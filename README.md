@@ -24,35 +24,53 @@ Notes
 
 Database schema
 
-This project uses a Postgres schema in Supabase with the following tables (columns are summarized):
+This project uses [a Postgres schema in Supabase](https://ttxtzgkhmlvbgciekula.supabase.co) with the following tables:
 
 - seasons
-  - id (PK integer), name (text, unique), status (enum: UPCOMING, ACTIVE, ARCHIVED), target_win_rounds (int), buy_in_amount (numeric)
+  - id (PK integer)
+  - name (text, unique)
+  - status (enum: UPCOMING, ACTIVE, ARCHIVED)
+  - target_win_rounds (int)
+  - buy_in_amount (numeric)
   - FK: weeks.season_id -> seasons.id
 
-- players
-  - id (PK), name (text, unique), discord_id (text, unique, nullable)
-  - Referenced by weeks.bye_player_id and player_match_stats.player_id
+- players (Referenced by weeks.bye_player_id and player_match_stats.player_id)
+  - id (PK)
+  - name (text, unique)
+  - discord_id (text, unique, nullable)
 
-- weeks
-  - id (PK), season_id (FK -> seasons.id), week_number (int), bye_player_id (FK -> players.id)
-  - Referenced by matches.week_id
+- weeks (Referenced by matches.week_id)
+  - id (PK)
+  - season_id (FK -> seasons.id)
+  - week_number (int)
+  - bye_player_id (FK -> players.id)
 
-- matches
-  - id (PK), week_id (FK -> weeks.id), match_number (int), final_score, picked_map, bans/picks, is_playoff_game (bool), is_interpolated (bool), notes
-  - Referenced by player_match_stats.match_id
+- matches (Referenced by player_match_stats.match_id)
+  - id (PK)
+  - week_id (FK -> weeks.id)
+  - match_number (int)
+  - final_score
+  - picked_map
+  - bans/picks
+  - is_playoff_game (bool)
+  - is_interpolated (bool)
+  - notes
 
 - player_match_stats
-  - id (PK), match_id (FK -> matches.id), player_id (FK -> players.id), faction (enum: SHIRTS, SKINS), kills, assists, deaths, adr, damage, rounds_played, rounds_won, is_win (bool)
+  - id (PK)
+  - match_id (FK -> matches.id)
+  - player_id (FK -> players.id)
+  - faction (enum: SHIRTS, SKINS)
+  - kills
+  - assists
+  - deaths
+  - adr
+  - damage
+  - rounds_played
+  - rounds_won
+  - is_win (bool)
 
 Security note
 - Row Level Security (RLS) is currently disabled on these tables. This exposes rows to the anon/auth roles. Do NOT enable RLS without adding appropriate policies first — enabling RLS without policies will block access.
-- Remediation SQL to enable RLS (run only after writing policies):
-
-ALTER TABLE public.seasons ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.players ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.weeks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.player_match_stats ENABLE ROW LEVEL SECURITY;
 
 If help is wanted to add RLS policies or to review the schema, say so and assistance can be provided.
