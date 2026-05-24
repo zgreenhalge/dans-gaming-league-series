@@ -1,0 +1,16 @@
+# Local environment files
+.env
+
+# Virtualenvs
+.dgls-env/
+dgls-env/
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor files
+.vscode/
+*.swp
