@@ -25,6 +25,8 @@ def parse_regular_season(file_path: str) -> Tuple[List[Dict], List[Dict]]:
     matches = []
     byes = []
     current_week = None
+    match_counter = 0  # Tracks match numbers within the current week
+    
     with open(file_path, mode='r', encoding='utf-8-sig') as f:
         reader = csv.reader(f)
         rows = list(reader)
@@ -35,9 +37,13 @@ def parse_regular_season(file_path: str) -> Tuple[List[Dict], List[Dict]]:
             idx += 1
             continue
         for cell in row:
-            week_match = re.search(r'Week\\s+(\\d+)', cell, re.IGNORECASE)
+            # FIX 1: Corrected regex to find actual spaces instead of literal '\s'
+            week_match = re.search(r'Week\s+(\d+)', cell, re.IGNORECASE)
             if week_match:
-                current_week = int(week_match.group(1))
+                new_week = int(week_match.group(1))
+                if new_week != current_week:
+                    current_week = new_week
+                    match_counter = 0  # Reset counter for the new week
                 break
         bye_player = None
         for c in row:
@@ -68,10 +74,16 @@ def parse_regular_season(file_path: str) -> Tuple[List[Dict], List[Dict]]:
                 print(f"⚠️ Incomplete match block starting at row {idx}; not enough following rows.")
                 idx += 1
                 continue
+            
+            match_counter += 1  # Increment the match number for this week
+            
             row1 = [clean_cell(c) for c in rows[idx + 1]]
             row2 = [clean_cell(c) for c in rows[idx + 2]]
+            
+            # FIX 2: Explicitly pass 'match_number' into the metadata dictionary
             match_meta = {
                 "week": current_week,
+                "match_number": match_counter, 
                 "shirts_ban": get_cell(row1, 20),
                 "skins_ban_1": get_cell(row1, 21),
                 "skins_ban_2": get_cell(row1, 22),
@@ -279,10 +291,10 @@ def stub_upload(matches, byes, source_file: str):
         skins_score = meta.get("skins_score")
         final_score = None
         if shirts_score is not None or skins_score is not None:
-            final_score = f"{shirts_score or 0}-{skins_score or 0}"
+            final_score = f"{shirts_score or -1}-{skins_score or -1}"
         payload = {
             "week_id": week_id,
-            "match_number": match_number or 0,
+            "match_number": match_number or -1,
             "shirts_ban": meta.get("shirts_ban") or meta.get("shirts_ban_1") or None,
             "skins_ban1": meta.get("skins_ban_1") or meta.get("skins_ban1") or None,
             "skins_ban2": meta.get("skins_ban_2") or meta.get("skins_ban2") or None,
@@ -309,13 +321,13 @@ def stub_upload(matches, byes, source_file: str):
             "match_id": match_id,
             "player_id": player_id,
             "faction": faction if faction in ("SHIRTS", "SKINS") else None,
-            "kills": perf.get("kills") or 0,
-            "assists": perf.get("assists") or 0,
-            "deaths": perf.get("deaths") or 0,
-            "adr": perf.get("adr") or 0,
-            "damage": perf.get("damage") or 0,
-            "rounds_played": perf.get("rounds_played") or 0,
-            "rounds_won": perf.get("rounds_won") or 0,
+            "kills": perf.get("kills") or -1,
+            "assists": perf.get("assists") or -1,
+            "deaths": perf.get("deaths") or -1,
+            "adr": perf.get("adr") or -1,
+            "damage": perf.get("damage") or -1,
+            "rounds_played": perf.get("rounds_played") or -1,
+            "rounds_won": perf.get("rounds_won") or -1,
             "is_win": bool(perf.get("win"))
         }
         # Clean None values
@@ -333,7 +345,7 @@ def stub_upload(matches, byes, source_file: str):
     # create weeks
     seen_week_ids = {}
     for b in byes:
-        wk = b.get("week")
+        wk = b.get("week") or -1
         if wk in seen_week_ids:
             continue
         week_id = get_or_create_week(season_id, wk, b.get("player"))
@@ -343,8 +355,8 @@ def stub_upload(matches, byes, source_file: str):
     # matches and player stats
     for m in matches:
         meta = m.get("metadata", {})
-        week_num = meta.get("week") or 0
-        match_number = meta.get("match_number") or 0
+        week_num = meta.get("week") or -1
+        match_number = meta.get("match_number") or -1
         week_id = seen_week_ids.get(week_num) or get_or_create_week(season_id, week_num)
         match_id = create_match(week_id, match_number, meta)
         print(f"Created match id={match_id} (week {week_num} # {match_number})")
