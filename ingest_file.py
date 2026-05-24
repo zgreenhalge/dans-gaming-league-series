@@ -157,43 +157,9 @@ def verify_aggregated_stats(matches: List[Dict]) -> None:
         wl_str = f"{stats['wins']}-{stats['losses']}"
         print(f"{player:<12} | {stats['kills']:<6} | {stats['assists']:<7} | {stats['deaths']:<6} | {stats['damage']:<8} | {wl_str:<6} | {adr:<4}")
 
-def build_season_payload(name: str = "Season 3"):
-    return {"name": name, "status": "ACTIVE", "target_win_rounds": 13, "buy_in_amount": 10.0}
-
-
-def normalize_id(s: str) -> str:
-    import re
-    s = s or ""
-    n = re.sub(r"\W+", "_", s.strip().lower())
-    if not n:
-        n = "unknown"
-    return n
-
-
-def build_week_payload(season_id: str, week_number: int, bye_player_name: str = None):
-    return {"season_id": season_id, "week_number": week_number, "bye_player_name": bye_player_name}
-
-
-def build_match_payload(week_id: str, match_number: int, match_meta: dict):
-    payload = {"week_id": week_id, "match_number": match_number}
-    payload.update(match_meta)
-    return payload
-
-
-def build_player_stat_payload(match_id: str, player_id: str, perf: dict):
-    return {
-        "match_id": match_id,
-        "player_id": player_id,
-        "faction": perf.get("team"),
-        "kills": perf.get("kills"),
-        "assists": perf.get("assists"),
-        "deaths": perf.get("deaths"),
-        "adr": perf.get("adr"),
-        "damage": perf.get("damage"),
-        "rounds_played": perf.get("rounds_played"),
-        "rounds_won": perf.get("rounds_won"),
-        "is_win": perf.get("win")
-    }
+# Returns the integer value if it exists, or -1 if the value is None.
+def default_stat(val: Any) -> int:
+    return int(val) if val is not None else -1
 
 
 def upload(matches, byes, source_file: str):
@@ -252,7 +218,7 @@ def upload(matches, byes, source_file: str):
         if row:
             print(f"Using existing season: {row}")
             return row["id"]
-        payload = build_season_payload(name)
+        payload = {"name": name, "status": "ACTIVE", "target_win_rounds": 13, "buy_in_amount": 10.0}
         resp = supabase.table("seasons").insert(payload).select("id").execute()
         row = _single_from_response(resp)
         if row:
@@ -289,9 +255,16 @@ def upload(matches, byes, source_file: str):
     def create_match(week_id: int, match_number: int, meta: dict):
         shirts_score = meta.get("shirts_score")
         skins_score = meta.get("skins_score")
-        final_score = None
-        if shirts_score is not None or skins_score is not None:
-            final_score = f"{shirts_score or -1}-{skins_score or -1}"
+        
+        # Check if scores are explicitly None (data missing), 
+        # but allow 0 to remain 0.
+        sh_score_str = str(shirts_score)
+        sk_score_str = str(skins_score)
+        
+        if shirts_score is not None and skins_score is not None:
+            final_score = f"{shirts_score}-{skins_score}"
+        else:
+            final_score = None
         payload = {
             "week_id": week_id,
             "match_number": match_number or -1,
@@ -321,13 +294,13 @@ def upload(matches, byes, source_file: str):
             "match_id": match_id,
             "player_id": player_id,
             "faction": faction if faction in ("SHIRTS", "SKINS") else None,
-            "kills": perf.get("kills") or -1,
-            "assists": perf.get("assists") or -1,
-            "deaths": perf.get("deaths") or -1,
-            "adr": perf.get("adr") or -1,
-            "damage": perf.get("damage") or -1,
-            "rounds_played": perf.get("rounds_played") or -1,
-            "rounds_won": perf.get("rounds_won") or -1,
+            "kills": default_stat(perf.get("kills")),
+            "assists": default_stat(perf.get("assists")),
+            "deaths": default_stat(perf.get("deaths")),
+            "adr": default_stat(perf.get("adr")),
+            "damage": default_stat(perf.get("damage")),
+            "rounds_played": default_stat(perf.get("rounds_played")),
+            "rounds_won": default_stat(perf.get("rounds_won")),
             "is_win": bool(perf.get("win"))
         }
         # Clean None values
@@ -338,22 +311,28 @@ def upload(matches, byes, source_file: str):
             return row["id"]
         raise RuntimeError(f"Failed to create player_match_stats: {payload}")
 
-    # 1. Capture everything AFTER "Season X Stat Tracker - "
-    # This matches "Season", a number, "Stat Tracker - ", and captures everything following it
-    season_match = re.search(r'Season\s+\d+\s+Stat\s+Tracker(.*)', source_file, re.IGNORECASE)
-    if season_match:
-        # 1. Grab the " - S# Regular Season" part
-        raw_name = season_match.group(1).strip()
+    # Assumes source_file name in format of "Season # Stat Tracker - S# <suffix>"
+    def get_season_name(source_file):
+        # 1. Extract the number from the beginning
+        num_match = re.search(r'Season\s+(\d+)', source_file, re.IGNORECASE)
+        season_num = num_match.group(1) if num_match else ""
         
-        # 2. Apply the one-liner to turn " - S1 Regular Season" into "Regular Season" 
-        # and combine it with the season number from the start of the string
-        season_name = re.sub(r' - S\d+', '', raw_name.replace('.csv', '')).strip()
-    else:
-        # Fallback name just in case the filename format is completely unexpected
-        season_name = "Unknown Season"
-        
-    print(f"🎯 Target Season identified from filename: '{season_name}'")
-    season_id = get_or_create_season(season_name)
+        # 2. Extract everything after "Stat Tracker"
+        suffix_match = re.search(r'Stat\s+Tracker\s*(.*)', source_file, re.IGNORECASE)
+        if suffix_match:
+            # Remove extension and trim
+            suffix = suffix_match.group(1).replace('.csv', '').strip()
+            
+            # 3. Clean the suffix: Remove the ' - S#' pattern (including dashes/spaces)
+            # This looks for an optional dash/space, then 'S', then digits
+            suffix = re.sub(r'[-\s]*S\d+\s*', '', suffix)
+            
+            # 4. Reconstruct: "Season " + Number + " " + Suffix
+            return f"Season {season_num} {suffix}".strip()
+            
+        return "Unknown Season"
+
+    season_id = get_or_create_season(get_season_name(source_file))
 
     # create weeks
     seen_week_ids = {}

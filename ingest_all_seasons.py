@@ -8,8 +8,14 @@ def find_csv_files(directory: str, pattern: str) -> List[str]:
     matches = []
     for root, _, files in os.walk(directory):
         for filename in files:
+            print(f"Matching {filename}")
+            # Skip Windows metadata files
+            if ":Zone.Identifier" in filename:
+                continue
             if fnmatch.fnmatch(filename, pattern):
-                matches.append(filename)
+                # Join root and filename to get the full path
+                full_path = os.path.join(root, filename)
+                matches.append(full_path)
     return matches
 
 def main():
@@ -17,8 +23,10 @@ def main():
     parser.add_argument("--pattern", default="*Regular Season.csv", help="Glob pattern for CSV files")
     parser.add_argument("--upload", action="store_true", help="Enable stub upload mode for each file")
     args = parser.parse_args()
-    search_dir = os.getcwd()
+    search_dir = os.getcwd() + "/Season Data/"
     csv_files = find_csv_files(search_dir, args.pattern)
+    csv_files.sort() # Sort alphabetically, to upload in order
+    
     if not csv_files:
         print(f"No CSV files found in {search_dir} matching pattern '{args.pattern}'.")
         return
