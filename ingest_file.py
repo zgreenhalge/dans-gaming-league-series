@@ -170,20 +170,20 @@ def normalize_id(s: str) -> str:
     return n
 
 
-def build_week_payload(season_stub_id: str, week_number: int, bye_player_name: str = None):
-    return {"season_id": season_stub_id, "week_number": week_number, "bye_player_name": bye_player_name}
+def build_week_payload(season_id: str, week_number: int, bye_player_name: str = None):
+    return {"season_id": season_id, "week_number": week_number, "bye_player_name": bye_player_name}
 
 
-def build_match_payload(week_stub_id: str, match_number: int, match_meta: dict):
-    payload = {"week_id": week_stub_id, "match_number": match_number}
+def build_match_payload(week_id: str, match_number: int, match_meta: dict):
+    payload = {"week_id": week_id, "match_number": match_number}
     payload.update(match_meta)
     return payload
 
 
-def build_player_stat_payload(match_stub_id: str, player_stub_id: str, perf: dict):
+def build_player_stat_payload(match_id: str, player_id: str, perf: dict):
     return {
-        "match_id": match_stub_id,
-        "player_id": player_stub_id,
+        "match_id": match_id,
+        "player_id": player_id,
         "faction": perf.get("team"),
         "kills": perf.get("kills"),
         "assists": perf.get("assists"),
@@ -196,7 +196,7 @@ def build_player_stat_payload(match_stub_id: str, player_stub_id: str, perf: dic
     }
 
 
-def stub_upload(matches, byes, source_file: str):
+def upload(matches, byes, source_file: str):
     """Upload parsed CSV data to Supabase.
 
     This function attempts to be robust against different supabase client return shapes
@@ -338,8 +338,21 @@ def stub_upload(matches, byes, source_file: str):
             return row["id"]
         raise RuntimeError(f"Failed to create player_match_stats: {payload}")
 
-    # Begin upload process
-    season_name = "Season 3"
+    # 1. Capture everything AFTER "Season X Stat Tracker - "
+    # This matches "Season", a number, "Stat Tracker - ", and captures everything following it
+    season_match = re.search(r'Season\s+\d+\s+Stat\s+Tracker(.*)', source_file, re.IGNORECASE)
+    if season_match:
+        # 1. Grab the " - S# Regular Season" part
+        raw_name = season_match.group(1).strip()
+        
+        # 2. Apply the one-liner to turn " - S1 Regular Season" into "Regular Season" 
+        # and combine it with the season number from the start of the string
+        season_name = re.sub(r' - S\d+', '', raw_name.replace('.csv', '')).strip()
+    else:
+        # Fallback name just in case the filename format is completely unexpected
+        season_name = "Unknown Season"
+        
+    print(f"🎯 Target Season identified from filename: '{season_name}'")
     season_id = get_or_create_season(season_name)
 
     # create weeks
@@ -370,7 +383,7 @@ def stub_upload(matches, byes, source_file: str):
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Ingest and verify a regular season CSV (dry-run by default).")
-    parser.add_argument("csv_file", nargs="?", default="Season 3 Stat Tracker - S3 Regular Season.csv")
+    parser.add_argument("csv_file")
     parser.add_argument("--upload", action="store_true", help="Enable stub upload output (prints stubbed payloads)")
     args = parser.parse_args()
     try:
@@ -387,7 +400,7 @@ def main():
             print("No BYEs detected.")
         if args.upload:
             print("\n=== STUB UPLOAD MODE ENABLED ===")
-            stub_upload(matches, byes, args.csv_file)
+            upload(matches, byes, args.csv_file)
     except FileNotFoundError:
         print(f"File not found: {args.csv_file}")
     except Exception as e:

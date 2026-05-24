@@ -9,12 +9,12 @@ def find_csv_files(directory: str, pattern: str) -> List[str]:
     for root, _, files in os.walk(directory):
         for filename in files:
             if fnmatch.fnmatch(filename, pattern):
-                matches.append(os.path.join(root, filename))
+                matches.append(filename)
     return matches
 
 def main():
     parser = argparse.ArgumentParser(description="Ingest and verify all regular season CSVs in the current directory.")
-    parser.add_argument("--pattern", default="*Regular Season*.csv", help="Glob pattern for CSV files")
+    parser.add_argument("--pattern", default="*Regular Season.csv", help="Glob pattern for CSV files")
     parser.add_argument("--upload", action="store_true", help="Enable stub upload mode for each file")
     args = parser.parse_args()
     search_dir = os.getcwd()
@@ -38,7 +38,7 @@ def main():
                 print("No BYEs detected.")
             if args.upload:
                 print("\n== Invoking stub upload for this file ==")
-                ingest_file.stub_upload(matches, byes, csv_file)
+                ingest_file.upload(matches, byes, csv_file)
         except FileNotFoundError:
             print(f"File not found: {csv_file}")
         except Exception as e:
