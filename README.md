@@ -24,7 +24,7 @@ Notes
 
 Database schema
 
-This project uses [a Postgres schema in Supabase](https://ttxtzgkhmlvbgciekula.supabase.co) with the following tables:
+This project uses [a Postgres schema in Supabase](https://supabase.com/dashboard/project/ttxtzgkhmlvbgciekula) with the following tables:
 
 - seasons
   - id (PK integer)
