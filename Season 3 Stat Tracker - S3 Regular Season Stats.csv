@@ -1,0 +1,71 @@
+4,Kills,Assists,Deaths,Total Damage,ADR,Kill Diff.,,,,,,Category,Leader,Value
+Adam,0,0,0,0,0,0,,,,,,Kills,Adam,0
+Andrew,0,0,0,0,0,0,,,,,,Assists,Adam,0
+Brian,0,0,0,0,0,0,,,,,,Least Deaths,Adam,0
+Dan,0,0,0,0,0,0,,,,,,K/D,#N/A,0.00
+Emanuel,0,0,0,0,0,0,,,,,,Most Rounds Played,Michael,0
+Eric,0,0,0,0,0,0,,,,,,Least Rounds Played,Michael,0
+Fred,0,0,0,0,0,0,,,,,,Best Round WR%,#N/A,0.00%
+Kevin,0,0,0,0,0,0,,,,,,Most Damage,Adam,0
+Michael,0,0,0,0,0,0,,,,,,Most Dmg/Game,#N/A,0.0
+Sean,0,0,0,0,0,0,,,,,,Best ADR,Adam,0
+Steve,0,0,0,0,0,0,,,,,,Longest Avg Game,#N/A,0.0
+Tim,0,0,0,0,0,0,,,,,,,,
+Zach,0,0,0,0,0,0,,,,,,,,
+,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,
+Name,K/D,Dmg/Kill,Kills/Round,Assists/Round,Deaths/Round,Kills/Win,Deaths/Win,Kills/Loss,Deaths/Loss,,,,,
+Adam,,,,,,,,,,,,,,
+Andrew,,,,,,,,,,,,,,
+Brian,,,,,,,,,,,,,,
+Dan,,,,,,,,,,,,,,
+Emanuel,,,,,,,,,,,,,,
+Eric,,,,,,,,,,,,,,
+Fred,,,,,,,,,,,,,,
+Kevin,,,,,,,,,,,,,,
+Michael,,,,,,,,,,,,,,
+Sean,,,,,,,,,,,,,,
+Steve,,,,,,,,,,,,,,
+Tim,,,,,,,,,,,,,,
+Zach,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,
+Name,Games,Wins,Losses,WR %,Round WR %,Rounds Won,Rounds Lost,Rounds Played,,,Place,Player,WR,Round WR
+Adam,0,0,0,,,0,0,0,,1st Round Bye,1,Adam,,
+Andrew,0,0,0,,,0,0,0,,,2,Andrew,,
+Brian,0,0,0,,,0,0,0,,,3,Brian,,
+Dan,0,0,0,,,0,0,0,,,4,Dan,,
+Emanuel,0,0,0,,,0,0,0,,,5,Emanuel,,
+Eric,0,0,0,,,0,0,0,,,6,Eric,,
+Fred,0,0,0,,,0,0,0,,,7,Fred,,
+Kevin,0,0,0,,,0,0,0,,,8,Kevin,,
+Michael,0,0,0,,,0,0,0,,,9,Michael,,
+Sean,0,0,0,,,0,0,0,,Play-in,10,Sean,,
+Steve,0,0,0,,,0,0,0,,,11,Steve,,
+Tim,0,0,0,,,0,0,0,,,12,Tim,,
+Zach,0,0,0,,,0,0,0,,,13,Zach,,
+,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,
+Name,Kill Diff/Game,Dmg/Game,Round Diff/Game,Rounds/Game,Rounds Won/Game,Rounds Lost/Game,Kills/Game,Assists/Game,Deaths/Game,,,,,
+Adam,,,0.00,,,,,,,,,,,
+Andrew,,,0.00,,,,,,,,,,,
+Brian,,,0.00,,,,,,,,,,,
+Dan,,,0.00,,,,,,,,,,,
+Emanuel,,,0.00,,,,,,,,,,,
+Eric,,,0.00,,,,,,,,,,,
+Fred,,,0.00,,,,,,,,,,,
+Kevin,,,0.00,,,,,,,,,,,
+Michael,,,0.00,,,,,,,,,,,
+Sean,,,0.00,,,,,,,,,,,
+Steve,,,0.00,,,,,,,,,,,
+Tim,,,0.00,,,,,,,,,,,
+Zach,,,0.00,,,,,,,,,,,
+,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,
+Map,Pick,Ban,Not Picked,CT Picked,T Picked,Picked & Won,,Side,Picked,Wins/pick,Loss/Pick,,,
+Drawbridge,0,0,0,0,0,0,,CT,0,0,0,,,
+Memento,0,0,0,0,0,0,,T,0,0,0,,,
+Debris,0,0,0,0,0,0,,,,,,,,
+Splat,0,0,0,0,0,0,,Games played:,0,/18,,,,
+Rooftop,0,0,0,0,0,0,,,,,,,,

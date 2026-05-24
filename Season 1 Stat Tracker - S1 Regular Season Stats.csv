@@ -1,0 +1,55 @@
+Name,Kills,Assists,Deaths,Total Damage,ADR,Kill Diff.,,,,Category,Leader,Value
+Adam,85,21,63,9838,86,+22,,,,Kills,Sean,93
+Andrew,25,18,87,4468,42,-62,,,,Assists,Adam,21
+Brian,63,14,82,7502,64,-19,,,,Least Deaths,Zach,54
+Dan,80,15,60,8685,82,+20,,,,K/D,Sean,11.63
+Eric,67,17,78,8199,68,-11,,,,Most Rounds Played,Eric,120
+Sean,93,17,63,9739,86,+30,,,,Least Rounds Played,Zach,102
+Zach,68,14,54,7690,75,+14,,,,Best Round WR%,Sean,75.00%
+,,,,,,,,,,Most Damage,Adam,9838
+,,,,,,,,,,Best ADR,Sean,86
+Name,K/D,Kills/Round,Assists/Round,Deaths/Round,Kills / Win,Deaths / Win,Kills / Loss,Deaths / Loss,,Longest Avg Game,Eric,15.0
+Adam,1.35,0.74,0.18,0.55,10.8,5.6,10.3,11.7,,,,
+Andrew,0.29,0.23,0.17,0.81,4.0,9.0,3.0,11.1,,,,
+Brian,0.77,0.54,0.12,0.70,9.0,10.0,6.8,10.5,,,,
+Dan,1.33,0.75,0.14,0.57,9.8,5.4,10.3,11.0,,,,
+Eric,0.86,0.56,0.14,0.65,11.7,7.7,6.4,11.0,,,,
+Sean,1.48,0.82,0.15,0.56,13.7,7.0,5.5,10.5,,,,
+Zach,1.26,0.67,0.14,0.53,9.3,4.5,7.8,9.0,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+Name,Wins,Losses,Games,WR %,Round WR %,Rounds Won,Rounds Lost,Rounds Played,,,,
+Andrew,1,7,8,12.50%,33.64%,36,71,107,,,,
+Eric,3,5,8,37.50%,47.50%,57,63,120,,,,
+Brian,4,4,8,50.00%,47.86%,56,61,117,,,,
+Zach,4,4,8,50.00%,50.98%,52,50,102,,,,
+Adam,5,3,8,62.50%,55.65%,64,51,115,,,,
+Dan,5,3,8,62.50%,58.49%,62,44,106,,,,
+Sean,6,2,8,75.00%,55.75%,63,50,113,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+Name,Kill Diff/Game,DMG/Game,Rounds/Game,Rounds Won/Game,Rounds Lost/Game,Kills/Game,Assists/Game,Deaths/Game,,,,
+Adam,+3,1229.8,14.4,8.0,6.4,10.63,2.63,7.88,,,,
+Andrew,-8,558.5,13.4,4.5,8.9,3.13,2.25,10.88,,,,
+Brian,-2,937.8,14.6,7.0,7.6,7.88,1.75,10.25,,,,
+Dan,+3,1085.6,13.3,7.8,5.5,10.00,1.88,7.50,,,,
+Eric,-1,1024.9,15.0,7.1,7.9,8.38,2.13,9.75,,,,
+Sean,+4,1217.4,14.1,7.9,6.3,11.63,2.13,7.88,,,,
+Zach,+2,961.3,12.8,6.5,6.3,8.50,1.75,6.75,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+Map,Pick,Ban,CT Picked,T Picked,Picked & Won,,Side,Picked,Wins/pick,Loss/Pick,,
+Assembly,3,9,2,1,1,,CT,7,4,3,,
+Brewery,3,6,2,1,2,,T,7,3,4,,
+Foroglio,2,12,1,1,2,,,,,,,
+Palais,5,3,2,3,2,,Games played:,14,/14,,,
+Vandal,1,12,0,1,0,,,,,,,
+,,,,,,,,,,,,
+Win/Loss,Adam,Andrew,Brian,Dan,Eric,Sean,Zach,,,,,
+Adam,,3,1,2,2,1,1,,,,,
+Andrew,,,1,,,,1,,,,,
+Brian,1,2,,1,3,,1,,,,,
+Dan,,1,1,,3,,1,,,,,
+Eric,1,3,,,,,2,,,,,
+Sean,1,1,2,2,2,,2,,,,,
+Zach,1,2,1,1,,1,,,,,,
