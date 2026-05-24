@@ -13,13 +13,14 @@ def find_csv_files(directory: str, pattern: str) -> List[str]:
     return matches
 
 def main():
-    parser = argparse.ArgumentParser(description="Ingest and verify all regular season CSVs in a directory.")
-    parser.add_argument("--dir", default=os.getcwd(), help="Directory to search for CSV files")
+    parser = argparse.ArgumentParser(description="Ingest and verify all regular season CSVs in the current directory.")
     parser.add_argument("--pattern", default="*Regular Season*.csv", help="Glob pattern for CSV files")
+    parser.add_argument("--upload", action="store_true", help="Enable stub upload mode for each file")
     args = parser.parse_args()
-    csv_files = find_csv_files(args.dir, args.pattern)
+    search_dir = os.getcwd()
+    csv_files = find_csv_files(search_dir, args.pattern)
     if not csv_files:
-        print(f"No CSV files found in {args.dir} matching pattern '{args.pattern}'.")
+        print(f"No CSV files found in {search_dir} matching pattern '{args.pattern}'.")
         return
     for csv_file in csv_files:
         print(f"\n=== Processing: {csv_file} ===")
@@ -35,6 +36,9 @@ def main():
                     print(f"  - Week {b.get('week')}: {b.get('player')}")
             else:
                 print("No BYEs detected.")
+            if args.upload:
+                print("\n== Invoking stub upload for this file ==")
+                ingest_file.stub_upload(matches, byes, csv_file)
         except FileNotFoundError:
             print(f"File not found: {csv_file}")
         except Exception as e:
