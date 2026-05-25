@@ -198,6 +198,17 @@ body > * { position: relative; z-index: 1; }
   display: inline-block;
 }
 
+/* Apply subtle transparent background to low-contrast text inside map cards */
+.map-card-bg .map-head,
+.map-card-bg .tracked,
+.map-card-bg [class*="text-[var(--color-text-secondary)"],
+.map-card-bg .opacity-50 {
+  background: var(--map-text-bg);
+  border-radius: var(--radius-md);
+  padding: 0.12em 0.45em;
+  display: inline-block;
+}
+
 /* Background image layer — separate pseudo-element so it can be filtered independently */
 .map-card-bg::before {
   content: "";
