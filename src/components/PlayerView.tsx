@@ -122,29 +122,28 @@ function PlayerMatchRow({
       className={`block border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors ${mapImg ? 'map-card-bg' : 'hover:bg-[var(--color-bg-secondary)]'}`}
       style={mapImg ? ({ ['--map-img' as string]: `url("${mapImg}")` } as React.CSSProperties) : undefined}
     >
-      <div className={`px-4 py-3 ${mapImg ? 'bg-[var(--overlay-medium)] hover:bg-[var(--overlay-weak)] transition-colors' : ''}`}>
-        <div className="flex items-center justify-between gap-3 mb-1">
-          <span className="font-mono text-[11px] text-[var(--color-text-secondary)] whitespace-nowrap map-head">
-            S{row.season_id} · W{row.week_number} · #{row.match_number}
-          </span>
+      <div className={mapImg ? 'bg-[var(--overlay-strong)] hover:bg-[var(--overlay-medium)] transition-colors' : ''}>
+        <div className="px-4 py-2 flex items-center justify-between gap-4 border-b border-[var(--color-border-tertiary)]">
+          <div className="flex items-center gap-2">
+            <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] map-head">
+              S{row.season_id} · W{row.week_number} · #{row.match_number}
+            </span>
+            {row.map && (
+              <span className="font-display text-[16px] font-semibold text-[var(--color-text-primary)] map-head">
+                {row.map}
+              </span>
+            )}
+          </div>
           {outcome}
         </div>
-        {row.map && (
-          <div className="font-display text-[15px] font-semibold leading-tight mb-1 map-head">
-            {row.map}
-          </div>
-        )}
-        <div className="flex items-end justify-between gap-3">
-          <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate">
-            {shirts} <span className="opacity-50">vs</span> {skins}
+
+        <div className="px-4 py-3">
+          <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate map-head">
+            {shirts} <span className="opacity-50 map-head">vs</span> {skins}
           </div>
           {variant === 'played' && (
-            <div className="font-mono text-[13px] font-semibold tnum shrink-0 text-[var(--color-text-primary)]">
-              {row.kills}
-              <span className="text-[var(--color-text-secondary)] font-normal mx-0.5">/</span>
-              {row.assists}
-              <span className="text-[var(--color-text-secondary)] font-normal mx-0.5">/</span>
-              {row.deaths}
+            <div className="mt-3 font-mono text-[13px] font-semibold tnum text-[var(--color-text-primary)]">
+              {row.kills}<span className="text-[var(--color-text-secondary)] font-normal mx-0.5">/</span>{row.assists}<span className="text-[var(--color-text-secondary)] font-normal mx-0.5">/</span>{row.deaths}
             </div>
           )}
         </div>

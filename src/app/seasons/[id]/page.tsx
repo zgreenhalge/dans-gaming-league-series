@@ -79,29 +79,34 @@ function MatchRow({ match }: { match: MatchWithRoster }) {
       href={`/matches/${match.id}`}
       className={`block border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors ${mapImg ? 'map-card-bg' : 'hover:bg-[var(--color-bg-secondary)]'}`}
       style={mapImg ? ({ ['--map-img' as string]: `url("${mapImg}")` } as React.CSSProperties) : undefined}
-    >
-      <div className={`px-4 py-3 ${mapImg ? 'bg-[var(--overlay-strong)] hover:bg-[var(--overlay-medium)] transition-colors' : ''}`}>
-        <div className="flex items-center justify-between gap-3 mb-1">
-          <span className="font-mono text-[11px] text-[var(--color-text-secondary)] map-head">
-            #{match.match_number}
-          </span>
+>
+      <div className={mapImg ? 'bg-[var(--overlay-strong)] hover:bg-[var(--overlay-medium)] transition-colors' : ''}>
+        <div className="px-4 py-2 flex items-center justify-between gap-4 border-b border-[var(--color-border-tertiary)]">
+          <div className="flex items-center gap-2">
+            <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] map-head">
+              Match #{match.match_number}
+            </span>
+            {map && (
+              <span className="font-display text-[16px] font-semibold text-[var(--color-text-primary)] map-head">
+                {map}
+              </span>
+            )}
+          </div>
           {played ? (
-            <span className="font-mono text-[13px] font-semibold tnum text-[var(--color-text-primary)] whitespace-nowrap">
+            <span className="font-mono text-[13px] font-semibold tnum text-[var(--color-text-primary)]">
               {match.final_score}
             </span>
           ) : (
-            <span className="inline-flex items-center px-1.5 py-0.5 tracked text-[9px] font-semibold text-[var(--color-accent-amber-fg)] bg-[var(--color-accent-amber-bg)] border border-[var(--color-accent-amber-border)] whitespace-nowrap">
+            <span className="tracked text-[9px] font-semibold text-[var(--color-accent-amber-fg)]">
               Pending
             </span>
           )}
         </div>
-        {map && (
-          <div className="font-display text-[15px] font-semibold leading-tight mb-1 map-head">
-            {map}
+
+        <div className="px-4 py-3">
+          <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate map-head">
+            {shirtsLabel} <span className="opacity-50 map-head">vs</span> {skinsLabel}
           </div>
-        )}
-        <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate map-head">
-          {shirtsLabel} <span className="opacity-50 map-head">vs</span> {skinsLabel}
         </div>
       </div>
     </Link>
