@@ -34,10 +34,11 @@
   --color-ct: #1f5fa8;
   --color-t: #c25a16;
 
-  /* Theme-aware overlays for map images and dim backgrounds. */
-  --overlay-strong: rgba(255,255,255,0.6); /* used for map card base in light */
-  --overlay-medium: rgba(255,255,255,0.48);
-  --overlay-weak: rgba(0,0,0,0.04);
+  /* Theme-aware overlays for map images and dim backgrounds — tuned for more vibrant look */
+  /* Warm brighter overlays in light mode to make images pop against white maps */
+  --overlay-strong: rgba(255,244,227,0.78);
+  --overlay-medium: rgba(255,246,234,0.56);
+  --overlay-weak: rgba(0,0,0,0.06);
 
   color-scheme: light;
 }
@@ -75,10 +76,10 @@
   --color-ct: #4ea1ff;
   --color-t: #ff8a3d;
 
-  /* Dark theme overlays — keep original darker tints */
-  --overlay-strong: rgba(0,0,0,0.48);
-  --overlay-medium: rgba(0,0,0,0.38);
-  --overlay-weak: rgba(0,0,0,0.18);
+  /* Dark theme overlays — slightly richer, cooler tint for vibrancy */
+  --overlay-strong: rgba(8,12,24,0.58);
+  --overlay-medium: rgba(10,16,36,0.44);
+  --overlay-weak: rgba(10,16,36,0.22);
 
   color-scheme: dark;
 }
