@@ -94,24 +94,13 @@ function PlayerMatchRow({
   const skins = row.skins.map((p) => p.player_name).join(' & ') || 'TBD';
   const mapImg = mapImageFor(row.map);
 
-  const outcome =
+  const wlChip =
     variant === 'played' ? (
-      <div className="flex items-center gap-2 shrink-0 player-highlight">
-        <span className="font-mono text-[13px] font-semibold tnum text-[var(--color-text-primary)]">
-          {row.final_score}
-        </span>
-        <span
-          className={`inline-flex items-center justify-center w-6 px-1 py-0.5 tracked text-[10px] font-semibold border ${
-            row.is_win
-              ? 'text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border-[var(--color-accent-green-border)]'
-              : 'text-[var(--color-accent-red-fg)] bg-[var(--color-bg-secondary)] border-[var(--color-border-tertiary)]'
-          }`}
-        >
-          {row.is_win ? 'W' : 'L'}
-        </span>
-      </div>
+      <span className={`inline-flex items-center px-2 py-1 tracked text-[14px] lg:text-[15px] font-semibold rounded-md ${row.is_win ? 'text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border border-[var(--color-accent-green-border)]' : 'text-[var(--color-accent-red-fg)] bg-[var(--color-bg-secondary)] border border-[var(--color-border-tertiary)]'}`}>
+        {row.is_win ? 'W' : 'L'}
+      </span>
     ) : (
-      <span className="inline-flex items-center px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-amber-fg)] bg-[var(--color-accent-amber-bg)] border border-[var(--color-accent-amber-border)] shrink-0">
+      <span className="inline-flex items-center px-2 py-1 tracked text-[14px] lg:text-[15px] font-semibold rounded-md text-[var(--color-accent-amber-fg)] bg-[var(--color-accent-amber-bg)] border border-[var(--color-accent-amber-border)]">
         Pending
       </span>
     );
@@ -124,17 +113,17 @@ function PlayerMatchRow({
     >
       <div className={mapImg ? 'bg-[var(--overlay-strong)] hover:bg-[var(--overlay-medium)] transition-colors' : ''}>
         <div className="px-4 py-2 flex items-center justify-between gap-4 border-b border-[var(--color-border-tertiary)]">
-          <div className="flex items-center gap-2">
-            <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] map-head">
-              Season {row.season_id} · Week {row.week_number} · Match {row.match_number}
-            </span>
+          <div className="flex items-baseline gap-3">
+            {wlChip}
             {row.map && (
               <span className="font-display text-[16px] font-semibold text-[var(--color-text-primary)] map-head">
                 {row.map}
               </span>
             )}
+            <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] map-head">
+              Season {row.season_id} · Week {row.week_number} · Match {row.match_number}
+            </span>
           </div>
-          {outcome}
         </div>
 
         <div className="px-4 py-3">
