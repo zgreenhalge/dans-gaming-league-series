@@ -149,24 +149,30 @@ function PastSeasonRow({
   return (
     <Link
       href={`/seasons/${season.id}`}
-      className="grid grid-cols-[1fr_auto] items-center gap-6 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
+      className="grid grid-cols-[1fr_auto] items-center gap-8 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
     >
       <div className="min-w-0">
         <div className="font-display text-[18px] font-semibold leading-tight truncate">
           {season.name}
         </div>
         <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1">
-          {winner ? (
-            <><span className="tracked mr-1">Champion</span>{winner.player_name}</>
-          ) : 'No data'} · {leaderboard.length} players
+          {leaderboard.length} players
         </div>
       </div>
-      {winner && (
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-5">
-          <Stat v={`${winner.win_rate_percentage.toFixed(1)}%`} l="WR" />
-          <Stat v={winner.overall_adr.toFixed(1)} l="ADR" />
-          <Stat v={winner.kd_ratio.toFixed(2)} l="K/D" />
+      {winner ? (
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex items-baseline gap-2">
+            <span className="tracked text-[9px] text-[var(--color-text-secondary)]">Champion</span>
+            <span className="font-display text-[16px] font-semibold leading-tight">{winner.player_name}</span>
+          </div>
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-5">
+            <Stat v={`${winner.win_rate_percentage.toFixed(1)}%`} l="WR" />
+            <Stat v={winner.overall_adr.toFixed(1)} l="ADR" />
+            <Stat v={winner.kd_ratio.toFixed(2)} l="K/D" />
+          </div>
         </div>
+      ) : (
+        <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">No data</div>
       )}
     </Link>
   );
