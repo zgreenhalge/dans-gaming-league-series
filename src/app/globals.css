@@ -1,26 +1,87 @@
 @import "tailwindcss";
 
+/* Light (default) — Dust2 daylight: tan base, navy ink, CT blue + T orange accents */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-bg-primary: #f6f0e0;
+  --color-bg-secondary: #efe7d1;
+  --color-bg-tertiary: #ece4d2;
+  --color-text-primary: #1f2733;
+  --color-text-secondary: #6b6451;
+  --color-border-primary: #b3a888;
+  --color-border-secondary: #c9bea2;
+  --color-border-tertiary: #d8cfb5;
+
+  --color-accent-green-bg: #d8e6c2;
+  --color-accent-green-fg: #3f7a2a;
+  --color-accent-green-strong: #2c5a1c;
+  --color-accent-green-border: #a7c987;
+  --color-accent-green-fill: #5b9636;
+
+  --color-accent-amber-bg: #f6e0c0;
+  --color-accent-amber-fg: #8a4a10;
+  --color-accent-amber-strong: #5a300a;
+  --color-accent-amber-border: #e9b97a;
+  --color-accent-amber-pickborder: #f5c542;
+
+  --color-accent-blue-bg: #d5e2f1;
+  --color-accent-blue-fg: #1f5fa8;
+  --color-accent-blue-strong: #143f70;
+  --color-accent-blue-border: #9ebcdf;
+
+  --color-accent-red-fg: #a53826;
+
+  /* Faction tokens — used in HUD reskin */
+  --color-ct: #1f5fa8;
+  --color-t: #c25a16;
+
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Dark — broadcast HUD: near-black slate, CT cyan + T orange neon */
+[data-theme="dark"] {
+  --color-bg-primary: #161a21;
+  --color-bg-secondary: #1d222b;
+  --color-bg-tertiary: #0e1116;
+  --color-text-primary: #e8e6df;
+  --color-text-secondary: #8a8579;
+  --color-border-primary: #2f3641;
+  --color-border-secondary: #242a33;
+  --color-border-tertiary: #1d2128;
+
+  --color-accent-green-bg: rgba(126, 201, 107, 0.12);
+  --color-accent-green-fg: #7ec96b;
+  --color-accent-green-strong: #a4d995;
+  --color-accent-green-border: rgba(126, 201, 107, 0.35);
+  --color-accent-green-fill: #7ec96b;
+
+  --color-accent-amber-bg: rgba(255, 138, 61, 0.12);
+  --color-accent-amber-fg: #ff8a3d;
+  --color-accent-amber-strong: #ffae73;
+  --color-accent-amber-border: rgba(255, 138, 61, 0.35);
+  --color-accent-amber-pickborder: #f5c542;
+
+  --color-accent-blue-bg: rgba(78, 161, 255, 0.12);
+  --color-accent-blue-fg: #4ea1ff;
+  --color-accent-blue-strong: #82bcff;
+  --color-accent-blue-border: rgba(78, 161, 255, 0.35);
+
+  --color-accent-red-fg: #ff7a5e;
+
+  --color-ct: #4ea1ff;
+  --color-t: #ff8a3d;
+
+  color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --radius-md: 6px;
+  --radius-lg: 10px;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+html, body {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
+
+.tnum { font-variant-numeric: tabular-nums; }
