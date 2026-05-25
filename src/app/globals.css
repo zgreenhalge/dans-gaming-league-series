@@ -28,10 +28,10 @@
   --color-accent-blue-strong: #143f70;
   --color-accent-blue-border: #9ebcdf;
 
-  --color-accent-red-fg: #a53826;
-  --color-accent-red-bg: rgba(165,56,38,0.10);
-  --color-accent-red-border: rgba(165,56,38,0.35);
-  --color-accent-red-strong: #7a251b;
+  --color-accent-red-fg: #b33a2d;
+  --color-accent-red-bg: rgba(179,58,45,0.10);
+  --color-accent-red-border: rgba(179,58,45,0.35);
+  --color-accent-red-strong: #8b2920;
 
   /* Faction tokens — used in HUD reskin */
   --color-ct: #1f5fa8;
@@ -78,10 +78,10 @@
   --color-accent-blue-strong: #82bcff;
   --color-accent-blue-border: rgba(78, 161, 255, 0.35);
 
-  --color-accent-red-fg: #ff7a5e;
-  --color-accent-red-bg: rgba(255,122,94,0.12);
-  --color-accent-red-border: rgba(255,122,94,0.35);
-  --color-accent-red-strong: #ff4f3a;
+  --color-accent-red-fg: #ff5b50;
+  --color-accent-red-bg: rgba(255,91,80,0.12);
+  --color-accent-red-border: rgba(255,91,80,0.35);
+  --color-accent-red-strong: #ff3b2a;
 
   --color-ct: #4ea1ff;
   --color-t: #ff8a3d;
@@ -234,35 +234,39 @@ body > * { position: relative; z-index: 1; }
 /* W/L badge sizing */
 .wl-badge { width: 1.5rem; height: 1.5rem; display:inline-flex; align-items:center; justify-content:center; border-radius:9999px; }
 
-/* W/L header chip — refined: thinner outlines and slimmer win chip for balance */
+/* W/L header chip — refined: uniform thin outlines and consistent sizing */
 .wl-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.18rem 0.5rem;
+  height: 1.5rem;
+  min-width: 1.5rem;
+  padding: 0 0.45rem;
   border-radius: 0.375rem;
   font-weight: 700;
+  font-size: 12px;
   line-height: 1;
   gap: 0.32rem;
+  box-sizing: border-box;
 }
 .wl-chip--win {
   color: var(--color-accent-green-strong, var(--color-accent-green-fg));
-  border: 2px solid var(--color-accent-green-border);
-  background: color-mix(in srgb, var(--color-accent-green-bg) 90%, var(--color-bg-primary));
-  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-  padding: 0.12rem 0.45rem; /* slightly slimmer */
+  border: 1.5px solid var(--color-accent-green-border);
+  background: color-mix(in srgb, var(--color-accent-green-bg) 88%, var(--color-bg-primary));
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  padding: 0 0.35rem; /* slightly slimmer */
 }
 .wl-chip--loss {
   color: var(--color-accent-red-fg);
-  border: 2px solid var(--color-accent-red-border);
-  background: color-mix(in srgb, var(--color-accent-red-bg) 86%, var(--color-bg-primary));
-  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  border: 1.5px solid var(--color-accent-red-border);
+  background: color-mix(in srgb, var(--color-accent-red-bg) 82%, var(--color-bg-primary));
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .wl-chip--pending {
   color: var(--color-accent-amber-fg);
-  border: 2px solid var(--color-accent-amber-border);
-  background: color-mix(in srgb, var(--color-accent-amber-bg) 88%, var(--color-bg-primary));
-  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  border: 1.5px solid var(--color-accent-amber-border);
+  background: color-mix(in srgb, var(--color-accent-amber-bg) 86%, var(--color-bg-primary));
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
 /* Background image layer — separate pseudo-element so it can be filtered independently */
