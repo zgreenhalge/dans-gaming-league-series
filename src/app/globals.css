@@ -247,16 +247,19 @@ body > * { position: relative; z-index: 1; }
   box-shadow: 0 4px 10px rgba(0,0,0,0.10);
 }
 .wl-chip--loss {
+  /* Keep text readable: use existing fg but lighten background and reduce border strength */
   color: var(--color-accent-red-fg);
-  border: 3px solid var(--color-accent-red-border, rgba(165,56,38,0.65));
-  background: color-mix(in srgb, var(--color-accent-red-bg, var(--color-accent-red-fg)) 94%, var(--color-bg-primary));
-  box-shadow: 0 4px 10px rgba(0,0,0,0.10);
+  border: 2px solid color-mix(in srgb, var(--color-accent-red-border, rgba(165,56,38,0.65)) 65%, var(--color-border-primary));
+  /* lighter, more translucent background so red text stays legible */
+  background: color-mix(in srgb, var(--color-accent-red-bg, rgba(165,56,38,0.08)) 78%, var(--color-bg-primary));
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
 }
 .wl-chip--pending {
-  color: var(--color-accent-amber-strong, var(--color-accent-amber-fg));
-  border: 3px solid var(--color-accent-amber-border);
-  background: color-mix(in srgb, var(--color-accent-amber-bg) 96%, var(--color-bg-primary));
-  box-shadow: 0 4px 10px rgba(0,0,0,0.10);
+  /* restore pending to previous softer style but keep slightly bolder than before */
+  color: var(--color-accent-amber-fg);
+  border: 2px solid var(--color-accent-amber-border);
+  background: color-mix(in srgb, var(--color-accent-amber-bg) 85%, var(--color-bg-primary));
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
 }
 
 /* Background image layer — separate pseudo-element so it can be filtered independently */
