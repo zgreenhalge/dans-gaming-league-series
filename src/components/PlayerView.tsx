@@ -96,11 +96,11 @@ function PlayerMatchRow({
 
   const wlChip =
     variant === 'played' ? (
-      <span className={`inline-flex items-center px-2 py-1 tracked text-[14px] lg:text-[15px] font-semibold rounded-md ${row.is_win ? 'text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border border-[var(--color-accent-green-border)]' : 'text-[var(--color-accent-red-fg)] bg-[var(--color-bg-secondary)] border border-[var(--color-border-tertiary)]'}`}>
+      <span className={`inline-flex items-center px-2 py-1 tracked text-[14px] lg:text-[15px] font-semibold rounded-md shadow-sm ${row.is_win ? 'text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border border-[var(--color-accent-green-border)]' : 'text-[var(--color-accent-red-fg)] bg-[var(--color-accent-red-bg)] border border-[var(--color-accent-red-border)]'}`}>
         {row.is_win ? 'W' : 'L'}
       </span>
     ) : (
-      <span className="inline-flex items-center px-2 py-1 tracked text-[14px] lg:text-[15px] font-semibold rounded-md text-[var(--color-accent-amber-fg)] bg-[var(--color-accent-amber-bg)] border border-[var(--color-accent-amber-border)]">
+      <span className="inline-flex items-center px-2 py-1 tracked text-[14px] lg:text-[15px] font-semibold rounded-md shadow-sm text-[var(--color-accent-amber-fg)] bg-[var(--color-accent-amber-bg)] border border-[var(--color-accent-amber-border)]">
         Pending
       </span>
     );
@@ -134,11 +134,6 @@ function PlayerMatchRow({
                   <tbody>
                     {(row as any).shirts_stats.map((p: any) => (
                       <tr key={p.player_id} className={`bg-[var(--overlay-medium)] ${p.player_id === row.player_id ? 'current-player-row' : ''}`}>
-                        <td className="pl-2 pr-3 py-0.5 whitespace-nowrap">
-                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[12px] font-semibold ${p.is_win ? 'text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)]' : 'text-[var(--color-accent-red-fg)] bg-[var(--color-bg-secondary)]'}`}>
-                            {p.is_win ? 'W' : 'L'}
-                          </span>
-                        </td>
                         <td className={`font-display ${p.player_id === row.player_id ? 'text-[15px] lg:text-[16px] font-bold' : 'text-[13px] font-semibold'} pl-2 pr-3 py-0.5 whitespace-nowrap`}>
                           {p.player_name}
                         </td>
@@ -159,11 +154,6 @@ function PlayerMatchRow({
                   <tbody>
                     {(row as any).skins_stats.map((p: any) => (
                       <tr key={p.player_id} className={`bg-[var(--overlay-medium)] ${p.player_id === row.player_id ? 'current-player-row' : ''}`}>
-                        <td className="pl-2 pr-3 py-0.5 whitespace-nowrap">
-                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[12px] font-semibold ${p.is_win ? 'text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)]' : 'text-[var(--color-accent-red-fg)] bg-[var(--color-bg-secondary)]'}`}>
-                            {p.is_win ? 'W' : 'L'}
-                          </span>
-                        </td>
                         <td className={`font-display ${p.player_id === row.player_id ? 'text-[15px] lg:text-[16px] font-bold' : 'text-[13px] font-semibold'} pl-2 pr-3 py-0.5 whitespace-nowrap`}>
                           {p.player_name}
                         </td>
