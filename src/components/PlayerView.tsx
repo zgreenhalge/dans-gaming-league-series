@@ -150,13 +150,13 @@ function PlayerMatchRow({
                             {p.is_win ? 'W' : 'L'}
                           </span>
                         </td>
-                        <td className="font-display text-[13px] font-semibold pl-2 pr-3 py-0.5 whitespace-nowrap">
+                        <td className={`font-display ${p.player_id === row.player_id ? 'text-[15px] lg:text-[16px] font-bold' : 'text-[13px] font-semibold'} pl-2 pr-3 py-0.5 whitespace-nowrap`}>
                           {p.player_name}
                         </td>
-                        <td className="font-mono text-[11px] tnum text-right pr-3 py-0.5 text-[var(--color-text-primary)]">
+                        <td className={`font-mono ${p.player_id === row.player_id ? 'text-[12px] font-semibold' : 'text-[11px]'} tnum text-right pr-3 py-0.5 text-[var(--color-text-primary)]`}>
                           {p.kills}/{p.assists}/{p.deaths}
                         </td>
-                        <td className="font-mono text-[11px] tnum text-right pr-2 py-0.5 text-[var(--color-text-secondary)] whitespace-nowrap">
+                        <td className={`font-mono ${p.player_id === row.player_id ? 'text-[12px] font-semibold' : 'text-[11px]'} tnum text-right pr-2 py-0.5 text-[var(--color-text-secondary)] whitespace-nowrap`}>
                           {p.adr} ADR
                         </td>
                       </tr>
@@ -175,13 +175,13 @@ function PlayerMatchRow({
                             {p.is_win ? 'W' : 'L'}
                           </span>
                         </td>
-                        <td className="font-display text-[13px] font-semibold pl-2 pr-3 py-0.5 whitespace-nowrap">
+                        <td className={`font-display ${p.player_id === row.player_id ? 'text-[15px] lg:text-[16px] font-bold' : 'text-[13px] font-semibold'} pl-2 pr-3 py-0.5 whitespace-nowrap`}>
                           {p.player_name}
                         </td>
-                        <td className="font-mono text-[11px] tnum text-right pr-3 py-0.5 text-[var(--color-text-primary)]">
+                        <td className={`font-mono ${p.player_id === row.player_id ? 'text-[12px] font-semibold' : 'text-[11px]'} tnum text-right pr-3 py-0.5 text-[var(--color-text-primary)]`}>
                           {p.kills}/{p.assists}/{p.deaths}
                         </td>
-                        <td className="font-mono text-[11px] tnum text-right pr-2 py-0.5 text-[var(--color-text-secondary)] whitespace-nowrap">
+                        <td className={`font-mono ${p.player_id === row.player_id ? 'text-[12px] font-semibold' : 'text-[11px]'} tnum text-right pr-2 py-0.5 text-[var(--color-text-secondary)] whitespace-nowrap`}>
                           {p.adr} ADR
                         </td>
                       </tr>
