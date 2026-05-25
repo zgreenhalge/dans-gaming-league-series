@@ -8,11 +8,26 @@ import type {
   PlayerMatchStat,
   LeaderboardRow,
   LeaderboardRowWithId,
+  Faction,
 } from './types';
+
+export interface RosterStat {
+  match_id: number;
+  player_id: number;
+  player_name: string;
+  faction: Faction;
+  kills: number;
+  assists: number;
+  deaths: number;
+  adr: number;
+  is_win: boolean;
+}
 
 export interface MatchWithRoster extends Match {
   shirts: { player_id: number; player_name: string }[];
   skins: { player_id: number; player_name: string }[];
+  shirts_stats: RosterStat[];
+  skins_stats: RosterStat[];
 }
 
 export interface WeekWithMatches extends Week {
@@ -40,6 +55,8 @@ export interface PlayerHistoryRow extends PlayerMatchStat {
   final_score: string | null;
   shirts: { player_id: number; player_name: string }[];
   skins: { player_id: number; player_name: string }[];
+  shirts_stats: RosterStat[];
+  skins_stats: RosterStat[];
 }
 
 export interface PlayerDetail {
@@ -223,10 +240,12 @@ export async function getSeasonSchedule(
     const shirtsStats = roster
       .filter((r) => r.faction === 'SHIRTS')
       .map((r) => ({
+        match_id: r.match_id,
         player_id: r.player_id,
         player_name: players.get(r.player_id)?.name ?? `#${r.player_id}`,
         faction: 'SHIRTS' as const,
         kills: Math.max(0, r.kills),
+        assists: Math.max(0, r.assists ?? 0),
         deaths: Math.max(0, r.deaths),
         adr: Math.max(0, r.adr),
         is_win: !!r.is_win,
@@ -234,10 +253,12 @@ export async function getSeasonSchedule(
     const skinsStats = roster
       .filter((r) => r.faction === 'SKINS')
       .map((r) => ({
+        match_id: r.match_id,
         player_id: r.player_id,
         player_name: players.get(r.player_id)?.name ?? `#${r.player_id}`,
         faction: 'SKINS' as const,
         kills: Math.max(0, r.kills),
+        assists: Math.max(0, r.assists ?? 0),
         deaths: Math.max(0, r.deaths),
         adr: Math.max(0, r.adr),
         is_win: !!r.is_win,
@@ -405,7 +426,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
     rosterByMatch.set(st.match_id, entry);
   }
 
-  const history: PlayerHistoryRow[] = statRows
+  const history = statRows
     .map((s) => {
       const m = matchById.get(s.match_id);
       if (!m) return null;
