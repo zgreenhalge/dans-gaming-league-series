@@ -84,4 +84,111 @@ html, body {
   font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+/* Page atmosphere — paper grain (light) or scanlines (dark), faintly applied. */
+body { position: relative; }
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 160px 160px;
+}
+[data-theme="dark"] body::before {
+  opacity: 1;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,0.018) 0px,
+    rgba(255,255,255,0.018) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  background-size: auto;
+}
+/* Make sure page content stacks above the overlay. */
+body > * { position: relative; z-index: 1; }
+
 .tnum { font-variant-numeric: tabular-nums; }
+
+/* Typography utilities */
+.font-display { font-family: var(--font-display), system-ui, sans-serif; }
+.font-mono    { font-family: var(--font-mono), ui-monospace, Menlo, monospace; }
+
+/* Broadcast chrome label: small, uppercase, tracked */
+.tracked {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-feature-settings: "ss01";
+}
+
+/* Hero numeral — big stat values, outlined ghost option */
+.display-numeral {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 0.9;
+}
+.display-numeral.ghost {
+  color: transparent;
+  -webkit-text-stroke: 1px var(--color-text-primary);
+  text-stroke: 1px var(--color-text-primary);
+}
+
+/* Faction utilities — applied after veto resolves */
+.faction-ct { --faction: var(--color-ct); }
+.faction-t  { --faction: var(--color-t); }
+.faction-ct .faction-fg,
+.faction-t  .faction-fg { color: var(--faction); }
+.faction-ct .faction-border,
+.faction-t  .faction-border { border-color: var(--faction); }
+.faction-ct .faction-rule,
+.faction-t  .faction-rule {
+  position: relative;
+}
+.faction-ct .faction-rule::before,
+.faction-t  .faction-rule::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--faction);
+}
+
+/* Subtle faction-colored background tint — applied to the element itself */
+.faction-ct.faction-tint,
+.faction-t.faction-tint {
+  background: color-mix(in srgb, var(--faction) 10%, var(--color-bg-primary));
+}
+
+/* Map-card backdrop — pass map image via --map-img custom property */
+.map-card-bg {
+  position: relative;
+  background-color: var(--color-bg-primary);
+  background-image: var(--map-img);
+  background-size: cover;
+  background-position: center;
+  isolation: isolate;
+}
+.map-card-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-bg-primary) 35%, transparent) 0%,
+    color-mix(in srgb, var(--color-bg-primary) 44%, transparent) 100%
+  );
+  z-index: 0;
+  pointer-events: none;
+}
+[data-theme="dark"] .map-card-bg::after {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-bg-primary) 41%, transparent) 0%,
+    color-mix(in srgb, var(--color-bg-primary) 47%, transparent) 100%
+  );
+}
+.map-card-bg > * { position: relative; z-index: 1; }

@@ -1,12 +1,39 @@
 import type { Metadata } from "next";
+import { Bai_Jamjuree, Geist, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
-import { ThemeToggle } from "@/components/ThemeToggle";
+
+const display = Bai_Jamjuree({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
+  display: "swap",
+});
+
+const sans = Geist({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "DGLS · Dan's Gaming League Series",
+  title: {
+    template: "DGLS · %s",
+    default: "DGLS · Dan's Gaming League Series",
+  },
   description: "Individual rotating mixer league stats",
+  openGraph: {
+    title: "DGLS · Dan's Gaming League Series",
+    type: "website",
+  },
 };
 
 // Runs before first paint to avoid a theme flash. Reads stored preference,
@@ -19,12 +46,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`h-full antialiased ${display.variable} ${sans.variable} ${mono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-full">
-        <ThemeToggle />
         {children}
         <Analytics />
         <SpeedInsights />
