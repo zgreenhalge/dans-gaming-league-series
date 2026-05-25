@@ -382,12 +382,25 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
       player_id: st.player_id,
       player_name: p?.name ?? `#${st.player_id}`,
     };
+
+    const statObj = {
+      match_id: st.match_id,
+      player_id: st.player_id,
+      player_name: p?.name ?? `#${st.player_id}`,
+      faction: st.faction,
+      kills: Math.max(0, st.kills),
+      assists: Math.max(0, st.assists ?? 0),
+      deaths: Math.max(0, st.deaths),
+      adr: Math.max(0, st.adr ?? 0),
+      is_win: !!st.is_win,
+    };
+
     if (st.faction === 'SHIRTS') {
       entry.shirts.push(slot);
-      entry.shirts_stats = (entry.shirts_stats ?? []).concat(st);
+      entry.shirts_stats = (entry.shirts_stats ?? []).concat(statObj);
     } else {
       entry.skins.push(slot);
-      entry.skins_stats = (entry.skins_stats ?? []).concat(st);
+      entry.skins_stats = (entry.skins_stats ?? []).concat(statObj);
     }
     rosterByMatch.set(st.match_id, entry);
   }
