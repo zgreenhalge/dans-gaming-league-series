@@ -96,11 +96,11 @@ function PlayerMatchRow({
 
   const wlChip =
     variant === 'played' ? (
-      <span className={`inline-flex items-center px-2 py-1 tracked text-[14px] lg:text-[15px] font-semibold rounded-md shadow-sm ${row.is_win ? 'text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border border-[var(--color-accent-green-border)]' : 'text-[var(--color-accent-red-fg)] bg-[var(--color-accent-red-bg)] border border-[var(--color-accent-red-border)]'}`}>
+      <span className={`wl-chip ${row.is_win ? 'wl-chip--win' : 'wl-chip--loss'}`}>
         {row.is_win ? 'W' : 'L'}
       </span>
     ) : (
-      <span className="inline-flex items-center px-2 py-1 tracked text-[14px] lg:text-[15px] font-semibold rounded-md shadow-sm text-[var(--color-accent-amber-fg)] bg-[var(--color-accent-amber-bg)] border border-[var(--color-accent-amber-border)]">
+      <span className={`wl-chip wl-chip--pending`}>
         Pending
       </span>
     );
