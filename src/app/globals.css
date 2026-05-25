@@ -41,6 +41,8 @@
   --overlay-weak: rgba(0,0,0,0.02);
 
   --map-img-filter: saturate(1.25) contrast(1.18) brightness(1.02);
+  --map-img-filter-boost: saturate(1.32) contrast(1.22) brightness(1.08);
+  --map-text-bg: color-mix(in srgb, var(--color-bg-primary) 72%, transparent);
 
   color-scheme: light;
 }
@@ -184,6 +186,18 @@ body > * { position: relative; z-index: 1; }
   background-color: var(--color-bg-primary);
   isolation: isolate;
 }
+
+.map-card-bg.light-boost::before {
+  filter: var(--map-img-filter-boost);
+}
+
+.map-head {
+  background: var(--map-text-bg);
+  border-radius: var(--radius-md);
+  padding: 0.15em 0.5em;
+  display: inline-block;
+}
+
 /* Background image layer — separate pseudo-element so it can be filtered independently */
 .map-card-bg::before {
   content: "";
