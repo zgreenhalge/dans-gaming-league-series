@@ -29,7 +29,6 @@ export const metadata: Metadata = {
     template: "DGLS · %s",
     default: "DGLS · Dan's Gaming League Series",
   },
-  description: "Individual rotating mixer league stats",
   openGraph: {
     title: "DGLS · Dan's Gaming League Series",
     type: "website",
