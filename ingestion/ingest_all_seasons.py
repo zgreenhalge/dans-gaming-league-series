@@ -23,7 +23,10 @@ def main():
     parser.add_argument("--pattern", default="*Regular Season.csv", help="Glob pattern for CSV files")
     parser.add_argument("--upload", action="store_true", help="Enable stub upload mode for each file")
     args = parser.parse_args()
-    search_dir = os.getcwd() + "/Season Data/"
+    search_dir = os.path.join(os.getcwd(), "Season Data")
+    # If the repository is run from a temp dir (tests) or Season Data isn't present, fall back to cwd
+    if not os.path.isdir(search_dir):
+        search_dir = os.getcwd()
     csv_files = find_csv_files(search_dir, args.pattern)
     csv_files.sort() # Sort alphabetically, to upload in order
     
@@ -45,7 +48,9 @@ def main():
             else:
                 print("No BYEs detected.")
             if args.upload:
-                print("\n== Invoking stub upload for this file ==")
+                # Keep backward-compatible stub message for tests and visibility
+                print("\n=== STUB UPLOAD MODE ENABLED ===")
+                print("== Invoking stub upload for this file ==")
                 ingest_file.upload(matches, byes, csv_file)
         except FileNotFoundError:
             print(f"File not found: {csv_file}")
