@@ -48,7 +48,6 @@
   --map-text-bg: color-mix(in srgb, var(--color-bg-primary) 72%, transparent);
 
   color-scheme: light;
-  --typography-scale: 1; /* default 1, overridden when scaling */
 }
 
 /* Dark — broadcast HUD: near-black slate, CT cyan + T orange neon */
@@ -131,8 +130,21 @@ body::before {
   );
   background-size: auto;
 }
-/* Make sure page content stacks above the overlay, and apply typography scaling */
-body > * { position: relative; z-index: 1; transform-origin: 0 0; transform: scale(var(--typography-scale)); }
+/* Make sure page content stacks above the overlay. */
+body > * { position: relative; z-index: 1; }
+
+/* Slightly increase common Tailwind pixel-based font utilities by ~10% for better readability */
+.text-\[10px\] { font-size: calc(10px * 1.1); }
+.text-\[11px\] { font-size: calc(11px * 1.1); }
+.text-\[12px\] { font-size: calc(12px * 1.1); }
+.text-\[13px\] { font-size: calc(13px * 1.1); }
+.text-\[14px\] { font-size: calc(14px * 1.1); }
+.text-\[15px\] { font-size: calc(15px * 1.1); }
+.text-\[16px\] { font-size: calc(16px * 1.1); }
+.text-\[20px\] { font-size: calc(20px * 1.1); }
+
+/* Also bump display numerals and stat cells */
+.display-numeral { font-size: calc(1.1 * 1em); }
 
 .tnum { font-variant-numeric: tabular-nums; }
 
