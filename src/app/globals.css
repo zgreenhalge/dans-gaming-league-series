@@ -218,6 +218,15 @@ body > * { position: relative; z-index: 1; }
   gap: 0.5em;
 }
 
+/* Row highlighting for the current player inside per-match tables */
+.current-player-row {
+  background: color-mix(in srgb, var(--color-accent-green-bg) 18%, var(--overlay-medium));
+  font-weight: 600;
+}
+
+/* W/L badge sizing */
+.wl-badge { width: 1.5rem; height: 1.5rem; display:inline-flex; align-items:center; justify-content:center; border-radius:9999px; }
+
 /* Background image layer — separate pseudo-element so it can be filtered independently */
 .map-card-bg::before {
   content: "";

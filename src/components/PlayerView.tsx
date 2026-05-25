@@ -144,7 +144,12 @@ function PlayerMatchRow({
                 <table className="w-full border-collapse">
                   <tbody>
                     {(row as any).shirts_stats.map((p: any) => (
-                      <tr key={p.player_id} className="bg-[var(--overlay-medium)]">
+                      <tr key={p.player_id} className={`bg-[var(--overlay-medium)] ${p.player_id === row.player_id ? 'current-player-row' : ''}`}>
+                        <td className="pl-2 pr-3 py-0.5 whitespace-nowrap">
+                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[12px] font-semibold ${p.is_win ? 'text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)]' : 'text-[var(--color-accent-red-fg)] bg-[var(--color-bg-secondary)]'}`}>
+                            {p.is_win ? 'W' : 'L'}
+                          </span>
+                        </td>
                         <td className="font-display text-[13px] font-semibold pl-2 pr-3 py-0.5 whitespace-nowrap">
                           {p.player_name}
                         </td>
@@ -164,7 +169,12 @@ function PlayerMatchRow({
                 <table className="w-full border-collapse">
                   <tbody>
                     {(row as any).skins_stats.map((p: any) => (
-                      <tr key={p.player_id} className="bg-[var(--overlay-medium)]">
+                      <tr key={p.player_id} className={`bg-[var(--overlay-medium)] ${p.player_id === row.player_id ? 'current-player-row' : ''}`}>
+                        <td className="pl-2 pr-3 py-0.5 whitespace-nowrap">
+                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[12px] font-semibold ${p.is_win ? 'text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)]' : 'text-[var(--color-accent-red-fg)] bg-[var(--color-bg-secondary)]'}`}>
+                            {p.is_win ? 'W' : 'L'}
+                          </span>
+                        </td>
                         <td className="font-display text-[13px] font-semibold pl-2 pr-3 py-0.5 whitespace-nowrap">
                           {p.player_name}
                         </td>
