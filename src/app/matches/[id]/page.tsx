@@ -289,7 +289,7 @@ export default async function MatchPage({
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         {/* Header + veto wrapped in map backdrop — gradient shows regardless of image */}
         <div
-          className={map ? 'map-card-bg -mx-6 px-6' : ''}
+          className={map ? 'map-card-bg light-boost -mx-6 px-6' : ''}
           style={
             map
               ? ({
@@ -301,7 +301,7 @@ export default async function MatchPage({
           <div className="pt-8 pb-6">
             <div className="flex items-end justify-between gap-4 flex-wrap">
               <div>
-                <div className="font-display text-[36px] font-semibold leading-tight">
+                <div className="font-display text-[36px] font-semibold leading-tight map-head">
                   {map ?? 'TBD'}
                 </div>
                 <div className="tracked text-[10px] text-[var(--color-text-secondary)] mt-1.5">

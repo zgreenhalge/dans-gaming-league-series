@@ -262,7 +262,22 @@ export default function PlayerView({
 
   return (
     <>
-      <div className="flex items-center justify-end mb-3">
+      {/* Last 5 games record with filter */}
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Last 5</span>
+          <div className="flex items-center gap-2">
+            {last5.length === 0 ? (
+              <span className="text-[12px] text-[var(--color-text-secondary)]">No recent matches</span>
+            ) : (
+              last5.map((r, i) => (
+                <span key={r.id ?? i} className={`wl-chip wl-chip--sm ${r.is_win ? 'wl-chip--win' : 'wl-chip--loss'}`} aria-label={r.is_win ? 'Win' : 'Loss'}>
+                  {r.is_win ? 'W' : 'L'}
+                </span>
+              ))
+            )}
+          </div>
+        </div>
         <select
           value={String(filter)}
           onChange={(e) => {
@@ -278,22 +293,6 @@ export default function PlayerView({
             </option>
           ))}
         </select>
-      </div>
-
-      {/* Last 5 games record */}
-      <div className="mt-2 mb-4 flex items-center gap-3">
-        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Last 5</span>
-        <div className="flex items-center gap-2">
-          {last5.length === 0 ? (
-            <span className="text-[12px] text-[var(--color-text-secondary)]">No recent matches</span>
-          ) : (
-            last5.map((r, i) => (
-              <span key={r.id ?? i} className={`wl-chip ${r.is_win ? 'wl-chip--win' : 'wl-chip--loss'}`} aria-label={r.is_win ? 'Win' : 'Loss'}>
-                {r.is_win ? 'W' : 'L'}
-              </span>
-            ))
-          )}
-        </div>
       </div>
 
       <div className="flex items-baseline justify-between mt-6 mb-3">
