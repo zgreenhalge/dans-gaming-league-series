@@ -34,11 +34,13 @@
   --color-ct: #1f5fa8;
   --color-t: #c25a16;
 
-  /* Theme-aware overlays for map images and dim backgrounds — tuned for more vibrant look */
-  /* Warm brighter overlays in light mode to make images pop against white maps */
-  --overlay-strong: rgba(255,244,227,0.78);
-  --overlay-medium: rgba(255,246,234,0.56);
-  --overlay-weak: rgba(0,0,0,0.06);
+  /* Theme-aware overlays for map images and dim backgrounds — tuned for image vibrancy */
+  /* Light: slightly transparent warm overlays, image filter increases color/contrast */
+  --overlay-strong: rgba(255,244,227,0.54);
+  --overlay-medium: rgba(255,246,234,0.32);
+  --overlay-weak: rgba(0,0,0,0.02);
+
+  --map-img-filter: saturate(1.25) contrast(1.18) brightness(1.02);
 
   color-scheme: light;
 }
@@ -76,10 +78,12 @@
   --color-ct: #4ea1ff;
   --color-t: #ff8a3d;
 
-  /* Dark theme overlays — slightly richer, cooler tint for vibrancy */
-  --overlay-strong: rgba(8,12,24,0.58);
-  --overlay-medium: rgba(10,16,36,0.44);
-  --overlay-weak: rgba(10,16,36,0.22);
+  /* Dark theme overlays — slightly richer, cooler tint for vibrancy; lighter to reveal images */
+  --overlay-strong: rgba(8,12,24,0.42);
+  --overlay-medium: rgba(10,16,36,0.28);
+  --overlay-weak: rgba(10,16,36,0.12);
+
+  --map-img-filter: saturate(1.1) contrast(1.22) brightness(0.98);
 
   color-scheme: dark;
 }
@@ -178,10 +182,19 @@ body > * { position: relative; z-index: 1; }
 .map-card-bg {
   position: relative;
   background-color: var(--color-bg-primary);
+  isolation: isolate;
+}
+/* Background image layer — separate pseudo-element so it can be filtered independently */
+.map-card-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
   background-image: var(--map-img);
   background-size: cover;
   background-position: center;
-  isolation: isolate;
+  filter: var(--map-img-filter);
+  z-index: -1; /* sit behind the gradient overlay (::after) */
+  pointer-events: none;
 }
 .map-card-bg::after {
   content: "";
