@@ -104,9 +104,16 @@ function MatchRow({ match }: { match: MatchWithRoster }) {
         </div>
 
         <div className="px-4 py-3">
-          <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate map-head">
-            {shirtsLabel} <span className="opacity-50 map-head">vs</span> {skinsLabel}
-          </div>
+          { (match as any).shirts_stats && (match as any).shirts_stats.length > 0 ? (
+            <div className="grid grid-cols-2 divide-x divide-[var(--color-border-tertiary)]">
+              <TeamStatBlock players={(match as any).shirts_stats} />
+              <TeamStatBlock players={(match as any).skins_stats} />
+            </div>
+          ) : (
+            <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate map-head">
+              {shirtsLabel} <span className="opacity-50 map-head">vs</span> {skinsLabel}
+            </div>
+          )}
         </div>
       </div>
     </Link>

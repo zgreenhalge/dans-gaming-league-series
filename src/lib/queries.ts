@@ -193,35 +193,59 @@ export async function getSeasonSchedule(
   if (matchIds.length > 0) {
     const { data: s, error: sErr } = await supabase
       .from('player_match_stats')
-      .select('match_id, player_id, faction')
+      .select('*')
       .in('match_id', matchIds);
     if (sErr) throw sErr;
     stats = (s ?? []) as PlayerMatchStat[];
   }
 
-  const rosterByMatch = new Map<
-    number,
-    { shirts: MatchWithRoster['shirts']; skins: MatchWithRoster['skins'] }
-  >();
-  for (const st of stats) {
-    const entry =
-      rosterByMatch.get(st.match_id) ??
-      { shirts: [], skins: [] };
-    const p = players.get(st.player_id);
-    const slot = {
-      player_id: st.player_id,
-      player_name: p?.name ?? `#${st.player_id}`,
-    };
-    if (st.faction === 'SHIRTS') entry.shirts.push(slot);
-    else entry.skins.push(slot);
-    rosterByMatch.set(st.match_id, entry);
+  type StatRow = {
+    match_id: number;
+    player_id: number;
+    faction: 'SHIRTS' | 'SKINS';
+    kills: number;
+    assists: number;
+    deaths: number;
+    adr: number;
+    is_win: boolean;
+  };
+
+  const statsByMatch = new Map<number, StatRow[]>();
+  for (const s of stats as StatRow[]) {
+    const list = statsByMatch.get(s.match_id) ?? [];
+    list.push(s);
+    statsByMatch.set(s.match_id, list);
   }
 
   const matchesByWeek = new Map<number, MatchWithRoster[]>();
   for (const m of matchRows) {
-    const roster = rosterByMatch.get(m.id) ?? { shirts: [], skins: [] };
+    const roster = (statsByMatch.get(m.id) ?? []) as StatRow[];
+    const shirtsStats = roster
+      .filter((r) => r.faction === 'SHIRTS')
+      .map((r) => ({
+        player_id: r.player_id,
+        player_name: players.get(r.player_id)?.name ?? `#${r.player_id}`,
+        faction: 'SHIRTS' as const,
+        kills: Math.max(0, r.kills),
+        deaths: Math.max(0, r.deaths),
+        adr: Math.max(0, r.adr),
+        is_win: !!r.is_win,
+      }));
+    const skinsStats = roster
+      .filter((r) => r.faction === 'SKINS')
+      .map((r) => ({
+        player_id: r.player_id,
+        player_name: players.get(r.player_id)?.name ?? `#${r.player_id}`,
+        faction: 'SKINS' as const,
+        kills: Math.max(0, r.kills),
+        deaths: Math.max(0, r.deaths),
+        adr: Math.max(0, r.adr),
+        is_win: !!r.is_win,
+      }));
+
     const list = matchesByWeek.get(m.week_id) ?? [];
-    list.push({ ...m, shirts: roster.shirts, skins: roster.skins });
+    // Attach stats arrays as shirts_stats/skins_stats (may be empty)
+    list.push({ ...m, shirts: shirtsStats.map(s => ({ player_id: s.player_id, player_name: s.player_name })), skins: skinsStats.map(s => ({ player_id: s.player_id, player_name: s.player_name })), shirts_stats: shirtsStats, skins_stats: skinsStats });
     matchesByWeek.set(m.week_id, list);
   }
 
@@ -330,24 +354,41 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
   const [{ data: allStats, error: aErr }, players] = await Promise.all([
     supabase
       .from('player_match_stats')
-      .select('match_id, player_id, faction')
+      .select('*')
       .in('match_id', matchIds),
     getPlayersById(),
   ]);
   if (aErr) throw aErr;
+
+  type StatRow = {
+    match_id: number;
+    player_id: number;
+    faction: 'SHIRTS' | 'SKINS';
+    kills: number;
+    assists: number;
+    deaths: number;
+    adr: number;
+    is_win: boolean;
+  };
+
   const rosterByMatch = new Map<
     number,
-    { shirts: { player_id: number; player_name: string }[]; skins: { player_id: number; player_name: string }[] }
+    { shirts: { player_id: number; player_name: string }[]; skins: { player_id: number; player_name: string }[]; shirts_stats?: StatRow[]; skins_stats?: StatRow[] }
   >();
-  for (const st of (allStats ?? []) as PlayerMatchStat[]) {
+  for (const st of (allStats ?? []) as StatRow[]) {
     const entry = rosterByMatch.get(st.match_id) ?? { shirts: [], skins: [] };
     const p = players.get(st.player_id);
     const slot = {
       player_id: st.player_id,
       player_name: p?.name ?? `#${st.player_id}`,
     };
-    if (st.faction === 'SHIRTS') entry.shirts.push(slot);
-    else entry.skins.push(slot);
+    if (st.faction === 'SHIRTS') {
+      entry.shirts.push(slot);
+      entry.shirts_stats = (entry.shirts_stats ?? []).concat(st);
+    } else {
+      entry.skins.push(slot);
+      entry.skins_stats = (entry.skins_stats ?? []).concat(st);
+    }
     rosterByMatch.set(st.match_id, entry);
   }
 
@@ -370,6 +411,8 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         final_score: m.final_score,
         shirts: roster.shirts,
         skins: roster.skins,
+        shirts_stats: roster.shirts_stats ?? [],
+        skins_stats: roster.skins_stats ?? [],
       };
     })
     .filter((r): r is PlayerHistoryRow => r !== null)

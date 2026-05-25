@@ -126,7 +126,7 @@ function PlayerMatchRow({
         <div className="px-4 py-2 flex items-center justify-between gap-4 border-b border-[var(--color-border-tertiary)]">
           <div className="flex items-center gap-2">
             <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] map-head">
-              S{row.season_id} · W{row.week_number} · #{row.match_number}
+              Season {row.season_id} · Week {row.week_number} · Match {row.match_number}
             </span>
             {row.map && (
               <span className="font-display text-[16px] font-semibold text-[var(--color-text-primary)] map-head">
@@ -138,9 +138,54 @@ function PlayerMatchRow({
         </div>
 
         <div className="px-4 py-3">
-          <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate map-head">
-            {shirts} <span className="opacity-50 map-head">vs</span> {skins}
-          </div>
+          {(row as any).shirts_stats && (row as any).shirts_stats.length > 0 ? (
+            <div className="grid grid-cols-2 divide-x divide-[var(--color-border-tertiary)]">
+              <div className="px-3 py-2">
+                <table className="w-full border-collapse">
+                  <tbody>
+                    {(row as any).shirts_stats.map((p: any) => (
+                      <tr key={p.player_id} className="bg-[var(--overlay-medium)]">
+                        <td className="font-display text-[13px] font-semibold pl-2 pr-3 py-0.5 whitespace-nowrap">
+                          {p.player_name}
+                        </td>
+                        <td className="font-mono text-[11px] tnum text-right pr-3 py-0.5 text-[var(--color-text-primary)]">
+                          {p.kills}/{p.assists}/{p.deaths}
+                        </td>
+                        <td className="font-mono text-[11px] tnum text-right pr-2 py-0.5 text-[var(--color-text-secondary)] whitespace-nowrap">
+                          {p.adr} ADR
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="px-3 py-2">
+                <table className="w-full border-collapse">
+                  <tbody>
+                    {(row as any).skins_stats.map((p: any) => (
+                      <tr key={p.player_id} className="bg-[var(--overlay-medium)]">
+                        <td className="font-display text-[13px] font-semibold pl-2 pr-3 py-0.5 whitespace-nowrap">
+                          {p.player_name}
+                        </td>
+                        <td className="font-mono text-[11px] tnum text-right pr-3 py-0.5 text-[var(--color-text-primary)]">
+                          {p.kills}/{p.assists}/{p.deaths}
+                        </td>
+                        <td className="font-mono text-[11px] tnum text-right pr-2 py-0.5 text-[var(--color-text-secondary)] whitespace-nowrap">
+                          {p.adr} ADR
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate map-head">
+              {shirts} <span className="opacity-50 map-head">vs</span> {skins}
+            </div>
+          )}
+
           {variant === 'played' && (
             <div className="mt-3 font-mono text-[13px] font-semibold tnum text-[var(--color-text-primary)]">
               {row.kills}<span className="text-[var(--color-text-secondary)] font-normal mx-0.5">/</span>{row.assists}<span className="text-[var(--color-text-secondary)] font-normal mx-0.5">/</span>{row.deaths}
