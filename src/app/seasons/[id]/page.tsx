@@ -96,7 +96,7 @@ function MatchRow({ match }: { match: MatchWithRoster }) {
           )}
         </div>
         {map && (
-          <div className="font-display text-[15px] font-semibold leading-tight mb-1">
+          <div className="font-display text-[15px] font-semibold leading-tight mb-1 map-head">
             {map}
           </div>
         )}
@@ -195,7 +195,7 @@ function GauntletMatchCard({
               Game {gameNumber}
             </span>
             {match.map && (
-              <span className="font-display text-[16px] font-semibold text-[var(--color-text-primary)]">
+              <span className="font-display text-[16px] font-semibold text-[var(--color-text-primary)] map-head">
                 {match.map}
               </span>
             )}

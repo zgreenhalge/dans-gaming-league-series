@@ -130,7 +130,7 @@ function PlayerMatchRow({
           {outcome}
         </div>
         {row.map && (
-          <div className="font-display text-[15px] font-semibold leading-tight mb-1">
+          <div className="font-display text-[15px] font-semibold leading-tight mb-1 map-head">
             {row.map}
           </div>
         )}
