@@ -94,24 +94,13 @@ function PlayerMatchRow({
   const skins = row.skins.map((p) => p.player_name).join(' & ') || 'TBD';
   const mapImg = mapImageFor(row.map);
 
-  const outcome =
+  const wlChip =
     variant === 'played' ? (
-      <div className="flex items-center gap-2 shrink-0">
-        <span className="font-mono text-[13px] font-semibold tnum text-[var(--color-text-primary)]">
-          {row.final_score}
-        </span>
-        <span
-          className={`inline-flex items-center justify-center w-6 px-1 py-0.5 tracked text-[10px] font-semibold border ${
-            row.is_win
-              ? 'text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border-[var(--color-accent-green-border)]'
-              : 'text-[var(--color-accent-red-fg)] bg-[var(--color-bg-secondary)] border-[var(--color-border-tertiary)]'
-          }`}
-        >
-          {row.is_win ? 'W' : 'L'}
-        </span>
-      </div>
+      <span className={`wl-chip ${row.is_win ? 'wl-chip--win' : 'wl-chip--loss'}`}>
+        {row.is_win ? 'W' : 'L'}
+      </span>
     ) : (
-      <span className="inline-flex items-center px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-amber-fg)] bg-[var(--color-accent-amber-bg)] border border-[var(--color-accent-amber-border)] shrink-0">
+      <span className={`wl-chip wl-chip--pending`}>
         Pending
       </span>
     );
@@ -122,29 +111,67 @@ function PlayerMatchRow({
       className={`block border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors ${mapImg ? 'map-card-bg' : 'hover:bg-[var(--color-bg-secondary)]'}`}
       style={mapImg ? ({ ['--map-img' as string]: `url("${mapImg}")` } as React.CSSProperties) : undefined}
     >
-      <div className={`px-4 py-3 ${mapImg ? 'bg-[rgba(0,0,0,0.28)] hover:bg-[rgba(0,0,0,0.18)] transition-colors' : ''}`}>
-        <div className="flex items-center justify-between gap-3 mb-1">
-          <span className="font-mono text-[11px] text-[var(--color-text-secondary)] whitespace-nowrap">
-            S{row.season_id} · W{row.week_number} · #{row.match_number}
-          </span>
-          {outcome}
+      <div className={mapImg ? 'bg-[var(--overlay-strong)] hover:bg-[var(--overlay-medium)] transition-colors' : ''}>
+        <div className="px-4 py-2 flex items-center justify-between gap-4 border-b border-[var(--color-border-tertiary)]">
+          <div className="flex items-baseline gap-3">
+            {wlChip}
+            {row.map && (
+              <span className="font-display text-[16px] font-semibold text-[var(--color-text-primary)] map-head">
+                {row.map}
+              </span>
+            )}
+            <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] map-head">
+              Season {row.season_id} · Week {row.week_number} · Match {row.match_number}
+            </span>
+          </div>
         </div>
-        {row.map && (
-          <div className="font-display text-[15px] font-semibold leading-tight mb-1">
-            {row.map}
-          </div>
-        )}
-        <div className="flex items-end justify-between gap-3">
-          <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate">
-            {shirts} <span className="opacity-50">vs</span> {skins}
-          </div>
-          {variant === 'played' && (
-            <div className="font-mono text-[13px] font-semibold tnum shrink-0 text-[var(--color-text-primary)]">
-              {row.kills}
-              <span className="text-[var(--color-text-secondary)] font-normal mx-0.5">/</span>
-              {row.assists}
-              <span className="text-[var(--color-text-secondary)] font-normal mx-0.5">/</span>
-              {row.deaths}
+
+        <div className="px-4 py-3">
+          {(row as any).shirts_stats && (row as any).shirts_stats.length > 0 ? (
+            <div className="grid grid-cols-2 divide-x divide-[var(--color-border-tertiary)]">
+              <div className="px-3 py-2">
+                <table className="w-full border-collapse">
+                  <tbody>
+                    {(row as any).shirts_stats.map((p: any) => (
+                      <tr key={p.player_id} className={`bg-[var(--overlay-medium)] ${p.player_id === row.player_id ? 'current-player-row' : ''}`}>
+                        <td className={`font-display ${p.player_id === row.player_id ? 'text-[15px] lg:text-[16px] font-bold' : 'text-[13px] font-semibold'} pl-2 pr-3 py-0.5 whitespace-nowrap`}>
+                          {p.player_name}
+                        </td>
+                        <td className={`font-mono ${p.player_id === row.player_id ? 'text-[12px] font-semibold' : 'text-[11px]'} tnum text-right pr-3 py-0.5 text-[var(--color-text-primary)]`}>
+                          {p.kills}/{p.assists}/{p.deaths}
+                        </td>
+                        <td className={`font-mono ${p.player_id === row.player_id ? 'text-[12px] font-semibold' : 'text-[11px]'} tnum text-right pr-2 py-0.5 text-[var(--color-text-secondary)] whitespace-nowrap`}>
+                          {p.adr} ADR
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="px-3 py-2">
+                <table className="w-full border-collapse">
+                  <tbody>
+                    {(row as any).skins_stats.map((p: any) => (
+                      <tr key={p.player_id} className={`bg-[var(--overlay-medium)] ${p.player_id === row.player_id ? 'current-player-row' : ''}`}>
+                        <td className={`font-display ${p.player_id === row.player_id ? 'text-[15px] lg:text-[16px] font-bold' : 'text-[13px] font-semibold'} pl-2 pr-3 py-0.5 whitespace-nowrap`}>
+                          {p.player_name}
+                        </td>
+                        <td className={`font-mono ${p.player_id === row.player_id ? 'text-[12px] font-semibold' : 'text-[11px]'} tnum text-right pr-3 py-0.5 text-[var(--color-text-primary)]`}>
+                          {p.kills}/{p.assists}/{p.deaths}
+                        </td>
+                        <td className={`font-mono ${p.player_id === row.player_id ? 'text-[12px] font-semibold' : 'text-[11px]'} tnum text-right pr-2 py-0.5 text-[var(--color-text-secondary)] whitespace-nowrap`}>
+                          {p.adr} ADR
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate map-head">
+              {shirts} <span className="opacity-50 map-head">vs</span> {skins}
             </div>
           )}
         </div>
@@ -206,6 +233,8 @@ export default function PlayerView({
     );
   }, [history]);
 
+  const last5 = useMemo(() => history.filter(isPlayed).slice(0, 5), [history]);
+
   const [filter, setFilter] = useState<Filter>('career');
   const [mapSort, setMapSort] = useState<MapSortCol>('wr');
   const [mapAsc, setMapAsc] = useState(false);
@@ -233,7 +262,22 @@ export default function PlayerView({
 
   return (
     <>
-      <div className="flex items-center justify-end mb-3">
+      {/* Last 5 games record with filter */}
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Last 5</span>
+          <div className="flex items-center gap-2">
+            {last5.length === 0 ? (
+              <span className="text-[12px] text-[var(--color-text-secondary)]">No recent matches</span>
+            ) : (
+              last5.map((r, i) => (
+                <span key={r.id ?? i} className={`wl-chip wl-chip--sm ${r.is_win ? 'wl-chip--win' : 'wl-chip--loss'}`} aria-label={r.is_win ? 'Win' : 'Loss'}>
+                  {r.is_win ? 'W' : 'L'}
+                </span>
+              ))
+            )}
+          </div>
+        </div>
         <select
           value={String(filter)}
           onChange={(e) => {

@@ -28,11 +28,24 @@
   --color-accent-blue-strong: #143f70;
   --color-accent-blue-border: #9ebcdf;
 
-  --color-accent-red-fg: #a53826;
+  --color-accent-red-fg: #b33a2d;
+  --color-accent-red-bg: rgba(179,58,45,0.10);
+  --color-accent-red-border: rgba(179,58,45,0.35);
+  --color-accent-red-strong: #8b2920;
 
   /* Faction tokens — used in HUD reskin */
   --color-ct: #1f5fa8;
   --color-t: #c25a16;
+
+  /* Theme-aware overlays for map images and dim backgrounds — tuned for image vibrancy */
+  /* Light: slightly transparent warm overlays, image filter increases color/contrast */
+  --overlay-strong: rgba(255,244,227,0.54);
+  --overlay-medium: rgba(255,246,234,0.32);
+  --overlay-weak: rgba(0,0,0,0.02);
+
+  --map-img-filter: saturate(1.25) contrast(1.18) brightness(1.02);
+  --map-img-filter-boost: saturate(1.32) contrast(1.22) brightness(1.08);
+  --map-text-bg: color-mix(in srgb, var(--color-bg-primary) 72%, transparent);
 
   color-scheme: light;
 }
@@ -65,10 +78,20 @@
   --color-accent-blue-strong: #82bcff;
   --color-accent-blue-border: rgba(78, 161, 255, 0.35);
 
-  --color-accent-red-fg: #ff7a5e;
+  --color-accent-red-fg: #ff5b50;
+  --color-accent-red-bg: rgba(255,91,80,0.12);
+  --color-accent-red-border: rgba(255,91,80,0.35);
+  --color-accent-red-strong: #ff3b2a;
 
   --color-ct: #4ea1ff;
   --color-t: #ff8a3d;
+
+  /* Dark theme overlays — slightly richer, cooler tint for vibrancy; lighter to reveal images */
+  --overlay-strong: rgba(8,12,24,0.42);
+  --overlay-medium: rgba(10,16,36,0.28);
+  --overlay-weak: rgba(10,16,36,0.12);
+
+  --map-img-filter: saturate(1.1) contrast(1.22) brightness(0.98);
 
   color-scheme: dark;
 }
@@ -109,6 +132,19 @@ body::before {
 }
 /* Make sure page content stacks above the overlay. */
 body > * { position: relative; z-index: 1; }
+
+/* Slightly increase common Tailwind pixel-based font utilities by ~10% for better readability */
+.text-\[10px\] { font-size: calc(10px * 1.1); }
+.text-\[11px\] { font-size: calc(11px * 1.1); }
+.text-\[12px\] { font-size: calc(12px * 1.1); }
+.text-\[13px\] { font-size: calc(13px * 1.1); }
+.text-\[14px\] { font-size: calc(14px * 1.1); }
+.text-\[15px\] { font-size: calc(15px * 1.1); }
+.text-\[16px\] { font-size: calc(16px * 1.1); }
+.text-\[20px\] { font-size: calc(20px * 1.1); }
+
+/* Also bump display numerals and stat cells */
+.display-numeral { font-size: calc(1.1 * 1em); }
 
 .tnum { font-variant-numeric: tabular-nums; }
 
@@ -167,10 +203,107 @@ body > * { position: relative; z-index: 1; }
 .map-card-bg {
   position: relative;
   background-color: var(--color-bg-primary);
+  isolation: isolate;
+}
+
+.map-card-bg.light-boost::before {
+  filter: var(--map-img-filter-boost);
+}
+
+.map-head {
+  background: var(--map-text-bg);
+  border-radius: var(--radius-md);
+  padding: 0.15em 0.5em;
+  display: inline-block;
+}
+
+/* Apply subtle transparent background to low-contrast text inside map cards */
+.map-card-bg .map-head,
+.map-card-bg .tracked,
+.map-card-bg .opacity-50 {
+  background: var(--map-text-bg);
+  border-radius: var(--radius-md);
+  padding: 0.12em 0.45em;
+  display: inline-block;
+}
+
+/* Highlight the player's key info on player-specific views */
+.player-highlight {
+  background: color-mix(in srgb, var(--color-accent-green-bg) 12%, transparent);
+  border-radius: var(--radius-md);
+  padding: 0.12em 0.5em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+/* Row highlighting for the current player inside per-match tables */
+.current-player-row {
+  background: color-mix(in srgb, var(--color-accent-green-bg) 18%, var(--overlay-medium));
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--color-border-primary);
+}
+
+/* W/L badge sizing */
+.wl-badge { width: 1.5rem; height: 1.5rem; display:inline-flex; align-items:center; justify-content:center; border-radius:9999px; }
+
+/* W/L header chip — refined: uniform thin outlines and consistent sizing */
+.wl-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.8rem; /* 1.2x larger */
+  min-width: 1.8rem;
+  padding: 0 0.54rem;
+  border-radius: 0.375rem;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+  gap: 0.38rem;
+  box-sizing: border-box;
+}
+.wl-chip--win {
+  color: var(--color-accent-green-strong, var(--color-accent-green-fg));
+  border: 1.5px solid var(--color-accent-green-border);
+  background: color-mix(in srgb, var(--color-accent-green-bg) 88%, var(--color-bg-primary));
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  padding: 0 0.42rem; /* slightly slimmer */
+}
+.wl-chip--loss {
+  color: var(--color-accent-red-fg);
+  border: 1.5px solid var(--color-accent-red-border);
+  background: color-mix(in srgb, var(--color-accent-red-bg) 82%, var(--color-bg-primary));
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.wl-chip--pending {
+  color: var(--color-accent-amber-fg);
+  border: 1.5px solid var(--color-accent-amber-border);
+  background: color-mix(in srgb, var(--color-accent-amber-bg) 86%, var(--color-bg-primary));
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+/* Compact variant — smaller sizing for inline/inline-block contexts */
+.wl-chip--sm {
+  height: 1.4rem;
+  min-width: 1.4rem;
+  padding: 0 0.35rem;
+  font-size: 12px;
+}
+.wl-chip--sm.wl-chip--win {
+  padding: 0 0.28rem;
+}
+
+/* Background image layer — separate pseudo-element so it can be filtered independently */
+.map-card-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
   background-image: var(--map-img);
   background-size: cover;
   background-position: center;
-  isolation: isolate;
+  filter: var(--map-img-filter);
+  z-index: -1; /* sit behind the gradient overlay (::after) */
+  pointer-events: none;
 }
 .map-card-bg::after {
   content: "";

@@ -17,8 +17,9 @@ export async function generateMetadata({
   const detail = await getMatch(Number(id));
   if (!detail) return { title: 'Match' };
   const { match, week, season } = detail;
+  const weekLabel = season.is_gauntlet ? `Round ${week.week_number}` : `Week ${week.week_number}`;
   return {
-    title: `S${season.id} W${week.week_number} Match ${match.match_number}`,
+    title: `${season.name} · ${weekLabel} · Match ${match.match_number}`,
   };
 }
 
@@ -41,18 +42,20 @@ function Topbar({
   seasonName,
   weekNumber,
   matchNumber,
+  isGauntlet,
 }: {
   seasonId: number;
   seasonName: string;
   weekNumber: number;
   matchNumber: number;
+  isGauntlet: boolean;
 }) {
   return (
     <TopbarShell
       crumbs={[
         { label: 'DGLS', href: '/' },
         { label: seasonName, href: `/seasons/${seasonId}` },
-        { label: `W${weekNumber} · M${matchNumber}` },
+        { label: `${isGauntlet ? 'Round' : 'Week'} ${weekNumber} · Match ${matchNumber}` },
       ]}
     />
   );
@@ -80,13 +83,23 @@ function VetoSequence({ match }: { match: Match }) {
   const pickCls =
     'bg-[var(--color-accent-green-bg)] border-2 border-[var(--color-accent-amber-pickborder)] [&_.lbl]:text-[var(--color-accent-green-fg)] [&_.val]:text-[var(--color-accent-green-strong)]';
 
-  const steps: { label: string; val: string | null; cls: string }[] = [
-    { label: 'Shirts ban', val: match.shirts_ban, cls: banCls },
-    { label: 'Skins ban', val: match.skins_ban1, cls: banCls },
-    { label: 'Skins ban', val: match.skins_ban2, cls: banCls },
-    { label: 'Map pick', val: match.shirts_pick ?? match.picked_map, cls: pickCls },
-    { label: 'Skins side', val: side, cls: sideCls },
-  ];
+  const steps: { label: string; val: string | null; cls: string }[] =
+    match.is_playoff_game
+      ? [
+          { label: 'Shirts ban', val: match.shirts_ban, cls: banCls },
+          { label: 'Shirts ban', val: match.shirts_ban2, cls: banCls },
+          { label: 'Skins ban', val: match.skins_ban1, cls: banCls },
+          { label: 'Skins ban', val: match.skins_ban2, cls: banCls },
+          { label: 'Map pick', val: match.shirts_pick ?? match.picked_map, cls: pickCls },
+          { label: 'Skins side', val: side, cls: sideCls },
+        ]
+      : [
+          { label: 'Shirts ban', val: match.shirts_ban, cls: banCls },
+          { label: 'Skins ban', val: match.skins_ban1, cls: banCls },
+          { label: 'Skins ban', val: match.skins_ban2, cls: banCls },
+          { label: 'Map pick', val: match.shirts_pick ?? match.picked_map, cls: pickCls },
+          { label: 'Skins side', val: side, cls: sideCls },
+        ];
 
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
@@ -272,11 +285,11 @@ export default async function MatchPage({
 
   return (
     <div className="min-h-screen">
-      <Topbar seasonId={season.id} seasonName={season.name} weekNumber={week.week_number} matchNumber={match.match_number} />
+      <Topbar seasonId={season.id} seasonName={season.name} weekNumber={week.week_number} matchNumber={match.match_number} isGauntlet={season.is_gauntlet} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         {/* Header + veto wrapped in map backdrop — gradient shows regardless of image */}
         <div
-          className={map ? 'map-card-bg -mx-6 px-6' : ''}
+          className={map ? 'map-card-bg light-boost -mx-6 px-6' : ''}
           style={
             map
               ? ({
@@ -288,11 +301,11 @@ export default async function MatchPage({
           <div className="pt-8 pb-6">
             <div className="flex items-end justify-between gap-4 flex-wrap">
               <div>
-                <div className="font-display text-[36px] font-semibold leading-tight">
+                <div className="font-display text-[36px] font-semibold leading-tight map-head">
                   {map ?? 'TBD'}
                 </div>
                 <div className="tracked text-[10px] text-[var(--color-text-secondary)] mt-1.5">
-                  Week {week.week_number} · Match {match.match_number}
+                  {season.is_gauntlet ? 'Round' : 'Week'} {week.week_number} · Match {match.match_number}
                 </div>
               </div>
               {!played && (

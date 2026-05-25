@@ -1,6 +1,9 @@
 # Local environment files
 .env
 
+# IntelliJ stuff
+.idea
+
 # Virtualenvs
 .dgls-env/
 dgls-env/

@@ -3,6 +3,7 @@ import {
   getCareerLeaderboard,
   getAllLeaderboards,
   getSeasons,
+  getGauntletStats,
 } from '@/lib/queries';
 import CareerStatsView from '@/components/CareerStatsView';
 import type { LeaderboardRowWithId } from '@/lib/types';
@@ -12,18 +13,24 @@ export const revalidate = 60;
 export const metadata = { title: 'Statistics' };
 
 export default async function StatisticsPage() {
-  const [careerRows, allLeaderboards, seasons] = await Promise.all([
-    getCareerLeaderboard(),
-    getAllLeaderboards(),
-    getSeasons(),
-  ]);
+  const [careerRows, allLeaderboards, seasons, gauntletStats] =
+    await Promise.all([
+      getCareerLeaderboard(),
+      getAllLeaderboards(),
+      getSeasons(),
+      getGauntletStats(),
+    ]);
 
   const bySeason: Record<number, LeaderboardRowWithId[]> = {};
   for (const [sid, rows] of allLeaderboards) bySeason[sid] = rows;
 
-  const seasonsWithData = seasons.filter((s) =>
-    (bySeason[s.id] ?? []).some((r) => r.total_rounds_played > 0),
-  );
+  const regularSeasons = seasons
+    .filter((s) => !s.is_gauntlet)
+    .filter((s) => (bySeason[s.id] ?? []).some((r) => r.total_rounds_played > 0));
+
+  const gauntletSeasons = seasons
+    .filter((s) => s.is_gauntlet)
+    .filter((s) => (gauntletStats.bySeason[s.id] ?? []).length > 0);
 
   return (
     <div className="min-h-screen">
@@ -40,9 +47,12 @@ export default async function StatisticsPage() {
           </div>
         </div>
         <CareerStatsView
-          seasons={seasonsWithData.map((s) => ({ id: s.id, name: s.name }))}
+          regularSeasons={regularSeasons.map((s) => ({ id: s.id, name: s.name }))}
+          gauntletSeasons={gauntletSeasons.map((s) => ({ id: s.id, name: s.name }))}
           careerRows={careerRows}
           bySeason={bySeason}
+          gauntletCareerRows={gauntletStats.career}
+          gauntletBySeason={gauntletStats.bySeason}
         />
       </main>
     </div>

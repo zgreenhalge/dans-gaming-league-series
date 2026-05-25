@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { getSeasons, getAllLeaderboards } from '@/lib/queries';
+import { getSeasons, getAllLeaderboards, getAllGauntletSummaries } from '@/lib/queries';
+import type { GauntletSummary } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { TopbarShell } from '@/components/TopbarShell';
 
@@ -149,24 +150,64 @@ function PastSeasonRow({
   return (
     <Link
       href={`/seasons/${season.id}`}
-      className="grid grid-cols-[1fr_auto] items-center gap-6 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
+      className="grid grid-cols-[1fr_auto] items-center gap-8 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
     >
       <div className="min-w-0">
         <div className="font-display text-[18px] font-semibold leading-tight truncate">
           {season.name}
         </div>
         <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1">
-          {winner ? (
-            <><span className="tracked mr-1">Champion</span>{winner.player_name}</>
-          ) : 'No data'} · {leaderboard.length} players
+          {leaderboard.length} players
         </div>
       </div>
-      {winner && (
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-5">
-          <Stat v={`${winner.win_rate_percentage.toFixed(1)}%`} l="WR" />
-          <Stat v={winner.overall_adr.toFixed(1)} l="ADR" />
-          <Stat v={winner.kd_ratio.toFixed(2)} l="K/D" />
+      {winner ? (
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex items-baseline gap-2">
+            <span className="tracked text-[9px] text-[var(--color-text-secondary)]">Champion</span>
+            <span className="font-display text-[16px] font-semibold leading-tight">{winner.player_name}</span>
+          </div>
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-5">
+            <Stat v={`${winner.win_rate_percentage.toFixed(1)}%`} l="WR" />
+            <Stat v={winner.overall_adr.toFixed(1)} l="ADR" />
+            <Stat v={winner.kd_ratio.toFixed(2)} l="K/D" />
+          </div>
         </div>
+      ) : (
+        <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">No data</div>
+      )}
+    </Link>
+  );
+}
+
+function GauntletPastSeasonRow({
+  season,
+  summary,
+}: {
+  season: Season;
+  summary: GauntletSummary | undefined;
+}) {
+  return (
+    <Link
+      href={`/seasons/${season.id}`}
+      className="grid grid-cols-[1fr_auto] items-center gap-8 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
+    >
+      <div className="min-w-0">
+        <div className="font-display text-[18px] font-semibold leading-tight truncate">
+          {season.name}
+        </div>
+        <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1">
+          {summary ? `${summary.playerCount} players · ${summary.roundCount} rounds` : 'Gauntlet'}
+        </div>
+      </div>
+      {summary?.champion ? (
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex items-baseline gap-2">
+            <span className="tracked text-[9px] text-[var(--color-text-secondary)]">Champion</span>
+            <span className="font-display text-[16px] font-semibold leading-tight">{summary.champion.name}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">No data</div>
       )}
     </Link>
   );
@@ -186,18 +227,28 @@ function Stat({ v, l }: { v: string; l: string }) {
 }
 
 export default async function Home() {
-  const [seasons, leaderboards] = await Promise.all([
+  const [seasons, leaderboards, gauntletSummaries] = await Promise.all([
     getSeasons(),
     getAllLeaderboards(),
+    getAllGauntletSummaries(),
   ]);
 
   const upcoming = seasons
     .filter((s) => s.status === 'UPCOMING')
     .sort((a, b) => a.id - b.id);
   const active = seasons.filter((s) => s.status === 'ACTIVE');
+  function seasonNumber(s: Season): number {
+    const m = s.name.match(/Season\s+(\d+)/i);
+    return m ? parseInt(m[1], 10) : 0;
+  }
   const past = seasons
     .filter((s) => s.status === 'ARCHIVED')
-    .sort((a, b) => b.id - a.id);
+    .sort((a, b) => {
+      const nDiff = seasonNumber(b) - seasonNumber(a);
+      if (nDiff !== 0) return nDiff;
+      // Within same season number: gauntlet is more recent, so show it first (top)
+      return (b.is_gauntlet ? 1 : 0) - (a.is_gauntlet ? 1 : 0);
+    });
 
   return (
     <div className="min-h-screen">
@@ -240,7 +291,14 @@ export default async function Home() {
           </div>
         ) : (
           <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-            {past.map((s) => (
+            {past.map((s) =>
+            s.is_gauntlet ? (
+              <GauntletPastSeasonRow
+                key={s.id}
+                season={s}
+                summary={gauntletSummaries.get(s.id)}
+              />
+            ) : (
               <PastSeasonRow
                 key={s.id}
                 season={s}

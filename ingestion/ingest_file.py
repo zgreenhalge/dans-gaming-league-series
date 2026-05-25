@@ -162,7 +162,7 @@ def default_stat(val: Any) -> int:
     return int(val) if val is not None else -1
 
 
-def upload(matches, byes, source_file: str):
+def upload(matches, byes, source_file: str, is_playoff: bool = False, season_name_override: str = None):
     """Upload parsed CSV data to Supabase.
 
     This function attempts to be robust against different supabase client return shapes
@@ -182,18 +182,27 @@ def upload(matches, byes, source_file: str):
         # python-dotenv not installed or .env missing; continue and rely on environment
         pass
 
+    # Try to import Supabase client; fall back to "stub" mode if unavailable
+    create_client = None
     try:
-        from supabase import create_client
-    except Exception as e:
+        from supabase import create_client as _create_client
+        create_client = _create_client
+    except Exception:
         print("Supabase Python client not available. Install with: pip install supabase")
-        raise
+        create_client = None
 
     SUPABASE_URL = os.environ.get("SUPABASE_URL")
     SUPABASE_KEY = os.environ.get("SUPABASE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_KEY (or SUPABASE_ANON_KEY) must be set in the environment to upload.")
 
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    if create_client and SUPABASE_URL and SUPABASE_KEY:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    else:
+        # Operate in stub mode (no network). Upload-related helpers will print actions instead of calling Supabase.
+        supabase = None
+        if not create_client:
+            print("Proceeding in STUB mode: no Supabase client available.")
+        else:
+            print("Proceeding in STUB mode: SUPABASE_URL or SUPABASE_KEY not set.")
 
     def _rows_from_response(resp):
         if resp is None:
@@ -213,6 +222,9 @@ def upload(matches, byes, source_file: str):
         return rows[0] if rows else None
 
     def get_or_create_season(name: str):
+        if supabase is None:
+            print(f"(stub) Would create or use season: {name}")
+            return -1
         resp = supabase.table("seasons").select("*").eq("name", name).limit(1).execute()
         row = _single_from_response(resp)
         if row:
@@ -229,6 +241,9 @@ def upload(matches, byes, source_file: str):
     def get_or_create_player(name: str):
         if not name:
             return None
+        if supabase is None:
+            print(f"(stub) Would get or create player: {name}")
+            return -1
         resp = supabase.table("players").select("*").eq("name", name).limit(1).execute()
         row = _single_from_response(resp)
         if row:
@@ -240,6 +255,9 @@ def upload(matches, byes, source_file: str):
         raise RuntimeError(f"Failed to create player: {name}")
 
     def get_or_create_week(season_id: int, week_number: int, bye_player_name: str = None):
+        if supabase is None:
+            print(f"(stub) Would create or use week: season_id={season_id}, week_number={week_number}, bye_player={bye_player_name}")
+            return -1
         resp = supabase.table("weeks").select("*").eq("season_id", season_id).eq("week_number", week_number).limit(1).execute()
         row = _single_from_response(resp)
         if row:
@@ -275,8 +293,14 @@ def upload(matches, byes, source_file: str):
             "skins_starting_side": meta.get("skins_side") or meta.get("skins_starting_side") or None,
             "final_score": final_score,
         }
+        # Add playoff flag for gauntlet imports if requested.
+        if is_playoff:
+            payload["is_playoff_game"] = True
         # Remove None values so Supabase uses defaults
         payload = {k: v for k, v in payload.items() if v is not None}
+        if supabase is None:
+            print(f"(stub) Would create match: week_id={week_id}, match_number={match_number}, final_score={final_score}, is_playoff_game={is_playoff}")
+            return -1
         resp = supabase.table("matches").insert(payload).select("id").execute()
         row = _single_from_response(resp)
         if row:
@@ -305,6 +329,9 @@ def upload(matches, byes, source_file: str):
         }
         # Clean None values
         payload = {k: v for k, v in payload.items() if v is not None}
+        if supabase is None:
+            print(f"(stub) Would create player_match_stats: match_id={match_id}, player_id={player_id}, payload={payload}")
+            return -1
         resp = supabase.table("player_match_stats").insert(payload).select("id").execute()
         row = _single_from_response(resp)
         if row:
@@ -332,7 +359,9 @@ def upload(matches, byes, source_file: str):
             
         return "Unknown Season"
 
-    season_id = get_or_create_season(get_season_name(source_file))
+    # Allow caller to override season name (useful for gauntlet imports)
+    season_name = season_name_override if season_name_override else get_season_name(source_file)
+    season_id = get_or_create_season(season_name)
 
     # create weeks
     seen_week_ids = {}
