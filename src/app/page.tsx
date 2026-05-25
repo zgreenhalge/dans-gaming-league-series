@@ -13,10 +13,6 @@ function podiumSort(rows: LeaderboardRowWithId[]): LeaderboardRowWithId[] {
   );
 }
 
-function seasonNumber(name: string, fallback: number): string {
-  const m = name.match(/Season\s+(\d+)/i);
-  return m ? m[1].padStart(2, '0') : String(fallback).padStart(2, '0');
-}
 
 function HomeTopbar() {
   return (
@@ -52,7 +48,6 @@ function ActiveSeasonPanel({
   const sorted = podiumSort(leaderboard);
   const hasData = sorted.length > 0 && sorted[0].matches_played > 0;
   const top3 = sorted.slice(0, 3);
-  const num = seasonNumber(season.name, season.id).replace(/^0/, '');
 
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
@@ -64,9 +59,6 @@ function ActiveSeasonPanel({
           <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border border-[var(--color-accent-green-border)]">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent-green-fill)] animate-pulse" />
             Live
-          </span>
-          <span className="tracked text-[10px] text-[var(--color-text-secondary)]">
-            Season {num}
           </span>
         </div>
         <div className="font-display text-[32px] font-semibold leading-tight text-[var(--color-text-primary)]">
@@ -119,15 +111,11 @@ function UpcomingSeasonRow({
   season: Season;
   leaderboard: LeaderboardRowWithId[];
 }) {
-  const num = seasonNumber(season.name, season.id);
   return (
     <Link
       href={`/seasons/${season.id}`}
-      className="grid grid-cols-[64px_1fr_auto] items-center gap-6 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
+      className="flex items-center justify-between gap-6 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
     >
-      <div className="display-numeral ghost text-[40px] leading-none">
-        {num}
-      </div>
       <div className="min-w-0">
         <div className="tracked text-[9px] text-[var(--color-accent-blue-fg)] mb-0.5">
           Upcoming
@@ -141,7 +129,7 @@ function UpcomingSeasonRow({
           </div>
         )}
       </div>
-      <span className="inline-flex items-center px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-blue-fg)] bg-[var(--color-accent-blue-bg)] border border-[var(--color-accent-blue-border)]">
+      <span className="inline-flex items-center px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-blue-fg)] bg-[var(--color-accent-blue-bg)] border border-[var(--color-accent-blue-border)] shrink-0">
         Soon
       </span>
     </Link>
@@ -157,31 +145,20 @@ function PastSeasonRow({
 }) {
   const sorted = podiumSort(leaderboard);
   const winner = sorted[0];
-  const num = seasonNumber(season.name, season.id);
 
   return (
     <Link
       href={`/seasons/${season.id}`}
-      className="grid grid-cols-[64px_1fr_auto] items-center gap-6 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
+      className="grid grid-cols-[1fr_auto] items-center gap-6 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
     >
-      <div className="display-numeral text-[40px] leading-none text-[var(--color-text-primary)]">
-        {num}
-      </div>
       <div className="min-w-0">
-        <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-0.5">
-          Champion
+        <div className="font-display text-[18px] font-semibold leading-tight truncate">
+          {season.name}
         </div>
-        {winner ? (
-          <div className="font-display text-[18px] font-semibold leading-tight truncate">
-            {winner.player_name}
-          </div>
-        ) : (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-            No data
-          </div>
-        )}
         <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1">
-          {leaderboard.length} players
+          {winner ? (
+            <><span className="tracked mr-1">Champion</span>{winner.player_name}</>
+          ) : 'No data'} · {leaderboard.length} players
         </div>
       </div>
       {winner && (
