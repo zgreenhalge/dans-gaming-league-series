@@ -201,12 +201,21 @@ body > * { position: relative; z-index: 1; }
 /* Apply subtle transparent background to low-contrast text inside map cards */
 .map-card-bg .map-head,
 .map-card-bg .tracked,
-.map-card-bg [class*="text-[var(--color-text-secondary)"],
 .map-card-bg .opacity-50 {
   background: var(--map-text-bg);
   border-radius: var(--radius-md);
   padding: 0.12em 0.45em;
   display: inline-block;
+}
+
+/* Highlight the player's key info on player-specific views */
+.player-highlight {
+  background: color-mix(in srgb, var(--color-accent-green-bg) 12%, transparent);
+  border-radius: var(--radius-md);
+  padding: 0.12em 0.5em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
 }
 
 /* Background image layer — separate pseudo-element so it can be filtered independently */

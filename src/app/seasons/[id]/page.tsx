@@ -82,7 +82,7 @@ function MatchRow({ match }: { match: MatchWithRoster }) {
     >
       <div className={`px-4 py-3 ${mapImg ? 'bg-[var(--overlay-strong)] hover:bg-[var(--overlay-medium)] transition-colors' : ''}`}>
         <div className="flex items-center justify-between gap-3 mb-1">
-          <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">
+          <span className="font-mono text-[11px] text-[var(--color-text-secondary)] map-head">
             #{match.match_number}
           </span>
           {played ? (
@@ -100,8 +100,8 @@ function MatchRow({ match }: { match: MatchWithRoster }) {
             {map}
           </div>
         )}
-        <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate">
-          {shirtsLabel} <span className="opacity-50">vs</span> {skinsLabel}
+        <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate map-head">
+          {shirtsLabel} <span className="opacity-50 map-head">vs</span> {skinsLabel}
         </div>
       </div>
     </Link>

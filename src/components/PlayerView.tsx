@@ -96,7 +96,7 @@ function PlayerMatchRow({
 
   const outcome =
     variant === 'played' ? (
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-2 shrink-0 player-highlight">
         <span className="font-mono text-[13px] font-semibold tnum text-[var(--color-text-primary)]">
           {row.final_score}
         </span>
@@ -124,7 +124,7 @@ function PlayerMatchRow({
     >
       <div className={`px-4 py-3 ${mapImg ? 'bg-[var(--overlay-medium)] hover:bg-[var(--overlay-weak)] transition-colors' : ''}`}>
         <div className="flex items-center justify-between gap-3 mb-1">
-          <span className="font-mono text-[11px] text-[var(--color-text-secondary)] whitespace-nowrap">
+          <span className="font-mono text-[11px] text-[var(--color-text-secondary)] whitespace-nowrap map-head">
             S{row.season_id} · W{row.week_number} · #{row.match_number}
           </span>
           {outcome}
