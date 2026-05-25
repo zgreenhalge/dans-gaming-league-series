@@ -174,12 +174,6 @@ function PlayerMatchRow({
               {shirts} <span className="opacity-50 map-head">vs</span> {skins}
             </div>
           )}
-
-          {variant === 'played' && (
-            <div className="mt-3 font-mono text-[13px] font-semibold tnum text-[var(--color-text-primary)]">
-              {row.kills}<span className="text-[var(--color-text-secondary)] font-normal mx-0.5">/</span>{row.assists}<span className="text-[var(--color-text-secondary)] font-normal mx-0.5">/</span>{row.deaths}
-            </div>
-          )}
         </div>
       </div>
     </Link>
@@ -239,6 +233,8 @@ export default function PlayerView({
     );
   }, [history]);
 
+  const last5 = useMemo(() => history.filter(isPlayed).slice(0, 5), [history]);
+
   const [filter, setFilter] = useState<Filter>('career');
   const [mapSort, setMapSort] = useState<MapSortCol>('wr');
   const [mapAsc, setMapAsc] = useState(false);
@@ -282,6 +278,22 @@ export default function PlayerView({
             </option>
           ))}
         </select>
+      </div>
+
+      {/* Last 5 games record */}
+      <div className="mt-2 mb-4 flex items-center gap-3">
+        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Last 5</span>
+        <div className="flex items-center gap-2">
+          {last5.length === 0 ? (
+            <span className="text-[12px] text-[var(--color-text-secondary)]">No recent matches</span>
+          ) : (
+            last5.map((r, i) => (
+              <span key={r.id ?? i} className={`wl-chip ${r.is_win ? 'wl-chip--win' : 'wl-chip--loss'}`} aria-label={r.is_win ? 'Win' : 'Loss'}>
+                {r.is_win ? 'W' : 'L'}
+              </span>
+            ))
+          )}
+        </div>
       </div>
 
       <div className="flex items-baseline justify-between mt-6 mb-3">
