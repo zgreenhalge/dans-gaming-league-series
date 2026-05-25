@@ -1,26 +1,194 @@
 @import "tailwindcss";
 
+/* Light (default) — Dust2 daylight: tan base, navy ink, CT blue + T orange accents */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-bg-primary: #f6f0e0;
+  --color-bg-secondary: #efe7d1;
+  --color-bg-tertiary: #ece4d2;
+  --color-text-primary: #1f2733;
+  --color-text-secondary: #6b6451;
+  --color-border-primary: #b3a888;
+  --color-border-secondary: #c9bea2;
+  --color-border-tertiary: #d8cfb5;
+
+  --color-accent-green-bg: #d8e6c2;
+  --color-accent-green-fg: #3f7a2a;
+  --color-accent-green-strong: #2c5a1c;
+  --color-accent-green-border: #a7c987;
+  --color-accent-green-fill: #5b9636;
+
+  --color-accent-amber-bg: #f6e0c0;
+  --color-accent-amber-fg: #8a4a10;
+  --color-accent-amber-strong: #5a300a;
+  --color-accent-amber-border: #e9b97a;
+  --color-accent-amber-pickborder: #f5c542;
+
+  --color-accent-blue-bg: #d5e2f1;
+  --color-accent-blue-fg: #1f5fa8;
+  --color-accent-blue-strong: #143f70;
+  --color-accent-blue-border: #9ebcdf;
+
+  --color-accent-red-fg: #a53826;
+
+  /* Faction tokens — used in HUD reskin */
+  --color-ct: #1f5fa8;
+  --color-t: #c25a16;
+
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Dark — broadcast HUD: near-black slate, CT cyan + T orange neon */
+[data-theme="dark"] {
+  --color-bg-primary: #161a21;
+  --color-bg-secondary: #1d222b;
+  --color-bg-tertiary: #0e1116;
+  --color-text-primary: #e8e6df;
+  --color-text-secondary: #8a8579;
+  --color-border-primary: #2f3641;
+  --color-border-secondary: #242a33;
+  --color-border-tertiary: #1d2128;
+
+  --color-accent-green-bg: rgba(126, 201, 107, 0.12);
+  --color-accent-green-fg: #7ec96b;
+  --color-accent-green-strong: #a4d995;
+  --color-accent-green-border: rgba(126, 201, 107, 0.35);
+  --color-accent-green-fill: #7ec96b;
+
+  --color-accent-amber-bg: rgba(255, 138, 61, 0.12);
+  --color-accent-amber-fg: #ff8a3d;
+  --color-accent-amber-strong: #ffae73;
+  --color-accent-amber-border: rgba(255, 138, 61, 0.35);
+  --color-accent-amber-pickborder: #f5c542;
+
+  --color-accent-blue-bg: rgba(78, 161, 255, 0.12);
+  --color-accent-blue-fg: #4ea1ff;
+  --color-accent-blue-strong: #82bcff;
+  --color-accent-blue-border: rgba(78, 161, 255, 0.35);
+
+  --color-accent-red-fg: #ff7a5e;
+
+  --color-ct: #4ea1ff;
+  --color-t: #ff8a3d;
+
+  color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --radius-md: 6px;
+  --radius-lg: 10px;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+html, body {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
+
+/* Page atmosphere — paper grain (light) or scanlines (dark), faintly applied. */
+body { position: relative; }
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 160px 160px;
+}
+[data-theme="dark"] body::before {
+  opacity: 1;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,0.018) 0px,
+    rgba(255,255,255,0.018) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  background-size: auto;
+}
+/* Make sure page content stacks above the overlay. */
+body > * { position: relative; z-index: 1; }
+
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Typography utilities */
+.font-display { font-family: var(--font-display), system-ui, sans-serif; }
+.font-mono    { font-family: var(--font-mono), ui-monospace, Menlo, monospace; }
+
+/* Broadcast chrome label: small, uppercase, tracked */
+.tracked {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-feature-settings: "ss01";
+}
+
+/* Hero numeral — big stat values, outlined ghost option */
+.display-numeral {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 0.9;
+}
+.display-numeral.ghost {
+  color: transparent;
+  -webkit-text-stroke: 1px var(--color-text-primary);
+  text-stroke: 1px var(--color-text-primary);
+}
+
+/* Faction utilities — applied after veto resolves */
+.faction-ct { --faction: var(--color-ct); }
+.faction-t  { --faction: var(--color-t); }
+.faction-ct .faction-fg,
+.faction-t  .faction-fg { color: var(--faction); }
+.faction-ct .faction-border,
+.faction-t  .faction-border { border-color: var(--faction); }
+.faction-ct .faction-rule,
+.faction-t  .faction-rule {
+  position: relative;
+}
+.faction-ct .faction-rule::before,
+.faction-t  .faction-rule::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--faction);
+}
+
+/* Subtle faction-colored background tint — applied to the element itself */
+.faction-ct.faction-tint,
+.faction-t.faction-tint {
+  background: color-mix(in srgb, var(--faction) 10%, var(--color-bg-primary));
+}
+
+/* Map-card backdrop — pass map image via --map-img custom property */
+.map-card-bg {
+  position: relative;
+  background-color: var(--color-bg-primary);
+  background-image: var(--map-img);
+  background-size: cover;
+  background-position: center;
+  isolation: isolate;
+}
+.map-card-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-bg-primary) 35%, transparent) 0%,
+    color-mix(in srgb, var(--color-bg-primary) 44%, transparent) 100%
+  );
+  z-index: 0;
+  pointer-events: none;
+}
+[data-theme="dark"] .map-card-bg::after {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-bg-primary) 41%, transparent) 0%,
+    color-mix(in srgb, var(--color-bg-primary) 47%, transparent) 100%
+  );
+}
+.map-card-bg > * { position: relative; z-index: 1; }
