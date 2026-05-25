@@ -34,6 +34,11 @@
   --color-ct: #1f5fa8;
   --color-t: #c25a16;
 
+  /* Theme-aware overlays for map images and dim backgrounds. */
+  --overlay-strong: rgba(255,255,255,0.6); /* used for map card base in light */
+  --overlay-medium: rgba(255,255,255,0.48);
+  --overlay-weak: rgba(0,0,0,0.04);
+
   color-scheme: light;
 }
 
@@ -69,6 +74,11 @@
 
   --color-ct: #4ea1ff;
   --color-t: #ff8a3d;
+
+  /* Dark theme overlays — keep original darker tints */
+  --overlay-strong: rgba(0,0,0,0.48);
+  --overlay-medium: rgba(0,0,0,0.38);
+  --overlay-weak: rgba(0,0,0,0.18);
 
   color-scheme: dark;
 }

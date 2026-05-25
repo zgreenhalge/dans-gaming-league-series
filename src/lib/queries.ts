@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { isPlayedScore } from './util';
 import type {
   Season,
   Week,
@@ -496,6 +497,499 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
     });
   }
   return out.sort((a, b) => b.overall_adr - a.overall_adr);
+}
+
+function aggToRow(
+  agg: {
+    player_id: number;
+    player_name: string;
+    matches_played: number;
+    matches_won: number;
+    matches_lost: number;
+    total_kills: number;
+    total_assists: number;
+    total_deaths: number;
+    total_damage: number;
+    total_rounds_played: number;
+    total_rounds_won: number;
+  },
+  season_id: number,
+): LeaderboardRowWithId {
+  return {
+    season_id,
+    player_id: agg.player_id,
+    player_name: agg.player_name,
+    matches_played: agg.matches_played,
+    matches_won: agg.matches_won,
+    matches_lost: agg.matches_lost,
+    win_rate_percentage:
+      agg.matches_played > 0
+        ? (agg.matches_won / agg.matches_played) * 100
+        : 0,
+    total_kills: agg.total_kills,
+    total_assists: agg.total_assists,
+    total_deaths: agg.total_deaths,
+    kd_ratio:
+      agg.total_deaths > 0
+        ? agg.total_kills / agg.total_deaths
+        : agg.total_kills,
+    total_damage: agg.total_damage,
+    total_rounds_played: agg.total_rounds_played,
+    total_rounds_won: agg.total_rounds_won,
+    rwr_percentage:
+      agg.total_rounds_played > 0
+        ? (agg.total_rounds_won / agg.total_rounds_played) * 100
+        : 0,
+    overall_adr:
+      agg.total_rounds_played > 0
+        ? agg.total_damage / agg.total_rounds_played
+        : 0,
+  };
+}
+
+/**
+ * Aggregates stats from all gauntlet seasons (is_gauntlet = true).
+ * The leaderboard view excludes playoff games, so we compute directly from
+ * player_match_stats. Negative sentinel values (-1) are clamped to 0.
+ */
+export async function getGauntletStats(): Promise<{
+  career: LeaderboardRowWithId[];
+  bySeason: Record<number, LeaderboardRowWithId[]>;
+}> {
+  const { data: gauntletSeasons, error: gsErr } = await supabase
+    .from('seasons')
+    .select('id')
+    .eq('is_gauntlet', true);
+  if (gsErr) throw gsErr;
+  if (!gauntletSeasons || gauntletSeasons.length === 0)
+    return { career: [], bySeason: {} };
+
+  const gauntletSeasonIds = (gauntletSeasons as { id: number }[]).map(
+    (s) => s.id,
+  );
+
+  const { data: weeks, error: wErr } = await supabase
+    .from('weeks')
+    .select('id, season_id')
+    .in('season_id', gauntletSeasonIds);
+  if (wErr) throw wErr;
+  if (!weeks || weeks.length === 0) return { career: [], bySeason: {} };
+
+  const weekRows = weeks as { id: number; season_id: number }[];
+  const weekToSeason = new Map<number, number>();
+  for (const w of weekRows) weekToSeason.set(w.id, w.season_id);
+
+  const { data: matches, error: mErr } = await supabase
+    .from('matches')
+    .select('id, week_id')
+    .in(
+      'week_id',
+      weekRows.map((w) => w.id),
+    )
+    .eq('is_playoff_game', true);
+  if (mErr) throw mErr;
+  if (!matches || matches.length === 0) return { career: [], bySeason: {} };
+
+  const matchRows = matches as { id: number; week_id: number }[];
+  const matchToSeason = new Map<number, number>();
+  for (const m of matchRows) {
+    const sid = weekToSeason.get(m.week_id);
+    if (sid != null) matchToSeason.set(m.id, sid);
+  }
+
+  const [{ data: stats, error: sErr }, players] = await Promise.all([
+    supabase
+      .from('player_match_stats')
+      .select('*')
+      .in(
+        'match_id',
+        matchRows.map((m) => m.id),
+      ),
+    getPlayersById(),
+  ]);
+  if (sErr) throw sErr;
+
+  type Agg = {
+    player_id: number;
+    player_name: string;
+    matches_played: number;
+    matches_won: number;
+    matches_lost: number;
+    total_kills: number;
+    total_assists: number;
+    total_deaths: number;
+    total_damage: number;
+    total_rounds_played: number;
+    total_rounds_won: number;
+  };
+
+  const bySeasonPlayer = new Map<string, Agg>();
+
+  for (const s of (stats ?? []) as PlayerMatchStat[]) {
+    const sid = matchToSeason.get(s.match_id);
+    if (sid == null) continue;
+    const player = players.get(s.player_id);
+    if (!player) continue;
+    const key = `${sid}:${s.player_id}`;
+    const agg = bySeasonPlayer.get(key) ?? {
+      player_id: s.player_id,
+      player_name: player.name,
+      matches_played: 0,
+      matches_won: 0,
+      matches_lost: 0,
+      total_kills: 0,
+      total_assists: 0,
+      total_deaths: 0,
+      total_damage: 0,
+      total_rounds_played: 0,
+      total_rounds_won: 0,
+    };
+    agg.matches_played += 1;
+    agg.matches_won += s.is_win ? 1 : 0;
+    agg.matches_lost += s.is_win ? 0 : 1;
+    agg.total_kills += Math.max(0, s.kills);
+    agg.total_assists += Math.max(0, s.assists);
+    agg.total_deaths += Math.max(0, s.deaths);
+    agg.total_damage += Math.max(0, s.damage);
+    agg.total_rounds_played += Math.max(0, s.rounds_played);
+    agg.total_rounds_won += Math.max(0, s.rounds_won);
+    bySeasonPlayer.set(key, agg);
+  }
+
+  const bySeason: Record<number, LeaderboardRowWithId[]> = {};
+  const careerByPlayer = new Map<number, Agg>();
+
+  for (const [key, agg] of bySeasonPlayer) {
+    const sid = Number(key.split(':')[0]);
+    const row = aggToRow(agg, sid);
+    if (!bySeason[sid]) bySeason[sid] = [];
+    bySeason[sid].push(row);
+
+    const prev = careerByPlayer.get(agg.player_id) ?? { ...agg };
+    if (careerByPlayer.has(agg.player_id)) {
+      prev.matches_played += agg.matches_played;
+      prev.matches_won += agg.matches_won;
+      prev.matches_lost += agg.matches_lost;
+      prev.total_kills += agg.total_kills;
+      prev.total_assists += agg.total_assists;
+      prev.total_deaths += agg.total_deaths;
+      prev.total_damage += agg.total_damage;
+      prev.total_rounds_played += agg.total_rounds_played;
+      prev.total_rounds_won += agg.total_rounds_won;
+    }
+    careerByPlayer.set(agg.player_id, prev);
+  }
+
+  for (const sid of Object.keys(bySeason))
+    bySeason[Number(sid)].sort((a, b) => b.overall_adr - a.overall_adr);
+
+  const career = Array.from(careerByPlayer.values())
+    .map((agg) => aggToRow(agg, 0))
+    .sort((a, b) => b.overall_adr - a.overall_adr);
+
+  return { career, bySeason };
+}
+
+export interface GauntletPlayerStat {
+  player_id: number;
+  player_name: string;
+  faction: 'SHIRTS' | 'SKINS';
+  kills: number;
+  deaths: number;
+  adr: number;
+  is_win: boolean;
+}
+
+export interface GauntletMatch {
+  id: number;
+  match_number: number;
+  map: string | null;
+  final_score: string | null;
+  shirts: GauntletPlayerStat[];
+  skins: GauntletPlayerStat[];
+}
+
+export interface GauntletRound {
+  round_number: number;
+  matches: GauntletMatch[];
+}
+
+/** Per-season gauntlet leaderboard — same shape as the regular leaderboard view. */
+export async function getGauntletSeasonLeaderboard(
+  seasonId: number,
+): Promise<LeaderboardRowWithId[]> {
+  const { data: weeks, error: wErr } = await supabase
+    .from('weeks')
+    .select('id')
+    .eq('season_id', seasonId);
+  if (wErr) throw wErr;
+  if (!weeks || weeks.length === 0) return [];
+
+  const weekIds = (weeks as { id: number }[]).map((w) => w.id);
+
+  const { data: matches, error: mErr } = await supabase
+    .from('matches')
+    .select('id')
+    .in('week_id', weekIds)
+    .eq('is_playoff_game', true);
+  if (mErr) throw mErr;
+  if (!matches || matches.length === 0) return [];
+
+  const matchIds = (matches as { id: number }[]).map((m) => m.id);
+
+  const [{ data: stats, error: sErr }, players] = await Promise.all([
+    supabase
+      .from('player_match_stats')
+      .select('player_id, kills, assists, deaths, damage, rounds_played, rounds_won, is_win')
+      .in('match_id', matchIds),
+    getPlayersById(),
+  ]);
+  if (sErr) throw sErr;
+
+  type RawRow = {
+    player_id: number;
+    kills: number;
+    assists: number;
+    deaths: number;
+    damage: number;
+    rounds_played: number;
+    rounds_won: number;
+    is_win: boolean;
+  };
+
+  type Agg = {
+    player_id: number;
+    player_name: string;
+    matches_played: number;
+    matches_won: number;
+    matches_lost: number;
+    total_kills: number;
+    total_assists: number;
+    total_deaths: number;
+    total_damage: number;
+    total_rounds_played: number;
+    total_rounds_won: number;
+  };
+
+  const byPlayer = new Map<number, Agg>();
+  for (const s of (stats ?? []) as RawRow[]) {
+    const player = players.get(s.player_id);
+    if (!player) continue;
+    const agg = byPlayer.get(s.player_id) ?? {
+      player_id: s.player_id,
+      player_name: player.name,
+      matches_played: 0,
+      matches_won: 0,
+      matches_lost: 0,
+      total_kills: 0,
+      total_assists: 0,
+      total_deaths: 0,
+      total_damage: 0,
+      total_rounds_played: 0,
+      total_rounds_won: 0,
+    };
+    agg.matches_played += 1;
+    agg.matches_won += s.is_win ? 1 : 0;
+    agg.matches_lost += s.is_win ? 0 : 1;
+    agg.total_kills += Math.max(0, s.kills);
+    agg.total_assists += Math.max(0, s.assists);
+    agg.total_deaths += Math.max(0, s.deaths);
+    agg.total_damage += Math.max(0, s.damage);
+    agg.total_rounds_played += Math.max(0, s.rounds_played);
+    agg.total_rounds_won += Math.max(0, s.rounds_won);
+    byPlayer.set(s.player_id, agg);
+  }
+
+  return Array.from(byPlayer.values())
+    .map((agg) => aggToRow(agg, seasonId))
+    .sort((a, b) => b.overall_adr - a.overall_adr);
+}
+
+/** Fetches all matches for a gauntlet season and groups them into rounds by week_number. */
+export async function getGauntletRounds(seasonId: number): Promise<GauntletRound[]> {
+  const { data: weeks, error: wErr } = await supabase
+    .from('weeks')
+    .select('id, week_number')
+    .eq('season_id', seasonId)
+    .order('week_number');
+  if (wErr) throw wErr;
+  if (!weeks || weeks.length === 0) return [];
+
+  const weekRows = weeks as { id: number; week_number: number }[];
+  const weekIds = weekRows.map((w) => w.id);
+
+  const { data: matchData, error: mErr } = await supabase
+    .from('matches')
+    .select('*')
+    .in('week_id', weekIds)
+    .order('match_number');
+  if (mErr) throw mErr;
+  const matchRows = (matchData ?? []) as Match[];
+  if (matchRows.length === 0) return [];
+
+  const matchIds = matchRows.map((m) => m.id);
+  const [{ data: stats, error: sErr }, players] = await Promise.all([
+    supabase
+      .from('player_match_stats')
+      .select('match_id, player_id, faction, kills, deaths, adr, is_win')
+      .in('match_id', matchIds),
+    getPlayersById(),
+  ]);
+  if (sErr) throw sErr;
+
+  type RawStat = {
+    match_id: number;
+    player_id: number;
+    faction: string;
+    kills: number;
+    deaths: number;
+    adr: number;
+    is_win: boolean;
+  };
+
+  const statsByMatch = new Map<number, GauntletPlayerStat[]>();
+  for (const s of (stats ?? []) as RawStat[]) {
+    const list = statsByMatch.get(s.match_id) ?? [];
+    const player = players.get(s.player_id);
+    list.push({
+      player_id: s.player_id,
+      player_name: player?.name ?? `#${s.player_id}`,
+      faction: s.faction as 'SHIRTS' | 'SKINS',
+      kills: Math.max(0, s.kills),
+      deaths: Math.max(0, s.deaths),
+      adr: Math.max(0, s.adr),
+      is_win: s.is_win,
+    });
+    statsByMatch.set(s.match_id, list);
+  }
+
+  // Group match rows by week_id so we can assign round_number from week_number.
+  const matchesByWeekId = new Map<number, Match[]>();
+  for (const m of matchRows) {
+    const list = matchesByWeekId.get(m.week_id) ?? [];
+    list.push(m);
+    matchesByWeekId.set(m.week_id, list);
+  }
+
+  const rounds: GauntletRound[] = [];
+  for (const week of weekRows) {
+    const weekMatches = (matchesByWeekId.get(week.id) ?? []).sort(
+      (a, b) => a.match_number - b.match_number,
+    );
+    const gauntletMatches: GauntletMatch[] = weekMatches.map((m) => {
+      const allStats = statsByMatch.get(m.id) ?? [];
+      return {
+        id: m.id,
+        match_number: m.match_number,
+        map: m.shirts_pick ?? m.picked_map,
+        final_score: m.final_score,
+        shirts: allStats.filter((s) => s.faction === 'SHIRTS'),
+        skins: allStats.filter((s) => s.faction === 'SKINS'),
+      };
+    });
+    rounds.push({ round_number: week.week_number, matches: gauntletMatches });
+  }
+  return rounds;
+}
+
+export type GauntletSummary = {
+  playerCount: number;
+  roundCount: number;
+  champion: { player_id: number; name: string } | null;
+};
+
+/**
+ * Returns a lightweight summary for every gauntlet season in one bulk fetch.
+ * Champion = the player who won both matches in the final round.
+ */
+export async function getAllGauntletSummaries(): Promise<Map<number, GauntletSummary>> {
+  const { data: gauntletSeasons } = await supabase
+    .from('seasons')
+    .select('id')
+    .eq('is_gauntlet', true);
+  if (!gauntletSeasons || gauntletSeasons.length === 0) return new Map();
+  const seasonIds = (gauntletSeasons as { id: number }[]).map((s) => s.id);
+
+  const [{ data: weeks }, players] = await Promise.all([
+    supabase.from('weeks').select('id, season_id, week_number').in('season_id', seasonIds),
+    getPlayersById(),
+  ]);
+  const weekRows = (weeks ?? []) as { id: number; season_id: number; week_number: number }[];
+  if (weekRows.length === 0) return new Map();
+
+  const weekIds = weekRows.map((w) => w.id);
+  const { data: matchData } = await supabase
+    .from('matches')
+    .select('id, week_id, final_score')
+    .in('week_id', weekIds);
+  const matchRows = (matchData ?? []) as { id: number; week_id: number; final_score: string | null }[];
+  if (matchRows.length === 0) return new Map();
+
+  const matchIds = matchRows.map((m) => m.id);
+  const { data: statData } = await supabase
+    .from('player_match_stats')
+    .select('match_id, player_id, is_win')
+    .in('match_id', matchIds);
+  const statRows = (statData ?? []) as { match_id: number; player_id: number; is_win: boolean }[];
+
+  // Build lookup maps
+  const matchesByWeek = new Map<number, { id: number; final_score: string | null }[]>();
+  for (const m of matchRows) {
+    const list = matchesByWeek.get(m.week_id) ?? [];
+    list.push(m);
+    matchesByWeek.set(m.week_id, list);
+  }
+  const statsByMatch = new Map<number, { player_id: number; is_win: boolean }[]>();
+  for (const s of statRows) {
+    const list = statsByMatch.get(s.match_id) ?? [];
+    list.push(s);
+    statsByMatch.set(s.match_id, list);
+  }
+
+  const out = new Map<number, GauntletSummary>();
+
+  for (const seasonId of seasonIds) {
+    const seasonWeeks = weekRows.filter((w) => w.season_id === seasonId);
+    const roundCount = seasonWeeks.length;
+
+    // Unique players across all matches in this season
+    const playerIds = new Set<number>();
+    for (const w of seasonWeeks) {
+      for (const m of matchesByWeek.get(w.id) ?? []) {
+        for (const s of statsByMatch.get(m.id) ?? []) {
+          playerIds.add(s.player_id);
+        }
+      }
+    }
+
+    // Champion: player who won both matches in the final round
+    let champion: { player_id: number; name: string } | null = null;
+    if (seasonWeeks.length > 0) {
+      const finalWeek = seasonWeeks.reduce((best, w) =>
+        w.week_number > best.week_number ? w : best,
+      );
+      const finalMatches = matchesByWeek.get(finalWeek.id) ?? [];
+      const allPlayed = finalMatches.length > 0 && finalMatches.every((m) => isPlayedScore(m.final_score));
+      if (allPlayed) {
+        const wins = new Map<number, number>();
+        for (const m of finalMatches) {
+          for (const s of statsByMatch.get(m.id) ?? []) {
+            if (s.is_win) wins.set(s.player_id, (wins.get(s.player_id) ?? 0) + 1);
+          }
+        }
+        for (const [pid, w] of wins) {
+          if (w === finalMatches.length) {
+            champion = { player_id: pid, name: players.get(pid)?.name ?? `#${pid}` };
+            break;
+          }
+        }
+      }
+    }
+
+    out.set(seasonId, { playerCount: playerIds.size, roundCount, champion });
+  }
+
+  return out;
 }
 
 /** Returns leaderboards for every season, keyed by season_id. */

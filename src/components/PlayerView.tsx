@@ -122,7 +122,7 @@ function PlayerMatchRow({
       className={`block border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors ${mapImg ? 'map-card-bg' : 'hover:bg-[var(--color-bg-secondary)]'}`}
       style={mapImg ? ({ ['--map-img' as string]: `url("${mapImg}")` } as React.CSSProperties) : undefined}
     >
-      <div className={`px-4 py-3 ${mapImg ? 'bg-[rgba(0,0,0,0.28)] hover:bg-[rgba(0,0,0,0.18)] transition-colors' : ''}`}>
+      <div className={`px-4 py-3 ${mapImg ? 'bg-[var(--overlay-medium)] hover:bg-[var(--overlay-weak)] transition-colors' : ''}`}>
         <div className="flex items-center justify-between gap-3 mb-1">
           <span className="font-mono text-[11px] text-[var(--color-text-secondary)] whitespace-nowrap">
             S{row.season_id} · W{row.week_number} · #{row.match_number}

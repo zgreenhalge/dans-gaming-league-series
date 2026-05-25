@@ -7,6 +7,7 @@ export interface Season {
   status: SeasonStatus;
   target_win_rounds: number;
   buy_in_amount: number | null;
+  is_gauntlet: boolean;
 }
 
 export interface Week {
@@ -23,6 +24,7 @@ export interface Match {
   final_score: string | null;
   picked_map: string | null;
   shirts_ban: string | null;
+  shirts_ban2: string | null;
   skins_ban1: string | null;
   skins_ban2: string | null;
   shirts_pick: string | null;

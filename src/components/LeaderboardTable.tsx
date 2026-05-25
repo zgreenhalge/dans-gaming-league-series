@@ -53,9 +53,11 @@ function compare(
 export default function LeaderboardTable({
   rows,
   firstColMode = 'player',
+  showMedals = true,
 }: {
   rows: LeaderboardRowWithId[];
   firstColMode?: 'player' | 'season';
+  showMedals?: boolean;
 }) {
   const [sortCol, setSortCol] = useState<SortCol>('wr');
   const [asc, setAsc] = useState(false);
@@ -82,7 +84,7 @@ export default function LeaderboardTable({
 
   // Canonical medal positions: WR% → RWR% → ADR, fixed regardless of active sort.
   const medalRank = new Map<number, 1 | 2 | 3>();
-  if (firstColMode === 'player') {
+  if (showMedals && firstColMode === 'player') {
     [...rows]
       .sort(
         (a, b) =>
