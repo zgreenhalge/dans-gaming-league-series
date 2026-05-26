@@ -2,38 +2,62 @@ import { NextResponse } from "next/server";
 import { createHmac } from "crypto";
 
 export async function GET(request) {
-  const { searchParams } = new URL(request.url);
+  try {
+    const { searchParams } = new URL(request.url);
+    console.log("[steam/callback] received params:", Object.fromEntries(searchParams));
 
-  // Validate the OpenID response with Steam
-  const verificationParams = new URLSearchParams(searchParams);
-  verificationParams.set("openid.mode", "check_authentication");
+    const claimedId = searchParams.get("openid.claimed_id") ?? "";
+    const mode = searchParams.get("openid.mode");
+    console.log("[steam/callback] mode:", mode, "claimedId:", claimedId);
 
-  const verifyResponse = await fetch("https://steamcommunity.com/openid/login", {
-    method: "POST",
-    body: verificationParams,
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-  });
+    if (mode !== "id_res") {
+      console.error("[steam/callback] unexpected mode:", mode);
+      return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/?error=steam_bad_mode`);
+    }
 
-  const verifyText = await verifyResponse.text();
-  if (!verifyText.includes("is_valid:true")) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/?error=steam_invalid`);
+    // Validate the OpenID response with Steam
+    const verificationParams = new URLSearchParams(searchParams);
+    verificationParams.set("openid.mode", "check_authentication");
+
+    console.log("[steam/callback] sending verification to Steam...");
+    const verifyResponse = await fetch("https://steamcommunity.com/openid/login", {
+      method: "POST",
+      body: verificationParams,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
+
+    const verifyText = await verifyResponse.text();
+    console.log("[steam/callback] Steam verification response:", verifyText);
+
+    if (!verifyText.includes("is_valid:true")) {
+      console.error("[steam/callback] Steam rejected signature");
+      return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/?error=steam_invalid`);
+    }
+
+    const steamId = claimedId.split("/").pop();
+    if (!steamId) {
+      console.error("[steam/callback] could not extract steamId from claimed_id:", claimedId);
+      return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/?error=steam_invalid`);
+    }
+
+    console.log("[steam/callback] verified steamId:", steamId);
+
+    if (!process.env.NEXTAUTH_SECRET) {
+      console.error("[steam/callback] NEXTAUTH_SECRET is not set");
+      return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/?error=config`);
+    }
+
+    const expires = Date.now() + 60_000;
+    const payload = `${steamId}:${expires}`;
+    const sig = createHmac("sha256", process.env.NEXTAUTH_SECRET)
+      .update(payload)
+      .digest("hex");
+    const token = Buffer.from(JSON.stringify({ steamId, expires, sig })).toString("base64url");
+
+    console.log("[steam/callback] redirecting to /auth/steam");
+    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/auth/steam?token=${token}`);
+  } catch (err) {
+    console.error("[steam/callback] unhandled error:", err);
+    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/?error=steam_exception`);
   }
-
-  const claimedId = searchParams.get("openid.claimed_id") ?? "";
-  const steamId = claimedId.split("/").pop();
-  if (!steamId) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/?error=steam_invalid`);
-  }
-
-  // Create a short-lived signed token so the client can complete the credentials sign-in
-  const expires = Date.now() + 60_000; // 1 minute
-  const payload = `${steamId}:${expires}`;
-  const sig = createHmac("sha256", process.env.NEXTAUTH_SECRET)
-    .update(payload)
-    .digest("hex");
-  const token = Buffer.from(JSON.stringify({ steamId, expires, sig })).toString("base64url");
-
-  return NextResponse.redirect(
-    `${process.env.NEXTAUTH_URL}/auth/steam?token=${token}`
-  );
 }
