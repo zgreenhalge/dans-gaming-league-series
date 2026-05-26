@@ -81,9 +81,13 @@ export function TopbarShell({
             {status === "loading" ? (
               <div className="w-10 h-10 rounded-full bg-gray-700 animate-pulse" />
             ) : user ? (
-              <Link href={`/players/${user.playerId}`}>
+              user.playerId != null ? (
+                <Link href={`/players/${user.playerId}`}>
+                  <PlayerAvatar name={user.name ?? "?"} imageUrl={user.image} size="md" />
+                </Link>
+              ) : (
                 <PlayerAvatar name={user.name ?? "?"} imageUrl={user.image} size="md" />
-              </Link>
+              )
             ) : (
               <a
                 href="/api/auth/steam"
