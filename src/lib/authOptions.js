@@ -30,6 +30,9 @@ export const authOptions = {
       id: "steam",
       name: "Steam",
       type: "oauth",
+      // Steam uses OpenID 2.0, not OAuth2 — disable state/PKCE so NextAuth
+      // doesn't reject the callback for missing `code` and `state` params.
+      checks: [],
       style: { logo: "/steam.svg", bg: "#000", text: "#fff" },
       clientId: "steam",
       clientSecret: process.env.STEAM_API_KEY,
@@ -46,13 +49,16 @@ export const authOptions = {
       },
       token: {
         async request(context) {
-          const params = context.checks.oauth?.searchParams;
-
-          if (!params) {
-            throw new Error("Missing Steam callback validation metadata.");
+          // context.params is the callback URL's query params as a plain object
+          const rawParams = context.params;
+          if (!rawParams?.["openid.claimed_id"]) {
+            throw new Error("Missing Steam OpenID callback params.");
           }
 
-          const verificationParams = new URLSearchParams(params);
+          const verificationParams = new URLSearchParams();
+          for (const [key, value] of Object.entries(rawParams)) {
+            if (typeof value === "string") verificationParams.set(key, value);
+          }
           verificationParams.set("openid.mode", "check_authentication");
 
           const response = await fetch("https://steamcommunity.com/openid/login", {
@@ -66,9 +72,7 @@ export const authOptions = {
             throw new Error("Steam signature verification rejected.");
           }
 
-          const claimedId = params.get("openid.claimed_id") || "";
-          const steamId = claimedId.split("/").pop();
-
+          const steamId = String(rawParams["openid.claimed_id"]).split("/").pop();
           return { tokens: { id_token: steamId, access_token: steamId } };
         },
       },
@@ -88,6 +92,14 @@ export const authOptions = {
             image: player?.avatarfull || "",
           };
         },
+      },
+      // Explicit profile mapping so NextAuth doesn't look for `sub` instead of `id`
+      profile(profile) {
+        return {
+          id: profile.id,
+          name: profile.name,
+          image: profile.image,
+        };
       },
     },
   ],
