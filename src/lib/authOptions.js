@@ -1,17 +1,52 @@
 import { createClient } from "@supabase/supabase-js";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { createHmac } from "crypto";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+async function fetchSteamProfile(steamId) {
+  const res = await fetch(
+    `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${process.env.STEAM_API_KEY}&steamids=${steamId}`
+  );
+  const data = await res.json();
+  const player = data.response?.players?.[0];
+  return {
+    name: player?.personaname || `Steam User ${steamId}`,
+    image: player?.avatarfull || "",
+  };
+}
+
+const steamProvider = CredentialsProvider({
+  id: "steam-credentials",
+  name: "Steam",
+  credentials: { token: { type: "text" } },
+  async authorize(credentials) {
+    if (!credentials?.token) return null;
+    try {
+      const { steamId, expires, sig } = JSON.parse(
+        Buffer.from(credentials.token, "base64url").toString()
+      );
+      if (Date.now() > expires) return null;
+      const expected = createHmac("sha256", process.env.NEXTAUTH_SECRET)
+        .update(`${steamId}:${expires}`)
+        .digest("hex");
+      if (sig !== expected) return null;
+
+      const { name, image } = await fetchSteamProfile(steamId);
+      return { id: steamId, name, image, steamId };
+    } catch {
+      return null;
+    }
+  },
+});
+
 const devProvider = CredentialsProvider({
   id: "dev-steam-mock",
   name: "Dev Steam Mock",
-  credentials: {
-    steamId: { label: "Steam ID", type: "text" },
-  },
+  credentials: { steamId: { label: "Steam ID", type: "text" } },
   async authorize(credentials) {
     if (!credentials?.steamId) return null;
     return {
@@ -25,96 +60,20 @@ const devProvider = CredentialsProvider({
 
 export const authOptions = {
   providers: [
+    steamProvider,
     ...(process.env.NODE_ENV === "development" ? [devProvider] : []),
-    {
-      id: "steam",
-      name: "Steam",
-      type: "oauth",
-      // Steam uses OpenID 2.0, not OAuth2 — disable state/PKCE so NextAuth
-      // doesn't reject the callback for missing `code` and `state` params.
-      checks: [],
-      style: { logo: "/steam.svg", bg: "#000", text: "#fff" },
-      clientId: "steam",
-      clientSecret: process.env.STEAM_API_KEY,
-      authorization: {
-        url: "https://steamcommunity.com/openid/login",
-        params: {
-          "openid.mode": "checkid_setup",
-          "openid.ns": "http://specs.openid.net/auth/2.0",
-          "openid.identity": "http://specs.openid.net/auth/2.0/identifier_select",
-          "openid.claimed_id": "http://specs.openid.net/auth/2.0/identifier_select",
-          "openid.return_to": `${process.env.NEXTAUTH_URL}/api/auth/callback/steam`,
-          "openid.realm": process.env.NEXTAUTH_URL,
-        },
-      },
-      token: {
-        async request(context) {
-          // context.params is the callback URL's query params as a plain object
-          const rawParams = context.params;
-          if (!rawParams?.["openid.claimed_id"]) {
-            throw new Error("Missing Steam OpenID callback params.");
-          }
-
-          const verificationParams = new URLSearchParams();
-          for (const [key, value] of Object.entries(rawParams)) {
-            if (typeof value === "string") verificationParams.set(key, value);
-          }
-          verificationParams.set("openid.mode", "check_authentication");
-
-          const response = await fetch("https://steamcommunity.com/openid/login", {
-            method: "POST",
-            body: verificationParams,
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          });
-
-          const responseText = await response.text();
-          if (!responseText.includes("is_valid:true")) {
-            throw new Error("Steam signature verification rejected.");
-          }
-
-          const steamId = String(rawParams["openid.claimed_id"]).split("/").pop();
-          return { tokens: { id_token: steamId, access_token: steamId } };
-        },
-      },
-      userinfo: {
-        async request(context) {
-          const steamId = context.tokens.access_token;
-
-          const response = await fetch(
-            `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${context.provider.clientSecret}&steamids=${steamId}`
-          );
-          const data = await response.json();
-          const player = data.response.players[0];
-
-          return {
-            id: steamId,
-            name: player?.personaname || `Steam User ${steamId}`,
-            image: player?.avatarfull || "",
-          };
-        },
-      },
-      // Explicit profile mapping so NextAuth doesn't look for `sub` instead of `id`
-      profile(profile) {
-        return {
-          id: profile.id,
-          name: profile.name,
-          image: profile.image,
-        };
-      },
-    },
   ],
   callbacks: {
-    async jwt({ token, profile, user, trigger, session: sessionData }) {
-      // profile is set on Steam OAuth login; user is set on credentials (dev mock) login
-      const steamId = profile?.id ?? user?.steamId;
-      if (steamId) {
-        token.steamId = steamId;
-        token.avatarUrl = profile?.image ?? "";
+    async jwt({ token, user, trigger, session: sessionData }) {
+      // user is populated on first sign-in for credentials providers
+      if (user?.steamId) {
+        token.steamId = user.steamId;
+        token.avatarUrl = user.image ?? "";
 
         const { data: player } = await supabase
           .from("players")
           .select("id, name")
-          .eq("steam_id", String(steamId))
+          .eq("steam_id", String(user.steamId))
           .single();
 
         token.playerId = player?.id ?? null;
