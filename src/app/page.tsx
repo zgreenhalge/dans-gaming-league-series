@@ -3,6 +3,7 @@ import { getSeasons, getAllLeaderboards, getAllGauntletSummaries } from '@/lib/q
 import type { GauntletSummary } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { TopbarShell } from '@/components/TopbarShell';
+import PlayerAvatar from '@/components/PlayerAvatar';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,8 +79,11 @@ function ActiveSeasonPanel({
               href={`/players/${p.player_id}`}
               className="block px-5 py-4 border-r border-[var(--color-border-tertiary)] last:border-r-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
             >
-              <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-1">
-                {i === 0 ? 'Leader' : i === 1 ? '2nd' : '3rd'}
+              <div className="flex items-center gap-3 mb-2">
+                <PlayerAvatar name={p.player_name} imageUrl={null} size="sm" />
+                <div className="tracked text-[9px] text-[var(--color-text-secondary)]">
+                  {i === 0 ? 'Leader' : i === 1 ? '2nd' : '3rd'}
+                </div>
               </div>
               <div className="font-display text-[18px] font-semibold leading-tight truncate">
                 {p.player_name}
@@ -162,9 +166,10 @@ function PastSeasonRow({
       </div>
       {winner ? (
         <div className="flex flex-col items-end gap-1.5">
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-center gap-2">
             <span className="tracked text-[9px] text-[var(--color-text-secondary)]">Champion</span>
             <span className="font-display text-[16px] font-semibold leading-tight">{winner.player_name}</span>
+            <PlayerAvatar name={winner.player_name} imageUrl={null} size="sm" />
           </div>
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-5">
             <Stat v={`${winner.win_rate_percentage.toFixed(1)}%`} l="WR" />
@@ -201,9 +206,10 @@ function GauntletPastSeasonRow({
       </div>
       {summary?.champion ? (
         <div className="flex flex-col items-end gap-1.5">
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-center gap-2">
             <span className="tracked text-[9px] text-[var(--color-text-secondary)]">Champion</span>
             <span className="font-display text-[16px] font-semibold leading-tight">{summary.champion.name}</span>
+            <PlayerAvatar name={summary.champion.name} imageUrl={null} size="sm" />
           </div>
         </div>
       ) : (

@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { ThemeToggle } from './ThemeToggle';
-import { useSession, signIn } from 'next-auth/react'; // Clean client auth hooks
+import { useSession, signIn, signOut } from 'next-auth/react';
+import PlayerAvatar from './PlayerAvatar';
 
 export interface Crumb {
   label: string;
@@ -67,18 +68,21 @@ export function TopbarShell({
 
         <div className="flex items-center gap-4 shrink-0">
           {nav}
+          {process.env.NODE_ENV === "development" && status !== "loading" && (
+            <button
+              onClick={() => user ? signOut() : signIn("dev-steam-mock", { steamId: "grachary" })}
+              className="text-[11px] font-mono px-2 py-1 rounded border border-dashed border-yellow-500 text-yellow-500 hover:bg-yellow-500/10 transition-colors"
+            >
+              dev
+            </button>
+          )}
           <ThemeToggle />
           <div className="flex items-center">
-            {/* Show loading state, then avatar, else a clean Login button */}
             {status === "loading" ? (
               <div className="w-10 h-10 rounded-full bg-gray-700 animate-pulse" />
             ) : user ? (
-              <Link href={`/players/${user.steamId}`}>
-                <img
-                  src={user.image || ''}
-                  alt={`${user.name}'s Profile`}
-                  className="w-10 h-10 rounded-full border-2 border-gray-400 object-cover cursor-pointer"
-                />
+              <Link href={`/players/${user.playerId}`}>
+                <PlayerAvatar name={user.name ?? "?"} imageUrl={user.image} size="md" />
               </Link>
             ) : (
               <button

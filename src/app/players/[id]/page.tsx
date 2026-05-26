@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getPlayer } from '@/lib/queries';
 import PlayerView from '@/components/PlayerView';
+import PlayerAvatar from '@/components/PlayerAvatar';
 
 export const revalidate = 60;
 
@@ -37,7 +38,8 @@ export default async function PlayerPage({
         ]}
       />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
-        <div className="mt-8 mb-6">
+        <div className="mt-8 mb-6 flex items-center gap-5">
+          <PlayerAvatar name={detail.player.name} imageUrl={null} size="lg" />
           <div className="font-display text-[42px] font-semibold leading-tight">
             {detail.player.name}
           </div>
