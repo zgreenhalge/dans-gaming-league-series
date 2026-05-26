@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ThemeToggle } from './ThemeToggle';
+import { useSession, signIn } from 'next-auth/react'; // Clean client auth hooks
 
 export interface Crumb {
   label: string;
@@ -15,6 +16,10 @@ export function TopbarShell({
   crumbs: Crumb[];
   nav?: React.ReactNode;
 }) {
+  // Use the official NextAuth client session hook
+  const { data: session, status } = useSession();
+  const user = session?.user;
+
   return (
     <div className="sticky top-0 z-20 bg-[var(--color-bg-primary)] border-b-2 border-[var(--color-ct)]">
       <div className="max-w-[1080px] mx-auto px-6 py-3 flex items-center justify-between gap-6">
@@ -63,8 +68,28 @@ export function TopbarShell({
         <div className="flex items-center gap-4 shrink-0">
           {nav}
           <ThemeToggle />
+          <div className="flex items-center">
+            {/* Show loading state, then avatar, else a clean Login button */}
+            {status === "loading" ? (
+              <div className="w-10 h-10 rounded-full bg-gray-700 animate-pulse" />
+            ) : user ? (
+              <Link href={`/players/${user.steamId}`}>
+                <img
+                  src={user.image || ''}
+                  alt={`${user.name}'s Profile`}
+                  className="w-10 h-10 rounded-full border-2 border-gray-400 object-cover cursor-pointer"
+                />
+              </Link>
+            ) : (
+              <button
+                onClick={() => signIn("steam")}
+                className="text-[13px] font-medium tracking-wide text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+              >
+                Login
+              </button>
+            )}
+          </div>
         </div>
-
       </div>
     </div>
   );
