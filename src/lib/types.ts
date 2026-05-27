@@ -39,6 +39,8 @@ export interface Player {
   name: string;
   discord_id: string | null;
   steam_id: string | null;
+  steam_nickname: string | null;
+  steam_avatar_url: string | null;
 }
 
 export interface PlayerMatchStat {

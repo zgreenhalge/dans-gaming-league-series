@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { ThemeToggle } from './ThemeToggle';
+import { useSession, signIn, signOut } from 'next-auth/react';
+import PlayerAvatar from './PlayerAvatar';
 
 export interface Crumb {
   label: string;
@@ -15,6 +17,9 @@ export function TopbarShell({
   crumbs: Crumb[];
   nav?: React.ReactNode;
 }) {
+  const { data: session, status } = useSession();
+  const user = session?.user;
+
   return (
     <div className="sticky top-0 z-20 bg-[var(--color-bg-primary)] border-b-2 border-[var(--color-ct)]">
       <div className="max-w-[1080px] mx-auto px-6 py-3 flex items-center justify-between gap-6">
@@ -62,9 +67,36 @@ export function TopbarShell({
 
         <div className="flex items-center gap-4 shrink-0">
           {nav}
+          {process.env.NODE_ENV === "development" && status !== "loading" && (
+            <button
+              onClick={() => user ? signOut() : signIn("dev-steam-mock", { steamId: "grachary" })}
+              className="text-[11px] font-mono px-2 py-1 rounded border border-dashed border-yellow-500 text-yellow-500 hover:bg-yellow-500/10 transition-colors"
+            >
+              dev
+            </button>
+          )}
           <ThemeToggle />
+          <div className="flex items-center">
+            {status === "loading" ? (
+              <div className="w-10 h-10 rounded-full bg-gray-700 animate-pulse" />
+            ) : user ? (
+              user.playerId != null ? (
+                <Link href={`/players/${user.playerId}`}>
+                  <PlayerAvatar name={user.name ?? "?"} imageUrl={user.image} size="md" />
+                </Link>
+              ) : (
+                <PlayerAvatar name={user.name ?? "?"} imageUrl={user.image} size="md" />
+              )
+            ) : (
+              <a
+                href="/api/auth/steam"
+                className="text-[13px] font-medium tracking-wide text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+              >
+                Login
+              </a>
+            )}
+          </div>
         </div>
-
       </div>
     </div>
   );

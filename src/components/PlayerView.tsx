@@ -108,7 +108,7 @@ function PlayerMatchRow({
   return (
     <Link
       href={`/matches/${row.match_id}`}
-      className={`block border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors ${mapImg ? 'map-card-bg' : 'hover:bg-[var(--color-bg-secondary)]'}`}
+      className={`block border border-[var(--color-border-primary)] transition-colors ${mapImg ? 'map-card-bg' : 'hover:bg-[var(--color-bg-secondary)]'}`}
       style={mapImg ? ({ ['--map-img' as string]: `url("${mapImg}")` } as React.CSSProperties) : undefined}
     >
       <div className={mapImg ? 'bg-[var(--overlay-strong)] hover:bg-[var(--overlay-medium)] transition-colors' : ''}>
@@ -352,7 +352,7 @@ export default function PlayerView({
       {upcomingHistory.length > 0 && (
         <>
           <SectionLabel>Upcoming matches</SectionLabel>
-          <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
+          <div className="flex flex-col gap-3">
             {upcomingHistory.map((h) => (
               <PlayerMatchRow key={h.id} row={h} variant="upcoming" />
             ))}
@@ -412,7 +412,7 @@ export default function PlayerView({
           No matches played yet.
         </div>
       ) : (
-        <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
+        <div className="flex flex-col gap-3">
           {playedHistory.map((h) => (
             <PlayerMatchRow key={h.id} row={h} variant="played" />
           ))}

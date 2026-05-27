@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { GauntletRound, GauntletMatch } from '@/lib/queries';
 import { isPlayedScore } from '@/lib/util';
+import PlayerAvatar from '@/components/PlayerAvatar';
 
 const MEDAL_COLORS = { 1: '#f5c542', 2: '#a0a3ab', 3: '#c47a3a' } as const;
 const tint = (rank: 1 | 2 | 3, opacity = 18) =>
@@ -61,8 +62,11 @@ export default function GauntletStandings({
         <div className="tracked text-[9px] mb-1.5" style={{ color: MEDAL_COLORS[1] }}>
           Champion
         </div>
-        <div className="font-display text-[28px] font-semibold leading-tight" style={{ color: MEDAL_COLORS[1] }}>
-          {champion.name}
+        <div className="flex items-center gap-3">
+          <PlayerAvatar name={champion.name} imageUrl={null} size="md" />
+          <div className="font-display text-[28px] font-semibold leading-tight" style={{ color: MEDAL_COLORS[1] }}>
+            {champion.name}
+          </div>
         </div>
         {champStats && (
           <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-2 flex items-center gap-4">
@@ -100,8 +104,11 @@ export default function GauntletStandings({
                 <div className="tracked text-[9px] mb-1" style={{ color: MEDAL_COLORS[rank] }}>
                   {i === 0 ? '2nd Place' : '3rd Place'}
                 </div>
-                <div className="font-display text-[18px] font-semibold leading-tight truncate" style={{ color: MEDAL_COLORS[rank] }}>
-                  {p.name}
+                <div className="flex items-center gap-2">
+                  <PlayerAvatar name={p.name} imageUrl={null} size="sm" />
+                  <div className="font-display text-[18px] font-semibold leading-tight truncate" style={{ color: MEDAL_COLORS[rank] }}>
+                    {p.name}
+                  </div>
                 </div>
                 {ps && (
                   <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1.5 flex items-center gap-3">

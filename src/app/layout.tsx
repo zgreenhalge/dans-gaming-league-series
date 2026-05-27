@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Bai_Jamjuree, Geist, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import AuthProvider from "@/components/AuthProvider";
+import Script from "next/script";
 import "./globals.css";
 
 const display = Bai_Jamjuree({
@@ -35,10 +37,6 @@ export const metadata: Metadata = {
   },
 };
 
-// Runs before first paint to avoid a theme flash. Reads stored preference,
-// falls back to system preference, and sets data-theme on <html>.
-const themeInitScript = `(function(){try{var s=localStorage.getItem('dgls-theme');var t=s==='dark'||s==='light'?s:(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=t;}catch(e){}})();`;
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -50,13 +48,17 @@ export default function RootLayout({
       className={`h-full antialiased ${display.variable} ${sans.variable} ${mono.variable}`}
       suppressHydrationWarning
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-      </head>
       <body className="min-h-full">
-        {children}
-        <Analytics />
-        <SpeedInsights />
+        <Script
+          id="theme-initializer"
+          src="/theme-script.js"
+          strategy="beforeInteractive"
+        />
+        <AuthProvider>
+          {children}
+          <Analytics />
+          <SpeedInsights />
+        </AuthProvider>
       </body>
     </html>
   );
