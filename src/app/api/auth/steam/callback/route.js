@@ -4,14 +4,10 @@ import { createHmac } from "crypto";
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    console.log("[steam/callback] received params:", Object.fromEntries(searchParams));
-
     const claimedId = searchParams.get("openid.claimed_id") ?? "";
     const mode = searchParams.get("openid.mode");
-    console.log("[steam/callback] mode:", mode, "claimedId:", claimedId);
 
     if (mode !== "id_res") {
-      console.error("[steam/callback] unexpected mode:", mode);
       return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/?error=steam_bad_mode`);
     }
 
@@ -19,7 +15,6 @@ export async function GET(request) {
     const verificationParams = new URLSearchParams(searchParams);
     verificationParams.set("openid.mode", "check_authentication");
 
-    console.log("[steam/callback] sending verification to Steam...");
     const verifyResponse = await fetch("https://steamcommunity.com/openid/login", {
       method: "POST",
       body: verificationParams,
@@ -27,20 +22,14 @@ export async function GET(request) {
     });
 
     const verifyText = await verifyResponse.text();
-    console.log("[steam/callback] Steam verification response:", verifyText);
-
     if (!verifyText.includes("is_valid:true")) {
-      console.error("[steam/callback] Steam rejected signature");
       return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/?error=steam_invalid`);
     }
 
     const steamId = claimedId.split("/").pop();
     if (!steamId) {
-      console.error("[steam/callback] could not extract steamId from claimed_id:", claimedId);
       return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/?error=steam_invalid`);
     }
-
-    console.log("[steam/callback] verified steamId:", steamId);
 
     if (!process.env.NEXTAUTH_SECRET) {
       console.error("[steam/callback] NEXTAUTH_SECRET is not set");
@@ -54,7 +43,6 @@ export async function GET(request) {
       .digest("hex");
     const token = Buffer.from(JSON.stringify({ steamId, expires, sig })).toString("base64url");
 
-    console.log("[steam/callback] redirecting to /auth/steam");
     return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/auth/steam?token=${token}`);
   } catch (err) {
     console.error("[steam/callback] unhandled error:", err);

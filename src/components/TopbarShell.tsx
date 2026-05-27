@@ -17,7 +17,6 @@ export function TopbarShell({
   crumbs: Crumb[];
   nav?: React.ReactNode;
 }) {
-  // Use the official NextAuth client session hook
   const { data: session, status } = useSession();
   const user = session?.user;
 

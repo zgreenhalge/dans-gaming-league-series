@@ -49,16 +49,15 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full">
-        {/* Next.js safely handles optimization and blocking via your public file asset */}
         <Script
           id="theme-initializer"
           src="/theme-script.js"
           strategy="beforeInteractive"
         />
         <AuthProvider>
-            {children}
-            <Analytics />
-            <SpeedInsights />
+          {children}
+          <Analytics />
+          <SpeedInsights />
         </AuthProvider>
       </body>
     </html>
