@@ -78,4 +78,5 @@ export interface LeaderboardRow {
 
 export interface LeaderboardRowWithId extends LeaderboardRow {
   player_id: number;
+  steam_avatar_url?: string | null;
 }

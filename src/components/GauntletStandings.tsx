@@ -63,7 +63,7 @@ export default function GauntletStandings({
           Champion
         </div>
         <div className="flex items-center gap-3">
-          <PlayerAvatar name={champion.name} imageUrl={null} size="md" />
+          <PlayerAvatar name={champion.name} imageUrl={champStats?.steam_avatar_url ?? null} size="md" />
           <div className="font-display text-[28px] font-semibold leading-tight" style={{ color: MEDAL_COLORS[1] }}>
             {champion.name}
           </div>
@@ -105,7 +105,7 @@ export default function GauntletStandings({
                   {i === 0 ? '2nd Place' : '3rd Place'}
                 </div>
                 <div className="flex items-center gap-2">
-                  <PlayerAvatar name={p.name} imageUrl={null} size="sm" />
+                  <PlayerAvatar name={p.name} imageUrl={ps?.steam_avatar_url ?? null} size="sm" />
                   <div className="font-display text-[18px] font-semibold leading-tight truncate" style={{ color: MEDAL_COLORS[rank] }}>
                     {p.name}
                   </div>

@@ -84,7 +84,7 @@ export default function CareerStatsView({
           No data for this selection.
         </div>
       ) : (
-        <LeaderboardTable rows={rows} />
+        <LeaderboardTable rows={rows} showMedals={false} />
       )}
     </>
   );

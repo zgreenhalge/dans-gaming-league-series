@@ -68,17 +68,18 @@ interface MapAgg {
 }
 
 function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
-  const buckets = new Map<string, PlayerHistoryRow[]>();
+  const buckets = new Map<string, { display: string; rows: PlayerHistoryRow[] }>();
   for (const r of rows) {
     if (!r.map) continue;
-    const list = buckets.get(r.map) ?? [];
-    list.push(r);
-    buckets.set(r.map, list);
+    const key = r.map.trim().toLowerCase();
+    const entry = buckets.get(key) ?? { display: r.map.trim(), rows: [] };
+    entry.rows.push(r);
+    buckets.set(key, entry);
   }
   const out: MapAgg[] = [];
-  for (const [map, list] of buckets) {
+  for (const { display, rows: list } of buckets.values()) {
     const a = aggregate(list);
-    out.push({ map, wins: a.wins, losses: a.losses, wr: a.wr, adr: a.adr });
+    out.push({ map: display, wins: a.wins, losses: a.losses, wr: a.wr, adr: a.adr });
   }
   return out.sort((a, b) => b.wr - a.wr || b.adr - a.adr);
 }
@@ -307,7 +308,8 @@ export default function PlayerView({
         </Link>
       </div>
       <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-        <div className="grid grid-cols-4 sm:grid-cols-7">
+        <div className="grid grid-cols-4 sm:grid-cols-8">
+          <StatCell v={agg.matches} l="Games" />
           <StatCell v={`${agg.wins}-${agg.losses}`} l="W-L" />
           <StatCell v={`${agg.wr.toFixed(1)}%`} l="Win rate" />
           <StatCell v={agg.kills} l="Kills" />
