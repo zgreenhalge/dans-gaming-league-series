@@ -78,6 +78,17 @@ export const authOptions = {
 
         token.playerId = player?.id ?? null;
         token.playerName = player?.name ?? null;
+
+        // Keep Steam profile info fresh in the DB on every login
+        if (player) {
+          await supabase
+            .from("players")
+            .update({
+              steam_nickname: user.name,
+              steam_avatar_url: user.image,
+            })
+            .eq("id", player.id);
+        }
       }
 
       if (trigger === "update" && sessionData?.playerId != null) {

@@ -36,11 +36,25 @@ export async function POST(request) {
   const steamId = String(session.user.steamId);
   const body = await request.json();
 
+  // Fetch Steam profile to store alongside the player record
+  const steamProfile = await fetch(
+    `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${process.env.STEAM_API_KEY}&steamids=${steamId}`
+  )
+    .then((r) => r.json())
+    .then((d) => d.response?.players?.[0] ?? null)
+    .catch(() => null);
+
+  const steamFields = {
+    steam_id: steamId,
+    steam_nickname: steamProfile?.personaname ?? null,
+    steam_avatar_url: steamProfile?.avatarfull ?? null,
+  };
+
   // Link an existing player record
   if (body.existingPlayerId != null) {
     const { data: player, error } = await supabase
       .from("players")
-      .update({ steam_id: steamId })
+      .update(steamFields)
       .eq("id", body.existingPlayerId)
       .is("steam_id", null) // only link if still unlinked
       .select("id, name")
@@ -58,7 +72,7 @@ export async function POST(request) {
 
   const { data: player, error } = await supabase
     .from("players")
-    .insert({ name: trimmedName, steam_id: steamId })
+    .insert({ name: trimmedName, ...steamFields })
     .select("id, name")
     .single();
 

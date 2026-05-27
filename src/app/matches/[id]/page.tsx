@@ -5,6 +5,7 @@ import type { Match } from '@/lib/types';
 import { isPlayedScore, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
 import { TopbarShell } from '@/components/TopbarShell';
+import PlayerAvatar from '@/components/PlayerAvatar';
 
 export const revalidate = 60;
 
@@ -170,14 +171,15 @@ function Scoreboard({
                 key={p.player_id}
                 className="border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] cursor-pointer transition-colors"
               >
-                <td className="pl-4 pr-3 py-2.5 font-display font-semibold faction-fg">
+                <td className="pl-3 pr-3 py-2 font-display font-semibold faction-fg">
                   <Link
                     href={`/players/${p.player_id}`}
-                    className="block w-full h-full"
+                    className="flex items-center gap-2.5"
                   >
+                    <PlayerAvatar name={p.player_name} imageUrl={p.steam_avatar_url} size="sm" />
                     {p.player_name}
                     {p.player_id === mvpPlayerId && (
-                      <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 tracked text-[9px] font-semibold border"
+                      <span className="ml-0.5 inline-flex items-center px-1.5 py-0.5 tracked text-[9px] font-semibold border"
                         style={{
                           color: 'var(--color-accent-amber-pickborder)',
                           background: 'color-mix(in srgb, var(--color-accent-amber-pickborder) 12%, transparent)',

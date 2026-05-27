@@ -17,8 +17,6 @@ export default function RegisterModal() {
 
   const show = !!session?.user && session.user.playerId == null;
 
-  console.log("[RegisterModal] status:", status, "| playerId:", session?.user?.playerId, "| steamId:", session?.user?.steamId, "| show:", show);
-
   useEffect(() => {
     if (!show) return;
     fetch("/api/players/register")

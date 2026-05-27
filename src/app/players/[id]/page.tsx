@@ -39,9 +39,21 @@ export default async function PlayerPage({
       />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6 flex items-center gap-5">
-          <PlayerAvatar name={detail.player.name} imageUrl={null} size="lg" />
-          <div className="font-display text-[42px] font-semibold leading-tight">
-            {detail.player.name}
+          <PlayerAvatar name={detail.player.name} imageUrl={detail.player.steam_avatar_url} size="lg" />
+          <div>
+            <div className="font-display text-[42px] font-semibold leading-tight">
+              {detail.player.name}
+            </div>
+            {detail.player.steam_id && detail.player.steam_nickname && (
+              <Link
+                href={`https://steamcommunity.com/profiles/${detail.player.steam_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-[12px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+              >
+                {detail.player.steam_nickname} ↗
+              </Link>
+            )}
           </div>
         </div>
         <PlayerView history={detail.history} />

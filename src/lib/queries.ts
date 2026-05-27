@@ -37,6 +37,7 @@ export interface WeekWithMatches extends Week {
 
 export interface MatchStatRow extends PlayerMatchStat {
   player_name: string;
+  steam_avatar_url: string | null;
 }
 
 export interface MatchDetail {
@@ -315,6 +316,7 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
     (s) => ({
       ...s,
       player_name: players.get(s.player_id)?.name ?? `#${s.player_id}`,
+      steam_avatar_url: players.get(s.player_id)?.steam_avatar_url ?? null,
     }),
   );
 
