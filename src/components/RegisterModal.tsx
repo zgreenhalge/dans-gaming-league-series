@@ -14,8 +14,11 @@ export default function RegisterModal() {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const show = !!session?.user && session.user.playerId == null;
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!show) return;
@@ -25,7 +28,7 @@ export default function RegisterModal() {
       .catch(() => {});
   }, [show]);
 
-  if (!show) return null;
+  if (!show || !mounted) return null;
 
   const selectedPlayer = unlinked.find((p) => p.id === selectedId) ?? null;
 

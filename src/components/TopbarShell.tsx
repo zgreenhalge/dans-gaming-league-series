@@ -82,10 +82,10 @@ export function TopbarShell({
             ) : user ? (
               user.playerId != null ? (
                 <Link href={`/players/${user.playerId}`}>
-                  <PlayerAvatar name={user.name ?? "?"} imageUrl={user.image} size="md" />
+                  <PlayerAvatar name={user.name ?? "?"} imageUrl={user.image} size="md" round />
                 </Link>
               ) : (
-                <PlayerAvatar name={user.name ?? "?"} imageUrl={user.image} size="md" />
+                <PlayerAvatar name={user.name ?? "?"} imageUrl={user.image} size="md" round />
               )
             ) : (
               <a

@@ -880,7 +880,10 @@ export async function getGauntletSeasonLeaderboard(
   }
 
   return Array.from(byPlayer.values())
-    .map((agg) => aggToRow(agg, seasonId))
+    .map((agg) => ({
+      ...aggToRow(agg, seasonId),
+      steam_avatar_url: players.get(agg.player_id)?.steam_avatar_url ?? null,
+    }))
     .sort((a, b) => b.overall_adr - a.overall_adr);
 }
 

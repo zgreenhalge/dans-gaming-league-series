@@ -7,8 +7,10 @@ import type { LeaderboardRowWithId } from '@/lib/types';
 type SortCol =
   | 'name'
   | 'record'
+  | 'gp'
   | 'wr'
   | 'rw_rl'
+  | 'rp'
   | 'rwr'
   | 'kills'
   | 'assists'
@@ -26,6 +28,8 @@ function compare(
       return a.player_name.localeCompare(b.player_name);
     case 'record':
       return b.matches_won - a.matches_won || a.matches_lost - b.matches_lost;
+    case 'gp':
+      return b.matches_played - a.matches_played;
     case 'wr':
       return (
         b.win_rate_percentage - a.win_rate_percentage ||
@@ -33,6 +37,8 @@ function compare(
       );
     case 'rw_rl':
       return b.total_rounds_won - a.total_rounds_won;
+    case 'rp':
+      return b.total_rounds_played - a.total_rounds_played;
     case 'rwr':
       return b.rwr_percentage - a.rwr_percentage;
     case 'kills':
@@ -109,8 +115,10 @@ export default function LeaderboardTable({
 
   const STAT_COLS: { key: SortCol; label: string }[] = [
     { key: 'record', label: 'W-L' },
+    { key: 'gp',     label: 'Games' },
     { key: 'wr',     label: 'WR%' },
     { key: 'rw_rl',  label: 'RW-RL' },
+    { key: 'rp',     label: 'Rounds' },
     { key: 'rwr',    label: 'RWR%' },
     { key: 'kills',   label: 'Kills' },
     { key: 'assists', label: 'Assists' },
@@ -133,9 +141,7 @@ export default function LeaderboardTable({
         }`}
       >
         {col.label}
-        <span className={`ml-1 ${active ? 'opacity-100' : 'opacity-30'}`}>
-          {active ? (asc ? '↑' : '↓') : '↕'}
-        </span>
+        {active && <span className="ml-1">{asc ? '↑' : '↓'}</span>}
       </th>
     );
   }
@@ -161,9 +167,7 @@ export default function LeaderboardTable({
               } ${sortCol === 'name' ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}
             >
               {firstColLabel}
-              <span className={`ml-1 ${sortCol === 'name' ? 'opacity-100' : 'opacity-30'}`}>
-                {sortCol === 'name' ? (asc ? '↑' : '↓') : '↕'}
-              </span>
+              {sortCol === 'name' && <span className="ml-1">{asc ? '↑' : '↓'}</span>}
             </th>
             {STAT_COLS.map((c) => <SortableTh key={c.key} col={c} />)}
           </tr>
@@ -203,10 +207,16 @@ export default function LeaderboardTable({
                   <Link href={href} className="block w-full h-full">{dash(played, `${p.matches_won}-${p.matches_lost}`)}</Link>
                 </td>
                 <td className="py-2.5 px-2 text-right font-mono tnum">
+                  <Link href={href} className="block w-full h-full">{dash(played, String(p.matches_played))}</Link>
+                </td>
+                <td className="py-2.5 px-2 text-right font-mono tnum">
                   <Link href={href} className="block w-full h-full">{dash(played, `${p.win_rate_percentage.toFixed(1)}%`)}</Link>
                 </td>
                 <td className="py-2.5 px-2 text-right font-mono tnum">
                   <Link href={href} className="block w-full h-full">{dash(played, `${p.total_rounds_won}-${rounds_lost}`)}</Link>
+                </td>
+                <td className="py-2.5 px-2 text-right font-mono tnum">
+                  <Link href={href} className="block w-full h-full">{dash(played, String(p.total_rounds_played))}</Link>
                 </td>
                 <td className="py-2.5 px-2 text-right font-mono tnum">
                   <Link href={href} className="block w-full h-full">{dash(played, `${p.rwr_percentage.toFixed(1)}%`)}</Link>

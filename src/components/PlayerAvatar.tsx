@@ -10,16 +10,18 @@ export default function PlayerAvatar({
   name,
   imageUrl,
   size = 'md',
+  round = false,
 }: {
   name: string;
   imageUrl?: string | null;
   size?: Size;
+  round?: boolean;
 }) {
   const { wrapper, text } = sizeClasses[size];
 
   return (
     <div
-      className={`${wrapper} rounded-full border-2 border-gray-400 flex items-center justify-center bg-gray-700 overflow-hidden shrink-0`}
+      className={`${wrapper} ${round ? 'rounded-full' : 'rounded-sm'} border-2 border-gray-400 flex items-center justify-center bg-gray-700 overflow-hidden shrink-0`}
     >
       {imageUrl ? (
         <img src={imageUrl} alt={`${name}'s avatar`} className="w-full h-full object-cover" />
