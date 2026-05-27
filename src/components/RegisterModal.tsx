@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 
 type UnlinkedPlayer = { id: number; name: string };
@@ -53,9 +54,8 @@ export default function RegisterModal() {
     }
   }
 
-  // Confirmation screen for linking an existing player
   if (confirming && selectedPlayer) {
-    return (
+    return createPortal(
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
         <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] rounded-lg p-8 w-full max-w-sm shadow-xl">
           <h2 className="font-display font-bold text-[18px] text-[var(--color-text-primary)] mb-3">
@@ -83,11 +83,12 @@ export default function RegisterModal() {
             </button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] rounded-lg p-8 w-full max-w-sm shadow-xl">
         <h2 className="font-display font-bold text-[20px] text-[var(--color-text-primary)] mb-1">
@@ -166,6 +167,7 @@ export default function RegisterModal() {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
