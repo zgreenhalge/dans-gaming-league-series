@@ -325,3 +325,21 @@ body > * { position: relative; z-index: 1; }
   );
 }
 .map-card-bg > * { position: relative; z-index: 1; }
+
+/* Gradient shown on match pages when no map image is available */
+.map-no-img {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-accent-blue-bg) 60%, var(--color-bg-primary)) 0%,
+    var(--color-bg-primary) 45%,
+    color-mix(in srgb, var(--color-accent-amber-bg) 55%, var(--color-bg-primary)) 100%
+  );
+}
+[data-theme="dark"] .map-no-img {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-accent-blue-bg) 80%, var(--color-bg-primary)) 0%,
+    var(--color-bg-primary) 45%,
+    color-mix(in srgb, var(--color-accent-amber-bg) 75%, var(--color-bg-primary)) 100%
+  );
+}

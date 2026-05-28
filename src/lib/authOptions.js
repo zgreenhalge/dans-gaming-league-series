@@ -46,15 +46,9 @@ const steamProvider = CredentialsProvider({
 const devProvider = CredentialsProvider({
   id: "dev-steam-mock",
   name: "Dev Steam Mock",
-  credentials: { steamId: { label: "Steam ID", type: "text" } },
-  async authorize(credentials) {
-    if (!credentials?.steamId) return null;
-    return {
-      id: credentials.steamId,
-      name: credentials.steamId,
-      image: "",
-      steamId: String(credentials.steamId),
-    };
+  credentials: {},
+  async authorize() {
+    return { id: "dev-1", name: "Zach", image: "", devPlayerId: 1 };
   },
 });
 
@@ -66,7 +60,15 @@ export const authOptions = {
   callbacks: {
     async jwt({ token, user, trigger, session: sessionData }) {
       // user is populated on first sign-in for credentials providers
-      if (user?.steamId) {
+      if (user?.devPlayerId) {
+        const { data: player } = await supabase
+          .from("players")
+          .select("id, name")
+          .eq("id", user.devPlayerId)
+          .single();
+        token.playerId = player?.id ?? null;
+        token.playerName = player?.name ?? null;
+      } else if (user?.steamId) {
         token.steamId = user.steamId;
         token.avatarUrl = user.image ?? "";
 

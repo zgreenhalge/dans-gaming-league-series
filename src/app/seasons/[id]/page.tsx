@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getServerSession } from 'next-auth';
 import { TopbarShell } from '@/components/TopbarShell';
 import {
   getSeason,
@@ -18,6 +19,10 @@ import GauntletStandings from '@/components/GauntletStandings';
 import type { Season, LeaderboardRowWithId } from '@/lib/types';
 import { isPlayedScore, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
+import { LocalTime } from '@/components/LocalTime';
+import SeasonStartDateButton from '@/components/SeasonStartDateButton';
+import { authOptions } from '@/lib/authOptions';
+import { supabase } from '@/lib/supabase';
 
 export const revalidate = 60;
 
@@ -63,9 +68,46 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ─── Week window helpers ──────────────────────────────────────────────────────
+
+function weekWindow(
+  startDate: string | null,
+  weekNumber: number,
+): { start: Date; end: Date } | null {
+  if (!startDate) return null;
+  const [y, m, d] = startDate.split('-').map(Number);
+  const base = Date.UTC(y, m - 1, d);
+  return {
+    start: new Date(base + (weekNumber - 1) * 7 * 86_400_000),
+    end: new Date(base + ((weekNumber - 1) * 7 + 6) * 86_400_000),
+  };
+}
+
+function fmtWindowDate(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+function relativeTime(iso: string): string {
+  const diff = new Date(iso).getTime() - Date.now();
+  const days = Math.round(diff / 86_400_000);
+  if (days > 1) return `in ${days} days`;
+  if (days === 1) return 'tomorrow';
+  if (days === 0) return 'today';
+  if (days === -1) return 'yesterday';
+  return `${Math.abs(days)} days ago`;
+}
+
 // ─── Regular season components ────────────────────────────────────────────────
 
-function MatchRow({ match }: { match: MatchWithRoster }) {
+function MatchRow({
+  match,
+  weekStart,
+  weekEnd,
+}: {
+  match: MatchWithRoster;
+  weekStart: Date | null;
+  weekEnd: Date | null;
+}) {
   const played = isPlayedScore(match.final_score);
   const map = match.shirts_pick ?? match.picked_map;
   const mapImg = mapImageFor(map);
@@ -96,6 +138,19 @@ function MatchRow({ match }: { match: MatchWithRoster }) {
             <span className="font-mono text-[13px] font-semibold tnum text-[var(--color-text-primary)]">
               {match.final_score}
             </span>
+          ) : match.scheduled_at ? (
+            <div className="text-right">
+              <div className="font-mono text-[12px] text-[var(--color-text-primary)]">
+                <LocalTime iso={match.scheduled_at} opts={{ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }} />
+              </div>
+              <div className="tracked text-[9px] text-[var(--color-text-secondary)] mt-0.5">
+                {relativeTime(match.scheduled_at)}
+              </div>
+            </div>
+          ) : weekStart && weekEnd ? (
+            <span className="tracked text-[10px] text-[var(--color-text-secondary)]">
+              {fmtWindowDate(weekStart)} – {fmtWindowDate(weekEnd)}
+            </span>
           ) : (
             <span className="tracked text-[9px] font-semibold text-[var(--color-accent-amber-fg)]">
               Pending
@@ -120,13 +175,27 @@ function MatchRow({ match }: { match: MatchWithRoster }) {
   );
 }
 
-function WeekBlock({ week }: { week: WeekWithMatches }) {
+function WeekBlock({
+  week,
+  seasonStartDate,
+}: {
+  week: WeekWithMatches;
+  seasonStartDate: string | null;
+}) {
+  const window = weekWindow(seasonStartDate, week.week_number);
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
-      <div className="px-4 py-2.5 flex items-center justify-between border-b border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)]">
-        <span className="tracked text-[11px] font-semibold text-[var(--color-text-primary)]">
-          Week {week.week_number}
-        </span>
+      <div className="px-4 py-2.5 flex items-center justify-between gap-3 border-b border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)]">
+        <div className="flex items-baseline gap-2.5">
+          <span className="tracked text-[11px] font-semibold text-[var(--color-text-primary)]">
+            Week {week.week_number}
+          </span>
+          {window && (
+            <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">
+              {fmtWindowDate(window.start)} – {fmtWindowDate(window.end)}
+            </span>
+          )}
+        </div>
         {week.bye_player_name && (
           <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">
             <span className="tracked mr-1.5">Bye</span>
@@ -135,7 +204,12 @@ function WeekBlock({ week }: { week: WeekWithMatches }) {
         )}
       </div>
       {week.matches.map((m) => (
-        <MatchRow key={m.id} match={m} />
+        <MatchRow
+          key={m.id}
+          match={m}
+          weekStart={window?.start ?? null}
+          weekEnd={window?.end ?? null}
+        />
       ))}
     </div>
   );
@@ -311,6 +385,18 @@ export default async function SeasonPage({
   const season = await getSeason(seasonId);
   if (!season) notFound();
 
+  // Admin check — used by both gauntlet and regular season views
+  const session = await getServerSession(authOptions);
+  let isAdmin = false;
+  if (session?.user?.playerId) {
+    const { data: playerRow } = await supabase
+      .from('players')
+      .select('is_admin')
+      .eq('id', session.user.playerId)
+      .maybeSingle();
+    isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
+  }
+
   if (season.is_gauntlet) {
     const [rounds, leaderboard] = await Promise.all([
       getGauntletRounds(seasonId),
@@ -328,6 +414,13 @@ export default async function SeasonPage({
             </div>
             <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5">
               {matchCount} matches · {rounds.length} rounds
+            </div>
+            <div className="mt-2">
+              <SeasonStartDateButton
+                seasonId={season.id}
+                startDate={season.start_date}
+                canEdit={isAdmin}
+              />
             </div>
           </div>
 
@@ -372,6 +465,13 @@ export default async function SeasonPage({
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5">
             {leaderboard.length} players · {matchCount} matches · {schedule.length} weeks
           </div>
+          <div className="mt-2">
+            <SeasonStartDateButton
+              seasonId={season.id}
+              startDate={season.start_date}
+              canEdit={isAdmin}
+            />
+          </div>
         </div>
 
         <SectionLabel>Leaderboard</SectionLabel>
@@ -389,7 +489,9 @@ export default async function SeasonPage({
             No weeks scheduled.
           </div>
         ) : (
-          schedule.map((w) => <WeekBlock key={w.id} week={w} />)
+          schedule.map((w) => (
+            <WeekBlock key={w.id} week={w} seasonStartDate={season.start_date} />
+          ))
         )}
       </main>
     </div>

@@ -8,6 +8,7 @@ export interface Season {
   target_win_rounds: number;
   buy_in_amount: number | null;
   is_gauntlet: boolean;
+  start_date: string | null;
 }
 
 export interface Week {
@@ -32,6 +33,7 @@ export interface Match {
   is_playoff_game: boolean;
   is_interpolated: boolean;
   notes: string | null;
+  scheduled_at: string | null;
 }
 
 export interface Player {
@@ -41,6 +43,7 @@ export interface Player {
   steam_id: string | null;
   steam_nickname: string | null;
   steam_avatar_url: string | null;
+  is_admin: boolean;
 }
 
 export interface PlayerMatchStat {

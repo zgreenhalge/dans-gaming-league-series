@@ -1,11 +1,15 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getServerSession } from 'next-auth';
 import { getMatch, type MatchStatRow } from '@/lib/queries';
 import type { Match } from '@/lib/types';
 import { isPlayedScore, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
 import { TopbarShell } from '@/components/TopbarShell';
 import PlayerAvatar from '@/components/PlayerAvatar';
+import MatchHeaderSection from '@/components/MatchHeaderSection';
+import { authOptions } from '@/lib/authOptions';
+import { supabase } from '@/lib/supabase';
 
 export const revalidate = 60;
 
@@ -256,6 +260,19 @@ function TeamHeader({
   );
 }
 
+function matchWeekWindow(
+  startDate: string | null,
+  weekNumber: number,
+): { weekStart: string; weekEnd: string } | null {
+  if (!startDate) return null;
+  const [y, m, d] = startDate.split('-').map(Number);
+  const base = Date.UTC(y, m - 1, d);
+  const startMs = base + (weekNumber - 1) * 7 * 86_400_000;
+  const endMs = base + ((weekNumber - 1) * 7 + 6) * 86_400_000;
+  const fmt = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  return { weekStart: fmt(startMs), weekEnd: fmt(endMs) };
+}
+
 export default async function MatchPage({
   params,
 }: {
@@ -285,13 +302,30 @@ export default async function MatchPage({
   const shirtsF = shirtsFaction(match.skins_starting_side);
   const skinsF: Faction = match.skins_starting_side;
 
+  // Scheduling: admins only, not available on gauntlet matches
+  let canEdit = false;
+  if (!played && !season.is_gauntlet) {
+    const session = await getServerSession(authOptions);
+    const currentPlayerId = session?.user?.playerId ?? null;
+    if (currentPlayerId !== null) {
+      const { data: playerRow } = await supabase
+        .from('players')
+        .select('is_admin')
+        .eq('id', currentPlayerId)
+        .maybeSingle();
+      canEdit = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
+    }
+  }
+
+  const window = matchWeekWindow(season.start_date, week.week_number);
+
   return (
     <div className="min-h-screen">
       <Topbar seasonId={season.id} seasonName={season.name} weekNumber={week.week_number} matchNumber={match.match_number} isGauntlet={season.is_gauntlet} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         {/* Header + veto wrapped in map backdrop — gradient shows regardless of image */}
         <div
-          className={map ? 'map-card-bg light-boost -mx-6 px-6' : ''}
+          className={`-mx-6 px-6 ${map ? 'map-card-bg light-boost' : 'map-no-img'}`}
           style={
             map
               ? ({
@@ -301,21 +335,17 @@ export default async function MatchPage({
           }
         >
           <div className="pt-8 pb-6">
-            <div className="flex items-end justify-between gap-4 flex-wrap">
-              <div>
-                <div className="font-display text-[36px] font-semibold leading-tight map-head">
-                  {map ?? 'TBD'}
-                </div>
-                <div className="tracked text-[10px] text-[var(--color-text-secondary)] mt-1.5">
-                  {season.is_gauntlet ? 'Round' : 'Week'} {week.week_number} · Match {match.match_number}
-                </div>
-              </div>
-              {!played && (
-                <span className="inline-flex items-center px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-amber-fg)] bg-[var(--color-accent-amber-bg)] border border-[var(--color-accent-amber-border)]">
-                  Pending
-                </span>
-              )}
-            </div>
+            <MatchHeaderSection
+              map={map}
+              matchId={match.id}
+              scheduledAt={match.scheduled_at}
+              weekStart={window?.weekStart ?? null}
+              weekEnd={window?.weekEnd ?? null}
+              canEdit={canEdit}
+              played={played}
+              isGauntlet={season.is_gauntlet}
+            />
+
             {score && (
               <div className="mt-5 flex items-baseline justify-center gap-5 flex-wrap">
                 <div className={`${factionClass(shirtsF)} flex items-baseline gap-3`}>
