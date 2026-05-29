@@ -257,7 +257,7 @@ export default function PlayerView({
   const agg = aggregate(filtered);
   const maps = aggregateByMap(filtered);
   const playedHistory = filtered.filter(isPlayed);
-  const upcomingHistory = filtered.filter((r) => !isPlayed(r));
+  const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
 
   const isCareer = filter === 'career';
 
