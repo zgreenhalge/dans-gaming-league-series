@@ -8,6 +8,7 @@ import { mapImageFor } from '@/lib/maps';
 import { TopbarShell } from '@/components/TopbarShell';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import MatchHeaderSection from '@/components/MatchHeaderSection';
+import VetoSequence from '@/components/VetoSequence';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 
@@ -74,62 +75,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function VetoSequence({ match }: { match: Match }) {
-  const side = match.skins_starting_side;
-  const sideCls =
-    side === 'CT'
-      ? 'bg-[var(--color-accent-blue-bg)] border-[var(--color-accent-blue-border)] [&_.lbl]:text-[var(--color-accent-blue-fg)] [&_.val]:text-[var(--color-accent-blue-strong)]'
-      : side === 'T'
-        ? 'bg-[var(--color-accent-amber-bg)] border-[var(--color-accent-amber-border)] [&_.lbl]:text-[var(--color-accent-amber-fg)] [&_.val]:text-[var(--color-accent-amber-strong)]'
-        : 'bg-[var(--color-bg-secondary)] border-[var(--color-border-tertiary)] [&_.lbl]:text-[var(--color-text-secondary)] [&_.val]:text-[var(--color-text-primary)]';
-
-  const banCls =
-    'bg-[var(--color-accent-green-bg)] border-[var(--color-accent-green-border)] [&_.lbl]:text-[var(--color-accent-green-fg)] [&_.val]:text-[var(--color-accent-green-strong)]';
-  const pickCls =
-    'bg-[var(--color-accent-green-bg)] border-2 border-[var(--color-accent-amber-pickborder)] [&_.lbl]:text-[var(--color-accent-green-fg)] [&_.val]:text-[var(--color-accent-green-strong)]';
-
-  const steps: { label: string; val: string | null; cls: string }[] =
-    match.is_playoff_game
-      ? [
-          { label: 'Shirts ban', val: match.shirts_ban, cls: banCls },
-          { label: 'Shirts ban', val: match.shirts_ban2, cls: banCls },
-          { label: 'Skins ban', val: match.skins_ban1, cls: banCls },
-          { label: 'Skins ban', val: match.skins_ban2, cls: banCls },
-          { label: 'Map pick', val: match.shirts_pick ?? match.picked_map, cls: pickCls },
-          { label: 'Skins side', val: side, cls: sideCls },
-        ]
-      : [
-          { label: 'Shirts ban', val: match.shirts_ban, cls: banCls },
-          { label: 'Skins ban', val: match.skins_ban1, cls: banCls },
-          { label: 'Skins ban', val: match.skins_ban2, cls: banCls },
-          { label: 'Map pick', val: match.shirts_pick ?? match.picked_map, cls: pickCls },
-          { label: 'Skins side', val: side, cls: sideCls },
-        ];
-
-  return (
-    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-      <div className="flex items-stretch gap-1 flex-wrap p-3">
-        {steps.map((s, i) => (
-          <span key={i} className="flex items-center gap-1 flex-1 min-w-[88px]">
-            {i > 0 && (
-              <span className="text-[var(--color-text-secondary)] text-sm shrink-0 font-mono">
-                ›
-              </span>
-            )}
-            <div className={`flex-1 min-w-[88px] px-2.5 py-2 border ${s.cls}`}>
-              <div className="lbl tracked text-[9px] font-semibold mb-0.5">
-                {s.label}
-              </div>
-              <div className="val font-display text-[14px] font-semibold leading-tight">
-                {s.val ?? '—'}
-              </div>
-            </div>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function Scoreboard({
   players,
@@ -302,22 +247,43 @@ export default async function MatchPage({
   const shirtsF = shirtsFaction(match.skins_starting_side);
   const skinsF: Faction = match.skins_starting_side;
 
-  // Scheduling: admins or players in the match can set the time
+  // Determine edit/veto permissions: admins or players in the match
   let canEdit = false;
-  if (!played && !season.is_gauntlet) {
+  let canVeto = false;
+  let playerFaction: 'SHIRTS' | 'SKINS' | null = null;
+  let gauntletPlayerIndex: 0 | 1 | null = null;
+  let vetoIsAdmin = false;
+  if (!played) {
     const session = await getServerSession(authOptions);
     const currentPlayerId = session?.user?.playerId ?? null;
     if (currentPlayerId !== null) {
-      const isInMatch = stats.some((s) => s.player_id === currentPlayerId);
-      if (isInMatch) {
-        canEdit = true;
-      } else {
+      const myStatRow = stats.find((s) => s.player_id === currentPlayerId);
+      const isInMatch = !!myStatRow;
+      let isAdmin = false;
+      if (!isInMatch) {
         const { data: playerRow } = await supabase
           .from('players')
           .select('is_admin')
           .eq('id', currentPlayerId)
           .maybeSingle();
-        canEdit = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
+        isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
+      }
+      const authorized = isInMatch || isAdmin;
+      if (authorized) {
+        canVeto = true;
+        vetoIsAdmin = isAdmin;
+        if (!season.is_gauntlet) canEdit = true;
+        if (myStatRow) {
+          playerFaction = myStatRow.faction as 'SHIRTS' | 'SKINS';
+          if (season.is_gauntlet) {
+            const factionPlayerIds = stats
+              .filter((s) => s.faction === myStatRow.faction)
+              .map((s) => s.player_id)
+              .sort((a, b) => a - b);
+            const idx = factionPlayerIds.indexOf(currentPlayerId);
+            gauntletPlayerIndex = idx === 0 ? 0 : idx === 1 ? 1 : null;
+          }
+        }
       }
     }
   }
@@ -380,7 +346,15 @@ export default async function MatchPage({
             Veto sequence
           </div>
           <div className="pb-6">
-            <VetoSequence match={match} />
+            <VetoSequence
+              match={match}
+              mapPool={season.map_pool}
+              canVeto={canVeto}
+              isGauntlet={season.is_gauntlet}
+              playerFaction={playerFaction}
+              gauntletPlayerIndex={gauntletPlayerIndex}
+              isAdmin={vetoIsAdmin}
+            />
           </div>
         </div>
 

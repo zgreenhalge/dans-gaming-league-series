@@ -9,6 +9,7 @@ export interface Season {
   buy_in_amount: number | null;
   is_gauntlet: boolean;
   start_date: string | null;
+  map_pool: string[] | null;
 }
 
 export interface Week {
