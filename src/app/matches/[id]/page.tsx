@@ -302,18 +302,23 @@ export default async function MatchPage({
   const shirtsF = shirtsFaction(match.skins_starting_side);
   const skinsF: Faction = match.skins_starting_side;
 
-  // Scheduling: admins only, not available on gauntlet matches
+  // Scheduling: admins or players in the match can set the time
   let canEdit = false;
   if (!played && !season.is_gauntlet) {
     const session = await getServerSession(authOptions);
     const currentPlayerId = session?.user?.playerId ?? null;
     if (currentPlayerId !== null) {
-      const { data: playerRow } = await supabase
-        .from('players')
-        .select('is_admin')
-        .eq('id', currentPlayerId)
-        .maybeSingle();
-      canEdit = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
+      const isInMatch = stats.some((s) => s.player_id === currentPlayerId);
+      if (isInMatch) {
+        canEdit = true;
+      } else {
+        const { data: playerRow } = await supabase
+          .from('players')
+          .select('is_admin')
+          .eq('id', currentPlayerId)
+          .maybeSingle();
+        canEdit = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
+      }
     }
   }
 

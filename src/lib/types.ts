@@ -43,6 +43,7 @@ export interface Player {
   steam_id: string | null;
   steam_nickname: string | null;
   steam_avatar_url: string | null;
+  steam_refreshed_at: string | null;
   is_admin: boolean;
 }
 
