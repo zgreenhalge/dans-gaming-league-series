@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 
 type Pref = 'system' | 'light' | 'dark';
 type Resolved = 'light' | 'dark';
@@ -54,7 +54,7 @@ function MoonIcon() {
   );
 }
 
-const OPTIONS: { value: Pref; label: string; Icon: () => JSX.Element }[] = [
+const OPTIONS: { value: Pref; label: string; Icon: () => ReactElement }[] = [
   { value: 'system', label: 'System', Icon: MonitorIcon },
   { value: 'light',  label: 'Light',  Icon: SunIcon },
   { value: 'dark',   label: 'Dark',   Icon: MoonIcon },
