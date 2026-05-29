@@ -90,26 +90,16 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   const nextCls =
     'bg-[var(--color-bg-secondary)] border border-[var(--color-accent-amber-pickborder)] [&_.lbl]:text-[var(--color-accent-amber-fg)] [&_.val]:text-[var(--color-text-secondary)]';
 
-  function tileCls(step: { field: string; type: string }, val: string | null, isNext: boolean) {
-    if (val !== null) {
-      if (step.type === 'side') return sideCls;
-      if (step.type === 'pick') return pickCls;
-      return lockedBanCls;
-    }
-    if (isNext) return `${nextCls} cursor-pointer`;
-    return pendingCls;
-  }
-
   // For non-gauntlet: the first unfilled step in sequence order
   const sequenceNextField = steps.find((s) => getFieldValue(match, s.field as StepField) === null)?.field as
     | StepField
     | undefined;
 
-  // The field the current player can act on right now
+  // The field the current player can act on for NEW entries (unfilled slots)
   const actionableField: StepField | undefined = (() => {
     if (!canVeto) return undefined;
     if (isGauntlet) {
-      if (isAdmin) return sequenceNextField; // admin follows sequence even in gauntlet
+      if (isAdmin) return sequenceNextField;
       if (!playerFaction || gauntletPlayerIndex === null) return undefined;
       const myField: StepField =
         playerFaction === 'SHIRTS'
@@ -117,13 +107,40 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
           : (gauntletPlayerIndex === 0 ? 'skins_ban1' : 'skins_ban2');
       return getFieldValue(match, myField) === null ? myField : undefined;
     }
-    // Non-gauntlet: sequential, restricted to the player's faction
     if (!sequenceNextField) return undefined;
     if (isAdmin) return sequenceNextField;
     if (!playerFaction) return undefined;
     const stepFaction = sequenceNextField.startsWith('shirts_') ? 'SHIRTS' : 'SKINS';
     return playerFaction === stepFaction ? sequenceNextField : undefined;
   })();
+
+  // Whether a filled tile can be overwritten by the current user
+  function isOverwritable(field: StepField): boolean {
+    if (!canVeto) return false;
+    if (isAdmin) return true;
+    if (isGauntlet) {
+      if (!playerFaction || gauntletPlayerIndex === null) return false;
+      const myField: StepField =
+        playerFaction === 'SHIRTS'
+          ? (gauntletPlayerIndex === 0 ? 'shirts_ban' : 'shirts_ban2')
+          : (gauntletPlayerIndex === 0 ? 'skins_ban1' : 'skins_ban2');
+      return field === myField;
+    }
+    if (!playerFaction) return false;
+    const fieldFaction = field.startsWith('shirts_') ? 'SHIRTS' : 'SKINS';
+    return fieldFaction === playerFaction;
+  }
+
+  function tileCls(step: { field: string; type: string }, val: string | null, isNext: boolean) {
+    const clickable = isNext || (val !== null && isOverwritable(step.field as StepField));
+    if (val !== null) {
+      if (step.type === 'side') return `${sideCls}${clickable ? ' cursor-pointer' : ''}`;
+      if (step.type === 'pick') return `${pickCls}${clickable ? ' cursor-pointer' : ''}`;
+      return `${lockedBanCls}${clickable ? ' cursor-pointer' : ''}`;
+    }
+    if (isNext) return `${nextCls} cursor-pointer`;
+    return pendingCls;
+  }
 
   // For playoff/gauntlet: show auto-picked map tile
   const isPlayoffOrGauntlet = match.is_playoff_game || isGauntlet;
@@ -148,13 +165,18 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   }
 
   function handleTileClick(field: StepField) {
-    if (field !== actionableField) return;
+    const val = getFieldValue(match, field);
+    const canClick = field === actionableField || (val !== null && isOverwritable(field));
+    if (!canClick) return;
     setActiveField(activeField === field ? null : field);
     setError(null);
   }
 
   const pool = mapPool ?? [];
-  const banned = usedMaps(match);
+  // Exclude the active field's current value so it can be re-selected or replaced freely
+  const banned = usedMaps(match).filter(
+    (m) => activeField === null || m !== getFieldValue(match, activeField),
+  );
 
   return (
     <div>
@@ -175,8 +197,8 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
                 <div
                   className={`flex-1 min-w-[88px] px-2.5 py-2 border transition-colors ${tileCls(s, val, isNext)} ${isActive ? 'ring-1 ring-[var(--color-accent-amber-pickborder)]' : ''}`}
                   onClick={() => handleTileClick(s.field as StepField)}
-                  role={isNext && val === null ? 'button' : undefined}
-                  aria-expanded={isNext && val === null ? isActive : undefined}
+                  role={isNext || (val !== null && isOverwritable(s.field as StepField)) ? 'button' : undefined}
+                  aria-expanded={isActive ? true : undefined}
                 >
                   {banImg && (
                     <>

@@ -37,6 +37,9 @@
   --color-ct: #1f5fa8;
   --color-t: #c25a16;
 
+  /* Site-wide brand accent: T-side orange in the warm light theme, CT cyan in the dark HUD */
+  --color-site-accent: var(--color-t);
+
   /* Theme-aware overlays for map images and dim backgrounds — tuned for image vibrancy */
   /* Light: slightly transparent warm overlays, image filter increases color/contrast */
   --overlay-strong: rgba(255,244,227,0.54);
@@ -86,6 +89,8 @@
   --color-ct: #4ea1ff;
   --color-t: #ff8a3d;
 
+  --color-site-accent: var(--color-ct);
+
   /* Dark theme overlays — slightly richer, cooler tint for vibrancy; lighter to reveal images */
   --overlay-strong: rgba(8,12,24,0.42);
   --overlay-medium: rgba(10,16,36,0.28);
@@ -130,8 +135,12 @@ body::before {
   );
   background-size: auto;
 }
-/* Make sure page content stacks above the overlay. */
-body > * { position: relative; z-index: 1; }
+/* Make sure page content stacks above the body::before texture overlay.
+   Must be in @layer base so Tailwind utilities (e.g. .fixed) can override it —
+   unlayered rules beat all @layer rules in Tailwind v4, which would break portals. */
+@layer base {
+  body > * { position: relative; z-index: 1; }
+}
 
 /* Slightly increase common Tailwind pixel-based font utilities by ~10% for better readability */
 .text-\[10px\] { font-size: calc(10px * 1.1); }
@@ -242,6 +251,13 @@ body > * { position: relative; z-index: 1; }
   background: color-mix(in srgb, var(--color-accent-green-bg) 18%, var(--overlay-medium));
   font-weight: 600;
   box-shadow: inset 0 0 0 1px var(--color-border-primary);
+}
+
+/* "YOU" identity badge */
+.you-badge {
+  color: var(--color-site-accent);
+  background: color-mix(in srgb, var(--color-site-accent) 12%, transparent);
+  border-color: var(--color-site-accent);
 }
 
 /* W/L badge sizing */

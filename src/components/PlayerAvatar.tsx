@@ -19,14 +19,22 @@ export default function PlayerAvatar({
 }) {
   const { wrapper, text } = sizeClasses[size];
 
+  const placeholderStyle = {
+    background: 'color-mix(in srgb, var(--color-site-accent) 14%, var(--color-bg-secondary))',
+    borderColor: 'color-mix(in srgb, var(--color-site-accent) 40%, var(--color-border-primary))',
+  };
+
   return (
     <div
-      className={`${wrapper} ${round ? 'rounded-full' : 'rounded-sm'} border-2 border-gray-400 flex items-center justify-center bg-gray-700 overflow-hidden shrink-0`}
+      className={`${wrapper} ${round ? 'rounded-full' : 'rounded-sm'} border-2 flex items-center justify-center overflow-hidden shrink-0`}
+      style={imageUrl
+        ? { borderColor: 'var(--color-border-secondary)' }
+        : placeholderStyle}
     >
       {imageUrl ? (
         <img src={imageUrl} alt={`${name}'s avatar`} className="w-full h-full object-cover" />
       ) : (
-        <span className={`${text} font-bold text-gray-300 select-none`}>
+        <span className={`${text} font-bold select-none`} style={{ color: 'var(--color-site-accent)' }}>
           {name[0].toUpperCase()}
         </span>
       )}

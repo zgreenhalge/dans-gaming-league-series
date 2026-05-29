@@ -148,19 +148,24 @@ export async function PATCH(
         return NextResponse.json({ error: 'Not your ban slot' }, { status: 403 });
       }
     }
-    if (currentValues[field] !== null) {
-      return NextResponse.json({ error: 'This ban slot is already set' }, { status: 400 });
-    }
+    // Allow overwriting an already-set slot (admin or correct player can correct mistakes)
   } else {
-    // Non-gauntlet: enforce sequential order
+    // Non-gauntlet: enforce sequential order for new entries; allow overwriting existing ones
     const steps = isPlayoff ? PLAYOFF_STEPS : REGULAR_STEPS;
-    const nextStep = steps.find((s) => currentValues[s] === null);
-    if (!nextStep) {
-      return NextResponse.json({ error: 'Veto sequence already complete' }, { status: 400 });
+    if (!steps.includes(field)) {
+      return NextResponse.json({ error: 'Invalid field for this match type' }, { status: 400 });
     }
-    if (field !== nextStep) {
-      return NextResponse.json({ error: `Expected next field: ${nextStep}` }, { status: 400 });
+    if (currentValues[field] === null) {
+      // Filling a new step: must be the next unfilled one in sequence
+      const nextStep = steps.find((s) => currentValues[s] === null);
+      if (!nextStep) {
+        return NextResponse.json({ error: 'Veto sequence already complete' }, { status: 400 });
+      }
+      if (field !== nextStep) {
+        return NextResponse.json({ error: `Expected next field: ${nextStep}` }, { status: 400 });
+      }
     }
+    // Overwriting an existing value: no sequence restriction, but faction still applies
     if (!isAdmin) {
       const stepFaction = field.startsWith('shirts_') ? 'SHIRTS' : 'SKINS';
       if (myFaction !== stepFaction) {
@@ -178,8 +183,14 @@ export async function PATCH(
     if (!mapPool.includes(value)) {
       return NextResponse.json({ error: 'Map not in pool' }, { status: 400 });
     }
-    // Check value not already used
-    const usedMaps = [m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2, m.shirts_pick].filter(Boolean);
+    // Check value not already used by another field (exclude the field being overwritten)
+    const usedMaps = [
+      field !== 'shirts_ban'  ? m.shirts_ban  : null,
+      field !== 'shirts_ban2' ? m.shirts_ban2 : null,
+      field !== 'skins_ban1'  ? m.skins_ban1  : null,
+      field !== 'skins_ban2'  ? m.skins_ban2  : null,
+      field !== 'shirts_pick' ? m.shirts_pick : null,
+    ].filter((v): v is string => v !== null);
     if (usedMaps.includes(value)) {
       return NextResponse.json({ error: 'Map already used' }, { status: 400 });
     }

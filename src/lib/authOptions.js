@@ -43,19 +43,28 @@ const steamProvider = CredentialsProvider({
   },
 });
 
-const devProvider = CredentialsProvider({
-  id: "dev-steam-mock",
-  name: "Dev Steam Mock",
+const devZachProvider = CredentialsProvider({
+  id: "dev-zach-mock",
+  name: "Dev: Zach",
   credentials: {},
   async authorize() {
     return { id: "dev-1", name: "Zach", image: "", devPlayerId: 1 };
   },
 });
 
+const devDanProvider = CredentialsProvider({
+  id: "dev-dan-mock",
+  name: "Dev: Dan",
+  credentials: {},
+  async authorize() {
+    return { id: "dev-7", name: "Dan", image: "", devPlayerId: 7 };
+  },
+});
+
 export const authOptions = {
   providers: [
     steamProvider,
-    ...(process.env.NODE_ENV === "development" ? [devProvider] : []),
+    ...(process.env.NODE_ENV === "development" ? [devZachProvider, devDanProvider] : []),
   ],
   callbacks: {
     async jwt({ token, user, trigger, session: sessionData }) {

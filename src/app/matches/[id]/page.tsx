@@ -11,6 +11,7 @@ import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
+import { YouBadge } from '@/components/YouBadge';
 
 export const revalidate = 60;
 
@@ -80,10 +81,12 @@ function Scoreboard({
   players,
   mvpPlayerId,
   faction,
+  currentPlayerId,
 }: {
   players: MatchStatRow[];
   mvpPlayerId: number | null;
   faction: Faction;
+  currentPlayerId: number | null;
 }) {
   const cls = factionClass(faction);
   return (
@@ -127,6 +130,7 @@ function Scoreboard({
                   >
                     <PlayerAvatar name={p.player_name} imageUrl={p.steam_avatar_url} size="sm" />
                     {p.player_name}
+                    {currentPlayerId !== null && p.player_id === currentPlayerId && <YouBadge />}
                     {p.player_id === mvpPlayerId && (
                       <span className="ml-0.5 inline-flex items-center px-1.5 py-0.5 tracked text-[9px] font-semibold border"
                         style={{
@@ -247,42 +251,38 @@ export default async function MatchPage({
   const shirtsF = shirtsFaction(match.skins_starting_side);
   const skinsF: Faction = match.skins_starting_side;
 
+  const session = await getServerSession(authOptions);
+  const currentPlayerId = session?.user?.playerId ?? null;
+
   // Determine edit/veto permissions: admins or players in the match
   let canEdit = false;
   let canVeto = false;
   let playerFaction: 'SHIRTS' | 'SKINS' | null = null;
   let gauntletPlayerIndex: 0 | 1 | null = null;
   let vetoIsAdmin = false;
-  if (!played) {
-    const session = await getServerSession(authOptions);
-    const currentPlayerId = session?.user?.playerId ?? null;
-    if (currentPlayerId !== null) {
-      const myStatRow = stats.find((s) => s.player_id === currentPlayerId);
-      const isInMatch = !!myStatRow;
-      let isAdmin = false;
-      if (!isInMatch) {
-        const { data: playerRow } = await supabase
-          .from('players')
-          .select('is_admin')
-          .eq('id', currentPlayerId)
-          .maybeSingle();
-        isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
-      }
-      const authorized = isInMatch || isAdmin;
-      if (authorized) {
-        canVeto = true;
-        vetoIsAdmin = isAdmin;
-        if (!season.is_gauntlet) canEdit = true;
-        if (myStatRow) {
-          playerFaction = myStatRow.faction as 'SHIRTS' | 'SKINS';
-          if (season.is_gauntlet) {
-            const factionPlayerIds = stats
-              .filter((s) => s.faction === myStatRow.faction)
-              .map((s) => s.player_id)
-              .sort((a, b) => a - b);
-            const idx = factionPlayerIds.indexOf(currentPlayerId);
-            gauntletPlayerIndex = idx === 0 ? 0 : idx === 1 ? 1 : null;
-          }
+  if (!played && currentPlayerId !== null) {
+    const myStatRow = stats.find((s) => s.player_id === currentPlayerId);
+    const isInMatch = !!myStatRow;
+    const { data: playerRow } = await supabase
+      .from('players')
+      .select('is_admin')
+      .eq('id', currentPlayerId)
+      .maybeSingle();
+    const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
+    const authorized = isInMatch || isAdmin;
+    if (authorized) {
+      canVeto = true;
+      vetoIsAdmin = isAdmin;
+      if (!season.is_gauntlet) canEdit = true;
+      if (myStatRow) {
+        playerFaction = myStatRow.faction as 'SHIRTS' | 'SKINS';
+        if (season.is_gauntlet) {
+          const factionPlayerIds = stats
+            .filter((s) => s.faction === myStatRow.faction)
+            .map((s) => s.player_id)
+            .sort((a, b) => a - b);
+          const idx = factionPlayerIds.indexOf(currentPlayerId);
+          gauntletPlayerIndex = idx === 0 ? 0 : idx === 1 ? 1 : null;
         }
       }
     }
@@ -375,6 +375,7 @@ export default async function MatchPage({
                 players={shirts}
                 mvpPlayerId={mvpPlayerId}
                 faction={shirtsF}
+                currentPlayerId={currentPlayerId}
               />
             </div>
 
@@ -389,6 +390,7 @@ export default async function MatchPage({
                 players={skins}
                 mvpPlayerId={mvpPlayerId}
                 faction={skinsF}
+                currentPlayerId={currentPlayerId}
               />
             </div>
           </>

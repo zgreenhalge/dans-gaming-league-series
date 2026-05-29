@@ -3,7 +3,7 @@ import Link from 'next/link';
 export default function NotFound() {
   return (
     <div className="min-h-screen">
-      <div className="border-b-2 border-[var(--color-ct)] bg-[var(--color-bg-primary)]">
+      <div className="border-b-2 border-[var(--color-site-accent)] bg-[var(--color-bg-primary)]">
         <div className="max-w-[1080px] mx-auto px-6 py-3">
           <Link href="/" className="font-display font-bold text-[20px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors">
             DGLS

@@ -122,7 +122,7 @@ function UpcomingSeasonRow({
       className="flex items-center justify-between gap-6 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
     >
       <div className="min-w-0">
-        <div className="tracked text-[9px] text-[var(--color-accent-blue-fg)] mb-0.5">
+        <div className="tracked text-[9px] mb-0.5" style={{ color: 'var(--color-site-accent)' }}>
           Upcoming
         </div>
         <div className="font-display text-[18px] font-semibold leading-tight truncate">
@@ -134,7 +134,14 @@ function UpcomingSeasonRow({
           </div>
         )}
       </div>
-      <span className="inline-flex items-center px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-blue-fg)] bg-[var(--color-accent-blue-bg)] border border-[var(--color-accent-blue-border)] shrink-0">
+      <span
+        className="inline-flex items-center px-1.5 py-0.5 tracked text-[10px] font-semibold border shrink-0"
+        style={{
+          color: 'var(--color-site-accent)',
+          background: 'color-mix(in srgb, var(--color-site-accent) 12%, transparent)',
+          borderColor: 'var(--color-site-accent)',
+        }}
+      >
         Soon
       </span>
     </Link>
