@@ -250,11 +250,15 @@ export default async function MatchPage({
   // Determine edit/veto permissions: admins or players in the match
   let canEdit = false;
   let canVeto = false;
+  let playerFaction: 'SHIRTS' | 'SKINS' | null = null;
+  let gauntletPlayerIndex: 0 | 1 | null = null;
+  let vetoIsAdmin = false;
   if (!played) {
     const session = await getServerSession(authOptions);
     const currentPlayerId = session?.user?.playerId ?? null;
     if (currentPlayerId !== null) {
-      const isInMatch = stats.some((s) => s.player_id === currentPlayerId);
+      const myStatRow = stats.find((s) => s.player_id === currentPlayerId);
+      const isInMatch = !!myStatRow;
       let isAdmin = false;
       if (!isInMatch) {
         const { data: playerRow } = await supabase
@@ -267,7 +271,19 @@ export default async function MatchPage({
       const authorized = isInMatch || isAdmin;
       if (authorized) {
         canVeto = true;
+        vetoIsAdmin = isAdmin;
         if (!season.is_gauntlet) canEdit = true;
+        if (myStatRow) {
+          playerFaction = myStatRow.faction as 'SHIRTS' | 'SKINS';
+          if (season.is_gauntlet) {
+            const factionPlayerIds = stats
+              .filter((s) => s.faction === myStatRow.faction)
+              .map((s) => s.player_id)
+              .sort((a, b) => a - b);
+            const idx = factionPlayerIds.indexOf(currentPlayerId);
+            gauntletPlayerIndex = idx === 0 ? 0 : idx === 1 ? 1 : null;
+          }
+        }
       }
     }
   }
@@ -335,6 +351,9 @@ export default async function MatchPage({
               mapPool={season.map_pool}
               canVeto={canVeto}
               isGauntlet={season.is_gauntlet}
+              playerFaction={playerFaction}
+              gauntletPlayerIndex={gauntletPlayerIndex}
+              isAdmin={vetoIsAdmin}
             />
           </div>
         </div>

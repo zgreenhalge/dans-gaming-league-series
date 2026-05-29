@@ -28,8 +28,6 @@ const REGULAR_STEPS: VetoField[] = [
 ];
 // Team blocks: Shirts bans first, then Skins
 const PLAYOFF_STEPS: VetoField[] = ['shirts_ban', 'shirts_ban2', 'skins_ban1', 'skins_ban2'];
-// Alternating: one ban per player
-const GAUNTLET_STEPS: VetoField[] = ['shirts_ban', 'skins_ban1', 'shirts_ban2', 'skins_ban2'];
 
 type MatchRow = {
   id: number;
@@ -66,7 +64,7 @@ export async function PATCH(
 
   const playerId = session.user.playerId;
 
-  const [{ data: matchRow }, { data: playerRow }, { data: statRow }] = await Promise.all([
+  const [{ data: matchRow }, { data: playerRow }, { data: matchStats }] = await Promise.all([
     supabaseAdmin
       .from('matches')
       .select(
@@ -77,18 +75,20 @@ export async function PATCH(
     supabaseAdmin.from('players').select('is_admin').eq('id', playerId).maybeSingle(),
     supabaseAdmin
       .from('player_match_stats')
-      .select('player_id')
-      .eq('match_id', matchId)
-      .eq('player_id', playerId)
-      .maybeSingle(),
+      .select('player_id, faction')
+      .eq('match_id', matchId),
   ]);
 
   if (!matchRow) {
     return NextResponse.json({ error: 'Match not found' }, { status: 404 });
   }
 
+  const allStats = (matchStats ?? []) as { player_id: number; faction: string }[];
+  const myStatRow = allStats.find((s) => s.player_id === playerId);
+  const isInMatch = !!myStatRow;
+  const myFaction = myStatRow?.faction ?? null;
+
   const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
-  const isInMatch = statRow !== null;
   if (!isAdmin && !isInMatch) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -116,9 +116,6 @@ export async function PATCH(
   const isPlayoff = m.is_playoff_game && !isGauntlet;
   const mapPool: string[] = season?.map_pool ?? [];
 
-  const steps = isGauntlet ? GAUNTLET_STEPS : isPlayoff ? PLAYOFF_STEPS : REGULAR_STEPS;
-
-  // Determine the next expected step
   const currentValues: Record<VetoField, string | null> = {
     shirts_ban: m.shirts_ban,
     shirts_ban2: m.shirts_ban2,
@@ -128,23 +125,48 @@ export async function PATCH(
     skins_starting_side: m.skins_starting_side,
   };
 
-  const nextStep = steps.find((s) => currentValues[s] === null);
-  if (!nextStep) {
-    return NextResponse.json({ error: 'Veto sequence already complete' }, { status: 400 });
-  }
-  if (field !== nextStep) {
-    return NextResponse.json({ error: `Expected next field: ${nextStep}` }, { status: 400 });
-  }
-
-  // Validate field is allowed for this match type
-  if ((isGauntlet || isPlayoff) && field === 'skins_starting_side') {
-    return NextResponse.json(
-      { error: 'Side pick not used in playoff/gauntlet' },
-      { status: 400 },
-    );
-  }
-  if (field === 'shirts_ban2' && !isGauntlet && !isPlayoff) {
-    return NextResponse.json({ error: 'shirts_ban2 only used in playoff/gauntlet' }, { status: 400 });
+  if (isGauntlet) {
+    // Gauntlet bans are simultaneous — each player submits their own fixed slot
+    if (field === 'shirts_pick' || field === 'skins_starting_side') {
+      return NextResponse.json({ error: 'Not a valid gauntlet field' }, { status: 400 });
+    }
+    if (!isAdmin) {
+      const stepFaction = field.startsWith('shirts_') ? 'SHIRTS' : 'SKINS';
+      if (myFaction !== stepFaction) {
+        return NextResponse.json({ error: "Not your faction's ban" }, { status: 403 });
+      }
+      const factionPlayerIds = allStats
+        .filter((s) => s.faction === stepFaction)
+        .map((s) => s.player_id)
+        .sort((a, b) => a - b);
+      const myIndex = factionPlayerIds.indexOf(playerId);
+      const myField: VetoField =
+        stepFaction === 'SHIRTS'
+          ? (myIndex === 0 ? 'shirts_ban' : 'shirts_ban2')
+          : (myIndex === 0 ? 'skins_ban1' : 'skins_ban2');
+      if (field !== myField) {
+        return NextResponse.json({ error: 'Not your ban slot' }, { status: 403 });
+      }
+    }
+    if (currentValues[field] !== null) {
+      return NextResponse.json({ error: 'This ban slot is already set' }, { status: 400 });
+    }
+  } else {
+    // Non-gauntlet: enforce sequential order
+    const steps = isPlayoff ? PLAYOFF_STEPS : REGULAR_STEPS;
+    const nextStep = steps.find((s) => currentValues[s] === null);
+    if (!nextStep) {
+      return NextResponse.json({ error: 'Veto sequence already complete' }, { status: 400 });
+    }
+    if (field !== nextStep) {
+      return NextResponse.json({ error: `Expected next field: ${nextStep}` }, { status: 400 });
+    }
+    if (!isAdmin) {
+      const stepFaction = field.startsWith('shirts_') ? 'SHIRTS' : 'SKINS';
+      if (myFaction !== stepFaction) {
+        return NextResponse.json({ error: "Not your faction's turn" }, { status: 403 });
+      }
+    }
   }
 
   // Validate value
@@ -165,12 +187,17 @@ export async function PATCH(
 
   const update: Record<string, string | null> = { [field]: value };
 
-  // For playoff/gauntlet: after the 4th ban, auto-set shirts_pick to the remaining map
-  if ((isGauntlet || isPlayoff) && field === 'skins_ban2') {
-    const usedAfter = [m.shirts_ban, m.shirts_ban2, m.skins_ban1, value].filter(Boolean) as string[];
-    const remaining = mapPool.filter((map) => !usedAfter.includes(map));
-    if (remaining.length === 1) {
-      update.shirts_pick = remaining[0];
+  // For playoff/gauntlet: once all 4 bans are set, auto-pick the remaining map
+  if (isGauntlet || isPlayoff) {
+    const bansAfter = [
+      field === 'shirts_ban'  ? value : m.shirts_ban,
+      field === 'shirts_ban2' ? value : m.shirts_ban2,
+      field === 'skins_ban1'  ? value : m.skins_ban1,
+      field === 'skins_ban2'  ? value : m.skins_ban2,
+    ].filter(Boolean) as string[];
+    if (bansAfter.length === 4) {
+      const remaining = mapPool.filter((map) => !bansAfter.includes(map));
+      if (remaining.length === 1) update.shirts_pick = remaining[0];
     }
   }
 
