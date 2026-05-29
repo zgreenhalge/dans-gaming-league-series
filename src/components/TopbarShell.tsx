@@ -1,9 +1,71 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 import { ThemeToggle } from './ThemeToggle';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import PlayerAvatar from './PlayerAvatar';
+
+const DEV_USERS: { label: string; playerId: number | null; providerId: string | null }[] = [
+  { label: 'Anonymous', playerId: null, providerId: null },
+  { label: 'Zach',      playerId: 1,    providerId: 'dev-zach-mock' },
+  { label: 'Dan',       playerId: 7,    providerId: 'dev-dan-mock' },
+];
+
+function DevToggle() {
+  const { data: session } = useSession();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const currentPlayerId = session?.user?.playerId ?? null;
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  async function select(u: typeof DEV_USERS[number]) {
+    setOpen(false);
+    if (u.providerId === null) {
+      await signOut({ redirect: false });
+    } else {
+      await signIn(u.providerId, { redirect: false });
+    }
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="text-[11px] font-mono px-2 py-1 rounded border border-dashed border-yellow-500 text-yellow-500 hover:bg-yellow-500/10 transition-colors"
+      >
+        dev
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-50 min-w-[7rem] border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] shadow-lg">
+          {DEV_USERS.map((u) => (
+            <button
+              key={u.label}
+              type="button"
+              onClick={() => select(u)}
+              className={[
+                'flex items-center w-full px-3 py-1.5 text-[13px] text-left',
+                'text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors',
+                u.playerId === currentPlayerId ? 'font-semibold' : '',
+              ].join(' ')}
+            >
+              {u.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export interface Crumb {
   label: string;
@@ -21,7 +83,7 @@ export function TopbarShell({
   const user = session?.user;
 
   return (
-    <div className="sticky top-0 z-20 bg-[var(--color-bg-primary)] border-b-2 border-[var(--color-ct)]">
+    <div className="sticky top-0 z-20 bg-[var(--color-bg-primary)] border-b-2 border-[var(--color-site-accent)]">
       <div className="max-w-[1080px] mx-auto px-6 py-3 flex items-center justify-between gap-6">
 
         <nav className="flex items-center min-w-0 overflow-hidden" aria-label="Breadcrumb">
@@ -68,12 +130,7 @@ export function TopbarShell({
         <div className="flex items-center gap-4 shrink-0">
           {nav}
           {process.env.NODE_ENV === "development" && status !== "loading" && (
-            <button
-              onClick={() => user ? signOut() : signIn("dev-steam-mock", { steamId: "grachary" })}
-              className="text-[11px] font-mono px-2 py-1 rounded border border-dashed border-yellow-500 text-yellow-500 hover:bg-yellow-500/10 transition-colors"
-            >
-              dev
-            </button>
+            <DevToggle />
           )}
           <ThemeToggle />
           <div className="flex items-center">
