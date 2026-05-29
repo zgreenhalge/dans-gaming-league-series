@@ -25,14 +25,20 @@ export async function PATCH(
 
   const playerId = session.user.playerId;
 
-  // Resolve match → week → season in parallel with the admin check
-  const [{ data: matchRow }, { data: playerRow }] = await Promise.all([
+  // Resolve match, player admin status, and whether the player is in this match
+  const [{ data: matchRow }, { data: playerRow }, { data: statRow }] = await Promise.all([
     supabaseAdmin
       .from('matches')
       .select('week_id, weeks(seasons(is_gauntlet))')
       .eq('id', matchId)
       .maybeSingle(),
     supabaseAdmin.from('players').select('is_admin').eq('id', playerId).maybeSingle(),
+    supabaseAdmin
+      .from('player_match_stats')
+      .select('player_id')
+      .eq('match_id', matchId)
+      .eq('player_id', playerId)
+      .maybeSingle(),
   ]);
 
   if (!matchRow) {
@@ -40,7 +46,8 @@ export async function PATCH(
   }
 
   const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
-  if (!isAdmin) {
+  const isInMatch = statRow !== null;
+  if (!isAdmin && !isInMatch) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
