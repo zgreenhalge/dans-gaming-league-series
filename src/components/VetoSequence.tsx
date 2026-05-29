@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { mapImageFor } from '@/lib/maps';
+import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import type { Match } from '@/lib/types';
 
 const REGULAR_STEPS = [
@@ -20,6 +20,7 @@ const PLAYOFF_STEPS = [
   { field: 'skins_ban2', label: 'Skins ban', type: 'ban' },
 ] as const;
 
+// Simultaneous: each player bans their own slot independently; displayed in this order
 const GAUNTLET_STEPS = [
   { field: 'shirts_ban', label: 'Shirts ban', type: 'ban' },
   { field: 'skins_ban1', label: 'Skins ban', type: 'ban' },
@@ -60,9 +61,12 @@ interface Props {
   mapPool: string[] | null;
   canVeto: boolean;
   isGauntlet: boolean;
+  playerFaction: 'SHIRTS' | 'SKINS' | null;
+  gauntletPlayerIndex: 0 | 1 | null;
+  isAdmin: boolean;
 }
 
-export default function VetoSequence({ match, mapPool, canVeto, isGauntlet }: Props) {
+export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, playerFaction, gauntletPlayerIndex, isAdmin }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [activeField, setActiveField] = useState<StepField | null>(null);
@@ -77,27 +81,49 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet }: Pr
       : side === 'T'
         ? 'bg-[var(--color-accent-amber-bg)] border-[var(--color-accent-amber-border)] [&_.lbl]:text-[var(--color-accent-amber-fg)] [&_.val]:text-[var(--color-accent-amber-strong)]'
         : 'bg-[var(--color-bg-secondary)] border-[var(--color-border-tertiary)] [&_.lbl]:text-[var(--color-text-secondary)] [&_.val]:text-[var(--color-text-primary)]';
-  const banCls =
-    'bg-[var(--color-accent-green-bg)] border-[var(--color-accent-green-border)] [&_.lbl]:text-[var(--color-accent-green-fg)] [&_.val]:text-[var(--color-accent-green-strong)]';
+  const lockedBanCls =
+    'relative overflow-hidden border-2 border-[var(--color-accent-red-fg)] [&_.lbl]:text-white/60 [&_.val]:text-white';
   const pickCls =
     'bg-[var(--color-accent-green-bg)] border-2 border-[var(--color-accent-amber-pickborder)] [&_.lbl]:text-[var(--color-accent-green-fg)] [&_.val]:text-[var(--color-accent-green-strong)]';
   const pendingCls =
     'bg-[var(--color-bg-secondary)] border-dashed border-[var(--color-border-tertiary)] [&_.lbl]:text-[var(--color-text-secondary)] [&_.val]:text-[var(--color-text-secondary)]';
+  const nextCls =
+    'bg-[var(--color-bg-secondary)] border border-[var(--color-accent-amber-pickborder)] [&_.lbl]:text-[var(--color-accent-amber-fg)] [&_.val]:text-[var(--color-text-secondary)]';
 
   function tileCls(step: { field: string; type: string }, val: string | null, isNext: boolean) {
     if (val !== null) {
       if (step.type === 'side') return sideCls;
       if (step.type === 'pick') return pickCls;
-      return banCls;
+      return lockedBanCls;
     }
-    if (isNext && canVeto) return `${pendingCls} cursor-pointer hover:border-[var(--color-border-secondary)]`;
+    if (isNext) return `${nextCls} cursor-pointer`;
     return pendingCls;
   }
 
-  // Determine the next pending field
-  const nextField = steps.find((s) => getFieldValue(match, s.field as StepField) === null)?.field as
+  // For non-gauntlet: the first unfilled step in sequence order
+  const sequenceNextField = steps.find((s) => getFieldValue(match, s.field as StepField) === null)?.field as
     | StepField
     | undefined;
+
+  // The field the current player can act on right now
+  const actionableField: StepField | undefined = (() => {
+    if (!canVeto) return undefined;
+    if (isGauntlet) {
+      if (isAdmin) return sequenceNextField; // admin follows sequence even in gauntlet
+      if (!playerFaction || gauntletPlayerIndex === null) return undefined;
+      const myField: StepField =
+        playerFaction === 'SHIRTS'
+          ? (gauntletPlayerIndex === 0 ? 'shirts_ban' : 'shirts_ban2')
+          : (gauntletPlayerIndex === 0 ? 'skins_ban1' : 'skins_ban2');
+      return getFieldValue(match, myField) === null ? myField : undefined;
+    }
+    // Non-gauntlet: sequential, restricted to the player's faction
+    if (!sequenceNextField) return undefined;
+    if (isAdmin) return sequenceNextField;
+    if (!playerFaction) return undefined;
+    const stepFaction = sequenceNextField.startsWith('shirts_') ? 'SHIRTS' : 'SKINS';
+    return playerFaction === stepFaction ? sequenceNextField : undefined;
+  })();
 
   // For playoff/gauntlet: show auto-picked map tile
   const isPlayoffOrGauntlet = match.is_playoff_game || isGauntlet;
@@ -122,7 +148,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet }: Pr
   }
 
   function handleTileClick(field: StepField) {
-    if (!canVeto || field !== nextField) return;
+    if (field !== actionableField) return;
     setActiveField(activeField === field ? null : field);
     setError(null);
   }
@@ -136,8 +162,9 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet }: Pr
         <div className="flex items-stretch gap-1 flex-wrap p-3">
           {steps.map((s, i) => {
             const val = getFieldValue(match, s.field as StepField);
-            const isNext = s.field === nextField;
+            const isNext = s.field === actionableField;
             const isActive = activeField === s.field;
+            const banImg = s.type === 'ban' && val ? mapImageFor(val) : null;
             return (
               <span key={s.field} className="flex items-center gap-1 flex-1 min-w-[88px]">
                 {i > 0 && (
@@ -148,17 +175,25 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet }: Pr
                 <div
                   className={`flex-1 min-w-[88px] px-2.5 py-2 border transition-colors ${tileCls(s, val, isNext)} ${isActive ? 'ring-1 ring-[var(--color-accent-amber-pickborder)]' : ''}`}
                   onClick={() => handleTileClick(s.field as StepField)}
-                  role={isNext && canVeto && val === null ? 'button' : undefined}
-                  aria-expanded={isActive}
+                  role={isNext && val === null ? 'button' : undefined}
+                  aria-expanded={isNext && val === null ? isActive : undefined}
                 >
-                  <div className="lbl tracked text-[9px] font-semibold mb-0.5 flex items-center gap-1">
-                    {s.label}
-                    {isNext && canVeto && val === null && (
-                      <span className="opacity-50">+</span>
-                    )}
-                  </div>
-                  <div className="val font-display text-[14px] font-semibold leading-tight">
-                    {val ?? '—'}
+                  {banImg && (
+                    <>
+                      <div className="absolute inset-0 bg-cover bg-center grayscale pointer-events-none" style={{ backgroundImage: `url(${banImg})` }} />
+                      <div className="absolute inset-0 bg-black/55 pointer-events-none" />
+                    </>
+                  )}
+                  <div className={banImg ? 'relative z-10' : undefined}>
+                    <div className="lbl tracked text-[9px] font-semibold mb-0.5 flex items-center gap-1">
+                      {s.label}
+                      {isNext && val === null && (
+                        <span className="ml-auto text-[var(--color-accent-amber-strong)] text-[8px] font-bold tracking-wide">NEXT</span>
+                      )}
+                    </div>
+                    <div className="val font-display text-[14px] font-semibold leading-tight">
+                      {val ? toSentenceCase(val) : '—'}
+                    </div>
                   </div>
                 </div>
               </span>
@@ -172,7 +207,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet }: Pr
               <div className={`flex-1 min-w-[88px] px-2.5 py-2 border ${autoPickedMap ? pickCls : pendingCls}`}>
                 <div className="lbl tracked text-[9px] font-semibold mb-0.5">Map pick</div>
                 <div className="val font-display text-[14px] font-semibold leading-tight">
-                  {autoPickedMap ?? '—'}
+                  {autoPickedMap ? toSentenceCase(autoPickedMap) : '—'}
                 </div>
               </div>
             </span>
@@ -213,26 +248,22 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet }: Pr
                   <button
                     key={map}
                     disabled={isPending || isUsed}
-                    onClick={() => !isUsed && submitVeto(activeField, map)}
+                    onClick={() => submitVeto(activeField, map)}
                     className={`relative flex-1 min-w-[80px] h-[72px] border overflow-hidden transition-opacity ${
                       isUsed
-                        ? 'opacity-40 cursor-not-allowed border-[var(--color-border-tertiary)]'
+                        ? 'opacity-40 grayscale cursor-not-allowed border-[var(--color-border-tertiary)]'
                         : 'border-[var(--color-border-primary)] hover:border-[var(--color-accent-amber-pickborder)] cursor-pointer'
                     } disabled:opacity-40`}
                     title={map}
                   >
                     {img && (
-                      <img
-                        src={img}
-                        alt={map}
-                        className={`absolute inset-0 w-full h-full object-cover ${isUsed ? 'grayscale' : ''}`}
-                      />
+                      <div className="absolute inset-0 bg-cover bg-center pointer-events-none" style={{ backgroundImage: `url(${img})` }} />
                     )}
                     <div className="absolute inset-0 bg-black/40 flex items-end p-1.5">
                       <span
                         className={`font-display font-semibold text-[11px] leading-tight text-white ${isUsed ? 'line-through opacity-70' : ''}`}
                       >
-                        {map}
+                        {toSentenceCase(map)}
                       </span>
                     </div>
                   </button>
