@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import type { LeaderboardRowWithId } from '@/lib/types';
+import { YouBadge } from './YouBadge';
 
 type SortCol =
   | 'name'
@@ -65,6 +67,9 @@ export default function LeaderboardTable({
   firstColMode?: 'player' | 'season';
   showMedals?: boolean;
 }) {
+  const { data: session } = useSession();
+  const myPlayerId = session?.user?.playerId ?? null;
+
   const [sortCol, setSortCol] = useState<SortCol>('wr');
   const [asc, setAsc] = useState(false);
 
@@ -201,7 +206,10 @@ export default function LeaderboardTable({
                 <td className={`py-2.5 font-display font-semibold ${firstColMode === 'player' ? 'px-2' : 'pl-4 pr-2'}`}
                   style={{ color: medal ? MEDAL_COLORS[medal] : undefined }}
                 >
-                  <Link href={href} className="block w-full h-full">{p.player_name}</Link>
+                  <Link href={href} className="flex items-center w-full h-full">
+                    {p.player_name}
+                    {firstColMode === 'player' && myPlayerId !== null && p.player_id === myPlayerId && <YouBadge />}
+                  </Link>
                 </td>
                 <td className="py-2.5 px-2 text-right font-mono tnum">
                   <Link href={href} className="block w-full h-full">{dash(played, `${p.matches_won}-${p.matches_lost}`)}</Link>

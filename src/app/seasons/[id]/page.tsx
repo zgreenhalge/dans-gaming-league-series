@@ -23,6 +23,7 @@ import { LocalTime } from '@/components/LocalTime';
 import SeasonStartDateButton from '@/components/SeasonStartDateButton';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
+import { YouBadge } from '@/components/YouBadge';
 
 export const revalidate = 60;
 
@@ -103,10 +104,12 @@ function MatchRow({
   match,
   weekStart,
   weekEnd,
+  currentPlayerId,
 }: {
   match: MatchWithRoster;
   weekStart: Date | null;
   weekEnd: Date | null;
+  currentPlayerId: number | null;
 }) {
   const played = isPlayedScore(match.final_score);
   const map = match.shirts_pick ?? match.picked_map;
@@ -161,8 +164,8 @@ function MatchRow({
         <div className="px-4 py-3">
           { (match as any).shirts_stats && (match as any).shirts_stats.length > 0 ? (
             <div className="grid grid-cols-2 divide-x divide-[var(--color-border-tertiary)]">
-              <TeamStatBlock players={(match as any).shirts_stats} />
-              <TeamStatBlock players={(match as any).skins_stats} />
+              <TeamStatBlock players={(match as any).shirts_stats} currentPlayerId={currentPlayerId} />
+              <TeamStatBlock players={(match as any).skins_stats} currentPlayerId={currentPlayerId} />
             </div>
           ) : (
             <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate map-head">
@@ -178,9 +181,11 @@ function MatchRow({
 function WeekBlock({
   week,
   seasonStartDate,
+  currentPlayerId,
 }: {
   week: WeekWithMatches;
   seasonStartDate: string | null;
+  currentPlayerId: number | null;
 }) {
   const window = weekWindow(seasonStartDate, week.week_number);
   return (
@@ -197,9 +202,10 @@ function WeekBlock({
           )}
         </div>
         {week.bye_player_name && (
-          <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">
-            <span className="tracked mr-1.5">Bye</span>
+          <span className="font-mono text-[10px] text-[var(--color-text-secondary)] inline-flex items-center gap-1">
+            <span className="tracked mr-0.5">Bye</span>
             {week.bye_player_name}
+            {currentPlayerId !== null && week.bye_player_id === currentPlayerId && <YouBadge />}
           </span>
         )}
       </div>
@@ -209,6 +215,7 @@ function WeekBlock({
           match={m}
           weekStart={window?.start ?? null}
           weekEnd={window?.end ?? null}
+          currentPlayerId={currentPlayerId}
         />
       ))}
     </div>
@@ -233,7 +240,7 @@ function computeGauntletRecords(matches: GauntletMatch[]) {
 }
 
 
-function TeamStatBlock({ players }: { players: GauntletPlayerStat[] }) {
+function TeamStatBlock({ players, currentPlayerId }: { players: GauntletPlayerStat[]; currentPlayerId: number | null }) {
   return (
     <div className="px-3 py-2">
       <table className="w-full border-collapse">
@@ -241,7 +248,10 @@ function TeamStatBlock({ players }: { players: GauntletPlayerStat[] }) {
           {players.map((p) => (
             <tr key={p.player_id} className="bg-[var(--overlay-medium)]">
               <td className="font-display text-[13px] font-semibold pl-2 pr-3 py-0.5 whitespace-nowrap">
-                {p.player_name}
+                <span className="inline-flex items-center gap-1">
+                  {p.player_name}
+                  {currentPlayerId !== null && p.player_id === currentPlayerId && <YouBadge />}
+                </span>
               </td>
               <td className="font-mono text-[11px] tnum text-right pr-3 py-0.5 text-[var(--color-text-primary)]">
                 {p.kills}/{p.deaths}
@@ -260,9 +270,11 @@ function TeamStatBlock({ players }: { players: GauntletPlayerStat[] }) {
 function GauntletMatchCard({
   match,
   gameNumber,
+  currentPlayerId,
 }: {
   match: GauntletMatch;
   gameNumber: number;
+  currentPlayerId: number | null;
 }) {
   const played = isPlayedScore(match.final_score);
   const hasStats = match.shirts.length > 0 || match.skins.length > 0;
@@ -299,8 +311,8 @@ function GauntletMatchCard({
 
         {hasStats && (
           <div className="grid grid-cols-2 divide-x divide-[var(--color-border-tertiary)]">
-            <TeamStatBlock players={match.shirts} />
-            <TeamStatBlock players={match.skins} />
+            <TeamStatBlock players={match.shirts} currentPlayerId={currentPlayerId} />
+            <TeamStatBlock players={match.skins} currentPlayerId={currentPlayerId} />
           </div>
         )}
       </div>
@@ -308,7 +320,7 @@ function GauntletMatchCard({
   );
 }
 
-function GauntletRoundCard({ round }: { round: GauntletRound }) {
+function GauntletRoundCard({ round, currentPlayerId }: { round: GauntletRound; currentPlayerId: number | null }) {
   const records = computeGauntletRecords(round.matches);
   const allPlayed = round.matches.length > 0 && round.matches.every((m) => isPlayedScore(m.final_score));
 
@@ -321,7 +333,7 @@ function GauntletRoundCard({ round }: { round: GauntletRound }) {
       </div>
 
       {round.matches.map((m, i) => (
-        <GauntletMatchCard key={m.id} match={m} gameNumber={i + 1} />
+        <GauntletMatchCard key={m.id} match={m} gameNumber={i + 1} currentPlayerId={currentPlayerId} />
       ))}
 
       {records.length > 0 && (
@@ -335,8 +347,9 @@ function GauntletRoundCard({ round }: { round: GauntletRound }) {
               const is02 = allPlayed && r.losses === 2;
               return (
                 <div key={r.name} className="flex items-center justify-between gap-3">
-                  <span className="font-display text-[13px] font-semibold">
+                  <span className="font-display text-[13px] font-semibold inline-flex items-center gap-1">
                     {r.name}
+                    {currentPlayerId !== null && r.player_id === currentPlayerId && <YouBadge />}
                   </span>
                   <div className="flex items-center gap-2">
                     <span
@@ -387,6 +400,7 @@ export default async function SeasonPage({
 
   // Admin check — used by both gauntlet and regular season views
   const session = await getServerSession(authOptions);
+  const currentPlayerId = session?.user?.playerId ?? null;
   let isAdmin = false;
   if (session?.user?.playerId) {
     const { data: playerRow } = await supabase
@@ -441,7 +455,7 @@ export default async function SeasonPage({
               No rounds recorded.
             </div>
           ) : (
-            rounds.map((r) => <GauntletRoundCard key={r.round_number} round={r} />)
+            rounds.map((r) => <GauntletRoundCard key={r.round_number} round={r} currentPlayerId={currentPlayerId} />)
           )}
         </main>
       </div>
@@ -490,7 +504,7 @@ export default async function SeasonPage({
           </div>
         ) : (
           schedule.map((w) => (
-            <WeekBlock key={w.id} week={w} seasonStartDate={season.start_date} />
+            <WeekBlock key={w.id} week={w} seasonStartDate={season.start_date} currentPlayerId={currentPlayerId} />
           ))
         )}
       </main>

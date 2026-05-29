@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { GauntletRound, GauntletMatch } from '@/lib/queries';
 import { isPlayedScore } from '@/lib/util';
 import PlayerAvatar from '@/components/PlayerAvatar';
+import { YouBadge } from '@/components/YouBadge';
 
 const MEDAL_COLORS = { 1: '#f5c542', 2: '#a0a3ab', 3: '#c47a3a' } as const;
 const tint = (rank: 1 | 2 | 3, opacity = 18) =>
@@ -30,6 +32,9 @@ export default function GauntletStandings({
   rounds: GauntletRound[];
   leaderboard: LeaderboardRowWithId[];
 }) {
+  const { data: session } = useSession();
+  const myPlayerId = session?.user?.playerId ?? null;
+
   if (rounds.length === 0) return null;
   const finalRound = rounds[rounds.length - 1];
   if (!finalRound.matches.every((m) => isPlayedScore(m.final_score))) return null;
@@ -64,8 +69,9 @@ export default function GauntletStandings({
         </div>
         <div className="flex items-center gap-3">
           <PlayerAvatar name={champion.name} imageUrl={champStats?.steam_avatar_url ?? null} size="md" />
-          <div className="font-display text-[28px] font-semibold leading-tight" style={{ color: MEDAL_COLORS[1] }}>
+          <div className="font-display text-[28px] font-semibold leading-tight flex items-center gap-2" style={{ color: MEDAL_COLORS[1] }}>
             {champion.name}
+            {myPlayerId !== null && champion.player_id === myPlayerId && <YouBadge />}
           </div>
         </div>
         {champStats && (
@@ -106,8 +112,9 @@ export default function GauntletStandings({
                 </div>
                 <div className="flex items-center gap-2">
                   <PlayerAvatar name={p.name} imageUrl={ps?.steam_avatar_url ?? null} size="sm" />
-                  <div className="font-display text-[18px] font-semibold leading-tight truncate" style={{ color: MEDAL_COLORS[rank] }}>
-                    {p.name}
+                  <div className="font-display text-[18px] font-semibold leading-tight flex items-center gap-1.5" style={{ color: MEDAL_COLORS[rank] }}>
+                    <span className="truncate">{p.name}</span>
+                    {myPlayerId !== null && p.player_id === myPlayerId && <YouBadge />}
                   </div>
                 </div>
                 {ps && (
