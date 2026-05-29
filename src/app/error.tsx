@@ -16,7 +16,7 @@ export default function GlobalError({
 
   return (
     <div className="min-h-screen">
-      <div className="border-b-2 border-[var(--color-ct)] bg-[var(--color-bg-primary)]">
+      <div className="border-b-2 border-[var(--color-site-accent)] bg-[var(--color-bg-primary)]">
         <div className="max-w-[1080px] mx-auto px-6 py-3">
           <span className="font-display font-bold text-[20px]">DGLS</span>
         </div>

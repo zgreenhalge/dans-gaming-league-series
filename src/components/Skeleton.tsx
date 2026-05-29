@@ -10,7 +10,7 @@ export function SkeletonBar({ className = '' }: { className?: string }) {
 export function SkeletonPage({ title = 'Loading…' }: { title?: string }) {
   return (
     <div className="min-h-screen">
-      <div className="border-b-2 border-[var(--color-ct)] bg-[var(--color-bg-primary)]">
+      <div className="border-b-2 border-[var(--color-site-accent)] bg-[var(--color-bg-primary)]">
         <div className="max-w-[1080px] mx-auto px-6 py-3 flex items-center justify-between">
           <span className="font-display font-bold text-[20px]">DGLS</span>
           <span className="tracked text-[10px] text-[var(--color-text-secondary)]">
