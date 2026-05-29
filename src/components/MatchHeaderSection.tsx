@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition, useEffect } from 'react';
+import { toSentenceCase } from '@/lib/maps';
 import { useRouter } from 'next/navigation';
 
 interface Props {
@@ -224,7 +225,7 @@ export default function MatchHeaderSection({
   const rightContent = (
     <div className="text-right">
       <div className="font-display text-[36px] font-semibold leading-tight map-head">
-        {map ?? 'TBD'}
+        {map ? toSentenceCase(map) : 'TBD'}
       </div>
     </div>
   );

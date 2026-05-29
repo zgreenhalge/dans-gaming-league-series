@@ -1,6 +1,11 @@
-// Per-map backdrop images for match cards.
-// Keys are produced by mapSlug(rawDBString) — lowercase, non-alphanumeric → hyphens.
-// Drop new images into /public/maps/ and add an entry here.
+// Map utilities: display name casing, slug normalisation, and backdrop image lookup.
+// Image keys use mapSlug(rawDBString) — lowercase, non-alphanumeric → hyphens.
+// Drop new images into /public/maps/ and add an entry to MAP_IMAGES.
+
+export function toSentenceCase(s: string): string {
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
 
 export function mapSlug(raw: string): string {
   return raw

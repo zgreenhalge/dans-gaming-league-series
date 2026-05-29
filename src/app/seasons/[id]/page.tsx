@@ -18,7 +18,7 @@ import LeaderboardTable from '@/components/LeaderboardTable';
 import GauntletStandings from '@/components/GauntletStandings';
 import type { Season, LeaderboardRowWithId } from '@/lib/types';
 import { isPlayedScore, parseScore } from '@/lib/util';
-import { mapImageFor } from '@/lib/maps';
+import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { LocalTime } from '@/components/LocalTime';
 import SeasonStartDateButton from '@/components/SeasonStartDateButton';
 import { authOptions } from '@/lib/authOptions';
@@ -130,7 +130,7 @@ function MatchRow({
             </span>
             {map && (
               <span className="font-display text-[16px] font-semibold text-[var(--color-text-primary)] map-head">
-                {map}
+                {toSentenceCase(map)}
               </span>
             )}
           </div>
