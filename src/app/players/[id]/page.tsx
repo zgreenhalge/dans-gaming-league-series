@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getPlayer } from '@/lib/queries';
+import { maybeRefreshSteamProfile } from '@/lib/steam';
 import PlayerView from '@/components/PlayerView';
 import PlayerAvatar from '@/components/PlayerAvatar';
 
@@ -27,6 +28,12 @@ export default async function PlayerPage({
   if (!Number.isFinite(playerId)) notFound();
   const detail = await getPlayer(playerId);
   if (!detail) notFound();
+
+  const freshSteam = await maybeRefreshSteamProfile(detail.player);
+  if (freshSteam) {
+    detail.player.steam_nickname = freshSteam.steam_nickname;
+    detail.player.steam_avatar_url = freshSteam.steam_avatar_url;
+  }
 
   return (
     <div className="min-h-screen">

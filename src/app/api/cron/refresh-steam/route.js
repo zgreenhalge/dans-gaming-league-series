@@ -59,6 +59,7 @@ export async function GET(request) {
         .update({
           steam_nickname: profile.personaname ?? null,
           steam_avatar_url: profile.avatarfull ?? null,
+          steam_refreshed_at: new Date().toISOString(),
         })
         .eq("id", player.id);
 
