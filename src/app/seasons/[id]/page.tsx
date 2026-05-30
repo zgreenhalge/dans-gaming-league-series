@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { TopbarShell } from '@/components/TopbarShell';
 import {
@@ -7,15 +7,18 @@ import {
   getSeasonSchedule,
   getGauntletRounds,
   getGauntletSeasonLeaderboard,
+  getLinkedGauntlet,
+  getLinkedRegularSeason,
   type WeekWithMatches,
   type GauntletRound,
 } from '@/lib/queries';
-import RegularSeasonTabView from '@/components/RegularSeasonTabView';
-import GauntletTabView from '@/components/GauntletTabView';
+import SeasonTabView from '@/components/SeasonTabView';
+import CombinedSeasonTabView from '@/components/CombinedSeasonTabView';
 import type { Season } from '@/lib/types';
 import SeasonStartDateButton from '@/components/SeasonStartDateButton';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
+import { seasonTitle } from '@/lib/util';
 
 export const revalidate = 60;
 
@@ -42,7 +45,7 @@ function Topbar({ season }: { season: Season }) {
     <TopbarShell
       crumbs={[
         { label: 'DGLS', href: '/' },
-        { label: season.name },
+        { label: seasonTitle(season.name) },
       ]}
     />
   );
@@ -101,6 +104,10 @@ export default async function SeasonPage({
   }
 
   if (season.is_gauntlet) {
+    const linked = await getLinkedRegularSeason(season.name);
+    if (linked) redirect(`/seasons/${linked.id}`);
+
+    // Orphan gauntlet with no paired regular season — render standalone
     const [rounds, leaderboard] = await Promise.all([
       getGauntletRounds(seasonId),
       getGauntletSeasonLeaderboard(seasonId),
@@ -115,7 +122,7 @@ export default async function SeasonPage({
             <div className="flex items-center gap-3">
               <SeasonStatusTag status={season.status} />
               <div className="font-display text-[36px] font-semibold leading-tight">
-                {season.name}
+                {seasonTitle(season.name)}
               </div>
             </div>
             <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5">
@@ -130,7 +137,8 @@ export default async function SeasonPage({
               />
             </div>
           </div>
-          <GauntletTabView
+          <SeasonTabView
+            kind="gauntlet"
             rounds={rounds}
             leaderboard={leaderboard}
             seasonStatus={season.status}
@@ -141,9 +149,14 @@ export default async function SeasonPage({
     );
   }
 
-  const [leaderboard, schedule] = await Promise.all([
+  // Regular season — check for paired gauntlet
+  const linkedGauntlet = await getLinkedGauntlet(season.name);
+
+  const [leaderboard, schedule, gauntletRounds, gauntletLeaderboard] = await Promise.all([
     getSeasonLeaderboard(seasonId),
     getSeasonSchedule(seasonId),
+    linkedGauntlet ? getGauntletRounds(linkedGauntlet.id) : Promise.resolve(null),
+    linkedGauntlet ? getGauntletSeasonLeaderboard(linkedGauntlet.id) : Promise.resolve(null),
   ]);
   const matchCount = countMatches(schedule);
 
@@ -155,7 +168,7 @@ export default async function SeasonPage({
           <div className="flex items-center gap-3">
             <SeasonStatusTag status={season.status} />
             <div className="font-display text-[36px] font-semibold leading-tight">
-              {season.name}
+              {seasonTitle(season.name)}
             </div>
           </div>
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5">
@@ -170,13 +183,27 @@ export default async function SeasonPage({
             />
           </div>
         </div>
-        <RegularSeasonTabView
-          leaderboard={leaderboard}
-          schedule={schedule}
-          seasonStartDate={season.start_date}
-          seasonStatus={season.status}
-          currentPlayerId={currentPlayerId}
-        />
+        {linkedGauntlet && gauntletRounds && gauntletLeaderboard ? (
+          <CombinedSeasonTabView
+            leaderboard={leaderboard}
+            schedule={schedule}
+            seasonStartDate={season.start_date}
+            seasonStatus={season.status}
+            gauntletRounds={gauntletRounds}
+            gauntletLeaderboard={gauntletLeaderboard}
+            gauntletStatus={linkedGauntlet.status}
+            currentPlayerId={currentPlayerId}
+          />
+        ) : (
+          <SeasonTabView
+            kind="regular"
+            leaderboard={leaderboard}
+            schedule={schedule}
+            seasonStartDate={season.start_date}
+            seasonStatus={season.status}
+            currentPlayerId={currentPlayerId}
+          />
+        )}
       </main>
     </div>
   );
