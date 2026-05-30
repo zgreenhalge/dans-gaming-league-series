@@ -774,6 +774,7 @@ export interface GauntletPlayerStat {
   player_name: string;
   faction: 'SHIRTS' | 'SKINS';
   kills: number;
+  assists: number;
   deaths: number;
   adr: number;
   is_win: boolean;
@@ -913,7 +914,7 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
   const [{ data: stats, error: sErr }, players] = await Promise.all([
     supabase
       .from('player_match_stats')
-      .select('match_id, player_id, faction, kills, deaths, adr, is_win')
+      .select('match_id, player_id, faction, kills, assists, deaths, adr, is_win')
       .in('match_id', matchIds),
     getPlayersById(),
   ]);
@@ -924,6 +925,7 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
     player_id: number;
     faction: string;
     kills: number;
+    assists: number;
     deaths: number;
     adr: number;
     is_win: boolean;
@@ -938,6 +940,7 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
       player_name: player?.name ?? `#${s.player_id}`,
       faction: s.faction as 'SHIRTS' | 'SKINS',
       kills: Math.max(0, s.kills),
+      assists: Math.max(0, s.assists ?? 0),
       deaths: Math.max(0, s.deaths),
       adr: Math.max(0, s.adr),
       is_win: s.is_win,

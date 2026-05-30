@@ -219,22 +219,6 @@ body::before {
   filter: var(--map-img-filter-boost);
 }
 
-.map-head {
-  background: var(--map-text-bg);
-  border-radius: var(--radius-md);
-  padding: 0.15em 0.5em;
-  display: inline-block;
-}
-
-/* Apply subtle transparent background to low-contrast text inside map cards */
-.map-card-bg .map-head,
-.map-card-bg .tracked,
-.map-card-bg .opacity-50 {
-  background: var(--map-text-bg);
-  border-radius: var(--radius-md);
-  padding: 0.12em 0.45em;
-  display: inline-block;
-}
 
 /* Highlight the player's key info on player-specific views */
 .player-highlight {
@@ -248,9 +232,13 @@ body::before {
 
 /* Row highlighting for the current player inside per-match tables */
 .current-player-row {
-  background: color-mix(in srgb, var(--color-accent-green-bg) 18%, var(--overlay-medium));
+  background: rgba(0, 0, 0, 0.08);
   font-weight: 600;
-  box-shadow: inset 0 0 0 1px var(--color-border-primary);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14);
+}
+[data-theme="dark"] .current-player-row {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
 }
 
 /* "YOU" identity badge */

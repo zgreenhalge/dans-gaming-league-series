@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { TopbarShell } from '@/components/TopbarShell';
@@ -12,14 +11,12 @@ import {
   type MatchWithRoster,
   type GauntletRound,
   type GauntletMatch,
-  type GauntletPlayerStat,
 } from '@/lib/queries';
 import LeaderboardTable from '@/components/LeaderboardTable';
 import GauntletStandings from '@/components/GauntletStandings';
+import { MatchCard, type MatchCardRight } from '@/components/MatchCard';
 import type { Season, LeaderboardRowWithId } from '@/lib/types';
-import { isPlayedScore, parseScore } from '@/lib/util';
-import { mapImageFor, toSentenceCase } from '@/lib/maps';
-import { LocalTime } from '@/components/LocalTime';
+import { isPlayedScore, fmtWindowDate } from '@/lib/util';
 import SeasonStartDateButton from '@/components/SeasonStartDateButton';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
@@ -84,95 +81,7 @@ function weekWindow(
   };
 }
 
-function fmtWindowDate(d: Date): string {
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-}
-
-function relativeTime(iso: string): string {
-  const diff = new Date(iso).getTime() - Date.now();
-  const days = Math.round(diff / 86_400_000);
-  if (days > 1) return `in ${days} days`;
-  if (days === 1) return 'tomorrow';
-  if (days === 0) return 'today';
-  if (days === -1) return 'yesterday';
-  return `${Math.abs(days)} days ago`;
-}
-
 // ─── Regular season components ────────────────────────────────────────────────
-
-function MatchRow({
-  match,
-  weekStart,
-  weekEnd,
-  currentPlayerId,
-}: {
-  match: MatchWithRoster;
-  weekStart: Date | null;
-  weekEnd: Date | null;
-  currentPlayerId: number | null;
-}) {
-  const played = isPlayedScore(match.final_score);
-  const map = match.shirts_pick ?? match.picked_map;
-  const mapImg = mapImageFor(map);
-  const shirtsLabel =
-    match.shirts.map((p) => p.player_name).join(' & ') || 'Shirts TBD';
-  const skinsLabel =
-    match.skins.map((p) => p.player_name).join(' & ') || 'Skins TBD';
-
-  return (
-    <Link
-      href={`/matches/${match.id}`}
-      className={`block border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors ${mapImg ? 'map-card-bg' : 'hover:bg-[var(--color-bg-secondary)]'}`}
-      style={mapImg ? ({ ['--map-img' as string]: `url("${mapImg}")` } as React.CSSProperties) : undefined}
->
-      <div className={mapImg ? 'bg-[var(--overlay-strong)] hover:bg-[var(--overlay-medium)] transition-colors' : ''}>
-        <div className="px-4 py-2 flex items-center justify-between gap-4 border-b border-[var(--color-border-tertiary)]">
-          <div className="flex items-center gap-2">
-            <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] map-head">
-              Match #{match.match_number}
-            </span>
-            {map && (
-              <span className="font-display text-[16px] font-semibold text-[var(--color-text-primary)] map-head">
-                {toSentenceCase(map)}
-              </span>
-            )}
-          </div>
-          {played ? (
-            <span className="font-mono text-[13px] font-semibold tnum text-[var(--color-text-primary)]">
-              {match.final_score}
-            </span>
-          ) : match.scheduled_at ? (
-            <div className="text-right">
-              <div className="font-mono text-[12px] text-[var(--color-text-primary)]">
-                <LocalTime iso={match.scheduled_at} opts={{ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }} />
-              </div>
-              <div className="tracked text-[9px] text-[var(--color-text-secondary)] mt-0.5">
-                {relativeTime(match.scheduled_at)}
-              </div>
-            </div>
-          ) : weekStart && weekEnd ? (
-            <span className="tracked text-[10px] text-[var(--color-text-secondary)]">
-              {fmtWindowDate(weekStart)} – {fmtWindowDate(weekEnd)}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="px-4 py-3">
-          { (match as any).shirts_stats && (match as any).shirts_stats.length > 0 ? (
-            <div className="grid grid-cols-2 divide-x divide-[var(--color-border-tertiary)]">
-              <TeamStatBlock players={(match as any).shirts_stats} currentPlayerId={currentPlayerId} />
-              <TeamStatBlock players={(match as any).skins_stats} currentPlayerId={currentPlayerId} />
-            </div>
-          ) : (
-            <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate map-head">
-              {shirtsLabel} <span className="opacity-50 map-head">vs</span> {skinsLabel}
-            </div>
-          )}
-        </div>
-      </div>
-    </Link>
-  );
-}
 
 function WeekBlock({
   week,
@@ -183,7 +92,7 @@ function WeekBlock({
   seasonStartDate: string | null;
   currentPlayerId: number | null;
 }) {
-  const window = weekWindow(seasonStartDate, week.week_number);
+  const win = weekWindow(seasonStartDate, week.week_number);
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
       <div className="px-4 py-2.5 flex items-center justify-between gap-3 border-b border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)]">
@@ -191,9 +100,9 @@ function WeekBlock({
           <span className="tracked text-[11px] font-semibold text-[var(--color-text-primary)]">
             Week {week.week_number}
           </span>
-          {window && (
+          {win && (
             <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">
-              {fmtWindowDate(window.start)} – {fmtWindowDate(window.end)}
+              {fmtWindowDate(win.start)} – {fmtWindowDate(win.end)}
             </span>
           )}
         </div>
@@ -205,15 +114,31 @@ function WeekBlock({
           </span>
         )}
       </div>
-      {week.matches.map((m) => (
-        <MatchRow
-          key={m.id}
-          match={m}
-          weekStart={window?.start ?? null}
-          weekEnd={window?.end ?? null}
-          currentPlayerId={currentPlayerId}
-        />
-      ))}
+      {week.matches.map((m) => {
+        const played = isPlayedScore(m.final_score);
+        let right: MatchCardRight = null;
+        if (played) {
+          right = { type: 'score', score: m.final_score! };
+        } else if (m.scheduled_at) {
+          right = { type: 'scheduled', scheduledAt: m.scheduled_at };
+        } else if (win) {
+          right = { type: 'week-window', weekStart: win.start, weekEnd: win.end };
+        }
+        return (
+          <MatchCard
+            key={m.id}
+            href={`/matches/${m.id}`}
+            map={m.shirts_pick ?? m.picked_map}
+            label={{ type: 'match', matchNumber: m.match_number }}
+            right={right}
+            shirtsStats={m.shirts_stats}
+            skinsStats={m.skins_stats}
+            shirtsFallback={m.shirts.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
+            skinsFallback={m.skins.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
+            currentPlayerId={currentPlayerId}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -232,87 +157,6 @@ function computeGauntletRecords(matches: GauntletMatch[]) {
   }
   return Array.from(records.values()).sort(
     (a, b) => b.wins - a.wins || a.name.localeCompare(b.name),
-  );
-}
-
-
-function TeamStatBlock({ players, currentPlayerId }: { players: GauntletPlayerStat[]; currentPlayerId: number | null }) {
-  return (
-    <div className="px-3 py-2">
-      <table className="w-full border-collapse">
-        <tbody>
-          {players.map((p) => (
-            <tr key={p.player_id} className="bg-[var(--overlay-medium)]">
-              <td className="font-display text-[13px] font-semibold pl-2 pr-3 py-0.5 whitespace-nowrap">
-                <span className="inline-flex items-center gap-1">
-                  {p.player_name}
-                  {currentPlayerId !== null && p.player_id === currentPlayerId && <YouBadge />}
-                </span>
-              </td>
-              <td className="font-mono text-[11px] tnum text-right pr-3 py-0.5 text-[var(--color-text-primary)]">
-                {p.kills}/{p.deaths}
-              </td>
-              <td className="font-mono text-[11px] tnum text-right pr-2 py-0.5 text-[var(--color-text-secondary)] whitespace-nowrap">
-                {p.adr} ADR
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function GauntletMatchCard({
-  match,
-  gameNumber,
-  currentPlayerId,
-}: {
-  match: GauntletMatch;
-  gameNumber: number;
-  currentPlayerId: number | null;
-}) {
-  const played = isPlayedScore(match.final_score);
-  const hasStats = match.shirts.length > 0 || match.skins.length > 0;
-  const mapImg = mapImageFor(match.map);
-
-  return (
-    <Link
-      href={`/matches/${match.id}`}
-      className={`block border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors ${mapImg ? 'map-card-bg' : 'hover:bg-[var(--color-bg-secondary)]'}`}
-      style={mapImg ? ({ ['--map-img' as string]: `url("${mapImg}")` } as React.CSSProperties) : undefined}
-    >
-      <div className={mapImg ? 'bg-[var(--overlay-strong)] hover:bg-[var(--overlay-medium)] transition-colors' : ''}>
-        <div className="px-4 py-2 flex items-center justify-between gap-4 border-b border-[var(--color-border-tertiary)]">
-          <div className="flex items-center gap-2">
-            <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)]">
-              Game {gameNumber}
-            </span>
-            {match.map && (
-              <span className="font-display text-[16px] font-semibold text-[var(--color-text-primary)] map-head">
-                {match.map}
-              </span>
-            )}
-          </div>
-          {played ? (
-            <span className="font-mono text-[13px] font-semibold tnum text-[var(--color-text-primary)]">
-              {match.final_score}
-            </span>
-          ) : (
-            <span className="tracked text-[9px] font-semibold text-[var(--color-accent-amber-fg)]">
-              Pending
-            </span>
-          )}
-        </div>
-
-        {hasStats && (
-          <div className="grid grid-cols-2 divide-x divide-[var(--color-border-tertiary)]">
-            <TeamStatBlock players={match.shirts} currentPlayerId={currentPlayerId} />
-            <TeamStatBlock players={match.skins} currentPlayerId={currentPlayerId} />
-          </div>
-        )}
-      </div>
-    </Link>
   );
 }
 
@@ -350,9 +194,23 @@ function GauntletRoundCard({
         </span>
       </div>
 
-      {round.matches.map((m, i) => (
-        <GauntletMatchCard key={m.id} match={m} gameNumber={i + 1} currentPlayerId={currentPlayerId} />
-      ))}
+      {round.matches.map((m, i) => {
+        const played = isPlayedScore(m.final_score);
+        return (
+          <MatchCard
+            key={m.id}
+            href={`/matches/${m.id}`}
+            map={m.map}
+            label={{ type: 'game', gameNumber: i + 1 }}
+            right={played ? { type: 'score', score: m.final_score! } : { type: 'pending' }}
+            shirtsStats={m.shirts}
+            skinsStats={m.skins}
+            shirtsFallback={m.shirts.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
+            skinsFallback={m.skins.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
+            currentPlayerId={currentPlayerId}
+          />
+        );
+      })}
 
       {records.length > 0 && (
         <div className="border-t-2 border-[var(--color-border-primary)] px-4 py-3 bg-[var(--color-bg-secondary)]">

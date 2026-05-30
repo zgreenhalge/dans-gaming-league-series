@@ -8,6 +8,20 @@ export function isPlayedScore(finalScore: string | null | undefined): boolean {
   return !/^\s*0\s*[-–]\s*0\s*$/.test(finalScore);
 }
 
+export function relativeTime(iso: string): string {
+  const diff = new Date(iso).getTime() - Date.now();
+  const days = Math.round(diff / 86_400_000);
+  if (days > 1) return `in ${days} days`;
+  if (days === 1) return 'tomorrow';
+  if (days === 0) return 'today';
+  if (days === -1) return 'yesterday';
+  return `${Math.abs(days)} days ago`;
+}
+
+export function fmtWindowDate(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
 /** Parses "13-9" / "13 – 9" into { shirts, skins }. Returns null if unparseable. */
 export function parseScore(
   s: string | null | undefined,

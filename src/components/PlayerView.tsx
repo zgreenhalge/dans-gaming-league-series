@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import type { PlayerHistoryRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { isPlayedScore } from '@/lib/util';
-import { mapImageFor } from '@/lib/maps';
+import { MatchCard } from './MatchCard';
 import LeaderboardTable from './LeaderboardTable';
 
 type Filter = 'career' | number;
@@ -82,103 +82,6 @@ function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
     out.push({ map: display, wins: a.wins, losses: a.losses, wr: a.wr, adr: a.adr });
   }
   return out.sort((a, b) => b.wr - a.wr || b.adr - a.adr);
-}
-
-function PlayerMatchRow({
-  row,
-  variant,
-}: {
-  row: PlayerHistoryRow;
-  variant: 'played' | 'upcoming';
-}) {
-  const shirts = row.shirts.map((p) => p.player_name).join(' & ') || 'TBD';
-  const skins = row.skins.map((p) => p.player_name).join(' & ') || 'TBD';
-  const mapImg = mapImageFor(row.map);
-
-  const wlChip =
-    variant === 'played' ? (
-      <span className={`wl-chip ${row.is_win ? 'wl-chip--win' : 'wl-chip--loss'}`}>
-        {row.is_win ? 'W' : 'L'}
-      </span>
-    ) : (
-      <span className={`wl-chip wl-chip--pending`}>
-        Pending
-      </span>
-    );
-
-  return (
-    <Link
-      href={`/matches/${row.match_id}`}
-      className={`block border border-[var(--color-border-primary)] transition-colors ${mapImg ? 'map-card-bg' : 'hover:bg-[var(--color-bg-secondary)]'}`}
-      style={mapImg ? ({ ['--map-img' as string]: `url("${mapImg}")` } as React.CSSProperties) : undefined}
-    >
-      <div className={mapImg ? 'bg-[var(--overlay-strong)] hover:bg-[var(--overlay-medium)] transition-colors' : ''}>
-        <div className="px-4 py-2 flex items-center justify-between gap-4 border-b border-[var(--color-border-tertiary)]">
-          <div className="flex items-baseline gap-3">
-            {wlChip}
-            {row.map && (
-              <span className="font-display text-[16px] font-semibold text-[var(--color-text-primary)] map-head">
-                {row.map}
-              </span>
-            )}
-            <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] map-head">
-              Season {row.season_id} · Week {row.week_number} · Match {row.match_number}
-            </span>
-          </div>
-        </div>
-
-        <div className="px-4 py-3">
-          {(row as any).shirts_stats && (row as any).shirts_stats.length > 0 ? (
-            <div className="grid grid-cols-2 divide-x divide-[var(--color-border-tertiary)]">
-              <div className="px-3 py-2">
-                <table className="w-full border-collapse">
-                  <tbody>
-                    {(row as any).shirts_stats.map((p: any) => (
-                      <tr key={p.player_id} className={`bg-[var(--overlay-medium)] ${p.player_id === row.player_id ? 'current-player-row' : ''}`}>
-                        <td className={`font-display ${p.player_id === row.player_id ? 'text-[15px] lg:text-[16px] font-bold' : 'text-[13px] font-semibold'} pl-2 pr-3 py-0.5 whitespace-nowrap`}>
-                          {p.player_name}
-                        </td>
-                        <td className={`font-mono ${p.player_id === row.player_id ? 'text-[12px] font-semibold' : 'text-[11px]'} tnum text-right pr-3 py-0.5 text-[var(--color-text-primary)]`}>
-                          {p.kills}/{p.assists}/{p.deaths}
-                        </td>
-                        <td className={`font-mono ${p.player_id === row.player_id ? 'text-[12px] font-semibold' : 'text-[11px]'} tnum text-right pr-2 py-0.5 text-[var(--color-text-secondary)] whitespace-nowrap`}>
-                          {p.adr} ADR
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="px-3 py-2">
-                <table className="w-full border-collapse">
-                  <tbody>
-                    {(row as any).skins_stats.map((p: any) => (
-                      <tr key={p.player_id} className={`bg-[var(--overlay-medium)] ${p.player_id === row.player_id ? 'current-player-row' : ''}`}>
-                        <td className={`font-display ${p.player_id === row.player_id ? 'text-[15px] lg:text-[16px] font-bold' : 'text-[13px] font-semibold'} pl-2 pr-3 py-0.5 whitespace-nowrap`}>
-                          {p.player_name}
-                        </td>
-                        <td className={`font-mono ${p.player_id === row.player_id ? 'text-[12px] font-semibold' : 'text-[11px]'} tnum text-right pr-3 py-0.5 text-[var(--color-text-primary)]`}>
-                          {p.kills}/{p.assists}/{p.deaths}
-                        </td>
-                        <td className={`font-mono ${p.player_id === row.player_id ? 'text-[12px] font-semibold' : 'text-[11px]'} tnum text-right pr-2 py-0.5 text-[var(--color-text-secondary)] whitespace-nowrap`}>
-                          {p.adr} ADR
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            <div className="font-mono text-[11px] text-[var(--color-text-secondary)] truncate map-head">
-              {shirts} <span className="opacity-50 map-head">vs</span> {skins}
-            </div>
-          )}
-        </div>
-      </div>
-    </Link>
-  );
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -356,7 +259,20 @@ export default function PlayerView({
           <SectionLabel>Upcoming matches</SectionLabel>
           <div className="flex flex-col gap-3">
             {upcomingHistory.map((h) => (
-              <PlayerMatchRow key={h.id} row={h} variant="upcoming" />
+              <MatchCard
+                key={h.id}
+                href={`/matches/${h.match_id}`}
+                map={h.map}
+                label={{ type: 'player-history', seasonId: h.season_id, weekNumber: h.week_number, matchNumber: h.match_number }}
+                right={{ type: 'pending' }}
+                shirtsStats={h.shirts_stats}
+                skinsStats={h.skins_stats}
+                shirtsFallback={h.shirts.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
+                skinsFallback={h.skins.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
+                currentPlayerId={h.player_id}
+                highlightCurrentPlayer
+                containerVariant="standalone"
+              />
             ))}
           </div>
         </>
@@ -416,7 +332,21 @@ export default function PlayerView({
       ) : (
         <div className="flex flex-col gap-3">
           {playedHistory.map((h) => (
-            <PlayerMatchRow key={h.id} row={h} variant="played" />
+            <MatchCard
+              key={h.id}
+              href={`/matches/${h.match_id}`}
+              map={h.map}
+              label={{ type: 'player-history', seasonId: h.season_id, weekNumber: h.week_number, matchNumber: h.match_number }}
+              outcome={h.is_win ? 'win' : 'loss'}
+              right={{ type: 'score', score: h.final_score! }}
+              shirtsStats={h.shirts_stats}
+              skinsStats={h.skins_stats}
+              shirtsFallback={h.shirts.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
+              skinsFallback={h.skins.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
+              currentPlayerId={h.player_id}
+              highlightCurrentPlayer
+              containerVariant="standalone"
+            />
           ))}
         </div>
       )}
