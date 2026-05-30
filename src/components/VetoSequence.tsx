@@ -146,7 +146,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   const isPlayoffOrGauntlet = match.is_playoff_game || isGauntlet;
   const autoPickedMap = isPlayoffOrGauntlet ? (match.shirts_pick ?? match.picked_map) : null;
 
-  async function submitVeto(field: StepField, value: string) {
+  async function submitVeto(field: StepField, value: string | null) {
     setError(null);
     startTransition(async () => {
       const res = await fetch(`/api/matches/${match.id}/veto`, {
@@ -162,6 +162,11 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
       setActiveField(null);
       router.refresh();
     });
+  }
+
+  function clearVeto(e: React.MouseEvent, field: StepField) {
+    e.stopPropagation();
+    submitVeto(field, null);
   }
 
   function handleTileClick(field: StepField) {
@@ -195,7 +200,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
                   </span>
                 )}
                 <div
-                  className={`flex-1 min-w-[88px] px-2.5 py-2 border transition-colors ${tileCls(s, val, isNext)} ${isActive ? 'ring-1 ring-[var(--color-accent-amber-pickborder)]' : ''}`}
+                  className={`relative flex-1 min-w-[88px] px-2.5 py-2 border transition-colors ${tileCls(s, val, isNext)} ${isActive ? 'ring-1 ring-[var(--color-accent-amber-pickborder)]' : ''}`}
                   onClick={() => handleTileClick(s.field as StepField)}
                   role={isNext || (val !== null && isOverwritable(s.field as StepField)) ? 'button' : undefined}
                   aria-expanded={isActive ? true : undefined}
@@ -205,6 +210,18 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
                       <div className="absolute inset-0 bg-cover bg-center grayscale pointer-events-none" style={{ backgroundImage: `url(${banImg})` }} />
                       <div className="absolute inset-0 bg-black/55 pointer-events-none" />
                     </>
+                  )}
+                  {isAdmin && val !== null && (
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={(e) => clearVeto(e, s.field as StepField)}
+                      className="absolute top-1 right-1 z-20 w-4 h-4 flex items-center justify-center text-[var(--color-accent-red-fg)] hover:opacity-70 transition-opacity disabled:opacity-30"
+                      title="Clear"
+                      aria-label="Clear"
+                    >
+                      ✕
+                    </button>
                   )}
                   <div className={banImg ? 'relative z-10' : undefined}>
                     <div className="lbl tracked text-[9px] font-semibold mb-0.5 flex items-center gap-1">

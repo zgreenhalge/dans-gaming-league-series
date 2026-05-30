@@ -300,6 +300,14 @@ export default async function MatchPage({
     <div className="min-h-screen">
       <Topbar seasonId={season.id} seasonName={season.name} weekNumber={week.week_number} matchNumber={match.match_number} isGauntlet={season.is_gauntlet} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
+        {!played && map && (
+          <div className="mt-4 px-4 py-3 border-2 border-[var(--color-accent-red-fg)] bg-[color-mix(in_srgb,var(--color-accent-red-fg)_8%,var(--color-bg-primary))]">
+            <p className="tracked text-[11px] font-bold text-[var(--color-accent-red-fg)] text-center">
+              REMEMBER: SCREENSHOT BOTH SIDES OF THE SCOREBOARD AT THE END OF THE GAME
+            </p>
+          </div>
+        )}
+
         {/* Header + veto wrapped in map backdrop — gradient shows regardless of image */}
         <div
           className={`-mx-6 px-6 ${map ? 'map-card-bg light-boost' : 'map-no-img'}`}

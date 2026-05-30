@@ -526,7 +526,7 @@ export default async function SeasonPage({
             No leaderboard data yet.
           </div>
         ) : (
-          <LeaderboardTable rows={leaderboard} />
+          <LeaderboardTable rows={leaderboard} showMedals={season.status === 'COMPLETED'} playoffZones={season.status === 'ACTIVE' ? { top: 2, bottom: 4 } : undefined} />
         )}
 
         <SectionLabel>Schedule</SectionLabel>
