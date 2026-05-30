@@ -189,8 +189,24 @@ export default function GauntletRoundsList({
   }, [rounds]);
 
   const [openRounds, setOpenRounds] = useState<Set<number>>(defaultOpenSet);
+  const [myGamesOnly, setMyGamesOnly] = useState(false);
 
-  const allOpen = openRounds.size === rounds.length;
+  const myRounds = useMemo(() => {
+    if (!currentPlayerId) return rounds;
+    return rounds
+      .map((r) => ({
+        ...r,
+        matches: r.matches.filter(
+          (m) =>
+            m.shirts.some((p) => p.player_id === currentPlayerId) ||
+            m.skins.some((p) => p.player_id === currentPlayerId),
+        ),
+      }))
+      .filter((r) => r.matches.length > 0);
+  }, [rounds, currentPlayerId]);
+
+  const displayRounds = myGamesOnly ? myRounds : rounds;
+  const allOpen = displayRounds.every((r) => openRounds.has(r.round_number));
 
   function toggleRound(roundNumber: number) {
     setOpenRounds((prev) => {
@@ -205,7 +221,17 @@ export default function GauntletRoundsList({
     if (allOpen) {
       setOpenRounds(new Set());
     } else {
-      setOpenRounds(new Set(rounds.map((r) => r.round_number)));
+      setOpenRounds(new Set(displayRounds.map((r) => r.round_number)));
+    }
+  }
+
+  function toggleMyGames() {
+    const next = !myGamesOnly;
+    setMyGamesOnly(next);
+    if (next && currentPlayerId) {
+      setOpenRounds(new Set(myRounds.map((r) => r.round_number)));
+    } else {
+      setOpenRounds(defaultOpenSet);
     }
   }
 
@@ -219,17 +245,37 @@ export default function GauntletRoundsList({
 
   return (
     <div>
-      {rounds.length > 1 && (
-        <div className="flex justify-end mb-3">
-          <button
-            onClick={toggleAll}
-            className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-          >
-            {allOpen ? 'Collapse all' : 'Expand all'}
-          </button>
+      <div className="flex flex-col gap-1.5 mb-3">
+        {currentPlayerId !== null && (
+          <div className="flex justify-end">
+            <button
+              onClick={toggleMyGames}
+              className={`tracked text-[10px] font-semibold px-2 py-1 border transition-colors ${
+                myGamesOnly
+                  ? 'text-[var(--color-text-primary)] border-[var(--color-border-secondary)] bg-[var(--color-bg-secondary)]'
+                  : 'text-[var(--color-text-secondary)] border-[var(--color-border-primary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)]'
+              }`}
+            >
+              My games
+            </button>
+          </div>
+        )}
+        {displayRounds.length > 1 && (
+          <div className="flex justify-end">
+            <button
+              onClick={toggleAll}
+              className="tracked text-[9px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+            >
+              {allOpen ? 'Collapse all' : 'Expand all'}
+            </button>
+          </div>
+        )}
+      </div>
+      {displayRounds.length === 0 ? (
+        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+          No matches found.
         </div>
-      )}
-      {rounds.map((r) => (
+      ) : displayRounds.map((r) => (
         <GauntletRoundCard
           key={r.round_number}
           round={r}
