@@ -105,12 +105,18 @@ export default function LeaderboardTable({
       )
     : [];
 
-  // Playoff zone coloring: top N gold, bottom N red (overrides medals when provided)
+  // Playoff zone coloring: top N gold, bottom N red tint (overrides medals when provided)
   const ZONE_COLORS = { top: '#f5c542', bottom: '#ef4444' } as const;
   const zoneColor = new Map<number, string>();
+  const elimZone = new Set<number>();
   if (playoffZones && firstColMode === 'player') {
     canonicalRanked.slice(0, playoffZones.top).forEach((r) => zoneColor.set(r.player_id, ZONE_COLORS.top));
-    canonicalRanked.slice(-playoffZones.bottom).forEach((r) => { if (!zoneColor.has(r.player_id)) zoneColor.set(r.player_id, ZONE_COLORS.bottom); });
+    canonicalRanked.slice(-playoffZones.bottom).forEach((r) => {
+      if (!zoneColor.has(r.player_id)) {
+        zoneColor.set(r.player_id, ZONE_COLORS.bottom);
+        elimZone.add(r.player_id);
+      }
+    });
   }
 
   // Medal positions (skipped when playoff zones are active)
@@ -198,6 +204,9 @@ export default function LeaderboardTable({
             const medal = medalRank.get(p.player_id);
             const zone = zoneColor.get(p.player_id);
             const rowColor = zone ?? (medal ? MEDAL_COLORS[medal] : null);
+            const textColor = elimZone.has(p.player_id)
+              ? 'var(--color-text-secondary)'
+              : rowColor;
             const href = firstColMode === 'season'
               ? `/seasons/${p.season_id}`
               : `/players/${p.player_id}`;
@@ -214,13 +223,13 @@ export default function LeaderboardTable({
               >
                 {firstColMode === 'player' && (
                   <td className="pl-4 pr-2 py-2.5 font-mono text-[11px] tnum"
-                    style={{ color: rowColor ?? 'var(--color-text-secondary)' }}
+                    style={{ color: textColor ?? 'var(--color-text-secondary)' }}
                   >
                     <Link href={href} className="block w-full h-full">{i + 1}</Link>
                   </td>
                 )}
                 <td className={`py-2.5 font-display font-semibold ${firstColMode === 'player' ? 'px-2' : 'pl-4 pr-2'}`}
-                  style={{ color: rowColor ?? undefined }}
+                  style={{ color: textColor ?? undefined }}
                 >
                   <Link href={href} className="flex items-center w-full h-full">
                     {p.player_name}
