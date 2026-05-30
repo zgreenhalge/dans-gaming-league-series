@@ -62,10 +62,12 @@ export default function LeaderboardTable({
   rows,
   firstColMode = 'player',
   showMedals = true,
+  playoffZones,
 }: {
   rows: LeaderboardRowWithId[];
   firstColMode?: 'player' | 'season';
   showMedals?: boolean;
+  playoffZones?: { top: number; bottom: number };
 }) {
   const { data: session } = useSession();
   const myPlayerId = session?.user?.playerId ?? null;
@@ -93,24 +95,36 @@ export default function LeaderboardTable({
     return asc ? -v : v;
   });
 
-  // Canonical medal positions: WR% → RWR% → ADR, fixed regardless of active sort.
-  const medalRank = new Map<number, 1 | 2 | 3>();
-  if (showMedals && firstColMode === 'player') {
-    [...rows]
-      .sort(
+  // Canonical ranking: WR% → RWR% → ADR, fixed regardless of active sort.
+  const canonicalRanked = firstColMode === 'player'
+    ? [...rows].sort(
         (a, b) =>
           b.win_rate_percentage - a.win_rate_percentage ||
           b.rwr_percentage - a.rwr_percentage ||
           b.overall_adr - a.overall_adr,
       )
+    : [];
+
+  // Playoff zone coloring: top N gold, bottom N red (overrides medals when provided)
+  const ZONE_COLORS = { top: '#f5c542', bottom: '#ef4444' } as const;
+  const zoneColor = new Map<number, string>();
+  if (playoffZones && firstColMode === 'player') {
+    canonicalRanked.slice(0, playoffZones.top).forEach((r) => zoneColor.set(r.player_id, ZONE_COLORS.top));
+    canonicalRanked.slice(-playoffZones.bottom).forEach((r) => { if (!zoneColor.has(r.player_id)) zoneColor.set(r.player_id, ZONE_COLORS.bottom); });
+  }
+
+  // Medal positions (skipped when playoff zones are active)
+  const medalRank = new Map<number, 1 | 2 | 3>();
+  if (showMedals && !playoffZones && firstColMode === 'player') {
+    canonicalRanked
       .slice(0, 3)
       .forEach((r, i) => medalRank.set(r.player_id, (i + 1) as 1 | 2 | 3));
   }
 
   const MEDAL_COLORS: Record<1 | 2 | 3, string> = {
-    1: '#f5c542',          // gold
-    2: '#a0a3ab',          // silver
-    3: '#c47a3a',          // bronze
+    1: '#f5c542',
+    2: '#a0a3ab',
+    3: '#c47a3a',
   };
 
   const dash = (played: boolean, v: string) =>
@@ -182,6 +196,8 @@ export default function LeaderboardTable({
             const played = p.total_rounds_played > 0;
             const rounds_lost = p.total_rounds_played - p.total_rounds_won;
             const medal = medalRank.get(p.player_id);
+            const zone = zoneColor.get(p.player_id);
+            const rowColor = zone ?? (medal ? MEDAL_COLORS[medal] : null);
             const href = firstColMode === 'season'
               ? `/seasons/${p.season_id}`
               : `/players/${p.player_id}`;
@@ -189,22 +205,22 @@ export default function LeaderboardTable({
               <tr
                 key={firstColMode === 'season' ? p.season_id : p.player_id}
                 className="border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer transition-colors"
-                style={medal
-                  ? { background: `color-mix(in srgb, ${MEDAL_COLORS[medal]} 8%, var(--color-bg-primary))` }
+                style={rowColor
+                  ? { background: `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))` }
                   : undefined
                 }
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = medal ? `color-mix(in srgb, ${MEDAL_COLORS[medal]} 14%, var(--color-bg-primary))` : 'var(--color-bg-secondary)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = medal ? `color-mix(in srgb, ${MEDAL_COLORS[medal]} 8%, var(--color-bg-primary))` : ''; }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 14%, var(--color-bg-primary))` : 'var(--color-bg-secondary)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))` : ''; }}
               >
                 {firstColMode === 'player' && (
                   <td className="pl-4 pr-2 py-2.5 font-mono text-[11px] tnum"
-                    style={{ color: medal ? MEDAL_COLORS[medal] : 'var(--color-text-secondary)' }}
+                    style={{ color: rowColor ?? 'var(--color-text-secondary)' }}
                   >
                     <Link href={href} className="block w-full h-full">{i + 1}</Link>
                   </td>
                 )}
                 <td className={`py-2.5 font-display font-semibold ${firstColMode === 'player' ? 'px-2' : 'pl-4 pr-2'}`}
-                  style={{ color: medal ? MEDAL_COLORS[medal] : undefined }}
+                  style={{ color: rowColor ?? undefined }}
                 >
                   <Link href={href} className="flex items-center w-full h-full">
                     {p.player_name}
