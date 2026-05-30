@@ -56,7 +56,7 @@ export default function GauntletStandings({
   const champStats = statsByPlayer.get(champion.player_id);
 
   return (
-    <div className="overflow-hidden flex flex-col gap-1">
+    <div className="overflow-hidden flex flex-col gap-1 mb-8">
       <Link
         href={`/players/${champion.player_id}`}
         className="block px-6 py-5 border-b border-[var(--color-border-tertiary)] transition-colors"
