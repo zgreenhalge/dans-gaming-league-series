@@ -254,6 +254,11 @@ export default async function MatchPage({
   const session = await getServerSession(authOptions);
   const currentPlayerId = session?.user?.playerId ?? null;
 
+  // Veto window: open only when a scheduled time exists and we're within 10 minutes of it
+  const vetoWindowOpen =
+    !!match.scheduled_at &&
+    Date.now() >= new Date(match.scheduled_at).getTime() - 10 * 60 * 1000;
+
   // Determine edit/veto permissions: admins or players in the match
   let canEdit = false;
   let canVeto = false;
@@ -271,7 +276,8 @@ export default async function MatchPage({
     const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
     const authorized = isInMatch || isAdmin;
     if (authorized) {
-      canVeto = true;
+      // Non-admins are blocked from veto until the window opens
+      canVeto = isAdmin || vetoWindowOpen;
       vetoIsAdmin = isAdmin;
       if (!season.is_gauntlet) canEdit = true;
       if (myStatRow) {
@@ -342,20 +348,24 @@ export default async function MatchPage({
             )}
           </div>
 
-          <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-3">
-            Veto sequence
-          </div>
-          <div className="pb-6">
-            <VetoSequence
-              match={match}
-              mapPool={season.map_pool}
-              canVeto={canVeto}
-              isGauntlet={season.is_gauntlet}
-              playerFaction={playerFaction}
-              gauntletPlayerIndex={gauntletPlayerIndex}
-              isAdmin={vetoIsAdmin}
-            />
-          </div>
+          {(played || vetoIsAdmin || vetoWindowOpen) && (
+            <>
+              <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-3">
+                Map pick/ban
+              </div>
+              <div className="pb-6">
+                <VetoSequence
+                  match={match}
+                  mapPool={season.map_pool}
+                  canVeto={canVeto}
+                  isGauntlet={season.is_gauntlet}
+                  playerFaction={playerFaction}
+                  gauntletPlayerIndex={gauntletPlayerIndex}
+                  isAdmin={vetoIsAdmin}
+                />
+              </div>
+            </>
+          )}
         </div>
 
         {stats.length === 0 ? (
