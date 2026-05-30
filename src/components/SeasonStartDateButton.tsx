@@ -7,6 +7,7 @@ interface Props {
   seasonId: number;
   startDate: string | null;
   canEdit: boolean;
+  seasonStatus: string;
 }
 
 function fmtDate(dateStr: string): string {
@@ -18,7 +19,7 @@ function fmtDate(dateStr: string): string {
   });
 }
 
-export default function SeasonStartDateButton({ seasonId, startDate, canEdit }: Props) {
+export default function SeasonStartDateButton({ seasonId, startDate, canEdit, seasonStatus }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(startDate ?? '');
@@ -59,25 +60,30 @@ export default function SeasonStartDateButton({ seasonId, startDate, canEdit }: 
   }
 
   if (!editing) {
-    if (!canEdit && !startDate) return null;
+    const isUpcoming = seasonStatus === 'UPCOMING';
+    if (seasonStatus === 'ACTIVE') return null;
+    if (!canEdit && !startDate && !isUpcoming) return null;
     return (
       <div className="flex items-center gap-3 flex-wrap">
-        {startDate && (
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-              {fmtDate(startDate)}
-            </span>
-            {canEdit && (
-              <button
-                onClick={clear}
-                className="text-[11px] text-[var(--color-text-secondary)] hover:text-red-500 transition-colors leading-none"
-                title="Clear start date"
-              >
-                ✕
-              </button>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">
+            Starts:{' '}
+            {startDate ? (
+              fmtDate(startDate)
+            ) : (
+              <span className="text-[var(--color-text-tertiary,var(--color-text-secondary))] opacity-60">TBD</span>
             )}
-          </div>
-        )}
+          </span>
+          {canEdit && startDate && (
+            <button
+              onClick={clear}
+              className="text-[11px] text-[var(--color-text-secondary)] hover:text-red-500 transition-colors leading-none"
+              title="Clear start date"
+            >
+              ✕
+            </button>
+          )}
+        </div>
         {canEdit && (
           <button
             onClick={() => {
