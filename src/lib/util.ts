@@ -22,6 +22,12 @@ export function fmtWindowDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
+/** Returns the canonical display title for a season, e.g. "Season 1". */
+export function seasonTitle(name: string): string {
+  const m = name.match(/Season\s+(\d+)/i);
+  return m ? `Season ${m[1]}` : name;
+}
+
 /** Parses "13-9" / "13 – 9" into { shirts, skins }. Returns null if unparseable. */
 export function parseScore(
   s: string | null | undefined,

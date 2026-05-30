@@ -1077,6 +1077,29 @@ export async function getAllGauntletSummaries(): Promise<Map<number, GauntletSum
   return out;
 }
 
+function extractSeasonNumber(name: string): number | null {
+  const m = name.match(/Season\s+(\d+)/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/** Find the gauntlet season paired to a regular season by season number in name. */
+export async function getLinkedGauntlet(regularSeasonName: string): Promise<Season | null> {
+  const num = extractSeasonNumber(regularSeasonName);
+  if (num == null) return null;
+  const { data, error } = await supabase.from('seasons').select('*').eq('is_gauntlet', true);
+  if (error) throw error;
+  return ((data ?? []) as Season[]).find((s) => extractSeasonNumber(s.name) === num) ?? null;
+}
+
+/** Find the regular season paired to a gauntlet season by season number in name. */
+export async function getLinkedRegularSeason(gauntletName: string): Promise<Season | null> {
+  const num = extractSeasonNumber(gauntletName);
+  if (num == null) return null;
+  const { data, error } = await supabase.from('seasons').select('*').eq('is_gauntlet', false);
+  if (error) throw error;
+  return ((data ?? []) as Season[]).find((s) => extractSeasonNumber(s.name) === num) ?? null;
+}
+
 /** Returns leaderboards for every season, keyed by season_id. */
 export async function getAllLeaderboards(): Promise<
   Map<number, LeaderboardRowWithId[]>

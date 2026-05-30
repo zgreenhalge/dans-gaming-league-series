@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useMemo } from 'react';
 import { MatchCard, type MatchCardRight } from './MatchCard';
 import { YouBadge } from './YouBadge';
 import { isPlayedScore, fmtWindowDate } from '@/lib/util';
@@ -17,13 +16,6 @@ function weekWindow(
     start: new Date(base + (weekNumber - 1) * 7 * 86_400_000),
     end: new Date(base + ((weekNumber - 1) * 7 + 6) * 86_400_000),
   };
-}
-
-function playerInMatch(match: MatchWithRoster, playerId: number): boolean {
-  return (
-    match.shirts.some((p) => p.player_id === playerId) ||
-    match.skins.some((p) => p.player_id === playerId)
-  );
 }
 
 function WeekBlock({
@@ -99,123 +91,38 @@ function WeekBlock({
 }
 
 export default function ScheduleList({
-  schedule,
+  displaySchedule,
+  openWeeks,
+  onToggleWeek,
   seasonStartDate,
   currentPlayerId,
 }: {
-  schedule: WeekWithMatches[];
+  displaySchedule: WeekWithMatches[];
+  openWeeks: Set<number>;
+  onToggleWeek: (id: number) => void;
   seasonStartDate: string | null;
   currentPlayerId: number | null;
 }) {
-  const defaultOpenSet = useMemo(() => {
-    const firstIncompleteIdx = schedule.findIndex((w) =>
-      w.matches.some((m) => !isPlayedScore(m.final_score)),
-    );
-    if (firstIncompleteIdx !== -1) {
-      return new Set([schedule[firstIncompleteIdx].id]);
-    }
-    if (schedule.length > 0) {
-      return new Set([schedule[schedule.length - 1].id]);
-    }
-    return new Set<number>();
-  }, [schedule]);
-
-  const [openWeeks, setOpenWeeks] = useState<Set<number>>(defaultOpenSet);
-  const [myGamesOnly, setMyGamesOnly] = useState(false);
-
-  // Weeks filtered to only those containing the current player's matches
-  const mySchedule = useMemo(() => {
-    if (!currentPlayerId) return schedule;
-    return schedule
-      .map((w) => ({
-        ...w,
-        matches: w.matches.filter((m) => playerInMatch(m, currentPlayerId)),
-      }))
-      .filter((w) => w.matches.length > 0);
-  }, [schedule, currentPlayerId]);
-
-  const displaySchedule = myGamesOnly ? mySchedule : schedule;
-  const allOpen = displaySchedule.every((w) => openWeeks.has(w.id));
-
-  function toggleWeek(id: number) {
-    setOpenWeeks((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleAll() {
-    if (allOpen) {
-      setOpenWeeks(new Set());
-    } else {
-      setOpenWeeks(new Set(displaySchedule.map((w) => w.id)));
-    }
-  }
-
-  function toggleMyGames() {
-    const next = !myGamesOnly;
-    setMyGamesOnly(next);
-    if (next && currentPlayerId) {
-      setOpenWeeks(new Set(mySchedule.map((w) => w.id)));
-    } else {
-      setOpenWeeks(defaultOpenSet);
-    }
-  }
-
-  if (schedule.length === 0) {
+  if (displaySchedule.length === 0) {
     return (
       <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-        No weeks scheduled.
+        No matches found.
       </div>
     );
   }
 
   return (
     <div>
-      <div className="flex flex-col gap-1.5 mb-3">
-        {currentPlayerId !== null && (
-          <div className="flex justify-end">
-            <button
-              onClick={toggleMyGames}
-              className={`tracked text-[10px] font-semibold px-2 py-1 border transition-colors ${
-                myGamesOnly
-                  ? 'text-[var(--color-text-primary)] border-[var(--color-border-secondary)] bg-[var(--color-bg-secondary)]'
-                  : 'text-[var(--color-text-secondary)] border-[var(--color-border-primary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)]'
-              }`}
-            >
-              My games
-            </button>
-          </div>
-        )}
-        {displaySchedule.length > 1 && (
-          <div className="flex justify-end">
-            <button
-              onClick={toggleAll}
-              className="tracked text-[9px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-            >
-              {allOpen ? 'Collapse all' : 'Expand all'}
-            </button>
-          </div>
-        )}
-      </div>
-      {displaySchedule.length === 0 ? (
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-          No matches found.
-        </div>
-      ) : (
-        displaySchedule.map((w) => (
-          <WeekBlock
-            key={w.id}
-            week={w}
-            seasonStartDate={seasonStartDate}
-            currentPlayerId={currentPlayerId}
-            isOpen={openWeeks.has(w.id)}
-            onToggle={() => toggleWeek(w.id)}
-          />
-        ))
-      )}
+      {displaySchedule.map((w) => (
+        <WeekBlock
+          key={w.id}
+          week={w}
+          seasonStartDate={seasonStartDate}
+          currentPlayerId={currentPlayerId}
+          isOpen={openWeeks.has(w.id)}
+          onToggle={() => onToggleWeek(w.id)}
+        />
+      ))}
     </div>
   );
 }
