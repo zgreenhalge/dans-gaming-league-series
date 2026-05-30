@@ -32,6 +32,7 @@ const PLAYOFF_STEPS: VetoField[] = ['shirts_ban', 'shirts_ban2', 'skins_ban1', '
 type MatchRow = {
   id: number;
   final_score: string | null;
+  scheduled_at: string | null;
   shirts_ban: string | null;
   shirts_ban2: string | null;
   skins_ban1: string | null;
@@ -68,7 +69,7 @@ export async function PATCH(
     supabaseAdmin
       .from('matches')
       .select(
-        'id, final_score, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, is_playoff_game, weeks(seasons(is_gauntlet, map_pool))',
+        'id, final_score, scheduled_at, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, is_playoff_game, weeks(seasons(is_gauntlet, map_pool))',
       )
       .eq('id', matchId)
       .maybeSingle(),
@@ -98,6 +99,17 @@ export async function PATCH(
 
   if (isPlayedScore(m.final_score)) {
     return NextResponse.json({ error: 'Match already played' }, { status: 403 });
+  }
+
+  // Non-admins need a scheduled time and must be within 10 minutes of it
+  if (!isAdmin) {
+    if (!m.scheduled_at) {
+      return NextResponse.json({ error: 'Match not yet scheduled' }, { status: 403 });
+    }
+    const windowStart = new Date(m.scheduled_at).getTime() - 10 * 60 * 1000;
+    if (Date.now() < windowStart) {
+      return NextResponse.json({ error: 'Veto window not open yet' }, { status: 403 });
+    }
   }
 
   const body = await req.json().catch(() => null);
@@ -159,7 +171,7 @@ export async function PATCH(
       // Filling a new step: must be the next unfilled one in sequence
       const nextStep = steps.find((s) => currentValues[s] === null);
       if (!nextStep) {
-        return NextResponse.json({ error: 'Veto sequence already complete' }, { status: 400 });
+        return NextResponse.json({ error: 'Pick/ban phase already complete' }, { status: 400 });
       }
       if (field !== nextStep) {
         return NextResponse.json({ error: `Expected next field: ${nextStep}` }, { status: 400 });

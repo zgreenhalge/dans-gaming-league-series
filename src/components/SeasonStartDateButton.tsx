@@ -59,22 +59,25 @@ export default function SeasonStartDateButton({ seasonId, startDate, canEdit }: 
   }
 
   if (!editing) {
+    if (!canEdit && !startDate) return null;
     return (
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-            {startDate ? fmtDate(startDate) : 'Season start not set'}
-          </span>
-          {canEdit && startDate && (
-            <button
-              onClick={clear}
-              className="text-[11px] text-[var(--color-text-secondary)] hover:text-red-500 transition-colors leading-none"
-              title="Clear start date"
-            >
-              ✕
-            </button>
-          )}
-        </div>
+        {startDate && (
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">
+              {fmtDate(startDate)}
+            </span>
+            {canEdit && (
+              <button
+                onClick={clear}
+                className="text-[11px] text-[var(--color-text-secondary)] hover:text-red-500 transition-colors leading-none"
+                title="Clear start date"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
         {canEdit && (
           <button
             onClick={() => {
