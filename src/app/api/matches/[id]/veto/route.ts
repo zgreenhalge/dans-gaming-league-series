@@ -113,15 +113,25 @@ export async function PATCH(
   }
 
   const body = await req.json().catch(() => null);
-  if (!body || typeof body.field !== 'string' || typeof body.value !== 'string') {
+  if (!body || typeof body.field !== 'string' || (typeof body.value !== 'string' && body.value !== null)) {
     return NextResponse.json({ error: 'Missing field or value' }, { status: 400 });
   }
 
   const field = body.field as VetoField;
-  const value: string = body.value;
+  const value: string | null = body.value;
 
   if (!(VALID_FIELDS as readonly string[]).includes(field)) {
     return NextResponse.json({ error: 'Invalid field' }, { status: 400 });
+  }
+
+  // Clearing a field is admin-only
+  if (value === null) {
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Only admins can clear a pick/ban' }, { status: 403 });
+    }
+    const { error } = await supabaseAdmin.from('matches').update({ [field]: null }).eq('id', matchId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
   }
 
   const isGauntlet = season?.is_gauntlet ?? false;
