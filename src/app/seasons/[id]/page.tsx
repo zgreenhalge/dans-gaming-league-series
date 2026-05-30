@@ -154,11 +154,7 @@ function MatchRow({
             <span className="tracked text-[10px] text-[var(--color-text-secondary)]">
               {fmtWindowDate(weekStart)} – {fmtWindowDate(weekEnd)}
             </span>
-          ) : (
-            <span className="tracked text-[9px] font-semibold text-[var(--color-accent-amber-fg)]">
-              Pending
-            </span>
-          )}
+          ) : null}
         </div>
 
         <div className="px-4 py-3">
@@ -320,9 +316,31 @@ function GauntletMatchCard({
   );
 }
 
-function GauntletRoundCard({ round, currentPlayerId }: { round: GauntletRound; currentPlayerId: number | null }) {
+function GauntletRoundCard({
+  round,
+  allRounds,
+  currentPlayerId,
+}: {
+  round: GauntletRound;
+  allRounds: GauntletRound[];
+  currentPlayerId: number | null;
+}) {
   const records = computeGauntletRecords(round.matches);
   const allPlayed = round.matches.length > 0 && round.matches.every((m) => isPlayedScore(m.final_score));
+
+  const maxRoundNumber = Math.max(...allRounds.map((r) => r.round_number));
+  const isFinalRound = round.round_number === maxRoundNumber;
+
+  // Build the set of players who appear in any subsequent round
+  const playerIdsInLaterRounds = new Set<number>();
+  for (const r of allRounds) {
+    if (r.round_number <= round.round_number) continue;
+    for (const m of r.matches) {
+      for (const p of [...m.shirts, ...m.skins]) {
+        playerIdsInLaterRounds.add(p.player_id);
+      }
+    }
+  }
 
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
@@ -343,34 +361,48 @@ function GauntletRoundCard({ round, currentPlayerId }: { round: GauntletRound; c
           </div>
           <div className="flex flex-col gap-1.5">
             {records.map((r) => {
-              const is20 = allPlayed && r.wins === 2;
-              const is02 = allPlayed && r.losses === 2;
+              const advanced = !isFinalRound && allPlayed && playerIdsInLaterRounds.has(r.player_id);
+              const eliminated = !isFinalRound && allPlayed && !playerIdsInLaterRounds.has(r.player_id);
+              const isChampion = isFinalRound && allPlayed && records[0]?.player_id === r.player_id && r.wins > r.losses;
               return (
-                <div key={r.name} className="flex items-center justify-between gap-3">
-                  <span className="font-display text-[13px] font-semibold inline-flex items-center gap-1">
+                <div key={r.player_id} className="flex items-center justify-between gap-3">
+                  <span className="font-display text-[13px] font-semibold inline-flex items-center gap-1" style={{
+                    color: isChampion
+                      ? 'var(--color-accent-amber-strong)'
+                      : advanced
+                        ? 'var(--color-accent-green-fg)'
+                        : eliminated
+                          ? 'var(--color-text-secondary)'
+                          : 'var(--color-text-primary)',
+                  }}>
                     {r.name}
                     {currentPlayerId !== null && r.player_id === currentPlayerId && <YouBadge />}
                   </span>
                   <div className="flex items-center gap-2">
                     <span
                       className={`font-mono text-[12px] tnum font-semibold ${
-                        is20
+                        advanced || isChampion
                           ? 'text-[var(--color-accent-green-fg)]'
-                          : is02
+                          : eliminated
                             ? 'text-[var(--color-text-secondary)]'
                             : 'text-[var(--color-text-primary)]'
                       }`}
                     >
                       {r.wins}-{r.losses}
                     </span>
-                    {is20 && (
+                    {advanced && (
                       <span className="tracked text-[9px] font-semibold px-1.5 py-0.5 border text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border-[var(--color-accent-green-border)]">
-                        Advances
+                        Advanced
                       </span>
                     )}
-                    {is02 && (
+                    {eliminated && (
                       <span className="tracked text-[9px] font-semibold px-1.5 py-0.5 border text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border-[var(--color-border-primary)]">
                         Eliminated
+                      </span>
+                    )}
+                    {isChampion && (
+                      <span className="tracked text-[9px] font-semibold px-1.5 py-0.5 border text-[var(--color-accent-amber-strong)] bg-[var(--color-accent-amber-bg)] border-[var(--color-accent-amber-border)]">
+                        Champion
                       </span>
                     )}
                   </div>
@@ -455,7 +487,7 @@ export default async function SeasonPage({
               No rounds recorded.
             </div>
           ) : (
-            rounds.map((r) => <GauntletRoundCard key={r.round_number} round={r} currentPlayerId={currentPlayerId} />)
+            rounds.map((r) => <GauntletRoundCard key={r.round_number} round={r} allRounds={rounds} currentPlayerId={currentPlayerId} />)
           )}
         </main>
       </div>
