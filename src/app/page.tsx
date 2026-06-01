@@ -249,7 +249,7 @@ function CombinedPastSeasonRow({
   return (
     <Link
       href={`/seasons/${regularSeason.id}`}
-      className="grid grid-cols-[1fr_auto] items-center gap-8 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
+      className="flex flex-col sm:grid sm:grid-cols-[1fr_auto] sm:items-center gap-3 sm:gap-8 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
     >
       <div className="min-w-0">
         <div className="font-display text-[18px] font-semibold leading-tight truncate">
@@ -259,7 +259,7 @@ function CombinedPastSeasonRow({
           {leaderboard.length} players
         </div>
       </div>
-      <div className="flex items-center gap-8">
+      <div className="flex flex-wrap sm:flex-nowrap items-start sm:items-center gap-4 sm:gap-8">
         {regWinner ? (
           <div className="flex flex-col items-end gap-1.5">
             <div className="flex items-center gap-2">
@@ -275,7 +275,7 @@ function CombinedPastSeasonRow({
         ) : (
           <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">No season data</div>
         )}
-        <div className="w-px self-stretch bg-[var(--color-border-tertiary)]" />
+        <div className="hidden sm:block w-px self-stretch bg-[var(--color-border-tertiary)]" />
         {gauntletChampion ? (
           <div className="flex flex-col items-end gap-1.5">
             <div className="flex items-center gap-2">

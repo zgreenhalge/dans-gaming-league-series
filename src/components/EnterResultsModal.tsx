@@ -33,6 +33,15 @@ function floatVal(s: string): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+export interface InitialPlayerStat {
+  player_id: number;
+  kills: number;
+  assists: number;
+  deaths: number;
+  damage: number;
+  adr: number;
+}
+
 interface Props {
   matchId: number;
   players: ResultPlayer[];
@@ -40,6 +49,11 @@ interface Props {
   alreadyPlayed: boolean;
   targetWinRounds: number;
   skinsSide: 'CT' | 'T' | null;
+  initialShirtsScore?: number | null;
+  initialSkinsScore?: number | null;
+  initialScreenshotFrontUrl?: string | null;
+  initialScreenshotBackUrl?: string | null;
+  initialStats?: InitialPlayerStat[];
 }
 
 export default function EnterResultsModal({
@@ -49,6 +63,11 @@ export default function EnterResultsModal({
   alreadyPlayed,
   targetWinRounds,
   skinsSide,
+  initialShirtsScore,
+  initialSkinsScore,
+  initialScreenshotFrontUrl,
+  initialScreenshotBackUrl,
+  initialStats,
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -60,6 +79,11 @@ export default function EnterResultsModal({
   const [drafts, setDrafts] = useState<Record<number, PlayerDraft>>(() =>
     Object.fromEntries(players.map((p) => [p.player_id, emptyDraft()])),
   );
+  const [screenshotFrontUrl, setScreenshotFrontUrl] = useState<string | null>(null);
+  const [screenshotBackUrl, setScreenshotBackUrl] = useState<string | null>(null);
+  const [uploadingFront, setUploadingFront] = useState(false);
+  const [uploadingBack, setUploadingBack] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
@@ -90,6 +114,12 @@ export default function EnterResultsModal({
     return (dmg / roundsPlayed).toFixed(1);
   }
 
+  function computedDamagePlaceholder(d: PlayerDraft): string {
+    const adr = floatVal(d.adr);
+    if (adr === null || roundsPlayed === 0) return '0';
+    return String(Math.round(adr * roundsPlayed));
+  }
+
   function updateDraft(playerId: number, field: keyof PlayerDraft, value: string) {
     setDrafts((prev) => ({
       ...prev,
@@ -97,10 +127,50 @@ export default function EnterResultsModal({
     }));
   }
 
+  async function handleScreenshotUpload(file: File, side: 'front' | 'back') {
+    const setUploading = side === 'front' ? setUploadingFront : setUploadingBack;
+    const setUrl = side === 'front' ? setScreenshotFrontUrl : setScreenshotBackUrl;
+    setUploading(true);
+    setUploadError(null);
+    const form = new FormData();
+    form.append('file', file);
+    form.append('side', side);
+    const res = await fetch(`/api/matches/${matchId}/screenshot`, { method: 'POST', body: form });
+    setUploading(false);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setUploadError(json.error ?? 'Screenshot upload failed.');
+      return;
+    }
+    const { url } = await res.json();
+    setUrl(url);
+  }
+
   function handleOpen() {
-    setShirtsScore('');
-    setSkinsScore('');
-    setDrafts(Object.fromEntries(players.map((p) => [p.player_id, emptyDraft()])));
+    setShirtsScore(initialShirtsScore != null ? String(initialShirtsScore) : '');
+    setSkinsScore(initialSkinsScore != null ? String(initialSkinsScore) : '');
+    const statMap = new Map((initialStats ?? []).map((s) => [s.player_id, s]));
+    setDrafts(
+      Object.fromEntries(
+        players.map((p) => {
+          const s = statMap.get(p.player_id);
+          if (!s) return [p.player_id, emptyDraft()];
+          return [
+            p.player_id,
+            {
+              kills: s.kills > 0 ? String(s.kills) : '',
+              assists: s.assists > 0 ? String(s.assists) : '',
+              deaths: s.deaths > 0 ? String(s.deaths) : '',
+              damage: s.damage > 0 ? String(s.damage) : '',
+              adr: s.adr > 0 ? s.adr.toFixed(1) : '',
+            },
+          ];
+        }),
+      ),
+    );
+    setScreenshotFrontUrl(initialScreenshotFrontUrl ?? null);
+    setScreenshotBackUrl(initialScreenshotBackUrl ?? null);
+    setUploadError(null);
     setError(null);
     setOpen(true);
   }
@@ -124,16 +194,28 @@ export default function EnterResultsModal({
       setError(`At least one team must reach ${targetWinRounds} rounds to win.`);
       return;
     }
+    if (!screenshotFrontUrl) {
+      setError('Front scoreboard screenshot is required.');
+      return;
+    }
 
+    const totalRounds = sInt + skInt;
     const player_stats = players.map((p) => {
       const d = drafts[p.player_id];
       const adrVal = floatVal(d.adr);
+      const dmgEntered = intVal(d.damage);
+      const damage =
+        dmgEntered > 0
+          ? dmgEntered
+          : adrVal != null && totalRounds > 0
+            ? Math.round(adrVal * totalRounds)
+            : 0;
       return {
         player_id: p.player_id,
         kills: intVal(d.kills),
         assists: intVal(d.assists),
         deaths: intVal(d.deaths),
-        damage: intVal(d.damage),
+        damage,
         ...(adrVal != null ? { adr: adrVal } : {}),
       };
     });
@@ -159,7 +241,7 @@ export default function EnterResultsModal({
       onClick={handleOpen}
       className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
     >
-      Edit Results
+      Edit
     </button>
   ) : (
     <button
@@ -205,12 +287,13 @@ export default function EnterResultsModal({
             {fPlayers.map((p) => {
               const d = drafts[p.player_id];
               const adrPlaceholder = computedAdrPlaceholder(d);
+              const damagePlaceholder = computedDamagePlaceholder(d);
               return (
                 <tr key={p.player_id} className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
                   <td className="pl-3 pr-2 py-1.5 font-display font-semibold text-[var(--color-text-primary)] whitespace-nowrap">
                     {p.player_name}
                   </td>
-                  {(['kills', 'assists', 'deaths', 'damage'] as const).map((field) => (
+                  {(['kills', 'assists', 'deaths'] as const).map((field) => (
                     <td key={field} className="px-1 py-1.5 text-center">
                       <input
                         type="number"
@@ -222,6 +305,16 @@ export default function EnterResultsModal({
                       />
                     </td>
                   ))}
+                  <td className="px-1 py-1.5 text-center">
+                    <input
+                      type="number"
+                      min={0}
+                      value={d.damage}
+                      onChange={(e) => updateDraft(p.player_id, 'damage', e.target.value)}
+                      placeholder={damagePlaceholder}
+                      className="w-12 px-1 py-1 font-mono text-[12px] text-center border border-[var(--color-border-tertiary)] border-dashed bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-text-secondary)] focus:border-solid"
+                    />
+                  </td>
                   <td className="px-1 py-1.5 text-center">
                     <input
                       type="number"
@@ -255,7 +348,7 @@ export default function EnterResultsModal({
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border-primary)]">
                 <h2 className="font-display font-bold text-[16px] text-[var(--color-text-primary)]">
-                  {alreadyPlayed ? 'Edit Results' : 'Enter Results'}
+                  {alreadyPlayed ? 'Edit' : 'Enter Results'}
                 </h2>
                 <button
                   onClick={handleClose}
@@ -298,6 +391,58 @@ export default function EnterResultsModal({
                   </div>
                 </div>
 
+                {/* Screenshot uploads */}
+                <div>
+                  <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-2">
+                    Scoreboard Screenshots
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {(['front', 'back'] as const).map((side) => {
+                      const uploading = side === 'front' ? uploadingFront : uploadingBack;
+                      const url = side === 'front' ? screenshotFrontUrl : screenshotBackUrl;
+                      const label = side === 'front' ? 'Front *' : 'Back';
+                      return (
+                        <label
+                          key={side}
+                          className={`flex items-center gap-3 px-3 py-2.5 border cursor-pointer transition-colors ${
+                            url
+                              ? 'border-[var(--color-accent-green-border)] bg-[var(--color-accent-green-bg)]'
+                              : 'border-[var(--color-border-primary)] hover:border-[var(--color-border-secondary)]'
+                          }`}
+                        >
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="sr-only"
+                            disabled={uploading || isPending}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) handleScreenshotUpload(f, side);
+                            }}
+                          />
+                          <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] w-10 shrink-0">
+                            {label}
+                          </span>
+                          <span className="text-[12px] truncate flex-1">
+                            {uploading ? (
+                              <span className="text-[var(--color-text-secondary)]">Uploading…</span>
+                            ) : url ? (
+                              <span className="text-[var(--color-accent-green-fg)] flex items-center gap-1.5">
+                                ✓ <span className="font-mono truncate">{url.split('/').pop()}</span>
+                              </span>
+                            ) : (
+                              <span className="text-[var(--color-text-secondary)]">Choose image…</span>
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {uploadError && (
+                    <p className="mt-1.5 text-[11px] text-[var(--color-accent-red-fg)]">{uploadError}</p>
+                  )}
+                </div>
+
                 {factionTable('SHIRTS', shirtsPlayers, shirtsFactionCls, shirtsSideLabel)}
                 {factionTable('SKINS', skinsPlayers, skinsFactionCls, skinsSideLabel)}
 
@@ -307,7 +452,7 @@ export default function EnterResultsModal({
 
                 <button
                   onClick={handleSubmit}
-                  disabled={isPending}
+                  disabled={isPending || uploadingFront || uploadingBack}
                   className="w-full py-2 tracked text-[11px] font-semibold border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80 transition-opacity"
                 >
                   {isPending ? 'Saving…' : alreadyPlayed ? 'Save Changes' : 'Submit Results'}

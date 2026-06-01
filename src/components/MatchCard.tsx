@@ -60,10 +60,10 @@ function TeamStatBlock({
       {/* header */}
       <div className="flex items-center pl-2 pb-1">
         <span className="flex-1" />
-        <span className={`${hdrCls} w-9`}>K</span>
-        <span className={`${hdrCls} w-9`}>A</span>
-        <span className={`${hdrCls} w-9`}>D</span>
-        <span className={`${hdrCls} w-14 pr-2`}>ADR</span>
+        <span className={`${hdrCls} w-7 sm:w-9`}>K</span>
+        <span className={`${hdrCls} w-7 sm:w-9 hidden min-[480px]:block`}>A</span>
+        <span className={`${hdrCls} w-7 sm:w-9`}>D</span>
+        <span className={`${hdrCls} w-12 sm:w-14 pr-2`}>ADR</span>
       </div>
       {/* rows */}
       <div className="divide-y divide-[var(--color-border-tertiary)]">
@@ -73,14 +73,14 @@ function TeamStatBlock({
         const numSz = highlight ? 'text-[12px] font-semibold' : 'text-[11px]';
         return (
           <div key={p.player_id} className={`flex items-center py-0.5 ${highlight ? 'current-player-row' : ''}`}>
-            <span className={`font-display flex-1 min-w-0 truncate pl-2 pr-1 ${highlight ? 'text-[15px] lg:text-[16px] font-semibold' : 'text-[13px] font-semibold'}`}>
-              {p.player_name}
+            <span className={`font-display flex items-center flex-1 min-w-0 pl-2 pr-1 ${highlight ? 'text-[15px] lg:text-[16px] font-semibold' : 'text-[13px] font-semibold'}`}>
+              <span className="truncate">{p.player_name}</span>
               {isMe && <YouBadge />}
             </span>
-            <span className={`${statCls} ${numSz} w-9 text-[var(--color-text-primary)]`}>{p.kills}</span>
-            <span className={`${statCls} ${numSz} w-9 text-[var(--color-text-primary)]`}>{p.assists}</span>
-            <span className={`${statCls} ${numSz} w-9 text-[var(--color-text-primary)]`}>{p.deaths}</span>
-            <span className={`${statCls} ${numSz} w-14 pr-2 text-[var(--color-text-primary)]`}>{p.adr}</span>
+            <span className={`${statCls} ${numSz} w-7 sm:w-9 text-[var(--color-text-primary)]`}>{p.kills}</span>
+            <span className={`${statCls} ${numSz} w-7 sm:w-9 text-[var(--color-text-primary)] hidden min-[480px]:block`}>{p.assists}</span>
+            <span className={`${statCls} ${numSz} w-7 sm:w-9 text-[var(--color-text-primary)]`}>{p.deaths}</span>
+            <span className={`${statCls} ${numSz} w-12 sm:w-14 pr-2 text-[var(--color-text-primary)]`}>{p.adr}</span>
           </div>
         );
       })}
