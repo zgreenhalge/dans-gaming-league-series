@@ -148,33 +148,33 @@ export default function MatchHeaderSection({
             <button
               suppressHydrationWarning
               onClick={startEditing}
-              className="font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)] hover:underline transition-colors"
+              className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)] hover:underline transition-colors"
             >
               {fmtScheduled(scheduledAt)}
             </button>
-            <div suppressHydrationWarning className="tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
+            <div suppressHydrationWarning className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
               {countdown}
             </div>
           </div>
         ) : (
           <div>
-            <div suppressHydrationWarning className="font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)]">
+            <div suppressHydrationWarning className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)]">
               {fmtScheduled(scheduledAt)}
             </div>
-            <div suppressHydrationWarning className="tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
+            <div suppressHydrationWarning className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
               {countdown}
             </div>
           </div>
         )
       ) : windowLabel ? (
-        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">
+        <span className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)]">
           {windowLabel}
         </span>
       ) : null}
       {canEdit && !scheduledAt && (
         <button
           onClick={startEditing}
-          className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
+          className="map-text-scrim tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
         >
           Set time
         </button>
@@ -224,7 +224,7 @@ export default function MatchHeaderSection({
 
   const rightContent = (
     <div className="text-right">
-      <div className="font-display text-[36px] font-semibold leading-tight map-head">
+      <div className="map-text-scrim font-display text-[36px] font-semibold leading-tight">
         {map ? toSentenceCase(map) : 'TBD'}
       </div>
     </div>
