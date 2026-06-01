@@ -35,6 +35,8 @@ export interface Match {
   is_interpolated: boolean;
   notes: string | null;
   scheduled_at: string | null;
+  screenshot_url_front: string | null;
+  screenshot_url_back: string | null;
 }
 
 export interface Player {

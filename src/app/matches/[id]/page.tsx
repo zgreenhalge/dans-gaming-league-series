@@ -9,7 +9,8 @@ import { TopbarShell } from '@/components/TopbarShell';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
-import EnterResultsModal from '@/components/EnterResultsModal';
+import EnterResultsModal, { type InitialPlayerStat } from '@/components/EnterResultsModal';
+import ScreenshotViewer from '@/components/ScreenshotViewer';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 import { YouBadge } from '@/components/YouBadge';
@@ -398,7 +399,7 @@ export default async function MatchPage({
         ) : (
           <>
             <div className="mt-10 flex items-center justify-between mb-2">
-              <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Scoreboard</span>
+              <span className="tracked text-[13px] font-semibold text-[var(--color-text-secondary)]">Scoreboard</span>
               {canEnterResults && (
                 <EnterResultsModal
                   matchId={match.id}
@@ -411,6 +412,18 @@ export default async function MatchPage({
                   alreadyPlayed={played}
                   targetWinRounds={season.target_win_rounds}
                   skinsSide={match.skins_starting_side}
+                  initialShirtsScore={score?.shirts ?? null}
+                  initialSkinsScore={score?.skins ?? null}
+                  initialScreenshotFrontUrl={match.screenshot_url_front}
+                  initialScreenshotBackUrl={match.screenshot_url_back}
+                  initialStats={played ? stats.map((s): InitialPlayerStat => ({
+                    player_id: s.player_id,
+                    kills: s.kills,
+                    assists: s.assists,
+                    deaths: s.deaths,
+                    damage: s.damage,
+                    adr: s.adr,
+                  })) : undefined}
                 />
               )}
             </div>
@@ -443,6 +456,13 @@ export default async function MatchPage({
                 currentPlayerId={currentPlayerId}
               />
             </div>
+
+            {match.screenshot_url_front && match.screenshot_url_back && (
+              <ScreenshotViewer
+                frontUrl={match.screenshot_url_front}
+                backUrl={match.screenshot_url_back}
+              />
+            )}
           </>
         )}
       </main>
