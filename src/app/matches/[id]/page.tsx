@@ -9,6 +9,7 @@ import { TopbarShell } from '@/components/TopbarShell';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
+import EnterResultsModal from '@/components/EnterResultsModal';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 import { YouBadge } from '@/components/YouBadge';
@@ -259,13 +260,21 @@ export default async function MatchPage({
     !!match.scheduled_at &&
     Date.now() >= new Date(match.scheduled_at).getTime() - 10 * 60 * 1000;
 
+  // Veto complete: all required pick/ban fields are filled
+  const isGauntletOrPlayoff = season.is_gauntlet || match.is_playoff_game;
+  const vetoComplete = isGauntletOrPlayoff
+    ? !!(match.shirts_ban && match.shirts_ban2 && match.skins_ban1 && match.skins_ban2)
+    : !!(match.shirts_ban && match.skins_ban1 && match.skins_ban2 && match.shirts_pick && match.skins_starting_side);
+
   // Determine edit/veto permissions: admins or players in the match
   let canEdit = false;
   let canVeto = false;
+  let canEnterResults = false;
   let playerFaction: 'SHIRTS' | 'SKINS' | null = null;
   let gauntletPlayerIndex: 0 | 1 | null = null;
   let vetoIsAdmin = false;
-  if (!played && currentPlayerId !== null) {
+  let isCurrentUserAdmin = false;
+  if (currentPlayerId !== null) {
     const myStatRow = stats.find((s) => s.player_id === currentPlayerId);
     const isInMatch = !!myStatRow;
     const { data: playerRow } = await supabase
@@ -274,8 +283,9 @@ export default async function MatchPage({
       .eq('id', currentPlayerId)
       .maybeSingle();
     const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
+    isCurrentUserAdmin = isAdmin;
     const authorized = isInMatch || isAdmin;
-    if (authorized) {
+    if (authorized && !played) {
       // Non-admins are blocked from veto until the window opens
       canVeto = isAdmin || vetoWindowOpen;
       vetoIsAdmin = isAdmin;
@@ -292,6 +302,10 @@ export default async function MatchPage({
         }
       }
     }
+    // Can enter results: veto complete + (in match or admin). Admins can also edit after played.
+    if (authorized && vetoComplete && (!played || isAdmin)) {
+      canEnterResults = true;
+    }
   }
 
   const window = matchWeekWindow(season.start_date, week.week_number);
@@ -301,7 +315,7 @@ export default async function MatchPage({
       <Topbar seasonId={season.id} seasonName={season.name} weekNumber={week.week_number} matchNumber={match.match_number} isGauntlet={season.is_gauntlet} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         {!played && map && (
-          <div className="mt-4 px-4 py-3 border-2 border-[var(--color-accent-red-fg)] bg-[color-mix(in_srgb,var(--color-accent-red-fg)_8%,var(--color-bg-primary))]">
+          <div className="mt-4 mb-3 px-4 py-3 border-2 border-[var(--color-accent-red-fg)] bg-[color-mix(in_srgb,var(--color-accent-red-fg)_8%,var(--color-bg-primary))]">
             <p className="tracked text-[11px] font-bold text-[var(--color-accent-red-fg)] text-center">
               REMEMBER: SCREENSHOT BOTH SIDES OF THE SCOREBOARD AT THE END OF THE GAME
             </p>
@@ -358,8 +372,8 @@ export default async function MatchPage({
 
           {(played || vetoIsAdmin || vetoWindowOpen) && (
             <>
-              <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-3">
-                Map pick/ban
+              <div className="mb-3">
+                <span className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban</span>
               </div>
               <div className="pb-6">
                 <VetoSequence
@@ -374,6 +388,7 @@ export default async function MatchPage({
               </div>
             </>
           )}
+
         </div>
 
         {stats.length === 0 ? (
@@ -382,7 +397,24 @@ export default async function MatchPage({
           </div>
         ) : (
           <>
-            <div className="mt-10">
+            <div className="mt-10 flex items-center justify-between mb-2">
+              <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Scoreboard</span>
+              {canEnterResults && (
+                <EnterResultsModal
+                  matchId={match.id}
+                  players={stats.map((s) => ({
+                    player_id: s.player_id,
+                    player_name: s.player_name,
+                    faction: s.faction as 'SHIRTS' | 'SKINS',
+                  }))}
+                  isAdmin={isCurrentUserAdmin}
+                  alreadyPlayed={played}
+                  targetWinRounds={season.target_win_rounds}
+                  skinsSide={match.skins_starting_side}
+                />
+              )}
+            </div>
+            <div>
               <TeamHeader
                 name="Shirts"
                 faction={shirtsF}
