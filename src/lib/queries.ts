@@ -455,7 +455,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         skins_stats: roster.skins_stats ?? [],
       };
     })
-    .filter((r): r is PlayerHistoryRow => r !== null)
+    .filter((r): r is PlayerHistoryRow => r !== null && isPlayedScore(r.final_score))
     .sort(
       (a, b) =>
         b.season_id - a.season_id ||
