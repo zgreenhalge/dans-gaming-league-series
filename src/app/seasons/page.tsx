@@ -234,7 +234,7 @@ export default async function SeasonsPage() {
             <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-3">Past</div>
             <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
               {past.map((s) => {
-                const num = extractNum(s.name);
+                const num = extractSeasonNumber(s.name);
                 const linkedGauntlet = num != null ? gauntletByNum.get(num) : undefined;
                 const summary = linkedGauntlet ? gauntletSummaries.get(linkedGauntlet.id) : undefined;
                 return (
