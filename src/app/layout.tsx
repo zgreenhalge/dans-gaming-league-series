@@ -3,6 +3,9 @@ import { Bai_Jamjuree, Geist, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import AuthProvider from "@/components/AuthProvider";
+import { SideNav } from "@/components/SideNav";
+import { NavProvider } from "@/components/NavContext";
+import { getSeasons } from "@/lib/queries";
 import Script from "next/script";
 import "./globals.css";
 
@@ -37,11 +40,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const seasons = await getSeasons().catch(() => []);
+
   return (
     <html
       lang="en"
@@ -55,7 +60,14 @@ export default function RootLayout({
           strategy="beforeInteractive"
         />
         <AuthProvider>
-          {children}
+          <NavProvider>
+            <div className="flex min-h-screen" style={{ paddingTop: 'var(--topbar-h)' }}>
+              <SideNav seasons={seasons.map((s) => ({ id: s.id, name: s.name }))} />
+              <div className="flex-1 min-w-0">
+                {children}
+              </div>
+            </div>
+          </NavProvider>
           <Analytics />
           <SpeedInsights />
         </AuthProvider>

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ThemeToggle } from './ThemeToggle';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import PlayerAvatar from './PlayerAvatar';
+import { useNav } from './NavContext';
 
 const DEV_USERS: { label: string; playerId: number | null; providerId: string | null }[] = [
   { label: 'Anonymous', playerId: null, providerId: null },
@@ -72,6 +73,22 @@ export interface Crumb {
   href?: string;
 }
 
+function NavToggleButton() {
+  const { toggleDesktop, mobileOpen, setMobileOpen } = useNav();
+  return (
+    <button
+      type="button"
+      onClick={() => { toggleDesktop(); setMobileOpen(!mobileOpen); }}
+      aria-label="Toggle navigation"
+      className="flex items-center justify-center w-8 h-8 shrink-0 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+    >
+      <svg width="16" height="13" viewBox="0 0 16 13" fill="none" aria-hidden>
+        <path d="M1 1h14M1 6.5h14M1 12h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    </button>
+  );
+}
+
 export function TopbarShell({
   crumbs,
   nav,
@@ -83,9 +100,11 @@ export function TopbarShell({
   const user = session?.user;
 
   return (
-    <div className="sticky top-0 z-20 bg-[var(--color-bg-primary)] border-b-2 border-[var(--color-site-accent)]">
-      <div className="max-w-[1080px] mx-auto px-6 py-3 flex items-center justify-between gap-6">
+    <div className="fixed top-0 left-0 right-0 z-20 bg-[var(--color-bg-primary)] border-b-2 border-[var(--color-site-accent)]" style={{ height: 'var(--topbar-h)' }}>
+      <div className="h-full px-3 flex items-center justify-between gap-3">
 
+        <div className="flex items-center gap-1 min-w-0 overflow-hidden">
+          <NavToggleButton />
         <nav className="flex items-center min-w-0 overflow-hidden" aria-label="Breadcrumb">
           {crumbs.map((crumb, i) => {
             const isFirst = i === 0;
@@ -126,6 +145,7 @@ export function TopbarShell({
             );
           })}
         </nav>
+        </div>
 
         <div className="flex items-center gap-4 shrink-0">
           {nav}
