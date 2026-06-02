@@ -108,7 +108,7 @@ async function getPerPlayerSeasonStats(): Promise<Map<string, PerPlayerStats>> {
     { data: weeks, error: wErr },
   ] = await Promise.all([
     supabase.from('player_match_stats').select('player_id, assists, rounds_won, match_id'),
-    supabase.from('matches').select('id, week_id, is_playoff_game'),
+    supabase.from('matches').select('id, week_id, is_playoff_game, final_score'),
     supabase.from('weeks').select('id, season_id'),
   ]);
   if (sErr) throw sErr;
@@ -124,8 +124,9 @@ async function getPerPlayerSeasonStats(): Promise<Map<string, PerPlayerStats>> {
     id: number;
     week_id: number;
     is_playoff_game: boolean;
+    final_score: string | null;
   }[]) {
-    if (m.is_playoff_game) continue;
+    if (m.is_playoff_game || !isPlayedScore(m.final_score)) continue;
     const sid = weekToSeason.get(m.week_id);
     if (sid != null) seasonOfMatch.set(m.id, sid);
   }
