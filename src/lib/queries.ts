@@ -664,7 +664,7 @@ export async function getGauntletStats(): Promise<{
 
   const { data: matches, error: mErr } = await supabase
     .from('matches')
-    .select('id, week_id')
+    .select('id, week_id, final_score')
     .in(
       'week_id',
       weekRows.map((w) => w.id),
@@ -673,7 +673,8 @@ export async function getGauntletStats(): Promise<{
   if (mErr) throw mErr;
   if (!matches || matches.length === 0) return { career: [], bySeason: {} };
 
-  const matchRows = matches as { id: number; week_id: number }[];
+  const matchRows = (matches as { id: number; week_id: number; final_score: string | null }[])
+    .filter((m) => isPlayedScore(m.final_score));
   const matchToSeason = new Map<number, number>();
   for (const m of matchRows) {
     const sid = weekToSeason.get(m.week_id);
@@ -813,13 +814,15 @@ export async function getGauntletSeasonLeaderboard(
 
   const { data: matches, error: mErr } = await supabase
     .from('matches')
-    .select('id')
+    .select('id, final_score')
     .in('week_id', weekIds)
     .eq('is_playoff_game', true);
   if (mErr) throw mErr;
   if (!matches || matches.length === 0) return [];
 
-  const matchIds = (matches as { id: number }[]).map((m) => m.id);
+  const matchIds = (matches as { id: number; final_score: string | null }[])
+    .filter((m) => isPlayedScore(m.final_score))
+    .map((m) => m.id);
 
   const [{ data: stats, error: sErr }, players] = await Promise.all([
     supabase
@@ -1045,6 +1048,7 @@ export async function getAllGauntletSummaries(): Promise<Map<number, GauntletSum
     const playerIds = new Set<number>();
     for (const w of seasonWeeks) {
       for (const m of matchesByWeek.get(w.id) ?? []) {
+        if (!isPlayedScore(m.final_score)) continue;
         for (const s of statsByMatch.get(m.id) ?? []) {
           playerIds.add(s.player_id);
         }
@@ -1247,6 +1251,7 @@ export async function getMapIndex(): Promise<MapIndexEntry[]> {
   const matchMapKey = new Map<number, string>();
 
   for (const m of matches) {
+    if (!isPlayedScore(m.final_score)) continue;
     const season = weekToSeason.get(m.week_id);
     const picks = new Set([m.shirts_pick, m.picked_map].filter((v): v is string => !!v).map((v) => v.trim()));
     for (const played of picks) {
