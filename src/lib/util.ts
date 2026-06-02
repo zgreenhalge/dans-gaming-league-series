@@ -22,10 +22,25 @@ export function fmtWindowDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
+export function extractSeasonNumber(name: string): number | null {
+  const m = name.match(/Season\s+(\d+)/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 /** Returns the canonical display title for a season, e.g. "Season 1". */
 export function seasonTitle(name: string): string {
-  const m = name.match(/Season\s+(\d+)/i);
-  return m ? `Season ${m[1]}` : name;
+  const num = extractSeasonNumber(name);
+  return num != null ? `Season ${num}` : name;
+}
+
+/** Shared tab button class — matches the bordered-underline tab pattern used throughout the app. */
+export function tabCls(active: boolean): string {
+  return [
+    'px-4 py-2 tracked text-[11px] font-semibold border-b-2 transition-colors',
+    active
+      ? 'border-[var(--color-text-primary)] text-[var(--color-text-primary)]'
+      : 'border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]',
+  ].join(' ');
 }
 
 /** Parses "13-9" / "13 – 9" into { shirts, skins }. Returns null if unparseable. */

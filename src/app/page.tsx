@@ -4,7 +4,7 @@ import type { GauntletSummary } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { TopbarShell } from '@/components/TopbarShell';
 import PlayerAvatar from '@/components/PlayerAvatar';
-import { seasonTitle } from '@/lib/util';
+import { seasonTitle, extractSeasonNumber } from '@/lib/util';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,19 +18,7 @@ function podiumSort(rows: LeaderboardRowWithId[]): LeaderboardRowWithId[] {
 
 
 function HomeTopbar() {
-  return (
-    <TopbarShell
-      crumbs={[{ label: 'DGLS' }]}
-      nav={
-        <Link
-          href="/statistics"
-          className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-        >
-          Statistics
-        </Link>
-      }
-    />
-  );
+  return <TopbarShell crumbs={[{ label: 'DGLS' }]} />;
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -312,8 +300,7 @@ function Stat({ v, l }: { v: string; l: string }) {
 }
 
 function seasonNumber(s: Season): number {
-  const m = s.name.match(/Season\s+(\d+)/i);
-  return m ? parseInt(m[1], 10) : 0;
+  return extractSeasonNumber(s.name) ?? 0;
 }
 
 export default async function Home() {
