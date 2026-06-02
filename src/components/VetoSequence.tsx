@@ -1,8 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { mapImageFor, toSentenceCase } from '@/lib/maps';
+import { mapImageFor, mapSlug, toSentenceCase } from '@/lib/maps';
 import type { Match } from '@/lib/types';
 
 const REGULAR_STEPS = [
@@ -231,7 +232,15 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
                       )}
                     </div>
                     <div className="val font-display text-[14px] font-semibold leading-tight">
-                      {val ? toSentenceCase(val) : '—'}
+                      {val && !canVeto && s.type !== 'side' ? (
+                        <Link
+                          href={`/maps/${mapSlug(val)}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="hover:underline"
+                        >
+                          {toSentenceCase(val)}
+                        </Link>
+                      ) : val ? toSentenceCase(val) : '—'}
                     </div>
                   </div>
                 </div>
@@ -246,7 +255,11 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
               <div className={`flex-1 min-w-[88px] px-2.5 py-2 border ${autoPickedMap ? pickCls : pendingCls}`}>
                 <div className="lbl tracked text-[9px] font-semibold mb-0.5">Map pick</div>
                 <div className="val font-display text-[14px] font-semibold leading-tight">
-                  {autoPickedMap ? toSentenceCase(autoPickedMap) : '—'}
+                  {autoPickedMap && !canVeto ? (
+                    <Link href={`/maps/${mapSlug(autoPickedMap)}`} className="hover:underline">
+                      {toSentenceCase(autoPickedMap)}
+                    </Link>
+                  ) : autoPickedMap ? toSentenceCase(autoPickedMap) : '—'}
                 </div>
               </div>
             </span>
