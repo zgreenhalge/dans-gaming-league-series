@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import LeaderboardTable from './LeaderboardTable';
+import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import type { LeaderboardRowWithId } from '@/lib/types';
 
 type Filter = 'career' | number;
@@ -61,21 +62,11 @@ export default function CareerStatsView({
   gauntletCareerRows: LeaderboardRowWithId[];
   gauntletBySeason: Record<number, LeaderboardRowWithId[]>;
 }) {
-  const [includeRegular, setIncludeRegular] = useState(true);
-  const [includeGauntlet, setIncludeGauntlet] = useState(true);
+  const { includeRegular, includeGauntlet, toggleRegular: baseToggleRegular, toggleGauntlet: baseToggleGauntlet } = useSeasonFilter();
   const [filter, setFilter] = useState<Filter>('career');
 
-  function toggleRegular() {
-    if (includeRegular && !includeGauntlet) return; // keep at least one
-    setIncludeRegular((v) => !v);
-    setFilter('career');
-  }
-
-  function toggleGauntlet() {
-    if (includeGauntlet && !includeRegular) return; // keep at least one
-    setIncludeGauntlet((v) => !v);
-    setFilter('career');
-  }
+  function toggleRegular() { baseToggleRegular(); setFilter('career'); }
+  function toggleGauntlet() { baseToggleGauntlet(); setFilter('career'); }
 
   const activeSeasons = useMemo(() => {
     const list: { id: number; name: string }[] = [];
@@ -100,43 +91,7 @@ export default function CareerStatsView({
   return (
     <>
       <div className="flex items-center justify-end gap-5 mb-3">
-        <div className="flex items-center gap-5">
-          {[
-            { label: 'Regular Season', checked: includeRegular, toggle: toggleRegular },
-            { label: 'Gauntlets', checked: includeGauntlet, toggle: toggleGauntlet },
-          ].map(({ label, checked, toggle }) => (
-            <label
-              key={label}
-              className="flex items-center gap-2 cursor-pointer select-none group"
-            >
-              <span
-                role="checkbox"
-                aria-checked={checked}
-                tabIndex={0}
-                onClick={toggle}
-                onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } }}
-                className={[
-                  'w-4 h-4 border flex-shrink-0 flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)]',
-                  checked
-                    ? 'border-[var(--color-text-primary)] bg-[var(--color-text-primary)]'
-                    : 'border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]',
-                ].join(' ')}
-              >
-                {checked && (
-                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                    <path d="M1 4L3.5 6.5L9 1" stroke="var(--color-bg-primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </span>
-              <span
-                onClick={toggle}
-                className="tracked text-[11px] font-semibold text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)] transition-colors"
-              >
-                {label}
-              </span>
-            </label>
-          ))}
-        </div>
+        <SeasonFilter filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }} />
         <select
           value={String(filter)}
           onChange={(e) => {

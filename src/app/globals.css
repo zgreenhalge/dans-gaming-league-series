@@ -40,6 +40,8 @@
   /* Site-wide brand accent: T-side orange in the warm light theme, CT cyan in the dark HUD */
   --color-site-accent: var(--color-t);
 
+  --topbar-h: 64px;
+
   /* Theme-aware overlays for map images and dim backgrounds — tuned for image vibrancy */
   /* Light: slightly transparent warm overlays, image filter increases color/contrast */
   --overlay-strong: rgba(255,244,227,0.54);
