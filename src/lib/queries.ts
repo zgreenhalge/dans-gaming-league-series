@@ -108,7 +108,7 @@ async function getPerPlayerSeasonStats(): Promise<Map<string, PerPlayerStats>> {
     { data: weeks, error: wErr },
   ] = await Promise.all([
     supabase.from('player_match_stats').select('player_id, assists, rounds_won, match_id'),
-    supabase.from('matches').select('id, week_id, is_playoff_game'),
+    supabase.from('matches').select('id, week_id, is_playoff_game, final_score'),
     supabase.from('weeks').select('id, season_id'),
   ]);
   if (sErr) throw sErr;
@@ -124,8 +124,9 @@ async function getPerPlayerSeasonStats(): Promise<Map<string, PerPlayerStats>> {
     id: number;
     week_id: number;
     is_playoff_game: boolean;
+    final_score: string | null;
   }[]) {
-    if (m.is_playoff_game) continue;
+    if (m.is_playoff_game || !isPlayedScore(m.final_score)) continue;
     const sid = weekToSeason.get(m.week_id);
     if (sid != null) seasonOfMatch.set(m.id, sid);
   }
@@ -454,7 +455,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         skins_stats: roster.skins_stats ?? [],
       };
     })
-    .filter((r): r is PlayerHistoryRow => r !== null)
+    .filter((r): r is PlayerHistoryRow => r !== null && isPlayedScore(r.final_score))
     .sort(
       (a, b) =>
         b.season_id - a.season_id ||
@@ -663,7 +664,7 @@ export async function getGauntletStats(): Promise<{
 
   const { data: matches, error: mErr } = await supabase
     .from('matches')
-    .select('id, week_id')
+    .select('id, week_id, final_score')
     .in(
       'week_id',
       weekRows.map((w) => w.id),
@@ -672,7 +673,8 @@ export async function getGauntletStats(): Promise<{
   if (mErr) throw mErr;
   if (!matches || matches.length === 0) return { career: [], bySeason: {} };
 
-  const matchRows = matches as { id: number; week_id: number }[];
+  const matchRows = (matches as { id: number; week_id: number; final_score: string | null }[])
+    .filter((m) => isPlayedScore(m.final_score));
   const matchToSeason = new Map<number, number>();
   for (const m of matchRows) {
     const sid = weekToSeason.get(m.week_id);
@@ -812,13 +814,15 @@ export async function getGauntletSeasonLeaderboard(
 
   const { data: matches, error: mErr } = await supabase
     .from('matches')
-    .select('id')
+    .select('id, final_score')
     .in('week_id', weekIds)
     .eq('is_playoff_game', true);
   if (mErr) throw mErr;
   if (!matches || matches.length === 0) return [];
 
-  const matchIds = (matches as { id: number }[]).map((m) => m.id);
+  const matchIds = (matches as { id: number; final_score: string | null }[])
+    .filter((m) => isPlayedScore(m.final_score))
+    .map((m) => m.id);
 
   const [{ data: stats, error: sErr }, players] = await Promise.all([
     supabase
@@ -1044,6 +1048,7 @@ export async function getAllGauntletSummaries(): Promise<Map<number, GauntletSum
     const playerIds = new Set<number>();
     for (const w of seasonWeeks) {
       for (const m of matchesByWeek.get(w.id) ?? []) {
+        if (!isPlayedScore(m.final_score)) continue;
         for (const s of statsByMatch.get(m.id) ?? []) {
           playerIds.add(s.player_id);
         }
@@ -1246,6 +1251,7 @@ export async function getMapIndex(): Promise<MapIndexEntry[]> {
   const matchMapKey = new Map<number, string>();
 
   for (const m of matches) {
+    if (!isPlayedScore(m.final_score)) continue;
     const season = weekToSeason.get(m.week_id);
     const picks = new Set([m.shirts_pick, m.picked_map].filter((v): v is string => !!v).map((v) => v.trim()));
     for (const played of picks) {
@@ -1286,7 +1292,7 @@ export async function getMapIndex(): Promise<MapIndexEntry[]> {
   const noPicksBySeason = new Map<string, Map<number, number>>();
   for (const m of matches) {
     const season = weekToSeason.get(m.week_id);
-    if (!season || season.is_gauntlet || m.is_playoff_game) continue;
+    if (!season || season.is_gauntlet || m.is_playoff_game || !isPlayedScore(m.final_score)) continue;
     if (!m.shirts_pick && !m.picked_map) continue;
     const vetoFields = [m.shirts_pick, m.picked_map, m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2];
     const involvedKeys = new Set(vetoFields.filter((v): v is string => !!v).map((v) => v.trim().toLowerCase()));
@@ -1412,7 +1418,7 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
 
   const playedMatches = matches.filter((m) => {
     const played = (m.shirts_pick ?? m.picked_map ?? '').trim().toLowerCase();
-    return played === nameLower;
+    return played === nameLower && isPlayedScore(m.final_score);
   });
 
   let bans = 0;
@@ -1458,7 +1464,7 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
   );
   const involvedMatchIds = new Set<number>();
   for (const m of matches) {
-    if (!poolWeekIds.has(m.week_id) || m.is_playoff_game || (!m.shirts_pick && !m.picked_map)) continue;
+    if (!poolWeekIds.has(m.week_id) || m.is_playoff_game || !isPlayedScore(m.final_score) || (!m.shirts_pick && !m.picked_map)) continue;
     const fields = [m.shirts_pick, m.picked_map, m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2];
     if (fields.some((v) => v && v.trim().toLowerCase() === nameLower)) {
       involvedMatchIds.add(m.id);
@@ -1468,6 +1474,7 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
     (m) =>
       poolWeekIds.has(m.week_id) &&
       !m.is_playoff_game &&
+      isPlayedScore(m.final_score) &&
       (m.shirts_pick != null || m.picked_map != null) &&
       !involvedMatchIds.has(m.id),
   ).length;
