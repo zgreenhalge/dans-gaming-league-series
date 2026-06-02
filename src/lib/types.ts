@@ -87,3 +87,24 @@ export interface LeaderboardRowWithId extends LeaderboardRow {
   player_id: number;
   steam_avatar_url?: string | null;
 }
+
+export interface MapSeasonStat {
+  seasonId: number;
+  isGauntlet: boolean;
+  pickCount: number;
+  banCount: number;
+  noPickCount: number;
+  totalKills: number;
+  totalAssists: number;
+  pickAndWon: number;
+}
+
+export interface MapIndexEntry {
+  name: string;
+  slug: string;
+  pickCount: number;
+  banCount: number;
+  noPickCount: number;
+  seasons: { id: number; name: string; is_gauntlet: boolean }[];
+  statsBySeason: MapSeasonStat[];
+}

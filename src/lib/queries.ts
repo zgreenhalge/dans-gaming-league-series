@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 import { isPlayedScore } from './util';
+import { mapSlug } from './maps';
+import { extractSeasonNumber } from './util';
 import type {
   Season,
   Week,
@@ -8,6 +10,7 @@ import type {
   PlayerMatchStat,
   LeaderboardRow,
   LeaderboardRowWithId,
+  MapIndexEntry,
   Faction,
 } from './types';
 
@@ -1077,11 +1080,6 @@ export async function getAllGauntletSummaries(): Promise<Map<number, GauntletSum
   return out;
 }
 
-function extractSeasonNumber(name: string): number | null {
-  const m = name.match(/Season\s+(\d+)/i);
-  return m ? parseInt(m[1], 10) : null;
-}
-
 /** Find the gauntlet season paired to a regular season by season number in name. */
 export async function getLinkedGauntlet(regularSeasonName: string): Promise<Season | null> {
   const num = extractSeasonNumber(regularSeasonName);
@@ -1098,6 +1096,44 @@ export async function getLinkedRegularSeason(gauntletName: string): Promise<Seas
   const { data, error } = await supabase.from('seasons').select('*').eq('is_gauntlet', false);
   if (error) throw error;
   return ((data ?? []) as Season[]).find((s) => extractSeasonNumber(s.name) === num) ?? null;
+}
+
+export interface MapPlayerStat {
+  player_id: number;
+  player_name: string;
+  faction: Faction;
+  kills: number;
+  assists: number;
+  deaths: number;
+  adr: number;
+  damage: number;
+  rounds_played: number;
+  rounds_won: number;
+  is_win: boolean;
+}
+
+export interface MapMatchRow {
+  match_id: number;
+  match_number: number;
+  week_number: number;
+  season_id: number;
+  season_name: string;
+  is_gauntlet: boolean;
+  is_playoff_game: boolean;
+  final_score: string | null;
+  shirts_stats: MapPlayerStat[];
+  skins_stats: MapPlayerStat[];
+}
+
+export interface MapDetail {
+  name: string;
+  slug: string;
+  pickCount: number;
+  banCount: number;
+  noPickCount: number;
+  seasons: { id: number; name: string; is_gauntlet: boolean }[];
+  matches: MapMatchRow[];
+  playerStats: LeaderboardRowWithId[];
 }
 
 /** Returns leaderboards for every season, keyed by season_id. */
@@ -1131,4 +1167,418 @@ export async function getAllLeaderboards(): Promise<
     out.set(r.season_id, list);
   }
   return out;
+}
+
+type RawMatch = {
+  id: number;
+  week_id: number;
+  match_number: number;
+  final_score: string | null;
+  shirts_pick: string | null;
+  picked_map: string | null;
+  shirts_ban: string | null;
+  shirts_ban2: string | null;
+  skins_ban1: string | null;
+  skins_ban2: string | null;
+  is_playoff_game: boolean;
+};
+
+type RawWeek = { id: number; season_id: number; week_number: number };
+type RawSeason = { id: number; name: string; is_gauntlet: boolean; map_pool: string[] | null };
+
+async function fetchMapRawData(): Promise<{
+  matches: RawMatch[];
+  weeks: RawWeek[];
+  seasons: RawSeason[];
+}> {
+  const [{ data: matches, error: mErr }, { data: weeks, error: wErr }, { data: seasons, error: sErr }] =
+    await Promise.all([
+      supabase.from('matches').select('id, week_id, match_number, final_score, shirts_pick, picked_map, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game'),
+      supabase.from('weeks').select('id, season_id, week_number'),
+      supabase.from('seasons').select('id, name, is_gauntlet, map_pool'),
+    ]);
+  if (mErr) throw mErr;
+  if (wErr) throw wErr;
+  if (sErr) throw sErr;
+  return {
+    matches: (matches ?? []) as RawMatch[],
+    weeks: (weeks ?? []) as RawWeek[],
+    seasons: (seasons ?? []) as RawSeason[],
+  };
+}
+
+function buildCanonicalNames(matches: RawMatch[], seasons: RawSeason[]): Map<string, string> {
+  const canonical = new Map<string, string>();
+  for (const m of matches) {
+    for (const v of [m.shirts_pick, m.picked_map, m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2]) {
+      if (!v) continue;
+      const t = v.trim();
+      if (t && !canonical.has(t.toLowerCase())) canonical.set(t.toLowerCase(), t);
+    }
+  }
+  for (const s of seasons) {
+    for (const m of s.map_pool ?? []) {
+      const t = m.trim();
+      if (t && !canonical.has(t.toLowerCase())) canonical.set(t.toLowerCase(), t);
+    }
+  }
+  return canonical;
+}
+
+export async function getMapIndex(): Promise<MapIndexEntry[]> {
+  const { matches, weeks, seasons } = await fetchMapRawData();
+  const canonicalName = buildCanonicalNames(matches, seasons);
+
+  const weekToSeason = new Map<number, RawSeason>();
+  for (const w of weeks) {
+    const s = seasons.find((s) => s.id === w.season_id);
+    if (s) weekToSeason.set(w.id, s);
+  }
+
+  const seasonById = new Map<number, RawSeason>();
+  for (const s of seasons) seasonById.set(s.id, s);
+
+  // per-map, per-season counts
+  const picksBySeason = new Map<string, Map<number, number>>();
+  const bansBySeason = new Map<string, Map<number, number>>();
+  const pickCount = new Map<string, number>();
+  const banCount = new Map<string, number>();
+  const matchMapKey = new Map<number, string>();
+
+  for (const m of matches) {
+    const season = weekToSeason.get(m.week_id);
+    const picks = new Set([m.shirts_pick, m.picked_map].filter((v): v is string => !!v).map((v) => v.trim()));
+    for (const played of picks) {
+      const key = played.toLowerCase();
+      pickCount.set(key, (pickCount.get(key) ?? 0) + 1);
+      matchMapKey.set(m.id, key);
+      if (season) {
+        const bySid = picksBySeason.get(key) ?? new Map<number, number>();
+        bySid.set(season.id, (bySid.get(season.id) ?? 0) + 1);
+        picksBySeason.set(key, bySid);
+      }
+    }
+    for (const ban of [m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2]) {
+      if (ban) {
+        const key = ban.trim().toLowerCase();
+        banCount.set(key, (banCount.get(key) ?? 0) + 1);
+        if (season) {
+          const bySid = bansBySeason.get(key) ?? new Map<number, number>();
+          bySid.set(season.id, (bySid.get(season.id) ?? 0) + 1);
+          bansBySeason.set(key, bySid);
+        }
+      }
+    }
+  }
+
+  const mapPoolSeasonIds = new Map<string, Set<number>>();
+  for (const s of seasons) {
+    if (s.is_gauntlet) continue;
+    for (const m of s.map_pool ?? []) {
+      const key = m.trim().toLowerCase();
+      const set = mapPoolSeasonIds.get(key) ?? new Set();
+      set.add(s.id);
+      mapPoolSeasonIds.set(key, set);
+    }
+  }
+
+  const noPickCount = new Map<string, number>();
+  const noPicksBySeason = new Map<string, Map<number, number>>();
+  for (const m of matches) {
+    const season = weekToSeason.get(m.week_id);
+    if (!season || season.is_gauntlet || m.is_playoff_game) continue;
+    if (!m.shirts_pick && !m.picked_map) continue;
+    const vetoFields = [m.shirts_pick, m.picked_map, m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2];
+    const involvedKeys = new Set(vetoFields.filter((v): v is string => !!v).map((v) => v.trim().toLowerCase()));
+    for (const key of mapPoolSeasonIds.keys()) {
+      const poolIds = mapPoolSeasonIds.get(key)!;
+      if (poolIds.has(season.id) && !involvedKeys.has(key)) {
+        noPickCount.set(key, (noPickCount.get(key) ?? 0) + 1);
+        const bySid = noPicksBySeason.get(key) ?? new Map<number, number>();
+        bySid.set(season.id, (bySid.get(season.id) ?? 0) + 1);
+        noPicksBySeason.set(key, bySid);
+      }
+    }
+  }
+
+  // totalKills and pickAndWon: fetch player_match_stats for played matches
+  const playedMatchIds = Array.from(matchMapKey.keys());
+  // match_id → season_id (for played matches)
+  const matchSeasonId = new Map<number, number>();
+  for (const m of matches) {
+    if (!matchMapKey.has(m.id)) continue;
+    const season = weekToSeason.get(m.week_id);
+    if (season) matchSeasonId.set(m.id, season.id);
+  }
+
+  const totalKillsBySeason = new Map<string, Map<number, number>>();
+  const totalAssistsBySeason = new Map<string, Map<number, number>>();
+  const pickAndWonBySeason = new Map<string, Map<number, number>>();
+
+  if (playedMatchIds.length > 0) {
+    const { data: statsData } = await supabase
+      .from('player_match_stats')
+      .select('match_id, kills, assists, faction, is_win')
+      .in('match_id', playedMatchIds);
+
+    // First pass: per-match totals
+    const matchKills = new Map<number, number>();
+    const matchAssists = new Map<number, number>();
+    const shirtsWon = new Map<number, boolean>();
+    for (const s of (statsData ?? []) as { match_id: number; kills: number; assists: number; faction: string; is_win: boolean }[]) {
+      matchKills.set(s.match_id, (matchKills.get(s.match_id) ?? 0) + Math.max(0, s.kills));
+      matchAssists.set(s.match_id, (matchAssists.get(s.match_id) ?? 0) + Math.max(0, s.assists ?? 0));
+      if (s.faction === 'SHIRTS') {
+        if (s.is_win) shirtsWon.set(s.match_id, true);
+        else if (!shirtsWon.has(s.match_id)) shirtsWon.set(s.match_id, false);
+      }
+    }
+
+    // Second pass: aggregate per map key + season
+    for (const [matchId, mapKey] of matchMapKey) {
+      const sid = matchSeasonId.get(matchId);
+      if (sid == null) continue;
+      const kills = matchKills.get(matchId) ?? 0;
+      const kBySid = totalKillsBySeason.get(mapKey) ?? new Map<number, number>();
+      kBySid.set(sid, (kBySid.get(sid) ?? 0) + kills);
+      totalKillsBySeason.set(mapKey, kBySid);
+      const assists = matchAssists.get(matchId) ?? 0;
+      const aBySid = totalAssistsBySeason.get(mapKey) ?? new Map<number, number>();
+      aBySid.set(sid, (aBySid.get(sid) ?? 0) + assists);
+      totalAssistsBySeason.set(mapKey, aBySid);
+      if (shirtsWon.get(matchId)) {
+        const wBySid = pickAndWonBySeason.get(mapKey) ?? new Map<number, number>();
+        wBySid.set(sid, (wBySid.get(sid) ?? 0) + 1);
+        pickAndWonBySeason.set(mapKey, wBySid);
+      }
+    }
+  }
+
+  const mapSeasons = new Map<string, { id: number; name: string; is_gauntlet: boolean }[]>();
+  for (const s of seasons) {
+    for (const m of s.map_pool ?? []) {
+      const key = m.trim().toLowerCase();
+      const slist = mapSeasons.get(key) ?? [];
+      slist.push({ id: s.id, name: s.name, is_gauntlet: s.is_gauntlet });
+      mapSeasons.set(key, slist);
+    }
+  }
+
+  return Array.from(canonicalName.keys()).map((key) => {
+    const name = canonicalName.get(key)!;
+
+    const allSids = new Set<number>([
+      ...Array.from(picksBySeason.get(key)?.keys() ?? []),
+      ...Array.from(bansBySeason.get(key)?.keys() ?? []),
+      ...Array.from(noPicksBySeason.get(key)?.keys() ?? []),
+      ...Array.from(totalKillsBySeason.get(key)?.keys() ?? []),
+      ...Array.from(totalAssistsBySeason.get(key)?.keys() ?? []),
+    ]);
+    const statsBySeason = Array.from(allSids).map((sid) => ({
+      seasonId: sid,
+      isGauntlet: seasonById.get(sid)?.is_gauntlet ?? false,
+      pickCount: picksBySeason.get(key)?.get(sid) ?? 0,
+      banCount: bansBySeason.get(key)?.get(sid) ?? 0,
+      noPickCount: noPicksBySeason.get(key)?.get(sid) ?? 0,
+      totalKills: totalKillsBySeason.get(key)?.get(sid) ?? 0,
+      totalAssists: totalAssistsBySeason.get(key)?.get(sid) ?? 0,
+      pickAndWon: pickAndWonBySeason.get(key)?.get(sid) ?? 0,
+    })).sort((a, b) => a.seasonId - b.seasonId);
+
+    return {
+      name,
+      slug: mapSlug(name),
+      pickCount: pickCount.get(key) ?? 0,
+      banCount: banCount.get(key) ?? 0,
+      noPickCount: noPickCount.get(key) ?? 0,
+      seasons: mapSeasons.get(key) ?? [],
+      statsBySeason,
+    };
+  }).sort((a, b) => b.pickCount - a.pickCount);
+}
+
+export async function getMapDetail(slug: string): Promise<MapDetail | null> {
+  const { matches, weeks, seasons } = await fetchMapRawData();
+  const canonicalName = buildCanonicalNames(matches, seasons);
+
+  const mapName = Array.from(canonicalName.values()).find((v) => mapSlug(v) === slug);
+  if (!mapName) return null;
+  const nameLower = mapName.toLowerCase();
+
+  const weekById = new Map<number, RawWeek>();
+  for (const w of weeks) weekById.set(w.id, w);
+  const seasonById = new Map<number, RawSeason>();
+  for (const s of seasons) seasonById.set(s.id, s);
+
+  const playedMatches = matches.filter((m) => {
+    const played = (m.shirts_pick ?? m.picked_map ?? '').trim().toLowerCase();
+    return played === nameLower;
+  });
+
+  let bans = 0;
+  for (const m of matches) {
+    for (const ban of [m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2]) {
+      if (ban && ban.trim().toLowerCase() === nameLower) bans++;
+    }
+  }
+
+  // Seasons where this map is in the pool OR had any veto activity
+  const seasonIdsSeen = new Set<number>();
+  for (const s of seasons) {
+    if ((s.map_pool ?? []).some((m) => m.trim().toLowerCase() === nameLower)) {
+      seasonIdsSeen.add(s.id);
+    }
+  }
+  const weekToSeasonId = new Map<number, number>();
+  for (const w of weeks) weekToSeasonId.set(w.id, w.season_id);
+  for (const m of matches) {
+    const sid = weekToSeasonId.get(m.week_id);
+    if (sid == null) continue;
+    const vetoFields = [m.shirts_pick, m.picked_map, m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2];
+    if (vetoFields.some((v) => v && v.trim().toLowerCase() === nameLower)) {
+      seasonIdsSeen.add(sid);
+    }
+  }
+
+  const mapSeasons: { id: number; name: string; is_gauntlet: boolean }[] = [];
+  for (const s of seasons) {
+    if (seasonIdsSeen.has(s.id)) {
+      mapSeasons.push({ id: s.id, name: s.name, is_gauntlet: s.is_gauntlet });
+    }
+  }
+
+  // nopick: regular (non-gauntlet) season matches in pool seasons where this map never appeared in any veto field
+  const nopickSeasonIds = new Set(
+    seasons
+      .filter((s) => !s.is_gauntlet && (s.map_pool ?? []).some((m) => m.trim().toLowerCase() === nameLower))
+      .map((s) => s.id),
+  );
+  const poolWeekIds = new Set(
+    weeks.filter((w) => nopickSeasonIds.has(w.season_id)).map((w) => w.id),
+  );
+  const involvedMatchIds = new Set<number>();
+  for (const m of matches) {
+    if (!poolWeekIds.has(m.week_id) || m.is_playoff_game || (!m.shirts_pick && !m.picked_map)) continue;
+    const fields = [m.shirts_pick, m.picked_map, m.shirts_ban, m.shirts_ban2, m.skins_ban1, m.skins_ban2];
+    if (fields.some((v) => v && v.trim().toLowerCase() === nameLower)) {
+      involvedMatchIds.add(m.id);
+    }
+  }
+  const noPickCount = matches.filter(
+    (m) =>
+      poolWeekIds.has(m.week_id) &&
+      !m.is_playoff_game &&
+      (m.shirts_pick != null || m.picked_map != null) &&
+      !involvedMatchIds.has(m.id),
+  ).length;
+
+  if (playedMatches.length === 0) {
+    return { name: mapName, slug, pickCount: 0, banCount: bans, noPickCount, seasons: mapSeasons, matches: [], playerStats: [] };
+  }
+
+  const matchIds = playedMatches.map((m) => m.id);
+  const [{ data: statsData, error: sErr }, players] = await Promise.all([
+    supabase.from('player_match_stats').select('*').in('match_id', matchIds),
+    getPlayersById(),
+  ]);
+  if (sErr) throw sErr;
+  const statRows = (statsData ?? []) as PlayerMatchStat[];
+
+  const rosterByMatch = new Map<number, { shirts: MapPlayerStat[]; skins: MapPlayerStat[] }>();
+  for (const s of statRows) {
+    const entry = rosterByMatch.get(s.match_id) ?? { shirts: [], skins: [] };
+    const player = players.get(s.player_id);
+    const stat: MapPlayerStat = {
+      player_id: s.player_id,
+      player_name: player?.name ?? `#${s.player_id}`,
+      faction: s.faction,
+      kills: Math.max(0, s.kills),
+      assists: Math.max(0, s.assists ?? 0),
+      deaths: Math.max(0, s.deaths),
+      adr: Math.max(0, s.adr ?? 0),
+      damage: Math.max(0, s.damage ?? 0),
+      rounds_played: Math.max(0, s.rounds_played ?? 0),
+      rounds_won: Math.max(0, s.rounds_won ?? 0),
+      is_win: !!s.is_win,
+    };
+    if (s.faction === 'SHIRTS') entry.shirts.push(stat);
+    else entry.skins.push(stat);
+    rosterByMatch.set(s.match_id, entry);
+  }
+
+  const mapMatches: MapMatchRow[] = playedMatches
+    .map((m) => {
+      const week = weekById.get(m.week_id);
+      if (!week) return null;
+      const season = seasonById.get(week.season_id);
+      if (!season) return null;
+      const roster = rosterByMatch.get(m.id) ?? { shirts: [], skins: [] };
+      return {
+        match_id: m.id,
+        match_number: m.match_number,
+        week_number: week.week_number,
+        season_id: season.id,
+        season_name: season.name,
+        is_gauntlet: season.is_gauntlet,
+        is_playoff_game: m.is_playoff_game,
+        final_score: m.final_score,
+        shirts_stats: roster.shirts,
+        skins_stats: roster.skins,
+      };
+    })
+    .filter((r): r is MapMatchRow => r !== null)
+    .sort((a, b) => b.season_id - a.season_id || b.week_number - a.week_number || b.match_number - a.match_number);
+
+  type Agg = {
+    player_id: number; player_name: string;
+    matches_played: number; matches_won: number; matches_lost: number;
+    total_kills: number; total_assists: number; total_deaths: number;
+    total_damage: number; total_rounds_played: number; total_rounds_won: number;
+  };
+  const byPlayer = new Map<number, Agg>();
+  for (const s of statRows) {
+    const player = players.get(s.player_id);
+    if (!player) continue;
+    const agg = byPlayer.get(s.player_id) ?? {
+      player_id: s.player_id, player_name: player.name,
+      matches_played: 0, matches_won: 0, matches_lost: 0,
+      total_kills: 0, total_assists: 0, total_deaths: 0,
+      total_damage: 0, total_rounds_played: 0, total_rounds_won: 0,
+    };
+    agg.matches_played += 1;
+    agg.matches_won += s.is_win ? 1 : 0;
+    agg.matches_lost += s.is_win ? 0 : 1;
+    agg.total_kills += Math.max(0, s.kills);
+    agg.total_assists += Math.max(0, s.assists ?? 0);
+    agg.total_deaths += Math.max(0, s.deaths);
+    agg.total_damage += Math.max(0, s.damage ?? 0);
+    agg.total_rounds_played += Math.max(0, s.rounds_played ?? 0);
+    agg.total_rounds_won += Math.max(0, s.rounds_won ?? 0);
+    byPlayer.set(s.player_id, agg);
+  }
+
+  const playerStats: LeaderboardRowWithId[] = Array.from(byPlayer.values()).map((a) => {
+    const rp = a.total_rounds_played;
+    const rw = a.total_rounds_won;
+    return {
+      season_id: 0,
+      player_id: a.player_id,
+      player_name: a.player_name,
+      matches_played: a.matches_played,
+      matches_won: a.matches_won,
+      matches_lost: a.matches_lost,
+      win_rate_percentage: a.matches_played > 0 ? (a.matches_won / a.matches_played) * 100 : 0,
+      total_kills: a.total_kills,
+      total_assists: a.total_assists,
+      total_deaths: a.total_deaths,
+      kd_ratio: a.total_deaths > 0 ? a.total_kills / a.total_deaths : a.total_kills,
+      total_damage: a.total_damage,
+      total_rounds_played: rp,
+      total_rounds_won: rw,
+      rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
+      overall_adr: rp > 0 ? a.total_damage / rp : 0,
+    };
+  }).sort((a, b) => b.overall_adr - a.overall_adr);
+
+  return { name: mapName, slug, pickCount: playedMatches.length, banCount: bans, noPickCount, seasons: mapSeasons, matches: mapMatches, playerStats };
 }
