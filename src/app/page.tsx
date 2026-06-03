@@ -1,12 +1,50 @@
 import Link from 'next/link';
-import { getSeasons, getAllLeaderboards, getAllGauntletSummaries, getGauntletStats } from '@/lib/queries';
-import type { GauntletSummary } from '@/lib/queries';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
+import { getSeasons, getAllLeaderboards, getAllGauntletSummaries, getGauntletStats, getSeasonSchedule } from '@/lib/queries';
+import type { GauntletSummary, MatchWithRoster, WeekWithMatches } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { TopbarShell } from '@/components/TopbarShell';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import { seasonTitle, extractSeasonNumber } from '@/lib/util';
+import { NextUpPanel } from '@/components/NextUpPanel';
+import { NextWeekPanel } from '@/components/NextWeekPanel';
 
 export const dynamic = 'force-dynamic';
+
+function weekWindowMs(startDate: string, weekNumber: number): { start: number; end: number } {
+  const [y, m, d] = startDate.split('-').map(Number);
+  const base = Date.UTC(y, m - 1, d);
+  return {
+    start: base + (weekNumber - 1) * 7 * 86_400_000,
+    end: base + ((weekNumber - 1) * 7 + 6) * 86_400_000 + 86_399_999,
+  };
+}
+
+function findCurrentWeek(schedule: WeekWithMatches[], startDate: string | null): WeekWithMatches | null {
+  if (schedule.length === 0) return null;
+
+  if (startDate) {
+    const now = Date.now();
+    // Week whose window contains today
+    const current = schedule.find((w) => {
+      const win = weekWindowMs(startDate, w.week_number);
+      return now >= win.start && now <= win.end;
+    });
+    if (current) return current;
+    // Today is before the first week or between weeks — return the next upcoming week
+    const next = schedule.find((w) => {
+      const win = weekWindowMs(startDate, w.week_number);
+      return now < win.start;
+    });
+    if (next) return next;
+    // All week windows are past — return the last week
+    return schedule[schedule.length - 1];
+  }
+
+  // No start_date: fall back to first week with any matches
+  return schedule[0];
+}
 
 function podiumSort(rows: LeaderboardRowWithId[]): LeaderboardRowWithId[] {
   return [...rows].sort(
@@ -36,15 +74,11 @@ function ActiveSeasonPanel({
   season: Season;
   leaderboard: LeaderboardRowWithId[];
 }) {
-  const sorted = podiumSort(leaderboard);
-  const hasData = sorted.length > 0 && sorted[0].matches_played > 0;
-  const top3 = sorted.slice(0, 3);
-
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <Link
         href={`/seasons/${season.id}`}
-        className="block px-6 py-5 border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-bg-secondary)] transition-colors"
+        className="block px-6 py-5 hover:bg-[var(--color-bg-secondary)] transition-colors"
       >
         <div className="flex items-center gap-2 mb-2">
           <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border border-[var(--color-accent-green-border)]">
@@ -59,41 +93,6 @@ function ActiveSeasonPanel({
           {leaderboard.length} players
         </div>
       </Link>
-
-      {hasData ? (
-        <div className="grid grid-cols-3">
-          {top3.map((p, i) => (
-            <Link
-              key={p.player_id}
-              href={`/players/${p.player_id}`}
-              className="block px-5 py-4 border-r border-[var(--color-border-tertiary)] last:border-r-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <PlayerAvatar name={p.player_name} imageUrl={null} size="sm" />
-                <div className="tracked text-[9px] text-[var(--color-text-secondary)]">
-                  {i === 0 ? 'Leader' : i === 1 ? '2nd' : '3rd'}
-                </div>
-              </div>
-              <div className="font-display text-[18px] font-semibold leading-tight truncate">
-                {p.player_name}
-              </div>
-              <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1.5 flex items-center gap-3">
-                <span>
-                  <span className="text-[var(--color-text-primary)] font-semibold">
-                    {p.overall_adr.toFixed(2)}
-                  </span>
-                  <span className="ml-1">ADR</span>
-                </span>
-                <span>{p.win_rate_percentage.toFixed(1)}% WR</span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      ) : (
-        <div className="px-6 py-5 font-mono text-[12px] text-[var(--color-text-secondary)]">
-          No matches played yet.
-        </div>
-      )}
     </div>
   );
 }
@@ -304,17 +303,40 @@ function seasonNumber(s: Season): number {
 }
 
 export default async function Home() {
-  const [seasons, leaderboards, gauntletSummaries, gauntletStats] = await Promise.all([
+  const [seasons, leaderboards, gauntletSummaries, gauntletStats, session] = await Promise.all([
     getSeasons(),
     getAllLeaderboards(),
     getAllGauntletSummaries(),
     getGauntletStats(),
+    getServerSession(authOptions),
   ]);
+  const currentPlayerId = session?.user?.playerId ?? null;
 
   const upcoming = seasons
     .filter((s) => s.status === 'UPCOMING')
     .sort((a, b) => a.id - b.id);
   const active = seasons.filter((s) => s.status === 'ACTIVE');
+
+  // Fetch schedule for the first active season to power the This Week + Next Week panels
+  let nextUpWeek: WeekWithMatches | null = null;
+  let nextUpMatches: MatchWithRoster[] = [];
+  let nextUpSeason: Season | null = null;
+  let followingWeek: WeekWithMatches | null = null;
+  if (active.length > 0) {
+    const activeSeason = active[0];
+    const schedule = await getSeasonSchedule(activeSeason.id);
+    const currentWeek = findCurrentWeek(schedule, activeSeason.start_date);
+    if (currentWeek && currentWeek.matches.length > 0) {
+      nextUpWeek = currentWeek;
+      nextUpMatches = [...currentWeek.matches].sort((a, b) => a.match_number - b.match_number);
+      nextUpSeason = activeSeason;
+      const idx = schedule.indexOf(currentWeek);
+      const candidate = idx >= 0 ? schedule[idx + 1] ?? null : null;
+      if (candidate && candidate.matches.some((m) => m.shirts.length > 0 || m.skins.length > 0)) {
+        followingWeek = candidate;
+      }
+    }
+  }
 
   // Group archived seasons by season number; each entry has at most one regular + one gauntlet
   type PastGroup = { num: number; regular: Season | null; gauntlet: Season | null };
@@ -333,7 +355,6 @@ export default async function Home() {
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         {upcoming.length > 0 && (
           <>
-            <SectionLabel>Upcoming Seasons</SectionLabel>
             <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
               {upcoming.map((s) => (
                 <UpcomingSeasonRow
@@ -348,7 +369,6 @@ export default async function Home() {
 
         {active.length > 0 && (
           <>
-            <SectionLabel>Active Season</SectionLabel>
             {active.map((s) => (
               <ActiveSeasonPanel
                 key={s.id}
@@ -357,6 +377,27 @@ export default async function Home() {
               />
             ))}
           </>
+        )}
+
+        {nextUpWeek && nextUpSeason && (
+          <div className="mt-4">
+            <NextUpPanel
+              season={nextUpSeason}
+              week={nextUpWeek}
+              matches={nextUpMatches}
+              currentPlayerId={currentPlayerId}
+            />
+          </div>
+        )}
+
+        {followingWeek && nextUpSeason && (
+          <div className="mt-4">
+            <NextWeekPanel
+              season={nextUpSeason}
+              week={followingWeek}
+              currentPlayerId={currentPlayerId}
+            />
+          </div>
         )}
 
         <SectionLabel>Past Seasons</SectionLabel>
