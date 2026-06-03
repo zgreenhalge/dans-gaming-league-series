@@ -1,5 +1,15 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+
+let _browserClient: SupabaseClient | null = null;
+
+export function getBrowserClient(): SupabaseClient {
+  if (_browserClient) return _browserClient;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  _browserClient = createClient(url, anon);
+  return _browserClient;
+}
 
 // Server-side Supabase client. Currently uses no-op cookie handlers because
 // there's no auth yet — this keeps pages eligible for ISR (calling cookies()
