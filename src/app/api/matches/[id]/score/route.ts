@@ -176,9 +176,9 @@ export async function PATCH(
     const isWin = faction === 'SHIRTS' ? shirts > skins : skins > shirts;
     const adr =
       row.adr != null
-        ? row.adr
+        ? Math.round(row.adr)
         : roundsPlayed > 0
-          ? row.damage / roundsPlayed
+          ? Math.round(row.damage / roundsPlayed)
           : 0;
 
     updates.push({

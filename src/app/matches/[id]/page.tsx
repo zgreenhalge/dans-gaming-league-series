@@ -95,20 +95,26 @@ function Scoreboard({
     <div
       className={`border border-[var(--color-border-primary)] overflow-hidden faction-tint ${cls}`}
     >
-      <table className="w-full border-collapse text-[13px]">
+      <table className="w-full table-fixed border-collapse text-[13px]">
         <thead>
           <tr className="bg-[var(--color-bg-secondary)]">
             <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)]">
               Player
             </th>
-            {['K', 'A', 'D', 'DMG', 'ADR'].map((h) => (
+            {(['K', 'A', 'D'] as const).map((h) => (
               <th
                 key={h}
-                className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)] whitespace-nowrap"
+                className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)] w-10"
               >
                 {h}
               </th>
             ))}
+            <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)] w-16">
+              DMG
+            </th>
+            <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)] w-14">
+              ADR
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -159,7 +165,7 @@ function Scoreboard({
                   {dash(p.damage.toLocaleString())}
                 </td>
                 <td className="px-3 pr-4 py-2.5 text-right font-mono tnum font-semibold">
-                  {dash(p.adr.toFixed(1))}
+                  {dash(String(Math.round(p.adr)))}
                 </td>
               </tr>
             );
@@ -457,7 +463,7 @@ export default async function MatchPage({
               />
             </div>
 
-            {match.screenshot_url_front && match.screenshot_url_back && (
+            {match.screenshot_url_front && (
               <ScreenshotViewer
                 frontUrl={match.screenshot_url_front}
                 backUrl={match.screenshot_url_back}

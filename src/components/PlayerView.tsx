@@ -246,7 +246,7 @@ export default function PlayerView({
               <StatCell v={agg.assists} l="Assists" />
               <StatCell v={agg.deaths} l="Deaths" />
               <StatCell v={agg.kd.toFixed(2)} l="K/D" />
-              <StatCell v={agg.adr.toFixed(1)} l="ADR" />
+              <StatCell v={agg.adr.toFixed(2)} l="ADR" />
             </div>
           </div>
 
@@ -318,7 +318,7 @@ export default function PlayerView({
                             <span className="block h-full bg-[var(--color-accent-green-fill)]" style={{ width: `${Math.max(0, Math.min(100, m.wr))}%` }} />
                           </span>
                         </td>
-                        <td className="px-3 pr-4 py-2.5 text-right font-mono tnum font-semibold">{m.adr.toFixed(1)}</td>
+                        <td className="px-3 pr-4 py-2.5 text-right font-mono tnum font-semibold">{m.adr.toFixed(2)}</td>
                       </tr>
                     ))}
                 </tbody>

@@ -71,7 +71,7 @@ function ActiveSeasonRow({ season, leaderboard }: { season: Season; leaderboard:
               </div>
               <div className="font-display text-[16px] font-semibold leading-tight truncate">{p.player_name}</div>
               <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1.5 flex items-center gap-3">
-                <Stat v={p.overall_adr.toFixed(1)} l="ADR" />
+                <Stat v={p.overall_adr.toFixed(2)} l="ADR" />
                 <span>{p.win_rate_percentage.toFixed(1)}% WR</span>
               </div>
             </Link>
@@ -149,7 +149,7 @@ function PastSeasonRow({
             </div>
             <div className="font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-4">
               <Stat v={`${regWinner.win_rate_percentage.toFixed(1)}%`} l="WR" />
-              <Stat v={regWinner.overall_adr.toFixed(1)} l="ADR" />
+              <Stat v={regWinner.overall_adr.toFixed(2)} l="ADR" />
             </div>
           </div>
         )}

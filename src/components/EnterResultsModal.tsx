@@ -111,7 +111,7 @@ export default function EnterResultsModal({
   function computedAdrPlaceholder(d: PlayerDraft): string {
     if (d.damage === '' || roundsPlayed === 0) return 'auto';
     const dmg = intVal(d.damage);
-    return (dmg / roundsPlayed).toFixed(1);
+    return String(Math.round(dmg / roundsPlayed));
   }
 
   function computedDamagePlaceholder(d: PlayerDraft): string {
@@ -162,7 +162,7 @@ export default function EnterResultsModal({
               assists: s.assists > 0 ? String(s.assists) : '',
               deaths: s.deaths > 0 ? String(s.deaths) : '',
               damage: s.damage > 0 ? String(s.damage) : '',
-              adr: s.adr > 0 ? s.adr.toFixed(1) : '',
+              adr: s.adr > 0 ? String(Math.round(s.adr)) : '',
             },
           ];
         }),

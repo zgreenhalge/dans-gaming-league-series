@@ -77,7 +77,7 @@ export default function GauntletStandings({
         {champStats && (
           <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-2 flex items-center gap-4">
             <span>
-              <span className="font-semibold text-[var(--color-text-primary)]">{champStats.overall_adr.toFixed(1)}</span>
+              <span className="font-semibold text-[var(--color-text-primary)]">{champStats.overall_adr.toFixed(2)}</span>
               <span className="ml-1">ADR</span>
             </span>
             <span>
@@ -120,7 +120,7 @@ export default function GauntletStandings({
                 {ps && (
                   <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1.5 flex items-center gap-3">
                     <span>
-                      <span className="font-semibold text-[var(--color-text-primary)]">{ps.overall_adr.toFixed(1)}</span>
+                      <span className="font-semibold text-[var(--color-text-primary)]">{ps.overall_adr.toFixed(2)}</span>
                       <span className="ml-1">ADR</span>
                     </span>
                     <span>

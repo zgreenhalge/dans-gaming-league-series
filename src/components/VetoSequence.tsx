@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { getBrowserClient } from '@/lib/supabase';
 import { mapImageFor, mapSlug, toSentenceCase } from '@/lib/maps';
 import type { Match } from '@/lib/types';
 
@@ -72,6 +73,18 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   const [isPending, startTransition] = useTransition();
   const [activeField, setActiveField] = useState<StepField | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const channel = getBrowserClient()
+      .channel(`match-veto-${match.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${match.id}` },
+        () => { router.refresh(); },
+      )
+      .subscribe();
+    return () => { getBrowserClient().removeChannel(channel); };
+  }, [match.id, router]);
 
   const steps = getSteps(match, isGauntlet);
 

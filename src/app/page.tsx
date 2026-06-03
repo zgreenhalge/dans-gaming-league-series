@@ -80,7 +80,7 @@ function ActiveSeasonPanel({
               <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1.5 flex items-center gap-3">
                 <span>
                   <span className="text-[var(--color-text-primary)] font-semibold">
-                    {p.overall_adr.toFixed(1)}
+                    {p.overall_adr.toFixed(2)}
                   </span>
                   <span className="ml-1">ADR</span>
                 </span>
@@ -170,7 +170,7 @@ function PastSeasonRow({
           </div>
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-5">
             <Stat v={`${winner.win_rate_percentage.toFixed(1)}%`} l="WR" />
-            <Stat v={winner.overall_adr.toFixed(1)} l="ADR" />
+            <Stat v={winner.overall_adr.toFixed(2)} l="ADR" />
             <Stat v={winner.kd_ratio.toFixed(2)} l="K/D" />
           </div>
         </div>
@@ -257,7 +257,7 @@ function CombinedPastSeasonRow({
             </div>
             <div className="font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-5">
               <Stat v={regWinner.kd_ratio.toFixed(2)} l="K/D" />
-              <Stat v={regWinner.overall_adr.toFixed(1)} l="ADR" />
+              <Stat v={regWinner.overall_adr.toFixed(2)} l="ADR" />
             </div>
           </div>
         ) : (
@@ -274,7 +274,7 @@ function CombinedPastSeasonRow({
             {gauntletChampionStats && (
               <div className="font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-5">
                 <Stat v={gauntletChampionStats.kd_ratio.toFixed(2)} l="K/D" />
-                <Stat v={gauntletChampionStats.overall_adr.toFixed(1)} l="ADR" />
+                <Stat v={gauntletChampionStats.overall_adr.toFixed(2)} l="ADR" />
               </div>
             )}
           </div>
