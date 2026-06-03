@@ -267,7 +267,7 @@ export default function LeaderboardTable({
                   <Link href={href} className="block w-full h-full">{dash(played, p.kd_ratio.toFixed(2))}</Link>
                 </td>
                 <td className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold">
-                  <Link href={href} className="block w-full h-full">{dash(played, p.overall_adr.toFixed(1))}</Link>
+                  <Link href={href} className="block w-full h-full">{dash(played, p.overall_adr.toFixed(2))}</Link>
                 </td>
               </tr>
             );

@@ -80,7 +80,7 @@ function TeamStatBlock({
             <span className={`${statCls} ${numSz} w-7 sm:w-9 text-[var(--color-text-primary)]`}>{p.kills}</span>
             <span className={`${statCls} ${numSz} w-7 sm:w-9 text-[var(--color-text-primary)] hidden min-[480px]:block`}>{p.assists}</span>
             <span className={`${statCls} ${numSz} w-7 sm:w-9 text-[var(--color-text-primary)]`}>{p.deaths}</span>
-            <span className={`${statCls} ${numSz} w-12 sm:w-14 pr-2 text-[var(--color-text-primary)]`}>{p.adr}</span>
+            <span className={`${statCls} ${numSz} w-12 sm:w-14 pr-2 text-[var(--color-text-primary)]`}>{Math.round(p.adr)}</span>
           </div>
         );
       })}
