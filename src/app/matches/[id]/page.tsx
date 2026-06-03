@@ -457,7 +457,7 @@ export default async function MatchPage({
               />
             </div>
 
-            {match.screenshot_url_front && match.screenshot_url_back && (
+            {match.screenshot_url_front && (
               <ScreenshotViewer
                 frontUrl={match.screenshot_url_front}
                 backUrl={match.screenshot_url_back}

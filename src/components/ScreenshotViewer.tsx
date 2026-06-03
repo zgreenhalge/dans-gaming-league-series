@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 interface Props {
   frontUrl: string;
-  backUrl: string;
+  backUrl: string | null;
 }
 
 export default function ScreenshotViewer({ frontUrl, backUrl }: Props) {
@@ -22,7 +22,7 @@ export default function ScreenshotViewer({ frontUrl, backUrl }: Props) {
 
       {open && (
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {[{ label: 'Front', url: frontUrl }, { label: 'Back', url: backUrl }].map(
+          {[{ label: 'Front', url: frontUrl }, ...(backUrl ? [{ label: 'Back', url: backUrl }] : [])].map(
             ({ label, url }) => (
               <div key={label} className="border border-[var(--color-border-primary)]">
                 <div className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)] px-3 py-1.5 bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-primary)]">
