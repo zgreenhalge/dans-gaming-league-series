@@ -22,6 +22,19 @@ export function fmtWindowDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
+export function weekWindow(
+  startDate: string | null,
+  weekNumber: number,
+): { start: Date; end: Date } | null {
+  if (!startDate) return null;
+  const [y, m, d] = startDate.split('-').map(Number);
+  const base = Date.UTC(y, m - 1, d);
+  return {
+    start: new Date(base + (weekNumber - 1) * 7 * 86_400_000),
+    end: new Date(base + ((weekNumber - 1) * 7 + 6) * 86_400_000),
+  };
+}
+
 export function extractSeasonNumber(name: string): number | null {
   const m = name.match(/Season\s+(\d+)/i);
   return m ? parseInt(m[1], 10) : null;

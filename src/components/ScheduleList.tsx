@@ -2,21 +2,9 @@
 
 import { MatchCard, type MatchCardRight } from './MatchCard';
 import { YouBadge } from './YouBadge';
-import { isPlayedScore, fmtWindowDate } from '@/lib/util';
+import { isPlayedScore, fmtWindowDate, weekWindow } from '@/lib/util';
 import type { WeekWithMatches, MatchWithRoster } from '@/lib/queries';
 
-function weekWindow(
-  startDate: string | null,
-  weekNumber: number,
-): { start: Date; end: Date } | null {
-  if (!startDate) return null;
-  const [y, m, d] = startDate.split('-').map(Number);
-  const base = Date.UTC(y, m - 1, d);
-  return {
-    start: new Date(base + (weekNumber - 1) * 7 * 86_400_000),
-    end: new Date(base + ((weekNumber - 1) * 7 + 6) * 86_400_000),
-  };
-}
 
 function WeekBlock({
   week,

@@ -150,6 +150,73 @@ async function getPerPlayerSeasonStats(): Promise<Map<string, PerPlayerStats>> {
   return out;
 }
 
+/**
+ * Returns unique (season_id → Set<player_id>) for players appearing in
+ * player_match_stats for matches that have NOT yet been played. Used to
+ * populate zero-stat leaderboard rows for upcoming seasons.
+ */
+async function getRosterPlayersBySeason(): Promise<Map<number, Set<number>>> {
+  const [
+    { data: stats, error: sErr },
+    { data: matches, error: mErr },
+    { data: weeks, error: wErr },
+  ] = await Promise.all([
+    supabase.from('player_match_stats').select('player_id, match_id'),
+    supabase.from('matches').select('id, week_id, final_score'),
+    supabase.from('weeks').select('id, season_id'),
+  ]);
+  if (sErr) throw sErr;
+  if (mErr) throw mErr;
+  if (wErr) throw wErr;
+
+  const weekToSeason = new Map<number, number>();
+  for (const w of (weeks ?? []) as { id: number; season_id: number }[])
+    weekToSeason.set(w.id, w.season_id);
+
+  const unplayedMatchToSeason = new Map<number, number>();
+  for (const m of (matches ?? []) as { id: number; week_id: number; final_score: string | null }[]) {
+    if (!isPlayedScore(m.final_score)) {
+      const sid = weekToSeason.get(m.week_id);
+      if (sid != null) unplayedMatchToSeason.set(m.id, sid);
+    }
+  }
+
+  const out = new Map<number, Set<number>>();
+  for (const s of (stats ?? []) as { player_id: number; match_id: number }[]) {
+    const sid = unplayedMatchToSeason.get(s.match_id);
+    if (sid == null) continue;
+    const set = out.get(sid) ?? new Set<number>();
+    set.add(s.player_id);
+    out.set(sid, set);
+  }
+  return out;
+}
+
+function zeroStatRows(
+  seasonId: number,
+  playerIds: Set<number>,
+  playersById: Map<number, Player>,
+): LeaderboardRowWithId[] {
+  return [...playerIds].map((pid) => ({
+    season_id: seasonId,
+    player_id: pid,
+    player_name: playersById.get(pid)?.name ?? `#${pid}`,
+    matches_played: 0,
+    matches_won: 0,
+    matches_lost: 0,
+    win_rate_percentage: 0,
+    total_kills: 0,
+    total_assists: 0,
+    total_deaths: 0,
+    kd_ratio: 0,
+    total_damage: 0,
+    total_rounds_played: 0,
+    total_rounds_won: 0,
+    rwr_percentage: 0,
+    overall_adr: 0,
+  }));
+}
+
 export async function getSeasons(): Promise<Season[]> {
   const { data, error } = await supabase
     .from('seasons')
@@ -473,7 +540,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
 export async function getSeasonLeaderboard(
   seasonId: number,
 ): Promise<LeaderboardRowWithId[]> {
-  const [{ data: rows, error }, players, perPlayer] = await Promise.all([
+  const [{ data: rows, error }, playersByName, perPlayer] = await Promise.all([
     supabase
       .from('player_season_leaderboard')
       .select('*')
@@ -483,8 +550,11 @@ export async function getSeasonLeaderboard(
     getPerPlayerSeasonStats(),
   ]);
   if (error) throw error;
-  return ((rows ?? []) as LeaderboardRow[]).map((r) => {
-    const player_id = players.get(r.player_name)?.id ?? -1;
+
+  const playersById = new Map([...playersByName.values()].map((p) => [p.id, p]));
+
+  const result = ((rows ?? []) as LeaderboardRow[]).map((r) => {
+    const player_id = playersByName.get(r.player_name)?.id ?? -1;
     const ps = perPlayer.get(`${r.season_id}:${player_id}`);
     const total_rounds_played = n(r.total_rounds_played);
     const total_rounds_won = ps?.rounds_won ?? 0;
@@ -496,6 +566,14 @@ export async function getSeasonLeaderboard(
       rwr_percentage: total_rounds_played > 0 ? (total_rounds_won / total_rounds_played) * 100 : 0,
     };
   });
+
+  if (result.length > 0) return result;
+
+  // No played matches yet — fall back to roster players with zero stats
+  const rosterBySeason = await getRosterPlayersBySeason();
+  const rosterIds = rosterBySeason.get(seasonId);
+  if (!rosterIds?.size) return [];
+  return zeroStatRows(seasonId, rosterIds, playersById);
 }
 
 /**
@@ -1145,18 +1223,22 @@ export interface MapDetail {
 export async function getAllLeaderboards(): Promise<
   Map<number, LeaderboardRowWithId[]>
 > {
-  const [{ data: rows, error }, players, perPlayer] = await Promise.all([
+  const [{ data: rows, error }, playersByName, perPlayer, rosterBySeason] = await Promise.all([
     supabase
       .from('player_season_leaderboard')
       .select('*')
       .order('overall_adr', { ascending: false }),
     getPlayersByName(),
     getPerPlayerSeasonStats(),
+    getRosterPlayersBySeason(),
   ]);
   if (error) throw error;
+
+  const playersById = new Map([...playersByName.values()].map((p) => [p.id, p]));
+
   const out = new Map<number, LeaderboardRowWithId[]>();
   for (const r of (rows ?? []) as LeaderboardRow[]) {
-    const player_id = players.get(r.player_name)?.id ?? -1;
+    const player_id = playersByName.get(r.player_name)?.id ?? -1;
     const ps = perPlayer.get(`${r.season_id}:${player_id}`);
     const total_rounds_played = n(r.total_rounds_played);
     const total_rounds_won = ps?.rounds_won ?? 0;
@@ -1171,6 +1253,14 @@ export async function getAllLeaderboards(): Promise<
     list.push(withId);
     out.set(r.season_id, list);
   }
+
+  // For any season with roster players but no played matches, add zero-stat rows
+  for (const [seasonId, playerIds] of rosterBySeason) {
+    if (!out.has(seasonId)) {
+      out.set(seasonId, zeroStatRows(seasonId, playerIds, playersById));
+    }
+  }
+
   return out;
 }
 
