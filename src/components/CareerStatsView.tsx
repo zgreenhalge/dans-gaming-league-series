@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
+import { extractSeasonNumber, seasonTitle } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
 
 type Filter = 'career' | number;
@@ -68,11 +69,30 @@ export default function CareerStatsView({
   function toggleRegular() { baseToggleRegular(); setFilter('career'); }
   function toggleGauntlet() { baseToggleGauntlet(); setFilter('career'); }
 
+  // Map regular season ID → paired gauntlet season ID (matched by season number)
+  const regularToGauntlet = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const r of regularSeasons) {
+      const n = extractSeasonNumber(r.name);
+      if (n == null) continue;
+      const g = gauntletSeasons.find((s) => extractSeasonNumber(s.name) === n);
+      if (g) map.set(r.id, g.id);
+    }
+    return map;
+  }, [regularSeasons, gauntletSeasons]);
+
   const activeSeasons = useMemo(() => {
-    const list: { id: number; name: string }[] = [];
-    if (includeRegular) list.push(...regularSeasons);
-    if (includeGauntlet) list.push(...gauntletSeasons);
-    return list;
+    const seen = new Set<string>();
+    const all = [
+      ...(includeRegular ? regularSeasons : []),
+      ...(includeGauntlet ? gauntletSeasons : []),
+    ];
+    return all.filter((s) => {
+      const title = seasonTitle(s.name);
+      if (seen.has(title)) return false;
+      seen.add(title);
+      return true;
+    });
   }, [includeRegular, includeGauntlet, regularSeasons, gauntletSeasons]);
 
   const rows = useMemo<LeaderboardRowWithId[]>(() => {
@@ -81,17 +101,27 @@ export default function CareerStatsView({
       if (includeRegular) return careerRows;
       return gauntletCareerRows;
     }
-    // Specific season — look up from whichever source owns that season ID
-    const reg = bySeason[filter] ?? [];
-    const gnt = gauntletBySeason[filter] ?? [];
-    const source = reg.length > 0 ? reg : gnt;
-    return source.filter((r) => r.total_rounds_played > 0);
-  }, [filter, includeRegular, includeGauntlet, careerRows, gauntletCareerRows, bySeason, gauntletBySeason]);
+    const reg = includeRegular
+      ? (bySeason[filter] ?? []).filter((r) => r.total_rounds_played > 0)
+      : [];
+    const pairedGntId = regularToGauntlet.get(filter);
+    const gnt = includeGauntlet
+      ? ((pairedGntId ? gauntletBySeason[pairedGntId] : gauntletBySeason[filter]) ?? []).filter(
+          (r) => r.total_rounds_played > 0,
+        )
+      : [];
+    if (reg.length > 0 && gnt.length > 0) return mergeRows(reg, gnt);
+    return reg.length > 0 ? reg : gnt;
+  }, [filter, includeRegular, includeGauntlet, careerRows, gauntletCareerRows, bySeason, gauntletBySeason, regularToGauntlet]);
 
   return (
     <>
       <div className="flex items-center justify-end gap-5 mb-3">
-        <SeasonFilter filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }} />
+        <SeasonFilter
+          filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }}
+          showRegular={regularSeasons.length > 0}
+          showGauntlet={gauntletSeasons.length > 0}
+        />
         <select
           value={String(filter)}
           onChange={(e) => {
@@ -103,7 +133,7 @@ export default function CareerStatsView({
           <option value="career">Career</option>
           {activeSeasons.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.name}
+              {seasonTitle(s.name)}
             </option>
           ))}
         </select>
