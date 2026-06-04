@@ -24,10 +24,10 @@ function podiumSort(rows: LeaderboardRowWithId[]): LeaderboardRowWithId[] {
 
 function Stat({ v, l }: { v: string; l: string }) {
   return (
-    <span>
-      <span className="text-[var(--color-text-primary)] font-semibold">{v}</span>
-      <span className="ml-1">{l}</span>
-    </span>
+    <div className="text-right">
+      <div className="font-mono text-[14px] font-semibold text-[var(--color-text-primary)] tnum">{v}</div>
+      <div className="tracked text-[9px] text-[var(--color-text-secondary)]">{l}</div>
+    </div>
   );
 }
 
@@ -71,7 +71,7 @@ function ActiveSeasonRow({ season, leaderboard }: { season: Season; leaderboard:
               </div>
               <div className="font-display text-[16px] font-semibold leading-tight truncate">{p.player_name}</div>
               <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1.5 flex items-center gap-3">
-                <Stat v={p.overall_adr.toFixed(2)} l="ADR" />
+                <span><span className="text-[var(--color-text-primary)] font-semibold">{p.overall_adr.toFixed(2)}</span> ADR</span>
                 <span>{p.win_rate_percentage.toFixed(1)}% WR</span>
               </div>
             </Link>
@@ -84,7 +84,15 @@ function ActiveSeasonRow({ season, leaderboard }: { season: Season; leaderboard:
   );
 }
 
-function UpcomingSeasonRow({ season }: { season: Season }) {
+function UpcomingSeasonRow({ season, leaderboard }: { season: Season; leaderboard: LeaderboardRowWithId[] }) {
+  const meta = [
+    leaderboard.length > 0 && `${leaderboard.length} players`,
+    season.start_date &&
+      new Date(season.start_date + 'T00:00:00Z').toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
+      }),
+  ].filter(Boolean).join(' · ');
+
   return (
     <Link
       href={`/seasons/${season.id}`}
@@ -97,6 +105,9 @@ function UpcomingSeasonRow({ season }: { season: Season }) {
         <div className="font-display text-[18px] font-semibold leading-tight truncate">
           {seasonTitle(season.name)}
         </div>
+        {meta && (
+          <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1">{meta}</div>
+        )}
       </div>
       <span
         className="inline-flex items-center px-1.5 py-0.5 tracked text-[10px] font-semibold border shrink-0"
@@ -113,56 +124,79 @@ function UpcomingSeasonRow({ season }: { season: Season }) {
 }
 
 function PastSeasonRow({
-  season,
-  leaderboard,
+  num,
+  regular,
+  regularLeaderboard,
+  gauntlet,
   gauntletSummary,
+  gauntletLeaderboard,
 }: {
-  season: Season;
-  leaderboard: LeaderboardRowWithId[];
-  gauntletSummary?: GauntletSummary;
+  num: number;
+  regular: Season | null;
+  regularLeaderboard: LeaderboardRowWithId[];
+  gauntlet: Season | null;
+  gauntletSummary: GauntletSummary | undefined;
+  gauntletLeaderboard: LeaderboardRowWithId[];
 }) {
-  const regWinner = podiumSort(leaderboard)[0] ?? null;
+  const href = `/seasons/${(regular ?? gauntlet)!.id}`;
+  const regWinner = regular ? (podiumSort(regularLeaderboard)[0] ?? null) : null;
   const gauntletChamp = gauntletSummary?.champion ?? null;
+  const gauntletChampStats = gauntletChamp
+    ? (gauntletLeaderboard.find((r) => r.player_id === gauntletChamp.player_id) ?? null)
+    : null;
+
+  const subtitle = regular ? `${regularLeaderboard.length} players` : '';
 
   return (
     <Link
-      href={`/seasons/${season.id}`}
-      className="grid grid-cols-[1fr_auto] items-center gap-8 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
+      href={href}
+      className="flex flex-col sm:grid sm:grid-cols-[1fr_auto] sm:items-center gap-3 sm:gap-8 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
     >
       <div className="min-w-0">
         <div className="font-display text-[18px] font-semibold leading-tight truncate">
-          {seasonTitle(season.name)}
+          Season {num}
         </div>
-        <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1">
-          {leaderboard.length} players{gauntletSummary ? ` · Gauntlet: ${gauntletSummary.roundCount} rounds` : ''}
-        </div>
+        {subtitle && (
+          <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1">{subtitle}</div>
+        )}
       </div>
-      <div className="flex items-center gap-8">
-        {regWinner && (
+      <div className="flex flex-wrap sm:flex-nowrap items-start sm:items-center gap-4 sm:gap-8">
+        {regWinner ? (
           <div className="flex flex-col items-end gap-1.5">
             <div className="flex items-center gap-2">
-              <span className="tracked text-[9px] text-[var(--color-text-secondary)]">
-                {gauntletChamp ? 'Reg. Winner' : 'Champion'}
+              <span className="tracked text-[9px] text-[var(--color-text-secondary)] text-right leading-tight">
+                {gauntletChamp ? <>Regular Season<br />Winner</> : 'Champion'}
               </span>
               <span className="font-display text-[16px] font-semibold leading-tight">{regWinner.player_name}</span>
               <PlayerAvatar name={regWinner.player_name} imageUrl={null} size="sm" />
             </div>
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-4">
-              <Stat v={`${regWinner.win_rate_percentage.toFixed(1)}%`} l="WR" />
+            <div className="font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-5">
+              <Stat v={regWinner.kd_ratio.toFixed(2)} l="K/D" />
               <Stat v={regWinner.overall_adr.toFixed(2)} l="ADR" />
             </div>
           </div>
-        )}
-        {gauntletChamp && (
-          <div className="flex flex-col items-end gap-1.5 hidden sm:flex">
-            <div className="flex items-center gap-2">
-              <span className="tracked text-[9px] text-[var(--color-text-secondary)]">Gauntlet</span>
-              <span className="font-display text-[16px] font-semibold leading-tight">{gauntletChamp.name}</span>
-              <PlayerAvatar name={gauntletChamp.name} imageUrl={null} size="sm" />
+        ) : null}
+        {gauntletChamp ? (
+          <>
+            {regWinner && <div className="hidden sm:block w-px self-stretch bg-[var(--color-border-tertiary)]" />}
+            <div className="flex flex-col items-end gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className="tracked text-[9px] text-[var(--color-text-secondary)] text-right leading-tight">
+                  {regWinner ? <>Gauntlet<br />Champion</> : 'Champion'}
+                </span>
+                <span className="font-display text-[16px] font-semibold leading-tight">{gauntletChamp.name}</span>
+                <PlayerAvatar name={gauntletChamp.name} imageUrl={null} size="sm" />
+              </div>
+              {gauntletChampStats && (
+                <div className="font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-5">
+                  <Stat v={gauntletChampStats.kd_ratio.toFixed(2)} l="K/D" />
+                  <Stat v={gauntletChampStats.overall_adr.toFixed(2)} l="ADR" />
+                </div>
+              )}
             </div>
-          </div>
-        )}
-        {!regWinner && (
+          </>
+        ) : null}
+        {!regWinner && !gauntletChamp && (
           <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">No data</div>
         )}
       </div>
@@ -178,17 +212,19 @@ export default async function SeasonsPage() {
     getGauntletStats(),
   ]);
 
-  const regularSeasons = seasons.filter((s) => !s.is_gauntlet);
-  const gauntletSeasons = seasons.filter((s) => s.is_gauntlet);
+  const active = seasons.filter((s) => !s.is_gauntlet && s.status === 'ACTIVE');
+  const upcoming = seasons.filter((s) => !s.is_gauntlet && s.status === 'UPCOMING');
 
-  // Pair gauntlets to regular seasons by season number
-  const gauntletByNum = new Map(
-    gauntletSeasons.map((g) => [extractSeasonNumber(g.name), g]),
-  );
-
-  const active = regularSeasons.filter((s) => s.status === 'ACTIVE');
-  const upcoming = regularSeasons.filter((s) => s.status === 'UPCOMING');
-  const past = regularSeasons.filter((s) => s.status === 'COMPLETED' || s.status === 'ARCHIVED');
+  // Group all past seasons (regular + gauntlet) by season number
+  type PastGroup = { num: number; regular: Season | null; gauntlet: Season | null };
+  const pastGroupMap = new Map<number, PastGroup>();
+  for (const s of seasons.filter((s) => s.status === 'COMPLETED' || s.status === 'ARCHIVED')) {
+    const num = extractSeasonNumber(s.name) ?? s.id;
+    const g = pastGroupMap.get(num) ?? { num, regular: null, gauntlet: null };
+    if (s.is_gauntlet) g.gauntlet = s; else g.regular = s;
+    pastGroupMap.set(num, g);
+  }
+  const pastGroups = Array.from(pastGroupMap.values()).sort((a, b) => b.num - a.num);
 
   return (
     <div className="min-h-screen">
@@ -223,29 +259,31 @@ export default async function SeasonsPage() {
             <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-3">Upcoming</div>
             <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-10">
               {upcoming.map((s) => (
-                <UpcomingSeasonRow key={s.id} season={s} />
+                <UpcomingSeasonRow
+                  key={s.id}
+                  season={s}
+                  leaderboard={allLeaderboards.get(s.id) ?? []}
+                />
               ))}
             </div>
           </>
         )}
 
-        {past.length > 0 && (
+        {pastGroups.length > 0 && (
           <>
             <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-3">Past</div>
             <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-              {past.map((s) => {
-                const num = extractSeasonNumber(s.name);
-                const linkedGauntlet = num != null ? gauntletByNum.get(num) : undefined;
-                const summary = linkedGauntlet ? gauntletSummaries.get(linkedGauntlet.id) : undefined;
-                return (
-                  <PastSeasonRow
-                    key={s.id}
-                    season={s}
-                    leaderboard={allLeaderboards.get(s.id) ?? []}
-                    gauntletSummary={summary}
-                  />
-                );
-              })}
+              {pastGroups.map(({ num, regular, gauntlet }) => (
+                <PastSeasonRow
+                  key={num}
+                  num={num}
+                  regular={regular}
+                  regularLeaderboard={regular ? (allLeaderboards.get(regular.id) ?? []) : []}
+                  gauntlet={gauntlet}
+                  gauntletSummary={gauntlet ? gauntletSummaries.get(gauntlet.id) : undefined}
+                  gauntletLeaderboard={gauntlet ? (gauntletStats.bySeason[gauntlet.id] ?? []) : []}
+                />
+              ))}
             </div>
           </>
         )}

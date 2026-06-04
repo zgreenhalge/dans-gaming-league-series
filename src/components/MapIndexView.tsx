@@ -108,7 +108,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
 
   return (
     <>
-      <div className="flex items-center border-b border-[var(--color-border-primary)] mb-6">
+      <div className="flex flex-wrap items-center gap-y-2 border-b border-[var(--color-border-primary)] mb-6">
         <button type="button" className={tabCls(tab === 'tiles')} onClick={() => setTab('tiles')}>
           Maps
         </button>
@@ -119,7 +119,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
           filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason }}
           seasons={allSeasons}
           onSeasonChange={setSelectedSeason}
-          className="ml-auto flex items-center gap-5 pb-0.5"
+          className="ml-auto flex flex-wrap items-center gap-4 pb-0.5"
         />
       </div>
 

@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import type { PlayerHistoryRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { isPlayedScore } from '@/lib/util';
+import { extractSeasonNumber, isPlayedScore, seasonTitle } from '@/lib/util';
 import { MatchCard } from './MatchCard';
 import LeaderboardTable from './LeaderboardTable';
+import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 
 type Filter = 'career' | number;
 type MapSortCol = 'map' | 'record' | 'wr' | 'adr';
@@ -130,20 +131,48 @@ export default function PlayerView({
 }: {
   history: PlayerHistoryRow[];
 }) {
-  const seasons = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const r of history) map.set(r.season_id, r.season_name);
-    return Array.from(map, ([id, name]) => ({ id, name })).sort(
-      (a, b) => a.id - b.id,
-    );
+  const { regularSeasons, gauntletSeasons, regularToGauntlet } = useMemo(() => {
+    const regMap = new Map<number, { id: number; name: string }>();
+    const gntMap = new Map<number, { id: number; name: string }>();
+    for (const r of history) {
+      (r.is_gauntlet ? gntMap : regMap).set(r.season_id, { id: r.season_id, name: r.season_name });
+    }
+    const reg = Array.from(regMap.values()).sort((a, b) => a.id - b.id);
+    const gnt = Array.from(gntMap.values()).sort((a, b) => a.id - b.id);
+    const r2g = new Map<number, number>();
+    for (const r of reg) {
+      const n = extractSeasonNumber(r.name);
+      if (n == null) continue;
+      const g = gnt.find((s) => extractSeasonNumber(s.name) === n);
+      if (g) r2g.set(r.id, g.id);
+    }
+    return { regularSeasons: reg, gauntletSeasons: gnt, regularToGauntlet: r2g };
   }, [history]);
 
   const last5 = useMemo(() => history.filter(isPlayed).slice(0, 5), [history]);
 
+  const { includeRegular, includeGauntlet, toggleRegular: baseToggleRegular, toggleGauntlet: baseToggleGauntlet } = useSeasonFilter();
   const [filter, setFilter] = useState<Filter>('career');
   const [tab, setTab] = useState<PlayerTab>('stats');
   const [mapSort, setMapSort] = useState<MapSortCol>('wr');
   const [mapAsc, setMapAsc] = useState(false);
+
+  function toggleRegular() { baseToggleRegular(); setFilter('career'); }
+  function toggleGauntlet() { baseToggleGauntlet(); setFilter('career'); }
+
+  const activeSeasons = useMemo(() => {
+    const seen = new Set<string>();
+    const all = [
+      ...(includeRegular ? regularSeasons : []),
+      ...(includeGauntlet ? gauntletSeasons : []),
+    ];
+    return all.filter((s) => {
+      const title = seasonTitle(s.name);
+      if (seen.has(title)) return false;
+      seen.add(title);
+      return true;
+    });
+  }, [includeRegular, includeGauntlet, regularSeasons, gauntletSeasons]);
 
   function clickMapSort(col: string) {
     const c = col as MapSortCol;
@@ -151,13 +180,20 @@ export default function PlayerView({
     else { setMapSort(c); setMapAsc(c === 'map'); }
   }
 
-  const filtered = useMemo(
-    () =>
-      filter === 'career'
-        ? history
-        : history.filter((r) => r.season_id === filter),
-    [filter, history],
-  );
+  const filtered = useMemo(() => {
+    const base = filter === 'career'
+      ? history
+      : (() => {
+          const pairedGntId = regularToGauntlet.get(filter);
+          return history.filter((r) =>
+            r.season_id === filter ||
+            (pairedGntId != null && r.season_id === pairedGntId),
+          );
+        })();
+    return base.filter((r) =>
+      r.is_gauntlet ? includeGauntlet : includeRegular,
+    );
+  }, [filter, history, includeRegular, includeGauntlet, regularToGauntlet]);
 
   const agg = aggregate(filtered);
   const maps = aggregateByMap(filtered);
@@ -173,41 +209,24 @@ export default function PlayerView({
 
   return (
     <>
-      {/* Last 5 + season filter — always visible above tabs */}
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Last 5</span>
-          <div className="flex items-center gap-2">
-            {last5.length === 0 ? (
-              <span className="text-[12px] text-[var(--color-text-secondary)]">No recent matches</span>
-            ) : (
-              last5.map((r, i) => (
-                <span key={r.id ?? i} className={`wl-chip wl-chip--sm ${r.is_win ? 'wl-chip--win' : 'wl-chip--loss'}`} aria-label={r.is_win ? 'Win' : 'Loss'}>
-                  {r.is_win ? 'W' : 'L'}
-                </span>
-              ))
-            )}
-          </div>
+      {/* Last 5 — above tabs */}
+      <div className="mb-4 flex items-center gap-3">
+        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Last 5</span>
+        <div className="flex items-center gap-2">
+          {last5.length === 0 ? (
+            <span className="text-[12px] text-[var(--color-text-secondary)]">No recent matches</span>
+          ) : (
+            last5.map((r, i) => (
+              <span key={r.id ?? i} className={`wl-chip wl-chip--sm ${r.is_win ? 'wl-chip--win' : 'wl-chip--loss'}`} aria-label={r.is_win ? 'Win' : 'Loss'}>
+                {r.is_win ? 'W' : 'L'}
+              </span>
+            ))
+          )}
         </div>
-        <select
-          value={String(filter)}
-          onChange={(e) => {
-            const v = e.target.value;
-            setFilter(v === 'career' ? 'career' : Number(v));
-          }}
-          className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
-        >
-          <option value="career">Career</option>
-          {seasons.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
       </div>
 
-      {/* Tab bar */}
-      <div className="flex border-b border-[var(--color-border-primary)] mb-6">
+      {/* Tab bar + filter controls */}
+      <div className="flex flex-wrap items-center gap-y-2 border-b border-[var(--color-border-primary)] mb-6">
         {playerTabs.map((t) => (
           <button
             key={t.key}
@@ -221,6 +240,28 @@ export default function PlayerView({
             {t.label}
           </button>
         ))}
+        <div className="ml-auto flex flex-wrap items-center gap-4 pb-0.5">
+          <SeasonFilter
+            filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }}
+            showRegular={regularSeasons.length > 0}
+            showGauntlet={gauntletSeasons.length > 0}
+          />
+          <select
+            value={String(filter)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setFilter(v === 'career' ? 'career' : Number(v));
+            }}
+            className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
+          >
+            <option value="career">Career</option>
+            {activeSeasons.map((s) => (
+              <option key={s.id} value={s.id}>
+                {seasonTitle(s.name)}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Stats tab */}
@@ -250,17 +291,23 @@ export default function PlayerView({
             </div>
           </div>
 
-          {isCareer && seasons.length > 0 && (
+          {isCareer && activeSeasons.length > 0 && (
             <>
               <SectionLabel>Season history</SectionLabel>
               <LeaderboardTable
                 firstColMode="season"
-                rows={seasons.map((s): LeaderboardRowWithId => {
-                  const a = aggregate(history.filter((r) => r.season_id === s.id));
+                rows={activeSeasons.map((s): LeaderboardRowWithId => {
+                  const pairedGntId = regularToGauntlet.get(s.id);
+                  const seasonRows = history.filter((r) => {
+                    if (r.season_id === s.id) return r.is_gauntlet ? includeGauntlet : includeRegular;
+                    if (pairedGntId != null && r.season_id === pairedGntId) return includeGauntlet;
+                    return false;
+                  });
+                  const a = aggregate(seasonRows);
                   return {
                     season_id: s.id,
                     player_id: s.id,
-                    player_name: s.name,
+                    player_name: seasonTitle(s.name),
                     matches_played: a.matches,
                     matches_won: a.wins,
                     matches_lost: a.losses,

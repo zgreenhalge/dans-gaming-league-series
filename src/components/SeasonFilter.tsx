@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { seasonTitle } from '@/lib/util';
 
 // ─── Checkbox ────────────────────────────────────────────────────────────────
 
@@ -87,46 +88,66 @@ export function SeasonFilter({
   filter,
   seasons,
   onSeasonChange,
+  showRegular = true,
+  showGauntlet = true,
   className = 'flex items-center gap-5',
 }: {
   filter: Pick<SeasonFilterState, 'includeRegular' | 'includeGauntlet' | 'toggleRegular' | 'toggleGauntlet' | 'selectedSeason'>;
   seasons?: { id: number; name: string; is_gauntlet: boolean }[];
   onSeasonChange?: (s: number | 'all') => void;
+  showRegular?: boolean;
+  showGauntlet?: boolean;
   className?: string;
 }) {
   const { includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason } = filter;
 
-  const visibleSeasons = seasons?.filter((s) => {
-    if (!includeRegular && !s.is_gauntlet) return false;
-    if (!includeGauntlet && s.is_gauntlet) return false;
-    return true;
-  });
+  const visibleSeasons = useMemo(
+    () =>
+      seasons?.filter((s) => {
+        if (!includeRegular && !s.is_gauntlet) return false;
+        if (!includeGauntlet && s.is_gauntlet) return false;
+        return true;
+      }),
+    [seasons, includeRegular, includeGauntlet],
+  );
+
+  // Deduplicate by season title so regular+gauntlet pairs appear as one entry
+  const uniqueSeasons = useMemo(() => {
+    if (!visibleSeasons) return undefined;
+    const seen = new Set<string>();
+    return visibleSeasons.filter((s) => {
+      const t = seasonTitle(s.name);
+      if (seen.has(t)) return false;
+      seen.add(t);
+      return true;
+    });
+  }, [visibleSeasons]);
 
   // Reset to 'all' if the selected season is no longer visible
   useEffect(() => {
     if (
       selectedSeason !== 'all' &&
       onSeasonChange &&
-      visibleSeasons &&
-      !visibleSeasons.some((s) => s.id === selectedSeason)
+      uniqueSeasons &&
+      !uniqueSeasons.some((s) => s.id === selectedSeason)
     ) {
       onSeasonChange('all');
     }
-  }, [selectedSeason, visibleSeasons, onSeasonChange]);
+  }, [selectedSeason, uniqueSeasons, onSeasonChange]);
 
   return (
     <div className={className}>
-      <Checkbox checked={includeRegular} onToggle={toggleRegular} label="Regular Season" />
-      <Checkbox checked={includeGauntlet} onToggle={toggleGauntlet} label="Gauntlets" />
-      {visibleSeasons && visibleSeasons.length > 1 && onSeasonChange && (
+      {showRegular && <Checkbox checked={includeRegular} onToggle={toggleRegular} label="Regular Season" />}
+      {showGauntlet && <Checkbox checked={includeGauntlet} onToggle={toggleGauntlet} label="Gauntlet" />}
+      {uniqueSeasons && uniqueSeasons.length > 1 && onSeasonChange && (
         <select
           value={selectedSeason === 'all' ? 'all' : String(selectedSeason)}
           onChange={(e) => onSeasonChange(e.target.value === 'all' ? 'all' : Number(e.target.value))}
           className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
         >
           <option value="all">All seasons</option>
-          {visibleSeasons.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
+          {uniqueSeasons.map((s) => (
+            <option key={s.id} value={s.id}>{seasonTitle(s.name)}</option>
           ))}
         </select>
       )}
