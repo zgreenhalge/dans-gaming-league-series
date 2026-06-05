@@ -157,9 +157,8 @@ def verify_aggregated_stats(matches: List[Dict]) -> None:
         wl_str = f"{stats['wins']}-{stats['losses']}"
         print(f"{player:<12} | {stats['kills']:<6} | {stats['assists']:<7} | {stats['deaths']:<6} | {stats['damage']:<8} | {wl_str:<6} | {adr:<4}")
 
-# Returns the integer value if it exists, or -1 if the value is None.
-def default_stat(val: Any) -> int:
-    return int(val) if val is not None else -1
+def default_stat(val: Any) -> int | None:
+    return int(val) if val is not None else None
 
 
 def upload(matches, byes, source_file: str, is_playoff: bool = False, season_name_override: str = None):
