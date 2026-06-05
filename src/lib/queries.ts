@@ -227,14 +227,6 @@ export async function getSeasons(): Promise<Season[]> {
   return (data ?? []) as Season[];
 }
 
-export async function getPlayersByName(): Promise<Map<string, Player>> {
-  const { data, error } = await supabase.from('players').select('*');
-  if (error) throw error;
-  const map = new Map<string, Player>();
-  for (const p of (data ?? []) as Player[]) map.set(p.name, p);
-  return map;
-}
-
 export async function getPlayersById(): Promise<Map<number, Player>> {
   const { data, error } = await supabase.from('players').select('*');
   if (error) throw error;
@@ -317,10 +309,10 @@ export async function getSeasonSchedule(
         player_id: r.player_id,
         player_name: players.get(r.player_id)?.name ?? `#${r.player_id}`,
         faction: 'SHIRTS' as const,
-        kills: Math.max(0, r.kills),
-        assists: Math.max(0, r.assists ?? 0),
-        deaths: Math.max(0, r.deaths),
-        adr: Math.max(0, r.adr),
+        kills: r.kills,
+        assists: r.assists ?? 0,
+        deaths: r.deaths,
+        adr: r.adr,
         is_win: !!r.is_win,
       }));
     const skinsStats = roster
@@ -330,10 +322,10 @@ export async function getSeasonSchedule(
         player_id: r.player_id,
         player_name: players.get(r.player_id)?.name ?? `#${r.player_id}`,
         faction: 'SKINS' as const,
-        kills: Math.max(0, r.kills),
-        assists: Math.max(0, r.assists ?? 0),
-        deaths: Math.max(0, r.deaths),
-        adr: Math.max(0, r.adr),
+        kills: r.kills,
+        assists: r.assists ?? 0,
+        deaths: r.deaths,
+        adr: r.adr,
         is_win: !!r.is_win,
       }));
 
@@ -483,10 +475,10 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
       player_id: st.player_id,
       player_name: p?.name ?? `#${st.player_id}`,
       faction: st.faction,
-      kills: Math.max(0, st.kills),
-      assists: Math.max(0, st.assists ?? 0),
-      deaths: Math.max(0, st.deaths),
-      adr: Math.max(0, st.adr ?? 0),
+      kills: st.kills,
+      assists: st.assists ?? 0,
+      deaths: st.deaths,
+      adr: st.adr ?? 0,
       is_win: !!st.is_win,
     };
 
@@ -535,34 +527,26 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
   return { player: player as Player, history };
 }
 
-/**
- * Returns leaderboard rows for a season, augmented with player_id by joining
- * the players table by name. The view itself doesn't expose player_id.
- */
 export async function getSeasonLeaderboard(
   seasonId: number,
 ): Promise<LeaderboardRowWithId[]> {
-  const [{ data: rows, error }, playersByName, perPlayer] = await Promise.all([
+  const [{ data: rows, error }, playersById, perPlayer] = await Promise.all([
     supabase
       .from('player_season_leaderboard')
       .select('*')
       .eq('season_id', seasonId)
       .order('overall_adr', { ascending: false }),
-    getPlayersByName(),
+    getPlayersById(),
     getPerPlayerSeasonStats(),
   ]);
   if (error) throw error;
 
-  const playersById = new Map([...playersByName.values()].map((p) => [p.id, p]));
-
   const result = ((rows ?? []) as LeaderboardRow[]).map((r) => {
-    const player_id = playersByName.get(r.player_name)?.id ?? -1;
-    const ps = perPlayer.get(`${r.season_id}:${player_id}`);
+    const ps = perPlayer.get(`${r.season_id}:${r.player_id}`);
     const total_rounds_played = n(r.total_rounds_played);
     const total_rounds_won = ps?.rounds_won ?? 0;
     return {
       ...normalizeRow(r),
-      player_id,
       total_assists: ps?.assists ?? 0,
       total_rounds_won,
       rwr_percentage: total_rounds_played > 0 ? (total_rounds_won / total_rounds_played) * 100 : 0,
@@ -584,14 +568,14 @@ export async function getSeasonLeaderboard(
  * are re-derived from totals so the math stays correct.
  */
 export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
-  const [{ data: rows, error }, players, perPlayer] = await Promise.all([
+  const [{ data: rows, error }, perPlayer] = await Promise.all([
     supabase.from('player_season_leaderboard').select('*'),
-    getPlayersByName(),
     getPerPlayerSeasonStats(),
   ]);
   if (error) throw error;
 
   type Agg = {
+    player_id: number;
     matches_played: number;
     matches_won: number;
     matches_lost: number;
@@ -606,11 +590,11 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
   const byName = new Map<string, Agg>();
   for (const raw of (rows ?? []) as LeaderboardRow[]) {
     const r = normalizeRow(raw);
-    if (r.total_rounds_played === 0) continue; // skip unplayed (S3 placeholder)
-    const player_id = players.get(r.player_name)?.id ?? -1;
+    if (r.total_rounds_played === 0) continue; // skip unplayed placeholder rows
     const agg =
       byName.get(r.player_name) ??
       ({
+        player_id: r.player_id,
         matches_played: 0,
         matches_won: 0,
         matches_lost: 0,
@@ -622,7 +606,7 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
         total_rounds_won: 0,
         seasons: new Set<number>(),
       } as Agg);
-    const ps = perPlayer.get(`${r.season_id}:${player_id}`);
+    const ps = perPlayer.get(`${r.season_id}:${r.player_id}`);
     agg.matches_played += r.matches_played;
     agg.matches_won += r.matches_won;
     agg.matches_lost += r.matches_lost;
@@ -641,7 +625,7 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
     out.push({
       season_id: 0,
       player_name,
-      player_id: players.get(player_name)?.id ?? -1,
+      player_id: a.player_id,
       matches_played: a.matches_played,
       matches_won: a.matches_won,
       matches_lost: a.matches_lost,
@@ -713,7 +697,7 @@ function aggToRow(
 /**
  * Aggregates stats from all gauntlet seasons (is_gauntlet = true).
  * The leaderboard view excludes playoff games, so we compute directly from
- * player_match_stats. Negative sentinel values (-1) are clamped to 0.
+ * player_match_stats.
  */
 export async function getGauntletStats(): Promise<{
   career: LeaderboardRowWithId[];
@@ -811,12 +795,12 @@ export async function getGauntletStats(): Promise<{
     agg.matches_played += 1;
     agg.matches_won += s.is_win ? 1 : 0;
     agg.matches_lost += s.is_win ? 0 : 1;
-    agg.total_kills += Math.max(0, s.kills);
-    agg.total_assists += Math.max(0, s.assists);
-    agg.total_deaths += Math.max(0, s.deaths);
-    agg.total_damage += Math.max(0, s.damage);
-    agg.total_rounds_played += Math.max(0, s.rounds_played);
-    agg.total_rounds_won += Math.max(0, s.rounds_won);
+    agg.total_kills += s.kills;
+    agg.total_assists += s.assists;
+    agg.total_deaths += s.deaths;
+    agg.total_damage += s.damage;
+    agg.total_rounds_played += s.rounds_played;
+    agg.total_rounds_won += s.rounds_won;
     bySeasonPlayer.set(key, agg);
   }
 
@@ -958,12 +942,12 @@ export async function getGauntletSeasonLeaderboard(
     agg.matches_played += 1;
     agg.matches_won += s.is_win ? 1 : 0;
     agg.matches_lost += s.is_win ? 0 : 1;
-    agg.total_kills += Math.max(0, s.kills);
-    agg.total_assists += Math.max(0, s.assists);
-    agg.total_deaths += Math.max(0, s.deaths);
-    agg.total_damage += Math.max(0, s.damage);
-    agg.total_rounds_played += Math.max(0, s.rounds_played);
-    agg.total_rounds_won += Math.max(0, s.rounds_won);
+    agg.total_kills += s.kills;
+    agg.total_assists += s.assists;
+    agg.total_deaths += s.deaths;
+    agg.total_damage += s.damage;
+    agg.total_rounds_played += s.rounds_played;
+    agg.total_rounds_won += s.rounds_won;
     byPlayer.set(s.player_id, agg);
   }
 
@@ -1026,10 +1010,10 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
       player_id: s.player_id,
       player_name: player?.name ?? `#${s.player_id}`,
       faction: s.faction as 'SHIRTS' | 'SKINS',
-      kills: Math.max(0, s.kills),
-      assists: Math.max(0, s.assists ?? 0),
-      deaths: Math.max(0, s.deaths),
-      adr: Math.max(0, s.adr),
+      kills: s.kills,
+      assists: s.assists ?? 0,
+      deaths: s.deaths,
+      adr: s.adr,
       is_win: s.is_win,
     });
     statsByMatch.set(s.match_id, list);
@@ -1225,28 +1209,24 @@ export interface MapDetail {
 export async function getAllLeaderboards(): Promise<
   Map<number, LeaderboardRowWithId[]>
 > {
-  const [{ data: rows, error }, playersByName, perPlayer, rosterBySeason] = await Promise.all([
+  const [{ data: rows, error }, playersById, perPlayer, rosterBySeason] = await Promise.all([
     supabase
       .from('player_season_leaderboard')
       .select('*')
       .order('overall_adr', { ascending: false }),
-    getPlayersByName(),
+    getPlayersById(),
     getPerPlayerSeasonStats(),
     getRosterPlayersBySeason(),
   ]);
   if (error) throw error;
 
-  const playersById = new Map([...playersByName.values()].map((p) => [p.id, p]));
-
   const out = new Map<number, LeaderboardRowWithId[]>();
   for (const r of (rows ?? []) as LeaderboardRow[]) {
-    const player_id = playersByName.get(r.player_name)?.id ?? -1;
-    const ps = perPlayer.get(`${r.season_id}:${player_id}`);
+    const ps = perPlayer.get(`${r.season_id}:${r.player_id}`);
     const total_rounds_played = n(r.total_rounds_played);
     const total_rounds_won = ps?.rounds_won ?? 0;
     const withId: LeaderboardRowWithId = {
       ...normalizeRow(r),
-      player_id,
       total_assists: ps?.assists ?? 0,
       total_rounds_won,
       rwr_percentage: total_rounds_played > 0 ? (total_rounds_won / total_rounds_played) * 100 : 0,
@@ -1424,8 +1404,8 @@ export async function getMapIndex(): Promise<MapIndexEntry[]> {
     const matchAssists = new Map<number, number>();
     const shirtsWon = new Map<number, boolean>();
     for (const s of (statsData ?? []) as { match_id: number; kills: number; assists: number; faction: string; is_win: boolean }[]) {
-      matchKills.set(s.match_id, (matchKills.get(s.match_id) ?? 0) + Math.max(0, s.kills));
-      matchAssists.set(s.match_id, (matchAssists.get(s.match_id) ?? 0) + Math.max(0, s.assists ?? 0));
+      matchKills.set(s.match_id, (matchKills.get(s.match_id) ?? 0) + s.kills);
+      matchAssists.set(s.match_id, (matchAssists.get(s.match_id) ?? 0) + (s.assists ?? 0));
       if (s.faction === 'SHIRTS') {
         if (s.is_win) shirtsWon.set(s.match_id, true);
         else if (!shirtsWon.has(s.match_id)) shirtsWon.set(s.match_id, false);
@@ -1591,13 +1571,13 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
       player_id: s.player_id,
       player_name: player?.name ?? `#${s.player_id}`,
       faction: s.faction,
-      kills: Math.max(0, s.kills),
-      assists: Math.max(0, s.assists ?? 0),
-      deaths: Math.max(0, s.deaths),
-      adr: Math.max(0, s.adr ?? 0),
-      damage: Math.max(0, s.damage ?? 0),
-      rounds_played: Math.max(0, s.rounds_played ?? 0),
-      rounds_won: Math.max(0, s.rounds_won ?? 0),
+      kills: s.kills,
+      assists: s.assists ?? 0,
+      deaths: s.deaths,
+      adr: s.adr ?? 0,
+      damage: s.damage ?? 0,
+      rounds_played: s.rounds_played ?? 0,
+      rounds_won: s.rounds_won ?? 0,
       is_win: !!s.is_win,
     };
     if (s.faction === 'SHIRTS') entry.shirts.push(stat);
@@ -1647,12 +1627,12 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
     agg.matches_played += 1;
     agg.matches_won += s.is_win ? 1 : 0;
     agg.matches_lost += s.is_win ? 0 : 1;
-    agg.total_kills += Math.max(0, s.kills);
-    agg.total_assists += Math.max(0, s.assists ?? 0);
-    agg.total_deaths += Math.max(0, s.deaths);
-    agg.total_damage += Math.max(0, s.damage ?? 0);
-    agg.total_rounds_played += Math.max(0, s.rounds_played ?? 0);
-    agg.total_rounds_won += Math.max(0, s.rounds_won ?? 0);
+    agg.total_kills += s.kills;
+    agg.total_assists += s.assists ?? 0;
+    agg.total_deaths += s.deaths;
+    agg.total_damage += s.damage ?? 0;
+    agg.total_rounds_played += s.rounds_played ?? 0;
+    agg.total_rounds_won += s.rounds_won ?? 0;
     byPlayer.set(s.player_id, agg);
   }
 

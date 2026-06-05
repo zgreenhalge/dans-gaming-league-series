@@ -67,6 +67,7 @@ export interface PlayerMatchStat {
 
 export interface LeaderboardRow {
   season_id: number;
+  player_id: number;
   player_name: string;
   matches_played: number;
   matches_won: number;
@@ -84,7 +85,6 @@ export interface LeaderboardRow {
 }
 
 export interface LeaderboardRowWithId extends LeaderboardRow {
-  player_id: number;
   steam_avatar_url?: string | null;
 }
 
