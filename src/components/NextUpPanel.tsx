@@ -3,6 +3,7 @@ import { LocalTime } from './LocalTime';
 import { YouBadge } from './YouBadge';
 import { toSentenceCase, mapImageFor } from '@/lib/maps';
 import { isPlayedScore, parseScore, weekWindow, fmtWindowDate } from '@/lib/util';
+import { CountdownTimer } from './CountdownTimer';
 import type { WeekWithMatches, MatchWithRoster } from '@/lib/queries';
 import type { Season } from '@/lib/types';
 
@@ -43,30 +44,22 @@ function MatchCell({
       style={mapImg ? { ['--map-img' as string]: `url("${mapImg}")` } : undefined}
     >
       <div className={mapImg ? 'bg-[var(--overlay-strong)] hover:bg-[var(--overlay-medium)] transition-colors' : ''}>
-        <div className="px-5 pt-4 pb-2 flex items-center gap-1.5">
-          <span className="tracked text-[9px] text-[var(--color-text-secondary)] map-head">
-            Match {match.match_number}
-          </span>
-          {isInMatch && <YouBadge />}
-          {map && (
-            <span className="tracked text-[9px] text-[var(--color-text-secondary)] map-head">
-              · {toSentenceCase(map)}
+        <div className="px-5 pt-4 pb-2 flex items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="tracked text-[11px] font-semibold text-[var(--color-text-primary)] map-head">
+              Match {match.match_number}
             </span>
-          )}
+            {map && (
+              <span className="tracked text-[9px] text-[var(--color-text-secondary)] map-head">
+                · {toSentenceCase(map)}
+              </span>
+            )}
+          </div>
+          {isInMatch && <YouBadge />}
         </div>
 
-        <div className="px-5 pb-4 flex items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="font-display text-[14px] font-semibold leading-tight truncate map-head">
-              <TeamNames players={match.shirts} />
-            </div>
-            <div className="tracked text-[9px] text-[var(--color-text-secondary)] my-1 map-head">vs</div>
-            <div className="font-display text-[14px] font-semibold leading-tight truncate map-head">
-              <TeamNames players={match.skins} />
-            </div>
-          </div>
-
-          <div className="shrink-0 text-right">
+        <div className="px-5 pb-4 flex items-center justify-between gap-4">
+          <div className="shrink-0 flex items-center">
             {score ? (
               <div className="font-display font-semibold leading-none">
                 <div className="text-[22px] text-[var(--color-text-primary)] map-head">{score.shirts}</div>
@@ -74,14 +67,27 @@ function MatchCell({
                 <div className="text-[22px] text-[var(--color-text-primary)] map-head">{score.skins}</div>
               </div>
             ) : match.scheduled_at ? (
-              <div className="font-mono text-[11px] text-[var(--color-text-secondary)] map-head">
-                <LocalTime iso={match.scheduled_at} opts={{ weekday: 'short', hour: 'numeric', minute: '2-digit' }} />
+              <div>
+                <div className="font-mono text-[11px] map-head" style={{ color: 'var(--color-site-accent)' }}>
+                  <LocalTime iso={match.scheduled_at} opts={{ weekday: 'short', hour: 'numeric', minute: '2-digit' }} />
+                </div>
+                <CountdownTimer iso={match.scheduled_at} className="tracked text-[9px] text-[var(--color-text-secondary)] mt-0.5 map-head" />
               </div>
             ) : (
-              <span className="tracked text-[9px] font-semibold text-[var(--color-accent-amber-fg)]">
+              <span className="tracked text-[11px] text-[var(--color-text-secondary)] opacity-60">
                 Pending
               </span>
             )}
+          </div>
+
+          <div className="min-w-0 flex-1 text-right">
+            <div className="font-display text-[14px] font-semibold leading-tight truncate map-head">
+              <TeamNames players={match.shirts} />
+            </div>
+            <div className="tracked text-[9px] text-[var(--color-text-secondary)] my-1 map-head">vs</div>
+            <div className="font-display text-[14px] font-semibold leading-tight truncate map-head">
+              <TeamNames players={match.skins} />
+            </div>
           </div>
         </div>
       </div>

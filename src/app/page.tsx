@@ -57,7 +57,10 @@ function ActiveSeasonPanel({
   leaderboard: LeaderboardRowWithId[];
 }) {
   return (
-    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
+    <div
+      className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]"
+      style={{ borderLeftColor: 'var(--color-site-accent)', borderLeftWidth: '3px' }}
+    >
       <Link
         href={`/seasons/${season.id}`}
         className="block px-6 py-5 hover:bg-[var(--color-bg-secondary)] transition-colors"

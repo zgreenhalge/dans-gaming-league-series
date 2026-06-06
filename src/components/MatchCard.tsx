@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { LocalTime } from './LocalTime';
 import { YouBadge } from './YouBadge';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
-import { relativeTime, fmtWindowDate } from '@/lib/util';
+import { fmtWindowDate } from '@/lib/util';
+import { CountdownTimer } from './CountdownTimer';
 
 export interface MatchCardPlayer {
   player_id: number;
@@ -145,9 +146,7 @@ function renderRight(right: MatchCardRight) {
           <div className="font-mono text-[12px] text-[var(--color-text-primary)]">
             <LocalTime iso={right.scheduledAt} opts={{ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }} />
           </div>
-          <div className="tracked text-[9px] text-[var(--color-text-secondary)] mt-0.5">
-            {relativeTime(right.scheduledAt)}
-          </div>
+          <CountdownTimer iso={right.scheduledAt} className="tracked text-[9px] text-[var(--color-text-secondary)] mt-0.5" />
         </div>
       );
     case 'week-window':
