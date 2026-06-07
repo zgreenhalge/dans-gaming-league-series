@@ -63,7 +63,7 @@ export default async function PlayerPage({
             )}
           </div>
         </div>
-        <PlayerView history={detail.history} />
+        <PlayerView history={detail.history} trophies={detail.trophies} />
       </main>
     </div>
   );
