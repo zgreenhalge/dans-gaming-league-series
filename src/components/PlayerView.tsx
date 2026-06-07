@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import type { PlayerHistoryRow } from '@/lib/queries';
+import type { PlayerHistoryRow, TrophyEntry } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { extractSeasonNumber, isPlayedScore, seasonTitle } from '@/lib/util';
 import { MatchCard } from './MatchCard';
@@ -11,7 +11,28 @@ import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 
 type Filter = 'career' | number;
 type MapSortCol = 'map' | 'record' | 'wr' | 'adr';
-type PlayerTab = 'stats' | 'matches';
+type PlayerTab = 'stats' | 'matches' | 'trophies';
+
+const MEDAL_COLORS: Record<1 | 2 | 3, string> = {
+  1: '#f5c542',
+  2: '#a0a3ab',
+  3: '#c47a3a',
+};
+const MEDAL_ICONS: Record<1 | 2 | 3, string> = {
+  1: '🥇',
+  2: '🥈',
+  3: '🥉',
+};
+const REGULAR_PLACEMENTS: Record<1 | 2 | 3, string> = {
+  1: '1st Place',
+  2: '2nd Place',
+  3: '3rd Place',
+};
+const GAUNTLET_PLACEMENTS: Record<1 | 2 | 3, string> = {
+  1: 'Champion',
+  2: '2nd Place',
+  3: '3rd Place',
+};
 
 interface Aggregate {
   matches: number;
@@ -101,7 +122,7 @@ function SortableTh({ label, colKey, activeCol, asc, align = 'right', onClick }:
   const active = colKey === activeCol;
   return (
     <th
-      role="button" tabIndex={0}
+      tabIndex={0}
       onClick={() => onClick(colKey)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(colKey); } }}
       aria-sort={active ? (asc ? 'ascending' : 'descending') : 'none'}
@@ -128,8 +149,10 @@ function StatCell({ v, l }: { v: string | number; l: string }) {
 
 export default function PlayerView({
   history,
+  trophies,
 }: {
   history: PlayerHistoryRow[];
+  trophies: TrophyEntry[];
 }) {
   const { regularSeasons, gauntletSeasons, regularToGauntlet } = useMemo(() => {
     const regMap = new Map<number, { id: number; name: string }>();
@@ -148,8 +171,6 @@ export default function PlayerView({
     }
     return { regularSeasons: reg, gauntletSeasons: gnt, regularToGauntlet: r2g };
   }, [history]);
-
-  const last5 = useMemo(() => history.filter(isPlayed).slice(0, 5), [history]);
 
   const { includeRegular, includeGauntlet, toggleRegular: baseToggleRegular, toggleGauntlet: baseToggleGauntlet } = useSeasonFilter();
   const [filter, setFilter] = useState<Filter>('career');
@@ -195,6 +216,21 @@ export default function PlayerView({
     );
   }, [filter, history, includeRegular, includeGauntlet, regularToGauntlet]);
 
+  const last5 = useMemo(() => filtered.filter(isPlayed).slice(0, 5), [filtered]);
+
+  const filteredTrophies = useMemo(() => {
+    const base = filter === 'career'
+      ? trophies
+      : (() => {
+          const pairedGntId = regularToGauntlet.get(filter);
+          return trophies.filter((t) =>
+            t.season_id === filter ||
+            (pairedGntId != null && t.season_id === pairedGntId),
+          );
+        })();
+    return base.filter((t) => (t.is_gauntlet ? includeGauntlet : includeRegular));
+  }, [filter, trophies, includeRegular, includeGauntlet, regularToGauntlet]);
+
   const agg = aggregate(filtered);
   const maps = aggregateByMap(filtered);
   const playedHistory = filtered.filter(isPlayed);
@@ -202,13 +238,40 @@ export default function PlayerView({
 
   const isCareer = filter === 'career';
 
+  const medalCounts = useMemo(() => {
+    const counts: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 };
+    for (const t of filteredTrophies) counts[t.rank]++;
+    return counts;
+  }, [filteredTrophies]);
+
   const playerTabs: { key: PlayerTab; label: string }[] = [
     { key: 'stats', label: 'Stats' },
     { key: 'matches', label: `Matches${playedHistory.length > 0 ? ` (${playedHistory.length})` : ''}` },
   ];
+  if (trophies.length > 0) {
+    playerTabs.push({ key: 'trophies', label: `Trophy Case${filteredTrophies.length > 0 ? ` (${filteredTrophies.length})` : ''}` });
+  }
 
   return (
     <>
+      {/* Trophy summary — above Last 5 */}
+      {trophies.length > 0 && (
+        <button
+          onClick={() => setTab('trophies')}
+          className="mb-3 flex items-center gap-3 hover:opacity-80 transition-opacity"
+        >
+          <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Trophies</span>
+          <div className="flex items-center gap-3 font-mono text-[12px]">
+            {([1, 2, 3] as const).map((rank) => (
+              <span key={rank} className="flex items-center gap-1" style={{ color: MEDAL_COLORS[rank] }}>
+                <span>{MEDAL_ICONS[rank]}</span>
+                <span className="font-semibold">{medalCounts[rank]}</span>
+              </span>
+            ))}
+          </div>
+        </button>
+      )}
+
       {/* Last 5 — above tabs */}
       <div className="mb-4 flex items-center gap-3">
         <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Last 5</span>
@@ -426,6 +489,73 @@ export default function PlayerView({
                   containerVariant="standalone"
                 />
               ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Trophy Case tab */}
+      {tab === 'trophies' && (
+        <>
+          <SectionLabel>Trophy case</SectionLabel>
+          {filteredTrophies.length === 0 ? (
+            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+              No trophies for the current filter.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {filteredTrophies
+                .slice()
+                .sort((a, b) => a.rank - b.rank || b.season_id - a.season_id)
+                .map((t) => {
+                  const seasonType = t.is_gauntlet ? 'Gauntlet' : 'Regular Season';
+                  const placement = (t.is_gauntlet ? GAUNTLET_PLACEMENTS : REGULAR_PLACEMENTS)[t.rank];
+                  return (
+                    <Link
+                      key={`${t.season_id}-${t.rank}`}
+                      href={`/seasons/${t.season_id}`}
+                      className="flex items-center justify-between gap-4 px-5 py-3.5 transition-colors hover:opacity-90"
+                      style={{
+                        background: `color-mix(in srgb, ${MEDAL_COLORS[t.rank]} 12%, var(--color-bg-primary))`,
+                        border: `2px solid ${MEDAL_COLORS[t.rank]}`,
+                      }}
+                    >
+                      <div className="flex items-center gap-4">
+                        <span className="text-[24px] leading-none">{MEDAL_ICONS[t.rank]}</span>
+                        <div>
+                          <div className="font-display text-[16px] font-semibold leading-tight">
+                            {seasonTitle(t.season_name)}
+                          </div>
+                          <div className="tracked text-[9px]" style={{ color: MEDAL_COLORS[t.rank] }}>
+                            {seasonType} · {placement}
+                          </div>
+                        </div>
+                      </div>
+                      <table className="border-collapse table-fixed text-[11px] shrink-0">
+                        <thead>
+                          <tr>
+                            <th className="w-9 tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right pr-3 pb-1">K</th>
+                            <th className="w-9 tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right pr-3 pb-1">A</th>
+                            <th className="w-9 tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right pr-3 pb-1">D</th>
+                            <th className="w-12 tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right pr-3 pb-1">WR%</th>
+                            <th className="w-14 tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right pr-3 pb-1">Rounds</th>
+                            <th className="w-12 tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right pb-1">ADR</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td className="font-mono tnum font-semibold text-right pr-3">{t.stats.kills}</td>
+                            <td className="font-mono tnum font-semibold text-right pr-3">{t.stats.assists}</td>
+                            <td className="font-mono tnum font-semibold text-right pr-3">{t.stats.deaths}</td>
+                            <td className="font-mono tnum font-semibold text-right pr-3">{t.stats.win_rate_percentage.toFixed(1)}%</td>
+                            <td className="font-mono tnum font-semibold text-right pr-3">{t.stats.rounds_won}-{t.stats.rounds_lost}</td>
+                            <td className="font-mono tnum font-semibold text-right">{t.stats.overall_adr.toFixed(2)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </Link>
+                  );
+                })}
             </div>
           )}
         </>

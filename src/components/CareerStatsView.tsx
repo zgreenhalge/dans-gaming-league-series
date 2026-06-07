@@ -5,6 +5,7 @@ import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import { extractSeasonNumber, seasonTitle } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
+import type { TrophyEntry } from '@/lib/queries';
 
 type Filter = 'career' | number;
 
@@ -55,6 +56,7 @@ export default function CareerStatsView({
   bySeason,
   gauntletCareerRows,
   gauntletBySeason,
+  trophiesByPlayer,
 }: {
   regularSeasons: { id: number; name: string }[];
   gauntletSeasons: { id: number; name: string }[];
@@ -62,6 +64,7 @@ export default function CareerStatsView({
   bySeason: Record<number, LeaderboardRowWithId[]>;
   gauntletCareerRows: LeaderboardRowWithId[];
   gauntletBySeason: Record<number, LeaderboardRowWithId[]>;
+  trophiesByPlayer: Record<number, TrophyEntry[]>;
 }) {
   const { includeRegular, includeGauntlet, toggleRegular: baseToggleRegular, toggleGauntlet: baseToggleGauntlet } = useSeasonFilter();
   const [filter, setFilter] = useState<Filter>('career');
@@ -114,6 +117,21 @@ export default function CareerStatsView({
     return reg.length > 0 ? reg : gnt;
   }, [filter, includeRegular, includeGauntlet, careerRows, gauntletCareerRows, bySeason, gauntletBySeason, regularToGauntlet]);
 
+  const trophyCounts = useMemo(() => {
+    const counts = new Map<number, Record<1 | 2 | 3, number>>();
+    for (const [pidStr, entries] of Object.entries(trophiesByPlayer)) {
+      const pairedGntId = filter === 'career' ? null : regularToGauntlet.get(filter);
+      const inSelection = filter === 'career'
+        ? entries
+        : entries.filter((t) => t.season_id === filter || (pairedGntId != null && t.season_id === pairedGntId));
+      const matching = inSelection.filter((t) => (t.is_gauntlet ? includeGauntlet : includeRegular));
+      const c: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 };
+      for (const t of matching) c[t.rank]++;
+      counts.set(Number(pidStr), c);
+    }
+    return counts;
+  }, [trophiesByPlayer, filter, includeRegular, includeGauntlet, regularToGauntlet]);
+
   return (
     <>
       <div className="flex items-center justify-end gap-5 mb-3">
@@ -144,7 +162,7 @@ export default function CareerStatsView({
           No data for this selection.
         </div>
       ) : (
-        <LeaderboardTable rows={rows} showMedals={false} />
+        <LeaderboardTable rows={rows} showMedals={false} trophyCounts={trophyCounts} />
       )}
     </>
   );

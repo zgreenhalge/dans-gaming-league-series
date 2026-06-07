@@ -4,25 +4,31 @@ import {
   getAllLeaderboards,
   getSeasons,
   getGauntletStats,
+  getAllSeasonMedalists,
 } from '@/lib/queries';
 import CareerStatsView from '@/components/CareerStatsView';
 import type { LeaderboardRowWithId } from '@/lib/types';
+import type { TrophyEntry } from '@/lib/queries';
 
 export const revalidate = 60;
 
 export const metadata = { title: 'Statistics' };
 
 export default async function StatisticsPage() {
-  const [careerRows, allLeaderboards, seasons, gauntletStats] =
+  const [careerRows, allLeaderboards, seasons, gauntletStats, medalists] =
     await Promise.all([
       getCareerLeaderboard(),
       getAllLeaderboards(),
       getSeasons(),
       getGauntletStats(),
+      getAllSeasonMedalists(),
     ]);
 
   const bySeason: Record<number, LeaderboardRowWithId[]> = {};
   for (const [sid, rows] of allLeaderboards) bySeason[sid] = rows;
+
+  const trophiesByPlayer: Record<number, TrophyEntry[]> = {};
+  for (const [pid, entries] of medalists) trophiesByPlayer[pid] = entries;
 
   const regularSeasons = seasons
     .filter((s) => !s.is_gauntlet)
@@ -53,6 +59,7 @@ export default async function StatisticsPage() {
           bySeason={bySeason}
           gauntletCareerRows={gauntletStats.career}
           gauntletBySeason={gauntletStats.bySeason}
+          trophiesByPlayer={trophiesByPlayer}
         />
       </main>
     </div>

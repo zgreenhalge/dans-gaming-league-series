@@ -8,6 +8,9 @@ import { YouBadge } from './YouBadge';
 
 type SortCol =
   | 'name'
+  | 'gold'
+  | 'silver'
+  | 'bronze'
   | 'record'
   | 'gp'
   | 'wr'
@@ -24,8 +27,15 @@ function compare(
   a: LeaderboardRowWithId,
   b: LeaderboardRowWithId,
   col: SortCol,
+  trophyCounts?: Map<number, Record<1 | 2 | 3, number>>,
 ): number {
   switch (col) {
+    case 'gold':
+      return (trophyCounts?.get(b.player_id)?.[1] ?? 0) - (trophyCounts?.get(a.player_id)?.[1] ?? 0);
+    case 'silver':
+      return (trophyCounts?.get(b.player_id)?.[2] ?? 0) - (trophyCounts?.get(a.player_id)?.[2] ?? 0);
+    case 'bronze':
+      return (trophyCounts?.get(b.player_id)?.[3] ?? 0) - (trophyCounts?.get(a.player_id)?.[3] ?? 0);
     case 'name':
       return a.player_name.localeCompare(b.player_name);
     case 'record':
@@ -63,11 +73,13 @@ export default function LeaderboardTable({
   firstColMode = 'player',
   showMedals = true,
   playoffZones,
+  trophyCounts,
 }: {
   rows: LeaderboardRowWithId[];
   firstColMode?: 'player' | 'season';
   showMedals?: boolean;
   playoffZones?: { top: number; bottom: number };
+  trophyCounts?: Map<number, Record<1 | 2 | 3, number>>;
 }) {
   const { data: session } = useSession();
   const myPlayerId = session?.user?.playerId ?? null;
@@ -91,7 +103,7 @@ export default function LeaderboardTable({
   }
 
   const sorted = [...rows].sort((a, b) => {
-    const v = compare(a, b, sortCol);
+    const v = compare(a, b, sortCol, trophyCounts);
     return asc ? -v : v;
   });
 
@@ -138,6 +150,12 @@ export default function LeaderboardTable({
 
   const firstColLabel = firstColMode === 'season' ? 'Season' : 'Player';
 
+  const TROPHY_COLS: { key: SortCol; label: string; rank: 1 | 2 | 3 }[] = [
+    { key: 'gold',   label: '🥇', rank: 1 },
+    { key: 'silver', label: '🥈', rank: 2 },
+    { key: 'bronze', label: '🥉', rank: 3 },
+  ];
+
   const STAT_COLS: { key: SortCol; label: string }[] = [
     { key: 'record', label: 'W-L' },
     { key: 'gp',     label: 'Games' },
@@ -156,7 +174,6 @@ export default function LeaderboardTable({
     const active = sortCol === col.key;
     return (
       <th
-        role="button"
         tabIndex={0}
         aria-sort={active ? (asc ? 'ascending' : 'descending') : 'none'}
         onClick={() => clickHeader(col.key)}
@@ -182,7 +199,6 @@ export default function LeaderboardTable({
               </th>
             )}
             <th
-              role="button"
               tabIndex={0}
               aria-sort={sortCol === 'name' ? (asc ? 'ascending' : 'descending') : 'none'}
               onClick={() => clickHeader('name')}
@@ -194,6 +210,7 @@ export default function LeaderboardTable({
               {firstColLabel}
               {sortCol === 'name' && <span className="ml-1">{asc ? '↑' : '↓'}</span>}
             </th>
+            {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => <SortableTh key={c.key} col={c} />)}
             {STAT_COLS.map((c) => <SortableTh key={c.key} col={c} />)}
           </tr>
         </thead>
@@ -236,6 +253,11 @@ export default function LeaderboardTable({
                     {firstColMode === 'player' && myPlayerId !== null && p.player_id === myPlayerId && <YouBadge />}
                   </Link>
                 </td>
+                {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => (
+                  <td key={c.key} className="py-2.5 px-2 text-right font-mono tnum">
+                    <Link href={href} className="block w-full h-full">{trophyCounts.get(p.player_id)?.[c.rank] ?? 0}</Link>
+                  </td>
+                ))}
                 <td className="py-2.5 px-2 text-right font-mono tnum">
                   <Link href={href} className="block w-full h-full">{dash(played, `${p.matches_won}-${p.matches_lost}`)}</Link>
                 </td>
