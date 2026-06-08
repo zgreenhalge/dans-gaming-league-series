@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
-import { extractSeasonNumber, seasonTitle } from '@/lib/util';
+import { buildRegularToGauntletMap, seasonTitle } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { TrophyEntry } from '@/lib/queries';
 
@@ -73,16 +73,10 @@ export default function CareerStatsView({
   function toggleGauntlet() { baseToggleGauntlet(); setFilter('career'); }
 
   // Map regular season ID → paired gauntlet season ID (matched by season number)
-  const regularToGauntlet = useMemo(() => {
-    const map = new Map<number, number>();
-    for (const r of regularSeasons) {
-      const n = extractSeasonNumber(r.name);
-      if (n == null) continue;
-      const g = gauntletSeasons.find((s) => extractSeasonNumber(s.name) === n);
-      if (g) map.set(r.id, g.id);
-    }
-    return map;
-  }, [regularSeasons, gauntletSeasons]);
+  const regularToGauntlet = useMemo(
+    () => buildRegularToGauntletMap(regularSeasons, gauntletSeasons),
+    [regularSeasons, gauntletSeasons],
+  );
 
   const activeSeasons = useMemo(() => {
     const seen = new Set<string>();

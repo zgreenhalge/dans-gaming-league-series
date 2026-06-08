@@ -46,6 +46,25 @@ export function seasonTitle(name: string): string {
   return num != null ? `Season ${num}` : name;
 }
 
+/**
+ * Maps each regular season ID to its paired gauntlet season ID, matched by
+ * season number (e.g. "Season 3" regular ↔ "Season 3" gauntlet). Pairing is
+ * name-based, not ID-based — see `extractSeasonNumber`.
+ */
+export function buildRegularToGauntletMap(
+  regularSeasons: { id: number; name: string }[],
+  gauntletSeasons: { id: number; name: string }[],
+): Map<number, number> {
+  const map = new Map<number, number>();
+  for (const r of regularSeasons) {
+    const n = extractSeasonNumber(r.name);
+    if (n == null) continue;
+    const g = gauntletSeasons.find((s) => extractSeasonNumber(s.name) === n);
+    if (g) map.set(r.id, g.id);
+  }
+  return map;
+}
+
 /** Shared tab button class — matches the bordered-underline tab pattern used throughout the app. */
 export function tabCls(active: boolean): string {
   return [
