@@ -40,7 +40,7 @@ function MatchCell({
   return (
     <Link
       href={`/matches/${match.id}`}
-      className={`block border-r border-[var(--color-border-tertiary)] last:border-r-0 transition-colors ${mapImg ? 'map-card-bg' : 'hover:bg-[var(--color-bg-secondary)]'}`}
+      className={`block border-r border-[var(--color-border-tertiary)] last:border-r-0 transition-colors ${mapImg ? 'map-card-bg' : 'lift-row'}`}
       style={mapImg ? { ['--map-img' as string]: `url("${mapImg}")` } : undefined}
     >
       <div className={mapImg ? 'bg-[var(--overlay-strong)] hover:bg-[var(--overlay-medium)] transition-colors' : ''}>

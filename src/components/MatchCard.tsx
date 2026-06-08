@@ -191,12 +191,14 @@ export function MatchCard({
 
   const containerCls =
     containerVariant === 'standalone'
-      ? `block transition-colors ${borderColor ? 'border-2' : 'border border-[var(--color-border-primary)]'} ${mapImg ? 'map-card-bg' : 'hover:bg-[var(--color-bg-secondary)]'}`
-      : `block border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors ${mapImg ? 'map-card-bg' : 'hover:bg-[var(--color-bg-secondary)]'}`;
+      ? `lift-card block transition-colors ${borderColor ? 'border-2' : 'border border-[var(--color-border-primary)]'} ${mapImg ? 'map-card-bg' : 'hover:bg-[var(--color-bg-secondary)]'}`
+      : `block border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors ${mapImg ? 'map-card-bg' : 'lift-row'}`;
 
   const containerStyle: React.CSSProperties = {
     ...(mapImg ? { ['--map-img' as string]: `url("${mapImg}")` } : {}),
-    ...(borderColor ? { borderColor } : {}),
+    // Win/loss cards carry a meaningful border color — keep it on hover via
+    // `--lift-accent` instead of letting `.lift-card` replace it with the site accent.
+    ...(borderColor ? { borderColor, ['--lift-accent' as string]: borderColor } : {}),
   };
 
   return (

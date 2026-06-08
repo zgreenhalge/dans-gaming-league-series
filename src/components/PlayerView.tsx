@@ -415,7 +415,7 @@ export default function PlayerView({
                       return mapAsc ? -v : v;
                     })
                     .map((m) => (
-                      <tr key={m.map} className="border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors">
+                      <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
                         <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{m.map}</td>
                         <td className="px-3 py-2.5 text-right font-mono tnum">{m.wins}-{m.losses}</td>
                         <td className="px-3 py-2.5 text-right font-mono tnum">

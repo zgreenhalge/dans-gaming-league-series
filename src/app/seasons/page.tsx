@@ -40,11 +40,11 @@ function ActiveSeasonRow({ season, leaderboard }: { season: Season; leaderboard:
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <Link
         href={`/seasons/${season.id}`}
-        className="block px-6 py-5 border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-bg-secondary)] transition-colors"
+        className="lift-row block px-6 py-5 border-b border-[var(--color-border-tertiary)]"
       >
         <div className="flex items-center gap-2 mb-2">
           <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border border-[var(--color-accent-green-border)]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent-green-fill)] animate-pulse" />
+            <span className="live-dot w-1.5 h-1.5 rounded-full bg-[var(--color-accent-green-fill)]" />
             Live
           </span>
         </div>
@@ -61,7 +61,7 @@ function ActiveSeasonRow({ season, leaderboard }: { season: Season; leaderboard:
             <Link
               key={p.player_id}
               href={`/players/${p.player_id}`}
-              className="block px-5 py-4 border-r border-[var(--color-border-tertiary)] last:border-r-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
+              className="lift-row block px-5 py-4 border-r border-[var(--color-border-tertiary)] last:border-r-0"
             >
               <div className="flex items-center gap-3 mb-2">
                 <PlayerAvatar name={p.player_name} imageUrl={null} size="sm" />
@@ -96,7 +96,7 @@ function UpcomingSeasonRow({ season, leaderboard }: { season: Season; leaderboar
   return (
     <Link
       href={`/seasons/${season.id}`}
-      className="flex items-center justify-between gap-6 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
+      className="lift-row flex items-center justify-between gap-6 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0"
     >
       <div className="min-w-0">
         <div className="tracked text-[9px] mb-0.5" style={{ color: 'var(--color-site-accent)' }}>
@@ -150,7 +150,7 @@ function PastSeasonRow({
   return (
     <Link
       href={href}
-      className="flex flex-col sm:grid sm:grid-cols-[1fr_auto] sm:items-center gap-3 sm:gap-8 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
+      className="lift-row flex flex-col sm:grid sm:grid-cols-[1fr_auto] sm:items-center gap-3 sm:gap-8 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0"
     >
       <div className="min-w-0">
         <div className="font-display text-[18px] font-semibold leading-tight truncate">

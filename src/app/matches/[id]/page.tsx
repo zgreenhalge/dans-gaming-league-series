@@ -129,7 +129,7 @@ function Scoreboard({
             return (
               <tr
                 key={p.player_id}
-                className="border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] cursor-pointer transition-colors"
+                className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer"
               >
                 <td className="pl-3 pr-3 py-2 font-display font-semibold faction-fg">
                   <Link

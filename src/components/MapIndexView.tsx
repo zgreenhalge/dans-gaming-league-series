@@ -135,7 +135,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
                 <Link
                   key={map.slug}
                   href={`/maps/${map.slug}`}
-                  className="relative block overflow-hidden border border-[var(--color-border-primary)] aspect-[4/3] group"
+                  className="lift-card relative block overflow-hidden border border-[var(--color-border-primary)] aspect-[4/3] group"
                 >
                   {img ? (
                     <>
@@ -189,7 +189,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
               {sorted.map((map) => {
                 const stats = displayStats.get(map.slug);
                 return (
-                  <tr key={map.slug} className="border-b border-[var(--color-border-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors">
+                  <tr key={map.slug} className="lift-row border-b border-[var(--color-border-primary)]">
                     <td className="py-2 pr-4">
                       <Link href={`/maps/${map.slug}`} className="hover:text-[var(--color-text-secondary)] transition-colors">
                         {toSentenceCase(map.name)}

@@ -58,7 +58,7 @@ function ActiveSeasonPanel({
 }) {
   return (
     <div
-      className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]"
+      className="lift-card border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]"
       style={{ borderLeftColor: 'var(--color-site-accent)', borderLeftWidth: '3px' }}
     >
       <Link
@@ -67,7 +67,7 @@ function ActiveSeasonPanel({
       >
         <div className="flex items-center gap-2 mb-2">
           <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] border border-[var(--color-accent-green-border)]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent-green-fill)] animate-pulse" />
+            <span className="live-dot w-1.5 h-1.5 rounded-full bg-[var(--color-accent-green-fill)]" />
             Live
           </span>
         </div>
@@ -92,7 +92,7 @@ function UpcomingSeasonRow({
   return (
     <Link
       href={`/seasons/${season.id}`}
-      className="flex items-center justify-between gap-6 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
+      className="lift-row flex items-center justify-between gap-6 px-5 py-4 border-b border-[var(--color-border-tertiary)] last:border-b-0"
     >
       <div className="min-w-0">
         <div className="tracked text-[9px] mb-0.5" style={{ color: 'var(--color-site-accent)' }}>
@@ -159,7 +159,7 @@ export default async function Home() {
   return (
     <div className="min-h-screen">
       <HomeTopbar />
-      <main className="max-w-[1080px] mx-auto px-6 pb-16">
+      <main className="max-w-[1080px] mx-auto px-6 pt-6 pb-16">
         {upcoming.length > 0 && (
           <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
             {upcoming.map((s) => (
