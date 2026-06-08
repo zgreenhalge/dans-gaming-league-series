@@ -25,7 +25,7 @@ See README.md for the full env var list. One non-obvious constraint: `SUPABASE_S
 Full schema is in README.md and `src/lib/types.ts`. Non-obvious rules:
 
 - **Always read aggregates from `player_season_leaderboard`** — never compute them client-side.
-- **ADR is the primary sort key** on every leaderboard. Never sort by W-L alone.
+- **Canonical sort is WR% → RWR% → ADR** (all descending). Use `canonicalSort()` from `src/lib/util.ts` everywhere player rows are ranked. Never sort by ADR alone.
 - `total_assists` and `total_rounds_won` are absent from the view. `getPerPlayerSeasonStats()` in `src/lib/queries.ts` augments them by reading `player_match_stats` directly.
 - **Gauntlet seasons** store all matches as `is_playoff_game = true`, so they're excluded from the regular view. Use `getGauntletStats()` / `getGauntletSeasonLeaderboard()` for gauntlet data.
 - **RLS is off** on all tables. Enabling it without policies blocks all access.

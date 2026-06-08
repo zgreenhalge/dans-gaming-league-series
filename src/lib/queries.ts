@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
-import { isPlayedScore } from './util';
+import { isPlayedScore, winRatePct } from './util';
 import { mapSlug } from './maps';
-import { extractSeasonNumber, buildRegularToGauntletMap } from './util';
+import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort } from './util';
 import type {
   Season,
   Week,
@@ -388,6 +388,126 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   return { match: m, week: w, season: season as Season, stats: statRows };
 }
 
+export interface ScoutingPlayer {
+  id: number;
+  name: string;
+  steam_avatar_url: string | null;
+  /** Average ADR across this player's recent played matches. */
+  adr: number;
+  /** Last-5 results, oldest → most recent. */
+  form: boolean[];
+  streak: { result: 'W' | 'L'; count: number } | null;
+  /** Chronological ADR values (most recent ~6 matches), for the mini sparkline. */
+  adrSeries: number[];
+  /** Average ADR on the upcoming match's map, or null if they haven't played it / map is unknown. */
+  mapAdr: number | null;
+}
+
+export interface MatchScoutingData {
+  shirts: ScoutingPlayer[];
+  skins: ScoutingPlayer[];
+}
+
+/**
+ * Pre-match intel for the four rostered players: recent form, ADR trend, and
+ * how each has performed on the picked map. Used by the scouting report shown
+ * before scores are entered.
+ */
+export async function getMatchScoutingData(matchId: number): Promise<MatchScoutingData | null> {
+  const { data: match, error: mErr } = await supabase
+    .from('matches')
+    .select('*')
+    .eq('id', matchId)
+    .maybeSingle();
+  if (mErr) throw mErr;
+  if (!match) return null;
+  const m = match as Match;
+  const matchMapKey = mapSlug((m.shirts_pick ?? m.picked_map) ?? '') || null;
+
+  const { data: roster, error: rErr } = await supabase
+    .from('player_match_stats')
+    .select('player_id, faction')
+    .eq('match_id', matchId);
+  if (rErr) throw rErr;
+  const rosterRows = (roster ?? []) as { player_id: number; faction: Faction }[];
+  if (rosterRows.length === 0) return null;
+  const playerIds = rosterRows.map((r) => r.player_id);
+
+  const [{ data: statRows, error: sErr }, players] = await Promise.all([
+    supabase.from('player_match_stats').select('*').in('player_id', playerIds),
+    getPlayersById(),
+  ]);
+  if (sErr) throw sErr;
+  const allStats = (statRows ?? []) as PlayerMatchStat[];
+
+  const matchIds = Array.from(new Set(allStats.map((s) => s.match_id)));
+  const { data: matches, error: matchesErr } = await supabase.from('matches').select('*').in('id', matchIds);
+  if (matchesErr) throw matchesErr;
+  const matchById = new Map<number, Match>();
+  for (const mm of (matches ?? []) as Match[]) matchById.set(mm.id, mm);
+
+  const weekIds = Array.from(new Set((matches ?? []).map((mm) => (mm as Match).week_id)));
+  const { data: weeks, error: wErr } = await supabase.from('weeks').select('*').in('id', weekIds);
+  if (wErr) throw wErr;
+  const weekById = new Map<number, Week>();
+  for (const w of (weeks ?? []) as Week[]) weekById.set(w.id, w);
+
+  function buildPlayer(playerId: number): ScoutingPlayer {
+    const p = players.get(playerId);
+
+    const rows = allStats
+      .filter((s) => s.player_id === playerId && s.rounds_played > 0)
+      .map((s) => {
+        const mm = matchById.get(s.match_id);
+        const w = mm ? weekById.get(mm.week_id) : undefined;
+        return mm && w && isPlayedScore(mm.final_score) ? { stat: s, match: mm, week: w } : null;
+      })
+      .filter((r): r is { stat: PlayerMatchStat; match: Match; week: Week } => r !== null)
+      .sort(
+        (a, b) =>
+          a.week.season_id - b.week.season_id ||
+          a.week.week_number - b.week.week_number ||
+          a.match.match_number - b.match.match_number,
+      ); // chronological, oldest first
+
+    const adrAll = rows.map((r) => r.stat.adr);
+    const adr = adrAll.length > 0 ? adrAll.reduce((s, v) => s + v, 0) / adrAll.length : 0;
+
+    const form = rows.slice(-5).map((r) => r.stat.is_win);
+
+    let streak: { result: 'W' | 'L'; count: number } | null = null;
+    if (rows.length > 0) {
+      const last = rows[rows.length - 1].stat.is_win;
+      let count = 0;
+      for (let i = rows.length - 1; i >= 0 && rows[i].stat.is_win === last; i--) count++;
+      streak = { result: last ? 'W' : 'L', count };
+    }
+
+    const adrSeries = rows.slice(-6).map((r) => r.stat.adr);
+
+    const mapRows = matchMapKey
+      ? rows.filter((r) => mapSlug((r.match.shirts_pick ?? r.match.picked_map) ?? '') === matchMapKey)
+      : [];
+    const mapAdr = mapRows.length > 0 ? mapRows.reduce((s, r) => s + r.stat.adr, 0) / mapRows.length : null;
+
+    return {
+      id: playerId,
+      name: p?.name ?? `#${playerId}`,
+      steam_avatar_url: p?.steam_avatar_url ?? null,
+      adr,
+      form,
+      streak,
+      adrSeries,
+      mapAdr,
+    };
+  }
+
+  return {
+    shirts: rosterRows.filter((r) => r.faction === 'SHIRTS').map((r) => buildPlayer(r.player_id)),
+    skins: rosterRows.filter((r) => r.faction === 'SKINS').map((r) => buildPlayer(r.player_id)),
+  };
+}
+
 export async function getPlayer(playerId: number): Promise<PlayerDetail | null> {
   const { data: player, error: pErr } = await supabase
     .from('players')
@@ -536,8 +656,7 @@ export async function getSeasonLeaderboard(
     supabase
       .from('player_season_leaderboard')
       .select('*')
-      .eq('season_id', seasonId)
-      .order('overall_adr', { ascending: false }),
+      .eq('season_id', seasonId),
     getPlayersById(),
     getPerPlayerSeasonStats(),
   ]);
@@ -555,7 +674,7 @@ export async function getSeasonLeaderboard(
     };
   });
 
-  if (result.length > 0) return result;
+  if (result.length > 0) return result.sort(canonicalSort);
 
   // No played matches yet — fall back to roster players with zero stats
   const rosterBySeason = await getRosterPlayersBySeason();
@@ -645,7 +764,7 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
         a.total_rounds_played > 0 ? a.total_damage / a.total_rounds_played : 0,
     });
   }
-  return out.sort((a, b) => b.overall_adr - a.overall_adr);
+  return out.sort(canonicalSort);
 }
 
 function aggToRow(
@@ -831,11 +950,11 @@ export async function getGauntletStats(): Promise<{
   }
 
   for (const sid of Object.keys(bySeason))
-    bySeason[Number(sid)].sort((a, b) => b.overall_adr - a.overall_adr);
+    bySeason[Number(sid)].sort(canonicalSort);
 
   const career = Array.from(careerByPlayer.values())
     .map((agg) => aggToRow(agg, 0))
-    .sort((a, b) => b.overall_adr - a.overall_adr);
+    .sort(canonicalSort);
 
   return { career, bySeason };
 }
@@ -958,7 +1077,7 @@ export async function getGauntletSeasonLeaderboard(
       ...aggToRow(agg, seasonId),
       steam_avatar_url: players.get(agg.player_id)?.steam_avatar_url ?? null,
     }))
-    .sort((a, b) => b.overall_adr - a.overall_adr);
+    .sort(canonicalSort);
 }
 
 /** Fetches all matches for a gauntlet season and groups them into rounds by week_number. */
@@ -1203,12 +1322,7 @@ export async function getAllSeasonMedalists(): Promise<Map<number, TrophyEntry[]
     const rows = leaderboards.get(season.id) ?? [];
     if (rows.length === 0) continue;
     [...rows]
-      .sort(
-        (a, b) =>
-          b.win_rate_percentage - a.win_rate_percentage ||
-          b.rwr_percentage - a.rwr_percentage ||
-          b.overall_adr - a.overall_adr,
-      )
+      .sort(canonicalSort)
       .slice(0, 3)
       .forEach((r, i) => {
         add(r.player_id, {
@@ -1386,8 +1500,7 @@ export async function getAllLeaderboards(): Promise<
   const [{ data: rows, error }, playersById, perPlayer, rosterBySeason] = await Promise.all([
     supabase
       .from('player_season_leaderboard')
-      .select('*')
-      .order('overall_adr', { ascending: false }),
+      .select('*'),
     getPlayersById(),
     getPerPlayerSeasonStats(),
     getRosterPlayersBySeason(),
@@ -1409,6 +1522,8 @@ export async function getAllLeaderboards(): Promise<
     list.push(withId);
     out.set(r.season_id, list);
   }
+
+  for (const list of out.values()) list.sort(canonicalSort);
 
   // For any season with roster players but no played matches, add zero-stat rows
   for (const [seasonId, playerIds] of rosterBySeason) {
@@ -1831,7 +1946,7 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
       rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
       overall_adr: rp > 0 ? a.total_damage / rp : 0,
     };
-  }).sort((a, b) => b.overall_adr - a.overall_adr);
+  }).sort(canonicalSort);
 
   return { name: mapName, slug, pickCount: playedMatches.length, banCount: bans, noPickCount, seasons: mapSeasons, matches: mapMatches, playerStats };
 }
@@ -1843,6 +1958,38 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
 // see `design_handoff/IMPLEMENTATION_PLAN.md` Phase 2 for why no DB view is
 // warranted at this league's scale.
 
+/** A player's individual stat line for a single match. */
+export interface MatchPlayerStats {
+  kills: number;
+  assists: number;
+  deaths: number;
+}
+
+/** One match `playerA`+`playerB` played as partners (same faction). */
+export interface DuoMatchSummary {
+  matchId: number;
+  seasonNumber: number | null;
+  weekNumber: number;
+  matchNumber: number;
+  map: string | null;
+  score: { duo: number; opponents: number } | null;
+  won: boolean | null;
+  opponents: { player_id: number; player_name: string }[];
+}
+
+/** One match `playerA` and `playerB` met as opponents (different factions). */
+export interface RivalMatchSummary {
+  matchId: number;
+  seasonNumber: number | null;
+  weekNumber: number;
+  matchNumber: number;
+  map: string | null;
+  score: { a: number; b: number } | null;
+  aWon: boolean | null;
+  aMatchStats: MatchPlayerStats;
+  bMatchStats: MatchPlayerStats;
+}
+
 export interface DuoStats {
   playerA: number;
   playerB: number;
@@ -1850,8 +1997,24 @@ export interface DuoStats {
   wins: number;
   losses: number;
   combinedAdr: number;
+  combinedKills: number;
+  combinedAssists: number;
+  combinedDeaths: number;
+  roundsWon: number;
+  roundsPlayed: number;
   bestMap: string | null;
-  chemistryScore: number; // 0-100: winRate*80 + (combined-ADR percentile)*20
+  matches: DuoMatchSummary[];
+}
+
+/** A player's aggregated performance across their meetings with a given rival. */
+export interface H2HPlayerStats {
+  kills: number;
+  assists: number;
+  deaths: number;
+  adr: number;
+  rwr: number;
+  roundsWon: number;
+  roundsPlayed: number;
 }
 
 export interface H2HStats {
@@ -1861,12 +2024,15 @@ export interface H2HStats {
   aWins: number;
   bWins: number;
   lastMap: string | null;
+  aStats: H2HPlayerStats;
+  bStats: H2HPlayerStats;
+  matches: RivalMatchSummary[];
 }
 
 export interface H2HData {
   duos: DuoStats[];
   rivals: H2HStats[];
-  players: { id: number; name: string }[];
+  players: { id: number; name: string; steam_avatar_url: string | null }[];
 }
 
 /**
@@ -1913,6 +2079,52 @@ function pairKey(a: number, b: number): string {
   return a < b ? `${a}:${b}` : `${b}:${a}`;
 }
 
+/**
+ * Returns a scorer for the "Best Friends" blended metric — see "Blended score" in GLOSSARY.md.
+ * Computes normalisation maxes once across `duos` then returns a closure. Shared by
+ * `H2HSection` (ranking) and `H2HMatrix` (cell coloring) so both use the same formula.
+ * IMPORTANT: if you change weights here, update the hover `title` in H2HSection.tsx ("Best Friends").
+ */
+export function duoBlendedScorer(duos: DuoStats[]): (d: DuoStats) => number {
+  const eligible = duos.filter((d) => d.gamesPlayed > 0);
+  const maxGames = Math.max(1, ...eligible.map((d) => d.gamesPlayed));
+  const maxWins = Math.max(1, ...eligible.map((d) => d.wins));
+  const maxRwr = Math.max(1, ...eligible.map((d) => winRatePct(d.roundsWon, d.roundsPlayed)));
+  return (d) =>
+    0.5 * (d.gamesPlayed / maxGames) +
+    0.3 * (d.wins / maxWins) +
+    0.2 * (winRatePct(d.roundsWon, d.roundsPlayed) / maxRwr);
+}
+
+/**
+ * Returns a scorer for the "Closest Rivals" blended metric — see "Blended score" in GLOSSARY.md.
+ * Computes normalisation maxes once across `rivals` then returns a closure. Shared by
+ * `H2HSection` (ranking) and `H2HMatrix` (cell coloring) so both use the same formula.
+ * IMPORTANT: if you change weights here, update the hover `title` in H2HSection.tsx ("Closest Rivals").
+ */
+export function rivalBlendedScorer(rivals: H2HStats[]): (r: H2HStats) => number {
+  const eligible = rivals.filter((r) => r.meetings > 0);
+  const maxMeetings = Math.max(1, ...eligible.map((r) => r.meetings));
+  const maxWinDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aWins - r.bWins)));
+  const maxRoundDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aStats.roundsWon - r.bStats.roundsWon)));
+  return (r) =>
+    0.4 * (r.meetings / maxMeetings) +
+    0.35 * (1 - Math.abs(r.aWins - r.bWins) / maxWinDiff) +
+    0.25 * (1 - Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / maxRoundDiff);
+}
+
+/** Sorts match summaries most-recent-first by season, then week, then match number. */
+function compareMatchRefDesc(
+  a: { seasonNumber: number | null; weekNumber: number; matchNumber: number },
+  b: { seasonNumber: number | null; weekNumber: number; matchNumber: number },
+): number {
+  const sa = a.seasonNumber ?? -1;
+  const sb = b.seasonNumber ?? -1;
+  if (sa !== sb) return sb - sa;
+  if (a.weekNumber !== b.weekNumber) return b.weekNumber - a.weekNumber;
+  return b.matchNumber - a.matchNumber;
+}
+
 interface DuoAgg {
   a: number;
   b: number;
@@ -1920,7 +2132,39 @@ interface DuoAgg {
   wins: number;
   losses: number;
   adrSum: number;
-  mapTotals: Map<string, { games: number; adrSum: number }>;
+  kills: number;
+  assists: number;
+  deaths: number;
+  roundsWon: number;
+  roundsPlayed: number;
+  mapTotals: Map<string, { games: number; wins: number; adrSum: number }>;
+  matches: DuoMatchSummary[];
+}
+
+interface RivalPlayerAgg {
+  games: number;
+  kills: number;
+  assists: number;
+  deaths: number;
+  adrSum: number;
+  roundsWon: number;
+  roundsPlayed: number;
+}
+
+function emptyRivalPlayerAgg(): RivalPlayerAgg {
+  return { games: 0, kills: 0, assists: 0, deaths: 0, adrSum: 0, roundsWon: 0, roundsPlayed: 0 };
+}
+
+function finalizeRivalPlayerStats(agg: RivalPlayerAgg): H2HPlayerStats {
+  return {
+    kills: agg.kills,
+    assists: agg.assists,
+    deaths: agg.deaths,
+    adr: agg.games > 0 ? agg.adrSum / agg.games : 0,
+    rwr: agg.roundsPlayed > 0 ? (agg.roundsWon / agg.roundsPlayed) * 100 : 0,
+    roundsWon: agg.roundsWon,
+    roundsPlayed: agg.roundsPlayed,
+  };
 }
 
 interface RivalAgg {
@@ -1929,20 +2173,34 @@ interface RivalAgg {
   meetings: number;
   aWins: number;
   bWins: number;
-  lastMap: string | null;
-}
-
-function bestMapFor(mapTotals: Map<string, { games: number; adrSum: number }>): string | null {
-  let best: { map: string; avgAdr: number } | null = null;
-  for (const [map, t] of mapTotals) {
-    const avgAdr = t.adrSum / t.games;
-    if (!best || avgAdr > best.avgAdr) best = { map, avgAdr };
-  }
-  return best?.map ?? null;
+  aStats: RivalPlayerAgg;
+  bStats: RivalPlayerAgg;
+  matches: RivalMatchSummary[];
 }
 
 /**
- * Computes head-to-head relationship data — partner chemistry (`duos`) and
+ * The map a duo has won together most often. If multiple maps are tied for
+ * the most wins, there's no clear "best" — return null rather than picking
+ * one arbitrarily.
+ */
+function bestMapFor(mapTotals: Map<string, { games: number; wins: number; adrSum: number }>): string | null {
+  let bestMap: string | null = null;
+  let bestWins = -1;
+  let tied = false;
+  for (const [map, t] of mapTotals) {
+    if (t.wins > bestWins) {
+      bestMap = map;
+      bestWins = t.wins;
+      tied = false;
+    } else if (t.wins === bestWins) {
+      tied = true;
+    }
+  }
+  return tied ? null : bestMap;
+}
+
+/**
+ * Computes head-to-head relationship data — partner records (`duos`) and
  * opponent records (`rivals`) — for the given resolved season selection.
  * Only played matches count (see `isPlayedScore`).
  */
@@ -1962,10 +2220,14 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
   const weekRows = (weeks ?? []) as { id: number; season_id: number; week_number: number }[];
   if (weekRows.length === 0) return { duos: [], rivals: [], players: [] };
   const weekNumberById = new Map(weekRows.map((w) => [w.id, w.week_number]));
+  const seasonIdByWeek = new Map(weekRows.map((w) => [w.id, w.season_id]));
+  const seasonNumberById = new Map(
+    [...regularSeasons, ...gauntletSeasons].map((s) => [s.id, extractSeasonNumber(s.name)]),
+  );
 
   const { data: matches, error: mErr } = await supabase
     .from('matches')
-    .select('id, week_id, match_number, final_score, picked_map')
+    .select('id, week_id, match_number, final_score, shirts_pick, picked_map')
     .in('week_id', weekRows.map((w) => w.id));
   if (mErr) throw mErr;
 
@@ -1974,26 +2236,34 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     week_id: number;
     match_number: number;
     final_score: string | null;
+    shirts_pick: string | null;
     picked_map: string | null;
   };
-  // Chronological order matters for `lastMap` below — process oldest-first so
-  // the last write naturally ends up being the most recent meeting.
-  const playedMatches = ((matches ?? []) as MatchRow[])
-    .filter((m) => isPlayedScore(m.final_score))
-    .sort((x, y) => {
-      const wx = weekNumberById.get(x.week_id) ?? 0;
-      const wy = weekNumberById.get(y.week_id) ?? 0;
-      return wx !== wy ? wx - wy : x.match_number - y.match_number;
-    });
+  // Some seasons recorded the played map under `shirts_pick` rather than
+  // `picked_map` — fall back the same way the rest of the codebase does
+  // (see `getMatchById`, `getCareerMatchHistory`, etc).
+  const mapFor = (m: MatchRow): string | null => m.shirts_pick ?? m.picked_map;
+  const playedMatches = ((matches ?? []) as MatchRow[]).filter((m) => isPlayedScore(m.final_score));
   if (playedMatches.length === 0) return { duos: [], rivals: [], players: [] };
 
   const { data: stats, error: sErr } = await supabase
     .from('player_match_stats')
-    .select('match_id, player_id, faction, adr, is_win')
+    .select('match_id, player_id, faction, kills, assists, deaths, adr, is_win, rounds_won, rounds_played')
     .in('match_id', playedMatches.map((m) => m.id));
   if (sErr) throw sErr;
 
-  type StatRow = { match_id: number; player_id: number; faction: Faction; adr: number; is_win: boolean };
+  type StatRow = {
+    match_id: number;
+    player_id: number;
+    faction: Faction;
+    kills: number;
+    assists: number | null;
+    deaths: number;
+    adr: number;
+    is_win: boolean;
+    rounds_won: number;
+    rounds_played: number;
+  };
   const statsByMatch = new Map<number, StatRow[]>();
   for (const s of (stats ?? []) as StatRow[]) {
     const list = statsByMatch.get(s.match_id) ?? [];
@@ -2010,7 +2280,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     const key = pairKey(a, b);
     let agg = duoAgg.get(key);
     if (!agg) {
-      agg = { a, b, games: 0, wins: 0, losses: 0, adrSum: 0, mapTotals: new Map() };
+      agg = { a, b, games: 0, wins: 0, losses: 0, adrSum: 0, kills: 0, assists: 0, deaths: 0, roundsWon: 0, roundsPlayed: 0, mapTotals: new Map(), matches: [] };
       duoAgg.set(key, agg);
     }
     return agg;
@@ -2021,7 +2291,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     const key = pairKey(a, b);
     let agg = rivalAgg.get(key);
     if (!agg) {
-      agg = { a, b, meetings: 0, aWins: 0, bWins: 0, lastMap: null };
+      agg = { a, b, meetings: 0, aWins: 0, bWins: 0, aStats: emptyRivalPlayerAgg(), bStats: emptyRivalPlayerAgg(), matches: [] };
       rivalAgg.set(key, agg);
     }
     return agg;
@@ -2039,8 +2309,16 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     // Wingman. Revisit if the format ever changes.
     const shirts = roster.filter((r) => r.faction === 'SHIRTS');
     const skins = roster.filter((r) => r.faction === 'SKINS');
+    const weekNumber = weekNumberById.get(m.week_id) ?? 0;
+    const seasonNumber = seasonNumberById.get(seasonIdByWeek.get(m.week_id) ?? -1) ?? null;
+    const parsedScore = parseScore(m.final_score);
+    const playedMap = mapFor(m);
 
-    for (const team of [shirts, skins]) {
+    const teams = [
+      { roster: shirts, opponents: skins, ourScore: parsedScore?.shirts ?? null, theirScore: parsedScore?.skins ?? null },
+      { roster: skins, opponents: shirts, ourScore: parsedScore?.skins ?? null, theirScore: parsedScore?.shirts ?? null },
+    ];
+    for (const { roster: team, opponents, ourScore, theirScore } of teams) {
       for (let i = 0; i < team.length; i++) {
         for (let j = i + 1; j < team.length; j++) {
           const x = team[i];
@@ -2050,13 +2328,30 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
           if (x.is_win) agg.wins += 1;
           else agg.losses += 1;
           agg.adrSum += x.adr + y.adr;
-          if (m.picked_map) {
-            const mapKey = m.picked_map.toLowerCase();
-            const mapAgg = agg.mapTotals.get(mapKey) ?? { games: 0, adrSum: 0 };
+          agg.kills += x.kills + y.kills;
+          agg.assists += (x.assists ?? 0) + (y.assists ?? 0);
+          agg.deaths += x.deaths + y.deaths;
+          // x and y are teammates, so they share identical round totals for this match — count once.
+          agg.roundsWon += x.rounds_won;
+          agg.roundsPlayed += x.rounds_played;
+          if (playedMap) {
+            const mapKey = playedMap.toLowerCase();
+            const mapAgg = agg.mapTotals.get(mapKey) ?? { games: 0, wins: 0, adrSum: 0 };
             mapAgg.games += 1;
+            if (x.is_win) mapAgg.wins += 1;
             mapAgg.adrSum += x.adr + y.adr;
             agg.mapTotals.set(mapKey, mapAgg);
           }
+          agg.matches.push({
+            matchId: m.id,
+            seasonNumber,
+            weekNumber,
+            matchNumber: m.match_number,
+            map: playedMap,
+            score: ourScore != null && theirScore != null ? { duo: ourScore, opponents: theirScore } : null,
+            won: x.is_win,
+            opponents: opponents.map((r) => ({ player_id: r.player_id, player_name: players.get(r.player_id)?.name ?? `#${r.player_id}` })),
+          });
         }
       }
     }
@@ -2066,51 +2361,74 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
         const agg = getRival(x, y);
         agg.meetings += 1;
         const aRow = x.player_id === agg.a ? x : y;
+        const bRow = aRow === x ? y : x;
         if (aRow.is_win) agg.aWins += 1;
         else agg.bWins += 1;
-        if (m.picked_map) agg.lastMap = m.picked_map;
+
+        for (const [statAgg, row] of [[agg.aStats, aRow], [agg.bStats, bRow]] as const) {
+          statAgg.games += 1;
+          statAgg.kills += row.kills;
+          statAgg.assists += row.assists ?? 0;
+          statAgg.deaths += row.deaths;
+          statAgg.adrSum += row.adr;
+          statAgg.roundsWon += row.rounds_won;
+          statAgg.roundsPlayed += row.rounds_played;
+        }
+
+        const aScore = parsedScore ? (aRow.faction === 'SHIRTS' ? parsedScore.shirts : parsedScore.skins) : null;
+        const bScore = parsedScore ? (bRow.faction === 'SHIRTS' ? parsedScore.shirts : parsedScore.skins) : null;
+        agg.matches.push({
+          matchId: m.id,
+          seasonNumber,
+          weekNumber,
+          matchNumber: m.match_number,
+          map: playedMap,
+          score: aScore != null && bScore != null ? { a: aScore, b: bScore } : null,
+          aWon: aRow.is_win,
+          aMatchStats: { kills: aRow.kills, assists: aRow.assists ?? 0, deaths: aRow.deaths },
+          bMatchStats: { kills: bRow.kills, assists: bRow.assists ?? 0, deaths: bRow.deaths },
+        });
       }
     }
   }
 
-  const duoList = [...duoAgg.values()].map((d) => ({
+  const duos: DuoStats[] = [...duoAgg.values()].map((d) => ({
     playerA: d.a,
     playerB: d.b,
     gamesPlayed: d.games,
     wins: d.wins,
     losses: d.losses,
     combinedAdr: d.games > 0 ? d.adrSum / d.games : 0,
+    combinedKills: d.kills,
+    combinedAssists: d.assists,
+    combinedDeaths: d.deaths,
+    roundsWon: d.roundsWon,
+    roundsPlayed: d.roundsPlayed,
     bestMap: bestMapFor(d.mapTotals),
+    matches: [...d.matches].sort(compareMatchRefDesc), // most recent first
   }));
 
-  // Chemistry score = winRate*80 + combinedAdrPercentile*20 (per the handoff
-  // doc's formula). The percentile is this duo's combined-ADR rank relative to
-  // all other duos in the selection — a stand-in for "league average".
-  const sortedByAdr = [...duoList].sort((x, y) => x.combinedAdr - y.combinedAdr);
-  const percentileByPair = new Map<string, number>();
-  sortedByAdr.forEach((d, i) => {
-    const pct = sortedByAdr.length > 1 ? i / (sortedByAdr.length - 1) : 1;
-    percentileByPair.set(pairKey(d.playerA, d.playerB), pct);
+  const rivals: H2HStats[] = [...rivalAgg.values()].map((r) => {
+    const sortedMatches = [...r.matches].sort(compareMatchRefDesc); // most recent first
+    return {
+      playerA: r.a,
+      playerB: r.b,
+      meetings: r.meetings,
+      aWins: r.aWins,
+      bWins: r.bWins,
+      lastMap: sortedMatches[0]?.map ?? null,
+      aStats: finalizeRivalPlayerStats(r.aStats),
+      bStats: finalizeRivalPlayerStats(r.bStats),
+      matches: sortedMatches,
+    };
   });
-
-  const duos: DuoStats[] = duoList.map((d) => {
-    const winRate = d.gamesPlayed > 0 ? d.wins / d.gamesPlayed : 0;
-    const percentile = percentileByPair.get(pairKey(d.playerA, d.playerB)) ?? 0;
-    const chemistryScore = Math.round(Math.min(100, Math.max(0, winRate * 80 + percentile * 20)));
-    return { ...d, chemistryScore };
-  });
-
-  const rivals: H2HStats[] = [...rivalAgg.values()].map((r) => ({
-    playerA: r.a,
-    playerB: r.b,
-    meetings: r.meetings,
-    aWins: r.aWins,
-    bWins: r.bWins,
-    lastMap: r.lastMap,
-  }));
 
   const playerList = [...playerIds]
-    .map((id) => ({ id, name: players.get(id)?.name ?? `#${id}` }))
+    .map((id) => ({
+      id,
+      name: players.get(id)?.name ?? `#${id}`,
+      steam_avatar_url: players.get(id)?.steam_avatar_url ?? null,
+    }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return { duos, rivals, players: playerList };

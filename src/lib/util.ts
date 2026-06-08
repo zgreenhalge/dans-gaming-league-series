@@ -81,6 +81,53 @@ export function tabCls(active: boolean, opts?: { compact?: boolean; accent?: boo
   ].join(' ');
 }
 
+/** Two-letter initials from a display name, e.g. "Dan Smith" → "DS", "Dan" → "DA". */
+export function initials(name: string): string {
+  const words = name.trim().split(/\s+/);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+/** First word of a display name, e.g. "Dan Smith" → "Dan" — a more readable axis label than initials. */
+export function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? name;
+}
+
+/** Win rate as a rounded 0-100 percentage — drives the H2H matrix, detail cards, profile partner bars, and scouting cards. */
+export function winRatePct(wins: number, gamesPlayed: number): number {
+  return gamesPlayed > 0 ? Math.round((wins / gamesPlayed) * 100) : 0;
+}
+
+/** T→white→CT color-mix for a 0-100 rate — white at 50, deepening to T-orange toward 0 and CT-blue toward 100. Used for round win rate. */
+export function rateGradientColor(rate: number): string {
+  const t = Math.max(0, Math.min(100, rate));
+  if (t <= 50) {
+    return `color-mix(in srgb, white ${Math.round((t / 50) * 100)}%, var(--color-t))`;
+  }
+  return `color-mix(in srgb, var(--color-ct) ${Math.round(((t - 50) / 50) * 100)}%, white)`;
+}
+
+/** Faint→green color-mix for a 0-100 win rate — the higher the win rate, the deeper the green. Used by the H2H matrix, detail cards, profile partner bars, and scouting cards. */
+export function winRateColor(winRate: number): string {
+  const t = Math.max(0, Math.min(100, winRate));
+  return `color-mix(in srgb, var(--color-accent-green-fill) ${Math.round(t)}%, var(--color-bg-secondary))`;
+}
+
+/**
+ * Canonical leaderboard sort: WR% → RWR% → ADR (all descending).
+ * Use this wherever player rows are ranked — never sort by ADR alone.
+ */
+export function canonicalSort(
+  a: { win_rate_percentage: number; rwr_percentage: number; overall_adr: number },
+  b: { win_rate_percentage: number; rwr_percentage: number; overall_adr: number },
+): number {
+  return (
+    b.win_rate_percentage - a.win_rate_percentage ||
+    b.rwr_percentage - a.rwr_percentage ||
+    b.overall_adr - a.overall_adr
+  );
+}
+
 /** Parses "13-9" / "13 – 9" into { shirts, skins }. Returns null if unparseable. */
 export function parseScore(
   s: string | null | undefined,
