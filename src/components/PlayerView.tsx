@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import type { PlayerHistoryRow, TrophyEntry } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { extractSeasonNumber, isPlayedScore, seasonTitle } from '@/lib/util';
+import { extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { MatchCard } from './MatchCard';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
@@ -294,11 +294,7 @@ export default function PlayerView({
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2.5 tracked text-[11px] font-semibold transition-colors -mb-px border-b-2 ${
-              tab === t.key
-                ? 'text-[var(--color-text-primary)] border-[var(--color-text-primary)]'
-                : 'text-[var(--color-text-secondary)] border-transparent hover:text-[var(--color-text-primary)]'
-            }`}
+            className={tabCls(tab === t.key)}
           >
             {t.label}
           </button>

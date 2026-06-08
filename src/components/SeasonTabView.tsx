@@ -7,7 +7,7 @@ import GauntletStandings from './GauntletStandings';
 import GauntletRoundsList from './GauntletRoundsList';
 import type { WeekWithMatches, GauntletRound } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { isPlayedScore } from '@/lib/util';
+import { isPlayedScore, tabCls } from '@/lib/util';
 
 type Tab = 'leaderboard' | 'schedule';
 
@@ -150,19 +150,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     <button
       key={t.key}
       onClick={() => setTab(t.key)}
-      className={
-        subStyle
-          ? `px-3 py-1.5 tracked text-[10px] font-semibold transition-colors -mb-px border-b-2 ${
-              tab === t.key
-                ? 'border-[var(--color-site-accent)] text-[var(--color-text-primary)]'
-                : 'border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-            }`
-          : `px-4 py-2.5 tracked text-[11px] font-semibold transition-colors -mb-px border-b-2 ${
-              tab === t.key
-                ? 'text-[var(--color-text-primary)] border-[var(--color-text-primary)]'
-                : 'text-[var(--color-text-secondary)] border-transparent hover:text-[var(--color-text-primary)]'
-            }`
-      }
+      className={tabCls(tab === t.key, { compact: subStyle, accent: subStyle })}
     >
       {t.label}
     </button>

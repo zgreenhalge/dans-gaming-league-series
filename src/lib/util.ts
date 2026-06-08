@@ -65,12 +65,18 @@ export function buildRegularToGauntletMap(
   return map;
 }
 
-/** Shared tab button class — matches the bordered-underline tab pattern used throughout the app. */
-export function tabCls(active: boolean): string {
+/**
+ * Shared tab button class — matches the bordered-underline tab pattern used throughout the app.
+ * `compact` is for smaller sub-navigation tabs; `accent` uses the site accent color for the
+ * active border instead of the primary text color (paired with `compact` in season sub-tabs).
+ */
+export function tabCls(active: boolean, opts?: { compact?: boolean; accent?: boolean }): string {
+  const { compact = false, accent = false } = opts ?? {};
   return [
-    'px-4 py-2 tracked text-[11px] font-semibold border-b-2 transition-colors',
+    compact ? 'px-3 py-1.5 text-[10px]' : 'px-4 py-2.5 text-[11px]',
+    'tracked font-semibold transition-colors -mb-px border-b-2',
     active
-      ? 'border-[var(--color-text-primary)] text-[var(--color-text-primary)]'
+      ? `${accent ? 'border-[var(--color-site-accent)]' : 'border-[var(--color-text-primary)]'} text-[var(--color-text-primary)]`
       : 'border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]',
   ].join(' ');
 }

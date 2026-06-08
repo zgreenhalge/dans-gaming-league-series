@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import SeasonTabView from './SeasonTabView';
+import { tabCls } from '@/lib/util';
 import type { WeekWithMatches, GauntletRound } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 
@@ -18,11 +19,7 @@ function TopTabBar({ tab, setTab }: { tab: TopTab; setTab: (t: TopTab) => void }
         <button
           key={t.key}
           onClick={() => setTab(t.key)}
-          className={`px-4 py-2.5 tracked text-[11px] font-semibold transition-colors -mb-px border-b-2 ${
-            tab === t.key
-              ? 'text-[var(--color-text-primary)] border-[var(--color-text-primary)]'
-              : 'text-[var(--color-text-secondary)] border-transparent hover:text-[var(--color-text-primary)]'
-          }`}
+          className={tabCls(tab === t.key)}
         >
           {t.label}
         </button>
