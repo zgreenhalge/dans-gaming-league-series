@@ -360,3 +360,176 @@ body::before {
     color-mix(in srgb, var(--color-accent-amber-bg) 75%, var(--color-bg-primary)) 100%
   );
 }
+
+/* Ghost text — transparent fill with text-stroke outline, in the site accent color */
+.ghost-accent {
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--color-site-accent);
+}
+
+/* Wider tracking variant for section headers */
+.tracked-wide {
+  text-transform: uppercase;
+  letter-spacing: 0.26em;
+}
+
+/* Form squares — W/L history as small colored squares (not just dots) */
+.form-square {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  font-family: var(--font-display), system-ui, sans-serif;
+}
+.form-square--w {
+  background: color-mix(in srgb, var(--color-accent-green-bg) 80%, transparent);
+  color: var(--color-accent-green-strong);
+  border: 1px solid var(--color-accent-green-border);
+}
+.form-square--l {
+  background: var(--color-accent-red-bg);
+  color: var(--color-accent-red-fg);
+  border: 1px solid var(--color-accent-red-border);
+}
+
+/* Form dots — small W/L pips for inline use */
+.form-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 9999px;
+  display: inline-block;
+}
+.form-dot--w { background: var(--color-accent-green-fill); }
+.form-dot--l { background: var(--color-accent-red-fg); opacity: 0.85; }
+
+/* Motion keyframes — broadcast-chrome touches: subtler pulse, reveal bars, hover sheen */
+@keyframes dgls-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes dgls-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes dgls-sheen { 0% { transform: translateX(-120%); } 60%,100% { transform: translateX(220%); } }
+
+.live-dot { animation: dgls-pulse 1.6s ease-in-out infinite; }
+
+/* Sheen sweep on hover cards */
+.sheen { position: relative; overflow: hidden; }
+.sheen::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.10), transparent);
+  transform: translateX(-120%);
+  animation: dgls-sheen 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot, .sheen::after { animation: none !important; }
+}
+
+/* Atmosphere — broadcast-arena ambient glow: faction-colored radial gradients
+   bleeding from the corners over the base surface. Fixed to the viewport so the
+   glow spans the whole page (not just the area near the top) as content scrolls.
+   The larger top-right gradient carries the *non*-site-accent faction color in
+   both themes (CT in light, T in dark — opposite of `.accent-stripe`'s "accent
+   leads" convention; swapped on request so the atmosphere reads as the
+   counter-side's glow dominating from the corner, with the site accent as the
+   smaller secondary bleed). Light theme's accent tones are darker/more muted
+   than dark theme's neon variants (and the CT side uses the deeper
+   `--color-accent-blue-strong` navy for real depth rather than just more
+   saturation), so light gets a higher mix percentage to read at the same
+   strength against the warm tan base. */
+.dgls-atmosphere {
+  background:
+    radial-gradient(1200px 480px at 78% -8%, color-mix(in srgb, var(--color-accent-blue-strong) 58%, transparent), transparent 60%),
+    radial-gradient(900px 420px at 8% 4%, color-mix(in srgb, var(--color-t) 40%, transparent), transparent 55%),
+    var(--color-bg-tertiary);
+  background-attachment: fixed;
+}
+[data-theme="dark"] .dgls-atmosphere {
+  background:
+    radial-gradient(1200px 480px at 78% -8%, color-mix(in srgb, var(--color-t) 18%, transparent), transparent 60%),
+    radial-gradient(900px 420px at 8% 4%, color-mix(in srgb, var(--color-ct) 22%, transparent), transparent 55%),
+    var(--color-bg-tertiary);
+  background-attachment: fixed;
+}
+
+/* Accent stripe — two-tone gradient bar that leads with the site accent in both
+   themes (T→CT in light, CT→T in dark), matching the site-accent left-border
+   convention used on hero/panel edges */
+.accent-stripe {
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-t), var(--color-ct));
+}
+[data-theme="dark"] .accent-stripe {
+  background: linear-gradient(90deg, var(--color-ct), var(--color-t));
+}
+
+/* Hover lift — panels rise slightly and pick up an accent border + shadow on
+   hover. The hover border color defaults to the site accent but can be
+   overridden per-element via the `--lift-accent` custom property — e.g. so a
+   card with a meaningful semantic border (win/loss) keeps that color on hover
+   instead of being replaced by the site accent. */
+.lift-card {
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.lift-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--lift-accent, var(--color-site-accent));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+[data-theme="dark"] .lift-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* Hover row — flush-row analog of `.lift-card` for rows/cells that share
+   borders with siblings inside one bordered container (season lists, match
+   grids, table rows, expandable section headers). `translateY`/drop-shadow
+   would create gaps or bleed onto neighbors there, so this carries the same
+   accent signal via an `inset` box-shadow (clipped to the row's own box —
+   can't bleed) plus an accent-tinted background wash, echoing the established
+   site-accent left-border convention used on hero/panel cards. Reuses
+   `--lift-accent` so any row can override the accent color the same way
+   `MatchCard` does for win/loss. Table `<tr>` elements don't paint
+   `box-shadow` (a long-standing browser table-rendering quirk), so they
+   naturally degrade to the background-tint-only part — the desired fallback
+   there, no special-casing needed. */
+.lift-row {
+  transition: background-color 0.15s, box-shadow 0.15s;
+}
+.lift-row:hover {
+  background: color-mix(in srgb, var(--lift-accent, var(--color-site-accent)) 6%, var(--color-bg-secondary));
+  box-shadow: inset 3px 0 0 0 var(--lift-accent, var(--color-site-accent));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lift-card { transition: none; }
+  .lift-row { transition: none; }
+  .map-card-bg { transition: none; }
+}
+
+/* Image-card accent ring — `.map-card-bg`'s analog of `.lift-card`/`.lift-row`'s
+   `--lift-accent` signal. An inset *bar* (the `.lift-row` mechanism) doesn't
+   work here: `.map-card-bg::before` (the map-image layer) sits at `z-index:
+   -1`, but an element's own background/border/box-shadow all paint in the
+   very first step — before any negative-z-index children — so the opaque
+   image still paints over an inset box-shadow and hides it (the same class of
+   problem as box-shadow on the transparent tab buttons). `outline` sidesteps
+   this entirely: it's painted in its own final step, above the element and
+   all its descendants, regardless of z-index. A negative `outline-offset`
+   keeps it inset within the card's own edge — self-contained, can't bleed
+   onto a flush neighbor — so it reads as a clean 2px accent ring. Scoped to
+   `:not(.lift-card)` because standalone image `MatchCard`s already carry
+   `.lift-card`'s own accent border-color change; an outline ring on top of
+   that would double the signal on one element. */
+.map-card-bg:not(.lift-card) {
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  transition: outline-color 0.15s;
+}
+.map-card-bg:not(.lift-card):hover {
+  outline-color: var(--lift-accent, var(--color-site-accent));
+}
