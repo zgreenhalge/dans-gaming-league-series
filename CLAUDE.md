@@ -1,5 +1,10 @@
 @AGENTS.md
 
+**New to this codebase (human or agent)?** Read `GLOSSARY.md` first — it defines DGLS-specific
+domain terms (gauntlet, H2H, faction, RWR, etc.) and maps concepts to the files that implement them.
+For step-by-step patterns on common changes (new stat, new page, new query helper), see
+`RECIPES.md`. For the shared CSS hover/glow/accent system, see `VISUAL_CONVENTIONS.md`.
+
 ## Guiding philosophy
 
 **Keep it simple and learnable.** Prefer straightforward solutions over clever ones. Every implementation choice should be easy to understand, modify, and extend without needing to unravel abstractions. When there are two ways to do something, pick the one a newcomer could follow. This is a real constraint — favor obvious code over abstraction.
