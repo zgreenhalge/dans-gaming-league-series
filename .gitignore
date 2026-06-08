@@ -18,6 +18,8 @@ __pycache__/
 .vscode/
 *.swp
 
+# Handoff files from Claude
+*handoff/
 
 # Whatever this windows shit is
 *:Zone.Identifier
