@@ -100,7 +100,8 @@ export function TopbarShell({
   const user = session?.user;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-20 bg-[var(--color-bg-primary)] border-b-2 border-[var(--color-site-accent)]" style={{ height: 'var(--topbar-h)' }}>
+    <div className="fixed top-0 left-0 right-0 z-20 bg-[var(--color-bg-primary)]" style={{ height: 'var(--topbar-h)' }}>
+      <div className="accent-stripe absolute bottom-0 left-0 right-0" />
       <div className="h-full px-3 flex items-center justify-between gap-3">
 
         <div className="flex items-center gap-1 min-w-0 overflow-hidden">
