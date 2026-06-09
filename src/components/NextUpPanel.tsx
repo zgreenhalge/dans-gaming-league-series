@@ -43,10 +43,10 @@ function MatchCell({
   return (
     <Link
       href={`/matches/${match.id}`}
-      className={`block border-r border-[var(--color-border-tertiary)] last:border-r-0 transition-colors ${mapImg ? 'map-card-bg' : 'lift-row'}`}
+      className={`block transition-colors ${mapImg ? 'map-card-bg' : 'lift-row'}`}
       style={mapImg ? { ['--map-img' as string]: `url("${mapImg}")` } : undefined}
     >
-      <div className={mapImg ? 'bg-[var(--overlay-strong)] hover:bg-[var(--overlay-medium)] transition-colors' : ''}>
+      <div className={mapImg ? 'h-full bg-[var(--overlay-strong)] hover:bg-[var(--overlay-medium)] transition-colors' : ''}>
         <div className="px-5 pt-4 pb-2 flex items-center justify-between gap-1.5">
           <div className="flex items-center gap-1.5">
             <span className="tracked text-[11px] font-semibold text-[var(--color-text-primary)] map-head">
@@ -113,9 +113,9 @@ export function NextUpPanel({
   const colCount = Math.min(matches.length, 4);
   const colsCls =
     colCount === 1 ? 'grid-cols-1' :
-    colCount === 2 ? 'grid-cols-2' :
-    colCount === 3 ? 'grid-cols-3' :
-    'grid-cols-4';
+    colCount === 2 ? 'grid-cols-1 sm:grid-cols-2' :
+    colCount === 3 ? 'grid-cols-1 sm:grid-cols-3' :
+    'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4';
 
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
@@ -132,7 +132,7 @@ export function NextUpPanel({
         </div>
       </div>
 
-      <div className={`grid ${colsCls}`}>
+      <div className={`grid ${colsCls} divide-y divide-[var(--color-border-tertiary)] sm:divide-y-0 sm:divide-x sm:divide-[var(--color-border-tertiary)]`}>
         {matches.map((m) => (
           <MatchCell key={m.id} match={m} currentPlayerId={currentPlayerId} />
         ))}
