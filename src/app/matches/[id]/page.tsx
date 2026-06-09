@@ -10,6 +10,7 @@ import VetoSequence from '@/components/VetoSequence';
 import MatchTabView from '@/components/MatchTabView';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
+import { FeatureMatchBanner } from '@/components/FeatureMatch';
 
 export const revalidate = 60;
 
@@ -187,6 +188,7 @@ export default async function MatchPage({
 
   return (
     <div className="min-h-screen">
+      <div className="centering">{match.is_feature_match && <FeatureMatchBanner />}</div>
       <Topbar seasonId={season.id} seasonName={season.name} weekNumber={week.week_number} matchNumber={match.match_number} isGauntlet={season.is_gauntlet} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         {!played && map && (

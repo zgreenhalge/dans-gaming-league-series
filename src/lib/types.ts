@@ -32,6 +32,7 @@ export interface Match {
   shirts_pick: string | null;
   skins_starting_side: 'CT' | 'T' | null;
   is_playoff_game: boolean;
+  is_feature_match: boolean;
   is_interpolated: boolean;
   notes: string | null;
   scheduled_at: string | null;

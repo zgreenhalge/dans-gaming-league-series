@@ -3,6 +3,7 @@ import { YouBadge } from './YouBadge';
 import { weekWindow, fmtWindowDate } from '@/lib/util';
 import type { WeekWithMatches, MatchWithRoster } from '@/lib/queries';
 import type { Season } from '@/lib/types';
+import { FeatureMatchIcon } from './FeatureMatch';
 
 function MatchupRow({
   match,
@@ -23,8 +24,8 @@ function MatchupRow({
       href={`/matches/${match.id}`}
       className="lift-row flex items-center gap-3 px-5 py-2.5 border-b border-[var(--color-border-tertiary)] last:border-b-0"
     >
-      <span className="tracked text-[9px] text-[var(--color-text-secondary)] shrink-0 w-12">
-        Match {match.match_number}
+      <span className="tracked text-[9px] text-[var(--color-text-secondary)] shrink-0 w-16">
+        Match {match.match_number} {match.is_feature_match && <FeatureMatchIcon />}
       </span>
       {isInMatch && <YouBadge />}
       <span className="font-display text-[13px] font-semibold truncate min-w-0">{shirts}</span>
