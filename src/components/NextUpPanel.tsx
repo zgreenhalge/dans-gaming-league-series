@@ -7,13 +7,14 @@ import { CountdownTimer } from './CountdownTimer';
 import type { WeekWithMatches, MatchWithRoster } from '@/lib/queries';
 import type { Season } from '@/lib/types';
 
-function TeamNames({ players }: { players: { player_id: number; player_name: string }[] }) {
+function TeamNames({ players, dimmed }: { players: { player_id: number; player_name: string }[]; dimmed?: boolean }) {
   if (players.length === 0) return <span className="opacity-50">TBD</span>;
+  const cls = dimmed ? 'text-[var(--color-text-secondary)]' : '';
   return (
     <>
       {players.map((p, i) => (
-        <span key={p.player_id} className="inline-flex items-center gap-0.5">
-          {i > 0 && <span className="opacity-50 mx-0.5">&amp;</span>}
+        <span key={p.player_id} className={`inline-flex items-center gap-0.5 ${cls}`}>
+          {i > 0 && <span className="mx-0.5">&amp;</span>}
           {p.player_name}
         </span>
       ))}
@@ -36,6 +37,8 @@ function MatchCell({
   );
   const played = isPlayedScore(match.final_score);
   const score = played ? parseScore(match.final_score) : null;
+  const shirtsLost = score !== null && score.shirts < score.skins;
+  const skinsLost = score !== null && score.skins < score.shirts;
 
   return (
     <Link
@@ -62,9 +65,9 @@ function MatchCell({
           <div className="shrink-0 flex items-center">
             {score ? (
               <div className="font-display font-semibold leading-none">
-                <div className="text-[22px] text-[var(--color-text-primary)] map-head">{score.shirts}</div>
+                <div className={`text-[22px] map-head ${shirtsLost ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-primary)]'}`}>{score.shirts}</div>
                 <div className="text-[10px] text-[var(--color-text-secondary)] my-0.5 map-head">–</div>
-                <div className="text-[22px] text-[var(--color-text-primary)] map-head">{score.skins}</div>
+                <div className={`text-[22px] map-head ${skinsLost ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-primary)]'}`}>{score.skins}</div>
               </div>
             ) : match.scheduled_at ? (
               <div>
@@ -82,11 +85,11 @@ function MatchCell({
 
           <div className="min-w-0 flex-1 text-right">
             <div className="font-display text-[14px] font-semibold leading-tight truncate map-head">
-              <TeamNames players={match.shirts} />
+              <TeamNames players={match.shirts} dimmed={shirtsLost} />
             </div>
             <div className="tracked text-[9px] text-[var(--color-text-secondary)] my-1 map-head">vs</div>
             <div className="font-display text-[14px] font-semibold leading-tight truncate map-head">
-              <TeamNames players={match.skins} />
+              <TeamNames players={match.skins} dimmed={skinsLost} />
             </div>
           </div>
         </div>
