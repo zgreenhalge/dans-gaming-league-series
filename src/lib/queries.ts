@@ -2054,6 +2054,7 @@ export interface H2HSeasonSelection {
   filter: 'career' | number;
   includeRegular: boolean;
   includeGauntlet: boolean;
+  map?: string;
 }
 
 function resolveH2HSeasonIds(
@@ -2246,10 +2247,15 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
   const playedMatches = ((matches ?? []) as MatchRow[]).filter((m) => isPlayedScore(m.final_score));
   if (playedMatches.length === 0) return { duos: [], rivals: [], players: [] };
 
+  const mapFilter = selection.map ? mapSlug(selection.map) : null;
+  const filteredMatches = mapFilter
+    ? playedMatches.filter((m) => mapSlug(mapFor(m) ?? '') === mapFilter)
+    : playedMatches;
+
   const { data: stats, error: sErr } = await supabase
     .from('player_match_stats')
     .select('match_id, player_id, faction, kills, assists, deaths, adr, is_win, rounds_won, rounds_played')
-    .in('match_id', playedMatches.map((m) => m.id));
+    .in('match_id', filteredMatches.map((m) => m.id));
   if (sErr) throw sErr;
 
   type StatRow = {
