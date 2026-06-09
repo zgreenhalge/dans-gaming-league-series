@@ -1,20 +1,15 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { getMatch, getMatchScoutingData, getH2HData, type MatchStatRow } from '@/lib/queries';
-import ScoutingReport from '@/components/ScoutingReport';
+import { getMatch, getMatchScoutingData, getH2HData } from '@/lib/queries';
 import type { Match } from '@/lib/types';
 import { isPlayedScore, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
 import { TopbarShell } from '@/components/TopbarShell';
-import PlayerAvatar from '@/components/PlayerAvatar';
 import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
-import EnterResultsModal, { type InitialPlayerStat } from '@/components/EnterResultsModal';
-import ScreenshotViewer from '@/components/ScreenshotViewer';
+import MatchTabView from '@/components/MatchTabView';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
-import { YouBadge } from '@/components/YouBadge';
 
 export const revalidate = 60;
 
@@ -46,6 +41,7 @@ function factionClass(f: Faction): string {
   if (f === 'T') return 'faction-t';
   return '';
 }
+
 
 function Topbar({
   seasonId,
@@ -80,143 +76,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 
-function Scoreboard({
-  players,
-  mvpPlayerId,
-  faction,
-  currentPlayerId,
-}: {
-  players: MatchStatRow[];
-  mvpPlayerId: number | null;
-  faction: Faction;
-  currentPlayerId: number | null;
-}) {
-  const cls = factionClass(faction);
-  return (
-    <div
-      className={`border border-[var(--color-border-primary)] overflow-hidden faction-tint ${cls}`}
-    >
-      <table className="w-full table-fixed border-collapse text-[13px]">
-        <thead>
-          <tr className="bg-[var(--color-bg-secondary)]">
-            <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)]">
-              Player
-            </th>
-            {(['K', 'A', 'D'] as const).map((h) => (
-              <th
-                key={h}
-                className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)] w-10"
-              >
-                {h}
-              </th>
-            ))}
-            <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)] w-16">
-              DMG
-            </th>
-            <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)] w-14">
-              ADR
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {players.map((p) => {
-            const playedRow = p.rounds_played > 0;
-            const dash = (v: string) =>
-              playedRow ? (
-                v
-              ) : (
-                <span className="text-[var(--color-text-secondary)]">—</span>
-              );
-            return (
-              <tr
-                key={p.player_id}
-                className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer"
-              >
-                <td className="pl-3 pr-3 py-2 font-display font-semibold faction-fg">
-                  <Link
-                    href={`/players/${p.player_id}`}
-                    className="flex items-center gap-2.5"
-                  >
-                    <PlayerAvatar name={p.player_name} imageUrl={p.steam_avatar_url} size="sm" />
-                    {p.player_name}
-                    {currentPlayerId !== null && p.player_id === currentPlayerId && <YouBadge />}
-                    {p.player_id === mvpPlayerId && (
-                      <span className="ml-0.5 inline-flex items-center px-1.5 py-0.5 tracked text-[9px] font-semibold border"
-                        style={{
-                          color: 'var(--color-accent-amber-pickborder)',
-                          background: 'color-mix(in srgb, var(--color-accent-amber-pickborder) 12%, transparent)',
-                          borderColor: 'var(--color-accent-amber-pickborder)',
-                        }}
-                      >
-                        MVP
-                      </span>
-                    )}
-                  </Link>
-                </td>
-                <td className="px-3 py-2.5 text-right font-mono tnum">
-                  {dash(String(p.kills))}
-                </td>
-                <td className="px-3 py-2.5 text-right font-mono tnum">
-                  {dash(String(p.assists))}
-                </td>
-                <td className="px-3 py-2.5 text-right font-mono tnum">
-                  {dash(String(p.deaths))}
-                </td>
-                <td className="px-3 py-2.5 text-right font-mono tnum">
-                  {dash(p.damage.toLocaleString())}
-                </td>
-                <td className="px-3 pr-4 py-2.5 text-right font-mono tnum font-semibold">
-                  {dash(String(Math.round(p.adr)))}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function TeamHeader({
-  name,
-  faction,
-  score,
-  outcome,
-}: {
-  name: string;
-  faction: Faction;
-  score: number | null;
-  outcome: 'WON' | 'LOST' | null;
-}) {
-  const cls = factionClass(faction);
-  return (
-    <div
-      className={`${cls} faction-rule pl-4 pr-4 py-3 border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] flex items-baseline justify-between`}
-    >
-      <div className="flex items-baseline gap-3">
-        {score !== null && (
-          <span className="font-display font-semibold text-[28px] leading-none tnum text-[var(--color-text-primary)]">
-            {score}
-          </span>
-        )}
-        <span className="font-display text-[20px] font-semibold faction-fg">
-          {name}
-        </span>
-      </div>
-      {outcome && (
-        <span
-          className={`tracked text-[10px] font-semibold ${
-            outcome === 'WON'
-              ? 'text-[var(--color-accent-green-fg)]'
-              : 'text-[var(--color-text-secondary)]'
-          }`}
-        >
-          {outcome}
-        </span>
-      )}
-    </div>
-  );
-}
 
 function matchWeekWindow(
   startDate: string | null,
@@ -407,91 +266,44 @@ export default async function MatchPage({
 
         </div>
 
-        {showScouting && scoutingData && scoutingH2H && (
-          <ScoutingReport
-            shirts={[scoutingData.shirts[0], scoutingData.shirts[1]]}
-            skins={[scoutingData.skins[0], scoutingData.skins[1]]}
-            duos={scoutingH2H.duos}
-            rivals={scoutingH2H.rivals}
-            matchMap={map}
-            shirtsF={shirtsF}
-            skinsF={skinsF}
-          />
-        )}
-
-        {!showScouting && (stats.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-10">
-            This match hasn&apos;t been recorded yet.
-          </div>
-        ) : (
-          <>
-            <div className="mt-10 flex items-center justify-between mb-2">
-              <span className="tracked text-[13px] font-semibold text-[var(--color-text-secondary)]">Scoreboard</span>
-              {canEnterResults && (
-                <EnterResultsModal
-                  matchId={match.id}
-                  players={stats.map((s) => ({
-                    player_id: s.player_id,
-                    player_name: s.player_name,
-                    faction: s.faction as 'SHIRTS' | 'SKINS',
-                  }))}
-                  isAdmin={isCurrentUserAdmin}
-                  alreadyPlayed={played}
-                  targetWinRounds={season.target_win_rounds}
-                  skinsSide={match.skins_starting_side}
-                  initialShirtsScore={score?.shirts ?? null}
-                  initialSkinsScore={score?.skins ?? null}
-                  initialScreenshotFrontUrl={match.screenshot_url_front}
-                  initialScreenshotBackUrl={match.screenshot_url_back}
-                  initialStats={played ? stats.map((s): InitialPlayerStat => ({
-                    player_id: s.player_id,
-                    kills: s.kills,
-                    assists: s.assists,
-                    deaths: s.deaths,
-                    damage: s.damage,
-                    adr: s.adr,
-                  })) : undefined}
-                />
-              )}
-            </div>
-            <div>
-              <TeamHeader
-                name="Shirts"
-                faction={shirtsF}
-                score={score?.shirts ?? null}
-                outcome={score ? (shirtsWon ? 'WON' : 'LOST') : null}
-              />
-              <Scoreboard
-                players={shirts}
-                mvpPlayerId={mvpPlayerId}
-                faction={shirtsF}
-                currentPlayerId={currentPlayerId}
-              />
-            </div>
-
-            <div className="mt-6">
-              <TeamHeader
-                name="Skins"
-                faction={skinsF}
-                score={score?.skins ?? null}
-                outcome={score ? (!shirtsWon ? 'WON' : 'LOST') : null}
-              />
-              <Scoreboard
-                players={skins}
-                mvpPlayerId={mvpPlayerId}
-                faction={skinsF}
-                currentPlayerId={currentPlayerId}
-              />
-            </div>
-
-            {match.screenshot_url_front && (
-              <ScreenshotViewer
-                frontUrl={match.screenshot_url_front}
-                backUrl={match.screenshot_url_back}
-              />
-            )}
-          </>
-        ))}
+        <MatchTabView
+          shirts={shirts}
+          skins={skins}
+          score={score}
+          shirtsWon={shirtsWon}
+          shirtsF={shirtsF}
+          skinsF={skinsF}
+          mvpPlayerId={mvpPlayerId}
+          currentPlayerId={currentPlayerId}
+          played={played}
+          canEnterResults={canEnterResults}
+          isCurrentUserAdmin={isCurrentUserAdmin}
+          matchId={match.id}
+          matchPlayers={stats.map((s) => ({
+            player_id: s.player_id,
+            player_name: s.player_name,
+            faction: s.faction as 'SHIRTS' | 'SKINS',
+          }))}
+          targetWinRounds={season.target_win_rounds}
+          skinsSide={match.skins_starting_side}
+          initialShirtsScore={score?.shirts ?? null}
+          initialSkinsScore={score?.skins ?? null}
+          initialScreenshotFrontUrl={match.screenshot_url_front}
+          initialScreenshotBackUrl={match.screenshot_url_back}
+          initialStats={played ? stats.map((s) => ({
+            player_id: s.player_id,
+            kills: s.kills,
+            assists: s.assists,
+            deaths: s.deaths,
+            damage: s.damage,
+            adr: s.adr,
+          })) : undefined}
+          screenshotFrontUrl={match.screenshot_url_front}
+          screenshotBackUrl={match.screenshot_url_back}
+          scoutingData={scoutingData}
+          scoutingH2H={scoutingH2H}
+          matchMap={map}
+        />
       </main>
     </div>
   );
