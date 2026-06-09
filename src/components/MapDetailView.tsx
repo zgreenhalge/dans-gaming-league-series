@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import LeaderboardTable from './LeaderboardTable';
 import { MatchCard } from './MatchCard';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
-import { tabCls } from '@/lib/util';
+import { tabCls, canonicalSort } from '@/lib/util';
 import type { MapMatchRow, MapDetail, MapPlayerStat } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 
@@ -86,7 +86,7 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
       rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
       overall_adr: rp > 0 ? a.total_damage / rp : 0,
     };
-  }).sort((a, b) => b.overall_adr - a.overall_adr);
+  }).sort(canonicalSort);
 }
 
 export default function MapDetailView({ detail }: { detail: MapDetail }) {

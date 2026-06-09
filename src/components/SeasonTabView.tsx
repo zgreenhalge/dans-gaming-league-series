@@ -5,11 +5,12 @@ import LeaderboardTable from './LeaderboardTable';
 import ScheduleList from './ScheduleList';
 import GauntletStandings from './GauntletStandings';
 import GauntletRoundsList from './GauntletRoundsList';
-import type { WeekWithMatches, GauntletRound } from '@/lib/queries';
+import H2HSection from './H2HSection';
+import type { WeekWithMatches, GauntletRound, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { isPlayedScore } from '@/lib/util';
+import { isPlayedScore, tabCls } from '@/lib/util';
 
-type Tab = 'leaderboard' | 'schedule';
+type Tab = 'leaderboard' | 'schedule' | 'h2h';
 
 function playerInMatch(
   match: { shirts: { player_id: number }[]; skins: { player_id: number }[] },
@@ -29,10 +30,11 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   seasonStatus: string;
   currentPlayerId: number | null;
   subStyle?: boolean;
+  h2hData: H2HData;
 };
 
 export default function SeasonTabView(props: SeasonTabViewProps) {
-  const { leaderboard, seasonStatus, currentPlayerId, subStyle } = props;
+  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData } = props;
   const isGauntlet = props.kind === 'gauntlet';
   const schedule = props.kind === 'regular' ? props.schedule : [];
   const rounds = props.kind === 'gauntlet' ? props.rounds : [];
@@ -143,6 +145,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'leaderboard', label: 'Leaderboard' },
+    { key: 'h2h', label: 'H2H' },
     { key: 'schedule', label: isGauntlet ? 'Rounds' : 'Schedule' },
   ];
 
@@ -150,19 +153,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     <button
       key={t.key}
       onClick={() => setTab(t.key)}
-      className={
-        subStyle
-          ? `px-3 py-1.5 tracked text-[10px] font-semibold transition-colors -mb-px border-b-2 ${
-              tab === t.key
-                ? 'border-[var(--color-site-accent)] text-[var(--color-text-primary)]'
-                : 'border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-            }`
-          : `px-4 py-2.5 tracked text-[11px] font-semibold transition-colors -mb-px border-b-2 ${
-              tab === t.key
-                ? 'text-[var(--color-text-primary)] border-[var(--color-text-primary)]'
-                : 'text-[var(--color-text-secondary)] border-transparent hover:text-[var(--color-text-primary)]'
-            }`
-      }
+      className={tabCls(tab === t.key, { compact: subStyle, accent: subStyle })}
     >
       {t.label}
     </button>
@@ -232,6 +223,8 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
           )
         )
       )}
+
+      {tab === 'h2h' && <H2HSection data={h2hData} />}
     </>
   );
 }

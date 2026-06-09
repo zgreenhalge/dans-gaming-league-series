@@ -2,12 +2,14 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import type { PlayerHistoryRow, TrophyEntry } from '@/lib/queries';
+import type { PlayerHistoryRow, TrophyEntry, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { extractSeasonNumber, isPlayedScore, seasonTitle } from '@/lib/util';
+import { winRateColor, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls, winRatePct } from '@/lib/util';
 import { MatchCard } from './MatchCard';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
+import Sparkline from './Sparkline';
+import PlayerAvatar from './PlayerAvatar';
 
 type Filter = 'career' | number;
 type MapSortCol = 'map' | 'record' | 'wr' | 'adr';
@@ -107,6 +109,29 @@ function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
   return out.sort((a, b) => b.wr - a.wr || b.adr - a.adr);
 }
 
+/** Percentage of `all` strictly below `value` — "you're ahead of N% of the league". */
+function percentileOf(value: number, all: number[]): number {
+  if (all.length === 0) return 0;
+  const below = all.filter((v) => v < value).length;
+  return Math.round((below / all.length) * 100);
+}
+
+function PctRow({ label, pct, value }: { label: string; pct: number; value: string }) {
+  const clamped = Math.max(0, Math.min(100, pct));
+  return (
+    <div className="grid grid-cols-[62px_1fr_50px] items-center gap-2.5 py-1.5">
+      <span className="tracked text-[9px] text-[var(--color-text-secondary)]">{label}</span>
+      <div className="relative">
+        <span className="block h-[6px] w-full bg-[rgba(255,255,255,0.08)]">
+          <span className="block h-full bg-[var(--color-ct)]" style={{ width: `${clamped}%` }} />
+        </span>
+        <span className="absolute left-1/2 -top-0.5 -bottom-0.5 w-px bg-[rgba(255,255,255,0.25)]" />
+      </div>
+      <span className="font-mono text-[10px] text-right text-[var(--color-text-primary)]">{value}</span>
+    </div>
+  );
+}
+
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="tracked text-[10px] text-[var(--color-text-secondary)] mt-10 mb-3">
@@ -148,11 +173,19 @@ function StatCell({ v, l }: { v: string | number; l: string }) {
 
 
 export default function PlayerView({
+  playerId,
   history,
   trophies,
+  careerLeaderboard,
+  h2hData,
+  isDev = false,
 }: {
+  playerId: number;
   history: PlayerHistoryRow[];
   trophies: TrophyEntry[];
+  careerLeaderboard: LeaderboardRowWithId[];
+  h2hData: H2HData;
+  isDev?: boolean;
 }) {
   const { regularSeasons, gauntletSeasons, regularToGauntlet } = useMemo(() => {
     const regMap = new Map<number, { id: number; name: string }>();
@@ -236,6 +269,58 @@ export default function PlayerView({
   const playedHistory = filtered.filter(isPlayed);
   const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
 
+  // Chronological ADR series (history is sorted newest-first; reverse for the sparkline).
+  const adrSeries = useMemo(
+    () => playedHistory.slice().reverse().map((r) => r.adr),
+    [playedHistory],
+  );
+
+  const percentiles = useMemo(() => {
+    const adrAll = careerLeaderboard.map((r) => r.overall_adr);
+    const kdAll = careerLeaderboard.map((r) => r.kd_ratio);
+    const wrAll = careerLeaderboard.map((r) => r.win_rate_percentage);
+    return {
+      adr: percentileOf(agg.adr, adrAll),
+      kd: percentileOf(agg.kd, kdAll),
+      wr: percentileOf(agg.wr, wrAll),
+    };
+  }, [careerLeaderboard, agg]);
+
+  const h2hPlayersById = useMemo(() => {
+    const m = new Map<number, (typeof h2hData.players)[number]>();
+    for (const p of h2hData.players) m.set(p.id, p);
+    return m;
+  }, [h2hData]);
+
+  const bestPartners = useMemo(
+    () =>
+      h2hData.duos
+        .filter((d) => d.playerA === playerId || d.playerB === playerId)
+        .filter((d) => d.gamesPlayed > 0)
+        .sort((a, b) => winRatePct(b.wins, b.gamesPlayed) - winRatePct(a.wins, a.gamesPlayed))
+        .slice(0, 3)
+        .map((d) => ({ other: d.playerA === playerId ? d.playerB : d.playerA, wr: winRatePct(d.wins, d.gamesPlayed) })),
+    [h2hData.duos, playerId],
+  );
+
+  const topRivals = useMemo(
+    () =>
+      h2hData.rivals
+        .filter((r) => r.playerA === playerId || r.playerB === playerId)
+        .filter((r) => r.meetings > 0)
+        .sort((a, b) => Math.abs(a.aWins - a.bWins) - Math.abs(b.aWins - b.bWins) || b.meetings - a.meetings)
+        .slice(0, 3)
+        .map((r) => {
+          const isA = r.playerA === playerId;
+          return {
+            other: isA ? r.playerB : r.playerA,
+            wins: isA ? r.aWins : r.bWins,
+            losses: isA ? r.bWins : r.aWins,
+          };
+        }),
+    [h2hData.rivals, playerId],
+  );
+
   const isCareer = filter === 'career';
 
   const medalCounts = useMemo(() => {
@@ -294,11 +379,7 @@ export default function PlayerView({
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2.5 tracked text-[11px] font-semibold transition-colors -mb-px border-b-2 ${
-              tab === t.key
-                ? 'text-[var(--color-text-primary)] border-[var(--color-text-primary)]'
-                : 'text-[var(--color-text-secondary)] border-transparent hover:text-[var(--color-text-primary)]'
-            }`}
+            className={tabCls(tab === t.key)}
           >
             {t.label}
           </button>
@@ -353,6 +434,98 @@ export default function PlayerView({
               <StatCell v={agg.adr.toFixed(2)} l="ADR" />
             </div>
           </div>
+
+          {isDev && adrSeries.length > 1 && (
+            <>
+              <div className="flex items-baseline justify-between mt-10 mb-3">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">ADR over time</span>
+                <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">{adrSeries.length} matches</span>
+              </div>
+              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 text-[var(--color-site-accent)]">
+                <Sparkline
+                  data={adrSeries}
+                  width={420}
+                  height={62}
+                  color="currentColor"
+                  fill="color-mix(in srgb, currentColor 16%, transparent)"
+                  strokeWidth={2.5}
+                  showDot
+                />
+              </div>
+            </>
+          )}
+
+          {isDev && (
+            <>
+              <div className="flex items-baseline justify-between mt-10 mb-3">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Percentile vs league</span>
+                <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">median = midline</span>
+              </div>
+              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-2">
+                <PctRow label="ADR" pct={percentiles.adr} value={agg.adr.toFixed(1)} />
+                <PctRow label="K/D" pct={percentiles.kd} value={agg.kd.toFixed(2)} />
+                <PctRow label="Win rate" pct={percentiles.wr} value={`${agg.wr.toFixed(0)}%`} />
+              </div>
+            </>
+          )}
+
+          {isDev && bestPartners.length > 0 && (
+            <>
+              <div className="flex items-baseline justify-between mt-10 mb-3">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Best partners</span>
+                <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">win rate</span>
+              </div>
+              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
+                {bestPartners.map(({ other, wr }) => {
+                  const p = h2hPlayersById.get(other);
+                  if (!p) return null;
+                  return (
+                    <Link
+                      key={other}
+                      href={`/players/${other}`}
+                      className="lift-row grid grid-cols-[22px_1fr_56px_28px] items-center gap-2.5 px-4 py-2 border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors"
+                    >
+                      <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
+                      <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
+                      <span className="block h-[5px] w-full bg-[rgba(255,255,255,0.08)]">
+                        <span className="block h-full" style={{ width: `${Math.max(0, Math.min(100, wr))}%`, background: winRateColor(wr) }} />
+                      </span>
+                      <span className="display-numeral text-[14px] text-right" style={{ color: winRateColor(wr) }}>{wr}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {isDev && topRivals.length > 0 && (
+            <>
+              <div className="flex items-baseline justify-between mt-10 mb-3">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Top rivals</span>
+                <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">head-to-head</span>
+              </div>
+              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
+                {topRivals.map(({ other, wins, losses }) => {
+                  const p = h2hPlayersById.get(other);
+                  if (!p) return null;
+                  const lead = wins > losses;
+                  return (
+                    <Link
+                      key={other}
+                      href={`/players/${other}`}
+                      className="lift-row grid grid-cols-[22px_1fr_auto] items-center gap-2.5 px-4 py-2 border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors"
+                    >
+                      <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
+                      <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
+                      <span className="display-numeral text-[15px]" style={{ color: lead ? 'var(--color-accent-green-fg)' : 'var(--color-accent-red-fg)' }}>
+                        {wins}<span className="text-[12px] text-[var(--color-text-secondary)]">–</span>{losses}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           {isCareer && activeSeasons.length > 0 && (
             <>
@@ -419,7 +592,7 @@ export default function PlayerView({
                       return mapAsc ? -v : v;
                     })
                     .map((m) => (
-                      <tr key={m.map} className="border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors">
+                      <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
                         <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{m.map}</td>
                         <td className="px-3 py-2.5 text-right font-mono tnum">{m.wins}-{m.losses}</td>
                         <td className="px-3 py-2.5 text-right font-mono tnum">

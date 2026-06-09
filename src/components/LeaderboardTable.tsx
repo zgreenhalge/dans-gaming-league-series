@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { YouBadge } from './YouBadge';
+import { canonicalSort } from '@/lib/util';
 
 type SortCol =
   | 'name'
@@ -109,12 +110,7 @@ export default function LeaderboardTable({
 
   // Canonical ranking: WR% → RWR% → ADR, fixed regardless of active sort.
   const canonicalRanked = firstColMode === 'player'
-    ? [...rows].sort(
-        (a, b) =>
-          b.win_rate_percentage - a.win_rate_percentage ||
-          b.rwr_percentage - a.rwr_percentage ||
-          b.overall_adr - a.overall_adr,
-      )
+    ? [...rows].sort(canonicalSort)
     : [];
 
   // Playoff zone coloring: top N gold, bottom N red tint (overrides medals when provided)

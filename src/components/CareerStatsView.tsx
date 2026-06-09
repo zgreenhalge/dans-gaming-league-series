@@ -1,13 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
-import { extractSeasonNumber, seasonTitle } from '@/lib/util';
+import H2HSection from './H2HSection';
+import { buildRegularToGauntletMap, seasonTitle, tabCls } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import type { TrophyEntry } from '@/lib/queries';
+import type { TrophyEntry, H2HData } from '@/lib/queries';
+import type { H2HPair } from './H2HMatrix';
 
 type Filter = 'career' | number;
+type Tab = 'leaderboard' | 'h2h';
 
 function mergeRows(
   a: LeaderboardRowWithId[],
@@ -57,6 +61,7 @@ export default function CareerStatsView({
   gauntletCareerRows,
   gauntletBySeason,
   trophiesByPlayer,
+  h2hData,
 }: {
   regularSeasons: { id: number; name: string }[];
   gauntletSeasons: { id: number; name: string }[];
@@ -65,24 +70,32 @@ export default function CareerStatsView({
   gauntletCareerRows: LeaderboardRowWithId[];
   gauntletBySeason: Record<number, LeaderboardRowWithId[]>;
   trophiesByPlayer: Record<number, TrophyEntry[]>;
+  h2hData: H2HData;
 }) {
+  const searchParams = useSearchParams();
   const { includeRegular, includeGauntlet, toggleRegular: baseToggleRegular, toggleGauntlet: baseToggleGauntlet } = useSeasonFilter();
   const [filter, setFilter] = useState<Filter>('career');
+  const [tab, setTab] = useState<Tab>(searchParams.get('tab') === 'h2h' ? 'h2h' : 'leaderboard');
+
+  const urlInitialPair = useMemo<H2HPair | null>(() => {
+    const aName = searchParams.get('a');
+    const bName = searchParams.get('b');
+    const type = searchParams.get('type') === 'opponent' ? 'opponent' : 'partner';
+    if (!aName || !bName) return null;
+    const a = h2hData.players.find((p) => p.name.toLowerCase() === aName.toLowerCase());
+    const b = h2hData.players.find((p) => p.name.toLowerCase() === bName.toLowerCase());
+    if (!a || !b) return null;
+    return { a: a.id, b: b.id, type };
+  }, [searchParams, h2hData.players]);
 
   function toggleRegular() { baseToggleRegular(); setFilter('career'); }
   function toggleGauntlet() { baseToggleGauntlet(); setFilter('career'); }
 
   // Map regular season ID → paired gauntlet season ID (matched by season number)
-  const regularToGauntlet = useMemo(() => {
-    const map = new Map<number, number>();
-    for (const r of regularSeasons) {
-      const n = extractSeasonNumber(r.name);
-      if (n == null) continue;
-      const g = gauntletSeasons.find((s) => extractSeasonNumber(s.name) === n);
-      if (g) map.set(r.id, g.id);
-    }
-    return map;
-  }, [regularSeasons, gauntletSeasons]);
+  const regularToGauntlet = useMemo(
+    () => buildRegularToGauntletMap(regularSeasons, gauntletSeasons),
+    [regularSeasons, gauntletSeasons],
+  );
 
   const activeSeasons = useMemo(() => {
     const seen = new Set<string>();
@@ -134,36 +147,53 @@ export default function CareerStatsView({
 
   return (
     <>
-      <div className="flex items-center justify-end gap-5 mb-3">
-        <SeasonFilter
-          filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }}
-          showRegular={regularSeasons.length > 0}
-          showGauntlet={gauntletSeasons.length > 0}
-        />
-        <select
-          value={String(filter)}
-          onChange={(e) => {
-            const v = e.target.value;
-            setFilter(v === 'career' ? 'career' : Number(v));
-          }}
-          className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
-        >
-          <option value="career">Career</option>
-          {activeSeasons.map((s) => (
-            <option key={s.id} value={s.id}>
-              {seasonTitle(s.name)}
-            </option>
-          ))}
-        </select>
+      <div className="flex items-center justify-between gap-5 mb-3 border-b border-[var(--color-border-tertiary)]">
+        <div className="flex items-center">
+          <button className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
+            Leaderboard
+          </button>
+          <button className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
+            H2H
+          </button>
+        </div>
+        {tab === 'leaderboard' && (
+          <div className="flex items-center gap-5 pb-3">
+            <SeasonFilter
+              filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }}
+              showRegular={regularSeasons.length > 0}
+              showGauntlet={gauntletSeasons.length > 0}
+            />
+            <select
+              value={String(filter)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setFilter(v === 'career' ? 'career' : Number(v));
+              }}
+              className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
+            >
+              <option value="career">Career</option>
+              {activeSeasons.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {seasonTitle(s.name)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
-      {rows.length === 0 ? (
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-          No data for this selection.
-        </div>
+      {tab === 'leaderboard' ? (
+        rows.length === 0 ? (
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+            No data for this selection.
+          </div>
+        ) : (
+          <LeaderboardTable rows={rows} showMedals={false} trophyCounts={trophyCounts} />
+        )
       ) : (
-        <LeaderboardTable rows={rows} showMedals={false} trophyCounts={trophyCounts} />
+        <H2HSection data={h2hData} initialPair={urlInitialPair} />
       )}
     </>
   );
 }
+

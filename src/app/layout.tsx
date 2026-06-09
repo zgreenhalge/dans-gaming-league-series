@@ -53,7 +53,7 @@ export default async function RootLayout({
       className={`h-full antialiased ${display.variable} ${sans.variable} ${mono.variable}`}
       suppressHydrationWarning
     >
-      <body className="min-h-full">
+      <body className="min-h-full dgls-atmosphere">
         <Script
           id="theme-initializer"
           src="/theme-script.js"

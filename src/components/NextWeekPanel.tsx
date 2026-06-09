@@ -21,7 +21,7 @@ function MatchupRow({
   return (
     <Link
       href={`/matches/${match.id}`}
-      className="flex items-center gap-3 px-5 py-2.5 border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] transition-colors"
+      className="lift-row flex items-center gap-3 px-5 py-2.5 border-b border-[var(--color-border-tertiary)] last:border-b-0"
     >
       <span className="tracked text-[9px] text-[var(--color-text-secondary)] shrink-0 w-12">
         Match {match.match_number}

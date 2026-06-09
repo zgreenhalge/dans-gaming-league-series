@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { getMatch, type MatchStatRow } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getH2HData, type MatchStatRow } from '@/lib/queries';
+import ScoutingReport from '@/components/ScoutingReport';
 import type { Match } from '@/lib/types';
 import { isPlayedScore, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
@@ -129,7 +130,7 @@ function Scoreboard({
             return (
               <tr
                 key={p.player_id}
-                className="border-b border-[var(--color-border-tertiary)] last:border-b-0 hover:bg-[var(--color-bg-secondary)] cursor-pointer transition-colors"
+                className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer"
               >
                 <td className="pl-3 pr-3 py-2 font-display font-semibold faction-fg">
                   <Link
@@ -249,6 +250,14 @@ export default async function MatchPage({
 
   const shirts = stats.filter((s) => s.faction === 'SHIRTS');
   const skins = stats.filter((s) => s.faction === 'SKINS');
+
+  const showScouting = !played && shirts.length === 2 && skins.length === 2;
+  const [scoutingData, scoutingH2H] = showScouting
+    ? await Promise.all([
+        getMatchScoutingData(matchId),
+        getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
+      ])
+    : [null, null];
   const allByAdr = [...stats]
     .filter((s) => s.rounds_played > 0)
     .sort((a, b) => b.adr - a.adr);
@@ -398,7 +407,19 @@ export default async function MatchPage({
 
         </div>
 
-        {stats.length === 0 ? (
+        {showScouting && scoutingData && scoutingH2H && (
+          <ScoutingReport
+            shirts={[scoutingData.shirts[0], scoutingData.shirts[1]]}
+            skins={[scoutingData.skins[0], scoutingData.skins[1]]}
+            duos={scoutingH2H.duos}
+            rivals={scoutingH2H.rivals}
+            matchMap={map}
+            shirtsF={shirtsF}
+            skinsF={skinsF}
+          />
+        )}
+
+        {!showScouting && (stats.length === 0 ? (
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-10">
             This match hasn&apos;t been recorded yet.
           </div>
@@ -470,7 +491,7 @@ export default async function MatchPage({
               />
             )}
           </>
-        )}
+        ))}
       </main>
     </div>
   );

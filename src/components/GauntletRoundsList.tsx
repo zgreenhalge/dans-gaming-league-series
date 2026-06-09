@@ -61,7 +61,7 @@ function GauntletRoundCard({
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
       <button
         onClick={onToggle}
-        className="w-full px-4 py-2.5 flex items-center gap-3 border-b border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-tertiary)] transition-colors text-left"
+        className="lift-row w-full px-4 py-2.5 flex items-center gap-3 border-b border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-left"
         aria-expanded={isOpen}
       >
         <span className="text-[var(--color-text-secondary)] text-[12px] leading-none select-none w-3 shrink-0">

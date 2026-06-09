@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getPlayer } from '@/lib/queries';
+import { getPlayer, getCareerLeaderboard, getH2HData } from '@/lib/queries';
 import { maybeRefreshSteamProfile } from '@/lib/steam';
 import PlayerView from '@/components/PlayerView';
 import PlayerAvatar from '@/components/PlayerAvatar';
@@ -26,7 +26,11 @@ export default async function PlayerPage({
   const { id } = await params;
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
-  const detail = await getPlayer(playerId);
+  const [detail, careerLeaderboard, h2hData] = await Promise.all([
+    getPlayer(playerId),
+    getCareerLeaderboard(),
+    getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
+  ]);
   if (!detail) notFound();
 
   const freshSteam = await maybeRefreshSteamProfile(detail.player);
@@ -63,7 +67,14 @@ export default async function PlayerPage({
             )}
           </div>
         </div>
-        <PlayerView history={detail.history} trophies={detail.trophies} />
+        <PlayerView
+          playerId={detail.player.id}
+          history={detail.history}
+          trophies={detail.trophies}
+          careerLeaderboard={careerLeaderboard}
+          h2hData={h2hData}
+          isDev={process.env.NODE_ENV === 'development'}
+        />
       </main>
     </div>
   );

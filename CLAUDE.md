@@ -1,8 +1,15 @@
 @AGENTS.md
 
+**New to this codebase (human or agent)?** Read `GLOSSARY.md` first — it defines DGLS-specific
+domain terms (gauntlet, H2H, faction, RWR, etc.) and maps concepts to the files that implement them.
+For step-by-step patterns on common changes (new stat, new page, new query helper), see
+`RECIPES.md`. For the shared CSS hover/glow/accent system, see `VISUAL_CONVENTIONS.md`.
+
 ## Guiding philosophy
 
 **Keep it simple and learnable.** Prefer straightforward solutions over clever ones. Every implementation choice should be easy to understand, modify, and extend without needing to unravel abstractions. When there are two ways to do something, pick the one a newcomer could follow. This is a real constraint — favor obvious code over abstraction.
+
+**Always prefer extracting/abstracting shared logic whenever possible.** If you're about to write a join/aggregation/derivation that already exists elsewhere (even inline in a component), factor it into a shared helper (`src/lib/queries.ts` or `src/lib/util.ts`) and have both call sites use it — don't let two copies of the same logic drift apart.
 
 ## Commands
 
@@ -18,7 +25,7 @@ See README.md for the full env var list. One non-obvious constraint: `SUPABASE_S
 Full schema is in README.md and `src/lib/types.ts`. Non-obvious rules:
 
 - **Always read aggregates from `player_season_leaderboard`** — never compute them client-side.
-- **ADR is the primary sort key** on every leaderboard. Never sort by W-L alone.
+- **Canonical sort is WR% → RWR% → ADR** (all descending). Use `canonicalSort()` from `src/lib/util.ts` everywhere player rows are ranked. Never sort by ADR alone.
 - `total_assists` and `total_rounds_won` are absent from the view. `getPerPlayerSeasonStats()` in `src/lib/queries.ts` augments them by reading `player_match_stats` directly.
 - **Gauntlet seasons** store all matches as `is_playoff_game = true`, so they're excluded from the regular view. Use `getGauntletStats()` / `getGauntletSeasonLeaderboard()` for gauntlet data.
 - **RLS is off** on all tables. Enabling it without policies blocks all access.
@@ -31,6 +38,7 @@ Full schema is in README.md and `src/lib/types.ts`. Non-obvious rules:
 - **Played match check:** use `isPlayedScore(m.final_score)` from `src/lib/util.ts`. `null` alone is not sufficient — S3 matches were pre-staged with `"0-0"` before scores were entered.
 - **Tab UI:** use `tabCls(active)` from `src/lib/util.ts` for the standard bordered-underline tab button style.
 - **Score parsing:** use `parseScore()` from `src/lib/util.ts` — handles both `"13-9"` and `"13 – 9"` (em-dash).
+- **Seasonal filter is universal.** Any view that aggregates stats across seasons must respect the same filter as the rest of the site — `useSeasonFilter()` / `<SeasonFilter>` from `src/components/SeasonFilter.tsx`, with the same `includeRegular`/`includeGauntlet`/`selectedSeason`/career semantics used by `getCareerLeaderboard()` and `CareerStatsView`. Don't build a one-off season selector.
 
 ## Gotchas
 
