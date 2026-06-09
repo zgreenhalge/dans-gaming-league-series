@@ -122,7 +122,7 @@ function TeamHeader({
             {score}
           </span>
         )}
-        <span className="font-display text-[20px] font-semibold faction-fg">{name}</span>
+        <span className="font-display text-[20px] font-bold faction-fg">{name}</span>
       </div>
       {outcome && (
         <span

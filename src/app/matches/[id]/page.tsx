@@ -110,7 +110,7 @@ export default async function MatchPage({
   const shirts = stats.filter((s) => s.faction === 'SHIRTS');
   const skins = stats.filter((s) => s.faction === 'SKINS');
 
-  const showScouting = !played && shirts.length === 2 && skins.length === 2;
+  const showScouting = shirts.length === 2 && skins.length === 2;
   const [scoutingData, scoutingH2H] = showScouting
     ? await Promise.all([
         getMatchScoutingData(matchId),
@@ -223,10 +223,10 @@ export default async function MatchPage({
             {score && (
               <div className="mt-5 flex items-baseline justify-center gap-5 flex-wrap">
                 <div className={`${factionClass(shirtsF)} flex items-baseline gap-3`}>
-                  <span className="font-display text-[24px] font-semibold faction-fg">
+                  <span className="font-display text-[24px] font-bold faction-fg">
                     Shirts
                   </span>
-                  <span className="display-numeral text-[64px] text-[var(--color-text-primary)] tnum">
+                  <span className="display-numeral text-[64px] text-[var(--color-text-primary)] tnum [text-shadow:-1px_-1px_0_black,1px_-1px_0_black,-1px_1px_0_black,1px_1px_0_black]">
                     {score.shirts}
                   </span>
                 </div>
@@ -234,10 +234,10 @@ export default async function MatchPage({
                   —
                 </span>
                 <div className={`${factionClass(skinsF)} flex items-baseline gap-3`}>
-                  <span className="display-numeral text-[64px] text-[var(--color-text-primary)] tnum">
+                  <span className="display-numeral text-[64px] text-[var(--color-text-primary)] tnum [text-shadow:-1px_-1px_0_black,1px_-1px_0_black,-1px_1px_0_black,1px_1px_0_black]">
                     {score.skins}
                   </span>
-                  <span className="font-display text-[24px] font-semibold faction-fg">
+                  <span className="font-display text-[24px] font-bold faction-fg">
                     Skins
                   </span>
                 </div>

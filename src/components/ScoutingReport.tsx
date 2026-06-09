@@ -17,6 +17,28 @@ function findRival(rivals: H2HStats[], a: number, b: number): H2HStats | undefin
   return rivals.find((r) => (r.playerA === a && r.playerB === b) || (r.playerA === b && r.playerB === a));
 }
 
+/** Return a copy of `rival` with A/B flipped so that `desiredA` is always playerA. */
+function normalizeRival(rival: H2HStats, desiredA: number): H2HStats {
+  if (rival.playerA === desiredA) return rival;
+  return {
+    playerA: rival.playerB,
+    playerB: rival.playerA,
+    meetings: rival.meetings,
+    aWins: rival.bWins,
+    bWins: rival.aWins,
+    lastMap: rival.lastMap,
+    aStats: rival.bStats,
+    bStats: rival.aStats,
+    matches: rival.matches.map((m) => ({
+      ...m,
+      aWon: m.aWon == null ? null : !m.aWon,
+      aMatchStats: m.bMatchStats,
+      bMatchStats: m.aMatchStats,
+      score: m.score ? { a: m.score.b, b: m.score.a } : null,
+    })),
+  };
+}
+
 function EmptyPanel({ label }: { label: string }) {
   return (
     <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] flex items-center justify-center p-8 min-h-[80px]">
@@ -86,12 +108,18 @@ export default function ScoutingReport({
   const scoreDuo = duoBlendedScorer(duos);
   const scoreRival = rivalBlendedScorer(rivals);
 
+  function findNormalized(shirtId: number, skinId: number): H2HStats | undefined {
+    const r = findRival(rivals, shirtId, skinId);
+    return r ? normalizeRival(r, shirtId) : undefined;
+  }
+
   // columns = shirts[0], shirts[1] — rows = skins[0], skins[1]
+  // Rivals are normalized so the shirt player is always playerA (left/T side) and skins player is playerB (right/CT side).
   const rivalCells: Array<{ shirt: ScoutingPlayer; skin: ScoutingPlayer; rival: H2HStats | undefined }> = [
-    { shirt: shirts[0], skin: skins[0], rival: findRival(rivals, shirts[0].id, skins[0].id) },
-    { shirt: shirts[1], skin: skins[0], rival: findRival(rivals, shirts[1].id, skins[0].id) },
-    { shirt: shirts[0], skin: skins[1], rival: findRival(rivals, shirts[0].id, skins[1].id) },
-    { shirt: shirts[1], skin: skins[1], rival: findRival(rivals, shirts[1].id, skins[1].id) },
+    { shirt: shirts[0], skin: skins[0], rival: findNormalized(shirts[0].id, skins[0].id) },
+    { shirt: shirts[1], skin: skins[0], rival: findNormalized(shirts[1].id, skins[0].id) },
+    { shirt: shirts[0], skin: skins[1], rival: findNormalized(shirts[0].id, skins[1].id) },
+    { shirt: shirts[1], skin: skins[1], rival: findNormalized(shirts[1].id, skins[1].id) },
   ];
 
   return (
@@ -125,7 +153,7 @@ export default function ScoutingReport({
         )}
       </div>
 
-      {matchMap && (
+      {matchMap && process.env.NODE_ENV === 'development' && (
         <div className="mt-5 border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
           <div className="px-4 py-2.5 border-b border-[var(--color-border-tertiary)] flex items-baseline justify-between gap-3">
             <span className="tracked text-[9px] text-[var(--color-text-secondary)]">

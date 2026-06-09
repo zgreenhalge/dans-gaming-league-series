@@ -4,13 +4,37 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { GauntletRound, GauntletMatch } from '@/lib/queries';
-import { isPlayedScore } from '@/lib/util';
+import { isPlayedScore, parseScore } from '@/lib/util';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import { YouBadge } from '@/components/YouBadge';
 
 const MEDAL_COLORS = { 1: '#f5c542', 2: '#a0a3ab', 3: '#c47a3a' } as const;
 const tint = (rank: 1 | 2 | 3, opacity = 18) =>
   `color-mix(in srgb, ${MEDAL_COLORS[rank]} ${opacity}%, var(--color-bg-primary))`;
+
+function computeFinalRoundPlayerStats(matches: GauntletMatch[]): Map<number, { rwr: number; adr: number }> {
+  const agg = new Map<number, { rounds_won: number; rounds_played: number; total_damage: number }>();
+  for (const m of matches) {
+    if (!isPlayedScore(m.final_score)) continue;
+    const scores = parseScore(m.final_score);
+    if (!scores) continue;
+    const totalRounds = scores.shirts + scores.skins;
+    for (const p of [...m.shirts, ...m.skins]) {
+      const prev = agg.get(p.player_id) ?? { rounds_won: 0, rounds_played: 0, total_damage: 0 };
+      prev.rounds_won += p.faction === 'SHIRTS' ? scores.shirts : scores.skins;
+      prev.rounds_played += totalRounds;
+      prev.total_damage += p.adr * totalRounds;
+      agg.set(p.player_id, prev);
+    }
+  }
+  return new Map([...agg].map(([id, { rounds_won, rounds_played, total_damage }]) => [
+    id,
+    {
+      rwr: rounds_played > 0 ? rounds_won / rounds_played : 0,
+      adr: rounds_played > 0 ? total_damage / rounds_played : 0,
+    },
+  ]));
+}
 
 function computeRecords(matches: GauntletMatch[]) {
   const records = new Map<number, { player_id: number; name: string; wins: number; losses: number }>();
@@ -44,11 +68,12 @@ export default function GauntletStandings({
   if (!champion) return null;
 
   const statsByPlayer = new Map(leaderboard.map((r) => [r.player_id, r]));
+  const finalRoundStats = computeFinalRoundPlayerStats(finalRound.matches);
   const contenders = records.filter((r) => r.wins === 1).sort((a, b) => {
-    const as = statsByPlayer.get(a.player_id);
-    const bs = statsByPlayer.get(b.player_id);
-    if (!as || !bs) return 0;
-    return bs.rwr_percentage - as.rwr_percentage || bs.overall_adr - as.overall_adr;
+    const af = finalRoundStats.get(a.player_id);
+    const bf = finalRoundStats.get(b.player_id);
+    if (!af || !bf) return 0;
+    return bf.rwr - af.rwr || bf.adr - af.adr;
   });
 
   const second = contenders[0] ?? null;

@@ -5,10 +5,11 @@ import LeaderboardTable from './LeaderboardTable';
 import { MatchCard } from './MatchCard';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import { tabCls, canonicalSort } from '@/lib/util';
-import type { MapMatchRow, MapDetail, MapPlayerStat } from '@/lib/queries';
+import type { MapMatchRow, MapDetail, MapPlayerStat, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
+import H2HSection from './H2HSection';
 
-type Tab = 'stats' | 'matches';
+type Tab = 'stats' | 'matches' | 'h2h';
 
 function toRosterStat(s: MapPlayerStat) {
   return {
@@ -89,7 +90,7 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
   }).sort(canonicalSort);
 }
 
-export default function MapDetailView({ detail }: { detail: MapDetail }) {
+export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; h2hData: H2HData }) {
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter();
   const [tab, setTab] = useState<Tab>('stats');
 
@@ -128,6 +129,9 @@ export default function MapDetailView({ detail }: { detail: MapDetail }) {
           <span className="ml-1.5 font-mono text-[10px] text-[var(--color-text-secondary)]">
             ({filteredMatches.length})
           </span>
+        </button>
+        <button type="button" className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
+          H2H
         </button>
         <SeasonFilter
           filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason }}
@@ -170,6 +174,8 @@ export default function MapDetailView({ detail }: { detail: MapDetail }) {
           </div>
         )
       )}
+
+      {tab === 'h2h' && <H2HSection data={h2hData} />}
     </div>
   );
 }

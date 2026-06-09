@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getMapDetail } from '@/lib/queries';
+import { getMapDetail, getH2HData } from '@/lib/queries';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { extractSeasonNumber } from '@/lib/util';
 import MapDetailView from '@/components/MapDetailView';
@@ -61,7 +61,10 @@ export default async function MapPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const detail = await getMapDetail(slug);
+  const [detail, h2hData] = await Promise.all([
+    getMapDetail(slug),
+    getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true, map: slug }),
+  ]);
   if (!detail) notFound();
 
   const img = mapImageFor(detail.name);
@@ -113,7 +116,7 @@ export default async function MapPage({
       </div>
 
       <main className="max-w-[1080px] mx-auto px-6 pb-16 mt-8">
-        <MapDetailView detail={detail} />
+        <MapDetailView detail={detail} h2hData={h2hData} />
       </main>
     </div>
   );

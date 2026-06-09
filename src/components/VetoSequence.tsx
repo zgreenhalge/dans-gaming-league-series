@@ -253,7 +253,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
                         >
                           {toSentenceCase(val)}
                         </Link>
-                      ) : val ? toSentenceCase(val) : '—'}
+                      ) : val ? (s.type === 'side' ? val : toSentenceCase(val)) : '—'}
                     </div>
                   </div>
                 </div>

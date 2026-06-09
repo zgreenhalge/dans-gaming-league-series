@@ -27,5 +27,9 @@ export function CountdownTimer({ iso, className }: { iso: string; className?: st
   }, [iso]);
 
   if (remaining === null || remaining <= 0) return null;
-  return <div className={className}>in {formatCountdown(remaining)}</div>;
+  const urgent = remaining < 6 * 60 * 60 * 1000;
+  const imminent = remaining < 60 * 60 * 1000;
+  const urgentCls = urgent ? ' text-red-500' : '';
+  const imminentCls = imminent ? ' font-bold' : '';
+  return <div className={`${className ?? ''}${urgentCls}${imminentCls}`}>in {formatCountdown(remaining)}</div>;
 }
