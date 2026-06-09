@@ -525,11 +525,11 @@ body::before {
    `:not(.lift-card)` because standalone image `MatchCard`s already carry
    `.lift-card`'s own accent border-color change; an outline ring on top of
    that would double the signal on one element. */
-.map-card-bg:not(.lift-card) {
+.map-card-bg:not(.lift-card):not(.no-hover-ring) {
   outline: 2px solid transparent;
   outline-offset: -2px;
   transition: outline-color 0.15s;
 }
-.map-card-bg:not(.lift-card):hover {
+.map-card-bg:not(.lift-card):not(.no-hover-ring):hover {
   outline-color: var(--lift-accent, var(--color-site-accent));
 }

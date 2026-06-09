@@ -36,6 +36,16 @@ so you don't have to reverse-engineer them from scratch each time.
   - **Duos** (`DuoStats`) — performance when two players are *teammates* (same faction)
   - **Rivals** (`H2HStats`) — performance when two players are *opponents* (different factions)
   Rendered by `H2HMatrix.tsx` (overview grid) and `H2HDetail.tsx` (drill-down for a pair).
+- **Blended score** (H2H rankings) — how the "Best Friends"/"Closest Rivals" cards
+  (`topDuos`/`topRivals` in `H2HSection.tsx`) rank pairs, and how the `H2HMatrix` colors
+  its cells. Shared via `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/queries.ts`.
+  Each metric that feeds the score (games played, wins, round win rate, meetings,
+  win-difference) lives on its own scale — raw counts can run into the dozens, rates top
+  out at 100, differences shrink toward 0 as a rivalry gets closer. To combine them into
+  one weighted sum, each metric is normalized against the *best value seen for that metric
+  across all eligible pairs* (e.g. `maxRwr` = the highest round win rate anyone posted),
+  turning every term into a 0–1 "how close to the best?" fraction before the weights
+  (0.5 / 0.3 / 0.2, etc.) are applied. `Math.max(1, ...)` guards the empty-data case.
 - **Scouting report** — pre-match prep view (`getMatchScoutingData()` → `ScoutingReport.tsx`)
   showing each upcoming player's recent form/history before a match is played.
 - **Bye** — a player who sits out a given week (`weeks.bye_player_id`); odd-numbered rosters mean
