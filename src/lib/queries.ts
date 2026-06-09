@@ -1365,9 +1365,9 @@ export async function getAllSeasonMedalists(): Promise<Map<number, TrophyEntry[]
 
       const matchIds = matchRows.map((m) => m.id);
       const { data: statData } = matchIds.length
-        ? await supabase.from('player_match_stats').select('match_id, player_id, is_win').in('match_id', matchIds)
-        : { data: [] as { match_id: number; player_id: number; is_win: boolean }[] };
-      const statRows = (statData ?? []) as { match_id: number; player_id: number; is_win: boolean }[];
+        ? await supabase.from('player_match_stats').select('match_id, player_id, is_win, rounds_won, rounds_played, adr').in('match_id', matchIds)
+        : { data: [] as { match_id: number; player_id: number; is_win: boolean; rounds_won: number; rounds_played: number; adr: number }[] };
+      const statRows = (statData ?? []) as { match_id: number; player_id: number; is_win: boolean; rounds_won: number; rounds_played: number; adr: number }[];
 
       const matchesByWeek = new Map<number, { id: number; final_score: string | null }[]>();
       for (const m of matchRows) {
@@ -1403,13 +1403,28 @@ export async function getAllSeasonMedalists(): Promise<Map<number, TrophyEntry[]
 
         const seasonLeaderboard = gauntletLeaderboards.get(season.id) ?? [];
         const statsByPlayer = new Map(seasonLeaderboard.map((r) => [r.player_id, r]));
+
+        const finalMatchIds = new Set(finalMatches.map((m) => m.id));
+        const finalRoundAgg = new Map<number, { rounds_won: number; rounds_played: number; total_damage: number }>();
+        for (const s of statRows.filter((s) => finalMatchIds.has(s.match_id))) {
+          const prev = finalRoundAgg.get(s.player_id) ?? { rounds_won: 0, rounds_played: 0, total_damage: 0 };
+          prev.rounds_won += s.rounds_won;
+          prev.rounds_played += s.rounds_played;
+          prev.total_damage += s.adr * s.rounds_played;
+          finalRoundAgg.set(s.player_id, prev);
+        }
+
         const contenders = recordList
           .filter((r) => r.wins === 1)
           .sort((a, b) => {
-            const as = statsByPlayer.get(a.player_id);
-            const bs = statsByPlayer.get(b.player_id);
-            if (!as || !bs) return 0;
-            return bs.rwr_percentage - as.rwr_percentage || bs.overall_adr - as.overall_adr;
+            const af = finalRoundAgg.get(a.player_id);
+            const bf = finalRoundAgg.get(b.player_id);
+            if (!af || !bf) return 0;
+            const aRwr = af.rounds_played > 0 ? af.rounds_won / af.rounds_played : 0;
+            const bRwr = bf.rounds_played > 0 ? bf.rounds_won / bf.rounds_played : 0;
+            const aAdr = af.rounds_played > 0 ? af.total_damage / af.rounds_played : 0;
+            const bAdr = bf.rounds_played > 0 ? bf.total_damage / bf.rounds_played : 0;
+            return bRwr - aRwr || bAdr - aAdr;
           });
 
         const zeroStats: TrophyStatLine = {
