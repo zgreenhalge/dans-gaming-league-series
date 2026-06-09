@@ -125,7 +125,7 @@ export default function ScoutingReport({
         )}
       </div>
 
-      {matchMap && (
+      {matchMap && process.env.NODE_ENV === 'development' && (
         <div className="mt-5 border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
           <div className="px-4 py-2.5 border-b border-[var(--color-border-tertiary)] flex items-baseline justify-between gap-3">
             <span className="tracked text-[9px] text-[var(--color-text-secondary)]">
