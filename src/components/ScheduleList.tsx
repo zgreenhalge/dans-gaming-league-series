@@ -64,7 +64,7 @@ function WeekBlock({
               key={m.id}
               href={`/matches/${m.id}`}
               map={m.shirts_pick ?? m.picked_map}
-              label={{ type: 'match', matchNumber: m.match_number }}
+              label={{ type: 'match', matchNumber: m.match_number, isFeatureMatch: m.is_feature_match }}
               right={right}
               shirtsStats={m.shirts_stats}
               skinsStats={m.skins_stats}

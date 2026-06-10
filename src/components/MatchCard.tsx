@@ -4,6 +4,7 @@ import { YouBadge } from './YouBadge';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { fmtWindowDate } from '@/lib/util';
 import { CountdownTimer } from './CountdownTimer';
+import { FeatureMatchIcon } from './FeatureMatch';
 
 export interface MatchCardPlayer {
   player_id: number;
@@ -15,7 +16,7 @@ export interface MatchCardPlayer {
 }
 
 export type MatchCardLabel =
-  | { type: 'match'; matchNumber: number }
+  | { type: 'match'; matchNumber: number; isFeatureMatch: boolean }
   | { type: 'game'; gameNumber: number }
   | { type: 'player-history'; seasonNumber: number | null; isGauntlet: boolean; weekNumber: number; matchNumber: number };
 
@@ -101,7 +102,7 @@ function renderLabel(label: MatchCardLabel, map: string | null | undefined) {
     return (
       <div className="flex items-baseline gap-3">
         <span className="font-display text-[18px] font-semibold text-[var(--color-text-primary)] map-head">
-          Match #{label.matchNumber}
+          Match {label.matchNumber} {label.isFeatureMatch && <FeatureMatchIcon />}
         </span>
         {mapLabel}
       </div>
