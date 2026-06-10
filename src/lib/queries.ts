@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { isPlayedScore, winRatePct } from './util';
 import { mapSlug } from './maps';
-import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort } from './util';
+import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
 import type {
   Season,
   Week,
@@ -54,6 +54,7 @@ export interface PlayerHistoryRow extends PlayerMatchStat {
   match_number: number;
   week_number: number;
   season_id: number;
+  season_number: number | null;
   season_name: string;
   is_gauntlet: boolean;
   map: string | null;
@@ -452,6 +453,12 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   const weekById = new Map<number, Week>();
   for (const w of (weeks ?? []) as Week[]) weekById.set(w.id, w);
 
+  const seasonIds = Array.from(new Set((weeks ?? []).map((w) => (w as Week).season_id)));
+  const { data: seasons, error: seErr } = await supabase.from('seasons').select('id, name').in('id', seasonIds);
+  if (seErr) throw seErr;
+  const seasonNameById = new Map<number, string>();
+  for (const s of (seasons ?? []) as { id: number; name: string }[]) seasonNameById.set(s.id, s.name);
+
   function buildPlayer(playerId: number): ScoutingPlayer {
     const p = players.get(playerId);
 
@@ -463,11 +470,11 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
         return mm && w && isPlayedScore(mm.final_score) ? { stat: s, match: mm, week: w } : null;
       })
       .filter((r): r is { stat: PlayerMatchStat; match: Match; week: Week } => r !== null)
-      .sort(
-        (a, b) =>
-          a.week.season_id - b.week.season_id ||
-          a.week.week_number - b.week.week_number ||
-          a.match.match_number - b.match.match_number,
+      .sort((a, b) =>
+        -compareMatchRefDesc(
+          { seasonNumber: extractSeasonNumber(seasonNameById.get(a.week.season_id) ?? ''), weekNumber: a.week.week_number, matchNumber: a.match.match_number },
+          { seasonNumber: extractSeasonNumber(seasonNameById.get(b.week.season_id) ?? ''), weekNumber: b.week.week_number, matchNumber: b.match.match_number },
+        ),
       ); // chronological, oldest first
 
     const adrAll = rows.map((r) => r.stat.adr);
@@ -628,6 +635,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         match_number: m.match_number,
         week_number: w.week_number,
         season_id: se.id,
+        season_number: extractSeasonNumber(se.name),
         season_name: se.name,
         is_gauntlet: se.is_gauntlet,
         map: m.shirts_pick ?? m.picked_map,
@@ -639,11 +647,11 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
       };
     })
     .filter((r): r is PlayerHistoryRow => r !== null && isPlayedScore(r.final_score))
-    .sort(
-      (a, b) =>
-        b.season_id - a.season_id ||
-        b.week_number - a.week_number ||
-        b.match_number - a.match_number,
+    .sort((a, b) =>
+      compareMatchRefDesc(
+        { seasonNumber: extractSeasonNumber(a.season_name), weekNumber: a.week_number, matchNumber: a.match_number },
+        { seasonNumber: extractSeasonNumber(b.season_name), weekNumber: b.week_number, matchNumber: b.match_number },
+      ),
     );
 
   return { player: player as Player, history, trophies };
@@ -652,13 +660,14 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
 export async function getSeasonLeaderboard(
   seasonId: number,
 ): Promise<LeaderboardRowWithId[]> {
-  const [{ data: rows, error }, playersById, perPlayer] = await Promise.all([
+  const [{ data: rows, error }, playersById, perPlayer, rosterBySeason] = await Promise.all([
     supabase
       .from('player_season_leaderboard')
       .select('*')
       .eq('season_id', seasonId),
     getPlayersById(),
     getPerPlayerSeasonStats(),
+    getRosterPlayersBySeason(),
   ]);
   if (error) throw error;
 
@@ -674,13 +683,16 @@ export async function getSeasonLeaderboard(
     };
   });
 
-  if (result.length > 0) return result.sort(canonicalSort);
-
-  // No played matches yet — fall back to roster players with zero stats
-  const rosterBySeason = await getRosterPlayersBySeason();
   const rosterIds = rosterBySeason.get(seasonId);
-  if (!rosterIds?.size) return [];
-  return zeroStatRows(seasonId, rosterIds, playersById);
+  if (!rosterIds?.size) return result.sort(canonicalSort);
+
+  if (result.length === 0) return zeroStatRows(seasonId, rosterIds, playersById);
+
+  // Merge in zero-stat rows for rostered players who haven't played yet
+  const playedIds = new Set(result.map((r) => r.player_id));
+  const unseenIds = new Set([...rosterIds].filter((id) => !playedIds.has(id)));
+  if (unseenIds.size > 0) result.push(...zeroStatRows(seasonId, unseenIds, playersById));
+  return result.sort(canonicalSort);
 }
 
 /**
@@ -1489,6 +1501,7 @@ export interface MapMatchRow {
   match_number: number;
   week_number: number;
   season_id: number;
+  season_number: number | null;
   season_name: string;
   is_gauntlet: boolean;
   is_playoff_game: boolean;
@@ -1540,10 +1553,18 @@ export async function getAllLeaderboards(): Promise<
 
   for (const list of out.values()) list.sort(canonicalSort);
 
-  // For any season with roster players but no played matches, add zero-stat rows
+  // Merge in zero-stat rows for rostered players missing from each season's leaderboard
   for (const [seasonId, playerIds] of rosterBySeason) {
-    if (!out.has(seasonId)) {
+    const existing = out.get(seasonId);
+    if (!existing) {
       out.set(seasonId, zeroStatRows(seasonId, playerIds, playersById));
+    } else {
+      const playedIds = new Set(existing.map((r) => r.player_id));
+      const unseenIds = new Set([...playerIds].filter((id) => !playedIds.has(id)));
+      if (unseenIds.size > 0) {
+        existing.push(...zeroStatRows(seasonId, unseenIds, playersById));
+        existing.sort(canonicalSort);
+      }
     }
   }
 
@@ -1901,6 +1922,7 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
         match_number: m.match_number,
         week_number: week.week_number,
         season_id: season.id,
+        season_number: extractSeasonNumber(season.name),
         season_name: season.name,
         is_gauntlet: season.is_gauntlet,
         is_playoff_game: m.is_playoff_game,
@@ -1910,7 +1932,12 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
       };
     })
     .filter((r): r is MapMatchRow => r !== null)
-    .sort((a, b) => b.season_id - a.season_id || b.week_number - a.week_number || b.match_number - a.match_number);
+    .sort((a, b) =>
+      compareMatchRefDesc(
+        { seasonNumber: a.season_number, weekNumber: a.week_number, matchNumber: a.match_number },
+        { seasonNumber: b.season_number, weekNumber: b.week_number, matchNumber: b.match_number },
+      ),
+    );
 
   type Agg = {
     player_id: number; player_name: string;
@@ -2104,42 +2131,59 @@ function pairKey(a: number, b: number): string {
 export function duoBlendedScorer(duos: DuoStats[]): (d: DuoStats) => number {
   const eligible = duos.filter((d) => d.gamesPlayed > 0);
   const maxGames = Math.max(1, ...eligible.map((d) => d.gamesPlayed));
-  const maxWins = Math.max(1, ...eligible.map((d) => d.wins));
+  const maxWinRate = Math.max(1, ...eligible.map((d) => d.wins / d.gamesPlayed));
   const maxRwr = Math.max(1, ...eligible.map((d) => winRatePct(d.roundsWon, d.roundsPlayed)));
   return (d) =>
-    0.5 * (d.gamesPlayed / maxGames) +
-    0.3 * (d.wins / maxWins) +
-    0.2 * (winRatePct(d.roundsWon, d.roundsPlayed) / maxRwr);
+    0.5 * (d.gamesPlayed / maxGames) ** 2 +
+    0.3 * ((d.wins / d.gamesPlayed) / maxWinRate) ** 2 +
+    0.2 * (winRatePct(d.roundsWon, d.roundsPlayed) / maxRwr) ** 2;
 }
 
 /**
  * Returns a scorer for the "Closest Rivals" blended metric — see "Blended score" in GLOSSARY.md.
  * Computes normalisation maxes once across `rivals` then returns a closure. Shared by
  * `H2HSection` (ranking) and `H2HMatrix` (cell coloring) so both use the same formula.
- * IMPORTANT: if you change weights here, update the hover `title` in H2HSection.tsx ("Closest Rivals").
+ * IMPORTANT: if you change weights here, update the hover `title` in H2HSection.tsx ("Closest Rivals" and "Best Friends").
  */
 export function rivalBlendedScorer(rivals: H2HStats[]): (r: H2HStats) => number {
   const eligible = rivals.filter((r) => r.meetings > 0);
   const maxMeetings = Math.max(1, ...eligible.map((r) => r.meetings));
   const maxWinDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aWins - r.bWins)));
-  const maxRoundDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aStats.roundsWon - r.bStats.roundsWon)));
+  const maxRoundDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings));
   return (r) =>
-    0.4 * (r.meetings / maxMeetings) +
-    0.35 * (1 - Math.abs(r.aWins - r.bWins) / maxWinDiff) +
-    0.25 * (1 - Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / maxRoundDiff);
+    0.5 * (r.meetings / maxMeetings) ** 2 +
+    0.3 * (1 - Math.abs(r.aWins - r.bWins) / maxWinDiff) ** 2 +
+    0.2 * (1 - (Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings) / maxRoundDiff) ** 2;
 }
 
-/** Sorts match summaries most-recent-first by season, then week, then match number. */
-function compareMatchRefDesc(
-  a: { seasonNumber: number | null; weekNumber: number; matchNumber: number },
-  b: { seasonNumber: number | null; weekNumber: number; matchNumber: number },
-): number {
-  const sa = a.seasonNumber ?? -1;
-  const sb = b.seasonNumber ?? -1;
-  if (sa !== sb) return sb - sa;
-  if (a.weekNumber !== b.weekNumber) return b.weekNumber - a.weekNumber;
-  return b.matchNumber - a.matchNumber;
+/** Returns a closure that formats the per-component breakdown of the friend score as a tooltip string. */
+export function duoBreakdownScorer(duos: DuoStats[]): (d: DuoStats) => string {
+  const eligible = duos.filter((d) => d.gamesPlayed > 0);
+  const maxGames = Math.max(1, ...eligible.map((d) => d.gamesPlayed));
+  const maxWinRate = Math.max(1, ...eligible.map((d) => d.wins / d.gamesPlayed));
+  const maxRwr = Math.max(1, ...eligible.map((d) => winRatePct(d.roundsWon, d.roundsPlayed)));
+  return (d) => {
+    const games   = Math.round(0.5 * (d.gamesPlayed / maxGames) ** 2 * 100);
+    const winRate = Math.round(0.3 * ((d.wins / d.gamesPlayed) / maxWinRate) ** 2 * 100);
+    const rwr     = Math.round(0.2 * (winRatePct(d.roundsWon, d.roundsPlayed) / maxRwr) ** 2 * 100);
+    return `Games ${games}/50 · Win rate ${winRate}/30 · Rounds ${rwr}/20`;
+  };
 }
+
+/** Returns a closure that formats the per-component breakdown of the rival score as a tooltip string. */
+export function rivalBreakdownScorer(rivals: H2HStats[]): (r: H2HStats) => string {
+  const eligible = rivals.filter((r) => r.meetings > 0);
+  const maxMeetings = Math.max(1, ...eligible.map((r) => r.meetings));
+  const maxWinDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aWins - r.bWins)));
+  const maxRoundDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings));
+  return (r) => {
+    const meetings  = Math.round(0.5 * (r.meetings / maxMeetings) ** 2 * 100);
+    const closeness = Math.round(0.3 * (1 - Math.abs(r.aWins - r.bWins) / maxWinDiff) ** 2 * 100);
+    const rounds    = Math.round(0.2 * (1 - (Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings) / maxRoundDiff) ** 2 * 100);
+    return `Meetings ${meetings}/50 · Closeness ${closeness}/30 · Rounds ${rounds}/20`;
+  };
+}
+
 
 interface DuoAgg {
   a: number;
