@@ -623,7 +623,7 @@ export default function PlayerView({
                     key={h.id}
                     href={`/matches/${h.match_id}`}
                     map={h.map}
-                    label={{ type: 'player-history', seasonId: h.season_id, weekNumber: h.week_number, matchNumber: h.match_number }}
+                    label={{ type: 'player-history', seasonNumber: h.season_number, isGauntlet: h.is_gauntlet, weekNumber: h.week_number, matchNumber: h.match_number }}
                     right={{ type: 'pending' }}
                     shirtsStats={h.shirts_stats}
                     skinsStats={h.skins_stats}
@@ -650,7 +650,7 @@ export default function PlayerView({
                   key={h.id}
                   href={`/matches/${h.match_id}`}
                   map={h.map}
-                  label={{ type: 'player-history', seasonId: h.season_id, weekNumber: h.week_number, matchNumber: h.match_number }}
+                  label={{ type: 'player-history', seasonNumber: h.season_number, isGauntlet: h.is_gauntlet, weekNumber: h.week_number, matchNumber: h.match_number }}
                   outcome={h.is_win ? 'win' : 'loss'}
                   right={{ type: 'score', score: h.final_score! }}
                   shirtsStats={h.shirts_stats}

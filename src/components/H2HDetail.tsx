@@ -43,9 +43,11 @@ function StatTrio({ values, color }: { values: [React.ReactNode, React.ReactNode
   );
 }
 
-/** Compact "S{season} W{week} M{match}" reference label for a match-history row. */
-function matchRefLabel(seasonNumber: number | null, weekNumber: number, matchNumber: number): string {
-  return seasonNumber != null ? `S${seasonNumber}·W${weekNumber}·M${matchNumber}` : `W${weekNumber}·M${matchNumber}`;
+/** Compact "S{season}[G] W/R{week} M{match}" reference label for a match-history row. */
+function matchRefLabel(seasonNumber: number | null, isGauntlet: boolean, weekNumber: number, matchNumber: number): string {
+  const sLabel = seasonNumber != null ? `S${seasonNumber}${isGauntlet ? 'G' : ''}` : null;
+  const wLabel = `${isGauntlet ? 'R' : 'W'}${weekNumber}·M${matchNumber}`;
+  return sLabel ? `${sLabel}·${wLabel}` : wLabel;
 }
 
 function MatchHistoryRow({
@@ -216,7 +218,7 @@ export function DuoDetail({
                 <MatchHistoryRow
                   key={m.matchId}
                   matchId={m.matchId}
-                  matchLabel={matchRefLabel(m.seasonNumber, m.weekNumber, m.matchNumber)}
+                  matchLabel={matchRefLabel(m.seasonNumber, m.isGauntlet, m.weekNumber, m.matchNumber)}
                   labelColor="var(--color-text-primary)"
                   map={m.map}
                   mapColor="var(--color-text-primary)"
@@ -411,7 +413,7 @@ export function RivalDetail({
                 <MatchHistoryRow
                   key={m.matchId}
                   matchId={m.matchId}
-                  matchLabel={matchRefLabel(m.seasonNumber, m.weekNumber, m.matchNumber)}
+                  matchLabel={matchRefLabel(m.seasonNumber, m.isGauntlet, m.weekNumber, m.matchNumber)}
                   labelColor="var(--color-text-primary)"
                   map={m.map}
                   mapColor="var(--color-text-primary)"

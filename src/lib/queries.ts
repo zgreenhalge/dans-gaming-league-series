@@ -454,10 +454,14 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   for (const w of (weeks ?? []) as Week[]) weekById.set(w.id, w);
 
   const seasonIds = Array.from(new Set((weeks ?? []).map((w) => (w as Week).season_id)));
-  const { data: seasons, error: seErr } = await supabase.from('seasons').select('id, name').in('id', seasonIds);
+  const { data: seasons, error: seErr } = await supabase.from('seasons').select('id, name, is_gauntlet').in('id', seasonIds);
   if (seErr) throw seErr;
   const seasonNameById = new Map<number, string>();
-  for (const s of (seasons ?? []) as { id: number; name: string }[]) seasonNameById.set(s.id, s.name);
+  const seasonIsGauntletById = new Map<number, boolean>();
+  for (const s of (seasons ?? []) as { id: number; name: string; is_gauntlet: boolean }[]) {
+    seasonNameById.set(s.id, s.name);
+    seasonIsGauntletById.set(s.id, s.is_gauntlet);
+  }
 
   function buildPlayer(playerId: number): ScoutingPlayer {
     const p = players.get(playerId);
@@ -472,8 +476,8 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
       .filter((r): r is { stat: PlayerMatchStat; match: Match; week: Week } => r !== null)
       .sort((a, b) =>
         -compareMatchRefDesc(
-          { seasonNumber: extractSeasonNumber(seasonNameById.get(a.week.season_id) ?? ''), weekNumber: a.week.week_number, matchNumber: a.match.match_number },
-          { seasonNumber: extractSeasonNumber(seasonNameById.get(b.week.season_id) ?? ''), weekNumber: b.week.week_number, matchNumber: b.match.match_number },
+          { seasonNumber: extractSeasonNumber(seasonNameById.get(a.week.season_id) ?? ''), isGauntlet: seasonIsGauntletById.get(a.week.season_id) ?? false, weekNumber: a.week.week_number, matchNumber: a.match.match_number },
+          { seasonNumber: extractSeasonNumber(seasonNameById.get(b.week.season_id) ?? ''), isGauntlet: seasonIsGauntletById.get(b.week.season_id) ?? false, weekNumber: b.week.week_number, matchNumber: b.match.match_number },
         ),
       ); // chronological, oldest first
 
@@ -649,8 +653,8 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
     .filter((r): r is PlayerHistoryRow => r !== null && isPlayedScore(r.final_score))
     .sort((a, b) =>
       compareMatchRefDesc(
-        { seasonNumber: extractSeasonNumber(a.season_name), weekNumber: a.week_number, matchNumber: a.match_number },
-        { seasonNumber: extractSeasonNumber(b.season_name), weekNumber: b.week_number, matchNumber: b.match_number },
+        { seasonNumber: extractSeasonNumber(a.season_name), isGauntlet: a.is_gauntlet, weekNumber: a.week_number, matchNumber: a.match_number },
+        { seasonNumber: extractSeasonNumber(b.season_name), isGauntlet: b.is_gauntlet, weekNumber: b.week_number, matchNumber: b.match_number },
       ),
     );
 
@@ -1934,8 +1938,8 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
     .filter((r): r is MapMatchRow => r !== null)
     .sort((a, b) =>
       compareMatchRefDesc(
-        { seasonNumber: a.season_number, weekNumber: a.week_number, matchNumber: a.match_number },
-        { seasonNumber: b.season_number, weekNumber: b.week_number, matchNumber: b.match_number },
+        { seasonNumber: a.season_number, isGauntlet: a.is_gauntlet, weekNumber: a.week_number, matchNumber: a.match_number },
+        { seasonNumber: b.season_number, isGauntlet: b.is_gauntlet, weekNumber: b.week_number, matchNumber: b.match_number },
       ),
     );
 
@@ -2011,6 +2015,7 @@ export interface MatchPlayerStats {
 export interface DuoMatchSummary {
   matchId: number;
   seasonNumber: number | null;
+  isGauntlet: boolean;
   weekNumber: number;
   matchNumber: number;
   map: string | null;
@@ -2023,6 +2028,7 @@ export interface DuoMatchSummary {
 export interface RivalMatchSummary {
   matchId: number;
   seasonNumber: number | null;
+  isGauntlet: boolean;
   weekNumber: number;
   matchNumber: number;
   map: string | null;
@@ -2281,9 +2287,9 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
   if (weekRows.length === 0) return { duos: [], rivals: [], players: [] };
   const weekNumberById = new Map(weekRows.map((w) => [w.id, w.week_number]));
   const seasonIdByWeek = new Map(weekRows.map((w) => [w.id, w.season_id]));
-  const seasonNumberById = new Map(
-    [...regularSeasons, ...gauntletSeasons].map((s) => [s.id, extractSeasonNumber(s.name)]),
-  );
+  const allSeasons = [...regularSeasons, ...gauntletSeasons];
+  const seasonNumberById = new Map(allSeasons.map((s) => [s.id, extractSeasonNumber(s.name)]));
+  const seasonIsGauntletById = new Map(allSeasons.map((s) => [s.id, s.is_gauntlet]));
 
   const { data: matches, error: mErr } = await supabase
     .from('matches')
@@ -2375,7 +2381,9 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     const shirts = roster.filter((r) => r.faction === 'SHIRTS');
     const skins = roster.filter((r) => r.faction === 'SKINS');
     const weekNumber = weekNumberById.get(m.week_id) ?? 0;
-    const seasonNumber = seasonNumberById.get(seasonIdByWeek.get(m.week_id) ?? -1) ?? null;
+    const seasonId = seasonIdByWeek.get(m.week_id) ?? -1;
+    const seasonNumber = seasonNumberById.get(seasonId) ?? null;
+    const isGauntlet = seasonIsGauntletById.get(seasonId) ?? false;
     const parsedScore = parseScore(m.final_score);
     const playedMap = mapFor(m);
 
@@ -2410,6 +2418,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
           agg.matches.push({
             matchId: m.id,
             seasonNumber,
+            isGauntlet,
             weekNumber,
             matchNumber: m.match_number,
             map: playedMap,
@@ -2445,6 +2454,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
         agg.matches.push({
           matchId: m.id,
           seasonNumber,
+          isGauntlet,
           weekNumber,
           matchNumber: m.match_number,
           map: playedMap,
