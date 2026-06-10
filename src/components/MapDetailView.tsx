@@ -161,7 +161,8 @@ export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; 
                 map={detail.name}
                 label={{
                   type: 'player-history',
-                  seasonId: m.season_id,
+                  seasonNumber: m.season_number,
+                  isGauntlet: m.is_gauntlet,
                   weekNumber: m.week_number,
                   matchNumber: m.match_number,
                 }}

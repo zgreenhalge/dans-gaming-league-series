@@ -128,6 +128,24 @@ export function canonicalSort(
   );
 }
 
+/**
+ * Sorts match summaries most-recent-first: season number desc → gauntlet before regular (within
+ * the same season number) → week desc → match number desc. Gauntlet seasons carry the same season
+ * number as their paired regular season but happened later, so they sort above it in the list.
+ * Use the negated result for ascending (oldest-first) sorts.
+ */
+export function compareMatchRefDesc(
+  a: { seasonNumber: number | null; isGauntlet: boolean; weekNumber: number; matchNumber: number },
+  b: { seasonNumber: number | null; isGauntlet: boolean; weekNumber: number; matchNumber: number },
+): number {
+  const sa = a.seasonNumber ?? -1;
+  const sb = b.seasonNumber ?? -1;
+  if (sa !== sb) return sb - sa;
+  if (a.isGauntlet !== b.isGauntlet) return a.isGauntlet ? -1 : 1;
+  if (a.weekNumber !== b.weekNumber) return b.weekNumber - a.weekNumber;
+  return b.matchNumber - a.matchNumber;
+}
+
 /** Parses "13-9" / "13 – 9" into { shirts, skins }. Returns null if unparseable. */
 export function parseScore(
   s: string | null | undefined,

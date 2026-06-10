@@ -43,9 +43,11 @@ function StatTrio({ values, color }: { values: [React.ReactNode, React.ReactNode
   );
 }
 
-/** Compact "S{season} W{week} M{match}" reference label for a match-history row. */
-function matchRefLabel(seasonNumber: number | null, weekNumber: number, matchNumber: number): string {
-  return seasonNumber != null ? `S${seasonNumber}·W${weekNumber}·M${matchNumber}` : `W${weekNumber}·M${matchNumber}`;
+/** Compact "S{season}[G] W/R{week} M{match}" reference label for a match-history row. */
+function matchRefLabel(seasonNumber: number | null, isGauntlet: boolean, weekNumber: number, matchNumber: number): string {
+  const sLabel = seasonNumber != null ? `S${seasonNumber}${isGauntlet ? 'G' : ''}` : null;
+  const wLabel = `${isGauntlet ? 'R' : 'W'}${weekNumber}·M${matchNumber}`;
+  return sLabel ? `${sLabel}·${wLabel}` : wLabel;
 }
 
 function MatchHistoryRow({
@@ -114,6 +116,7 @@ export function DuoDetail({
   headerColor,
   statsHref,
   friendshipRating,
+  ratingBreakdown,
 }: {
   duo: DuoStats;
   players: Map<number, H2HPlayer>;
@@ -123,6 +126,7 @@ export function DuoDetail({
   headerColor?: string;
   statsHref?: string;
   friendshipRating?: number;
+  ratingBreakdown?: string;
 }) {
   const a = players.get(duo.playerA);
   const b = players.get(duo.playerB);
@@ -133,7 +137,7 @@ export function DuoDetail({
 
   const hero = (
     <>
-      <RatingCircle value={circleValue} colorStart="white" colorEnd="var(--color-accent-green-fill)" size="lg" />
+      <RatingCircle value={circleValue} colorStart="white" colorEnd="var(--color-accent-green-fill)" size="lg" title={ratingBreakdown ?? "50% games played together² · 30% win rate² · 20% round win rate²"} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center">
           <PlayerAvatar name={a.name} imageUrl={a.steam_avatar_url} size="md" />
@@ -214,7 +218,7 @@ export function DuoDetail({
                 <MatchHistoryRow
                   key={m.matchId}
                   matchId={m.matchId}
-                  matchLabel={matchRefLabel(m.seasonNumber, m.weekNumber, m.matchNumber)}
+                  matchLabel={matchRefLabel(m.seasonNumber, m.isGauntlet, m.weekNumber, m.matchNumber)}
                   labelColor="var(--color-text-primary)"
                   map={m.map}
                   mapColor="var(--color-text-primary)"
@@ -283,6 +287,7 @@ export function RivalDetail({
   minimal,
   statsHref,
   rivalryRating,
+  ratingBreakdown,
 }: {
   rival: H2HStats;
   players: Map<number, H2HPlayer>;
@@ -290,6 +295,7 @@ export function RivalDetail({
   minimal?: boolean;
   statsHref?: string;
   rivalryRating?: number;
+  ratingBreakdown?: string;
 }) {
   const a = players.get(rival.playerA);
   const b = players.get(rival.playerB);
@@ -299,7 +305,7 @@ export function RivalDetail({
   const mapImg = mapImageFor(rival.lastMap);
 
   const circleValue = rivalryRating ?? 50;
-  const rivalCircle = <RatingCircle value={circleValue} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="lg" />;
+  const rivalCircle = <RatingCircle value={circleValue} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="lg" title={ratingBreakdown ?? "50% times faced² · 30% game outcome closeness² · 20% avg round closeness²"} />;
 
   const scoreBars = (
     <div className="flex h-8 overflow-hidden">
@@ -407,7 +413,7 @@ export function RivalDetail({
                 <MatchHistoryRow
                   key={m.matchId}
                   matchId={m.matchId}
-                  matchLabel={matchRefLabel(m.seasonNumber, m.weekNumber, m.matchNumber)}
+                  matchLabel={matchRefLabel(m.seasonNumber, m.isGauntlet, m.weekNumber, m.matchNumber)}
                   labelColor="var(--color-text-primary)"
                   map={m.map}
                   mapColor="var(--color-text-primary)"
