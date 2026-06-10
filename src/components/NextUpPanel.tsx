@@ -6,6 +6,7 @@ import { isPlayedScore, parseScore, weekWindow, fmtWindowDate } from '@/lib/util
 import { CountdownTimer } from './CountdownTimer';
 import type { WeekWithMatches, MatchWithRoster } from '@/lib/queries';
 import type { Season } from '@/lib/types';
+import { FeatureMatchIcon } from './FeatureMatch';
 
 function TeamNames({ players, dimmed }: { players: { player_id: number; player_name: string }[]; dimmed?: boolean }) {
   if (players.length === 0) return <span className="opacity-50">TBD</span>;
@@ -50,7 +51,7 @@ function MatchCell({
         <div className="px-5 pt-4 pb-2 flex items-center justify-between gap-1.5">
           <div className="flex items-center gap-1.5">
             <span className="tracked text-[11px] font-semibold text-[var(--color-text-primary)] map-head">
-              Match {match.match_number}
+              Match {match.match_number} {match.is_feature_match && <FeatureMatchIcon />}
             </span>
             {map && (
               <span className="tracked text-[9px] text-[var(--color-text-secondary)] map-head">
