@@ -67,27 +67,6 @@ export default function H2HMatrix({
   const duoScore = duoBlendedScorer(duos);
   const rivalScore = rivalBlendedScorer(rivals);
 
-  // Rescale scores to [0,1] within the actual data range so the full color
-  // spectrum is used regardless of how compressed the raw scores are.
-  const eligibleDuos = duos.filter((d) => d.gamesPlayed > 0);
-  const duoScores = eligibleDuos.map((d) => duoScore(d));
-  const minDuo = duoScores.length ? Math.min(...duoScores) : 0;
-  const maxDuo = duoScores.length ? Math.max(...duoScores) : 1;
-  const normDuoScore = (d: DuoStats) => {
-    const s = duoScore(d);
-    const norm = maxDuo > minDuo ? (s - minDuo) / (maxDuo - minDuo) : s;
-    return 0.1 + norm * 0.9;
-  };
-
-  const eligibleRivals = rivals.filter((r) => r.meetings > 0);
-  const rivalScores = eligibleRivals.map((r) => rivalScore(r));
-  const minRival = rivalScores.length ? Math.min(...rivalScores) : 0;
-  const maxRival = rivalScores.length ? Math.max(...rivalScores) : 1;
-  const normRivalScore = (r: H2HStats) => {
-    const s = rivalScore(r);
-    const norm = maxRival > minRival ? (s - minRival) / (maxRival - minRival) : s;
-    return 0.1 + norm * 0.9;
-  };
 
   const n = players.length;
 
@@ -157,7 +136,7 @@ export default function H2HMatrix({
                     <div
                       key={col.id}
                       className={cellCls}
-                      style={{ background: friendColor(normDuoScore(d)) }}
+                      style={{ background: friendColor(duoScore(d)) }}
                       onMouseEnter={() => onHover({ a: row.id, b: col.id, type: 'partner' })}
                       onMouseLeave={() => onHover(null)}
                       onClick={() => onSelect({ a: row.id, b: col.id, type: 'partner' })}
@@ -181,7 +160,7 @@ export default function H2HMatrix({
                   <div
                     key={col.id}
                     className={cellCls}
-                    style={{ background: rivalColor(normRivalScore(r)) }}
+                    style={{ background: rivalColor(rivalScore(r)) }}
                     onMouseEnter={() => onHover({ a: row.id, b: col.id, type: 'opponent' })}
                     onMouseLeave={() => onHover(null)}
                     onClick={() => onSelect({ a: row.id, b: col.id, type: 'opponent' })}

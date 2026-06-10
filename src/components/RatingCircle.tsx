@@ -10,17 +10,19 @@ export default function RatingCircle({
   colorStart,
   colorEnd,
   size = 'lg',
+  title,
 }: {
   value: number;
   colorStart: string;
   colorEnd: string;
   size?: keyof typeof SIZES;
+  title?: string;
 }) {
   const { px, r, sw, text } = SIZES[size];
   const c = 2 * Math.PI * r;
   const stroke = `color-mix(in srgb, ${colorEnd} ${value}%, ${colorStart})`;
   return (
-    <div className="relative shrink-0" style={{ width: px, height: px }}>
+    <div className="relative shrink-0" title={title} style={{ width: px, height: px }}>
       <svg width={px} height={px}>
         <circle cx={px / 2} cy={px / 2} r={r} stroke="rgba(255,255,255,0.1)" strokeWidth={sw} fill="none" />
         <circle

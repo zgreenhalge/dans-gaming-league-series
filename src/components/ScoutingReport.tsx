@@ -1,7 +1,7 @@
 'use client';
 
 import type { DuoStats, H2HStats, ScoutingPlayer } from '@/lib/queries';
-import { duoBlendedScorer, rivalBlendedScorer } from '@/lib/queries';
+import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
 import { toSentenceCase } from '@/lib/maps';
 import { DuoDetail, RivalDetail } from './H2HDetail';
 
@@ -107,6 +107,8 @@ export default function ScoutingReport({
   const skinsDuo = findDuo(duos, skins[0].id, skins[1].id);
   const scoreDuo = duoBlendedScorer(duos);
   const scoreRival = rivalBlendedScorer(rivals);
+  const breakdownDuo = duoBreakdownScorer(duos);
+  const breakdownRival = rivalBreakdownScorer(rivals);
 
   function findNormalized(shirtId: number, skinId: number): H2HStats | undefined {
     const r = findRival(rivals, shirtId, skinId);
@@ -131,10 +133,10 @@ export default function ScoutingReport({
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
         {shirtsDuo
-          ? <DuoDetail duo={shirtsDuo} players={playersById} minimal headerLabel="Shirts" headerColor={factionColor(shirtsF)} statsHref={h2hHref(shirts[0].name, shirts[1].name, 'partner')} friendshipRating={Math.round(scoreDuo(shirtsDuo) * 100)} />
+          ? <DuoDetail duo={shirtsDuo} players={playersById} minimal headerLabel="Shirts" headerColor={factionColor(shirtsF)} statsHref={h2hHref(shirts[0].name, shirts[1].name, 'partner')} friendshipRating={Math.round(scoreDuo(shirtsDuo) * 100)} ratingBreakdown={breakdownDuo(shirtsDuo)} />
           : <EmptyPanel label={`Shirts (${shirts[0].name} & ${shirts[1].name}) — no history yet`} />}
         {skinsDuo
-          ? <DuoDetail duo={skinsDuo} players={playersById} minimal headerLabel="Skins" headerColor={factionColor(skinsF)} statsHref={h2hHref(skins[0].name, skins[1].name, 'partner')} friendshipRating={Math.round(scoreDuo(skinsDuo) * 100)} />
+          ? <DuoDetail duo={skinsDuo} players={playersById} minimal headerLabel="Skins" headerColor={factionColor(skinsF)} statsHref={h2hHref(skins[0].name, skins[1].name, 'partner')} friendshipRating={Math.round(scoreDuo(skinsDuo) * 100)} ratingBreakdown={breakdownDuo(skinsDuo)} />
           : <EmptyPanel label={`Skins (${skins[0].name} & ${skins[1].name}) — no history yet`} />}
       </div>
 
@@ -146,7 +148,7 @@ export default function ScoutingReport({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
         {rivalCells.map(({ shirt, skin, rival }) =>
           rival ? (
-            <RivalDetail key={`${rival.playerA}-${rival.playerB}`} rival={rival} players={playersById} minimal statsHref={h2hHref(shirt.name, skin.name, 'opponent')} rivalryRating={Math.round(scoreRival(rival) * 100)} />
+            <RivalDetail key={`${rival.playerA}-${rival.playerB}`} rival={rival} players={playersById} minimal statsHref={h2hHref(shirt.name, skin.name, 'opponent')} rivalryRating={Math.round(scoreRival(rival) * 100)} ratingBreakdown={breakdownRival(rival)} />
           ) : (
             <EmptyPanel key={`${shirt.id}-${skin.id}`} label={`${shirt.name} vs ${skin.name} — no history yet`} />
           ),

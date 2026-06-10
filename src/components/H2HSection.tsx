@@ -5,15 +5,15 @@ import H2HMatrix, { type H2HPair } from './H2HMatrix';
 import { DuoDetail, RivalDetail } from './H2HDetail';
 import { winRatePct } from '@/lib/util';
 import type { H2HData } from '@/lib/queries';
-import { duoBlendedScorer, rivalBlendedScorer } from '@/lib/queries';
+import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
 
-function LeagueAvgCircle({ value, colorStart, colorEnd }: { value: number; colorStart: string; colorEnd: string }) {
+function LeagueAvgCircle({ value, colorStart, colorEnd, title }: { value: number; colorStart: string; colorEnd: string; title?: string }) {
   return (
     <div className="flex items-center gap-2">
       <span className="tracked text-[8px] text-[var(--color-text-secondary)]">League Avg</span>
-      <RatingCircle value={value} colorStart={colorStart} colorEnd={colorEnd} size="md" />
+      <RatingCircle value={value} colorStart={colorStart} colorEnd={colorEnd} size="md" title={title} />
     </div>
   );
 }
@@ -42,11 +42,13 @@ export default function H2HSection({ data, initialPair }: { data: H2HData; initi
   // See "Blended score" in GLOSSARY.md. Scorer factories normalise against the full set
   // so the top-5 ranking and matrix gradient stay derived from the same formula.
   const duoScore = useMemo(() => duoBlendedScorer(duos), [duos]);
+  const duoBreakdown = useMemo(() => duoBreakdownScorer(duos), [duos]);
   const topDuos = useMemo(() => {
     const eligible = duos.filter((d) => d.gamesPlayed > 0);
     return [...eligible].sort((x, y) => duoScore(y) - duoScore(x)).slice(0, 5);
   }, [duos, duoScore]);
   const rivalScore = useMemo(() => rivalBlendedScorer(rivals), [rivals]);
+  const rivalBreakdown = useMemo(() => rivalBreakdownScorer(rivals), [rivals]);
   const topRivals = useMemo(() => {
     const eligible = rivals.filter((r) => r.meetings > 0);
     return [...eligible].sort((x, y) => rivalScore(y) - rivalScore(x)).slice(0, 5);
@@ -95,11 +97,11 @@ export default function H2HSection({ data, initialPair }: { data: H2HData; initi
             <div className="px-5 py-2.5 border-b border-[var(--color-border-tertiary)] flex items-center justify-between">
               <span
                 className="font-display font-bold text-[13px]"
-                title="50% games played together · 30% wins together · 20% round win rate"
+                title="50% games played together² · 30% win rate² · 20% round win rate²"
               >
                 Best Friends
               </span>
-              <LeagueAvgCircle value={avgFriendshipRating} colorStart="white" colorEnd="var(--color-accent-green-fill)" />
+              <LeagueAvgCircle value={avgFriendshipRating} colorStart="white" colorEnd="var(--color-accent-green-fill)" title="50% games played together² · 30% win rate² · 20% round win rate²" />
             </div>
             <div className="flex items-center px-3.5 pt-2">
               <span className="flex-1" />
@@ -135,7 +137,7 @@ export default function H2HSection({ data, initialPair }: { data: H2HData; initi
                     <span className="font-display font-semibold text-[11px] flex-1 truncate">{a.name} &amp; {b.name}</span>
                     <div className="grid grid-cols-[28px_34px_44px_88px] gap-x-2 shrink-0 items-center">
                       <div className="flex justify-center">
-                        <RatingCircle value={Math.round(duoScore(d) * 100)} colorStart="white" colorEnd="var(--color-accent-green-fill)" size="xs" />
+                        <RatingCircle value={Math.round(duoScore(d) * 100)} colorStart="white" colorEnd="var(--color-accent-green-fill)" size="xs" title={duoBreakdown(d)} />
                       </div>
                       <div className="flex flex-col items-end">
                         <span className="display-numeral text-[13px] text-right">{d.gamesPlayed}</span>
@@ -162,11 +164,11 @@ export default function H2HSection({ data, initialPair }: { data: H2HData; initi
             <div className="px-5 py-2.5 border-b border-[var(--color-border-tertiary)] flex items-center justify-between">
               <span
                 className="font-display font-bold text-[13px]"
-                title="40% times faced · 35% how close the match outcomes were · 25% how close the round counts were"
+                title="50% times faced² · 30% game outcome closeness² · 20% avg round closeness²"
               >
                 Closest Rivals
               </span>
-              <LeagueAvgCircle value={avgRivalryScore} colorStart="black" colorEnd="var(--color-accent-red-fg)" />
+              <LeagueAvgCircle value={avgRivalryScore} colorStart="black" colorEnd="var(--color-accent-red-fg)" title="50% times faced² · 30% game outcome closeness² · 20% avg round closeness²" />
             </div>
             <div className="grid grid-cols-[28px_1fr_38px_38px_38px_38px_38px_1fr_28px] items-center gap-2 px-3.5 pt-2">
               <span />
@@ -205,7 +207,7 @@ export default function H2HSection({ data, initialPair }: { data: H2HData; initi
                     <span className={`display-numeral text-[12px] text-center${aRoundsHigher ? ` ${accent}` : !bRoundsHigher ? '' : ` ${dim}`}`}>{r.aStats.roundsWon}</span>
                     <span className={`display-numeral text-[12px] text-center${aWinsHigher ? ` ${accent}` : !bWinsHigher ? '' : ` ${dim}`}`}>{r.aWins}</span>
                     <div className="flex items-center justify-center border-x border-[var(--color-border-tertiary)] bg-[var(--color-border-tertiary)] self-stretch -my-2">
-                      <RatingCircle value={Math.round(rivalScore(r) * 100)} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="xs" />
+                      <RatingCircle value={Math.round(rivalScore(r) * 100)} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="xs" title={rivalBreakdown(r)} />
                     </div>
                     <span className={`display-numeral text-[12px] text-center${bWinsHigher ? ` ${accent}` : !aWinsHigher ? '' : ` ${dim}`}`}>{r.bWins}</span>
                     <span className={`display-numeral text-[12px] text-center${bRoundsHigher ? ` ${accent}` : !aRoundsHigher ? '' : ` ${dim}`}`}>{r.bStats.roundsWon}</span>
@@ -230,8 +232,8 @@ export default function H2HSection({ data, initialPair }: { data: H2HData; initi
         />
 
         <div className="flex flex-col gap-3.5">
-          {activeDuo && <DuoDetail duo={activeDuo} players={playersById} onFlip={flipToOpponent} friendshipRating={Math.round(duoScore(activeDuo) * 100)} />}
-          {activeRival && <RivalDetail rival={activeRival} players={playersById} onFlip={flipToPartner} rivalryRating={Math.round(rivalScore(activeRival) * 100)} />}
+          {activeDuo && <DuoDetail duo={activeDuo} players={playersById} onFlip={flipToOpponent} friendshipRating={Math.round(duoScore(activeDuo) * 100)} ratingBreakdown={duoBreakdown(activeDuo)} />}
+          {activeRival && <RivalDetail rival={activeRival} players={playersById} onFlip={flipToPartner} rivalryRating={Math.round(rivalScore(activeRival) * 100)} ratingBreakdown={rivalBreakdown(activeRival)} />}
         </div>
       </div>
     </div>
