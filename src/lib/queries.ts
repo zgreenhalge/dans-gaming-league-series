@@ -567,27 +567,27 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   for (const mm of (leagueMatchRows ?? []) as LeagueMatchRow[]) leagueMatchById.set(mm.id, mm);
 
   type LeagueStatRow = { match_id: number; adr: number; kills: number; deaths: number; assists: number; is_win: boolean };
-  // Use a Set of match IDs to count unique matches (not player-stat rows).
-  // Each Wingman match has 2 player rows per side, so row-counting would inflate counts by 2×.
-  const leagueMapGroups = new Map<string, { adr: number[]; kills: number[]; deaths: number[]; assists: number[]; matches: Set<number> }>();
+  // Use Sets of match IDs for wins/losses rather than counting player-stat rows directly.
+  // Each Wingman match has 2 player rows per side, so row-counting would inflate W-L by 2×.
+  const leagueMapGroups = new Map<string, { adr: number[]; kills: number[]; deaths: number[]; assists: number[]; winMatches: Set<number>; lossMatches: Set<number> }>();
   for (const s of (leagueStatRows ?? []) as LeagueStatRow[]) {
     const mm = leagueMatchById.get(s.match_id);
     if (!mm || !isPlayedScore(mm.final_score)) continue;
     const slug = mapSlug((mm.shirts_pick ?? mm.picked_map) ?? '');
     if (!slug) continue;
-    if (!leagueMapGroups.has(slug)) leagueMapGroups.set(slug, { adr: [], kills: [], deaths: [], assists: [], matches: new Set() });
+    if (!leagueMapGroups.has(slug)) leagueMapGroups.set(slug, { adr: [], kills: [], deaths: [], assists: [], winMatches: new Set(), lossMatches: new Set() });
     const g = leagueMapGroups.get(slug)!;
     g.adr.push(s.adr);
     g.kills.push(s.kills);
     g.deaths.push(s.deaths);
     g.assists.push(s.assists);
-    g.matches.add(s.match_id);
+    if (s.is_win) g.winMatches.add(s.match_id); else g.lossMatches.add(s.match_id);
   }
   const mapLeagueAverages: Record<string, MapLeagueAvg> = {};
   for (const [slug, g] of leagueMapGroups) {
     mapLeagueAverages[slug] = {
-      wins: g.matches.size,
-      losses: 0,
+      wins: g.winMatches.size,
+      losses: g.lossMatches.size,
       adr: avgOf(g.adr),
       avgKills: avgOf(g.kills),
       avgDeaths: avgOf(g.deaths),
