@@ -36,16 +36,18 @@ export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickB
   const buckets = new Map<string, MatchPickBanInput[]>();
 
   for (const m of matches) {
-    if (!isPlayedScore(m.final_score) || !m.picked_map) continue;
-    const key = m.picked_map.trim().toLowerCase();
+    const effectiveMap = m.shirts_pick ?? m.picked_map;
+    if (!isPlayedScore(m.final_score) || !effectiveMap) continue;
+    const key = effectiveMap.trim().toLowerCase();
     const list = buckets.get(key) ?? [];
     list.push(m);
     buckets.set(key, list);
   }
 
   const out: MapPickBanStat[] = [];
-  for (const [key, matchList] of buckets) {
-    const display = (matchList[0]?.picked_map ?? key) as string;
+  for (const [, matchList] of buckets) {
+    const firstMatch = matchList[0];
+    const display = ((firstMatch?.shirts_pick ?? firstMatch?.picked_map) ?? '') as string;
     let picked = 0;
     let ctPicked = 0;
     let tPicked = 0;
@@ -57,7 +59,8 @@ export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickB
       if (m.skins_starting_side === 'CT') ctPicked++;
       else if (m.skins_starting_side === 'T') tPicked++;
 
-      const shirtsPicked = m.shirts_pick === m.picked_map;
+      // shirts picked when shirts_pick is set; otherwise skins picked via picked_map
+      const shirtsPicked = m.shirts_pick != null;
       const teamThatPicked = shirtsPicked ? 'SHIRTS' : 'SKINS';
       if (getWinningFaction(m) === teamThatPicked) pickedAndWon++;
     }
@@ -76,7 +79,7 @@ export function aggregatePerSideStats(matches: MatchPickBanInput[]): PerSideStat
     if (!isPlayedScore(m.final_score) || !m.skins_starting_side) continue;
 
     // pickedSide = side chosen by the team that didn't pick the map
-    const shirtsPicked = m.shirts_pick === m.picked_map;
+    const shirtsPicked = m.shirts_pick != null;
     const pickedSide = shirtsPicked
       ? m.skins_starting_side
       : (m.skins_starting_side === 'CT' ? 'T' : 'CT');
