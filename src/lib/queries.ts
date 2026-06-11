@@ -64,6 +64,13 @@ export interface PlayerHistoryRow extends PlayerMatchStat {
   skins: { player_id: number; player_name: string }[];
   shirts_stats: RosterStat[];
   skins_stats: RosterStat[];
+  picked_map: string | null;
+  shirts_pick: string | null;
+  skins_starting_side: 'CT' | 'T' | null;
+  shirts_ban: string | null;
+  shirts_ban2: string | null;
+  skins_ban1: string | null;
+  skins_ban2: string | null;
 }
 
 export interface PlayerDetail {
@@ -736,6 +743,13 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         skins: roster.skins,
         shirts_stats: roster.shirts_stats ?? [],
         skins_stats: roster.skins_stats ?? [],
+        picked_map: m.picked_map,
+        shirts_pick: m.shirts_pick,
+        skins_starting_side: m.skins_starting_side,
+        shirts_ban: m.shirts_ban,
+        shirts_ban2: m.shirts_ban2,
+        skins_ban1: m.skins_ban1,
+        skins_ban2: m.skins_ban2,
       };
     })
     .filter((r): r is PlayerHistoryRow => r !== null)

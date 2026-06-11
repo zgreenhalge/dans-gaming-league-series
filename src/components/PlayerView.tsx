@@ -94,6 +94,23 @@ interface MapAgg {
   adr: number;
 }
 
+interface MapPickBanAgg {
+  map: string;
+  picked: number;
+  banned: number;
+  notPicked: number;
+  ctPicked: number;
+  tPicked: number;
+  pickedAndWon: number;
+}
+
+interface PerSideAgg {
+  side: 'CT' | 'T';
+  numTimesPicked: number;
+  wins: number;
+  losses: number;
+}
+
 function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
   const buckets = new Map<string, { display: string; rows: PlayerHistoryRow[] }>();
   for (const r of rows) {
@@ -110,6 +127,93 @@ function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
     out.push({ map: display, wins: a.wins, losses: a.losses, wr: a.wr, adr: a.adr });
   }
   return out.sort((a, b) => b.wr - a.wr || b.adr - a.adr);
+}
+
+function aggregateMapPickBanStats(rows: PlayerHistoryRow[]): MapPickBanAgg[] {
+  const buckets = new Map<string, PlayerHistoryRow[]>();
+  for (const r of rows) {
+    if (!isPlayed(r) || !r.picked_map) continue;
+    const key = r.picked_map.trim().toLowerCase();
+    const list = buckets.get(key) ?? [];
+    list.push(r);
+    buckets.set(key, list);
+  }
+
+  const out: MapPickBanAgg[] = [];
+  for (const [key, matches] of buckets) {
+    const display = matches[0]?.picked_map ?? key;
+    let picked = 0;
+    let ctPicked = 0;
+    let tPicked = 0;
+    let pickedAndWon = 0;
+
+    for (const m of matches) {
+      picked++;
+
+      // Count sides: skins_starting_side indicates which side skins starts on
+      if (m.skins_starting_side === 'CT') {
+        ctPicked++;
+      } else if (m.skins_starting_side === 'T') {
+        tPicked++;
+      }
+
+      // Picked and won: if the team that picked the map won
+      const shirtsPicked = m.shirts_pick === m.picked_map;
+      const teamThatPicked = shirtsPicked ? 'SHIRTS' : 'SKINS';
+      // Check if this match's faction won (won't work for league-wide, but assuming player context)
+      if (m.faction === teamThatPicked && m.is_win) {
+        pickedAndWon++;
+      }
+    }
+
+    out.push({
+      map: display,
+      picked,
+      banned: 0, // Would need ban data tracking
+      notPicked: 0, // Would need map pool from season
+      ctPicked,
+      tPicked,
+      pickedAndWon,
+    });
+  }
+
+  return out.sort((a, b) => b.picked - a.picked);
+}
+
+function aggregatePerSideStats(rows: PlayerHistoryRow[]): PerSideAgg[] {
+  const playedRows = rows.filter(isPlayed);
+  const ctStats = { wins: 0, losses: 0 };
+  const tStats = { wins: 0, losses: 0 };
+
+  for (const r of playedRows) {
+    if (!r.skins_starting_side) continue;
+    // skins_starting_side indicates the side skins starts on
+    // Map this to a "picked side" (the side chosen by the team that didn't pick the map)
+    const shirtsPicked = r.shirts_pick === r.picked_map;
+    const pickedSide = shirtsPicked ? r.skins_starting_side : (r.skins_starting_side === 'CT' ? 'T' : 'CT');
+
+    const stats = pickedSide === 'CT' ? ctStats : tStats;
+    if (r.is_win) {
+      stats.wins++;
+    } else {
+      stats.losses++;
+    }
+  }
+
+  return [
+    {
+      side: 'CT',
+      numTimesPicked: ctStats.wins + ctStats.losses,
+      wins: ctStats.wins,
+      losses: ctStats.losses,
+    },
+    {
+      side: 'T',
+      numTimesPicked: tStats.wins + tStats.losses,
+      wins: tStats.wins,
+      losses: tStats.losses,
+    },
+  ];
 }
 
 /** Percentage of `all` strictly below `value` — "you're ahead of N% of the league". */
@@ -270,6 +374,8 @@ export default function PlayerView({
 
   const agg = aggregate(filtered);
   const maps = aggregateByMap(filtered);
+  const mapPickBanStats = aggregateMapPickBanStats(filtered);
+  const perSideStats = aggregatePerSideStats(filtered);
   const playedHistory = filtered.filter(isPlayed);
   const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
   useEffect(() => {
@@ -431,6 +537,78 @@ export default function PlayerView({
               <StatCell v={agg.deaths} l="Deaths" />
               <StatCell v={agg.kd.toFixed(2)} l="K/D" />
               <StatCell v={agg.adr.toFixed(2)} l="ADR" />
+            </div>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Map Pick/Ban Stats */}
+            <div>
+              <div className="flex items-baseline justify-between mb-3">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban stats</span>
+              </div>
+              {mapPickBanStats.length === 0 ? (
+                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+                  No map data.
+                </div>
+              ) : (
+                <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
+                  <table className="w-full border-collapse text-[12px]">
+                    <thead>
+                      <tr className="bg-[var(--color-bg-secondary)]">
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Map</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Picked</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">CT</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">T</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mapPickBanStats.map((m) => (
+                        <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                          <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{m.map}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.ctPicked}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.tPicked}</td>
+                          <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Per-Side Stats */}
+            <div>
+              <div className="flex items-baseline justify-between mb-3">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Per-side stats</span>
+              </div>
+              {perSideStats.length === 0 ? (
+                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+                  No side data.
+                </div>
+              ) : (
+                <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
+                  <table className="w-full border-collapse text-[12px]">
+                    <thead>
+                      <tr className="bg-[var(--color-bg-secondary)]">
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Side</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Times Picked</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W-L</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {perSideStats.map((s) => (
+                        <tr key={s.side} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                          <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{s.side}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.numTimesPicked}</td>
+                          <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
 
