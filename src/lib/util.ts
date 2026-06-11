@@ -150,7 +150,7 @@ export function compareMatchRefDesc(
 // Minimal types for canonicalGauntletRankMap — mirrors GauntletRound/GauntletMatch
 // from queries.ts without creating a circular import.
 interface _GauntletPlayer { player_id: number; faction: 'SHIRTS' | 'SKINS'; is_win: boolean; adr: number }
-interface _GauntletMatch { final_score: string | null; shirts: _GauntletPlayer[]; skins: _GauntletPlayer[] }
+interface _GauntletMatch { final_score: string | null; shirts_stats: _GauntletPlayer[]; skins_stats: _GauntletPlayer[] }
 interface _GauntletRound { round_number: number; matches: _GauntletMatch[] }
 
 /**
@@ -184,7 +184,7 @@ export function canonicalGauntletRankMap(rounds: _GauntletRound[]): Map<number, 
       const scores = parseScore(m.final_score);
       if (!scores) continue;
       const total = scores.shirts + scores.skins;
-      for (const p of [...m.shirts, ...m.skins]) {
+      for (const p of [...m.shirts_stats, ...m.skins_stats]) {
         const prev = agg.get(p.player_id) ?? { wins: 0, rounds_won: 0, rounds_played: 0 };
         prev.wins += p.is_win ? 1 : 0;
         prev.rounds_won += p.faction === 'SHIRTS' ? scores.shirts : scores.skins;
@@ -200,7 +200,7 @@ export function canonicalGauntletRankMap(rounds: _GauntletRound[]): Map<number, 
   const playerLastRound = new Map<number, number>();
   for (const r of rounds) {
     for (const m of r.matches) {
-      for (const p of [...m.shirts, ...m.skins]) {
+      for (const p of [...m.shirts_stats, ...m.skins_stats]) {
         if (!playerFirstRound.has(p.player_id)) playerFirstRound.set(p.player_id, r.round_number);
         const prev = playerLastRound.get(p.player_id) ?? 0;
         if (r.round_number > prev) playerLastRound.set(p.player_id, r.round_number);

@@ -15,12 +15,12 @@ import { isPlayedScore, tabCls, canonicalGauntletRankMap } from '@/lib/util';
 type Tab = 'leaderboard' | 'schedule' | 'h2h' | 'stats';
 
 function playerInMatch(
-  match: { shirts: { player_id: number }[]; skins: { player_id: number }[] },
+  match: { shirts_stats: { player_id: number }[]; skins_stats: { player_id: number }[] },
   playerId: number,
 ): boolean {
   return (
-    match.shirts.some((p) => p.player_id === playerId) ||
-    match.skins.some((p) => p.player_id === playerId)
+    match.shirts_stats.some((p) => p.player_id === playerId) ||
+    match.skins_stats.some((p) => p.player_id === playerId)
   );
 }
 
@@ -88,12 +88,25 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const displayRounds = myGamesOnly ? myRounds : rounds;
   const displayCount = isGauntlet ? displayRounds.length : displaySchedule.length;
 
-  const allMatches = useMemo(() => {
+  const allMatches = useMemo<MatchPickBanInput[]>(() => {
     if (isGauntlet) {
-      return rounds.flatMap((r) => r.matches);
-    } else {
-      return schedule.flatMap((w) => w.matches);
+      return rounds.flatMap((r) => r.matches).map((m) => ({
+        final_score: m.final_score,
+        picked_map: m.picked_map,
+        shirts_pick: m.shirts_pick,
+        skins_starting_side: m.skins_starting_side,
+        shirts_stats: m.shirts_stats,
+        skins_stats: m.skins_stats,
+      }));
     }
+    return schedule.flatMap((w) => w.matches).map((m) => ({
+      final_score: m.final_score,
+      picked_map: m.picked_map,
+      shirts_pick: m.shirts_pick,
+      skins_starting_side: m.skins_starting_side,
+      shirts_stats: m.shirts_stats,
+      skins_stats: m.skins_stats,
+    }));
   }, [isGauntlet, rounds, schedule]);
 
   const allOpen = isGauntlet
@@ -247,7 +260,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
             No stats available yet.
           </div>
         ) : (
-          <AdvancedStatsView rows={leaderboard} matches={allMatches as MatchPickBanInput[]} />
+          <AdvancedStatsView rows={leaderboard} matches={allMatches} />
         )
       )}
 
