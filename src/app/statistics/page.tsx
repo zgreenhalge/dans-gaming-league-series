@@ -35,7 +35,7 @@ export default async function StatisticsPage() {
 
   const regularSeasons = seasons
     .filter((s) => !s.is_gauntlet)
-    .filter((s) => (bySeason[s.id] ?? []).some((r) => r.total_rounds_played > 0));
+    .filter((s) => (bySeason[s.id] ?? []).length > 0);
 
   const gauntletSeasons = seasons
     .filter((s) => s.is_gauntlet)
