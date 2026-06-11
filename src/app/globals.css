@@ -410,6 +410,8 @@ body::before {
 @keyframes dgls-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 @keyframes dgls-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes dgls-sheen { 0% { transform: translateX(-120%); } 60%,100% { transform: translateX(220%); } }
+@keyframes feature-gradient-pan { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+@keyframes feature-holo-sweep { 0% { transform: translateX(-110%); } 100% { transform: translateX(110%); } }
 
 .live-dot { animation: dgls-pulse 1.6s ease-in-out infinite; }
 
@@ -426,8 +428,37 @@ body::before {
   pointer-events: none;
 }
 
+/* Feature match banner — gradient pans T→CT→T at 0.9s/direction, holo rainbow sweeps at 0.6s/direction,
+   both alternate for a forward-then-reverse round-trip triggered on hover. */
+.feature-banner {
+  background: linear-gradient(90deg, var(--color-t), var(--color-ct), var(--color-t));
+  background-size: 200% 100%;
+  background-position: 0% 50%;
+}
+.feature-banner-active {
+  animation: feature-gradient-pan 0.75s ease-in-out alternate 2;
+}
+.feature-holo {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    65deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.12) 46%,
+    rgba(255, 255, 255, 0.32) 50%,
+    rgba(255, 255, 255, 0.12) 54%,
+    transparent 60%
+  );
+  transform: translateX(-110%);
+}
+.feature-holo-active {
+  animation: feature-holo-sweep 0.75s ease-in-out alternate 2;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .live-dot, .sheen::after { animation: none !important; }
+  .feature-banner-active, .feature-holo-active { animation: none !important; }
 }
 
 /* Atmosphere — broadcast-arena ambient glow: faction-colored radial gradients
