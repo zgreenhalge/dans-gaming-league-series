@@ -53,6 +53,10 @@ interface Aggregate {
   rounds_won: number;
   rwr: number;
   adr: number;
+  kills_in_wins: number;
+  deaths_in_wins: number;
+  kills_in_losses: number;
+  deaths_in_losses: number;
 }
 
 function isPlayed(r: PlayerHistoryRow): boolean {
@@ -70,6 +74,10 @@ function aggregate(rowsRaw: PlayerHistoryRow[]): Aggregate {
   const damage = rows.reduce((s, r) => s + r.damage, 0);
   const rounds_played = rows.reduce((s, r) => s + r.rounds_played, 0);
   const rounds_won = rows.reduce((s, r) => s + r.rounds_won, 0);
+  const kills_in_wins = rows.reduce((s, r) => s + (r.is_win ? r.kills : 0), 0);
+  const deaths_in_wins = rows.reduce((s, r) => s + (r.is_win ? r.deaths : 0), 0);
+  const kills_in_losses = rows.reduce((s, r) => s + (r.is_win ? 0 : r.kills), 0);
+  const deaths_in_losses = rows.reduce((s, r) => s + (r.is_win ? 0 : r.deaths), 0);
   return {
     matches,
     wins,
@@ -84,6 +92,10 @@ function aggregate(rowsRaw: PlayerHistoryRow[]): Aggregate {
     rounds_won,
     rwr: rounds_played > 0 ? (rounds_won / rounds_played) * 100 : 0,
     adr: rounds_played > 0 ? damage / rounds_played : 0,
+    kills_in_wins,
+    deaths_in_wins,
+    kills_in_losses,
+    deaths_in_losses,
   };
 }
 
@@ -573,10 +585,10 @@ export default function PlayerView({
                     total_rounds_won: a.rounds_won,
                     rwr_percentage: a.rwr,
                     overall_adr: a.adr,
-                    kills_in_wins: 0,
-                    deaths_in_wins: 0,
-                    kills_in_losses: 0,
-                    deaths_in_losses: 0,
+                    kills_in_wins: a.kills_in_wins,
+                    deaths_in_wins: a.deaths_in_wins,
+                    kills_in_losses: a.kills_in_losses,
+                    deaths_in_losses: a.deaths_in_losses,
                   };
                 })}
               />
