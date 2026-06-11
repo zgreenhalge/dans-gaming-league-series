@@ -9,9 +9,9 @@ import RatingCircle from './RatingCircle';
 
 type H2HPlayer = { id: number; name: string; steam_avatar_url: string | null };
 
-function StatCell({ label, children, color }: { label: string; children: React.ReactNode; color?: string }) {
+function StatCell({ label, children, color, title }: { label: string; children: React.ReactNode; color?: string; title?: string }) {
   return (
-    <div className="border-l-2 border-[var(--color-border-primary)] pl-2.5">
+    <div className="border-l-2 border-[var(--color-border-primary)] pl-2.5" title={title}>
       <div className="tracked text-[8px] text-[var(--color-text-secondary)]">{label}</div>
       <div className="font-display text-[16px] font-bold mt-1" style={color ? { color } : undefined}>
         {children}
@@ -200,13 +200,15 @@ export function DuoDetail({
           <StatCell label="Rounds" color={rateGradientColor(winRatePct(duo.roundsWon, duo.roundsPlayed))}>
             {duo.roundsWon}–{duo.roundsPlayed - duo.roundsWon}
           </StatCell>
-          <StatCell label="Comb. ADR">{duo.combinedAdr.toFixed(1)}</StatCell>
+          <StatCell label="Comb. ADR" title={`${a.name}: ${duo.aStats.adr.toFixed(1)}\n${b.name}: ${duo.bStats.adr.toFixed(1)}`}>
+            {duo.combinedAdr.toFixed(1)}
+          </StatCell>
         </div>
 
         <div className="grid grid-cols-3 gap-2.5 mt-2.5">
-          <StatCell label="Comb. Kills">{duo.combinedKills}</StatCell>
-          <StatCell label="Comb. Assists">{duo.combinedAssists}</StatCell>
-          <StatCell label="Comb. Deaths">{duo.combinedDeaths}</StatCell>
+          <StatCell label="Comb. Kills"   title={`${a.name}: ${duo.aStats.kills}\n${b.name}: ${duo.bStats.kills}`}>{duo.combinedKills}</StatCell>
+          <StatCell label="Comb. Assists" title={`${a.name}: ${duo.aStats.assists}\n${b.name}: ${duo.bStats.assists}`}>{duo.combinedAssists}</StatCell>
+          <StatCell label="Comb. Deaths"  title={`${a.name}: ${duo.aStats.deaths}\n${b.name}: ${duo.bStats.deaths}`}>{duo.combinedDeaths}</StatCell>
         </div>
 
         {!minimal && duo.matches.length > 0 && (
