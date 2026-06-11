@@ -88,12 +88,25 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const displayRounds = myGamesOnly ? myRounds : rounds;
   const displayCount = isGauntlet ? displayRounds.length : displaySchedule.length;
 
-  const allMatches = useMemo(() => {
+  const allMatches = useMemo<MatchPickBanInput[]>(() => {
     if (isGauntlet) {
-      return rounds.flatMap((r) => r.matches);
-    } else {
-      return schedule.flatMap((w) => w.matches);
+      return rounds.flatMap((r) => r.matches).map((m) => ({
+        final_score: m.final_score,
+        picked_map: m.picked_map,
+        shirts_pick: m.shirts_pick,
+        skins_starting_side: m.skins_starting_side,
+        shirts_stats: m.shirts,
+        skins_stats: m.skins,
+      }));
     }
+    return schedule.flatMap((w) => w.matches).map((m) => ({
+      final_score: m.final_score,
+      picked_map: m.picked_map,
+      shirts_pick: m.shirts_pick,
+      skins_starting_side: m.skins_starting_side,
+      shirts_stats: m.shirts_stats,
+      skins_stats: m.skins_stats,
+    }));
   }, [isGauntlet, rounds, schedule]);
 
   const allOpen = isGauntlet
@@ -247,7 +260,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
             No stats available yet.
           </div>
         ) : (
-          <AdvancedStatsView rows={leaderboard} matches={allMatches as MatchPickBanInput[]} />
+          <AdvancedStatsView rows={leaderboard} matches={allMatches} />
         )
       )}
 

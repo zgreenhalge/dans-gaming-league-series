@@ -1197,6 +1197,9 @@ export interface GauntletMatch {
   match_number: number;
   map: string | null;
   final_score: string | null;
+  picked_map: string | null;
+  shirts_pick: string | null;
+  skins_starting_side: 'CT' | 'T' | null;
   shirts: GauntletPlayerStat[];
   skins: GauntletPlayerStat[];
 }
@@ -1394,6 +1397,9 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
         match_number: m.match_number,
         map: m.shirts_pick ?? m.picked_map,
         final_score: m.final_score,
+        picked_map: m.picked_map,
+        shirts_pick: m.shirts_pick,
+        skins_starting_side: m.skins_starting_side,
         shirts: allStats.filter((s) => s.faction === 'SHIRTS'),
         skins: allStats.filter((s) => s.faction === 'SKINS'),
       };
@@ -1759,7 +1765,7 @@ export async function getAllMatchesWithPickBan(): Promise<MapMatchRow[]> {
   for (const s of seasons) seasonById.set(s.id, s);
 
   const playedMatches = matches.filter(
-    (m) => isPlayedScore(m.final_score) && !m.is_playoff_game && (m.shirts_pick != null || m.picked_map != null),
+    (m) => isPlayedScore(m.final_score) && (m.shirts_pick != null || m.picked_map != null),
   );
   if (playedMatches.length === 0) return [];
 
