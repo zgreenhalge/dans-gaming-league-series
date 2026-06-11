@@ -1,6 +1,6 @@
 'use client';
 
-import type { DuoStats, H2HStats, MapStat, ScoutingPlayer } from '@/lib/queries';
+import type { DuoStats, H2HStats, MapLeagueAvg, MapStat, ScoutingPlayer } from '@/lib/queries';
 import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
 import { mapImageFor, mapSlug, toSentenceCase } from '@/lib/maps';
 import Link from 'next/link';
@@ -74,11 +74,13 @@ function MapCard({
   shirts,
   skins,
   expanded,
+  leagueAvg,
 }: {
   mapName: string;
   shirts: [ScoutingPlayer, ScoutingPlayer];
   skins: [ScoutingPlayer, ScoutingPlayer];
   expanded: boolean;
+  leagueAvg: MapLeagueAvg | null;
 }) {
   const slug = mapSlug(mapName);
   const displayName = toSentenceCase(mapName);
@@ -86,13 +88,19 @@ function MapCard({
 
   type Row = { player: ScoutingPlayer; stat: MapStat | null };
   let rows: Row[] = [...shirts, ...skins].map((p) => ({ player: p, stat: p.mapStats[slug] ?? null }));
-  if (expanded) rows = [...rows].sort((a, b) => (b.stat?.adr ?? -1) - (a.stat?.adr ?? -1));
+  if (expanded) rows = [...rows].sort((a, b) => {
+    const wDiff = (b.stat?.wins ?? -1) - (a.stat?.wins ?? -1);
+    if (wDiff !== 0) return wDiff;
+    return (a.stat?.losses ?? Infinity) - (b.stat?.losses ?? Infinity);
+  });
 
   const withData = rows.filter((r): r is { player: ScoutingPlayer; stat: MapStat } => r.stat !== null);
   const avg = withData.length > 0
     ? {
-        adr: withData.reduce((s, r) => s + r.stat.adr, 0) / withData.length,
+        wins: withData.reduce((s, r) => s + r.stat.wins, 0),
+        losses: withData.reduce((s, r) => s + r.stat.losses, 0),
         rwr: withData.reduce((s, r) => s + r.stat.rwr, 0) / withData.length,
+        adr: withData.reduce((s, r) => s + r.stat.adr, 0) / withData.length,
         avgKills: withData.reduce((s, r) => s + r.stat.avgKills, 0) / withData.length,
         avgDeaths: withData.reduce((s, r) => s + r.stat.avgDeaths, 0) / withData.length,
         avgAssists: withData.reduce((s, r) => s + r.stat.avgAssists, 0) / withData.length,
@@ -100,10 +108,10 @@ function MapCard({
     : null;
 
   return (
-    <div className={`border bg-[var(--color-bg-primary)] ${expanded ? 'border-[var(--color-ct)]' : 'border-[var(--color-border-primary)]'}`}>
+    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <Link
         href={`/maps/${slug}`}
-        className="map-card-bg block px-4 py-5 border-b border-[var(--color-border-tertiary)] flex items-end justify-between gap-3"
+        className="map-card-bg flex items-end justify-between gap-3 px-4 py-5 border-b border-[var(--color-border-tertiary)]"
         style={mapImg ? ({ ['--map-img' as string]: `url("${mapImg}")` } as React.CSSProperties) : undefined}
       >
         <span className="map-text-scrim font-display font-bold text-[16px] text-[var(--color-text-primary)]">{displayName}</span>
@@ -148,19 +156,34 @@ function MapCard({
             </tr>
           ))}
           {avg && (
-            <tr className="border-t border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)]">
-              <td className="px-4 py-1.5 tracked text-[9px] text-[var(--color-text-secondary)]">avg</td>
-              <td className="px-3 py-1.5 text-right font-mono text-[10px] text-[var(--color-text-secondary)]">—</td>
-              {expanded && (
-                <>
-                  <td className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{Math.round(avg.avgKills)}</td>
-                  <td className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{Math.round(avg.avgAssists)}</td>
-                  <td className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{Math.round(avg.avgDeaths)}</td>
-                </>
-              )}
-              <td className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{(avg.rwr * 100).toFixed(1)}%</td>
-              <td className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.adr.toFixed(1)}</td>
-            </tr>
+            <>
+              <tr className="border-t border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)]">
+                <td className="px-4 py-1.5 tracked text-[9px] text-[var(--color-text-secondary)]">players</td>
+                <td title="Sum of Players W/L" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.wins}-{avg.losses}</td>
+                {expanded && (
+                  <>
+                    <td title="Avg of Players K" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.avgKills.toFixed(1)}</td>
+                    <td title="Avg of Players A" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.avgAssists.toFixed(1)}</td>
+                    <td title="Avg of Players D" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.avgDeaths.toFixed(1)}</td>
+                  </>
+                )}
+                <td title="Avg of Players RWR%" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{(avg.rwr * 100).toFixed(1)}%</td>
+                <td title="Avg of Players ADR" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.adr.toFixed(1)}</td>
+              </tr>
+              <tr className="bg-[var(--color-bg-secondary)]">
+                <td className="px-4 py-1.5 tracked text-[9px] text-[var(--color-text-secondary)]">league</td>
+                <td title="Sum of League W/L" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? `${leagueAvg.wins}-${leagueAvg.losses}` : '—'}</td>
+                {expanded && (
+                  <>
+                    <td title="Avg of League K" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.avgKills.toFixed(1) : '—'}</td>
+                    <td title="Avg of League A" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.avgAssists.toFixed(1) : '—'}</td>
+                    <td title="Avg of League D" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.avgDeaths.toFixed(1) : '—'}</td>
+                  </>
+                )}
+                <td className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">—</td>
+                <td title="Avg of League ADR" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.adr.toFixed(1) : '—'}</td>
+              </tr>
+            </>
           )}
         </tbody>
       </table>
@@ -183,6 +206,7 @@ export default function ScoutingReport({
   rivals,
   matchMap,
   mapPool,
+  mapLeagueAverages,
   shirtsF,
   skinsF,
 }: {
@@ -192,6 +216,7 @@ export default function ScoutingReport({
   rivals: H2HStats[];
   matchMap: string | null;
   mapPool: string[] | null;
+  mapLeagueAverages: Record<string, MapLeagueAvg>;
   shirtsF: Faction;
   skinsF: Faction;
 }) {
@@ -252,7 +277,7 @@ export default function ScoutingReport({
 
       {(() => {
         const pickedSlug = matchMap ? mapSlug(matchMap) : null;
-        const pool = mapPool ?? (matchMap ? [matchMap] : null);
+        const pool = (mapPool && mapPool.length > 0) ? mapPool : matchMap ? [matchMap] : null;
         if (!pool) return null;
         const mapsToShow = pickedSlug ? [matchMap!] : pool;
         return (
@@ -268,6 +293,7 @@ export default function ScoutingReport({
                   shirts={shirts}
                   skins={skins}
                   expanded={pickedSlug !== null}
+                  leagueAvg={mapLeagueAverages[mapSlug(m)] ?? null}
                 />
               ))}
             </div>

@@ -390,6 +390,15 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   return { match: m, week: w, season: season as Season, stats: statRows };
 }
 
+export interface MapLeagueAvg {
+  wins: number;
+  losses: number;
+  adr: number;
+  avgKills: number;
+  avgDeaths: number;
+  avgAssists: number;
+}
+
 export interface MapStat {
   games: number;
   wins: number;
@@ -421,6 +430,7 @@ export interface ScoutingPlayer {
 export interface MatchScoutingData {
   shirts: ScoutingPlayer[];
   skins: ScoutingPlayer[];
+  mapLeagueAverages: Record<string, MapLeagueAvg>;
 }
 
 /**
@@ -437,7 +447,6 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   if (mErr) throw mErr;
   if (!match) return null;
   const m = match as Match;
-  const matchMapKey = mapSlug((m.shirts_pick ?? m.picked_map) ?? '') || null;
 
   const { data: roster, error: rErr } = await supabase
     .from('player_match_stats')
@@ -448,11 +457,15 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   if (rosterRows.length === 0) return null;
   const playerIds = rosterRows.map((r) => r.player_id);
 
-  const [{ data: statRows, error: sErr }, players] = await Promise.all([
+  const [{ data: statRows, error: sErr }, players, { data: leagueStatRows, error: lsErr }, { data: leagueMatchRows, error: lmErr }] = await Promise.all([
     supabase.from('player_match_stats').select('*').in('player_id', playerIds),
     getPlayersById(),
+    supabase.from('player_match_stats').select('match_id, adr, kills, deaths, assists, is_win').gt('rounds_played', 0),
+    supabase.from('matches').select('id, final_score, shirts_pick, picked_map'),
   ]);
   if (sErr) throw sErr;
+  if (lsErr) throw lsErr;
+  if (lmErr) throw lmErr;
   const allStats = (statRows ?? []) as PlayerMatchStat[];
 
   const matchIds = Array.from(new Set(allStats.map((s) => s.match_id)));
@@ -548,9 +561,42 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
     };
   }
 
+  type LeagueMatchRow = { id: number; final_score: string | null; shirts_pick: string | null; picked_map: string | null };
+  const leagueMatchById = new Map<number, LeagueMatchRow>();
+  for (const mm of (leagueMatchRows ?? []) as LeagueMatchRow[]) leagueMatchById.set(mm.id, mm);
+
+  type LeagueStatRow = { match_id: number; adr: number; kills: number; deaths: number; assists: number; is_win: boolean };
+  const leagueMapGroups = new Map<string, { adr: number[]; kills: number[]; deaths: number[]; assists: number[]; wins: number; losses: number }>();
+  for (const s of (leagueStatRows ?? []) as LeagueStatRow[]) {
+    const mm = leagueMatchById.get(s.match_id);
+    if (!mm || !isPlayedScore(mm.final_score)) continue;
+    const slug = mapSlug((mm.shirts_pick ?? mm.picked_map) ?? '');
+    if (!slug) continue;
+    if (!leagueMapGroups.has(slug)) leagueMapGroups.set(slug, { adr: [], kills: [], deaths: [], assists: [], wins: 0, losses: 0 });
+    const g = leagueMapGroups.get(slug)!;
+    g.adr.push(s.adr);
+    g.kills.push(s.kills);
+    g.deaths.push(s.deaths);
+    g.assists.push(s.assists);
+    if (s.is_win) g.wins++; else g.losses++;
+  }
+  const leagueAvgArr = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
+  const mapLeagueAverages: Record<string, MapLeagueAvg> = {};
+  for (const [slug, g] of leagueMapGroups) {
+    mapLeagueAverages[slug] = {
+      wins: g.wins,
+      losses: g.losses,
+      adr: leagueAvgArr(g.adr),
+      avgKills: leagueAvgArr(g.kills),
+      avgDeaths: leagueAvgArr(g.deaths),
+      avgAssists: leagueAvgArr(g.assists),
+    };
+  }
+
   return {
     shirts: rosterRows.filter((r) => r.faction === 'SHIRTS').map((r) => buildPlayer(r.player_id)),
     skins: rosterRows.filter((r) => r.faction === 'SKINS').map((r) => buildPlayer(r.player_id)),
+    mapLeagueAverages,
   };
 }
 

@@ -272,6 +272,7 @@ export default function MatchTabView({
           rivals={scoutingH2H!.rivals}
           matchMap={matchMap}
           mapPool={mapPool}
+          mapLeagueAverages={scoutingData!.mapLeagueAverages}
           shirtsF={shirtsF}
           skinsF={skinsF}
         />
