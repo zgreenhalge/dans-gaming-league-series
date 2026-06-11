@@ -146,6 +146,10 @@ export function compareMatchRefDesc(
   return b.matchNumber - a.matchNumber;
 }
 
+export function avgOf(arr: number[]): number {
+  return arr.reduce((s, v) => s + v, 0) / arr.length;
+}
+
 /** Parses "13-9" / "13 – 9" into { shirts, skins }. Returns null if unparseable. */
 export function parseScore(
   s: string | null | undefined,

@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { isPlayedScore, winRatePct } from './util';
+import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
 import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
 import type {
@@ -428,8 +428,8 @@ export interface ScoutingPlayer {
 }
 
 export interface MatchScoutingData {
-  shirts: ScoutingPlayer[];
-  skins: ScoutingPlayer[];
+  shirts: [ScoutingPlayer, ScoutingPlayer];
+  skins: [ScoutingPlayer, ScoutingPlayer];
   mapLeagueAverages: Record<string, MapLeagueAvg>;
 }
 
@@ -457,11 +457,12 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   if (rosterRows.length === 0) return null;
   const playerIds = rosterRows.map((r) => r.player_id);
 
+  // TODO: replace unbounded fetches with paginated queries — see GH issue #73.
   const [{ data: statRows, error: sErr }, players, { data: leagueStatRows, error: lsErr }, { data: leagueMatchRows, error: lmErr }] = await Promise.all([
-    supabase.from('player_match_stats').select('*').in('player_id', playerIds),
+    supabase.from('player_match_stats').select('*').in('player_id', playerIds).limit(10000),
     getPlayersById(),
-    supabase.from('player_match_stats').select('match_id, adr, kills, deaths, assists, is_win').gt('rounds_played', 0),
-    supabase.from('matches').select('id, final_score, shirts_pick, picked_map'),
+    supabase.from('player_match_stats').select('match_id, adr, kills, deaths, assists, is_win').gt('rounds_played', 0).limit(10000),
+    supabase.from('matches').select('id, final_score, shirts_pick, picked_map').limit(10000),
   ]);
   if (sErr) throw sErr;
   if (lsErr) throw lsErr;
@@ -509,7 +510,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
       ); // chronological, oldest first
 
     const adrAll = rows.map((r) => r.stat.adr);
-    const adr = adrAll.length > 0 ? adrAll.reduce((s, v) => s + v, 0) / adrAll.length : 0;
+    const adr = adrAll.length > 0 ? avgOf(adrAll) : 0;
 
     const form = rows.slice(-5).map((r) => r.stat.is_win);
 
@@ -524,7 +525,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
     const adrSeries = rows.slice(-6).map((r) => r.stat.adr);
 
     const rwrAll = rows.map((r) => r.stat.rounds_won / Math.max(1, r.stat.rounds_played));
-    const rwr = rwrAll.length > 0 ? rwrAll.reduce((s, v) => s + v, 0) / rwrAll.length : 0;
+    const rwr = rwrAll.length > 0 ? avgOf(rwrAll) : 0;
 
     const mapGroups = new Map<string, typeof rows>();
     for (const r of rows) {
@@ -566,36 +567,40 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   for (const mm of (leagueMatchRows ?? []) as LeagueMatchRow[]) leagueMatchById.set(mm.id, mm);
 
   type LeagueStatRow = { match_id: number; adr: number; kills: number; deaths: number; assists: number; is_win: boolean };
-  const leagueMapGroups = new Map<string, { adr: number[]; kills: number[]; deaths: number[]; assists: number[]; wins: number; losses: number }>();
+  // Use Sets of match IDs for wins/losses rather than counting player-stat rows directly.
+  // Each Wingman match has 2 player rows per side, so row-counting would inflate W-L by 2×.
+  const leagueMapGroups = new Map<string, { adr: number[]; kills: number[]; deaths: number[]; assists: number[]; winMatches: Set<number>; lossMatches: Set<number> }>();
   for (const s of (leagueStatRows ?? []) as LeagueStatRow[]) {
     const mm = leagueMatchById.get(s.match_id);
     if (!mm || !isPlayedScore(mm.final_score)) continue;
     const slug = mapSlug((mm.shirts_pick ?? mm.picked_map) ?? '');
     if (!slug) continue;
-    if (!leagueMapGroups.has(slug)) leagueMapGroups.set(slug, { adr: [], kills: [], deaths: [], assists: [], wins: 0, losses: 0 });
+    if (!leagueMapGroups.has(slug)) leagueMapGroups.set(slug, { adr: [], kills: [], deaths: [], assists: [], winMatches: new Set(), lossMatches: new Set() });
     const g = leagueMapGroups.get(slug)!;
     g.adr.push(s.adr);
     g.kills.push(s.kills);
     g.deaths.push(s.deaths);
     g.assists.push(s.assists);
-    if (s.is_win) g.wins++; else g.losses++;
+    if (s.is_win) g.winMatches.add(s.match_id); else g.lossMatches.add(s.match_id);
   }
-  const leagueAvgArr = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
   const mapLeagueAverages: Record<string, MapLeagueAvg> = {};
   for (const [slug, g] of leagueMapGroups) {
     mapLeagueAverages[slug] = {
-      wins: g.wins,
-      losses: g.losses,
-      adr: leagueAvgArr(g.adr),
-      avgKills: leagueAvgArr(g.kills),
-      avgDeaths: leagueAvgArr(g.deaths),
-      avgAssists: leagueAvgArr(g.assists),
+      wins: g.winMatches.size,
+      losses: g.lossMatches.size,
+      adr: avgOf(g.adr),
+      avgKills: avgOf(g.kills),
+      avgDeaths: avgOf(g.deaths),
+      avgAssists: avgOf(g.assists),
     };
   }
 
+  const shirts = rosterRows.filter((r) => r.faction === 'SHIRTS').map((r) => buildPlayer(r.player_id));
+  const skins = rosterRows.filter((r) => r.faction === 'SKINS').map((r) => buildPlayer(r.player_id));
+  if (shirts.length !== 2 || skins.length !== 2) return null;
   return {
-    shirts: rosterRows.filter((r) => r.faction === 'SHIRTS').map((r) => buildPlayer(r.player_id)),
-    skins: rosterRows.filter((r) => r.faction === 'SKINS').map((r) => buildPlayer(r.player_id)),
+    shirts: shirts as [ScoutingPlayer, ScoutingPlayer],
+    skins: skins as [ScoutingPlayer, ScoutingPlayer],
     mapLeagueAverages,
   };
 }
@@ -610,7 +615,8 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
   if (!player) return null;
 
   const [{ data: stats, error: sErr }, medalists] = await Promise.all([
-    supabase.from('player_match_stats').select('*').eq('player_id', playerId),
+    // TODO: replace with paginated fetch — see GH issue #73. Using a high limit for now.
+    supabase.from('player_match_stats').select('*').eq('player_id', playerId).limit(10000),
     getAllSeasonMedalists(),
   ]);
   if (sErr) throw sErr;

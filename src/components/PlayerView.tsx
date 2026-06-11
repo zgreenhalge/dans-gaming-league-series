@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { PlayerHistoryRow, TrophyEntry, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { winRateColor, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls, winRatePct } from '@/lib/util';
@@ -106,6 +106,7 @@ function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
   const out: MapAgg[] = [];
   for (const { display, rows: list } of buckets.values()) {
     const a = aggregate(list);
+    if (a.matches === 0) continue;
     out.push({ map: display, wins: a.wins, losses: a.losses, wr: a.wr, adr: a.adr });
   }
   return out.sort((a, b) => b.wr - a.wr || b.adr - a.adr);
@@ -271,6 +272,9 @@ export default function PlayerView({
   const maps = aggregateByMap(filtered);
   const playedHistory = filtered.filter(isPlayed);
   const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
+  useEffect(() => {
+    if (upcomingHistory.length === 0) setMatchesSubTab('history');
+  }, [upcomingHistory.length]);
 
   // Chronological ADR series (history is sorted newest-first; reverse for the sparkline).
   const adrSeries = useMemo(

@@ -3,6 +3,7 @@
 import type { DuoStats, H2HStats, MapLeagueAvg, MapStat, ScoutingPlayer } from '@/lib/queries';
 import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
 import { mapImageFor, mapSlug, toSentenceCase } from '@/lib/maps';
+import { avgOf } from '@/lib/util';
 import Link from 'next/link';
 import { DuoDetail, RivalDetail } from './H2HDetail';
 
@@ -97,13 +98,11 @@ function MapCard({
   const withData = rows.filter((r): r is { player: ScoutingPlayer; stat: MapStat } => r.stat !== null);
   const avg = withData.length > 0
     ? {
-        wins: withData.reduce((s, r) => s + r.stat.wins, 0),
-        losses: withData.reduce((s, r) => s + r.stat.losses, 0),
-        rwr: withData.reduce((s, r) => s + r.stat.rwr, 0) / withData.length,
-        adr: withData.reduce((s, r) => s + r.stat.adr, 0) / withData.length,
-        avgKills: withData.reduce((s, r) => s + r.stat.avgKills, 0) / withData.length,
-        avgDeaths: withData.reduce((s, r) => s + r.stat.avgDeaths, 0) / withData.length,
-        avgAssists: withData.reduce((s, r) => s + r.stat.avgAssists, 0) / withData.length,
+        rwr: avgOf(withData.map((r) => r.stat.rwr)),
+        adr: avgOf(withData.map((r) => r.stat.adr)),
+        avgKills: avgOf(withData.map((r) => r.stat.avgKills)),
+        avgDeaths: avgOf(withData.map((r) => r.stat.avgDeaths)),
+        avgAssists: avgOf(withData.map((r) => r.stat.avgAssists)),
       }
     : null;
 
@@ -159,7 +158,7 @@ function MapCard({
             <>
               <tr className="border-t border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)]">
                 <td className="px-4 py-1.5 tracked text-[9px] text-[var(--color-text-secondary)]">players</td>
-                <td title="Sum of Players W/L" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.wins}-{avg.losses}</td>
+                <td className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">—</td>
                 {expanded && (
                   <>
                     <td title="Avg of Players K" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.avgKills.toFixed(1)}</td>
