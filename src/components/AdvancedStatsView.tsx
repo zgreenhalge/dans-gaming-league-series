@@ -41,14 +41,6 @@ function SortableTh({ label, title, sortKey, state, onClick }: { label: string; 
   );
 }
 
-function PlayerNameCell({ row }: { row: LeaderboardRowWithId }) {
-  return (
-    <Link href={`/players/${row.player_id}`} className="hover:underline">
-      {row.player_name}
-    </Link>
-  );
-}
-
 function fmtNum(v: number, decimals: number = 0): string {
   if (!Number.isFinite(v)) return '—';
   return v.toFixed(decimals);
@@ -99,15 +91,37 @@ function BasicStatsTable({ data }: { data: RowWithStats[] }) {
           </thead>
           <tbody>
             {sorted.map(({ row, stats }) => (
-              <tr key={row.player_id} className="hover:bg-[var(--color-bg-hover)] border-b border-[var(--color-border-secondary)]">
+              <tr key={row.player_id} className="lift-row border-b border-[var(--color-border-secondary)]">
                 <td className="px-3 py-2">
-                  <PlayerNameCell row={row} />
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {row.player_name}
+                  </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">{row.total_kills}</td>
-                <td className="px-3 py-2 text-right tnum">{row.total_assists}</td>
-                <td className="px-3 py-2 text-right tnum">{row.total_deaths}</td>
-                <td className="px-3 py-2 text-right tnum">{row.total_damage.toLocaleString()}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtDiff(stats.killDiff)}</td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {row.total_kills}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {row.total_assists}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {row.total_deaths}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {row.total_damage.toLocaleString()}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtDiff(stats.killDiff)}
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -164,19 +178,57 @@ function KillStatsTable({ data }: { data: RowWithStats[] }) {
           </thead>
           <tbody>
             {sorted.map(({ row, stats }) => (
-              <tr key={row.player_id} className="hover:bg-[var(--color-bg-hover)] border-b border-[var(--color-border-secondary)]">
+              <tr key={row.player_id} className="lift-row border-b border-[var(--color-border-secondary)]">
                 <td className="px-3 py-2">
-                  <PlayerNameCell row={row} />
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {row.player_name}
+                  </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(row.kd_ratio, 2)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.dmgPerKill, 1)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.kPerRound, 2)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.aPerRound, 2)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.dPerRound, 2)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.kPerWin, 1)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.dPerWin, 1)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.kPerLoss, 1)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.dPerLoss, 1)}</td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(row.kd_ratio, 2)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.dmgPerKill, 1)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.kPerRound, 2)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.aPerRound, 2)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.dPerRound, 2)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.kPerWin, 1)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.dPerWin, 1)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.kPerLoss, 1)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.dPerLoss, 1)}
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -252,21 +304,47 @@ function GameStatsTable({ data }: { data: RowWithStats[] }) {
           </thead>
           <tbody>
             {sorted.map(({ row, stats }) => (
-              <tr key={row.player_id} className="hover:bg-[var(--color-bg-hover)] border-b border-[var(--color-border-secondary)]">
+              <tr key={row.player_id} className="lift-row border-b border-[var(--color-border-secondary)]">
                 <td className="px-3 py-2">
-                  <PlayerNameCell row={row} />
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {row.player_name}
+                  </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">{row.matches_played}</td>
                 <td className="px-3 py-2 text-right tnum">
-                  {row.matches_won}–{row.matches_lost}
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {row.matches_played}
+                  </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(row.win_rate_percentage, 1)}</td>
-                <td className="px-3 py-2 text-right tnum">{row.total_rounds_played}</td>
                 <td className="px-3 py-2 text-right tnum">
-                  {row.total_rounds_won}–{stats.roundsLost}
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {row.matches_won}–{row.matches_lost}
+                  </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">{fmtDiff(stats.roundDiff)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(row.rwr_percentage, 1)}</td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(row.win_rate_percentage, 1)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {row.total_rounds_played}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {row.total_rounds_won}–{stats.roundsLost}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtDiff(stats.roundDiff)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(row.rwr_percentage, 1)}
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -323,19 +401,57 @@ function AverageGameStatsTable({ data }: { data: RowWithStats[] }) {
           </thead>
           <tbody>
             {sorted.map(({ row, stats }) => (
-              <tr key={row.player_id} className="hover:bg-[var(--color-bg-hover)] border-b border-[var(--color-border-secondary)]">
+              <tr key={row.player_id} className="lift-row border-b border-[var(--color-border-secondary)]">
                 <td className="px-3 py-2">
-                  <PlayerNameCell row={row} />
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {row.player_name}
+                  </Link>
                 </td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.rPerGame, 1)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtDiff(stats.rdPerGame, 2)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.rwPerGame, 2)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.rlPerGame, 2)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtDiff(stats.kdPerGame, 2)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.dmgPerGame, 1)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.kPerGame, 2)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.aPerGame, 2)}</td>
-                <td className="px-3 py-2 text-right tnum">{fmtNum(stats.dPerGame, 2)}</td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.rPerGame, 1)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtDiff(stats.rdPerGame, 2)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.rwPerGame, 2)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.rlPerGame, 2)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtDiff(stats.kdPerGame, 2)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.dmgPerGame, 1)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.kPerGame, 2)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.aPerGame, 2)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtNum(stats.dPerGame, 2)}
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>
