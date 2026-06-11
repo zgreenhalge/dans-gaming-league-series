@@ -171,7 +171,7 @@ function MapCard({
               </tr>
               <tr className="bg-[var(--color-bg-secondary)]">
                 <td className="px-4 py-1.5 tracked text-[9px] text-[var(--color-text-secondary)]">league</td>
-                <td title="Sum of League W/L" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? `${leagueAvg.wins}-${leagueAvg.losses}` : '—'}</td>
+                <td title={leagueAvg ? `Games played on ${displayName} by the league` : undefined} className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.wins + leagueAvg.losses : '—'}</td>
                 {expanded && (
                   <>
                     <td title="Avg of League K" className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{leagueAvg ? leagueAvg.avgKills.toFixed(1) : '—'}</td>
