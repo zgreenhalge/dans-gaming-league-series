@@ -9,6 +9,7 @@ import H2HSection from './H2HSection';
 import { AdvancedStatsView } from './AdvancedStatsView';
 import type { WeekWithMatches, GauntletRound, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
+import type { MatchPickBanInput } from '@/lib/mapSideStats';
 import { isPlayedScore, tabCls, canonicalGauntletRankMap } from '@/lib/util';
 
 type Tab = 'leaderboard' | 'schedule' | 'h2h' | 'stats';
@@ -86,6 +87,14 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const displaySchedule = myGamesOnly ? mySchedule : schedule;
   const displayRounds = myGamesOnly ? myRounds : rounds;
   const displayCount = isGauntlet ? displayRounds.length : displaySchedule.length;
+
+  const allMatches = useMemo(() => {
+    if (isGauntlet) {
+      return rounds.flatMap((r) => r.matches);
+    } else {
+      return schedule.flatMap((w) => w.matches);
+    }
+  }, [isGauntlet, rounds, schedule]);
 
   const allOpen = isGauntlet
     ? displayRounds.length > 0 && displayRounds.every((r) => openItems.has(r.round_number))
@@ -238,7 +247,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
             No stats available yet.
           </div>
         ) : (
-          <AdvancedStatsView rows={leaderboard} />
+          <AdvancedStatsView rows={leaderboard} matches={allMatches as MatchPickBanInput[]} />
         )
       )}
 

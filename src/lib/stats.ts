@@ -1,4 +1,4 @@
-import { LeaderboardRow } from './types';
+import { LeaderboardRowWithId } from './types';
 
 export interface AdvancedStats {
   killDiff: number;
@@ -23,7 +23,7 @@ export interface AdvancedStats {
   dPerGame: number;
 }
 
-export function computeAdvancedStats(row: LeaderboardRow): AdvancedStats {
+export function computeAdvancedStats(row: LeaderboardRowWithId): AdvancedStats {
   const {
     total_kills: k,
     total_deaths: d,
@@ -34,6 +34,10 @@ export function computeAdvancedStats(row: LeaderboardRow): AdvancedStats {
     matches_won: mw,
     matches_lost: ml,
     matches_played: mp,
+    kills_in_wins: kiw,
+    deaths_in_wins: diw,
+    kills_in_losses: kil,
+    deaths_in_losses: dil,
   } = row;
 
   const rl = rp - rw;
@@ -45,10 +49,10 @@ export function computeAdvancedStats(row: LeaderboardRow): AdvancedStats {
     kPerRound: rp > 0 ? k / rp : NaN,
     aPerRound: rp > 0 ? a / rp : NaN,
     dPerRound: rp > 0 ? d / rp : NaN,
-    kPerWin: mw > 0 ? k / mw : NaN,
-    dPerWin: mw > 0 ? d / mw : NaN,
-    kPerLoss: ml > 0 ? k / ml : NaN,
-    dPerLoss: ml > 0 ? d / ml : NaN,
+    kPerWin: mw > 0 ? kiw / mw : NaN,
+    dPerWin: mw > 0 ? diw / mw : NaN,
+    kPerLoss: ml > 0 ? kil / ml : NaN,
+    dPerLoss: ml > 0 ? dil / ml : NaN,
     roundsLost: mp > 0 ? rl : NaN,
     roundDiff: mp > 0 ? rw - rl : NaN,
     rPerGame: mp > 0 ? rp / mp : NaN,

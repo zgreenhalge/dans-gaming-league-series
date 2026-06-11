@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { PlayerHistoryRow, TrophyEntry, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
+import { aggregatePlayerMapStats, aggregatePlayerSideStats, type PlayerMapStat, type PlayerSideStat } from '@/lib/mapSideStats';
+import DevGate from './DevGate';
 import { MatchCard } from './MatchCard';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
@@ -52,6 +54,10 @@ interface Aggregate {
   rounds_won: number;
   rwr: number;
   adr: number;
+  kills_in_wins: number;
+  deaths_in_wins: number;
+  kills_in_losses: number;
+  deaths_in_losses: number;
 }
 
 function isPlayed(r: PlayerHistoryRow): boolean {
@@ -69,6 +75,10 @@ function aggregate(rowsRaw: PlayerHistoryRow[]): Aggregate {
   const damage = rows.reduce((s, r) => s + r.damage, 0);
   const rounds_played = rows.reduce((s, r) => s + r.rounds_played, 0);
   const rounds_won = rows.reduce((s, r) => s + r.rounds_won, 0);
+  const kills_in_wins = rows.reduce((s, r) => s + (r.is_win ? r.kills : 0), 0);
+  const deaths_in_wins = rows.reduce((s, r) => s + (r.is_win ? r.deaths : 0), 0);
+  const kills_in_losses = rows.reduce((s, r) => s + (r.is_win ? 0 : r.kills), 0);
+  const deaths_in_losses = rows.reduce((s, r) => s + (r.is_win ? 0 : r.deaths), 0);
   return {
     matches,
     wins,
@@ -83,6 +93,10 @@ function aggregate(rowsRaw: PlayerHistoryRow[]): Aggregate {
     rounds_won,
     rwr: rounds_played > 0 ? (rounds_won / rounds_played) * 100 : 0,
     adr: rounds_played > 0 ? damage / rounds_played : 0,
+    kills_in_wins,
+    deaths_in_wins,
+    kills_in_losses,
+    deaths_in_losses,
   };
 }
 
@@ -181,14 +195,12 @@ export default function PlayerView({
   trophies,
   careerLeaderboard,
   h2hData,
-  isDev = false,
 }: {
   playerId: number;
   history: PlayerHistoryRow[];
   trophies: TrophyEntry[];
   careerLeaderboard: LeaderboardRowWithId[];
   h2hData: H2HData;
-  isDev?: boolean;
 }) {
   const { regularSeasons, gauntletSeasons, regularToGauntlet } = useMemo(() => {
     const regMap = new Map<number, { id: number; name: string }>();
@@ -270,6 +282,8 @@ export default function PlayerView({
 
   const agg = aggregate(filtered);
   const maps = aggregateByMap(filtered);
+  const playerMapStats = aggregatePlayerMapStats(filtered);
+  const playerSideStats = aggregatePlayerSideStats(filtered);
   const playedHistory = filtered.filter(isPlayed);
   const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
   useEffect(() => {
@@ -302,7 +316,7 @@ export default function PlayerView({
   }, [filteredTrophies]);
 
   const playerTabs: { key: PlayerTab; label: string }[] = [
-    { key: 'stats', label: 'Stats' },
+    { key: 'stats', label: 'Overview' },
     { key: 'matches', label: `Matches${playedHistory.length > 0 ? ` (${playedHistory.length})` : ''}` },
     { key: 'matchups', label: 'H2H' },
   ];
@@ -434,9 +448,87 @@ export default function PlayerView({
             </div>
           </div>
 
-          {isDev && adrSeries.length > 1 && (
-            <>
-              <div className="flex items-baseline justify-between mt-10 mb-3">
+          <DevGate className="mt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Map Pick/Ban Stats */}
+            <div>
+              <div className="flex items-baseline justify-between mb-3">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban stats</span>
+              </div>
+              {playerMapStats.length === 0 ? (
+                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+                  No map data.
+                </div>
+              ) : (
+                <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
+                  <table className="w-full border-collapse text-[12px]">
+                    <thead>
+                      <tr className="bg-[var(--color-bg-secondary)]">
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Map</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Games</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Picked</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">CT</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">T</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {playerMapStats.map((m) => (
+                        <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                          <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{m.map}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.games}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.picked}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.ctPlayed}</td>
+                          <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.tPlayed}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Per-Side Stats */}
+            <div>
+              <div className="flex items-baseline justify-between mb-3">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Per-side stats</span>
+              </div>
+              {playerSideStats.every((s) => s.played === 0) ? (
+                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+                  No side data.
+                </div>
+              ) : (
+                <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
+                  <table className="w-full border-collapse text-[12px]">
+                    <thead>
+                      <tr className="bg-[var(--color-bg-secondary)]">
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Side</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Played</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Times Picked</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W-L</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {playerSideStats.map((s) => (
+                        <tr key={s.side} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                          <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{s.side}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.played}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{s.numTimesPicked}</td>
+                          <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+          </DevGate>
+
+          {adrSeries.length > 1 && (
+          <DevGate className="mt-10">
+              <div className="flex items-baseline justify-between mb-3">
                 <span className="tracked text-[10px] text-[var(--color-text-secondary)]">ADR over time</span>
                 <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">{adrSeries.length} matches</span>
               </div>
@@ -451,12 +543,11 @@ export default function PlayerView({
                   showDot
                 />
               </div>
-            </>
+          </DevGate>
           )}
 
-          {isDev && (
-            <>
-              <div className="flex items-baseline justify-between mt-10 mb-3">
+          <DevGate className="mt-10">
+              <div className="flex items-baseline justify-between mb-3">
                 <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Percentile vs league</span>
                 <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">median = midline</span>
               </div>
@@ -465,8 +556,7 @@ export default function PlayerView({
                 <PctRow label="K/D" pct={percentiles.kd} value={agg.kd.toFixed(2)} />
                 <PctRow label="Win rate" pct={percentiles.wr} value={`${agg.wr.toFixed(0)}%`} />
               </div>
-            </>
-          )}
+          </DevGate>
 
           {isCareer && activeSeasons.length > 0 && (
             <>
@@ -498,6 +588,10 @@ export default function PlayerView({
                     total_rounds_won: a.rounds_won,
                     rwr_percentage: a.rwr,
                     overall_adr: a.adr,
+                    kills_in_wins: a.kills_in_wins,
+                    deaths_in_wins: a.deaths_in_wins,
+                    kills_in_losses: a.kills_in_losses,
+                    deaths_in_losses: a.deaths_in_losses,
                   };
                 })}
               />

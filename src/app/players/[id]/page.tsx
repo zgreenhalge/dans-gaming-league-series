@@ -73,7 +73,6 @@ export default async function PlayerPage({
           trophies={detail.trophies}
           careerLeaderboard={careerLeaderboard}
           h2hData={h2hData}
-          isDev={process.env.NODE_ENV === 'development'}
         />
       </main>
     </div>

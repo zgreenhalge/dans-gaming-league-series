@@ -41,6 +41,10 @@ Full schema is in README.md and `src/lib/types.ts`. Non-obvious rules:
 - **Tab UI:** use `tabCls(active)` from `src/lib/util.ts` for the standard bordered-underline tab button style.
 - **Score parsing:** use `parseScore()` from `src/lib/util.ts` — handles both `"13-9"` and `"13 – 9"` (em-dash).
 - **Seasonal filter is universal.** Any view that aggregates stats across seasons must respect the same filter as the rest of the site — `useSeasonFilter()` / `<SeasonFilter>` from `src/components/SeasonFilter.tsx`, with the same `includeRegular`/`includeGauntlet`/`selectedSeason`/career semantics used by `getCareerLeaderboard()` and `CareerStatsView`. Don't build a one-off season selector.
+- **Hover lift effects:** The codebase defines two hover interaction classes in `globals.css`:
+  - **`lift-card`** — for standalone cards/panels/buttons that should rise on hover with a smooth `translateY(-2px)` transform and drop shadow. Use this for anything that should feel like it's floating above the page (hero cards, standalone result cards, clickable panels).
+  - **`lift-row`** — for rows/cells in bordered containers (season lists, match grids, table rows). Uses an inset accent border and subtle background tint instead of transform (since `translateY` would create gaps between neighbors). Use this for all table rows and list items inside bordered containers.
+  - Both classes support the `--lift-accent` custom property to override the hover accent color (useful for semantic colors like win/loss). The default is the site accent color.
 
 ## Gotchas
 

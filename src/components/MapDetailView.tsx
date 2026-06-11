@@ -4,12 +4,13 @@ import { useState, useMemo } from 'react';
 import LeaderboardTable from './LeaderboardTable';
 import { MatchCard } from './MatchCard';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
+import { AdvancedStatsView } from './AdvancedStatsView';
 import { tabCls, canonicalSort } from '@/lib/util';
 import type { MapMatchRow, MapDetail, MapPlayerStat, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import H2HSection from './H2HSection';
 
-type Tab = 'stats' | 'matches' | 'h2h';
+type Tab = 'leaderboard' | 'stats' | 'matches' | 'h2h';
 
 function toRosterStat(s: MapPlayerStat) {
   return {
@@ -40,6 +41,10 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
     total_damage: number;
     total_rounds_played: number;
     total_rounds_won: number;
+    kills_in_wins: number;
+    deaths_in_wins: number;
+    kills_in_losses: number;
+    deaths_in_losses: number;
   };
 
   const byPlayer = new Map<number, Agg>();
@@ -52,6 +57,8 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
         matches_played: 0, matches_won: 0, matches_lost: 0,
         total_kills: 0, total_assists: 0, total_deaths: 0,
         total_damage: 0, total_rounds_played: 0, total_rounds_won: 0,
+        kills_in_wins: 0, deaths_in_wins: 0,
+        kills_in_losses: 0, deaths_in_losses: 0,
       };
       agg.matches_played += 1;
       agg.matches_won += s.is_win ? 1 : 0;
@@ -62,11 +69,15 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
       agg.total_damage += s.damage;
       agg.total_rounds_played += s.rounds_played;
       agg.total_rounds_won += s.rounds_won;
+      agg.kills_in_wins += s.is_win ? s.kills : 0;
+      agg.deaths_in_wins += s.is_win ? s.deaths : 0;
+      agg.kills_in_losses += s.is_win ? 0 : s.kills;
+      agg.deaths_in_losses += s.is_win ? 0 : s.deaths;
       byPlayer.set(s.player_id, agg);
     }
   }
 
-  return Array.from(byPlayer.values()).map((a) => {
+  return (Array.from(byPlayer.values()).map((a) => {
     const rp = a.total_rounds_played;
     const rw = a.total_rounds_won;
     return {
@@ -86,13 +97,17 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
       total_rounds_won: rw,
       rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
       overall_adr: rp > 0 ? a.total_damage / rp : 0,
+      kills_in_wins: a.kills_in_wins,
+      deaths_in_wins: a.deaths_in_wins,
+      kills_in_losses: a.kills_in_losses,
+      deaths_in_losses: a.deaths_in_losses,
     };
-  }).sort(canonicalSort);
+  }).sort(canonicalSort)) as unknown as LeaderboardRowWithId[];
 }
 
 export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; h2hData: H2HData }) {
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter();
-  const [tab, setTab] = useState<Tab>('stats');
+  const [tab, setTab] = useState<Tab>('leaderboard');
 
   const uniqueSeasons = useMemo(() => {
     const seen = new Map<number, { id: number; name: string; is_gauntlet: boolean }>();
@@ -121,6 +136,9 @@ export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; 
     <div>
       {/* Tabs + filter controls */}
       <div className="flex items-center border-b border-[var(--color-border-primary)] mb-4">
+        <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
+          Leaderboard
+        </button>
         <button type="button" className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
           Stats
         </button>
@@ -141,11 +159,19 @@ export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; 
         />
       </div>
 
-      {tab === 'stats' && (
+      {tab === 'leaderboard' && (
         filteredPlayerStats.length === 0 ? (
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No data for this selection.</div>
         ) : (
           <LeaderboardTable rows={filteredPlayerStats} showMedals={false} />
+        )
+      )}
+
+      {tab === 'stats' && (
+        filteredPlayerStats.length === 0 ? (
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No data for this selection.</div>
+        ) : (
+          <AdvancedStatsView rows={filteredPlayerStats} matches={filteredMatches} singleMap />
         )
       )}
 
