@@ -172,7 +172,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
   );
 
   // ── Callout card data ─────────────────────────────────────────────────────
-  const { highestOutputPartner, mostElevatedPartner, bestFormOpponent, mostContestedRival } = useMemo(() => {
+  const { highestOutputPartner, mostElevatedPartner, bestFormOpponent, hotStreakRival } = useMemo(() => {
     // Teammate where this player's personal ADR was highest
     const byMyAdr = [...b2bRows].sort((a, b) => b.myStats.adr - a.myStats.adr);
     const topMyAdr = byMyAdr[0];
@@ -184,18 +184,26 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
     // Opponent where this player's personal ADR was highest
     const byMyOppAdr = [...h2hRows].sort((a, b) => b.adr - a.adr);
 
-    // Opponent with win record closest to 50/50 (min 2 meetings)
-    const contested = [...h2hRows]
-      .filter((r) => r.games >= 2)
-      .sort((a, b) => Math.abs(a.wr - 50) - Math.abs(b.wr - 50));
+    // Opponent against whom this player has the longest current win streak (matches are most-recent-first)
+    const withStreak = h2hRows.map((row) => {
+      const isA = row._raw.playerA === playerId;
+      let streak = 0;
+      for (const m of row._raw.matches) {
+        if (m.aWon === null) continue;
+        if (isA ? m.aWon : !m.aWon) streak++;
+        else break;
+      }
+      return { row, streak };
+    });
+    const topStreak = withStreak.filter((s) => s.streak >= 2).sort((a, b) => b.streak - a.streak)[0];
 
     return {
       highestOutputPartner: topMyAdr ? { player: playersById.get(topMyAdr.other), stat: `${topMyAdr.myStats.adr.toFixed(1)}` } : null,
       mostElevatedPartner: topTheirAdr ? { player: playersById.get(topTheirAdr.other), stat: `${topTheirAdr.theirStats.adr.toFixed(1)}` } : null,
       bestFormOpponent: byMyOppAdr[0] ? { player: playersById.get(byMyOppAdr[0].other), stat: `${byMyOppAdr[0].adr.toFixed(1)}` } : null,
-      mostContestedRival: contested[0] ? { player: playersById.get(contested[0].other), stat: `${contested[0].myWins}–${contested[0].myLosses}` } : null,
+      hotStreakRival: topStreak ? { player: playersById.get(topStreak.row.other), stat: `${topStreak.streak}W` } : null,
     };
-  }, [b2bRows, h2hRows, playersById]);
+  }, [b2bRows, h2hRows, playersById, playerId]);
 
   // ── Sorting ───────────────────────────────────────────────────────────────
   const sortedH2h = useMemo(() => {
@@ -285,7 +293,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
   return (
     <div className="flex flex-col gap-6">
       {/* Callout cards */}
-      {(highestOutputPartner || mostElevatedPartner || bestFormOpponent || mostContestedRival) && (
+      {(highestOutputPartner || mostElevatedPartner || bestFormOpponent || hotStreakRival) && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {highestOutputPartner?.player && (
             <CalloutCard
@@ -302,7 +310,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
               player={mostElevatedPartner.player}
               stat={`${mostElevatedPartner.stat} ADR`}
               color={GREEN}
-              title="Teammate who posted their highest personal ADR when paired with you"
+              title="Teammate who was highest above their personal average ADR"
             />
           )}
           {bestFormOpponent?.player && (
@@ -311,16 +319,16 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
               player={bestFormOpponent.player}
               stat={`${bestFormOpponent.stat} ADR`}
               color={GREEN}
-              title="Opponent you've personally fragged hardest — your peak ADR in any rivalry"
+              title="Your peak ADR in any rivalry"
             />
           )}
-          {mostContestedRival?.player && (
+          {hotStreakRival?.player && (
             <CalloutCard
-              label="Most Contested"
-              player={mostContestedRival.player}
-              stat={mostContestedRival.stat}
+              label="Hot Streak vs"
+              player={hotStreakRival.player}
+              stat={hotStreakRival.stat}
               color="var(--color-site-accent)"
-              title="The rivalry with the most evenly matched win record (min. 2 meetings)"
+              title="Opponent you're currently on your longest active win streak against"
             />
           )}
         </div>
