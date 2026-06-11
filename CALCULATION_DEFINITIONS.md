@@ -119,6 +119,15 @@ Beer Tax = (Teamflash seconds)
 ```
 
 
+## Canonical Regular Season Ranking
+
+The default sort order for every regular-season and career leaderboard: **WR% → RWR% → ADR**,
+all descending. Applying all three keys in sequence avoids overweighting any single metric and
+produces a stable, consistent ordering across views.
+
+Implemented by `canonicalSort(rows)` in `src/lib/util.ts`. Use it everywhere regular-season or
+career player rows are ranked — never sort by ADR alone.
+
 ## Canonical Gauntlet Ranking
 
 The official finish order for a completed gauntlet season. Used by the leaderboard table on
@@ -137,7 +146,8 @@ round in which the placement is decided, not from overall gauntlet stats.
 
 Returns no ranking while the gauntlet is incomplete (final round not fully played).
 
-Implemented by `canonicalGauntletRankMap(rounds)` in `src/lib/util.ts`.
+Implemented by `canonicalGauntletRankMap(rounds)` in `src/lib/util.ts`. Pass the result as the
+`canonicalRanking` prop to `LeaderboardTable` anywhere gauntlet leaderboards are ranked.
 
 ## Narrative Metrics
 

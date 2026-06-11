@@ -9,10 +9,19 @@ so you don't have to reverse-engineer them from scratch each time.
 - **Individual Rotating Mixer** — the league format. Teammates change every week (randomly drawn),
   so traditional W-L records say more about your draw than your skill. This is *why* the whole site
   is built around rate-based stats instead of win totals.
-- **ADR (Average Damage per Round)** — the platform's primary skill metric, and the **primary sort
-  key** on every leaderboard. Never sort by W-L alone — see `CLAUDE.md`.
-- **RWR (Round Win Rate)** — `total_rounds_won / total_rounds_played * 100`. Derived, not stored;
-  see `LeaderboardRow.rwr_percentage` in `src/lib/types.ts`.
+- **ADR (Average Damage per Round)** — the platform's primary individual skill metric; the
+  *tertiary* tiebreaker in the canonical leaderboard sort (WR% → RWR% → ADR). Never sort by ADR
+  alone — always apply `canonicalSort()` from `src/lib/util.ts`.
+- **WR% (Win Rate)** — `wins / games_played`; the *primary* sort key in the canonical leaderboard
+  sort. Stored as `total_wins / total_games` on `player_season_leaderboard`.
+- **RWR% (Round Win Rate)** — `total_rounds_won / total_rounds_played`; the *secondary* sort key in
+  the canonical leaderboard sort. Derived, not stored; see `LeaderboardRow.rwr_percentage` in
+  `src/lib/types.ts`.
+- **Canonical sort (regular season)** — the standard leaderboard sort order for regular-season and
+  career views: **WR% → RWR% → ADR**, all descending. Implemented by `canonicalSort()` in
+  `src/lib/util.ts`; see
+  [`CALCULATION_DEFINITIONS.md`](./CALCULATION_DEFINITIONS.md#canonical-regular-season-ranking)
+  for the full rationale. Not to be confused with the canonical *gauntlet* ranking below.
 - **Faction: SHIRTS / SKINS** — the two ad-hoc teams for a given match (CS2 Wingman is 2v2).
   Rosters are reshuffled weekly, hence "rotating mixer."
 - **Veto** — the map pick/ban sequence before a match (`shirts_ban`, `shirts_ban2`, `skins_ban1`,
@@ -27,14 +36,11 @@ so you don't have to reverse-engineer them from scratch each time.
     `player_season_leaderboard` view excludes them entirely — gauntlet stats must be computed
     directly from `player_match_stats` (`getGauntletStats`, `getGauntletSeasonLeaderboard`,
     `getGauntletRounds`)
-  - **Canonical gauntlet ranking** — the official finish order for a completed gauntlet.
-    Matches how the podium (`GauntletStandings`) is determined:
-    1st = 2-0 in the final round; 2nd/3rd = 1-1 players ordered by final-round RWR% (desc);
-    4th = 0-2 in the final round; 5th+ = eliminated players sorted by latest round they played in
-    (later = better), tiebreak by wins in that round then RWR% in that round.
-    Implemented by `canonicalGauntletRankMap()` in `src/lib/util.ts`.
-    Use it anywhere gauntlet leaderboards are ranked — pass the result as `canonicalRanking`
-    to `LeaderboardTable`. Returns an empty map while the gauntlet is in progress.
+  - **Canonical gauntlet ranking** — the official finish order for a completed gauntlet; see
+    [`CALCULATION_DEFINITIONS.md`](./CALCULATION_DEFINITIONS.md#canonical-gauntlet-ranking) for the
+    full placement rules. Implemented by `canonicalGauntletRankMap()` in `src/lib/util.ts` — pass
+    the result as `canonicalRanking` to `LeaderboardTable`. Returns an empty map while the gauntlet
+    is in progress.
 - **Regular ↔ gauntlet pairing** — each regular season has a companion gauntlet season (playoffs),
   matched **by name, not ID** (e.g. "Season 5" ↔ "Season 5 Gauntlet"). Always go through
   `extractSeasonNumber()` / `buildRegularToGauntletMap()` in `src/lib/util.ts`, or the
