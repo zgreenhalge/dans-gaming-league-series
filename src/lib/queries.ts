@@ -1746,6 +1746,80 @@ export interface MapDetail {
   playerStats: LeaderboardRowWithId[];
 }
 
+/**
+ * Returns all played matches with pick/ban data and per-faction win flags.
+ * Used by the statistics page to compute league-wide map pick/ban and side stats.
+ */
+export async function getAllMatchesWithPickBan(): Promise<MapMatchRow[]> {
+  const { matches, weeks, seasons } = await fetchMapRawData();
+
+  const weekById = new Map<number, RawWeek>();
+  for (const w of weeks) weekById.set(w.id, w);
+  const seasonById = new Map<number, RawSeason>();
+  for (const s of seasons) seasonById.set(s.id, s);
+
+  const playedMatches = matches.filter(
+    (m) => isPlayedScore(m.final_score) && !m.is_playoff_game && (m.shirts_pick != null || m.picked_map != null),
+  );
+  if (playedMatches.length === 0) return [];
+
+  const matchIds = playedMatches.map((m) => m.id);
+  const [{ data: statsData, error: sErr }, players] = await Promise.all([
+    supabase.from('player_match_stats').select('*').in('match_id', matchIds),
+    getPlayersById(),
+  ]);
+  if (sErr) throw sErr;
+  const statRows = (statsData ?? []) as PlayerMatchStat[];
+
+  const rosterByMatch = new Map<number, { shirts: MapPlayerStat[]; skins: MapPlayerStat[] }>();
+  for (const s of statRows) {
+    const entry = rosterByMatch.get(s.match_id) ?? { shirts: [], skins: [] };
+    const player = players.get(s.player_id);
+    const stat: MapPlayerStat = {
+      player_id: s.player_id,
+      player_name: player?.name ?? `#${s.player_id}`,
+      faction: s.faction,
+      kills: s.kills,
+      assists: s.assists ?? 0,
+      deaths: s.deaths,
+      adr: s.adr ?? 0,
+      damage: s.damage ?? 0,
+      rounds_played: s.rounds_played ?? 0,
+      rounds_won: s.rounds_won ?? 0,
+      is_win: !!s.is_win,
+    };
+    if (s.faction === 'SHIRTS') entry.shirts.push(stat);
+    else entry.skins.push(stat);
+    rosterByMatch.set(s.match_id, entry);
+  }
+
+  return playedMatches
+    .map((m) => {
+      const week = weekById.get(m.week_id);
+      if (!week) return null;
+      const season = seasonById.get(week.season_id);
+      if (!season) return null;
+      const roster = rosterByMatch.get(m.id) ?? { shirts: [], skins: [] };
+      return {
+        match_id: m.id,
+        match_number: m.match_number,
+        week_number: week.week_number,
+        season_id: season.id,
+        season_number: extractSeasonNumber(season.name),
+        season_name: season.name,
+        is_gauntlet: season.is_gauntlet,
+        is_playoff_game: m.is_playoff_game,
+        final_score: m.final_score,
+        shirts_stats: roster.shirts,
+        skins_stats: roster.skins,
+        picked_map: m.picked_map,
+        shirts_pick: m.shirts_pick,
+        skins_starting_side: m.skins_starting_side,
+      };
+    })
+    .filter((r): r is MapMatchRow => r !== null);
+}
+
 /** Returns leaderboards for every season, keyed by season_id. */
 export async function getAllLeaderboards(): Promise<
   Map<number, LeaderboardRowWithId[]>

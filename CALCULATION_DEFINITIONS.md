@@ -17,10 +17,10 @@ Raw numbers, direct from the game scoreboard
 - K/R = Kills / Rounds played
 - A/R = Assists / Rounds played
 - D/R = Deaths / Rounds played
-- K/W = Kills / Wins
-- D/W = Deaths / Wins
-- K/L = Kills / Losses
-- D/L = Deaths / Losses
+- K/W = Kills in wins only / Wins (average kills per game when winning)
+- D/W = Deaths in wins only / Wins (average deaths per game when winning)
+- K/L = Kills in losses only / Losses (average kills per game when losing)
+- D/L = Deaths in losses only / Losses (average deaths per game when losing)
 
 ### Game Stats
 

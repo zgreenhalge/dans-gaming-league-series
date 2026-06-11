@@ -8,7 +8,7 @@ import H2HSection from './H2HSection';
 import { AdvancedStatsView } from './AdvancedStatsView';
 import { buildRegularToGauntletMap, seasonTitle, tabCls } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import type { TrophyEntry, H2HData } from '@/lib/queries';
+import type { TrophyEntry, H2HData, MapMatchRow } from '@/lib/queries';
 import type { H2HPair } from './H2HMatrix';
 
 type Filter = 'career' | number;
@@ -63,6 +63,7 @@ export default function CareerStatsView({
   gauntletBySeason,
   trophiesByPlayer,
   h2hData,
+  allMatches = [],
 }: {
   regularSeasons: { id: number; name: string }[];
   gauntletSeasons: { id: number; name: string }[];
@@ -72,6 +73,7 @@ export default function CareerStatsView({
   gauntletBySeason: Record<number, LeaderboardRowWithId[]>;
   trophiesByPlayer: Record<number, TrophyEntry[]>;
   h2hData: H2HData;
+  allMatches?: MapMatchRow[];
 }) {
   const searchParams = useSearchParams();
   const { includeRegular, includeGauntlet, toggleRegular: baseToggleRegular, toggleGauntlet: baseToggleGauntlet } = useSeasonFilter();
@@ -126,6 +128,18 @@ export default function CareerStatsView({
     if (reg.length > 0 && gnt.length > 0) return mergeRows(reg, gnt);
     return reg.length > 0 ? reg : gnt;
   }, [filter, includeRegular, includeGauntlet, careerRows, gauntletCareerRows, bySeason, gauntletBySeason, regularToGauntlet]);
+
+  const filteredMatches = useMemo<MapMatchRow[]>(() => {
+    if (filter === 'career') {
+      return allMatches.filter((m) => m.is_gauntlet ? includeGauntlet : includeRegular);
+    }
+    const pairedGntId = regularToGauntlet.get(filter);
+    return allMatches.filter((m) => {
+      if (m.season_id === filter) return m.is_gauntlet ? includeGauntlet : includeRegular;
+      if (pairedGntId != null && m.season_id === pairedGntId) return includeGauntlet;
+      return false;
+    });
+  }, [filter, allMatches, includeRegular, includeGauntlet, regularToGauntlet]);
 
   const trophyCounts = useMemo(() => {
     const counts = new Map<number, Record<1 | 2 | 3, number>>();
@@ -198,7 +212,7 @@ export default function CareerStatsView({
             No data for this selection.
           </div>
         ) : (
-          <AdvancedStatsView rows={rows} />
+          <AdvancedStatsView rows={rows} matches={filteredMatches} />
         )
       )}
 

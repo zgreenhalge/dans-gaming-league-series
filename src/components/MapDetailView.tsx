@@ -41,6 +41,10 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
     total_damage: number;
     total_rounds_played: number;
     total_rounds_won: number;
+    kills_in_wins: number;
+    deaths_in_wins: number;
+    kills_in_losses: number;
+    deaths_in_losses: number;
   };
 
   const byPlayer = new Map<number, Agg>();
@@ -53,6 +57,8 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
         matches_played: 0, matches_won: 0, matches_lost: 0,
         total_kills: 0, total_assists: 0, total_deaths: 0,
         total_damage: 0, total_rounds_played: 0, total_rounds_won: 0,
+        kills_in_wins: 0, deaths_in_wins: 0,
+        kills_in_losses: 0, deaths_in_losses: 0,
       };
       agg.matches_played += 1;
       agg.matches_won += s.is_win ? 1 : 0;
@@ -63,6 +69,10 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
       agg.total_damage += s.damage;
       agg.total_rounds_played += s.rounds_played;
       agg.total_rounds_won += s.rounds_won;
+      agg.kills_in_wins += s.is_win ? s.kills : 0;
+      agg.deaths_in_wins += s.is_win ? s.deaths : 0;
+      agg.kills_in_losses += s.is_win ? 0 : s.kills;
+      agg.deaths_in_losses += s.is_win ? 0 : s.deaths;
       byPlayer.set(s.player_id, agg);
     }
   }
@@ -87,10 +97,10 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
       total_rounds_won: rw,
       rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
       overall_adr: rp > 0 ? a.total_damage / rp : 0,
-      kills_in_wins: 0,
-      deaths_in_wins: 0,
-      kills_in_losses: 0,
-      deaths_in_losses: 0,
+      kills_in_wins: a.kills_in_wins,
+      deaths_in_wins: a.deaths_in_wins,
+      kills_in_losses: a.kills_in_losses,
+      deaths_in_losses: a.deaths_in_losses,
     };
   }).sort(canonicalSort)) as unknown as LeaderboardRowWithId[];
 }
@@ -161,7 +171,7 @@ export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; 
         filteredPlayerStats.length === 0 ? (
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No data for this selection.</div>
         ) : (
-          <AdvancedStatsView rows={filteredPlayerStats} matches={filteredMatches as any} />
+          <AdvancedStatsView rows={filteredPlayerStats} matches={filteredMatches} singleMap />
         )
       )}
 

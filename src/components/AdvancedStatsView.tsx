@@ -2,9 +2,9 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { LeaderboardRowWithId, Match } from '@/lib/types';
+import { LeaderboardRowWithId } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
-import { aggregateMapPickBanStats, aggregatePerSideStats, type MapPickBanStat, type PerSideStat } from '@/lib/mapSideStats';
+import { aggregateMapPickBanStats, aggregatePerSideStats, type MapPickBanStat, type PerSideStat, type MatchPickBanInput } from '@/lib/mapSideStats';
 
 type SortKey = string;
 
@@ -462,16 +462,16 @@ function AverageGameStatsTable({ data }: { data: RowWithStats[] }) {
   );
 }
 
-export function AdvancedStatsView({ rows, matches }: { rows: LeaderboardRowWithId[]; matches?: Match[] }) {
+export function AdvancedStatsView({ rows, matches, singleMap = false }: { rows: LeaderboardRowWithId[]; matches?: MatchPickBanInput[]; singleMap?: boolean }) {
   const data = useMemo(() => rows.map((row) => ({ row, stats: computeAdvancedStats(row) })), [rows]);
 
   const mapPickBanStats = useMemo<MapPickBanStat[]>(
-    () => (matches ? aggregateMapPickBanStats(matches as any) : []),
-    [matches],
+    () => (matches && !singleMap ? aggregateMapPickBanStats(matches) : []),
+    [matches, singleMap],
   );
 
   const perSideStats = useMemo<PerSideStat[]>(
-    () => (matches ? aggregatePerSideStats(matches as any) : []),
+    () => (matches ? aggregatePerSideStats(matches) : []),
     [matches],
   );
 

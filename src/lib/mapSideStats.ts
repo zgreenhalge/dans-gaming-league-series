@@ -1,9 +1,12 @@
-import type { Match, Faction } from './types';
 import { isPlayedScore } from './util';
 
-export interface RosterStat {
-  faction: Faction;
-  is_win: boolean;
+export interface MatchPickBanInput {
+  final_score: string | null;
+  picked_map: string | null;
+  shirts_pick: string | null;
+  skins_starting_side: 'CT' | 'T' | null;
+  shirts_stats: { is_win: boolean }[];
+  skins_stats: { is_win: boolean }[];
 }
 
 export interface MapPickBanStat {
@@ -21,26 +24,16 @@ export interface PerSideStat {
   losses: number;
 }
 
-/**
- * Determines which faction won a match by checking if any player from that faction has is_win === true.
- * Returns 'SHIRTS' or 'SKINS', or null if the result is ambiguous.
- */
-function getWinningFaction(stats: RosterStat[]): Faction | null {
-  const shirtsWin = stats.filter((s) => s.faction === 'SHIRTS').some((s) => s.is_win);
-  const skinsWin = stats.filter((s) => s.faction === 'SKINS').some((s) => s.is_win);
-
+function getWinningFaction(m: MatchPickBanInput): 'SHIRTS' | 'SKINS' | null {
+  const shirtsWin = m.shirts_stats.some((s) => s.is_win);
+  const skinsWin = m.skins_stats.some((s) => s.is_win);
   if (shirtsWin && !skinsWin) return 'SHIRTS';
   if (skinsWin && !shirtsWin) return 'SKINS';
   return null;
 }
 
-interface MatchWithStats extends Match {
-  shirts_stats: RosterStat[];
-  skins_stats: RosterStat[];
-}
-
-export function aggregateMapPickBanStats(matches: MatchWithStats[]): MapPickBanStat[] {
-  const buckets = new Map<string, MatchWithStats[]>();
+export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickBanStat[] {
+  const buckets = new Map<string, MatchPickBanInput[]>();
 
   for (const m of matches) {
     if (!isPlayedScore(m.final_score) || !m.picked_map) continue;
@@ -52,7 +45,7 @@ export function aggregateMapPickBanStats(matches: MatchWithStats[]): MapPickBanS
 
   const out: MapPickBanStat[] = [];
   for (const [key, matchList] of buckets) {
-    const display = matchList[0]?.picked_map ?? key;
+    const display = (matchList[0]?.picked_map ?? key) as string;
     let picked = 0;
     let ctPicked = 0;
     let tPicked = 0;
@@ -61,80 +54,46 @@ export function aggregateMapPickBanStats(matches: MatchWithStats[]): MapPickBanS
     for (const m of matchList) {
       picked++;
 
-      // Count sides: skins_starting_side indicates which side skins starts on
-      if (m.skins_starting_side === 'CT') {
-        ctPicked++;
-      } else if (m.skins_starting_side === 'T') {
-        tPicked++;
-      }
+      if (m.skins_starting_side === 'CT') ctPicked++;
+      else if (m.skins_starting_side === 'T') tPicked++;
 
-      // Picked and won: count if the team that picked the map won
       const shirtsPicked = m.shirts_pick === m.picked_map;
       const teamThatPicked = shirtsPicked ? 'SHIRTS' : 'SKINS';
-      const stats = [...m.shirts_stats, ...m.skins_stats];
-      const winner = getWinningFaction(stats);
-      if (winner === teamThatPicked) {
-        pickedAndWon++;
-      }
+      if (getWinningFaction(m) === teamThatPicked) pickedAndWon++;
     }
 
-    out.push({
-      map: display,
-      picked,
-      ctPicked,
-      tPicked,
-      pickedAndWon,
-    });
+    out.push({ map: display, picked, ctPicked, tPicked, pickedAndWon });
   }
 
   return out.sort((a, b) => b.picked - a.picked);
 }
 
-export function aggregatePerSideStats(matches: MatchWithStats[]): PerSideStat[] {
-  const playedMatches = matches.filter((m) => isPlayedScore(m.final_score));
-  const ctStats = { wins: 0, losses: 0 };
-  const tStats = { wins: 0, losses: 0 };
+export function aggregatePerSideStats(matches: MatchPickBanInput[]): PerSideStat[] {
+  const ct = { wins: 0, losses: 0 };
+  const t = { wins: 0, losses: 0 };
 
-  for (const m of playedMatches) {
-    if (!m.skins_starting_side) continue;
+  for (const m of matches) {
+    if (!isPlayedScore(m.final_score) || !m.skins_starting_side) continue;
 
-    // Determine the winning faction
-    const stats = [...m.shirts_stats, ...m.skins_stats];
-    const winner = getWinningFaction(stats);
-
-    // The "picked side" is the side chosen by the team that didn't pick the map
+    // pickedSide = side chosen by the team that didn't pick the map
     const shirtsPicked = m.shirts_pick === m.picked_map;
-    const pickedSide = shirtsPicked ? m.skins_starting_side : (m.skins_starting_side === 'CT' ? 'T' : 'CT');
+    const pickedSide = shirtsPicked
+      ? m.skins_starting_side
+      : (m.skins_starting_side === 'CT' ? 'T' : 'CT');
 
-    // Track wins/losses for the picked side
-    const targetStats = pickedSide === 'CT' ? ctStats : tStats;
+    const winner = getWinningFaction(m);
+    // The team that picked this side is whichever team plays it
+    // If skins starts on skins_starting_side and pickedSide === skins_starting_side → skins picked it
+    const pickedBySkins = pickedSide === m.skins_starting_side;
+    const sideTeamWon = pickedBySkins ? winner === 'SKINS' : winner === 'SHIRTS';
 
-    // Determine if the team that picked this side won
-    // If pickedSide is CT and skins started on CT, then we check if skins won
-    // If pickedSide is T and skins started on T, then we check if skins won
-    // Otherwise, check if shirts won
-    const pickedByShirts = pickedSide === m.skins_starting_side;
-    const sideTeamWon = pickedByShirts ? (winner === 'SHIRTS') : (winner === 'SKINS');
-
-    if (sideTeamWon) {
-      targetStats.wins++;
-    } else if (winner) {
-      targetStats.losses++;
-    }
+    const bucket = pickedSide === 'CT' ? ct : t;
+    if (sideTeamWon) bucket.wins++;
+    else if (winner) bucket.losses++;
   }
 
   return [
-    {
-      side: 'CT',
-      numTimesPicked: ctStats.wins + ctStats.losses,
-      wins: ctStats.wins,
-      losses: ctStats.losses,
-    },
-    {
-      side: 'T',
-      numTimesPicked: tStats.wins + tStats.losses,
-      wins: tStats.wins,
-      losses: tStats.losses,
-    },
+    { side: 'CT', numTimesPicked: ct.wins + ct.losses, wins: ct.wins, losses: ct.losses },
+    { side: 'T', numTimesPicked: t.wins + t.losses, wins: t.wins, losses: t.losses },
   ];
 }
