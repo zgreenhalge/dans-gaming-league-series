@@ -4,12 +4,13 @@ import { useState, useMemo } from 'react';
 import LeaderboardTable from './LeaderboardTable';
 import { MatchCard } from './MatchCard';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
+import { AdvancedStatsView } from './AdvancedStatsView';
 import { tabCls, canonicalSort } from '@/lib/util';
 import type { MapMatchRow, MapDetail, MapPlayerStat, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import H2HSection from './H2HSection';
 
-type Tab = 'stats' | 'matches' | 'h2h';
+type Tab = 'leaderboard' | 'stats' | 'matches' | 'h2h';
 
 function toRosterStat(s: MapPlayerStat) {
   return {
@@ -92,7 +93,7 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
 
 export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; h2hData: H2HData }) {
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter();
-  const [tab, setTab] = useState<Tab>('stats');
+  const [tab, setTab] = useState<Tab>('leaderboard');
 
   const uniqueSeasons = useMemo(() => {
     const seen = new Map<number, { id: number; name: string; is_gauntlet: boolean }>();
@@ -121,6 +122,9 @@ export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; 
     <div>
       {/* Tabs + filter controls */}
       <div className="flex items-center border-b border-[var(--color-border-primary)] mb-4">
+        <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
+          Leaderboard
+        </button>
         <button type="button" className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
           Stats
         </button>
@@ -141,11 +145,19 @@ export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; 
         />
       </div>
 
-      {tab === 'stats' && (
+      {tab === 'leaderboard' && (
         filteredPlayerStats.length === 0 ? (
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No data for this selection.</div>
         ) : (
           <LeaderboardTable rows={filteredPlayerStats} showMedals={false} />
+        )
+      )}
+
+      {tab === 'stats' && (
+        filteredPlayerStats.length === 0 ? (
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No data for this selection.</div>
+        ) : (
+          <AdvancedStatsView rows={filteredPlayerStats} />
         )
       )}
 
