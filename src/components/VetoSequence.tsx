@@ -73,6 +73,12 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   const [isPending, startTransition] = useTransition();
   const [activeField, setActiveField] = useState<StepField | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Tracks fields submitted but not yet confirmed via server refresh, to prevent re-clicking
+  const [submittedFields, setSubmittedFields] = useState<Set<StepField>>(new Set());
+
+  useEffect(() => {
+    setSubmittedFields(new Set());
+  }, [match]);
 
   useEffect(() => {
     const channel = getBrowserClient()
@@ -104,10 +110,11 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   const nextCls =
     'bg-[var(--color-bg-secondary)] border border-[var(--color-accent-amber-pickborder)] [&_.lbl]:text-[var(--color-accent-amber-fg)] [&_.val]:text-[var(--color-text-secondary)]';
 
-  // For non-gauntlet: the first unfilled step in sequence order
-  const sequenceNextField = steps.find((s) => getFieldValue(match, s.field as StepField) === null)?.field as
-    | StepField
-    | undefined;
+  // For non-gauntlet: the first unfilled step in sequence order (excluding optimistically submitted fields)
+  const sequenceNextField = steps.find((s) => {
+    const f = s.field as StepField;
+    return getFieldValue(match, f) === null && !submittedFields.has(f);
+  })?.field as StepField | undefined;
 
   // The field the current player can act on for NEW entries (unfilled slots)
   const actionableField: StepField | undefined = (() => {
@@ -119,7 +126,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
         playerFaction === 'SHIRTS'
           ? (gauntletPlayerIndex === 0 ? 'shirts_ban' : 'shirts_ban2')
           : (gauntletPlayerIndex === 0 ? 'skins_ban1' : 'skins_ban2');
-      return getFieldValue(match, myField) === null ? myField : undefined;
+      return getFieldValue(match, myField) === null && !submittedFields.has(myField) ? myField : undefined;
     }
     if (!sequenceNextField) return undefined;
     if (isAdmin) return sequenceNextField;
@@ -131,6 +138,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   // Whether a filled tile can be overwritten by the current user
   function isOverwritable(field: StepField): boolean {
     if (!canVeto) return false;
+    if (submittedFields.has(field)) return false;
     if (isAdmin) return true;
     if (isGauntlet) {
       if (!playerFaction || gauntletPlayerIndex === null) return false;
@@ -174,7 +182,8 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
         return;
       }
       setActiveField(null);
-      router.refresh();
+      // Mark as submitted so the tile is locked until the realtime refresh lands
+      if (value !== null) setSubmittedFields((prev) => new Set([...prev, field]));
     });
   }
 
@@ -241,7 +250,9 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
                     <div className="lbl tracked text-[9px] font-semibold mb-0.5 flex items-center gap-1">
                       {s.label}
                       {isNext && val === null && (
-                        <span className="ml-auto text-[var(--color-accent-amber-strong)] text-[8px] font-bold tracking-wide">NEXT</span>
+                        <span className="ml-auto text-[var(--color-accent-amber-strong)] text-[8px] font-bold tracking-wide">
+                          {s.type === 'pick' ? 'YOUR PICK' : s.type === 'side' ? 'YOUR SIDE' : 'YOUR BAN'}
+                        </span>
                       )}
                     </div>
                     <div className="val font-display text-[14px] font-semibold leading-tight">

@@ -2138,6 +2138,8 @@ export interface DuoStats {
   combinedDeaths: number;
   roundsWon: number;
   roundsPlayed: number;
+  aStats: H2HPlayerStats;
+  bStats: H2HPlayerStats;
   bestMap: string | null;
   matches: DuoMatchSummary[];
 }
@@ -2291,6 +2293,8 @@ interface DuoAgg {
   deaths: number;
   roundsWon: number;
   roundsPlayed: number;
+  aStats: RivalPlayerAgg;
+  bStats: RivalPlayerAgg;
   mapTotals: Map<string, { games: number; wins: number; adrSum: number }>;
   matches: DuoMatchSummary[];
 }
@@ -2439,7 +2443,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     const key = pairKey(a, b);
     let agg = duoAgg.get(key);
     if (!agg) {
-      agg = { a, b, games: 0, wins: 0, losses: 0, adrSum: 0, kills: 0, assists: 0, deaths: 0, roundsWon: 0, roundsPlayed: 0, mapTotals: new Map(), matches: [] };
+      agg = { a, b, games: 0, wins: 0, losses: 0, adrSum: 0, kills: 0, assists: 0, deaths: 0, roundsWon: 0, roundsPlayed: 0, aStats: emptyRivalPlayerAgg(), bStats: emptyRivalPlayerAgg(), mapTotals: new Map(), matches: [] };
       duoAgg.set(key, agg);
     }
     return agg;
@@ -2495,6 +2499,18 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
           // x and y are teammates, so they share identical round totals for this match — count once.
           agg.roundsWon += x.rounds_won;
           agg.roundsPlayed += x.rounds_played;
+          // Per-player stats: aStats belongs to the lower-id player (agg.a), bStats to the higher.
+          const aRow = x.player_id === agg.a ? x : y;
+          const bRow = aRow === x ? y : x;
+          for (const [statAgg, row] of [[agg.aStats, aRow], [agg.bStats, bRow]] as const) {
+            statAgg.games += 1;
+            statAgg.kills += row.kills;
+            statAgg.assists += row.assists ?? 0;
+            statAgg.deaths += row.deaths;
+            statAgg.adrSum += row.adr;
+            statAgg.roundsWon += row.rounds_won;
+            statAgg.roundsPlayed += row.rounds_played;
+          }
           if (playedMap) {
             const mapKey = playedMap.toLowerCase();
             const mapAgg = agg.mapTotals.get(mapKey) ?? { games: 0, wins: 0, adrSum: 0 };
@@ -2567,6 +2583,8 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     combinedDeaths: d.deaths,
     roundsWon: d.roundsWon,
     roundsPlayed: d.roundsPlayed,
+    aStats: finalizeRivalPlayerStats(d.aStats),
+    bStats: finalizeRivalPlayerStats(d.bStats),
     bestMap: bestMapFor(d.mapTotals),
     matches: [...d.matches].sort(compareMatchRefDesc), // most recent first
   }));

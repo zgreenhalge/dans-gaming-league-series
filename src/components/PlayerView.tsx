@@ -4,17 +4,17 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import type { PlayerHistoryRow, TrophyEntry, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { winRateColor, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls, winRatePct } from '@/lib/util';
+import { extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { MatchCard } from './MatchCard';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import Sparkline from './Sparkline';
-import PlayerAvatar from './PlayerAvatar';
 import { CountdownTimer } from './CountdownTimer';
+import MatchupsTab from './MatchupsTab';
 
 type Filter = 'career' | number;
 type MapSortCol = 'map' | 'record' | 'wr' | 'adr';
-type PlayerTab = 'stats' | 'matches' | 'trophies';
+type PlayerTab = 'stats' | 'matches' | 'trophies' | 'matchups';
 type MatchesSubTab = 'history' | 'upcoming';
 
 const MEDAL_COLORS: Record<1 | 2 | 3, string> = {
@@ -293,41 +293,6 @@ export default function PlayerView({
     };
   }, [careerLeaderboard, agg]);
 
-  const h2hPlayersById = useMemo(() => {
-    const m = new Map<number, (typeof h2hData.players)[number]>();
-    for (const p of h2hData.players) m.set(p.id, p);
-    return m;
-  }, [h2hData]);
-
-  const bestPartners = useMemo(
-    () =>
-      h2hData.duos
-        .filter((d) => d.playerA === playerId || d.playerB === playerId)
-        .filter((d) => d.gamesPlayed > 0)
-        .sort((a, b) => winRatePct(b.wins, b.gamesPlayed) - winRatePct(a.wins, a.gamesPlayed))
-        .slice(0, 3)
-        .map((d) => ({ other: d.playerA === playerId ? d.playerB : d.playerA, wr: winRatePct(d.wins, d.gamesPlayed) })),
-    [h2hData.duos, playerId],
-  );
-
-  const topRivals = useMemo(
-    () =>
-      h2hData.rivals
-        .filter((r) => r.playerA === playerId || r.playerB === playerId)
-        .filter((r) => r.meetings > 0)
-        .sort((a, b) => Math.abs(a.aWins - a.bWins) - Math.abs(b.aWins - b.bWins) || b.meetings - a.meetings)
-        .slice(0, 3)
-        .map((r) => {
-          const isA = r.playerA === playerId;
-          return {
-            other: isA ? r.playerB : r.playerA,
-            wins: isA ? r.aWins : r.bWins,
-            losses: isA ? r.bWins : r.aWins,
-          };
-        }),
-    [h2hData.rivals, playerId],
-  );
-
   const isCareer = filter === 'career';
 
   const medalCounts = useMemo(() => {
@@ -339,6 +304,7 @@ export default function PlayerView({
   const playerTabs: { key: PlayerTab; label: string }[] = [
     { key: 'stats', label: 'Stats' },
     { key: 'matches', label: `Matches${playedHistory.length > 0 ? ` (${playedHistory.length})` : ''}` },
+    { key: 'matchups', label: 'H2H' },
   ];
   if (trophies.length > 0) {
     playerTabs.push({ key: 'trophies', label: `Trophy Case${filteredTrophies.length > 0 ? ` (${filteredTrophies.length})` : ''}` });
@@ -502,64 +468,6 @@ export default function PlayerView({
             </>
           )}
 
-          {isDev && bestPartners.length > 0 && (
-            <>
-              <div className="flex items-baseline justify-between mt-10 mb-3">
-                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Best partners</span>
-                <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">win rate</span>
-              </div>
-              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-                {bestPartners.map(({ other, wr }) => {
-                  const p = h2hPlayersById.get(other);
-                  if (!p) return null;
-                  return (
-                    <Link
-                      key={other}
-                      href={`/players/${other}`}
-                      className="lift-row grid grid-cols-[22px_1fr_56px_28px] items-center gap-2.5 px-4 py-2 border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors"
-                    >
-                      <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
-                      <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
-                      <span className="block h-[5px] w-full bg-[rgba(255,255,255,0.08)]">
-                        <span className="block h-full" style={{ width: `${Math.max(0, Math.min(100, wr))}%`, background: winRateColor(wr) }} />
-                      </span>
-                      <span className="display-numeral text-[14px] text-right" style={{ color: winRateColor(wr) }}>{wr}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          {isDev && topRivals.length > 0 && (
-            <>
-              <div className="flex items-baseline justify-between mt-10 mb-3">
-                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Top rivals</span>
-                <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">head-to-head</span>
-              </div>
-              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-                {topRivals.map(({ other, wins, losses }) => {
-                  const p = h2hPlayersById.get(other);
-                  if (!p) return null;
-                  const lead = wins > losses;
-                  return (
-                    <Link
-                      key={other}
-                      href={`/players/${other}`}
-                      className="lift-row grid grid-cols-[22px_1fr_auto] items-center gap-2.5 px-4 py-2 border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors"
-                    >
-                      <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
-                      <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
-                      <span className="display-numeral text-[15px]" style={{ color: lead ? 'var(--color-accent-green-fg)' : 'var(--color-accent-red-fg)' }}>
-                        {wins}<span className="text-[12px] text-[var(--color-text-secondary)]">–</span>{losses}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
           {isCareer && activeSeasons.length > 0 && (
             <>
               <SectionLabel>Season history</SectionLabel>
@@ -707,6 +615,11 @@ export default function PlayerView({
             </>
           )}
         </>
+      )}
+
+      {/* Matchups tab */}
+      {tab === 'matchups' && (
+        <MatchupsTab playerId={playerId} h2hData={h2hData} />
       )}
 
       {/* Trophy Case tab */}
