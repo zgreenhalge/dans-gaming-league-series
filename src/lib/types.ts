@@ -38,6 +38,7 @@ export interface Match {
   scheduled_at: string | null;
   screenshot_url_front: string | null;
   screenshot_url_back: string | null;
+  recording_url: string | null;
 }
 
 export interface Player {

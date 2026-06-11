@@ -8,10 +8,11 @@ import { YouBadge } from '@/components/YouBadge';
 import EnterResultsModal, { type InitialPlayerStat } from '@/components/EnterResultsModal';
 import ScreenshotViewer from '@/components/ScreenshotViewer';
 import ScoutingReport from '@/components/ScoutingReport';
+import { RecordingViewer, SubmitRecordingURL } from '@/components/RecordingViewer';
 import type { MatchStatRow, MatchScoutingData, H2HData } from '@/lib/queries';
 
 type Faction = 'CT' | 'T' | null;
-type Tab = 'leaderboard' | 'scouting';
+type Tab = 'leaderboard' | 'scouting' | 'recording';
 
 function factionClass(f: Faction): string {
   if (f === 'CT') return 'faction-ct';
@@ -165,6 +166,7 @@ export default function MatchTabView({
   scoutingData,
   scoutingH2H,
   matchMap,
+  recordingURL,
 }: {
   shirts: MatchStatRow[];
   skins: MatchStatRow[];
@@ -191,6 +193,7 @@ export default function MatchTabView({
   scoutingData: MatchScoutingData | null;
   scoutingH2H: H2HData | null;
   matchMap: string | null;
+  recordingURL: string | null;
 }) {
   const hasScoutingData = !!(scoutingData && scoutingH2H);
   const [tab, setTab] = useState<Tab>('leaderboard');
@@ -210,6 +213,9 @@ export default function MatchTabView({
               Scouting Report
             </button>
           )}
+          <button type="button" className={tabCls(tab === 'recording')} onClick={() => setTab('recording')}>
+            Recording
+          </button>
         </div>
         {tab === 'leaderboard' && canEnterResults && (
           <EnterResultsModal
@@ -272,6 +278,14 @@ export default function MatchTabView({
           shirtsF={shirtsF}
           skinsF={skinsF}
         />
+      )}
+
+      {tab === 'recording' && (
+        <RecordingViewer embedURL={recordingURL} />
+      )}
+
+      {tab === 'recording' && (
+        <SubmitRecordingURL matchId={matchId} />
       )}
     </>
   );

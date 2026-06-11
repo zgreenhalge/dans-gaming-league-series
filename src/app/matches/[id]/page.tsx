@@ -305,6 +305,7 @@ export default async function MatchPage({
           scoutingData={scoutingData}
           scoutingH2H={scoutingH2H}
           matchMap={map}
+          recordingURL={match.recording_url}
         />
       </main>
     </div>
