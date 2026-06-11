@@ -58,16 +58,19 @@ function CalloutCard({
   player,
   stat,
   color,
+  title,
 }: {
   label: string;
   player: { id: number; name: string; steam_avatar_url: string | null } | undefined;
   stat: string;
   color: string;
+  title?: string;
 }) {
   if (!player) return null;
   return (
     <Link
       href={`/players/${player.id}`}
+      title={title}
       className="lift-row border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 flex items-center gap-3 transition-colors"
       style={{ background: `color-mix(in srgb, ${color} 6%, var(--color-bg-primary))` }}
     >
@@ -169,18 +172,30 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
   );
 
   // ── Callout card data ─────────────────────────────────────────────────────
-  const { bestTeammate, worstTeammate, bestOpponent, worstOpponent } = useMemo(() => {
-    const b2bSorted = [...b2bRows].sort((a, b) => duoScore(b._raw) - duoScore(a._raw));
-    const h2hSorted = [...h2hRows].sort((a, b) => rivalScore(b._raw) - rivalScore(a._raw));
-    const pick = (row: (typeof b2bRows)[number] | (typeof h2hRows)[number] | undefined) =>
-      row ? { player: playersById.get(row.other), wr: row.wr } : null;
+  const { highestOutputPartner, mostElevatedPartner, bestFormOpponent, mostContestedRival } = useMemo(() => {
+    // Teammate where this player's personal ADR was highest
+    const byMyAdr = [...b2bRows].sort((a, b) => b.myStats.adr - a.myStats.adr);
+    const topMyAdr = byMyAdr[0];
+
+    // Teammate whose own ADR peaked when paired with this player (skip same player as above)
+    const byTheirAdr = [...b2bRows].sort((a, b) => b.theirStats.adr - a.theirStats.adr);
+    const topTheirAdr = byTheirAdr[0]?.other === topMyAdr?.other ? byTheirAdr[1] : byTheirAdr[0];
+
+    // Opponent where this player's personal ADR was highest
+    const byMyOppAdr = [...h2hRows].sort((a, b) => b.adr - a.adr);
+
+    // Opponent with win record closest to 50/50 (min 2 meetings)
+    const contested = [...h2hRows]
+      .filter((r) => r.games >= 2)
+      .sort((a, b) => Math.abs(a.wr - 50) - Math.abs(b.wr - 50));
+
     return {
-      bestTeammate: pick(b2bSorted[0]),
-      worstTeammate: pick(b2bSorted[b2bSorted.length - 1]),
-      bestOpponent: pick(h2hSorted[0]),
-      worstOpponent: pick(h2hSorted[h2hSorted.length - 1]),
+      highestOutputPartner: topMyAdr ? { player: playersById.get(topMyAdr.other), stat: `${topMyAdr.myStats.adr.toFixed(1)}` } : null,
+      mostElevatedPartner: topTheirAdr ? { player: playersById.get(topTheirAdr.other), stat: `${topTheirAdr.theirStats.adr.toFixed(1)}` } : null,
+      bestFormOpponent: byMyOppAdr[0] ? { player: playersById.get(byMyOppAdr[0].other), stat: `${byMyOppAdr[0].adr.toFixed(1)}` } : null,
+      mostContestedRival: contested[0] ? { player: playersById.get(contested[0].other), stat: `${contested[0].myWins}–${contested[0].myLosses}` } : null,
     };
-  }, [b2bRows, h2hRows, playersById, duoScore, rivalScore]);
+  }, [b2bRows, h2hRows, playersById]);
 
   // ── Sorting ───────────────────────────────────────────────────────────────
   const sortedH2h = useMemo(() => {
@@ -270,19 +285,43 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
   return (
     <div className="flex flex-col gap-6">
       {/* Callout cards */}
-      {(bestTeammate || worstTeammate || bestOpponent || worstOpponent) && (
+      {(highestOutputPartner || mostElevatedPartner || bestFormOpponent || mostContestedRival) && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {bestTeammate?.player && (
-            <CalloutCard label="Most Chemistry" player={bestTeammate.player} stat={`${bestTeammate.wr}%`} color={GREEN} />
+          {highestOutputPartner?.player && (
+            <CalloutCard
+              label="Highest Output"
+              player={highestOutputPartner.player}
+              stat={`${highestOutputPartner.stat} ADR`}
+              color={GREEN}
+              title="Teammate you've posted your highest personal ADR alongside"
+            />
           )}
-          {worstTeammate?.player && bestTeammate?.player?.id !== worstTeammate?.player?.id && (
-            <CalloutCard label="Least Chemistry" player={worstTeammate.player} stat={`${worstTeammate.wr}%`} color={RED} />
+          {mostElevatedPartner?.player && (
+            <CalloutCard
+              label="Most Elevated"
+              player={mostElevatedPartner.player}
+              stat={`${mostElevatedPartner.stat} ADR`}
+              color={GREEN}
+              title="Teammate who posted their highest personal ADR when paired with you"
+            />
           )}
-          {bestOpponent?.player && (
-            <CalloutCard label="Easiest Rivalry" player={bestOpponent.player} stat={`${bestOpponent.wr}%`} color={GREEN} />
+          {bestFormOpponent?.player && (
+            <CalloutCard
+              label="Best Form vs"
+              player={bestFormOpponent.player}
+              stat={`${bestFormOpponent.stat} ADR`}
+              color={GREEN}
+              title="Opponent you've personally fragged hardest — your peak ADR in any rivalry"
+            />
           )}
-          {worstOpponent?.player && bestOpponent?.player?.id !== worstOpponent?.player?.id && (
-            <CalloutCard label="Hardest Rivalry" player={worstOpponent.player} stat={`${worstOpponent.wr}%`} color={RED} />
+          {mostContestedRival?.player && (
+            <CalloutCard
+              label="Most Contested"
+              player={mostContestedRival.player}
+              stat={mostContestedRival.stat}
+              color="var(--color-site-accent)"
+              title="The rivalry with the most evenly matched win record (min. 2 meetings)"
+            />
           )}
         </div>
       )}
