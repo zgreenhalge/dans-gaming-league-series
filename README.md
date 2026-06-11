@@ -2,7 +2,7 @@
 
 A stat tracker for DGLS — a **CS2 Wingman league** played in the Individual Rotating Mixer format. Because teammates rotate randomly every week, standard win/loss records are misleading. This platform surfaces individual skill through rate-based metrics, primarily **ADR (Average Damage per Round)**.
 
-> New here? See [`GLOSSARY.md`](./GLOSSARY.md) for a rundown of DGLS-specific terms (gauntlet, H2H, faction, RWR, veto, etc.) and a map of where each concept lives in the code, [`RECIPES.md`](./RECIPES.md) for step-by-step patterns on common changes (new stat, new page, new query helper), and [`VISUAL_CONVENTIONS.md`](./VISUAL_CONVENTIONS.md) for the shared hover/glow/accent CSS system.
+> New here? See [`GLOSSARY.md`](./GLOSSARY.md) for a rundown of DGLS-specific terms (gauntlet, H2H, faction, RWR, veto, etc.) and a map of where each concept lives in the code, [`RECIPES.md`](./RECIPES.md) for step-by-step patterns on common changes (new stat, new page, new query helper), [`VISUAL_CONVENTIONS.md`](./VISUAL_CONVENTIONS.md) for the shared hover/glow/accent CSS system, and [`CALCULATION_DEFINITIONS.md`](./CALCULATION_DEFINITIONS.md) for the formulas behind every stat and ranking shown on the site.
 
 ## Tech Stack
 

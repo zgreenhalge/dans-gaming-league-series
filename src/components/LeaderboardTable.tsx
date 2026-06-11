@@ -12,16 +12,9 @@ type SortCol =
   | 'gold'
   | 'silver'
   | 'bronze'
-  | 'record'
-  | 'gp'
+  | 'rank'
   | 'wr'
-  | 'rw_rl'
-  | 'rp'
   | 'rwr'
-  | 'kills'
-  | 'assists'
-  | 'deaths'
-  | 'kd'
   | 'adr';
 
 function compare(
@@ -29,39 +22,30 @@ function compare(
   b: LeaderboardRowWithId,
   col: SortCol,
   trophyCounts?: Map<number, Record<1 | 2 | 3, number>>,
+  canonicalRanking?: Map<number, number>,
 ): number {
   switch (col) {
+    case 'rank':
+      return (canonicalRanking?.get(a.player_id) ?? 999) - (canonicalRanking?.get(b.player_id) ?? 999);
     case 'gold':
-      return (trophyCounts?.get(b.player_id)?.[1] ?? 0) - (trophyCounts?.get(a.player_id)?.[1] ?? 0);
+      return (
+        ((trophyCounts?.get(b.player_id)?.[1] ?? 0) - (trophyCounts?.get(a.player_id)?.[1] ?? 0)) ||
+        ((trophyCounts?.get(b.player_id)?.[2] ?? 0) - (trophyCounts?.get(a.player_id)?.[2] ?? 0)) ||
+        ((trophyCounts?.get(b.player_id)?.[3] ?? 0) - (trophyCounts?.get(a.player_id)?.[3] ?? 0))
+      );
     case 'silver':
       return (trophyCounts?.get(b.player_id)?.[2] ?? 0) - (trophyCounts?.get(a.player_id)?.[2] ?? 0);
     case 'bronze':
       return (trophyCounts?.get(b.player_id)?.[3] ?? 0) - (trophyCounts?.get(a.player_id)?.[3] ?? 0);
     case 'name':
       return a.player_name.localeCompare(b.player_name);
-    case 'record':
-      return b.matches_won - a.matches_won || a.matches_lost - b.matches_lost;
-    case 'gp':
-      return b.matches_played - a.matches_played;
     case 'wr':
       return (
         b.win_rate_percentage - a.win_rate_percentage ||
         b.rwr_percentage - a.rwr_percentage
       );
-    case 'rw_rl':
-      return b.total_rounds_won - a.total_rounds_won;
-    case 'rp':
-      return b.total_rounds_played - a.total_rounds_played;
     case 'rwr':
       return b.rwr_percentage - a.rwr_percentage;
-    case 'kills':
-      return b.total_kills - a.total_kills;
-    case 'assists':
-      return b.total_assists - a.total_assists;
-    case 'deaths':
-      return a.total_deaths - b.total_deaths;
-    case 'kd':
-      return b.kd_ratio - a.kd_ratio;
     case 'adr':
       return b.overall_adr - a.overall_adr;
   }
@@ -75,17 +59,20 @@ export default function LeaderboardTable({
   showMedals = true,
   playoffZones,
   trophyCounts,
+  canonicalRanking,
 }: {
   rows: LeaderboardRowWithId[];
   firstColMode?: 'player' | 'season';
   showMedals?: boolean;
   playoffZones?: { top: number; bottom: number };
   trophyCounts?: Map<number, Record<1 | 2 | 3, number>>;
+  canonicalRanking?: Map<number, number>;
 }) {
   const { data: session } = useSession();
   const myPlayerId = session?.user?.playerId ?? null;
 
-  const [sortCol, setSortCol] = useState<SortCol>('wr');
+  const defaultSort: SortCol = trophyCounts ? 'gold' : canonicalRanking ? 'rank' : 'wr';
+  const [sortCol, setSortCol] = useState<SortCol>(defaultSort);
   const [asc, setAsc] = useState(false);
 
   function clickHeader(col: SortCol) {
@@ -104,35 +91,41 @@ export default function LeaderboardTable({
   }
 
   const sorted = [...rows].sort((a, b) => {
-    const v = compare(a, b, sortCol, trophyCounts);
+    const v = compare(a, b, sortCol, trophyCounts, canonicalRanking);
     return asc ? -v : v;
   });
 
-  // Canonical ranking: WR% → RWR% → ADR, fixed regardless of active sort.
-  const canonicalRanked = firstColMode === 'player'
-    ? [...rows].sort(canonicalSort)
-    : [];
+  // Canonical rank for the # column: use the provided gauntlet ranking when available,
+  // otherwise fall back to WR% → RWR% → ADR.
+  const canonicalRankOf: Map<number, number> = canonicalRanking
+    ? canonicalRanking
+    : new Map([...rows].sort(canonicalSort).map((r, i) => [r.player_id, i + 1]));
 
   // Playoff zone coloring: top N gold, bottom N red tint (overrides medals when provided)
   const ZONE_COLORS = { top: '#f5c542', bottom: '#ef4444' } as const;
   const zoneColor = new Map<number, string>();
   const elimZone = new Set<number>();
   if (playoffZones && firstColMode === 'player') {
-    canonicalRanked.slice(0, playoffZones.top).forEach((r) => zoneColor.set(r.player_id, ZONE_COLORS.top));
-    canonicalRanked.slice(-playoffZones.bottom).forEach((r) => {
-      if (!zoneColor.has(r.player_id)) {
+    const n = rows.length;
+    for (const r of rows) {
+      const rank = canonicalRankOf.get(r.player_id);
+      if (rank == null) continue;
+      if (rank <= playoffZones.top) {
+        zoneColor.set(r.player_id, ZONE_COLORS.top);
+      } else if (rank > n - playoffZones.bottom) {
         zoneColor.set(r.player_id, ZONE_COLORS.bottom);
         elimZone.add(r.player_id);
       }
-    });
+    }
   }
 
   // Medal positions (skipped when playoff zones are active)
   const medalRank = new Map<number, 1 | 2 | 3>();
   if (showMedals && !playoffZones && firstColMode === 'player') {
-    canonicalRanked
-      .slice(0, 3)
-      .forEach((r, i) => medalRank.set(r.player_id, (i + 1) as 1 | 2 | 3));
+    for (const r of rows) {
+      const rank = canonicalRankOf.get(r.player_id);
+      if (rank === 1 || rank === 2 || rank === 3) medalRank.set(r.player_id, rank);
+    }
   }
 
   const MEDAL_COLORS: Record<1 | 2 | 3, string> = {
@@ -146,30 +139,23 @@ export default function LeaderboardTable({
 
   const firstColLabel = firstColMode === 'season' ? 'Season' : 'Player';
 
-  const TROPHY_COLS: { key: SortCol; label: string; rank: 1 | 2 | 3 }[] = [
-    { key: 'gold',   label: '🥇', rank: 1 },
-    { key: 'silver', label: '🥈', rank: 2 },
-    { key: 'bronze', label: '🥉', rank: 3 },
+  const TROPHY_COLS: { key: SortCol; label: string; title: string; rank: 1 | 2 | 3 }[] = [
+    { key: 'gold',   label: '🥇', title: 'Gold Medals',   rank: 1 },
+    { key: 'silver', label: '🥈', title: 'Silver Medals', rank: 2 },
+    { key: 'bronze', label: '🥉', title: 'Bronze Medals', rank: 3 },
   ];
 
-  const STAT_COLS: { key: SortCol; label: string }[] = [
-    { key: 'record', label: 'W-L' },
-    { key: 'gp',     label: 'Games' },
-    { key: 'wr',     label: 'WR%' },
-    { key: 'rw_rl',  label: 'RW-RL' },
-    { key: 'rp',     label: 'Rounds' },
-    { key: 'rwr',    label: 'RWR%' },
-    { key: 'kills',   label: 'Kills' },
-    { key: 'assists', label: 'Assists' },
-    { key: 'deaths',  label: 'Deaths' },
-    { key: 'kd',      label: 'K/D' },
-    { key: 'adr',     label: 'ADR' },
+  const STAT_COLS: { key: SortCol; label: string; title: string }[] = [
+    { key: 'wr',  label: 'WR%',  title: 'Win Rate' },
+    { key: 'rwr', label: 'RWR%', title: 'Round Win Rate' },
+    { key: 'adr', label: 'ADR',  title: 'Average Damage per Round' },
   ];
 
-  function SortableTh({ col }: { col: { key: SortCol; label: string } }) {
+  function SortableTh({ col }: { col: { key: SortCol; label: string; title?: string } }) {
     const active = sortCol === col.key;
     return (
       <th
+        title={col.title}
         tabIndex={0}
         aria-sort={active ? (asc ? 'ascending' : 'descending') : 'none'}
         onClick={() => clickHeader(col.key)}
@@ -211,9 +197,8 @@ export default function LeaderboardTable({
           </tr>
         </thead>
         <tbody>
-          {sorted.map((p, i) => {
+          {sorted.map((p) => {
             const played = p.total_rounds_played > 0;
-            const rounds_lost = p.total_rounds_played - p.total_rounds_won;
             const medal = medalRank.get(p.player_id);
             const zone = zoneColor.get(p.player_id);
             const rowColor = zone ?? (medal ? MEDAL_COLORS[medal] : null);
@@ -238,7 +223,7 @@ export default function LeaderboardTable({
                   <td className="pl-4 pr-2 py-2.5 font-mono text-[11px] tnum"
                     style={{ color: textColor ?? 'var(--color-text-secondary)' }}
                   >
-                    <Link href={href} className="block w-full h-full">{i + 1}</Link>
+                    <Link href={href} className="block w-full h-full">{canonicalRankOf.get(p.player_id) ?? '-'}</Link>
                   </td>
                 )}
                 <td className={`py-2.5 font-display font-semibold ${firstColMode === 'player' ? 'px-2' : 'pl-4 pr-2'}`}
@@ -255,34 +240,10 @@ export default function LeaderboardTable({
                   </td>
                 ))}
                 <td className="py-2.5 px-2 text-right font-mono tnum">
-                  <Link href={href} className="block w-full h-full">{dash(played, `${p.matches_won}-${p.matches_lost}`)}</Link>
-                </td>
-                <td className="py-2.5 px-2 text-right font-mono tnum">
-                  <Link href={href} className="block w-full h-full">{dash(played, String(p.matches_played))}</Link>
-                </td>
-                <td className="py-2.5 px-2 text-right font-mono tnum">
                   <Link href={href} className="block w-full h-full">{dash(played, `${p.win_rate_percentage.toFixed(1)}%`)}</Link>
                 </td>
                 <td className="py-2.5 px-2 text-right font-mono tnum">
-                  <Link href={href} className="block w-full h-full">{dash(played, `${p.total_rounds_won}-${rounds_lost}`)}</Link>
-                </td>
-                <td className="py-2.5 px-2 text-right font-mono tnum">
-                  <Link href={href} className="block w-full h-full">{dash(played, String(p.total_rounds_played))}</Link>
-                </td>
-                <td className="py-2.5 px-2 text-right font-mono tnum">
                   <Link href={href} className="block w-full h-full">{dash(played, `${p.rwr_percentage.toFixed(1)}%`)}</Link>
-                </td>
-                <td className="py-2.5 px-2 text-right font-mono tnum">
-                  <Link href={href} className="block w-full h-full">{dash(played, String(p.total_kills))}</Link>
-                </td>
-                <td className="py-2.5 px-2 text-right font-mono tnum">
-                  <Link href={href} className="block w-full h-full">{dash(played, String(p.total_assists))}</Link>
-                </td>
-                <td className="py-2.5 px-2 text-right font-mono tnum">
-                  <Link href={href} className="block w-full h-full">{dash(played, String(p.total_deaths))}</Link>
-                </td>
-                <td className="py-2.5 px-2 text-right font-mono tnum">
-                  <Link href={href} className="block w-full h-full">{dash(played, p.kd_ratio.toFixed(2))}</Link>
                 </td>
                 <td className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold">
                   <Link href={href} className="block w-full h-full">{dash(played, p.overall_adr.toFixed(2))}</Link>

@@ -2,8 +2,9 @@
 
 Step-by-step patterns for the changes made most often in this codebase. Each recipe links to a real
 example already in the repo — read that example before writing new code in the same shape. See also
-[`GLOSSARY.md`](./GLOSSARY.md) (domain vocabulary + file map) and
-[`VISUAL_CONVENTIONS.md`](./VISUAL_CONVENTIONS.md) (shared CSS utilities).
+[`GLOSSARY.md`](./GLOSSARY.md) (domain vocabulary + file map),
+[`VISUAL_CONVENTIONS.md`](./VISUAL_CONVENTIONS.md) (shared CSS utilities), and
+[`CALCULATION_DEFINITIONS.md`](./CALCULATION_DEFINITIONS.md) (stat formulas and ranking rules).
 
 ## Recipe: Add a new aggregated stat / metric
 

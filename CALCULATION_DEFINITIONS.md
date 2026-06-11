@@ -48,28 +48,67 @@ Raw numbers, direct from the game scoreboard
 
 Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 
+- `KPR+` = `Player K/R` / `League Avg K/R` * 100
+- `APR+` = `Player A/R` / `League Avg A/R` * 100
+- `DPR+` = `Player D/R` / `League Avg D/R` * 100
+- `KDR+` = `Player K/D` / `League Avg K/D` * 100
+- `ADR+` = `Player ADR` / `League Avg A/R` * 100
+- `Entry+` = `Player Entry Value` / `League Avg Entry Value` * 100
+  - `Entry Value` = `Opening Kills` - `Opening Deaths`
+- `Trade+` = `Player KAST` / `League Avg KAST` * 100
+  - `KAST` = `Rounds with Kill, Assist, Survived, or Traded` / `Rounds played`
+  - `Trade Score` = `KAST` - (`Untraded Deaths` * 10)
+- `Objective+` = `Player Objective Score` / `League Avg Objective Score` * 100
+  - `Objective Score` = (2 * `Plants`) + (3 * `Defuses`) + 
+  `Utility+` = `Player Utility Score` / `League Avg Utility Score` * 100
+  - `Utility Score` = `Flash Assists` + (`Utility Damage` / 50) 
+- `Clutch+` = `Player Clutch Score` / `League Avg Clutch Score` * 100
+  - `Clutch Score` = `1v1 wins` + 2 * `1v2 wins w/ assist` + 3 * `1v2 wins w/o assist`
+- `Choke+` = `Player Choke Score` / `League Avg Choke Score` * 100
+  - `Choke Score` = `1v1 losses` + 2 * `1v2 losses` + 5 * `2v1 losses`
+
 ```
-Skill Rating = 100
+E-HOG = 100
   + 0.30(KPR+ - 100)
   + 0.20(ADR+ - 100)
-  + 0.15(Entry+ - 100)
-  + 0.15(Trade+ - 100)
-  + 0.10(Objective+ - 100)
+  + 0.10(Entry+ - 100)
   + 0.10(Clutch+ - 100)
+  + 0.10(Trade+ - 100)
+  + 0.10(Objective+ - 100)
+  + 0.10(Utility+ - 100)
+  + 0.10(APR+ - 100)
+  - 0.10(DPR+ - 100)
   - Beer Tax
 ```
 
-- `KPR+ = Player KPR / League Avg KPR * 100`
-- `ADR+ = Player ADR / League Avg ADR * 100`
-- `Entry+ = Player Entry Value / League Avg Entry Value * 100`
-  - `Entry Value = Opening Kills - Opening Deaths`
-- `Trade+ = Player KAST / League Avg KAST * 100`
-  - `KAST = rounds with Kill, Assist, Survived, or Traded`
-  - `Trade Score = KAST - (Untraded Deaths * 10)`
-- `Objective+ = Player Objective Score / League Avg Objective Score * 100`
-  - `Objective Score = (2 * Plants) + (3 * Defuses) + Flash Assists + (Utility Damage / 50)`
-- `Clutch+ = Player Clutch Score / League Avg Clutch Score * 100`
-  - `Clutch Score = 1v1 wins + 2 * (1v2 wins w/ assist) + 3 * (1v2 wins w/o assist)`
+```
+Entry Rating = 100
+  + 0.35(Entry+ - 100)
+  + 0.20(KPR+ - 100)  
+  + 0.20(ADR+ - 100)
+  + 0.15(Trade+ - 100)
+  + 0.10(K/D+ - 100)
+```
+
+```
+Anchor Rating = 100 
+  + 0.50(KPR+ - 100)
+  + 0.40(Clutch+ - 100)
+  + 0.15(ADR+ - 100)
+  + 0.15(Trade+ - 100)
+  + 0.10(Objective+ - 100)
+  - 0.50(DPR+ - 100)
+  - 0.20(Choke+ - 100)
+```
+
+```
+Setup Rating = 100
+  + 0.50(APR+ - 100)
+  + 0.40(Utility+ - 100)
+  + 0.10(Objective+ - 100)
+  - 10 * Teamflash seconds
+
+```
 
 ```
 Beer Tax = (Teamflash seconds)
@@ -79,6 +118,36 @@ Beer Tax = (Teamflash seconds)
   + 15 * (Knife deaths attempted)
 ```
 
+
+## Canonical Regular Season Ranking
+
+The default sort order for every regular-season and career leaderboard: **WR% → RWR% → ADR**,
+all descending. Applying all three keys in sequence avoids overweighting any single metric and
+produces a stable, consistent ordering across views.
+
+Implemented by `canonicalSort(rows)` in `src/lib/util.ts`. Use it everywhere regular-season or
+career player rows are ranked — never sort by ADR alone.
+
+## Canonical Gauntlet Ranking
+
+The official finish order for a completed gauntlet season. Used by the leaderboard table on
+gauntlet season pages and matches the podium displayed by `GauntletStandings`.
+
+| Place | Condition |
+|-------|-----------|
+| 1st   | 2-0 record in the final round |
+| 2nd   | 1-1 in the final round, higher RWR% across all final-round matches |
+| 3rd   | 1-1 in the final round, lower RWR% across all final-round matches |
+| 4th   | 0-2 in the final round |
+| 5th+  | Eliminated before the final round; sorted by latest round reached (higher = better rank), tiebreak by wins in that round then RWR% in that round (both descending) |
+
+RWR% tiebreaks mirror the final-round logic throughout: it is always computed from the specific
+round in which the placement is decided, not from overall gauntlet stats.
+
+Returns no ranking while the gauntlet is incomplete (final round not fully played).
+
+Implemented by `canonicalGauntletRankMap(rounds)` in `src/lib/util.ts`. Pass the result as the
+`canonicalRanking` prop to `LeaderboardTable` anywhere gauntlet leaderboards are ranked.
 
 ## Narrative Metrics
 

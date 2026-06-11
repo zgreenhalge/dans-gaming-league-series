@@ -3,7 +3,9 @@
 **New to this codebase (human or agent)?** Read `GLOSSARY.md` first — it defines DGLS-specific
 domain terms (gauntlet, H2H, faction, RWR, etc.) and maps concepts to the files that implement them.
 For step-by-step patterns on common changes (new stat, new page, new query helper), see
-`RECIPES.md`. For the shared CSS hover/glow/accent system, see `VISUAL_CONVENTIONS.md`.
+`RECIPES.md`. For the shared CSS hover/glow/accent system, see `VISUAL_CONVENTIONS.md`. For the
+formulas behind every stat and ranking (sabremetrics, canonical regular-season and gauntlet rankings, narrative metrics),
+see `CALCULATION_DEFINITIONS.md`.
 
 ## Guiding philosophy
 

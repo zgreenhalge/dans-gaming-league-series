@@ -793,11 +793,21 @@ export async function getSeasonLeaderboard(
  * are re-derived from totals so the math stays correct.
  */
 export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
-  const [{ data: rows, error }, perPlayer] = await Promise.all([
+  const [{ data: rows, error }, perPlayer, playersById, rosterBySeason, { data: seasonRows, error: sErr }] = await Promise.all([
     supabase.from('player_season_leaderboard').select('*'),
     getPerPlayerSeasonStats(),
+    getPlayersById(),
+    getRosterPlayersBySeason(),
+    supabase.from('seasons').select('id, status'),
   ]);
   if (error) throw error;
+  if (sErr) throw sErr;
+
+  const activeSeasonIds = new Set(
+    ((seasonRows ?? []) as { id: number; status: string }[])
+      .filter((s) => s.status === 'ACTIVE' || s.status === 'UPCOMING')
+      .map((s) => s.id),
+  );
 
   type Agg = {
     player_id: number;
@@ -812,6 +822,7 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
     total_rounds_won: number;
     seasons: Set<number>;
   };
+  const byId = new Map<number, Agg>();
   const byName = new Map<string, Agg>();
   for (const raw of (rows ?? []) as LeaderboardRow[]) {
     const r = normalizeRow(raw);
@@ -843,6 +854,33 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
     agg.total_rounds_won += ps?.rounds_won ?? 0;
     agg.seasons.add(r.season_id);
     byName.set(r.player_name, agg);
+    byId.set(r.player_id, agg);
+  }
+
+  // Add zero-stat entries for players rostered in active/upcoming seasons who
+  // haven't played yet and therefore don't appear in player_season_leaderboard.
+  for (const [seasonId, playerIds] of rosterBySeason) {
+    if (!activeSeasonIds.has(seasonId)) continue;
+    for (const pid of playerIds) {
+      if (byId.has(pid)) continue;
+      const player = playersById.get(pid);
+      if (!player) continue;
+      const agg: Agg = {
+        player_id: pid,
+        matches_played: 0,
+        matches_won: 0,
+        matches_lost: 0,
+        total_kills: 0,
+        total_assists: 0,
+        total_deaths: 0,
+        total_damage: 0,
+        total_rounds_played: 0,
+        total_rounds_won: 0,
+        seasons: new Set(),
+      };
+      byName.set(player.name, agg);
+      byId.set(pid, agg);
+    }
   }
 
   const out: LeaderboardRowWithId[] = [];
