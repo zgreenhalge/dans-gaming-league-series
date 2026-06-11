@@ -10,10 +10,12 @@ import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import Sparkline from './Sparkline';
 import PlayerAvatar from './PlayerAvatar';
+import { CountdownTimer } from './CountdownTimer';
 
 type Filter = 'career' | number;
 type MapSortCol = 'map' | 'record' | 'wr' | 'adr';
 type PlayerTab = 'stats' | 'matches' | 'trophies';
+type MatchesSubTab = 'history' | 'upcoming';
 
 const MEDAL_COLORS: Record<1 | 2 | 3, string> = {
   1: '#f5c542',
@@ -208,6 +210,7 @@ export default function PlayerView({
   const { includeRegular, includeGauntlet, toggleRegular: baseToggleRegular, toggleGauntlet: baseToggleGauntlet } = useSeasonFilter();
   const [filter, setFilter] = useState<Filter>('career');
   const [tab, setTab] = useState<PlayerTab>('stats');
+  const [matchesSubTab, setMatchesSubTab] = useState<MatchesSubTab>('history');
   const [mapSort, setMapSort] = useState<MapSortCol>('wr');
   const [mapAsc, setMapAsc] = useState(false);
 
@@ -372,6 +375,32 @@ export default function PlayerView({
           )}
         </div>
       </div>
+
+      {/* Next Match — below Last 5 */}
+      {upcomingHistory.length > 0 && (() => {
+        const next = upcomingHistory[0];
+        const opponents = next.faction === 'SHIRTS'
+          ? next.skins.map((p) => p.player_name).join(' & ') || 'TBD'
+          : next.shirts.map((p) => p.player_name).join(' & ') || 'TBD';
+        return (
+          <Link
+            href={`/matches/${next.match_id}`}
+            className="mb-4 inline-flex items-center gap-3 hover:opacity-80 transition-opacity"
+          >
+            <span className="tracked text-[10px] text-[var(--color-text-secondary)] shrink-0">Next Match</span>
+            <div className="flex items-center gap-2 font-mono text-[12px] min-w-0">
+              {next.map && (
+                <span className="font-semibold text-[var(--color-text-primary)] truncate">{next.map}</span>
+              )}
+              <span className="text-[var(--color-text-secondary)] shrink-0">vs</span>
+              <span className="text-[var(--color-text-primary)] truncate">{opponents}</span>
+              {next.scheduled_at && (
+                <CountdownTimer iso={next.scheduled_at} className="tracked text-[9px] text-[var(--color-text-secondary)]" />
+              )}
+            </div>
+          </Link>
+        );
+      })()}
 
       {/* Tab bar + filter controls */}
       <div className="flex flex-wrap items-center gap-y-2 border-b border-[var(--color-border-primary)] mb-6">
@@ -615,44 +644,25 @@ export default function PlayerView({
       {tab === 'matches' && (
         <>
           {upcomingHistory.length > 0 && (
-            <>
-              <SectionLabel>Upcoming matches</SectionLabel>
-              <div className="flex flex-col gap-3">
-                {upcomingHistory.map((h) => (
-                  <MatchCard
-                    key={h.id}
-                    href={`/matches/${h.match_id}`}
-                    map={h.map}
-                    label={{ type: 'player-history', seasonNumber: h.season_number, isGauntlet: h.is_gauntlet, weekNumber: h.week_number, matchNumber: h.match_number }}
-                    right={{ type: 'pending' }}
-                    shirtsStats={h.shirts_stats}
-                    skinsStats={h.skins_stats}
-                    shirtsFallback={h.shirts.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
-                    skinsFallback={h.skins.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
-                    currentPlayerId={h.player_id}
-                    highlightCurrentPlayer
-                    containerVariant="standalone"
-                  />
-                ))}
-              </div>
-            </>
+            <div className="flex items-center gap-0 border-b border-[var(--color-border-primary)] mb-6">
+              <button onClick={() => setMatchesSubTab('history')} className={tabCls(matchesSubTab === 'history')}>
+                History
+              </button>
+              <button onClick={() => setMatchesSubTab('upcoming')} className={tabCls(matchesSubTab === 'upcoming')}>
+                Upcoming ({upcomingHistory.length})
+              </button>
+            </div>
           )}
 
-          <SectionLabel>Match history</SectionLabel>
-          {playedHistory.length === 0 ? (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-              No matches played yet.
-            </div>
-          ) : (
+          {matchesSubTab === 'upcoming' && upcomingHistory.length > 0 ? (
             <div className="flex flex-col gap-3">
-              {playedHistory.map((h) => (
+              {upcomingHistory.map((h) => (
                 <MatchCard
                   key={h.id}
                   href={`/matches/${h.match_id}`}
                   map={h.map}
                   label={{ type: 'player-history', seasonNumber: h.season_number, isGauntlet: h.is_gauntlet, weekNumber: h.week_number, matchNumber: h.match_number }}
-                  outcome={h.is_win ? 'win' : 'loss'}
-                  right={{ type: 'score', score: h.final_score! }}
+                  right={{ type: 'pending' }}
                   shirtsStats={h.shirts_stats}
                   skinsStats={h.skins_stats}
                   shirtsFallback={h.shirts.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
@@ -663,6 +673,34 @@ export default function PlayerView({
                 />
               ))}
             </div>
+          ) : (
+            <>
+              {playedHistory.length === 0 ? (
+                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+                  No matches played yet.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {playedHistory.map((h) => (
+                    <MatchCard
+                      key={h.id}
+                      href={`/matches/${h.match_id}`}
+                      map={h.map}
+                      label={{ type: 'player-history', seasonNumber: h.season_number, isGauntlet: h.is_gauntlet, weekNumber: h.week_number, matchNumber: h.match_number }}
+                      outcome={h.is_win ? 'win' : 'loss'}
+                      right={{ type: 'score', score: h.final_score! }}
+                      shirtsStats={h.shirts_stats}
+                      skinsStats={h.skins_stats}
+                      shirtsFallback={h.shirts.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
+                      skinsFallback={h.skins.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
+                      currentPlayerId={h.player_id}
+                      highlightCurrentPlayer
+                      containerVariant="standalone"
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </>
       )}
