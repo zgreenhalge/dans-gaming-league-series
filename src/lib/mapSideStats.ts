@@ -1,4 +1,4 @@
-import { isPlayedScore } from './util';
+import { isPlayedScore, parseScore } from './util';
 
 export interface MatchPickBanInput {
   final_score: string | null;
@@ -69,6 +69,33 @@ export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickB
   }
 
   return out.sort((a, b) => b.picked - a.picked);
+}
+
+export interface ScoreDistribution {
+  ot: number;
+  close: number;
+  comfortable: number;
+  landslide: number;
+  total: number;
+}
+
+export function aggregateScoreDistribution(matches: MatchPickBanInput[]): ScoreDistribution {
+  const out: ScoreDistribution = { ot: 0, close: 0, comfortable: 0, landslide: 0, total: 0 };
+  for (const m of matches) {
+    if (!isPlayedScore(m.final_score)) continue;
+    const parsed = parseScore(m.final_score);
+    if (!parsed) continue;
+    const { shirts, skins } = parsed;
+    const winner = Math.max(shirts, skins);
+    const loser = Math.min(shirts, skins);
+    const margin = winner - loser;
+    out.total++;
+    if (winner > 13) out.ot++;
+    else if (margin <= 2) out.close++;
+    else if (margin <= 4) out.comfortable++;
+    else out.landslide++;
+  }
+  return out;
 }
 
 export function aggregatePerSideStats(matches: MatchPickBanInput[]): PerSideStat[] {

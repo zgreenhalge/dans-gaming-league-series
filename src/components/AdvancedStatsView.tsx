@@ -4,7 +4,8 @@ import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { LeaderboardRowWithId } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
-import { aggregateMapPickBanStats, aggregatePerSideStats, type MapPickBanStat, type PerSideStat, type MatchPickBanInput } from '@/lib/mapSideStats';
+import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type MatchPickBanInput } from '@/lib/mapSideStats';
+import { mapSlug } from '@/lib/maps';
 
 type SortKey = string;
 
@@ -462,6 +463,51 @@ function AverageGameStatsTable({ data }: { data: RowWithStats[] }) {
   );
 }
 
+function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
+  const buckets = [
+    { label: 'Landslide',   count: dist.landslide,    note: '13–8 or worse' },
+    { label: 'Comfortable', count: dist.comfortable,  note: '13–9 or 13–10' },
+    { label: 'Close',       count: dist.close,        note: '13–11 or 13–12' },
+    { label: 'OT',          count: dist.ot,           note: 'Overtime' },
+  ];
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-3">
+        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Score distribution</span>
+      </div>
+      {dist.total === 0 ? (
+        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No match data.</div>
+      ) : (
+        <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
+          <table className="w-full border-collapse text-[12px]">
+            <thead>
+              <tr className="bg-[var(--color-bg-secondary)]">
+                <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Category</th>
+                <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Count</th>
+                <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {buckets.map(({ label, count, note }) => (
+                <tr key={label} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                  <td className="pl-4 pr-3 py-2.5">
+                    <span className="tracked text-[11px] font-semibold">{label}</span>
+                    <span className="ml-2 text-[10px] text-[var(--color-text-secondary)]">{note}</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{count}</td>
+                  <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">
+                    {((count / dist.total) * 100).toFixed(0)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AdvancedStatsView({ rows, matches, singleMap = false }: { rows: LeaderboardRowWithId[]; matches?: MatchPickBanInput[]; singleMap?: boolean }) {
   const data = useMemo(() => rows.map((row) => ({ row, stats: computeAdvancedStats(row) })), [rows]);
 
@@ -475,11 +521,17 @@ export function AdvancedStatsView({ rows, matches, singleMap = false }: { rows: 
     [matches],
   );
 
+  const scoreDistribution = useMemo<ScoreDistribution | null>(
+    () => (matches && singleMap ? aggregateScoreDistribution(matches) : null),
+    [matches, singleMap],
+  );
+
   return (
     <div className="space-y-6">
       {matches && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Map Pick/Ban Stats */}
+          {/* Score Distribution (singleMap) or Map Pick/Ban Stats (multi-map) */}
+          {singleMap && scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
           {!singleMap && <div>
             <div className="flex items-baseline justify-between mb-3">
               <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban stats</span>
@@ -503,7 +555,9 @@ export function AdvancedStatsView({ rows, matches, singleMap = false }: { rows: 
                   <tbody>
                     {mapPickBanStats.map((m) => (
                       <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                        <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{m.map}</td>
+                        <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">
+                          <Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-accent)] transition-colors">{m.map}</Link>
+                        </td>
                         <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
                         <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.ctPicked}</td>
                         <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.tPicked}</td>
