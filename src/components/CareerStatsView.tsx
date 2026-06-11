@@ -150,7 +150,7 @@ export default function CareerStatsView({
             Leaderboard
           </button>
           <button className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
-            Stats
+            Overview
           </button>
           <button className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
             H2H
