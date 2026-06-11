@@ -127,3 +127,85 @@ export function aggregatePerSideStats(matches: MatchPickBanInput[]): PerSideStat
     { side: 'T', numTimesPicked: t.wins + t.losses, wins: t.wins, losses: t.losses },
   ];
 }
+
+// ─── Player-perspective stat interfaces & aggregators ───────────────────────
+
+export interface PlayerMatchInput {
+  final_score: string | null;
+  map: string | null;
+  faction: 'SHIRTS' | 'SKINS';
+  skins_starting_side: 'CT' | 'T' | null;
+  shirts_pick: string | null;
+  picked_map: string | null;
+  is_win: boolean;
+}
+
+export interface PlayerMapStat {
+  map: string;
+  games: number;
+  picked: number;
+  ctPlayed: number;
+  tPlayed: number;
+  pickedAndWon: number;
+}
+
+export interface PlayerSideStat {
+  side: 'CT' | 'T';
+  played: number;
+  numTimesPicked: number;
+  wins: number;
+  losses: number;
+}
+
+export function aggregatePlayerMapStats(matches: PlayerMatchInput[]): PlayerMapStat[] {
+  const buckets = new Map<string, { display: string; games: number; picked: number; ctPlayed: number; tPlayed: number; pickedAndWon: number }>();
+
+  for (const m of matches) {
+    if (!isPlayedScore(m.final_score) || !m.map) continue;
+    const key = m.map.trim().toLowerCase();
+    const b = buckets.get(key) ?? { display: m.map.trim(), games: 0, picked: 0, ctPlayed: 0, tPlayed: 0, pickedAndWon: 0 };
+
+    b.games++;
+
+    const playerPicked = m.faction === 'SHIRTS' ? m.shirts_pick != null : m.picked_map != null;
+    if (playerPicked) b.picked++;
+
+    if (m.skins_starting_side) {
+      const playerSide = m.faction === 'SKINS' ? m.skins_starting_side : (m.skins_starting_side === 'CT' ? 'T' : 'CT');
+      if (playerSide === 'CT') b.ctPlayed++;
+      else b.tPlayed++;
+    }
+
+    if (playerPicked && m.is_win) b.pickedAndWon++;
+
+    buckets.set(key, b);
+  }
+
+  return Array.from(buckets.values())
+    .map(({ display, games, picked, ctPlayed, tPlayed, pickedAndWon }) => ({ map: display, games, picked, ctPlayed, tPlayed, pickedAndWon }))
+    .sort((a, b) => b.games - a.games);
+}
+
+export function aggregatePlayerSideStats(matches: PlayerMatchInput[]): PlayerSideStat[] {
+  const ct = { played: 0, numTimesPicked: 0, wins: 0, losses: 0 };
+  const t = { played: 0, numTimesPicked: 0, wins: 0, losses: 0 };
+
+  for (const m of matches) {
+    if (!isPlayedScore(m.final_score) || !m.skins_starting_side) continue;
+    const playerSide = m.faction === 'SKINS' ? m.skins_starting_side : (m.skins_starting_side === 'CT' ? 'T' : 'CT');
+    const bucket = playerSide === 'CT' ? ct : t;
+    bucket.played++;
+    if (m.is_win) bucket.wins++;
+    else bucket.losses++;
+
+    // numTimesPicked = times the player's team got to choose their starting side
+    // The team that didn't pick the map gets to choose the side
+    const playerTeamChoseSide = m.faction === 'SHIRTS' ? m.picked_map != null : m.shirts_pick != null;
+    if (playerTeamChoseSide) bucket.numTimesPicked++;
+  }
+
+  return [
+    { side: 'CT', ...ct },
+    { side: 'T', ...t },
+  ];
+}

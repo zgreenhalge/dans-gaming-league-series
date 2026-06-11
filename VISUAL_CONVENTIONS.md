@@ -94,3 +94,25 @@ If you need a new hover/glow/accent treatment, ask first whether it's really a n
 row vs. image-card) or just a new *color* — the latter is almost always a `--lift-accent` override,
 not a new class. New semantic colors should become theme tokens (`--color-accent-*`), not inline
 hex values, so both themes stay correct automatically.
+
+## Dev-gate pattern
+
+Use the `<DevGate>` component (`src/components/DevGate.tsx`) to hide under-construction UI from
+production. It reads `NODE_ENV` itself — no props needed — and renders a dashed amber border with
+a small "DEV" badge in the corner so the section is obviously un-shipped in local dev.
+
+```tsx
+import DevGate from '@/components/DevGate';
+
+<DevGate className="mt-6">
+  {/* your under-construction UI */}
+</DevGate>
+```
+
+The `className` prop is forwarded to the wrapper `div` for spacing overrides (e.g. `mt-6`, `mt-10`).
+
+**To launch a dev-gated section:** delete the `<DevGate>` wrapper and keep its children.
+That's the entire checklist — no other changes needed.
+
+Never use `.dev-gate` directly on production-visible content; always go through `<DevGate>` so the
+env check is inseparable from the visual indicator.
