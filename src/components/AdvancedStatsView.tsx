@@ -480,7 +480,7 @@ export function AdvancedStatsView({ rows, matches, singleMap = false }: { rows: 
       {matches && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Map Pick/Ban Stats */}
-          <div>
+          {!singleMap && <div>
             <div className="flex items-baseline justify-between mb-3">
               <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban stats</span>
             </div>
@@ -514,7 +514,7 @@ export function AdvancedStatsView({ rows, matches, singleMap = false }: { rows: 
                 </table>
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Per-Side Stats */}
           <div>
