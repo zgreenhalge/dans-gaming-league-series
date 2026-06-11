@@ -170,8 +170,8 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
 
   // ── Callout card data ─────────────────────────────────────────────────────
   const { bestTeammate, worstTeammate, bestOpponent, worstOpponent } = useMemo(() => {
-    const b2bSorted = [...b2bRows].sort((a, b) => b.wr - a.wr);
-    const h2hSorted = [...h2hRows].sort((a, b) => b.wr - a.wr);
+    const b2bSorted = [...b2bRows].sort((a, b) => duoScore(b._raw) - duoScore(a._raw));
+    const h2hSorted = [...h2hRows].sort((a, b) => rivalScore(b._raw) - rivalScore(a._raw));
     const pick = (row: (typeof b2bRows)[number] | (typeof h2hRows)[number] | undefined) =>
       row ? { player: playersById.get(row.other), wr: row.wr } : null;
     return {
@@ -180,7 +180,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
       bestOpponent: pick(h2hSorted[0]),
       worstOpponent: pick(h2hSorted[h2hSorted.length - 1]),
     };
-  }, [b2bRows, h2hRows, playersById]);
+  }, [b2bRows, h2hRows, playersById, duoScore, rivalScore]);
 
   // ── Sorting ───────────────────────────────────────────────────────────────
   const sortedH2h = useMemo(() => {
