@@ -105,6 +105,10 @@ function normalizeRow(r: LeaderboardRow): LeaderboardRow {
 interface PerPlayerStats {
   assists: number;
   rounds_won: number;
+  kills_in_wins: number;
+  deaths_in_wins: number;
+  kills_in_losses: number;
+  deaths_in_losses: number;
 }
 
 /**
@@ -118,7 +122,7 @@ async function getPerPlayerSeasonStats(): Promise<Map<string, PerPlayerStats>> {
     { data: matches, error: mErr },
     { data: weeks, error: wErr },
   ] = await Promise.all([
-    supabase.from('player_match_stats').select('player_id, assists, rounds_won, match_id'),
+    supabase.from('player_match_stats').select('player_id, assists, rounds_won, match_id, kills, deaths, is_win'),
     supabase.from('matches').select('id, week_id, is_playoff_game, final_score'),
     supabase.from('weeks').select('id, season_id'),
   ]);
@@ -148,14 +152,24 @@ async function getPerPlayerSeasonStats(): Promise<Map<string, PerPlayerStats>> {
     assists: number | null;
     rounds_won: number | null;
     match_id: number;
+    kills: number | null;
+    deaths: number | null;
+    is_win: boolean | null;
   }[]) {
     const sid = seasonOfMatch.get(s.match_id);
     if (sid == null) continue;
     const key = `${sid}:${s.player_id}`;
-    const prev = out.get(key) ?? { assists: 0, rounds_won: 0 };
+    const prev = out.get(key) ?? { assists: 0, rounds_won: 0, kills_in_wins: 0, deaths_in_wins: 0, kills_in_losses: 0, deaths_in_losses: 0 };
+    const win = !!s.is_win;
+    const k = s.kills ?? 0;
+    const d = s.deaths ?? 0;
     out.set(key, {
       assists: prev.assists + (s.assists ?? 0),
       rounds_won: prev.rounds_won + (s.rounds_won ?? 0),
+      kills_in_wins: prev.kills_in_wins + (win ? k : 0),
+      deaths_in_wins: prev.deaths_in_wins + (win ? d : 0),
+      kills_in_losses: prev.kills_in_losses + (win ? 0 : k),
+      deaths_in_losses: prev.deaths_in_losses + (win ? 0 : d),
     });
   }
   return out;
@@ -225,6 +239,10 @@ function zeroStatRows(
     total_rounds_won: 0,
     rwr_percentage: 0,
     overall_adr: 0,
+    kills_in_wins: 0,
+    deaths_in_wins: 0,
+    kills_in_losses: 0,
+    deaths_in_losses: 0,
   }));
 }
 
@@ -786,6 +804,10 @@ export async function getSeasonLeaderboard(
       total_assists: ps?.assists ?? 0,
       total_rounds_won,
       rwr_percentage: total_rounds_played > 0 ? (total_rounds_won / total_rounds_played) * 100 : 0,
+      kills_in_wins: ps?.kills_in_wins ?? 0,
+      deaths_in_wins: ps?.deaths_in_wins ?? 0,
+      kills_in_losses: ps?.kills_in_losses ?? 0,
+      deaths_in_losses: ps?.deaths_in_losses ?? 0,
     };
   });
 
@@ -834,6 +856,10 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
     total_damage: number;
     total_rounds_played: number;
     total_rounds_won: number;
+    kills_in_wins: number;
+    deaths_in_wins: number;
+    kills_in_losses: number;
+    deaths_in_losses: number;
     seasons: Set<number>;
   };
   const byId = new Map<number, Agg>();
@@ -854,6 +880,10 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
         total_damage: 0,
         total_rounds_played: 0,
         total_rounds_won: 0,
+        kills_in_wins: 0,
+        deaths_in_wins: 0,
+        kills_in_losses: 0,
+        deaths_in_losses: 0,
         seasons: new Set<number>(),
       } as Agg);
     const ps = perPlayer.get(`${r.season_id}:${r.player_id}`);
@@ -866,6 +896,10 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
     agg.total_damage += r.total_damage;
     agg.total_rounds_played += r.total_rounds_played;
     agg.total_rounds_won += ps?.rounds_won ?? 0;
+    agg.kills_in_wins += ps?.kills_in_wins ?? 0;
+    agg.deaths_in_wins += ps?.deaths_in_wins ?? 0;
+    agg.kills_in_losses += ps?.kills_in_losses ?? 0;
+    agg.deaths_in_losses += ps?.deaths_in_losses ?? 0;
     agg.seasons.add(r.season_id);
     byName.set(r.player_name, agg);
     byId.set(r.player_id, agg);
@@ -890,6 +924,10 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
         total_damage: 0,
         total_rounds_played: 0,
         total_rounds_won: 0,
+        kills_in_wins: 0,
+        deaths_in_wins: 0,
+        kills_in_losses: 0,
+        deaths_in_losses: 0,
         seasons: new Set(),
       };
       byName.set(player.name, agg);
@@ -918,6 +956,10 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
       rwr_percentage: a.total_rounds_played > 0 ? (a.total_rounds_won / a.total_rounds_played) * 100 : 0,
       overall_adr:
         a.total_rounds_played > 0 ? a.total_damage / a.total_rounds_played : 0,
+      kills_in_wins: a.kills_in_wins,
+      deaths_in_wins: a.deaths_in_wins,
+      kills_in_losses: a.kills_in_losses,
+      deaths_in_losses: a.deaths_in_losses,
     });
   }
   return out.sort(canonicalSort);
@@ -936,6 +978,10 @@ function aggToRow(
     total_damage: number;
     total_rounds_played: number;
     total_rounds_won: number;
+    kills_in_wins: number;
+    deaths_in_wins: number;
+    kills_in_losses: number;
+    deaths_in_losses: number;
   },
   season_id: number,
 ): LeaderboardRowWithId {
@@ -968,6 +1014,10 @@ function aggToRow(
       agg.total_rounds_played > 0
         ? agg.total_damage / agg.total_rounds_played
         : 0,
+    kills_in_wins: agg.kills_in_wins,
+    deaths_in_wins: agg.deaths_in_wins,
+    kills_in_losses: agg.kills_in_losses,
+    deaths_in_losses: agg.deaths_in_losses,
   };
 }
 
@@ -1046,6 +1096,10 @@ export async function getGauntletStats(): Promise<{
     total_damage: number;
     total_rounds_played: number;
     total_rounds_won: number;
+    kills_in_wins: number;
+    deaths_in_wins: number;
+    kills_in_losses: number;
+    deaths_in_losses: number;
   };
 
   const bySeasonPlayer = new Map<string, Agg>();
@@ -1068,6 +1122,10 @@ export async function getGauntletStats(): Promise<{
       total_damage: 0,
       total_rounds_played: 0,
       total_rounds_won: 0,
+      kills_in_wins: 0,
+      deaths_in_wins: 0,
+      kills_in_losses: 0,
+      deaths_in_losses: 0,
     };
     agg.matches_played += 1;
     agg.matches_won += s.is_win ? 1 : 0;
@@ -1078,6 +1136,10 @@ export async function getGauntletStats(): Promise<{
     agg.total_damage += s.damage;
     agg.total_rounds_played += s.rounds_played;
     agg.total_rounds_won += s.rounds_won;
+    agg.kills_in_wins += s.is_win ? s.kills : 0;
+    agg.deaths_in_wins += s.is_win ? s.deaths : 0;
+    agg.kills_in_losses += s.is_win ? 0 : s.kills;
+    agg.deaths_in_losses += s.is_win ? 0 : s.deaths;
     bySeasonPlayer.set(key, agg);
   }
 
@@ -1101,6 +1163,10 @@ export async function getGauntletStats(): Promise<{
       prev.total_damage += agg.total_damage;
       prev.total_rounds_played += agg.total_rounds_played;
       prev.total_rounds_won += agg.total_rounds_won;
+      prev.kills_in_wins += agg.kills_in_wins;
+      prev.deaths_in_wins += agg.deaths_in_wins;
+      prev.kills_in_losses += agg.kills_in_losses;
+      prev.deaths_in_losses += agg.deaths_in_losses;
     }
     careerByPlayer.set(agg.player_id, prev);
   }
@@ -1197,6 +1263,10 @@ export async function getGauntletSeasonLeaderboard(
     total_damage: number;
     total_rounds_played: number;
     total_rounds_won: number;
+    kills_in_wins: number;
+    deaths_in_wins: number;
+    kills_in_losses: number;
+    deaths_in_losses: number;
   };
 
   const byPlayer = new Map<number, Agg>();
@@ -1215,6 +1285,10 @@ export async function getGauntletSeasonLeaderboard(
       total_damage: 0,
       total_rounds_played: 0,
       total_rounds_won: 0,
+      kills_in_wins: 0,
+      deaths_in_wins: 0,
+      kills_in_losses: 0,
+      deaths_in_losses: 0,
     };
     agg.matches_played += 1;
     agg.matches_won += s.is_win ? 1 : 0;
@@ -1225,6 +1299,10 @@ export async function getGauntletSeasonLeaderboard(
     agg.total_damage += s.damage;
     agg.total_rounds_played += s.rounds_played;
     agg.total_rounds_won += s.rounds_won;
+    agg.kills_in_wins += s.is_win ? s.kills : 0;
+    agg.deaths_in_wins += s.is_win ? s.deaths : 0;
+    agg.kills_in_losses += s.is_win ? 0 : s.kills;
+    agg.deaths_in_losses += s.is_win ? 0 : s.deaths;
     byPlayer.set(s.player_id, agg);
   }
 
@@ -1652,6 +1730,9 @@ export interface MapMatchRow {
   final_score: string | null;
   shirts_stats: MapPlayerStat[];
   skins_stats: MapPlayerStat[];
+  picked_map: string | null;
+  shirts_pick: string | null;
+  skins_starting_side: 'CT' | 'T' | null;
 }
 
 export interface MapDetail {
@@ -1689,6 +1770,10 @@ export async function getAllLeaderboards(): Promise<
       total_assists: ps?.assists ?? 0,
       total_rounds_won,
       rwr_percentage: total_rounds_played > 0 ? (total_rounds_won / total_rounds_played) * 100 : 0,
+      kills_in_wins: ps?.kills_in_wins ?? 0,
+      deaths_in_wins: ps?.deaths_in_wins ?? 0,
+      kills_in_losses: ps?.kills_in_losses ?? 0,
+      deaths_in_losses: ps?.deaths_in_losses ?? 0,
     };
     const list = out.get(r.season_id) ?? [];
     list.push(withId);
@@ -1727,6 +1812,7 @@ type RawMatch = {
   skins_ban1: string | null;
   skins_ban2: string | null;
   is_playoff_game: boolean;
+  skins_starting_side: 'CT' | 'T' | null;
 };
 
 type RawWeek = { id: number; season_id: number; week_number: number };
@@ -1739,7 +1825,7 @@ async function fetchMapRawData(): Promise<{
 }> {
   const [{ data: matches, error: mErr }, { data: weeks, error: wErr }, { data: seasons, error: sErr }] =
     await Promise.all([
-      supabase.from('matches').select('id, week_id, match_number, final_score, shirts_pick, picked_map, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game'),
+      supabase.from('matches').select('id, week_id, match_number, final_score, shirts_pick, picked_map, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game, skins_starting_side'),
       supabase.from('weeks').select('id, season_id, week_number'),
       supabase.from('seasons').select('id, name, is_gauntlet, map_pool'),
     ]);
@@ -2073,6 +2159,9 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
         final_score: m.final_score,
         shirts_stats: roster.shirts,
         skins_stats: roster.skins,
+        picked_map: m.picked_map,
+        shirts_pick: m.shirts_pick,
+        skins_starting_side: m.skins_starting_side,
       };
     })
     .filter((r): r is MapMatchRow => r !== null)
@@ -2088,6 +2177,8 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
     matches_played: number; matches_won: number; matches_lost: number;
     total_kills: number; total_assists: number; total_deaths: number;
     total_damage: number; total_rounds_played: number; total_rounds_won: number;
+    kills_in_wins: number; deaths_in_wins: number;
+    kills_in_losses: number; deaths_in_losses: number;
   };
   const byPlayer = new Map<number, Agg>();
   for (const s of statRows) {
@@ -2098,6 +2189,8 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
       matches_played: 0, matches_won: 0, matches_lost: 0,
       total_kills: 0, total_assists: 0, total_deaths: 0,
       total_damage: 0, total_rounds_played: 0, total_rounds_won: 0,
+      kills_in_wins: 0, deaths_in_wins: 0,
+      kills_in_losses: 0, deaths_in_losses: 0,
     };
     agg.matches_played += 1;
     agg.matches_won += s.is_win ? 1 : 0;
@@ -2108,6 +2201,10 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
     agg.total_damage += s.damage ?? 0;
     agg.total_rounds_played += s.rounds_played ?? 0;
     agg.total_rounds_won += s.rounds_won ?? 0;
+    agg.kills_in_wins += s.is_win ? s.kills : 0;
+    agg.deaths_in_wins += s.is_win ? s.deaths : 0;
+    agg.kills_in_losses += s.is_win ? 0 : s.kills;
+    agg.deaths_in_losses += s.is_win ? 0 : s.deaths;
     byPlayer.set(s.player_id, agg);
   }
 
@@ -2131,6 +2228,10 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
       total_rounds_won: rw,
       rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
       overall_adr: rp > 0 ? a.total_damage / rp : 0,
+      kills_in_wins: a.kills_in_wins,
+      deaths_in_wins: a.deaths_in_wins,
+      kills_in_losses: a.kills_in_losses,
+      deaths_in_losses: a.deaths_in_losses,
     };
   }).sort(canonicalSort);
 

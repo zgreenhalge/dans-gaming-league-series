@@ -67,7 +67,7 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
     }
   }
 
-  return Array.from(byPlayer.values()).map((a) => {
+  return (Array.from(byPlayer.values()).map((a) => {
     const rp = a.total_rounds_played;
     const rw = a.total_rounds_won;
     return {
@@ -87,8 +87,12 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
       total_rounds_won: rw,
       rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
       overall_adr: rp > 0 ? a.total_damage / rp : 0,
+      kills_in_wins: 0,
+      deaths_in_wins: 0,
+      kills_in_losses: 0,
+      deaths_in_losses: 0,
     };
-  }).sort(canonicalSort);
+  }).sort(canonicalSort)) as unknown as LeaderboardRowWithId[];
 }
 
 export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; h2hData: H2HData }) {
@@ -157,7 +161,7 @@ export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; 
         filteredPlayerStats.length === 0 ? (
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No data for this selection.</div>
         ) : (
-          <AdvancedStatsView rows={filteredPlayerStats} />
+          <AdvancedStatsView rows={filteredPlayerStats} matches={filteredMatches as any} />
         )
       )}
 

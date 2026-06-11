@@ -87,6 +87,14 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const displayRounds = myGamesOnly ? myRounds : rounds;
   const displayCount = isGauntlet ? displayRounds.length : displaySchedule.length;
 
+  const allMatches = useMemo(() => {
+    if (isGauntlet) {
+      return displayRounds.flatMap((r) => r.matches);
+    } else {
+      return displaySchedule.flatMap((w) => w.matches);
+    }
+  }, [isGauntlet, displayRounds, displaySchedule]);
+
   const allOpen = isGauntlet
     ? displayRounds.length > 0 && displayRounds.every((r) => openItems.has(r.round_number))
     : displaySchedule.length > 0 && displaySchedule.every((w) => openItems.has(w.id));
@@ -238,7 +246,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
             No stats available yet.
           </div>
         ) : (
-          <AdvancedStatsView rows={leaderboard} />
+          <AdvancedStatsView rows={leaderboard} matches={allMatches as any} />
         )
       )}
 

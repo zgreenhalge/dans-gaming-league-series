@@ -87,6 +87,10 @@ export interface LeaderboardRow {
 
 export interface LeaderboardRowWithId extends LeaderboardRow {
   steam_avatar_url?: string | null;
+  kills_in_wins: number;
+  deaths_in_wins: number;
+  kills_in_losses: number;
+  deaths_in_losses: number;
 }
 
 export interface MapSeasonStat {

@@ -676,6 +676,10 @@ export default function PlayerView({
                     total_rounds_won: a.rounds_won,
                     rwr_percentage: a.rwr,
                     overall_adr: a.adr,
+                    kills_in_wins: 0,
+                    deaths_in_wins: 0,
+                    kills_in_losses: 0,
+                    deaths_in_losses: 0,
                   };
                 })}
               />
