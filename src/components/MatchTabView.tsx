@@ -8,7 +8,7 @@ import { YouBadge } from '@/components/YouBadge';
 import EnterResultsModal, { type InitialPlayerStat } from '@/components/EnterResultsModal';
 import ScreenshotViewer from '@/components/ScreenshotViewer';
 import ScoutingReport from '@/components/ScoutingReport';
-import { RecordingViewer, SubmitRecordingURL } from '@/components/RecordingViewer';
+import { RecordingViewer, RecordingUrlForm } from '@/components/RecordingViewer';
 import type { MatchStatRow, MatchScoutingData, H2HData } from '@/lib/queries';
 
 type Faction = 'CT' | 'T' | null;
@@ -285,7 +285,7 @@ export default function MatchTabView({
       )}
 
       {tab === 'recording' && (
-        <SubmitRecordingURL matchId={matchId} />
+        <RecordingUrlForm matchId={matchId} />
       )}
     </>
   );
