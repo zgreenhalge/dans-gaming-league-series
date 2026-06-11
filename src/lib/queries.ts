@@ -1195,13 +1195,12 @@ export interface GauntletPlayerStat {
 export interface GauntletMatch {
   id: number;
   match_number: number;
-  map: string | null;
   final_score: string | null;
   picked_map: string | null;
   shirts_pick: string | null;
   skins_starting_side: 'CT' | 'T' | null;
-  shirts: GauntletPlayerStat[];
-  skins: GauntletPlayerStat[];
+  shirts_stats: GauntletPlayerStat[];
+  skins_stats: GauntletPlayerStat[];
 }
 
 export interface GauntletRound {
@@ -1395,13 +1394,12 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
       return {
         id: m.id,
         match_number: m.match_number,
-        map: m.shirts_pick ?? m.picked_map,
         final_score: m.final_score,
         picked_map: m.picked_map,
         shirts_pick: m.shirts_pick,
         skins_starting_side: m.skins_starting_side,
-        shirts: allStats.filter((s) => s.faction === 'SHIRTS'),
-        skins: allStats.filter((s) => s.faction === 'SKINS'),
+        shirts_stats: allStats.filter((s) => s.faction === 'SHIRTS'),
+        skins_stats: allStats.filter((s) => s.faction === 'SKINS'),
       };
     });
     rounds.push({ round_number: week.week_number, matches: gauntletMatches });

@@ -12,7 +12,7 @@ function computeGauntletRecords(matches: GauntletMatch[]) {
   >();
   for (const m of matches) {
     if (!isPlayedScore(m.final_score)) continue;
-    for (const p of [...m.shirts, ...m.skins]) {
+    for (const p of [...m.shirts_stats, ...m.skins_stats]) {
       const prev = records.get(p.player_id) ?? {
         player_id: p.player_id,
         name: p.player_name,
@@ -51,7 +51,7 @@ function GauntletRoundCard({
   for (const r of allRounds) {
     if (r.round_number <= round.round_number) continue;
     for (const m of r.matches) {
-      for (const p of [...m.shirts, ...m.skins]) {
+      for (const p of [...m.shirts_stats, ...m.skins_stats]) {
         playerIdsInLaterRounds.add(p.player_id);
       }
     }
@@ -80,13 +80,13 @@ function GauntletRoundCard({
               <MatchCard
                 key={m.id}
                 href={`/matches/${m.id}`}
-                map={m.map}
+                map={m.shirts_pick ?? m.picked_map}
                 label={{ type: 'game', gameNumber: i + 1 }}
                 right={played ? { type: 'score', score: m.final_score! } : { type: 'pending' }}
-                shirtsStats={m.shirts}
-                skinsStats={m.skins}
-                shirtsFallback={m.shirts.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
-                skinsFallback={m.skins.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
+                shirtsStats={m.shirts_stats}
+                skinsStats={m.skins_stats}
+                shirtsFallback={m.shirts_stats.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
+                skinsFallback={m.skins_stats.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
                 currentPlayerId={currentPlayerId}
               />
             );

@@ -19,7 +19,7 @@ function computeFinalRoundPlayerStats(matches: GauntletMatch[]): Map<number, { r
     const scores = parseScore(m.final_score);
     if (!scores) continue;
     const totalRounds = scores.shirts + scores.skins;
-    for (const p of [...m.shirts, ...m.skins]) {
+    for (const p of [...m.shirts_stats, ...m.skins_stats]) {
       const prev = agg.get(p.player_id) ?? { rounds_won: 0, rounds_played: 0, total_damage: 0 };
       prev.rounds_won += p.faction === 'SHIRTS' ? scores.shirts : scores.skins;
       prev.rounds_played += totalRounds;
@@ -40,7 +40,7 @@ function computeRecords(matches: GauntletMatch[]) {
   const records = new Map<number, { player_id: number; name: string; wins: number; losses: number }>();
   for (const m of matches) {
     if (!isPlayedScore(m.final_score)) continue;
-    for (const p of [...m.shirts, ...m.skins]) {
+    for (const p of [...m.shirts_stats, ...m.skins_stats]) {
       const prev = records.get(p.player_id) ?? { player_id: p.player_id, name: p.player_name, wins: 0, losses: 0 };
       p.is_win ? prev.wins++ : prev.losses++;
       records.set(p.player_id, prev);
