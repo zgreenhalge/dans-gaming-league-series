@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { PlayerHistoryRow, TrophyEntry, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
+import { aggregateMapPickBanStats, aggregatePerSideStats, type MapPickBanStat, type PerSideStat } from '@/lib/mapSideStats';
 import { MatchCard } from './MatchCard';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
@@ -94,23 +95,6 @@ interface MapAgg {
   adr: number;
 }
 
-interface MapPickBanAgg {
-  map: string;
-  picked: number;
-  banned: number;
-  notPicked: number;
-  ctPicked: number;
-  tPicked: number;
-  pickedAndWon: number;
-}
-
-interface PerSideAgg {
-  side: 'CT' | 'T';
-  numTimesPicked: number;
-  wins: number;
-  losses: number;
-}
-
 function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
   const buckets = new Map<string, { display: string; rows: PlayerHistoryRow[] }>();
   for (const r of rows) {
@@ -127,93 +111,6 @@ function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
     out.push({ map: display, wins: a.wins, losses: a.losses, wr: a.wr, adr: a.adr });
   }
   return out.sort((a, b) => b.wr - a.wr || b.adr - a.adr);
-}
-
-function aggregateMapPickBanStats(rows: PlayerHistoryRow[]): MapPickBanAgg[] {
-  const buckets = new Map<string, PlayerHistoryRow[]>();
-  for (const r of rows) {
-    if (!isPlayed(r) || !r.picked_map) continue;
-    const key = r.picked_map.trim().toLowerCase();
-    const list = buckets.get(key) ?? [];
-    list.push(r);
-    buckets.set(key, list);
-  }
-
-  const out: MapPickBanAgg[] = [];
-  for (const [key, matches] of buckets) {
-    const display = matches[0]?.picked_map ?? key;
-    let picked = 0;
-    let ctPicked = 0;
-    let tPicked = 0;
-    let pickedAndWon = 0;
-
-    for (const m of matches) {
-      picked++;
-
-      // Count sides: skins_starting_side indicates which side skins starts on
-      if (m.skins_starting_side === 'CT') {
-        ctPicked++;
-      } else if (m.skins_starting_side === 'T') {
-        tPicked++;
-      }
-
-      // Picked and won: if the team that picked the map won
-      const shirtsPicked = m.shirts_pick === m.picked_map;
-      const teamThatPicked = shirtsPicked ? 'SHIRTS' : 'SKINS';
-      // Check if this match's faction won (won't work for league-wide, but assuming player context)
-      if (m.faction === teamThatPicked && m.is_win) {
-        pickedAndWon++;
-      }
-    }
-
-    out.push({
-      map: display,
-      picked,
-      banned: 0, // Would need ban data tracking
-      notPicked: 0, // Would need map pool from season
-      ctPicked,
-      tPicked,
-      pickedAndWon,
-    });
-  }
-
-  return out.sort((a, b) => b.picked - a.picked);
-}
-
-function aggregatePerSideStats(rows: PlayerHistoryRow[]): PerSideAgg[] {
-  const playedRows = rows.filter(isPlayed);
-  const ctStats = { wins: 0, losses: 0 };
-  const tStats = { wins: 0, losses: 0 };
-
-  for (const r of playedRows) {
-    if (!r.skins_starting_side) continue;
-    // skins_starting_side indicates the side skins starts on
-    // Map this to a "picked side" (the side chosen by the team that didn't pick the map)
-    const shirtsPicked = r.shirts_pick === r.picked_map;
-    const pickedSide = shirtsPicked ? r.skins_starting_side : (r.skins_starting_side === 'CT' ? 'T' : 'CT');
-
-    const stats = pickedSide === 'CT' ? ctStats : tStats;
-    if (r.is_win) {
-      stats.wins++;
-    } else {
-      stats.losses++;
-    }
-  }
-
-  return [
-    {
-      side: 'CT',
-      numTimesPicked: ctStats.wins + ctStats.losses,
-      wins: ctStats.wins,
-      losses: ctStats.losses,
-    },
-    {
-      side: 'T',
-      numTimesPicked: tStats.wins + tStats.losses,
-      wins: tStats.wins,
-      losses: tStats.losses,
-    },
-  ];
 }
 
 /** Percentage of `all` strictly below `value` — "you're ahead of N% of the league". */
