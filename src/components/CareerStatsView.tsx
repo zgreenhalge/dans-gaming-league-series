@@ -5,13 +5,14 @@ import { useSearchParams } from 'next/navigation';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import H2HSection from './H2HSection';
+import { AdvancedStatsView } from './AdvancedStatsView';
 import { buildRegularToGauntletMap, seasonTitle, tabCls } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { TrophyEntry, H2HData } from '@/lib/queries';
 import type { H2HPair } from './H2HMatrix';
 
 type Filter = 'career' | number;
-type Tab = 'leaderboard' | 'h2h';
+type Tab = 'leaderboard' | 'stats' | 'h2h';
 
 function mergeRows(
   a: LeaderboardRowWithId[],
@@ -117,14 +118,10 @@ export default function CareerStatsView({
       if (includeRegular) return careerRows;
       return gauntletCareerRows;
     }
-    const reg = includeRegular
-      ? (bySeason[filter] ?? []).filter((r) => r.total_rounds_played > 0)
-      : [];
+    const reg = includeRegular ? (bySeason[filter] ?? []) : [];
     const pairedGntId = regularToGauntlet.get(filter);
     const gnt = includeGauntlet
-      ? ((pairedGntId ? gauntletBySeason[pairedGntId] : gauntletBySeason[filter]) ?? []).filter(
-          (r) => r.total_rounds_played > 0,
-        )
+      ? (pairedGntId ? gauntletBySeason[pairedGntId] : gauntletBySeason[filter]) ?? []
       : [];
     if (reg.length > 0 && gnt.length > 0) return mergeRows(reg, gnt);
     return reg.length > 0 ? reg : gnt;
@@ -152,11 +149,14 @@ export default function CareerStatsView({
           <button className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
             Leaderboard
           </button>
+          <button className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
+            Stats
+          </button>
           <button className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
             H2H
           </button>
         </div>
-        {tab === 'leaderboard' && (
+        {(tab === 'leaderboard' || tab === 'stats') && (
           <div className="flex items-center gap-5 pb-3">
             <SeasonFilter
               filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }}
@@ -182,7 +182,7 @@ export default function CareerStatsView({
         )}
       </div>
 
-      {tab === 'leaderboard' ? (
+      {tab === 'leaderboard' && (
         rows.length === 0 ? (
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
             No data for this selection.
@@ -190,7 +190,19 @@ export default function CareerStatsView({
         ) : (
           <LeaderboardTable rows={rows} showMedals={false} trophyCounts={trophyCounts} />
         )
-      ) : (
+      )}
+
+      {tab === 'stats' && (
+        rows.length === 0 ? (
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+            No data for this selection.
+          </div>
+        ) : (
+          <AdvancedStatsView rows={rows} />
+        )
+      )}
+
+      {tab === 'h2h' && (
         <H2HSection data={h2hData} initialPair={urlInitialPair} />
       )}
     </>

@@ -6,11 +6,12 @@ import ScheduleList from './ScheduleList';
 import GauntletStandings from './GauntletStandings';
 import GauntletRoundsList from './GauntletRoundsList';
 import H2HSection from './H2HSection';
+import { AdvancedStatsView } from './AdvancedStatsView';
 import type { WeekWithMatches, GauntletRound, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { isPlayedScore, tabCls } from '@/lib/util';
+import { isPlayedScore, tabCls, canonicalGauntletRankMap } from '@/lib/util';
 
-type Tab = 'leaderboard' | 'schedule' | 'h2h';
+type Tab = 'leaderboard' | 'schedule' | 'h2h' | 'stats';
 
 function playerInMatch(
   match: { shirts: { player_id: number }[]; skins: { player_id: number }[] },
@@ -39,6 +40,11 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const schedule = props.kind === 'regular' ? props.schedule : [];
   const rounds = props.kind === 'gauntlet' ? props.rounds : [];
   const seasonStartDate = props.kind === 'regular' ? props.seasonStartDate : null;
+
+  const gauntletRanking = useMemo(
+    () => (isGauntlet ? canonicalGauntletRankMap(rounds) : undefined),
+    [isGauntlet, rounds],
+  );
 
   const defaultOpenSet = useMemo<Set<number>>(() => {
     if (isGauntlet) {
@@ -145,6 +151,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'leaderboard', label: 'Leaderboard' },
+    { key: 'stats', label: 'Stats' },
     { key: 'h2h', label: 'H2H' },
     { key: 'schedule', label: isGauntlet ? 'Rounds' : 'Schedule' },
   ];
@@ -187,6 +194,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
               rows={leaderboard}
               showMedals={seasonStatus === 'ARCHIVED'}
               playoffZones={!isGauntlet && seasonStatus === 'ACTIVE' ? { top: 2, bottom: 4 } : undefined}
+              canonicalRanking={gauntletRanking}
             />
           )}
         </>
@@ -221,6 +229,16 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
               currentPlayerId={currentPlayerId}
             />
           )
+        )
+      )}
+
+      {tab === 'stats' && (
+        leaderboard.length === 0 ? (
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+            No stats available yet.
+          </div>
+        ) : (
+          <AdvancedStatsView rows={leaderboard} />
         )
       )}
 

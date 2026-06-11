@@ -27,6 +27,14 @@ so you don't have to reverse-engineer them from scratch each time.
     `player_season_leaderboard` view excludes them entirely — gauntlet stats must be computed
     directly from `player_match_stats` (`getGauntletStats`, `getGauntletSeasonLeaderboard`,
     `getGauntletRounds`)
+  - **Canonical gauntlet ranking** — the official finish order for a completed gauntlet.
+    Matches how the podium (`GauntletStandings`) is determined:
+    1st = 2-0 in the final round; 2nd/3rd = 1-1 players ordered by final-round RWR% (desc);
+    4th = 0-2 in the final round; 5th+ = eliminated players sorted by latest round they played in
+    (later = better), tiebreak by wins in that round then RWR% in that round.
+    Implemented by `canonicalGauntletRankMap()` in `src/lib/util.ts`.
+    Use it anywhere gauntlet leaderboards are ranked — pass the result as `canonicalRanking`
+    to `LeaderboardTable`. Returns an empty map while the gauntlet is in progress.
 - **Regular ↔ gauntlet pairing** — each regular season has a companion gauntlet season (playoffs),
   matched **by name, not ID** (e.g. "Season 5" ↔ "Season 5 Gauntlet"). Always go through
   `extractSeasonNumber()` / `buildRegularToGauntletMap()` in `src/lib/util.ts`, or the
