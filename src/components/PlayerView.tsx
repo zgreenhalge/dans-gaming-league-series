@@ -408,7 +408,7 @@ export default function PlayerView({
   }, [filteredTrophies]);
 
   const playerTabs: { key: PlayerTab; label: string }[] = [
-    { key: 'stats', label: 'Stats' },
+    { key: 'stats', label: 'Overview' },
     { key: 'matches', label: `Matches${playedHistory.length > 0 ? ` (${playedHistory.length})` : ''}` },
     { key: 'matchups', label: 'H2H' },
   ];
