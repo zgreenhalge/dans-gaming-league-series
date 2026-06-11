@@ -1,8 +1,9 @@
 'use client';
 
-import type { DuoStats, H2HStats, ScoutingPlayer } from '@/lib/queries';
+import type { DuoStats, H2HStats, MapStat, ScoutingPlayer } from '@/lib/queries';
 import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
-import { toSentenceCase } from '@/lib/maps';
+import { mapImageFor, mapSlug, toSentenceCase } from '@/lib/maps';
+import Link from 'next/link';
 import { DuoDetail, RivalDetail } from './H2HDetail';
 
 function h2hHref(nameA: string, nameB: string, type: 'partner' | 'opponent'): string {
@@ -47,30 +48,122 @@ function EmptyPanel({ label }: { label: string }) {
   );
 }
 
-function MapIntelRow({ player, map }: { player: ScoutingPlayer; map: string }) {
-  const mapAdr = player.mapAdr;
-  if (mapAdr == null) {
-    return (
-      <div className="flex items-center gap-2.5 py-1.5 border-b border-[var(--color-border-tertiary)] last:border-b-0">
-        <span className="font-display font-semibold text-[12px] w-[80px] truncate">{player.name}</span>
-        <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">No data on {toSentenceCase(map)} yet</span>
-      </div>
-    );
-  }
-  const delta = mapAdr - player.adr;
-  const barColor = delta >= 5 ? 'var(--color-accent-green-fg)' : delta <= -5 ? 'var(--color-accent-red-fg)' : 'var(--color-ct)';
-  const deltaColor = delta >= 5 ? 'var(--color-accent-green-fg)' : delta <= -5 ? 'var(--color-accent-red-fg)' : 'var(--color-text-secondary)';
+function heatTitle(val: number, baseline: number, unit: string, decimals: number): string {
+  const d = val - baseline;
+  const abs = Math.abs(d).toFixed(decimals);
+  if (d > 0) return `+${abs}${unit} above career average`;
+  if (d < 0) return `${abs}${unit} below career average`;
+  return 'At career average';
+}
+
+function heatColor(val: number, baseline: number, threshold: number): string {
+  const d = val - baseline;
+  if (d >= threshold) return 'var(--color-accent-green-fg)';
+  if (d <= -threshold) return 'var(--color-accent-red-fg)';
+  return 'var(--color-text-primary)';
+}
+
+const TH = ({ children, right }: { children: React.ReactNode; right?: boolean }) => (
+  <th className={`tracked text-[9px] font-semibold text-[var(--color-text-secondary)] py-1.5 border-b border-[var(--color-border-tertiary)] ${right ? 'text-right px-3' : 'text-left px-4'}`}>
+    {children}
+  </th>
+);
+
+function MapCard({
+  mapName,
+  shirts,
+  skins,
+  expanded,
+}: {
+  mapName: string;
+  shirts: [ScoutingPlayer, ScoutingPlayer];
+  skins: [ScoutingPlayer, ScoutingPlayer];
+  expanded: boolean;
+}) {
+  const slug = mapSlug(mapName);
+  const displayName = toSentenceCase(mapName);
+  const mapImg = mapImageFor(mapName);
+
+  type Row = { player: ScoutingPlayer; stat: MapStat | null };
+  let rows: Row[] = [...shirts, ...skins].map((p) => ({ player: p, stat: p.mapStats[slug] ?? null }));
+  if (expanded) rows = [...rows].sort((a, b) => (b.stat?.adr ?? -1) - (a.stat?.adr ?? -1));
+
+  const withData = rows.filter((r): r is { player: ScoutingPlayer; stat: MapStat } => r.stat !== null);
+  const avg = withData.length > 0
+    ? {
+        adr: withData.reduce((s, r) => s + r.stat.adr, 0) / withData.length,
+        rwr: withData.reduce((s, r) => s + r.stat.rwr, 0) / withData.length,
+        avgKills: withData.reduce((s, r) => s + r.stat.avgKills, 0) / withData.length,
+        avgDeaths: withData.reduce((s, r) => s + r.stat.avgDeaths, 0) / withData.length,
+        avgAssists: withData.reduce((s, r) => s + r.stat.avgAssists, 0) / withData.length,
+      }
+    : null;
 
   return (
-    <div className="flex items-center gap-2.5 py-1.5 border-b border-[var(--color-border-tertiary)] last:border-b-0">
-      <span className="font-display font-semibold text-[12px] w-[80px] truncate">{player.name}</span>
-      <span className="flex-1 block h-[5px] bg-[rgba(255,255,255,0.08)]">
-        <span className="block h-full" style={{ width: `${Math.max(0, Math.min(100, (mapAdr / 130) * 100))}%`, background: barColor }} />
-      </span>
-      <span className="display-numeral text-[14px] w-[42px] text-right">{mapAdr.toFixed(0)}</span>
-      <span className="font-mono text-[10px] w-[38px] text-right" style={{ color: deltaColor }}>
-        {delta >= 0 ? '+' : ''}{delta.toFixed(0)}
-      </span>
+    <div className={`border bg-[var(--color-bg-primary)] ${expanded ? 'border-[var(--color-ct)]' : 'border-[var(--color-border-primary)]'}`}>
+      <Link
+        href={`/maps/${slug}`}
+        className="map-card-bg block px-4 py-5 border-b border-[var(--color-border-tertiary)] flex items-end justify-between gap-3"
+        style={mapImg ? ({ ['--map-img' as string]: `url("${mapImg}")` } as React.CSSProperties) : undefined}
+      >
+        <span className="map-text-scrim font-display font-bold text-[16px] text-[var(--color-text-primary)]">{displayName}</span>
+        {expanded && <span className="map-text-scrim tracked text-[9px] text-[var(--color-ct)]">PICKED</span>}
+      </Link>
+      <table className="w-full table-fixed text-[12px]">
+        <thead>
+          <tr>
+            <TH>Player</TH>
+            <TH right>W-L</TH>
+            {expanded && <><TH right>K</TH><TH right>A</TH><TH right>D</TH></>}
+            <TH right>RWR%</TH>
+            <TH right>ADR</TH>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ player, stat }) => (
+            <tr key={player.id} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer">
+              <td className="px-4 py-1.5 font-display font-semibold text-[12px] truncate">
+                <Link href={`/players/${player.id}`}>{player.name}</Link>
+              </td>
+              {stat === null ? (
+                <td colSpan={expanded ? 6 : 3} className="px-3 py-1.5 text-right font-mono text-[10px] text-[var(--color-text-secondary)]">No data</td>
+              ) : (
+                <>
+                  <td className="px-3 py-1.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{stat.wins}-{stat.losses}</td>
+                  {expanded && (
+                    <>
+                      <td className="px-3 py-1.5 text-right font-mono tnum">{Math.round(stat.avgKills)}</td>
+                      <td className="px-3 py-1.5 text-right font-mono tnum">{Math.round(stat.avgAssists)}</td>
+                      <td className="px-3 py-1.5 text-right font-mono tnum">{Math.round(stat.avgDeaths)}</td>
+                    </>
+                  )}
+                  <td className="px-3 py-1.5 text-right font-mono tnum" style={{ color: heatColor(stat.rwr * 100, player.rwr * 100, 3) }} title={heatTitle(stat.rwr * 100, player.rwr * 100, '%', 1)}>
+                    {(stat.rwr * 100).toFixed(1)}%
+                  </td>
+                  <td className="px-3 py-1.5 text-right font-mono tnum font-semibold" style={{ color: heatColor(stat.adr, player.adr, 5) }} title={heatTitle(stat.adr, player.adr, ' ADR', 1)}>
+                    {stat.adr.toFixed(1)}
+                  </td>
+                </>
+              )}
+            </tr>
+          ))}
+          {avg && (
+            <tr className="border-t border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)]">
+              <td className="px-4 py-1.5 tracked text-[9px] text-[var(--color-text-secondary)]">avg</td>
+              <td className="px-3 py-1.5 text-right font-mono text-[10px] text-[var(--color-text-secondary)]">—</td>
+              {expanded && (
+                <>
+                  <td className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{Math.round(avg.avgKills)}</td>
+                  <td className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{Math.round(avg.avgAssists)}</td>
+                  <td className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{Math.round(avg.avgDeaths)}</td>
+                </>
+              )}
+              <td className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{(avg.rwr * 100).toFixed(1)}%</td>
+              <td className="px-3 py-1.5 text-right font-mono tnum text-[11px] text-[var(--color-text-secondary)]">{avg.adr.toFixed(1)}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -89,6 +182,7 @@ export default function ScoutingReport({
   duos,
   rivals,
   matchMap,
+  mapPool,
   shirtsF,
   skinsF,
 }: {
@@ -97,6 +191,7 @@ export default function ScoutingReport({
   duos: DuoStats[];
   rivals: H2HStats[];
   matchMap: string | null;
+  mapPool: string[] | null;
   shirtsF: Faction;
   skinsF: Faction;
 }) {
@@ -155,23 +250,30 @@ export default function ScoutingReport({
         )}
       </div>
 
-      {matchMap && process.env.NODE_ENV === 'development' && (
-        <div className="mt-5 border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-          <div className="px-4 py-2.5 border-b border-[var(--color-border-tertiary)] flex items-baseline justify-between gap-3">
-            <span className="tracked text-[9px] text-[var(--color-text-secondary)]">
-              Map Intel — <span className="capitalize text-[var(--color-text-primary)]">{toSentenceCase(matchMap)}</span>
-            </span>
-            <span className="tracked text-[8px] text-[var(--color-text-secondary)]">ADR vs avg</span>
-          </div>
-          <div className="px-4 pt-1 pb-2">
-            {[...allPlayers]
-              .sort((a, b) => (b.mapAdr ?? -1) - (a.mapAdr ?? -1))
-              .map((p) => (
-                <MapIntelRow key={p.id} player={p} map={matchMap} />
+      {(() => {
+        const pickedSlug = matchMap ? mapSlug(matchMap) : null;
+        const pool = mapPool ?? (matchMap ? [matchMap] : null);
+        if (!pool) return null;
+        const mapsToShow = pickedSlug ? [matchMap!] : pool;
+        return (
+          <div className="mt-6 flex flex-col gap-2.5">
+            <div className="tracked text-[10px] mb-2" style={{ letterSpacing: '0.2em' }}>
+              <span className="text-[var(--color-ct)]">Map Intel</span>
+            </div>
+            <div className={pickedSlug ? 'flex flex-col gap-2.5' : 'grid grid-cols-2 lg:grid-cols-3 gap-2.5'}>
+              {mapsToShow.map((m) => (
+                <MapCard
+                  key={mapSlug(m)}
+                  mapName={m}
+                  shirts={shirts}
+                  skins={skins}
+                  expanded={pickedSlug !== null}
+                />
               ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

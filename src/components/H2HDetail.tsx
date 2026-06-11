@@ -347,8 +347,8 @@ export function RivalDetail({
         { player: a, stats: rival.aStats, color: 'var(--color-t)' },
         { player: b, stats: rival.bStats, color: 'var(--color-ct)' },
       ] as const).map(({ player, stats, color }) => (
-        <Link key={player.id} href={`/players/${player.id}`} className="relative z-[2] flex items-center gap-2 py-1.5 border-t border-[var(--color-border-tertiary)] hover:opacity-80 transition-opacity">
-          <PlayerAvatar name={player.name} imageUrl={player.steam_avatar_url} size="sm" />
+        <Link key={player.id} href={`/players/${player.id}`} className="lift-row relative z-[2] flex items-center gap-2 py-1.5 border-t border-[var(--color-border-tertiary)]">
+          <span className="ml-2 shrink-0"><PlayerAvatar name={player.name} imageUrl={player.steam_avatar_url} size="sm" /></span>
           <span className="flex-1 font-display font-semibold text-[12px] truncate" style={{ color }}>{player.name}</span>
           <span className={smCol}>{stats.kills}</span>
           <span className={smCol}>{stats.assists}</span>
