@@ -305,6 +305,7 @@ export default async function MatchPage({
           scoutingData={scoutingData}
           scoutingH2H={scoutingH2H}
           matchMap={map}
+          mapPool={season.map_pool}
         />
       </main>
     </div>

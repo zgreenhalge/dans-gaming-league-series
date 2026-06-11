@@ -1,14 +1,18 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-let _browserClient: SupabaseClient | null = null;
+type GlobalWithClients = typeof globalThis & {
+  __dgls_browserClient?: SupabaseClient;
+  __dgls_serverClient?: SupabaseClient;
+};
 
 export function getBrowserClient(): SupabaseClient {
-  if (_browserClient) return _browserClient;
+  const g = globalThis as GlobalWithClients;
+  if (g.__dgls_browserClient) return g.__dgls_browserClient;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  _browserClient = createClient(url, anon);
-  return _browserClient;
+  g.__dgls_browserClient = createClient(url, anon);
+  return g.__dgls_browserClient;
 }
 
 // Server-side Supabase client. Currently uses no-op cookie handlers because
@@ -20,10 +24,9 @@ export function getBrowserClient(): SupabaseClient {
 //             (those routes will no longer be ISR-cacheable, which is correct
 //             — authenticated reads/writes must hit the database per-request).
 //   - browser: createBrowserClient for client components that need auth state.
-let _client: SupabaseClient | null = null;
-
 function getClient(): SupabaseClient {
-  if (_client) return _client;
+  const g = globalThis as GlobalWithClients;
+  if (g.__dgls_serverClient) return g.__dgls_serverClient;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) {
@@ -31,7 +34,7 @@ function getClient(): SupabaseClient {
       'Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local (local) and Vercel project settings (deployed).',
     );
   }
-  _client = createServerClient(url, anon, {
+  g.__dgls_serverClient = createServerClient(url, anon, {
     cookies: {
       getAll() {
         return [];
@@ -41,7 +44,7 @@ function getClient(): SupabaseClient {
       },
     },
   });
-  return _client;
+  return g.__dgls_serverClient;
 }
 
 export const supabase = new Proxy({} as SupabaseClient, {

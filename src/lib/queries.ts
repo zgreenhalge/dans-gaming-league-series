@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { isPlayedScore, winRatePct } from './util';
+import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
 import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
 import type {
@@ -59,6 +59,7 @@ export interface PlayerHistoryRow extends PlayerMatchStat {
   is_gauntlet: boolean;
   map: string | null;
   final_score: string | null;
+  scheduled_at: string | null;
   shirts: { player_id: number; player_name: string }[];
   skins: { player_id: number; player_name: string }[];
   shirts_stats: RosterStat[];
@@ -389,24 +390,47 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   return { match: m, week: w, season: season as Season, stats: statRows };
 }
 
+export interface MapLeagueAvg {
+  wins: number;
+  losses: number;
+  adr: number;
+  avgKills: number;
+  avgDeaths: number;
+  avgAssists: number;
+}
+
+export interface MapStat {
+  games: number;
+  wins: number;
+  losses: number;
+  adr: number;
+  rwr: number;
+  avgKills: number;
+  avgDeaths: number;
+  avgAssists: number;
+}
+
 export interface ScoutingPlayer {
   id: number;
   name: string;
   steam_avatar_url: string | null;
-  /** Average ADR across this player's recent played matches. */
+  /** Average ADR across all played matches. */
   adr: number;
+  /** Average rounds-won rate across all played matches. */
+  rwr: number;
   /** Last-5 results, oldest → most recent. */
   form: boolean[];
   streak: { result: 'W' | 'L'; count: number } | null;
   /** Chronological ADR values (most recent ~6 matches), for the mini sparkline. */
   adrSeries: number[];
-  /** Average ADR on the upcoming match's map, or null if they haven't played it / map is unknown. */
-  mapAdr: number | null;
+  /** Per-map aggregates keyed by mapSlug. */
+  mapStats: Record<string, MapStat>;
 }
 
 export interface MatchScoutingData {
-  shirts: ScoutingPlayer[];
-  skins: ScoutingPlayer[];
+  shirts: [ScoutingPlayer, ScoutingPlayer];
+  skins: [ScoutingPlayer, ScoutingPlayer];
+  mapLeagueAverages: Record<string, MapLeagueAvg>;
 }
 
 /**
@@ -423,7 +447,6 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   if (mErr) throw mErr;
   if (!match) return null;
   const m = match as Match;
-  const matchMapKey = mapSlug((m.shirts_pick ?? m.picked_map) ?? '') || null;
 
   const { data: roster, error: rErr } = await supabase
     .from('player_match_stats')
@@ -434,11 +457,16 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   if (rosterRows.length === 0) return null;
   const playerIds = rosterRows.map((r) => r.player_id);
 
-  const [{ data: statRows, error: sErr }, players] = await Promise.all([
-    supabase.from('player_match_stats').select('*').in('player_id', playerIds),
+  // TODO: replace unbounded fetches with paginated queries — see GH issue #73.
+  const [{ data: statRows, error: sErr }, players, { data: leagueStatRows, error: lsErr }, { data: leagueMatchRows, error: lmErr }] = await Promise.all([
+    supabase.from('player_match_stats').select('*').in('player_id', playerIds).limit(10000),
     getPlayersById(),
+    supabase.from('player_match_stats').select('match_id, adr, kills, deaths, assists, is_win').gt('rounds_played', 0).limit(10000),
+    supabase.from('matches').select('id, final_score, shirts_pick, picked_map').limit(10000),
   ]);
   if (sErr) throw sErr;
+  if (lsErr) throw lsErr;
+  if (lmErr) throw lmErr;
   const allStats = (statRows ?? []) as PlayerMatchStat[];
 
   const matchIds = Array.from(new Set(allStats.map((s) => s.match_id)));
@@ -482,7 +510,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
       ); // chronological, oldest first
 
     const adrAll = rows.map((r) => r.stat.adr);
-    const adr = adrAll.length > 0 ? adrAll.reduce((s, v) => s + v, 0) / adrAll.length : 0;
+    const adr = adrAll.length > 0 ? avgOf(adrAll) : 0;
 
     const form = rows.slice(-5).map((r) => r.stat.is_win);
 
@@ -496,26 +524,84 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
 
     const adrSeries = rows.slice(-6).map((r) => r.stat.adr);
 
-    const mapRows = matchMapKey
-      ? rows.filter((r) => mapSlug((r.match.shirts_pick ?? r.match.picked_map) ?? '') === matchMapKey)
-      : [];
-    const mapAdr = mapRows.length > 0 ? mapRows.reduce((s, r) => s + r.stat.adr, 0) / mapRows.length : null;
+    const rwrAll = rows.map((r) => r.stat.rounds_won / Math.max(1, r.stat.rounds_played));
+    const rwr = rwrAll.length > 0 ? avgOf(rwrAll) : 0;
+
+    const mapGroups = new Map<string, typeof rows>();
+    for (const r of rows) {
+      const slug = mapSlug((r.match.shirts_pick ?? r.match.picked_map) ?? '');
+      if (!slug) continue;
+      if (!mapGroups.has(slug)) mapGroups.set(slug, []);
+      mapGroups.get(slug)!.push(r);
+    }
+    const mapStats: Record<string, MapStat> = {};
+    for (const [slug, mRows] of mapGroups) {
+      const n = mRows.length;
+      mapStats[slug] = {
+        games: n,
+        wins: mRows.filter((r) => r.stat.is_win).length,
+        losses: mRows.filter((r) => !r.stat.is_win).length,
+        adr: mRows.reduce((s, r) => s + r.stat.adr, 0) / n,
+        rwr: mRows.reduce((s, r) => s + r.stat.rounds_won / Math.max(1, r.stat.rounds_played), 0) / n,
+        avgKills: mRows.reduce((s, r) => s + r.stat.kills, 0) / n,
+        avgDeaths: mRows.reduce((s, r) => s + r.stat.deaths, 0) / n,
+        avgAssists: mRows.reduce((s, r) => s + r.stat.assists, 0) / n,
+      };
+    }
 
     return {
       id: playerId,
       name: p?.name ?? `#${playerId}`,
       steam_avatar_url: p?.steam_avatar_url ?? null,
       adr,
+      rwr,
       form,
       streak,
       adrSeries,
-      mapAdr,
+      mapStats,
     };
   }
 
+  type LeagueMatchRow = { id: number; final_score: string | null; shirts_pick: string | null; picked_map: string | null };
+  const leagueMatchById = new Map<number, LeagueMatchRow>();
+  for (const mm of (leagueMatchRows ?? []) as LeagueMatchRow[]) leagueMatchById.set(mm.id, mm);
+
+  type LeagueStatRow = { match_id: number; adr: number; kills: number; deaths: number; assists: number; is_win: boolean };
+  // Use Sets of match IDs for wins/losses rather than counting player-stat rows directly.
+  // Each Wingman match has 2 player rows per side, so row-counting would inflate W-L by 2×.
+  const leagueMapGroups = new Map<string, { adr: number[]; kills: number[]; deaths: number[]; assists: number[]; winMatches: Set<number>; lossMatches: Set<number> }>();
+  for (const s of (leagueStatRows ?? []) as LeagueStatRow[]) {
+    const mm = leagueMatchById.get(s.match_id);
+    if (!mm || !isPlayedScore(mm.final_score)) continue;
+    const slug = mapSlug((mm.shirts_pick ?? mm.picked_map) ?? '');
+    if (!slug) continue;
+    if (!leagueMapGroups.has(slug)) leagueMapGroups.set(slug, { adr: [], kills: [], deaths: [], assists: [], winMatches: new Set(), lossMatches: new Set() });
+    const g = leagueMapGroups.get(slug)!;
+    g.adr.push(s.adr);
+    g.kills.push(s.kills);
+    g.deaths.push(s.deaths);
+    g.assists.push(s.assists);
+    if (s.is_win) g.winMatches.add(s.match_id); else g.lossMatches.add(s.match_id);
+  }
+  const mapLeagueAverages: Record<string, MapLeagueAvg> = {};
+  for (const [slug, g] of leagueMapGroups) {
+    mapLeagueAverages[slug] = {
+      wins: g.winMatches.size,
+      losses: g.lossMatches.size,
+      adr: avgOf(g.adr),
+      avgKills: avgOf(g.kills),
+      avgDeaths: avgOf(g.deaths),
+      avgAssists: avgOf(g.assists),
+    };
+  }
+
+  const shirts = rosterRows.filter((r) => r.faction === 'SHIRTS').map((r) => buildPlayer(r.player_id));
+  const skins = rosterRows.filter((r) => r.faction === 'SKINS').map((r) => buildPlayer(r.player_id));
+  if (shirts.length !== 2 || skins.length !== 2) return null;
   return {
-    shirts: rosterRows.filter((r) => r.faction === 'SHIRTS').map((r) => buildPlayer(r.player_id)),
-    skins: rosterRows.filter((r) => r.faction === 'SKINS').map((r) => buildPlayer(r.player_id)),
+    shirts: shirts as [ScoutingPlayer, ScoutingPlayer],
+    skins: skins as [ScoutingPlayer, ScoutingPlayer],
+    mapLeagueAverages,
   };
 }
 
@@ -529,7 +615,8 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
   if (!player) return null;
 
   const [{ data: stats, error: sErr }, medalists] = await Promise.all([
-    supabase.from('player_match_stats').select('*').eq('player_id', playerId),
+    // TODO: replace with paginated fetch — see GH issue #73. Using a high limit for now.
+    supabase.from('player_match_stats').select('*').eq('player_id', playerId).limit(10000),
     getAllSeasonMedalists(),
   ]);
   if (sErr) throw sErr;
@@ -644,13 +731,14 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         is_gauntlet: se.is_gauntlet,
         map: m.shirts_pick ?? m.picked_map,
         final_score: m.final_score,
+        scheduled_at: m.scheduled_at,
         shirts: roster.shirts,
         skins: roster.skins,
         shirts_stats: roster.shirts_stats ?? [],
         skins_stats: roster.skins_stats ?? [],
       };
     })
-    .filter((r): r is PlayerHistoryRow => r !== null && isPlayedScore(r.final_score))
+    .filter((r): r is PlayerHistoryRow => r !== null)
     .sort((a, b) =>
       compareMatchRefDesc(
         { seasonNumber: extractSeasonNumber(a.season_name), isGauntlet: a.is_gauntlet, weekNumber: a.week_number, matchNumber: a.match_number },

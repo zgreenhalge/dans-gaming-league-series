@@ -165,6 +165,7 @@ export default function MatchTabView({
   scoutingData,
   scoutingH2H,
   matchMap,
+  mapPool,
 }: {
   shirts: MatchStatRow[];
   skins: MatchStatRow[];
@@ -191,6 +192,7 @@ export default function MatchTabView({
   scoutingData: MatchScoutingData | null;
   scoutingH2H: H2HData | null;
   matchMap: string | null;
+  mapPool: string[] | null;
 }) {
   const hasScoutingData = !!(scoutingData && scoutingH2H);
   const [tab, setTab] = useState<Tab>('leaderboard');
@@ -269,6 +271,8 @@ export default function MatchTabView({
           duos={scoutingH2H!.duos}
           rivals={scoutingH2H!.rivals}
           matchMap={matchMap}
+          mapPool={mapPool}
+          mapLeagueAverages={scoutingData!.mapLeagueAverages}
           shirtsF={shirtsF}
           skinsF={skinsF}
         />
