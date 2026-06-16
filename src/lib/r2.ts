@@ -1,0 +1,24 @@
+import { S3Client } from '@aws-sdk/client-s3';
+
+export const r2 = new S3Client({
+  region: 'auto',
+  endpoint: `https://${process.env.CLOUDFLARE_R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY!,
+  },
+  // R2 doesn't require automatic checksums; disabling avoids CORS preflight issues
+  // with the extra x-amz-checksum-* headers the SDK v3 adds by default.
+  requestChecksumCalculation: 'WHEN_REQUIRED',
+  responseChecksumValidation: 'WHEN_REQUIRED',
+});
+
+export const R2_BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME!;
+
+// Stable public download URL for a stored demo (for replay viewing)
+// Returns null if CLOUDFLARE_R2_PUBLIC_URL is not configured
+export function demoPublicUrl(key: string): string | null {
+  const base = process.env.CLOUDFLARE_R2_PUBLIC_URL;
+  if (!base) return null;
+  return `${base.replace(/\/$/, '')}/${key}`;
+}
