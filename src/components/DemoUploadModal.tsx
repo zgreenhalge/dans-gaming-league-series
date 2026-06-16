@@ -259,7 +259,7 @@ export default function DemoUploadModal({
       onClick={handleOpen}
       className="tracked text-[10px] font-semibold px-3 py-1.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:opacity-80 transition-opacity"
     >
-      Enter Results
+      Upload Demo
     </button>
   );
 
@@ -276,7 +276,7 @@ export default function DemoUploadModal({
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border-primary)]">
                 <h2 className="font-display font-bold text-[16px] text-[var(--color-text-primary)]">
-                  {alreadyPlayed ? 'Edit Results' : stage === 'preview' ? 'Review Results' : 'Enter Results'}
+                  {alreadyPlayed ? 'Edit Results' : stage === 'preview' ? 'Review Results' : 'Upload Demo'}
                 </h2>
                 <button
                   onClick={handleClose}
@@ -298,7 +298,7 @@ export default function DemoUploadModal({
                       className="sr-only"
                       onChange={(e) => {
                         const f = e.target.files?.[0];
-                        if (f) handleFileSelect(f);
+                        if (f) handleFileSelect(f).catch(() => {});
                       }}
                     />
                     <span className="text-[32px] opacity-40">📁</span>

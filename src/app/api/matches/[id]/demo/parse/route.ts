@@ -1,11 +1,15 @@
 import { gunzipSync } from 'zlib';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { createClient } from '@supabase/supabase-js';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { authOptions } from '@/lib/authOptions';
 import { parseDemoFile, type RosterEntry } from '@/lib/demoParser';
-import { r2, R2_BUCKET } from '@/lib/r2';
+import { r2, R2_BUCKET, demoKey } from '@/lib/r2';
+import { getAdminClient } from '@/lib/supabase-admin';
+
+export const maxDuration = 300;
+
+const MAX_DEMO_BYTES = 200 * 1024 * 1024; // 200 MB
 
 function decompressIfNeeded(buf: Buffer): Buffer {
   // Gzip magic bytes: 0x1f 0x8b
@@ -14,11 +18,6 @@ function decompressIfNeeded(buf: Buffer): Buffer {
   }
   return buf;
 }
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
 
 export async function POST(
   req: NextRequest,
@@ -36,6 +35,7 @@ export async function POST(
   }
 
   const playerId = session.user.playerId;
+  const supabaseAdmin = getAdminClient();
 
   // Fetch match, roster, and player details in parallel
   const [{ data: matchRow }, { data: playerRow }, { data: matchStats }] = await Promise.all([
@@ -74,7 +74,7 @@ export async function POST(
   const firstWeek = weeksArr[0] as { seasons: unknown } | undefined;
   const seasonsArr = Array.isArray(firstWeek?.seasons) ? firstWeek!.seasons : [firstWeek?.seasons];
   const firstSeason = seasonsArr[0] as { target_win_rounds?: number } | undefined;
-  const targetWinRounds: number = firstSeason?.target_win_rounds ?? 9;
+  const targetWinRounds: number = firstSeason?.target_win_rounds ?? 13;
 
   // Fetch player details (steam_id, name, steam_nickname) for all rostered players
   const playerIds = allStats.map((s) => s.player_id);
@@ -101,12 +101,19 @@ export async function POST(
   });
 
   // Download demo from R2
-  const key = `${matchId}/game.dem`;
+  const key = demoKey(matchId);
   const r2Res = await r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }));
   if (!r2Res.Body) {
     return NextResponse.json(
       { error: 'Demo file not found. Upload a demo file first.' },
       { status: 404 },
+    );
+  }
+  const contentLength = r2Res.ContentLength ?? 0;
+  if (contentLength > MAX_DEMO_BYTES) {
+    return NextResponse.json(
+      { error: `Demo file is too large (${Math.round(contentLength / 1024 / 1024)} MB). Maximum is ${MAX_DEMO_BYTES / 1024 / 1024} MB.` },
+      { status: 413 },
     );
   }
   const chunks: Buffer[] = [];

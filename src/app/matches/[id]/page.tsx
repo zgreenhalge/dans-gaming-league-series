@@ -13,7 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { FeatureMatchBanner } from '@/components/FeatureMatch';
 import { HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { r2, R2_BUCKET } from '@/lib/r2';
+import { r2, R2_BUCKET, demoKey as makeDemoKey } from '@/lib/r2';
 
 export const revalidate = 60;
 
@@ -115,15 +115,15 @@ export default async function MatchPage({
   const skins = stats.filter((s) => s.faction === 'SKINS');
 
   const showScouting = shirts.length === 2 && skins.length === 2;
-  const demoKey = `${matchId}/game.dem`;
+  const key = makeDemoKey(matchId);
   const [scoutingData, scoutingH2H, demoDownloadUrl] = await Promise.all([
     showScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     showScouting
       ? getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true })
       : Promise.resolve(null),
-    r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: demoKey }))
+    r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }))
       .then(() =>
-        getSignedUrl(r2, new GetObjectCommand({ Bucket: R2_BUCKET, Key: demoKey }), {
+        getSignedUrl(r2, new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }), {
           expiresIn: 3600,
         }),
       )

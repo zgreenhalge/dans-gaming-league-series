@@ -157,10 +157,25 @@ export function parseDemoFile(
   if (skinsSide !== null) {
     // SHIRTS start on the opposite side from SKINS
     const shirtsStartSide = skinsSide === 'CT' ? 'T' : 'CT';
-    const halftimeAfter = targetWinRounds - 1; // rounds 1..halftimeAfter are first half
+    const shirtsOtherSide: 'CT' | 'T' = shirtsStartSide === 'T' ? 'CT' : 'T';
+    const regRoundsPerHalf = targetWinRounds - 1; // e.g. 8 for first-to-9
+    // CS2 OT is MR3: 3 rounds per OT half, sides alternate starting from reg-H2 sides.
+    const OT_ROUNDS_PER_HALF = 3;
 
     for (const e of liveRounds) {
-      const shirtsWinSide = e.round <= halftimeAfter ? shirtsStartSide : (shirtsStartSide === 'T' ? 'CT' : 'T');
+      let shirtsWinSide: 'CT' | 'T';
+      if (e.round <= regRoundsPerHalf) {
+        shirtsWinSide = shirtsStartSide;
+      } else if (e.round <= regRoundsPerHalf * 2) {
+        shirtsWinSide = shirtsOtherSide;
+      } else {
+        // OT: halves alternate, starting with the same sides as regulation H2.
+        // OT half 1 (odd) = same as reg H2 = shirtsOtherSide
+        // OT half 2 (even) = same as reg H1 = shirtsStartSide
+        const otRound = e.round - regRoundsPerHalf * 2;
+        const otHalf = Math.ceil(otRound / OT_ROUNDS_PER_HALF);
+        shirtsWinSide = otHalf % 2 === 1 ? shirtsOtherSide : shirtsStartSide;
+      }
       if (e.winner === shirtsWinSide) shirtsRoundsWon++;
       else skinsRoundsWon++;
     }

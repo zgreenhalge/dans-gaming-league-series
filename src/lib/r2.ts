@@ -15,10 +15,6 @@ export const r2 = new S3Client({
 
 export const R2_BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME!;
 
-// Stable public download URL for a stored demo (for replay viewing)
-// Returns null if CLOUDFLARE_R2_PUBLIC_URL is not configured
-export function demoPublicUrl(key: string): string | null {
-  const base = process.env.CLOUDFLARE_R2_PUBLIC_URL;
-  if (!base) return null;
-  return `${base.replace(/\/$/, '')}/${key}`;
+export function demoKey(matchId: number): string {
+  return `${matchId}/game.dem`;
 }
