@@ -73,11 +73,11 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   const [isPending, startTransition] = useTransition();
   const [activeField, setActiveField] = useState<StepField | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Tracks fields submitted but not yet confirmed via server refresh, to prevent re-clicking
-  const [submittedFields, setSubmittedFields] = useState<Set<StepField>>(new Set());
+  // Optimistic values: applied immediately on submit, cleared when server confirms via match prop update
+  const [optimisticFields, setOptimisticFields] = useState<Map<StepField, string | null>>(new Map());
 
   useEffect(() => {
-    setSubmittedFields(new Set());
+    setOptimisticFields(new Map());
   }, [match]);
 
   useEffect(() => {
@@ -110,10 +110,14 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   const nextCls =
     'bg-[var(--color-bg-secondary)] border border-[var(--color-accent-amber-pickborder)] [&_.lbl]:text-[var(--color-accent-amber-fg)] [&_.val]:text-[var(--color-text-secondary)]';
 
+  function displayValue(field: StepField): string | null {
+    return optimisticFields.has(field) ? optimisticFields.get(field)! : getFieldValue(match, field);
+  }
+
   // For non-gauntlet: the first unfilled step in sequence order (excluding optimistically submitted fields)
   const sequenceNextField = steps.find((s) => {
     const f = s.field as StepField;
-    return getFieldValue(match, f) === null && !submittedFields.has(f);
+    return displayValue(f) === null;
   })?.field as StepField | undefined;
 
   // The field the current player can act on for NEW entries (unfilled slots)
@@ -126,7 +130,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
         playerFaction === 'SHIRTS'
           ? (gauntletPlayerIndex === 0 ? 'shirts_ban' : 'shirts_ban2')
           : (gauntletPlayerIndex === 0 ? 'skins_ban1' : 'skins_ban2');
-      return getFieldValue(match, myField) === null && !submittedFields.has(myField) ? myField : undefined;
+      return displayValue(myField) === null ? myField : undefined;
     }
     if (!sequenceNextField) return undefined;
     if (isAdmin) return sequenceNextField;
@@ -138,7 +142,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   // Whether a filled tile can be overwritten by the current user
   function isOverwritable(field: StepField): boolean {
     if (!canVeto) return false;
-    if (submittedFields.has(field)) return false;
+    if (optimisticFields.has(field)) return false;
     if (isAdmin) return true;
     if (isGauntlet) {
       if (!playerFaction || gauntletPlayerIndex === null) return false;
@@ -170,6 +174,9 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
 
   async function submitVeto(field: StepField, value: string | null) {
     setError(null);
+    setActiveField(null);
+    // Apply optimistically so the tile updates immediately before the server round-trip
+    setOptimisticFields((prev) => new Map([...prev, [field, value]]));
     startTransition(async () => {
       const res = await fetch(`/api/matches/${match.id}/veto`, {
         method: 'PATCH',
@@ -179,11 +186,10 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         setError(json.error ?? 'Something went wrong');
+        // Revert optimistic value on failure
+        setOptimisticFields((prev) => { const next = new Map(prev); next.delete(field); return next; });
         return;
       }
-      setActiveField(null);
-      // Mark as submitted so the tile is locked until the realtime refresh lands
-      if (value !== null) setSubmittedFields((prev) => new Set([...prev, field]));
     });
   }
 
@@ -193,7 +199,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   }
 
   function handleTileClick(field: StepField) {
-    const val = getFieldValue(match, field);
+    const val = displayValue(field);
     const canClick = field === actionableField || (val !== null && isOverwritable(field));
     if (!canClick) return;
     setActiveField(activeField === field ? null : field);
@@ -203,7 +209,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   const pool = mapPool ?? [];
   // Exclude the active field's current value so it can be re-selected or replaced freely
   const banned = usedMaps(match).filter(
-    (m) => activeField === null || m !== getFieldValue(match, activeField),
+    (m) => activeField === null || m !== displayValue(activeField),
   );
 
   return (
@@ -211,7 +217,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
       <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
         <div className="flex items-stretch gap-1 flex-wrap p-3">
           {steps.map((s, i) => {
-            const val = getFieldValue(match, s.field as StepField);
+            const val = displayValue(s.field as StepField);
             const isNext = s.field === actionableField;
             const isActive = activeField === s.field;
             const banImg = s.type === 'ban' && val ? mapImageFor(val) : null;

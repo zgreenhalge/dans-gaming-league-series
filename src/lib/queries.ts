@@ -116,7 +116,15 @@ interface PerPlayerStats {
  * from the leaderboard view). Excludes playoff games. Returns a Map keyed by
  * `${season_id}:${player_id}`.
  */
-async function getPerPlayerSeasonStats(): Promise<Map<string, PerPlayerStats>> {
+/**
+ * Fetches the three shared tables (weeks, matches, player_match_stats) once
+ * and returns both derived outputs, replacing two back-to-back triple-fetches
+ * with a single shared fetch.
+ */
+async function getSeasonBaseData(): Promise<{
+  perPlayerStats: Map<string, PerPlayerStats>;
+  rosterBySeason: Map<number, Set<number>>;
+}> {
   const [
     { data: stats, error: sErr },
     { data: matches, error: mErr },
@@ -134,19 +142,20 @@ async function getPerPlayerSeasonStats(): Promise<Map<string, PerPlayerStats>> {
   for (const w of (weeks ?? []) as { id: number; season_id: number }[])
     weekToSeason.set(w.id, w.season_id);
 
-  const seasonOfMatch = new Map<number, number>();
-  for (const m of (matches ?? []) as {
-    id: number;
-    week_id: number;
-    is_playoff_game: boolean;
-    final_score: string | null;
-  }[]) {
-    if (m.is_playoff_game || !isPlayedScore(m.final_score)) continue;
+  // played non-playoff matches → their season (for perPlayerStats)
+  const playedMatchSeason = new Map<number, number>();
+  // unplayed matches → their season (for rosterBySeason)
+  const unplayedMatchSeason = new Map<number, number>();
+  for (const m of (matches ?? []) as { id: number; week_id: number; is_playoff_game: boolean; final_score: string | null }[]) {
     const sid = weekToSeason.get(m.week_id);
-    if (sid != null) seasonOfMatch.set(m.id, sid);
+    if (sid == null) continue;
+    if (isPlayedScore(m.final_score) && !m.is_playoff_game) playedMatchSeason.set(m.id, sid);
+    if (!isPlayedScore(m.final_score)) unplayedMatchSeason.set(m.id, sid);
   }
 
-  const out = new Map<string, PerPlayerStats>();
+  const perPlayerStats = new Map<string, PerPlayerStats>();
+  const rosterBySeason = new Map<number, Set<number>>();
+
   for (const s of (stats ?? []) as {
     player_id: number;
     assists: number | null;
@@ -156,65 +165,32 @@ async function getPerPlayerSeasonStats(): Promise<Map<string, PerPlayerStats>> {
     deaths: number | null;
     is_win: boolean | null;
   }[]) {
-    const sid = seasonOfMatch.get(s.match_id);
-    if (sid == null) continue;
-    const key = `${sid}:${s.player_id}`;
-    const prev = out.get(key) ?? { assists: 0, rounds_won: 0, kills_in_wins: 0, deaths_in_wins: 0, kills_in_losses: 0, deaths_in_losses: 0 };
-    const win = !!s.is_win;
-    const k = s.kills ?? 0;
-    const d = s.deaths ?? 0;
-    out.set(key, {
-      assists: prev.assists + (s.assists ?? 0),
-      rounds_won: prev.rounds_won + (s.rounds_won ?? 0),
-      kills_in_wins: prev.kills_in_wins + (win ? k : 0),
-      deaths_in_wins: prev.deaths_in_wins + (win ? d : 0),
-      kills_in_losses: prev.kills_in_losses + (win ? 0 : k),
-      deaths_in_losses: prev.deaths_in_losses + (win ? 0 : d),
-    });
-  }
-  return out;
-}
+    const playedSid = playedMatchSeason.get(s.match_id);
+    if (playedSid != null) {
+      const key = `${playedSid}:${s.player_id}`;
+      const prev = perPlayerStats.get(key) ?? { assists: 0, rounds_won: 0, kills_in_wins: 0, deaths_in_wins: 0, kills_in_losses: 0, deaths_in_losses: 0 };
+      const win = !!s.is_win;
+      const k = s.kills ?? 0;
+      const d = s.deaths ?? 0;
+      perPlayerStats.set(key, {
+        assists: prev.assists + (s.assists ?? 0),
+        rounds_won: prev.rounds_won + (s.rounds_won ?? 0),
+        kills_in_wins: prev.kills_in_wins + (win ? k : 0),
+        deaths_in_wins: prev.deaths_in_wins + (win ? d : 0),
+        kills_in_losses: prev.kills_in_losses + (win ? 0 : k),
+        deaths_in_losses: prev.deaths_in_losses + (win ? 0 : d),
+      });
+    }
 
-/**
- * Returns unique (season_id → Set<player_id>) for players appearing in
- * player_match_stats for matches that have NOT yet been played. Used to
- * populate zero-stat leaderboard rows for upcoming seasons.
- */
-async function getRosterPlayersBySeason(): Promise<Map<number, Set<number>>> {
-  const [
-    { data: stats, error: sErr },
-    { data: matches, error: mErr },
-    { data: weeks, error: wErr },
-  ] = await Promise.all([
-    supabase.from('player_match_stats').select('player_id, match_id'),
-    supabase.from('matches').select('id, week_id, final_score'),
-    supabase.from('weeks').select('id, season_id'),
-  ]);
-  if (sErr) throw sErr;
-  if (mErr) throw mErr;
-  if (wErr) throw wErr;
-
-  const weekToSeason = new Map<number, number>();
-  for (const w of (weeks ?? []) as { id: number; season_id: number }[])
-    weekToSeason.set(w.id, w.season_id);
-
-  const unplayedMatchToSeason = new Map<number, number>();
-  for (const m of (matches ?? []) as { id: number; week_id: number; final_score: string | null }[]) {
-    if (!isPlayedScore(m.final_score)) {
-      const sid = weekToSeason.get(m.week_id);
-      if (sid != null) unplayedMatchToSeason.set(m.id, sid);
+    const unplayedSid = unplayedMatchSeason.get(s.match_id);
+    if (unplayedSid != null) {
+      const set = rosterBySeason.get(unplayedSid) ?? new Set<number>();
+      set.add(s.player_id);
+      rosterBySeason.set(unplayedSid, set);
     }
   }
 
-  const out = new Map<number, Set<number>>();
-  for (const s of (stats ?? []) as { player_id: number; match_id: number }[]) {
-    const sid = unplayedMatchToSeason.get(s.match_id);
-    if (sid == null) continue;
-    const set = out.get(sid) ?? new Set<number>();
-    set.add(s.player_id);
-    out.set(sid, set);
-  }
-  return out;
+  return { perPlayerStats, rosterBySeason };
 }
 
 function zeroStatRows(
@@ -784,14 +760,13 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
 export async function getSeasonLeaderboard(
   seasonId: number,
 ): Promise<LeaderboardRowWithId[]> {
-  const [{ data: rows, error }, playersById, perPlayer, rosterBySeason] = await Promise.all([
+  const [{ data: rows, error }, playersById, { perPlayerStats: perPlayer, rosterBySeason }] = await Promise.all([
     supabase
       .from('player_season_leaderboard')
       .select('*')
       .eq('season_id', seasonId),
     getPlayersById(),
-    getPerPlayerSeasonStats(),
-    getRosterPlayersBySeason(),
+    getSeasonBaseData(),
   ]);
   if (error) throw error;
 
@@ -829,11 +804,10 @@ export async function getSeasonLeaderboard(
  * are re-derived from totals so the math stays correct.
  */
 export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
-  const [{ data: rows, error }, perPlayer, playersById, rosterBySeason, { data: seasonRows, error: sErr }] = await Promise.all([
+  const [{ data: rows, error }, { perPlayerStats: perPlayer, rosterBySeason }, playersById, { data: seasonRows, error: sErr }] = await Promise.all([
     supabase.from('player_season_leaderboard').select('*'),
-    getPerPlayerSeasonStats(),
+    getSeasonBaseData(),
     getPlayersById(),
-    getRosterPlayersBySeason(),
     supabase.from('seasons').select('id, status'),
   ]);
   if (error) throw error;
@@ -1828,13 +1802,12 @@ export async function getAllMatchesWithPickBan(): Promise<MapMatchRow[]> {
 export async function getAllLeaderboards(): Promise<
   Map<number, LeaderboardRowWithId[]>
 > {
-  const [{ data: rows, error }, playersById, perPlayer, rosterBySeason] = await Promise.all([
+  const [{ data: rows, error }, playersById, { perPlayerStats: perPlayer, rosterBySeason }] = await Promise.all([
     supabase
       .from('player_season_leaderboard')
       .select('*'),
     getPlayersById(),
-    getPerPlayerSeasonStats(),
-    getRosterPlayersBySeason(),
+    getSeasonBaseData(),
   ]);
   if (error) throw error;
 
