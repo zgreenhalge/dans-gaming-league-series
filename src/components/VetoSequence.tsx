@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getBrowserClient } from '@/lib/supabase';
+import { getBrowserClient } from '@/lib/supabase-browser';
 import { mapImageFor, mapSlug, toSentenceCase } from '@/lib/maps';
 import type { Match } from '@/lib/types';
 
