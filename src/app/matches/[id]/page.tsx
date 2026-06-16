@@ -11,6 +11,9 @@ import MatchTabView from '@/components/MatchTabView';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 import { FeatureMatchBanner } from '@/components/FeatureMatch';
+import { HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { r2, R2_BUCKET } from '@/lib/r2';
 
 export const revalidate = 60;
 
@@ -112,12 +115,20 @@ export default async function MatchPage({
   const skins = stats.filter((s) => s.faction === 'SKINS');
 
   const showScouting = shirts.length === 2 && skins.length === 2;
-  const [scoutingData, scoutingH2H] = showScouting
-    ? await Promise.all([
-        getMatchScoutingData(matchId),
-        getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
-      ])
-    : [null, null];
+  const demoKey = `${matchId}/game.dem`;
+  const [scoutingData, scoutingH2H, demoDownloadUrl] = await Promise.all([
+    showScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
+    showScouting
+      ? getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true })
+      : Promise.resolve(null),
+    r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: demoKey }))
+      .then(() =>
+        getSignedUrl(r2, new GetObjectCommand({ Bucket: R2_BUCKET, Key: demoKey }), {
+          expiresIn: 3600,
+        }),
+      )
+      .catch(() => null),
+  ]);
   const allByAdr = [...stats]
     .filter((s) => s.rounds_played > 0)
     .sort((a, b) => b.adr - a.adr);
@@ -191,14 +202,6 @@ export default async function MatchPage({
       <div className="centering">{match.is_feature_match && <FeatureMatchBanner />}</div>
       <Topbar seasonId={season.id} seasonName={season.name} weekNumber={week.week_number} matchNumber={match.match_number} isGauntlet={season.is_gauntlet} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
-        {!played && map && (
-          <div className="mt-4 mb-3 px-4 py-3 border-2 border-[var(--color-accent-red-fg)] bg-[color-mix(in_srgb,var(--color-accent-red-fg)_8%,var(--color-bg-primary))]">
-            <p className="tracked text-[11px] font-bold text-[var(--color-accent-red-fg)] text-center">
-              REMEMBER: SCREENSHOT BOTH SIDES OF THE SCOREBOARD AT THE END OF THE GAME
-            </p>
-          </div>
-        )}
-
         {/* Header + veto wrapped in map backdrop — gradient shows regardless of image */}
         <div
           className={`-mx-6 px-6 ${map ? 'map-card-bg light-boost' : 'map-no-img'}`}
@@ -288,24 +291,11 @@ export default async function MatchPage({
           }))}
           targetWinRounds={season.target_win_rounds}
           skinsSide={match.skins_starting_side}
-          initialShirtsScore={score?.shirts ?? null}
-          initialSkinsScore={score?.skins ?? null}
-          initialScreenshotFrontUrl={match.screenshot_url_front}
-          initialScreenshotBackUrl={match.screenshot_url_back}
-          initialStats={played ? stats.map((s) => ({
-            player_id: s.player_id,
-            kills: s.kills,
-            assists: s.assists,
-            deaths: s.deaths,
-            damage: s.damage,
-            adr: s.adr,
-          })) : undefined}
-          screenshotFrontUrl={match.screenshot_url_front}
-          screenshotBackUrl={match.screenshot_url_back}
           scoutingData={scoutingData}
           scoutingH2H={scoutingH2H}
           matchMap={map}
           mapPool={season.map_pool}
+          demoDownloadUrl={demoDownloadUrl}
         />
       </main>
     </div>

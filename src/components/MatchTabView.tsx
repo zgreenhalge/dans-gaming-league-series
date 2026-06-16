@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { tabCls } from '@/lib/util';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import { YouBadge } from '@/components/YouBadge';
-import EnterResultsModal, { type InitialPlayerStat } from '@/components/EnterResultsModal';
-import ScreenshotViewer from '@/components/ScreenshotViewer';
+import DemoUploadModal from '@/components/DemoUploadModal';
 import ScoutingReport from '@/components/ScoutingReport';
 import type { MatchStatRow, MatchScoutingData, H2HData } from '@/lib/queries';
 
@@ -155,17 +154,11 @@ export default function MatchTabView({
   matchPlayers,
   targetWinRounds,
   skinsSide,
-  initialShirtsScore,
-  initialSkinsScore,
-  initialScreenshotFrontUrl,
-  initialScreenshotBackUrl,
-  initialStats,
-  screenshotFrontUrl,
-  screenshotBackUrl,
   scoutingData,
   scoutingH2H,
   matchMap,
   mapPool,
+  demoDownloadUrl,
 }: {
   shirts: MatchStatRow[];
   skins: MatchStatRow[];
@@ -182,17 +175,11 @@ export default function MatchTabView({
   matchPlayers: { player_id: number; player_name: string; faction: 'SHIRTS' | 'SKINS' }[];
   targetWinRounds: number;
   skinsSide: 'CT' | 'T' | null;
-  initialShirtsScore: number | null;
-  initialSkinsScore: number | null;
-  initialScreenshotFrontUrl: string | null;
-  initialScreenshotBackUrl: string | null;
-  initialStats: InitialPlayerStat[] | undefined;
-  screenshotFrontUrl: string | null;
-  screenshotBackUrl: string | null;
   scoutingData: MatchScoutingData | null;
   scoutingH2H: H2HData | null;
   matchMap: string | null;
   mapPool: string[] | null;
+  demoDownloadUrl: string | null;
 }) {
   const hasScoutingData = !!(scoutingData && scoutingH2H);
   const [tab, setTab] = useState<Tab>('leaderboard');
@@ -213,20 +200,31 @@ export default function MatchTabView({
             </button>
           )}
         </div>
-        {tab === 'leaderboard' && canEnterResults && (
-          <EnterResultsModal
-            matchId={matchId}
-            players={matchPlayers}
-            isAdmin={isCurrentUserAdmin}
-            alreadyPlayed={played}
-            targetWinRounds={targetWinRounds}
-            skinsSide={skinsSide}
-            initialShirtsScore={initialShirtsScore}
-            initialSkinsScore={initialSkinsScore}
-            initialScreenshotFrontUrl={initialScreenshotFrontUrl}
-            initialScreenshotBackUrl={initialScreenshotBackUrl}
-            initialStats={initialStats}
-          />
+        {tab === 'leaderboard' && (
+          <div className="flex items-center gap-2">
+            {demoDownloadUrl && (
+              <a
+                href={demoDownloadUrl}
+                download
+                className="py-1 text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:underline underline-offset-2 transition-colors"
+              >
+                Download demo
+              </a>
+            )}
+            {canEnterResults && (
+              <DemoUploadModal
+                matchId={matchId}
+                players={matchPlayers}
+                skinsSide={skinsSide}
+                targetWinRounds={targetWinRounds}
+                isAdmin={isCurrentUserAdmin}
+                alreadyPlayed={played}
+                initialStats={allStats.length > 0 ? allStats : undefined}
+                initialShirtsScore={score?.shirts ?? null}
+                initialSkinsScore={score?.skins ?? null}
+              />
+            )}
+          </div>
         )}
       </div>
 
@@ -256,9 +254,6 @@ export default function MatchTabView({
                 />
                 <Scoreboard players={skins} mvpPlayerId={mvpPlayerId} faction={skinsF} currentPlayerId={currentPlayerId} />
               </div>
-              {screenshotFrontUrl && (
-                <ScreenshotViewer frontUrl={screenshotFrontUrl} backUrl={screenshotBackUrl} />
-              )}
             </>
           )}
         </>
