@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import SeasonTabView from './SeasonTabView';
+import SeasonTabView, { type SeasonTab } from './SeasonTabView';
 import { tabCls } from '@/lib/util';
 import type { WeekWithMatches, GauntletRound, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
@@ -52,6 +52,7 @@ export default function CombinedSeasonTabView({
   gauntletH2hData: H2HData;
 }) {
   const [topTab, setTopTab] = useState<TopTab>('regular');
+  const [subTab, setSubTab] = useState<SeasonTab>('leaderboard');
 
   return (
     <>
@@ -67,6 +68,8 @@ export default function CombinedSeasonTabView({
           currentPlayerId={currentPlayerId}
           h2hData={h2hData}
           subStyle
+          tab={subTab}
+          onTabChange={setSubTab}
         />
       )}
 
@@ -79,6 +82,8 @@ export default function CombinedSeasonTabView({
           currentPlayerId={currentPlayerId}
           h2hData={gauntletH2hData}
           subStyle
+          tab={subTab}
+          onTabChange={setSubTab}
         />
       )}
     </>

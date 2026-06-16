@@ -63,15 +63,25 @@ function MatchCell({
         </div>
 
         <div className="px-5 pb-4 flex items-center justify-between gap-4">
-          <div className="shrink-0 flex items-center">
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-[14px] font-semibold leading-tight truncate map-head">
+              <TeamNames players={match.shirts} dimmed={shirtsLost} />
+            </div>
+            <div className="tracked text-[9px] text-[var(--color-text-secondary)] my-1 map-head">vs</div>
+            <div className="font-display text-[14px] font-semibold leading-tight truncate map-head">
+              <TeamNames players={match.skins} dimmed={skinsLost} />
+            </div>
+          </div>
+
+          <div className="shrink-0 flex items-center text-right">
             {score ? (
-              <div className="font-display font-semibold leading-none">
+              <div className="font-display font-semibold leading-none text-right">
                 <div className={`text-[22px] map-head ${shirtsLost ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-primary)]'}`}>{score.shirts}</div>
                 <div className="text-[10px] text-[var(--color-text-secondary)] my-0.5 map-head">–</div>
                 <div className={`text-[22px] map-head ${skinsLost ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-primary)]'}`}>{score.skins}</div>
               </div>
             ) : match.scheduled_at ? (
-              <div>
+              <div className="text-right">
                 <div className="font-mono text-[11px] map-head" style={{ color: 'var(--color-site-accent)' }}>
                   <LocalTime iso={match.scheduled_at} opts={{ weekday: 'short', hour: 'numeric', minute: '2-digit' }} />
                 </div>
@@ -82,16 +92,6 @@ function MatchCell({
                 Pending
               </span>
             )}
-          </div>
-
-          <div className="min-w-0 flex-1 text-right">
-            <div className="font-display text-[14px] font-semibold leading-tight truncate map-head">
-              <TeamNames players={match.shirts} dimmed={shirtsLost} />
-            </div>
-            <div className="tracked text-[9px] text-[var(--color-text-secondary)] my-1 map-head">vs</div>
-            <div className="font-display text-[14px] font-semibold leading-tight truncate map-head">
-              <TeamNames players={match.skins} dimmed={skinsLost} />
-            </div>
           </div>
         </div>
       </div>

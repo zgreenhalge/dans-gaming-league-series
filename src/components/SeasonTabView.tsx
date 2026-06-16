@@ -27,12 +27,16 @@ function playerInMatch(
 type RegularMode = { kind: 'regular'; schedule: WeekWithMatches[]; seasonStartDate: string | null };
 type GauntletMode = { kind: 'gauntlet'; rounds: GauntletRound[] };
 
+export type { Tab as SeasonTab };
+
 type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   leaderboard: LeaderboardRowWithId[];
   seasonStatus: string;
   currentPlayerId: number | null;
   subStyle?: boolean;
   h2hData: H2HData;
+  tab?: Tab;
+  onTabChange?: (t: Tab) => void;
 };
 
 export default function SeasonTabView(props: SeasonTabViewProps) {
@@ -60,7 +64,9 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     return new Set();
   }, [isGauntlet, rounds, schedule]);
 
-  const [tab, setTab] = useState<Tab>('leaderboard');
+  const [localTab, setLocalTab] = useState<Tab>('leaderboard');
+  const tab = props.tab ?? localTab;
+  const setTab = props.onTabChange ?? setLocalTab;
   const [myGamesOnly, setMyGamesOnly] = useState(false);
   const [openItems, setOpenItems] = useState<Set<number>>(defaultOpenSet);
 
