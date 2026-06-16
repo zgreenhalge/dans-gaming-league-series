@@ -1,19 +1,9 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { type SupabaseClient } from '@supabase/supabase-js';
 
-type GlobalWithClients = typeof globalThis & {
-  __dgls_browserClient?: SupabaseClient;
+type GlobalWithServerClient = typeof globalThis & {
   __dgls_serverClient?: SupabaseClient;
 };
-
-export function getBrowserClient(): SupabaseClient {
-  const g = globalThis as GlobalWithClients;
-  if (g.__dgls_browserClient) return g.__dgls_browserClient;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  g.__dgls_browserClient = createClient(url, anon);
-  return g.__dgls_browserClient;
-}
 
 // Server-side Supabase client. Currently uses no-op cookie handlers because
 // there's no auth yet — this keeps pages eligible for ISR (calling cookies()
@@ -25,7 +15,7 @@ export function getBrowserClient(): SupabaseClient {
 //             — authenticated reads/writes must hit the database per-request).
 //   - browser: createBrowserClient for client components that need auth state.
 function getClient(): SupabaseClient {
-  const g = globalThis as GlobalWithClients;
+  const g = globalThis as GlobalWithServerClient;
   if (g.__dgls_serverClient) return g.__dgls_serverClient;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
