@@ -57,7 +57,7 @@ export default function CombinedSeasonTabView({
     <>
       <TopTabBar tab={topTab} setTab={setTopTab} />
 
-      {topTab === 'regular' && (
+      <div className={topTab === 'regular' ? undefined : 'hidden'}>
         <SeasonTabView
           kind="regular"
           leaderboard={leaderboard}
@@ -68,9 +68,9 @@ export default function CombinedSeasonTabView({
           h2hData={h2hData}
           subStyle
         />
-      )}
+      </div>
 
-      {topTab === 'gauntlet' && (
+      <div className={topTab === 'gauntlet' ? undefined : 'hidden'}>
         <SeasonTabView
           kind="gauntlet"
           leaderboard={gauntletLeaderboard}
@@ -80,7 +80,7 @@ export default function CombinedSeasonTabView({
           h2hData={gauntletH2hData}
           subStyle
         />
-      )}
+      </div>
     </>
   );
 }

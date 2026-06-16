@@ -13,6 +13,7 @@ type SortCol =
   | 'silver'
   | 'bronze'
   | 'rank'
+  | 'gp'
   | 'wr'
   | 'rwr'
   | 'adr';
@@ -46,6 +47,8 @@ function compare(
       );
     case 'rwr':
       return b.rwr_percentage - a.rwr_percentage;
+    case 'gp':
+      return b.matches_played - a.matches_played;
     case 'adr':
       return b.overall_adr - a.overall_adr;
   }
@@ -146,6 +149,7 @@ export default function LeaderboardTable({
   ];
 
   const STAT_COLS: { key: SortCol; label: string; title: string }[] = [
+    { key: 'gp',  label: 'GP',   title: 'Games Played' },
     { key: 'wr',  label: 'WR%',  title: 'Win Rate' },
     { key: 'rwr', label: 'RWR%', title: 'Round Win Rate' },
     { key: 'adr', label: 'ADR',  title: 'Average Damage per Round' },
@@ -239,6 +243,9 @@ export default function LeaderboardTable({
                     <Link href={href} className="block w-full h-full">{trophyCounts.get(p.player_id)?.[c.rank] ?? 0}</Link>
                   </td>
                 ))}
+                <td className="py-2.5 px-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
+                  <Link href={href} className="block w-full h-full">{p.matches_played}</Link>
+                </td>
                 <td className="py-2.5 px-2 text-right font-mono tnum">
                   <Link href={href} className="block w-full h-full">{dash(played, `${p.win_rate_percentage.toFixed(1)}%`)}</Link>
                 </td>
