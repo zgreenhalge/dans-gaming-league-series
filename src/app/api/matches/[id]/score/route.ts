@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
@@ -48,6 +49,20 @@ function isVetoComplete(match: MatchRow): boolean {
     match.shirts_pick &&
     match.skins_starting_side
   );
+}
+
+async function triggerRatingRecompute(): Promise<void> {
+  const secret = process.env.RECOMPUTE_SECRET;
+  if (!secret) return;
+  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+  try {
+    await fetch(`${base}/api/ehog/recompute`, {
+      method: 'POST',
+      headers: { 'x-recompute-secret': secret },
+    });
+  } catch (e) {
+    console.error('EHOG recompute trigger failed:', e);
+  }
 }
 
 export async function PATCH(
@@ -221,6 +236,8 @@ export async function PATCH(
       return NextResponse.json({ error: statErr.message }, { status: 500 });
     }
   }
+
+  after(triggerRatingRecompute());
 
   return NextResponse.json({ ok: true });
 }
