@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings } from '@/lib/queries';
+import { projectRatingDeltas, type RatingProjection } from '@/lib/ehog';
 import type { Match } from '@/lib/types';
 import { isPlayedScore, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
@@ -131,6 +132,18 @@ export default async function MatchPage({
     played ? getMatchRatingDeltas(matchId) : Promise.resolve(new Map<number, number>()),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
+
+  // Compute rating projections for unplayed matches with full rosters
+  let ratingProjections: RatingProjection[] = [];
+  if (!played && shirts.length === 2 && skins.length === 2) {
+    const allPlayerIds = [...shirts, ...skins].map((s) => s.player_id);
+    const playerRatings = await getPlayerRatings(allPlayerIds);
+    const byId = new Map(playerRatings.map((r) => [r.playerId, r]));
+    const shirtRatings = shirts.map((s) => byId.get(s.player_id)!);
+    const skinRatings = skins.map((s) => byId.get(s.player_id)!);
+    ratingProjections = projectRatingDeltas(shirtRatings, skinRatings, season.target_win_rounds);
+  }
+
   const allByAdr = [...stats]
     .filter((s) => s.rounds_played > 0)
     .sort((a, b) => b.adr - a.adr);
@@ -299,6 +312,7 @@ export default async function MatchPage({
           mapPool={season.map_pool}
           demoDownloadUrl={demoDownloadUrl}
           ratingDeltas={ratingDeltas}
+          ratingProjections={ratingProjections}
         />
       </main>
     </div>

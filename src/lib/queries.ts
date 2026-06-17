@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
 import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
+import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
 import type {
   Season,
   Week,
@@ -3022,4 +3023,33 @@ export async function getMatchRatingDeltas(matchId: number): Promise<Map<number,
   const map = new Map<number, number>();
   for (const row of data ?? []) map.set(row.player_id, row.rating_delta);
   return map;
+}
+
+export interface PlayerMuSigma {
+  playerId: number;
+  mu: number;
+  sigma: number;
+  ehogRating: number;
+}
+
+export async function getPlayerRatings(playerIds: number[]): Promise<PlayerMuSigma[]> {
+  if (playerIds.length === 0) return [];
+  const rows = await batchedIn<{ player_id: number; mu: number; sigma: number; ehog_rating: number; sequence_index: number }>(
+    'player_rating_history', 'player_id', playerIds,
+    'player_id, mu, sigma, ehog_rating, sequence_index',
+  );
+
+  const latest = new Map<number, { mu: number; sigma: number; ehogRating: number; seq: number }>();
+  for (const r of rows) {
+    const prev = latest.get(r.player_id);
+    if (!prev || r.sequence_index > prev.seq) {
+      latest.set(r.player_id, { mu: r.mu, sigma: r.sigma, ehogRating: r.ehog_rating, seq: r.sequence_index });
+    }
+  }
+
+  return playerIds.map((pid) => {
+    const s = latest.get(pid);
+    if (s) return { playerId: pid, mu: s.mu, sigma: s.sigma, ehogRating: s.ehogRating };
+    return { playerId: pid, mu: MU_DEFAULT, sigma: SIGMA_DEFAULT, ehogRating: DEFAULT_EHOG };
+  });
 }
