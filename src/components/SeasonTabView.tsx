@@ -37,10 +37,11 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   h2hData: H2HData;
   tab?: Tab;
   onTabChange?: (t: Tab) => void;
+  ehogRatings?: Record<number, number>;
 };
 
 export default function SeasonTabView(props: SeasonTabViewProps) {
-  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData } = props;
+  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings } = props;
   const isGauntlet = props.kind === 'gauntlet';
   const schedule = props.kind === 'regular' ? props.schedule : [];
   const rounds = props.kind === 'gauntlet' ? props.rounds : [];
@@ -223,6 +224,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
               showMedals={seasonStatus === 'ARCHIVED'}
               playoffZones={!isGauntlet && seasonStatus === 'ACTIVE' ? { top: 2, bottom: 4 } : undefined}
               canonicalRanking={gauntletRanking}
+              ehogRatings={ehogRatings}
             />
           )}
         </>

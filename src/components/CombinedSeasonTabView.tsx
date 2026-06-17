@@ -39,6 +39,8 @@ export default function CombinedSeasonTabView({
   currentPlayerId,
   h2hData,
   gauntletH2hData,
+  ehogRatings,
+  gauntletEhogRatings,
 }: {
   leaderboard: LeaderboardRowWithId[];
   schedule: WeekWithMatches[];
@@ -50,6 +52,8 @@ export default function CombinedSeasonTabView({
   currentPlayerId: number | null;
   h2hData: H2HData;
   gauntletH2hData: H2HData;
+  ehogRatings?: Record<number, number>;
+  gauntletEhogRatings?: Record<number, number>;
 }) {
   const [topTab, setTopTab] = useState<TopTab>('regular');
   const [subTab, setSubTab] = useState<SeasonTab>('leaderboard');
@@ -70,6 +74,7 @@ export default function CombinedSeasonTabView({
           subStyle
           tab={subTab}
           onTabChange={setSubTab}
+          ehogRatings={ehogRatings}
         />
       )}
 
@@ -84,6 +89,7 @@ export default function CombinedSeasonTabView({
           subStyle
           tab={subTab}
           onTabChange={setSubTab}
+          ehogRatings={gauntletEhogRatings}
         />
       )}
     </>

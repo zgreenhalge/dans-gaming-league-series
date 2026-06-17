@@ -8,6 +8,7 @@ import {
   getAllSeasonMedalists,
   getH2HData,
   getAllMatchesWithPickBan,
+  getAllEhogSnapshots,
 } from '@/lib/queries';
 import CareerStatsView from '@/components/CareerStatsView';
 import type { LeaderboardRowWithId } from '@/lib/types';
@@ -18,7 +19,7 @@ export const revalidate = 60;
 export const metadata = { title: 'Statistics' };
 
 export default async function StatisticsPage() {
-  const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, h2hData, allMatches] =
+  const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, h2hData, allMatches, ehogSnapshots] =
     await Promise.all([
       getCareerLeaderboard(),
       getAllLeaderboards(),
@@ -27,6 +28,7 @@ export default async function StatisticsPage() {
       getAllSeasonMedalists(),
       getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
       getAllMatchesWithPickBan(),
+      getAllEhogSnapshots(),
     ]);
 
   const bySeason: Record<number, LeaderboardRowWithId[]> = {};
@@ -68,6 +70,7 @@ export default async function StatisticsPage() {
             trophiesByPlayer={trophiesByPlayer}
             h2hData={h2hData}
             allMatches={allMatches}
+            ehogSnapshots={ehogSnapshots}
           />
         </Suspense>
       </main>

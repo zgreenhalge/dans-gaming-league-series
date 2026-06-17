@@ -6,9 +6,9 @@ import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import H2HSection from './H2HSection';
 import { AdvancedStatsView } from './AdvancedStatsView';
-import { buildRegularToGauntletMap, seasonTitle, tabCls } from '@/lib/util';
+import { buildRegularToGauntletMap, extractSeasonNumber, seasonTitle, tabCls } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import type { TrophyEntry, H2HData, MapMatchRow } from '@/lib/queries';
+import type { TrophyEntry, H2HData, MapMatchRow, EhogSnapshotRow } from '@/lib/queries';
 import type { H2HPair } from './H2HMatrix';
 
 type Filter = 'career' | number;
@@ -64,6 +64,7 @@ export default function CareerStatsView({
   trophiesByPlayer,
   h2hData,
   allMatches = [],
+  ehogSnapshots = [],
 }: {
   regularSeasons: { id: number; name: string }[];
   gauntletSeasons: { id: number; name: string }[];
@@ -74,6 +75,7 @@ export default function CareerStatsView({
   trophiesByPlayer: Record<number, TrophyEntry[]>;
   h2hData: H2HData;
   allMatches?: MapMatchRow[];
+  ehogSnapshots?: EhogSnapshotRow[];
 }) {
   const searchParams = useSearchParams();
   const { includeRegular, includeGauntlet, toggleRegular: baseToggleRegular, toggleGauntlet: baseToggleGauntlet } = useSeasonFilter();
@@ -156,6 +158,26 @@ export default function CareerStatsView({
     return counts;
   }, [trophiesByPlayer, filter, includeRegular, includeGauntlet, regularToGauntlet]);
 
+  const ehogRatings = useMemo<Record<number, number>>(() => {
+    const filtered = filter === 'career'
+      ? ehogSnapshots.filter((s) => s.isGauntlet ? includeGauntlet : includeRegular)
+      : (() => {
+          const sel = regularSeasons.find((rs) => rs.id === filter);
+          const sn = sel ? extractSeasonNumber(sel.name) : null;
+          return ehogSnapshots.filter((s) => s.seasonNumber === sn && (s.isGauntlet ? includeGauntlet : includeRegular));
+        })();
+    const latest: Record<number, { rating: number; seq: number }> = {};
+    for (const s of filtered) {
+      const prev = latest[s.playerId];
+      if (!prev || s.sequenceIndex > prev.seq) {
+        latest[s.playerId] = { rating: s.ehogRating, seq: s.sequenceIndex };
+      }
+    }
+    const result: Record<number, number> = {};
+    for (const [pid, val] of Object.entries(latest)) result[Number(pid)] = val.rating;
+    return result;
+  }, [ehogSnapshots, filter, includeRegular, includeGauntlet, regularSeasons]);
+
   return (
     <>
       <div className="flex items-center justify-between gap-5 mb-3 border-b border-[var(--color-border-tertiary)]">
@@ -202,7 +224,7 @@ export default function CareerStatsView({
             No data for this selection.
           </div>
         ) : (
-          <LeaderboardTable rows={rows} showMedals={false} trophyCounts={trophyCounts} />
+          <LeaderboardTable rows={rows} showMedals={false} trophyCounts={trophyCounts} ehogRatings={ehogRatings} />
         )
       )}
 

@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { YouBadge } from './YouBadge';
 import { canonicalSort } from '@/lib/util';
+import { ehogColorFor } from './EhogBadge';
 
 type SortCol =
   | 'name'
@@ -16,7 +17,8 @@ type SortCol =
   | 'gp'
   | 'wr'
   | 'rwr'
-  | 'adr';
+  | 'adr'
+  | 'ehog';
 
 function compare(
   a: LeaderboardRowWithId,
@@ -24,6 +26,7 @@ function compare(
   col: SortCol,
   trophyCounts?: Map<number, Record<1 | 2 | 3, number>>,
   canonicalRanking?: Map<number, number>,
+  ehogRatings?: Record<number, number>,
 ): number {
   switch (col) {
     case 'rank':
@@ -51,6 +54,8 @@ function compare(
       return b.matches_played - a.matches_played;
     case 'adr':
       return b.overall_adr - a.overall_adr;
+    case 'ehog':
+      return (ehogRatings?.[b.player_id] ?? -1) - (ehogRatings?.[a.player_id] ?? -1);
   }
 }
 
@@ -63,6 +68,7 @@ export default function LeaderboardTable({
   playoffZones,
   trophyCounts,
   canonicalRanking,
+  ehogRatings,
 }: {
   rows: LeaderboardRowWithId[];
   firstColMode?: 'player' | 'season';
@@ -70,6 +76,7 @@ export default function LeaderboardTable({
   playoffZones?: { top: number; bottom: number };
   trophyCounts?: Map<number, Record<1 | 2 | 3, number>>;
   canonicalRanking?: Map<number, number>;
+  ehogRatings?: Record<number, number>;
 }) {
   const { data: session } = useSession();
   const myPlayerId = session?.user?.playerId ?? null;
@@ -94,7 +101,7 @@ export default function LeaderboardTable({
   }
 
   const sorted = [...rows].sort((a, b) => {
-    const v = compare(a, b, sortCol, trophyCounts, canonicalRanking);
+    const v = compare(a, b, sortCol, trophyCounts, canonicalRanking, ehogRatings);
     return asc ? -v : v;
   });
 
@@ -148,6 +155,8 @@ export default function LeaderboardTable({
     { key: 'bronze', label: '🥉', title: 'Bronze Medals', rank: 3 },
   ];
 
+  const hasEhog = ehogRatings && Object.keys(ehogRatings).length > 0;
+
   const STAT_COLS: { key: SortCol; label: string; title: string }[] = [
     { key: 'gp',  label: 'GP',   title: 'Games Played' },
     { key: 'wr',  label: 'WR%',  title: 'Win Rate' },
@@ -198,6 +207,7 @@ export default function LeaderboardTable({
             </th>
             {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => <SortableTh key={c.key} col={c} />)}
             {STAT_COLS.map((c) => <SortableTh key={c.key} col={c} />)}
+            {hasEhog && <SortableTh col={{ key: 'ehog', label: 'EHOG', title: 'EHOG rating as of most recent match in this view' }} />}
           </tr>
         </thead>
         <tbody>
@@ -255,6 +265,19 @@ export default function LeaderboardTable({
                 <td className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold">
                   <Link href={href} className="block w-full h-full">{dash(played, p.overall_adr.toFixed(2))}</Link>
                 </td>
+                {hasEhog && (
+                  <td
+                    className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold"
+                    title={ehogRatings[p.player_id] != null ? 'EHOG rating as of most recent match in this view' : undefined}
+                    style={ehogRatings[p.player_id] != null ? { color: ehogColorFor(ehogRatings[p.player_id]) } : undefined}
+                  >
+                    <Link href={href} className="block w-full h-full">
+                      {ehogRatings[p.player_id] != null
+                        ? ehogRatings[p.player_id].toFixed(1)
+                        : <span className="text-[var(--color-text-secondary)]">—</span>}
+                    </Link>
+                  </td>
+                )}
               </tr>
             );
           })}
