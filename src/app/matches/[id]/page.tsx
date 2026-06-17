@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings } from '@/lib/queries';
 import { projectRatingDeltas, type RatingProjection } from '@/lib/ehog';
+import { RatingProjectionTable } from '@/components/MatchTabView';
 import type { Match } from '@/lib/types';
 import { isPlayedScore, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
@@ -286,6 +287,14 @@ export default async function MatchPage({
 
         </div>
 
+        {!played && ratingProjections.length > 0 && (
+          <RatingProjectionTable
+            projections={ratingProjections}
+            shirts={shirts.map((s) => ({ player_id: s.player_id, player_name: s.player_name }))}
+            skins={skins.map((s) => ({ player_id: s.player_id, player_name: s.player_name }))}
+          />
+        )}
+
         <MatchTabView
           shirts={shirts}
           skins={skins}
@@ -312,7 +321,6 @@ export default async function MatchPage({
           mapPool={season.map_pool}
           demoDownloadUrl={demoDownloadUrl}
           ratingDeltas={ratingDeltas}
-          ratingProjections={ratingProjections}
         />
       </main>
     </div>

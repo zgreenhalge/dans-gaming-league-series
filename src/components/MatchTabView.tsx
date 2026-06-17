@@ -154,7 +154,7 @@ function deltaColor(delta: number, maxAbs: number): string {
   return 'rgba(255,255,255,0.5)';
 }
 
-function RatingProjectionTable({
+export function RatingProjectionTable({
   projections,
   shirts,
   skins,
@@ -239,7 +239,6 @@ export default function MatchTabView({
   mapPool,
   demoDownloadUrl,
   ratingDeltas,
-  ratingProjections = [],
 }: {
   shirts: MatchStatRow[];
   skins: MatchStatRow[];
@@ -262,7 +261,6 @@ export default function MatchTabView({
   mapPool: string[] | null;
   demoDownloadUrl: string | null;
   ratingDeltas: Record<number, number>;
-  ratingProjections?: RatingProjection[];
 }) {
   const hasScoutingData = !!(scoutingData && scoutingH2H);
   const [tab, setTab] = useState<Tab>('leaderboard');
@@ -340,13 +338,6 @@ export default function MatchTabView({
             </>
           )}
 
-          {!played && ratingProjections.length > 0 && (
-            <RatingProjectionTable
-              projections={ratingProjections}
-              shirts={matchPlayers.filter((p) => p.faction === 'SHIRTS')}
-              skins={matchPlayers.filter((p) => p.faction === 'SKINS')}
-            />
-          )}
         </>
       )}
 
