@@ -239,6 +239,7 @@ export default function MatchTabView({
   mapPool,
   demoDownloadUrl,
   ratingDeltas,
+  ratingProjections = [],
 }: {
   shirts: MatchStatRow[];
   skins: MatchStatRow[];
@@ -261,8 +262,10 @@ export default function MatchTabView({
   mapPool: string[] | null;
   demoDownloadUrl: string | null;
   ratingDeltas: Record<number, number>;
+  ratingProjections?: RatingProjection[];
 }) {
   const hasScoutingData = !!(scoutingData && scoutingH2H);
+  const hasProjections = ratingProjections.length > 0;
   const [tab, setTab] = useState<Tab>('leaderboard');
 
   const allStats = [...shirts, ...skins];
@@ -275,7 +278,7 @@ export default function MatchTabView({
           <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
             Scoreboard
           </button>
-          {hasScoutingData && (
+          {(hasScoutingData || hasProjections) && (
             <button type="button" className={tabCls(tab === 'scouting')} onClick={() => setTab('scouting')}>
               Scouting Report
             </button>
@@ -341,18 +344,29 @@ export default function MatchTabView({
         </>
       )}
 
-      {tab === 'scouting' && hasScoutingData && (
-        <ScoutingReport
-          shirts={[scoutingData!.shirts[0], scoutingData!.shirts[1]]}
-          skins={[scoutingData!.skins[0], scoutingData!.skins[1]]}
-          duos={scoutingH2H!.duos}
-          rivals={scoutingH2H!.rivals}
-          matchMap={matchMap}
-          mapPool={mapPool}
-          mapLeagueAverages={scoutingData!.mapLeagueAverages}
-          shirtsF={shirtsF}
-          skinsF={skinsF}
-        />
+      {tab === 'scouting' && (
+        <>
+          {hasProjections && (
+            <RatingProjectionTable
+              projections={ratingProjections}
+              shirts={matchPlayers.filter((p) => p.faction === 'SHIRTS')}
+              skins={matchPlayers.filter((p) => p.faction === 'SKINS')}
+            />
+          )}
+          {hasScoutingData && (
+            <ScoutingReport
+              shirts={[scoutingData!.shirts[0], scoutingData!.shirts[1]]}
+              skins={[scoutingData!.skins[0], scoutingData!.skins[1]]}
+              duos={scoutingH2H!.duos}
+              rivals={scoutingH2H!.rivals}
+              matchMap={matchMap}
+              mapPool={mapPool}
+              mapLeagueAverages={scoutingData!.mapLeagueAverages}
+              shirtsF={shirtsF}
+              skinsF={skinsF}
+            />
+          )}
+        </>
       )}
     </>
   );
