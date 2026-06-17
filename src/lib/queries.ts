@@ -2823,6 +2823,67 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
 // EHOG rating data
 // ---------------------------------------------------------------------------
 
+const SUPABASE_IN_BATCH = 200;
+
+async function batchedIn<T>(
+  table: string,
+  column: string,
+  ids: number[],
+  select: string,
+): Promise<T[]> {
+  const results: T[] = [];
+  for (let i = 0; i < ids.length; i += SUPABASE_IN_BATCH) {
+    const chunk = ids.slice(i, i + SUPABASE_IN_BATCH);
+    const { data, error } = await supabase.from(table).select(select).in(column, chunk);
+    if (error) throw error;
+    if (data) results.push(...(data as T[]));
+  }
+  return results;
+}
+
+interface MatchContext {
+  matchById: Map<number, { match_number: number; week_id: number }>;
+  weekById: Map<number, { season_id: number; week_number: number }>;
+  seasonById: Map<number, { name: string; is_gauntlet: boolean }>;
+}
+
+async function resolveMatchContext(matchIds: number[]): Promise<MatchContext> {
+  const matches = await batchedIn<{ id: number; match_number: number; week_id: number }>(
+    'matches', 'id', matchIds, 'id, match_number, week_id',
+  );
+  const matchById = new Map(matches.map((m) => [m.id, m]));
+
+  const weekIds = Array.from(new Set(matches.map((m) => m.week_id)));
+  const weeks = await batchedIn<{ id: number; season_id: number; week_number: number }>(
+    'weeks', 'id', weekIds, 'id, season_id, week_number',
+  );
+  const weekById = new Map(weeks.map((w) => [w.id, w]));
+
+  const seasonIds = Array.from(new Set(weeks.map((w) => w.season_id)));
+  const seasons = await batchedIn<{ id: number; name: string; is_gauntlet: boolean }>(
+    'seasons', 'id', seasonIds, 'id, name, is_gauntlet',
+  );
+  const seasonById = new Map(seasons.map((s) => [s.id, s]));
+
+  return { matchById, weekById, seasonById };
+}
+
+function matchSeasonInfo(
+  matchId: number,
+  ctx: MatchContext,
+): { seasonName: string; seasonNumber: number | null; isGauntlet: boolean; weekNumber: number; matchNumber: number } {
+  const m = ctx.matchById.get(matchId);
+  const w = m ? ctx.weekById.get(m.week_id) : undefined;
+  const s = w ? ctx.seasonById.get(w.season_id) : undefined;
+  return {
+    seasonName: s?.name ?? '',
+    seasonNumber: s ? extractSeasonNumber(s.name) : null,
+    isGauntlet: s?.is_gauntlet ?? false,
+    weekNumber: w?.week_number ?? 0,
+    matchNumber: m?.match_number ?? 0,
+  };
+}
+
 export interface EhogRatingPoint {
   matchId: number;
   sequenceIndex: number;
@@ -2862,50 +2923,15 @@ export async function getPlayerEhogRating(playerId: number): Promise<EhogPlayerD
 
   if (rows.length === 0) return { currentRating, history: [] };
 
-  const matchIds = rows.map((r) => r.match_id);
-  const { data: matches, error: mErr } = await supabase
-    .from('matches')
-    .select('id, match_number, week_id')
-    .in('id', matchIds);
-  if (mErr) throw mErr;
+  const ctx = await resolveMatchContext(rows.map((r) => r.match_id));
 
-  const matchById = new Map<number, { match_number: number; week_id: number }>();
-  for (const m of matches ?? []) matchById.set(m.id, m);
-
-  const weekIds = Array.from(new Set((matches ?? []).map((m) => m.week_id)));
-  const { data: weeks, error: wErr } = await supabase
-    .from('weeks')
-    .select('id, season_id, week_number')
-    .in('id', weekIds);
-  if (wErr) throw wErr;
-  const weekById = new Map<number, { season_id: number; week_number: number }>();
-  for (const w of weeks ?? []) weekById.set(w.id, w);
-
-  const seasonIds = Array.from(new Set((weeks ?? []).map((w) => w.season_id)));
-  const { data: seasons, error: sErr } = await supabase
-    .from('seasons')
-    .select('id, name, is_gauntlet')
-    .in('id', seasonIds);
-  if (sErr) throw sErr;
-  const seasonById = new Map<number, { name: string; is_gauntlet: boolean }>();
-  for (const s of seasons ?? []) seasonById.set(s.id, s);
-
-  const history: EhogRatingPoint[] = rows.map((r) => {
-    const m = matchById.get(r.match_id);
-    const w = m ? weekById.get(m.week_id) : undefined;
-    const s = w ? seasonById.get(w.season_id) : undefined;
-    return {
-      matchId: r.match_id,
-      sequenceIndex: r.sequence_index,
-      ehogRating: r.ehog_rating,
-      ratingDelta: r.rating_delta,
-      seasonName: s?.name ?? '',
-      seasonNumber: s ? extractSeasonNumber(s.name) : null,
-      isGauntlet: s?.is_gauntlet ?? false,
-      weekNumber: w?.week_number ?? 0,
-      matchNumber: m?.match_number ?? 0,
-    };
-  });
+  const history: EhogRatingPoint[] = rows.map((r) => ({
+    matchId: r.match_id,
+    sequenceIndex: r.sequence_index,
+    ehogRating: r.ehog_rating,
+    ratingDelta: r.rating_delta,
+    ...matchSeasonInfo(r.match_id, ctx),
+  }));
 
   return { currentRating, history };
 }
@@ -2928,44 +2954,25 @@ export async function getAllEhogSnapshots(): Promise<EhogSnapshotRow[]> {
   if (!data || data.length === 0) return [];
 
   const matchIds = Array.from(new Set(data.map((r) => r.match_id)));
-  const { data: matches, error: mErr } = await supabase
-    .from('matches')
-    .select('id, week_id')
-    .in('id', matchIds);
-  if (mErr) throw mErr;
-  const matchWeekMap = new Map<number, number>();
-  for (const m of matches ?? []) matchWeekMap.set(m.id, m.week_id);
+  const ctx = await resolveMatchContext(matchIds);
 
-  const weekIds = Array.from(new Set((matches ?? []).map((m) => m.week_id)));
-  const { data: weeks, error: wErr } = await supabase
-    .from('weeks')
-    .select('id, season_id')
-    .in('id', weekIds);
-  if (wErr) throw wErr;
-  const weekSeasonMap = new Map<number, number>();
-  for (const w of weeks ?? []) weekSeasonMap.set(w.id, w.season_id);
-
-  const seasonIds = Array.from(new Set((weeks ?? []).map((w) => w.season_id)));
-  const { data: seasons, error: sErr } = await supabase
-    .from('seasons')
-    .select('id, name, is_gauntlet')
-    .in('id', seasonIds);
-  if (sErr) throw sErr;
-  const seasonInfo = new Map<number, { name: string; is_gauntlet: boolean }>();
-  for (const s of seasons ?? []) seasonInfo.set(s.id, { name: s.name, is_gauntlet: s.is_gauntlet });
-
-  return data.map((r) => {
-    const weekId = matchWeekMap.get(r.match_id);
-    const seasonId = weekId != null ? weekSeasonMap.get(weekId) : undefined;
-    const si = seasonId != null ? seasonInfo.get(seasonId) : undefined;
-    return {
-      playerId: r.player_id,
-      ehogRating: r.ehog_rating,
-      sequenceIndex: r.sequence_index,
-      seasonNumber: si ? extractSeasonNumber(si.name) : null,
-      isGauntlet: si?.is_gauntlet ?? false,
-    };
-  });
+  // Reduce to latest snapshot per player per (seasonNumber, isGauntlet) segment
+  const latest = new Map<string, EhogSnapshotRow>();
+  for (const r of data) {
+    const info = matchSeasonInfo(r.match_id, ctx);
+    const key = `${r.player_id}:${info.seasonNumber}:${info.isGauntlet}`;
+    const prev = latest.get(key);
+    if (!prev || r.sequence_index > prev.sequenceIndex) {
+      latest.set(key, {
+        playerId: r.player_id,
+        ehogRating: r.ehog_rating,
+        sequenceIndex: r.sequence_index,
+        seasonNumber: info.seasonNumber,
+        isGauntlet: info.isGauntlet,
+      });
+    }
+  }
+  return Array.from(latest.values());
 }
 
 export async function getSeasonEhogRatings(seasonId: number): Promise<Record<number, number>> {
@@ -2977,23 +2984,24 @@ export async function getSeasonEhogRatings(seasonId: number): Promise<Record<num
   if (!weeks || weeks.length === 0) return {};
 
   const weekIds = weeks.map((w) => w.id);
-  const { data: matches, error: mErr } = await supabase
-    .from('matches')
-    .select('id')
-    .in('week_id', weekIds);
-  if (mErr) throw mErr;
-  if (!matches || matches.length === 0) return {};
+  const matches = await batchedIn<{ id: number }>('matches', 'week_id', weekIds, 'id');
+  if (matches.length === 0) return {};
 
   const matchIds = matches.map((m) => m.id);
-  const { data, error } = await supabase
-    .from('player_rating_history')
-    .select('player_id, ehog_rating, sequence_index')
-    .eq('formula_version', 'ehog_v1')
-    .in('match_id', matchIds);
-  if (error) throw error;
+  const rows: { player_id: number; ehog_rating: number; sequence_index: number }[] = [];
+  for (let i = 0; i < matchIds.length; i += SUPABASE_IN_BATCH) {
+    const chunk = matchIds.slice(i, i + SUPABASE_IN_BATCH);
+    const { data, error } = await supabase
+      .from('player_rating_history')
+      .select('player_id, ehog_rating, sequence_index')
+      .eq('formula_version', 'ehog_v1')
+      .in('match_id', chunk);
+    if (error) throw error;
+    if (data) rows.push(...data);
+  }
 
   const latest: Record<number, { rating: number; seq: number }> = {};
-  for (const row of data ?? []) {
+  for (const row of rows) {
     const prev = latest[row.player_id];
     if (!prev || row.sequence_index > prev.seq) {
       latest[row.player_id] = { rating: row.ehog_rating, seq: row.sequence_index };

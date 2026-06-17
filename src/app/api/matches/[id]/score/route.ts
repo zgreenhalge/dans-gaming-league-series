@@ -237,7 +237,7 @@ export async function PATCH(
     }
   }
 
-  after(triggerRatingRecompute());
+  after(() => triggerRatingRecompute());
 
   return NextResponse.json({ ok: true });
 }

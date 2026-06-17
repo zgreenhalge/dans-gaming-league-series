@@ -137,8 +137,9 @@ def fetch_chronological_matches(
     gauntlet → week_number → match_number.
     """
     all_seasons = sb.table("seasons").select("id, name, is_gauntlet").execute().data
-    ordered = []
 
+    # Build season_id → (season_number, is_gauntlet) map for relevant seasons
+    season_map: dict[int, tuple[int, bool]] = {}
     for season_number in season_numbers:
         gauntlet_flags = [False] + ([True] if include_gauntlet else [])
         for is_gauntlet in gauntlet_flags:
@@ -154,33 +155,61 @@ def fetch_chronological_matches(
                     f"Ambiguous season match for season {season_number}, "
                     f"is_gauntlet={is_gauntlet}: {[s['name'] for s in candidates]}"
                 )
-            season_id = candidates[0]["id"]
+            season_map[candidates[0]["id"]] = (season_number, is_gauntlet)
 
-            weeks = (
-                sb.table("weeks")
-                .select("id, week_number")
-                .eq("season_id", season_id)
-                .order("week_number")
-                .execute()
-                .data
-            )
-            for week in weeks:
-                matches = (
-                    sb.table("matches")
-                    .select("id, final_score, match_number")
-                    .eq("week_id", week["id"])
-                    .order("match_number")
-                    .execute()
-                    .data
-                )
-                for m in matches:
-                    if not is_played_score(m.get("final_score")):
-                        continue
-                    ordered.append({
-                        "match_id": m["id"],
-                        "season_number": season_number,
-                        "is_gauntlet": is_gauntlet,
-                    })
+    if not season_map:
+        return []
+
+    # Batch-fetch all weeks and matches for the relevant seasons (3 queries total)
+    season_ids = list(season_map.keys())
+    all_weeks = []
+    for i in range(0, len(season_ids), BATCH_SIZE):
+        chunk = season_ids[i: i + BATCH_SIZE]
+        all_weeks.extend(
+            sb.table("weeks")
+            .select("id, season_id, week_number")
+            .in_("season_id", chunk)
+            .execute()
+            .data
+        )
+
+    week_map: dict[int, tuple[int, int]] = {}  # week_id → (season_id, week_number)
+    week_ids = []
+    for w in all_weeks:
+        week_map[w["id"]] = (w["season_id"], w["week_number"])
+        week_ids.append(w["id"])
+
+    all_matches = []
+    for i in range(0, len(week_ids), BATCH_SIZE):
+        chunk = week_ids[i: i + BATCH_SIZE]
+        all_matches.extend(
+            sb.table("matches")
+            .select("id, final_score, match_number, week_id")
+            .in_("week_id", chunk)
+            .execute()
+            .data
+        )
+
+    # Sort: season_number → regular before gauntlet → week_number → match_number
+    def sort_key(m):
+        wid = m["week_id"]
+        sid, wn = week_map[wid]
+        sn, ig = season_map[sid]
+        return (sn, ig, wn, m["match_number"])
+
+    all_matches.sort(key=sort_key)
+
+    ordered = []
+    for m in all_matches:
+        if not is_played_score(m.get("final_score")):
+            continue
+        sid, _ = week_map[m["week_id"]]
+        sn, ig = season_map[sid]
+        ordered.append({
+            "match_id": m["id"],
+            "season_number": sn,
+            "is_gauntlet": ig,
+        })
 
     return ordered
 

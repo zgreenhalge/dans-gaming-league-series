@@ -592,7 +592,7 @@ export default function PlayerView({
                           <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.played}</td>
                           <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.numTimesPicked}</td>
                           <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
-                          <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.roundsPlayed > 0 ? (s.roundsWon / s.roundsPlayed * 100).toFixed(1) : '—'}%</td>
+                          <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.roundsPlayed > 0 ? `${(s.roundsWon / s.roundsPlayed * 100).toFixed(1)}%` : '—'}</td>
                         </tr>
                       ))}
                     </tbody>
