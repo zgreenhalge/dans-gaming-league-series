@@ -134,9 +134,11 @@ export default async function MatchPage({
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
 
-  // Compute rating projections for unplayed matches with full rosters
+  // Compute rating projections for unplayed matches in the current week
+  const matchWindow = matchWeekWindow(season.start_date, week.week_number);
+  const isCurrentWeek = matchWindow != null && new Date().toISOString().slice(0, 10) >= matchWindow.weekStart && new Date().toISOString().slice(0, 10) <= matchWindow.weekEnd;
   let ratingProjections: RatingProjection[] = [];
-  if (!played && shirts.length === 2 && skins.length === 2) {
+  if (!played && isCurrentWeek && shirts.length === 2 && skins.length === 2) {
     const allPlayerIds = [...shirts, ...skins].map((s) => s.player_id);
     const playerRatings = await getPlayerRatings(allPlayerIds);
     const byId = new Map(playerRatings.map((r) => [r.playerId, r]));
