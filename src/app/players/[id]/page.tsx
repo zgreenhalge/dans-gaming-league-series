@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getPlayer, getCareerLeaderboard, getH2HData } from '@/lib/queries';
+import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating } from '@/lib/queries';
 import { maybeRefreshSteamProfile } from '@/lib/steam';
 import PlayerView from '@/components/PlayerView';
 import PlayerAvatar from '@/components/PlayerAvatar';
+import EhogBadge from '@/components/EhogBadge';
 
 export const revalidate = 60;
 
@@ -26,10 +27,11 @@ export default async function PlayerPage({
   const { id } = await params;
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
-  const [detail, careerLeaderboard, h2hData] = await Promise.all([
+  const [detail, careerLeaderboard, h2hData, ehog] = await Promise.all([
     getPlayer(playerId),
     getCareerLeaderboard(),
     getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
+    getPlayerEhogRating(playerId),
   ]);
   if (!detail) notFound();
 
@@ -51,7 +53,7 @@ export default async function PlayerPage({
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6 flex items-center gap-5">
           <PlayerAvatar name={detail.player.name} imageUrl={detail.player.steam_avatar_url} size="lg" />
-          <div>
+          <div className="flex-1 min-w-0">
             <div className="font-display text-[42px] font-semibold leading-tight">
               {detail.player.name}
             </div>
@@ -66,6 +68,9 @@ export default async function PlayerPage({
               </Link>
             )}
           </div>
+          {ehog.currentRating != null && (
+            <EhogBadge rating={ehog.currentRating} />
+          )}
         </div>
         <PlayerView
           playerId={detail.player.id}
@@ -73,6 +78,7 @@ export default async function PlayerPage({
           trophies={detail.trophies}
           careerLeaderboard={careerLeaderboard}
           h2hData={h2hData}
+          ehogHistory={ehog.history}
         />
       </main>
     </div>

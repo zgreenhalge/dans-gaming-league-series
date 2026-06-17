@@ -8,6 +8,7 @@ import { YouBadge } from '@/components/YouBadge';
 import DemoUploadModal from '@/components/DemoUploadModal';
 import ScoutingReport from '@/components/ScoutingReport';
 import type { MatchStatRow, MatchScoutingData, H2HData } from '@/lib/queries';
+import type { RatingProjection } from '@/lib/ehog';
 
 type Faction = 'CT' | 'T' | null;
 type Tab = 'leaderboard' | 'scouting';
@@ -23,11 +24,13 @@ function Scoreboard({
   mvpPlayerId,
   faction,
   currentPlayerId,
+  ratingDeltas,
 }: {
   players: MatchStatRow[];
   mvpPlayerId: number | null;
   faction: Faction;
   currentPlayerId: number | null;
+  ratingDeltas: Record<number, number>;
 }) {
   const cls = factionClass(faction);
   return (
@@ -79,6 +82,11 @@ function Scoreboard({
                         }}
                       >
                         MVP
+                      </span>
+                    )}
+                    {ratingDeltas[p.player_id] != null && (
+                      <span className={`ml-1 font-mono text-[10px] ${ratingDeltas[p.player_id] > 0 ? 'text-[var(--color-accent-green-fill)]' : ratingDeltas[p.player_id] < 0 ? 'text-[var(--color-accent-red-fg)]' : 'text-[var(--color-text-secondary)]'}`}>
+                        ({ratingDeltas[p.player_id] > 0 ? '+' : ''}{ratingDeltas[p.player_id].toFixed(1)})
                       </span>
                     )}
                   </Link>
@@ -138,6 +146,77 @@ function TeamHeader({
   );
 }
 
+function deltaColor(delta: number, maxAbs: number): string {
+  if (maxAbs === 0) return 'rgba(255,255,255,0.5)';
+  const t = Math.min(1, Math.abs(delta) / maxAbs);
+  if (delta > 0) return `color-mix(in srgb, var(--color-accent-green-fill) ${Math.round(t * 100)}%, rgba(255,255,255,0.5))`;
+  if (delta < 0) return `color-mix(in srgb, var(--color-accent-red-fg) ${Math.round(t * 100)}%, rgba(255,255,255,0.5))`;
+  return 'rgba(255,255,255,0.5)';
+}
+
+export function RatingProjectionTable({
+  projections,
+  shirts,
+  skins,
+}: {
+  projections: RatingProjection[];
+  shirts: { player_id: number; player_name: string }[];
+  skins: { player_id: number; player_name: string }[];
+}) {
+  const allPlayers = [...shirts, ...skins];
+  const maxAbsDelta = Math.max(...projections.flatMap((p) => Object.values(p.deltas).map(Math.abs)), 0.01);
+  return (
+    <div className="mt-8">
+      <div className="flex items-baseline justify-between mb-3">
+        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">EHOG rating projections</span>
+        <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">based on current ratings</span>
+      </div>
+      <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr className="bg-[var(--color-bg-secondary)]">
+              <th className="tracked text-[9px] font-semibold py-2 pl-4 pr-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">
+                Score
+              </th>
+              {allPlayers.map((p) => (
+                <th key={p.player_id} className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">
+                  {p.player_name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {projections.map((proj) => {
+              const shirtsWin = proj.scoreA > proj.scoreB;
+              return (
+                <tr key={proj.label} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                  <td className="pl-4 pr-3 py-2.5 font-mono tnum text-[var(--color-text-secondary)] whitespace-nowrap">
+                    <span className={shirtsWin ? 'text-[var(--color-accent-green-fg)]' : 'text-[var(--color-accent-red-fg)]'}>
+                      {proj.label}
+                    </span>
+                  </td>
+                  {allPlayers.map((p) => {
+                    const delta = proj.deltas[p.player_id] ?? 0;
+                    return (
+                      <td
+                        key={p.player_id}
+                        className="px-3 py-2.5 text-right font-mono tnum font-semibold"
+                        style={{ color: deltaColor(delta, maxAbsDelta) }}
+                      >
+                        {delta > 0 ? '+' : ''}{delta.toFixed(2)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function MatchTabView({
   shirts,
   skins,
@@ -159,6 +238,8 @@ export default function MatchTabView({
   matchMap,
   mapPool,
   demoDownloadUrl,
+  ratingDeltas,
+  ratingProjections = [],
 }: {
   shirts: MatchStatRow[];
   skins: MatchStatRow[];
@@ -180,8 +261,11 @@ export default function MatchTabView({
   matchMap: string | null;
   mapPool: string[] | null;
   demoDownloadUrl: string | null;
+  ratingDeltas: Record<number, number>;
+  ratingProjections?: RatingProjection[];
 }) {
   const hasScoutingData = !!(scoutingData && scoutingH2H);
+  const hasProjections = ratingProjections.length > 0;
   const [tab, setTab] = useState<Tab>('leaderboard');
 
   const allStats = [...shirts, ...skins];
@@ -194,7 +278,7 @@ export default function MatchTabView({
           <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
             Scoreboard
           </button>
-          {hasScoutingData && (
+          {(hasScoutingData || hasProjections) && (
             <button type="button" className={tabCls(tab === 'scouting')} onClick={() => setTab('scouting')}>
               Scouting Report
             </button>
@@ -243,7 +327,7 @@ export default function MatchTabView({
                   score={score?.shirts ?? null}
                   outcome={score ? (shirtsWon ? 'WON' : 'LOST') : null}
                 />
-                <Scoreboard players={shirts} mvpPlayerId={mvpPlayerId} faction={shirtsF} currentPlayerId={currentPlayerId} />
+                <Scoreboard players={shirts} mvpPlayerId={mvpPlayerId} faction={shirtsF} currentPlayerId={currentPlayerId} ratingDeltas={ratingDeltas} />
               </div>
               <div className="mt-6">
                 <TeamHeader
@@ -252,25 +336,37 @@ export default function MatchTabView({
                   score={score?.skins ?? null}
                   outcome={score ? (!shirtsWon ? 'WON' : 'LOST') : null}
                 />
-                <Scoreboard players={skins} mvpPlayerId={mvpPlayerId} faction={skinsF} currentPlayerId={currentPlayerId} />
+                <Scoreboard players={skins} mvpPlayerId={mvpPlayerId} faction={skinsF} currentPlayerId={currentPlayerId} ratingDeltas={ratingDeltas} />
               </div>
             </>
           )}
+
         </>
       )}
 
-      {tab === 'scouting' && hasScoutingData && (
-        <ScoutingReport
-          shirts={[scoutingData!.shirts[0], scoutingData!.shirts[1]]}
-          skins={[scoutingData!.skins[0], scoutingData!.skins[1]]}
-          duos={scoutingH2H!.duos}
-          rivals={scoutingH2H!.rivals}
-          matchMap={matchMap}
-          mapPool={mapPool}
-          mapLeagueAverages={scoutingData!.mapLeagueAverages}
-          shirtsF={shirtsF}
-          skinsF={skinsF}
-        />
+      {tab === 'scouting' && (
+        <>
+          {hasProjections && (
+            <RatingProjectionTable
+              projections={ratingProjections}
+              shirts={matchPlayers.filter((p) => p.faction === 'SHIRTS')}
+              skins={matchPlayers.filter((p) => p.faction === 'SKINS')}
+            />
+          )}
+          {hasScoutingData && (
+            <ScoutingReport
+              shirts={[scoutingData!.shirts[0], scoutingData!.shirts[1]]}
+              skins={[scoutingData!.skins[0], scoutingData!.skins[1]]}
+              duos={scoutingH2H!.duos}
+              rivals={scoutingH2H!.rivals}
+              matchMap={matchMap}
+              mapPool={mapPool}
+              mapLeagueAverages={scoutingData!.mapLeagueAverages}
+              shirtsF={shirtsF}
+              skinsF={skinsF}
+            />
+          )}
+        </>
       )}
     </>
   );

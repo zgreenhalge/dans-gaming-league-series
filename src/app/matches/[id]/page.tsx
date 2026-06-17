@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { getMatch, getMatchScoutingData, getH2HData } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings } from '@/lib/queries';
+import { projectRatingDeltas, type RatingProjection } from '@/lib/ehog';
 import type { Match } from '@/lib/types';
 import { isPlayedScore, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
@@ -116,7 +117,7 @@ export default async function MatchPage({
 
   const showScouting = shirts.length === 2 && skins.length === 2;
   const key = makeDemoKey(matchId);
-  const [scoutingData, scoutingH2H, demoDownloadUrl] = await Promise.all([
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap] = await Promise.all([
     showScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     showScouting
       ? getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true })
@@ -128,7 +129,23 @@ export default async function MatchPage({
         }),
       )
       .catch(() => null),
+    played ? getMatchRatingDeltas(matchId) : Promise.resolve(new Map<number, number>()),
   ]);
+  const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
+
+  // Compute rating projections for unplayed matches in the current week
+  const matchWindow = matchWeekWindow(season.start_date, week.week_number);
+  const isCurrentWeek = matchWindow != null && new Date().toISOString().slice(0, 10) >= matchWindow.weekStart && new Date().toISOString().slice(0, 10) <= matchWindow.weekEnd;
+  let ratingProjections: RatingProjection[] = [];
+  if (!played && isCurrentWeek && shirts.length === 2 && skins.length === 2) {
+    const allPlayerIds = [...shirts, ...skins].map((s) => s.player_id);
+    const playerRatings = await getPlayerRatings(allPlayerIds);
+    const byId = new Map(playerRatings.map((r) => [r.playerId, r]));
+    const shirtRatings = shirts.map((s) => byId.get(s.player_id)!);
+    const skinRatings = skins.map((s) => byId.get(s.player_id)!);
+    ratingProjections = projectRatingDeltas(shirtRatings, skinRatings, season.target_win_rounds);
+  }
+
   const allByAdr = [...stats]
     .filter((s) => s.rounds_played > 0)
     .sort((a, b) => b.adr - a.adr);
@@ -296,6 +313,8 @@ export default async function MatchPage({
           matchMap={map}
           mapPool={season.map_pool}
           demoDownloadUrl={demoDownloadUrl}
+          ratingDeltas={ratingDeltas}
+          ratingProjections={ratingProjections}
         />
       </main>
     </div>

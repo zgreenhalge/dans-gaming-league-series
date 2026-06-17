@@ -10,6 +10,7 @@ import {
   getLinkedGauntlet,
   getLinkedRegularSeason,
   getH2HData,
+  getSeasonEhogRatings,
   type WeekWithMatches,
   type GauntletRound,
 } from '@/lib/queries';
@@ -109,10 +110,11 @@ export default async function SeasonPage({
     if (linked) redirect(`/seasons/${linked.id}`);
 
     // Orphan gauntlet with no paired regular season — render standalone
-    const [rounds, leaderboard, h2hData] = await Promise.all([
+    const [rounds, leaderboard, h2hData, ehogRatings] = await Promise.all([
       getGauntletRounds(seasonId),
       getGauntletSeasonLeaderboard(seasonId),
       getH2HData({ filter: seasonId, includeRegular: false, includeGauntlet: true }),
+      getSeasonEhogRatings(seasonId),
     ]);
     const matchCount = countGauntletMatches(rounds);
 
@@ -146,6 +148,7 @@ export default async function SeasonPage({
             seasonStatus={season.status}
             currentPlayerId={currentPlayerId}
             h2hData={h2hData}
+            ehogRatings={ehogRatings}
           />
         </main>
       </div>
@@ -155,7 +158,7 @@ export default async function SeasonPage({
   // Regular season — check for paired gauntlet
   const linkedGauntlet = await getLinkedGauntlet(season.name);
 
-  const [leaderboard, schedule, gauntletRounds, gauntletLeaderboard, h2hData, gauntletH2hData] = await Promise.all([
+  const [leaderboard, schedule, gauntletRounds, gauntletLeaderboard, h2hData, gauntletH2hData, ehogRatings, gauntletEhogRatings] = await Promise.all([
     getSeasonLeaderboard(seasonId),
     getSeasonSchedule(seasonId),
     linkedGauntlet ? getGauntletRounds(linkedGauntlet.id) : Promise.resolve(null),
@@ -164,6 +167,8 @@ export default async function SeasonPage({
     linkedGauntlet
       ? getH2HData({ filter: seasonId, includeRegular: false, includeGauntlet: true })
       : Promise.resolve(null),
+    getSeasonEhogRatings(seasonId),
+    linkedGauntlet ? getSeasonEhogRatings(linkedGauntlet.id) : Promise.resolve(null),
   ]);
   const matchCount = countMatches(schedule);
 
@@ -202,6 +207,8 @@ export default async function SeasonPage({
             currentPlayerId={currentPlayerId}
             h2hData={h2hData}
             gauntletH2hData={gauntletH2hData}
+            ehogRatings={ehogRatings}
+            gauntletEhogRatings={gauntletEhogRatings ?? undefined}
           />
         ) : (
           <SeasonTabView
@@ -212,6 +219,7 @@ export default async function SeasonPage({
             seasonStatus={season.status}
             currentPlayerId={currentPlayerId}
             h2hData={h2hData}
+            ehogRatings={ehogRatings}
           />
         )}
       </main>

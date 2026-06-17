@@ -4,5 +4,11 @@
       "path": "/api/cron/refresh-steam",
       "schedule": "0 4 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "api/ehog/recompute.py": {
+      "runtime": "@vercel/python@6.45.0",
+      "includeFiles": "ehog/**"
+    }
+  }
 }

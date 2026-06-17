@@ -138,6 +138,8 @@ export interface PlayerMatchInput {
   shirts_pick: string | null;
   picked_map: string | null;
   is_win: boolean;
+  rounds_won: number;
+  rounds_played: number;
 }
 
 export interface PlayerMapStat {
@@ -155,6 +157,8 @@ export interface PlayerSideStat {
   numTimesPicked: number;
   wins: number;
   losses: number;
+  roundsWon: number;
+  roundsPlayed: number;
 }
 
 export function aggregatePlayerMapStats(matches: PlayerMatchInput[]): PlayerMapStat[] {
@@ -187,19 +191,19 @@ export function aggregatePlayerMapStats(matches: PlayerMatchInput[]): PlayerMapS
 }
 
 export function aggregatePlayerSideStats(matches: PlayerMatchInput[]): PlayerSideStat[] {
-  const ct = { played: 0, numTimesPicked: 0, wins: 0, losses: 0 };
-  const t = { played: 0, numTimesPicked: 0, wins: 0, losses: 0 };
+  const ct = { played: 0, numTimesPicked: 0, wins: 0, losses: 0, roundsWon: 0, roundsPlayed: 0 };
+  const t = { played: 0, numTimesPicked: 0, wins: 0, losses: 0, roundsWon: 0, roundsPlayed: 0 };
 
   for (const m of matches) {
     if (!isPlayedScore(m.final_score) || !m.skins_starting_side) continue;
     const playerSide = m.faction === 'SKINS' ? m.skins_starting_side : (m.skins_starting_side === 'CT' ? 'T' : 'CT');
     const bucket = playerSide === 'CT' ? ct : t;
     bucket.played++;
+    bucket.roundsWon += m.rounds_won;
+    bucket.roundsPlayed += m.rounds_played;
     if (m.is_win) bucket.wins++;
     else bucket.losses++;
 
-    // numTimesPicked = times the player's team got to choose their starting side
-    // The team that didn't pick the map gets to choose the side
     const playerTeamChoseSide = m.faction === 'SHIRTS' ? m.picked_map != null : m.shirts_pick != null;
     if (playerTeamChoseSide) bucket.numTimesPicked++;
   }
