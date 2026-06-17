@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import type { PlayerHistoryRow, TrophyEntry, H2HData } from '@/lib/queries';
+import type { PlayerHistoryRow, TrophyEntry, H2HData, EhogRatingPoint } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats, type PlayerMapStat, type PlayerSideStat } from '@/lib/mapSideStats';
+import { mapSlug } from '@/lib/maps';
 import DevGate from './DevGate';
 import { MatchCard } from './MatchCard';
 import LeaderboardTable from './LeaderboardTable';
@@ -13,9 +14,10 @@ import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import Sparkline from './Sparkline';
 import { CountdownTimer } from './CountdownTimer';
 import MatchupsTab from './MatchupsTab';
+import EhogTimeline from './EhogTimeline';
 
 type Filter = 'career' | number;
-type MapSortCol = 'map' | 'record' | 'wr' | 'adr';
+type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
 type PlayerTab = 'stats' | 'matches' | 'trophies' | 'matchups';
 type MatchesSubTab = 'history' | 'upcoming';
 
@@ -105,6 +107,7 @@ interface MapAgg {
   wins: number;
   losses: number;
   wr: number;
+  rwr: number;
   adr: number;
 }
 
@@ -121,7 +124,7 @@ function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
   for (const { display, rows: list } of buckets.values()) {
     const a = aggregate(list);
     if (a.matches === 0) continue;
-    out.push({ map: display, wins: a.wins, losses: a.losses, wr: a.wr, adr: a.adr });
+    out.push({ map: display, wins: a.wins, losses: a.losses, wr: a.wr, rwr: a.rwr, adr: a.adr });
   }
   return out.sort((a, b) => b.wr - a.wr || b.adr - a.adr);
 }
@@ -195,12 +198,14 @@ export default function PlayerView({
   trophies,
   careerLeaderboard,
   h2hData,
+  ehogHistory,
 }: {
   playerId: number;
   history: PlayerHistoryRow[];
   trophies: TrophyEntry[];
   careerLeaderboard: LeaderboardRowWithId[];
   h2hData: H2HData;
+  ehogHistory: EhogRatingPoint[];
 }) {
   const { regularSeasons, gauntletSeasons, regularToGauntlet } = useMemo(() => {
     const regMap = new Map<number, { id: number; name: string }>();
@@ -280,7 +285,24 @@ export default function PlayerView({
     return base.filter((t) => (t.is_gauntlet ? includeGauntlet : includeRegular));
   }, [filter, trophies, includeRegular, includeGauntlet, regularToGauntlet]);
 
+  const filteredEhog = useMemo(() => {
+    const base = filter === 'career'
+      ? ehogHistory
+      : (() => {
+          const sel = regularSeasons.find((s) => s.id === filter);
+          const sn = sel ? extractSeasonNumber(sel.name) : null;
+          return ehogHistory.filter((h) => h.seasonNumber === sn);
+        })();
+    return base.filter((h) =>
+      h.isGauntlet ? includeGauntlet : includeRegular,
+    );
+  }, [filter, ehogHistory, includeRegular, includeGauntlet, regularSeasons]);
+
   const agg = aggregate(filtered);
+  const peakEhog = useMemo(() => {
+    if (filteredEhog.length === 0) return null;
+    return Math.max(...filteredEhog.map((h) => h.ehogRating));
+  }, [filteredEhog]);
   const maps = aggregateByMap(filtered);
   const playerMapStats = aggregatePlayerMapStats(filtered);
   const playerSideStats = aggregatePlayerSideStats(filtered);
@@ -436,127 +458,19 @@ export default function PlayerView({
             </Link>
           </div>
           <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-            <div className="grid grid-cols-4 sm:grid-cols-8">
+            <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-10">
               <StatCell v={agg.matches} l="Games" />
               <StatCell v={`${agg.wins}-${agg.losses}`} l="W-L" />
               <StatCell v={`${agg.wr.toFixed(1)}%`} l="Win rate" />
+              <StatCell v={`${agg.rwr.toFixed(1)}%`} l="RWR%" />
               <StatCell v={agg.kills} l="Kills" />
               <StatCell v={agg.assists} l="Assists" />
               <StatCell v={agg.deaths} l="Deaths" />
               <StatCell v={agg.kd.toFixed(2)} l="K/D" />
               <StatCell v={agg.adr.toFixed(2)} l="ADR" />
+              {peakEhog !== null && <StatCell v={peakEhog.toFixed(2)} l="Peak EHOG" />}
             </div>
           </div>
-
-          <DevGate className="mt-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Map Pick/Ban Stats */}
-            <div>
-              <div className="flex items-baseline justify-between mb-3">
-                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban stats</span>
-              </div>
-              {playerMapStats.length === 0 ? (
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                  No map data.
-                </div>
-              ) : (
-                <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
-                  <table className="w-full border-collapse text-[12px]">
-                    <thead>
-                      <tr className="bg-[var(--color-bg-secondary)]">
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Map</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Games</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Picked</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">CT</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">T</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {playerMapStats.map((m) => (
-                        <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                          <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{m.map}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.games}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.picked}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.ctPlayed}</td>
-                          <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.tPlayed}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* Per-Side Stats */}
-            <div>
-              <div className="flex items-baseline justify-between mb-3">
-                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Per-side stats</span>
-              </div>
-              {playerSideStats.every((s) => s.played === 0) ? (
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                  No side data.
-                </div>
-              ) : (
-                <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
-                  <table className="w-full border-collapse text-[12px]">
-                    <thead>
-                      <tr className="bg-[var(--color-bg-secondary)]">
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Side</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Played</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Times Picked</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W-L</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {playerSideStats.map((s) => (
-                        <tr key={s.side} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                          <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{s.side}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.played}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{s.numTimesPicked}</td>
-                          <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-          </DevGate>
-
-          {adrSeries.length > 1 && (
-          <DevGate className="mt-10">
-              <div className="flex items-baseline justify-between mb-3">
-                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">ADR over time</span>
-                <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">{adrSeries.length} matches</span>
-              </div>
-              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 text-[var(--color-site-accent)]">
-                <Sparkline
-                  data={adrSeries}
-                  width={420}
-                  height={62}
-                  color="currentColor"
-                  fill="color-mix(in srgb, currentColor 16%, transparent)"
-                  strokeWidth={2.5}
-                  showDot
-                />
-              </div>
-          </DevGate>
-          )}
-
-          <DevGate className="mt-10">
-              <div className="flex items-baseline justify-between mb-3">
-                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Percentile vs league</span>
-                <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">median = midline</span>
-              </div>
-              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-2">
-                <PctRow label="ADR" pct={percentiles.adr} value={agg.adr.toFixed(1)} />
-                <PctRow label="K/D" pct={percentiles.kd} value={agg.kd.toFixed(2)} />
-                <PctRow label="Win rate" pct={percentiles.wr} value={`${agg.wr.toFixed(0)}%`} />
-              </div>
-          </DevGate>
 
           {isCareer && activeSeasons.length > 0 && (
             <>
@@ -598,7 +512,97 @@ export default function PlayerView({
             </>
           )}
 
-          <SectionLabel>Map statistics</SectionLabel>
+          {filteredEhog.length > 1 && (
+            <div className="mt-8">
+              <div className="flex items-baseline justify-between mb-3">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">EHOG timeline</span>
+                <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">{filteredEhog.length} matches</span>
+              </div>
+              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-2 py-3">
+                <EhogTimeline history={filteredEhog} />
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            {/* Pick/Ban Stats */}
+            <div>
+              <div className="flex items-baseline justify-between mb-3">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Pick/ban stats</span>
+              </div>
+              {playerMapStats.length === 0 ? (
+                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+                  No map data.
+                </div>
+              ) : (
+                <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
+                  <table className="w-full border-collapse text-[12px]">
+                    <thead>
+                      <tr className="bg-[var(--color-bg-secondary)]">
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Map</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Games</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Picked</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">CT</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">T</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {playerMapStats.map((m) => (
+                        <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                          <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold"><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.games}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.ctPlayed}</td>
+                          <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.tPlayed}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Side Stats */}
+            <div>
+              <div className="flex items-baseline justify-between mb-3">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Side stats</span>
+              </div>
+              {playerSideStats.every((s) => s.played === 0) ? (
+                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+                  No side data.
+                </div>
+              ) : (
+                <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
+                  <table className="w-full border-collapse text-[12px]">
+                    <thead>
+                      <tr className="bg-[var(--color-bg-secondary)]">
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Side</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Played</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Times Picked</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W-L</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">RWR%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {playerSideStats.map((s) => (
+                        <tr key={s.side} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                          <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{s.side}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.played}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.numTimesPicked}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
+                          <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.roundsPlayed > 0 ? (s.roundsWon / s.roundsPlayed * 100).toFixed(1) : '—'}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <SectionLabel>Map stats</SectionLabel>
           {maps.length === 0 ? (
             <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
               No map data.
@@ -611,6 +615,7 @@ export default function PlayerView({
                     <SortableTh label="Map" colKey="map"    activeCol={mapSort} asc={mapAsc} align="left" onClick={clickMapSort} />
                     <SortableTh label="W-L" colKey="record" activeCol={mapSort} asc={mapAsc} onClick={clickMapSort} />
                     <SortableTh label="WR%" colKey="wr"     activeCol={mapSort} asc={mapAsc} onClick={clickMapSort} />
+                    <SortableTh label="RWR%" colKey="rwr"   activeCol={mapSort} asc={mapAsc} onClick={clickMapSort} />
                     <SortableTh label="ADR" colKey="adr"    activeCol={mapSort} asc={mapAsc} onClick={clickMapSort} />
                   </tr>
                 </thead>
@@ -622,13 +627,14 @@ export default function PlayerView({
                         case 'map':    v = a.map.localeCompare(b.map); break;
                         case 'record': v = b.wins - a.wins || a.losses - b.losses; break;
                         case 'wr':     v = b.wr - a.wr; break;
+                        case 'rwr':    v = b.rwr - a.rwr; break;
                         case 'adr':    v = b.adr - a.adr; break;
                       }
                       return mapAsc ? -v : v;
                     })
                     .map((m) => (
                       <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                        <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{m.map}</td>
+                        <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold"><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></td>
                         <td className="px-3 py-2.5 text-right font-mono tnum">{m.wins}-{m.losses}</td>
                         <td className="px-3 py-2.5 text-right font-mono tnum">
                           {m.wr.toFixed(1)}%
@@ -636,6 +642,7 @@ export default function PlayerView({
                             <span className="block h-full bg-[var(--color-accent-green-fill)]" style={{ width: `${Math.max(0, Math.min(100, m.wr))}%` }} />
                           </span>
                         </td>
+                        <td className="px-3 py-2.5 text-right font-mono tnum">{m.rwr.toFixed(1)}%</td>
                         <td className="px-3 pr-4 py-2.5 text-right font-mono tnum font-semibold">{m.adr.toFixed(2)}</td>
                       </tr>
                     ))}
@@ -643,6 +650,38 @@ export default function PlayerView({
               </table>
             </div>
           )}
+
+          {adrSeries.length > 1 && (
+          <DevGate className="mt-10">
+              <div className="flex items-baseline justify-between mb-3">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">ADR over time</span>
+                <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">{adrSeries.length} matches</span>
+              </div>
+              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 text-[var(--color-site-accent)]">
+                <Sparkline
+                  data={adrSeries}
+                  width={420}
+                  height={62}
+                  color="currentColor"
+                  fill="color-mix(in srgb, currentColor 16%, transparent)"
+                  strokeWidth={2.5}
+                  showDot
+                />
+              </div>
+          </DevGate>
+          )}
+
+          <DevGate className="mt-10">
+              <div className="flex items-baseline justify-between mb-3">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Percentile vs league</span>
+                <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">median = midline</span>
+              </div>
+              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-2">
+                <PctRow label="ADR" pct={percentiles.adr} value={agg.adr.toFixed(1)} />
+                <PctRow label="K/D" pct={percentiles.kd} value={agg.kd.toFixed(2)} />
+                <PctRow label="Win rate" pct={percentiles.wr} value={`${agg.wr.toFixed(0)}%`} />
+              </div>
+          </DevGate>
         </>
       )}
 

@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { getMatch, getMatchScoutingData, getH2HData } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas } from '@/lib/queries';
 import type { Match } from '@/lib/types';
 import { isPlayedScore, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
@@ -116,7 +116,7 @@ export default async function MatchPage({
 
   const showScouting = shirts.length === 2 && skins.length === 2;
   const key = makeDemoKey(matchId);
-  const [scoutingData, scoutingH2H, demoDownloadUrl] = await Promise.all([
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap] = await Promise.all([
     showScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     showScouting
       ? getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true })
@@ -128,7 +128,9 @@ export default async function MatchPage({
         }),
       )
       .catch(() => null),
+    played ? getMatchRatingDeltas(matchId) : Promise.resolve(new Map<number, number>()),
   ]);
+  const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
   const allByAdr = [...stats]
     .filter((s) => s.rounds_played > 0)
     .sort((a, b) => b.adr - a.adr);
@@ -296,6 +298,7 @@ export default async function MatchPage({
           matchMap={map}
           mapPool={season.map_pool}
           demoDownloadUrl={demoDownloadUrl}
+          ratingDeltas={ratingDeltas}
         />
       </main>
     </div>

@@ -23,11 +23,13 @@ function Scoreboard({
   mvpPlayerId,
   faction,
   currentPlayerId,
+  ratingDeltas,
 }: {
   players: MatchStatRow[];
   mvpPlayerId: number | null;
   faction: Faction;
   currentPlayerId: number | null;
+  ratingDeltas: Record<number, number>;
 }) {
   const cls = factionClass(faction);
   return (
@@ -79,6 +81,11 @@ function Scoreboard({
                         }}
                       >
                         MVP
+                      </span>
+                    )}
+                    {ratingDeltas[p.player_id] != null && (
+                      <span className={`ml-1 font-mono text-[10px] ${ratingDeltas[p.player_id] > 0 ? 'text-[var(--color-accent-green-fill)]' : ratingDeltas[p.player_id] < 0 ? 'text-[var(--color-accent-red-fg)]' : 'text-[var(--color-text-secondary)]'}`}>
+                        ({ratingDeltas[p.player_id] > 0 ? '+' : ''}{ratingDeltas[p.player_id].toFixed(1)})
                       </span>
                     )}
                   </Link>
@@ -159,6 +166,7 @@ export default function MatchTabView({
   matchMap,
   mapPool,
   demoDownloadUrl,
+  ratingDeltas,
 }: {
   shirts: MatchStatRow[];
   skins: MatchStatRow[];
@@ -180,6 +188,7 @@ export default function MatchTabView({
   matchMap: string | null;
   mapPool: string[] | null;
   demoDownloadUrl: string | null;
+  ratingDeltas: Record<number, number>;
 }) {
   const hasScoutingData = !!(scoutingData && scoutingH2H);
   const [tab, setTab] = useState<Tab>('leaderboard');
@@ -243,7 +252,7 @@ export default function MatchTabView({
                   score={score?.shirts ?? null}
                   outcome={score ? (shirtsWon ? 'WON' : 'LOST') : null}
                 />
-                <Scoreboard players={shirts} mvpPlayerId={mvpPlayerId} faction={shirtsF} currentPlayerId={currentPlayerId} />
+                <Scoreboard players={shirts} mvpPlayerId={mvpPlayerId} faction={shirtsF} currentPlayerId={currentPlayerId} ratingDeltas={ratingDeltas} />
               </div>
               <div className="mt-6">
                 <TeamHeader
@@ -252,7 +261,7 @@ export default function MatchTabView({
                   score={score?.skins ?? null}
                   outcome={score ? (!shirtsWon ? 'WON' : 'LOST') : null}
                 />
-                <Scoreboard players={skins} mvpPlayerId={mvpPlayerId} faction={skinsF} currentPlayerId={currentPlayerId} />
+                <Scoreboard players={skins} mvpPlayerId={mvpPlayerId} faction={skinsF} currentPlayerId={currentPlayerId} ratingDeltas={ratingDeltas} />
               </div>
             </>
           )}
