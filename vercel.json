@@ -7,7 +7,7 @@
   ],
   "functions": {
     "api/ehog/recompute.py": {
-      "runtime": "python3.12",
+      "runtime": "@vercel/python",
       "includeFiles": "ehog/**"
     }
   }
