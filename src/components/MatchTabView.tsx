@@ -146,6 +146,14 @@ function TeamHeader({
   );
 }
 
+function deltaColor(delta: number, maxAbs: number): string {
+  if (maxAbs === 0) return 'rgba(255,255,255,0.5)';
+  const t = Math.min(1, Math.abs(delta) / maxAbs);
+  if (delta > 0) return `color-mix(in srgb, var(--color-accent-green-fill) ${Math.round(t * 100)}%, rgba(255,255,255,0.5))`;
+  if (delta < 0) return `color-mix(in srgb, var(--color-accent-red-fg) ${Math.round(t * 100)}%, rgba(255,255,255,0.5))`;
+  return 'rgba(255,255,255,0.5)';
+}
+
 function RatingProjectionTable({
   projections,
   shirts,
@@ -156,6 +164,7 @@ function RatingProjectionTable({
   skins: { player_id: number; player_name: string }[];
 }) {
   const allPlayers = [...shirts, ...skins];
+  const maxAbsDelta = Math.max(...projections.flatMap((p) => Object.values(p.deltas).map(Math.abs)), 0.01);
   return (
     <div className="mt-8">
       <div className="flex items-baseline justify-between mb-3">
@@ -191,7 +200,8 @@ function RatingProjectionTable({
                     return (
                       <td
                         key={p.player_id}
-                        className={`px-3 py-2.5 text-right font-mono tnum font-semibold ${delta > 0 ? 'text-[var(--color-accent-green-fill)]' : delta < 0 ? 'text-[var(--color-accent-red-fg)]' : 'text-[var(--color-text-secondary)]'}`}
+                        className="px-3 py-2.5 text-right font-mono tnum font-semibold"
+                        style={{ color: deltaColor(delta, maxAbsDelta) }}
                       >
                         {delta > 0 ? '+' : ''}{delta.toFixed(2)}
                       </td>

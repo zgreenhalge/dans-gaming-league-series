@@ -48,23 +48,28 @@ function projectScenario(
 ): Record<number, number> {
   const aWon = scoreA > scoreB;
   const [wA, wB] = teamWeights(scoreA, scoreB);
+
+  // Run PlackettLuce unweighted to get the base mu/sigma updates.
+  // The JS openskill library ignores the `weight` option, so we apply
+  // margin-of-victory weights manually to match the Python engine.
   const rA = teamA.map((p) => rating({ mu: p.mu, sigma: p.sigma }));
   const rB = teamB.map((p) => rating({ mu: p.mu, sigma: p.sigma }));
-  const [newA, newB] = rate([rA, rB], {
+  const [baseA, baseB] = rate([rA, rB], {
     model: plackettLuce,
     beta: BETA,
     rank: aWon ? [0, 1] : [1, 0],
-    weight: [[wA, wA], [wB, wB]],
   });
 
   const deltas: Record<number, number> = {};
   for (let i = 0; i < teamA.length; i++) {
-    const newEhog = computeEhog(newA[i].mu, newA[i].sigma);
-    deltas[teamA[i].playerId] = newEhog - teamA[i].ehogRating;
+    const weightedMu = teamA[i].mu + wA * (baseA[i].mu - teamA[i].mu);
+    const weightedSigma = teamA[i].sigma + wA * (baseA[i].sigma - teamA[i].sigma);
+    deltas[teamA[i].playerId] = computeEhog(weightedMu, weightedSigma) - teamA[i].ehogRating;
   }
   for (let i = 0; i < teamB.length; i++) {
-    const newEhog = computeEhog(newB[i].mu, newB[i].sigma);
-    deltas[teamB[i].playerId] = newEhog - teamB[i].ehogRating;
+    const weightedMu = teamB[i].mu + wB * (baseB[i].mu - teamB[i].mu);
+    const weightedSigma = teamB[i].sigma + wB * (baseB[i].sigma - teamB[i].sigma);
+    deltas[teamB[i].playerId] = computeEhog(weightedMu, weightedSigma) - teamB[i].ehogRating;
   }
   return deltas;
 }
