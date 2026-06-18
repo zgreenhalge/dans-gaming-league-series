@@ -10,6 +10,7 @@ every match via a full chronological recompute.
 1. PlackettLuce.rate() — unweighted, ranks only
    ↓
 2. Margin-of-victory multiplier (same m for all 4 players)
+   m = MIN + (MAX − MIN) × |scoreSh − scoreSk| / (scoreSh + scoreSk)
    new_mu = prior_mu + m × (unweighted_mu − prior_mu)
    new_sigma = max(SIGMA_FLOOR, unweighted_sigma)
    ↓
@@ -61,16 +62,16 @@ The UI renders a color-coded badge (`EhogBadge.tsx`) and tier bar (`EhogTierBar.
 
 | Key | Description |
 |---|---|
-| `EHOG_CENTER` | μ value that maps to the midpoint of the band (EHOG ≈ 55). Set to `MU_DEFAULT` so new players start mid-band. |
-| `EHOG_SCALE` | Controls how spread out ratings are. Smaller = more bunched in the middle, larger = wider use of the 10–100 range. **Primary tuning knob for dry-run spread.** |
-| `EHOG_LAMBDA` | Conservatism. `skill = mu − LAMBDA × sigma`, so higher values penalize uncertain (low-game) players. 0 = pure μ (max upset reward). |
+| `CENTER` | μ value that maps to the midpoint of the band (EHOG ≈ 55). Set to `MU_DEFAULT` so new players start mid-band. |
+| `SCALE` | Controls how spread out ratings are. Smaller = more bunched in the middle, larger = wider use of the 10–100 range. **Primary tuning knob for dry-run spread.** |
+| `LAMBDA` | Conservatism. `skill = mu − LAMBDA × sigma`, so higher values penalize uncertain (low-game) players. 0 = pure μ (max upset reward). |
 
 ### Margin-of-victory — `m = M_MIN + (M_MAX − M_MIN) × |scoreA − scoreB| / (scoreA + scoreB)`
 
 | Key | Description |
 |---|---|
-| `MOV_M_MIN` | Multiplier floor (nailbiter games). Values < 1 dampen close-game updates; values ≥ 1 leave them at or above the unweighted baseline. |
-| `MOV_M_MAX` | Multiplier ceiling (blowouts). Values > 1 amplify the update for dominant wins/losses. |
+| `M_MIN` | Multiplier floor (nailbiter games). Values < 1 dampen close-game updates; values ≥ 1 leave them at or above the unweighted baseline. |
+| `M_MAX` | Multiplier ceiling (blowouts). Values > 1 amplify the update for dominant wins/losses. |
 
 ### Sigma dynamics
 
