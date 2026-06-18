@@ -199,6 +199,7 @@ export default function PlayerView({
   careerLeaderboard,
   h2hData,
   ehogHistory,
+  matchDeltas,
 }: {
   playerId: number;
   history: PlayerHistoryRow[];
@@ -206,6 +207,7 @@ export default function PlayerView({
   careerLeaderboard: LeaderboardRowWithId[];
   h2hData: H2HData;
   ehogHistory: EhogRatingPoint[];
+  matchDeltas: Record<number, Record<number, number>>;
 }) {
   const { regularSeasons, gauntletSeasons, regularToGauntlet } = useMemo(() => {
     const regMap = new Map<number, { id: number; name: string }>();
@@ -740,6 +742,7 @@ export default function PlayerView({
                       skinsFallback={h.skins.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
                       currentPlayerId={h.player_id}
                       highlightCurrentPlayer
+                      ehogDeltas={matchDeltas[h.match_id] ?? null}
                       containerVariant="standalone"
                     />
                   ))}

@@ -250,6 +250,10 @@ export function avgOf(arr: number[]): number {
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
+export function formatEhogDelta(delta: number): string {
+  return `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}`;
+}
+
 /** Parses "13-9" / "13 – 9" into { shirts, skins }. Returns null if unparseable. */
 export function parseScore(
   s: string | null | undefined,

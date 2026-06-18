@@ -10,6 +10,7 @@ import { buildRegularToGauntletMap, extractSeasonNumber, seasonTitle, tabCls } f
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { TrophyEntry, H2HData, MapMatchRow, EhogSnapshotRow } from '@/lib/queries';
 import type { H2HPair } from './H2HMatrix';
+import EhogTierBar from './EhogTierBar';
 
 type Filter = 'career' | number;
 type Tab = 'leaderboard' | 'stats' | 'h2h';
@@ -224,7 +225,16 @@ export default function CareerStatsView({
             No data for this selection.
           </div>
         ) : (
-          <LeaderboardTable rows={rows} showMedals={false} trophyCounts={trophyCounts} ehogRatings={ehogRatings} />
+          <>
+            <div className="mb-4">
+              <EhogTierBar
+                players={rows
+                  .filter((r) => ehogRatings[r.player_id] != null)
+                  .map((r) => ({ id: r.player_id, name: r.player_name, rating: ehogRatings[r.player_id] }))}
+              />
+            </div>
+            <LeaderboardTable rows={rows} showMedals={false} showRank={false} trophyCounts={trophyCounts} ehogRatings={ehogRatings} />
+          </>
         )
       )}
 

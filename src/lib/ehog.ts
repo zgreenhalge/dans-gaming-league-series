@@ -1,36 +1,33 @@
 import { rate, rating } from 'openskill';
 import { plackettLuce } from 'openskill/models';
+import constants from '../../ehog/constants.json';
 
-// Mirror ehog/engine.py constants — single source of truth for the TS side
-export const MU_DEFAULT = 25.0;
-export const SIGMA_DEFAULT = 8.3333333333;
-export const BETA = SIGMA_DEFAULT * 0.5;
-export const CREDIBILITY_EXPONENT = 1;
-const WEIGHT_MIN = 0.1;
-const WEIGHT_MAX = 0.9;
-const EHOG_FLOOR = 10.0;
-const EHOG_CAP_KNEE = 0.85;
-const EHOG_POWER = 2;
+export const MU_DEFAULT = constants.MU_DEFAULT;
+export const SIGMA_DEFAULT = constants.SIGMA_DEFAULT;
+export const BETA = SIGMA_DEFAULT * constants.BETA_FACTOR;
+const EHOG_CENTER = constants.EHOG_CENTER;
+const EHOG_SCALE = constants.EHOG_SCALE;
+const EHOG_LAMBDA = constants.EHOG_LAMBDA;
+const SIGMA_FLOOR = constants.SIGMA_FLOOR;
+const MOV_M_MIN = constants.MOV_M_MIN;
+const MOV_M_MAX = constants.MOV_M_MAX;
 
-function toEhog(raw: number): number {
-  const x = Math.log1p(Math.exp(raw));
-  return EHOG_FLOOR + (100.0 - EHOG_FLOOR) * (x / (x + EHOG_CAP_KNEE)) ** EHOG_POWER;
+export function toEhog(mu: number, sigma: number): number {
+  const skill = mu - EHOG_LAMBDA * sigma;
+  return 10.0 + 90.0 / (1.0 + Math.exp(-(skill - EHOG_CENTER) / EHOG_SCALE));
 }
 
-export function computeEhog(mu: number, sigma: number): number {
-  const cred = Math.max(0, 1 - (sigma / SIGMA_DEFAULT) ** CREDIBILITY_EXPONENT);
-  return toEhog((mu - 3 * sigma) * cred);
+export const DEFAULT_EHOG = toEhog(MU_DEFAULT, SIGMA_DEFAULT);
+
+export function correctedDelta(ratingDelta: number, ehogRating: number, sequenceIndex: number): number {
+  return sequenceIndex === 1 && ratingDelta === 0 ? ehogRating - DEFAULT_EHOG : ratingDelta;
 }
 
-export const DEFAULT_EHOG = computeEhog(MU_DEFAULT, SIGMA_DEFAULT);
-
-function teamWeights(scoreA: number, scoreB: number): [number, number] {
+export function marginMultiplier(scoreA: number, scoreB: number): number {
   const total = scoreA + scoreB;
-  if (total <= 0) return [0.5, 0.5];
-  return [
-    Math.max(WEIGHT_MIN, Math.min(WEIGHT_MAX, scoreA / total)),
-    Math.max(WEIGHT_MIN, Math.min(WEIGHT_MAX, scoreB / total)),
-  ];
+  if (total <= 0) return 1.0;
+  const marginFrac = Math.abs(scoreA - scoreB) / total;
+  return MOV_M_MIN + (MOV_M_MAX - MOV_M_MIN) * marginFrac;
 }
 
 export interface PlayerRating {
@@ -47,11 +44,8 @@ function projectScenario(
   scoreB: number,
 ): Record<number, number> {
   const aWon = scoreA > scoreB;
-  const [wA, wB] = teamWeights(scoreA, scoreB);
 
-  // Run PlackettLuce unweighted to get the base mu/sigma updates.
-  // The JS openskill library ignores the `weight` option, so we apply
-  // margin-of-victory weights manually to match the Python engine.
+  // Unweighted PlackettLuce update — identical to Python engine
   const rA = teamA.map((p) => rating({ mu: p.mu, sigma: p.sigma }));
   const rB = teamB.map((p) => rating({ mu: p.mu, sigma: p.sigma }));
   const [baseA, baseB] = rate([rA, rB], {
@@ -60,16 +54,19 @@ function projectScenario(
     rank: aWon ? [0, 1] : [1, 0],
   });
 
+  // MoV margin multiplier — μ-only (D5), same m for all 4 players
+  const m = marginMultiplier(scoreA, scoreB);
+
   const deltas: Record<number, number> = {};
   for (let i = 0; i < teamA.length; i++) {
-    const weightedMu = teamA[i].mu + wA * (baseA[i].mu - teamA[i].mu);
-    const weightedSigma = teamA[i].sigma + wA * (baseA[i].sigma - teamA[i].sigma);
-    deltas[teamA[i].playerId] = computeEhog(weightedMu, weightedSigma) - teamA[i].ehogRating;
+    const newMu = teamA[i].mu + m * (baseA[i].mu - teamA[i].mu);
+    const newSigma = Math.max(SIGMA_FLOOR, baseA[i].sigma);
+    deltas[teamA[i].playerId] = toEhog(newMu, newSigma) - teamA[i].ehogRating;
   }
   for (let i = 0; i < teamB.length; i++) {
-    const weightedMu = teamB[i].mu + wB * (baseB[i].mu - teamB[i].mu);
-    const weightedSigma = teamB[i].sigma + wB * (baseB[i].sigma - teamB[i].sigma);
-    deltas[teamB[i].playerId] = computeEhog(weightedMu, weightedSigma) - teamB[i].ehogRating;
+    const newMu = teamB[i].mu + m * (baseB[i].mu - teamB[i].mu);
+    const newSigma = Math.max(SIGMA_FLOOR, baseB[i].sigma);
+    deltas[teamB[i].playerId] = toEhog(newMu, newSigma) - teamB[i].ehogRating;
   }
   return deltas;
 }

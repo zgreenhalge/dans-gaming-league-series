@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { tabCls } from '@/lib/util';
+import { tabCls, formatEhogDelta } from '@/lib/util';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import { YouBadge } from '@/components/YouBadge';
 import DemoUploadModal from '@/components/DemoUploadModal';
@@ -86,7 +86,7 @@ function Scoreboard({
                     )}
                     {ratingDeltas[p.player_id] != null && (
                       <span className={`ml-1 font-mono text-[10px] ${ratingDeltas[p.player_id] > 0 ? 'text-[var(--color-accent-green-fill)]' : ratingDeltas[p.player_id] < 0 ? 'text-[var(--color-accent-red-fg)]' : 'text-[var(--color-text-secondary)]'}`}>
-                        ({ratingDeltas[p.player_id] > 0 ? '+' : ''}{ratingDeltas[p.player_id].toFixed(1)})
+                        ({formatEhogDelta(ratingDeltas[p.player_id])})
                       </span>
                     )}
                   </Link>

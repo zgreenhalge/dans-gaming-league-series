@@ -65,6 +65,7 @@ export default function LeaderboardTable({
   rows,
   firstColMode = 'player',
   showMedals = true,
+  showRank = true,
   playoffZones,
   trophyCounts,
   canonicalRanking,
@@ -73,6 +74,7 @@ export default function LeaderboardTable({
   rows: LeaderboardRowWithId[];
   firstColMode?: 'player' | 'season';
   showMedals?: boolean;
+  showRank?: boolean;
   playoffZones?: { top: number; bottom: number };
   trophyCounts?: Map<number, Record<1 | 2 | 3, number>>;
   canonicalRanking?: Map<number, number>;
@@ -188,7 +190,7 @@ export default function LeaderboardTable({
       <table className="w-full border-collapse text-[13px]">
         <thead>
           <tr className="bg-[var(--color-bg-secondary)]">
-            {firstColMode === 'player' && (
+            {firstColMode === 'player' && showRank && (
               <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-2 py-2.5 border-b border-[var(--color-border-primary)] w-6">
                 #
               </th>
@@ -199,7 +201,7 @@ export default function LeaderboardTable({
               onClick={() => clickHeader('name')}
               onKeyDown={(e) => headerKey(e, 'name')}
               className={`tracked text-[10px] font-semibold py-2.5 border-b border-[var(--color-border-primary)] cursor-pointer select-none whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] text-left ${
-                firstColMode === 'player' ? 'px-2' : 'pl-4 pr-2'
+                firstColMode === 'player' && showRank ? 'px-2' : 'pl-4 pr-2'
               } ${sortCol === 'name' ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}
             >
               {firstColLabel}
@@ -233,14 +235,14 @@ export default function LeaderboardTable({
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 14%, var(--color-bg-primary))` : 'var(--color-bg-secondary)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))` : ''; }}
               >
-                {firstColMode === 'player' && (
+                {firstColMode === 'player' && showRank && (
                   <td className="pl-4 pr-2 py-2.5 font-mono text-[11px] tnum"
                     style={{ color: textColor ?? 'var(--color-text-secondary)' }}
                   >
                     <Link href={href} className="block w-full h-full">{canonicalRankOf.get(p.player_id) ?? '-'}</Link>
                   </td>
                 )}
-                <td className={`py-2.5 font-display font-semibold ${firstColMode === 'player' ? 'px-2' : 'pl-4 pr-2'}`}
+                <td className={`py-2.5 font-display font-semibold ${firstColMode === 'player' && showRank ? 'px-2' : 'pl-4 pr-2'}`}
                   style={{ color: textColor ?? undefined }}
                 >
                   <Link href={href} className="flex items-center w-full h-full">

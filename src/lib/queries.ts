@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
 import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
-import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
+import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG, correctedDelta } from './ehog';
 import type {
   Season,
   Week,
@@ -2930,7 +2930,7 @@ export async function getPlayerEhogRating(playerId: number): Promise<EhogPlayerD
     matchId: r.match_id,
     sequenceIndex: r.sequence_index,
     ehogRating: r.ehog_rating,
-    ratingDelta: r.rating_delta,
+    ratingDelta: correctedDelta(r.rating_delta, r.ehog_rating, r.sequence_index),
     ...matchSeasonInfo(r.match_id, ctx),
   }));
 
@@ -3013,15 +3013,39 @@ export async function getSeasonEhogRatings(seasonId: number): Promise<Record<num
   return result;
 }
 
+export async function getBatchMatchRatingDeltas(matchIds: number[]): Promise<Map<number, Map<number, number>>> {
+  if (matchIds.length === 0) return new Map();
+  const rows: { match_id: number; player_id: number; rating_delta: number; ehog_rating: number; sequence_index: number }[] = [];
+  for (let i = 0; i < matchIds.length; i += SUPABASE_IN_BATCH) {
+    const chunk = matchIds.slice(i, i + SUPABASE_IN_BATCH);
+    const { data, error } = await supabase
+      .from('player_rating_history')
+      .select('match_id, player_id, rating_delta, ehog_rating, sequence_index')
+      .in('match_id', chunk)
+      .eq('formula_version', 'ehog_v1');
+    if (error) throw error;
+    if (data) rows.push(...data);
+  }
+  const result = new Map<number, Map<number, number>>();
+  for (const r of rows) {
+    let inner = result.get(r.match_id);
+    if (!inner) { inner = new Map(); result.set(r.match_id, inner); }
+    inner.set(r.player_id, correctedDelta(r.rating_delta, r.ehog_rating, r.sequence_index));
+  }
+  return result;
+}
+
 export async function getMatchRatingDeltas(matchId: number): Promise<Map<number, number>> {
   const { data, error } = await supabase
     .from('player_rating_history')
-    .select('player_id, rating_delta')
+    .select('player_id, rating_delta, ehog_rating, sequence_index')
     .eq('match_id', matchId)
     .eq('formula_version', 'ehog_v1');
   if (error) throw error;
   const map = new Map<number, number>();
-  for (const row of data ?? []) map.set(row.player_id, row.rating_delta);
+  for (const row of data ?? []) {
+    map.set(row.player_id, correctedDelta(row.rating_delta, row.ehog_rating, row.sequence_index));
+  }
   return map;
 }
 

@@ -52,23 +52,29 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 - `APR+` = `Player A/R` / `League Avg A/R` * 100
 - `DPR+` = `Player D/R` / `League Avg D/R` * 100
 - `KDR+` = `Player K/D` / `League Avg K/D` * 100
-- `ADR+` = `Player ADR` / `League Avg A/R` * 100
+- `ADR+` = `Player ADR` / `League Avg ADR` * 100
 - `Entry+` = `Player Entry Value` / `League Avg Entry Value` * 100
   - `Entry Value` = `Opening Kills` - `Opening Deaths`
 - `Trade+` = `Player KAST` / `League Avg KAST` * 100
   - `KAST` = `Rounds with Kill, Assist, Survived, or Traded` / `Rounds played`
   - `Trade Score` = `KAST` - (`Untraded Deaths` * 10)
 - `Objective+` = `Player Objective Score` / `League Avg Objective Score` * 100
-  - `Objective Score` = (2 * `Plants`) + (3 * `Defuses`) + 
-  `Utility+` = `Player Utility Score` / `League Avg Utility Score` * 100
-  - `Utility Score` = `Flash Assists` + (`Utility Damage` / 50) 
+  - `Objective Score` = (2 * `Plants`) + (3 * `Defuses`)
+- `Utility+` = `Player Utility Score` / `League Avg Utility Score` * 100
+  - `Utility Score` = `Flash Assists` + (`Utility Damage` / 50)
 - `Clutch+` = `Player Clutch Score` / `League Avg Clutch Score` * 100
   - `Clutch Score` = `1v1 wins` + 2 * `1v2 wins w/ assist` + 3 * `1v2 wins w/o assist`
 - `Choke+` = `Player Choke Score` / `League Avg Choke Score` * 100
   - `Choke Score` = `1v1 losses` + 2 * `1v2 losses` + 5 * `2v1 losses`
 
+### Player Rating (aspirational — requires demo data)
+
+A weighted sabremetric composite for individual performance. Independent from the
+[EHOG skill rating](ehog/README.md), which is match-outcome-based (OpenSkill). These formulas
+will be implemented once demo ingestion provides the underlying stats (Entry+, Trade+, etc.).
+
 ```
-E-HOG = 100
+Player Rating = 100
   + 0.30(KPR+ - 100)
   + 0.20(ADR+ - 100)
   + 0.10(Entry+ - 100)
@@ -81,17 +87,19 @@ E-HOG = 100
   - Beer Tax
 ```
 
+#### Role ratings
+
 ```
 Entry Rating = 100
   + 0.35(Entry+ - 100)
-  + 0.20(KPR+ - 100)  
+  + 0.20(KPR+ - 100)
   + 0.20(ADR+ - 100)
   + 0.15(Trade+ - 100)
   + 0.10(K/D+ - 100)
 ```
 
 ```
-Anchor Rating = 100 
+Anchor Rating = 100
   + 0.50(KPR+ - 100)
   + 0.40(Clutch+ - 100)
   + 0.15(ADR+ - 100)
@@ -107,8 +115,9 @@ Setup Rating = 100
   + 0.40(Utility+ - 100)
   + 0.10(Objective+ - 100)
   - 10 * Teamflash seconds
-
 ```
+
+#### Beer Tax
 
 ```
 Beer Tax = (Teamflash seconds)
