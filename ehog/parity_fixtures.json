@@ -1,0 +1,677 @@
+[
+  {
+    "label": "fresh players, close game",
+    "input": {
+      "team_a": [
+        [
+          25.0,
+          8.3333333333
+        ],
+        [
+          25.0,
+          8.3333333333
+        ]
+      ],
+      "team_b": [
+        [
+          25.0,
+          8.3333333333
+        ],
+        [
+          25.0,
+          8.3333333333
+        ]
+      ],
+      "score_a": 13,
+      "score_b": 11,
+      "a_won": true
+    },
+    "margin_multiplier": 0.8666666666666667,
+    "results": [
+      {
+        "team": "A",
+        "index": 0,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 26.70238867222251,
+        "new_sigma": 8.177962604357282,
+        "prior_ehog": 55.0,
+        "new_ehog": 62.587590910675175,
+        "delta": 7.587590910675175
+      },
+      {
+        "team": "A",
+        "index": 1,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 26.70238867222251,
+        "new_sigma": 8.177962604357282,
+        "prior_ehog": 55.0,
+        "new_ehog": 62.587590910675175,
+        "delta": 7.587590910675175
+      },
+      {
+        "team": "B",
+        "index": 0,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 23.29761132777749,
+        "new_sigma": 8.177962604357282,
+        "prior_ehog": 55.0,
+        "new_ehog": 47.412409089324825,
+        "delta": -7.587590910675175
+      },
+      {
+        "team": "B",
+        "index": 1,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 23.29761132777749,
+        "new_sigma": 8.177962604357282,
+        "prior_ehog": 55.0,
+        "new_ehog": 47.412409089324825,
+        "delta": -7.587590910675175
+      }
+    ]
+  },
+  {
+    "label": "fresh players, blowout",
+    "input": {
+      "team_a": [
+        [
+          25.0,
+          8.3333333333
+        ],
+        [
+          25.0,
+          8.3333333333
+        ]
+      ],
+      "team_b": [
+        [
+          25.0,
+          8.3333333333
+        ],
+        [
+          25.0,
+          8.3333333333
+        ]
+      ],
+      "score_a": 13,
+      "score_b": 1,
+      "a_won": true
+    },
+    "margin_multiplier": 1.4857142857142858,
+    "results": [
+      {
+        "team": "A",
+        "index": 0,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 27.918380580952874,
+        "new_sigma": 8.177962604357282,
+        "prior_ehog": 55.0,
+        "new_ehog": 67.77215571197152,
+        "delta": 12.772155711971521
+      },
+      {
+        "team": "A",
+        "index": 1,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 27.918380580952874,
+        "new_sigma": 8.177962604357282,
+        "prior_ehog": 55.0,
+        "new_ehog": 67.77215571197152,
+        "delta": 12.772155711971521
+      },
+      {
+        "team": "B",
+        "index": 0,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 22.081619419047126,
+        "new_sigma": 8.177962604357282,
+        "prior_ehog": 55.0,
+        "new_ehog": 42.22784428802848,
+        "delta": -12.772155711971521
+      },
+      {
+        "team": "B",
+        "index": 1,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 22.081619419047126,
+        "new_sigma": 8.177962604357282,
+        "prior_ehog": 55.0,
+        "new_ehog": 42.22784428802848,
+        "delta": -12.772155711971521
+      }
+    ]
+  },
+  {
+    "label": "experienced vs fresh, upset",
+    "input": {
+      "team_a": [
+        [
+          30.0,
+          4.0
+        ],
+        [
+          28.0,
+          5.0
+        ]
+      ],
+      "team_b": [
+        [
+          25.0,
+          8.3333333333
+        ],
+        [
+          25.0,
+          8.3333333333
+        ]
+      ],
+      "score_a": 8,
+      "score_b": 13,
+      "a_won": false
+    },
+    "margin_multiplier": 0.9904761904761905,
+    "results": [
+      {
+        "team": "A",
+        "index": 0,
+        "prior_mu": 30.0,
+        "prior_sigma": 4.0,
+        "new_mu": 29.31474429083238,
+        "new_sigma": 3.985693253227236,
+        "prior_ehog": 75.79527207670044,
+        "new_ehog": 73.29487482179263,
+        "delta": -2.50039725490781
+      },
+      {
+        "team": "A",
+        "index": 1,
+        "prior_mu": 28.0,
+        "prior_sigma": 5.0,
+        "new_mu": 26.929455180601902,
+        "new_sigma": 4.971031454032795,
+        "prior_ehog": 68.10906756032159,
+        "new_ehog": 63.576384382209966,
+        "delta": -4.5326831781116255
+      },
+      {
+        "team": "B",
+        "index": 0,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 27.973207092117388,
+        "new_sigma": 8.077913460095267,
+        "prior_ehog": 55.0,
+        "new_ehog": 67.99864532732576,
+        "delta": 12.998645327325761
+      },
+      {
+        "team": "B",
+        "index": 1,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 27.973207092117388,
+        "new_sigma": 8.077913460095267,
+        "prior_ehog": 55.0,
+        "new_ehog": 67.99864532732576,
+        "delta": 12.998645327325761
+      }
+    ]
+  },
+  {
+    "label": "experienced vs fresh, expected win",
+    "input": {
+      "team_a": [
+        [
+          30.0,
+          4.0
+        ],
+        [
+          28.0,
+          5.0
+        ]
+      ],
+      "team_b": [
+        [
+          25.0,
+          8.3333333333
+        ],
+        [
+          25.0,
+          8.3333333333
+        ]
+      ],
+      "score_a": 13,
+      "score_b": 5,
+      "a_won": true
+    },
+    "margin_multiplier": 1.1555555555555557,
+    "results": [
+      {
+        "team": "A",
+        "index": 0,
+        "prior_mu": 30.0,
+        "prior_sigma": 4.0,
+        "new_mu": 30.463074759897744,
+        "new_sigma": 3.985693253227236,
+        "prior_ehog": 75.79527207670044,
+        "new_ehog": 77.39864327958614,
+        "delta": 1.6033712028856968
+      },
+      {
+        "team": "A",
+        "index": 1,
+        "prior_mu": 28.0,
+        "prior_sigma": 5.0,
+        "new_mu": 28.723441306026796,
+        "new_sigma": 4.971031454032795,
+        "prior_ehog": 68.10906756032159,
+        "new_ehog": 71.02181782033702,
+        "delta": 2.9127502600154287
+      },
+      {
+        "team": "B",
+        "index": 0,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 22.99079797236431,
+        "new_sigma": 8.077913460095267,
+        "prior_ehog": 55.0,
+        "new_ehog": 46.078321879349545,
+        "delta": -8.921678120650455
+      },
+      {
+        "team": "B",
+        "index": 1,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 22.99079797236431,
+        "new_sigma": 8.077913460095267,
+        "prior_ehog": 55.0,
+        "new_ehog": 46.078321879349545,
+        "delta": -8.921678120650455
+      }
+    ]
+  },
+  {
+    "label": "low sigma, nailbiter",
+    "input": {
+      "team_a": [
+        [
+          32.0,
+          3.0
+        ],
+        [
+          27.0,
+          3.5
+        ]
+      ],
+      "team_b": [
+        [
+          29.0,
+          3.2
+        ],
+        [
+          26.0,
+          4.0
+        ]
+      ],
+      "score_a": 13,
+      "score_b": 12,
+      "a_won": true
+    },
+    "margin_multiplier": 0.8320000000000001,
+    "results": [
+      {
+        "team": "A",
+        "index": 0,
+        "prior_mu": 32.0,
+        "prior_sigma": 3.0,
+        "new_mu": 32.32349875051588,
+        "new_sigma": 2.9811831252256553,
+        "prior_ehog": 82.19654997027236,
+        "new_ehog": 83.10253933851911,
+        "delta": 0.9059893682467504
+      },
+      {
+        "team": "A",
+        "index": 1,
+        "prior_mu": 27.0,
+        "prior_sigma": 3.5,
+        "new_mu": 27.44022767514305,
+        "new_sigma": 3.4692451665335113,
+        "prior_ehog": 63.88188941012068,
+        "new_ehog": 65.76813121441589,
+        "delta": 1.88624180429521
+      },
+      {
+        "team": "B",
+        "index": 0,
+        "prior_mu": 29.0,
+        "prior_sigma": 3.2,
+        "new_mu": 28.631964675164827,
+        "new_sigma": 3.174129102899842,
+        "prior_ehog": 72.09770330148513,
+        "new_ehog": 70.66119056067316,
+        "delta": -1.4365127408119633
+      },
+      {
+        "team": "B",
+        "index": 1,
+        "prior_mu": 26.0,
+        "prior_sigma": 4.0,
+        "new_mu": 25.4250851041333,
+        "new_sigma": 3.948112992875079,
+        "prior_ehog": 59.485059758123015,
+        "new_ehog": 56.9117316245214,
+        "delta": -2.5733281336016134
+      }
+    ]
+  },
+  {
+    "label": "asymmetric sigmas, blowout",
+    "input": {
+      "team_a": [
+        [
+          35.0,
+          5.8
+        ],
+        [
+          31.0,
+          5.4
+        ]
+      ],
+      "team_b": [
+        [
+          20.0,
+          6.5
+        ],
+        [
+          18.0,
+          6.6
+        ]
+      ],
+      "score_a": 13,
+      "score_b": 2,
+      "a_won": true
+    },
+    "margin_multiplier": 1.3866666666666667,
+    "results": [
+      {
+        "team": "A",
+        "index": 0,
+        "prior_mu": 35.0,
+        "prior_sigma": 5.8,
+        "new_mu": 35.38682917086135,
+        "new_sigma": 5.769469838505885,
+        "prior_ehog": 89.27173701800942,
+        "new_ehog": 89.98153436740913,
+        "delta": 0.7097973493997074
+      },
+      {
+        "team": "A",
+        "index": 1,
+        "prior_mu": 31.0,
+        "prior_sigma": 5.4,
+        "new_mu": 31.335323908969876,
+        "new_sigma": 5.3755284808058095,
+        "prior_ehog": 79.16723051491158,
+        "new_ehog": 80.22158856368337,
+        "delta": 1.054358048771789
+      },
+      {
+        "team": "B",
+        "index": 0,
+        "prior_mu": 20.0,
+        "prior_sigma": 6.5,
+        "new_mu": 19.514184153940985,
+        "new_sigma": 6.4492578824467515,
+        "prior_ehog": 34.20472792329956,
+        "new_ehog": 32.52446274890565,
+        "delta": -1.6802651743939094
+      },
+      {
+        "team": "B",
+        "index": 1,
+        "prior_mu": 18.0,
+        "prior_sigma": 6.6,
+        "new_mu": 17.49912346352183,
+        "new_sigma": 6.546840376981006,
+        "prior_ehog": 27.803450029727642,
+        "new_ehog": 26.415944092074838,
+        "delta": -1.3875059376528043
+      }
+    ]
+  },
+  {
+    "label": "near-boundary low, moderate game",
+    "input": {
+      "team_a": [
+        [
+          12.0,
+          6.0
+        ],
+        [
+          15.0,
+          7.0
+        ]
+      ],
+      "team_b": [
+        [
+          25.0,
+          8.3333333333
+        ],
+        [
+          25.0,
+          8.3333333333
+        ]
+      ],
+      "score_a": 9,
+      "score_b": 13,
+      "a_won": false
+    },
+    "margin_multiplier": 0.9454545454545455,
+    "results": [
+      {
+        "team": "A",
+        "index": 0,
+        "prior_mu": 12.0,
+        "prior_sigma": 6.0,
+        "new_mu": 11.591297279258825,
+        "new_sigma": 5.963152934161908,
+        "prior_ehog": 16.222457830901213,
+        "new_ehog": 15.765349727891865,
+        "delta": -0.45710810300934845
+      },
+      {
+        "team": "A",
+        "index": 1,
+        "prior_mu": 15.0,
+        "prior_sigma": 7.0,
+        "new_mu": 14.44373864989962,
+        "new_sigma": 6.941002402211032,
+        "prior_ehog": 20.728262981990582,
+        "new_ehog": 19.720716492269133,
+        "delta": -1.0075464897214488
+      },
+      {
+        "team": "B",
+        "index": 0,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 25.788319365496587,
+        "new_sigma": 8.205003869436222,
+        "prior_ehog": 55.0,
+        "new_ehog": 58.54010688013052,
+        "delta": 3.540106880130523
+      },
+      {
+        "team": "B",
+        "index": 1,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 25.788319365496587,
+        "new_sigma": 8.205003869436222,
+        "prior_ehog": 55.0,
+        "new_ehog": 58.54010688013052,
+        "delta": 3.540106880130523
+      }
+    ]
+  },
+  {
+    "label": "zero rounds (MoV defaults to 1.0)",
+    "input": {
+      "team_a": [
+        [
+          25.0,
+          8.3333333333
+        ],
+        [
+          25.0,
+          8.3333333333
+        ]
+      ],
+      "team_b": [
+        [
+          25.0,
+          8.3333333333
+        ],
+        [
+          25.0,
+          8.3333333333
+        ]
+      ],
+      "score_a": 0,
+      "score_b": 0,
+      "a_won": true
+    },
+    "margin_multiplier": 1.0,
+    "results": [
+      {
+        "team": "A",
+        "index": 0,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 26.964294621795204,
+        "new_sigma": 8.177962604357282,
+        "prior_ehog": 55.0,
+        "new_ehog": 63.72736635451063,
+        "delta": 8.727366354510629
+      },
+      {
+        "team": "A",
+        "index": 1,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 26.964294621795204,
+        "new_sigma": 8.177962604357282,
+        "prior_ehog": 55.0,
+        "new_ehog": 63.72736635451063,
+        "delta": 8.727366354510629
+      },
+      {
+        "team": "B",
+        "index": 0,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 23.035705378204796,
+        "new_sigma": 8.177962604357282,
+        "prior_ehog": 55.0,
+        "new_ehog": 46.27263364548937,
+        "delta": -8.727366354510629
+      },
+      {
+        "team": "B",
+        "index": 1,
+        "prior_mu": 25.0,
+        "prior_sigma": 8.3333333333,
+        "new_mu": 23.035705378204796,
+        "new_sigma": 8.177962604357282,
+        "prior_ehog": 55.0,
+        "new_ehog": 46.27263364548937,
+        "delta": -8.727366354510629
+      }
+    ]
+  },
+  {
+    "label": "very low sigma (floor test)",
+    "input": {
+      "team_a": [
+        [
+          33.0,
+          2.1
+        ],
+        [
+          30.0,
+          2.2
+        ]
+      ],
+      "team_b": [
+        [
+          27.0,
+          2.3
+        ],
+        [
+          24.0,
+          2.5
+        ]
+      ],
+      "score_a": 13,
+      "score_b": 9,
+      "a_won": true
+    },
+    "margin_multiplier": 0.9454545454545455,
+    "results": [
+      {
+        "team": "A",
+        "index": 0,
+        "prior_mu": 33.0,
+        "prior_sigma": 2.1,
+        "new_mu": 33.09333286736737,
+        "new_sigma": 2.096909499858861,
+        "prior_ehog": 84.8816546620532,
+        "new_ehog": 85.11500367014217,
+        "delta": 0.23334900808897885
+      },
+      {
+        "team": "A",
+        "index": 1,
+        "prior_mu": 30.0,
+        "prior_sigma": 2.2,
+        "new_mu": 30.102419042996875,
+        "new_sigma": 2.1961245781972893,
+        "prior_ehog": 75.79527207670044,
+        "new_ehog": 76.15601459224409,
+        "delta": 0.3607425155436488
+      },
+      {
+        "team": "B",
+        "index": 0,
+        "prior_mu": 27.0,
+        "prior_sigma": 2.3,
+        "new_mu": 26.88807216855365,
+        "new_sigma": 2.294549812033272,
+        "prior_ehog": 63.88188941012068,
+        "new_ehog": 63.39678442731322,
+        "delta": -0.4851049828074565
+      },
+      {
+        "team": "B",
+        "index": 1,
+        "prior_mu": 24.0,
+        "prior_sigma": 2.5,
+        "new_mu": 23.867786753194764,
+        "new_sigma": 2.4924514632428894,
+        "prior_ehog": 50.51494024187699,
+        "new_ehog": 49.92670021117514,
+        "delta": -0.5882400307018543
+      }
+    ]
+  }
+]
