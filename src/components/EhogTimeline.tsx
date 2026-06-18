@@ -280,6 +280,12 @@ export default function EhogTimeline({
           const deltaStr = hovered.ratingDelta > 0
             ? `+${hovered.ratingDelta.toFixed(2)}`
             : hovered.ratingDelta.toFixed(2);
+          const t = Math.min(1, Math.abs(hovered.ratingDelta) / 5);
+          const deltaColor = hovered.ratingDelta > 0
+            ? `rgb(${Math.round(255 - 200 * t)}, ${Math.round(255 - 30 * t)}, ${Math.round(255 - 200 * t)})`
+            : hovered.ratingDelta < 0
+              ? `rgb(${Math.round(255 - 30 * t)}, ${Math.round(255 - 200 * t)}, ${Math.round(255 - 200 * t)})`
+              : '#ffffff';
           const tooltipW = 130;
           const tooltipH = 40;
           let tx = hoveredPt.x - tooltipW / 2;
@@ -302,9 +308,10 @@ export default function EhogTimeline({
                 x={tx + tooltipW / 2}
                 y={ty + 14}
                 textAnchor="middle"
-                fill="var(--color-text-secondary)"
-                fontSize={9}
+                fill="var(--color-text-primary)"
+                fontSize={11}
                 fontFamily="monospace"
+                fontWeight={600}
               >
                 {label}
               </text>
@@ -312,12 +319,12 @@ export default function EhogTimeline({
                 x={tx + tooltipW / 2}
                 y={ty + 30}
                 textAnchor="middle"
-                fill="var(--color-text-primary)"
                 fontSize={12}
                 fontFamily="var(--font-display)"
                 fontWeight={600}
               >
-                {hovered.ehogRating.toFixed(2)} ({deltaStr})
+                <tspan fill="var(--color-text-primary)">{hovered.ehogRating.toFixed(2)} </tspan>
+                <tspan fill={deltaColor}>({deltaStr})</tspan>
               </text>
             </g>
           );

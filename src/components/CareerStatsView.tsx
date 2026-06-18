@@ -227,9 +227,13 @@ export default function CareerStatsView({
         ) : (
           <>
             <div className="mb-4">
-              <EhogTierBar />
+              <EhogTierBar
+                players={rows
+                  .filter((r) => ehogRatings[r.player_id] != null)
+                  .map((r) => ({ id: r.player_id, name: r.player_name, rating: ehogRatings[r.player_id] }))}
+              />
             </div>
-            <LeaderboardTable rows={rows} showMedals={false} trophyCounts={trophyCounts} ehogRatings={ehogRatings} />
+            <LeaderboardTable rows={rows} showMedals={false} showRank={false} trophyCounts={trophyCounts} ehogRatings={ehogRatings} />
           </>
         )
       )}
