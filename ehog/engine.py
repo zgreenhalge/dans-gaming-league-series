@@ -8,43 +8,69 @@ Imported by:
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 
 from openskill.models import PlackettLuce
 
 # ---------------------------------------------------------------------------
-# CONSTANTS
+# CONSTANTS — loaded from ehog/constants.json (single source of truth)
 # ---------------------------------------------------------------------------
 
-FORMULA_VERSION = "ehog_v1"
-MU_DEFAULT = 25.0
-SIGMA_DEFAULT = 8.3333333333
-BETA = SIGMA_DEFAULT * 0.5
-CREDIBILITY_EXPONENT = 1
-SEASON_REGRESSION = 0.1
-WEIGHT_MIN, WEIGHT_MAX = 0.1, 0.9
-EHOG_FLOOR = 10.0
-EHOG_CAP_KNEE = 0.85
-EHOG_POWER = 2
+_CONSTANTS_PATH = Path(__file__).resolve().parent / "constants.json"
+with open(_CONSTANTS_PATH) as _f:
+    _C = json.load(_f)
+
+FORMULA_VERSION: str = _C["FORMULA_VERSION"]
+MU_DEFAULT: float = _C["MU_DEFAULT"]
+SIGMA_DEFAULT: float = _C["SIGMA_DEFAULT"]
+BETA: float = SIGMA_DEFAULT * _C["BETA_FACTOR"]
+SEASON_REGRESSION: float = _C["SEASON_REGRESSION"]
+
+EHOG_CENTER: float = _C["EHOG_CENTER"]
+EHOG_SCALE: float = _C["EHOG_SCALE"]
+EHOG_LAMBDA: float = _C["EHOG_LAMBDA"]
+
+# σ dynamics
+SIGMA_FLOOR: float = _C["SIGMA_FLOOR"]
+
+MOV_M_MIN: float = _C["MOV_M_MIN"]
+MOV_M_MAX: float = _C["MOV_M_MAX"]
+
 BATCH_SIZE = 200
 
 # ---------------------------------------------------------------------------
 # EHOG TRANSFORM
 # ---------------------------------------------------------------------------
 
-def to_ehog(raw: float) -> float:
-    """
-    Credibility-dampened (μ−3σ) → EHOG rating in (FLOOR, 100).
 
-    x = softplus(raw) compresses the input onto a log scale with a smooth
-    lower bound. The power-compressed soft cap provides ceiling resistance
-    (POWER=2.5 makes the last stretch to 100 very hard) and floor resistance
-    (as raw → -∞, ehog → FLOOR, never below).
+def to_ehog(mu: float, sigma: float) -> float:
     """
-    x = math.log1p(math.exp(raw))
-    return EHOG_FLOOR + (100.0 - EHOG_FLOOR) * (x / (x + EHOG_CAP_KNEE)) ** EHOG_POWER
+    Symmetric logistic on skill = mu - LAMBDA*sigma, mapped to (10, 100).
+    No clamp — the asymptote IS the bound.
+    """
+    skill = mu - EHOG_LAMBDA * sigma
+    return 10.0 + 90.0 / (1.0 + math.exp(-(skill - EHOG_CENTER) / EHOG_SCALE))
+
+
+# ---------------------------------------------------------------------------
+# MARGIN-OF-VICTORY MULTIPLIER
+# ---------------------------------------------------------------------------
+
+
+def margin_multiplier(score_a: int, score_b: int) -> float:
+    """
+    Single per-match multiplier applied equally to all 4 players.
+    Blowout → larger m → bigger update. Nailbiter → m ≈ M_MIN.
+    """
+    total = score_a + score_b
+    if total <= 0:
+        return 1.0
+    margin_frac = abs(score_a - score_b) / total
+    return MOV_M_MIN + (MOV_M_MAX - MOV_M_MIN) * margin_frac
 
 
 # ---------------------------------------------------------------------------
@@ -57,22 +83,16 @@ _model = PlackettLuce(beta=BETA)
 def run_openskill_update(
     team_a_states: list[tuple[float, float]],
     team_b_states: list[tuple[float, float]],
-    weight_a: float,
-    weight_b: float,
     a_won: bool,
 ) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
     """
-    One PlackettLuce rate() call over two 2-player teams with MoV weights.
+    Unweighted PlackettLuce rate() over two 2-player teams.
     Returns (new_team_a_states, new_team_b_states) as (mu, sigma) tuples.
     """
     team_a = [_model.rating(mu=mu, sigma=sigma) for mu, sigma in team_a_states]
     team_b = [_model.rating(mu=mu, sigma=sigma) for mu, sigma in team_b_states]
     ranks = [0, 1] if a_won else [1, 0]
-    new_a, new_b = _model.rate(
-        [team_a, team_b],
-        ranks=ranks,
-        weights=[[weight_a, weight_a], [weight_b, weight_b]],
-    )
+    new_a, new_b = _model.rate([team_a, team_b], ranks=ranks)
     return [(r.mu, r.sigma) for r in new_a], [(r.mu, r.sigma) for r in new_b]
 
 
@@ -94,20 +114,6 @@ def extract_season_number(name: str) -> int | None:
     """Port of extractSeasonNumber(). Returns None for non-standard names."""
     m = re.search(r"Season\s+(\d+)", name, re.IGNORECASE)
     return int(m.group(1)) if m else None
-
-
-def team_weights(score_a: int, score_b: int) -> tuple[float, float]:
-    """
-    rounds_won / total_rounds for each team, clamped to [WEIGHT_MIN, WEIGHT_MAX].
-    A 13-9 game → (0.59, 0.41); a 13-1 blowout is clamped to (0.9, 0.1).
-    Falls back to (0.5, 0.5) when no rounds were played.
-    """
-    total = score_a + score_b
-    if total <= 0:
-        return 0.5, 0.5
-    wa = max(WEIGHT_MIN, min(WEIGHT_MAX, score_a / total))
-    wb = max(WEIGHT_MIN, min(WEIGHT_MAX, score_b / total))
-    return wa, wb
 
 
 # ---------------------------------------------------------------------------
@@ -138,7 +144,6 @@ def fetch_chronological_matches(
     """
     all_seasons = sb.table("seasons").select("id, name, is_gauntlet").execute().data
 
-    # Build season_id → (season_number, is_gauntlet) map for relevant seasons
     season_map: dict[int, tuple[int, bool]] = {}
     for season_number in season_numbers:
         gauntlet_flags = [False] + ([True] if include_gauntlet else [])
@@ -160,7 +165,6 @@ def fetch_chronological_matches(
     if not season_map:
         return []
 
-    # Batch-fetch all weeks and matches for the relevant seasons (3 queries total)
     season_ids = list(season_map.keys())
     all_weeks = []
     for i in range(0, len(season_ids), BATCH_SIZE):
@@ -173,7 +177,7 @@ def fetch_chronological_matches(
             .data
         )
 
-    week_map: dict[int, tuple[int, int]] = {}  # week_id → (season_id, week_number)
+    week_map: dict[int, tuple[int, int]] = {}
     week_ids = []
     for w in all_weeks:
         week_map[w["id"]] = (w["season_id"], w["week_number"])
@@ -190,7 +194,6 @@ def fetch_chronological_matches(
             .data
         )
 
-    # Sort: season_number → regular before gauntlet → week_number → match_number
     def sort_key(m):
         wid = m["week_id"]
         sid, wn = week_map[wid]
@@ -251,7 +254,7 @@ def compute_ratings(
     Returns (history_rows, player_state, zero_round_matches).
       history_rows      — one dict per (player, match), ready to upsert
       player_state      — {player_id: (mu, sigma, ehog_rating)} final state
-      zero_round_matches — match IDs where total rounds == 0 (MoV weight defaulted)
+      zero_round_matches — match IDs where total rounds == 0 (MoV defaulted)
 
     on_segment_end: optional callable(segment, player_state) fired after the
         last match in each segment, before inter-season regression is applied.
@@ -263,7 +266,7 @@ def compute_ratings(
     current_segment = None
 
     def state_for(pid: int) -> tuple[float, float, float]:
-        return player_state.get(pid, (MU_DEFAULT, SIGMA_DEFAULT, MU_DEFAULT - 3 * SIGMA_DEFAULT))
+        return player_state.get(pid, (MU_DEFAULT, SIGMA_DEFAULT, to_ehog(MU_DEFAULT, SIGMA_DEFAULT)))
 
     for sequence_index, entry in enumerate(ordered_matches, start=1):
         match_id = entry["match_id"]
@@ -275,12 +278,10 @@ def compute_ratings(
             prev_season, _ = current_segment
             cur_season, _ = segment
             if cur_season != prev_season:
-                # 10% regression toward mean between season numbers
                 for pid, (mu, sigma, _) in player_state.items():
                     regressed_mu = mu + (MU_DEFAULT - mu) * SEASON_REGRESSION
-                    cred = max(0.0, 1.0 - (sigma / SIGMA_DEFAULT) ** CREDIBILITY_EXPONENT)
-                    raw = (regressed_mu - 3 * sigma) * cred
-                    player_state[pid] = (regressed_mu, sigma, to_ehog(raw))
+                    regressed_sigma = max(SIGMA_FLOOR, sigma + (SIGMA_DEFAULT - sigma) * SEASON_REGRESSION)
+                    player_state[pid] = (regressed_mu, regressed_sigma, to_ehog(regressed_mu, regressed_sigma))
 
         current_segment = segment
         rows = stats_by_match.get(match_id, [])
@@ -309,29 +310,32 @@ def compute_ratings(
         b_score = team_b_rows[0]["rounds_won"] or 0
         if (a_score + b_score) <= 0:
             zero_round_matches.append(match_id)
-        weight_a, weight_b = team_weights(a_score, b_score)
 
-        new_a_states, new_b_states = run_openskill_update(
-            team_a_states, team_b_states, weight_a, weight_b, a_won
+        # Unweighted update + explicit margin multiplier (μ-only)
+        new_a_unweighted, new_b_unweighted = run_openskill_update(
+            team_a_states, team_b_states, a_won
         )
+        m = margin_multiplier(a_score, b_score)
 
-        for rows_team, row_weight, new_states in (
-            (team_a_rows, weight_a, new_a_states),
-            (team_b_rows, weight_b, new_b_states),
+        for rows_team, unweighted_states, prior_states in (
+            (team_a_rows, new_a_unweighted, team_a_states),
+            (team_b_rows, new_b_unweighted, team_b_states),
         ):
-            for row, (new_mu, new_sigma) in zip(rows_team, new_states):
+            for row, (uw_mu, uw_sigma), (prior_mu, prior_sigma) in zip(rows_team, unweighted_states, prior_states):
                 pid = row["player_id"]
                 _, _, prior_ehog = state_for(pid)
-                cred = max(0.0, 1.0 - (new_sigma / SIGMA_DEFAULT) ** CREDIBILITY_EXPONENT)
-                raw = (new_mu - 3 * new_sigma) * cred
-                new_ehog = to_ehog(raw)
+
+                new_mu = prior_mu + m * (uw_mu - prior_mu)
+                new_sigma = max(SIGMA_FLOOR, uw_sigma)
+
+                new_ehog = to_ehog(new_mu, new_sigma)
                 rating_delta = 0.0 if pid not in player_state else (new_ehog - prior_ehog)
 
                 history_rows.append({
                     "player_id": pid,
                     "match_id": match_id,
                     "sequence_index": sequence_index,
-                    "skill_rating_weight": row_weight,
+                    "skill_rating_weight": m,
                     "mu": new_mu,
                     "sigma": new_sigma,
                     "ehog_rating": new_ehog,
