@@ -1,10 +1,10 @@
 const GRADE_TIERS = [
-  { min: 90, color: '#f5c542' },  // gold
-  { min: 78, color: '#eb4b4b' },  // red
-  { min: 62, color: '#d32ee6' },  // pink
-  { min: 45, color: '#8847ff' },  // purple
-  { min: 32, color: '#4b69ff' },  // blue
-  { min: 22, color: '#1ac8ed' },  // cyan
+  { min: 99, color: '#f5c542' },  // gold
+  { min: 95, color: '#eb4b4b' },  // red
+  { min: 80, color: '#d32ee6' },  // pink
+  { min: 60, color: '#8847ff' },  // purple
+  { min: 30, color: '#4b69ff' },  // blue
+  { min: 15, color: '#1ac8ed' },  // cyan
   { min: 0,  color: '#b0b0b0' },  // grey
 ] as const;
 
