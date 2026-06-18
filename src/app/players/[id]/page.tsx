@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating } from '@/lib/queries';
+import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas } from '@/lib/queries';
+import { isPlayedScore } from '@/lib/util';
 import { maybeRefreshSteamProfile } from '@/lib/steam';
 import PlayerView from '@/components/PlayerView';
 import PlayerAvatar from '@/components/PlayerAvatar';
@@ -34,6 +35,15 @@ export default async function PlayerPage({
     getPlayerEhogRating(playerId),
   ]);
   if (!detail) notFound();
+
+  const playedMatchIds = detail.history
+    .filter((h) => isPlayedScore(h.final_score) && h.rounds_played > 0)
+    .map((h) => h.match_id);
+  const matchDeltasMap = await getBatchMatchRatingDeltas(playedMatchIds);
+  const matchDeltas: Record<number, Record<number, number>> = {};
+  for (const [matchId, playerMap] of matchDeltasMap) {
+    matchDeltas[matchId] = Object.fromEntries(playerMap);
+  }
 
   const freshSteam = await maybeRefreshSteamProfile(detail.player);
   if (freshSteam) {
@@ -79,6 +89,7 @@ export default async function PlayerPage({
           careerLeaderboard={careerLeaderboard}
           h2hData={h2hData}
           ehogHistory={ehog.history}
+          matchDeltas={matchDeltas}
         />
       </main>
     </div>

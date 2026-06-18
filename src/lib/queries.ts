@@ -2930,7 +2930,9 @@ export async function getPlayerEhogRating(playerId: number): Promise<EhogPlayerD
     matchId: r.match_id,
     sequenceIndex: r.sequence_index,
     ehogRating: r.ehog_rating,
-    ratingDelta: r.rating_delta,
+    ratingDelta: r.sequence_index === 1 && r.rating_delta === 0
+      ? r.ehog_rating - DEFAULT_EHOG
+      : r.rating_delta,
     ...matchSeasonInfo(r.match_id, ctx),
   }));
 
@@ -3013,15 +3015,35 @@ export async function getSeasonEhogRatings(seasonId: number): Promise<Record<num
   return result;
 }
 
+export async function getBatchMatchRatingDeltas(matchIds: number[]): Promise<Map<number, Map<number, number>>> {
+  if (matchIds.length === 0) return new Map();
+  const rows = await batchedIn<{ match_id: number; player_id: number; rating_delta: number }>(
+    'player_rating_history', 'match_id', matchIds, 'match_id, player_id, rating_delta',
+  );
+  const result = new Map<number, Map<number, number>>();
+  for (const r of rows) {
+    let inner = result.get(r.match_id);
+    if (!inner) { inner = new Map(); result.set(r.match_id, inner); }
+    inner.set(r.player_id, r.rating_delta);
+  }
+  return result;
+}
+
 export async function getMatchRatingDeltas(matchId: number): Promise<Map<number, number>> {
   const { data, error } = await supabase
     .from('player_rating_history')
-    .select('player_id, rating_delta')
+    .select('player_id, rating_delta, ehog_rating, sequence_index')
     .eq('match_id', matchId)
     .eq('formula_version', 'ehog_v1');
   if (error) throw error;
   const map = new Map<number, number>();
-  for (const row of data ?? []) map.set(row.player_id, row.rating_delta);
+  for (const row of data ?? []) {
+    // First game stores delta as 0; compute actual change from the starting rating
+    const delta = row.sequence_index === 1 && row.rating_delta === 0
+      ? row.ehog_rating - DEFAULT_EHOG
+      : row.rating_delta;
+    map.set(row.player_id, delta);
+  }
   return map;
 }
 
