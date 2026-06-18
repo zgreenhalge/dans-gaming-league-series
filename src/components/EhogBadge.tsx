@@ -1,4 +1,4 @@
-const GRADE_TIERS = [
+export const GRADE_TIERS = [
   { min: 99, color: '#f5c542' },  // gold
   { min: 95, color: '#eb4b4b' },  // red
   { min: 80, color: '#d32ee6' },  // pink
