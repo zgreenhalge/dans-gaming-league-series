@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { LocalTime } from './LocalTime';
 import { YouBadge } from './YouBadge';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
-import { fmtWindowDate } from '@/lib/util';
+import { fmtWindowDate, formatEhogDelta } from '@/lib/util';
 import { CountdownTimer } from './CountdownTimer';
 import { FeatureMatchIcon } from './FeatureMatch';
 
@@ -45,11 +45,6 @@ interface MatchCardProps {
   ehogDeltas?: Record<number, number> | null;
   /** 'inline': inside a container block (border-b style). 'standalone': full-border card. */
   containerVariant?: 'inline' | 'standalone';
-}
-
-function formatEhogDelta(delta: number): string {
-  const sign = delta >= 0 ? '+' : '';
-  return `${sign}${delta.toFixed(1)}`;
 }
 
 function TeamStatBlock({

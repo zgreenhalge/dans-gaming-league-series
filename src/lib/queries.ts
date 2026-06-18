@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
 import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
-import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
+import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG, correctedDelta } from './ehog';
 import type {
   Season,
   Week,
@@ -2930,9 +2930,7 @@ export async function getPlayerEhogRating(playerId: number): Promise<EhogPlayerD
     matchId: r.match_id,
     sequenceIndex: r.sequence_index,
     ehogRating: r.ehog_rating,
-    ratingDelta: r.sequence_index === 1 && r.rating_delta === 0
-      ? r.ehog_rating - DEFAULT_EHOG
-      : r.rating_delta,
+    ratingDelta: correctedDelta(r.rating_delta, r.ehog_rating, r.sequence_index),
     ...matchSeasonInfo(r.match_id, ctx),
   }));
 
@@ -3032,10 +3030,7 @@ export async function getBatchMatchRatingDeltas(matchIds: number[]): Promise<Map
   for (const r of rows) {
     let inner = result.get(r.match_id);
     if (!inner) { inner = new Map(); result.set(r.match_id, inner); }
-    const delta = r.sequence_index === 1 && r.rating_delta === 0
-      ? r.ehog_rating - DEFAULT_EHOG
-      : r.rating_delta;
-    inner.set(r.player_id, delta);
+    inner.set(r.player_id, correctedDelta(r.rating_delta, r.ehog_rating, r.sequence_index));
   }
   return result;
 }
@@ -3049,11 +3044,7 @@ export async function getMatchRatingDeltas(matchId: number): Promise<Map<number,
   if (error) throw error;
   const map = new Map<number, number>();
   for (const row of data ?? []) {
-    // First game stores delta as 0; compute actual change from the starting rating
-    const delta = row.sequence_index === 1 && row.rating_delta === 0
-      ? row.ehog_rating - DEFAULT_EHOG
-      : row.rating_delta;
-    map.set(row.player_id, delta);
+    map.set(row.player_id, correctedDelta(row.rating_delta, row.ehog_rating, row.sequence_index));
   }
   return map;
 }
