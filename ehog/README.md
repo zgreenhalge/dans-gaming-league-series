@@ -1,18 +1,8 @@
 # EHOG Rating Engine
 
-EHOG maps [OpenSkill](https://github.com/philihp/openskill.js) (PlackettLuce) state onto a **10–100 display rating** for the DGLS leaderboard. Ratings update after every match via a full chronological recompute.
-
-## Pipeline
-
-| File | Role |
-|---|---|
-| `constants.json` | Single source of truth for all tunable parameters. Read by both Python and TS. |
-| `engine.py` | Core rating math + DB read/write helpers. |
-| `backfill.py` | CLI full recompute. `--dry-run` prints standings without writing. |
-| `test_parity.py` | Generates `parity_fixtures.json` from the Python engine. |
-| `test_parity.ts` | Verifies the TS predictor matches the Python fixtures exactly. |
-| `src/lib/ehog.ts` | TS predictor — mirrors the engine math for client-side match projections. |
-| `api/ehog/recompute.py` | Vercel function, triggered after a score is submitted. Thin wrapper over `engine.py`. |
+EHOG is the DGLS player skill rating. It maps [OpenSkill](https://github.com/philihp/openskill.js)
+(PlackettLuce) state onto a **10–100 display rating** for the leaderboard. Ratings update after
+every match via a full chronological recompute.
 
 ## How a rating update works
 
@@ -28,6 +18,35 @@ EHOG maps [OpenSkill](https://github.com/philihp/openskill.js) (PlackettLuce) st
    EHOG = 10 + 90 / (1 + exp(−(skill − CENTER) / SCALE))
 ```
 
+Between seasons, μ and σ are regressed toward their defaults by `SEASON_REGRESSION` (10%) to keep
+ratings responsive without full resets.
+
+## Display tiers
+
+The UI renders a color-coded badge (`EhogBadge.tsx`) and tier bar (`EhogTierBar.tsx`):
+
+| EHOG range | Color  |
+|------------|--------|
+| 99–100     | Gold   |
+| 95–98      | Red    |
+| 80–94      | Pink   |
+| 60–79      | Purple |
+| 30–59      | Blue   |
+| 15–29      | Cyan   |
+| 0–14       | Grey   |
+
+## Pipeline
+
+| File | Role |
+|---|---|
+| `constants.json` | Single source of truth for all tunable parameters. Read by both Python and TS. |
+| `engine.py` | Core rating math + DB read/write helpers. |
+| `backfill.py` | CLI full recompute. `--dry-run` prints standings without writing. |
+| `test_parity.py` | Generates `parity_fixtures.json` from the Python engine. |
+| `test_parity.ts` | Verifies the TS predictor matches the Python fixtures exactly. |
+| `src/lib/ehog.ts` | TS predictor — mirrors the engine math for client-side match projections. |
+| `api/ehog/recompute.py` | Vercel function, triggered after a score is submitted. Thin wrapper over `engine.py`. |
+
 ## `constants.json` reference
 
 ### OpenSkill model
@@ -38,7 +57,7 @@ EHOG maps [OpenSkill](https://github.com/philihp/openskill.js) (PlackettLuce) st
 | `SIGMA_DEFAULT` | Starting σ (uncertainty) for new players. Higher = more volatile early ratings. |
 | `BETA_FACTOR` | Multiplied by `SIGMA_DEFAULT` to get the OpenSkill β parameter (performance variance). |
 
-### EHOG Calculation — `EHOG = 10 + 90 / (1 + exp(−(skill − CENTER) / SCALE))`
+### Display transform — `EHOG = 10 + 90 / (1 + exp(−(skill − CENTER) / SCALE))`
 
 | Key | Description |
 |---|---|

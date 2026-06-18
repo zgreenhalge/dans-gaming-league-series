@@ -22,6 +22,12 @@ so you don't have to reverse-engineer them from scratch each time.
   `src/lib/util.ts`; see
   [`CALCULATION_DEFINITIONS.md`](./CALCULATION_DEFINITIONS.md#canonical-regular-season-ranking)
   for the full rationale. Not to be confused with the canonical *gauntlet* ranking below.
+- **EHOG (rating)** — the DGLS player skill rating, an [OpenSkill](https://github.com/philihp/openskill.js)
+  PlackettLuce model mapped onto a 10–100 display scale via a logistic transform. Match-outcome-based
+  (win/loss + margin of victory), not individual-stat-based. Updated via full chronological recompute
+  after every score submission. See [`ehog/README.md`](./ehog/README.md) for the full engine docs.
+  Not to be confused with the aspirational *Player Rating* sabremetric composite in
+  [`CALCULATION_DEFINITIONS.md`](./CALCULATION_DEFINITIONS.md#player-rating-aspirational--requires-demo-data).
 - **Faction: SHIRTS / SKINS** — the two ad-hoc teams for a given match (CS2 Wingman is 2v2).
   Rosters are reshuffled weekly, hence "rotating mixer."
 - **Veto** — the map pick/ban sequence before a match (`shirts_ban`, `shirts_ban2`, `skins_ban1`,
