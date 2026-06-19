@@ -44,76 +44,95 @@ Raw numbers, direct from the game scoreboard
 - A/G = Assists / Games played
 - D/G = Deaths / Games played
 
+## Side Splits
+
+CT/T splits for kills, deaths, assists, damage, and headshot kills are derived deterministically
+from the roster's faction (SHIRTS/SKINS), the stored `skins_starting_side`, and the round number.
+No per-tick `team_num` lookups are used.
+
+- **Regulation:** Rounds 1–`regRoundsPerHalf` (= `target_win_rounds - 1`) use starting sides;
+  rounds `regRoundsPerHalf + 1`–`regRoundsPerHalf * 2` use swapped sides.
+- **Overtime:** MR3 halves alternate starting from the regulation H2 sides. OT half 1 (odd) =
+  reg H2 sides, OT half 2 (even) = reg H1 sides.
+- A player's side each round is `sideForFaction(roundSideInfo, faction)`.
+
+Per-round deltas are computed from the engine's `ActionTrackingServices` accumulators at each
+round-end tick: `delta(round R) = value@roundEnd(R) − value@roundEnd(R−1)` (R=1 baseline 0).
+Each delta is attributed to the player's side that round.
+
+Implemented in `src/lib/parsers/roundSides.ts` (side map) and `src/lib/parsers/accumulators.ts`
+(delta splitter).
+
 ## Sabremetrics
 
 Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 
-- `KPR+` = `Player K/R` / `League Avg K/R` * 100
-- `APR+` = `Player A/R` / `League Avg A/R` * 100
-- `DPR+` = `Player D/R` / `League Avg D/R` * 100
-- `KDR+` = `Player K/D` / `League Avg K/D` * 100
-- `ADR+` = `Player ADR` / `League Avg ADR` * 100
-- `Entry+` = `Player Entry Value` / `League Avg Entry Value` * 100
-  - `Entry Value` = `Opening Kills` - `Opening Deaths`
-- `Trade+` = `Player KAST` / `League Avg KAST` * 100
+- `KPR+` = `Player K/R` / `League Avg K/R`
+- `APR+` = `Player A/R` / `League Avg A/R`
+- `DPR+` = `Player D/R` / `League Avg D/R`
+- `KDR+` = `Player K/D` / `League Avg K/D`
+- `ADR+` = `Player ADR` / `League Avg ADR`
+- `Entry+` = `Player Opening Success Rate` / `League Avg Opening Success Rate`
+  - `Opening Success Rate` = `Opening Kills` / (`Opening Kills` + `Opening Deaths`)
+- `KAST+` = `Player KAST` / `League Avg KAST`
   - `KAST` = `Rounds with Kill, Assist, Survived, or Traded` / `Rounds played`
   - `Trade Score` = `KAST` - (`Untraded Deaths` * 10)
-- `Objective+` = `Player Objective Score` / `League Avg Objective Score` * 100
+- `Objective+` = `Player Objective Score` / `League Avg Objective Score`
   - `Objective Score` = (2 * `Plants`) + (3 * `Defuses`)
-- `Utility+` = `Player Utility Score` / `League Avg Utility Score` * 100
+- `Utility+` = `Player Utility Score` / `League Avg Utility Score`
   - `Utility Score` = `Flash Assists` + (`Utility Damage` / 50)
-- `Clutch+` = `Player Clutch Score` / `League Avg Clutch Score` * 100
-  - `Clutch Score` = `1v1 wins` + 2 * `1v2 wins w/ assist` + 3 * `1v2 wins w/o assist`
-- `Choke+` = `Player Choke Score` / `League Avg Choke Score` * 100
+- `Clutch+` = `Player Clutch Score` / `League Avg Clutch Score`
+  - `Clutch Score` = `1v1 wins` + 3 * `1v2 wins`
+- `Choke+` = `Player Choke Score` / `League Avg Choke Score`
   - `Choke Score` = `1v1 losses` + 2 * `1v2 losses` + 5 * `2v1 losses`
 
 ### Player Rating (aspirational — requires demo data)
 
 A weighted sabremetric composite for individual performance. Independent from the
 [EHOG skill rating](ehog/README.md), which is match-outcome-based (OpenSkill). These formulas
-will be implemented once demo ingestion provides the underlying stats (Entry+, Trade+, etc.).
+will be implemented once demo ingestion provides the underlying stats (Entry+, KAST+, etc.).
 
 ```
-Player Rating = 100
-  + 0.30(KPR+ - 100)
-  + 0.20(ADR+ - 100)
-  + 0.10(Entry+ - 100)
-  + 0.10(Clutch+ - 100)
-  + 0.10(Trade+ - 100)
-  + 0.10(Objective+ - 100)
-  + 0.10(Utility+ - 100)
-  + 0.10(APR+ - 100)
-  - 0.10(DPR+ - 100)
+Player Rating = 1.00
+  + 0.30(KPR+ - 1)
+  + 0.20(ADR+ - 1)
+  + 0.10(Entry+ - 1)
+  + 0.10(Clutch+ - 1)
+  + 0.10(KAST+ - 1)
+  + 0.10(Objective+ - 1)
+  + 0.10(Utility+ - 1)
+  + 0.10(APR+ - 1)
+  - 0.10(DPR+ - 1)
   - Beer Tax
 ```
 
 #### Role ratings
 
 ```
-Entry Rating = 100
-  + 0.35(Entry+ - 100)
-  + 0.20(KPR+ - 100)
-  + 0.20(ADR+ - 100)
-  + 0.15(Trade+ - 100)
-  + 0.10(K/D+ - 100)
+Entry Rating = 1.00
+  + 0.35(Entry+ - 1)
+  + 0.20(KPR+ - 1)
+  + 0.20(ADR+ - 1)
+  + 0.15(KAST+ - 1)
+  + 0.10(K/D+ - 1)
 ```
 
 ```
-Anchor Rating = 100
-  + 0.50(KPR+ - 100)
-  + 0.40(Clutch+ - 100)
-  + 0.15(ADR+ - 100)
-  + 0.15(Trade+ - 100)
-  + 0.10(Objective+ - 100)
-  - 0.50(DPR+ - 100)
-  - 0.20(Choke+ - 100)
+Anchor Rating = 1.00
+  + 0.50(KPR+ - 1)
+  + 0.40(Clutch+ - 1)
+  + 0.15(ADR+ - 1)
+  + 0.15(KAST+ - 1)
+  + 0.10(Objective+ - 1)
+  - 0.50(DPR+ - 1)
+  - 0.20(Choke+ - 1)
 ```
 
 ```
-Setup Rating = 100
-  + 0.50(APR+ - 100)
-  + 0.40(Utility+ - 100)
-  + 0.10(Objective+ - 100)
+Setup Rating = 1.00
+  + 0.50(APR+ - 1)
+  + 0.40(Utility+ - 1)
+  + 0.10(Objective+ - 1)
   - 10 * Teamflash seconds
 ```
 
