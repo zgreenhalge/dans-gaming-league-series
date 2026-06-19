@@ -3,6 +3,8 @@
 import { useState, useTransition, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
+import SabremetricsTable from '@/components/SabremetricsTable';
+import type { SabFields, RoundHistoryEntry } from '@/lib/types';
 type Faction = 'CT' | 'T' | null;
 
 interface MatchPlayer {
@@ -24,11 +26,18 @@ interface PlayerStat {
   is_win: boolean;
 }
 
+interface SabremetricStat {
+  player_id: number;
+  sabremetrics: Record<string, number>;
+}
+
 interface ParsedResult {
   stats: PlayerStat[];
   shirts_score: number | null;
   skins_score: number | null;
   warnings: string[];
+  sabremetrics?: SabremetricStat[];
+  round_history?: RoundHistoryEntry[] | null;
 }
 
 type DraftStats = Record<number, { kills: string; assists: string; deaths: string; damage: string }>;
@@ -65,6 +74,7 @@ interface Props {
   targetWinRounds: number;
   isAdmin: boolean;
   alreadyPlayed: boolean;
+  hasDemoUploaded: boolean;
   initialStats?: PlayerStat[];
   initialShirtsScore?: number | null;
   initialSkinsScore?: number | null;
@@ -77,6 +87,7 @@ export default function DemoUploadModal({
   targetWinRounds,
   isAdmin,
   alreadyPlayed,
+  hasDemoUploaded,
   initialStats,
   initialShirtsScore,
   initialSkinsScore,
@@ -99,11 +110,54 @@ export default function DemoUploadModal({
   if (!mounted) return null;
   if (alreadyPlayed && !isAdmin) return null;
 
+  async function reparseExistingDemo() {
+    setStage('parsing');
+    setError(null);
+    const parseRes = await fetch(`/api/matches/${matchId}/demo/parse`, { method: 'POST' });
+    if (!parseRes.ok) {
+      const json = await parseRes.json().catch(() => ({}));
+      setError(json.error ?? 'Demo re-parse failed.');
+      // Fall back to synthetic stats from existing data
+      if (initialStats && initialStats.length > 0) {
+        const syntheticParsed: ParsedResult = {
+          stats: initialStats,
+          shirts_score: initialShirtsScore ?? null,
+          skins_score: initialSkinsScore ?? null,
+          warnings: [],
+        };
+        setParsed(syntheticParsed);
+        setDraftStats(initDraftFromStats(initialStats));
+        setShirtsScore(initialShirtsScore != null ? String(initialShirtsScore) : '');
+        setSkinsScore(initialSkinsScore != null ? String(initialSkinsScore) : '');
+      }
+      setStage('preview');
+      return;
+    }
+    const result: ParsedResult = await parseRes.json();
+    setParsed(result);
+    setDraftStats(initDraftFromStats(result.stats));
+    if (result.shirts_score !== null) setShirtsScore(String(result.shirts_score));
+    if (result.skins_score !== null) setSkinsScore(String(result.skins_score));
+    setStage('preview');
+  }
+
   function handleOpen() {
     setError(null);
 
+    if (alreadyPlayed && hasDemoUploaded) {
+      // Edit mode with demo: re-parse to get sabremetrics
+      setStage('parsing');
+      setParsed(null);
+      setDraftStats({});
+      setShirtsScore(initialShirtsScore != null ? String(initialShirtsScore) : '');
+      setSkinsScore(initialSkinsScore != null ? String(initialSkinsScore) : '');
+      setOpen(true);
+      reparseExistingDemo();
+      return;
+    }
+
     if (alreadyPlayed && initialStats && initialStats.length > 0) {
-      // Edit mode: pre-populate from existing stats
+      // Edit mode without demo: pre-populate from existing stats
       const syntheticParsed: ParsedResult = {
         stats: initialStats,
         shirts_score: initialShirtsScore ?? null,
@@ -230,7 +284,13 @@ export default function DemoUploadModal({
       const res = await fetch(`/api/matches/${matchId}/score`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shirts: sInt, skins: skInt, player_stats }),
+        body: JSON.stringify({
+          shirts: sInt,
+          skins: skInt,
+          player_stats,
+          sabremetrics: parsed.sabremetrics,
+          round_history: parsed.round_history ?? null,
+        }),
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
@@ -486,6 +546,29 @@ export default function DemoUploadModal({
                         </div>
                       );
                     })}
+
+                    {parsed.sabremetrics && parsed.sabremetrics.length > 0 && (() => {
+                      const allPlayers = [...shirtsPlayers, ...skinsPlayers];
+                      const sabPlayers = parsed.sabremetrics!.map((s) => {
+                        const mp = allPlayers.find((p) => p.player_id === s.player_id);
+                        const stat = statMap.get(s.player_id);
+                        return {
+                          player_id: s.player_id,
+                          player_name: mp?.player_name ?? `#${s.player_id}`,
+                          faction: mp?.faction ?? 'SHIRTS' as const,
+                          rounds_played: stat?.rounds_played ?? 0,
+                          sabremetrics: s.sabremetrics as SabFields,
+                        };
+                      });
+                      return (
+                        <div>
+                          <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-1.5">
+                            Advanced Stats
+                          </div>
+                          <SabremetricsTable players={sabPlayers} />
+                        </div>
+                      );
+                    })()}
 
                     {error && (
                       <p className="text-[12px] text-[var(--color-accent-red-fg,#ef4444)]">{error}</p>
