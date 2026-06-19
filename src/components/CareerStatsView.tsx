@@ -82,6 +82,7 @@ export default function CareerStatsView({
   const { includeRegular, includeGauntlet, toggleRegular: baseToggleRegular, toggleGauntlet: baseToggleGauntlet } = useSeasonFilter();
   const [filter, setFilter] = useState<Filter>('career');
   const [tab, setTab] = useState<Tab>(searchParams.get('tab') === 'h2h' ? 'h2h' : 'leaderboard');
+  const [hoveredPlayerId, setHoveredPlayerId] = useState<number | null>(null);
 
   const urlInitialPair = useMemo<H2HPair | null>(() => {
     const aName = searchParams.get('a');
@@ -231,9 +232,10 @@ export default function CareerStatsView({
                 players={rows
                   .filter((r) => ehogRatings[r.player_id] != null)
                   .map((r) => ({ id: r.player_id, name: r.player_name, rating: ehogRatings[r.player_id] }))}
+                highlightPlayerId={hoveredPlayerId}
               />
             </div>
-            <LeaderboardTable rows={rows} showMedals={false} showRank={false} trophyCounts={trophyCounts} ehogRatings={ehogRatings} />
+            <LeaderboardTable rows={rows} showMedals={false} showRank={false} trophyCounts={trophyCounts} ehogRatings={ehogRatings} onPlayerHover={setHoveredPlayerId} />
           </>
         )
       )}
