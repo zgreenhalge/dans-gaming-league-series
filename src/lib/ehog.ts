@@ -19,10 +19,6 @@ export function toEhog(mu: number, sigma: number): number {
 
 export const DEFAULT_EHOG = toEhog(MU_DEFAULT, SIGMA_DEFAULT);
 
-export function correctedDelta(ratingDelta: number, ehogRating: number, sequenceIndex: number): number {
-  return sequenceIndex === 1 && ratingDelta === 0 ? ehogRating - DEFAULT_EHOG : ratingDelta;
-}
-
 export function marginMultiplier(scoreA: number, scoreB: number): number {
   const total = scoreA + scoreB;
   if (total <= 0) return 1.0;

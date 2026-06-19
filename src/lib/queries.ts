@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
 import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
-import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG, correctedDelta } from './ehog';
+import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
 import type {
   Season,
   Week,
@@ -2930,7 +2930,7 @@ export async function getPlayerEhogRating(playerId: number): Promise<EhogPlayerD
     matchId: r.match_id,
     sequenceIndex: r.sequence_index,
     ehogRating: r.ehog_rating,
-    ratingDelta: correctedDelta(r.rating_delta, r.ehog_rating, r.sequence_index),
+    ratingDelta: r.rating_delta,
     ...matchSeasonInfo(r.match_id, ctx),
   }));
 
@@ -3030,7 +3030,7 @@ export async function getBatchMatchRatingDeltas(matchIds: number[]): Promise<Map
   for (const r of rows) {
     let inner = result.get(r.match_id);
     if (!inner) { inner = new Map(); result.set(r.match_id, inner); }
-    inner.set(r.player_id, correctedDelta(r.rating_delta, r.ehog_rating, r.sequence_index));
+    inner.set(r.player_id, r.rating_delta);
   }
   return result;
 }
@@ -3044,7 +3044,7 @@ export async function getMatchRatingDeltas(matchId: number): Promise<Map<number,
   if (error) throw error;
   const map = new Map<number, number>();
   for (const row of data ?? []) {
-    map.set(row.player_id, correctedDelta(row.rating_delta, row.ehog_rating, row.sequence_index));
+    map.set(row.player_id, row.rating_delta);
   }
   return map;
 }
