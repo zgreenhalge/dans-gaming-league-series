@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { tabCls, formatEhogDelta } from '@/lib/util';
 import PlayerAvatar from '@/components/PlayerAvatar';
-import { YouBadge } from '@/components/YouBadge';
+import { PlayerName } from '@/components/PlayerName';
 import DemoUploadModal from '@/components/DemoUploadModal';
 import ScoutingReport from '@/components/ScoutingReport';
 import type { MatchStatRow, MatchScoutingData, H2HData } from '@/lib/queries';
@@ -70,8 +70,7 @@ function Scoreboard({
                 <td className="pl-3 pr-3 py-2 font-display font-semibold faction-fg">
                   <Link href={`/players/${p.player_id}`} className="flex items-center gap-2.5">
                     <PlayerAvatar name={p.player_name} imageUrl={p.steam_avatar_url} size="sm" />
-                    {p.player_name}
-                    {currentPlayerId !== null && p.player_id === currentPlayerId && <YouBadge />}
+                    <PlayerName name={p.player_name} isMe={currentPlayerId !== null && p.player_id === currentPlayerId} />
                     {p.player_id === mvpPlayerId && (
                       <span
                         className="ml-0.5 inline-flex items-center px-1.5 py-0.5 tracked text-[9px] font-semibold border"

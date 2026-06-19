@@ -329,7 +329,7 @@ def compute_ratings(
                 new_sigma = max(SIGMA_FLOOR, uw_sigma)
 
                 new_ehog = to_ehog(new_mu, new_sigma)
-                rating_delta = 0.0 if pid not in player_state else (new_ehog - prior_ehog)
+                rating_delta = new_ehog - prior_ehog
 
                 history_rows.append({
                     "player_id": pid,

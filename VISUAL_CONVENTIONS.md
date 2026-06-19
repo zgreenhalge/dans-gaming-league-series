@@ -65,8 +65,8 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
   Don't build ad-hoc colored pill markup for match results — use these.
 - **`.form-square` / `.form-dot`** (`--w` / `--l` modifiers) — recent-form history indicators
   (squares for emphasis, dots for compact inline use)
-- **`.you-badge`** / `.player-highlight` / `.current-player-row` — "this is you" / "this is the
-  player whose page you're on" treatments. See also `YouBadge.tsx`.
+- **`.player-name-me`** / `.player-highlight` / `.current-player-row` — "this is you" / "this is the
+  player whose page you're on" treatments. See also `PlayerName.tsx`.
 
 ## Typography
 

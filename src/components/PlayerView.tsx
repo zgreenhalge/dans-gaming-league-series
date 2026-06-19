@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import type { PlayerHistoryRow, TrophyEntry, H2HData, EhogRatingPoint } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
@@ -209,6 +210,9 @@ export default function PlayerView({
   ehogHistory: EhogRatingPoint[];
   matchDeltas: Record<number, Record<number, number>>;
 }) {
+  const { data: session } = useSession();
+  const loggedInPlayerId = session?.user?.playerId ?? null;
+
   const { regularSeasons, gauntletSeasons, regularToGauntlet } = useMemo(() => {
     const regMap = new Map<number, { id: number; name: string }>();
     const gntMap = new Map<number, { id: number; name: string }>();
@@ -716,6 +720,7 @@ export default function PlayerView({
                   skinsFallback={h.skins.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
                   currentPlayerId={h.player_id}
                   highlightCurrentPlayer
+                  loggedInPlayerId={loggedInPlayerId}
                   containerVariant="standalone"
                 />
               ))}
@@ -742,6 +747,7 @@ export default function PlayerView({
                       skinsFallback={h.skins.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
                       currentPlayerId={h.player_id}
                       highlightCurrentPlayer
+                      loggedInPlayerId={loggedInPlayerId}
                       ehogDeltas={matchDeltas[h.match_id] ?? null}
                       containerVariant="standalone"
                     />

@@ -38,11 +38,12 @@ interface PlayerDot {
   rating: number;
 }
 
-export default function EhogTierBar({ players }: { players?: PlayerDot[] }) {
+export default function EhogTierBar({ players, highlightPlayerId }: { players?: PlayerDot[]; highlightPlayerId?: number | null }) {
   const segments = buildSegments();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerW, setContainerW] = useState(0);
-  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [localHoveredId, setLocalHoveredId] = useState<number | null>(null);
+  const hoveredId = localHoveredId ?? highlightPlayerId ?? null;
 
   useEffect(() => {
     const node = containerRef.current;
@@ -106,8 +107,8 @@ export default function EhogTierBar({ players }: { players?: PlayerDot[] }) {
                 stroke={color}
                 strokeWidth={2}
                 style={{ cursor: 'pointer', pointerEvents: 'auto', transition: 'r 0.1s' }}
-                onMouseEnter={() => setHoveredId(dot.id)}
-                onMouseLeave={() => setHoveredId(null)}
+                onMouseEnter={() => setLocalHoveredId(dot.id)}
+                onMouseLeave={() => setLocalHoveredId(null)}
               />
             );
           })}

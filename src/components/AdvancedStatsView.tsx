@@ -66,6 +66,7 @@ function BasicStatsTable({ data }: { data: RowWithStats[] }) {
         case 'a':    aVal = a.row.total_assists;  bVal = b.row.total_assists; break;
         case 'd':    aVal = a.row.total_deaths;   bVal = b.row.total_deaths;  break;
         case 'dmg':  aVal = a.row.total_damage;   bVal = b.row.total_damage;  break;
+        case 'adr':  aVal = a.row.overall_adr;    bVal = b.row.overall_adr;   break;
         case 'kdiff': aVal = a.stats.killDiff;    bVal = b.stats.killDiff;    break;
         default: return 0;
       }
@@ -87,8 +88,9 @@ function BasicStatsTable({ data }: { data: RowWithStats[] }) {
               <SortableTh label="Kills"            sortKey="k"     state={sort} onClick={toggleSort} />
               <SortableTh label="Assists"          sortKey="a"     state={sort} onClick={toggleSort} />
               <SortableTh label="Deaths"           sortKey="d"     state={sort} onClick={toggleSort} />
-              <SortableTh label="Damage"           sortKey="dmg"   state={sort} onClick={toggleSort} />
               <SortableTh label="Kill Differential" sortKey="kdiff" state={sort} onClick={toggleSort} />
+              <SortableTh label="Damage"           sortKey="dmg"   state={sort} onClick={toggleSort} />
+              <SortableTh label="ADR" title="Average Damage per Round" sortKey="adr" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -116,12 +118,17 @@ function BasicStatsTable({ data }: { data: RowWithStats[] }) {
                 </td>
                 <td className="px-3 py-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
+                    {fmtDiff(stats.killDiff)}
+                  </Link>
+                </td>
+                <td className="px-3 py-2 text-right tnum">
+                  <Link href={`/players/${row.player_id}`} className="block">
                     {row.total_damage.toLocaleString()}
                   </Link>
                 </td>
                 <td className="px-3 py-2 text-right tnum">
                   <Link href={`/players/${row.player_id}`} className="block">
-                    {fmtDiff(stats.killDiff)}
+                    {fmtNum(row.overall_adr, 2)}
                   </Link>
                 </td>
               </tr>
