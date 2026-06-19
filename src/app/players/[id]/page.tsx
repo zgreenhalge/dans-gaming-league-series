@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas } from '@/lib/queries';
+import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas, getPlayerSabremetrics } from '@/lib/queries';
 import { isPlayedScore } from '@/lib/util';
 import { maybeRefreshSteamProfile } from '@/lib/steam';
 import PlayerView from '@/components/PlayerView';
@@ -28,11 +28,12 @@ export default async function PlayerPage({
   const { id } = await params;
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
-  const [detail, careerLeaderboard, h2hData, ehog] = await Promise.all([
+  const [detail, careerLeaderboard, h2hData, ehog, playerSabremetrics] = await Promise.all([
     getPlayer(playerId),
     getCareerLeaderboard(),
     getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
     getPlayerEhogRating(playerId),
+    getPlayerSabremetrics(playerId),
   ]);
   if (!detail) notFound();
 
@@ -90,6 +91,7 @@ export default async function PlayerPage({
           h2hData={h2hData}
           ehogHistory={ehog.history}
           matchDeltas={matchDeltas}
+          sabremetrics={playerSabremetrics}
         />
       </main>
     </div>

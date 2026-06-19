@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics } from '@/lib/queries';
 import { projectRatingDeltas, type RatingProjection } from '@/lib/ehog';
 import type { Match } from '@/lib/types';
 import { isPlayedScore, parseScore } from '@/lib/util';
@@ -9,6 +9,7 @@ import { TopbarShell } from '@/components/TopbarShell';
 import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
 import MatchTabView from '@/components/MatchTabView';
+import RoundHistoryStrip from '@/components/RoundHistoryStrip';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 import { FeatureMatchBanner } from '@/components/FeatureMatch';
@@ -117,7 +118,7 @@ export default async function MatchPage({
 
   const showScouting = shirts.length === 2 && skins.length === 2;
   const key = makeDemoKey(matchId);
-  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap] = await Promise.all([
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics] = await Promise.all([
     showScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     showScouting
       ? getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true })
@@ -130,6 +131,7 @@ export default async function MatchPage({
       )
       .catch(() => null),
     played ? getMatchRatingDeltas(matchId) : Promise.resolve(new Map<number, number>()),
+    played ? getMatchSabremetrics(matchId) : Promise.resolve([]),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
 
@@ -288,6 +290,15 @@ export default async function MatchPage({
 
         </div>
 
+        {played && match.round_history && shirtsF && skinsF && (
+          <RoundHistoryStrip
+            rounds={match.round_history}
+            targetWinRounds={season.target_win_rounds}
+            shirtsSide={shirtsF}
+            skinsSide={skinsF}
+          />
+        )}
+
         <MatchTabView
           shirts={shirts}
           skins={skins}
@@ -315,6 +326,7 @@ export default async function MatchPage({
           demoDownloadUrl={demoDownloadUrl}
           ratingDeltas={ratingDeltas}
           ratingProjections={ratingProjections}
+          sabremetrics={sabremetrics}
         />
       </main>
     </div>

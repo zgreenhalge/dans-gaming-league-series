@@ -8,12 +8,13 @@ import H2HSection from './H2HSection';
 import { AdvancedStatsView } from './AdvancedStatsView';
 import { buildRegularToGauntletMap, extractSeasonNumber, seasonTitle, tabCls } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import type { TrophyEntry, H2HData, MapMatchRow, EhogSnapshotRow } from '@/lib/queries';
+import type { TrophyEntry, H2HData, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow } from '@/lib/queries';
 import type { H2HPair } from './H2HMatrix';
 import EhogTierBar from './EhogTierBar';
+import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 
 type Filter = 'career' | number;
-type Tab = 'leaderboard' | 'stats' | 'h2h';
+type Tab = 'leaderboard' | 'stats' | 'advanced' | 'h2h';
 
 function mergeRows(
   a: LeaderboardRowWithId[],
@@ -66,6 +67,7 @@ export default function CareerStatsView({
   h2hData,
   allMatches = [],
   ehogSnapshots = [],
+  allSabremetrics = [],
 }: {
   regularSeasons: { id: number; name: string }[];
   gauntletSeasons: { id: number; name: string }[];
@@ -77,6 +79,7 @@ export default function CareerStatsView({
   h2hData: H2HData;
   allMatches?: MapMatchRow[];
   ehogSnapshots?: EhogSnapshotRow[];
+  allSabremetrics?: SabremetricMatchRow[];
 }) {
   const searchParams = useSearchParams();
   const { includeRegular, includeGauntlet, toggleRegular: baseToggleRegular, toggleGauntlet: baseToggleGauntlet } = useSeasonFilter();
@@ -145,6 +148,18 @@ export default function CareerStatsView({
     });
   }, [filter, allMatches, includeRegular, includeGauntlet, regularToGauntlet]);
 
+  const filteredSabremetrics = useMemo(() => {
+    if (filter === 'career') {
+      return allSabremetrics.filter((r) => r.is_gauntlet ? includeGauntlet : includeRegular);
+    }
+    const pairedGntId = regularToGauntlet.get(filter);
+    return allSabremetrics.filter((r) => {
+      if (r.season_id === filter) return r.is_gauntlet ? includeGauntlet : includeRegular;
+      if (pairedGntId != null && r.season_id === pairedGntId) return includeGauntlet;
+      return false;
+    });
+  }, [filter, allSabremetrics, includeRegular, includeGauntlet, regularToGauntlet]);
+
   const trophyCounts = useMemo(() => {
     const counts = new Map<number, Record<1 | 2 | 3, number>>();
     for (const [pidStr, entries] of Object.entries(trophiesByPlayer)) {
@@ -190,11 +205,14 @@ export default function CareerStatsView({
           <button className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
             Stats
           </button>
+          <button className={tabCls(tab === 'advanced')} onClick={() => setTab('advanced')}>
+            Advanced Stats
+          </button>
           <button className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
             H2H
           </button>
         </div>
-        {(tab === 'leaderboard' || tab === 'stats') && (
+        {(tab === 'leaderboard' || tab === 'stats' || tab === 'advanced') && (
           <div className="flex items-center gap-5 pb-3">
             <SeasonFilter
               filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }}
@@ -248,6 +266,10 @@ export default function CareerStatsView({
         ) : (
           <AdvancedStatsView rows={rows} matches={filteredMatches} />
         )
+      )}
+
+      {tab === 'advanced' && (
+        <SabremetricsLeaderboardView rows={filteredSabremetrics} />
       )}
 
       {tab === 'h2h' && (

@@ -19,6 +19,17 @@ export interface Week {
   bye_player_id: number | null;
 }
 
+/** How a single round was won. Drives the round-history strip icon. */
+export type RoundCondition = 'elim' | 'bomb' | 'defuse' | 'time';
+
+/** One round's outcome, for the CS2-scoreboard-style round-history strip. */
+export interface RoundHistoryEntry {
+  n: number;                  // 1-based round number
+  winner: 'SHIRTS' | 'SKINS'; // winning team (drives tile color)
+  side: 'CT' | 'T';           // winning side (drives vertical track)
+  condition: RoundCondition;  // how the round was won (drives icon)
+}
+
 export interface Match {
   id: number;
   week_id: number;
@@ -38,6 +49,7 @@ export interface Match {
   scheduled_at: string | null;
   screenshot_url_front: string | null;
   screenshot_url_back: string | null;
+  round_history: RoundHistoryEntry[] | null;
 }
 
 export interface Player {
@@ -112,4 +124,47 @@ export interface MapIndexEntry {
   noPickCount: number;
   seasons: { id: number; name: string; is_gauntlet: boolean }[];
   statsBySeason: MapSeasonStat[];
+}
+
+export interface PlayerMatchSabremetrics {
+  player_match_stats_id: number;
+  kills_ct: number;
+  kills_t: number;
+  deaths_ct: number;
+  deaths_t: number;
+  assists_ct: number;
+  assists_t: number;
+  damage_ct: number;
+  damage_t: number;
+  headshot_kills: number;
+  headshot_kills_ct: number;
+  headshot_kills_t: number;
+  opening_kills: number;
+  opening_deaths: number;
+  kast_rounds: number;
+  clutch_1v1_attempts: number;
+  clutch_1v1_wins: number;
+  clutch_1v2_attempts: number;
+  clutch_1v2_wins: number;
+  flash_assists: number;
+  utility_damage: number;
+  blind_duration_dealt: number;
+  enemies_flashed: number;
+  flashes_thrown: number;
+  teamflash_duration: number;
+  plants: number;
+  defuses: number;
+  two_k_rounds: number;
+}
+
+export type SabFields = Omit<PlayerMatchSabremetrics, 'player_match_stats_id'>;
+
+export interface DemoSabremetricStat {
+  player_id: number;
+  sabremetrics: SabFields;
+}
+
+export interface ParsedDemoSabremetricsResult {
+  sabremetrics: DemoSabremetricStat[];
+  warnings: string[];
 }

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import type { PlayerHistoryRow, TrophyEntry, H2HData, EhogRatingPoint } from '@/lib/queries';
+import type { PlayerHistoryRow, TrophyEntry, H2HData, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats, type PlayerMapStat, type PlayerSideStat } from '@/lib/mapSideStats';
@@ -16,10 +16,11 @@ import Sparkline from './Sparkline';
 import { CountdownTimer } from './CountdownTimer';
 import MatchupsTab from './MatchupsTab';
 import EhogTimeline from './EhogTimeline';
+import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 
 type Filter = 'career' | number;
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
-type PlayerTab = 'stats' | 'matches' | 'trophies' | 'matchups';
+type PlayerTab = 'stats' | 'matches' | 'advanced' | 'trophies' | 'matchups';
 type MatchesSubTab = 'history' | 'upcoming';
 
 const MEDAL_COLORS: Record<1 | 2 | 3, string> = {
@@ -201,6 +202,7 @@ export default function PlayerView({
   h2hData,
   ehogHistory,
   matchDeltas,
+  sabremetrics = [],
 }: {
   playerId: number;
   history: PlayerHistoryRow[];
@@ -209,6 +211,7 @@ export default function PlayerView({
   h2hData: H2HData;
   ehogHistory: EhogRatingPoint[];
   matchDeltas: Record<number, Record<number, number>>;
+  sabremetrics?: SabremetricMatchRow[];
 }) {
   const { data: session } = useSession();
   const loggedInPlayerId = session?.user?.playerId ?? null;
@@ -343,9 +346,25 @@ export default function PlayerView({
     return counts;
   }, [filteredTrophies]);
 
+  const filteredSabremetrics = useMemo(() => {
+    const base = filter === 'career'
+      ? sabremetrics
+      : (() => {
+          const pairedGntId = regularToGauntlet.get(filter);
+          return sabremetrics.filter((r) =>
+            r.season_id === filter ||
+            (pairedGntId != null && r.season_id === pairedGntId),
+          );
+        })();
+    return base.filter((r) =>
+      r.is_gauntlet ? includeGauntlet : includeRegular,
+    );
+  }, [filter, sabremetrics, includeRegular, includeGauntlet, regularToGauntlet]);
+
   const playerTabs: { key: PlayerTab; label: string }[] = [
     { key: 'stats', label: 'Overview' },
     { key: 'matches', label: `Matches${playedHistory.length > 0 ? ` (${playedHistory.length})` : ''}` },
+    { key: 'advanced', label: 'Advanced Stats' },
     { key: 'matchups', label: 'H2H' },
   ];
   if (trophies.length > 0) {
@@ -757,6 +776,11 @@ export default function PlayerView({
             </>
           )}
         </>
+      )}
+
+      {/* Advanced Stats tab */}
+      {tab === 'advanced' && (
+        <SabremetricsLeaderboardView rows={filteredSabremetrics} singlePlayer />
       )}
 
       {/* Matchups tab */}
