@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { LocalTime } from './LocalTime';
-import { YouBadge } from './YouBadge';
+import { PlayerName } from './PlayerName';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { fmtWindowDate, formatEhogDelta } from '@/lib/util';
 import { CountdownTimer } from './CountdownTimer';
@@ -41,6 +41,8 @@ interface MatchCardProps {
   currentPlayerId?: number | null;
   /** Enlarge/bold the current player's stat row. Enable only on the player profile page. */
   highlightCurrentPlayer?: boolean;
+  /** When set, highlights this player's name (accent glow) independently of currentPlayerId. */
+  loggedInPlayerId?: number | null;
   /** EHOG rating deltas per player_id for this match. */
   ehogDeltas?: Record<number, number> | null;
   /** 'inline': inside a container block (border-b style). 'standalone': full-border card. */
@@ -51,11 +53,13 @@ function TeamStatBlock({
   players,
   currentPlayerId,
   highlightCurrentPlayer,
+  loggedInPlayerId,
   ehogDeltas,
 }: {
   players: MatchCardPlayer[];
   currentPlayerId: number | null;
   highlightCurrentPlayer: boolean;
+  loggedInPlayerId: number | null;
   ehogDeltas?: Record<number, number> | null;
 }) {
   const statCls = `font-mono tnum text-right shrink-0`;
@@ -76,14 +80,15 @@ function TeamStatBlock({
       {/* rows */}
       <div className="divide-y divide-[var(--color-border-tertiary)]">
       {players.map((p) => {
-        const isMe = currentPlayerId !== null && p.player_id === currentPlayerId;
-        const highlight = isMe && highlightCurrentPlayer;
+        const isPagePlayer = currentPlayerId !== null && p.player_id === currentPlayerId;
+        const highlight = isPagePlayer && highlightCurrentPlayer;
+        const meId = loggedInPlayerId ?? currentPlayerId;
+        const isMe = meId !== null && p.player_id === meId;
         const numSz = highlight ? 'text-[12px] font-semibold' : 'text-[11px]';
         return (
           <div key={p.player_id} className={`flex items-center py-0.5 ${highlight ? 'current-player-row' : ''}`}>
             <span className={`font-display flex items-center flex-1 min-w-0 pl-2 pr-1 ${highlight ? 'text-[15px] lg:text-[16px] font-semibold' : 'text-[13px] font-semibold'}`}>
-              <span className="truncate">{p.player_name}</span>
-              {isMe && <YouBadge />}
+              <span className="truncate"><PlayerName name={p.player_name} isMe={isMe} /></span>
             </span>
             <span className={`${statCls} ${numSz} w-7 sm:w-9 text-[var(--color-text-primary)]`}>{p.kills}</span>
             <span className={`${statCls} ${numSz} w-7 sm:w-9 text-[var(--color-text-primary)] hidden min-[480px]:block`}>{p.assists}</span>
@@ -197,6 +202,7 @@ export function MatchCard({
   skinsFallback,
   currentPlayerId = null,
   highlightCurrentPlayer = false,
+  loggedInPlayerId = null,
   ehogDeltas,
   containerVariant = 'inline',
 }: MatchCardProps) {
@@ -236,12 +242,14 @@ export function MatchCard({
                 players={shirtsStats ?? []}
                 currentPlayerId={currentPlayerId}
                 highlightCurrentPlayer={highlightCurrentPlayer}
+                loggedInPlayerId={loggedInPlayerId}
                 ehogDeltas={ehogDeltas}
               />
               <TeamStatBlock
                 players={skinsStats ?? []}
                 currentPlayerId={currentPlayerId}
                 highlightCurrentPlayer={highlightCurrentPlayer}
+                loggedInPlayerId={loggedInPlayerId}
                 ehogDeltas={ehogDeltas}
               />
             </div>

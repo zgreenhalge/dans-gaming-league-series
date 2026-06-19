@@ -1,7 +1,7 @@
 'use client';
 
 import { MatchCard, type MatchCardRight } from './MatchCard';
-import { YouBadge } from './YouBadge';
+import { PlayerName } from './PlayerName';
 import { isPlayedScore, fmtWindowDate, weekWindow } from '@/lib/util';
 import type { WeekWithMatches, MatchWithRoster } from '@/lib/queries';
 
@@ -43,8 +43,7 @@ function WeekBlock({
         {week.bye_player_name && (
           <span className="font-mono text-[10px] text-[var(--color-text-secondary)] inline-flex items-center gap-1 shrink-0">
             <span className="tracked mr-0.5">Bye</span>
-            {week.bye_player_name}
-            {currentPlayerId !== null && week.bye_player_id === currentPlayerId && <YouBadge />}
+            <PlayerName name={week.bye_player_name} isMe={currentPlayerId !== null && week.bye_player_id === currentPlayerId} />
           </span>
         )}
       </button>

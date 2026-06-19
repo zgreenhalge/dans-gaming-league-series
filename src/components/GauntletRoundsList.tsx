@@ -1,7 +1,7 @@
 'use client';
 
 import { MatchCard } from './MatchCard';
-import { YouBadge } from './YouBadge';
+import { PlayerName } from './PlayerName';
 import { isPlayedScore } from '@/lib/util';
 import type { GauntletRound, GauntletMatch } from '@/lib/queries';
 
@@ -122,10 +122,7 @@ function GauntletRoundCard({
                                 : 'var(--color-text-primary)',
                         }}
                       >
-                        {r.name}
-                        {currentPlayerId !== null && r.player_id === currentPlayerId && (
-                          <YouBadge />
-                        )}
+                        <PlayerName name={r.name} isMe={currentPlayerId !== null && r.player_id === currentPlayerId} />
                       </span>
                       <div className="flex items-center gap-2">
                         <span

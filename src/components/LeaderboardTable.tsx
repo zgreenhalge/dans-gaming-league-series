@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { YouBadge } from './YouBadge';
+import { PlayerName } from './PlayerName';
 import { canonicalSort } from '@/lib/util';
 import { ehogColorFor } from './EhogBadge';
 
@@ -70,6 +70,7 @@ export default function LeaderboardTable({
   trophyCounts,
   canonicalRanking,
   ehogRatings,
+  onPlayerHover,
 }: {
   rows: LeaderboardRowWithId[];
   firstColMode?: 'player' | 'season';
@@ -79,6 +80,7 @@ export default function LeaderboardTable({
   trophyCounts?: Map<number, Record<1 | 2 | 3, number>>;
   canonicalRanking?: Map<number, number>;
   ehogRatings?: Record<number, number>;
+  onPlayerHover?: (playerId: number | null) => void;
 }) {
   const { data: session } = useSession();
   const myPlayerId = session?.user?.playerId ?? null;
@@ -232,8 +234,8 @@ export default function LeaderboardTable({
                   ? { background: `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))` }
                   : undefined
                 }
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 14%, var(--color-bg-primary))` : 'var(--color-bg-secondary)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))` : ''; }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 14%, var(--color-bg-primary))` : 'var(--color-bg-secondary)'; onPlayerHover?.(p.player_id); }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))` : ''; onPlayerHover?.(null); }}
               >
                 {firstColMode === 'player' && showRank && (
                   <td className="pl-4 pr-2 py-2.5 font-mono text-[11px] tnum"
@@ -246,8 +248,7 @@ export default function LeaderboardTable({
                   style={{ color: textColor ?? undefined }}
                 >
                   <Link href={href} className="flex items-center w-full h-full">
-                    {p.player_name}
-                    {firstColMode === 'player' && myPlayerId !== null && p.player_id === myPlayerId && <YouBadge />}
+                    <PlayerName name={p.player_name} isMe={firstColMode === 'player' && myPlayerId !== null && p.player_id === myPlayerId} />
                   </Link>
                 </td>
                 {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => (

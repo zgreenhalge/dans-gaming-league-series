@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { LocalTime } from './LocalTime';
-import { YouBadge } from './YouBadge';
+import { PlayerName } from './PlayerName';
 import { toSentenceCase, mapImageFor } from '@/lib/maps';
 import { isPlayedScore, parseScore, weekWindow, fmtWindowDate } from '@/lib/util';
 import { CountdownTimer } from './CountdownTimer';
@@ -8,7 +8,7 @@ import type { WeekWithMatches, MatchWithRoster } from '@/lib/queries';
 import type { Season } from '@/lib/types';
 import { FeatureMatchIcon } from './FeatureMatch';
 
-function TeamNames({ players, dimmed }: { players: { player_id: number; player_name: string }[]; dimmed?: boolean }) {
+export function TeamNames({ players, dimmed, currentPlayerId }: { players: { player_id: number; player_name: string }[]; dimmed?: boolean; currentPlayerId?: number | null }) {
   if (players.length === 0) return <span className="opacity-50">TBD</span>;
   const cls = dimmed ? 'text-[var(--color-text-secondary)]' : '';
   return (
@@ -16,7 +16,7 @@ function TeamNames({ players, dimmed }: { players: { player_id: number; player_n
       {players.map((p, i) => (
         <span key={p.player_id} className={`inline-flex items-center gap-0.5 ${cls}`}>
           {i > 0 && <span className="mx-0.5">&amp;</span>}
-          {p.player_name}
+          <PlayerName name={p.player_name} isMe={currentPlayerId !== null && p.player_id === currentPlayerId} />
         </span>
       ))}
     </>
@@ -32,10 +32,6 @@ function MatchCell({
 }) {
   const map = match.shirts_pick ?? match.picked_map;
   const mapImg = mapImageFor(map);
-  const isInMatch = currentPlayerId !== null && (
-    match.shirts.some((p) => p.player_id === currentPlayerId) ||
-    match.skins.some((p) => p.player_id === currentPlayerId)
-  );
   const played = isPlayedScore(match.final_score);
   const score = played ? parseScore(match.final_score) : null;
   const shirtsLost = score !== null && score.shirts < score.skins;
@@ -59,17 +55,16 @@ function MatchCell({
               </span>
             )}
           </div>
-          {isInMatch && <YouBadge />}
         </div>
 
         <div className="px-5 pb-4 flex items-center justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="font-display text-[14px] font-semibold leading-tight truncate map-head">
-              <TeamNames players={match.shirts} dimmed={shirtsLost} />
+              <TeamNames players={match.shirts} dimmed={shirtsLost} currentPlayerId={currentPlayerId} />
             </div>
             <div className="tracked text-[9px] text-[var(--color-text-secondary)] my-1 map-head">vs</div>
             <div className="font-display text-[14px] font-semibold leading-tight truncate map-head">
-              <TeamNames players={match.skins} dimmed={skinsLost} />
+              <TeamNames players={match.skins} dimmed={skinsLost} currentPlayerId={currentPlayerId} />
             </div>
           </div>
 

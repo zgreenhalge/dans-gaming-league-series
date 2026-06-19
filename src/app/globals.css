@@ -247,11 +247,10 @@ body::before {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
 }
 
-/* "YOU" identity badge */
-.you-badge {
+/* Logged-in player name highlight */
+.player-name-me {
   color: var(--color-site-accent);
-  background: color-mix(in srgb, var(--color-site-accent) 12%, transparent);
-  border-color: var(--color-site-accent);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--color-site-accent) 50%, transparent);
 }
 
 /* W/L badge sizing */

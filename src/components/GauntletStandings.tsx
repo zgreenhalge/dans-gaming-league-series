@@ -6,7 +6,7 @@ import type { LeaderboardRowWithId } from '@/lib/types';
 import type { GauntletRound, GauntletMatch } from '@/lib/queries';
 import { isPlayedScore, parseScore } from '@/lib/util';
 import PlayerAvatar from '@/components/PlayerAvatar';
-import { YouBadge } from '@/components/YouBadge';
+import { PlayerName } from '@/components/PlayerName';
 
 const MEDAL_COLORS = { 1: '#f5c542', 2: '#a0a3ab', 3: '#c47a3a' } as const;
 const tint = (rank: 1 | 2 | 3, opacity = 18) =>
@@ -95,8 +95,7 @@ export default function GauntletStandings({
         <div className="flex items-center gap-3">
           <PlayerAvatar name={champion.name} imageUrl={champStats?.steam_avatar_url ?? null} size="md" />
           <div className="font-display text-[28px] font-semibold leading-tight flex items-center gap-2" style={{ color: MEDAL_COLORS[1] }}>
-            {champion.name}
-            {myPlayerId !== null && champion.player_id === myPlayerId && <YouBadge />}
+            <PlayerName name={champion.name} isMe={myPlayerId !== null && champion.player_id === myPlayerId} />
           </div>
         </div>
         {champStats && (
@@ -138,8 +137,7 @@ export default function GauntletStandings({
                 <div className="flex items-center gap-2">
                   <PlayerAvatar name={p.name} imageUrl={ps?.steam_avatar_url ?? null} size="sm" />
                   <div className="font-display text-[18px] font-semibold leading-tight flex items-center gap-1.5" style={{ color: MEDAL_COLORS[rank] }}>
-                    <span className="truncate">{p.name}</span>
-                    {myPlayerId !== null && p.player_id === myPlayerId && <YouBadge />}
+                    <span className="truncate"><PlayerName name={p.name} isMe={myPlayerId !== null && p.player_id === myPlayerId} /></span>
                   </div>
                 </div>
                 {ps && (
