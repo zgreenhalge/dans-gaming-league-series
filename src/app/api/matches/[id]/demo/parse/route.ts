@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { authOptions } from '@/lib/authOptions';
 import { parseDemoFile, type RosterEntry } from '@/lib/demoParser';
+import { parseDemoSabremetrics } from '@/lib/demoOrchestrator';
 import { r2, R2_BUCKET, demoKey } from '@/lib/r2';
 import { getAdminClient } from '@/lib/supabase-admin';
 
@@ -122,13 +123,18 @@ export async function POST(
   }
   const demoBuffer = decompressIfNeeded(Buffer.concat(chunks));
 
-  let result;
+  let result, sabremetricsResult;
   try {
     result = parseDemoFile(demoBuffer, roster, match.skins_starting_side, targetWinRounds);
+    sabremetricsResult = parseDemoSabremetrics(demoBuffer, roster, match.skins_starting_side, targetWinRounds);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 422 });
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json({
+    ...result,
+    sabremetrics: sabremetricsResult.sabremetrics,
+    warnings: [...new Set([...result.warnings, ...sabremetricsResult.warnings])],
+  });
 }

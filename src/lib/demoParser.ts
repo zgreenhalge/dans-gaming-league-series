@@ -1,4 +1,23 @@
-import { parseEvent, parsePlayerInfo, parseTicks } from '@laihoe/demoparser2';
+import { parseEvent, parseTicks } from '@laihoe/demoparser2';
+import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
+import { buildRoundSides } from './parsers/roundSides';
+import type { RoundCondition, RoundHistoryEntry } from './types';
+
+/** Map a CS2 round_end `reason` string to the win-condition icon bucket. */
+function reasonToCondition(reason: string | null): RoundCondition {
+  switch (reason) {
+    case 'bomb_exploded':
+      return 'bomb';
+    case 'bomb_defused':
+      return 'defuse';
+    case 'time_ran_out':
+    case 't_saved':
+      return 'time';
+    // 't_killed' (CT elim) and 'ct_killed' (T elim) both read as eliminations.
+    default:
+      return 'elim';
+  }
+}
 
 const TRACKING = 'CCSPlayerController.CCSPlayerController_ActionTrackingServices';
 
@@ -27,69 +46,8 @@ export interface ParsedDemoResult {
   stats: DemoPlayerStat[];
   shirts_score: number | null;
   skins_score: number | null;
+  round_history: RoundHistoryEntry[] | null;
   warnings: string[];
-}
-
-function normName(s: string | null | undefined): string {
-  return (s ?? '').toLowerCase().trim().replace(/\s+/g, ' ');
-}
-
-function resolveRoster(
-  demoPlayers: { steamId: string; name: string }[],
-  roster: RosterEntry[],
-  warnings: string[],
-): Map<string, { player_id: number; faction: 'SHIRTS' | 'SKINS' }> {
-  const resolved = new Map<string, { player_id: number; faction: 'SHIRTS' | 'SKINS' }>();
-  const usedIds = new Set<number>();
-  let remaining = [...demoPlayers];
-
-  // Pass 1: exact Steam ID
-  for (const d of [...remaining]) {
-    const slot = roster.find(
-      (r) => r.steam_id && String(r.steam_id) === d.steamId && !usedIds.has(r.player_id),
-    );
-    if (slot) {
-      resolved.set(d.steamId, { player_id: slot.player_id, faction: slot.faction });
-      usedIds.add(slot.player_id);
-      remaining = remaining.filter((r) => r.steamId !== d.steamId);
-    }
-  }
-
-  // Pass 2: name / steam_nickname
-  for (const d of [...remaining]) {
-    const target = normName(d.name);
-    const slot = roster.find(
-      (r) =>
-        !usedIds.has(r.player_id) &&
-        (target === normName(r.name) || (r.steam_nickname && target === normName(r.steam_nickname))),
-    );
-    if (slot) {
-      resolved.set(d.steamId, { player_id: slot.player_id, faction: slot.faction });
-      usedIds.add(slot.player_id);
-      remaining = remaining.filter((r) => r.steamId !== d.steamId);
-    }
-  }
-
-  // Pass 3: elimination
-  const open = roster.filter((r) => !usedIds.has(r.player_id));
-  if (remaining.length === 1 && open.length === 1) {
-    const d = remaining[0];
-    warnings.push(
-      `Resolved "${d.name}" (${d.steamId}) to roster player "${open[0].name}" by elimination — verify this is correct.`,
-    );
-    resolved.set(d.steamId, { player_id: open[0].player_id, faction: open[0].faction });
-    remaining = [];
-  }
-
-  if (remaining.length > 0) {
-    throw new Error(
-      `Could not match ${remaining.length} demo player(s) to roster: ` +
-        remaining.map((d) => `"${d.name}" (${d.steamId})`).join(', ') +
-        '. Check that players have their Steam ID saved.',
-    );
-  }
-
-  return resolved;
 }
 
 export function parseDemoFile(
@@ -101,11 +59,7 @@ export function parseDemoFile(
   const warnings: string[] = [];
 
   // --- Player info (names + Steam IDs) ---
-  const playerInfoRaw: { steamid: string | bigint; name: string }[] = parsePlayerInfo(demoBuffer);
-  const demoPlayers = playerInfoRaw
-    .filter((p) => p.steamid && String(p.steamid) !== '0')
-    .map((p) => ({ steamId: String(p.steamid), name: p.name ?? '' }));
-
+  const demoPlayers = readDemoPlayers(demoBuffer);
   const steamToPlayer = resolveRoster(demoPlayers, roster, warnings);
 
   // --- Round outcomes (needed for final tick + halftime logic) ---
@@ -113,8 +67,9 @@ export function parseDemoFile(
     tick: number;
     round: number;
     winner: string | null;
+    reason: string | null;
     is_warmup_period: boolean | number;
-  }[] = parseEvent(demoBuffer, 'round_end', [], ['winner', 'is_warmup_period']);
+  }[] = parseEvent(demoBuffer, 'round_end', [], ['winner', 'reason', 'is_warmup_period']);
 
   const liveRounds = roundEndEvents.filter(
     (e) => !e.is_warmup_period && e.winner !== null && e.round > 0,
@@ -150,36 +105,41 @@ export function parseDemoFile(
     }
   }
 
-  // --- Round outcomes ---
+  // --- Round outcomes (via shared side logic) ---
   let shirtsRoundsWon = 0;
   let skinsRoundsWon = 0;
 
-  if (skinsSide !== null) {
-    // SHIRTS start on the opposite side from SKINS
-    const shirtsStartSide = skinsSide === 'CT' ? 'T' : 'CT';
-    const shirtsOtherSide: 'CT' | 'T' = shirtsStartSide === 'T' ? 'CT' : 'T';
-    const regRoundsPerHalf = targetWinRounds - 1; // e.g. 8 for first-to-9
-    // CS2 OT is MR3: 3 rounds per OT half, sides alternate starting from reg-H2 sides.
-    const OT_ROUNDS_PER_HALF = 3;
+  const roundSides = buildRoundSides(
+    liveRounds.map((e) => ({
+      tick: e.tick,
+      total_rounds_played: e.round,
+      winner: e.winner,
+      is_warmup_period: false,
+    })),
+    skinsSide,
+    targetWinRounds,
+  );
 
-    for (const e of liveRounds) {
-      let shirtsWinSide: 'CT' | 'T';
-      if (e.round <= regRoundsPerHalf) {
-        shirtsWinSide = shirtsStartSide;
-      } else if (e.round <= regRoundsPerHalf * 2) {
-        shirtsWinSide = shirtsOtherSide;
-      } else {
-        // OT: halves alternate, starting with the same sides as regulation H2.
-        // OT half 1 (odd) = same as reg H2 = shirtsOtherSide
-        // OT half 2 (even) = same as reg H1 = shirtsStartSide
-        const otRound = e.round - regRoundsPerHalf * 2;
-        const otHalf = Math.ceil(otRound / OT_ROUNDS_PER_HALF);
-        shirtsWinSide = otHalf % 2 === 1 ? shirtsOtherSide : shirtsStartSide;
-      }
-      if (e.winner === shirtsWinSide) shirtsRoundsWon++;
+  // buildRoundSides filters identically to `liveRounds` above and preserves
+  // order, so the two arrays line up index-for-index.
+  let roundHistory: RoundHistoryEntry[] | null = null;
+
+  if (roundSides.length > 0) {
+    roundHistory = [];
+    for (let i = 0; i < roundSides.length; i++) {
+      const r = roundSides[i];
+      const winner: 'SHIRTS' | 'SKINS' =
+        r.winnerSide === r.shirtsSide ? 'SHIRTS' : 'SKINS';
+      if (winner === 'SHIRTS') shirtsRoundsWon++;
       else skinsRoundsWon++;
+      roundHistory.push({
+        n: r.roundNumber,
+        winner,
+        side: r.winnerSide as 'CT' | 'T',
+        condition: reasonToCondition(liveRounds[i]?.reason ?? null),
+      });
     }
-  } else {
+  } else if (skinsSide === null) {
     warnings.push(
       'Starting side unknown — rounds won cannot be determined from the demo. Enter the score manually.',
     );
@@ -214,6 +174,7 @@ export function parseDemoFile(
     stats,
     shirts_score: skinsSide !== null ? shirtsRoundsWon : null,
     skins_score: skinsSide !== null ? skinsRoundsWon : null,
+    round_history: roundHistory,
     warnings,
   };
 }

@@ -9,6 +9,8 @@ import type {
   Match,
   Player,
   PlayerMatchStat,
+  PlayerMatchSabremetrics,
+  SabFields,
   LeaderboardRow,
   LeaderboardRowWithId,
   MapIndexEntry,
@@ -390,6 +392,42 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   );
 
   return { match: m, week: w, season: season as Season, stats: statRows };
+}
+
+export interface MatchSabremetricsRow extends PlayerMatchSabremetrics {
+  player_id: number;
+  player_name: string;
+  faction: Faction;
+}
+
+export async function getMatchSabremetrics(matchId: number): Promise<MatchSabremetricsRow[]> {
+  const { data: pmsRows } = await supabase
+    .from('player_match_stats')
+    .select('id, player_id, faction')
+    .eq('match_id', matchId);
+  if (!pmsRows || pmsRows.length === 0) return [];
+
+  const pmsIds = (pmsRows as { id: number; player_id: number; faction: string }[]).map((r) => r.id);
+  const { data: sabRows } = await supabase
+    .from('player_match_sabremetrics')
+    .select('*')
+    .in('player_match_stats_id', pmsIds);
+  if (!sabRows || sabRows.length === 0) return [];
+
+  const players = await getPlayersById();
+  const pmsLookup = new Map(
+    (pmsRows as { id: number; player_id: number; faction: string }[]).map((r) => [r.id, r]),
+  );
+
+  return (sabRows as PlayerMatchSabremetrics[]).map((sab) => {
+    const pms = pmsLookup.get(sab.player_match_stats_id)!;
+    return {
+      ...sab,
+      player_id: pms.player_id,
+      player_name: players.get(pms.player_id)?.name ?? `#${pms.player_id}`,
+      faction: pms.faction as Faction,
+    };
+  });
 }
 
 export interface MapLeagueAvg {
@@ -3076,4 +3114,81 @@ export async function getPlayerRatings(playerIds: number[]): Promise<PlayerMuSig
     if (s) return { playerId: pid, mu: s.mu, sigma: s.sigma, ehogRating: s.ehogRating };
     return { playerId: pid, mu: MU_DEFAULT, sigma: SIGMA_DEFAULT, ehogRating: DEFAULT_EHOG };
   });
+}
+
+export interface SabremetricMatchRow {
+  player_id: number;
+  player_name: string;
+  match_id: number;
+  season_id: number;
+  is_gauntlet: boolean;
+  rounds_played: number;
+  sab: SabFields;
+}
+
+export async function getPlayerSabremetrics(playerId: number): Promise<SabremetricMatchRow[]> {
+  const all = await getAllSabremetrics();
+  return all.filter((r) => r.player_id === playerId);
+}
+
+export async function getAllSabremetrics(): Promise<SabremetricMatchRow[]> {
+  const [
+    { data: sabRows, error: sabErr },
+    { data: pmsRows, error: pmsErr },
+    { data: matchRows, error: matchErr },
+    { data: weekRows, error: weekErr },
+    { data: seasonRows, error: seasonErr },
+    playersById,
+  ] = await Promise.all([
+    supabase.from('player_match_sabremetrics').select('*'),
+    supabase.from('player_match_stats').select('id, player_id, match_id, rounds_played'),
+    supabase.from('matches').select('id, week_id, final_score'),
+    supabase.from('weeks').select('id, season_id'),
+    supabase.from('seasons').select('id, is_gauntlet'),
+    getPlayersById(),
+  ]);
+  if (sabErr) throw sabErr;
+  if (pmsErr) throw pmsErr;
+  if (matchErr) throw matchErr;
+  if (weekErr) throw weekErr;
+  if (seasonErr) throw seasonErr;
+
+  const weekToSeason = new Map<number, number>();
+  for (const w of (weekRows ?? []) as { id: number; season_id: number }[])
+    weekToSeason.set(w.id, w.season_id);
+
+  const seasonIsGauntlet = new Map<number, boolean>();
+  for (const s of (seasonRows ?? []) as { id: number; is_gauntlet: boolean }[])
+    seasonIsGauntlet.set(s.id, s.is_gauntlet);
+
+  const matchSeason = new Map<number, number>();
+  for (const m of (matchRows ?? []) as { id: number; week_id: number; final_score: string | null }[]) {
+    if (!isPlayedScore(m.final_score)) continue;
+    const sid = weekToSeason.get(m.week_id);
+    if (sid != null) matchSeason.set(m.id, sid);
+  }
+
+  const pmsLookup = new Map<number, { player_id: number; match_id: number; rounds_played: number }>();
+  for (const r of (pmsRows ?? []) as { id: number; player_id: number; match_id: number; rounds_played: number }[])
+    pmsLookup.set(r.id, r);
+
+  const result: SabremetricMatchRow[] = [];
+  for (const raw of (sabRows ?? []) as PlayerMatchSabremetrics[]) {
+    const pms = pmsLookup.get(raw.player_match_stats_id);
+    if (!pms) continue;
+    const sid = matchSeason.get(pms.match_id);
+    if (sid == null) continue;
+    const player = playersById.get(pms.player_id);
+    const { player_match_stats_id: _, ...sab } = raw;
+    result.push({
+      player_id: pms.player_id,
+      player_name: player?.name ?? `#${pms.player_id}`,
+      match_id: pms.match_id,
+      season_id: sid,
+      is_gauntlet: seasonIsGauntlet.get(sid) ?? false,
+      rounds_played: pms.rounds_played,
+      sab,
+    });
+  }
+  return result;
 }
