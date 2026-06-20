@@ -557,6 +557,16 @@ body::before {
   pointer-events: none;
 }
 
+/* Opaque per-row background for faction scoreboards whose first column is
+   `.sticky-col`. The sticky cell paints `background: inherit`, so each row needs
+   an opaque base instead of leaning on the container's `.faction-tint`. Mirror
+   that tint here off the inherited `--faction` var (falling back to a flat
+   opaque bg when no faction is set). Single class on purpose: `.lift-row:hover`
+   is more specific, so row hover still wins. */
+.faction-tint-row {
+  background: color-mix(in srgb, var(--faction, var(--color-bg-primary)) 10%, var(--color-bg-primary));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lift-card { transition: none; }
   .lift-row { transition: none; }
