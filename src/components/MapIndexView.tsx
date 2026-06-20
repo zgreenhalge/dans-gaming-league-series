@@ -172,7 +172,8 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
         sorted.length === 0 ? (
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No maps for this selection.</div>
         ) : (
-          <table className="w-full border-collapse font-mono text-[12px]">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-max border-collapse font-mono text-[12px]">
             <thead>
               <tr className="border-b border-[var(--color-border-primary)]">
                 <th className={colCls('name', 'left')} onClick={() => handleSort('name')}>Map{arrow('name')}</th>
@@ -207,6 +208,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
               })}
             </tbody>
           </table>
+          </div>
         )
       )}
     </>

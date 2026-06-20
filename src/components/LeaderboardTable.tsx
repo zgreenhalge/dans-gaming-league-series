@@ -189,7 +189,7 @@ export default function LeaderboardTable({
 
   return (
     <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
-      <table className="w-full border-collapse text-[13px]">
+      <table className="w-full min-w-max border-collapse text-[13px]">
         <thead>
           <tr className="bg-[var(--color-bg-secondary)]">
             {firstColMode === 'player' && showRank && (

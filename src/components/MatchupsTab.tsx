@@ -350,7 +350,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No opponent data yet.</div>
         ) : (
           <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
+            <table className="w-full min-w-max border-collapse text-[13px]">
               <thead>
                 <tr className="bg-[var(--color-bg-secondary)]">
                   <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-2 py-2.5 border-b border-[var(--color-border-primary)] whitespace-nowrap">
@@ -429,7 +429,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No teammate data yet.</div>
         ) : (
           <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
+            <table className="w-full min-w-max border-collapse text-[13px]">
               <thead>
                 <tr className="bg-[var(--color-bg-secondary)]">
                   <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-2 py-2.5 border-b border-[var(--color-border-primary)] whitespace-nowrap">

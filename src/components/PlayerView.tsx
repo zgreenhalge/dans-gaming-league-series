@@ -560,8 +560,8 @@ export default function PlayerView({
                   No map data.
                 </div>
               ) : (
-                <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
-                  <table className="w-full border-collapse text-[12px]">
+                <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
+                  <table className="w-full min-w-max border-collapse text-[12px]">
                     <thead>
                       <tr className="bg-[var(--color-bg-secondary)]">
                         <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Map</th>
@@ -599,8 +599,8 @@ export default function PlayerView({
                   No side data.
                 </div>
               ) : (
-                <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
-                  <table className="w-full border-collapse text-[12px]">
+                <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
+                  <table className="w-full min-w-max border-collapse text-[12px]">
                     <thead>
                       <tr className="bg-[var(--color-bg-secondary)]">
                         <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Side</th>
@@ -633,8 +633,8 @@ export default function PlayerView({
               No map data.
             </div>
           ) : (
-            <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
-              <table className="w-full border-collapse text-[13px]">
+            <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
+              <table className="w-full min-w-max border-collapse text-[13px]">
                 <thead>
                   <tr className="bg-[var(--color-bg-secondary)]">
                     <SortableTh label="Map" colKey="map"    activeCol={mapSort} asc={mapAsc} align="left" onClick={clickMapSort} />
