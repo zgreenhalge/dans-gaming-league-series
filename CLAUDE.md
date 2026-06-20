@@ -1,11 +1,19 @@
 @AGENTS.md
 
-**New to this codebase (human or agent)?** Read `GLOSSARY.md` first — it defines DGLS-specific
-domain terms (gauntlet, H2H, faction, RWR, etc.) and maps concepts to the files that implement them.
-For step-by-step patterns on common changes (new stat, new page, new query helper), see
-`RECIPES.md`. For the shared CSS hover/glow/accent system, see `VISUAL_CONVENTIONS.md`. For the
-formulas behind every stat and ranking (sabremetrics, canonical regular-season and gauntlet rankings, narrative metrics),
-see `CALCULATION_DEFINITIONS.md`.
+**New to this codebase (human or agent)?** All reference docs live in [`docs/`](./docs/) — see
+[`docs/README.md`](./docs/README.md) for the index. Read [`docs/glossary.md`](./docs/glossary.md)
+first: it defines DGLS-specific domain terms (gauntlet, H2H, faction, RWR, etc.) and maps concepts
+to the files that implement them. For cross-cutting conventions every change should follow, see
+[`docs/patterns.md`](./docs/patterns.md). For step-by-step patterns on common changes (new stat, new
+page, new query helper), see [`docs/recipes.md`](./docs/recipes.md). For routes/schema/API/deployment,
+see [`docs/architecture.md`](./docs/architecture.md). For the shared CSS hover/glow/accent system,
+see [`docs/visual-conventions.md`](./docs/visual-conventions.md). For the formulas behind every stat
+and ranking (sabremetrics, canonical regular-season and gauntlet rankings, narrative metrics), see
+[`docs/calculations.md`](./docs/calculations.md).
+
+When citing code in docs, comments, or commits, reference it by **symbol name** (e.g.
+`getGauntletStats()` in `queries.ts`), never by line number — line numbers rot. See
+[`docs/patterns.md`](./docs/patterns.md).
 
 ## Guiding philosophy
 
