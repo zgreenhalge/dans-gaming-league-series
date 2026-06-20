@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { PlayerHistoryRow, TrophyEntry, H2HData, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
+import { deriveRates, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats, type PlayerMapStat, type PlayerSideStat } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import DevGate from './DevGate';
@@ -85,20 +85,29 @@ function aggregate(rowsRaw: PlayerHistoryRow[]): Aggregate {
   const deaths_in_wins = rows.reduce((s, r) => s + (r.is_win ? r.deaths : 0), 0);
   const kills_in_losses = rows.reduce((s, r) => s + (r.is_win ? 0 : r.kills), 0);
   const deaths_in_losses = rows.reduce((s, r) => s + (r.is_win ? 0 : r.deaths), 0);
+  const rates = deriveRates({
+    matches_played: matches,
+    matches_won: wins,
+    total_kills: kills,
+    total_deaths: deaths,
+    total_rounds_played: rounds_played,
+    total_rounds_won: rounds_won,
+    total_damage: damage,
+  });
   return {
     matches,
     wins,
     losses,
-    wr: matches > 0 ? (wins / matches) * 100 : 0,
+    wr: rates.win_rate_percentage,
     kills,
     assists,
     deaths,
-    kd: deaths > 0 ? kills / deaths : kills,
+    kd: rates.kd_ratio,
     damage,
     rounds_played,
     rounds_won,
-    rwr: rounds_played > 0 ? (rounds_won / rounds_played) * 100 : 0,
-    adr: rounds_played > 0 ? damage / rounds_played : 0,
+    rwr: rates.rwr_percentage,
+    adr: rates.overall_adr,
     kills_in_wins,
     deaths_in_wins,
     kills_in_losses,

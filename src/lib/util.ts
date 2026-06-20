@@ -130,6 +130,35 @@ export function canonicalSort(
 }
 
 /**
+ * Derives the four canonical leaderboard rates (the exact `canonicalSort` keys) from summed totals.
+ * Every place that aggregates per-match stats into a leaderboard row must derive these the same way
+ * — keep this the single source so the rankings can't drift between the player, career, and map views.
+ * Callers do their own summation (input shapes differ); this only does the division + zero-guards.
+ */
+export function deriveRates(totals: {
+  matches_played: number;
+  matches_won: number;
+  total_kills: number;
+  total_deaths: number;
+  total_rounds_played: number;
+  total_rounds_won: number;
+  total_damage: number;
+}): {
+  win_rate_percentage: number;
+  kd_ratio: number;
+  rwr_percentage: number;
+  overall_adr: number;
+} {
+  const { matches_played: mp, matches_won: mw, total_kills, total_deaths, total_rounds_played: rp, total_rounds_won: rw, total_damage } = totals;
+  return {
+    win_rate_percentage: mp > 0 ? (mw / mp) * 100 : 0,
+    kd_ratio: total_deaths > 0 ? total_kills / total_deaths : total_kills,
+    rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
+    overall_adr: rp > 0 ? total_damage / rp : 0,
+  };
+}
+
+/**
  * Sorts match summaries most-recent-first: season number desc → gauntlet before regular (within
  * the same season number) → week desc → match number desc. Gauntlet seasons carry the same season
  * number as their paired regular season but happened later, so they sort above it in the list.
