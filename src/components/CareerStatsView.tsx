@@ -12,6 +12,7 @@ import type { TrophyEntry, H2HData, MapMatchRow, EhogSnapshotRow, SabremetricMat
 import type { H2HPair } from './H2HMatrix';
 import EhogTierBar from './EhogTierBar';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
+import TabBar from './TabBar';
 
 type Filter = 'career' | number;
 type Tab = 'leaderboard' | 'stats' | 'advanced' | 'h2h';
@@ -197,46 +198,49 @@ export default function CareerStatsView({
 
   return (
     <>
-      <div className="flex items-center justify-between gap-5 mb-3 border-b border-[var(--color-border-tertiary)]">
-        <div className="flex items-center">
-          <button className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
-            Leaderboard
-          </button>
-          <button className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
-            Stats
-          </button>
-          <button className={tabCls(tab === 'advanced')} onClick={() => setTab('advanced')}>
-            Advanced Stats
-          </button>
-          <button className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
-            H2H
-          </button>
-        </div>
-        {(tab === 'leaderboard' || tab === 'stats' || tab === 'advanced') && (
-          <div className="flex items-center gap-5 pb-3">
-            <SeasonFilter
-              filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }}
-              showRegular={regularSeasons.length > 0}
-              showGauntlet={gauntletSeasons.length > 0}
-            />
-            <select
-              value={String(filter)}
-              onChange={(e) => {
-                const v = e.target.value;
-                setFilter(v === 'career' ? 'career' : Number(v));
-              }}
-              className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
-            >
-              <option value="career">Career</option>
-              {activeSeasons.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {seasonTitle(s.name)}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
+      <TabBar
+        bordered
+        className="mb-3"
+        controls={
+          (tab === 'leaderboard' || tab === 'stats' || tab === 'advanced') ? (
+            <>
+              <SeasonFilter
+                filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }}
+                showRegular={regularSeasons.length > 0}
+                showGauntlet={gauntletSeasons.length > 0}
+              />
+              <select
+                value={String(filter)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setFilter(v === 'career' ? 'career' : Number(v));
+                }}
+                className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
+              >
+                <option value="career">Career</option>
+                {activeSeasons.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {seasonTitle(s.name)}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : undefined
+        }
+      >
+        <button className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
+          Leaderboard
+        </button>
+        <button className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
+          Stats
+        </button>
+        <button className={tabCls(tab === 'advanced')} onClick={() => setTab('advanced')}>
+          Advanced Stats
+        </button>
+        <button className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
+          H2H
+        </button>
+      </TabBar>
 
       {tab === 'leaderboard' && (
         rows.length === 0 ? (

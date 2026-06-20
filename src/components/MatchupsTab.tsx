@@ -350,10 +350,10 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No opponent data yet.</div>
         ) : (
           <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
+            <table className="w-full min-w-max border-collapse text-[13px]">
               <thead>
                 <tr className="bg-[var(--color-bg-secondary)]">
-                  <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-2 py-2.5 border-b border-[var(--color-border-primary)] whitespace-nowrap">
+                  <th className="sticky-col tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-2 py-2.5 border-b border-[var(--color-border-primary)] whitespace-nowrap">
                     Opponent
                   </th>
                   {H2H_COLS.map(({ col, label, align, title }) => (
@@ -376,7 +376,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = hoverBg; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = bg; }}
                     >
-                      <td className="pl-4 pr-2 py-2.5">
+                      <td className="sticky-col pl-4 pr-2 py-2.5">
                         <Link href={`/players/${p.id}`} className="flex items-center gap-2 w-full h-full">
                           <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
                           <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
@@ -429,10 +429,10 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No teammate data yet.</div>
         ) : (
           <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
+            <table className="w-full min-w-max border-collapse text-[13px]">
               <thead>
                 <tr className="bg-[var(--color-bg-secondary)]">
-                  <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-2 py-2.5 border-b border-[var(--color-border-primary)] whitespace-nowrap">
+                  <th className="sticky-col tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-2 py-2.5 border-b border-[var(--color-border-primary)] whitespace-nowrap">
                     Teammate
                   </th>
                   {B2B_COLS.map(({ col, label, align, title }) => (
@@ -458,7 +458,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = hoverBg; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = bg; }}
                     >
-                      <td className="pl-4 pr-2 py-2.5">
+                      <td className="sticky-col pl-4 pr-2 py-2.5">
                         <Link href={`/players/${p.id}`} className="flex items-center gap-2 w-full h-full">
                           <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
                           <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>

@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { SabremetricMatchRow } from '@/lib/queries';
+import StatTileGrid, { type StatTile } from './StatTileGrid';
 
 interface AggregatedSab {
   player_id: number;
@@ -207,13 +208,13 @@ function OpeningDuels({ wins, losses }: { wins: number; losses: number }) {
 
 function PlayerCell({ id, name }: { id: number; name: string }) {
   return (
-    <td className="px-3 py-2">
+    <td className="sticky-col px-3 py-2">
       <Link href={`/players/${id}`} className="block">{name}</Link>
     </td>
   );
 }
 
-const playerThCls = 'px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]';
+const playerThCls = 'sticky-col px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]';
 const tdRight = 'px-3 py-2 text-right tnum';
 
 // --- Impact Stats ---
@@ -254,9 +255,9 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3">Impact</h3>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
+        <table className="w-full min-w-max border-collapse text-xs">
           <thead>
-            <tr>
+            <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
               <SortableTh label="Opening Duels" title="First kill and first death of each round (wins-losses)" sortKey="duels" state={sort} onClick={toggleSort} />
               <SortableTh label="Opening %" title="Percentage of rounds where this player took the opening duel" sortKey="opening_pct" state={sort} onClick={toggleSort} />
@@ -275,7 +276,7 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
               const clutchAttempts = a.clutch_1v1_attempts + a.clutch_1v2_attempts;
               const clutchWins = a.clutch_1v1_wins + a.clutch_1v2_wins;
               return (
-                <tr key={a.player_id} className="lift-row border-b border-[var(--color-border-secondary)]">
+                <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                   {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
                   <td className={tdRight}><OpeningDuels wins={a.opening_kills} losses={a.opening_deaths} /></td>
                   <td className={tdRight}>{pct(totalDuels, a.rounds_played)}</td>
@@ -325,9 +326,9 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3">Utility</h3>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
+        <table className="w-full min-w-max border-collapse text-xs">
           <thead>
-            <tr>
+            <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
               <SortableTh label="Utility Damage" title="Damage dealt with grenades (HE, molotov, incendiary)" sortKey="ud" state={sort} onClick={toggleSort} />
               <SortableTh label="Util Dmg/Round" title="Utility damage per round" sortKey="ud_r" state={sort} onClick={toggleSort} />
@@ -343,7 +344,7 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
             {sorted.map((a) => {
               const rp = a.rounds_played || 1;
               return (
-                <tr key={a.player_id} className="lift-row border-b border-[var(--color-border-secondary)]">
+                <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                   {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
                   <td className={tdRight}>{a.utility_damage}</td>
                   <td className={tdRight}>{fmtNum(a.utility_damage / rp, 1)}</td>
@@ -397,9 +398,9 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3" title="1.00 = league average. Values above 1 are better than average, below 1 are worse.">Stats Plus</h3>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
+        <table className="w-full min-w-max border-collapse text-xs">
           <thead>
-            <tr>
+            <tr className="bg-[var(--color-bg-secondary)]">
               <th className={playerThCls}>Player</th>
               <SortableTh label="Kills/Round+" title="Kills per round vs league avg (1.00 = avg)" sortKey="kpr" state={sort} onClick={toggleSort} />
               <SortableTh label="Assists/Round+" title="Assists per round vs league avg (1.00 = avg)" sortKey="apr" state={sort} onClick={toggleSort} />
@@ -414,7 +415,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
           </thead>
           <tbody>
             {sorted.map(({ agg, plus }) => (
-              <tr key={agg.player_id} className="lift-row border-b border-[var(--color-border-secondary)]">
+              <tr key={agg.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                 <PlayerCell id={agg.player_id} name={agg.player_name} />
                 <td className={tdRight} style={plusStyle(plus.kpr)}>{fmtNum(plus.kpr, 2)}</td>
                 <td className={tdRight} style={plusStyle(plus.apr)}>{fmtNum(plus.apr, 2)}</td>
@@ -434,14 +435,79 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
   );
 }
 
+// --- Single-player layout ---
+//
+// A one-row table is awkward (lots of columns, a single line of data, forced
+// horizontal scroll on mobile). For a single player we transpose the same
+// metrics into a label/value stat-tile grid — the shared `StatTileGrid`, so it
+// matches the player Overview panel exactly. See VISUAL_CONVENTIONS.md.
+
+function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leagueAggregated: AggregatedSab[] }) {
+  const rp = agg.rounds_played || 1;
+  const totalDuels = agg.opening_kills + agg.opening_deaths;
+  const clutchAttempts = agg.clutch_1v1_attempts + agg.clutch_1v2_attempts;
+  const clutchWins = agg.clutch_1v1_wins + agg.clutch_1v2_wins;
+
+  const impact: StatTile[] = [
+    { label: 'Opening Duels', title: 'First kill and first death of each round (wins-losses)', value: <OpeningDuels wins={agg.opening_kills} losses={agg.opening_deaths} /> },
+    { label: 'Opening %', title: 'Percentage of rounds where this player took the opening duel', value: pct(totalDuels, agg.rounds_played) },
+    { label: 'Opening Success', title: 'Opening kills / (opening kills + opening deaths)', value: pct(agg.opening_kills, totalDuels) },
+    { label: 'Headshot %', title: 'Headshot kill percentage', value: pct(agg.headshot_kills, agg.kills) },
+    { label: 'KAST', title: 'Percentage of rounds with a Kill, Assist, Survived, or Traded', value: pct(agg.kast_rounds, agg.rounds_played) },
+    { label: 'Double Kills', title: 'Rounds where both opponents were eliminated', value: agg.two_k_rounds },
+    { label: '1v1 Clutches', title: '1v1 clutch wins / attempts', value: `${agg.clutch_1v1_wins}/${agg.clutch_1v1_attempts}` },
+    { label: '1v2 Clutches', title: '1v2 clutch wins / attempts', value: `${agg.clutch_1v2_wins}/${agg.clutch_1v2_attempts}` },
+    { label: 'Clutch %', title: 'Overall clutch success rate (1v1 + 1v2 wins / attempts)', value: pct(clutchWins, clutchAttempts) },
+  ];
+
+  const utility: StatTile[] = [
+    { label: 'Utility Damage', title: 'Damage dealt with grenades (HE, molotov, incendiary)', value: agg.utility_damage },
+    { label: 'Util Dmg/Round', title: 'Utility damage per round', value: fmtNum(agg.utility_damage / rp, 1) },
+    { label: 'Flash Assists', title: 'Kills by a teammate on an enemy you flashbanged', value: agg.flash_assists },
+    { label: 'Flash Assists/Round', title: 'Flash assists per round', value: fmtNum(agg.flash_assists / rp, 2) },
+    { label: 'Enemies Flashed', title: 'Enemy players blinded by your flashbangs', value: agg.enemies_flashed },
+    { label: 'Enemies Flashed/Round', title: 'Enemies flashed per round', value: fmtNum(agg.enemies_flashed / rp, 2) },
+    { label: 'Plants', title: 'Bomb plants', value: agg.plants },
+    { label: 'Defuses', title: 'Bomb defuses', value: agg.defuses },
+  ];
+
+  // Plus stats need the league as a baseline; comparing a player to only
+  // themselves yields all 1.00, so only render when we have other players.
+  const hasLeagueBaseline = leagueAggregated.length > 1;
+  const plus = hasLeagueBaseline ? computePlusStats(agg, leagueAggregated) : null;
+  const plusTiles: StatTile[] = plus ? [
+    { label: 'Kills/Round+', title: 'Kills per round vs league avg (1.00 = avg)', value: fmtNum(plus.kpr, 2), valueStyle: plusStyle(plus.kpr) },
+    { label: 'Assists/Round+', title: 'Assists per round vs league avg (1.00 = avg)', value: fmtNum(plus.apr, 2), valueStyle: plusStyle(plus.apr) },
+    { label: 'Deaths/Round+', title: 'Deaths per round vs league avg (1.00 = avg, lower is better)', value: fmtNum(plus.dpr, 2), valueStyle: plusStyle(2 - plus.dpr) },
+    { label: 'K/D+', title: 'K/D ratio vs league avg (1.00 = avg)', value: fmtNum(plus.kdr, 2), valueStyle: plusStyle(plus.kdr) },
+    { label: 'Entry+', title: 'Opening duel success rate (OK / total duels) vs league avg (1.00 = avg)', value: fmtNum(plus.entry, 2), valueStyle: plusStyle(plus.entry) },
+    { label: 'KAST+', title: 'KAST per round vs league avg (1.00 = avg)', value: fmtNum(plus.trade, 2), valueStyle: plusStyle(plus.trade) },
+    { label: 'Objective+', title: 'Objective score (2×plants + 3×defuses) per round vs league avg (1.00 = avg)', value: fmtNum(plus.objective, 2), valueStyle: plusStyle(plus.objective) },
+    { label: 'Utility+', title: 'Utility score (flash assists + util damage/50) per round vs league avg (1.00 = avg)', value: fmtNum(plus.utility, 2), valueStyle: plusStyle(plus.utility) },
+    { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)', value: fmtNum(plus.clutch, 2), valueStyle: plusStyle(plus.clutch) },
+  ] : [];
+
+  return (
+    <div className="space-y-6">
+      <StatTileGrid heading="Impact" tiles={impact} />
+      <StatTileGrid heading="Utility" tiles={utility} />
+      {plus && <StatTileGrid heading="Stats Plus" hint="1.00 = league average. Values above 1 are better than average, below 1 are worse." tiles={plusTiles} />}
+    </div>
+  );
+}
+
 export default function SabremetricsLeaderboardView({
   rows,
+  leagueRows,
   singlePlayer = false,
 }: {
   rows: SabremetricMatchRow[];
+  /** League-wide rows used as the Plus-stat baseline in single-player mode. Defaults to `rows`. */
+  leagueRows?: SabremetricMatchRow[];
   singlePlayer?: boolean;
 }) {
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);
+  const leagueAggregated = useMemo(() => aggregateRows(leagueRows ?? rows), [leagueRows, rows]);
 
   if (aggregated.length === 0) {
     return (
@@ -451,11 +517,15 @@ export default function SabremetricsLeaderboardView({
     );
   }
 
+  if (singlePlayer) {
+    return <SinglePlayerStats agg={aggregated[0]} leagueAggregated={leagueAggregated} />;
+  }
+
   return (
     <div className="space-y-6">
       <ImpactTable aggregated={aggregated} singlePlayer={singlePlayer} />
       <UtilityTable aggregated={aggregated} singlePlayer={singlePlayer} />
-      {!singlePlayer && <PlusStatsTable aggregated={aggregated} />}
+      <PlusStatsTable aggregated={aggregated} />
     </div>
   );
 }

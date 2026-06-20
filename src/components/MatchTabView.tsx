@@ -8,6 +8,7 @@ import { PlayerName } from '@/components/PlayerName';
 import DemoUploadModal from '@/components/DemoUploadModal';
 import ScoutingReport from '@/components/ScoutingReport';
 import { Checkbox } from '@/components/SeasonFilter';
+import TabBar from '@/components/TabBar';
 import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow } from '@/lib/queries';
 import type { SabFields } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
@@ -59,11 +60,11 @@ function Scoreboard({
   const thStatCls = 'tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)]';
 
   return (
-    <div className={`border border-[var(--color-border-primary)] overflow-hidden faction-tint ${cls}`}>
-      <table className="w-full border-collapse text-[13px]">
+    <div className={`border border-[var(--color-border-primary)] overflow-x-auto faction-tint ${cls}`}>
+      <table className="w-full min-w-max border-collapse text-[13px]">
         <thead>
           <tr className="bg-[var(--color-bg-secondary)]">
-            <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)] w-[40%]">
+            <th className="sticky-col tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)] w-[40%]">
               Player
             </th>
             <th className={`${thStatCls}`} title="Kills">K</th>
@@ -106,9 +107,9 @@ function Scoreboard({
             return (
               <tr
                 key={p.player_id}
-                className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer"
+                className="lift-row faction-tint-row border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer"
               >
-                <td className="pl-3 pr-3 py-2 font-display font-semibold faction-fg">
+                <td className="sticky-col pl-3 pr-3 py-2 font-display font-semibold faction-fg">
                   <Link href={`/players/${p.player_id}`} className="flex items-center gap-2.5">
                     <PlayerAvatar name={p.player_name} imageUrl={p.steam_avatar_url} size="sm" />
                     <PlayerName name={p.player_name} isMe={currentPlayerId !== null && p.player_id === currentPlayerId} />
@@ -182,11 +183,11 @@ function SabStatTable({
   const thCls = 'tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)]';
 
   return (
-    <div className={`border border-[var(--color-border-primary)] overflow-hidden faction-tint ${cls}`}>
-      <table className="w-full border-collapse text-[13px]">
+    <div className={`border border-[var(--color-border-primary)] overflow-x-auto faction-tint ${cls}`}>
+      <table className="w-full min-w-max border-collapse text-[13px]">
         <thead>
           <tr className="bg-[var(--color-bg-secondary)]">
-            <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)]">
+            <th className="sticky-col tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)]">
               Player
             </th>
             {cols.map((c, i) => (
@@ -200,9 +201,9 @@ function SabStatTable({
             return (
               <tr
                 key={p.player_id}
-                className="border-b border-[var(--color-border-tertiary)] last:border-b-0"
+                className="lift-row faction-tint-row border-b border-[var(--color-border-tertiary)] last:border-b-0"
               >
-                <td className="pl-4 pr-3 py-2.5 font-display font-semibold faction-fg">
+                <td className="sticky-col pl-4 pr-3 py-2.5 font-display font-semibold faction-fg">
                   {p.player_name}
                 </td>
                 {cols.map((c, i) => (
@@ -323,10 +324,10 @@ export function RatingProjectionTable({
         <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">based on current ratings</span>
       </div>
       <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
-        <table className="w-full text-[13px]">
+        <table className="w-full min-w-max text-[13px]">
           <thead>
             <tr className="bg-[var(--color-bg-secondary)]">
-              <th className="tracked text-[9px] font-semibold py-2 pl-4 pr-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">
+              <th className="sticky-col tracked text-[9px] font-semibold py-2 pl-4 pr-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">
                 Score
               </th>
               {allPlayers.map((p) => (
@@ -340,8 +341,8 @@ export function RatingProjectionTable({
             {projections.map((proj) => {
               const shirtsWin = proj.scoreA > proj.scoreB;
               return (
-                <tr key={proj.label} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                  <td className="pl-4 pr-3 py-2.5 font-mono tnum text-[var(--color-text-secondary)] whitespace-nowrap">
+                <tr key={proj.label} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                  <td className="sticky-col pl-4 pr-3 py-2.5 font-mono tnum text-[var(--color-text-secondary)] whitespace-nowrap">
                     <span className={shirtsWin ? 'text-[var(--color-accent-green-fg)]' : 'text-[var(--color-accent-red-fg)]'}>
                       {proj.label}
                     </span>
@@ -433,63 +434,65 @@ export default function MatchTabView({
 
   return (
     <>
-      <div className="mt-10 flex items-center justify-between mb-2">
-        <div className="flex gap-1">
-          <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
-            Scoreboard
-          </button>
-          {hasSab && (
+      <TabBar
+        className="mt-10 mb-2"
+        controls={
+          tab === 'leaderboard' ? (
             <>
-              <button type="button" className={tabCls(tab === 'impact')} onClick={() => setTab('impact')}>
-                Impact
-              </button>
-              <button type="button" className={tabCls(tab === 'utility')} onClick={() => setTab('utility')}>
-                Utility
-              </button>
+              {hasSab && (
+                <>
+                  <Checkbox checked={includeCT} onToggle={() => setIncludeCT((v) => !v)} label="CT" />
+                  <Checkbox checked={includeT} onToggle={() => setIncludeT((v) => !v)} label="T" />
+                </>
+              )}
+              <div className="flex items-center gap-2">
+                {demoDownloadUrl && (
+                  <a
+                    href={demoDownloadUrl}
+                    download
+                    className="py-1 text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:underline underline-offset-2 transition-colors"
+                  >
+                    Download demo
+                  </a>
+                )}
+                {canEnterResults && (
+                  <DemoUploadModal
+                    matchId={matchId}
+                    players={matchPlayers}
+                    skinsSide={skinsSide}
+                    targetWinRounds={targetWinRounds}
+                    isAdmin={isCurrentUserAdmin}
+                    alreadyPlayed={played}
+                    hasDemoUploaded={!!demoDownloadUrl}
+                    initialStats={allStats.length > 0 ? allStats : undefined}
+                    initialShirtsScore={score?.shirts ?? null}
+                    initialSkinsScore={score?.skins ?? null}
+                  />
+                )}
+              </div>
             </>
-          )}
-          {(hasScoutingData || hasProjections) && (
-            <button type="button" className={tabCls(tab === 'scouting')} onClick={() => setTab('scouting')}>
-              Scouting Report
+          ) : undefined
+        }
+      >
+        <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
+          Scoreboard
+        </button>
+        {hasSab && (
+          <>
+            <button type="button" className={tabCls(tab === 'impact')} onClick={() => setTab('impact')}>
+              Impact
             </button>
-          )}
-        </div>
-        <div className="flex items-center gap-4">
-          {tab === 'leaderboard' && hasSab && (
-            <>
-              <Checkbox checked={includeCT} onToggle={() => setIncludeCT((v) => !v)} label="CT" />
-              <Checkbox checked={includeT} onToggle={() => setIncludeT((v) => !v)} label="T" />
-            </>
-          )}
-          {tab === 'leaderboard' && (
-            <div className="flex items-center gap-2">
-              {demoDownloadUrl && (
-                <a
-                  href={demoDownloadUrl}
-                  download
-                  className="py-1 text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:underline underline-offset-2 transition-colors"
-                >
-                  Download demo
-                </a>
-              )}
-              {canEnterResults && (
-                <DemoUploadModal
-                  matchId={matchId}
-                  players={matchPlayers}
-                  skinsSide={skinsSide}
-                  targetWinRounds={targetWinRounds}
-                  isAdmin={isCurrentUserAdmin}
-                  alreadyPlayed={played}
-                  hasDemoUploaded={!!demoDownloadUrl}
-                  initialStats={allStats.length > 0 ? allStats : undefined}
-                  initialShirtsScore={score?.shirts ?? null}
-                  initialSkinsScore={score?.skins ?? null}
-                />
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+            <button type="button" className={tabCls(tab === 'utility')} onClick={() => setTab('utility')}>
+              Utility
+            </button>
+          </>
+        )}
+        {(hasScoutingData || hasProjections) && (
+          <button type="button" className={tabCls(tab === 'scouting')} onClick={() => setTab('scouting')}>
+            Scouting Report
+          </button>
+        )}
+      </TabBar>
 
       {tab === 'leaderboard' && (
         <>

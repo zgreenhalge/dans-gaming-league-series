@@ -88,6 +88,30 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 - `.map-text-scrim` / `.map-no-img` handle text legibility over images and the no-image fallback
   gradient respectively
 
+## Tables & data display
+
+**Avoid single-row tables.** A table whose body renders exactly one data row reads poorly — many
+columns of headers above a single line of values, forcing horizontal scroll on mobile while wasting
+vertical space. This happens most often when a multi-row leaderboard component is reused for a single
+subject (e.g. the Advanced Stats tab on `/players/<id>` reusing the league sabremetrics tables).
+
+When a table would have one data row, **transpose it into a label/value layout** instead:
+- Use the shared **`StatTileGrid`** (`src/components/StatTileGrid.tsx`): pass a `tiles` array of
+  `{ label, value, title?, valueStyle? }` and an optional responsive `columns` spec. It renders one
+  bordered container with 1px grid-line dividers — the same shape as the player Overview stat panel
+  (`PlayerView`) and the single-player Advanced Stats (`SinglePlayerStats` in
+  `SabremetricsLeaderboardView.tsx`), so the two never drift.
+- Keep the same metrics, formatting helpers, and `title` tooltips as the table — only the shape
+  changes.
+
+Tables remain the right choice the moment there are multiple rows to compare across the same columns.
+
+**Tab bar + filter controls.** Use the shared **`TabBar`** (`src/components/TabBar.tsx`) for any page
+with a row of tab buttons plus filter controls (season filter, side checkboxes, etc.). It owns the
+`flex-wrap` layout that keeps the controls from overrunning the page on narrow viewports — tabs as
+children, controls in the `controls` slot (pushed right via `ml-auto`), `bordered` for the standard
+bottom rule. Don't hand-roll a `flex justify-between` tab row; it won't wrap.
+
 ## When extending this system
 
 If you need a new hover/glow/accent treatment, ask first whether it's really a new *shape* (card vs.

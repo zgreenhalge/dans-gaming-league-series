@@ -3126,11 +3126,6 @@ export interface SabremetricMatchRow {
   sab: SabFields;
 }
 
-export async function getPlayerSabremetrics(playerId: number): Promise<SabremetricMatchRow[]> {
-  const all = await getAllSabremetrics();
-  return all.filter((r) => r.player_id === playerId);
-}
-
 export async function getAllSabremetrics(): Promise<SabremetricMatchRow[]> {
   const [
     { data: sabRows, error: sabErr },

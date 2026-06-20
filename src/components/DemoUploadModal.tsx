@@ -457,8 +457,8 @@ export default function DemoUploadModal({
                           <div className={`tracked text-[10px] mb-2 ${cls} faction-fg`}>
                             {faction}
                           </div>
-                          <div className={`border border-[var(--color-border-primary)] overflow-hidden faction-tint ${cls}`}>
-                            <table className="w-full border-collapse text-[12px]">
+                          <div className={`border border-[var(--color-border-primary)] overflow-x-auto faction-tint ${cls}`}>
+                            <table className="w-full min-w-max border-collapse text-[12px]">
                               <thead>
                                 <tr className="bg-[var(--color-bg-secondary)]">
                                   <th className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-left pl-3 pr-2 py-2 border-b border-[var(--color-border-primary)]">

@@ -533,6 +533,40 @@ body::before {
   box-shadow: inset 3px 0 0 0 var(--lift-accent, var(--color-site-accent));
 }
 
+/* Pin a table's first column while the rest scrolls horizontally.
+   `background: inherit` makes the cell paint whatever color its row is
+   currently painting (medal/zone tint, hover, etc.), so the pinned column
+   stays opaque and tracks every row highlight automatically — the row just
+   needs an opaque base background. The ::after edge shadow makes the pinned
+   column read as floating above the scrolled content. */
+.sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: inherit;
+}
+.sticky-col::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 6px;
+  transform: translateX(100%);
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.28), transparent);
+  pointer-events: none;
+}
+
+/* Opaque per-row background for faction scoreboards whose first column is
+   `.sticky-col`. The sticky cell paints `background: inherit`, so each row needs
+   an opaque base instead of leaning on the container's `.faction-tint`. Mirror
+   that tint here off the inherited `--faction` var (falling back to a flat
+   opaque bg when no faction is set). Single class on purpose: `.lift-row:hover`
+   is more specific, so row hover still wins. */
+.faction-tint-row {
+  background: color-mix(in srgb, var(--faction, var(--color-bg-primary)) 10%, var(--color-bg-primary));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lift-card { transition: none; }
   .lift-row { transition: none; }

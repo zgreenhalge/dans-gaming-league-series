@@ -79,10 +79,10 @@ function BasicStatsTable({ data }: { data: RowWithStats[] }) {
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3">Basic Stats</h3>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
+        <table className="w-full min-w-max border-collapse text-xs">
           <thead>
-            <tr>
-              <th className="px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]">
+            <tr className="bg-[var(--color-bg-secondary)]">
+              <th className="sticky-col px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]">
                 Player
               </th>
               <SortableTh label="Kills"            sortKey="k"     state={sort} onClick={toggleSort} />
@@ -95,8 +95,8 @@ function BasicStatsTable({ data }: { data: RowWithStats[] }) {
           </thead>
           <tbody>
             {sorted.map(({ row, stats }) => (
-              <tr key={row.player_id} className="lift-row border-b border-[var(--color-border-secondary)]">
-                <td className="px-3 py-2">
+              <tr key={row.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                <td className="sticky-col px-3 py-2">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.player_name}
                   </Link>
@@ -168,10 +168,10 @@ function KillStatsTable({ data }: { data: RowWithStats[] }) {
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3">Kill Stats</h3>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
+        <table className="w-full min-w-max border-collapse text-xs">
           <thead>
-            <tr>
-              <th className="px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]">
+            <tr className="bg-[var(--color-bg-secondary)]">
+              <th className="sticky-col px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]">
                 Player
               </th>
               <SortableTh label="K/D"      title="Kill/Death Ratio"      sortKey="kd"  state={sort} onClick={toggleSort} />
@@ -187,8 +187,8 @@ function KillStatsTable({ data }: { data: RowWithStats[] }) {
           </thead>
           <tbody>
             {sorted.map(({ row, stats }) => (
-              <tr key={row.player_id} className="lift-row border-b border-[var(--color-border-secondary)]">
-                <td className="px-3 py-2">
+              <tr key={row.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                <td className="sticky-col px-3 py-2">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.player_name}
                   </Link>
@@ -296,10 +296,10 @@ function GameStatsTable({ data }: { data: RowWithStats[] }) {
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3">Game Stats</h3>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
+        <table className="w-full min-w-max border-collapse text-xs">
           <thead>
-            <tr>
-              <th className="px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]">
+            <tr className="bg-[var(--color-bg-secondary)]">
+              <th className="sticky-col px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]">
                 Player
               </th>
               <SortableTh label="Games"    title="Games Played"          sortKey="games" state={sort} onClick={toggleSort} />
@@ -313,8 +313,8 @@ function GameStatsTable({ data }: { data: RowWithStats[] }) {
           </thead>
           <tbody>
             {sorted.map(({ row, stats }) => (
-              <tr key={row.player_id} className="lift-row border-b border-[var(--color-border-secondary)]">
-                <td className="px-3 py-2">
+              <tr key={row.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                <td className="sticky-col px-3 py-2">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.player_name}
                   </Link>
@@ -391,10 +391,10 @@ function AverageGameStatsTable({ data }: { data: RowWithStats[] }) {
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3">Average Game Stats</h3>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
+        <table className="w-full min-w-max border-collapse text-xs">
           <thead>
-            <tr>
-              <th className="px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]">
+            <tr className="bg-[var(--color-bg-secondary)]">
+              <th className="sticky-col px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]">
                 Player
               </th>
               <SortableTh label="Rounds/Game"     title="Rounds Played per Game"      sortKey="rg"   state={sort} onClick={toggleSort} />
@@ -410,8 +410,8 @@ function AverageGameStatsTable({ data }: { data: RowWithStats[] }) {
           </thead>
           <tbody>
             {sorted.map(({ row, stats }) => (
-              <tr key={row.player_id} className="lift-row border-b border-[var(--color-border-secondary)]">
-                <td className="px-3 py-2">
+              <tr key={row.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                <td className="sticky-col px-3 py-2">
                   <Link href={`/players/${row.player_id}`} className="block">
                     {row.player_name}
                   </Link>

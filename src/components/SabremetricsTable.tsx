@@ -77,7 +77,7 @@ export default function SabremetricsTable({ players }: SabremetricsTableProps) {
 
   return (
     <div className="border border-[var(--color-border-primary)] overflow-x-auto">
-      <table className="w-full border-collapse text-[13px]">
+      <table className="w-full min-w-max border-collapse text-[13px]">
         <thead>
           <tr className="bg-[var(--color-bg-secondary)]">
             {cols.map((col) => (
@@ -86,7 +86,7 @@ export default function SabremetricsTable({ players }: SabremetricsTableProps) {
                 title={col.title || undefined}
                 className={
                   col.key === 'name'
-                    ? 'tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)]'
+                    ? 'sticky-col tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)]'
                     : thCls
                 }
               >
@@ -99,14 +99,14 @@ export default function SabremetricsTable({ players }: SabremetricsTableProps) {
           {players.map((p) => (
             <tr
               key={p.player_id}
-              className="border-b border-[var(--color-border-tertiary)] last:border-b-0"
+              className="bg-[var(--color-bg-primary)] border-b border-[var(--color-border-tertiary)] last:border-b-0"
             >
               {cols.map((col, i) => (
                 <td
                   key={col.key}
                   className={
                     col.key === 'name'
-                      ? 'pl-4 pr-3 py-2.5 font-display font-semibold text-[var(--color-text-primary)]'
+                      ? 'sticky-col pl-4 pr-3 py-2.5 font-display font-semibold text-[var(--color-text-primary)]'
                       : i === cols.length - 1
                         ? `${tdCls} pr-4 font-semibold`
                         : tdCls
