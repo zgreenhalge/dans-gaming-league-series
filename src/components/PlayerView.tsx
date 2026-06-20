@@ -139,7 +139,7 @@ function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
     if (a.matches === 0) continue;
     out.push({ map: display, wins: a.wins, losses: a.losses, wr: a.wr, rwr: a.rwr, adr: a.adr });
   }
-  return out.sort((a, b) => b.wr - a.wr || b.adr - a.adr);
+  return out.sort((a, b) => b.wr - a.wr || b.rwr - a.rwr || b.adr - a.adr);
 }
 
 /** Percentage of `all` strictly below `value` — "you're ahead of N% of the league". */
