@@ -2462,7 +2462,7 @@ function pairKey(a: number, b: number): string {
 }
 
 /**
- * Returns a scorer for the "Best Friends" blended metric — see "Blended score" in GLOSSARY.md.
+ * Returns a scorer for the "Best Friends" blended metric — see "Blended score" in docs/glossary.md.
  * Computes normalisation maxes once across `duos` then returns a closure. Shared by
  * `H2HSection` (ranking) and `H2HMatrix` (cell coloring) so both use the same formula.
  * IMPORTANT: if you change weights here, update the hover `title` in H2HSection.tsx ("Best Friends").
@@ -2479,7 +2479,7 @@ export function duoBlendedScorer(duos: DuoStats[]): (d: DuoStats) => number {
 }
 
 /**
- * Returns a scorer for the "Closest Rivals" blended metric — see "Blended score" in GLOSSARY.md.
+ * Returns a scorer for the "Closest Rivals" blended metric — see "Blended score" in docs/glossary.md.
  * Computes normalisation maxes once across `rivals` then returns a closure. Shared by
  * `H2HSection` (ranking) and `H2HMatrix` (cell coloring) so both use the same formula.
  * IMPORTANT: if you change weights here, update the hover `title` in H2HSection.tsx ("Closest Rivals" and "Best Friends").

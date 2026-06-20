@@ -39,7 +39,7 @@ export default function H2HSection({ data, initialPair }: { data: H2HData; initi
   const [hover, setHover] = useState<H2HPair | null>(null);
   const active = hover ?? sel ?? defaultPair;
 
-  // See "Blended score" in GLOSSARY.md. Scorer factories normalise against the full set
+  // See "Blended score" in docs/glossary.md. Scorer factories normalise against the full set
   // so the top-5 ranking and matrix gradient stay derived from the same formula.
   const duoScore = useMemo(() => duoBlendedScorer(duos), [duos]);
   const duoBreakdown = useMemo(() => duoBreakdownScorer(duos), [duos]);
