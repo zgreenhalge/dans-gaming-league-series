@@ -171,13 +171,18 @@ gauntlet season pages and matches the podium displayed by `GauntletStandings`.
 | Place | Condition |
 |-------|-----------|
 | 1st   | 2-0 record in the final round |
-| 2nd   | 1-1 in the final round, higher RWR% across all final-round matches |
-| 3rd   | 1-1 in the final round, lower RWR% across all final-round matches |
+| 2nd   | 1-1 in the final round, higher RWR% (then ADR) across all final-round matches |
+| 3rd   | 1-1 in the final round, lower RWR% (then ADR) across all final-round matches |
 | 4th   | 0-2 in the final round |
-| 5th+  | Eliminated before the final round; sorted by latest round reached (higher = better rank), tiebreak by wins in that round then RWR% in that round (both descending) |
+| 5th+  | Eliminated before the final round; sorted by latest round reached (higher = better rank), tiebreak by wins in that round, then RWR%, then ADR in that round (all descending) |
 
-RWR% tiebreaks mirror the final-round logic throughout: it is always computed from the specific
-round in which the placement is decided, not from overall gauntlet stats.
+Round reached is the primary axis: a player who advanced further always outranks one eliminated
+earlier. The stat tiebreaks (RWR% then ADR) only order players *within* the same round, and are
+always computed from the specific round in which the placement is decided, not from overall gauntlet
+stats. ADR is round-weighted so it aggregates correctly across a round's matches.
+
+`GauntletStandings` renders its podium straight from `canonicalGauntletRankMap()` — the standings and
+the leaderboard table share the one ranking implementation.
 
 Returns no ranking while the gauntlet is incomplete (final round not fully played).
 
