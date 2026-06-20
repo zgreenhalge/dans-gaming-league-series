@@ -202,7 +202,7 @@ export default function LeaderboardTable({
               aria-sort={sortCol === 'name' ? (asc ? 'ascending' : 'descending') : 'none'}
               onClick={() => clickHeader('name')}
               onKeyDown={(e) => headerKey(e, 'name')}
-              className={`tracked text-[10px] font-semibold py-2.5 border-b border-[var(--color-border-primary)] cursor-pointer select-none whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] text-left ${
+              className={`sticky-col tracked text-[10px] font-semibold py-2.5 border-b border-[var(--color-border-primary)] cursor-pointer select-none whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] text-left ${
                 firstColMode === 'player' && showRank ? 'px-2' : 'pl-4 pr-2'
               } ${sortCol === 'name' ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}
             >
@@ -230,12 +230,12 @@ export default function LeaderboardTable({
               <tr
                 key={firstColMode === 'season' ? p.season_id : p.player_id}
                 className="border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer transition-colors"
-                style={rowColor
-                  ? { background: `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))` }
-                  : undefined
-                }
+                style={{ background: rowColor
+                  ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))`
+                  : 'var(--color-bg-primary)'
+                }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 14%, var(--color-bg-primary))` : 'var(--color-bg-secondary)'; onPlayerHover?.(p.player_id); }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))` : ''; onPlayerHover?.(null); }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = rowColor ? `color-mix(in srgb, ${rowColor} 8%, var(--color-bg-primary))` : 'var(--color-bg-primary)'; onPlayerHover?.(null); }}
               >
                 {firstColMode === 'player' && showRank && (
                   <td className="pl-4 pr-2 py-2.5 font-mono text-[11px] tnum"
@@ -244,7 +244,7 @@ export default function LeaderboardTable({
                     <Link href={href} className="block w-full h-full">{canonicalRankOf.get(p.player_id) ?? '-'}</Link>
                   </td>
                 )}
-                <td className={`py-2.5 font-display font-semibold ${firstColMode === 'player' && showRank ? 'px-2' : 'pl-4 pr-2'}`}
+                <td className={`sticky-col py-2.5 font-display font-semibold ${firstColMode === 'player' && showRank ? 'px-2' : 'pl-4 pr-2'}`}
                   style={{ color: textColor ?? undefined }}
                 >
                   <Link href={href} className="flex items-center w-full h-full">

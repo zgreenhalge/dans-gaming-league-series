@@ -207,13 +207,13 @@ function OpeningDuels({ wins, losses }: { wins: number; losses: number }) {
 
 function PlayerCell({ id, name }: { id: number; name: string }) {
   return (
-    <td className="px-3 py-2">
+    <td className="sticky-col px-3 py-2">
       <Link href={`/players/${id}`} className="block">{name}</Link>
     </td>
   );
 }
 
-const playerThCls = 'px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]';
+const playerThCls = 'sticky-col px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]';
 const tdRight = 'px-3 py-2 text-right tnum';
 
 // --- Impact Stats ---
@@ -256,7 +256,7 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-xs">
           <thead>
-            <tr>
+            <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
               <SortableTh label="Opening Duels" title="First kill and first death of each round (wins-losses)" sortKey="duels" state={sort} onClick={toggleSort} />
               <SortableTh label="Opening %" title="Percentage of rounds where this player took the opening duel" sortKey="opening_pct" state={sort} onClick={toggleSort} />
@@ -275,7 +275,7 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
               const clutchAttempts = a.clutch_1v1_attempts + a.clutch_1v2_attempts;
               const clutchWins = a.clutch_1v1_wins + a.clutch_1v2_wins;
               return (
-                <tr key={a.player_id} className="lift-row border-b border-[var(--color-border-secondary)]">
+                <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                   {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
                   <td className={tdRight}><OpeningDuels wins={a.opening_kills} losses={a.opening_deaths} /></td>
                   <td className={tdRight}>{pct(totalDuels, a.rounds_played)}</td>
@@ -327,7 +327,7 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-xs">
           <thead>
-            <tr>
+            <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
               <SortableTh label="Utility Damage" title="Damage dealt with grenades (HE, molotov, incendiary)" sortKey="ud" state={sort} onClick={toggleSort} />
               <SortableTh label="Util Dmg/Round" title="Utility damage per round" sortKey="ud_r" state={sort} onClick={toggleSort} />
@@ -343,7 +343,7 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
             {sorted.map((a) => {
               const rp = a.rounds_played || 1;
               return (
-                <tr key={a.player_id} className="lift-row border-b border-[var(--color-border-secondary)]">
+                <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                   {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
                   <td className={tdRight}>{a.utility_damage}</td>
                   <td className={tdRight}>{fmtNum(a.utility_damage / rp, 1)}</td>
@@ -399,7 +399,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-xs">
           <thead>
-            <tr>
+            <tr className="bg-[var(--color-bg-secondary)]">
               <th className={playerThCls}>Player</th>
               <SortableTh label="Kills/Round+" title="Kills per round vs league avg (1.00 = avg)" sortKey="kpr" state={sort} onClick={toggleSort} />
               <SortableTh label="Assists/Round+" title="Assists per round vs league avg (1.00 = avg)" sortKey="apr" state={sort} onClick={toggleSort} />
@@ -414,7 +414,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
           </thead>
           <tbody>
             {sorted.map(({ agg, plus }) => (
-              <tr key={agg.player_id} className="lift-row border-b border-[var(--color-border-secondary)]">
+              <tr key={agg.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                 <PlayerCell id={agg.player_id} name={agg.player_name} />
                 <td className={tdRight} style={plusStyle(plus.kpr)}>{fmtNum(plus.kpr, 2)}</td>
                 <td className={tdRight} style={plusStyle(plus.apr)}>{fmtNum(plus.apr, 2)}</td>
