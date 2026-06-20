@@ -77,7 +77,7 @@ export default function SabremetricsTable({ players }: SabremetricsTableProps) {
 
   return (
     <div className="border border-[var(--color-border-primary)] overflow-x-auto">
-      <table className="w-full border-collapse text-[13px]">
+      <table className="w-full min-w-max border-collapse text-[13px]">
         <thead>
           <tr className="bg-[var(--color-bg-secondary)]">
             {cols.map((col) => (

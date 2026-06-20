@@ -254,7 +254,7 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3">Impact</h3>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
+        <table className="w-full min-w-max border-collapse text-xs">
           <thead>
             <tr>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
@@ -325,7 +325,7 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3">Utility</h3>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
+        <table className="w-full min-w-max border-collapse text-xs">
           <thead>
             <tr>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
@@ -397,7 +397,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
     <div className="my-6">
       <h3 className="text-sm font-semibold mb-3" title="1.00 = league average. Values above 1 are better than average, below 1 are worse.">Stats Plus</h3>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
+        <table className="w-full min-w-max border-collapse text-xs">
           <thead>
             <tr>
               <th className={playerThCls}>Player</th>

@@ -59,8 +59,8 @@ function Scoreboard({
   const thStatCls = 'tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)]';
 
   return (
-    <div className={`border border-[var(--color-border-primary)] overflow-hidden faction-tint ${cls}`}>
-      <table className="w-full border-collapse text-[13px]">
+    <div className={`border border-[var(--color-border-primary)] overflow-x-auto faction-tint ${cls}`}>
+      <table className="w-full min-w-max border-collapse text-[13px]">
         <thead>
           <tr className="bg-[var(--color-bg-secondary)]">
             <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)] w-[40%]">
@@ -182,8 +182,8 @@ function SabStatTable({
   const thCls = 'tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)]';
 
   return (
-    <div className={`border border-[var(--color-border-primary)] overflow-hidden faction-tint ${cls}`}>
-      <table className="w-full border-collapse text-[13px]">
+    <div className={`border border-[var(--color-border-primary)] overflow-x-auto faction-tint ${cls}`}>
+      <table className="w-full min-w-max border-collapse text-[13px]">
         <thead>
           <tr className="bg-[var(--color-bg-secondary)]">
             <th className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)]">
@@ -323,7 +323,7 @@ export function RatingProjectionTable({
         <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">based on current ratings</span>
       </div>
       <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
-        <table className="w-full text-[13px]">
+        <table className="w-full min-w-max text-[13px]">
           <thead>
             <tr className="bg-[var(--color-bg-secondary)]">
               <th className="tracked text-[9px] font-semibold py-2 pl-4 pr-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">
