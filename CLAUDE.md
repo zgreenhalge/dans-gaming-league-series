@@ -21,6 +21,14 @@ When citing code in docs, comments, or commits, reference it by **symbol name** 
 
 **Always prefer extracting/abstracting shared logic whenever possible.** If you're about to write a join/aggregation/derivation that already exists elsewhere (even inline in a component), factor it into a shared helper (`src/lib/queries.ts` or `src/lib/util.ts`) and have both call sites use it — don't let two copies of the same logic drift apart.
 
+## Working with the user
+
+- **Questions and planning requests are not implementation triggers.** When the user asks "what could we do about X?" or asks for a plan, respond with analysis and stop — don't start editing until they say to proceed.
+- **Read the doc that owns the area before changing code in it.** [`docs/README.md`](./docs/README.md) maps each area to its doc (formulas → `calculations.md`, queries → `recipes.md`, routes/API/schema → `architecture.md`, CSS → `visual-conventions.md`, EHOG → `ehog.md`). The cross-cutting design heuristics — KISS, YAGNI, DRY, WYSIWYG, SOLID-as-modules, POLA — live in [`docs/patterns.md`](./docs/patterns.md). Reading first beats reverse-engineering, and you update the relevant doc in the same change that alters its behavior.
+- **The user verifies UI on the deployed preview (often on their phone), not localhost.** Don't spin up the dev server to self-diagnose a visual change — you can't see the result and they don't expose localhost to the internet. Finish the change, hand it back, and let them test. Use `npm run build` to catch type/lint errors, not the dev server to "check" UI.
+- **When a number looks wrong, investigate the data before changing code.** Stats often look off because matches were entered out of chronological order or pre-staged (S3's `"0-0"` rows) — not because the logic is broken. Confirm the data is what you think it is before restructuring a query or derivation to "explain" an anomaly. Reverting a needless logic change costs more than a `select`.
+- **Git: commit only when asked, in logical groups, on a feature branch.** When the user asks you to commit, default to **multiple logically-grouped commits** (not one mega-commit) on a feature branch, then push and write a PR description. Never commit work the user hasn't confirmed. Cite code by symbol name in commit messages (see [`docs/patterns.md`](./docs/patterns.md)).
+
 ## Commands
 
 See README.md for frontend npm commands. See `ingestion/README.md` for Python ingestion setup and commands.
@@ -40,6 +48,7 @@ Full schema is in README.md and `src/lib/types.ts`. Non-obvious rules:
 - **Gauntlet seasons** store all matches as `is_playoff_game = true`, so they're excluded from the regular view. Use `getGauntletStats()` / `getGauntletSeasonLeaderboard()` for gauntlet data.
 - **RLS is off** on all tables. Enabling it without policies blocks all access.
 - **Season ↔ gauntlet pairing is name-based.** Use `extractSeasonNumber()` from `src/lib/util.ts` — don't assume paired seasons have adjacent IDs.
+- **Numeric precision is a storage-vs-display split.** Per-match `adr` in `player_match_stats` is stored as a whole number; aggregate ADR is *recomputed* from `total_damage / total_rounds_played` (see `overall_adr` in `queries.ts`) and is a true float — display layers show it at 2 decimals (`overall_adr.toFixed(2)`). Don't "fix" a decimal aggregate ADR to look like an integer, and don't massage match-card numbers — show them as stored.
 
 ### Frontend patterns
 - **`src/lib/queries.ts`** — all data-fetching lives here. Don't write ad-hoc `supabase.from(...)` calls in page components.

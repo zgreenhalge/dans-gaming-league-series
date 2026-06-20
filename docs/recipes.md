@@ -34,6 +34,11 @@ In all cases: **the helper lives in `queries.ts`, returns a fully-shaped value, 
 render it.** If you find yourself writing a join/reduce inside a `.tsx` file, that's the signal to
 move it — see the "Always prefer extracting/abstracting shared logic" rule in `CLAUDE.md`.
 
+When you aggregate per-match stats into a leaderboard row, sum the totals however the input shape
+requires but derive the four canonical-sort fields (`win_rate_percentage`, `kd_ratio`,
+`rwr_percentage`, `overall_adr`) through `deriveRates()` in `src/lib/util.ts` — it's the single
+source for those divisions so the rankings can't drift between the player, career, and map views.
+
 If the new stat should appear on **career views**, it must respect `useSeasonFilter()` the same way
 `getCareerLeaderboard()` and `CareerStatsView.tsx` do — don't build a parallel filter.
 
@@ -98,6 +103,9 @@ if the element carries a semantic color (win/loss) that should survive hover.
 
 - `npm run build` (type-checks + lints via the build)
 - `npm run lint`
+- `npm test` — unit tests for the pure invariants in `util.ts` (canonical sort, played-match check,
+  score parsing, season pairing, `deriveRates`). If you touched any of those, add a case in
+  `src/lib/util.test.ts` (zero-dependency `node:assert` runner, run via `tsx`).
 - If you touched `queries.ts`, double check you didn't duplicate a join/derivation that already
   exists — grep for the field name first
 - If you added a domain concept (new season format, new stat, new filter), add it to
