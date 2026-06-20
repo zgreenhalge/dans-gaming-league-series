@@ -88,6 +88,22 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 - `.map-text-scrim` / `.map-no-img` handle text legibility over images and the no-image fallback
   gradient respectively
 
+## Tables & data display
+
+**Avoid single-row tables.** A table whose body renders exactly one data row reads poorly — many
+columns of headers above a single line of values, forcing horizontal scroll on mobile while wasting
+vertical space. This happens most often when a multi-row leaderboard component is reused for a single
+subject (e.g. the Advanced Stats tab on `/players/<id>` reusing the league sabremetrics tables).
+
+When a table would have one data row, **transpose it into a label/value layout** instead:
+- A responsive **stat-tile grid** (`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4`) where each tile
+  stacks the column's label above its value — see `SinglePlayerStats` in
+  `src/components/SabremetricsLeaderboardView.tsx` for the canonical implementation.
+- Keep the same metrics, formatting helpers, and `title` tooltips as the table — only the shape
+  changes, so the two presentations don't drift.
+
+Tables remain the right choice the moment there are multiple rows to compare across the same columns.
+
 ## When extending this system
 
 If you need a new hover/glow/accent treatment, ask first whether it's really a new *shape* (card vs.

@@ -434,14 +434,103 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
   );
 }
 
+// --- Single-player layout ---
+//
+// A one-row table is awkward (lots of columns, a single line of data, forced
+// horizontal scroll on mobile). For a single player we transpose the same
+// metrics into a label/value stat-tile grid. See VISUAL_CONVENTIONS.md.
+
+interface StatTileData { label: string; title?: string; value: React.ReactNode; valueStyle?: React.CSSProperties }
+
+function StatTile({ label, title, value, valueStyle }: StatTileData) {
+  return (
+    <div
+      title={title}
+      className="border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] px-3 py-2.5"
+    >
+      <div className="tracked text-[9px] font-semibold leading-tight text-[var(--color-text-secondary)]">{label}</div>
+      <div className="tnum mt-1.5 text-[18px] font-semibold leading-none" style={valueStyle}>{value}</div>
+    </div>
+  );
+}
+
+function StatGrid({ title, hint, tiles }: { title: string; hint?: string; tiles: StatTileData[] }) {
+  return (
+    <div className="my-6">
+      <h3 className="mb-3 text-sm font-semibold" title={hint}>{title}</h3>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+        {tiles.map((t) => <StatTile key={t.label} {...t} />)}
+      </div>
+    </div>
+  );
+}
+
+function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leagueAggregated: AggregatedSab[] }) {
+  const rp = agg.rounds_played || 1;
+  const totalDuels = agg.opening_kills + agg.opening_deaths;
+  const clutchAttempts = agg.clutch_1v1_attempts + agg.clutch_1v2_attempts;
+  const clutchWins = agg.clutch_1v1_wins + agg.clutch_1v2_wins;
+
+  const impact: StatTileData[] = [
+    { label: 'Opening Duels', title: 'First kill and first death of each round (wins-losses)', value: <OpeningDuels wins={agg.opening_kills} losses={agg.opening_deaths} /> },
+    { label: 'Opening %', title: 'Percentage of rounds where this player took the opening duel', value: pct(totalDuels, agg.rounds_played) },
+    { label: 'Opening Success', title: 'Opening kills / (opening kills + opening deaths)', value: pct(agg.opening_kills, totalDuels) },
+    { label: 'Headshot %', title: 'Headshot kill percentage', value: pct(agg.headshot_kills, agg.kills) },
+    { label: 'KAST', title: 'Percentage of rounds with a Kill, Assist, Survived, or Traded', value: pct(agg.kast_rounds, agg.rounds_played) },
+    { label: 'Double Kills', title: 'Rounds where both opponents were eliminated', value: agg.two_k_rounds },
+    { label: '1v1 Clutches', title: '1v1 clutch wins / attempts', value: `${agg.clutch_1v1_wins}/${agg.clutch_1v1_attempts}` },
+    { label: '1v2 Clutches', title: '1v2 clutch wins / attempts', value: `${agg.clutch_1v2_wins}/${agg.clutch_1v2_attempts}` },
+    { label: 'Clutch %', title: 'Overall clutch success rate (1v1 + 1v2 wins / attempts)', value: pct(clutchWins, clutchAttempts) },
+  ];
+
+  const utility: StatTileData[] = [
+    { label: 'Utility Damage', title: 'Damage dealt with grenades (HE, molotov, incendiary)', value: agg.utility_damage },
+    { label: 'Util Dmg/Round', title: 'Utility damage per round', value: fmtNum(agg.utility_damage / rp, 1) },
+    { label: 'Flash Assists', title: 'Kills by a teammate on an enemy you flashbanged', value: agg.flash_assists },
+    { label: 'Flash Assists/Round', title: 'Flash assists per round', value: fmtNum(agg.flash_assists / rp, 2) },
+    { label: 'Enemies Flashed', title: 'Enemy players blinded by your flashbangs', value: agg.enemies_flashed },
+    { label: 'Enemies Flashed/Round', title: 'Enemies flashed per round', value: fmtNum(agg.enemies_flashed / rp, 2) },
+    { label: 'Plants', title: 'Bomb plants', value: agg.plants },
+    { label: 'Defuses', title: 'Bomb defuses', value: agg.defuses },
+  ];
+
+  // Plus stats need the league as a baseline; comparing a player to only
+  // themselves yields all 1.00, so only render when we have other players.
+  const hasLeagueBaseline = leagueAggregated.length > 1;
+  const plus = hasLeagueBaseline ? computePlusStats(agg, leagueAggregated) : null;
+  const plusTiles: StatTileData[] = plus ? [
+    { label: 'Kills/Round+', title: 'Kills per round vs league avg (1.00 = avg)', value: fmtNum(plus.kpr, 2), valueStyle: plusStyle(plus.kpr) },
+    { label: 'Assists/Round+', title: 'Assists per round vs league avg (1.00 = avg)', value: fmtNum(plus.apr, 2), valueStyle: plusStyle(plus.apr) },
+    { label: 'Deaths/Round+', title: 'Deaths per round vs league avg (1.00 = avg, lower is better)', value: fmtNum(plus.dpr, 2), valueStyle: plusStyle(2 - plus.dpr) },
+    { label: 'K/D+', title: 'K/D ratio vs league avg (1.00 = avg)', value: fmtNum(plus.kdr, 2), valueStyle: plusStyle(plus.kdr) },
+    { label: 'Entry+', title: 'Opening duel success rate (OK / total duels) vs league avg (1.00 = avg)', value: fmtNum(plus.entry, 2), valueStyle: plusStyle(plus.entry) },
+    { label: 'KAST+', title: 'KAST per round vs league avg (1.00 = avg)', value: fmtNum(plus.trade, 2), valueStyle: plusStyle(plus.trade) },
+    { label: 'Objective+', title: 'Objective score (2×plants + 3×defuses) per round vs league avg (1.00 = avg)', value: fmtNum(plus.objective, 2), valueStyle: plusStyle(plus.objective) },
+    { label: 'Utility+', title: 'Utility score (flash assists + util damage/50) per round vs league avg (1.00 = avg)', value: fmtNum(plus.utility, 2), valueStyle: plusStyle(plus.utility) },
+    { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)', value: fmtNum(plus.clutch, 2), valueStyle: plusStyle(plus.clutch) },
+  ] : [];
+
+  return (
+    <div className="space-y-6">
+      <StatGrid title="Impact" tiles={impact} />
+      <StatGrid title="Utility" tiles={utility} />
+      {plus && <StatGrid title="Stats Plus" hint="1.00 = league average. Values above 1 are better than average, below 1 are worse." tiles={plusTiles} />}
+    </div>
+  );
+}
+
 export default function SabremetricsLeaderboardView({
   rows,
+  leagueRows,
   singlePlayer = false,
 }: {
   rows: SabremetricMatchRow[];
+  /** League-wide rows used as the Plus-stat baseline in single-player mode. Defaults to `rows`. */
+  leagueRows?: SabremetricMatchRow[];
   singlePlayer?: boolean;
 }) {
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);
+  const leagueAggregated = useMemo(() => aggregateRows(leagueRows ?? rows), [leagueRows, rows]);
 
   if (aggregated.length === 0) {
     return (
@@ -451,11 +540,15 @@ export default function SabremetricsLeaderboardView({
     );
   }
 
+  if (singlePlayer) {
+    return <SinglePlayerStats agg={aggregated[0]} leagueAggregated={leagueAggregated} />;
+  }
+
   return (
     <div className="space-y-6">
       <ImpactTable aggregated={aggregated} singlePlayer={singlePlayer} />
       <UtilityTable aggregated={aggregated} singlePlayer={singlePlayer} />
-      {!singlePlayer && <PlusStatsTable aggregated={aggregated} />}
+      <PlusStatsTable aggregated={aggregated} />
     </div>
   );
 }

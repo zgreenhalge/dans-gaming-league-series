@@ -211,6 +211,8 @@ export default function PlayerView({
   h2hData: H2HData;
   ehogHistory: EhogRatingPoint[];
   matchDeltas: Record<number, Record<number, number>>;
+  /** League-wide sabremetric rows (all players) — the player's own rows and the
+   *  Plus-stat baseline are both derived from these under the active season filter. */
   sabremetrics?: SabremetricMatchRow[];
 }) {
   const { data: session } = useSession();
@@ -346,7 +348,9 @@ export default function PlayerView({
     return counts;
   }, [filteredTrophies]);
 
-  const filteredSabremetrics = useMemo(() => {
+  // League-wide sabremetric rows under the active season filter — used as the
+  // baseline for the player's Plus stats (player per-round value vs. league avg).
+  const filteredLeagueSabremetrics = useMemo(() => {
     const base = filter === 'career'
       ? sabremetrics
       : (() => {
@@ -360,6 +364,11 @@ export default function PlayerView({
       r.is_gauntlet ? includeGauntlet : includeRegular,
     );
   }, [filter, sabremetrics, includeRegular, includeGauntlet, regularToGauntlet]);
+
+  const filteredPlayerSabremetrics = useMemo(
+    () => filteredLeagueSabremetrics.filter((r) => r.player_id === playerId),
+    [filteredLeagueSabremetrics, playerId],
+  );
 
   const playerTabs: { key: PlayerTab; label: string }[] = [
     { key: 'stats', label: 'Overview' },
@@ -780,7 +789,7 @@ export default function PlayerView({
 
       {/* Advanced Stats tab */}
       {tab === 'advanced' && (
-        <SabremetricsLeaderboardView rows={filteredSabremetrics} singlePlayer />
+        <SabremetricsLeaderboardView rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} singlePlayer />
       )}
 
       {/* Matchups tab */}
