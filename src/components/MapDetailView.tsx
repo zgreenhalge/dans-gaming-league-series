@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import LeaderboardTable from './LeaderboardTable';
 import { MatchCard } from './MatchCard';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
+import TabBar from './TabBar';
 import { AdvancedStatsView } from './AdvancedStatsView';
 import { tabCls, canonicalSort } from '@/lib/util';
 import type { MapMatchRow, MapDetail, MapPlayerStat, H2HData } from '@/lib/queries';
@@ -135,7 +136,17 @@ export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; 
   return (
     <div>
       {/* Tabs + filter controls */}
-      <div className="flex items-center border-b border-[var(--color-border-primary)] mb-4">
+      <TabBar
+        bordered
+        className="mb-4"
+        controls={
+          <SeasonFilter
+            filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason }}
+            seasons={uniqueSeasons}
+            onSeasonChange={setSelectedSeason}
+          />
+        }
+      >
         <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
           Leaderboard
         </button>
@@ -151,13 +162,7 @@ export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; 
         <button type="button" className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
           H2H
         </button>
-        <SeasonFilter
-          filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason }}
-          seasons={uniqueSeasons}
-          onSeasonChange={setSelectedSeason}
-          className="ml-auto flex items-center gap-5 pb-0.5"
-        />
-      </div>
+      </TabBar>
 
       {tab === 'leaderboard' && (
         filteredPlayerStats.length === 0 ? (

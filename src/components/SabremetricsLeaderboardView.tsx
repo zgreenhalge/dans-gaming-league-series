@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { SabremetricMatchRow } from '@/lib/queries';
+import StatTileGrid, { type StatTile } from './StatTileGrid';
 
 interface AggregatedSab {
   player_id: number;
@@ -438,32 +439,8 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
 //
 // A one-row table is awkward (lots of columns, a single line of data, forced
 // horizontal scroll on mobile). For a single player we transpose the same
-// metrics into a label/value stat-tile grid. See VISUAL_CONVENTIONS.md.
-
-interface StatTileData { label: string; title?: string; value: React.ReactNode; valueStyle?: React.CSSProperties }
-
-function StatTile({ label, title, value, valueStyle }: StatTileData) {
-  return (
-    <div
-      title={title}
-      className="border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] px-3 py-2.5"
-    >
-      <div className="tracked text-[9px] font-semibold leading-tight text-[var(--color-text-secondary)]">{label}</div>
-      <div className="tnum mt-1.5 text-[18px] font-semibold leading-none" style={valueStyle}>{value}</div>
-    </div>
-  );
-}
-
-function StatGrid({ title, hint, tiles }: { title: string; hint?: string; tiles: StatTileData[] }) {
-  return (
-    <div className="my-6">
-      <h3 className="mb-3 text-sm font-semibold" title={hint}>{title}</h3>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-        {tiles.map((t) => <StatTile key={t.label} {...t} />)}
-      </div>
-    </div>
-  );
-}
+// metrics into a label/value stat-tile grid — the shared `StatTileGrid`, so it
+// matches the player Overview panel exactly. See VISUAL_CONVENTIONS.md.
 
 function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leagueAggregated: AggregatedSab[] }) {
   const rp = agg.rounds_played || 1;
@@ -471,7 +448,7 @@ function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leag
   const clutchAttempts = agg.clutch_1v1_attempts + agg.clutch_1v2_attempts;
   const clutchWins = agg.clutch_1v1_wins + agg.clutch_1v2_wins;
 
-  const impact: StatTileData[] = [
+  const impact: StatTile[] = [
     { label: 'Opening Duels', title: 'First kill and first death of each round (wins-losses)', value: <OpeningDuels wins={agg.opening_kills} losses={agg.opening_deaths} /> },
     { label: 'Opening %', title: 'Percentage of rounds where this player took the opening duel', value: pct(totalDuels, agg.rounds_played) },
     { label: 'Opening Success', title: 'Opening kills / (opening kills + opening deaths)', value: pct(agg.opening_kills, totalDuels) },
@@ -483,7 +460,7 @@ function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leag
     { label: 'Clutch %', title: 'Overall clutch success rate (1v1 + 1v2 wins / attempts)', value: pct(clutchWins, clutchAttempts) },
   ];
 
-  const utility: StatTileData[] = [
+  const utility: StatTile[] = [
     { label: 'Utility Damage', title: 'Damage dealt with grenades (HE, molotov, incendiary)', value: agg.utility_damage },
     { label: 'Util Dmg/Round', title: 'Utility damage per round', value: fmtNum(agg.utility_damage / rp, 1) },
     { label: 'Flash Assists', title: 'Kills by a teammate on an enemy you flashbanged', value: agg.flash_assists },
@@ -498,7 +475,7 @@ function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leag
   // themselves yields all 1.00, so only render when we have other players.
   const hasLeagueBaseline = leagueAggregated.length > 1;
   const plus = hasLeagueBaseline ? computePlusStats(agg, leagueAggregated) : null;
-  const plusTiles: StatTileData[] = plus ? [
+  const plusTiles: StatTile[] = plus ? [
     { label: 'Kills/Round+', title: 'Kills per round vs league avg (1.00 = avg)', value: fmtNum(plus.kpr, 2), valueStyle: plusStyle(plus.kpr) },
     { label: 'Assists/Round+', title: 'Assists per round vs league avg (1.00 = avg)', value: fmtNum(plus.apr, 2), valueStyle: plusStyle(plus.apr) },
     { label: 'Deaths/Round+', title: 'Deaths per round vs league avg (1.00 = avg, lower is better)', value: fmtNum(plus.dpr, 2), valueStyle: plusStyle(2 - plus.dpr) },
@@ -512,9 +489,9 @@ function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leag
 
   return (
     <div className="space-y-6">
-      <StatGrid title="Impact" tiles={impact} />
-      <StatGrid title="Utility" tiles={utility} />
-      {plus && <StatGrid title="Stats Plus" hint="1.00 = league average. Values above 1 are better than average, below 1 are worse." tiles={plusTiles} />}
+      <StatTileGrid heading="Impact" tiles={impact} />
+      <StatTileGrid heading="Utility" tiles={utility} />
+      {plus && <StatTileGrid heading="Stats Plus" hint="1.00 = league average. Values above 1 are better than average, below 1 are worse." tiles={plusTiles} />}
     </div>
   );
 }

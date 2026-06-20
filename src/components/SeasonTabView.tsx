@@ -7,6 +7,7 @@ import GauntletStandings from './GauntletStandings';
 import GauntletRoundsList from './GauntletRoundsList';
 import H2HSection from './H2HSection';
 import { AdvancedStatsView } from './AdvancedStatsView';
+import TabBar from './TabBar';
 import type { WeekWithMatches, GauntletRound, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { MatchPickBanInput } from '@/lib/mapSideStats';
@@ -195,16 +196,10 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     </button>
   ));
 
-  const tabBar = subStyle ? (
-    <div className="flex items-center justify-between mb-6">
-      <div className="flex">{tabBarButtons}</div>
-      <div className="flex items-center gap-3">{scheduleControls}</div>
-    </div>
-  ) : (
-    <div className="flex items-center justify-between border-b border-[var(--color-border-primary)] mb-6">
-      <div className="flex">{tabBarButtons}</div>
-      <div className="flex items-center gap-3 pb-px">{scheduleControls}</div>
-    </div>
+  const tabBar = (
+    <TabBar bordered={!subStyle} className="mb-6" controls={scheduleControls || undefined}>
+      {tabBarButtons}
+    </TabBar>
   );
 
   return (

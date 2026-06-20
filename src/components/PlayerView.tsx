@@ -17,6 +17,8 @@ import { CountdownTimer } from './CountdownTimer';
 import MatchupsTab from './MatchupsTab';
 import EhogTimeline from './EhogTimeline';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
+import StatTileGrid from './StatTileGrid';
+import TabBar from './TabBar';
 
 type Filter = 'career' | number;
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
@@ -179,20 +181,6 @@ function SortableTh({ label, colKey, activeCol, asc, align = 'right', onClick }:
     </th>
   );
 }
-
-function StatCell({ v, l }: { v: string | number; l: string }) {
-  return (
-    <div className="px-3 py-3 border-r border-[var(--color-border-tertiary)] last:border-r-0">
-      <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-1">
-        {l}
-      </div>
-      <div className="font-display text-[20px] font-semibold tnum leading-none">
-        {v}
-      </div>
-    </div>
-  );
-}
-
 
 export default function PlayerView({
   playerId,
@@ -443,7 +431,34 @@ export default function PlayerView({
       })()}
 
       {/* Tab bar + filter controls */}
-      <div className="flex flex-wrap items-center gap-y-2 border-b border-[var(--color-border-primary)] mb-6">
+      <TabBar
+        bordered
+        className="mb-6"
+        controls={
+          <>
+            <SeasonFilter
+              filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }}
+              showRegular={regularSeasons.length > 0}
+              showGauntlet={gauntletSeasons.length > 0}
+            />
+            <select
+              value={String(filter)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setFilter(v === 'career' ? 'career' : Number(v));
+              }}
+              className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
+            >
+              <option value="career">Career</option>
+              {activeSeasons.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {seasonTitle(s.name)}
+                </option>
+              ))}
+            </select>
+          </>
+        }
+      >
         {playerTabs.map((t) => (
           <button
             key={t.key}
@@ -453,29 +468,7 @@ export default function PlayerView({
             {t.label}
           </button>
         ))}
-        <div className="ml-auto flex flex-wrap items-center gap-4 pb-0.5">
-          <SeasonFilter
-            filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }}
-            showRegular={regularSeasons.length > 0}
-            showGauntlet={gauntletSeasons.length > 0}
-          />
-          <select
-            value={String(filter)}
-            onChange={(e) => {
-              const v = e.target.value;
-              setFilter(v === 'career' ? 'career' : Number(v));
-            }}
-            className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
-          >
-            <option value="career">Career</option>
-            {activeSeasons.map((s) => (
-              <option key={s.id} value={s.id}>
-                {seasonTitle(s.name)}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      </TabBar>
 
       {/* Stats tab */}
       {tab === 'stats' && (
@@ -491,26 +484,28 @@ export default function PlayerView({
               View all →
             </Link>
           </div>
-          <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-            <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-10">
-              <StatCell v={agg.matches} l="Games" />
-              <StatCell v={`${agg.wins}-${agg.losses}`} l="W-L" />
-              <StatCell v={`${agg.wr.toFixed(1)}%`} l="Win rate" />
-              <StatCell v={`${agg.rwr.toFixed(1)}%`} l="RWR%" />
-              <StatCell v={agg.kills} l="Kills" />
-              <StatCell v={agg.assists} l="Assists" />
-              <StatCell v={agg.deaths} l="Deaths" />
-              <StatCell v={agg.kd.toFixed(2)} l="K/D" />
-              <StatCell v={agg.adr.toFixed(2)} l="ADR" />
-              {peakEhog !== null && <StatCell v={peakEhog.toFixed(2)} l="Peak EHOG" />}
-            </div>
-          </div>
+          <StatTileGrid
+            columns="grid-cols-4 sm:grid-cols-5 lg:grid-cols-10"
+            tiles={[
+              { label: 'Games', value: agg.matches },
+              { label: 'W-L', value: `${agg.wins}-${agg.losses}` },
+              { label: 'Win rate', value: `${agg.wr.toFixed(1)}%` },
+              { label: 'RWR%', value: `${agg.rwr.toFixed(1)}%` },
+              { label: 'Kills', value: agg.kills },
+              { label: 'Assists', value: agg.assists },
+              { label: 'Deaths', value: agg.deaths },
+              { label: 'K/D', value: agg.kd.toFixed(2) },
+              { label: 'ADR', value: agg.adr.toFixed(2) },
+              ...(peakEhog !== null ? [{ label: 'Peak EHOG', value: peakEhog.toFixed(2) }] : []),
+            ]}
+          />
 
           {isCareer && activeSeasons.length > 0 && (
             <>
               <SectionLabel>Season history</SectionLabel>
               <LeaderboardTable
                 firstColMode="season"
+                stickyNameCol={false}
                 rows={activeSeasons.map((s): LeaderboardRowWithId => {
                   const pairedGntId = regularToGauntlet.get(s.id);
                   const seasonRows = history.filter((r) => {

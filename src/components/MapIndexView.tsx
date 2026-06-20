@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { extractSeasonNumber, tabCls } from '@/lib/util';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
+import TabBar from './TabBar';
 import type { MapIndexEntry } from '@/lib/types';
 
 type SortKey = 'name' | 'seasonsPlayed' | 'pickCount' | 'banCount' | 'noPickCount' | 'pickAndWon' | 'totalKills' | 'totalAssists';
@@ -108,20 +109,24 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-y-2 border-b border-[var(--color-border-primary)] mb-6">
+      <TabBar
+        bordered
+        className="mb-6"
+        controls={
+          <SeasonFilter
+            filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason }}
+            seasons={allSeasons}
+            onSeasonChange={setSelectedSeason}
+          />
+        }
+      >
         <button type="button" className={tabCls(tab === 'tiles')} onClick={() => setTab('tiles')}>
           Maps
         </button>
         <button type="button" className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
           Statistics
         </button>
-        <SeasonFilter
-          filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason }}
-          seasons={allSeasons}
-          onSeasonChange={setSelectedSeason}
-          className="ml-auto flex flex-wrap items-center gap-4 pb-0.5"
-        />
-      </div>
+      </TabBar>
 
       {tab === 'tiles' && (
         filtered.length === 0 ? (
