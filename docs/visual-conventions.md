@@ -2,8 +2,8 @@
 
 The site's visual language — a CS2-broadcast-inspired theme with a light "Dust2 daylight" mode and
 a dark "broadcast HUD" mode. This doc names the shared utilities in `src/app/globals.css` so the
-visual-refresh pass (commits `2d1ed97`, `c3b9415`, `8a97368`) stays a *system* instead of drifting
-into one-off classes per component. **Reach for these before writing new hover/glow/accent CSS.**
+visual language stays a *system* instead of drifting into one-off classes per component.
+**Reach for these before writing new hover/glow/accent CSS.**
 
 ## Theme tokens
 

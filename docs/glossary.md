@@ -20,14 +20,14 @@ so you don't have to reverse-engineer them from scratch each time.
 - **Canonical sort (regular season)** — the standard leaderboard sort order for regular-season and
   career views: **WR% → RWR% → ADR**, all descending. Implemented by `canonicalSort()` in
   `src/lib/util.ts`; see
-  [`CALCULATION_DEFINITIONS.md`](./CALCULATION_DEFINITIONS.md#canonical-regular-season-ranking)
+  [`calculations.md`](./calculations.md#canonical-regular-season-ranking)
   for the full rationale. Not to be confused with the canonical *gauntlet* ranking below.
 - **EHOG (rating)** — the DGLS player skill rating, an [OpenSkill](https://github.com/philihp/openskill.js)
   PlackettLuce model mapped onto a 10–100 display scale via a logistic transform. Match-outcome-based
   (win/loss + margin of victory), not individual-stat-based. Updated via full chronological recompute
-  after every score submission. See [`ehog/README.md`](./ehog/README.md) for the full engine docs.
+  after every score submission. See [`ehog.md`](./ehog.md) for the full engine docs.
   Not to be confused with the aspirational *Player Rating* sabremetric composite in
-  [`CALCULATION_DEFINITIONS.md`](./CALCULATION_DEFINITIONS.md#player-rating-aspirational--requires-demo-data).
+  [`calculations.md`](./calculations.md#player-rating-aspirational--requires-demo-data).
 - **Faction: SHIRTS / SKINS** — the two ad-hoc teams for a given match (CS2 Wingman is 2v2).
   Rosters are reshuffled weekly, hence "rotating mixer."
 - **Veto** — the map pick/ban sequence before a match (`shirts_ban`, `shirts_ban2`, `skins_ban1`,
@@ -52,7 +52,7 @@ so you don't have to reverse-engineer them from scratch each time.
     directly from `player_match_stats` (`getGauntletStats`, `getGauntletSeasonLeaderboard`,
     `getGauntletRounds`)
   - **Canonical gauntlet ranking** — the official finish order for a completed gauntlet; see
-    [`CALCULATION_DEFINITIONS.md`](./CALCULATION_DEFINITIONS.md#canonical-gauntlet-ranking) for the
+    [`calculations.md`](./calculations.md#canonical-gauntlet-ranking) for the
     full placement rules. Implemented by `canonicalGauntletRankMap()` in `src/lib/util.ts` — pass
     the result as `canonicalRanking` to `LeaderboardTable`. Returns an empty map while the gauntlet
     is in progress.
@@ -93,7 +93,7 @@ so you don't have to reverse-engineer them from scratch each time.
 
 | Concern | File(s) |
 |---|---|
-| All Supabase data-fetching | `src/lib/queries.ts` (~2,400 lines — grep for `export async function get…`) |
+| All Supabase data-fetching | `src/lib/queries.ts` (grep for `export async function get…`) |
 | Shared types matching DB shape | `src/lib/types.ts` |
 | Cross-cutting helpers (score parsing, season pairing, tab styles, formatting) | `src/lib/util.ts` |
 | Map name → image/slug lookups | `src/lib/maps.ts` |
@@ -103,7 +103,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | Pre-match prep view | `src/components/ScoutingReport.tsx` |
 | Gauntlet bracket rendering | `src/components/GauntletRoundsList.tsx`, `src/components/GauntletStandings.tsx` |
 | Career vs per-season stat views | `src/components/CareerStatsView.tsx`, `src/components/SeasonTabView.tsx`, `src/components/CombinedSeasonTabView.tsx` |
-| Pages (routes) | `src/app/**` — see the route table in `README.md` |
+| Pages (routes) | `src/app/**` — see the route table in [`architecture.md`](./architecture.md) |
 | Historical CSV ingestion (Python, not deployed) | `ingestion/` |
 
 ## Conventions to know before reading the query layer

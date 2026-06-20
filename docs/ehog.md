@@ -40,13 +40,13 @@ The UI renders a color-coded badge (`EhogBadge.tsx`) and tier bar (`EhogTierBar.
 
 | File | Role |
 |---|---|
-| `constants.json` | Single source of truth for all tunable parameters. Read by both Python and TS. |
-| `engine.py` | Core rating math + DB read/write helpers. |
-| `backfill.py` | CLI full recompute. `--dry-run` prints standings without writing. |
-| `test_parity.py` | Generates `parity_fixtures.json` from the Python engine. |
-| `test_parity.ts` | Verifies the TS predictor matches the Python fixtures exactly. |
+| `ehog/constants.json` | Single source of truth for all tunable parameters. Read by both Python and TS. |
+| `ehog/engine.py` | Core rating math + DB read/write helpers. |
+| `ehog/backfill.py` | CLI full recompute. `--dry-run` prints standings without writing. |
+| `ehog/test_parity.py` | Generates `parity_fixtures.json` from the Python engine. |
+| `ehog/test_parity.ts` | Verifies the TS predictor matches the Python fixtures exactly. |
 | `src/lib/ehog.ts` | TS predictor — mirrors the engine math for client-side match projections. |
-| `api/ehog/recompute.py` | Vercel function, triggered after a score is submitted. Thin wrapper over `engine.py`. |
+| `api/ehog/recompute.py` | Vercel Python function (configured in `vercel.json`), triggered after a score is submitted. Thin wrapper over `ehog/engine.py`. |
 
 ## `constants.json` reference
 
@@ -104,6 +104,6 @@ python ehog/test_parity.py && npx tsx ehog/test_parity.ts
 The rating math is ~10 lines in each language. The guard against drift is:
 
 1. **Shared constants** — both sides read `ehog/constants.json`.
-2. **Parity test** — `test_parity.py` generates fixtures from the Python engine; `test_parity.ts` verifies the TS predictor matches within float tolerance (1e-8).
+2. **Parity test** — `ehog/test_parity.py` generates fixtures from the Python engine; `ehog/test_parity.ts` verifies the TS predictor matches within float tolerance (1e-8).
 
-If you change the math in `engine.py`, mirror it in `src/lib/ehog.ts`, regenerate fixtures, and run both tests.
+If you change the math in `ehog/engine.py`, mirror it in `src/lib/ehog.ts`, regenerate fixtures, and run both tests.

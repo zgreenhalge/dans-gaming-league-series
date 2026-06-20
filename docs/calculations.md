@@ -1,3 +1,10 @@
+# Calculation Definitions
+
+The formulas behind every stat and ranking shown on the site — raw scoreboard stats, side splits,
+sabremetrics, the canonical regular-season and gauntlet rankings, and narrative (pairing) metrics.
+See [`glossary.md`](./glossary.md) for the domain vocabulary and [`ehog.md`](./ehog.md) for the
+separate match-outcome skill rating.
+
 ## Statistics
 
 Raw numbers, direct from the game scoreboard
@@ -89,7 +96,7 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 ### Player Rating (aspirational — requires demo data)
 
 A weighted sabremetric composite for individual performance. Independent from the
-[EHOG skill rating](ehog/README.md), which is match-outcome-based (OpenSkill). These formulas
+[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). These formulas
 will be implemented once demo ingestion provides the underlying stats (Entry+, KAST+, etc.).
 
 ```
