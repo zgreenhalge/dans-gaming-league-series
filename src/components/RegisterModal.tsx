@@ -7,18 +7,16 @@ import { useSession } from "next-auth/react";
 type UnlinkedPlayer = { id: number; name: string };
 
 export default function RegisterModal() {
-  const { data: session, status, update } = useSession();
+  const { data: session, update } = useSession();
   const [unlinked, setUnlinked] = useState<UnlinkedPlayer[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [newName, setNewName] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const [mounted] = useState(true);
 
   const show = !!session?.user && session.user.playerId == null;
-
-  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!show) return;

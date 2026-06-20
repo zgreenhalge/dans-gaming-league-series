@@ -486,7 +486,6 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
     .maybeSingle();
   if (mErr) throw mErr;
   if (!match) return null;
-  const m = match as Match;
 
   const { data: roster, error: rErr } = await supabase
     .from('player_match_stats')
@@ -3174,6 +3173,7 @@ export async function getAllSabremetrics(): Promise<SabremetricMatchRow[]> {
     const sid = matchSeason.get(pms.match_id);
     if (sid == null) continue;
     const player = playersById.get(pms.player_id);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { player_match_stats_id: _, ...sab } = raw;
     result.push({
       player_id: pms.player_id,

@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react';
 import type { PlayerHistoryRow, TrophyEntry, H2HData, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { deriveRates, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
-import { aggregatePlayerMapStats, aggregatePlayerSideStats, type PlayerMapStat, type PlayerSideStat } from '@/lib/mapSideStats';
+import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import DevGate from './DevGate';
 import { MatchCard } from './MatchCard';
@@ -317,7 +317,9 @@ export default function PlayerView({
   const playedHistory = filtered.filter(isPlayed);
   const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
   useEffect(() => {
-    if (upcomingHistory.length === 0) setMatchesSubTab('history');
+    if (upcomingHistory.length > 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMatchesSubTab('history');
   }, [upcomingHistory.length]);
 
   // Chronological ADR series (history is sorted newest-first; reverse for the sparkline).

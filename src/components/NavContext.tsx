@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 
 interface NavState {
   mobileOpen: boolean;
@@ -13,12 +13,10 @@ const NavContext = createContext<NavState | null>(null);
 
 export function NavProvider({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [desktopOpen, setDesktopOpen] = useState(true);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('sidenav-desktop-open');
-    if (stored !== null) setDesktopOpen(stored === 'true');
-  }, []);
+  const [desktopOpen, setDesktopOpen] = useState(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('sidenav-desktop-open') : null;
+    return stored === 'true' ? false : true;
+  });
 
   function toggleDesktop() {
     setDesktopOpen((v) => {

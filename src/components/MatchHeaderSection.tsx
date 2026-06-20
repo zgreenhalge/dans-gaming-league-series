@@ -33,13 +33,25 @@ function formatCountdown(iso: string): string {
 }
 
 function useCountdown(iso: string | null): string {
-  const [label, setLabel] = useState('');
+  const [label, setLabel] = useState(() => {
+    if (!iso) return '';
+    const time = new Date(iso).getTime();
+    if (time <= Date.now()) return '';
+    return formatCountdown(iso);
+  });
+
   useEffect(() => {
     if (!iso) return;
-    if (new Date(iso).getTime() <= Date.now()) return;
-    setLabel(formatCountdown(iso));
+    const time = new Date(iso).getTime();
+    if (time <= Date.now()) return;
+
     const id = setInterval(() => {
-      if (new Date(iso).getTime() <= Date.now()) { setLabel(''); clearInterval(id); return; }
+      const now = new Date(iso).getTime();
+      if (now <= Date.now()) {
+        setLabel('');
+        clearInterval(id);
+        return;
+      }
       setLabel(formatCountdown(iso));
     }, 1000);
     return () => clearInterval(id);

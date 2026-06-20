@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import SabremetricsTable from '@/components/SabremetricsTable';
@@ -94,7 +94,6 @@ export default function DemoUploadModal({
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const [stage, setStage] = useState<Stage>('idle');
@@ -105,7 +104,8 @@ export default function DemoUploadModal({
   const [skinsScore, setSkinsScore] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { setMounted(true); }, []);
+  // ClientOnly wrapper: hydration safety
+  const mounted = typeof window !== 'undefined';
 
   if (!mounted) return null;
   if (alreadyPlayed && !isAdmin) return null;

@@ -77,8 +77,9 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   const [optimisticFields, setOptimisticFields] = useState<Map<StepField, string | null>>(new Map());
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOptimisticFields(new Map());
-  }, [match]);
+  }, [match.id]);
 
   useEffect(() => {
     const channel = getBrowserClient()

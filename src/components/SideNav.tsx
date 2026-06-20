@@ -50,13 +50,11 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
 
 export function SideNav({ seasons }: Props) {
   const { desktopOpen, mobileOpen, setMobileOpen } = useNav();
-  const [seasonsOpen, setSeasonsOpen] = useState(true);
+  const [seasonsOpen, setSeasonsOpen] = useState(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('sidenav-seasons-open') : null;
+    return stored === 'true' ? false : true;
+  });
   const pathname = usePathname();
-
-  useEffect(() => {
-    const stored = localStorage.getItem('sidenav-seasons-open');
-    if (stored !== null) setSeasonsOpen(stored === 'true');
-  }, []);
 
   // Close mobile drawer on navigation
   useEffect(() => {

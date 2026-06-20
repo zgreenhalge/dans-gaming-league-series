@@ -250,36 +250,8 @@ export function DuoDetail({
   );
 }
 
-function H2HStatPair({ aValue, bValue }: { aValue: string; bValue: string }) {
-  return (
-    <span>
-      <span style={{ color: 'var(--color-t)' }}>{aValue}</span>
-      <span className="text-[12px] font-normal text-[var(--color-text-secondary)] mx-1">–</span>
-      <span style={{ color: 'var(--color-ct)' }}>{bValue}</span>
-    </span>
-  );
-}
-
 function kdr(stats: H2HStats['aStats']): number {
   return stats.deaths > 0 ? stats.kills / stats.deaths : stats.kills;
-}
-
-function H2HStatsGrid({ rival }: { rival: H2HStats }) {
-  return (
-    <>
-      <div className="grid grid-cols-3 gap-2.5 mt-4">
-        <StatCell label="RWR%">
-          <H2HStatPair aValue={`${rival.aStats.rwr.toFixed(1)}%`} bValue={`${rival.bStats.rwr.toFixed(1)}%`} />
-        </StatCell>
-        <StatCell label="KDR">
-          <H2HStatPair aValue={kdr(rival.aStats).toFixed(2)} bValue={kdr(rival.bStats).toFixed(2)} />
-        </StatCell>
-        <StatCell label="ADR">
-          <H2HStatPair aValue={rival.aStats.adr.toFixed(0)} bValue={rival.bStats.adr.toFixed(0)} />
-        </StatCell>
-      </div>
-    </>
-  );
 }
 
 export function RivalDetail({

@@ -61,15 +61,10 @@ const OPTIONS: { value: Pref; label: string; Icon: () => ReactElement }[] = [
 ];
 
 export function ThemeToggle() {
-  const [pref, setPref] = useState<Pref>('system');
-  const [mounted, setMounted] = useState(false);
+  const [pref, setPref] = useState<Pref>(() => readPref());
+  const [mounted] = useState(true);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setPref(readPref());
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (pref !== 'system') return;

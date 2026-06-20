@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics } from '@/lib/queries';
 import { projectRatingDeltas, type RatingProjection } from '@/lib/ehog';
-import type { Match } from '@/lib/types';
 import { isPlayedScore, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
 import { TopbarShell } from '@/components/TopbarShell';
@@ -72,16 +71,6 @@ function Topbar({
     />
   );
 }
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="tracked text-[10px] text-[var(--color-text-secondary)] mt-10 mb-3">
-      {children}
-    </div>
-  );
-}
-
-
 
 function matchWeekWindow(
   startDate: string | null,
@@ -162,9 +151,9 @@ export default async function MatchPage({
   const currentPlayerId = session?.user?.playerId ?? null;
 
   // Veto window: open only when a scheduled time exists and we're within 10 minutes of it
-  const vetoWindowOpen =
-    !!match.scheduled_at &&
-    Date.now() >= new Date(match.scheduled_at).getTime() - 10 * 60 * 1000;
+  const scheduledTime = match.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
+  // eslint-disable-next-line react-hooks/purity
+  const vetoWindowOpen = !!scheduledTime && Date.now() >= scheduledTime - 10 * 60 * 1000;
 
   // Veto complete: all required pick/ban fields are filled
   const isGauntletOrPlayoff = season.is_gauntlet || match.is_playoff_game;

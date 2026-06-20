@@ -19,7 +19,7 @@ function computeGauntletRecords(matches: GauntletMatch[]) {
         wins: 0,
         losses: 0,
       };
-      p.is_win ? prev.wins++ : prev.losses++;
+      if (p.is_win) prev.wins++; else prev.losses++;
       records.set(p.player_id, prev);
     }
   }
