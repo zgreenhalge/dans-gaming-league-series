@@ -14,7 +14,9 @@ export default function RegisterModal() {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mounted] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const show = !!session?.user && session.user.playerId == null;
 
