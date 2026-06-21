@@ -54,8 +54,8 @@ export async function POST(req: NextRequest) {
   const mapPool: string[] = Array.isArray(body?.map_pool) ? body.map_pool : [];
   const newMaps: NewMap[] = Array.isArray(body?.new_maps) ? body.new_maps : [];
 
-  if (mapPool.length < 5) {
-    return NextResponse.json({ error: 'At least 5 maps are required' }, { status: 400 });
+  if (mapPool.length !== 5) {
+    return NextResponse.json({ error: 'Exactly 5 maps are required' }, { status: 400 });
   }
 
   const { data: seasons, error: fetchErr } = await supabaseAdmin
