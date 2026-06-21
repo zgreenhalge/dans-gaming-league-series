@@ -1,7 +1,10 @@
+'use client';
+
 import Link from 'next/link';
 import { LocalTime } from './LocalTime';
 import { PlayerName } from './PlayerName';
-import { toSentenceCase, mapImageFor } from '@/lib/maps';
+import { mapSlug, toSentenceCase } from '@/lib/maps';
+import { useMapLookup } from './MapContext';
 import { isPlayedScore, parseScore, weekWindow, fmtWindowDate } from '@/lib/util';
 import { CountdownTimer } from './CountdownTimer';
 import type { WeekWithMatches, MatchWithRoster } from '@/lib/queries';
@@ -30,8 +33,9 @@ function MatchCell({
   match: MatchWithRoster;
   currentPlayerId: number | null;
 }) {
+  const maps = useMapLookup();
   const map = match.shirts_pick ?? match.picked_map;
-  const mapImg = mapImageFor(map);
+  const mapImg = map ? (maps[mapSlug(map)]?.image_url ?? null) : null;
   const played = isPlayedScore(match.final_score);
   const score = played ? parseScore(match.final_score) : null;
   const shirtsLost = score !== null && score.shirts < score.skins;

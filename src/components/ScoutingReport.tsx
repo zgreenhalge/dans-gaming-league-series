@@ -2,7 +2,8 @@
 
 import type { DuoStats, H2HStats, MapLeagueAvg, MapStat, ScoutingPlayer } from '@/lib/queries';
 import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
-import { mapImageFor, mapSlug, toSentenceCase } from '@/lib/maps';
+import { mapSlug, toSentenceCase } from '@/lib/maps';
+import { useMapLookup } from './MapContext';
 import { avgOf } from '@/lib/util';
 import Link from 'next/link';
 import { DuoDetail, RivalDetail } from './H2HDetail';
@@ -83,9 +84,10 @@ function MapCard({
   expanded: boolean;
   leagueAvg: MapLeagueAvg | null;
 }) {
+  const maps = useMapLookup();
   const slug = mapSlug(mapName);
   const displayName = toSentenceCase(mapName);
-  const mapImg = mapImageFor(mapName);
+  const mapImg = maps[slug]?.image_url ?? null;
 
   type Row = { player: ScoutingPlayer; stat: MapStat | null };
   let rows: Row[] = [...shirts, ...skins].map((p) => ({ player: p, stat: p.mapStats[slug] ?? null }));

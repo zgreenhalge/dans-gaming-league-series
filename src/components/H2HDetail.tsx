@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import type { DuoStats, H2HStats } from '@/lib/queries';
 import { rateGradientColor, winRatePct } from '@/lib/util';
-import { mapImageFor, mapSlug, toSentenceCase } from '@/lib/maps';
+import { mapSlug, toSentenceCase } from '@/lib/maps';
+import { useMapLookup } from './MapContext';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
 
@@ -132,8 +133,9 @@ export function DuoDetail({
   const b = players.get(duo.playerB);
   if (!a || !b) return null;
 
+  const maps = useMapLookup();
   const circleValue = friendshipRating ?? winRatePct(duo.wins, duo.gamesPlayed);
-  const mapImg = mapImageFor(duo.bestMap);
+  const mapImg = duo.bestMap ? (maps[mapSlug(duo.bestMap)]?.image_url ?? null) : null;
 
   const hero = (
     <>
@@ -275,8 +277,9 @@ export function RivalDetail({
   const b = players.get(rival.playerB);
   if (!a || !b) return null;
 
+  const maps = useMapLookup();
   const total = rival.aWins + rival.bWins || 1;
-  const mapImg = mapImageFor(rival.lastMap);
+  const mapImg = rival.lastMap ? (maps[mapSlug(rival.lastMap)]?.image_url ?? null) : null;
 
   const circleValue = rivalryRating ?? 50;
   const rivalCircle = <RatingCircle value={circleValue} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="lg" title={ratingBreakdown ?? "50% times faced² · 30% game outcome closeness² · 20% avg round closeness²"} />;

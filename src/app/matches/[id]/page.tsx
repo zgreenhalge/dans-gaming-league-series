@@ -6,6 +6,7 @@ import { getMatchMeta } from '@/lib/og';
 import { projectRatingDeltas, type RatingProjection } from '@/lib/ehog';
 import { isPlayedScore, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
+import { getMapLookup } from '@/lib/queries';
 import { TopbarShell } from '@/components/TopbarShell';
 import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
@@ -103,14 +104,14 @@ export default async function MatchPage({
   const { id } = await params;
   const matchId = Number(id);
   if (!Number.isFinite(matchId)) notFound();
-  const detail = await getMatch(matchId);
+  const [detail, mapLookup] = await Promise.all([getMatch(matchId), getMapLookup()]);
   if (!detail) notFound();
 
   const { match, week, season, stats } = detail;
   const played = isPlayedScore(match.final_score);
   const score = played ? parseScore(match.final_score) : null;
   const map = match.shirts_pick ?? match.picked_map;
-  const mapImg = mapImageFor(map);
+  const mapImg = mapImageFor(map, mapLookup);
 
   const shirts = stats.filter((s) => s.faction === 'SHIRTS');
   const skins = stats.filter((s) => s.faction === 'SKINS');
