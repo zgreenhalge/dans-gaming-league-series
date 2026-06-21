@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 import { getPlayerMeta } from '@/lib/og';
-import { OG_SIZE, colors, loadFonts, fontConfig, CardShell, StatPill } from '@/lib/og-card';
+import { OG_SIZE, colors, loadFonts, fontConfig, CardShell, StatPill, ehogColor } from '@/lib/og-card';
 
 export const alt = 'DGLS Player';
 export const size = OG_SIZE;
@@ -61,7 +61,7 @@ export default async function Image({
               <StatPill label="ADR" value={meta.stats.adr} />
             )}
             {meta.stats.ehog != null && (
-              <StatPill label="EHOG" value={meta.stats.ehog} color={colors.ACCENT} />
+              <StatPill label="EHOG" value={meta.stats.ehog} color={meta.stats.ehogRaw != null ? ehogColor(meta.stats.ehogRaw) : colors.ACCENT} />
             )}
           </div>
         </div>

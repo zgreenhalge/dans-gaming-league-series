@@ -63,7 +63,7 @@ export async function getPlayerMeta(playerId: number) {
     name: p.name,
     description,
     image: p.steam_avatar_url ?? null,
-    stats: { wr, kd, adr, record, ehog: ehogStr },
+    stats: { wr, kd, adr, record, ehog: ehogStr, ehogRaw: ehog },
   };
 }
 

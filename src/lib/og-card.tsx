@@ -109,6 +109,20 @@ export function CardShell({ children, subtitle, bgImage }: { children: React.Rea
   );
 }
 
+const EHOG_TIERS = [
+  { min: 99, color: '#f5c542' },
+  { min: 95, color: '#eb4b4b' },
+  { min: 80, color: '#d32ee6' },
+  { min: 60, color: '#8847ff' },
+  { min: 30, color: '#4b69ff' },
+  { min: 15, color: '#1ac8ed' },
+  { min: 0,  color: '#b0b0b0' },
+];
+
+export function ehogColor(rating: number): string {
+  return (EHOG_TIERS.find(t => rating >= t.min) ?? EHOG_TIERS[EHOG_TIERS.length - 1]).color;
+}
+
 export function StatPill({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
