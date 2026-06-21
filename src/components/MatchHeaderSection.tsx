@@ -1,9 +1,13 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition, useEffect, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { toSentenceCase, mapSlug } from '@/lib/maps';
 import { useRouter } from 'next/navigation';
+
+const noopSubscribe = () => () => {};
+const returnFalse = () => false;
+const returnTrue = () => true;
 
 interface Props {
   map: string | null;
@@ -33,27 +37,23 @@ function formatCountdown(iso: string): string {
 }
 
 function useCountdown(iso: string | null): string {
-  const [label, setLabel] = useState(() => {
-    if (!iso) return '';
-    const time = new Date(iso).getTime();
-    if (time <= Date.now()) return '';
-    return formatCountdown(iso);
-  });
+  const [label, setLabel] = useState('');
 
   useEffect(() => {
     if (!iso) return;
-    const time = new Date(iso).getTime();
-    if (time <= Date.now()) return;
 
-    const id = setInterval(() => {
+    const tick = () => {
       const target = new Date(iso).getTime();
       if (target <= Date.now()) {
         setLabel('');
-        clearInterval(id);
-        return;
+        return false;
       }
       setLabel(formatCountdown(iso));
-    }, 1000);
+      return true;
+    };
+
+    if (!tick()) return;
+    const id = setInterval(() => { if (!tick()) clearInterval(id); }, 1000);
     return () => clearInterval(id);
   }, [iso]);
   return label;
@@ -85,6 +85,10 @@ function fmtScheduled(iso: string): string {
   });
 }
 
+function useIsClient(): boolean {
+  return useSyncExternalStore(noopSubscribe, returnTrue, returnFalse);
+}
+
 function isOutsideWindow(localDt: string, weekStart: string | null, weekEnd: string | null): boolean {
   if (!weekStart || !weekEnd || !localDt) return false;
   const d = new Date(localDt);
@@ -102,16 +106,21 @@ export default function MatchHeaderSection({
   isGauntlet,
 }: Props) {
   const router = useRouter();
+  const isClient = useIsClient();
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(scheduledAt ? toDatetimeLocal(scheduledAt) : '');
+  const [value, setValue] = useState('');
   const [warning, setWarning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const countdown = useCountdown(scheduledAt);
 
+  useEffect(() => {
+    if (scheduledAt) setValue(toDatetimeLocal(scheduledAt));
+  }, [scheduledAt]);
+
   const showSchedule = !played && !isGauntlet;
   const windowLabel =
-    weekStart && weekEnd ? `${fmtWindowDate(weekStart)} – ${fmtWindowDate(weekEnd)}` : null;
+    isClient && weekStart && weekEnd ? `${fmtWindowDate(weekStart)} – ${fmtWindowDate(weekEnd)}` : null;
 
   async function save(override = false) {
     if (!value) return;
@@ -159,24 +168,27 @@ export default function MatchHeaderSection({
         canEdit ? (
           <div>
             <button
-              suppressHydrationWarning
               onClick={startEditing}
               className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)] hover:underline transition-colors"
             >
-              {fmtScheduled(scheduledAt)}
+              {isClient ? fmtScheduled(scheduledAt) : null}
             </button>
-            <div suppressHydrationWarning className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
-              {countdown}
-            </div>
+            {countdown && (
+              <div className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
+                {countdown}
+              </div>
+            )}
           </div>
         ) : (
           <div>
-            <div suppressHydrationWarning className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)]">
-              {fmtScheduled(scheduledAt)}
+            <div className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)]">
+              {isClient ? fmtScheduled(scheduledAt) : null}
             </div>
-            <div suppressHydrationWarning className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
-              {countdown}
-            </div>
+            {countdown && (
+              <div className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
+                {countdown}
+              </div>
+            )}
           </div>
         )
       ) : windowLabel ? (
