@@ -15,9 +15,16 @@ const AMBER = '#f5c542';
 
 export const colors = { BG, BG2, TEXT, TEXT2, BORDER, ACCENT, GREEN, RED, AMBER };
 
-export async function loadMapImageAsDataUri(relPath: string): Promise<string | null> {
+export async function loadMapImageAsDataUri(path: string): Promise<string | null> {
   try {
-    const buf = await readFile(join(process.cwd(), 'public', relPath));
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      const res = await fetch(path);
+      if (!res.ok) return null;
+      const buf = Buffer.from(await res.arrayBuffer());
+      const ct = res.headers.get('content-type') ?? 'image/jpeg';
+      return `data:${ct};base64,${buf.toString('base64')}`;
+    }
+    const buf = await readFile(join(process.cwd(), 'public', path));
     return `data:image/jpeg;base64,${buf.toString('base64')}`;
   } catch {
     return null;

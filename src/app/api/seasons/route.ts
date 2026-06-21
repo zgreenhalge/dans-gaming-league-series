@@ -7,7 +7,32 @@ import { mapSlug } from '@/lib/maps';
 
 const supabaseAdmin = getAdminClient();
 
-type NewMap = { name: string; workshopUrl?: string };
+type NewMap = { name: string; workshopUrl: string };
+
+function extractWorkshopId(url: string): string | null {
+  const match = url.match(/[?&]id=(\d+)/);
+  return match ? match[1] : null;
+}
+
+async function fetchWorkshopPreviewImage(workshopUrl: string): Promise<string | null> {
+  const fileId = extractWorkshopId(workshopUrl);
+  if (!fileId) return null;
+  try {
+    const res = await fetch(
+      'https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `itemcount=1&publishedfileids[0]=${fileId}`,
+      },
+    );
+    const data = await res.json();
+    const detail = data?.response?.publishedfiledetails?.[0];
+    return detail?.preview_url ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -46,13 +71,19 @@ export async function POST(req: NextRequest) {
 
   const name = `Season ${maxNum + 1}`;
 
-  // Upsert new maps into the maps table
+  // Upsert new maps into the maps table, fetching preview images from Steam
   if (newMaps.length > 0) {
-    const rows = newMaps.map((m) => ({
-      name: m.name.trim().toLowerCase(),
-      slug: mapSlug(m.name),
-      workshop_url: m.workshopUrl || null,
-    }));
+    const rows = await Promise.all(
+      newMaps.map(async (m) => {
+        const previewUrl = await fetchWorkshopPreviewImage(m.workshopUrl);
+        return {
+          name: m.name.trim().toLowerCase(),
+          slug: mapSlug(m.name),
+          workshop_url: m.workshopUrl,
+          image_url: previewUrl,
+        };
+      }),
+    );
     const { error: mapErr } = await supabaseAdmin
       .from('maps')
       .upsert(rows, { onConflict: 'slug' });

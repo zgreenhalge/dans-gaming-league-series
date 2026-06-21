@@ -33,14 +33,15 @@ export function CreateSeasonForm({ knownMaps }: Props) {
 
   function addNewMap() {
     const name = newMapName.trim().toLowerCase();
-    if (!name) return;
+    const url = newMapWorkshopUrl.trim();
+    if (!name || !url) return;
     if (allMaps.includes(name)) {
       setSelected((prev) => new Set(prev).add(name));
       setNewMapName('');
       setNewMapWorkshopUrl('');
       return;
     }
-    setAddedMaps((prev) => [...prev, { name, workshopUrl: newMapWorkshopUrl.trim() }]);
+    setAddedMaps((prev) => [...prev, { name, workshopUrl: url }]);
     setSelected((prev) => new Set(prev).add(name));
     setNewMapName('');
     setNewMapWorkshopUrl('');
@@ -127,7 +128,7 @@ export function CreateSeasonForm({ knownMaps }: Props) {
             <button
               type="button"
               onClick={addNewMap}
-              disabled={!newMapName.trim()}
+              disabled={!newMapName.trim() || !newMapWorkshopUrl.trim()}
               className="tracked text-[10px] font-semibold px-3 py-2 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors disabled:opacity-40"
             >
               Add
@@ -138,7 +139,7 @@ export function CreateSeasonForm({ knownMaps }: Props) {
             value={newMapWorkshopUrl}
             onChange={(e) => setNewMapWorkshopUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addNewMap(); } }}
-            placeholder="Steam Workshop URL (optional)"
+            placeholder="Steam Workshop URL"
             className="font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] placeholder:opacity-50 focus:outline-none focus:border-[var(--color-text-secondary)]"
           />
         </div>
