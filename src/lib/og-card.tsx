@@ -90,18 +90,15 @@ export function CardShell({ children, subtitle, bgImage }: { children: React.Rea
           background: 'linear-gradient(to top, #161a21 30%, transparent 100%)',
         }} />
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: '36px 48px', position: 'relative' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '4px' }}>
-          <span style={{ fontWeight: 600, fontSize: '34px', letterSpacing: '3px', color: ACCENT }}>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: '28px 40px', position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <span style={{ fontWeight: 600, fontSize: '40px', letterSpacing: '4px', color: ACCENT }}>
             DGLS
           </span>
           {subtitle && (
-            <>
-              <span style={{ color: TEXT2, fontSize: '34px' }}>·</span>
-              <span style={{ fontSize: '28px', color: TEXT2, fontFamily: 'JetBrains Mono' }}>
-                {subtitle}
-              </span>
-            </>
+            <span style={{ fontSize: '34px', color: TEXT2, fontFamily: 'JetBrains Mono' }}>
+              {subtitle}
+            </span>
           )}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
@@ -115,10 +112,10 @@ export function CardShell({ children, subtitle, bgImage }: { children: React.Rea
 export function StatPill({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-      <span style={{ fontFamily: 'JetBrains Mono', fontSize: '42px', fontWeight: 600, color: color ?? TEXT }}>
+      <span style={{ fontFamily: 'JetBrains Mono', fontSize: '52px', fontWeight: 600, color: color ?? TEXT }}>
         {value}
       </span>
-      <span style={{ fontFamily: 'JetBrains Mono', fontSize: '20px', color: TEXT2, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+      <span style={{ fontFamily: 'JetBrains Mono', fontSize: '24px', color: TEXT2, letterSpacing: '2px', textTransform: 'uppercase' }}>
         {label}
       </span>
     </div>

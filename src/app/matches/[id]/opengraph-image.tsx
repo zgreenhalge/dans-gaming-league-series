@@ -38,32 +38,32 @@ export default async function Image({
           flex: 1,
           justifyContent: 'center',
           alignItems: 'center',
-          gap: '28px',
+          gap: '32px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '40px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-              <span style={{ fontFamily: 'JetBrains Mono', fontSize: '24px', color: colors.TEXT2, letterSpacing: '2px', textTransform: 'uppercase' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '48px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+              <span style={{ fontFamily: 'JetBrains Mono', fontSize: '28px', color: colors.TEXT2, letterSpacing: '3px', textTransform: 'uppercase' }}>
                 Shirts
               </span>
-              <span style={{ fontSize: '46px', fontWeight: 600 }}>
+              <span style={{ fontSize: '52px', fontWeight: 600 }}>
                 {meta.shirtNames || '—'}
               </span>
             </div>
 
             {meta.score ? (
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '24px' }}>
                 <span style={{
                   fontFamily: 'JetBrains Mono',
-                  fontSize: '96px',
+                  fontSize: '120px',
                   fontWeight: 600,
                   color: meta.score.shirts > meta.score.skins ? colors.GREEN : colors.TEXT,
                 }}>
                   {meta.score.shirts}
                 </span>
-                <span style={{ fontSize: '52px', color: colors.TEXT2 }}>—</span>
+                <span style={{ fontSize: '60px', color: colors.TEXT2 }}>—</span>
                 <span style={{
                   fontFamily: 'JetBrains Mono',
-                  fontSize: '96px',
+                  fontSize: '120px',
                   fontWeight: 600,
                   color: meta.score.skins > meta.score.shirts ? colors.GREEN : colors.TEXT,
                 }}>
@@ -75,30 +75,30 @@ export default async function Image({
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                padding: '8px 28px',
+                padding: '8px 32px',
               }}>
-                <span style={{ fontSize: '52px', color: colors.TEXT2, fontFamily: 'JetBrains Mono' }}>vs</span>
+                <span style={{ fontSize: '64px', color: colors.TEXT2, fontFamily: 'JetBrains Mono' }}>vs</span>
               </div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '6px' }}>
-              <span style={{ fontFamily: 'JetBrains Mono', fontSize: '24px', color: colors.TEXT2, letterSpacing: '2px', textTransform: 'uppercase' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
+              <span style={{ fontFamily: 'JetBrains Mono', fontSize: '28px', color: colors.TEXT2, letterSpacing: '3px', textTransform: 'uppercase' }}>
                 Skins
               </span>
-              <span style={{ fontSize: '46px', fontWeight: 600 }}>
+              <span style={{ fontSize: '52px', fontWeight: 600 }}>
                 {meta.skinNames || '—'}
               </span>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
             {meta.mapName && (
               <span style={{
                 fontFamily: 'JetBrains Mono',
-                fontSize: '30px',
+                fontSize: '36px',
                 color: colors.ACCENT,
-                padding: '8px 22px',
-                border: `1px solid ${colors.ACCENT}`,
+                padding: '10px 28px',
+                border: `2px solid ${colors.ACCENT}`,
                 backgroundColor: 'rgba(22,26,33,0.8)',
               }}>
                 {meta.mapName}
@@ -107,7 +107,7 @@ export default async function Image({
             {meta.scheduledAt && !meta.score && (
               <span style={{
                 fontFamily: 'JetBrains Mono',
-                fontSize: '28px',
+                fontSize: '32px',
                 color: colors.TEXT2,
               }}>
                 {meta.scheduledAt}

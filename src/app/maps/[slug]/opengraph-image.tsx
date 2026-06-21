@@ -37,19 +37,19 @@ export default async function Image({
     (
       <CardShell subtitle="Map" bgImage={bgImage ?? undefined}>
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'flex-end' }}>
-          <span style={{ fontSize: '84px', fontWeight: 600, marginBottom: '8px' }}>
+          <span style={{ fontSize: '96px', fontWeight: 600, marginBottom: '8px' }}>
             {name}
           </span>
 
           {regularSeasons.length > 0 && (
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
               {regularSeasons.map(s => (
                 <span
                   key={s.id}
                   style={{
                     fontFamily: 'JetBrains Mono',
-                    fontSize: '22px',
-                    padding: '4px 14px',
+                    fontSize: '26px',
+                    padding: '6px 16px',
                     border: `1px solid ${colors.BORDER}`,
                     color: colors.TEXT2,
                     backgroundColor: 'rgba(22,26,33,0.8)',
@@ -63,8 +63,8 @@ export default async function Image({
 
           <div style={{
             display: 'flex',
-            gap: '48px',
-            padding: '24px 36px',
+            gap: '56px',
+            padding: '24px 40px',
             backgroundColor: 'rgba(29,34,43,0.9)',
             border: `1px solid ${colors.BORDER}`,
           }}>

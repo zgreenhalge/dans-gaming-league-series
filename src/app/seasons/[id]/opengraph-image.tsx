@@ -34,29 +34,28 @@ export default async function Image({
   const isUpcoming = season.status === 'UPCOMING';
 
   const cols = [
-    { key: 'WR%', width: '110px' },
-    { key: 'RWR%', width: '110px' },
-    { key: 'ADR', width: '110px' },
-    { key: 'K/D', width: '100px' },
+    { key: 'WR%', width: '120px' },
+    { key: 'RWR%', width: '120px' },
+    { key: 'ADR', width: '120px' },
+    { key: 'K/D', width: '110px' },
   ];
 
   return new ImageResponse(
     (
       <CardShell subtitle={isLive ? 'Live' : isUpcoming ? 'Upcoming' : undefined}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '4px' }}>
-          <span style={{ fontSize: '64px', fontWeight: 600 }}>{title}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginTop: '4px' }}>
+          <span style={{ fontSize: '72px', fontWeight: 600 }}>{title}</span>
           {isLive && (
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '6px 16px',
+              padding: '8px 20px',
               backgroundColor: 'rgba(91,150,54,0.2)',
               border: `1px solid ${colors.GREEN}`,
-              fontSize: '22px',
+              fontSize: '28px',
               fontFamily: 'JetBrains Mono',
               color: colors.GREEN,
-              letterSpacing: '1px',
+              letterSpacing: '2px',
             }}>
               LIVE
             </div>
@@ -67,22 +66,22 @@ export default async function Image({
           <div style={{
             display: 'flex',
             flexDirection: 'column',
-            marginTop: '24px',
+            marginTop: '16px',
             border: `1px solid ${colors.BORDER}`,
             backgroundColor: colors.BG2,
             flex: 1,
           }}>
             <div style={{
               display: 'flex',
-              padding: '14px 24px',
+              padding: '14px 28px',
               borderBottom: `1px solid ${colors.BORDER}`,
               fontFamily: 'JetBrains Mono',
-              fontSize: '20px',
+              fontSize: '24px',
               color: colors.TEXT2,
               letterSpacing: '1px',
               textTransform: 'uppercase',
             }}>
-              <span style={{ width: '48px' }}>#</span>
+              <span style={{ width: '52px' }}>#</span>
               <span style={{ flex: 1 }}>Player</span>
               {cols.map(c => (
                 <span key={c.key} style={{ width: c.width, textAlign: 'right' }}>{c.key}</span>
@@ -94,41 +93,40 @@ export default async function Image({
                 key={i}
                 style={{
                   display: 'flex',
-                  padding: '16px 24px',
+                  padding: '14px 28px',
                   borderBottom: i < top4.length - 1 ? `1px solid ${colors.BORDER}` : 'none',
-                  fontSize: '26px',
                   alignItems: 'center',
                 }}
               >
                 <span style={{
-                  width: '48px',
+                  width: '52px',
                   fontFamily: 'JetBrains Mono',
-                  fontSize: '26px',
+                  fontSize: '32px',
                   color: i === 0 ? colors.AMBER : colors.TEXT2,
                   fontWeight: 600,
                 }}>
                   {i + 1}
                 </span>
-                <span style={{ flex: 1, fontWeight: 600, fontSize: '32px' }}>
+                <span style={{ flex: 1, fontWeight: 600, fontSize: '36px' }}>
                   {p.player_name}
                 </span>
-                <span style={{ width: '110px', textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: '28px', color: colors.GREEN }}>
+                <span style={{ width: '120px', textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: '32px', color: colors.GREEN }}>
                   {p.win_rate_percentage.toFixed(0)}%
                 </span>
-                <span style={{ width: '110px', textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: '28px' }}>
+                <span style={{ width: '120px', textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: '32px' }}>
                   {p.rwr_percentage.toFixed(0)}%
                 </span>
-                <span style={{ width: '110px', textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: '28px' }}>
+                <span style={{ width: '120px', textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: '32px' }}>
                   {p.overall_adr.toFixed(1)}
                 </span>
-                <span style={{ width: '100px', textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: '28px' }}>
+                <span style={{ width: '110px', textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: '32px' }}>
                   {p.kd_ratio.toFixed(2)}
                 </span>
               </div>
             ))}
           </div>
         ) : (
-          <div style={{ marginTop: '32px', fontSize: '32px', color: colors.TEXT2 }}>
+          <div style={{ marginTop: '32px', fontSize: '36px', color: colors.TEXT2 }}>
             No matches played yet.
           </div>
         )}

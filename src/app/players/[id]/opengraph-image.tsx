@@ -28,23 +28,23 @@ export default async function Image({
   return new ImageResponse(
     (
       <CardShell subtitle="Player">
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center', gap: '32px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center', gap: '36px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '36px' }}>
             {meta.image && (
               <img
                 src={meta.image}
-                width={140}
-                height={140}
-                style={{ borderRadius: '10px', border: `2px solid ${colors.BORDER}` }}
+                width={160}
+                height={160}
+                style={{ borderRadius: '12px', border: `3px solid ${colors.BORDER}` }}
               />
             )}
-            <span style={{ fontSize: '84px', fontWeight: 600 }}>{meta.name}</span>
+            <span style={{ fontSize: '96px', fontWeight: 600 }}>{meta.name}</span>
           </div>
 
           <div style={{
             display: 'flex',
-            gap: '48px',
-            padding: '28px 40px',
+            gap: '56px',
+            padding: '28px 44px',
             backgroundColor: colors.BG2,
             border: `1px solid ${colors.BORDER}`,
           }}>
