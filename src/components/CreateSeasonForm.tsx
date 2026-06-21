@@ -79,32 +79,22 @@ export function CreateSeasonForm({ knownMaps }: Props) {
       <div>
         <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-3">Map Pool</div>
         <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-          {allMaps.map((map) => {
-            const added = addedMaps.find((m) => m.name === map);
-            return (
-              <label
-                key={map}
-                className="lift-row flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={selected.has(map)}
-                  onChange={() => toggle(map)}
-                  className="accent-[var(--color-site-accent)]"
-                />
-                <div className="min-w-0">
-                  <span className="font-display text-[15px] font-semibold">
-                    {toSentenceCase(map)}
-                  </span>
-                  {added?.workshopUrl && (
-                    <span className="ml-2 font-mono text-[10px] text-[var(--color-text-secondary)]">
-                      Workshop link added
-                    </span>
-                  )}
-                </div>
-              </label>
-            );
-          })}
+          {allMaps.map((map) => (
+            <label
+              key={map}
+              className="lift-row flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={selected.has(map)}
+                onChange={() => toggle(map)}
+                className="accent-[var(--color-site-accent)]"
+              />
+              <span className="font-display text-[15px] font-semibold">
+                {toSentenceCase(map)}
+              </span>
+            </label>
+          ))}
           {allMaps.length === 0 && (
             <div className="px-4 py-3 font-mono text-[12px] text-[var(--color-text-secondary)]">
               No maps found. Add one below.
