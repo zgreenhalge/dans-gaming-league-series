@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
+import type { Metadata } from 'next';
 import { TopbarShell } from '@/components/TopbarShell';
 import {
   getSeason,
@@ -28,10 +29,29 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>;
-}) {
+}): Promise<Metadata> {
   const { id } = await params;
-  const season = await getSeason(Number(id));
-  return { title: season?.name ?? 'Season' };
+  const seasonId = Number(id);
+  const season = await getSeason(seasonId);
+  if (!season) return { title: 'Season' };
+
+  const title = seasonTitle(season.name);
+  const statusLabel = season.status === 'ACTIVE' ? ' · Live' : season.status === 'UPCOMING' ? ' · Soon' : '';
+  const description = `${title}${statusLabel} — standings, schedule, and match results in DGLS.`;
+
+  return {
+    title: season.name,
+    description,
+    openGraph: {
+      title: `DGLS · ${title}`,
+      description,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `DGLS · ${title}`,
+      description,
+    },
+  };
 }
 
 function countMatches(schedule: WeekWithMatches[]) {

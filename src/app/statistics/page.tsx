@@ -17,7 +17,10 @@ import type { TrophyEntry } from '@/lib/queries';
 
 export const revalidate = 60;
 
-export const metadata = { title: 'Statistics' };
+export const metadata = {
+  title: 'Statistics',
+  description: 'Career leaderboards, rankings, and advanced stats for all DGLS players.',
+};
 
 export default async function StatisticsPage() {
   const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, h2hData, allMatches, ehogSnapshots, allSabremetrics] =

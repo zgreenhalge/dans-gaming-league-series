@@ -29,14 +29,24 @@ const mono = JetBrains_Mono({
   display: "swap",
 });
 
+const SITE_URL = 'https://dans-gaming-league-series.vercel.app';
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     template: "DGLS · %s",
     default: "DGLS · Dan's Gaming League Series",
   },
+  description: "Stats, standings, and match history for Dan's Gaming League Series — a CS2 Wingman league.",
   openGraph: {
     title: "DGLS · Dan's Gaming League Series",
+    description: "Stats, standings, and match history for Dan's Gaming League Series — a CS2 Wingman league.",
     type: "website",
+    siteName: "DGLS",
+    images: [{ url: '/icon.png', width: 512, height: 512, alt: 'DGLS' }],
+  },
+  twitter: {
+    card: 'summary',
   },
 };
 

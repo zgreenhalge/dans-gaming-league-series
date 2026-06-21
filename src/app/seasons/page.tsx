@@ -12,7 +12,10 @@ import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { seasonTitle, extractSeasonNumber } from '@/lib/util';
 
 export const revalidate = 60;
-export const metadata = { title: 'Seasons' };
+export const metadata = {
+  title: 'Seasons',
+  description: 'All DGLS seasons — standings, schedules, and match results.',
+};
 
 function podiumSort(rows: LeaderboardRowWithId[]): LeaderboardRowWithId[] {
   return [...rows].sort(
