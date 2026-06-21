@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
 import { TopbarShell } from '@/components/TopbarShell';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import {
@@ -6,6 +8,7 @@ import {
   getAllLeaderboards,
   getAllGauntletSummaries,
   getGauntletStats,
+  isPlayerAdmin,
   type GauntletSummary,
 } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
@@ -208,12 +211,15 @@ function PastSeasonRow({
 }
 
 export default async function SeasonsPage() {
-  const [seasons, allLeaderboards, gauntletSummaries, gauntletStats] = await Promise.all([
+  const [seasons, allLeaderboards, gauntletSummaries, gauntletStats, session] = await Promise.all([
     getSeasons(),
     getAllLeaderboards(),
     getAllGauntletSummaries(),
     getGauntletStats(),
+    getServerSession(authOptions),
   ]);
+
+  const isAdmin = session?.user?.playerId ? await isPlayerAdmin(session.user.playerId) : false;
 
   const active = seasons.filter((s) => !s.is_gauntlet && s.status === 'ACTIVE');
   const upcoming = seasons.filter((s) => !s.is_gauntlet && s.status === 'UPCOMING');
@@ -238,8 +244,16 @@ export default async function SeasonsPage() {
         ]}
       />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
-        <div className="mt-8 mb-6">
+        <div className="mt-8 mb-6 flex items-center justify-between gap-4">
           <div className="font-display text-[36px] font-semibold leading-tight">Seasons</div>
+          {isAdmin && (
+            <Link
+              href="/admin/seasons/new"
+              className="tracked text-[10px] font-semibold px-3 py-1.5 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors shrink-0"
+            >
+              + Create Season
+            </Link>
+          )}
         </div>
 
         {active.length > 0 && (

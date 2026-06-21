@@ -1,6 +1,6 @@
-// Map utilities: display name casing, slug normalisation, and backdrop image lookup.
-// Image keys use mapSlug(rawDBString) — lowercase, non-alphanumeric → hyphens.
-// Drop new images into /public/maps/ and add an entry to MAP_IMAGES.
+// Map utilities: display name casing, slug normalisation, and image lookup.
+// Map images and workshop URLs are stored in the `maps` table in Supabase.
+// Client components access them via MapContext; server code uses getMapLookup().
 
 export function toSentenceCase(s: string): string {
   if (!s) return s;
@@ -15,21 +15,12 @@ export function mapSlug(raw: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-const MAP_IMAGES: Record<string, string> = {
-  'foroglio':   '/maps/foroglio.jpg',
-  'ganny':      '/maps/ganny.jpg',
-  'memento':    '/maps/memento.jpg',
-  'palais':     '/maps/palais.jpg',
-  'rooftop':    '/maps/rooftop.jpg',
-  'vandal':     '/maps/vandal.jpg',
-  'drawbridge': '/maps/drawbridge.jpg',
-  'splat':      '/maps/splat.jpg',
-  'debris':     '/maps/debris.jpg',
-  'assembly':   '/maps/assembly.jpg',
-  'brewery':    '/maps/brewery.jpg',
-};
+type ImageLookup = Record<string, { image_url: string | null }>;
 
-export function mapImageFor(raw: string | null | undefined): string | undefined {
+export function mapImageFor(
+  raw: string | null | undefined,
+  lookup: ImageLookup,
+): string | undefined {
   if (!raw) return undefined;
-  return MAP_IMAGES[mapSlug(raw)];
+  return lookup[mapSlug(raw)]?.image_url ?? undefined;
 }

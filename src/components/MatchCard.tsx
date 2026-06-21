@@ -1,7 +1,10 @@
+'use client';
+
 import Link from 'next/link';
 import { LocalTime } from './LocalTime';
 import { PlayerName } from './PlayerName';
-import { mapImageFor, toSentenceCase } from '@/lib/maps';
+import { mapSlug, toSentenceCase } from '@/lib/maps';
+import { useMapLookup } from './MapContext';
 import { fmtWindowDate, formatEhogDelta } from '@/lib/util';
 import { CountdownTimer } from './CountdownTimer';
 import { FeatureMatchIcon } from './FeatureMatch';
@@ -206,7 +209,8 @@ export function MatchCard({
   ehogDeltas,
   containerVariant = 'inline',
 }: MatchCardProps) {
-  const mapImg = mapImageFor(map);
+  const maps = useMapLookup();
+  const mapImg = map ? (maps[mapSlug(map)]?.image_url ?? null) : null;
   const hasStats = (shirtsStats?.length ?? 0) > 0 || (skinsStats?.length ?? 0) > 0;
   const hasFallback = !!(shirtsFallback || skinsFallback);
   const borderColor = containerVariant === 'standalone' ? outcomeBorderColor(outcome) : undefined;

@@ -3187,3 +3187,38 @@ export async function getAllSabremetrics(): Promise<SabremetricMatchRow[]> {
   }
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// Admin check
+// ---------------------------------------------------------------------------
+
+export async function isPlayerAdmin(playerId: number): Promise<boolean> {
+  const { data } = await supabase
+    .from('players')
+    .select('is_admin')
+    .eq('id', playerId)
+    .maybeSingle();
+  return !!(data as { is_admin?: boolean } | null)?.is_admin;
+}
+
+// ---------------------------------------------------------------------------
+// Maps table lookup
+// ---------------------------------------------------------------------------
+
+export type MapRow = {
+  id: number;
+  name: string;
+  slug: string;
+  workshop_url: string | null;
+  image_url: string | null;
+};
+
+export async function getMapLookup(): Promise<Record<string, { image_url: string | null; workshop_url: string | null }>> {
+  const { data, error } = await supabase.from('maps').select('*');
+  if (error) throw error;
+  const lookup: Record<string, { image_url: string | null; workshop_url: string | null }> = {};
+  for (const row of (data ?? []) as MapRow[]) {
+    lookup[row.slug] = { image_url: row.image_url, workshop_url: row.workshop_url };
+  }
+  return lookup;
+}

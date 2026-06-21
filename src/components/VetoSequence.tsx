@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase-browser';
-import { mapImageFor, mapSlug, toSentenceCase } from '@/lib/maps';
+import { mapSlug, toSentenceCase } from '@/lib/maps';
+import { isPlayedScore } from '@/lib/util';
+import { useMapLookup } from './MapContext';
 import type { Match } from '@/lib/types';
 
 const REGULAR_STEPS = [
@@ -70,6 +72,7 @@ interface Props {
 
 export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, playerFaction, gauntletPlayerIndex, isAdmin }: Props) {
   const router = useRouter();
+  const mapLookup = useMapLookup();
   const [isPending, startTransition] = useTransition();
   const [activeField, setActiveField] = useState<StepField | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -221,7 +224,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
             const val = displayValue(s.field as StepField);
             const isNext = s.field === actionableField;
             const isActive = activeField === s.field;
-            const banImg = s.type === 'ban' && val ? mapImageFor(val) : null;
+            const banImg = s.type === 'ban' && val ? (mapLookup[mapSlug(val)]?.image_url ?? null) : null;
             return (
               <span key={s.field} className="flex items-center gap-1 flex-1 min-w-[88px]">
                 {i > 0 && (
@@ -298,6 +301,27 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
         </div>
       </div>
 
+      {/* Workshop link for picked map (hidden once stats are recorded) */}
+      {(() => {
+        const pickedMap = match.shirts_pick ?? match.picked_map ?? autoPickedMap;
+        if (!pickedMap || isPlayedScore(match.final_score)) return null;
+        const workshopUrl = mapLookup[mapSlug(pickedMap)]?.workshop_url;
+        if (!workshopUrl) return null;
+        return (
+          <div className="mt-1.5 px-1">
+            <a
+              href={workshopUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+            >
+              <span>Steam Workshop</span>
+              <span className="text-[9px]">↗</span>
+            </a>
+          </div>
+        );
+      })()}
+
       {/* Map selection panel */}
       {activeField && canVeto && (
         <div className="mt-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] p-3">
@@ -325,7 +349,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
           ) : (
             <div className="flex gap-2 flex-wrap">
               {[...pool].sort((a, b) => a.localeCompare(b)).map((map) => {
-                const img = mapImageFor(map);
+                const img = mapLookup[mapSlug(map)]?.image_url ?? null;
                 const isUsed = banned.includes(map);
                 return (
                   <button

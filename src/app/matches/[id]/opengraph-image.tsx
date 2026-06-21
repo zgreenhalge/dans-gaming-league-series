@@ -1,6 +1,5 @@
 import { ImageResponse } from 'next/og';
 import { getMatchMeta } from '@/lib/og';
-import { mapImageFor } from '@/lib/maps';
 import { OG_SIZE, colors, loadFonts, fontConfig, CardShell, loadMapImageAsDataUri } from '@/lib/og-card';
 
 export const alt = 'DGLS Match';
@@ -26,7 +25,7 @@ export default async function Image({
     );
   }
 
-  const mapRelPath = meta.mapName ? mapImageFor(meta.mapName) : undefined;
+  const mapRelPath = meta.image ?? undefined;
   const bgImage = mapRelPath ? await loadMapImageAsDataUri(mapRelPath) : null;
 
   return new ImageResponse(

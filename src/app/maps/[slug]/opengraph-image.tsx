@@ -1,5 +1,5 @@
 import { ImageResponse } from 'next/og';
-import { getMapDetail } from '@/lib/queries';
+import { getMapDetail, getMapLookup } from '@/lib/queries';
 import { toSentenceCase, mapImageFor } from '@/lib/maps';
 import { OG_SIZE, colors, loadFonts, fontConfig, CardShell, StatPill, loadMapImageAsDataUri } from '@/lib/og-card';
 
@@ -14,9 +14,10 @@ export default async function Image({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [detail, fonts] = await Promise.all([
+  const [detail, fonts, mapLookup] = await Promise.all([
     getMapDetail(slug),
     loadFonts(),
+    getMapLookup(),
   ]);
 
   if (!detail) {
@@ -30,7 +31,7 @@ export default async function Image({
   const regularSeasons = detail.seasons.filter(s => !s.is_gauntlet);
   const totalMatches = detail.matches.length;
 
-  const mapRelPath = mapImageFor(detail.name);
+  const mapRelPath = mapImageFor(detail.name, mapLookup);
   const bgImage = mapRelPath ? await loadMapImageAsDataUri(mapRelPath) : null;
 
   return new ImageResponse(

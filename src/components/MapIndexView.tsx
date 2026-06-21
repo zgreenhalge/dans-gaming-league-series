@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { mapImageFor, toSentenceCase } from '@/lib/maps';
+import { toSentenceCase } from '@/lib/maps';
+import { useMapLookup } from './MapContext';
 import { extractSeasonNumber, tabCls } from '@/lib/util';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import TabBar from './TabBar';
@@ -21,6 +22,7 @@ function extractSeasonNums(seasons: { name: string }[]): string {
 
 
 export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
+  const mapLookup = useMapLookup();
   const [tab, setTab] = useState<'tiles' | 'stats'>('tiles');
   const [sortKey, setSortKey] = useState<SortKey>('pickCount');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -134,7 +136,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {filtered.map((map) => {
-              const img = mapImageFor(map.name);
+              const img = mapLookup[map.slug]?.image_url ?? null;
               const stats = displayStats.get(map.slug);
               return (
                 <Link

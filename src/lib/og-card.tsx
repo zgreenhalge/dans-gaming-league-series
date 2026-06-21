@@ -15,9 +15,20 @@ const AMBER = '#f5c542';
 
 export const colors = { BG, BG2, TEXT, TEXT2, BORDER, ACCENT, GREEN, RED, AMBER };
 
-export async function loadMapImageAsDataUri(relPath: string): Promise<string | null> {
+const ALLOWED_IMAGE_HOSTS = ['steamuserimages-a.akamaihd.net', 'cdn.cloudflare.steamstatic.com'];
+
+export async function loadMapImageAsDataUri(path: string): Promise<string | null> {
   try {
-    const buf = await readFile(join(process.cwd(), 'public', relPath));
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      const url = new URL(path);
+      if (!ALLOWED_IMAGE_HOSTS.includes(url.hostname)) return null;
+      const res = await fetch(path, { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) return null;
+      const buf = Buffer.from(await res.arrayBuffer());
+      const ct = res.headers.get('content-type') ?? 'image/jpeg';
+      return `data:${ct};base64,${buf.toString('base64')}`;
+    }
+    const buf = await readFile(join(process.cwd(), 'public', path));
     return `data:image/jpeg;base64,${buf.toString('base64')}`;
   } catch {
     return null;

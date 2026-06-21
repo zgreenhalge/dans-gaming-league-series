@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { isPlayedScore, parseScore, canonicalSort } from '@/lib/util';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
+import { getMapLookup } from './queries';
 import type { Player, Match, Week, Season, PlayerMatchStat } from '@/lib/types';
 
 type LeaderboardAgg = {
@@ -148,7 +149,8 @@ export async function getMatchMeta(matchId: number) {
   }
   const description = descParts.join(' · ');
 
-  const image = map ? mapImageFor(map) ?? null : null;
+  const mapLookup = await getMapLookup();
+  const image = map ? mapImageFor(map, mapLookup) ?? null : null;
 
   return { title, description, image, shirtNames, skinNames, score, mapName, scheduledAt };
 }
