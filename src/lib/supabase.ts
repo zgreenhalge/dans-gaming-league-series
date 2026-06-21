@@ -29,7 +29,8 @@ function getClient(): SupabaseClient {
       getAll() {
         return [];
       },
-      setAll(_cookies: { name: string; value: string; options: CookieOptions }[]) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      setAll(_: { name: string; value: string; options: CookieOptions }[]) {
         // no-op until auth is wired up
       },
     },

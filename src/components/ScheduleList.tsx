@@ -3,7 +3,7 @@
 import { MatchCard, type MatchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
 import { isPlayedScore, fmtWindowDate, weekWindow } from '@/lib/util';
-import type { WeekWithMatches, MatchWithRoster } from '@/lib/queries';
+import type { WeekWithMatches } from '@/lib/queries';
 
 
 function WeekBlock({

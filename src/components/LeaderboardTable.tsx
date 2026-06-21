@@ -59,6 +59,36 @@ function compare(
   }
 }
 
+function SortableTh({
+  col,
+  active,
+  asc,
+  onClickHeader,
+  onKeyDown,
+}: {
+  col: { key: SortCol; label: string; title?: string };
+  active: boolean;
+  asc: boolean;
+  onClickHeader: (col: SortCol) => void;
+  onKeyDown: (e: React.KeyboardEvent, col: SortCol) => void;
+}) {
+  return (
+    <th
+      title={col.title}
+      tabIndex={0}
+      aria-sort={active ? (asc ? 'ascending' : 'descending') : 'none'}
+      onClick={() => onClickHeader(col.key)}
+      onKeyDown={(e) => onKeyDown(e, col.key)}
+      className={`tracked text-[10px] font-semibold py-2.5 px-2 border-b border-[var(--color-border-primary)] cursor-pointer select-none whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] text-right ${
+        active ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'
+      }`}
+    >
+      {col.label}
+      {active && <span className="ml-1">{asc ? '↑' : '↓'}</span>}
+    </th>
+  );
+}
+
 // In 'season' mode: first col shows season name linking to /seasons/[season_id].
 // In 'player' mode: first col shows rank + player name linking to /players/[player_id].
 export default function LeaderboardTable({
@@ -172,25 +202,6 @@ export default function LeaderboardTable({
     { key: 'adr', label: 'ADR',  title: 'Average Damage per Round' },
   ];
 
-  function SortableTh({ col }: { col: { key: SortCol; label: string; title?: string } }) {
-    const active = sortCol === col.key;
-    return (
-      <th
-        title={col.title}
-        tabIndex={0}
-        aria-sort={active ? (asc ? 'ascending' : 'descending') : 'none'}
-        onClick={() => clickHeader(col.key)}
-        onKeyDown={(e) => headerKey(e, col.key)}
-        className={`tracked text-[10px] font-semibold py-2.5 px-2 border-b border-[var(--color-border-primary)] cursor-pointer select-none whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-primary)] text-right ${
-          active ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'
-        }`}
-      >
-        {col.label}
-        {active && <span className="ml-1">{asc ? '↑' : '↓'}</span>}
-      </th>
-    );
-  }
-
   return (
     <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
       <table className="w-full min-w-max border-collapse text-[13px]">
@@ -213,9 +224,9 @@ export default function LeaderboardTable({
               {firstColLabel}
               {sortCol === 'name' && <span className="ml-1">{asc ? '↑' : '↓'}</span>}
             </th>
-            {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => <SortableTh key={c.key} col={c} />)}
-            {STAT_COLS.map((c) => <SortableTh key={c.key} col={c} />)}
-            {hasEhog && <SortableTh col={{ key: 'ehog', label: 'EHOG', title: 'EHOG rating as of most recent match in this view' }} />}
+            {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => <SortableTh key={c.key} col={c} active={sortCol === c.key} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />)}
+            {STAT_COLS.map((c) => <SortableTh key={c.key} col={c} active={sortCol === c.key} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />)}
+            {hasEhog && <SortableTh col={{ key: 'ehog', label: 'EHOG', title: 'EHOG rating as of most recent match in this view' }} active={sortCol === 'ehog'} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />}
           </tr>
         </thead>
         <tbody>

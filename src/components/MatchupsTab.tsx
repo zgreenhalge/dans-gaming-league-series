@@ -95,7 +95,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
     const m = new Map<number, (typeof h2hData.players)[number]>();
     for (const p of h2hData.players) m.set(p.id, p);
     return m;
-  }, [h2hData.players]);
+  }, [h2hData]);
 
   // League-wide scorer closures for normalization (same as Statistics page)
   const rivalScore = useMemo(() => rivalBlendedScorer(h2hData.rivals), [h2hData.rivals]);

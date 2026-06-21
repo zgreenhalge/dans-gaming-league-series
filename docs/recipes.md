@@ -2,9 +2,9 @@
 
 Step-by-step patterns for the changes made most often in this codebase. Each recipe links to a real
 example already in the repo — read that example before writing new code in the same shape. See also
-[`GLOSSARY.md`](./GLOSSARY.md) (domain vocabulary + file map),
-[`VISUAL_CONVENTIONS.md`](./VISUAL_CONVENTIONS.md) (shared CSS utilities), and
-[`CALCULATION_DEFINITIONS.md`](./CALCULATION_DEFINITIONS.md) (stat formulas and ranking rules).
+[`glossary.md`](./glossary.md) (domain vocabulary + file map),
+[`visual-conventions.md`](./visual-conventions.md) (shared CSS utilities), and
+[`calculations.md`](./calculations.md) (stat formulas and ranking rules).
 
 ## Recipe: Add a new aggregated stat / metric
 
@@ -16,23 +16,28 @@ with logic duplicated across components. Decision order:
    something the view already provides.
 2. **Is it derivable from fields the view *does* expose** (e.g. a percentage/ratio of two existing
    columns)? Compute it once in the query layer and attach it to the row type — see
-   `rwr_percentage` on `LeaderboardRow` (`src/lib/types.ts:83`), derived in
+   `rwr_percentage` on `LeaderboardRow` (`src/lib/types.ts`), derived in
    `getSeasonLeaderboard()`/`getCareerLeaderboard()` as `total_rounds_won / total_rounds_played * 100`.
 3. **Is it missing from the view entirely** (like `total_assists`/`total_rounds_won`)? Augment it by
    reading `player_match_stats` directly and merging — the canonical pattern is
-   `getPerPlayerSeasonStats()` (`src/lib/queries.ts:106`), called from every leaderboard-shaped
+   `getPerPlayerSeasonStats()` in `src/lib/queries.ts`, called from every leaderboard-shaped
    query (`getSeasonLeaderboard`, `getCareerLeaderboard`, `getAllLeaderboards`) via `Promise.all`.
 4. **Is it gauntlet-specific?** Gauntlet matches are excluded from the view entirely
    (`is_playoff_game = true`), so gauntlet stats are *always* computed directly from
-   `player_match_stats` — see `getGauntletStats()` (`src/lib/queries.ts:824`).
+   `player_match_stats` — see `getGauntletStats()` in `src/lib/queries.ts`.
 5. **Is it map-specific** (pick/ban/win counts per map)? Follow the accumulator-map pattern in
-   `getMapIndex()` (`src/lib/queries.ts:1599`) — iterate played matches once, build
+   `getMapIndex()` in `src/lib/queries.ts` — iterate played matches once, build
    `Map<mapKey, Map<seasonId, count>>` accumulators, then shape into `MapSeasonStat[]`
-   (`src/lib/types.ts:91`). Always gate on `isPlayedScore()` and `.toLowerCase()` map names.
+   (`src/lib/types.ts`). Always gate on `isPlayedScore()` and `.toLowerCase()` map names.
 
 In all cases: **the helper lives in `queries.ts`, returns a fully-shaped value, and components just
 render it.** If you find yourself writing a join/reduce inside a `.tsx` file, that's the signal to
 move it — see the "Always prefer extracting/abstracting shared logic" rule in `CLAUDE.md`.
+
+When you aggregate per-match stats into a leaderboard row, sum the totals however the input shape
+requires but derive the four canonical-sort fields (`win_rate_percentage`, `kd_ratio`,
+`rwr_percentage`, `overall_adr`) through `deriveRates()` in `src/lib/util.ts` — it's the single
+source for those divisions so the rankings can't drift between the player, career, and map views.
 
 If the new stat should appear on **career views**, it must respect `useSeasonFilter()` the same way
 `getCareerLeaderboard()` and `CareerStatsView.tsx` do — don't build a parallel filter.
@@ -50,20 +55,20 @@ Follow the shape of an existing dynamic route, e.g. `src/app/players/[id]/page.t
 4. **Add `generateMetadata()`** for the page `<title>`.
 5. **Wrap content in `<TopbarShell>`** and delegate the actual rendering to a `components/*View.tsx`
    client/server component — keep the page itself thin (param handling + data fetching only).
-6. **Add the route to the table in `README.md`** once it's live.
+6. **Add the route to the table in [`architecture.md`](./architecture.md)** once it's live.
 
 ## Recipe: Add a new query helper to `queries.ts`
 
 1. Name it `get<Noun>()` / `get<Noun>Data()` and have it return a fully-joined, fully-shaped object
    — never a raw Supabase row that the component has to massage further.
 2. Define its return shape as an `interface` near the top of `queries.ts` (or in `types.ts` if it
-   mirrors a DB table) — see `H2HData`/`H2HStats`/`DuoStats` (`queries.ts:2012-2034`) for a recent
+   mirrors a DB table) — see `H2HData`/`H2HStats`/`DuoStats` in `queries.ts` for an
    example of a multi-shape result type.
 3. Batch independent Supabase reads with `Promise.all` and check `error` once, immediately —
-   match the destructuring style at `queries.ts:107-109` and `queries.ts:662`.
+   match the destructuring style in `getPerPlayerSeasonStats()`.
 4. If the new helper needs season pairing (regular ↔ gauntlet), use `extractSeasonNumber()` /
    `buildRegularToGauntletMap()` from `src/lib/util.ts` or `getLinkedGauntlet()`/
-   `getLinkedRegularSeason()` — **never** assume adjacent IDs (see `GLOSSARY.md`).
+   `getLinkedRegularSeason()` — **never** assume adjacent IDs (see [`glossary.md`](./glossary.md)).
 5. Gate "did this match actually happen" on `isPlayedScore(m.final_score)`, not `final_score !=
    null` — Season 3 has `"0-0"` placeholder rows.
 
@@ -89,7 +94,7 @@ If the view aggregates across seasons (like `CareerStatsView`, `H2HMatrix`):
 
 ## Recipe: Style a new hoverable surface
 
-Before writing new hover/transition CSS, check [`VISUAL_CONVENTIONS.md`](./VISUAL_CONVENTIONS.md):
+Before writing new hover/transition CSS, check [`visual-conventions.md`](./visual-conventions.md):
 pick `.lift-card` (standalone panels), `.lift-row` (flush table/list rows), or the `.map-card-bg`
 accent ring (image-backed cards) based on the element's *shape*, and override `--lift-accent` only
 if the element carries a semantic color (win/loss) that should survive hover.
@@ -98,7 +103,12 @@ if the element carries a semantic color (win/loss) that should survive hover.
 
 - `npm run build` (type-checks + lints via the build)
 - `npm run lint`
+- `npm test` — unit tests for the pure invariants in `util.ts` (canonical sort, played-match check,
+  score parsing, season pairing, `deriveRates`). If you touched any of those, add a case in
+  `src/lib/util.test.ts` (zero-dependency `node:assert` runner, run via `tsx`).
 - If you touched `queries.ts`, double check you didn't duplicate a join/derivation that already
   exists — grep for the field name first
 - If you added a domain concept (new season format, new stat, new filter), add it to
-  `GLOSSARY.md`
+  [`glossary.md`](./glossary.md)
+- Cite code by **symbol name** (`getGauntletStats()` in `queries.ts`), never by line number —
+  line numbers rot the moment the file changes. See [`patterns.md`](./patterns.md).

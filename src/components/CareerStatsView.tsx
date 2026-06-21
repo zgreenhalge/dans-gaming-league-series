@@ -6,7 +6,7 @@ import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import H2HSection from './H2HSection';
 import { AdvancedStatsView } from './AdvancedStatsView';
-import { buildRegularToGauntletMap, extractSeasonNumber, seasonTitle, tabCls } from '@/lib/util';
+import { buildRegularToGauntletMap, deriveRates, extractSeasonNumber, seasonTitle, tabCls } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { TrophyEntry, H2HData, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow } from '@/lib/queries';
 import type { H2HPair } from './H2HMatrix';
@@ -28,30 +28,22 @@ function mergeRows(
       map.set(row.player_id, { ...row });
       continue;
     }
-    const mp = prev.matches_played + row.matches_played;
-    const mw = prev.matches_won + row.matches_won;
-    const ml = prev.matches_lost + row.matches_lost;
-    const rp = prev.total_rounds_played + row.total_rounds_played;
-    const rw = prev.total_rounds_won + row.total_rounds_won;
-    const kills = prev.total_kills + row.total_kills;
-    const deaths = prev.total_deaths + row.total_deaths;
-    const td = prev.total_damage + row.total_damage;
+    const totals = {
+      matches_played: prev.matches_played + row.matches_played,
+      matches_won: prev.matches_won + row.matches_won,
+      matches_lost: prev.matches_lost + row.matches_lost,
+      total_kills: prev.total_kills + row.total_kills,
+      total_assists: prev.total_assists + row.total_assists,
+      total_deaths: prev.total_deaths + row.total_deaths,
+      total_damage: prev.total_damage + row.total_damage,
+      total_rounds_played: prev.total_rounds_played + row.total_rounds_played,
+      total_rounds_won: prev.total_rounds_won + row.total_rounds_won,
+    };
     map.set(row.player_id, {
       ...prev,
       season_id: -1,
-      matches_played: mp,
-      matches_won: mw,
-      matches_lost: ml,
-      total_kills: kills,
-      total_assists: prev.total_assists + row.total_assists,
-      total_deaths: deaths,
-      total_damage: td,
-      total_rounds_played: rp,
-      total_rounds_won: rw,
-      win_rate_percentage: mp > 0 ? (mw / mp) * 100 : 0,
-      kd_ratio: deaths > 0 ? kills / deaths : kills,
-      rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
-      overall_adr: rp > 0 ? td / rp : 0,
+      ...totals,
+      ...deriveRates(totals),
     });
   }
   return Array.from(map.values());

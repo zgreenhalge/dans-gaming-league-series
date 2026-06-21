@@ -2,7 +2,7 @@
 // tiles instead of a one-row table (player Overview, single-player Advanced
 // Stats, etc.). One bordered container with 1px grid-line dividers between
 // tiles — the grid's background shows through `gap-px`, so the lines wrap
-// correctly in both directions. See VISUAL_CONVENTIONS.md.
+// correctly in both directions. See docs/visual-conventions.md.
 
 export interface StatTile {
   label: string;

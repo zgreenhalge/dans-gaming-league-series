@@ -440,7 +440,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
 // A one-row table is awkward (lots of columns, a single line of data, forced
 // horizontal scroll on mobile). For a single player we transpose the same
 // metrics into a label/value stat-tile grid — the shared `StatTileGrid`, so it
-// matches the player Overview panel exactly. See VISUAL_CONVENTIONS.md.
+// matches the player Overview panel exactly. See docs/visual-conventions.md.
 
 function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leagueAggregated: AggregatedSab[] }) {
   const rp = agg.rounds_played || 1;

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "tsx src/lib/util.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1069.0",

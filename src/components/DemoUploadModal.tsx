@@ -94,7 +94,6 @@ export default function DemoUploadModal({
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const [stage, setStage] = useState<Stage>('idle');
@@ -105,6 +104,7 @@ export default function DemoUploadModal({
   const [skinsScore, setSkinsScore] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
   if (!mounted) return null;

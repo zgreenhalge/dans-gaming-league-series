@@ -486,7 +486,6 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
     .maybeSingle();
   if (mErr) throw mErr;
   if (!match) return null;
-  const m = match as Match;
 
   const { data: roster, error: rErr } = await supabase
     .from('player_match_stats')
@@ -2462,7 +2461,7 @@ function pairKey(a: number, b: number): string {
 }
 
 /**
- * Returns a scorer for the "Best Friends" blended metric — see "Blended score" in GLOSSARY.md.
+ * Returns a scorer for the "Best Friends" blended metric — see "Blended score" in docs/glossary.md.
  * Computes normalisation maxes once across `duos` then returns a closure. Shared by
  * `H2HSection` (ranking) and `H2HMatrix` (cell coloring) so both use the same formula.
  * IMPORTANT: if you change weights here, update the hover `title` in H2HSection.tsx ("Best Friends").
@@ -2479,7 +2478,7 @@ export function duoBlendedScorer(duos: DuoStats[]): (d: DuoStats) => number {
 }
 
 /**
- * Returns a scorer for the "Closest Rivals" blended metric — see "Blended score" in GLOSSARY.md.
+ * Returns a scorer for the "Closest Rivals" blended metric — see "Blended score" in docs/glossary.md.
  * Computes normalisation maxes once across `rivals` then returns a closure. Shared by
  * `H2HSection` (ranking) and `H2HMatrix` (cell coloring) so both use the same formula.
  * IMPORTANT: if you change weights here, update the hover `title` in H2HSection.tsx ("Closest Rivals" and "Best Friends").
@@ -3174,6 +3173,7 @@ export async function getAllSabremetrics(): Promise<SabremetricMatchRow[]> {
     const sid = matchSeason.get(pms.match_id);
     if (sid == null) continue;
     const player = playersById.get(pms.player_id);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { player_match_stats_id: _, ...sab } = raw;
     result.push({
       player_id: pms.player_id,

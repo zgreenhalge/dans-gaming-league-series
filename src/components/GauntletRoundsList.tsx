@@ -2,7 +2,7 @@
 
 import { MatchCard } from './MatchCard';
 import { PlayerName } from './PlayerName';
-import { isPlayedScore } from '@/lib/util';
+import { isPlayedScore, canonicalGauntletRankMap } from '@/lib/util';
 import type { GauntletRound, GauntletMatch } from '@/lib/queries';
 
 function computeGauntletRecords(matches: GauntletMatch[]) {
@@ -19,7 +19,7 @@ function computeGauntletRecords(matches: GauntletMatch[]) {
         wins: 0,
         losses: 0,
       };
-      p.is_win ? prev.wins++ : prev.losses++;
+      if (p.is_win) prev.wins++; else prev.losses++;
       records.set(p.player_id, prev);
     }
   }
@@ -41,7 +41,12 @@ function GauntletRoundCard({
   isOpen: boolean;
   onToggle: () => void;
 }) {
-  const records = computeGauntletRecords(round.matches);
+  const rankMap = canonicalGauntletRankMap(allRounds);
+  const unsortedRecords = computeGauntletRecords(round.matches);
+  const records = rankMap.size > 0
+    ? [...unsortedRecords].sort((a, b) =>
+        (rankMap.get(a.player_id) ?? Infinity) - (rankMap.get(b.player_id) ?? Infinity))
+    : unsortedRecords;
   const allPlayed =
     round.matches.length > 0 && round.matches.every((m) => isPlayedScore(m.final_score));
   const maxRoundNumber = Math.max(...allRounds.map((r) => r.round_number));
@@ -106,8 +111,7 @@ function GauntletRoundCard({
                   const isChampion =
                     isFinalRound &&
                     allPlayed &&
-                    records[0]?.player_id === r.player_id &&
-                    r.wins > r.losses;
+                    rankMap.get(r.player_id) === 1;
                   return (
                     <div key={r.player_id} className="flex items-center justify-between gap-3">
                       <span

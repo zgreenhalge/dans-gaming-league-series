@@ -1,3 +1,10 @@
+# Calculation Definitions
+
+The formulas behind every stat and ranking shown on the site — raw scoreboard stats, side splits,
+sabremetrics, the canonical regular-season and gauntlet rankings, and narrative (pairing) metrics.
+See [`glossary.md`](./glossary.md) for the domain vocabulary and [`ehog.md`](./ehog.md) for the
+separate match-outcome skill rating.
+
 ## Statistics
 
 Raw numbers, direct from the game scoreboard
@@ -89,7 +96,7 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 ### Player Rating (aspirational — requires demo data)
 
 A weighted sabremetric composite for individual performance. Independent from the
-[EHOG skill rating](ehog/README.md), which is match-outcome-based (OpenSkill). These formulas
+[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). These formulas
 will be implemented once demo ingestion provides the underlying stats (Entry+, KAST+, etc.).
 
 ```
@@ -164,13 +171,18 @@ gauntlet season pages and matches the podium displayed by `GauntletStandings`.
 | Place | Condition |
 |-------|-----------|
 | 1st   | 2-0 record in the final round |
-| 2nd   | 1-1 in the final round, higher RWR% across all final-round matches |
-| 3rd   | 1-1 in the final round, lower RWR% across all final-round matches |
+| 2nd   | 1-1 in the final round, higher RWR% (then ADR) across all final-round matches |
+| 3rd   | 1-1 in the final round, lower RWR% (then ADR) across all final-round matches |
 | 4th   | 0-2 in the final round |
-| 5th+  | Eliminated before the final round; sorted by latest round reached (higher = better rank), tiebreak by wins in that round then RWR% in that round (both descending) |
+| 5th+  | Eliminated before the final round; sorted by latest round reached (higher = better rank), tiebreak by wins in that round, then RWR%, then ADR in that round (all descending) |
 
-RWR% tiebreaks mirror the final-round logic throughout: it is always computed from the specific
-round in which the placement is decided, not from overall gauntlet stats.
+Round reached is the primary axis: a player who advanced further always outranks one eliminated
+earlier. The stat tiebreaks (RWR% then ADR) only order players *within* the same round, and are
+always computed from the specific round in which the placement is decided, not from overall gauntlet
+stats. ADR is round-weighted so it aggregates correctly across a round's matches.
+
+`GauntletStandings` renders its podium straight from `canonicalGauntletRankMap()` — the standings and
+the leaderboard table share the one ranking implementation.
 
 Returns no ranking while the gauntlet is incomplete (final round not fully played).
 

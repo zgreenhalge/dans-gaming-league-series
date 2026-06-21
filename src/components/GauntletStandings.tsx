@@ -3,51 +3,14 @@
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import type { GauntletRound, GauntletMatch } from '@/lib/queries';
-import { isPlayedScore, parseScore } from '@/lib/util';
+import type { GauntletRound } from '@/lib/queries';
+import { canonicalGauntletRankMap } from '@/lib/util';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import { PlayerName } from '@/components/PlayerName';
 
 const MEDAL_COLORS = { 1: '#f5c542', 2: '#a0a3ab', 3: '#c47a3a' } as const;
 const tint = (rank: 1 | 2 | 3, opacity = 18) =>
   `color-mix(in srgb, ${MEDAL_COLORS[rank]} ${opacity}%, var(--color-bg-primary))`;
-
-function computeFinalRoundPlayerStats(matches: GauntletMatch[]): Map<number, { rwr: number; adr: number }> {
-  const agg = new Map<number, { rounds_won: number; rounds_played: number; total_damage: number }>();
-  for (const m of matches) {
-    if (!isPlayedScore(m.final_score)) continue;
-    const scores = parseScore(m.final_score);
-    if (!scores) continue;
-    const totalRounds = scores.shirts + scores.skins;
-    for (const p of [...m.shirts_stats, ...m.skins_stats]) {
-      const prev = agg.get(p.player_id) ?? { rounds_won: 0, rounds_played: 0, total_damage: 0 };
-      prev.rounds_won += p.faction === 'SHIRTS' ? scores.shirts : scores.skins;
-      prev.rounds_played += totalRounds;
-      prev.total_damage += p.adr * totalRounds;
-      agg.set(p.player_id, prev);
-    }
-  }
-  return new Map([...agg].map(([id, { rounds_won, rounds_played, total_damage }]) => [
-    id,
-    {
-      rwr: rounds_played > 0 ? rounds_won / rounds_played : 0,
-      adr: rounds_played > 0 ? total_damage / rounds_played : 0,
-    },
-  ]));
-}
-
-function computeRecords(matches: GauntletMatch[]) {
-  const records = new Map<number, { player_id: number; name: string; wins: number; losses: number }>();
-  for (const m of matches) {
-    if (!isPlayedScore(m.final_score)) continue;
-    for (const p of [...m.shirts_stats, ...m.skins_stats]) {
-      const prev = records.get(p.player_id) ?? { player_id: p.player_id, name: p.player_name, wins: 0, losses: 0 };
-      p.is_win ? prev.wins++ : prev.losses++;
-      records.set(p.player_id, prev);
-    }
-  }
-  return Array.from(records.values()).sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name));
-}
 
 export default function GauntletStandings({
   rounds,
@@ -59,26 +22,25 @@ export default function GauntletStandings({
   const { data: session } = useSession();
   const myPlayerId = session?.user?.playerId ?? null;
 
-  if (rounds.length === 0) return null;
-  const finalRound = rounds[rounds.length - 1];
-  if (!finalRound.matches.every((m) => isPlayedScore(m.final_score))) return null;
+  // Podium order comes straight from the canonical gauntlet ranking so the
+  // standings and the leaderboard table can't drift. Returns an empty map
+  // until the gauntlet is complete.
+  const rankMap = canonicalGauntletRankMap(rounds);
+  if (rankMap.size === 0) return null;
 
-  const records = computeRecords(finalRound.matches);
-  const champion = records.find((r) => r.wins === 2) ?? null;
-  if (!champion) return null;
+  const byRank = new Map<number, number>();
+  for (const [playerId, rank] of rankMap) byRank.set(rank, playerId);
+
+  const championId = byRank.get(1);
+  if (championId == null) return null;
+  const secondId = byRank.get(2) ?? null;
+  const thirdId = byRank.get(3) ?? null;
 
   const statsByPlayer = new Map(leaderboard.map((r) => [r.player_id, r]));
-  const finalRoundStats = computeFinalRoundPlayerStats(finalRound.matches);
-  const contenders = records.filter((r) => r.wins === 1).sort((a, b) => {
-    const af = finalRoundStats.get(a.player_id);
-    const bf = finalRoundStats.get(b.player_id);
-    if (!af || !bf) return 0;
-    return bf.rwr - af.rwr || bf.adr - af.adr;
-  });
-
-  const second = contenders[0] ?? null;
-  const third = contenders[1] ?? null;
-  const champStats = statsByPlayer.get(champion.player_id);
+  const champStats = statsByPlayer.get(championId);
+  const champion = { player_id: championId, name: champStats?.player_name ?? '' };
+  const second = secondId == null ? null : { player_id: secondId, name: statsByPlayer.get(secondId)?.player_name ?? '' };
+  const third = thirdId == null ? null : { player_id: thirdId, name: statsByPlayer.get(thirdId)?.player_name ?? '' };
 
   return (
     <div className="overflow-hidden flex flex-col gap-1 mb-8">

@@ -5,8 +5,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { PlayerHistoryRow, TrophyEntry, H2HData, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
-import { aggregatePlayerMapStats, aggregatePlayerSideStats, type PlayerMapStat, type PlayerSideStat } from '@/lib/mapSideStats';
+import { deriveRates, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
+import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import DevGate from './DevGate';
 import { MatchCard } from './MatchCard';
@@ -85,20 +85,29 @@ function aggregate(rowsRaw: PlayerHistoryRow[]): Aggregate {
   const deaths_in_wins = rows.reduce((s, r) => s + (r.is_win ? r.deaths : 0), 0);
   const kills_in_losses = rows.reduce((s, r) => s + (r.is_win ? 0 : r.kills), 0);
   const deaths_in_losses = rows.reduce((s, r) => s + (r.is_win ? 0 : r.deaths), 0);
+  const rates = deriveRates({
+    matches_played: matches,
+    matches_won: wins,
+    total_kills: kills,
+    total_deaths: deaths,
+    total_rounds_played: rounds_played,
+    total_rounds_won: rounds_won,
+    total_damage: damage,
+  });
   return {
     matches,
     wins,
     losses,
-    wr: matches > 0 ? (wins / matches) * 100 : 0,
+    wr: rates.win_rate_percentage,
     kills,
     assists,
     deaths,
-    kd: deaths > 0 ? kills / deaths : kills,
+    kd: rates.kd_ratio,
     damage,
     rounds_played,
     rounds_won,
-    rwr: rounds_played > 0 ? (rounds_won / rounds_played) * 100 : 0,
-    adr: rounds_played > 0 ? damage / rounds_played : 0,
+    rwr: rates.rwr_percentage,
+    adr: rates.overall_adr,
     kills_in_wins,
     deaths_in_wins,
     kills_in_losses,
@@ -130,7 +139,7 @@ function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
     if (a.matches === 0) continue;
     out.push({ map: display, wins: a.wins, losses: a.losses, wr: a.wr, rwr: a.rwr, adr: a.adr });
   }
-  return out.sort((a, b) => b.wr - a.wr || b.adr - a.adr);
+  return out.sort((a, b) => b.wr - a.wr || b.rwr - a.rwr || b.adr - a.adr);
 }
 
 /** Percentage of `all` strictly below `value` — "you're ahead of N% of the league". */
@@ -308,7 +317,9 @@ export default function PlayerView({
   const playedHistory = filtered.filter(isPlayed);
   const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
   useEffect(() => {
-    if (upcomingHistory.length === 0) setMatchesSubTab('history');
+    if (upcomingHistory.length > 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMatchesSubTab('history');
   }, [upcomingHistory.length]);
 
   // Chronological ADR series (history is sorted newest-first; reverse for the sparkline).
