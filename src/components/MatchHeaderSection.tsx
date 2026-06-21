@@ -46,8 +46,8 @@ function useCountdown(iso: string | null): string {
     if (time <= Date.now()) return;
 
     const id = setInterval(() => {
-      const now = new Date(iso).getTime();
-      if (now <= Date.now()) {
+      const target = new Date(iso).getTime();
+      if (target <= Date.now()) {
         setLabel('');
         clearInterval(id);
         return;

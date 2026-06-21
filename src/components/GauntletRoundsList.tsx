@@ -31,17 +31,18 @@ function computeGauntletRecords(matches: GauntletMatch[]) {
 function GauntletRoundCard({
   round,
   allRounds,
+  rankMap,
   currentPlayerId,
   isOpen,
   onToggle,
 }: {
   round: GauntletRound;
   allRounds: GauntletRound[];
+  rankMap: Map<number, number>;
   currentPlayerId: number | null;
   isOpen: boolean;
   onToggle: () => void;
 }) {
-  const rankMap = canonicalGauntletRankMap(allRounds);
   const unsortedRecords = computeGauntletRecords(round.matches);
   const records = rankMap.size > 0
     ? [...unsortedRecords].sort((a, b) =>
@@ -181,6 +182,8 @@ export default function GauntletRoundsList({
   onToggleRound: (roundNumber: number) => void;
   currentPlayerId: number | null;
 }) {
+  const rankMap = canonicalGauntletRankMap(allRounds);
+
   if (displayRounds.length === 0) {
     return (
       <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
@@ -196,6 +199,7 @@ export default function GauntletRoundsList({
           key={r.round_number}
           round={r}
           allRounds={allRounds}
+          rankMap={rankMap}
           currentPlayerId={currentPlayerId}
           isOpen={openRounds.has(r.round_number)}
           onToggle={() => onToggleRound(r.round_number)}

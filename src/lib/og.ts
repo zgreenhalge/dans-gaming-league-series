@@ -13,7 +13,7 @@ type LeaderboardAgg = {
 };
 
 export async function getPlayerMeta(playerId: number) {
-  const [{ data: player }, { data: rows }, { data: ratingRow }] = await Promise.all([
+  const [{ data: player }, { data: rows }, { data: gauntletRows }, { data: ratingRow }] = await Promise.all([
     supabase
       .from('players')
       .select('id, name, steam_avatar_url')
@@ -23,6 +23,11 @@ export async function getPlayerMeta(playerId: number) {
       .from('player_season_leaderboard')
       .select('matches_played, matches_won, total_kills, total_deaths, total_damage, total_rounds_played')
       .eq('player_id', playerId),
+    supabase
+      .from('player_match_stats')
+      .select('kills, deaths, damage, rounds_played, is_win, match_id, matches!inner(is_playoff_game)')
+      .eq('player_id', playerId)
+      .eq('matches.is_playoff_game', true),
     supabase
       .from('player_current_ratings')
       .select('ehog_v1')
@@ -41,12 +46,20 @@ export async function getPlayerMeta(playerId: number) {
     agg.total_damage += r.total_damage;
     agg.total_rounds_played += r.total_rounds_played;
   }
+  for (const g of (gauntletRows ?? []) as { kills: number; deaths: number; damage: number; rounds_played: number; is_win: boolean }[]) {
+    agg.matches_played += 1;
+    agg.matches_won += g.is_win ? 1 : 0;
+    agg.total_kills += g.kills;
+    agg.total_deaths += g.deaths;
+    agg.total_damage += g.damage;
+    agg.total_rounds_played += g.rounds_played;
+  }
 
   const ehog: number | null = (ratingRow as { ehog_v1?: number } | null)?.ehog_v1 ?? null;
 
   const wr = agg.matches_played > 0 ? ((agg.matches_won / agg.matches_played) * 100).toFixed(0) : null;
   const kd = agg.total_deaths > 0 ? (agg.total_kills / agg.total_deaths).toFixed(2) : null;
-  const adr = agg.total_rounds_played > 0 ? (agg.total_damage / agg.total_rounds_played).toFixed(1) : null;
+  const adr = agg.total_rounds_played > 0 ? (agg.total_damage / agg.total_rounds_played).toFixed(2) : null;
   const record = agg.matches_played > 0 ? `${agg.matches_won}–${agg.matches_played - agg.matches_won}` : null;
   const ehogStr = ehog != null ? ehog.toFixed(2) : null;
 
@@ -117,9 +130,10 @@ export async function getMatchMeta(matchId: number) {
   let scheduledAt: string | null = null;
   if (m.scheduled_at && !played) {
     const d = new Date(m.scheduled_at);
-    const fmt = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    scheduledAt = `${fmt} at ${time}`;
+    const tz = 'America/New_York';
+    const fmt = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz });
+    scheduledAt = `${fmt} at ${time} ET`;
   }
 
   // Text description for meta tags
@@ -148,6 +162,20 @@ type SeasonLeaderboardMeta = {
 };
 
 export async function getSeasonMetaLeaderboard(seasonId: number): Promise<SeasonLeaderboardMeta[]> {
+  const { data: seasonRow } = await supabase
+    .from('seasons')
+    .select('is_gauntlet')
+    .eq('id', seasonId)
+    .maybeSingle();
+  const isGauntlet = !!(seasonRow as { is_gauntlet: boolean } | null)?.is_gauntlet;
+
+  if (!isGauntlet) {
+    return getRegularSeasonMeta(seasonId);
+  }
+  return getGauntletSeasonMeta(seasonId);
+}
+
+async function getRegularSeasonMeta(seasonId: number): Promise<SeasonLeaderboardMeta[]> {
   type Row = {
     player_id: number;
     player_name: string;
@@ -194,6 +222,59 @@ export async function getSeasonMetaLeaderboard(seasonId: number): Promise<Season
         kd_ratio: r.kd_ratio,
       };
     })
+    .sort(canonicalSort)
+    .slice(0, 4);
+}
+
+async function getGauntletSeasonMeta(seasonId: number): Promise<SeasonLeaderboardMeta[]> {
+  const { data: weekRows } = await supabase.from('weeks').select('id').eq('season_id', seasonId);
+  const weekIds = ((weekRows ?? []) as { id: number }[]).map(w => w.id);
+  if (weekIds.length === 0) return [];
+
+  const { data: matchRows } = await supabase
+    .from('matches')
+    .select('id, final_score')
+    .in('week_id', weekIds)
+    .eq('is_playoff_game', true);
+  const matchIds = ((matchRows ?? []) as { id: number; final_score: string | null }[])
+    .filter(m => isPlayedScore(m.final_score))
+    .map(m => m.id);
+  if (matchIds.length === 0) return [];
+
+  const [{ data: stats }, { data: players }] = await Promise.all([
+    supabase
+      .from('player_match_stats')
+      .select('player_id, kills, deaths, damage, rounds_played, rounds_won, is_win')
+      .in('match_id', matchIds),
+    supabase.from('players').select('id, name'),
+  ]);
+
+  const namesById = new Map<number, string>();
+  for (const p of (players ?? []) as Pick<Player, 'id' | 'name'>[]) namesById.set(p.id, p.name);
+
+  type Agg = { mp: number; mw: number; kills: number; deaths: number; damage: number; rp: number; rw: number };
+  const byPlayer = new Map<number, Agg>();
+  for (const s of (stats ?? []) as { player_id: number; kills: number; deaths: number; damage: number; rounds_played: number; rounds_won: number; is_win: boolean }[]) {
+    const prev = byPlayer.get(s.player_id) ?? { mp: 0, mw: 0, kills: 0, deaths: 0, damage: 0, rp: 0, rw: 0 };
+    prev.mp += 1;
+    prev.mw += s.is_win ? 1 : 0;
+    prev.kills += s.kills;
+    prev.deaths += s.deaths;
+    prev.damage += s.damage;
+    prev.rp += s.rounds_played;
+    prev.rw += s.rounds_won;
+    byPlayer.set(s.player_id, prev);
+  }
+
+  return Array.from(byPlayer.entries())
+    .filter(([, a]) => a.rp > 0)
+    .map(([id, a]) => ({
+      player_name: namesById.get(id) ?? '?',
+      win_rate_percentage: a.mp > 0 ? (a.mw / a.mp) * 100 : 0,
+      rwr_percentage: a.rp > 0 ? (a.rw / a.rp) * 100 : 0,
+      overall_adr: a.rp > 0 ? a.damage / a.rp : 0,
+      kd_ratio: a.deaths > 0 ? a.kills / a.deaths : a.kills,
+    }))
     .sort(canonicalSort)
     .slice(0, 4);
 }

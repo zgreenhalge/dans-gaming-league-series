@@ -117,7 +117,7 @@ export default async function Image({
                   {p.rwr_percentage.toFixed(0)}%
                 </span>
                 <span style={{ width: '120px', textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: '32px' }}>
-                  {p.overall_adr.toFixed(1)}
+                  {p.overall_adr.toFixed(2)}
                 </span>
                 <span style={{ width: '110px', textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: '32px' }}>
                   {p.kd_ratio.toFixed(2)}
