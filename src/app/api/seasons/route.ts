@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     if (n !== null && n > maxNum) maxNum = n;
   }
 
-  const name = `Season ${maxNum + 1}`;
+  const name = `Season ${maxNum + 1} Regular Season`;
 
   // Upsert new maps into the maps table, fetching preview images from Steam
   if (newMaps.length > 0) {

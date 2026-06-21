@@ -32,7 +32,7 @@ export default async function NewSeasonPage() {
     const n = extractSeasonNumber(s.name);
     if (n !== null && n > maxNum) maxNum = n;
   }
-  const nextName = `Season ${maxNum + 1}`;
+  const nextName = `Season ${maxNum + 1} Regular Season`;
 
   // Collect all known map names: maps table + prior season map pools
   const knownMaps = new Set<string>(Object.keys(mapLookup));
