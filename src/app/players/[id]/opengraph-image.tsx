@@ -28,42 +28,42 @@ export default async function Image({
   return new ImageResponse(
     (
       <CardShell subtitle="Player">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '28px', marginTop: '16px' }}>
-          {meta.image && (
-            <img
-              src={meta.image}
-              width={120}
-              height={120}
-              style={{ borderRadius: '8px', border: `2px solid ${colors.BORDER}` }}
-            />
-          )}
-          <span style={{ fontSize: '56px', fontWeight: 600 }}>{meta.name}</span>
-        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center', gap: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+            {meta.image && (
+              <img
+                src={meta.image}
+                width={140}
+                height={140}
+                style={{ borderRadius: '10px', border: `2px solid ${colors.BORDER}` }}
+              />
+            )}
+            <span style={{ fontSize: '84px', fontWeight: 600 }}>{meta.name}</span>
+          </div>
 
-        <div style={{
-          display: 'flex',
-          gap: '48px',
-          marginTop: 'auto',
-          marginBottom: '16px',
-          padding: '28px 36px',
-          backgroundColor: colors.BG2,
-          border: `1px solid ${colors.BORDER}`,
-        }}>
-          {meta.stats.wr != null && (
-            <StatPill label="Win Rate" value={`${meta.stats.wr}%`} color={colors.GREEN} />
-          )}
-          {meta.stats.record && (
-            <StatPill label="Record" value={meta.stats.record} />
-          )}
-          {meta.stats.kd != null && (
-            <StatPill label="K/D" value={meta.stats.kd} />
-          )}
-          {meta.stats.adr != null && (
-            <StatPill label="ADR" value={meta.stats.adr} />
-          )}
-          {meta.stats.ehog != null && (
-            <StatPill label="EHOG" value={meta.stats.ehog} color={colors.ACCENT} />
-          )}
+          <div style={{
+            display: 'flex',
+            gap: '48px',
+            padding: '28px 40px',
+            backgroundColor: colors.BG2,
+            border: `1px solid ${colors.BORDER}`,
+          }}>
+            {meta.stats.wr != null && (
+              <StatPill label="Win Rate" value={`${meta.stats.wr}%`} color={colors.GREEN} />
+            )}
+            {meta.stats.record && (
+              <StatPill label="Record" value={meta.stats.record} />
+            )}
+            {meta.stats.kd != null && (
+              <StatPill label="K/D" value={meta.stats.kd} />
+            )}
+            {meta.stats.adr != null && (
+              <StatPill label="ADR" value={meta.stats.adr} />
+            )}
+            {meta.stats.ehog != null && (
+              <StatPill label="EHOG" value={meta.stats.ehog} color={colors.ACCENT} />
+            )}
+          </div>
         </div>
       </CardShell>
     ),

@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 import { getMapDetail } from '@/lib/queries';
-import { toSentenceCase } from '@/lib/maps';
-import { OG_SIZE, colors, loadFonts, fontConfig, CardShell, StatPill } from '@/lib/og-card';
+import { toSentenceCase, mapImageFor } from '@/lib/maps';
+import { OG_SIZE, colors, loadFonts, fontConfig, CardShell, StatPill, loadMapImageAsDataUri } from '@/lib/og-card';
 
 export const alt = 'DGLS Map';
 export const size = OG_SIZE;
@@ -30,25 +30,29 @@ export default async function Image({
   const regularSeasons = detail.seasons.filter(s => !s.is_gauntlet);
   const totalMatches = detail.matches.length;
 
+  const mapRelPath = mapImageFor(detail.name);
+  const bgImage = mapRelPath ? await loadMapImageAsDataUri(mapRelPath) : null;
+
   return new ImageResponse(
     (
-      <CardShell subtitle="Map">
-        <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-          <span style={{ fontSize: '56px', fontWeight: 600, marginTop: '16px' }}>
+      <CardShell subtitle="Map" bgImage={bgImage ?? undefined}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'flex-end' }}>
+          <span style={{ fontSize: '84px', fontWeight: 600, marginBottom: '8px' }}>
             {name}
           </span>
 
           {regularSeasons.length > 0 && (
-            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
               {regularSeasons.map(s => (
                 <span
                   key={s.id}
                   style={{
                     fontFamily: 'JetBrains Mono',
-                    fontSize: '13px',
-                    padding: '3px 10px',
+                    fontSize: '22px',
+                    padding: '4px 14px',
                     border: `1px solid ${colors.BORDER}`,
                     color: colors.TEXT2,
+                    backgroundColor: 'rgba(22,26,33,0.8)',
                   }}
                 >
                   {s.name}
@@ -60,10 +64,8 @@ export default async function Image({
           <div style={{
             display: 'flex',
             gap: '48px',
-            marginTop: 'auto',
-            marginBottom: '16px',
-            padding: '28px 36px',
-            backgroundColor: colors.BG2,
+            padding: '24px 36px',
+            backgroundColor: 'rgba(29,34,43,0.9)',
             border: `1px solid ${colors.BORDER}`,
           }}>
             <StatPill label="Picks" value={String(detail.pickCount)} color={colors.GREEN} />

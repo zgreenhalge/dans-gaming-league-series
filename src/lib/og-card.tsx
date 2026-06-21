@@ -15,6 +15,15 @@ const AMBER = '#f5c542';
 
 export const colors = { BG, BG2, TEXT, TEXT2, BORDER, ACCENT, GREEN, RED, AMBER };
 
+export async function loadMapImageAsDataUri(relPath: string): Promise<string | null> {
+  try {
+    const buf = await readFile(join(process.cwd(), 'public', relPath));
+    return `data:image/jpeg;base64,${buf.toString('base64')}`;
+  } catch {
+    return null;
+  }
+}
+
 let fontCache: { geist: ArrayBuffer; jetbrains: ArrayBuffer; geistBold: ArrayBuffer } | null = null;
 
 export async function loadFonts() {
@@ -42,7 +51,7 @@ export function fontConfig(fonts: Awaited<ReturnType<typeof loadFonts>>) {
   ];
 }
 
-export function CardShell({ children, subtitle }: { children: React.ReactNode; subtitle?: string }) {
+export function CardShell({ children, subtitle, bgImage }: { children: React.ReactNode; subtitle?: string; bgImage?: string }) {
   return (
     <div
       style={{
@@ -51,26 +60,53 @@ export function CardShell({ children, subtitle }: { children: React.ReactNode; s
         display: 'flex',
         flexDirection: 'column',
         backgroundColor: BG,
-        padding: '48px 56px',
         fontFamily: 'Geist',
         color: TEXT,
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
-        <span style={{ fontWeight: 600, fontSize: '20px', letterSpacing: '2px', color: ACCENT }}>
-          DGLS
-        </span>
-        {subtitle && (
-          <>
-            <span style={{ color: TEXT2, fontSize: '20px' }}>·</span>
-            <span style={{ fontSize: '18px', color: TEXT2, fontFamily: 'JetBrains Mono' }}>
-              {subtitle}
-            </span>
-          </>
-        )}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-        {children}
+      {bgImage && (
+        <img
+          src={bgImage}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            opacity: 0.3,
+          }}
+        />
+      )}
+      {bgImage && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'linear-gradient(to top, #161a21 30%, transparent 100%)',
+        }} />
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: '36px 48px', position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '4px' }}>
+          <span style={{ fontWeight: 600, fontSize: '34px', letterSpacing: '3px', color: ACCENT }}>
+            DGLS
+          </span>
+          {subtitle && (
+            <>
+              <span style={{ color: TEXT2, fontSize: '34px' }}>·</span>
+              <span style={{ fontSize: '28px', color: TEXT2, fontFamily: 'JetBrains Mono' }}>
+                {subtitle}
+              </span>
+            </>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -78,11 +114,11 @@ export function CardShell({ children, subtitle }: { children: React.ReactNode; s
 
 export function StatPill({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-      <span style={{ fontFamily: 'JetBrains Mono', fontSize: '28px', fontWeight: 600, color: color ?? TEXT }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+      <span style={{ fontFamily: 'JetBrains Mono', fontSize: '42px', fontWeight: 600, color: color ?? TEXT }}>
         {value}
       </span>
-      <span style={{ fontFamily: 'JetBrains Mono', fontSize: '12px', color: TEXT2, letterSpacing: '1px', textTransform: 'uppercase' }}>
+      <span style={{ fontFamily: 'JetBrains Mono', fontSize: '20px', color: TEXT2, letterSpacing: '1.5px', textTransform: 'uppercase' }}>
         {label}
       </span>
     </div>
