@@ -94,6 +94,36 @@ to do X," no decision archaeology unless explicitly asked. When a change alters 
 relevant doc in the **same** change, and when you add a domain concept add it to
 [`glossary.md`](./glossary.md). A stale doc is worse than no doc.
 
+## Client-only values: dates, times, and hydration safety
+
+Server-rendered HTML must match the client's first render pass. Anything that depends on the user's
+timezone, locale, or the current clock produces different values on the Vercel server (UTC) and the
+user's browser — React will either warn or silently show the wrong value until hydration corrects it.
+
+**Rules:**
+
+1. **Locale-sensitive date/time formatting** (`toLocaleString`, `toLocaleDateString`, weekday names,
+   12h vs 24h) must be **deferred to the client**. Use the `<LocalTime>` component for inline
+   formatted timestamps, or `useSyncExternalStore` (see `useIsClient()` in `MatchHeaderSection`) to
+   gate formatting behind a client-only check that returns `null` during SSR.
+2. **Calendar-only dates** (no time-of-day component — e.g. season start dates, week windows) can
+   render on the server if you pin both the `Date` constructor and the formatter to UTC:
+   `new Date(str + 'T00:00:00Z').toLocaleDateString('en-US', { ..., timeZone: 'UTC' })`.
+3. **`Date.now()` / `new Date()`** in render-time code (including `useState` initializers) will
+   differ between server and client. Move these into `useEffect` so the value is only computed on
+   the client.
+4. **Never use `suppressHydrationWarning` to paper over a timezone mismatch.** It silences the React
+   warning but the user still sees incorrect content flash on first load. Fix the root cause instead.
+
+**Correct patterns already in the codebase:**
+
+- `<LocalTime>` — uses `useSyncExternalStore` to return `null` on the server and format on the
+  client only.
+- `<CountdownTimer>` — initializes state to `null` and computes in `useEffect`.
+- `useCountdown()` in `MatchHeaderSection` — initializes to `''`, populates via `useEffect`.
+- Server components (e.g. `page.tsx`) using `toLocaleDateString` with `timeZone: 'UTC'` — safe
+  because server components never hydrate.
+
 ## Identifiers vs. display names
 
 Use `id` for routing, queries, and props; treat `name` as display-only. Don't key logic off a
