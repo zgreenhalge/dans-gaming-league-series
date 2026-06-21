@@ -8,9 +8,9 @@ import {
   getAllLeaderboards,
   getAllGauntletSummaries,
   getGauntletStats,
+  isPlayerAdmin,
   type GauntletSummary,
 } from '@/lib/queries';
-import { supabase } from '@/lib/supabase';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { seasonTitle, extractSeasonNumber } from '@/lib/util';
 
@@ -219,15 +219,7 @@ export default async function SeasonsPage() {
     getServerSession(authOptions),
   ]);
 
-  let isAdmin = false;
-  if (session?.user?.playerId) {
-    const { data: playerRow } = await supabase
-      .from('players')
-      .select('is_admin')
-      .eq('id', session.user.playerId)
-      .maybeSingle();
-    isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
-  }
+  const isAdmin = session?.user?.playerId ? await isPlayerAdmin(session.user.playerId) : false;
 
   const active = seasons.filter((s) => !s.is_gauntlet && s.status === 'ACTIVE');
   const upcoming = seasons.filter((s) => !s.is_gauntlet && s.status === 'UPCOMING');

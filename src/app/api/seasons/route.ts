@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { isPlayerAdmin } from '@/lib/queries';
 import { extractSeasonNumber } from '@/lib/util';
 import { mapSlug } from '@/lib/maps';
-
-const supabaseAdmin = getAdminClient();
 
 type NewMap = { name: string; workshopUrl: string };
 
@@ -34,21 +33,19 @@ async function fetchWorkshopPreviewImage(workshopUrl: string): Promise<string | 
   }
 }
 
+const WORKSHOP_URL_RE = /^https:\/\/steamcommunity\.com\/sharedfiles\/filedetails\/\?id=\d+/;
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.playerId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data: playerRow } = await supabaseAdmin
-    .from('players')
-    .select('is_admin')
-    .eq('id', session.user.playerId)
-    .maybeSingle();
-
-  if (!(playerRow as { is_admin?: boolean } | null)?.is_admin) {
+  if (!(await isPlayerAdmin(session.user.playerId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+
+  const supabaseAdmin = getAdminClient();
 
   const body = await req.json().catch(() => null);
   const mapPool: string[] = Array.isArray(body?.map_pool) ? body.map_pool : [];
@@ -56,6 +53,16 @@ export async function POST(req: NextRequest) {
 
   if (mapPool.length !== 5) {
     return NextResponse.json({ error: 'Exactly 5 maps are required' }, { status: 400 });
+  }
+
+  if (mapPool.some((m) => typeof m !== 'string' || !m.trim())) {
+    return NextResponse.json({ error: 'Map pool entries must be non-empty strings' }, { status: 400 });
+  }
+
+  for (const m of newMaps) {
+    if (!m.name?.trim() || !WORKSHOP_URL_RE.test(m.workshopUrl ?? '')) {
+      return NextResponse.json({ error: 'New maps must have a name and valid Steam Workshop URL' }, { status: 400 });
+    }
   }
 
   const { data: seasons, error: fetchErr } = await supabaseAdmin

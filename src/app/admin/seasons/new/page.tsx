@@ -3,8 +3,7 @@ import { authOptions } from '@/lib/authOptions';
 import { redirect } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { CreateSeasonForm } from '@/components/CreateSeasonForm';
-import { getSeasons, getMapLookup } from '@/lib/queries';
-import { supabase } from '@/lib/supabase';
+import { getSeasons, getMapLookup, isPlayerAdmin } from '@/lib/queries';
 import { extractSeasonNumber } from '@/lib/util';
 
 export const metadata = {
@@ -15,14 +14,7 @@ export const metadata = {
 export default async function NewSeasonPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.playerId) redirect('/');
-
-  const { data: playerRow } = await supabase
-    .from('players')
-    .select('is_admin')
-    .eq('id', session.user.playerId)
-    .maybeSingle();
-
-  if (!(playerRow as { is_admin?: boolean } | null)?.is_admin) redirect('/');
+  if (!(await isPlayerAdmin(session.user.playerId))) redirect('/');
 
   const [seasons, mapLookup] = await Promise.all([getSeasons(), getMapLookup()]);
 

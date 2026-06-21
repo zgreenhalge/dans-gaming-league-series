@@ -10,6 +10,8 @@ import { getSeasons, getMapLookup } from "@/lib/queries";
 import Script from "next/script";
 import "./globals.css";
 
+export const revalidate = 60;
+
 const display = Bai_Jamjuree({
   subsets: ["latin"],
   weight: ["500", "600", "700"],

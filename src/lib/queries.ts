@@ -3189,6 +3189,19 @@ export async function getAllSabremetrics(): Promise<SabremetricMatchRow[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Admin check
+// ---------------------------------------------------------------------------
+
+export async function isPlayerAdmin(playerId: number): Promise<boolean> {
+  const { data } = await supabase
+    .from('players')
+    .select('is_admin')
+    .eq('id', playerId)
+    .maybeSingle();
+  return !!(data as { is_admin?: boolean } | null)?.is_admin;
+}
+
+// ---------------------------------------------------------------------------
 // Maps table lookup
 // ---------------------------------------------------------------------------
 

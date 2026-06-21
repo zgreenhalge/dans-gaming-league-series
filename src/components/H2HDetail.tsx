@@ -129,11 +129,11 @@ export function DuoDetail({
   friendshipRating?: number;
   ratingBreakdown?: string;
 }) {
+  const maps = useMapLookup();
   const a = players.get(duo.playerA);
   const b = players.get(duo.playerB);
   if (!a || !b) return null;
 
-  const maps = useMapLookup();
   const circleValue = friendshipRating ?? winRatePct(duo.wins, duo.gamesPlayed);
   const mapImg = duo.bestMap ? (maps[mapSlug(duo.bestMap)]?.image_url ?? null) : null;
 
@@ -273,11 +273,11 @@ export function RivalDetail({
   rivalryRating?: number;
   ratingBreakdown?: string;
 }) {
+  const maps = useMapLookup();
   const a = players.get(rival.playerA);
   const b = players.get(rival.playerB);
   if (!a || !b) return null;
 
-  const maps = useMapLookup();
   const total = rival.aWins + rival.bWins || 1;
   const mapImg = rival.lastMap ? (maps[mapSlug(rival.lastMap)]?.image_url ?? null) : null;
 
