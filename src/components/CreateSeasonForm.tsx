@@ -141,18 +141,16 @@ export function CreateSeasonForm({ knownMaps }: Props) {
 
       {/* Submit */}
       <div className="flex flex-col gap-3">
-        {selected.size > 0 && (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-            {selected.size} map{selected.size !== 1 ? 's' : ''} selected
-          </div>
-        )}
+        <div className={`font-mono text-[12px] ${selected.size >= 5 ? 'text-[var(--color-accent-green-fg)]' : 'text-[var(--color-text-secondary)]'}`}>
+          {selected.size} / 5 maps selected
+        </div>
         {error && (
           <div className="text-[12px] text-[var(--color-accent-red-fg,#f87171)]">{error}</div>
         )}
         <button
           type="button"
           onClick={submit}
-          disabled={busy}
+          disabled={busy || selected.size < 5}
           className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40 self-start"
         >
           {busy ? 'Creating…' : 'Create Season'}
