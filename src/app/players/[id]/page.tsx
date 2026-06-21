@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas, getAllSabremetrics } from '@/lib/queries';
+import { getPlayerMeta } from '@/lib/og';
 import { isPlayedScore } from '@/lib/util';
 import { maybeRefreshSteamProfile } from '@/lib/steam';
 import PlayerView from '@/components/PlayerView';
@@ -14,10 +16,23 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>;
-}) {
+}): Promise<Metadata> {
   const { id } = await params;
-  const detail = await getPlayer(Number(id));
-  return { title: detail?.player.name ?? 'Player' };
+  const meta = await getPlayerMeta(Number(id));
+  if (!meta) return { title: 'Player' };
+  return {
+    title: meta.name,
+    description: meta.description,
+    openGraph: {
+      title: `DGLS · ${meta.name}`,
+      description: meta.description,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `DGLS · ${meta.name}`,
+      description: meta.description,
+    },
+  };
 }
 
 export default async function PlayerPage({

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getMapDetail, getH2HData } from '@/lib/queries';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
@@ -49,10 +50,33 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
-}) {
+}): Promise<Metadata> {
   const { slug } = await params;
   const detail = await getMapDetail(slug);
-  return { title: detail ? toSentenceCase(detail.name) : 'Map' };
+  if (!detail) return { title: 'Map' };
+
+  const name = toSentenceCase(detail.name);
+  const parts: string[] = [];
+  if (detail.pickCount > 0) parts.push(`${detail.pickCount} picks`);
+  if (detail.banCount > 0) parts.push(`${detail.banCount} bans`);
+  const seasonCount = detail.seasons.filter(s => !s.is_gauntlet).length;
+  if (seasonCount > 0) parts.push(`${seasonCount} season${seasonCount > 1 ? 's' : ''}`);
+  const description = parts.length > 0
+    ? `${name} — ${parts.join(', ')} in DGLS.`
+    : `${name} map stats in DGLS.`;
+  return {
+    title: name,
+    description,
+    openGraph: {
+      title: `DGLS · ${name}`,
+      description,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `DGLS · ${name}`,
+      description,
+    },
+  };
 }
 
 export default async function MapPage({

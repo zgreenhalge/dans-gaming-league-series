@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
+import type { Metadata } from 'next';
 import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics } from '@/lib/queries';
+import { getMatchMeta } from '@/lib/og';
 import { projectRatingDeltas, type RatingProjection } from '@/lib/ehog';
 import { isPlayedScore, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
@@ -22,14 +24,22 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>;
-}) {
+}): Promise<Metadata> {
   const { id } = await params;
-  const detail = await getMatch(Number(id));
-  if (!detail) return { title: 'Match' };
-  const { match, week, season } = detail;
-  const weekLabel = season.is_gauntlet ? `Round ${week.week_number}` : `Week ${week.week_number}`;
+  const meta = await getMatchMeta(Number(id));
+  if (!meta) return { title: 'Match' };
   return {
-    title: `${season.name} · ${weekLabel} · Match ${match.match_number}`,
+    title: meta.title,
+    description: meta.description,
+    openGraph: {
+      title: `DGLS · ${meta.title}`,
+      description: meta.description,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `DGLS · ${meta.title}`,
+      description: meta.description,
+    },
   };
 }
 

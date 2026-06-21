@@ -3,7 +3,10 @@ import { getMapIndex } from '@/lib/queries';
 import MapIndexView from '@/components/MapIndexView';
 
 export const revalidate = 60;
-export const metadata = { title: 'Maps' };
+export const metadata = {
+  title: 'Maps',
+  description: 'Map stats, pick/ban rates, and player performance across all DGLS maps.',
+};
 
 export default async function MapsPage() {
   const maps = await getMapIndex();
