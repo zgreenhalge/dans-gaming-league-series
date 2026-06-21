@@ -129,7 +129,11 @@ export function CreateSeasonForm({ knownMaps }: Props) {
               type="button"
               onClick={addNewMap}
               disabled={!newMapName.trim() || !newMapWorkshopUrl.trim()}
-              className="tracked text-[10px] font-semibold px-3 py-2 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors disabled:opacity-40"
+              className={`tracked text-[10px] font-semibold px-3 py-2 border transition-colors ${
+                newMapName.trim() && newMapWorkshopUrl.trim()
+                  ? 'border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110'
+                  : 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)] opacity-40'
+              }`}
             >
               Add
             </button>
