@@ -65,6 +65,7 @@ export function CreateSeasonForm({ knownMaps }: Props) {
         return;
       }
       const created = await res.json();
+      router.refresh();
       startTransition(() => router.push(`/seasons/${created.id}`));
     } finally {
       setSubmitting(false);
