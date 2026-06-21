@@ -581,8 +581,9 @@ export default function PlayerView({
                       <tr className="bg-[var(--color-bg-secondary)]">
                         <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Map</th>
                         <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Games</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Wins</th>
                         <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Picked</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Pick W</th>
                         <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">CT</th>
                         <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">T</th>
                       </tr>
@@ -592,6 +593,7 @@ export default function PlayerView({
                         <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
                           <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold"><Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-text-secondary)] transition-colors">{m.map}</Link></td>
                           <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.games}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.wins}</td>
                           <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
                           <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
                           <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.ctPlayed}</td>

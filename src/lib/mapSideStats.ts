@@ -145,6 +145,7 @@ export interface PlayerMatchInput {
 export interface PlayerMapStat {
   map: string;
   games: number;
+  wins: number;
   picked: number;
   ctPlayed: number;
   tPlayed: number;
@@ -162,14 +163,15 @@ export interface PlayerSideStat {
 }
 
 export function aggregatePlayerMapStats(matches: PlayerMatchInput[]): PlayerMapStat[] {
-  const buckets = new Map<string, { display: string; games: number; picked: number; ctPlayed: number; tPlayed: number; pickedAndWon: number }>();
+  const buckets = new Map<string, { display: string; games: number; wins: number; picked: number; ctPlayed: number; tPlayed: number; pickedAndWon: number }>();
 
   for (const m of matches) {
     if (!isPlayedScore(m.final_score) || !m.map) continue;
     const key = m.map.trim().toLowerCase();
-    const b = buckets.get(key) ?? { display: m.map.trim(), games: 0, picked: 0, ctPlayed: 0, tPlayed: 0, pickedAndWon: 0 };
+    const b = buckets.get(key) ?? { display: m.map.trim(), games: 0, wins: 0, picked: 0, ctPlayed: 0, tPlayed: 0, pickedAndWon: 0 };
 
     b.games++;
+    if (m.is_win) b.wins++;
 
     const playerPicked = m.faction === 'SHIRTS' ? m.shirts_pick != null : m.picked_map != null;
     if (playerPicked) b.picked++;
@@ -186,7 +188,7 @@ export function aggregatePlayerMapStats(matches: PlayerMatchInput[]): PlayerMapS
   }
 
   return Array.from(buckets.values())
-    .map(({ display, games, picked, ctPlayed, tPlayed, pickedAndWon }) => ({ map: display, games, picked, ctPlayed, tPlayed, pickedAndWon }))
+    .map(({ display, games, wins, picked, ctPlayed, tPlayed, pickedAndWon }) => ({ map: display, games, wins, picked, ctPlayed, tPlayed, pickedAndWon }))
     .sort((a, b) => b.games - a.games);
 }
 
