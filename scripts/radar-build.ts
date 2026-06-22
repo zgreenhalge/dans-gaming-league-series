@@ -219,21 +219,46 @@ async function main() {
       warning(`Overview head (${chosen}):\n${raw.slice(0, 1000)}`);
       throw new Error(`Could not parse pos_x/pos_y/scale from ${chosen}`);
     }
-    notice(`calibration: pos (${cal.posX}, ${cal.posY}) scale ${cal.scale}`);
+    notice(`calibration: pos (${cal.posX}, ${cal.posY}) scale ${cal.scale}, material "${cal.material ?? '?'}"`);
     return cal;
   });
 
   await stage('upload-radar', () => {
-    // The decoded radar PNG: match the overview's material name when we have it, else
-    // the first *_radar*.png the decompiler produced.
+    // A community map decodes to MANY textures (foroglio reuses cobblestone assets),
+    // so pick the radar deliberately instead of the first png: prefer names with
+    // radar/overview or the overview material, penalize generic PBR/background maps,
+    // and fail loudly (logging every candidate) rather than upload the wrong texture.
     const pngs = walk(outDir, (p) => p.toLowerCase().endsWith('.png'));
-    const matSlug = calibration.material?.split('/').pop()?.toLowerCase() ?? 'radar';
-    const radar =
-      pngs.find((p) => p.toLowerCase().includes(matSlug)) ??
-      pngs.find((p) => p.toLowerCase().includes('radar')) ??
-      pngs[0];
-    if (!radar) throw new Error('No decoded radar PNG found');
-    notice(`radar png: ${radar}`);
+    if (pngs.length === 0) throw new Error('decode produced no PNGs');
+    const matBase = (calibration.material ?? '')
+      .split(/[\\/]/)
+      .pop()!
+      .replace(/\.(vmat|vtex)_?c?$/i, '')
+      .replace(/_(psd|tga|png|jpg)$/i, '')
+      .toLowerCase();
+    const NEG = /(_normal|_rough|_metal|_ao|_mask|_height|_spec|_selfillum|_trans|bg_)/i;
+    const score = (p: string): number => {
+      const lp = p.toLowerCase();
+      const base = lp.split(/[\\/]/).pop()!;
+      let s = 0;
+      if (/radar/.test(lp)) s += 6;
+      if (/(minimap|overhead|overview)/.test(lp)) s += 5;
+      if (matBase && base.includes(matBase)) s += 4;
+      if (/[\\/]overviews?[\\/]/.test(lp)) s += 3;
+      if (NEG.test(base)) s -= 5;
+      return s;
+    };
+    const ranked = [...pngs].sort((a, b) => score(b) - score(a));
+    notice(
+      `radar PNG candidates (material "${calibration.material ?? '?'}", ${pngs.length} pngs):\n` +
+        ranked.slice(0, 12).map((p) => `  [${score(p)}] ${p}`).join('\n'),
+    );
+    const radar = ranked[0];
+    if (!radar || score(radar) <= 0) {
+      warning(`All decoded PNGs:\n${pngs.join('\n')}`);
+      throw new Error('Could not identify the radar overview PNG (see candidate list above)');
+    }
+    notice(`selected radar png: ${radar}`);
     return putR2Object(radarKey(mapId), readFileSync(radar), { contentType: 'image/png' });
   });
 
