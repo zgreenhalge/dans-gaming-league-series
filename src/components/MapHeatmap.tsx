@@ -30,7 +30,7 @@ const GRENADE_RADIUS: Partial<Record<HeatmapKind, number>> = {
   smoke: 144,
   molotov: 150,
   incendiary: 150,
-  he: 250,
+  he: 115,
   flashbang: 120,
   decoy: 60,
 };
