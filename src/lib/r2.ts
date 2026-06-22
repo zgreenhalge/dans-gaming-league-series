@@ -24,6 +24,11 @@ export function replayKey(matchId: number): string {
   return `${matchId}/replay.json`;
 }
 
+/** Deterministic key for a match's compact heatmap points artifact (gzipped JSON). */
+export function heatmapKey(matchId: number): string {
+  return `${matchId}/heatmap.json`;
+}
+
 /** Deterministic key for a map's extracted top-down radar PNG. */
 export function radarKey(mapId: number): string {
   return `maps/${mapId}/radar.png`;

@@ -13,7 +13,8 @@
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { buildReplay } from '../src/lib/replay/extract';
-import { getR2Object, putR2Object, demoKey, replayKey } from '../src/lib/r2';
+import { buildHeatmapPoints } from '../src/lib/replay/heatmap';
+import { getR2Object, putR2Object, demoKey, replayKey, heatmapKey } from '../src/lib/r2';
 import { getAdminClient } from '../src/lib/supabase-admin';
 
 const JOB_TYPE = 'replay_extract';
@@ -28,6 +29,7 @@ const STAGES = [
   'assemble',
   'gzip',
   'upload',
+  'heatmap',
   'done',
 ] as const;
 
@@ -138,7 +140,7 @@ async function main() {
   // buildReplay() does parse-ticks → parse-events → parse-grenades → assemble in one
   // pass; we surface those as ordered stages around it for progress reporting.
   await setStage('parse-ticks');
-  const { payload, warnings } = await stage('assemble', () => {
+  const { payload, warnings, notices } = await stage('assemble', () => {
     notice('parsing ticks, events, and grenades');
     return buildReplay({
       demoBuffer,
@@ -149,6 +151,7 @@ async function main() {
       targetWinRounds: inputs.targetWinRounds,
     });
   });
+  for (const n of notices) notice(n);
   for (const w of warnings) warning(w);
 
   const gz = await stage('gzip', () => gzipSync(Buffer.from(JSON.stringify(payload))));
@@ -160,6 +163,18 @@ async function main() {
       contentEncoding: 'gzip',
     }),
   );
+
+  // Compact heatmap points artifact (kills/deaths/grenades) for the map's Heatmap
+  // tab — derived from the same payload, so there's no second source of truth.
+  await stage('heatmap', async () => {
+    const points = buildHeatmapPoints(payload);
+    const gzPoints = gzipSync(Buffer.from(JSON.stringify(points)));
+    notice(`heatmap.json: ${points.points.length} points, ${gzPoints.length} bytes gzipped`);
+    await putR2Object(heatmapKey(matchId), gzPoints, {
+      contentType: 'application/json',
+      contentEncoding: 'gzip',
+    });
+  });
 
   await stage('done', async () => {
     await supabase

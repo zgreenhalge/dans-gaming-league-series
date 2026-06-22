@@ -16,7 +16,7 @@ export type Side = 'CT' | 'T';
  * Bump when the shape changes incompatibly. The player reads this and refuses
  * payloads it doesn't understand instead of mis-rendering.
  */
-export const REPLAY_SCHEMA_VERSION = 1;
+export const REPLAY_SCHEMA_VERSION = 2;
 
 /** A 2D world position, in CS2 world units (not yet projected to a radar). */
 export interface Point {
@@ -58,6 +58,52 @@ export interface ReplayRound {
   /** Core events — powers BOTH the Events tab and the in-player timeline. */
   events: ReplayEvent[];
   grenades: ReplayGrenade[];
+  /** Every bullet fired this round — drives the all-shots tracers. */
+  shots: ReplayShot[];
+  /** Flash events — drive the per-player whiteout overlay. */
+  blinds: ReplayBlind[];
+  /** Damage events — drive the per-player red damage blink. */
+  hurts: ReplayHurt[];
+  /**
+   * Bomb-carrier change-points (tick-ordered). The first entry is the round-start
+   * seed (read from `inventory` at the first rendered tick); later entries come from
+   * `bomb_pickup` / `bomb_dropped`. `carrierId: null` means dropped. The *plant* is
+   * read from `events` (a `plant` event takes priority once the bomb is down), so it
+   * isn't repeated here. Empty when the carrier couldn't be resolved.
+   */
+  bombCarrier: BombCarrierPoint[];
+}
+
+/** A change in who holds the bomb. `carrierId: null` = dropped on the ground. */
+export interface BombCarrierPoint {
+  tick: number;
+  carrierId: number | null;
+}
+
+/** A player getting flashed (one per `player_blind`). */
+export interface ReplayBlind {
+  tick: number;
+  playerId: number | null;
+  /** Seconds the flash blinds them; the whiteout fades to team color over this. */
+  duration: number;
+}
+
+/** A player taking damage (one per `player_hurt`); drives a brief red blink. */
+export interface ReplayHurt {
+  tick: number;
+  playerId: number | null;
+}
+
+/**
+ * A single bullet fired (one per `weapon_fire`). We store only *when* and *who* — the
+ * tracer is cast at render time from the shooter's interpolated frame position along
+ * their current yaw, so we don't depend on (often-absent) position/yaw props on the
+ * `weapon_fire` event itself.
+ */
+export interface ReplayShot {
+  tick: number;
+  /** `null` if the shooter isn't on the resolved roster. */
+  shooterId: number | null;
 }
 
 /** A single downsampled tick: where everyone is and what the bomb is doing. */
