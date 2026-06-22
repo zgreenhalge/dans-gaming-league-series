@@ -22,15 +22,19 @@ export interface OverviewCalibration {
  * minor format variations across community maps.
  */
 export function parseOverview(text: string): OverviewCalibration | null {
+  // Handle both the classic CSGO KeyValues form (`"pos_x"  "-2476"`) and the CS2
+  // KV3 form (`pos_x = -2476.000000`) — quotes, `=`/`:`, and decimals all optional.
   const num = (key: string): number | null => {
-    const m = text.match(new RegExp(`"${key}"\\s+"(-?[0-9.]+)"`, 'i'));
+    const m = text.match(
+      new RegExp(`["']?\\b${key}\\b["']?\\s*[=:]?\\s*["']?(-?[0-9]+(?:\\.[0-9]+)?)`, 'i'),
+    );
     return m ? Number(m[1]) : null;
   };
   const posX = num('pos_x');
   const posY = num('pos_y');
   const scale = num('scale');
   if (posX === null || posY === null || scale === null || scale === 0) return null;
-  const matMatch = text.match(/"material"\s+"([^"]+)"/i);
+  const matMatch = text.match(/["']?\bmaterial\b["']?\s*[=:]?\s*["']?([^"'\s]+)/i);
   return { posX, posY, scale, material: matMatch ? matMatch[1] : null };
 }
 
