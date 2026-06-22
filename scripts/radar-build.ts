@@ -15,7 +15,7 @@
 // (Source2Viewer CLI path), plus R2 creds + Supabase service key.
 
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { parseOverview, workshopIdFromUrl } from '../src/lib/replay/radar';
@@ -149,14 +149,31 @@ async function main() {
   });
 
   const contentDir = await stage('steamcmd-download', () => {
-    // Anonymous workshop download of the CS2 (appid 730) item.
-    execFileSync(
+    // Anonymous workshop download of the CS2 (appid 730) item. Capture stdout so we
+    // can read the destination SteamCMD prints — its Steam root varies by install
+    // (the apt build uses ~/.local/share/Steam, not ~/Steam).
+    const out = execFileSync(
       STEAMCMD,
       ['+login', 'anonymous', '+workshop_download_item', '730', workshopId, '+quit'],
-      { stdio: 'inherit' },
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 64 * 1024 * 1024 },
     );
-    const dir = join(homedir(), 'Steam', 'steamapps', 'workshop', 'content', '730', workshopId);
-    statSync(dir); // throws if the download didn't land where expected
+    process.stdout.write(out);
+    if (!/Success\.\s*Downloaded item/i.test(out)) {
+      // Some items can't be fetched anonymously; SteamCMD exits 0 either way.
+      throw new Error('SteamCMD did not report a successful download (item may not be public)');
+    }
+    const printed = out.match(/Downloaded item \d+ to "([^"]+)"/i);
+    const candidates = [
+      ...(printed ? [printed[1]] : []),
+      ...['.local/share/Steam', 'Steam', '.steam/steam', '.steam/SteamApps'].map((root) =>
+        join(homedir(), root, 'steamapps', 'workshop', 'content', '730', workshopId),
+      ),
+    ];
+    const dir = candidates.find((p) => existsSync(p));
+    if (!dir) {
+      throw new Error(`Workshop content dir not found (checked: ${candidates.join(', ')})`);
+    }
+    notice(`workshop content at ${dir}`);
     return dir;
   });
 
