@@ -178,10 +178,12 @@ async function main() {
   });
 
   const vpk = await stage('extract-vpk', () => {
-    // The workshop item is one (or more) .vpk; pick the largest as the map pak.
     const vpks = walk(contentDir, (p) => p.toLowerCase().endsWith('.vpk'));
     if (vpks.length === 0) throw new Error('No .vpk found in the workshop download');
-    return vpks.sort((a, b) => statSync(b).size - statSync(a).size)[0];
+    // Prefer the directory pak (`*_dir.vpk`) — Source2Viewer needs the index, not a
+    // raw data chunk. Otherwise the largest .vpk (usually a single-file map pak).
+    const dirPak = vpks.find((p) => /_dir\.vpk$/i.test(p));
+    return dirPak ?? vpks.sort((a, b) => statSync(b).size - statSync(a).size)[0];
   });
 
   const outDir = join(process.cwd(), 'radar-out');
