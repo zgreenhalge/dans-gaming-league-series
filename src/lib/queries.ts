@@ -1,7 +1,8 @@
 import { gunzipSync } from 'node:zlib';
 import { supabase } from './supabase';
-import { getR2Object, replayKey } from './r2';
+import { getR2Object, replayKey, heatmapKey } from './r2';
 import type { ReplayPayload, ReplayPlayerMeta, ReplayEvent } from './replay/types';
+import type { HeatmapArtifact, HeatmapKind } from './replay/heatmap';
 import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
 import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
@@ -3257,6 +3258,45 @@ export async function getMapCalibration(slug: string): Promise<MapCalibration | 
   if (!r || r.radar_pos_x == null || r.radar_pos_y == null || r.radar_scale == null) return null;
   if (!r.radar_image_url) return null;
   return { mapId: r.id, posX: r.radar_pos_x, posY: r.radar_pos_y, scale: r.radar_scale, source: r.radar_source };
+}
+
+/** One heatmap point tagged with its source match (so the map page can season-filter). */
+export interface MapHeatmapPoint {
+  matchId: number;
+  kind: HeatmapKind;
+  x: number;
+  y: number;
+  side: 'CT' | 'T' | null;
+}
+
+/**
+ * Aggregate the compact `heatmap.json` artifacts (kill/death/grenade points) for a
+ * set of matches into a flat, match-tagged list for the map Heatmap tab. Matches
+ * without a replay yet are silently skipped (no artifact in R2). Reads are small
+ * gzipped files; we fan out with Promise.all and let the page's revalidate cache it.
+ */
+export async function getMapHeatmap(matchIds: number[]): Promise<MapHeatmapPoint[]> {
+  const perMatch = await Promise.all(
+    matchIds.map(async (matchId): Promise<MapHeatmapPoint[]> => {
+      const buf = await getR2Object(heatmapKey(matchId));
+      if (!buf) return [];
+      try {
+        const json =
+          buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b ? gunzipSync(buf) : buf;
+        const art = JSON.parse(json.toString('utf8')) as HeatmapArtifact;
+        return art.points.map((p) => ({
+          matchId,
+          kind: p.kind,
+          x: p.x,
+          y: p.y,
+          side: p.side,
+        }));
+      } catch {
+        return [];
+      }
+    }),
+  );
+  return perMatch.flat();
 }
 
 // --- Match replay / events (issue #121; see docs/replay.md) ---
