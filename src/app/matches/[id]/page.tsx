@@ -137,12 +137,15 @@ export default async function MatchPage({
 
   // Replay/Events (issue #121). Only played matches can have a replay, and the Recap
   // tab is gated on `played`, so skip the queries entirely otherwise. Status is
-  // defensive (tolerates missing DB columns); events load only once a payload is ready.
+  // defensive (tolerates missing DB columns). We load the events payload whenever a
+  // job has ever run (status !== 'none'), NOT only when status === 'ready', so a
+  // failed/in-flight *re*generation never hides a replay whose payload still exists in
+  // R2 — the Recap tab gates on the payload, not the status flag.
   const replayJob = played
     ? await getReplayJobState(matchId)
     : { status: 'none' as const, stage: null, ghRunUrl: null, errorMessage: null };
   const replayEvents =
-    replayJob.status === 'ready' ? await getReplayEventsView(matchId) : null;
+    played && replayJob.status !== 'none' ? await getReplayEventsView(matchId) : null;
 
   // Compute rating projections for unplayed matches in the current week
   const matchWindow = matchWeekWindow(season.start_date, week.week_number);

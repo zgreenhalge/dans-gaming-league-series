@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Skull, Bomb, Scissors, Clock, Crosshair } from 'lucide-react';
 import { tabCls } from '@/lib/util';
+import DevGate from './DevGate';
 import type { ReplayJobState, ReplayEventsView } from '@/lib/queries';
 import type { ReplayEvent } from '@/lib/replay/types';
 import type { Faction } from '@/lib/types';
@@ -36,22 +38,12 @@ function weaponLabel(weapon: string | null): string {
   return weapon.replace(/^weapon_/, '').replace(/_/g, ' ');
 }
 
-/** Status panel + Generate/Retry control, shown until a replay is ready. */
-function ReplayStatusPanel({
-  job,
-  matchId,
-  canDispatch,
-}: {
-  job: ReplayJobState;
-  matchId: number;
-  canDispatch: boolean;
-}) {
+/** Shared replay-dispatch action (Generate / Retry / Regenerate all hit the same endpoint). */
+function useReplayDispatch(matchId: number) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const inFlight = job.status === 'queued' || job.status === 'running';
 
   async function dispatch() {
     setBusy(true);
@@ -70,6 +62,23 @@ function ReplayStatusPanel({
       setBusy(false);
     }
   }
+
+  return { dispatch, busy, error, isPending };
+}
+
+/** Status panel + Generate/Retry control, shown until a replay is ready. */
+function ReplayStatusPanel({
+  job,
+  matchId,
+  canDispatch,
+}: {
+  job: ReplayJobState;
+  matchId: number;
+  canDispatch: boolean;
+}) {
+  const { dispatch, busy, error, isPending } = useReplayDispatch(matchId);
+
+  const inFlight = job.status === 'queued' || job.status === 'running';
 
   return (
     <div className="border border-[var(--color-border-primary)] px-5 py-6 mt-4 text-center">
@@ -242,14 +251,16 @@ function EventsList({ events }: { events: ReplayEventsView }) {
   );
 }
 
-/** Placeholder until the Phase 2 client `<ReplayPlayer>` lands (issue #121). */
-function ReplayPlaceholder() {
-  return (
+// The player is a canvas-only client component — load it lazily and skip SSR so its
+// payload fetch + RAF loop never run on the server.
+const ReplayPlayer = dynamic(() => import('./ReplayPlayer'), {
+  ssr: false,
+  loading: () => (
     <div className="border border-[var(--color-border-primary)] px-5 py-10 text-center font-mono text-[12px] text-[var(--color-text-secondary)]">
-      The 2D replay player is coming soon.
+      Loading replay…
     </div>
-  );
-}
+  ),
+});
 
 type RecapSubTab = 'events' | 'replay';
 
@@ -266,23 +277,47 @@ export default function MatchRecapTab({
 }) {
   const [sub, setSub] = useState<RecapSubTab>('events');
 
-  // Both sub-tabs are powered by the same replay payload — until it's ready, show
-  // the generate/progress panel instead of either sub-tab.
-  if (job.status !== 'ready' || !events) {
+  // Both sub-tabs are powered by the same replay payload. Gate on the payload itself
+  // (`events`), not `job.status`: if the payload exists we show it even when a later
+  // regenerate is queued/running/failed, so a transient dispatch error can't hide a
+  // good replay. Only when there's no payload do we fall back to the generate/progress
+  // panel (first generation, or genuinely failed before any payload was produced).
+  if (!events) {
     return <ReplayStatusPanel job={job} matchId={matchId} canDispatch={canDispatch} />;
   }
 
   return (
     <div className="mt-4">
-      <div className="flex gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-4">
         <button type="button" className={tabCls(sub === 'events')} onClick={() => setSub('events')}>
           Events
         </button>
         <button type="button" className={tabCls(sub === 'replay')} onClick={() => setSub('replay')}>
           2D Replay
         </button>
+        <DevGate className="ml-auto">
+          <RegenerateLink matchId={matchId} />
+        </DevGate>
       </div>
-      {sub === 'events' ? <EventsList events={events} /> : <ReplayPlaceholder />}
+      {sub === 'events' ? <EventsList events={events} /> : <ReplayPlayer matchId={matchId} />}
+    </div>
+  );
+}
+
+/** Dev-only re-dispatch of a finished replay (re-runs the extract Action, overwrites R2). */
+function RegenerateLink({ matchId }: { matchId: number }) {
+  const { dispatch, busy, error, isPending } = useReplayDispatch(matchId);
+  return (
+    <div className="flex items-center gap-2">
+      {error && <span className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</span>}
+      <button
+        type="button"
+        onClick={dispatch}
+        disabled={busy || isPending}
+        className="font-mono text-[11px] text-[var(--color-text-secondary)] underline underline-offset-2 hover:text-[var(--color-text-primary)] disabled:opacity-50"
+      >
+        {busy || isPending ? 'Regenerating…' : 'Regenerate'}
+      </button>
     </div>
   );
 }
