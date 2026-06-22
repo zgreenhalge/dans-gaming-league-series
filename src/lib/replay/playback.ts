@@ -249,8 +249,7 @@ export function bombStateAt(
   if (!cur) return null;
 
   if (cur.carrierId !== null) {
-    const pls = players ?? interpolatePlayers(round, tick);
-    const carrier = pls.find((p) => p.id === cur.carrierId);
+    const carrier = playerPosAt(round, cur.carrierId, tick, players);
     if (!carrier) return null;
     return {
       x: carrier.x,
@@ -269,9 +268,32 @@ export function bombStateAt(
     if (p.carrierId !== null) dropper = p.carrierId;
   }
   if (dropper === null) return null;
-  const at = interpolatePlayers(round, cur.tick).find((p) => p.id === dropper);
+  const at = playerPosAt(round, dropper, cur.tick);
   if (!at) return null;
   return { x: at.x, y: at.y, planted: false, defused: false, carried: false, carrierId: null };
+}
+
+/**
+ * A player's position at `tick`, falling back to their last known frame before it. The
+ * carrier of a just-dropped bomb has often died on that same tick and may be gone from
+ * the frames bracketing it; without this fallback the bomb would vanish from the radar
+ * instead of resting at the drop spot.
+ */
+function playerPosAt(
+  round: ReplayRound,
+  id: number,
+  tick: number,
+  players?: ViewPlayer[],
+): { x: number; y: number } | null {
+  const here = (players ?? interpolatePlayers(round, tick)).find((p) => p.id === id);
+  if (here) return here;
+  for (let i = round.frames.length - 1; i >= 0; i--) {
+    const f = round.frames[i];
+    if (f.tick > tick) continue;
+    const pl = f.players.find((p) => p.id === id);
+    if (pl) return { x: pl.x, y: pl.y };
+  }
+  return null;
 }
 
 export function activeGrenadesAt(

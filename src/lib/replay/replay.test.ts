@@ -208,6 +208,25 @@ test('bomb: carried by the seed, dropped at the drop spot, then plant takes over
   approx(planted.x, 99);
 });
 
+test('bomb: dropper gone from the frames at the drop tick → parks at their last known spot, not null', () => {
+  const r = round({
+    // Player 1 carries, then dies and is absent from every frame at/after the drop tick.
+    frames: [
+      frame(0, [pf(1, 12, 34), pf(2, 50, 50)]),
+      frame(100, [pf(2, 50, 50)]), // player 1 dropped out of the roster
+    ],
+    bombCarrier: [
+      { tick: 0, carrierId: 1 },
+      { tick: 60, carrierId: null },
+    ],
+  });
+  const dropped = bombStateAt(r, 80);
+  assert.ok(dropped, 'dropped bomb should not vanish');
+  assert.equal(dropped!.carried, false);
+  approx(dropped!.x, 12); // last frame that still had player 1
+  approx(dropped!.y, 34);
+});
+
 // --- killFeed / tracers windows ---
 test('killFeed: only kills within the recent window, newest first', () => {
   const tickRate = 64;
