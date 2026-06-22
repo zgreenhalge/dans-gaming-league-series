@@ -229,7 +229,7 @@ export function drawScene(args: DrawSceneArgs): void {
   for (const sh of state.shots) {
     const a = projector.project(sh.from);
     const b = projector.project(sh.to);
-    ctx.globalAlpha = Math.max(0, Math.min(1, sh.alpha)) * 0.3;
+    ctx.globalAlpha = Math.max(0, Math.min(1, sh.alpha)) * 0.7;
     ctx.strokeStyle = theme.textDim;
     ctx.lineWidth = 1;
     ctx.beginPath();
