@@ -15,7 +15,7 @@
 // (Source2Viewer CLI path), plus R2 creds + Supabase service key.
 
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { appendFileSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { parseOverview, workshopIdFromUrl } from '../src/lib/replay/radar';
@@ -43,9 +43,18 @@ const DECOMPILER = process.env.DECOMPILER || 'Source2Viewer-CLI';
 const supabase = getAdminClient();
 
 let currentStage: string = STAGES[0];
+// Human-facing label for this run — replaced with the map name as soon as we resolve
+// it (map ids aren't used forward-facing, so every log/summary line leads with name).
+let mapLabel = `map #${mapId}`;
 
 const notice = (m: string) => console.log(`::notice::${m}`);
 const warning = (m: string) => console.log(`::warning::${m}`);
+
+/** Append markdown to the GitHub run summary (the panel at the top of the run page). */
+function summary(md: string) {
+  const file = process.env.GITHUB_STEP_SUMMARY;
+  if (file) appendFileSync(file, md + '\n');
+}
 
 async function markRunning() {
   const now = new Date().toISOString();
@@ -91,7 +100,8 @@ async function stage<T>(name: string, fn: () => Promise<T> | T): Promise<T> {
 
 async function fail(err: unknown) {
   const msg = err instanceof Error ? err.message : String(err);
-  console.log(`::error::failed at stage ${currentStage}: ${msg}`);
+  console.log(`::error::${mapLabel} failed at stage ${currentStage}: ${msg}`);
+  summary(`\n❌ **${mapLabel}** failed at \`${currentStage}\`: ${msg}`);
   await supabase
     .from('background_jobs')
     .update({
@@ -128,9 +138,13 @@ async function main() {
       .maybeSingle();
     const row = data as { name: string; slug: string; workshop_url: string | null } | null;
     if (!row) throw new Error(`Map ${mapId} not found`);
+    mapLabel = `${row.name} (#${mapId})`;
     const id = workshopIdFromUrl(row.workshop_url);
-    if (!id) throw new Error(`Map ${mapId} has no usable workshop_url`);
-    notice(`workshop id ${id} for ${row.name}`);
+    if (!id) throw new Error(`${mapLabel} has no usable workshop_url`);
+    // Lead with the map name everywhere a human looks: the run summary panel and a
+    // banner notice (map ids aren't meaningful forward-facing).
+    summary(`## 🗺️ radar-build — ${row.name}\n\n- Map: **${row.name}** (\`${row.slug}\`, id ${mapId})\n- Workshop item: ${id}\n`);
+    notice(`▶ Building radar for "${row.name}"  ·  slug ${row.slug}  ·  workshop ${id}`);
     return { workshopId: id, mapName: row.name };
   });
 
@@ -228,7 +242,10 @@ async function main() {
       .throwOnError();
   });
 
-  notice('radar-build complete');
+  summary(
+    `\n✅ **${mapName}** calibrated — pos (${calibration.posX}, ${calibration.posY}), scale ${calibration.scale}, radar uploaded.`,
+  );
+  notice(`radar-build complete for "${mapName}"`);
 }
 
 main().catch(fail);
