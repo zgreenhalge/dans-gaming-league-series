@@ -23,7 +23,7 @@ const LAYERS: { key: string; label: string; kinds: HeatmapKind[]; color: string 
   { key: 'flash', label: 'Flashes', kinds: ['flashbang'], color: '#e8e6c8' },
 ];
 
-const GRENADE_KINDS = new Set<HeatmapKind>(['smoke', 'molotov', 'incendiary', 'he', 'flashbang', 'decoy']);
+const GRENADE_KINDS = new Set<HeatmapKind>(['smoke', 'molotov', 'incendiary', 'he', 'flashbang']);
 
 /** Approximate effect radius in world units, so grenades plot as their area. */
 const GRENADE_RADIUS: Partial<Record<HeatmapKind, number>> = {
@@ -32,7 +32,6 @@ const GRENADE_RADIUS: Partial<Record<HeatmapKind, number>> = {
   incendiary: 150,
   he: 115,
   flashbang: 120,
-  decoy: 60,
 };
 
 const MAX_SIDE = 560;
@@ -50,24 +49,43 @@ function boundsOf(points: MapHeatmapPoint[]): Bounds | null {
 
 export default function MapHeatmap({
   slug,
-  points,
+  matchIds,
   visibleMatchIds,
 }: {
   slug: string;
-  points: MapHeatmapPoint[];
+  /** Every match id for this map — points are fetched lazily for these when the tab opens. */
+  matchIds: number[];
   /** Match ids passing the page's season filter — points outside are hidden. */
   visibleMatchIds: Set<number>;
 }) {
   const { calibration, radarImage } = useMapRadar(slug);
+  // null = still loading the per-match artifacts (fetched only when this tab mounts, so
+  // the map page no longer pays the per-match R2 fan-out on every render).
+  const [points, setPoints] = useState<MapHeatmapPoint[] | null>(null);
   const [active, setActive] = useState<Set<string>>(new Set(['death']));
   const [side, setSide] = useState<SideFilter>('all');
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/maps/${slug}/heatmap`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ matchIds }),
+    })
+      .then((res) => (res.ok ? res.json() : { points: [] }))
+      .then((body) => !cancelled && setPoints(body.points ?? []))
+      .catch(() => !cancelled && setPoints([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, matchIds]);
+
   // Auto-fit bounds use ALL points (stable view across filter changes); calibration
   // ignores them entirely.
-  const allBounds = useMemo(() => boundsOf(points), [points]);
+  const allBounds = useMemo(() => boundsOf(points ?? []), [points]);
 
   const activeKinds = useMemo(() => {
     const set = new Set<HeatmapKind>();
@@ -83,7 +101,7 @@ export default function MapHeatmap({
 
   const visible = useMemo(
     () =>
-      points.filter(
+      (points ?? []).filter(
         (p) =>
           visibleMatchIds.has(p.matchId) &&
           activeKinds.has(p.kind) &&
@@ -174,6 +192,12 @@ export default function MapHeatmap({
       else next.add(key);
       return next;
     });
+
+  if (points === null) {
+    return (
+      <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">Loading heatmap…</div>
+    );
+  }
 
   if (points.length === 0) {
     return (

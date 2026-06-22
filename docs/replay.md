@@ -265,6 +265,13 @@ workflow — see the dispatch endpoint.
 4. ~~On-demand `replay-mp4` Action~~ — **dropped** in favor of the **map Heatmap tab** — **built.**
    Kill/death/grenade locations on `/maps/[slug]`, respecting the season filter (shared with the rest
    of the page) + a CT/T side toggle + per-layer toggles, plotted via the shared `project.ts` (real
-   radar when calibrated, else auto-fit) over the `heatmap.json` artifacts. `getMapHeatmap()`
-   aggregates the per-match artifacts server-side; `MapHeatmap` (with the shared `useMapRadar` hook)
-   renders the density additively on a canvas, with grenades drawn as their effect area.
+   radar when calibrated, else auto-fit) over the `heatmap.json` artifacts. The aggregation is
+   **lazy**: `MapHeatmap` (with the shared `useMapRadar` hook) fetches the points only when the
+   Heatmap tab opens — it POSTs the map's match ids to `/api/maps/[slug]/heatmap`, which calls
+   `getMapHeatmap()` to fan out one R2 GET per match. The map page no longer pays that fan-out on
+   every render. `MapHeatmap` then renders the density additively on a canvas, with grenades drawn
+   as their effect area. (Decoys are excluded from `heatmap.json` entirely — `buildHeatmapPoints()`
+   skips them; they carry no signal worth plotting and the tab has no decoy layer.)
+
+   > **Scaling note:** the per-match R2 fan-out is fine for current match counts but grows linearly.
+   > A precomputed per-map rollup (or a streamed response) is tracked in issue #127 for when it matters.

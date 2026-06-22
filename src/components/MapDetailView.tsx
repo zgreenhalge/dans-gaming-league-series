@@ -11,7 +11,6 @@ import type { MapMatchRow, MapDetail, MapPlayerStat, H2HData } from '@/lib/queri
 import type { LeaderboardRowWithId } from '@/lib/types';
 import H2HSection from './H2HSection';
 import MapHeatmap from './MapHeatmap';
-import type { MapHeatmapPoint } from '@/lib/queries';
 
 type Tab = 'leaderboard' | 'stats' | 'matches' | 'h2h' | 'heatmap';
 
@@ -104,11 +103,9 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
 export default function MapDetailView({
   detail,
   h2hData,
-  heatmapPoints,
 }: {
   detail: MapDetail;
   h2hData: H2HData;
-  heatmapPoints: MapHeatmapPoint[];
 }) {
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter();
   const [tab, setTab] = useState<Tab>('leaderboard');
@@ -134,6 +131,10 @@ export default function MapDetailView({
     () => aggregatePlayerStats(filteredMatches),
     [filteredMatches],
   );
+
+  // Stable list of every match id for this map — the Heatmap tab fetches its artifacts
+  // lazily for these (memoized so the fetch effect doesn't re-run on every render).
+  const allMatchIds = useMemo(() => detail.matches.map((m) => m.match_id), [detail.matches]);
 
 
   return (
@@ -218,7 +219,7 @@ export default function MapDetailView({
       {tab === 'heatmap' && (
         <MapHeatmap
           slug={detail.slug}
-          points={heatmapPoints}
+          matchIds={allMatchIds}
           visibleMatchIds={new Set(filteredMatches.map((m) => m.match_id))}
         />
       )}

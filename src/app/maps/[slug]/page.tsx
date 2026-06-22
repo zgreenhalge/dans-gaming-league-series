@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getMapDetail, getH2HData, getMapHeatmap } from '@/lib/queries';
+import { getMapDetail, getH2HData } from '@/lib/queries';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
 import { extractSeasonNumber } from '@/lib/util';
@@ -93,10 +93,6 @@ export default async function MapPage({
   ]);
   if (!detail) notFound();
 
-  // Heatmap points for this map's matches (small per-match artifacts; skips matches
-  // without a replay yet). The client tab season-filters them against the visible set.
-  const heatmapPoints = await getMapHeatmap(detail.matches.map((m) => m.match_id));
-
   const img = mapImageFor(detail.name, mapLookup);
   const workshopUrl = mapLookup[slug]?.workshop_url ?? null;
 
@@ -158,7 +154,7 @@ export default async function MapPage({
       </div>
 
       <main className="max-w-[1080px] mx-auto px-6 pb-16 mt-8">
-        <MapDetailView detail={detail} h2hData={h2hData} heatmapPoints={heatmapPoints} />
+        <MapDetailView detail={detail} h2hData={h2hData} />
       </main>
     </div>
   );
