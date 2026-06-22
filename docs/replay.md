@@ -43,6 +43,7 @@ ReplayPayload {
     frames:   [{ tick, players: [{ id, x, y, yaw, hp, alive, weapon }], bomb }],  // ~16 fps
     events:   [{ tick, type: 'kill'|'plant'|'defuse'|'round_end', … }],
     grenades: [{ type, throwerId, trajectory: [{tick,x,y,z}], detonateTick }],
+    shots:    [{ tick, shooterId, x, y, yaw }],   // every weapon_fire → a tracer ray
   }]
 }
 ```
@@ -64,10 +65,22 @@ script, mirroring the roster assembly in `POST /api/matches/[id]/demo/parse`.
 > rounds *completed so far*, so their round number is `total_rounds_played + 1`. The extract honors
 > this split (same as the stats collectors).
 
-**Freeze-time trim:** each round opens with ~15s of freeze/buy time where everyone stands in spawn —
-dead air for a replay. The extract begins each round's frames only `PRE_LIVE_SECONDS` (≈1s) before
-`round_freeze_end`, skipping the rest. This both tightens playback and shrinks the payload. If a demo
-has no `round_freeze_end` events the full freeze time is kept (with a warning).
+**Freeze-time trim + post-round:** each round opens with ~15s of freeze/buy time where everyone
+stands in spawn — dead air for a replay. The extract begins each round's frames only
+`PRE_LIVE_SECONDS` (≈1s) before `round_freeze_end`, skipping the rest. This both tightens playback and
+shrinks the payload. If a demo has no `round_freeze_end` events the full freeze time is kept (with a
+warning). At the other end, frames continue `POST_ROUND_SECONDS` (≈7s) **past** `round_end` to show
+the post-round, capped at the next `round_start` so they never bleed into the following round's
+(trimmed) freeze. `ReplayRound.endTick` stays the `round_end` tick — events reference it — while
+`frames`/`roundTickRange()` cover the extended window; grenades are bucketed over the extended range
+too, so a smoke thrown at round end still blooms into the post-round.
+
+**Tracers & grenade effects:** `shots[]` (one per `weapon_fire`) drives a faint tracer ray for **every
+bullet**, cast from the shooter along their eye `yaw` (the event carries no impact point); kills keep
+their own brighter attacker→victim tracer. Grenade detonations linger and are sized per type in
+`GRENADE_EFFECT` (`playback.ts`): smoke blooms wide for ~15s, molotov/incendiary burn ~7s with the
+incendiary covering a larger area, and he/flash/decoy are brief point pops. `draw.ts` renders the AoE
+disc in world units via `projector.scaleLength()` and fades it over the effect's life.
 
 ### Known Phase-1 limitations
 
@@ -76,9 +89,10 @@ has no `round_freeze_end` events the full freeze time is kept (with a warning).
   and plant markers work; only the moving bomb dot is deferred. The schema field exists so adding it
   later is non-breaking.
 - **Parser field names are validated by a real run.** Position/weapon prop names (`X`, `Y`, `yaw`,
-  `health`, `is_alive`, `active_weapon_name`) and grenade fields are read defensively (`pick()` tries
-  several candidate keys). The first real Action run against an uploaded demo is the validation step —
-  watch the `assemble`-stage warnings.
+  `health`, `is_alive`, `active_weapon_name`), grenade fields, and the `weapon_fire` shooter
+  props (`user_X`, `user_Y`, `user_yaw`) are read defensively (`pick()` tries several candidate
+  keys). The first real Action run against an uploaded demo is the validation step — watch the
+  `assemble`-stage warnings.
 
 ## Client renderer (Phase 2)
 
@@ -217,7 +231,9 @@ workflow — see the dispatch endpoint.
 3. **`radar-build` Action + calibration read path** — **built.** The Action extracts the radar +
    triplet from the workshop VPK; the player loads it via `GET /api/maps/[slug]/calibration` +
    `…/radar` and switches `projectorFor()` to the calibrated branch (auto-fit fallback when
-   uncalibrated). Remaining: an in-site admin trigger + a manual calibration/correction UI.
+   uncalibrated). The whole map pool was calibrated by running `radar-build` from the Actions UI. The
+   originally-planned in-site admin trigger + manual calibration/correction UI were **not pursued** —
+   the auto extraction proved accurate enough across every map, so they're unnecessary.
 4. ~~On-demand `replay-mp4` Action~~ — **dropped** in favor of the **map Heatmap tab** — **built.**
    Kill/death/grenade locations on `/maps/[slug]`, respecting the season filter (shared with the rest
    of the page) + a CT/T side toggle + per-layer toggles, plotted via the shared `project.ts` (real
