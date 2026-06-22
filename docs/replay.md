@@ -43,7 +43,7 @@ ReplayPayload {
     frames:   [{ tick, players: [{ id, x, y, yaw, hp, alive, weapon }], bomb }],  // ~16 fps
     events:   [{ tick, type: 'kill'|'plant'|'defuse'|'round_end', … }],
     grenades: [{ type, throwerId, trajectory: [{tick,x,y,z}], detonateTick }],
-    shots:    [{ tick, shooterId, x, y, yaw }],   // every weapon_fire → a tracer ray
+    shots:    [{ tick, shooterId }],              // every weapon_fire → a tracer ray
     blinds:   [{ tick, playerId, duration }],     // player_blind → flash whiteout
     hurts:    [{ tick, playerId }],               // player_hurt → red damage blink
   }]
@@ -77,14 +77,19 @@ the post-round, capped at the next `round_start` so they never bleed into the fo
 `frames`/`roundTickRange()` cover the extended window; grenades are bucketed over the extended range
 too, so a smoke thrown at round end still blooms into the post-round.
 
-**Tracers & grenade effects:** `shots[]` (one per `weapon_fire`) drives a faint tracer ray for **every
-bullet**, cast from the shooter along their eye `yaw` (the event carries no impact point); kills keep
-their own brighter attacker→victim tracer. Grenade detonations linger and are sized per type in
-`GRENADE_EFFECT` (`playback.ts`): smoke blooms wide for ~18s, molotov/incendiary burn ~7s with the
-incendiary covering a larger area, decoy lasts ~15s as a dot that *pulses* (it pops gunshots
-intermittently — `activeGrenadesAt` gates its `fade` with a duty cycle), and he/flash are brief point
-pops. `draw.ts` renders the AoE disc in world units via `projector.scaleLength()` and fades it over the
-effect's life.
+**Tracers & grenade effects:** `shots[]` (one per `weapon_fire`, just `tick` + `shooterId`) drives a
+faint tracer ray for **every bullet**. The event carries no impact point *and* its position/yaw props
+are unreliable, so `shotTracersAt()` casts the ray from the shooter's **interpolated frame position**
+along their current yaw at render time (skipping a shooter who isn't in-frame/alive) — no dependence on
+fragile event props. Kills keep their own brighter attacker→victim tracer. Grenade detonations linger
+and are sized per type in `GRENADE_EFFECT` (`playback.ts`): smoke blooms wide for ~18s,
+molotov/incendiary burn ~7s with the incendiary covering a larger area, decoy lasts ~15s as a dot that
+*pulses* (it pops gunshots intermittently — `activeGrenadesAt` gates its `fade` with a duty cycle), and
+he/flash are brief point pops. `draw.ts` renders the smoke/fire AoE disc in world units via
+`projector.scaleLength()`, gives HE/flash/decoy **distinct glyphs** (burst / ring+core / pulsing
+ring-dot) so they read apart, and paints the planted bomb as a **C4 icon** (body + blinking light), not
+a dot. `detonateTick` is the tick the projectile reaches its **resting** position (not the last emitted
+tick), so a smoke/fire blooms where and when it lands instead of late.
 
 **Player status effects:** `blinds[]` (`player_blind`, with `blind_duration`) and `hurts[]`
 (`player_hurt`) drive per-player overlays computed by `flashAt()` / `hurtAt()` and merged onto each
@@ -100,10 +105,13 @@ re-trigger the blink for a steady burn. `draw.ts` paints these as fading alpha o
   and plant markers work; only the moving bomb dot is deferred. The schema field exists so adding it
   later is non-breaking.
 - **Parser field names are validated by a real run.** Position/weapon prop names (`X`, `Y`, `yaw`,
-  `health`, `is_alive`, `active_weapon_name`), grenade fields, the `weapon_fire` shooter
-  props (`user_X`, `user_Y`, `user_yaw`), and `player_blind`'s `blind_duration` are read defensively
-  (`pick()` tries several candidate keys). The first real Action run against an uploaded demo is the
-  validation step — watch the `assemble`-stage warnings.
+  `health`, `is_alive`, `active_weapon_name`), grenade fields, and `player_blind`'s `blind_duration`
+  are read defensively (`pick()` tries several candidate keys). The first real Action run against an
+  uploaded demo is the validation step — `buildReplay()` emits an `assemble`-stage warning with the
+  **captured counts** (`N shots, M blinds, K hurts, …`) plus an explicit warning per array that comes
+  back empty, so a drifted field name (which makes a fail-soft collector silently return nothing) is
+  visible without opening the demo. `shots` deliberately avoids event position/yaw props (it stores
+  only `tick` + `shooterId`) precisely because those were unreliable.
 
 ## Client renderer (Phase 2)
 
@@ -126,7 +134,9 @@ Phase-4 mp4 Action share one code path with **no draw drift**:
 `<ReplayPlayer>` is the thin shell: a DPR-aware canvas sized by `ResizeObserver`, a RAF clock that
 advances `tick` (auto-advancing across rounds), and the controls (play/pause, 0.5–4× speed, round
 jump, scrubber). The scrubber is uncontrolled and synced imperatively each frame to avoid a
-per-frame React re-render. The pure modules are unit-tested in `src/lib/replay/replay.test.ts`
+per-frame React re-render. It also accepts an optional `jump={{ round, n }}` prop: clicking a round
+header in the Recap tab's **Events** timeline (`MatchRecapTab`) switches to the 2D Replay sub-tab and
+jumps the player to that round (the `n` nonce lets a repeat click on the same round re-fire). The pure modules are unit-tested in `src/lib/replay/replay.test.ts`
 (`npm test`).
 
 ## Background jobs (GitHub Actions)

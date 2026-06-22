@@ -81,19 +81,15 @@ export interface ReplayHurt {
 }
 
 /**
- * A single bullet fired (one per `weapon_fire`). We store the shooter's position and
- * aim yaw rather than an impact point — the 2D tracer is cast as a ray along `yaw`
- * (the demo's `weapon_fire` carries no impact location). World coords; the projector
- * applies the y-flip.
+ * A single bullet fired (one per `weapon_fire`). We store only *when* and *who* — the
+ * tracer is cast at render time from the shooter's interpolated frame position along
+ * their current yaw, so we don't depend on (often-absent) position/yaw props on the
+ * `weapon_fire` event itself.
  */
 export interface ReplayShot {
   tick: number;
   /** `null` if the shooter isn't on the resolved roster. */
   shooterId: number | null;
-  x: number;
-  y: number;
-  /** Eye yaw in degrees (world-space, CCW from +X). */
-  yaw: number;
 }
 
 /** A single downsampled tick: where everyone is and what the bomb is doing. */

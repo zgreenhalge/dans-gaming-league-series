@@ -295,23 +295,34 @@ export function tracersAt(round: ReplayRound, tick: number, tickRate: number): T
 }
 
 /**
- * Bullet tracers active at `tick`. The demo's `weapon_fire` carries no impact point,
- * so each tracer is a ray from the shooter along their eye yaw — in WORLD space, so
- * the projector applies the y-flip (don't negate yaw here, unlike a direct canvas
- * draw). Fades out fast over `SHOT_TRACER_SECONDS`.
+ * Bullet tracers active at `tick`, one per recent `weapon_fire`. The event carries no
+ * impact point, so each tracer is cast from the shooter's *current* interpolated
+ * position along their yaw — in WORLD space, so the projector applies the y-flip
+ * (don't negate yaw here, unlike a direct canvas draw). A shooter who isn't currently
+ * in-frame or alive (e.g. already traded) is skipped. Fades over `SHOT_TRACER_SECONDS`.
  */
-export function shotTracersAt(round: ReplayRound, tick: number, tickRate: number): ShotTracer[] {
+export function shotTracersAt(
+  round: ReplayRound,
+  tick: number,
+  tickRate: number,
+  players: ViewPlayer[],
+): ShotTracer[] {
   const shots = round.shots ?? [];
+  if (shots.length === 0) return [];
   const windowTicks = SHOT_TRACER_SECONDS * tickRate;
+  const byId = new Map(players.map((p) => [p.id, p]));
   const out: ShotTracer[] = [];
   for (const s of shots) {
+    if (s.shooterId === null) continue;
     if (s.tick > tick || tick - s.tick > windowTicks) continue;
-    const rad = (s.yaw * Math.PI) / 180;
+    const shooter = byId.get(s.shooterId);
+    if (!shooter || !shooter.alive) continue;
+    const rad = (shooter.yaw * Math.PI) / 180;
     out.push({
-      from: { x: s.x, y: s.y },
+      from: { x: shooter.x, y: shooter.y },
       to: {
-        x: s.x + Math.cos(rad) * SHOT_TRACER_LENGTH,
-        y: s.y + Math.sin(rad) * SHOT_TRACER_LENGTH,
+        x: shooter.x + Math.cos(rad) * SHOT_TRACER_LENGTH,
+        y: shooter.y + Math.sin(rad) * SHOT_TRACER_LENGTH,
       },
       alpha: 1 - (tick - s.tick) / windowTicks,
     });
@@ -352,7 +363,7 @@ export function viewStateAt(round: ReplayRound, tick: number, tickRate: number):
     bomb: bombStateAt(round, tick),
     grenades: activeGrenadesAt(round, tick, tickRate),
     tracers: tracersAt(round, tick, tickRate),
-    shots: shotTracersAt(round, tick, tickRate),
+    shots: shotTracersAt(round, tick, tickRate, players),
     killFeed: killFeedAt(round, tick, tickRate),
   };
 }

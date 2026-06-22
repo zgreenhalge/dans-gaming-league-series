@@ -253,6 +253,21 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
   const blindsByRound = collectBlinds(demoBuffer, context, playerIdOf);
   const hurtsByRound = collectHurts(demoBuffer, context, playerIdOf);
 
+  // Capture counts surface in the Action's `assemble` stage — an empty array here is
+  // the first sign a parser field name drifted (collectors fail soft / skip silently).
+  const sumLengths = (m: Map<number, readonly unknown[]>): number =>
+    [...m.values()].reduce((n, a) => n + a.length, 0);
+  const nShots = sumLengths(shotsByRound);
+  const nBlinds = sumLengths(blindsByRound);
+  const nHurts = sumLengths(hurtsByRound);
+  const nGrenades = sumLengths(grenadesByRound);
+  warnings.push(
+    `Captured ${nShots} shots, ${nBlinds} blinds, ${nHurts} hurts, ${nGrenades} grenades.`,
+  );
+  if (nShots === 0) warnings.push('No shots captured — bullet tracers will be absent (weapon_fire?).');
+  if (nBlinds === 0) warnings.push('No blinds captured — flash overlay will be absent (player_blind?).');
+  if (nHurts === 0) warnings.push('No hurts captured — damage blink will be absent (player_hurt?).');
+
   // --- Assemble rounds ---
   for (const b of roundBounds) {
     const sideInfo = context.rounds.find((r) => r.roundNumber === b.round)!;
@@ -446,13 +461,29 @@ function collectGrenades(
       trajectory.push({ tick, x, y, z: Number(gz(p) ?? 0) });
     }
 
+    // Detonation = when the projectile reaches its final resting spot, NOT the last
+    // emitted tick. parseGrenades can keep emitting a settled projectile's position
+    // long after it lands; using the last tick would make a smoke/fire bloom late and
+    // leave the in-flight dot parked at the bloom for seconds. Use the first tick the
+    // projectile is at its final position (for air-bursts that's just the last point).
+    const lastPt = points[points.length - 1];
+    const restX = gx(lastPt);
+    const restY = gy(lastPt);
+    let detonateTick = gtick(lastPt);
+    for (const p of points) {
+      if (gx(p) === restX && gy(p) === restY) {
+        detonateTick = gtick(p);
+        break;
+      }
+    }
+
     const grenade: ReplayGrenade = {
       // grenade_type is the engine class name, e.g. "CSmokeGrenade" (`name` is the
       // thrower's display name, not the grenade).
       type: normGrenadeType(pick<string>(first, ['grenade_type'])),
       throwerId: playerIdOf(pick<string>(first, ['steamid', 'steamID'])),
       trajectory,
-      detonateTick: gtick(points[points.length - 1]),
+      detonateTick,
     };
     if (!byRound.has(round)) byRound.set(round, []);
     byRound.get(round)!.push(grenade);
@@ -474,7 +505,7 @@ function collectShots(
   const byRound = new Map<number, ReplayShot[]>();
   let rows: Record<string, unknown>[];
   try {
-    rows = parseEvent(demoBuffer, 'weapon_fire', ['X', 'Y', 'yaw'], [
+    rows = parseEvent(demoBuffer, 'weapon_fire', [], [
       'total_rounds_played',
       'is_warmup_period',
     ]) as Record<string, unknown>[];
@@ -486,16 +517,10 @@ function collectShots(
     if (f.is_warmup_period) continue;
     const round = Number(f.total_rounds_played ?? -1) + 1;
     if (!context.liveRounds.has(round)) continue;
-    const x = pick<number>(f, ['user_X', 'X']);
-    const y = pick<number>(f, ['user_Y', 'Y']);
-    if (x === null || y === null) continue;
     if (!byRound.has(round)) byRound.set(round, []);
     byRound.get(round)!.push({
       tick: Number(pick<number>(f, ['tick']) ?? 0),
       shooterId: playerIdOf(pick<string>(f, ['user_steamid'])),
-      x: Number(x),
-      y: Number(y),
-      yaw: Number(pick<number>(f, ['user_yaw', 'yaw']) ?? 0),
     });
   }
 

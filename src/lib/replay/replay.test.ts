@@ -246,16 +246,21 @@ test('grenades: incendiary covers a larger area than molotov, both burn ~7s', ()
   assert.equal(activeGrenadesAt(molo, 100 + 8 * tickRate, tickRate).length, 0); // out after 7s
 });
 
-// --- shot tracers: every bullet, cast as a fading ray along the shooter's yaw ---
-test('shots: tracer points along yaw in world space and fades out fast', () => {
+// --- shot tracers: every bullet, cast from the shooter's interpolated frame ---
+test('shots: tracer is cast from the live shooter position along their yaw', () => {
   const tickRate = 64;
-  const r = round({ shots: [{ tick: 100, shooterId: 1, x: 0, y: 0, yaw: 0 }] });
-  const t = shotTracersAt(r, 100, tickRate);
+  const r = round({ shots: [{ tick: 100, shooterId: 1 }] });
+  // Shooter at (5,5) facing yaw 0 (+x) at the moment we render.
+  const shooter = { id: 1, x: 5, y: 5, yaw: 0, hp: 100, alive: true, flash: 0, hurt: 0 };
+  const t = shotTracersAt(r, 100, tickRate, [shooter]);
   assert.equal(t.length, 1);
   approx(t[0].alpha, 1);
+  approx(t[0].from.x, 5);
   assert.ok(t[0].to.x > t[0].from.x); // yaw 0 → ray extends along +x (world, no flip here)
-  approx(t[0].to.y, 0);
-  assert.equal(shotTracersAt(r, 100 + tickRate, tickRate).length, 0); // 1s later (>0.25s window) gone
+  approx(t[0].to.y, 5);
+  assert.equal(shotTracersAt(r, 100 + tickRate, tickRate, [shooter]).length, 0); // >0.25s → gone
+  // A dead / missing shooter casts no tracer.
+  assert.equal(shotTracersAt(r, 100, tickRate, [{ ...shooter, alive: false }]).length, 0);
 });
 
 // --- player status effects: flash whiteout + damage blink, per player ---
