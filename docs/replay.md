@@ -107,11 +107,13 @@ re-trigger the blink for a steady burn. `draw.ts` paints these as fading alpha o
 - **Parser field names are validated by a real run.** Position/weapon prop names (`X`, `Y`, `yaw`,
   `health`, `is_alive`, `active_weapon_name`), grenade fields, and `player_blind`'s `blind_duration`
   are read defensively (`pick()` tries several candidate keys). The first real Action run against an
-  uploaded demo is the validation step — `buildReplay()` emits an `assemble`-stage warning with the
-  **captured counts** (`N shots, M blinds, K hurts, …`) plus an explicit warning per array that comes
-  back empty, so a drifted field name (which makes a fail-soft collector silently return nothing) is
-  visible without opening the demo. `shots` deliberately avoids event position/yaw props (it stores
-  only `tick` + `shooterId`) precisely because those were unreliable.
+  uploaded demo is the validation step — `buildReplay()` returns `notices` (surfaced as `::notice`)
+  with the **captured counts** (`N shots, M blinds, K hurts, …`) and `warnings` (surfaced as
+  `::warning`) including an explicit one per array that comes back empty, so a drifted field name
+  (which makes a fail-soft collector silently return nothing) is visible without opening the demo.
+  `shots` deliberately avoids event position/yaw props (it stores only `tick` + `shooterId`) precisely
+  because those were unreliable, and filters `weapon_fire` to firearms only (`isBulletWeapon`) so
+  grenade throws and knife swings don't draw tracers.
 
 ## Client renderer (Phase 2)
 

@@ -80,10 +80,10 @@ export interface ViewState {
 
 /** Seconds a death tracer stays on screen. */
 const TRACER_SECONDS = 0.8;
-/** Seconds a bullet tracer stays on screen — brief, like a muzzle flash. */
-const SHOT_TRACER_SECONDS = 0.25;
-/** World-unit length of a bullet tracer ray (clipped by the canvas when long). */
-const SHOT_TRACER_LENGTH = 3000;
+/** Seconds a bullet tracer stays on screen — a brief muzzle-flash blip. */
+const SHOT_TRACER_SECONDS = 0.1;
+/** World-unit length of a bullet tracer ray — a short stub, not a map-spanning line. */
+const SHOT_TRACER_LENGTH = 450;
 /** Seconds a kill stays in the feed overlay. */
 const KILLFEED_SECONDS = 6;
 

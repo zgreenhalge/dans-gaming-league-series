@@ -140,7 +140,7 @@ async function main() {
   // buildReplay() does parse-ticks → parse-events → parse-grenades → assemble in one
   // pass; we surface those as ordered stages around it for progress reporting.
   await setStage('parse-ticks');
-  const { payload, warnings } = await stage('assemble', () => {
+  const { payload, warnings, notices } = await stage('assemble', () => {
     notice('parsing ticks, events, and grenades');
     return buildReplay({
       demoBuffer,
@@ -151,6 +151,7 @@ async function main() {
       targetWinRounds: inputs.targetWinRounds,
     });
   });
+  for (const n of notices) notice(n);
   for (const w of warnings) warning(w);
 
   const gz = await stage('gzip', () => gzipSync(Buffer.from(JSON.stringify(payload))));

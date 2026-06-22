@@ -74,6 +74,15 @@ function normGrenadeType(raw: string | null): string {
   return s || 'unknown';
 }
 
+/** True for firearms (which fire bullets → tracers), false for grenades/knives. */
+function isBulletWeapon(weapon: string | null): boolean {
+  const w = (weapon ?? '').toLowerCase();
+  if (!w) return false; // unknown weapon → no tracer (safer than a spurious one)
+  return !/grenade|molotov|incgren|flashbang|smoke|decoy|knife|bayonet|fists|breachcharge|bump|tablet|healthshot|zone/.test(
+    w,
+  );
+}
+
 export interface BuildReplayInput {
   demoBuffer: Buffer;
   matchId: number;
@@ -86,11 +95,14 @@ export interface BuildReplayInput {
 export interface BuildReplayResult {
   payload: ReplayPayload;
   warnings: string[];
+  /** Informational lines (e.g. capture counts) — surfaced as ::notice, not ::warning. */
+  notices: string[];
 }
 
 export function buildReplay(input: BuildReplayInput): BuildReplayResult {
   const { demoBuffer, matchId, map, roster, skinsSide, targetWinRounds } = input;
   const warnings: string[] = [];
+  const notices: string[] = [];
 
   // --- Roster resolution (steamid → DGLS player + faction) ---
   const demoPlayers = readDemoPlayers(demoBuffer);
@@ -140,7 +152,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
 
   if (context.rounds.length === 0) {
     warnings.push('No live rounds found — replay has no rounds.');
-    return { payload: meta, warnings: [...new Set(warnings)] };
+    return { payload: meta, warnings: [...new Set(warnings)], notices: [...new Set(notices)] };
   }
 
   // reason lookup keyed by ended-round number (round_end uses total_rounds_played as-is)
@@ -261,7 +273,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
   const nBlinds = sumLengths(blindsByRound);
   const nHurts = sumLengths(hurtsByRound);
   const nGrenades = sumLengths(grenadesByRound);
-  warnings.push(
+  notices.push(
     `Captured ${nShots} shots, ${nBlinds} blinds, ${nHurts} hurts, ${nGrenades} grenades.`,
   );
   if (nShots === 0) warnings.push('No shots captured — bullet tracers will be absent (weapon_fire?).');
@@ -293,7 +305,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     });
   }
 
-  return { payload: meta, warnings: [...new Set(warnings)] };
+  return { payload: meta, warnings: [...new Set(warnings)], notices: [...new Set(notices)] };
 }
 
 function collectEvents(
@@ -508,6 +520,7 @@ function collectShots(
     rows = parseEvent(demoBuffer, 'weapon_fire', [], [
       'total_rounds_played',
       'is_warmup_period',
+      'weapon',
     ]) as Record<string, unknown>[];
   } catch {
     return byRound; // shots are non-critical
@@ -515,6 +528,9 @@ function collectShots(
 
   for (const f of rows) {
     if (f.is_warmup_period) continue;
+    // `weapon_fire` also fires for grenade throws and knife swings — those aren't
+    // bullets and shouldn't draw a tracer. Skip anything that isn't a firearm.
+    if (!isBulletWeapon(pick<string>(f, ['weapon']))) continue;
     const round = Number(f.total_rounds_played ?? -1) + 1;
     if (!context.liveRounds.has(round)) continue;
     if (!byRound.has(round)) byRound.set(round, []);
