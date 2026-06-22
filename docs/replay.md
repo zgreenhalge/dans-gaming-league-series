@@ -113,9 +113,12 @@ keys, re-dispatch overwrites); run the same `src/lib/replay/*` code via `tsx`.
 
 | Action | Trigger | Output | Status |
 |---|---|---|---|
-| **A — `replay-extract`** | auto, after demo upload/parse | `replay.json` → R2 `<matchId>/replay.json` | **Phase 1 — built** (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
-| **B — `radar-build`** | per map | radar PNG + calibration → R2 + `maps` row | Phase 3 — planned |
-| **C — `replay-mp4`** | on demand ("Generate MP4") | `replay.mp4` → R2 `<matchId>/replay.mp4` | Phase 4 — planned |
+| **A — `replay-extract`** | auto, after demo upload/parse | `replay.json` **and** compact `heatmap.json` → R2 `<matchId>/…` | **built** (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
+| **B — `radar-build`** | per map (Actions UI / dispatch) | radar PNG → R2 `maps/<id>/radar.png` + `maps` row calibration | **built** (`radar-build.yml` + `scripts/radar-build.ts`); first real run validates the SteamCMD/Source2Viewer invocations |
+
+> The mp4 render Action (originally Phase 4) was **dropped in favor of the map Heatmap
+> tab**. Heatmaps need no separate Action — the extract Action emits the `heatmap.json`
+> artifact (`buildHeatmapPoints()`), and the map page aggregates those small files.
 
 ### Observability
 
@@ -125,8 +128,15 @@ Each job declares an **ordered list of named stages**, reported two ways: collap
 records `status=failed`, the failing stage, and the message — no silent hangs.
 
 `replay-extract` stages: `validate → download-demo → decompress → parse-ticks → parse-events →
-parse-grenades → assemble → gzip → upload → done`. (`buildReplay()` does the three parse stages plus
-`assemble` in one library pass; they're surfaced as ordered stages around that call for progress.)
+parse-grenades → assemble → gzip → upload → heatmap → done`. (`buildReplay()` does the three parse
+stages plus `assemble` in one library pass; they're surfaced as ordered stages around that call for
+progress. `heatmap` builds + uploads the `heatmap.json` points artifact.)
+
+`radar-build` stages: `validate-workshop-id → steamcmd-download → extract-vpk → decode-vtex →
+compute-calibration → upload-radar → upsert-map → done`. The deterministic parsing
+(`parseOverview()`, `workshopIdFromUrl()` in `radar.ts`) is unit-tested; the SteamCMD/Source2Viewer
+orchestration is best-effort and isolated — a choke leaves the map uncalibrated (auto-fit fallback),
+never blocking playback.
 
 ### No duplicate in-flight jobs
 
@@ -186,7 +196,8 @@ the dedup guard. GitHub retains full run history/logs (~90d) as the audit trail.
 |---|---|
 | `<matchId>/game.dem` | uploaded demo (`demoKey()`) |
 | `<matchId>/replay.json` | gzipped replay payload (`replayKey()`) |
-| `<matchId>/replay.mp4` | on-demand render (Phase 4) |
+| `<matchId>/heatmap.json` | gzipped compact heatmap points (`heatmapKey()`) |
+| `maps/<mapId>/radar.png` | extracted top-down radar (`radarKey()`) |
 
 Both `getR2Object()`/`putR2Object()` helpers live in `src/lib/r2.ts`.
 
@@ -203,7 +214,10 @@ workflow — see the dispatch endpoint.
 1. **`replay.json` schema (locked) + `replay-extract` Action + Events tab.** — **built.**
 2. **`<ReplayPlayer>` (client), calibration-free auto-fit + overlays + controls.** — **built**
    (`project.ts` / `playback.ts` / `draw.ts` + the payload route; see "Client renderer").
-3. `radar-build` Action + admin calibration UI → real radar backgrounds. The calibrated branch of
-   `projectorFor()` + `drawScene`'s radar background are already wired; this phase fills in the data.
-4. On-demand `replay-mp4` Action + download UX — reuses `playback.ts` + `draw.ts` headlessly via
-   `@napi-rs/canvas`.
+3. **`radar-build` Action + calibration read path** — **built.** The Action extracts the radar +
+   triplet from the workshop VPK; the player loads it via `GET /api/maps/[slug]/calibration` +
+   `…/radar` and switches `projectorFor()` to the calibrated branch (auto-fit fallback when
+   uncalibrated). Remaining: an in-site admin trigger + a manual calibration/correction UI.
+4. ~~On-demand `replay-mp4` Action~~ — **dropped** in favor of the **map Heatmap tab**: kill/death/
+   grenade locations on `/maps/[slug]`, respecting the season + side filters, plotted via the shared
+   `project.ts` over the `heatmap.json` artifacts. (Tab UI pending.)
