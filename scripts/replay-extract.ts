@@ -1,0 +1,187 @@
+// `replay-extract` job entry point — runs in the GitHub Action (Action A) via `tsx`.
+//
+// demo (R2) → buildReplay() → gzipped replay.json (R2 `<matchId>/replay.json`).
+// Reuses the SAME `src/lib/replay/*` code as the app, so there is no logic drift.
+//
+// Observability: each named stage is reported two ways (issue #121) —
+//   1. collapsible GitHub log groups + ::notice/::warning/::error annotations, and
+//   2. `background_jobs.stage`, so the app can show progress without opening Actions.
+//
+// Env (from the workflow): MATCH_ID, GH_RUN_ID, GH_RUN_URL, plus R2 creds and
+// SUPABASE_SERVICE_ROLE_KEY / NEXT_PUBLIC_SUPABASE_URL (GH Actions secrets).
+
+import { gunzipSync, gzipSync } from 'node:zlib';
+import { getReplayInputs } from '../src/lib/replay/inputs';
+import { buildReplay } from '../src/lib/replay/extract';
+import { getR2Object, putR2Object, demoKey, replayKey } from '../src/lib/r2';
+import { getAdminClient } from '../src/lib/supabase-admin';
+
+const JOB_TYPE = 'replay_extract';
+
+const STAGES = [
+  'validate',
+  'download-demo',
+  'decompress',
+  'parse-ticks',
+  'parse-events',
+  'parse-grenades',
+  'assemble',
+  'gzip',
+  'upload',
+  'done',
+] as const;
+
+const matchId = Number(process.env.MATCH_ID);
+const ghRunId = process.env.GH_RUN_ID ? Number(process.env.GH_RUN_ID) : null;
+const ghRunUrl = process.env.GH_RUN_URL ?? null;
+const supabase = getAdminClient();
+
+let currentStage: string = STAGES[0];
+
+function notice(msg: string) {
+  console.log(`::notice::${msg}`);
+}
+function warning(msg: string) {
+  console.log(`::warning::${msg}`);
+}
+
+/** Mark the row queued→running (idempotent), recording the GH run link. */
+async function markRunning() {
+  await supabase
+    .from('background_jobs')
+    .upsert(
+      {
+        job_type: JOB_TYPE,
+        match_id: matchId,
+        status: 'running',
+        stage: STAGES[0],
+        error_message: null,
+        gh_run_id: ghRunId,
+        gh_run_url: ghRunUrl,
+        started_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'job_type,match_id' },
+    )
+    .throwOnError();
+  await supabase
+    .from('matches')
+    .update({ replay_status: 'running' })
+    .eq('id', matchId)
+    .throwOnError();
+}
+
+async function setStage(stage: string) {
+  currentStage = stage;
+  await supabase
+    .from('background_jobs')
+    .update({ stage, updated_at: new Date().toISOString() })
+    .eq('job_type', JOB_TYPE)
+    .eq('match_id', matchId)
+    .throwOnError();
+}
+
+/** Run a named stage inside a collapsible GH log group, reporting it to the DB. */
+async function stage<T>(name: string, fn: () => Promise<T> | T): Promise<T> {
+  console.log(`::group::${name}`);
+  notice(`stage ${name}`);
+  await setStage(name);
+  try {
+    return await fn();
+  } finally {
+    console.log('::endgroup::');
+  }
+}
+
+async function fail(err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err);
+  console.log(`::error::failed at stage ${currentStage}: ${msg}`);
+  await supabase
+    .from('background_jobs')
+    .update({
+      status: 'failed',
+      stage: currentStage,
+      error_message: msg,
+      finished_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('job_type', JOB_TYPE)
+    .eq('match_id', matchId);
+  await supabase.from('matches').update({ replay_status: 'failed' }).eq('id', matchId);
+  process.exit(1);
+}
+
+async function main() {
+  if (!Number.isFinite(matchId)) throw new Error('MATCH_ID env var missing or invalid');
+  await markRunning();
+
+  const inputs = await stage('validate', async () => {
+    const i = await getReplayInputs(supabase, matchId);
+    if (!i.map) warning('Match has no map name — auto-fit playback only.');
+    return i;
+  });
+
+  let demoBuffer = await stage('download-demo', async () => {
+    const buf = await getR2Object(demoKey(matchId));
+    if (!buf) throw new Error('Demo not found in R2 — upload a demo first.');
+    return buf;
+  });
+
+  demoBuffer = await stage('decompress', () => {
+    // Gzip magic bytes: 0x1f 0x8b
+    if (demoBuffer.length >= 2 && demoBuffer[0] === 0x1f && demoBuffer[1] === 0x8b) {
+      return gunzipSync(demoBuffer);
+    }
+    return demoBuffer;
+  });
+
+  // buildReplay() does parse-ticks → parse-events → parse-grenades → assemble in one
+  // pass; we surface those as ordered stages around it for progress reporting.
+  await setStage('parse-ticks');
+  const { payload, warnings } = await stage('assemble', () => {
+    notice('parsing ticks, events, and grenades');
+    return buildReplay({
+      demoBuffer,
+      matchId,
+      map: inputs.map,
+      roster: inputs.roster,
+      skinsSide: inputs.skinsSide,
+      targetWinRounds: inputs.targetWinRounds,
+    });
+  });
+  for (const w of warnings) warning(w);
+
+  const gz = await stage('gzip', () => gzipSync(Buffer.from(JSON.stringify(payload))));
+  notice(`replay.json: ${payload.rounds.length} rounds, ${gz.length} bytes gzipped`);
+
+  await stage('upload', () =>
+    putR2Object(replayKey(matchId), gz, {
+      contentType: 'application/json',
+      contentEncoding: 'gzip',
+    }),
+  );
+
+  await stage('done', async () => {
+    await supabase
+      .from('background_jobs')
+      .update({
+        status: 'succeeded',
+        stage: 'done',
+        error_message: null,
+        finished_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('job_type', JOB_TYPE)
+      .eq('match_id', matchId)
+      .throwOnError();
+    await supabase
+      .from('matches')
+      .update({ replay_status: 'ready' })
+      .eq('id', matchId)
+      .throwOnError();
+  });
+
+  notice('replay-extract complete');
+}
+
+main().catch(fail);
