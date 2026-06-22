@@ -15,7 +15,11 @@ import { sideOfPlayer } from './playback';
 /** Bump when the artifact shape changes incompatibly. */
 export const HEATMAP_SCHEMA_VERSION = 1;
 
-/** Point kinds: where players died / shot from, and where grenades went off. */
+/**
+ * Point kinds: where players died / shot from, and where grenades went off. Decoys are
+ * deliberately excluded — they carry no tactical signal worth plotting and the heatmap
+ * has no toggle for them, so emitting them would only bloat every artifact.
+ */
 export type HeatmapKind =
   | 'kill' // attacker position at a kill
   | 'death' // victim position at a kill
@@ -23,17 +27,9 @@ export type HeatmapKind =
   | 'molotov'
   | 'incendiary'
   | 'flashbang'
-  | 'he'
-  | 'decoy';
+  | 'he';
 
-const GRENADE_KINDS = new Set<HeatmapKind>([
-  'smoke',
-  'molotov',
-  'incendiary',
-  'flashbang',
-  'he',
-  'decoy',
-]);
+const GRENADE_KINDS = new Set<HeatmapKind>(['smoke', 'molotov', 'incendiary', 'flashbang', 'he']);
 
 export interface HeatmapPoint {
   kind: HeatmapKind;
