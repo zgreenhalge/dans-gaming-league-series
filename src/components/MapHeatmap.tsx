@@ -138,7 +138,7 @@ export default function MapHeatmap({
           // Plot grenades as their effect area.
           const r = Math.max(4, projector.scaleLength(GRENADE_RADIUS[p.kind] ?? 100));
           ctx.fillStyle = color;
-          ctx.globalAlpha = 0.1;
+          ctx.globalAlpha = 0.22;
           ctx.beginPath();
           ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
           ctx.fill();
