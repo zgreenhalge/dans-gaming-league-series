@@ -3226,6 +3226,39 @@ export async function getMapLookup(): Promise<Record<string, { image_url: string
   return lookup;
 }
 
+/** A map's radar calibration triplet (Phase 3). `null` when the map isn't calibrated. */
+export interface MapCalibration {
+  mapId: number;
+  posX: number;
+  posY: number;
+  scale: number;
+  source: string | null;
+}
+
+/**
+ * Read a map's radar calibration by slug. Returns `null` unless the full triplet AND
+ * a radar image are present — callers (the replay player, the heatmap) fall back to
+ * auto-fit when uncalibrated, so a partially-filled row is treated as uncalibrated.
+ */
+export async function getMapCalibration(slug: string): Promise<MapCalibration | null> {
+  const { data } = await supabase
+    .from('maps')
+    .select('id, radar_pos_x, radar_pos_y, radar_scale, radar_image_url, radar_source')
+    .eq('slug', slug)
+    .maybeSingle();
+  const r = data as {
+    id: number;
+    radar_pos_x: number | null;
+    radar_pos_y: number | null;
+    radar_scale: number | null;
+    radar_image_url: string | null;
+    radar_source: string | null;
+  } | null;
+  if (!r || r.radar_pos_x == null || r.radar_pos_y == null || r.radar_scale == null) return null;
+  if (!r.radar_image_url) return null;
+  return { mapId: r.id, posX: r.radar_pos_x, posY: r.radar_pos_y, scale: r.radar_scale, source: r.radar_source };
+}
+
 // --- Match replay / events (issue #121; see docs/replay.md) ---
 
 export type ReplayStatus = 'none' | 'queued' | 'running' | 'ready' | 'failed';
