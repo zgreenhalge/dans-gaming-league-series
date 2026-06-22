@@ -46,6 +46,7 @@ ReplayPayload {
     shots:    [{ tick, shooterId }],              // every weapon_fire → a tracer ray
     blinds:   [{ tick, playerId, duration }],     // player_blind → flash whiteout
     hurts:    [{ tick, playerId }],               // player_hurt → red damage blink
+    bombCarrier: [{ tick, carrierId }],           // seed + pickups/drops (null = dropped)
   }]
 }
 ```
@@ -100,10 +101,14 @@ re-trigger the blink for a steady burn. `draw.ts` paints these as fading alpha o
 
 ### Known Phase-1 limitations
 
-- **`frame.bomb` is always `null`.** Live per-tick bomb position requires tracking the C4 entity /
-  carrier, which isn't wired yet. Plant/defuse **events** carry their own positions, so the Events tab
-  and plant markers work; only the moving bomb dot is deferred. The schema field exists so adding it
-  later is non-breaking.
+- **Bomb is tracked without reading the C4 entity.** `frame.bomb` stays `null` (per-tick C4 entity
+  position isn't exposed by the parser). Instead `round.bombCarrier` holds carrier change-points:
+  a round-start **seed** (who holds `weapon_c4` in `inventory` at the first rendered tick — one cheap
+  `parseTicks` over just the per-round start ticks, not every tick) plus `bomb_pickup`/`bomb_dropped`
+  changes. `bombStateAt()` resolves it — carried bombs ride the carrier's interpolated position, a
+  dropped bomb sits where the carrier was at the drop tick, and a `plant` event takes priority once
+  the bomb is down. Dropped position is therefore the drop-spot approximation (the carrier's location),
+  not the physics-settled entity — accurate in essentially every real case.
 - **Parser field names are validated by a real run.** Position/weapon prop names (`X`, `Y`, `yaw`,
   `health`, `is_alive`, `active_weapon_name`), grenade fields, and `player_blind`'s `blind_duration`
   are read defensively (`pick()` tries several candidate keys). The first real Action run against an

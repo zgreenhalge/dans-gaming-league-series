@@ -64,6 +64,20 @@ export interface ReplayRound {
   blinds: ReplayBlind[];
   /** Damage events — drive the per-player red damage blink. */
   hurts: ReplayHurt[];
+  /**
+   * Bomb-carrier change-points (tick-ordered). The first entry is the round-start
+   * seed (read from `inventory` at the first rendered tick); later entries come from
+   * `bomb_pickup` / `bomb_dropped`. `carrierId: null` means dropped. The *plant* is
+   * read from `events` (a `plant` event takes priority once the bomb is down), so it
+   * isn't repeated here. Empty when the carrier couldn't be resolved.
+   */
+  bombCarrier: BombCarrierPoint[];
+}
+
+/** A change in who holds the bomb. `carrierId: null` = dropped on the ground. */
+export interface BombCarrierPoint {
+  tick: number;
+  carrierId: number | null;
 }
 
 /** A player getting flashed (one per `player_blind`). */

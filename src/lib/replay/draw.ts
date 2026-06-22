@@ -155,26 +155,32 @@ function drawPointDetonation(
   }
 }
 
-/** A planted-C4 glyph: a small body with a blinking arming light — clearly not a nade. */
+/**
+ * A C4 glyph: a small body with a red light — clearly not a nade. `blink` arms the
+ * light (planted); `alpha` dims it (dropped on the ground); `half` sizes it (a smaller
+ * badge when riding a carrier).
+ */
 function drawC4(
   ctx: Ctx2D,
   p: { x: number; y: number },
   theme: ReplayTheme,
   tick: number,
+  opts: { blink: boolean; alpha?: number; half?: number } = { blink: true },
 ): void {
-  const s = 5; // half-side
-  ctx.globalAlpha = 1;
+  const s = opts.half ?? 5;
+  const a = opts.alpha ?? 1;
+  ctx.globalAlpha = a;
   ctx.fillStyle = theme.bomb;
   ctx.fillRect(p.x - s, p.y - s, s * 2, s * 2);
   ctx.strokeStyle = theme.bg;
   ctx.lineWidth = 1.5;
   ctx.strokeRect(p.x - s, p.y - s, s * 2, s * 2);
-  // Blinking red arming light (period ~0.5s at any frame rate — tick is monotonic).
-  const blink = Math.floor(tick / 16) % 2 === 0;
-  ctx.globalAlpha = blink ? 1 : 0.25;
+  // Arming light: blinks when planted (period ~0.5s; tick is monotonic), else steady.
+  const lit = opts.blink ? Math.floor(tick / 16) % 2 === 0 : true;
+  ctx.globalAlpha = (lit ? 1 : 0.25) * a;
   ctx.fillStyle = theme.tracer;
   ctx.beginPath();
-  ctx.arc(p.x, p.y, 1.6, 0, TWO_PI);
+  ctx.arc(p.x, p.y, Math.max(1.2, s * 0.32), 0, TWO_PI);
   ctx.fill();
   ctx.globalAlpha = 1;
 }
@@ -253,9 +259,20 @@ export function drawScene(args: DrawSceneArgs): void {
   }
   ctx.globalAlpha = 1;
 
-  // --- bomb (planted C4) ---
+  // --- bomb (C4): carried on its holder, dropped dimmed, planted blinking ---
   if (state.bomb && !state.bomb.defused) {
-    drawC4(ctx, projector.project(state.bomb), theme, state.tick);
+    const bp = projector.project(state.bomb);
+    if (state.bomb.carried) {
+      // A small badge offset up-right from the carrier's dot.
+      drawC4(ctx, { x: bp.x + DOT_RADIUS + 3, y: bp.y - DOT_RADIUS - 1 }, theme, state.tick, {
+        blink: false,
+        half: 3.5,
+      });
+    } else if (state.bomb.planted) {
+      drawC4(ctx, bp, theme, state.tick, { blink: true });
+    } else {
+      drawC4(ctx, bp, theme, state.tick, { blink: false, alpha: 0.6 });
+    }
   }
 
   // --- players ---

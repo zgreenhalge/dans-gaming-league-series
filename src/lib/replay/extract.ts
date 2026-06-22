@@ -22,6 +22,7 @@ import {
   type ReplayShot,
   type ReplayBlind,
   type ReplayHurt,
+  type BombCarrierPoint,
   type GrenadePoint,
   type Side,
 } from './types';
@@ -264,6 +265,12 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
   const shotsByRound = collectShots(demoBuffer, context, playerIdOf);
   const blindsByRound = collectBlinds(demoBuffer, context, playerIdOf);
   const hurtsByRound = collectHurts(demoBuffer, context, playerIdOf);
+  const { byRound: bombCarrierByRound, seededRounds } = collectBombCarrier(
+    demoBuffer,
+    context,
+    roundBounds,
+    playerIdOf,
+  );
 
   // Capture counts surface in the Action's `assemble` stage — an empty array here is
   // the first sign a parser field name drifted (collectors fail soft / skip silently).
@@ -279,6 +286,9 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
   if (nShots === 0) warnings.push('No shots captured — bullet tracers will be absent (weapon_fire?).');
   if (nBlinds === 0) warnings.push('No blinds captured — flash overlay will be absent (player_blind?).');
   if (nHurts === 0) warnings.push('No hurts captured — damage blink will be absent (player_hurt?).');
+  notices.push(`Seeded the bomb carrier in ${seededRounds}/${context.rounds.length} rounds.`);
+  if (seededRounds === 0)
+    warnings.push('No bomb carrier seeded in any round — check the `inventory` tick prop.');
 
   // --- Assemble rounds ---
   for (const b of roundBounds) {
@@ -302,6 +312,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
       shots: shotsByRound.get(b.round) ?? [],
       blinds: blindsByRound.get(b.round) ?? [],
       hurts: hurtsByRound.get(b.round) ?? [],
+      bombCarrier: bombCarrierByRound.get(b.round) ?? [],
     });
   }
 
@@ -618,4 +629,69 @@ function collectHurts(
 
   for (const hurts of byRound.values()) hurts.sort((a, b) => a.tick - b.tick);
   return byRound;
+}
+
+/**
+ * Bomb-carrier change-points per round. We don't read `inventory` every tick (heavy);
+ * instead we *seed* the round-start carrier by checking `inventory` for `weapon_c4` at
+ * the round's first rendered tick, then track changes from `bomb_pickup`/`bomb_dropped`
+ * (a drop is `carrierId: null`). The plant is read from `events` separately. Positions
+ * aren't stored — `bombStateAt()` derives them from the carrier's frames. Returns the
+ * map plus how many rounds got a seed (a zero count flags an `inventory` field issue).
+ */
+function collectBombCarrier(
+  demoBuffer: Buffer,
+  context: ReturnType<typeof buildMatchContext>,
+  roundBounds: { round: number; startTick: number }[],
+  playerIdOf: (s: string | null | undefined) => number | null,
+): { byRound: Map<number, BombCarrierPoint[]>; seededRounds: number } {
+  const byRound = new Map<number, BombCarrierPoint[]>();
+  const push = (round: number, p: BombCarrierPoint) => {
+    if (!byRound.has(round)) byRound.set(round, []);
+    byRound.get(round)!.push(p);
+  };
+
+  // 1) Seed: who holds weapon_c4 at each round's first rendered tick.
+  const roundBySeedTick = new Map(roundBounds.map((b) => [b.startTick, b.round]));
+  try {
+    const seedTicks = roundBounds.map((b) => b.startTick);
+    const rows = parseTicks(demoBuffer, ['inventory'], seedTicks) as Record<string, unknown>[];
+    for (const row of rows) {
+      const tick = Number(pick<number>(row, ['tick']) ?? -1);
+      const round = roundBySeedTick.get(tick);
+      if (round === undefined || !context.liveRounds.has(round)) continue;
+      const inv = pick<unknown[]>(row, ['inventory']);
+      if (!Array.isArray(inv)) continue;
+      if (!inv.some((w) => typeof w === 'string' && /c4/i.test(w))) continue;
+      const carrierId = playerIdOf(pick<string>(row, ['steamid', 'steamID']));
+      push(round, { tick, carrierId });
+    }
+  } catch {
+    /* inventory prop unsupported — no seed; events still apply */
+  }
+  const seededRounds = byRound.size;
+
+  // 2) Pickups + drops (mid-round events → round = total_rounds_played + 1).
+  const carrierEvent = (name: string, toCarrier: (e: Record<string, unknown>) => number | null) => {
+    let rows: Record<string, unknown>[];
+    try {
+      rows = parseEvent(demoBuffer, name, [], [
+        'total_rounds_played',
+        'is_warmup_period',
+      ]) as Record<string, unknown>[];
+    } catch {
+      return;
+    }
+    for (const e of rows) {
+      if (e.is_warmup_period) continue;
+      const round = Number(e.total_rounds_played ?? -1) + 1;
+      if (!context.liveRounds.has(round)) continue;
+      push(round, { tick: Number(pick<number>(e, ['tick']) ?? 0), carrierId: toCarrier(e) });
+    }
+  };
+  carrierEvent('bomb_pickup', (e) => playerIdOf(pick<string>(e, ['user_steamid'])));
+  carrierEvent('bomb_dropped', () => null);
+
+  for (const pts of byRound.values()) pts.sort((a, b) => a.tick - b.tick);
+  return { byRound, seededRounds };
 }

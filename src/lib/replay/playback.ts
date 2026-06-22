@@ -63,6 +63,10 @@ export interface BombView {
   y: number;
   planted: boolean;
   defused: boolean;
+  /** True while a player is carrying it (drawn on the carrier). */
+  carried: boolean;
+  /** The carrier's player id when `carried`, else null. */
+  carrierId: number | null;
 }
 
 /** Everything needed to draw one moment of a round. */
@@ -211,17 +215,19 @@ export function hurtAt(round: ReplayRound, tick: number, tickRate: number): Map<
 }
 
 /**
- * Bomb position is a known Phase-1 payload gap (`frame.bomb` is null), so we
- * reconstruct planted-bomb state from the plant/defuse events: once planted, the
- * bomb sits at the plant site until defused or round end. Pre-plant the bomb is
- * carried and we don't have its position, so it isn't drawn.
+ * Resolve the bomb at `tick`. A *planted* bomb (from plant/defuse events) takes
+ * priority once it's down. Otherwise we read the carrier change-points: while carried,
+ * the bomb rides the carrier's interpolated position; once dropped (`carrierId: null`)
+ * it sits where the carrier was at the drop tick until the next pickup/plant. Positions
+ * are derived from frames here — `players` (already interpolated for `tick`) is reused
+ * for the carried case to avoid recomputing.
  */
-export function bombStateAt(round: ReplayRound, tick: number): BombView | null {
-  // Prefer a real frame bomb if a future payload ever provides one.
-  const b = bracket(round.frames, tick);
-  if (b && b.lo.bomb) {
-    return { x: b.lo.bomb.x, y: b.lo.bomb.y, planted: b.lo.bomb.planted, defused: false };
-  }
+export function bombStateAt(
+  round: ReplayRound,
+  tick: number,
+  players?: ViewPlayer[],
+): BombView | null {
+  // Planted state from events wins once the bomb is down.
   let plant: { x: number; y: number } | null = null;
   let defused = false;
   for (const ev of round.events) {
@@ -229,8 +235,43 @@ export function bombStateAt(round: ReplayRound, tick: number): BombView | null {
     if (ev.type === 'plant') plant = { x: ev.x, y: ev.y };
     else if (ev.type === 'defuse') defused = true;
   }
-  if (!plant) return null;
-  return { x: plant.x, y: plant.y, planted: true, defused };
+  if (plant) {
+    return { x: plant.x, y: plant.y, planted: true, defused, carried: false, carrierId: null };
+  }
+
+  // Otherwise resolve from the carrier change-points (seed + pickups/drops).
+  const points = round.bombCarrier ?? [];
+  let cur: { tick: number; carrierId: number | null } | null = null;
+  for (const p of points) {
+    if (p.tick > tick) break; // points are tick-sorted
+    cur = p;
+  }
+  if (!cur) return null;
+
+  if (cur.carrierId !== null) {
+    const pls = players ?? interpolatePlayers(round, tick);
+    const carrier = pls.find((p) => p.id === cur.carrierId);
+    if (!carrier) return null;
+    return {
+      x: carrier.x,
+      y: carrier.y,
+      planted: false,
+      defused: false,
+      carried: true,
+      carrierId: cur.carrierId,
+    };
+  }
+
+  // Dropped: park it where the last carrier was at the drop tick.
+  let dropper: number | null = null;
+  for (const p of points) {
+    if (p.tick > cur.tick) break;
+    if (p.carrierId !== null) dropper = p.carrierId;
+  }
+  if (dropper === null) return null;
+  const at = interpolatePlayers(round, cur.tick).find((p) => p.id === dropper);
+  if (!at) return null;
+  return { x: at.x, y: at.y, planted: false, defused: false, carried: false, carrierId: null };
 }
 
 export function activeGrenadesAt(
@@ -360,7 +401,7 @@ export function viewStateAt(round: ReplayRound, tick: number, tickRate: number):
   return {
     tick,
     players,
-    bomb: bombStateAt(round, tick),
+    bomb: bombStateAt(round, tick, players),
     grenades: activeGrenadesAt(round, tick, tickRate),
     tracers: tracersAt(round, tick, tickRate),
     shots: shotTracersAt(round, tick, tickRate, players),

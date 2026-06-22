@@ -75,6 +75,7 @@ function round(partial: Partial<ReplayRound>): ReplayRound {
     shots: [],
     blinds: [],
     hurts: [],
+    bombCarrier: [],
     ...partial,
   };
 }
@@ -177,6 +178,34 @@ test('bomb: none before plant, planted at site after, defused after defuse', () 
   assert.equal(planted.defused, false);
   approx(planted.x, 7);
   assert.equal(bombStateAt(r, 400)!.defused, true);
+});
+
+test('bomb: carried by the seed, dropped at the drop spot, then plant takes over', () => {
+  const r = round({
+    frames: [
+      frame(0, [pf(1, 10, 10), pf(2, 50, 50)]),
+      frame(100, [pf(1, 20, 20), pf(2, 50, 50)]),
+    ],
+    bombCarrier: [
+      { tick: 0, carrierId: 1 },
+      { tick: 50, carrierId: null },
+    ],
+    events: [{ type: 'plant', tick: 80, playerId: 2, site: 'A', x: 99, y: 99 }],
+  });
+  // Carried: rides player 1's interpolated position.
+  const carried = bombStateAt(r, 10)!;
+  assert.equal(carried.carried, true);
+  assert.equal(carried.carrierId, 1);
+  approx(carried.x, 11); // lerp(10→20) at t=0.1
+  // Dropped: parked where player 1 was at the drop tick (50 → x 15), not moving after.
+  const dropped = bombStateAt(r, 60)!;
+  assert.equal(dropped.carried, false);
+  assert.equal(dropped.planted, false);
+  approx(dropped.x, 15);
+  // Plant overrides the carrier timeline once down.
+  const planted = bombStateAt(r, 90)!;
+  assert.equal(planted.planted, true);
+  approx(planted.x, 99);
 });
 
 // --- killFeed / tracers windows ---
