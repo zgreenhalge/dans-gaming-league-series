@@ -36,13 +36,13 @@ export function buildMatchContext(
   try {
     const header = parseHeader(demoBuffer);
     const parsed = Number(header.tickrate ?? header.tick_rate);
+    // CS2 demos frequently omit a usable tickrate in the header; 64 is the correct
+    // default for this league, so fall back silently rather than warn.
     if (parsed > 0 && parsed < 1000) {
       tickRate = parsed;
-    } else {
-      warnings.push('Tick rate absent or implausible in demo header — defaulting to 64.');
     }
   } catch {
-    warnings.push('Could not parse demo header for tick rate — defaulting to 64.');
+    // header unreadable — keep the 64 default
   }
 
   const rounds = buildRoundSides(roundEndEvents, skinsStartingSide, targetWinRounds);
