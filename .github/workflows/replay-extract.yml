@@ -24,7 +24,11 @@ on:
 # endpoint is the primary guard).
 concurrency:
   group: replay-extract-${{ github.event.inputs.match_id || github.event.client_payload.match_id }}
-  cancel-in-progress: true
+  # Queue a backstop run behind an in-flight one rather than cancelling it: a
+  # cancelled run never reaches the script's fail() handler, so it would orphan
+  # background_jobs.status at 'running' (and the dispatch guard then blocks retries).
+  # The second run is idempotent (deterministic R2 key) and overwrites cleanly.
+  cancel-in-progress: false
 
 permissions:
   contents: read

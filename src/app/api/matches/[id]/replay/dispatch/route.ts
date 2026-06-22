@@ -87,35 +87,53 @@ export async function POST(
   }
   await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
 
+  // Roll the just-queued job back to `failed` so a transient dispatch error never
+  // leaves the match wedged in `queued` (the in-flight guard above would otherwise
+  // block every retry — see docs/replay.md).
+  async function markFailed(message: string) {
+    await supabaseAdmin
+      .from('background_jobs')
+      .update({ status: 'failed', error_message: message, updated_at: new Date().toISOString() })
+      .eq('job_type', JOB_TYPE)
+      .eq('match_id', matchId);
+    await supabaseAdmin.from('matches').update({ replay_status: 'failed' }).eq('id', matchId);
+  }
+
   // Fire the workflow via workflow_dispatch (gated by Actions: write, unlike
   // repository_dispatch which needs Contents: write). The workflow must exist on
   // the dispatched ref's default branch to be triggerable.
   const ref = process.env.GITHUB_DISPATCH_REF || 'main';
-  const ghRes = await fetch(
-    `https://api.github.com/repos/${repo}/actions/workflows/replay-extract.yml/dispatches`,
-    {
-      method: 'POST',
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${token}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-        'Content-Type': 'application/json',
+  let ghRes: Response;
+  try {
+    ghRes = await fetch(
+      `https://api.github.com/repos/${repo}/actions/workflows/replay-extract.yml/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ref,
+          inputs: { match_id: String(matchId) },
+        }),
       },
-      body: JSON.stringify({
-        ref,
-        inputs: { match_id: String(matchId) },
-      }),
-    },
-  );
+    );
+  } catch (err) {
+    // Network-level rejection (DNS, timeout, connection reset) — fetch never resolved.
+    const detail = err instanceof Error ? err.message : String(err);
+    await markFailed(`dispatch request failed: ${detail}`);
+    return NextResponse.json(
+      { error: 'Failed to reach GitHub to dispatch replay job', detail },
+      { status: 502 },
+    );
+  }
 
   if (!ghRes.ok) {
     const detail = await ghRes.text();
-    await supabaseAdmin
-      .from('background_jobs')
-      .update({ status: 'failed', error_message: `dispatch failed: ${ghRes.status}`, updated_at: new Date().toISOString() })
-      .eq('job_type', JOB_TYPE)
-      .eq('match_id', matchId);
-    await supabaseAdmin.from('matches').update({ replay_status: 'failed' }).eq('id', matchId);
+    await markFailed(`dispatch failed: ${ghRes.status}`);
     return NextResponse.json(
       { error: `Failed to dispatch replay job (${ghRes.status})`, detail },
       { status: 502 },
