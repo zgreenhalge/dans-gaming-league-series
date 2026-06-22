@@ -333,16 +333,23 @@ function collectGrenades(
     return null;
   };
 
+  // Field names vary across props, so read defensively via pick() — same as the
+  // frame/event collectors (the parser may emit X/Y/Z capitalized like parseTicks).
+  const gx = (r: Record<string, unknown>) => pick<number>(r, ['x', 'X']);
+  const gy = (r: Record<string, unknown>) => pick<number>(r, ['y', 'Y']);
+  const gz = (r: Record<string, unknown>) => pick<number>(r, ['z', 'Z']);
+  const gtick = (r: Record<string, unknown>) => Number(pick<number>(r, ['tick']) ?? 0);
+
   // parseGrenades emits one row per tick per live grenade entity, with x/y/z null
   // while the projectile isn't in flight (held / already detonated). Entity ids are
   // RECYCLED across rounds, so group by (round, entity) — within a round an entity
   // is a single throw — and keep only located points.
   const byThrow = new Map<string, Record<string, unknown>[]>();
   for (const r of rows) {
-    if (r.x === null || r.x === undefined) continue; // unlocated tick
-    const id = Number(r.grenade_entity_id ?? -1);
+    if (gx(r) === null) continue; // unlocated tick
+    const id = Number(pick<number>(r, ['grenade_entity_id', 'entity_id']) ?? -1);
     if (id < 0) continue;
-    const round = roundForTick(Number(r.tick ?? 0));
+    const round = roundForTick(gtick(r));
     if (round === null || !context.liveRounds.has(round)) continue;
     const key = `${round}:${id}`;
     if (!byThrow.has(key)) byThrow.set(key, []);
@@ -351,7 +358,7 @@ function collectGrenades(
 
   for (const [key, points] of byThrow) {
     const round = Number(key.split(':')[0]);
-    points.sort((a, b) => Number(a.tick ?? 0) - Number(b.tick ?? 0));
+    points.sort((a, b) => gtick(a) - gtick(b));
     const first = points[0];
 
     // Downsample by interval and collapse stationary runs (a settled smoke sits
@@ -362,9 +369,9 @@ function collectGrenades(
     let lastY = NaN;
     for (let i = 0; i < points.length; i++) {
       const p = points[i];
-      const tick = Number(p.tick ?? 0);
-      const x = Number(p.x ?? 0);
-      const y = Number(p.y ?? 0);
+      const tick = gtick(p);
+      const x = Number(gx(p) ?? 0);
+      const y = Number(gy(p) ?? 0);
       const isLast = i === points.length - 1;
       const moved = x !== lastX || y !== lastY;
       if (!isLast) {
@@ -374,16 +381,16 @@ function collectGrenades(
       lastTick = tick;
       lastX = x;
       lastY = y;
-      trajectory.push({ tick, x, y, z: Number(p.z ?? 0) });
+      trajectory.push({ tick, x, y, z: Number(gz(p) ?? 0) });
     }
 
     const grenade: ReplayGrenade = {
       // grenade_type is the engine class name, e.g. "CSmokeGrenade" (`name` is the
       // thrower's display name, not the grenade).
-      type: normGrenadeType((first.grenade_type as string) ?? null),
-      throwerId: playerIdOf((first.steamid as string) ?? null),
+      type: normGrenadeType(pick<string>(first, ['grenade_type'])),
+      throwerId: playerIdOf(pick<string>(first, ['steamid', 'steamID'])),
       trajectory,
-      detonateTick: Number(points[points.length - 1].tick ?? 0),
+      detonateTick: gtick(points[points.length - 1]),
     };
     if (!byRound.has(round)) byRound.set(round, []);
     byRound.get(round)!.push(grenade);

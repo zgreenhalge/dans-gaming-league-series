@@ -3246,21 +3246,21 @@ export interface ReplayJobState {
 export async function getReplayJobState(matchId: number): Promise<ReplayJobState> {
   const none: ReplayJobState = { status: 'none', stage: null, ghRunUrl: null, errorMessage: null };
   try {
-    const { data: matchRow, error: matchErr } = await supabase
-      .from('matches')
-      .select('replay_status')
-      .eq('id', matchId)
-      .maybeSingle();
+    // Independent reads — run them together to avoid a serial round-trip on the
+    // (hot) match page render.
+    const [{ data: matchRow, error: matchErr }, { data: jobRow }] = await Promise.all([
+      supabase.from('matches').select('replay_status').eq('id', matchId).maybeSingle(),
+      supabase
+        .from('background_jobs')
+        .select('stage, gh_run_url, error_message')
+        .eq('job_type', 'replay_extract')
+        .eq('match_id', matchId)
+        .maybeSingle(),
+    ]);
     if (matchErr) return none;
     const status = ((matchRow as { replay_status?: string } | null)?.replay_status ??
       'none') as ReplayStatus;
 
-    const { data: jobRow } = await supabase
-      .from('background_jobs')
-      .select('stage, gh_run_url, error_message')
-      .eq('job_type', 'replay_extract')
-      .eq('match_id', matchId)
-      .maybeSingle();
     const job = jobRow as
       | { stage: string | null; gh_run_url: string | null; error_message: string | null }
       | null;
