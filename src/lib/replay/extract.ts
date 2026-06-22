@@ -26,6 +26,9 @@ import {
 /** Target playback cadence. Frames are downsampled from tickRate to this. */
 const FRAME_RATE = 16;
 
+/** Seconds of lead kept before a round goes live; the rest of freeze time is skipped. */
+const PRE_LIVE_SECONDS = 1;
+
 /** Map a CS2 round_end `reason` to the win-condition icon bucket (mirrors demoParser). */
 function reasonToCondition(reason: string | null): RoundCondition {
   switch (reason) {
@@ -149,19 +152,45 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     return best;
   };
 
+  // --- Freeze-end ticks: a round is in freeze/buy time (~15s) between round_start
+  // and round_freeze_end, with everyone standing in spawn — dead air we don't want
+  // to play back. We keep only a short lead before live (see PRE_LIVE_SECONDS). ---
+  let freezeEndTicks: number[] = [];
+  try {
+    const rows = parseEvent(demoBuffer, 'round_freeze_end', [], []) as { tick: number }[];
+    freezeEndTicks = rows.map((r) => r.tick).sort((a, b) => a - b);
+  } catch {
+    warnings.push('No round_freeze_end events — replay keeps full freeze time.');
+  }
+  const freezeEndIn = (startTick: number, endTick: number): number | null => {
+    for (const t of freezeEndTicks) if (t > startTick && t <= endTick) return t;
+    return null;
+  };
+
   // --- Frames: one batched parseTicks over every wanted tick ---
   const interval = Math.max(1, Math.round(context.tickRate / FRAME_RATE));
-  const roundBounds: { round: number; startTick: number; endTick: number; wanted: number[] }[] = [];
+  const leadTicks = Math.round(context.tickRate * PRE_LIVE_SECONDS);
+  const roundBounds: {
+    round: number;
+    startTick: number;
+    endTick: number;
+    wanted: number[];
+  }[] = [];
   const allWantedTicks: number[] = [];
   let prevEnd = 0;
   for (const r of context.rounds) {
-    const startTick = startTickFor(r.endTick, prevEnd);
+    const roundStart = startTickFor(r.endTick, prevEnd);
+    prevEnd = r.endTick;
+    // Begin playback ~PRE_LIVE_SECONDS before the round goes live, skipping the
+    // freeze/buy dead time. Fall back to round_start if no freeze-end is known.
+    const freezeEnd = freezeEndIn(roundStart, r.endTick);
+    const startTick =
+      freezeEnd !== null ? Math.max(roundStart, freezeEnd - leadTicks) : roundStart;
     const wanted: number[] = [];
     for (let t = startTick; t < r.endTick; t += interval) wanted.push(t);
     wanted.push(r.endTick);
     roundBounds.push({ round: r.roundNumber, startTick, endTick: r.endTick, wanted });
     allWantedTicks.push(...wanted);
-    prevEnd = r.endTick;
   }
 
   const tickRows = parseTicks(
