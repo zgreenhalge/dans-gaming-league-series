@@ -62,7 +62,14 @@ function bannerFor(payload: ReplayPayload, roundIdx: number): BannerInfo {
   };
 }
 
-export default function ReplayPlayer({ matchId }: { matchId: number }) {
+export default function ReplayPlayer({
+  matchId,
+  jump,
+}: {
+  matchId: number;
+  /** External jump request: 1-based round number + a nonce that changes per click. */
+  jump?: { round: number; n: number } | null;
+}) {
   const [payload, setPayload] = useState<ReplayPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [roundIdx, setRoundIdx] = useState(0);
@@ -83,6 +90,9 @@ export default function ReplayPlayer({ matchId }: { matchId: number }) {
   const sizeRef = useRef({ w: 0, h: 0 });
   const tickRef = useRef(0);
   const radarImageRef = useRef<HTMLImageElement | null>(null);
+  // Last-applied jump nonce, kept in state so the "adjust state when a prop changes"
+  // pattern can run during render (refs can't be read/written there).
+  const [lastJumpN, setLastJumpN] = useState(0);
 
   // --- lazy payload fetch (only mounts when the Replay sub-tab is open) ---
   useEffect(() => {
@@ -202,6 +212,7 @@ export default function ReplayPlayer({ matchId }: { matchId: number }) {
     tickRef.current = roundTickRange(payload.rounds[roundIdx]).start;
   }, [payload, roundIdx]);
 
+
   // --- playback clock ---
   useEffect(() => {
     if (!payload?.rounds[roundIdx]) return;
@@ -230,6 +241,17 @@ export default function ReplayPlayer({ matchId }: { matchId: number }) {
     else draw();
     return () => cancelAnimationFrame(raf);
   }, [payload, roundIdx, playing, speed, draw]);
+
+  // Apply an external jump request during render (the React-blessed "adjust state when
+  // a prop changes" pattern — guarded by the nonce so it can't loop).
+  if (jump && payload && jump.n !== lastJumpN) {
+    setLastJumpN(jump.n);
+    const idx = payload.rounds.findIndex((r) => r.round === jump.round);
+    if (idx >= 0) {
+      setRoundIdx(idx);
+      setPlaying(true);
+    }
+  }
 
   if (error) {
     return (

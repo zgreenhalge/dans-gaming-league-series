@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { Skull, Bomb, Scissors, Clock, Crosshair } from 'lucide-react';
+import { Skull, Bomb, Scissors, Clock, Crosshair, Play } from 'lucide-react';
 import { tabCls } from '@/lib/util';
 import DevGate from './DevGate';
 import type { ReplayJobState, ReplayEventsView } from '@/lib/queries';
@@ -216,8 +216,14 @@ function EventRow({
   );
 }
 
-/** The core-events list, grouped by round. */
-function EventsList({ events }: { events: ReplayEventsView }) {
+/** The core-events list, grouped by round. Round headers jump the 2D replay. */
+function EventsList({
+  events,
+  onSelectRound,
+}: {
+  events: ReplayEventsView;
+  onSelectRound: (round: number) => void;
+}) {
   const playerById = new Map(events.players.map((p) => [p.id, p]));
   const nameOf = (id: number | null): string =>
     id === null ? 'world' : (playerById.get(id)?.name ?? `#${id}`);
@@ -234,11 +240,19 @@ function EventsList({ events }: { events: ReplayEventsView }) {
         };
         return (
           <div key={round.round} className="border border-[var(--color-border-primary)]">
-            <div className="bg-[var(--color-bg-secondary)] px-3 py-2 border-b border-[var(--color-border-primary)] flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => onSelectRound(round.round)}
+              className="lift-row w-full bg-[var(--color-bg-secondary)] px-3 py-2 border-b border-[var(--color-border-primary)] flex items-center gap-3 text-left"
+              title="Watch this round in the 2D replay"
+            >
               <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)]">
                 Round {round.round}
               </span>
-            </div>
+              <span className="ml-auto flex items-center gap-1 text-[10px] font-mono text-[var(--color-text-secondary)]">
+                <Play size={11} /> Replay
+              </span>
+            </button>
             <ul>
               {round.events.map((ev, i) => (
                 <EventRow key={i} ev={ev} nameOf={nameOf} sideOf={sideOf} />
@@ -276,6 +290,13 @@ export default function MatchRecapTab({
   canDispatch: boolean;
 }) {
   const [sub, setSub] = useState<RecapSubTab>('events');
+  // Clicking a round in the Events timeline jumps the replay there. The nonce makes a
+  // repeat click on the same round re-fire the jump.
+  const [jump, setJump] = useState<{ round: number; n: number } | null>(null);
+  const jumpToRound = (round: number) => {
+    setJump((prev) => ({ round, n: (prev?.n ?? 0) + 1 }));
+    setSub('replay');
+  };
 
   // Both sub-tabs are powered by the same replay payload. Gate on the payload itself
   // (`events`), not `job.status`: if the payload exists we show it even when a later
@@ -299,7 +320,11 @@ export default function MatchRecapTab({
           <RegenerateLink matchId={matchId} />
         </DevGate>
       </div>
-      {sub === 'events' ? <EventsList events={events} /> : <ReplayPlayer matchId={matchId} />}
+      {sub === 'events' ? (
+        <EventsList events={events} onSelectRound={jumpToRound} />
+      ) : (
+        <ReplayPlayer matchId={matchId} jump={jump} />
+      )}
     </div>
   );
 }
