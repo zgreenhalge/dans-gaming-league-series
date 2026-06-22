@@ -75,7 +75,10 @@ export interface DrawSceneArgs {
   projector: Projector;
   state: ViewState;
   round: ReplayRound;
-  players: ReplayPlayerMeta[];
+  /** Roster keyed by player id, built once by the caller (constant across a round). */
+  metaById: ReadonlyMap<number, ReplayPlayerMeta>;
+  /** Engine ticks per second — times the C4 arming-light blink to wall-clock. */
+  tickRate: number;
   theme: ReplayTheme;
   banner: BannerInfo;
   /** Optional real radar background (Phase 3); falls back to a grid when absent. */
@@ -84,6 +87,8 @@ export interface DrawSceneArgs {
 
 const TWO_PI = Math.PI * 2;
 const DOT_RADIUS = 6;
+/** Half a blink cycle (light on, then off) for the planted-C4 arming light, in seconds. */
+const C4_BLINK_HALF_SECONDS = 0.25;
 
 function factionColor(theme: ReplayTheme, round: ReplayRound, faction: Faction | undefined): string {
   const side = sideOfPlayer(round, faction);
@@ -165,6 +170,7 @@ function drawC4(
   p: { x: number; y: number },
   theme: ReplayTheme,
   tick: number,
+  tickRate: number,
   opts: { blink: boolean; alpha?: number; half?: number } = { blink: true },
 ): void {
   const s = opts.half ?? 5;
@@ -175,8 +181,10 @@ function drawC4(
   ctx.strokeStyle = theme.bg;
   ctx.lineWidth = 1.5;
   ctx.strokeRect(p.x - s, p.y - s, s * 2, s * 2);
-  // Arming light: blinks when planted (period ~0.5s; tick is monotonic), else steady.
-  const lit = opts.blink ? Math.floor(tick / 16) % 2 === 0 : true;
+  // Arming light: blinks when planted, ~0.5s on/off in wall-clock time regardless of the
+  // demo's tick rate (tick is monotonic engine ticks, so the half-period scales with it).
+  const halfPeriodTicks = Math.max(1, C4_BLINK_HALF_SECONDS * tickRate);
+  const lit = opts.blink ? Math.floor(tick / halfPeriodTicks) % 2 === 0 : true;
   ctx.globalAlpha = (lit ? 1 : 0.25) * a;
   ctx.fillStyle = theme.tracer;
   ctx.beginPath();
@@ -186,8 +194,7 @@ function drawC4(
 }
 
 export function drawScene(args: DrawSceneArgs): void {
-  const { ctx, width, height, projector, state, round, players, theme, radar } = args;
-  const metaById = new Map(players.map((p) => [p.id, p]));
+  const { ctx, width, height, projector, state, round, metaById, tickRate, theme, radar } = args;
 
   // --- background ---
   ctx.fillStyle = theme.bg;
@@ -264,14 +271,14 @@ export function drawScene(args: DrawSceneArgs): void {
     const bp = projector.project(state.bomb);
     if (state.bomb.carried) {
       // A small badge offset up-right from the carrier's dot.
-      drawC4(ctx, { x: bp.x + DOT_RADIUS + 3, y: bp.y - DOT_RADIUS - 1 }, theme, state.tick, {
+      drawC4(ctx, { x: bp.x + DOT_RADIUS + 3, y: bp.y - DOT_RADIUS - 1 }, theme, state.tick, tickRate, {
         blink: false,
         half: 3.5,
       });
     } else if (state.bomb.planted) {
-      drawC4(ctx, bp, theme, state.tick, { blink: true });
+      drawC4(ctx, bp, theme, state.tick, tickRate, { blink: true });
     } else {
-      drawC4(ctx, bp, theme, state.tick, { blink: false, alpha: 0.6 });
+      drawC4(ctx, bp, theme, state.tick, tickRate, { blink: false, alpha: 0.6 });
     }
   }
 
@@ -418,7 +425,7 @@ function drawKillFeed(
   ctx: Ctx2D,
   width: number,
   state: ViewState,
-  nameById: Map<number, ReplayPlayerMeta>,
+  nameById: ReadonlyMap<number, ReplayPlayerMeta>,
   round: ReplayRound,
   theme: ReplayTheme,
 ): void {
