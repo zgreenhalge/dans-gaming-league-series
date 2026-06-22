@@ -30,7 +30,7 @@ permissions:
 env:
   # Source2Viewer (ValveResourceFormat) CLI release used to decode .vtex_c radar
   # textures. Bump this tag to pick up fixes for maps the decoder chokes on.
-  VRF_VERSION: "11.2"
+  VRF_VERSION: "19.2"
 
 jobs:
   radar:
@@ -73,7 +73,7 @@ jobs:
         run: |
           mkdir -p vrf && cd vrf
           curl -fsSL -o cli.zip \
-            "https://github.com/ValveResourceFormat/ValveResourceFormat/releases/download/${VRF_VERSION}/Source2Viewer-CLI-linux-x64.zip"
+            "https://github.com/ValveResourceFormat/ValveResourceFormat/releases/download/${VRF_VERSION}/cli-linux-x64.zip"
           unzip -o cli.zip
           chmod +x Source2Viewer-CLI
 
