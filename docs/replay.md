@@ -44,6 +44,8 @@ ReplayPayload {
     events:   [{ tick, type: 'kill'|'plant'|'defuse'|'round_end', … }],
     grenades: [{ type, throwerId, trajectory: [{tick,x,y,z}], detonateTick }],
     shots:    [{ tick, shooterId, x, y, yaw }],   // every weapon_fire → a tracer ray
+    blinds:   [{ tick, playerId, duration }],     // player_blind → flash whiteout
+    hurts:    [{ tick, playerId }],               // player_hurt → red damage blink
   }]
 }
 ```
@@ -78,9 +80,18 @@ too, so a smoke thrown at round end still blooms into the post-round.
 **Tracers & grenade effects:** `shots[]` (one per `weapon_fire`) drives a faint tracer ray for **every
 bullet**, cast from the shooter along their eye `yaw` (the event carries no impact point); kills keep
 their own brighter attacker→victim tracer. Grenade detonations linger and are sized per type in
-`GRENADE_EFFECT` (`playback.ts`): smoke blooms wide for ~15s, molotov/incendiary burn ~7s with the
-incendiary covering a larger area, and he/flash/decoy are brief point pops. `draw.ts` renders the AoE
-disc in world units via `projector.scaleLength()` and fades it over the effect's life.
+`GRENADE_EFFECT` (`playback.ts`): smoke blooms wide for ~18s, molotov/incendiary burn ~7s with the
+incendiary covering a larger area, decoy lasts ~15s as a dot that *pulses* (it pops gunshots
+intermittently — `activeGrenadesAt` gates its `fade` with a duty cycle), and he/flash are brief point
+pops. `draw.ts` renders the AoE disc in world units via `projector.scaleLength()` and fades it over the
+effect's life.
+
+**Player status effects:** `blinds[]` (`player_blind`, with `blind_duration`) and `hurts[]`
+(`player_hurt`) drive per-player overlays computed by `flashAt()` / `hurtAt()` and merged onto each
+`ViewPlayer` in `viewStateAt` (alive players only). A flash whites the dot out fully and fades back to
+team color over the blind duration; damage blinks it red over `HURT_BLINK_SECONDS` — fire ticks
+re-trigger the blink for a steady burn. `draw.ts` paints these as fading alpha overlays on the dot
+(red under, whiteout on top), so no CSS color parsing/blending is needed.
 
 ### Known Phase-1 limitations
 
@@ -89,10 +100,10 @@ disc in world units via `projector.scaleLength()` and fades it over the effect's
   and plant markers work; only the moving bomb dot is deferred. The schema field exists so adding it
   later is non-breaking.
 - **Parser field names are validated by a real run.** Position/weapon prop names (`X`, `Y`, `yaw`,
-  `health`, `is_alive`, `active_weapon_name`), grenade fields, and the `weapon_fire` shooter
-  props (`user_X`, `user_Y`, `user_yaw`) are read defensively (`pick()` tries several candidate
-  keys). The first real Action run against an uploaded demo is the validation step — watch the
-  `assemble`-stage warnings.
+  `health`, `is_alive`, `active_weapon_name`), grenade fields, the `weapon_fire` shooter
+  props (`user_X`, `user_Y`, `user_yaw`), and `player_blind`'s `blind_duration` are read defensively
+  (`pick()` tries several candidate keys). The first real Action run against an uploaded demo is the
+  validation step — watch the `assemble`-stage warnings.
 
 ## Client renderer (Phase 2)
 

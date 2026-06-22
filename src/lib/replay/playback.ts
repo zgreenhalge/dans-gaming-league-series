@@ -24,6 +24,10 @@ export interface ViewPlayer {
   yaw: number;
   hp: number;
   alive: boolean;
+  /** Flash whiteout intensity, 0 (clear) → 1 (fully blinded). */
+  flash: number;
+  /** Damage blink intensity, 0 (none) → 1 (just hit). */
+  hurt: number;
 }
 
 /** A recent kill rendered as a fading tracer line (attacker → victim). */
@@ -40,6 +44,18 @@ export interface ActiveGrenade {
   y: number;
   /** True once past `detonateTick` (draw the effect, e.g. smoke cloud, not the nade). */
   detonated: boolean;
+  /** Area-of-effect radius in WORLD units (0 for in-flight / point grenades). */
+  radius: number;
+  /** 1 at detonation fading to 0 at the end of the effect's linger; 1 while in flight. */
+  fade: number;
+}
+
+/** A single bullet's tracer, cast as a ray from the shooter along their aim. */
+export interface ShotTracer {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  /** 1 at the shot, fading to 0 over the (short) tracer window. */
+  alpha: number;
 }
 
 export interface BombView {
@@ -56,16 +72,45 @@ export interface ViewState {
   bomb: BombView | null;
   grenades: ActiveGrenade[];
   tracers: Tracer[];
+  /** Bullet tracers active at this tick (every shot, not just kills). */
+  shots: ShotTracer[];
   /** Recent kills, newest first — drives the kill-feed overlay. */
   killFeed: ReplayKillEvent[];
 }
 
 /** Seconds a death tracer stays on screen. */
 const TRACER_SECONDS = 0.8;
+/** Seconds a bullet tracer stays on screen — brief, like a muzzle flash. */
+const SHOT_TRACER_SECONDS = 0.25;
+/** World-unit length of a bullet tracer ray (clipped by the canvas when long). */
+const SHOT_TRACER_LENGTH = 3000;
 /** Seconds a kill stays in the feed overlay. */
 const KILLFEED_SECONDS = 6;
-/** Seconds a detonation effect lingers after `detonateTick`. */
-const DETONATION_SECONDS = 1.2;
+
+/**
+ * Per-grenade-type detonation effect: how long it lingers after `detonateTick` and
+ * its area-of-effect radius in world units. Smoke blooms wide and lasts longest;
+ * incendiary covers a larger area than a molotov; both burn ~7s. He/flash/decoy are
+ * point pops with no AoE disc. Values are tuned to read well on the 2D radar, not to
+ * mirror exact CS2 timings. See `docs/replay.md`.
+ */
+const GRENADE_EFFECT: Record<string, { linger: number; radius: number }> = {
+  smoke: { linger: 18, radius: 144 },
+  molotov: { linger: 7, radius: 130 },
+  incendiary: { linger: 7, radius: 165 },
+  he: { linger: 0.4, radius: 0 },
+  flashbang: { linger: 0.4, radius: 0 },
+  decoy: { linger: 15, radius: 0 },
+};
+const DEFAULT_EFFECT = { linger: 1.2, radius: 0 };
+const effectFor = (type: string) => GRENADE_EFFECT[type] ?? DEFAULT_EFFECT;
+
+/** Decoy "fires" intermittently — period (s) and the bright fraction of each cycle. */
+const DECOY_PULSE_SECONDS = 0.9;
+const DECOY_PULSE_DUTY = 0.3;
+
+/** Seconds a damage hit blinks the player red. Fire re-triggers it every burn tick. */
+const HURT_BLINK_SECONDS = 0.5;
 
 export function roundTickRange(round: ReplayRound): { start: number; end: number } {
   if (round.frames.length === 0) return { start: round.startTick, end: round.endTick };
@@ -123,8 +168,46 @@ export function interpolatePlayers(round: ReplayRound, tick: number): ViewPlayer
       // Discrete fields snap at the later frame once we're past the midpoint.
       hp: b.t < 0.5 ? lo.hp : hi.hp,
       alive: b.t < 0.5 ? lo.alive : hi.alive,
+      // Status effects are overlaid by viewStateAt (they live on the round, not the
+      // frame); default to clear so interpolatePlayers stays position-only.
+      flash: 0,
+      hurt: 0,
     };
   });
+}
+
+/**
+ * Per-player flash whiteout at `tick`, keyed by player id. A `player_blind` whites the
+ * player out fully, fading linearly back to team color over its `duration`. Overlapping
+ * flashes take the strongest. Players past their blind window aren't in the map.
+ */
+export function flashAt(round: ReplayRound, tick: number, tickRate: number): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const b of round.blinds ?? []) {
+    if (b.playerId === null) continue;
+    const windowTicks = b.duration * tickRate;
+    if (b.tick > tick || tick - b.tick > windowTicks) continue;
+    const intensity = 1 - (tick - b.tick) / (windowTicks || 1);
+    out.set(b.playerId, Math.max(out.get(b.playerId) ?? 0, intensity));
+  }
+  return out;
+}
+
+/**
+ * Per-player damage blink at `tick`, keyed by player id. Each `player_hurt` blinks the
+ * player red, fading over `HURT_BLINK_SECONDS`; fire ticks re-trigger it for a steady
+ * burn. Overlapping hits take the strongest.
+ */
+export function hurtAt(round: ReplayRound, tick: number, tickRate: number): Map<number, number> {
+  const windowTicks = HURT_BLINK_SECONDS * tickRate;
+  const out = new Map<number, number>();
+  for (const h of round.hurts ?? []) {
+    if (h.playerId === null) continue;
+    if (h.tick > tick || tick - h.tick > windowTicks) continue;
+    const intensity = 1 - (tick - h.tick) / (windowTicks || 1);
+    out.set(h.playerId, Math.max(out.get(h.playerId) ?? 0, intensity));
+  }
+  return out;
 }
 
 /**
@@ -155,15 +238,25 @@ export function activeGrenadesAt(
   tick: number,
   tickRate: number,
 ): ActiveGrenade[] {
-  const lingerTicks = DETONATION_SECONDS * tickRate;
   const out: ActiveGrenade[] = [];
   for (const g of round.grenades) {
     if (g.trajectory.length === 0) continue;
     const first = g.trajectory[0].tick;
     const detonate = g.detonateTick ?? g.trajectory[g.trajectory.length - 1].tick;
+    const eff = effectFor(g.type);
+    const lingerTicks = eff.linger * tickRate;
     if (tick < first || tick > detonate + lingerTicks) continue;
     const pos = grenadePosAt(g, tick);
-    out.push({ type: g.type, x: pos.x, y: pos.y, detonated: tick >= detonate });
+    const detonated = tick >= detonate;
+    let fade = detonated ? Math.max(0, 1 - (tick - detonate) / (lingerTicks || 1)) : 1;
+    // A decoy isn't a steady glow — it pops gunshots intermittently. Gate its fade
+    // with a periodic duty cycle so the dot blinks on and off over its 15s life.
+    if (detonated && g.type === 'decoy') {
+      const periodTicks = DECOY_PULSE_SECONDS * tickRate || 1;
+      const phase = ((tick - detonate) % periodTicks) / periodTicks;
+      fade *= phase < DECOY_PULSE_DUTY ? 1 : 0.15;
+    }
+    out.push({ type: g.type, x: pos.x, y: pos.y, detonated, radius: eff.radius, fade });
   }
   return out;
 }
@@ -201,6 +294,31 @@ export function tracersAt(round: ReplayRound, tick: number, tickRate: number): T
   return out;
 }
 
+/**
+ * Bullet tracers active at `tick`. The demo's `weapon_fire` carries no impact point,
+ * so each tracer is a ray from the shooter along their eye yaw — in WORLD space, so
+ * the projector applies the y-flip (don't negate yaw here, unlike a direct canvas
+ * draw). Fades out fast over `SHOT_TRACER_SECONDS`.
+ */
+export function shotTracersAt(round: ReplayRound, tick: number, tickRate: number): ShotTracer[] {
+  const shots = round.shots ?? [];
+  const windowTicks = SHOT_TRACER_SECONDS * tickRate;
+  const out: ShotTracer[] = [];
+  for (const s of shots) {
+    if (s.tick > tick || tick - s.tick > windowTicks) continue;
+    const rad = (s.yaw * Math.PI) / 180;
+    out.push({
+      from: { x: s.x, y: s.y },
+      to: {
+        x: s.x + Math.cos(rad) * SHOT_TRACER_LENGTH,
+        y: s.y + Math.sin(rad) * SHOT_TRACER_LENGTH,
+      },
+      alpha: 1 - (tick - s.tick) / windowTicks,
+    });
+  }
+  return out;
+}
+
 export function killFeedAt(
   round: ReplayRound,
   tick: number,
@@ -218,12 +336,23 @@ export function killFeedAt(
 
 /** Compose the full drawable state for a round at `tick`. */
 export function viewStateAt(round: ReplayRound, tick: number, tickRate: number): ViewState {
+  const players = interpolatePlayers(round, tick);
+  // Overlay per-player status effects (flash / damage) onto the interpolated dots.
+  // Dead players show neither — the source events stop while they're down.
+  const flash = flashAt(round, tick, tickRate);
+  const hurt = hurtAt(round, tick, tickRate);
+  for (const p of players) {
+    if (!p.alive) continue;
+    p.flash = flash.get(p.id) ?? 0;
+    p.hurt = hurt.get(p.id) ?? 0;
+  }
   return {
     tick,
-    players: interpolatePlayers(round, tick),
+    players,
     bomb: bombStateAt(round, tick),
     grenades: activeGrenadesAt(round, tick, tickRate),
     tracers: tracersAt(round, tick, tickRate),
+    shots: shotTracersAt(round, tick, tickRate),
     killFeed: killFeedAt(round, tick, tickRate),
   };
 }

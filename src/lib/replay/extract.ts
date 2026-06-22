@@ -19,6 +19,9 @@ import {
   type ReplayPlayerFrame,
   type ReplayEvent,
   type ReplayGrenade,
+  type ReplayShot,
+  type ReplayBlind,
+  type ReplayHurt,
   type GrenadePoint,
   type Side,
 } from './types';
@@ -28,6 +31,13 @@ const FRAME_RATE = 16;
 
 /** Seconds of lead kept before a round goes live; the rest of freeze time is skipped. */
 const PRE_LIVE_SECONDS = 1;
+
+/**
+ * Seconds of play kept after `round_end` — the post-round window where players keep
+ * moving before the next freeze. Capped at the next `round_start` so we never bleed
+ * back into the (trimmed) freeze time of the following round.
+ */
+const POST_ROUND_SECONDS = 7;
 
 /** Map a CS2 round_end `reason` to the win-condition icon bucket (mirrors demoParser). */
 function reasonToCondition(reason: string | null): RoundCondition {
@@ -166,14 +176,24 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     for (const t of freezeEndTicks) if (t > startTick && t <= endTick) return t;
     return null;
   };
+  // First round_start strictly after a round's end — the start of the next freeze,
+  // which caps how far we extend post-round playback.
+  const nextStartAfter = (endTick: number): number | null => {
+    for (const t of startTicks) if (t > endTick) return t;
+    return null;
+  };
 
   // --- Frames: one batched parseTicks over every wanted tick ---
   const interval = Math.max(1, Math.round(context.tickRate / FRAME_RATE));
   const leadTicks = Math.round(context.tickRate * PRE_LIVE_SECONDS);
+  const postRoundTicks = Math.round(context.tickRate * POST_ROUND_SECONDS);
   const roundBounds: {
     round: number;
     startTick: number;
+    /** The `round_end` tick (semantic round end; events reference it). */
     endTick: number;
+    /** Last tick of playback, including the post-round window (≥ `endTick`). */
+    frameEndTick: number;
     wanted: number[];
   }[] = [];
   const allWantedTicks: number[] = [];
@@ -186,10 +206,17 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     const freezeEnd = freezeEndIn(roundStart, r.endTick);
     const startTick =
       freezeEnd !== null ? Math.max(roundStart, freezeEnd - leadTicks) : roundStart;
+    // Keep playing through the post-round, but never into the next freeze.
+    const nextStart = nextStartAfter(r.endTick);
+    const frameEndTick =
+      nextStart !== null
+        ? Math.min(r.endTick + postRoundTicks, nextStart)
+        : r.endTick + postRoundTicks;
     const wanted: number[] = [];
     for (let t = startTick; t < r.endTick; t += interval) wanted.push(t);
     wanted.push(r.endTick);
-    roundBounds.push({ round: r.roundNumber, startTick, endTick: r.endTick, wanted });
+    for (let t = r.endTick + interval; t <= frameEndTick; t += interval) wanted.push(t);
+    roundBounds.push({ round: r.roundNumber, startTick, endTick: r.endTick, frameEndTick, wanted });
     allWantedTicks.push(...wanted);
   }
 
@@ -219,9 +246,12 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     framesByTick.get(tick)!.push(frame);
   }
 
-  // --- Events + grenades, bucketed per round ---
+  // --- Events + grenades + shots, bucketed per round ---
   const eventsByRound = collectEvents(demoBuffer, deathRows, context, playerIdOf, reasonByRound);
   const grenadesByRound = collectGrenades(demoBuffer, context, roundBounds, playerIdOf, interval);
+  const shotsByRound = collectShots(demoBuffer, context, playerIdOf);
+  const blindsByRound = collectBlinds(demoBuffer, context, playerIdOf);
+  const hurtsByRound = collectHurts(demoBuffer, context, playerIdOf);
 
   // --- Assemble rounds ---
   for (const b of roundBounds) {
@@ -242,6 +272,9 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
       frames,
       events: eventsByRound.get(b.round) ?? [],
       grenades: grenadesByRound.get(b.round) ?? [],
+      shots: shotsByRound.get(b.round) ?? [],
+      blinds: blindsByRound.get(b.round) ?? [],
+      hurts: hurtsByRound.get(b.round) ?? [],
     });
   }
 
@@ -343,7 +376,7 @@ function collectEvents(
 function collectGrenades(
   demoBuffer: Buffer,
   context: ReturnType<typeof buildMatchContext>,
-  roundBounds: { round: number; startTick: number; endTick: number }[],
+  roundBounds: { round: number; startTick: number; frameEndTick: number }[],
   playerIdOf: (s: string | null | undefined) => number | null,
   interval: number,
 ): Map<number, ReplayGrenade[]> {
@@ -357,7 +390,7 @@ function collectGrenades(
 
   const roundForTick = (tick: number): number | null => {
     for (const b of roundBounds) {
-      if (tick >= b.startTick && tick <= b.endTick) return b.round;
+      if (tick >= b.startTick && tick <= b.frameEndTick) return b.round;
     }
     return null;
   };
@@ -425,5 +458,123 @@ function collectGrenades(
     byRound.get(round)!.push(grenade);
   }
 
+  return byRound;
+}
+
+/**
+ * Every bullet fired, bucketed per round. `weapon_fire` is a mid-round event so it
+ * counts rounds *completed* — the round it belongs to is `total_rounds_played + 1`,
+ * same as kills. We pull the shooter's position + eye yaw to cast the 2D tracer.
+ */
+function collectShots(
+  demoBuffer: Buffer,
+  context: ReturnType<typeof buildMatchContext>,
+  playerIdOf: (s: string | null | undefined) => number | null,
+): Map<number, ReplayShot[]> {
+  const byRound = new Map<number, ReplayShot[]>();
+  let rows: Record<string, unknown>[];
+  try {
+    rows = parseEvent(demoBuffer, 'weapon_fire', ['X', 'Y', 'yaw'], [
+      'total_rounds_played',
+      'is_warmup_period',
+    ]) as Record<string, unknown>[];
+  } catch {
+    return byRound; // shots are non-critical
+  }
+
+  for (const f of rows) {
+    if (f.is_warmup_period) continue;
+    const round = Number(f.total_rounds_played ?? -1) + 1;
+    if (!context.liveRounds.has(round)) continue;
+    const x = pick<number>(f, ['user_X', 'X']);
+    const y = pick<number>(f, ['user_Y', 'Y']);
+    if (x === null || y === null) continue;
+    if (!byRound.has(round)) byRound.set(round, []);
+    byRound.get(round)!.push({
+      tick: Number(pick<number>(f, ['tick']) ?? 0),
+      shooterId: playerIdOf(pick<string>(f, ['user_steamid'])),
+      x: Number(x),
+      y: Number(y),
+      yaw: Number(pick<number>(f, ['user_yaw', 'yaw']) ?? 0),
+    });
+  }
+
+  for (const shots of byRound.values()) shots.sort((a, b) => a.tick - b.tick);
+  return byRound;
+}
+
+/**
+ * Flash events, bucketed per round. `player_blind` carries `blind_duration` (seconds);
+ * the player renders a whiteout that fades to team color over that span. Mid-round
+ * event, so the round is `total_rounds_played + 1` (same as kills/shots).
+ */
+function collectBlinds(
+  demoBuffer: Buffer,
+  context: ReturnType<typeof buildMatchContext>,
+  playerIdOf: (s: string | null | undefined) => number | null,
+): Map<number, ReplayBlind[]> {
+  const byRound = new Map<number, ReplayBlind[]>();
+  let rows: Record<string, unknown>[];
+  try {
+    rows = parseEvent(demoBuffer, 'player_blind', [], [
+      'total_rounds_played',
+      'is_warmup_period',
+      'blind_duration',
+    ]) as Record<string, unknown>[];
+  } catch {
+    return byRound; // non-critical
+  }
+
+  for (const b of rows) {
+    if (b.is_warmup_period) continue;
+    const round = Number(b.total_rounds_played ?? -1) + 1;
+    if (!context.liveRounds.has(round)) continue;
+    const duration = Number(pick<number>(b, ['blind_duration']) ?? 0);
+    if (duration <= 0) continue;
+    if (!byRound.has(round)) byRound.set(round, []);
+    byRound.get(round)!.push({
+      tick: Number(pick<number>(b, ['tick']) ?? 0),
+      playerId: playerIdOf(pick<string>(b, ['user_steamid'])),
+      duration,
+    });
+  }
+
+  for (const blinds of byRound.values()) blinds.sort((a, b) => a.tick - b.tick);
+  return byRound;
+}
+
+/**
+ * Damage events, bucketed per round. `player_hurt` fires once per damage instance —
+ * fire (inferno) ticks repeatedly, so a short red blink per hurt reads as a sustained
+ * burn. Mid-round event, so the round is `total_rounds_played + 1`.
+ */
+function collectHurts(
+  demoBuffer: Buffer,
+  context: ReturnType<typeof buildMatchContext>,
+  playerIdOf: (s: string | null | undefined) => number | null,
+): Map<number, ReplayHurt[]> {
+  const byRound = new Map<number, ReplayHurt[]>();
+  let rows: Record<string, unknown>[];
+  try {
+    rows = parseEvent(demoBuffer, 'player_hurt', [], [
+      'total_rounds_played',
+      'is_warmup_period',
+    ]) as Record<string, unknown>[];
+  } catch {
+    return byRound; // non-critical
+  }
+
+  for (const h of rows) {
+    if (h.is_warmup_period) continue;
+    const round = Number(h.total_rounds_played ?? -1) + 1;
+    if (!context.liveRounds.has(round)) continue;
+    if (!byRound.has(round)) byRound.set(round, []);
+    byRound.get(round)!.push({
+      tick: Number(pick<number>(h, ['tick']) ?? 0),
+      playerId: playerIdOf(pick<string>(h, ['user_steamid'])),
+    });
+  }
+
+  for (const hurts of byRound.values()) hurts.sort((a, b) => a.tick - b.tick);
   return byRound;
 }

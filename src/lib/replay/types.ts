@@ -16,7 +16,7 @@ export type Side = 'CT' | 'T';
  * Bump when the shape changes incompatibly. The player reads this and refuses
  * payloads it doesn't understand instead of mis-rendering.
  */
-export const REPLAY_SCHEMA_VERSION = 1;
+export const REPLAY_SCHEMA_VERSION = 2;
 
 /** A 2D world position, in CS2 world units (not yet projected to a radar). */
 export interface Point {
@@ -58,6 +58,42 @@ export interface ReplayRound {
   /** Core events — powers BOTH the Events tab and the in-player timeline. */
   events: ReplayEvent[];
   grenades: ReplayGrenade[];
+  /** Every bullet fired this round — drives the all-shots tracers. */
+  shots: ReplayShot[];
+  /** Flash events — drive the per-player whiteout overlay. */
+  blinds: ReplayBlind[];
+  /** Damage events — drive the per-player red damage blink. */
+  hurts: ReplayHurt[];
+}
+
+/** A player getting flashed (one per `player_blind`). */
+export interface ReplayBlind {
+  tick: number;
+  playerId: number | null;
+  /** Seconds the flash blinds them; the whiteout fades to team color over this. */
+  duration: number;
+}
+
+/** A player taking damage (one per `player_hurt`); drives a brief red blink. */
+export interface ReplayHurt {
+  tick: number;
+  playerId: number | null;
+}
+
+/**
+ * A single bullet fired (one per `weapon_fire`). We store the shooter's position and
+ * aim yaw rather than an impact point — the 2D tracer is cast as a ray along `yaw`
+ * (the demo's `weapon_fire` carries no impact location). World coords; the projector
+ * applies the y-flip.
+ */
+export interface ReplayShot {
+  tick: number;
+  /** `null` if the shooter isn't on the resolved roster. */
+  shooterId: number | null;
+  x: number;
+  y: number;
+  /** Eye yaw in degrees (world-space, CCW from +X). */
+  yaw: number;
 }
 
 /** A single downsampled tick: where everyone is and what the bomb is doing. */

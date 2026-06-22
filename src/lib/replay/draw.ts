@@ -118,20 +118,58 @@ export function drawScene(args: DrawSceneArgs): void {
     drawGrid(ctx, width, height, theme.grid);
   }
 
-  // --- grenade arcs / effects (under players) ---
+  // --- grenade effects (under players) ---
   for (const g of state.grenades) {
     const p = projector.project(g);
     const color = grenadeColor(theme, g.type);
-    ctx.globalAlpha = g.detonated ? 0.35 : 0.9;
-    ctx.fillStyle = color;
+    if (!g.detonated) {
+      // Projectile still in flight — a small travelling dot.
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 4, 0, TWO_PI);
+      ctx.fill();
+    } else if (g.radius > 0) {
+      // Area effect (smoke bloom / fire), sized to its AoE and fading over its life.
+      const r = projector.scaleLength(g.radius);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = (g.type === 'smoke' ? 0.55 : 0.45) * g.fade;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, TWO_PI);
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = Math.min(1, g.fade);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, TWO_PI);
+      ctx.stroke();
+    } else {
+      // Point detonation (he / flash / decoy) — a brief flash.
+      ctx.globalAlpha = 0.5 * g.fade;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 6, 0, TWO_PI);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // --- bullet tracers (every shot, faint + thin, under death tracers) ---
+  ctx.lineCap = 'round';
+  for (const sh of state.shots) {
+    const a = projector.project(sh.from);
+    const b = projector.project(sh.to);
+    ctx.globalAlpha = Math.max(0, Math.min(1, sh.alpha)) * 0.3;
+    ctx.strokeStyle = theme.textDim;
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, g.detonated ? projector.scaleLength(144) : 4, 0, TWO_PI);
-    ctx.fill();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
   }
   ctx.globalAlpha = 1;
 
   // --- death tracers (fading) ---
-  ctx.lineCap = 'round';
   for (const tr of state.tracers) {
     const a = projector.project(tr.from);
     const b = projector.project(tr.to);
@@ -235,6 +273,25 @@ function drawPlayer(
   ctx.strokeStyle = theme.bg;
   ctx.lineWidth = 1.5;
   ctx.stroke();
+
+  // Status overlays (alive only): a red damage blink, then a flash whiteout on top —
+  // both fade their alpha to 0, so the dot eases back to its team color.
+  if (pl.alive && pl.hurt > 0) {
+    ctx.globalAlpha = Math.min(1, pl.hurt) * 0.85;
+    ctx.fillStyle = theme.tracer;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, DOT_RADIUS, 0, TWO_PI);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  if (pl.alive && pl.flash > 0) {
+    ctx.globalAlpha = Math.min(1, pl.flash);
+    ctx.fillStyle = theme.flash;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, DOT_RADIUS, 0, TWO_PI);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
 
   if (!pl.alive) {
     // Death X

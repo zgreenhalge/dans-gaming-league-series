@@ -21,7 +21,11 @@ import {
   bombStateAt,
   killFeedAt,
   tracersAt,
+  shotTracersAt,
   activeGrenadesAt,
+  flashAt,
+  hurtAt,
+  viewStateAt,
   roundTickRange,
 } from './playback';
 import { buildHeatmapPoints } from './heatmap';
@@ -68,6 +72,9 @@ function round(partial: Partial<ReplayRound>): ReplayRound {
     frames: [],
     events: [],
     grenades: [],
+    shots: [],
+    blinds: [],
+    hurts: [],
     ...partial,
   };
 }
@@ -198,8 +205,8 @@ test('tracers: fade from 1 to 0 across the tracer window, then disappear', () =>
   assert.equal(tracersAt(r, 100 + 64, tickRate).length, 0); // 1s later (>0.8s window) gone
 });
 
-// --- activeGrenades: visible in flight, lingers as effect after detonation ---
-test('grenades: in flight then detonated effect, gone after linger', () => {
+// --- activeGrenades: visible in flight, lingers per-type as effect after detonation ---
+test('grenades: smoke in flight → bloom → gone after its ~15s linger', () => {
   const tickRate = 64;
   const r = round({
     grenades: [
@@ -208,8 +215,79 @@ test('grenades: in flight then detonated effect, gone after linger', () => {
   });
   assert.equal(activeGrenadesAt(r, 50, tickRate).length, 0); // before throw
   assert.equal(activeGrenadesAt(r, 150, tickRate)[0].detonated, false); // mid-flight
-  assert.equal(activeGrenadesAt(r, 200, tickRate)[0].detonated, true); // at detonation
-  assert.equal(activeGrenadesAt(r, 200 + 2 * tickRate, tickRate).length, 0); // past linger
+  const bloom = activeGrenadesAt(r, 200, tickRate)[0];
+  assert.equal(bloom.detonated, true);
+  assert.equal(bloom.radius, 144); // smoke AoE
+  approx(bloom.fade, 1);
+  assert.equal(activeGrenadesAt(r, 200 + 16 * tickRate, tickRate).length, 1); // still up at 16s
+  assert.equal(activeGrenadesAt(r, 200 + 19 * tickRate, tickRate).length, 0); // gone after 18s
+});
+
+test('grenades: decoy lasts ~15s and pulses (fade dips between fires)', () => {
+  const tickRate = 64;
+  const r = round({ grenades: [{ type: 'decoy', throwerId: 1, detonateTick: 100, trajectory: [{ tick: 100, x: 0, y: 0, z: 0 }] }] });
+  assert.equal(activeGrenadesAt(r, 100 + 14 * tickRate, tickRate).length, 1); // alive at 14s
+  assert.equal(activeGrenadesAt(r, 100 + 16 * tickRate, tickRate).length, 0); // gone after 15s
+  // Bright at the start of a cycle, dim partway through it.
+  const bright = activeGrenadesAt(r, 100, tickRate)[0].fade;
+  const dim = activeGrenadesAt(r, 100 + Math.round(0.6 * tickRate), tickRate)[0].fade;
+  assert.ok(bright > dim);
+});
+
+test('grenades: incendiary covers a larger area than molotov, both burn ~7s', () => {
+  const tickRate = 64;
+  const traj = [{ tick: 100, x: 0, y: 0, z: 0 }];
+  const molo = round({ grenades: [{ type: 'molotov', throwerId: 1, detonateTick: 100, trajectory: traj }] });
+  const incen = round({ grenades: [{ type: 'incendiary', throwerId: 1, detonateTick: 100, trajectory: traj }] });
+  assert.ok(
+    activeGrenadesAt(incen, 100, tickRate)[0].radius > activeGrenadesAt(molo, 100, tickRate)[0].radius,
+  );
+  assert.equal(activeGrenadesAt(molo, 100 + 6 * tickRate, tickRate).length, 1); // still burning at 6s
+  assert.equal(activeGrenadesAt(molo, 100 + 8 * tickRate, tickRate).length, 0); // out after 7s
+});
+
+// --- shot tracers: every bullet, cast as a fading ray along the shooter's yaw ---
+test('shots: tracer points along yaw in world space and fades out fast', () => {
+  const tickRate = 64;
+  const r = round({ shots: [{ tick: 100, shooterId: 1, x: 0, y: 0, yaw: 0 }] });
+  const t = shotTracersAt(r, 100, tickRate);
+  assert.equal(t.length, 1);
+  approx(t[0].alpha, 1);
+  assert.ok(t[0].to.x > t[0].from.x); // yaw 0 → ray extends along +x (world, no flip here)
+  approx(t[0].to.y, 0);
+  assert.equal(shotTracersAt(r, 100 + tickRate, tickRate).length, 0); // 1s later (>0.25s window) gone
+});
+
+// --- player status effects: flash whiteout + damage blink, per player ---
+test('flash: whiteout starts full and fades to 0 over blind_duration', () => {
+  const tickRate = 64;
+  const r = round({ blinds: [{ tick: 100, playerId: 7, duration: 2 }] });
+  approx(flashAt(r, 100, tickRate).get(7)!, 1); // fully blinded at the hit
+  approx(flashAt(r, 100 + tickRate, tickRate).get(7)!, 0.5); // halfway through 2s
+  assert.equal(flashAt(r, 100 + 3 * tickRate, tickRate).has(7), false); // cleared after duration
+});
+
+test('hurt: damage blinks red briefly and re-triggers on the next tick', () => {
+  const tickRate = 64;
+  const r = round({ hurts: [{ tick: 100, playerId: 7 }, { tick: 132, playerId: 7 }] });
+  approx(hurtAt(r, 100, tickRate).get(7)!, 1); // just hit
+  // The second hit (tick 132) is the strongest active blink at tick 132.
+  approx(hurtAt(r, 132, tickRate).get(7)!, 1);
+  assert.equal(hurtAt(r, 200, tickRate).has(7), false); // both >0.5s old → gone
+});
+
+test('viewStateAt: status effects land on alive players, not the dead', () => {
+  const tickRate = 64;
+  const r = round({
+    frames: [frame(100, [pf(1, 0, 0, { alive: true }), pf(2, 5, 5, { alive: false })])],
+    blinds: [{ tick: 100, playerId: 1, duration: 2 }, { tick: 100, playerId: 2, duration: 2 }],
+    hurts: [{ tick: 100, playerId: 1 }],
+  });
+  const state = viewStateAt(r, 100, tickRate);
+  const alive = state.players.find((p) => p.id === 1)!;
+  const dead = state.players.find((p) => p.id === 2)!;
+  assert.ok(alive.flash > 0 && alive.hurt > 0);
+  assert.equal(dead.flash, 0); // dead players show no whiteout
 });
 
 test('roundTickRange: spans first to last frame tick', () => {
