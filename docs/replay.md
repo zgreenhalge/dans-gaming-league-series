@@ -218,6 +218,9 @@ workflow — see the dispatch endpoint.
    triplet from the workshop VPK; the player loads it via `GET /api/maps/[slug]/calibration` +
    `…/radar` and switches `projectorFor()` to the calibrated branch (auto-fit fallback when
    uncalibrated). Remaining: an in-site admin trigger + a manual calibration/correction UI.
-4. ~~On-demand `replay-mp4` Action~~ — **dropped** in favor of the **map Heatmap tab**: kill/death/
-   grenade locations on `/maps/[slug]`, respecting the season + side filters, plotted via the shared
-   `project.ts` over the `heatmap.json` artifacts. (Tab UI pending.)
+4. ~~On-demand `replay-mp4` Action~~ — **dropped** in favor of the **map Heatmap tab** — **built.**
+   Kill/death/grenade locations on `/maps/[slug]`, respecting the season filter (shared with the rest
+   of the page) + a CT/T side toggle + per-layer toggles, plotted via the shared `project.ts` (real
+   radar when calibrated, else auto-fit) over the `heatmap.json` artifacts. `getMapHeatmap()`
+   aggregates the per-match artifacts server-side; `MapHeatmap` (with the shared `useMapRadar` hook)
+   renders the density additively on a canvas, with grenades drawn as their effect area.

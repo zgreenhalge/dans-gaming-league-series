@@ -10,8 +10,10 @@ import { tabCls, canonicalSort, deriveRates } from '@/lib/util';
 import type { MapMatchRow, MapDetail, MapPlayerStat, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import H2HSection from './H2HSection';
+import MapHeatmap from './MapHeatmap';
+import type { MapHeatmapPoint } from '@/lib/queries';
 
-type Tab = 'leaderboard' | 'stats' | 'matches' | 'h2h';
+type Tab = 'leaderboard' | 'stats' | 'matches' | 'h2h' | 'heatmap';
 
 function toRosterStat(s: MapPlayerStat) {
   return {
@@ -99,7 +101,15 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
   })).sort(canonicalSort)) as unknown as LeaderboardRowWithId[];
 }
 
-export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; h2hData: H2HData }) {
+export default function MapDetailView({
+  detail,
+  h2hData,
+  heatmapPoints,
+}: {
+  detail: MapDetail;
+  h2hData: H2HData;
+  heatmapPoints: MapHeatmapPoint[];
+}) {
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter();
   const [tab, setTab] = useState<Tab>('leaderboard');
 
@@ -155,6 +165,9 @@ export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; 
         <button type="button" className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
           H2H
         </button>
+        <button type="button" className={tabCls(tab === 'heatmap')} onClick={() => setTab('heatmap')}>
+          Heatmap
+        </button>
       </TabBar>
 
       {tab === 'leaderboard' && (
@@ -201,6 +214,14 @@ export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; 
       )}
 
       {tab === 'h2h' && <H2HSection data={h2hData} />}
+
+      {tab === 'heatmap' && (
+        <MapHeatmap
+          slug={detail.slug}
+          points={heatmapPoints}
+          visibleMatchIds={new Set(filteredMatches.map((m) => m.match_id))}
+        />
+      )}
     </div>
   );
 }
