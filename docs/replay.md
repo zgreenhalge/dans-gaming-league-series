@@ -2,9 +2,9 @@
 
 The 2D match replay and core-events list (issue #121). Every uploaded CS2 demo is turned into a
 **`replay.json`** payload that drives two products, both surfaced as sub-tabs under the match page's
-**Recap** tab (`MatchRecapTab.tsx`): an **Events** list (kills, plants, defuses, round ends) and —
-once Phase 2 lands — a **2D Replay** rendered in-browser by **`<ReplayPlayer>`** on a canvas (a
-placeholder for now). An optional mp4 is produced on demand. This is a sibling pipeline to
+**Recap** tab (`MatchRecapTab.tsx`): an **Events** list (kills, plants, defuses, round ends) and a
+**2D Replay** rendered in-browser by **`<ReplayPlayer>`** on a canvas. An optional mp4 is produced on
+demand. This is a sibling pipeline to
 [`demo-ingestion.md`](./demo-ingestion.md): that path parses **stats** (which need human review before
 they write scores); this path parses **positions/events** (which need no review, so it runs fully
 async in GitHub Actions).
@@ -21,8 +21,8 @@ deterministic key; Vercel only **dispatches** jobs and **reads** the finished pa
 - **App (Vercel)** — serves the Recap tab (Events list + replay player), the admin radar-calibration UI, and *dispatches*
   the GitHub jobs. No ffmpeg, no server canvas on the request path.
 - **GitHub Actions** — all heavy compute (parse, render, radar extraction). See "Background jobs".
-- **Client `<ReplayPlayer>`** (Phase 2) — a canvas component that loads `replay.json` and plays it
-  back interactively. The renderer.
+- **Client `<ReplayPlayer>`** — a canvas component that loads `replay.json` and plays it back
+  interactively. The renderer.
 
 ## The `replay.json` contract
 
@@ -64,6 +64,11 @@ script, mirroring the roster assembly in `POST /api/matches/[id]/demo/parse`.
 > rounds *completed so far*, so their round number is `total_rounds_played + 1`. The extract honors
 > this split (same as the stats collectors).
 
+**Freeze-time trim:** each round opens with ~15s of freeze/buy time where everyone stands in spawn —
+dead air for a replay. The extract begins each round's frames only `PRE_LIVE_SECONDS` (≈1s) before
+`round_freeze_end`, skipping the rest. This both tightens playback and shrinks the payload. If a demo
+has no `round_freeze_end` events the full freeze time is kept (with a warning).
+
 ### Known Phase-1 limitations
 
 - **`frame.bomb` is always `null`.** Live per-tick bomb position requires tracking the C4 entity /
@@ -74,6 +79,30 @@ script, mirroring the roster assembly in `POST /api/matches/[id]/demo/parse`.
   `health`, `is_alive`, `active_weapon_name`) and grenade fields are read defensively (`pick()` tries
   several candidate keys). The first real Action run against an uploaded demo is the validation step —
   watch the `assemble`-stage warnings.
+
+## Client renderer (Phase 2)
+
+The 2D Replay sub-tab is `<ReplayPlayer>` (`src/components/ReplayPlayer.tsx`), a canvas component
+loaded lazily with `ssr: false` (its payload fetch + RAF loop are browser-only). It fetches the full
+payload from **`GET /api/matches/[id]/replay/payload`** — which streams the gzipped `replay.json`
+straight from R2 with `Content-Encoding: gzip` — only when the user opens the sub-tab, so the
+multi-MB payload never bloats the server-rendered match page (the Events tab keeps using the
+stripped `getReplayEventsView` projection).
+
+The render is split into **three pure, runtime-agnostic modules** so the browser player and the
+Phase-4 mp4 Action share one code path with **no draw drift**:
+
+| Module | Responsibility |
+|---|---|
+| `src/lib/replay/project.ts` | world (x,y) → canvas px. `autoFitProjector` (fit the payload's bounding box; default) and `calibratedProjector` (a map's radar triplet; Phase 3) behind one `Projector` interface. `projectorFor()` picks. |
+| `src/lib/replay/playback.ts` | `viewStateAt(round, tick, tickRate)` — interpolates positions between downsampled frames (shortest-path yaw lerp), reconstructs planted-bomb state from plant/defuse events, and resolves active grenades / tracers / kill-feed by tick window. No clock. |
+| `src/lib/replay/draw.ts` | `drawScene()` — paints one moment onto a structural `Ctx2D` (the Canvas2D subset used), taking colors from a passed `ReplayTheme` (the player reads CSS vars; the mp4 Action hardcodes them). No DOM, no React. |
+
+`<ReplayPlayer>` is the thin shell: a DPR-aware canvas sized by `ResizeObserver`, a RAF clock that
+advances `tick` (auto-advancing across rounds), and the controls (play/pause, 0.5–4× speed, round
+jump, scrubber). The scrubber is uncontrolled and synced imperatively each frame to avoid a
+per-frame React re-render. The pure modules are unit-tested in `src/lib/replay/replay.test.ts`
+(`npm test`).
 
 ## Background jobs (GitHub Actions)
 
@@ -171,7 +200,10 @@ workflow — see the dispatch endpoint.
 
 ## Phases
 
-1. **`replay.json` schema (locked) + `replay-extract` Action + Events tab.** — *this deliverable.*
-2. `<ReplayPlayer>` (client), calibration-free auto-fit + overlays + controls.
-3. `radar-build` Action + admin calibration UI → real radar backgrounds.
-4. On-demand `replay-mp4` Action + download UX (reuses the shared `drawFrame`).
+1. **`replay.json` schema (locked) + `replay-extract` Action + Events tab.** — **built.**
+2. **`<ReplayPlayer>` (client), calibration-free auto-fit + overlays + controls.** — **built**
+   (`project.ts` / `playback.ts` / `draw.ts` + the payload route; see "Client renderer").
+3. `radar-build` Action + admin calibration UI → real radar backgrounds. The calibrated branch of
+   `projectorFor()` + `drawScene`'s radar background are already wired; this phase fills in the data.
+4. On-demand `replay-mp4` Action + download UX — reuses `playback.ts` + `draw.ts` headlessly via
+   `@napi-rs/canvas`.
