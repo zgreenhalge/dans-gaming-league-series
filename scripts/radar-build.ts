@@ -212,8 +212,13 @@ async function main() {
     if (!matched) {
       warning(`No overview matched map slug "${slug}"; using ${chosen} (verify the radar).`);
     }
-    const cal = parseOverview(readFileSync(chosen, 'utf8'));
-    if (!cal) throw new Error(`Could not parse pos_x/pos_y/scale from ${chosen}`);
+    const raw = readFileSync(chosen, 'utf8');
+    const cal = parseOverview(raw);
+    if (!cal) {
+      // Surface the file so we can adjust the parser to its actual format.
+      warning(`Overview head (${chosen}):\n${raw.slice(0, 1000)}`);
+      throw new Error(`Could not parse pos_x/pos_y/scale from ${chosen}`);
+    }
     notice(`calibration: pos (${cal.posX}, ${cal.posY}) scale ${cal.scale}`);
     return cal;
   });

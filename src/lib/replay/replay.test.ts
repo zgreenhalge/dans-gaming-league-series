@@ -301,6 +301,22 @@ test('parseOverview: reads pos_x/pos_y/scale and material from CS KeyValues', ()
   assert.equal(cal.material, 'overviews/de_example_radar_psd');
 });
 
+test('parseOverview: reads the CS2 KV3 form (unquoted, = separator, decimals)', () => {
+  const txt = `<!-- kv3 -->
+    {
+      material = "materials/overviews/de_foroglio.vmat"
+      pos_x = -2476.000000
+      pos_y = 3239.000000
+      scale = 5.000000
+    }
+  `;
+  const cal = parseOverview(txt)!;
+  approx(cal.posX, -2476);
+  approx(cal.posY, 3239);
+  approx(cal.scale, 5);
+  assert.equal(cal.material, 'materials/overviews/de_foroglio.vmat');
+});
+
 test('parseOverview: null when a required key or a usable scale is missing', () => {
   assert.equal(parseOverview('"x" { "pos_x" "1" "pos_y" "2" }'), null); // no scale
   assert.equal(parseOverview('"x" { "pos_x" "1" "pos_y" "2" "scale" "0" }'), null); // scale 0
