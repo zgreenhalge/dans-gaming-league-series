@@ -135,9 +135,12 @@ export default async function MatchPage({
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
 
-  // Replay/Events (issue #121). Status is defensive (tolerates missing DB columns);
-  // events are only fetched once a payload is ready.
-  const replayJob = await getReplayJobState(matchId);
+  // Replay/Events (issue #121). Only played matches can have a replay, and the Recap
+  // tab is gated on `played`, so skip the queries entirely otherwise. Status is
+  // defensive (tolerates missing DB columns); events load only once a payload is ready.
+  const replayJob = played
+    ? await getReplayJobState(matchId)
+    : { status: 'none' as const, stage: null, ghRunUrl: null, errorMessage: null };
   const replayEvents =
     replayJob.status === 'ready' ? await getReplayEventsView(matchId) : null;
 

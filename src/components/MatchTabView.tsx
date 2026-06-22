@@ -6,15 +6,16 @@ import { tabCls, formatEhogDelta } from '@/lib/util';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import { PlayerName } from '@/components/PlayerName';
 import DemoUploadModal from '@/components/DemoUploadModal';
+import MatchRecapTab from '@/components/MatchRecapTab';
 import ScoutingReport from '@/components/ScoutingReport';
 import { Checkbox } from '@/components/SeasonFilter';
 import TabBar from '@/components/TabBar';
-import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow } from '@/lib/queries';
+import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView } from '@/lib/queries';
 import type { SabFields } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
 
 type Faction = 'CT' | 'T' | null;
-type Tab = 'leaderboard' | 'impact' | 'utility' | 'scouting';
+type Tab = 'leaderboard' | 'impact' | 'utility' | 'scouting' | 'recap';
 
 function factionClass(f: Faction): string {
   if (f === 'CT') return 'faction-ct';
@@ -393,6 +394,8 @@ export default function MatchTabView({
   ratingDeltas,
   ratingProjections = [],
   sabremetrics = [],
+  replayJob,
+  replayEvents = null,
 }: {
   shirts: MatchStatRow[];
   skins: MatchStatRow[];
@@ -417,6 +420,8 @@ export default function MatchTabView({
   ratingDeltas: Record<number, number>;
   ratingProjections?: RatingProjection[];
   sabremetrics?: MatchSabremetricsRow[];
+  replayJob: ReplayJobState;
+  replayEvents?: ReplayEventsView | null;
 }) {
   const hasScoutingData = !!(scoutingData && scoutingH2H);
   const hasProjections = ratingProjections.length > 0;
@@ -427,6 +432,9 @@ export default function MatchTabView({
 
   const allStats = [...shirts, ...skins];
   const statsRecorded = allStats.length > 0;
+  const canDispatchReplay =
+    isCurrentUserAdmin ||
+    (currentPlayerId !== null && matchPlayers.some((p) => p.player_id === currentPlayerId));
 
   const sabMap = new Map<number, SabFields>(
     sabremetrics.map((s) => [s.player_id, s]),
@@ -490,6 +498,11 @@ export default function MatchTabView({
         {(hasScoutingData || hasProjections) && (
           <button type="button" className={tabCls(tab === 'scouting')} onClick={() => setTab('scouting')}>
             Scouting Report
+          </button>
+        )}
+        {played && (
+          <button type="button" className={tabCls(tab === 'recap')} onClick={() => setTab('recap')}>
+            Recap
           </button>
         )}
       </TabBar>
@@ -571,6 +584,15 @@ export default function MatchTabView({
             />
           )}
         </>
+      )}
+
+      {tab === 'recap' && (
+        <MatchRecapTab
+          job={replayJob}
+          events={replayEvents}
+          matchId={matchId}
+          canDispatch={canDispatchReplay}
+        />
       )}
     </>
   );
