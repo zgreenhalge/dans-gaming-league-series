@@ -68,6 +68,9 @@ export default function ReplayPlayer({ matchId }: { matchId: number }) {
   const [roundIdx, setRoundIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
+  // Rendered pixel width of the (square) play-field, so the scrubber/controls below
+  // can be constrained to match it instead of the full container width.
+  const [boardWidth, setBoardWidth] = useState(0);
   // Set once the map's radar image has loaded — switches projection from auto-fit to
   // the real top-down radar. Null = uncalibrated map (auto-fit grid).
   const [calibration, setCalibration] = useState<RadarCalibration | null>(null);
@@ -180,6 +183,7 @@ export default function ReplayPlayer({ matchId }: { matchId: number }) {
         ctx.scale(dpr, dpr);
       }
       sizeRef.current = { w: side, h: side };
+      setBoardWidth(side);
       themeRef.current = readTheme(container);
       // Calibrated radar projection when the map has one, else auto-fit over the
       // whole payload's bounds.
@@ -253,77 +257,78 @@ export default function ReplayPlayer({ matchId }: { matchId: number }) {
   const range = roundTickRange(round);
 
   return (
-    <div className="space-y-3">
-      <div ref={containerRef} className="w-full">
-        <canvas ref={canvasRef} className="block mx-auto border border-[var(--color-border-primary)]" />
-      </div>
+    <div ref={containerRef} className="w-full">
+      {/* Centered board: the scrubber + controls are constrained to the canvas width. */}
+      <div className="mx-auto space-y-3" style={boardWidth ? { width: boardWidth } : undefined}>
+        <canvas ref={canvasRef} className="block border border-[var(--color-border-primary)]" />
 
-      {/* Scrubber */}
-      <input
-        ref={scrubRef}
-        type="range"
-        min={range.start}
-        max={range.end}
-        step={1}
-        defaultValue={range.start}
-        onInput={(e) => {
-          tickRef.current = Number(e.currentTarget.value);
-          if (!playing) draw();
-        }}
-        className="w-full accent-[var(--color-text-primary)]"
-        aria-label="Scrub replay"
-      />
+        {/* Scrubber */}
+        <input
+          ref={scrubRef}
+          type="range"
+          min={range.start}
+          max={range.end}
+          step={1}
+          defaultValue={range.start}
+          onInput={(e) => {
+            tickRef.current = Number(e.currentTarget.value);
+            if (!playing) draw();
+          }}
+          className="w-full accent-[var(--color-text-primary)]"
+          aria-label="Scrub replay"
+        />
 
-      {/* Controls */}
-      <div className="flex items-center gap-3 text-[12px]">
-        <button
-          type="button"
-          onClick={() => setPlaying((p) => !p)}
-          className="lift-card border border-[var(--color-border-primary)] p-1.5"
-          aria-label={playing ? 'Pause' : 'Play'}
-        >
-          {playing ? <Pause size={14} /> : <Play size={14} />}
-        </button>
-
-        <div className="flex items-center gap-1">
+        {/* Controls */}
+        <div className="flex items-center gap-3 text-[12px]">
           <button
             type="button"
-            onClick={() => setRoundIdx((i) => Math.max(0, i - 1))}
-            disabled={roundIdx === 0}
-            className="border border-[var(--color-border-primary)] p-1 disabled:opacity-40"
-            aria-label="Previous round"
+            onClick={() => setPlaying((p) => !p)}
+            className="lift-card border border-[var(--color-border-primary)] p-1.5"
+            aria-label={playing ? 'Pause' : 'Play'}
           >
-            <ChevronLeft size={14} />
+            {playing ? <Pause size={14} /> : <Play size={14} />}
           </button>
-          <span className="font-mono tabular-nums text-[var(--color-text-secondary)] px-1">
-            Round {round.round} / {payload.rounds.length}
-          </span>
-          <button
-            type="button"
-            onClick={() => setRoundIdx((i) => Math.min(payload.rounds.length - 1, i + 1))}
-            disabled={roundIdx === payload.rounds.length - 1}
-            className="border border-[var(--color-border-primary)] p-1 disabled:opacity-40"
-            aria-label="Next round"
-          >
-            <ChevronRight size={14} />
-          </button>
-        </div>
 
-        <div className="ml-auto flex items-center gap-1">
-          {SPEEDS.map((s) => (
+          <div className="flex items-center gap-1">
             <button
-              key={s}
               type="button"
-              onClick={() => setSpeed(s)}
-              className={`border px-1.5 py-0.5 font-mono ${
-                speed === s
-                  ? 'border-[var(--color-text-primary)] text-[var(--color-text-primary)]'
-                  : 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)]'
-              }`}
+              onClick={() => setRoundIdx((i) => Math.max(0, i - 1))}
+              disabled={roundIdx === 0}
+              className="border border-[var(--color-border-primary)] p-1 disabled:opacity-40"
+              aria-label="Previous round"
             >
-              {s}×
+              <ChevronLeft size={14} />
             </button>
-          ))}
+            <span className="font-mono tabular-nums text-[var(--color-text-secondary)] px-1">
+              Round {round.round} / {payload.rounds.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => setRoundIdx((i) => Math.min(payload.rounds.length - 1, i + 1))}
+              disabled={roundIdx === payload.rounds.length - 1}
+              className="border border-[var(--color-border-primary)] p-1 disabled:opacity-40"
+              aria-label="Next round"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+
+          <div className="ml-auto flex items-center gap-1">
+            {SPEEDS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSpeed(s)}
+                className={`border px-1.5 py-0.5 font-mono ${
+                  speed === s
+                    ? 'border-[var(--color-text-primary)] text-[var(--color-text-primary)]'
+                    : 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)]'
+                }`}
+              >
+                {s}×
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
