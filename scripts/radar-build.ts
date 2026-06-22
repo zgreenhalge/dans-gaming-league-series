@@ -186,7 +186,7 @@ async function main() {
     return dirPak ?? vpks.sort((a, b) => statSync(b).size - statSync(a).size)[0];
   });
 
-  const outDir = join(process.cwd(), 'radar-out');
+  const outDir = join(process.cwd(), 'vrf-out');
   await stage('decode-vtex', () => {
     // Source2Viewer CLI decompiles the pak, turning .vtex_c radar textures into PNGs
     // and writing the plain overview .txt. Flags are best-effort; the first run
@@ -241,8 +241,10 @@ async function main() {
       const lp = p.toLowerCase();
       const base = lp.split(/[\\/]/).pop()!;
       let s = 0;
-      if (/radar/.test(lp)) s += 6;
-      if (/(minimap|overhead|overview)/.test(lp)) s += 5;
+      // CS2 keeps the minimap at panorama/images/overheadmaps/<map>_radar*.
+      if (/overheadmaps/.test(lp)) s += 8;
+      if (/radar/.test(base)) s += 6; // score the filename, not the path
+      if (/(minimap|overhead|overview)/.test(base)) s += 3;
       if (matBase && base.includes(matBase)) s += 4;
       if (/[\\/]overviews?[\\/]/.test(lp)) s += 3;
       if (NEG.test(base)) s -= 5;
