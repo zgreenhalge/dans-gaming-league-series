@@ -1,13 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { ReplayPayload } from '@/lib/replay/types';
+import type { ReplayPayload, ReplayPlayerMeta } from '@/lib/replay/types';
 import type { Faction } from '@/lib/types';
 import { mapSlug } from '@/lib/maps';
-import { projectorFor, type Projector, type RadarCalibration } from '@/lib/replay/project';
+import { projectorFor, type Projector } from '@/lib/replay/project';
 import { viewStateAt, roundTickRange } from '@/lib/replay/playback';
 import { drawScene, type Ctx2D, type ReplayTheme, type BannerInfo } from '@/lib/replay/draw';
+import { useMapRadar } from './useMapRadar';
 
 const SPEEDS = [0.5, 1, 2, 4];
 
@@ -78,21 +79,32 @@ export default function ReplayPlayer({
   // Rendered pixel width of the (square) play-field, so the scrubber/controls below
   // can be constrained to match it instead of the full container width.
   const [boardWidth, setBoardWidth] = useState(0);
-  // Set once the map's radar image has loaded — switches projection from auto-fit to
-  // the real top-down radar. Null = uncalibrated map (auto-fit grid).
-  const [calibration, setCalibration] = useState<RadarCalibration | null>(null);
+  // The map's radar calibration + image (shared with the heatmap via useMapRadar).
+  // Null calibration = uncalibrated map (auto-fit grid).
+  const { calibration, radarImage } = useMapRadar(payload ? mapSlug(payload.map) : null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrubRef = useRef<HTMLInputElement>(null);
   const projectorRef = useRef<Projector | null>(null);
+  const ctxRef = useRef<Ctx2D | null>(null);
   const themeRef = useRef<ReplayTheme | null>(null);
   const sizeRef = useRef({ w: 0, h: 0 });
   const tickRef = useRef(0);
-  const radarImageRef = useRef<HTMLImageElement | null>(null);
   // Last-applied jump nonce, kept in state so the "adjust state when a prop changes"
   // pattern can run during render (refs can't be read/written there).
   const [lastJumpN, setLastJumpN] = useState(0);
+
+  // Roster lookup + score banner are constant within a round — build them once per
+  // round change, not every animation frame.
+  const metaById = useMemo(
+    () => new Map<number, ReplayPlayerMeta>((payload?.players ?? []).map((p) => [p.id, p])),
+    [payload],
+  );
+  const banner = useMemo(
+    () => (payload ? bannerFor(payload, roundIdx) : null),
+    [payload, roundIdx],
+  );
 
   // --- lazy payload fetch (only mounts when the Replay sub-tab is open) ---
   useEffect(() => {
@@ -113,48 +125,19 @@ export default function ReplayPlayer({
     };
   }, [matchId]);
 
-  // --- load the map's radar calibration + image, if any (else auto-fit) ---
-  useEffect(() => {
-    if (!payload) return;
-    let cancelled = false;
-    const slug = mapSlug(payload.map);
-    fetch(`/api/maps/${slug}/calibration`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((body) => {
-        if (cancelled || !body?.calibration || !body.radarUrl) return;
-        const { posX, posY, scale } = body.calibration;
-        const img = new Image();
-        img.onload = () => {
-          if (cancelled) return;
-          radarImageRef.current = img;
-          // Image pixel size comes from the loaded bitmap, not the DB.
-          setCalibration({ posX, posY, scale, imageWidth: img.naturalWidth, imageHeight: img.naturalHeight });
-        };
-        img.src = body.radarUrl;
-      })
-      .catch(() => {
-        /* uncalibrated — stay on auto-fit */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [payload]);
-
   // --- draw one frame at the current tick ---
   const draw = useCallback(() => {
-    const canvas = canvasRef.current;
     const proj = projectorRef.current;
+    const ctx = ctxRef.current;
     const theme = themeRef.current;
-    if (!canvas || !proj || !theme || !payload) return;
+    if (!ctx || !proj || !theme || !payload || !banner) return;
     const round = payload.rounds[roundIdx];
     if (!round) return;
-    const ctx = canvas.getContext('2d') as unknown as Ctx2D | null;
-    if (!ctx) return;
     const { w, h } = sizeRef.current;
     const state = viewStateAt(round, tickRef.current, payload.tickRate);
     const radar =
-      calibration && radarImageRef.current
-        ? { image: radarImageRef.current, calibration }
+      calibration && radarImage.current
+        ? { image: radarImage.current, calibration }
         : null;
     drawScene({
       ctx,
@@ -163,14 +146,15 @@ export default function ReplayPlayer({
       projector: proj,
       state,
       round,
-      players: payload.players,
+      metaById,
+      tickRate: payload.tickRate,
       theme,
-      banner: bannerFor(payload, roundIdx),
+      banner,
       radar,
     });
     // Reflect playback position on the (uncontrolled) scrubber without re-rendering.
     if (scrubRef.current) scrubRef.current.value = String(tickRef.current);
-  }, [payload, roundIdx, calibration]);
+  }, [payload, roundIdx, calibration, radarImage, metaById, banner]);
 
   // --- size canvas to its container (DPR-aware) + (re)build the projector ---
   useEffect(() => {
@@ -191,6 +175,8 @@ export default function ReplayPlayer({
       if (ctx) {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.scale(dpr, dpr);
+        // Cache the context so the per-frame draw loop doesn't re-fetch it.
+        ctxRef.current = ctx as unknown as Ctx2D;
       }
       sizeRef.current = { w: side, h: side };
       setBoardWidth(side);
