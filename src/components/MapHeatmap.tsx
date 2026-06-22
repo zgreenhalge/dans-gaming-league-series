@@ -143,7 +143,10 @@ export default function MapHeatmap({
           ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          // Kills/deaths as soft heat blobs.
+          // Kills/deaths as soft heat blobs. Alpha is baked into the gradient, so
+          // reset globalAlpha — otherwise a grenade drawn earlier in the loop (0.1)
+          // leaks onto these and dims them.
+          ctx.globalAlpha = 1;
           const r = 16;
           const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
           g.addColorStop(0, hexAlpha(color, 0.5));
