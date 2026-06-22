@@ -7,8 +7,8 @@ type Side = 'CT' | 'T';
  * CS2-scoreboard-style round-history strip.
  *
  * Each round tile encodes three independent things:
- *   - vertical track  = winning SIDE  (T on top, CT on bottom — CS2 muscle memory)
- *   - color           = winning TEAM  (Shirts vs Skins, consistent across the swap)
+ *   - vertical track  = winning TEAM  (Shirts on top, Skins on bottom)
+ *   - color           = winning SIDE  (T=orange, CT=blue — CS2 muscle memory)
  *   - icon            = win CONDITION (elim / bomb / defuse / time)
  *
  * Dividers mark every side-swap / phase boundary (halftime, then each overtime
@@ -99,7 +99,7 @@ function buildColumns(
 
 function RoundTile({ entry, color }: { entry: RoundHistoryEntry; color: string }) {
   const Icon = CONDITION_ICON[entry.condition];
-  const onTop = entry.side === 'T';
+  const onTop = entry.winner === 'SHIRTS';
   const teamName = entry.winner === 'SHIRTS' ? 'Shirts' : 'Skins';
   return (
     <div
@@ -123,45 +123,32 @@ function RoundTile({ entry, color }: { entry: RoundHistoryEntry; color: string }
 export default function RoundHistoryStrip({
   rounds,
   targetWinRounds,
-  shirtsSide,
-  skinsSide,
 }: {
   rounds: RoundHistoryEntry[];
   targetWinRounds: number;
-  shirtsSide: Side;
-  skinsSide: Side;
 }) {
   if (!rounds || rounds.length === 0) return null;
 
   const regHalf = Math.max(1, targetWinRounds - 1);
   const columns = buildColumns(rounds, regHalf);
 
-  const teamColor = (team: 'SHIRTS' | 'SKINS') =>
-    sideColor(team === 'SHIRTS' ? shirtsSide : skinsSide);
-
   return (
     <section className="mt-6">
       <div className="flex items-center justify-end mb-2">
         <div className="flex items-center gap-3 text-[10px] text-[var(--color-text-secondary)]">
-          <LegendSwatch color={teamColor('SHIRTS')} label="Shirts" />
-          <LegendSwatch color={teamColor('SKINS')} label="Skins" />
+          <LegendSwatch color={sideColor('T')} label="T" />
+          <LegendSwatch color={sideColor('CT')} label="CT" />
         </div>
       </div>
 
       <div className="flex items-start gap-2">
-        {/* T / CT track labels (top track = T wins, bottom track = CT wins) */}
-        <div className="flex flex-col shrink-0 w-[24px] select-none">
-          <div
-            className="h-[34px] flex items-center justify-end font-display text-[12px] font-bold"
-            style={{ color: 'var(--color-t)' }}
-          >
-            T
+        {/* Team track labels (top track = Shirts wins, bottom track = Skins wins) */}
+        <div className="flex flex-col shrink-0 w-[40px] select-none text-right text-[var(--color-text-secondary)]">
+          <div className="h-[34px] flex items-center justify-end font-display text-[11px] font-bold">
+            Shirts
           </div>
-          <div
-            className="h-[34px] flex items-center justify-end font-display text-[12px] font-bold"
-            style={{ color: 'var(--color-ct)' }}
-          >
-            CT
+          <div className="h-[34px] flex items-center justify-end font-display text-[11px] font-bold">
+            Skins
           </div>
         </div>
 
@@ -173,16 +160,16 @@ export default function RoundHistoryStrip({
             {columns.map((col, i) =>
               col.type === 'round' ? (
                 <div key={`r${col.entry.n}`} className="flex flex-col w-[26px] shrink-0">
-                  {/* top track (T-side wins) */}
+                  {/* top track (Shirts wins) */}
                   <div className="h-[34px] flex items-end justify-center">
-                    {col.entry.side === 'T' && (
-                      <RoundTile entry={col.entry} color={teamColor(col.entry.winner)} />
+                    {col.entry.winner === 'SHIRTS' && (
+                      <RoundTile entry={col.entry} color={sideColor(col.entry.side)} />
                     )}
                   </div>
-                  {/* bottom track (CT-side wins) */}
+                  {/* bottom track (Skins wins) */}
                   <div className="h-[34px] flex items-start justify-center">
-                    {col.entry.side === 'CT' && (
-                      <RoundTile entry={col.entry} color={teamColor(col.entry.winner)} />
+                    {col.entry.winner === 'SKINS' && (
+                      <RoundTile entry={col.entry} color={sideColor(col.entry.side)} />
                     )}
                   </div>
                   <div className="h-[16px] flex items-center justify-center font-mono text-[9px] text-[var(--color-text-secondary)] tnum">
@@ -225,10 +212,10 @@ export default function RoundHistoryStrip({
                       </span>
                     )}
                   </div>
-                  <div className="h-[16px] flex items-center justify-center font-mono text-[13px] font-semibold tnum whitespace-nowrap">
-                    <span style={{ color: teamColor('SHIRTS') }}>{col.shirts}</span>
+                  <div className="h-[16px] flex items-center justify-center font-mono text-[13px] font-semibold tnum whitespace-nowrap text-[var(--color-text-primary)]">
+                    <span title="Shirts">{col.shirts}</span>
                     <span className="text-[var(--color-text-secondary)] mx-[2px]">–</span>
-                    <span style={{ color: teamColor('SKINS') }}>{col.skins}</span>
+                    <span title="Skins">{col.skins}</span>
                   </div>
                 </div>
               ),

@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/og';
 import { projectRatingDeltas, type RatingProjection } from '@/lib/ehog';
 import { isPlayedScore, parseScore } from '@/lib/util';
@@ -134,6 +134,12 @@ export default async function MatchPage({
     played ? getMatchSabremetrics(matchId) : Promise.resolve([]),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
+
+  // Replay/Events (issue #121). Status is defensive (tolerates missing DB columns);
+  // events are only fetched once a payload is ready.
+  const replayJob = await getReplayJobState(matchId);
+  const replayEvents =
+    replayJob.status === 'ready' ? await getReplayEventsView(matchId) : null;
 
   // Compute rating projections for unplayed matches in the current week
   const matchWindow = matchWeekWindow(season.start_date, week.week_number);
@@ -290,12 +296,10 @@ export default async function MatchPage({
 
         </div>
 
-        {played && match.round_history && shirtsF && skinsF && (
+        {played && match.round_history && (
           <RoundHistoryStrip
             rounds={match.round_history}
             targetWinRounds={season.target_win_rounds}
-            shirtsSide={shirtsF}
-            skinsSide={skinsF}
           />
         )}
 
@@ -327,6 +331,8 @@ export default async function MatchPage({
           ratingDeltas={ratingDeltas}
           ratingProjections={ratingProjections}
           sabremetrics={sabremetrics}
+          replayJob={replayJob}
+          replayEvents={replayEvents}
         />
       </main>
     </div>

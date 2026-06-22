@@ -25,8 +25,8 @@ export type RoundCondition = 'elim' | 'bomb' | 'defuse' | 'time';
 /** One round's outcome, for the CS2-scoreboard-style round-history strip. */
 export interface RoundHistoryEntry {
   n: number;                  // 1-based round number
-  winner: 'SHIRTS' | 'SKINS'; // winning team (drives tile color)
-  side: 'CT' | 'T';           // winning side (drives vertical track)
+  winner: 'SHIRTS' | 'SKINS'; // winning team (drives vertical track)
+  side: 'CT' | 'T';           // winning side (drives tile color)
   condition: RoundCondition;  // how the round was won (drives icon)
 }
 
