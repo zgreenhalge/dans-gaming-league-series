@@ -15,7 +15,7 @@
 // (Source2Viewer CLI path), plus R2 creds + Supabase service key.
 
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { parseOverview, workshopIdFromUrl } from '../src/lib/replay/radar';
@@ -149,25 +149,44 @@ async function main() {
   });
 
   const contentDir = await stage('steamcmd-download', () => {
-    // Anonymous workshop download of the CS2 (appid 730) item.
-    execFileSync(
+    // Anonymous workshop download of the CS2 (appid 730) item. Capture stdout so we
+    // can read the destination SteamCMD prints — its Steam root varies by install
+    // (the apt build uses ~/.local/share/Steam, not ~/Steam).
+    const out = execFileSync(
       STEAMCMD,
       ['+login', 'anonymous', '+workshop_download_item', '730', workshopId, '+quit'],
-      { stdio: 'inherit' },
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 64 * 1024 * 1024 },
     );
-    const dir = join(homedir(), 'Steam', 'steamapps', 'workshop', 'content', '730', workshopId);
-    statSync(dir); // throws if the download didn't land where expected
+    process.stdout.write(out);
+    if (!/Success\.\s*Downloaded item/i.test(out)) {
+      // Some items can't be fetched anonymously; SteamCMD exits 0 either way.
+      throw new Error('SteamCMD did not report a successful download (item may not be public)');
+    }
+    const printed = out.match(/Downloaded item \d+ to "([^"]+)"/i);
+    const candidates = [
+      ...(printed ? [printed[1]] : []),
+      ...['.local/share/Steam', 'Steam', '.steam/steam', '.steam/SteamApps'].map((root) =>
+        join(homedir(), root, 'steamapps', 'workshop', 'content', '730', workshopId),
+      ),
+    ];
+    const dir = candidates.find((p) => existsSync(p));
+    if (!dir) {
+      throw new Error(`Workshop content dir not found (checked: ${candidates.join(', ')})`);
+    }
+    notice(`workshop content at ${dir}`);
     return dir;
   });
 
   const vpk = await stage('extract-vpk', () => {
-    // The workshop item is one (or more) .vpk; pick the largest as the map pak.
     const vpks = walk(contentDir, (p) => p.toLowerCase().endsWith('.vpk'));
     if (vpks.length === 0) throw new Error('No .vpk found in the workshop download');
-    return vpks.sort((a, b) => statSync(b).size - statSync(a).size)[0];
+    // Prefer the directory pak (`*_dir.vpk`) — Source2Viewer needs the index, not a
+    // raw data chunk. Otherwise the largest .vpk (usually a single-file map pak).
+    const dirPak = vpks.find((p) => /_dir\.vpk$/i.test(p));
+    return dirPak ?? vpks.sort((a, b) => statSync(b).size - statSync(a).size)[0];
   });
 
-  const outDir = join(process.cwd(), 'radar-out');
+  const outDir = join(process.cwd(), 'vrf-out');
   await stage('decode-vtex', () => {
     // Source2Viewer CLI decompiles the pak, turning .vtex_c radar textures into PNGs
     // and writing the plain overview .txt. Flags are best-effort; the first run
@@ -193,23 +212,55 @@ async function main() {
     if (!matched) {
       warning(`No overview matched map slug "${slug}"; using ${chosen} (verify the radar).`);
     }
-    const cal = parseOverview(readFileSync(chosen, 'utf8'));
-    if (!cal) throw new Error(`Could not parse pos_x/pos_y/scale from ${chosen}`);
-    notice(`calibration: pos (${cal.posX}, ${cal.posY}) scale ${cal.scale}`);
+    const raw = readFileSync(chosen, 'utf8');
+    const cal = parseOverview(raw);
+    if (!cal) {
+      // Surface the file so we can adjust the parser to its actual format.
+      warning(`Overview head (${chosen}):\n${raw.slice(0, 1000)}`);
+      throw new Error(`Could not parse pos_x/pos_y/scale from ${chosen}`);
+    }
+    notice(`calibration: pos (${cal.posX}, ${cal.posY}) scale ${cal.scale}, material "${cal.material ?? '?'}"`);
     return cal;
   });
 
   await stage('upload-radar', () => {
-    // The decoded radar PNG: match the overview's material name when we have it, else
-    // the first *_radar*.png the decompiler produced.
+    // A community map decodes to MANY textures (foroglio reuses cobblestone assets),
+    // so pick the radar deliberately instead of the first png: prefer names with
+    // radar/overview or the overview material, penalize generic PBR/background maps,
+    // and fail loudly (logging every candidate) rather than upload the wrong texture.
     const pngs = walk(outDir, (p) => p.toLowerCase().endsWith('.png'));
-    const matSlug = calibration.material?.split('/').pop()?.toLowerCase() ?? 'radar';
-    const radar =
-      pngs.find((p) => p.toLowerCase().includes(matSlug)) ??
-      pngs.find((p) => p.toLowerCase().includes('radar')) ??
-      pngs[0];
-    if (!radar) throw new Error('No decoded radar PNG found');
-    notice(`radar png: ${radar}`);
+    if (pngs.length === 0) throw new Error('decode produced no PNGs');
+    const matBase = (calibration.material ?? '')
+      .split(/[\\/]/)
+      .pop()!
+      .replace(/\.(vmat|vtex)_?c?$/i, '')
+      .replace(/_(psd|tga|png|jpg)$/i, '')
+      .toLowerCase();
+    const NEG = /(_normal|_rough|_metal|_ao|_mask|_height|_spec|_selfillum|_trans|bg_)/i;
+    const score = (p: string): number => {
+      const lp = p.toLowerCase();
+      const base = lp.split(/[\\/]/).pop()!;
+      let s = 0;
+      // CS2 keeps the minimap at panorama/images/overheadmaps/<map>_radar*.
+      if (/overheadmaps/.test(lp)) s += 8;
+      if (/radar/.test(base)) s += 6; // score the filename, not the path
+      if (/(minimap|overhead|overview)/.test(base)) s += 3;
+      if (matBase && base.includes(matBase)) s += 4;
+      if (/[\\/]overviews?[\\/]/.test(lp)) s += 3;
+      if (NEG.test(base)) s -= 5;
+      return s;
+    };
+    const ranked = [...pngs].sort((a, b) => score(b) - score(a));
+    notice(
+      `radar PNG candidates (material "${calibration.material ?? '?'}", ${pngs.length} pngs):\n` +
+        ranked.slice(0, 12).map((p) => `  [${score(p)}] ${p}`).join('\n'),
+    );
+    const radar = ranked[0];
+    if (!radar || score(radar) <= 0) {
+      warning(`All decoded PNGs:\n${pngs.join('\n')}`);
+      throw new Error('Could not identify the radar overview PNG (see candidate list above)');
+    }
+    notice(`selected radar png: ${radar}`);
     return putR2Object(radarKey(mapId), readFileSync(radar), { contentType: 'image/png' });
   });
 
