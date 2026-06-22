@@ -14,6 +14,7 @@ follow the link that matches what you're doing. New to the codebase? Read
 | [`visual-conventions.md`](./visual-conventions.md) | The shared CSS hover/glow/accent system and UI primitives |
 | [`ehog.md`](./ehog.md) | The EHOG player skill rating engine (OpenSkill) |
 | [`demo-ingestion.md`](./demo-ingestion.md) | The in-app CS2 demo upload → parse → stats pipeline |
+| [`replay.md`](./replay.md) | The 2D match replay + core-events pipeline (`replay.json`, GitHub Actions jobs, `background_jobs`) |
 
 For quick-start, env vars, and npm commands see the root [`README.md`](../README.md). Agent-specific
 guidance lives in [`../CLAUDE.md`](../CLAUDE.md) and [`../AGENTS.md`](../AGENTS.md). The historical
