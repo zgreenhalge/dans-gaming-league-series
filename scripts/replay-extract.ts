@@ -13,7 +13,8 @@
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { buildReplay } from '../src/lib/replay/extract';
-import { getR2Object, putR2Object, demoKey, replayKey } from '../src/lib/r2';
+import { buildHeatmapPoints } from '../src/lib/replay/heatmap';
+import { getR2Object, putR2Object, demoKey, replayKey, heatmapKey } from '../src/lib/r2';
 import { getAdminClient } from '../src/lib/supabase-admin';
 
 const JOB_TYPE = 'replay_extract';
@@ -28,6 +29,7 @@ const STAGES = [
   'assemble',
   'gzip',
   'upload',
+  'heatmap',
   'done',
 ] as const;
 
@@ -160,6 +162,18 @@ async function main() {
       contentEncoding: 'gzip',
     }),
   );
+
+  // Compact heatmap points artifact (kills/deaths/grenades) for the map's Heatmap
+  // tab — derived from the same payload, so there's no second source of truth.
+  await stage('heatmap', async () => {
+    const points = buildHeatmapPoints(payload);
+    const gzPoints = gzipSync(Buffer.from(JSON.stringify(points)));
+    notice(`heatmap.json: ${points.points.length} points, ${gzPoints.length} bytes gzipped`);
+    await putR2Object(heatmapKey(matchId), gzPoints, {
+      contentType: 'application/json',
+      contentEncoding: 'gzip',
+    });
+  });
 
   await stage('done', async () => {
     await supabase

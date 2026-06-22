@@ -24,6 +24,8 @@ import {
   activeGrenadesAt,
   roundTickRange,
 } from './playback';
+import { buildHeatmapPoints } from './heatmap';
+import { parseOverview, workshopIdFromUrl } from './radar';
 import type { ReplayRound, ReplayFrame, ReplayPayload, ReplayPlayerFrame } from './types';
 
 let passed = 0;
@@ -215,6 +217,99 @@ test('roundTickRange: spans first to last frame tick', () => {
   const range = roundTickRange(r);
   assert.equal(range.start, 10);
   assert.equal(range.end, 90);
+});
+
+// --- buildHeatmapPoints: kill→death+kill points, grenade→detonation point ---
+test('heatmap: a kill yields a death point (victim) and a kill point (attacker), side-tagged', () => {
+  const payload = {
+    matchId: 7,
+    map: 'de_test',
+    players: [
+      { id: 1, name: 'A', faction: 'SHIRTS', steamId: null },
+      { id: 2, name: 'B', faction: 'SKINS', steamId: null },
+    ],
+    rounds: [
+      round({
+        sideByFaction: { SHIRTS: 'CT', SKINS: 'T' },
+        events: [
+          {
+            type: 'kill',
+            tick: 100,
+            attackerId: 1,
+            victimId: 2,
+            assisterId: null,
+            weapon: 'weapon_ak47',
+            headshot: false,
+            attacker: { x: 10, y: 20 },
+            victim: { x: 30, y: 40 },
+          },
+        ],
+      }),
+    ],
+  } as unknown as ReplayPayload;
+
+  const art = buildHeatmapPoints(payload);
+  assert.equal(art.version, 1);
+  const death = art.points.find((p) => p.kind === 'death')!;
+  const kill = art.points.find((p) => p.kind === 'kill')!;
+  approx(death.x, 30);
+  approx(death.y, 40);
+  assert.equal(death.side, 'T'); // victim is SKINS = T this round
+  approx(kill.x, 10);
+  assert.equal(kill.side, 'CT'); // attacker is SHIRTS = CT this round
+});
+
+test('heatmap: grenade contributes a detonation point of its type; unknown is skipped', () => {
+  const payload = {
+    matchId: 7,
+    map: 'de_test',
+    players: [{ id: 1, name: 'A', faction: 'SHIRTS', steamId: null }],
+    rounds: [
+      round({
+        sideByFaction: { SHIRTS: 'T', SKINS: 'CT' },
+        grenades: [
+          { type: 'smoke', throwerId: 1, detonateTick: 200, trajectory: [{ tick: 100, x: 0, y: 0, z: 0 }, { tick: 200, x: 55, y: 66, z: 0 }] },
+          { type: 'unknown', throwerId: 1, detonateTick: 200, trajectory: [{ tick: 100, x: 1, y: 1, z: 0 }] },
+        ],
+      }),
+    ],
+  } as unknown as ReplayPayload;
+
+  const art = buildHeatmapPoints(payload);
+  const smoke = art.points.filter((p) => p.kind === 'smoke');
+  assert.equal(smoke.length, 1);
+  approx(smoke[0].x, 55); // detonation = last trajectory point
+  assert.equal(smoke[0].side, 'T');
+  assert.equal(art.points.some((p) => (p.kind as string) === 'unknown'), false);
+});
+
+// --- radar: overview parsing + workshop id extraction ---
+test('parseOverview: reads pos_x/pos_y/scale and material from CS KeyValues', () => {
+  const txt = `
+    "de_example"
+    {
+      "material"  "overviews/de_example_radar_psd"
+      "pos_x"   "-2476"
+      "pos_y"   "3239"
+      "scale"   "5.0"
+    }
+  `;
+  const cal = parseOverview(txt)!;
+  approx(cal.posX, -2476);
+  approx(cal.posY, 3239);
+  approx(cal.scale, 5.0);
+  assert.equal(cal.material, 'overviews/de_example_radar_psd');
+});
+
+test('parseOverview: null when a required key or a usable scale is missing', () => {
+  assert.equal(parseOverview('"x" { "pos_x" "1" "pos_y" "2" }'), null); // no scale
+  assert.equal(parseOverview('"x" { "pos_x" "1" "pos_y" "2" "scale" "0" }'), null); // scale 0
+});
+
+test('workshopIdFromUrl: pulls the id from ?id= and from a bare digit run', () => {
+  assert.equal(workshopIdFromUrl('https://steamcommunity.com/sharedfiles/filedetails/?id=3070284539'), '3070284539');
+  assert.equal(workshopIdFromUrl('steam://url/CommunityFilePage/3070284539'), '3070284539');
+  assert.equal(workshopIdFromUrl(null), null);
 });
 
 // --- report ---
