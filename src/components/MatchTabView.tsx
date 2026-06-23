@@ -458,6 +458,11 @@ export default function MatchTabView({
   const hasScoutingData = !!(scoutingData && scoutingH2H);
   const hasProjections = ratingProjections.length > 0;
   const hasSab = sabremetrics.length > 0;
+  // Show the Recap tab when a demo exists, OR when a replay payload is already loaded —
+  // so a transient R2 error on demoDownloadUrl (or a demo removed while replay.json
+  // remains) can't hide an existing replay/heatmap. Manual, demo-less matches have
+  // neither, so the tab stays hidden for them.
+  const hasRecap = !!demoDownloadUrl || !!replayEvents;
   const [tab, setTab] = useState<Tab>('leaderboard');
   const [includeCT, setIncludeCT] = useState(true);
   const [includeT, setIncludeT] = useState(true);
@@ -532,7 +537,7 @@ export default function MatchTabView({
             Scouting Report
           </button>
         )}
-        {played && (
+        {played && hasRecap && (
           <button type="button" className={tabCls(tab === 'recap')} onClick={() => setTab('recap')}>
             Recap
           </button>
@@ -620,7 +625,7 @@ export default function MatchTabView({
         </>
       )}
 
-      {tab === 'recap' && (
+      {tab === 'recap' && hasRecap && (
         <MatchRecapTab
           job={replayJob}
           events={replayEvents}

@@ -51,6 +51,21 @@ function factionClass(faction: 'SHIRTS' | 'SKINS', skinsSide: Faction): string {
   return side === 'CT' ? 'faction-ct' : 'faction-t';
 }
 
+function blankStatsForPlayers(players: MatchPlayer[]): PlayerStat[] {
+  return players.map((p) => ({
+    player_id: p.player_id,
+    faction: p.faction,
+    kills: 0,
+    assists: 0,
+    deaths: 0,
+    damage: 0,
+    rounds_played: 0,
+    rounds_won: 0,
+    adr: 0,
+    is_win: false,
+  }));
+}
+
 function initDraftFromStats(stats: PlayerStat[]): DraftStats {
   const draft: DraftStats = {};
   for (const s of stats) {
@@ -179,6 +194,17 @@ export default function DemoUploadModal({
     }
 
     setOpen(true);
+  }
+
+  function enterManually() {
+    // Fallback path: skip the demo and enter scores/stats by hand.
+    const stats = blankStatsForPlayers(players);
+    setParsed({ stats, shirts_score: null, skins_score: null, warnings: [] });
+    setDraftStats(initDraftFromStats(stats));
+    setShirtsScore('');
+    setSkinsScore('');
+    setError(null);
+    setStage('preview');
   }
 
   function handleClose() {
@@ -373,6 +399,19 @@ export default function DemoUploadModal({
                   </label>
                 )}
 
+                {/* Manual-entry fallback — for when no demo is available */}
+                {stage === 'idle' && (
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={enterManually}
+                      className="text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] underline underline-offset-2 transition-colors"
+                    >
+                      No demo? Enter results manually
+                    </button>
+                  </div>
+                )}
+
                 {/* Upload progress */}
                 {stage === 'uploading' && (
                   <div className="flex flex-col gap-3">
@@ -479,7 +518,10 @@ export default function DemoUploadModal({
                                   const s = statMap.get(p.player_id);
                                   const d = draftStats[p.player_id];
                                   const dmgVal = d ? (parseInt(d.damage, 10) || 0) : (s?.damage ?? 0);
-                                  const rounds = s?.rounds_played ?? 0;
+                                  // Demos carry per-player rounds; manual entry has none, so
+                                  // fall back to the rounds implied by the entered final score.
+                                  const liveRounds = (parseInt(shirtsScore, 10) || 0) + (parseInt(skinsScore, 10) || 0);
+                                  const rounds = (s?.rounds_played ?? 0) || liveRounds;
                                   const derivedAdr = rounds > 0 ? Math.round(dmgVal / rounds) : 0;
                                   const dash = <span className="text-[var(--color-text-secondary)]">—</span>;
                                   return (
