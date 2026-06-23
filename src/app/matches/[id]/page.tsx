@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/og';
 import { projectRatingDeltas, type RatingProjection } from '@/lib/ehog';
 import { isPlayedScore, parseScore } from '@/lib/util';
@@ -118,7 +118,7 @@ export default async function MatchPage({
 
   const showScouting = shirts.length === 2 && skins.length === 2;
   const key = makeDemoKey(matchId);
-  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics] = await Promise.all([
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds] = await Promise.all([
     showScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     showScouting
       ? getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true })
@@ -132,6 +132,8 @@ export default async function MatchPage({
       .catch(() => null),
     played ? getMatchRatingDeltas(matchId) : Promise.resolve(new Map<number, number>()),
     played ? getMatchSabremetrics(matchId) : Promise.resolve([]),
+    // Match ids on this map — feeds the scouting report's Map Intel heatmap (#128).
+    showScouting && map ? getMatchIdsForMap(map) : Promise.resolve<number[]>([]),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
 
@@ -151,6 +153,7 @@ export default async function MatchPage({
   const matchWindow = matchWeekWindow(season.start_date, week.week_number);
   const isCurrentWeek = matchWindow != null && new Date().toISOString().slice(0, 10) >= matchWindow.weekStart && new Date().toISOString().slice(0, 10) <= matchWindow.weekEnd;
   let ratingProjections: RatingProjection[] = [];
+  const ratingCurrent: Record<number, number> = {};
   if (!played && isCurrentWeek && shirts.length === 2 && skins.length === 2) {
     const allPlayerIds = [...shirts, ...skins].map((s) => s.player_id);
     const playerRatings = await getPlayerRatings(allPlayerIds);
@@ -158,6 +161,7 @@ export default async function MatchPage({
     const shirtRatings = shirts.map((s) => byId.get(s.player_id)!);
     const skinRatings = skins.map((s) => byId.get(s.player_id)!);
     ratingProjections = projectRatingDeltas(shirtRatings, skinRatings, season.target_win_rounds);
+    for (const r of playerRatings) ratingCurrent[r.playerId] = r.ehogRating;
   }
 
   const allByAdr = [...stats]
@@ -332,10 +336,12 @@ export default async function MatchPage({
           scoutingData={scoutingData}
           scoutingH2H={scoutingH2H}
           matchMap={map}
+          mapMatchIds={mapMatchIds}
           mapPool={season.map_pool}
           demoDownloadUrl={demoDownloadUrl}
           ratingDeltas={ratingDeltas}
           ratingProjections={ratingProjections}
+          ratingCurrent={ratingCurrent}
           sabremetrics={sabremetrics}
           replayJob={replayJob}
           replayEvents={replayEvents}

@@ -64,9 +64,12 @@ the roster/sides/target-rounds/map from the DB and is shared by the dispatch pat
 script, mirroring the roster assembly in `POST /api/matches/[id]/demo/parse`.
 
 > **Round numbering gotcha:** `round_end` events carry `total_rounds_played` as the round that *just
-> ended* (1-based), while mid-round events (`player_death`, `bomb_planted`, `bomb_defused`) carry
-> rounds *completed so far*, so their round number is `total_rounds_played + 1`. The extract honors
-> this split (same as the stats collectors).
+> ended* (1-based), while mid-round events (`bomb_planted`, `bomb_defused`) carry rounds *completed so
+> far*, so their round number is `total_rounds_played + 1`. The extract honors this split (same as the
+> stats collectors). **Kills are the exception:** a `player_death` can land in the post-round window
+> *after* `round_end` has already bumped the counter, so the `+1` math would misfile it into the next
+> round (where its tick precedes the live frames and the kill feed never shows it). Kills are therefore
+> bucketed by **tick** into the round whose playback window (incl. the post-round span) covers them.
 
 **Freeze-time trim + post-round:** each round opens with ~15s of freeze/buy time where everyone
 stands in spawn — dead air for a replay. The extract begins each round's frames only
@@ -86,18 +89,28 @@ fragile event props. Kills keep their own brighter attacker→victim tracer. Gre
 and are sized per type in `GRENADE_EFFECT` (`playback.ts`): smoke blooms wide for ~18s,
 molotov/incendiary burn ~7s with the incendiary covering a larger area, decoy lasts ~15s as a dot that
 *pulses* (it pops gunshots intermittently — `activeGrenadesAt` gates its `fade` with a duty cycle), and
-he/flash are brief point pops. `draw.ts` renders the smoke/fire AoE disc in world units via
-`projector.scaleLength()`, gives HE/flash/decoy **distinct glyphs** (burst / ring+core / pulsing
-ring-dot) so they read apart, and paints the planted bomb as a **C4 icon** (body + blinking light), not
-a dot. `detonateTick` is the tick the projectile reaches its **resting** position (not the last emitted
-tick), so a smoke/fire blooms where and when it lands instead of late.
+he/flash are brief point pops. `draw.ts` renders the AoE in world units via `projector.scaleLength()`,
+drawing smoke as a **soft cloud** (`drawSmokeCloud` — a dense core ringed by translucent puffs that
+slowly rotate with the tick, `SMOKE_SPIN_RATE`) and
+molotov/incendiary as **flickering fire** (`drawFire` — warm tongues whose size/alpha pulse with the
+tick) so the two don't read as the same flat disc. HE/flash/decoy get **distinct glyphs** (burst /
+ring+core / pulsing ring-dot). The planted bomb is a **C4 icon** (body + blinking light), not a dot;
+when the round ends by `bomb` (the C4 detonates at the plant site on the `round_end` tick), `bombStateAt`
+drops the icon and `bombExplosionAt` surfaces a brief **blast** (`drawExplosion` — expanding shock ring +
+fireball) over the post-round window — both derived from the existing plant/round_end events, no schema
+change. `detonateTick` is the tick the projectile reaches its **resting** position (not the last emitted
+tick), so a smoke/fire blooms where and when it lands instead of late. In the kill feed, fire kills
+(engine weapon `inferno`) are relabeled to the actual `molotov`/`incendiary` by matching the attacker's
+most recent fire grenade (`killWeaponLabel`).
 
 **Player status effects:** `blinds[]` (`player_blind`, with `blind_duration`) and `hurts[]`
 (`player_hurt`) drive per-player overlays computed by `flashAt()` / `hurtAt()` and merged onto each
 `ViewPlayer` in `viewStateAt` (alive players only). A flash whites the dot out fully and fades back to
 team color over the blind duration; damage blinks it red over `HURT_BLINK_SECONDS` — fire ticks
 re-trigger the blink for a steady burn. `draw.ts` paints these as fading alpha overlays on the dot
-(red under, whiteout on top), so no CSS color parsing/blending is needed.
+(red under, whiteout on top), so no CSS color parsing/blending is needed. The living player's dot also
+encodes **remaining HP**: the team-colour fill rises from the bottom of the dot with `hp/100`
+(`fillHpSegment`), leaving the missing chunk dimmed, so a hurt player reads as a partly-drained dot.
 
 ### Known Phase-1 limitations
 
@@ -156,7 +169,16 @@ keys, re-dispatch overwrites); run the same `src/lib/replay/*` code via `tsx`.
 | Action | Trigger | Output | Status |
 |---|---|---|---|
 | **A — `replay-extract`** | auto, after demo upload/parse | `replay.json` **and** compact `heatmap.json` → R2 `<matchId>/…` | **built** (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
+| **A′ — `replay-extract-all`** | manual (Actions UI / dispatch) | re-runs A for **every** match with a demo, as a matrix | **built** (`replay-extract-all.yml` + `scripts/list-demo-matches.ts`) |
 | **B — `radar-build`** | per map (Actions UI / dispatch) | radar PNG → R2 `maps/<id>/radar.png` + `maps` row calibration | **built** (`radar-build.yml` + `scripts/radar-build.ts`); first real run validates the SteamCMD/Source2Viewer invocations |
+
+> **Backfilling a logic/schema change:** when the extract or heatmap output shape changes
+> (e.g. the post-round-kill fix, or a future `HEATMAP_SCHEMA_VERSION` bump for per-player
+> filtering), run **`replay-extract-all`** to re-extract existing artifacts. It enumerates
+> matches with a `<id>/game.dem` in R2 (`list-demo-matches.ts`; `only_missing` skips ones
+> that already have a `replay.json`) and fans out Action A as a `max-parallel: 3` matrix.
+> The Action runs the dispatched ref's code, so dispatch it on the branch/`main` that has
+> the fix.
 
 > The mp4 render Action (originally Phase 4) was **dropped in favor of the map Heatmap
 > tab**. Heatmaps need no separate Action — the extract Action emits the `heatmap.json`
@@ -272,6 +294,13 @@ workflow — see the dispatch endpoint.
    every render. `MapHeatmap` then renders the density additively on a canvas, with grenades drawn
    as their effect area. (Decoys are excluded from `heatmap.json` entirely — `buildHeatmapPoints()`
    skips them; they carry no signal worth plotting and the tab has no decoy layer.)
+
+   `MapHeatmap` is reused in two more places on the **match page** (#128), both passing explicit
+   match-id sets to the same component/route: the **Recap tab**'s *Heatmap* sub-tab scopes it to the
+   single match (`matchIds={[matchId]}`), and the **Scouting Report**'s *Map Intel* sub-tab plots the
+   picked map's full history (`getMatchIdsForMap()` resolves the ids server-side, passed down through
+   `MatchTabView` → `ScoutingReport`). No new aggregation path — same lazy POST to
+   `/api/maps/[slug]/heatmap`.
 
    > **Scaling note:** the per-match R2 fan-out is fine for current match counts but grows linearly.
    > A precomputed per-map rollup (or a streamed response) is tracked in issue #127 for when it matters.

@@ -3299,6 +3299,30 @@ export async function getMapHeatmap(matchIds: number[]): Promise<MapHeatmapPoint
   return perMatch.flat();
 }
 
+/**
+ * Match ids played on a given map (case-insensitive), for the match-page scouting
+ * report's Map Intel heatmap. The played map is the pick (`shirts_pick`) falling back
+ * to `picked_map` — the same rule `getMapDetail` uses. Only played matches qualify;
+ * matches without a replay artifact are silently dropped later by `getMapHeatmap`.
+ */
+export async function getMatchIdsForMap(mapName: string): Promise<number[]> {
+  const nameLower = mapName.trim().toLowerCase();
+  if (!nameLower) return [];
+  const { data, error } = await supabase
+    .from('matches')
+    .select('id, shirts_pick, picked_map, final_score')
+    .limit(10000);
+  if (error) throw error;
+  type Row = { id: number; shirts_pick: string | null; picked_map: string | null; final_score: string | null };
+  return ((data ?? []) as Row[])
+    .filter(
+      (m) =>
+        (m.shirts_pick ?? m.picked_map ?? '').trim().toLowerCase() === nameLower &&
+        isPlayedScore(m.final_score),
+    )
+    .map((m) => m.id);
+}
+
 // --- Match replay / events (issue #121; see docs/replay.md) ---
 
 export type ReplayStatus = 'none' | 'queued' | 'running' | 'ready' | 'failed';

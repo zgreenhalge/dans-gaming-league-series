@@ -311,13 +311,43 @@ export function RatingProjectionTable({
   projections,
   shirts,
   skins,
+  current,
 }: {
   projections: RatingProjection[];
   shirts: { player_id: number; player_name: string }[];
   skins: { player_id: number; player_name: string }[];
+  /** Each player's current EHOG rating — anchors the projection deltas below it. */
+  current?: Record<number, number>;
 }) {
   const allPlayers = [...shirts, ...skins];
   const maxAbsDelta = Math.max(...projections.flatMap((p) => Object.values(p.deltas).map(Math.abs)), 0.01);
+
+  const renderProjRow = (proj: RatingProjection) => {
+    const shirtsWin = proj.scoreA > proj.scoreB;
+    return (
+      <tr key={proj.label} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-tertiary)] last:border-b-0">
+        <td className="sticky-col pl-4 pr-3 py-2.5 font-mono tnum text-[var(--color-text-secondary)] whitespace-nowrap">
+          <span className={shirtsWin ? 'text-[var(--color-accent-green-fg)]' : 'text-[var(--color-accent-red-fg)]'}>
+            {proj.label}
+          </span>
+        </td>
+        {allPlayers.map((p) => {
+          const delta = proj.deltas[p.player_id] ?? 0;
+          return (
+            <td key={p.player_id} className="px-3 py-2.5 text-right font-mono tnum font-semibold" style={{ color: deltaColor(delta, maxAbsDelta) }}>
+              {delta > 0 ? '+' : ''}{delta.toFixed(2)}
+            </td>
+          );
+        })}
+      </tr>
+    );
+  };
+  // The Current rating sits between the winning scenarios (rating ↑) and the losing
+  // ones (↓), so the deltas above/below read as moves away from where they are now.
+  const splitIdx = projections.findIndex((p) => p.scoreA <= p.scoreB);
+  const wins = splitIdx === -1 ? projections : projections.slice(0, splitIdx);
+  const losses = splitIdx === -1 ? [] : projections.slice(splitIdx);
+
   return (
     <div className="mt-8">
       <div className="flex items-baseline justify-between mb-3">
@@ -339,30 +369,28 @@ export function RatingProjectionTable({
             </tr>
           </thead>
           <tbody>
-            {projections.map((proj) => {
-              const shirtsWin = proj.scoreA > proj.scoreB;
-              return (
-                <tr key={proj.label} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                  <td className="sticky-col pl-4 pr-3 py-2.5 font-mono tnum text-[var(--color-text-secondary)] whitespace-nowrap">
-                    <span className={shirtsWin ? 'text-[var(--color-accent-green-fg)]' : 'text-[var(--color-accent-red-fg)]'}>
-                      {proj.label}
-                    </span>
+            {wins.map(renderProjRow)}
+            {current && (
+              <tr
+                style={{
+                  background: 'color-mix(in srgb, #ffffff 16%, var(--color-bg-secondary))',
+                  boxShadow: 'inset 0 1px 0 0 #fff, inset 0 -1px 0 0 #fff',
+                }}
+              >
+                <td
+                  className="sticky-col pl-4 pr-3 py-2.5 tracked text-[9px] font-semibold text-[var(--color-text-primary)] whitespace-nowrap"
+                  style={{ boxShadow: 'inset 0 1px 0 0 #fff, inset 0 -1px 0 0 #fff' }}
+                >
+                  Current
+                </td>
+                {allPlayers.map((p) => (
+                  <td key={p.player_id} className="px-3 py-2.5 text-right font-mono tnum font-semibold text-[var(--color-text-primary)]">
+                    {(current[p.player_id] ?? 0).toFixed(2)}
                   </td>
-                  {allPlayers.map((p) => {
-                    const delta = proj.deltas[p.player_id] ?? 0;
-                    return (
-                      <td
-                        key={p.player_id}
-                        className="px-3 py-2.5 text-right font-mono tnum font-semibold"
-                        style={{ color: deltaColor(delta, maxAbsDelta) }}
-                      >
-                        {delta > 0 ? '+' : ''}{delta.toFixed(2)}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
+                ))}
+              </tr>
+            )}
+            {losses.map(renderProjRow)}
           </tbody>
         </table>
       </div>
@@ -389,10 +417,12 @@ export default function MatchTabView({
   scoutingData,
   scoutingH2H,
   matchMap,
+  mapMatchIds = [],
   mapPool,
   demoDownloadUrl,
   ratingDeltas,
   ratingProjections = [],
+  ratingCurrent = {},
   sabremetrics = [],
   replayJob,
   replayEvents = null,
@@ -415,10 +445,12 @@ export default function MatchTabView({
   scoutingData: MatchScoutingData | null;
   scoutingH2H: H2HData | null;
   matchMap: string | null;
+  mapMatchIds?: number[];
   mapPool: string[] | null;
   demoDownloadUrl: string | null;
   ratingDeltas: Record<number, number>;
   ratingProjections?: RatingProjection[];
+  ratingCurrent?: Record<number, number>;
   sabremetrics?: MatchSabremetricsRow[];
   replayJob: ReplayJobState;
   replayEvents?: ReplayEventsView | null;
@@ -495,7 +527,7 @@ export default function MatchTabView({
             </button>
           </>
         )}
-        {(hasScoutingData || hasProjections) && (
+        {hasScoutingData && (
           <button type="button" className={tabCls(tab === 'scouting')} onClick={() => setTab('scouting')}>
             Scouting Report
           </button>
@@ -535,6 +567,14 @@ export default function MatchTabView({
               </div>
             </>
           )}
+          {hasProjections && (
+            <RatingProjectionTable
+              projections={ratingProjections}
+              shirts={matchPlayers.filter((p) => p.faction === 'SHIRTS')}
+              skins={matchPlayers.filter((p) => p.faction === 'SKINS')}
+              current={ratingCurrent}
+            />
+          )}
         </>
       )}
 
@@ -563,13 +603,6 @@ export default function MatchTabView({
 
       {tab === 'scouting' && (
         <>
-          {hasProjections && (
-            <RatingProjectionTable
-              projections={ratingProjections}
-              shirts={matchPlayers.filter((p) => p.faction === 'SHIRTS')}
-              skins={matchPlayers.filter((p) => p.faction === 'SKINS')}
-            />
-          )}
           {hasScoutingData && (
             <ScoutingReport
               shirts={[scoutingData!.shirts[0], scoutingData!.shirts[1]]}
@@ -577,6 +610,7 @@ export default function MatchTabView({
               duos={scoutingH2H!.duos}
               rivals={scoutingH2H!.rivals}
               matchMap={matchMap}
+              mapMatchIds={mapMatchIds}
               mapPool={mapPool}
               mapLeagueAverages={scoutingData!.mapLeagueAverages}
               shirtsF={shirtsF}
@@ -591,6 +625,7 @@ export default function MatchTabView({
           job={replayJob}
           events={replayEvents}
           matchId={matchId}
+          matchMap={matchMap}
           canDispatch={canDispatchReplay}
         />
       )}
