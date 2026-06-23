@@ -50,6 +50,7 @@ export interface Match {
   screenshot_url_front: string | null;
   screenshot_url_back: string | null;
   round_history: RoundHistoryEntry[] | null;
+  recording_url: string | null;
 }
 
 export interface Player {
