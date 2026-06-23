@@ -69,6 +69,14 @@ export interface BombView {
   carrierId: number | null;
 }
 
+/** A bomb detonation blast at the plant site, fading over its (short) lifetime. */
+export interface BombExplosion {
+  x: number;
+  y: number;
+  /** 1 at the moment of detonation, fading to 0 over `EXPLOSION_SECONDS`. */
+  fade: number;
+}
+
 /** Everything needed to draw one moment of a round. */
 export interface ViewState {
   tick: number;
@@ -80,6 +88,8 @@ export interface ViewState {
   shots: ShotTracer[];
   /** Recent kills, newest first — drives the kill-feed overlay. */
   killFeed: ReplayKillEvent[];
+  /** The C4 blast, present only for the brief window after a bomb-explosion round end. */
+  explosion: BombExplosion | null;
 }
 
 /** Seconds a death tracer stays on screen. */
@@ -115,6 +125,9 @@ const DECOY_PULSE_DUTY = 0.3;
 
 /** Seconds a damage hit blinks the player red. Fire re-triggers it every burn tick. */
 const HURT_BLINK_SECONDS = 0.5;
+
+/** Seconds the C4 detonation blast stays on screen after the bomb explodes. */
+const EXPLOSION_SECONDS = 1;
 
 export function roundTickRange(round: ReplayRound): { start: number; end: number } {
   if (round.frames.length === 0) return { start: round.startTick, end: round.endTick };
@@ -230,11 +243,16 @@ export function bombStateAt(
   // Planted state from events wins once the bomb is down.
   let plant: { x: number; y: number } | null = null;
   let defused = false;
+  let detonated = false;
   for (const ev of round.events) {
     if (ev.tick > tick) break; // events are tick-sorted
     if (ev.type === 'plant') plant = { x: ev.x, y: ev.y };
     else if (ev.type === 'defuse') defused = true;
+    else if (ev.type === 'round_end' && ev.condition === 'bomb') detonated = true;
   }
+  // Once the planted bomb explodes the C4 is gone — drop the icon so it doesn't linger
+  // into the post-round window. The blast itself is drawn from `bombExplosionAt`.
+  if (plant && detonated) return null;
   if (plant) {
     return { x: plant.x, y: plant.y, planted: true, defused, carried: false, carrierId: null };
   }
@@ -294,6 +312,28 @@ function playerPosAt(
     if (pl) return { x: pl.x, y: pl.y };
   }
   return null;
+}
+
+/**
+ * The C4 blast at `tick`, or null. A round won by `bomb` detonates at its `round_end`
+ * tick at the plant site; the blast fades over `EXPLOSION_SECONDS`. Derived entirely
+ * from existing events (plant position + round_end condition), so no schema change.
+ */
+export function bombExplosionAt(
+  round: ReplayRound,
+  tick: number,
+  tickRate: number,
+): BombExplosion | null {
+  let plant: { x: number; y: number } | null = null;
+  let detonateTick: number | null = null;
+  for (const ev of round.events) {
+    if (ev.type === 'plant') plant = { x: ev.x, y: ev.y };
+    else if (ev.type === 'round_end' && ev.condition === 'bomb') detonateTick = ev.tick;
+  }
+  if (!plant || detonateTick === null || tick < detonateTick) return null;
+  const windowTicks = EXPLOSION_SECONDS * tickRate;
+  if (tick - detonateTick > windowTicks) return null;
+  return { x: plant.x, y: plant.y, fade: 1 - (tick - detonateTick) / (windowTicks || 1) };
 }
 
 export function activeGrenadesAt(
@@ -428,6 +468,7 @@ export function viewStateAt(round: ReplayRound, tick: number, tickRate: number):
     tracers: tracersAt(round, tick, tickRate),
     shots: shotTracersAt(round, tick, tickRate, players),
     killFeed: killFeedAt(round, tick, tickRate),
+    explosion: bombExplosionAt(round, tick, tickRate),
   };
 }
 

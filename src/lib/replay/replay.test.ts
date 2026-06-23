@@ -19,6 +19,7 @@ import {
 import {
   interpolatePlayers,
   bombStateAt,
+  bombExplosionAt,
   killFeedAt,
   tracersAt,
   shotTracersAt,
@@ -225,6 +226,42 @@ test('bomb: dropper gone from the frames at the drop tick → parks at their las
   assert.equal(dropped!.carried, false);
   approx(dropped!.x, 12); // last frame that still had player 1
   approx(dropped!.y, 34);
+});
+
+test('bomb: detonation drops the C4 icon and surfaces a fading blast at the plant site', () => {
+  const tickRate = 64;
+  const r = round({
+    endTick: 1000,
+    events: [
+      { type: 'plant', tick: 200, playerId: 1, site: 'A', x: 7, y: 8 },
+      { type: 'round_end', tick: 1000, winnerSide: 'T', winnerFaction: 'SKINS', condition: 'bomb' },
+    ],
+  });
+  // Before detonation the planted bomb still shows; no blast yet.
+  assert.equal(bombStateAt(r, 500)!.planted, true);
+  assert.equal(bombExplosionAt(r, 500, tickRate), null);
+  // At the round_end tick the icon is gone and the blast is at full intensity.
+  assert.equal(bombStateAt(r, 1000), null);
+  const blast = bombExplosionAt(r, 1000, tickRate)!;
+  approx(blast.x, 7);
+  approx(blast.y, 8);
+  approx(blast.fade, 1);
+  // Mid-window it has faded; past EXPLOSION_SECONDS (1s = 64 ticks) it's gone.
+  assert.ok(bombExplosionAt(r, 1032, tickRate)!.fade < 1);
+  assert.equal(bombExplosionAt(r, 1100, tickRate), null);
+});
+
+test('bomb: a defused round end does NOT detonate — icon persists, no blast', () => {
+  const r = round({
+    endTick: 1000,
+    events: [
+      { type: 'plant', tick: 200, playerId: 1, site: 'A', x: 7, y: 8 },
+      { type: 'defuse', tick: 900, playerId: 2, x: 7, y: 8 },
+      { type: 'round_end', tick: 1000, winnerSide: 'CT', winnerFaction: 'SHIRTS', condition: 'defuse' },
+    ],
+  });
+  assert.equal(bombExplosionAt(r, 1000, 64), null);
+  assert.equal(bombStateAt(r, 1000)!.defused, true);
 });
 
 // --- killFeed / tracers windows ---
