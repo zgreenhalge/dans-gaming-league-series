@@ -1,12 +1,14 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import type { DuoStats, H2HStats, MapLeagueAvg, MapStat, ScoutingPlayer } from '@/lib/queries';
 import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
-import { avgOf } from '@/lib/util';
+import { avgOf, tabCls } from '@/lib/util';
 import Link from 'next/link';
 import { DuoDetail, RivalDetail } from './H2HDetail';
+import MapHeatmap from './MapHeatmap';
 
 function h2hHref(nameA: string, nameB: string, type: 'partner' | 'opponent'): string {
   return `/statistics?tab=h2h&a=${encodeURIComponent(nameA)}&b=${encodeURIComponent(nameB)}&type=${type}`;
@@ -206,6 +208,7 @@ export default function ScoutingReport({
   duos,
   rivals,
   matchMap,
+  mapMatchIds = [],
   mapPool,
   mapLeagueAverages,
   shirtsF,
@@ -216,6 +219,7 @@ export default function ScoutingReport({
   duos: DuoStats[];
   rivals: H2HStats[];
   matchMap: string | null;
+  mapMatchIds?: number[];
   mapPool: string[] | null;
   mapLeagueAverages: Record<string, MapLeagueAvg>;
   shirtsF: Faction;
@@ -245,62 +249,94 @@ export default function ScoutingReport({
     { shirt: shirts[1], skin: skins[1], rival: findNormalized(shirts[1].id, skins[1].id) },
   ];
 
+  // Sub-tabs split the people-intel (Friends/Rivals) from the map-intel (per-map stat
+  // cards + the picked map's heatmap), keeping each view focused (#128).
+  const [sub, setSub] = useState<'scouting' | 'map'>('scouting');
+  // Stable identity so MapHeatmap's filter memo doesn't churn each render.
+  const visibleMatchIds = useMemo(() => new Set(mapMatchIds), [mapMatchIds]);
+
   return (
     <div className="mt-6">
-      <div className="tracked text-[10px] mb-4" style={{ letterSpacing: '0.2em' }}>
-        <span className="text-[var(--color-ct)]">Scouting Report</span>
-        <span className="text-[var(--color-text-secondary)] mx-2">—</span>
-        <span className="text-[var(--color-ct)]">Friends</span>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
-        {shirtsDuo
-          ? <DuoDetail duo={shirtsDuo} players={playersById} minimal headerLabel="Shirts" headerColor={factionColor(shirtsF)} statsHref={h2hHref(shirts[0].name, shirts[1].name, 'partner')} friendshipRating={Math.round(scoreDuo(shirtsDuo) * 100)} ratingBreakdown={breakdownDuo(shirtsDuo)} />
-          : <EmptyPanel label={`Shirts (${shirts[0].name} & ${shirts[1].name}) — no history yet`} />}
-        {skinsDuo
-          ? <DuoDetail duo={skinsDuo} players={playersById} minimal headerLabel="Skins" headerColor={factionColor(skinsF)} statsHref={h2hHref(skins[0].name, skins[1].name, 'partner')} friendshipRating={Math.round(scoreDuo(skinsDuo) * 100)} ratingBreakdown={breakdownDuo(skinsDuo)} />
-          : <EmptyPanel label={`Skins (${skins[0].name} & ${skins[1].name}) — no history yet`} />}
+      <div className="flex items-center gap-2 mb-4 border-b border-[var(--color-border-primary)]">
+        <button type="button" className={tabCls(sub === 'scouting')} onClick={() => setSub('scouting')}>
+          H2H
+        </button>
+        <button type="button" className={tabCls(sub === 'map')} onClick={() => setSub('map')}>
+          Map Intel
+        </button>
       </div>
 
-      <div className="tracked text-[10px] mt-6 mb-4" style={{ letterSpacing: '0.2em' }}>
-        <span className="text-[var(--color-t)]">Scouting Report</span>
-        <span className="text-[var(--color-text-secondary)] mx-2">—</span>
-        <span className="text-[var(--color-t)]">Rivals</span>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
-        {rivalCells.map(({ shirt, skin, rival }) =>
-          rival ? (
-            <RivalDetail key={`${rival.playerA}-${rival.playerB}`} rival={rival} players={playersById} minimal statsHref={h2hHref(shirt.name, skin.name, 'opponent')} rivalryRating={Math.round(scoreRival(rival) * 100)} ratingBreakdown={breakdownRival(rival)} />
-          ) : (
-            <EmptyPanel key={`${shirt.id}-${skin.id}`} label={`${shirt.name} vs ${skin.name} — no history yet`} />
-          ),
-        )}
-      </div>
-
-      {(() => {
-        const pickedSlug = matchMap ? mapSlug(matchMap) : null;
-        const pool = (mapPool && mapPool.length > 0) ? mapPool : matchMap ? [matchMap] : null;
-        if (!pool) return null;
-        const mapsToShow = pickedSlug ? [matchMap!] : pool;
-        return (
-          <div className="mt-6 flex flex-col gap-2.5">
-            <div className="tracked text-[10px] mb-2" style={{ letterSpacing: '0.2em' }}>
-              <span className="text-[var(--color-ct)]">Map Intel</span>
-            </div>
-            <div className={pickedSlug ? 'flex flex-col gap-2.5' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5'}>
-              {mapsToShow.map((m) => (
-                <MapCard
-                  key={mapSlug(m)}
-                  mapName={m}
-                  shirts={shirts}
-                  skins={skins}
-                  expanded={pickedSlug !== null}
-                  leagueAvg={mapLeagueAverages[mapSlug(m)] ?? null}
-                />
-              ))}
-            </div>
+      {sub === 'scouting' && (
+        <>
+          <div className="tracked text-[10px] mb-4" style={{ letterSpacing: '0.2em' }}>
+            <span className="text-[var(--color-ct)]">Scouting Report</span>
+            <span className="text-[var(--color-text-secondary)] mx-2">—</span>
+            <span className="text-[var(--color-ct)]">Friends</span>
           </div>
-        );
-      })()}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+            {shirtsDuo
+              ? <DuoDetail duo={shirtsDuo} players={playersById} minimal headerLabel="Shirts" headerColor={factionColor(shirtsF)} statsHref={h2hHref(shirts[0].name, shirts[1].name, 'partner')} friendshipRating={Math.round(scoreDuo(shirtsDuo) * 100)} ratingBreakdown={breakdownDuo(shirtsDuo)} />
+              : <EmptyPanel label={`Shirts (${shirts[0].name} & ${shirts[1].name}) — no history yet`} />}
+            {skinsDuo
+              ? <DuoDetail duo={skinsDuo} players={playersById} minimal headerLabel="Skins" headerColor={factionColor(skinsF)} statsHref={h2hHref(skins[0].name, skins[1].name, 'partner')} friendshipRating={Math.round(scoreDuo(skinsDuo) * 100)} ratingBreakdown={breakdownDuo(skinsDuo)} />
+              : <EmptyPanel label={`Skins (${skins[0].name} & ${skins[1].name}) — no history yet`} />}
+          </div>
+
+          <div className="tracked text-[10px] mt-6 mb-4" style={{ letterSpacing: '0.2em' }}>
+            <span className="text-[var(--color-t)]">Scouting Report</span>
+            <span className="text-[var(--color-text-secondary)] mx-2">—</span>
+            <span className="text-[var(--color-t)]">Rivals</span>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+            {rivalCells.map(({ shirt, skin, rival }) =>
+              rival ? (
+                <RivalDetail key={`${rival.playerA}-${rival.playerB}`} rival={rival} players={playersById} minimal statsHref={h2hHref(shirt.name, skin.name, 'opponent')} rivalryRating={Math.round(scoreRival(rival) * 100)} ratingBreakdown={breakdownRival(rival)} />
+              ) : (
+                <EmptyPanel key={`${shirt.id}-${skin.id}`} label={`${shirt.name} vs ${skin.name} — no history yet`} />
+              ),
+            )}
+          </div>
+        </>
+      )}
+
+      {sub === 'map' && (
+        <div className="flex flex-col gap-6">
+          {(() => {
+            const pickedSlug = matchMap ? mapSlug(matchMap) : null;
+            const pool = (mapPool && mapPool.length > 0) ? mapPool : matchMap ? [matchMap] : null;
+            if (!pool) return null;
+            const mapsToShow = pickedSlug ? [matchMap!] : pool;
+            return (
+              <div className="flex flex-col gap-2.5">
+                <div className="tracked text-[10px] mb-2" style={{ letterSpacing: '0.2em' }}>
+                  <span className="text-[var(--color-ct)]">Map Intel</span>
+                </div>
+                <div className={pickedSlug ? 'flex flex-col gap-2.5' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5'}>
+                  {mapsToShow.map((m) => (
+                    <MapCard
+                      key={mapSlug(m)}
+                      mapName={m}
+                      shirts={shirts}
+                      skins={skins}
+                      expanded={pickedSlug !== null}
+                      leagueAvg={mapLeagueAverages[mapSlug(m)] ?? null}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {matchMap && (
+            <div className="flex flex-col gap-2.5">
+              <div className="tracked text-[10px] mb-2" style={{ letterSpacing: '0.2em' }}>
+                <span className="text-[var(--color-t)]">{toSentenceCase(matchMap)} Heatmap</span>
+              </div>
+              <MapHeatmap slug={mapSlug(matchMap)} matchIds={mapMatchIds} visibleMatchIds={visibleMatchIds} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
