@@ -1,0 +1,96 @@
+# replay-extract-all (issue #128)
+#
+# Batch backfill: re-run `replay-extract` for every match that has a demo in R2. Use
+# this after a change to the extract logic or schema (e.g. the post-round-kill fix, or a
+# heatmap schema bump) so existing `replay.json` / `heatmap.json` artifacts pick it up
+# without dispatching each match by hand.
+#
+# Two stages: `enumerate` lists the demo matches (optionally only those missing a
+# replay), then `extract` fans them out as a matrix at limited concurrency. Each matrix
+# leg runs the SAME `scripts/replay-extract.ts` as the single-match workflow, so it
+# updates `background_jobs` + `matches.replay_status` per match exactly the same way.
+
+name: replay-extract-all
+
+on:
+  workflow_dispatch:
+    inputs:
+      only_missing:
+        description: Only matches without a replay.json yet (skip already-extracted)
+        type: boolean
+        default: false
+
+# One batch at a time — don't let a second all-run interleave with an in-flight one.
+concurrency:
+  group: replay-extract-all
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  enumerate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      match_ids: ${{ steps.list.outputs.match_ids }}
+      count: ${{ steps.list.outputs.count }}
+      has_matches: ${{ steps.list.outputs.has_matches }}
+    env:
+      ONLY_MISSING: ${{ inputs.only_missing }}
+      CLOUDFLARE_R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID }}
+      CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: List demo matches
+        id: list
+        run: npx tsx scripts/list-demo-matches.ts
+
+  extract:
+    needs: enumerate
+    if: needs.enumerate.outputs.has_matches == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        match_id: ${{ fromJSON(needs.enumerate.outputs.match_ids) }}
+    env:
+      MATCH_ID: ${{ matrix.match_id }}
+      GH_RUN_ID: ${{ github.run_id }}
+      GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CLOUDFLARE_R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID }}
+      CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build replay.json
+        run: npx tsx scripts/replay-extract.ts

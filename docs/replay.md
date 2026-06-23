@@ -169,7 +169,16 @@ keys, re-dispatch overwrites); run the same `src/lib/replay/*` code via `tsx`.
 | Action | Trigger | Output | Status |
 |---|---|---|---|
 | **A — `replay-extract`** | auto, after demo upload/parse | `replay.json` **and** compact `heatmap.json` → R2 `<matchId>/…` | **built** (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
+| **A′ — `replay-extract-all`** | manual (Actions UI / dispatch) | re-runs A for **every** match with a demo, as a matrix | **built** (`replay-extract-all.yml` + `scripts/list-demo-matches.ts`) |
 | **B — `radar-build`** | per map (Actions UI / dispatch) | radar PNG → R2 `maps/<id>/radar.png` + `maps` row calibration | **built** (`radar-build.yml` + `scripts/radar-build.ts`); first real run validates the SteamCMD/Source2Viewer invocations |
+
+> **Backfilling a logic/schema change:** when the extract or heatmap output shape changes
+> (e.g. the post-round-kill fix, or a future `HEATMAP_SCHEMA_VERSION` bump for per-player
+> filtering), run **`replay-extract-all`** to re-extract existing artifacts. It enumerates
+> matches with a `<id>/game.dem` in R2 (`list-demo-matches.ts`; `only_missing` skips ones
+> that already have a `replay.json`) and fans out Action A as a `max-parallel: 3` matrix.
+> The Action runs the dispatched ref's code, so dispatch it on the branch/`main` that has
+> the fix.
 
 > The mp4 render Action (originally Phase 4) was **dropped in favor of the map Heatmap
 > tab**. Heatmaps need no separate Action — the extract Action emits the `heatmap.json`
