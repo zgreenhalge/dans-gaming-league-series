@@ -1,8 +1,11 @@
+'use client';
+
 import Link from 'next/link';
 import { LocalTime } from './LocalTime';
-import { YouBadge } from './YouBadge';
-import { mapImageFor, toSentenceCase } from '@/lib/maps';
-import { fmtWindowDate } from '@/lib/util';
+import { PlayerName } from './PlayerName';
+import { mapSlug, toSentenceCase } from '@/lib/maps';
+import { useMapLookup } from './MapContext';
+import { fmtWindowDate, formatEhogDelta } from '@/lib/util';
 import { CountdownTimer } from './CountdownTimer';
 import { FeatureMatchIcon } from './FeatureMatch';
 
@@ -41,6 +44,10 @@ interface MatchCardProps {
   currentPlayerId?: number | null;
   /** Enlarge/bold the current player's stat row. Enable only on the player profile page. */
   highlightCurrentPlayer?: boolean;
+  /** When set, highlights this player's name (accent glow) independently of currentPlayerId. */
+  loggedInPlayerId?: number | null;
+  /** EHOG rating deltas per player_id for this match. */
+  ehogDeltas?: Record<number, number> | null;
   /** 'inline': inside a container block (border-b style). 'standalone': full-border card. */
   containerVariant?: 'inline' | 'standalone';
 }
@@ -49,13 +56,18 @@ function TeamStatBlock({
   players,
   currentPlayerId,
   highlightCurrentPlayer,
+  loggedInPlayerId,
+  ehogDeltas,
 }: {
   players: MatchCardPlayer[];
   currentPlayerId: number | null;
   highlightCurrentPlayer: boolean;
+  loggedInPlayerId: number | null;
+  ehogDeltas?: Record<number, number> | null;
 }) {
   const statCls = `font-mono tnum text-right shrink-0`;
   const hdrCls = `text-[11px] font-semibold text-[var(--color-text-secondary)] text-right shrink-0`;
+  const showEhog = ehogDeltas != null && Object.keys(ehogDeltas).length > 0;
 
   return (
     <div className="px-3 py-2">
@@ -65,24 +77,34 @@ function TeamStatBlock({
         <span className={`${hdrCls} w-7 sm:w-9`}>K</span>
         <span className={`${hdrCls} w-7 sm:w-9 hidden min-[480px]:block`}>A</span>
         <span className={`${hdrCls} w-7 sm:w-9`}>D</span>
-        <span className={`${hdrCls} w-12 sm:w-14 pr-2`}>ADR</span>
+        <span className={`${hdrCls} w-12 sm:w-14 ${showEhog ? '' : 'pr-2'}`}>ADR</span>
+        {showEhog && <span className="w-14 pr-2 hidden min-[480px]:block" />}
       </div>
       {/* rows */}
       <div className="divide-y divide-[var(--color-border-tertiary)]">
       {players.map((p) => {
-        const isMe = currentPlayerId !== null && p.player_id === currentPlayerId;
-        const highlight = isMe && highlightCurrentPlayer;
+        const isPagePlayer = currentPlayerId !== null && p.player_id === currentPlayerId;
+        const highlight = isPagePlayer && highlightCurrentPlayer;
+        const meId = loggedInPlayerId ?? currentPlayerId;
+        const isMe = meId !== null && p.player_id === meId;
         const numSz = highlight ? 'text-[12px] font-semibold' : 'text-[11px]';
         return (
           <div key={p.player_id} className={`flex items-center py-0.5 ${highlight ? 'current-player-row' : ''}`}>
             <span className={`font-display flex items-center flex-1 min-w-0 pl-2 pr-1 ${highlight ? 'text-[15px] lg:text-[16px] font-semibold' : 'text-[13px] font-semibold'}`}>
-              <span className="truncate">{p.player_name}</span>
-              {isMe && <YouBadge />}
+              <span className="truncate"><PlayerName name={p.player_name} isMe={isMe} /></span>
             </span>
             <span className={`${statCls} ${numSz} w-7 sm:w-9 text-[var(--color-text-primary)]`}>{p.kills}</span>
             <span className={`${statCls} ${numSz} w-7 sm:w-9 text-[var(--color-text-primary)] hidden min-[480px]:block`}>{p.assists}</span>
             <span className={`${statCls} ${numSz} w-7 sm:w-9 text-[var(--color-text-primary)]`}>{p.deaths}</span>
-            <span className={`${statCls} ${numSz} w-12 sm:w-14 pr-2 text-[var(--color-text-primary)]`}>{Math.round(p.adr)}</span>
+            <span className={`${statCls} ${numSz} w-12 sm:w-14 ${showEhog ? '' : 'pr-2'} text-[var(--color-text-primary)]`}>{Math.round(p.adr)}</span>
+            {showEhog && (() => {
+              const delta = ehogDeltas[p.player_id] as number | undefined;
+              return (
+                <span className={`${statCls} ${highlight ? 'text-[12px] font-semibold' : 'text-[11px]'} w-14 pr-2 hidden min-[480px]:block ${delta != null ? (delta >= 0 ? 'text-[var(--color-accent-green-fg)]' : 'text-[var(--color-accent-red-fg)]') : 'text-[var(--color-text-secondary)]'}`}>
+                  {delta != null ? formatEhogDelta(delta) : ''}
+                </span>
+              );
+            })()}
           </div>
         );
       })}
@@ -183,9 +205,12 @@ export function MatchCard({
   skinsFallback,
   currentPlayerId = null,
   highlightCurrentPlayer = false,
+  loggedInPlayerId = null,
+  ehogDeltas,
   containerVariant = 'inline',
 }: MatchCardProps) {
-  const mapImg = mapImageFor(map);
+  const maps = useMapLookup();
+  const mapImg = map ? (maps[mapSlug(map)]?.image_url ?? null) : null;
   const hasStats = (shirtsStats?.length ?? 0) > 0 || (skinsStats?.length ?? 0) > 0;
   const hasFallback = !!(shirtsFallback || skinsFallback);
   const borderColor = containerVariant === 'standalone' ? outcomeBorderColor(outcome) : undefined;
@@ -221,11 +246,15 @@ export function MatchCard({
                 players={shirtsStats ?? []}
                 currentPlayerId={currentPlayerId}
                 highlightCurrentPlayer={highlightCurrentPlayer}
+                loggedInPlayerId={loggedInPlayerId}
+                ehogDeltas={ehogDeltas}
               />
               <TeamStatBlock
                 players={skinsStats ?? []}
                 currentPlayerId={currentPlayerId}
                 highlightCurrentPlayer={highlightCurrentPlayer}
+                loggedInPlayerId={loggedInPlayerId}
+                ehogDeltas={ehogDeltas}
               />
             </div>
           </div>

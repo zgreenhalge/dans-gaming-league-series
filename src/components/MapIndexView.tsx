@@ -2,9 +2,11 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { mapImageFor, toSentenceCase } from '@/lib/maps';
+import { toSentenceCase } from '@/lib/maps';
+import { useMapLookup } from './MapContext';
 import { extractSeasonNumber, tabCls } from '@/lib/util';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
+import TabBar from './TabBar';
 import type { MapIndexEntry } from '@/lib/types';
 
 type SortKey = 'name' | 'seasonsPlayed' | 'pickCount' | 'banCount' | 'noPickCount' | 'pickAndWon' | 'totalKills' | 'totalAssists';
@@ -20,6 +22,7 @@ function extractSeasonNums(seasons: { name: string }[]): string {
 
 
 export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
+  const mapLookup = useMapLookup();
   const [tab, setTab] = useState<'tiles' | 'stats'>('tiles');
   const [sortKey, setSortKey] = useState<SortKey>('pickCount');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -108,20 +111,24 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-y-2 border-b border-[var(--color-border-primary)] mb-6">
+      <TabBar
+        bordered
+        className="mb-6"
+        controls={
+          <SeasonFilter
+            filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason }}
+            seasons={allSeasons}
+            onSeasonChange={setSelectedSeason}
+          />
+        }
+      >
         <button type="button" className={tabCls(tab === 'tiles')} onClick={() => setTab('tiles')}>
           Maps
         </button>
         <button type="button" className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
           Statistics
         </button>
-        <SeasonFilter
-          filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason }}
-          seasons={allSeasons}
-          onSeasonChange={setSelectedSeason}
-          className="ml-auto flex flex-wrap items-center gap-4 pb-0.5"
-        />
-      </div>
+      </TabBar>
 
       {tab === 'tiles' && (
         filtered.length === 0 ? (
@@ -129,7 +136,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {filtered.map((map) => {
-              const img = mapImageFor(map.name);
+              const img = mapLookup[map.slug]?.image_url ?? null;
               const stats = displayStats.get(map.slug);
               return (
                 <Link
@@ -172,7 +179,8 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
         sorted.length === 0 ? (
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No maps for this selection.</div>
         ) : (
-          <table className="w-full border-collapse font-mono text-[12px]">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-max border-collapse font-mono text-[12px]">
             <thead>
               <tr className="border-b border-[var(--color-border-primary)]">
                 <th className={colCls('name', 'left')} onClick={() => handleSort('name')}>Map{arrow('name')}</th>
@@ -207,6 +215,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
               })}
             </tbody>
           </table>
+          </div>
         )
       )}
     </>

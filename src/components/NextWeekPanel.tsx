@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { YouBadge } from './YouBadge';
+import { TeamNames } from './NextUpPanel';
 import { weekWindow, fmtWindowDate } from '@/lib/util';
 import type { WeekWithMatches, MatchWithRoster } from '@/lib/queries';
 import type { Season } from '@/lib/types';
@@ -12,13 +12,6 @@ function MatchupRow({
   match: MatchWithRoster;
   currentPlayerId: number | null;
 }) {
-  const isInMatch = currentPlayerId !== null && (
-    match.shirts.some((p) => p.player_id === currentPlayerId) ||
-    match.skins.some((p) => p.player_id === currentPlayerId)
-  );
-  const shirts = match.shirts.map((p) => p.player_name).join(' & ') || 'TBD';
-  const skins = match.skins.map((p) => p.player_name).join(' & ') || 'TBD';
-
   return (
     <Link
       href={`/matches/${match.id}`}
@@ -27,10 +20,9 @@ function MatchupRow({
       <span className="tracked text-[9px] text-[var(--color-text-secondary)] shrink-0 w-16">
         Match {match.match_number} {match.is_feature_match && <FeatureMatchIcon />}
       </span>
-      {isInMatch && <YouBadge />}
-      <span className="font-display text-[13px] font-semibold truncate min-w-0">{shirts}</span>
+      <span className="font-display text-[13px] font-semibold truncate min-w-0"><TeamNames players={match.shirts} currentPlayerId={currentPlayerId} /></span>
       <span className="tracked text-[9px] text-[var(--color-text-secondary)] shrink-0">vs</span>
-      <span className="font-display text-[13px] font-semibold truncate min-w-0">{skins}</span>
+      <span className="font-display text-[13px] font-semibold truncate min-w-0"><TeamNames players={match.skins} currentPlayerId={currentPlayerId} /></span>
     </Link>
   );
 }

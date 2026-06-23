@@ -2,8 +2,8 @@
 
 The site's visual language — a CS2-broadcast-inspired theme with a light "Dust2 daylight" mode and
 a dark "broadcast HUD" mode. This doc names the shared utilities in `src/app/globals.css` so the
-visual-refresh pass (commits `2d1ed97`, `c3b9415`, `8a97368`) stays a *system* instead of drifting
-into one-off classes per component. **Reach for these before writing new hover/glow/accent CSS.**
+visual language stays a *system* instead of drifting into one-off classes per component.
+**Reach for these before writing new hover/glow/accent CSS.**
 
 ## Theme tokens
 
@@ -65,8 +65,8 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
   Don't build ad-hoc colored pill markup for match results — use these.
 - **`.form-square` / `.form-dot`** (`--w` / `--l` modifiers) — recent-form history indicators
   (squares for emphasis, dots for compact inline use)
-- **`.you-badge`** / `.player-highlight` / `.current-player-row` — "this is you" / "this is the
-  player whose page you're on" treatments. See also `YouBadge.tsx`.
+- **`.player-name-me`** / `.player-highlight` / `.current-player-row` — "this is you" / "this is the
+  player whose page you're on" treatments. See also `PlayerName.tsx`.
 
 ## Typography
 
@@ -88,9 +88,55 @@ Once a match's veto resolves, wrap the relevant scope in `.faction-ct` / `.facti
 - `.map-text-scrim` / `.map-no-img` handle text legibility over images and the no-image fallback
   gradient respectively
 
+## Tables & data display
+
+**Avoid single-row tables.** A table whose body renders exactly one data row reads poorly — many
+columns of headers above a single line of values, forcing horizontal scroll on mobile while wasting
+vertical space. This happens most often when a multi-row leaderboard component is reused for a single
+subject (e.g. the Advanced Stats tab on `/players/<id>` reusing the league sabremetrics tables).
+
+When a table would have one data row, **transpose it into a label/value layout** instead:
+- Use the shared **`StatTileGrid`** (`src/components/StatTileGrid.tsx`): pass a `tiles` array of
+  `{ label, value, title?, valueStyle? }` and an optional responsive `columns` spec. It renders one
+  bordered container with 1px grid-line dividers — the same shape as the player Overview stat panel
+  (`PlayerView`) and the single-player Advanced Stats (`SinglePlayerStats` in
+  `SabremetricsLeaderboardView.tsx`), so the two never drift.
+- Keep the same metrics, formatting helpers, and `title` tooltips as the table — only the shape
+  changes.
+
+Tables remain the right choice the moment there are multiple rows to compare across the same columns.
+
+**Tab bar + filter controls.** Use the shared **`TabBar`** (`src/components/TabBar.tsx`) for any page
+with a row of tab buttons plus filter controls (season filter, side checkboxes, etc.). It owns the
+`flex-wrap` layout that keeps the controls from overrunning the page on narrow viewports — tabs as
+children, controls in the `controls` slot (pushed right via `ml-auto`), `bordered` for the standard
+bottom rule. Don't hand-roll a `flex justify-between` tab row; it won't wrap.
+
 ## When extending this system
 
 If you need a new hover/glow/accent treatment, ask first whether it's really a new *shape* (card vs.
 row vs. image-card) or just a new *color* — the latter is almost always a `--lift-accent` override,
 not a new class. New semantic colors should become theme tokens (`--color-accent-*`), not inline
 hex values, so both themes stay correct automatically.
+
+## Dev-gate pattern
+
+Use the `<DevGate>` component (`src/components/DevGate.tsx`) to hide under-construction UI from
+production. It reads `NODE_ENV` itself — no props needed — and renders a dashed amber border with
+a small "DEV" badge in the corner so the section is obviously un-shipped in local dev.
+
+```tsx
+import DevGate from '@/components/DevGate';
+
+<DevGate className="mt-6">
+  {/* your under-construction UI */}
+</DevGate>
+```
+
+The `className` prop is forwarded to the wrapper `div` for spacing overrides (e.g. `mt-6`, `mt-10`).
+
+**To launch a dev-gated section:** delete the `<DevGate>` wrapper and keep its children.
+That's the entire checklist — no other changes needed.
+
+Never use `.dev-gate` directly on production-visible content; always go through `<DevGate>` so the
+env check is inseparable from the visual indicator.

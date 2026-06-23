@@ -1,0 +1,81 @@
+# Action B — radar-build (issue #121)
+#
+# Steam workshop map → top-down radar PNG + calibration → R2 `maps/<id>/radar.png` +
+# the `maps` row's radar_* columns. Heavy/fragile external tooling (SteamCMD, the
+# Source2Viewer CLI) runs here, NOT on Vercel. Fully isolated: a failure leaves the
+# map uncalibrated and playback falls back to auto-fit. See docs/replay.md.
+#
+# Triggered by the app via repository_dispatch (type `radar-build`) or manually via
+# the Actions UI with a map_id.
+
+name: radar-build
+
+on:
+  workflow_dispatch:
+    inputs:
+      map_id:
+        description: Map ID to build a radar for
+        required: true
+        type: string
+  repository_dispatch:
+    types: [radar-build]
+
+concurrency:
+  group: radar-build-${{ github.event.inputs.map_id || github.event.client_payload.map_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Source2Viewer (ValveResourceFormat) CLI release used to decode .vtex_c radar
+  # textures. Bump this tag to pick up fixes for maps the decoder chokes on.
+  VRF_VERSION: "19.2"
+
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      MAP_ID: ${{ github.event.inputs.map_id || github.event.client_payload.map_id }}
+      GH_RUN_ID: ${{ github.run_id }}
+      GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      STEAMCMD: /usr/games/steamcmd
+      DECOMPILER: ${{ github.workspace }}/vrf/Source2Viewer-CLI
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CLOUDFLARE_R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID }}
+      CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install SteamCMD
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          echo steam steam/question select "I AGREE" | sudo debconf-set-selections
+          echo steam steam/license note '' | sudo debconf-set-selections
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y steamcmd
+
+      - name: Install Source2Viewer CLI
+        run: |
+          mkdir -p vrf && cd vrf
+          curl -fsSL -o cli.zip \
+            "https://github.com/ValveResourceFormat/ValveResourceFormat/releases/download/${VRF_VERSION}/cli-linux-x64.zip"
+          unzip -o cli.zip
+          chmod +x Source2Viewer-CLI
+
+      - name: Build radar
+        run: npx tsx scripts/radar-build.ts

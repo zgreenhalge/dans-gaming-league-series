@@ -116,6 +116,7 @@ export function winRateColor(winRate: number): string {
 /**
  * Canonical leaderboard sort: WR% → RWR% → ADR (all descending).
  * Use this wherever player rows are ranked — never sort by ADR alone.
+ * For gauntlet season pages, use canonicalGauntletRankMap instead.
  */
 export function canonicalSort(
   a: { win_rate_percentage: number; rwr_percentage: number; overall_adr: number },
@@ -126,6 +127,35 @@ export function canonicalSort(
     b.rwr_percentage - a.rwr_percentage ||
     b.overall_adr - a.overall_adr
   );
+}
+
+/**
+ * Derives the four canonical leaderboard rates (the exact `canonicalSort` keys) from summed totals.
+ * Every place that aggregates per-match stats into a leaderboard row must derive these the same way
+ * — keep this the single source so the rankings can't drift between the player, career, and map views.
+ * Callers do their own summation (input shapes differ); this only does the division + zero-guards.
+ */
+export function deriveRates(totals: {
+  matches_played: number;
+  matches_won: number;
+  total_kills: number;
+  total_deaths: number;
+  total_rounds_played: number;
+  total_rounds_won: number;
+  total_damage: number;
+}): {
+  win_rate_percentage: number;
+  kd_ratio: number;
+  rwr_percentage: number;
+  overall_adr: number;
+} {
+  const { matches_played: mp, matches_won: mw, total_kills, total_deaths, total_rounds_played: rp, total_rounds_won: rw, total_damage } = totals;
+  return {
+    win_rate_percentage: mp > 0 ? (mw / mp) * 100 : 0,
+    kd_ratio: total_deaths > 0 ? total_kills / total_deaths : total_kills,
+    rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
+    overall_adr: rp > 0 ? total_damage / rp : 0,
+  };
 }
 
 /**
@@ -144,6 +174,117 @@ export function compareMatchRefDesc(
   if (a.isGauntlet !== b.isGauntlet) return a.isGauntlet ? -1 : 1;
   if (a.weekNumber !== b.weekNumber) return b.weekNumber - a.weekNumber;
   return b.matchNumber - a.matchNumber;
+}
+
+// Minimal types for canonicalGauntletRankMap — mirrors GauntletRound/GauntletMatch
+// from queries.ts without creating a circular import.
+interface _GauntletPlayer { player_id: number; faction: 'SHIRTS' | 'SKINS'; is_win: boolean; adr: number }
+interface _GauntletMatch { final_score: string | null; shirts_stats: _GauntletPlayer[]; skins_stats: _GauntletPlayer[] }
+interface _GauntletRound { round_number: number; matches: _GauntletMatch[] }
+
+/**
+ * Canonical gauntlet ranking — returns a Map<player_id, rank> (1-indexed) matching
+ * the order the podium is determined:
+ *   1st  — 2-0 in the final round (champion)
+ *   2nd  — 1-1 in the final round, higher final-round RWR% (then ADR)
+ *   3rd  — 1-1 in the final round, lower final-round RWR% (then ADR)
+ *   4th  — 0-2 in the final round
+ *   5th+ — players eliminated before the final round, ordered by latest elimination
+ *          round (higher round = better rank); tiebreak within the same round by
+ *          wins in that round, then RWR%, then ADR in that round (all descending)
+ *
+ * Returns an empty map when the gauntlet is not yet complete.
+ * Use this instead of canonicalSort wherever gauntlet leaderboards are rendered.
+ */
+export function canonicalGauntletRankMap(rounds: _GauntletRound[]): Map<number, number> {
+  if (rounds.length === 0) return new Map();
+
+  const maxRound = Math.max(...rounds.map((r) => r.round_number));
+  const finalRound = rounds.find((r) => r.round_number === maxRound);
+  if (!finalRound || !finalRound.matches.every((m) => isPlayedScore(m.final_score))) {
+    return new Map();
+  }
+
+  // Compute per-player record, RWR% and ADR for a given set of matches.
+  // ADR is round-weighted (per-match adr * rounds) so it aggregates correctly.
+  function aggregateRound(matches: _GauntletMatch[]) {
+    const agg = new Map<number, { wins: number; rounds_won: number; rounds_played: number; total_damage: number }>();
+    for (const m of matches) {
+      if (!isPlayedScore(m.final_score)) continue;
+      const scores = parseScore(m.final_score);
+      if (!scores) continue;
+      const total = scores.shirts + scores.skins;
+      for (const p of [...m.shirts_stats, ...m.skins_stats]) {
+        const prev = agg.get(p.player_id) ?? { wins: 0, rounds_won: 0, rounds_played: 0, total_damage: 0 };
+        prev.wins += p.is_win ? 1 : 0;
+        prev.rounds_won += p.faction === 'SHIRTS' ? scores.shirts : scores.skins;
+        prev.rounds_played += total;
+        prev.total_damage += p.adr * total;
+        agg.set(p.player_id, prev);
+      }
+    }
+    return agg;
+  }
+
+  // Determine which players appeared in each round.
+  const playerFirstRound = new Map<number, number>();
+  const playerLastRound = new Map<number, number>();
+  for (const r of rounds) {
+    for (const m of r.matches) {
+      for (const p of [...m.shirts_stats, ...m.skins_stats]) {
+        if (!playerFirstRound.has(p.player_id)) playerFirstRound.set(p.player_id, r.round_number);
+        const prev = playerLastRound.get(p.player_id) ?? 0;
+        if (r.round_number > prev) playerLastRound.set(p.player_id, r.round_number);
+      }
+    }
+  }
+
+  // Final round: rank 1–4 by record then RWR%.
+  const finalAgg = aggregateRound(finalRound.matches);
+  const finalPlayers = Array.from(finalAgg.entries()).map(([id, s]) => ({
+    player_id: id,
+    wins: s.wins,
+    rwr: s.rounds_played > 0 ? s.rounds_won / s.rounds_played : 0,
+    adr: s.rounds_played > 0 ? s.total_damage / s.rounds_played : 0,
+  }));
+
+  finalPlayers.sort((a, b) => b.wins - a.wins || b.rwr - a.rwr || b.adr - a.adr);
+
+  const rankMap = new Map<number, number>();
+  finalPlayers.forEach((p, i) => rankMap.set(p.player_id, i + 1));
+
+  // Earlier rounds: players whose last round < maxRound were eliminated there.
+  // Later elimination round = better rank. Tiebreak: wins in that round, then RWR%.
+  const eliminated: { player_id: number; lastRound: number; wins: number; rwr: number; adr: number }[] = [];
+  for (const [id, lastRound] of playerLastRound) {
+    if (lastRound >= maxRound) continue;
+    const r = rounds.find((r) => r.round_number === lastRound);
+    const agg = r ? aggregateRound(r.matches) : new Map();
+    const s = agg.get(id);
+    eliminated.push({
+      player_id: id,
+      lastRound,
+      wins: s?.wins ?? 0,
+      rwr: s && s.rounds_played > 0 ? s.rounds_won / s.rounds_played : 0,
+      adr: s && s.rounds_played > 0 ? s.total_damage / s.rounds_played : 0,
+    });
+  }
+
+  // Sort: later eliminated = better (lower rank number), then wins desc, then RWR% desc, then ADR desc.
+  eliminated.sort((a, b) => b.lastRound - a.lastRound || b.wins - a.wins || b.rwr - a.rwr || b.adr - a.adr);
+
+  const nextRank = finalPlayers.length + 1;
+  eliminated.forEach((p, i) => rankMap.set(p.player_id, nextRank + i));
+
+  return rankMap;
+}
+
+export function avgOf(arr: number[]): number {
+  return arr.reduce((s, v) => s + v, 0) / arr.length;
+}
+
+export function formatEhogDelta(delta: number): string {
+  return `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}`;
 }
 
 /** Parses "13-9" / "13 – 9" into { shirts, skins }. Returns null if unparseable. */

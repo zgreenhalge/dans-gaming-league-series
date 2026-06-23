@@ -6,24 +6,29 @@ import ScheduleList from './ScheduleList';
 import GauntletStandings from './GauntletStandings';
 import GauntletRoundsList from './GauntletRoundsList';
 import H2HSection from './H2HSection';
+import { AdvancedStatsView } from './AdvancedStatsView';
+import TabBar from './TabBar';
 import type { WeekWithMatches, GauntletRound, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { isPlayedScore, tabCls } from '@/lib/util';
+import type { MatchPickBanInput } from '@/lib/mapSideStats';
+import { isPlayedScore, tabCls, canonicalGauntletRankMap } from '@/lib/util';
 
-type Tab = 'leaderboard' | 'schedule' | 'h2h';
+type Tab = 'leaderboard' | 'schedule' | 'h2h' | 'stats';
 
 function playerInMatch(
-  match: { shirts: { player_id: number }[]; skins: { player_id: number }[] },
+  match: { shirts_stats: { player_id: number }[]; skins_stats: { player_id: number }[] },
   playerId: number,
 ): boolean {
   return (
-    match.shirts.some((p) => p.player_id === playerId) ||
-    match.skins.some((p) => p.player_id === playerId)
+    match.shirts_stats.some((p) => p.player_id === playerId) ||
+    match.skins_stats.some((p) => p.player_id === playerId)
   );
 }
 
 type RegularMode = { kind: 'regular'; schedule: WeekWithMatches[]; seasonStartDate: string | null };
 type GauntletMode = { kind: 'gauntlet'; rounds: GauntletRound[] };
+
+export type { Tab as SeasonTab };
 
 type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   leaderboard: LeaderboardRowWithId[];
@@ -31,14 +36,22 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   currentPlayerId: number | null;
   subStyle?: boolean;
   h2hData: H2HData;
+  tab?: Tab;
+  onTabChange?: (t: Tab) => void;
+  ehogRatings?: Record<number, number>;
 };
 
 export default function SeasonTabView(props: SeasonTabViewProps) {
-  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData } = props;
+  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings } = props;
   const isGauntlet = props.kind === 'gauntlet';
   const schedule = props.kind === 'regular' ? props.schedule : [];
   const rounds = props.kind === 'gauntlet' ? props.rounds : [];
   const seasonStartDate = props.kind === 'regular' ? props.seasonStartDate : null;
+
+  const gauntletRanking = useMemo(
+    () => (isGauntlet ? canonicalGauntletRankMap(rounds) : undefined),
+    [isGauntlet, rounds],
+  );
 
   const defaultOpenSet = useMemo<Set<number>>(() => {
     if (isGauntlet) {
@@ -53,7 +66,9 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     return new Set();
   }, [isGauntlet, rounds, schedule]);
 
-  const [tab, setTab] = useState<Tab>('leaderboard');
+  const [localTab, setLocalTab] = useState<Tab>('leaderboard');
+  const tab = props.tab ?? localTab;
+  const setTab = props.onTabChange ?? setLocalTab;
   const [myGamesOnly, setMyGamesOnly] = useState(false);
   const [openItems, setOpenItems] = useState<Set<number>>(defaultOpenSet);
 
@@ -80,6 +95,27 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const displaySchedule = myGamesOnly ? mySchedule : schedule;
   const displayRounds = myGamesOnly ? myRounds : rounds;
   const displayCount = isGauntlet ? displayRounds.length : displaySchedule.length;
+
+  const allMatches = useMemo<MatchPickBanInput[]>(() => {
+    if (isGauntlet) {
+      return rounds.flatMap((r) => r.matches).map((m) => ({
+        final_score: m.final_score,
+        picked_map: m.picked_map,
+        shirts_pick: m.shirts_pick,
+        skins_starting_side: m.skins_starting_side,
+        shirts_stats: m.shirts_stats,
+        skins_stats: m.skins_stats,
+      }));
+    }
+    return schedule.flatMap((w) => w.matches).map((m) => ({
+      final_score: m.final_score,
+      picked_map: m.picked_map,
+      shirts_pick: m.shirts_pick,
+      skins_starting_side: m.skins_starting_side,
+      shirts_stats: m.shirts_stats,
+      skins_stats: m.skins_stats,
+    }));
+  }, [isGauntlet, rounds, schedule]);
 
   const allOpen = isGauntlet
     ? displayRounds.length > 0 && displayRounds.every((r) => openItems.has(r.round_number))
@@ -145,6 +181,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'leaderboard', label: 'Leaderboard' },
+    { key: 'stats', label: 'Stats' },
     { key: 'h2h', label: 'H2H' },
     { key: 'schedule', label: isGauntlet ? 'Rounds' : 'Schedule' },
   ];
@@ -159,16 +196,10 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     </button>
   ));
 
-  const tabBar = subStyle ? (
-    <div className="flex items-center justify-between mb-6">
-      <div className="flex">{tabBarButtons}</div>
-      <div className="flex items-center gap-3">{scheduleControls}</div>
-    </div>
-  ) : (
-    <div className="flex items-center justify-between border-b border-[var(--color-border-primary)] mb-6">
-      <div className="flex">{tabBarButtons}</div>
-      <div className="flex items-center gap-3 pb-px">{scheduleControls}</div>
-    </div>
+  const tabBar = (
+    <TabBar bordered={!subStyle} className="mb-6" controls={scheduleControls || undefined}>
+      {tabBarButtons}
+    </TabBar>
   );
 
   return (
@@ -187,6 +218,8 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
               rows={leaderboard}
               showMedals={seasonStatus === 'ARCHIVED'}
               playoffZones={!isGauntlet && seasonStatus === 'ACTIVE' ? { top: 2, bottom: 4 } : undefined}
+              canonicalRanking={gauntletRanking}
+              ehogRatings={ehogRatings}
             />
           )}
         </>
@@ -221,6 +254,16 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
               currentPlayerId={currentPlayerId}
             />
           )
+        )
+      )}
+
+      {tab === 'stats' && (
+        leaderboard.length === 0 ? (
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+            No stats available yet.
+          </div>
+        ) : (
+          <AdvancedStatsView rows={leaderboard} matches={allMatches} />
         )
       )}
 

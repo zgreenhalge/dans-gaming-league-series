@@ -1,12 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
 import type { Player } from './types';
+import { getAdminClient } from './supabase-admin';
 
 const REFRESH_COOLDOWN_MS = 5 * 60 * 1000;
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+const supabaseAdmin = getAdminClient();
 
 async function fetchSteamProfile(steamId: string): Promise<{ name: string; image: string } | null> {
   try {

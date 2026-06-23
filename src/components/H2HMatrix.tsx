@@ -36,7 +36,7 @@ const emptyCellStyle = { background: 'var(--color-bg-tertiary)' };
  * friend blended score, colored from neutral to green; lower triangle (row >
  * col) shows the rival blended score, colored from neutral to red. Both use
  * the same normalised formula as the "Best Friends"/"Closest Rivals" cards —
- * see "Blended score" in GLOSSARY.md. Diagonal is empty.
+ * see "Blended score" in docs/glossary.md. Diagonal is empty.
  */
 export default function H2HMatrix({
   players,

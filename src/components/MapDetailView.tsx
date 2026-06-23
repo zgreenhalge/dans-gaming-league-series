@@ -4,12 +4,15 @@ import { useState, useMemo } from 'react';
 import LeaderboardTable from './LeaderboardTable';
 import { MatchCard } from './MatchCard';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
-import { tabCls, canonicalSort } from '@/lib/util';
+import TabBar from './TabBar';
+import { AdvancedStatsView } from './AdvancedStatsView';
+import { tabCls, canonicalSort, deriveRates } from '@/lib/util';
 import type { MapMatchRow, MapDetail, MapPlayerStat, H2HData } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import H2HSection from './H2HSection';
+import MapHeatmap from './MapHeatmap';
 
-type Tab = 'stats' | 'matches' | 'h2h';
+type Tab = 'leaderboard' | 'stats' | 'matches' | 'h2h' | 'heatmap';
 
 function toRosterStat(s: MapPlayerStat) {
   return {
@@ -40,6 +43,10 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
     total_damage: number;
     total_rounds_played: number;
     total_rounds_won: number;
+    kills_in_wins: number;
+    deaths_in_wins: number;
+    kills_in_losses: number;
+    deaths_in_losses: number;
   };
 
   const byPlayer = new Map<number, Agg>();
@@ -52,6 +59,8 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
         matches_played: 0, matches_won: 0, matches_lost: 0,
         total_kills: 0, total_assists: 0, total_deaths: 0,
         total_damage: 0, total_rounds_played: 0, total_rounds_won: 0,
+        kills_in_wins: 0, deaths_in_wins: 0,
+        kills_in_losses: 0, deaths_in_losses: 0,
       };
       agg.matches_played += 1;
       agg.matches_won += s.is_win ? 1 : 0;
@@ -62,37 +71,44 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
       agg.total_damage += s.damage;
       agg.total_rounds_played += s.rounds_played;
       agg.total_rounds_won += s.rounds_won;
+      agg.kills_in_wins += s.is_win ? s.kills : 0;
+      agg.deaths_in_wins += s.is_win ? s.deaths : 0;
+      agg.kills_in_losses += s.is_win ? 0 : s.kills;
+      agg.deaths_in_losses += s.is_win ? 0 : s.deaths;
       byPlayer.set(s.player_id, agg);
     }
   }
 
-  return Array.from(byPlayer.values()).map((a) => {
-    const rp = a.total_rounds_played;
-    const rw = a.total_rounds_won;
-    return {
-      season_id: 0,
-      player_id: a.player_id,
-      player_name: a.player_name,
-      matches_played: a.matches_played,
-      matches_won: a.matches_won,
-      matches_lost: a.matches_lost,
-      win_rate_percentage: a.matches_played > 0 ? (a.matches_won / a.matches_played) * 100 : 0,
-      total_kills: a.total_kills,
-      total_assists: a.total_assists,
-      total_deaths: a.total_deaths,
-      kd_ratio: a.total_deaths > 0 ? a.total_kills / a.total_deaths : a.total_kills,
-      total_damage: a.total_damage,
-      total_rounds_played: rp,
-      total_rounds_won: rw,
-      rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
-      overall_adr: rp > 0 ? a.total_damage / rp : 0,
-    };
-  }).sort(canonicalSort);
+  return (Array.from(byPlayer.values()).map((a) => ({
+    season_id: 0,
+    player_id: a.player_id,
+    player_name: a.player_name,
+    matches_played: a.matches_played,
+    matches_won: a.matches_won,
+    matches_lost: a.matches_lost,
+    total_kills: a.total_kills,
+    total_assists: a.total_assists,
+    total_deaths: a.total_deaths,
+    total_damage: a.total_damage,
+    total_rounds_played: a.total_rounds_played,
+    total_rounds_won: a.total_rounds_won,
+    ...deriveRates(a),
+    kills_in_wins: a.kills_in_wins,
+    deaths_in_wins: a.deaths_in_wins,
+    kills_in_losses: a.kills_in_losses,
+    deaths_in_losses: a.deaths_in_losses,
+  })).sort(canonicalSort)) as unknown as LeaderboardRowWithId[];
 }
 
-export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; h2hData: H2HData }) {
+export default function MapDetailView({
+  detail,
+  h2hData,
+}: {
+  detail: MapDetail;
+  h2hData: H2HData;
+}) {
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter();
-  const [tab, setTab] = useState<Tab>('stats');
+  const [tab, setTab] = useState<Tab>('leaderboard');
 
   const uniqueSeasons = useMemo(() => {
     const seen = new Map<number, { id: number; name: string; is_gauntlet: boolean }>();
@@ -116,11 +132,28 @@ export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; 
     [filteredMatches],
   );
 
+  // Stable list of every match id for this map — the Heatmap tab fetches its artifacts
+  // lazily for these (memoized so the fetch effect doesn't re-run on every render).
+  const allMatchIds = useMemo(() => detail.matches.map((m) => m.match_id), [detail.matches]);
+
 
   return (
     <div>
       {/* Tabs + filter controls */}
-      <div className="flex items-center border-b border-[var(--color-border-primary)] mb-4">
+      <TabBar
+        bordered
+        className="mb-4"
+        controls={
+          <SeasonFilter
+            filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason }}
+            seasons={uniqueSeasons}
+            onSeasonChange={setSelectedSeason}
+          />
+        }
+      >
+        <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
+          Leaderboard
+        </button>
         <button type="button" className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
           Stats
         </button>
@@ -133,19 +166,24 @@ export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; 
         <button type="button" className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
           H2H
         </button>
-        <SeasonFilter
-          filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason }}
-          seasons={uniqueSeasons}
-          onSeasonChange={setSelectedSeason}
-          className="ml-auto flex items-center gap-5 pb-0.5"
-        />
-      </div>
+        <button type="button" className={tabCls(tab === 'heatmap')} onClick={() => setTab('heatmap')}>
+          Heatmap
+        </button>
+      </TabBar>
+
+      {tab === 'leaderboard' && (
+        filteredPlayerStats.length === 0 ? (
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No data for this selection.</div>
+        ) : (
+          <LeaderboardTable rows={filteredPlayerStats} showMedals={false} />
+        )
+      )}
 
       {tab === 'stats' && (
         filteredPlayerStats.length === 0 ? (
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No data for this selection.</div>
         ) : (
-          <LeaderboardTable rows={filteredPlayerStats} showMedals={false} />
+          <AdvancedStatsView rows={filteredPlayerStats} matches={filteredMatches} singleMap />
         )
       )}
 
@@ -177,6 +215,14 @@ export default function MapDetailView({ detail, h2hData }: { detail: MapDetail; 
       )}
 
       {tab === 'h2h' && <H2HSection data={h2hData} />}
+
+      {tab === 'heatmap' && (
+        <MapHeatmap
+          slug={detail.slug}
+          matchIds={allMatchIds}
+          visibleMatchIds={new Set(filteredMatches.map((m) => m.match_id))}
+        />
+      )}
     </div>
   );
 }

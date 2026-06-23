@@ -7,6 +7,9 @@ import {
   getGauntletStats,
   getAllSeasonMedalists,
   getH2HData,
+  getAllMatchesWithPickBan,
+  getAllEhogSnapshots,
+  getAllSabremetrics,
 } from '@/lib/queries';
 import CareerStatsView from '@/components/CareerStatsView';
 import type { LeaderboardRowWithId } from '@/lib/types';
@@ -14,10 +17,13 @@ import type { TrophyEntry } from '@/lib/queries';
 
 export const revalidate = 60;
 
-export const metadata = { title: 'Statistics' };
+export const metadata = {
+  title: 'Statistics',
+  description: 'Career leaderboards, rankings, and advanced stats for all DGLS players.',
+};
 
 export default async function StatisticsPage() {
-  const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, h2hData] =
+  const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, h2hData, allMatches, ehogSnapshots, allSabremetrics] =
     await Promise.all([
       getCareerLeaderboard(),
       getAllLeaderboards(),
@@ -25,6 +31,9 @@ export default async function StatisticsPage() {
       getGauntletStats(),
       getAllSeasonMedalists(),
       getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
+      getAllMatchesWithPickBan(),
+      getAllEhogSnapshots(),
+      getAllSabremetrics(),
     ]);
 
   const bySeason: Record<number, LeaderboardRowWithId[]> = {};
@@ -35,7 +44,7 @@ export default async function StatisticsPage() {
 
   const regularSeasons = seasons
     .filter((s) => !s.is_gauntlet)
-    .filter((s) => (bySeason[s.id] ?? []).some((r) => r.total_rounds_played > 0));
+    .filter((s) => (bySeason[s.id] ?? []).length > 0);
 
   const gauntletSeasons = seasons
     .filter((s) => s.is_gauntlet)
@@ -65,6 +74,9 @@ export default async function StatisticsPage() {
             gauntletBySeason={gauntletStats.bySeason}
             trophiesByPlayer={trophiesByPlayer}
             h2hData={h2hData}
+            allMatches={allMatches}
+            ehogSnapshots={ehogSnapshots}
+            allSabremetrics={allSabremetrics}
           />
         </Suspense>
       </main>

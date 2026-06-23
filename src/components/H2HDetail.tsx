@@ -3,15 +3,16 @@
 import Link from 'next/link';
 import type { DuoStats, H2HStats } from '@/lib/queries';
 import { rateGradientColor, winRatePct } from '@/lib/util';
-import { mapImageFor, mapSlug, toSentenceCase } from '@/lib/maps';
+import { mapSlug, toSentenceCase } from '@/lib/maps';
+import { useMapLookup } from './MapContext';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
 
 type H2HPlayer = { id: number; name: string; steam_avatar_url: string | null };
 
-function StatCell({ label, children, color }: { label: string; children: React.ReactNode; color?: string }) {
+function StatCell({ label, children, color, title }: { label: string; children: React.ReactNode; color?: string; title?: string }) {
   return (
-    <div className="border-l-2 border-[var(--color-border-primary)] pl-2.5">
+    <div className="border-l-2 border-[var(--color-border-primary)] pl-2.5" title={title}>
       <div className="tracked text-[8px] text-[var(--color-text-secondary)]">{label}</div>
       <div className="font-display text-[16px] font-bold mt-1" style={color ? { color } : undefined}>
         {children}
@@ -128,12 +129,13 @@ export function DuoDetail({
   friendshipRating?: number;
   ratingBreakdown?: string;
 }) {
+  const maps = useMapLookup();
   const a = players.get(duo.playerA);
   const b = players.get(duo.playerB);
   if (!a || !b) return null;
 
   const circleValue = friendshipRating ?? winRatePct(duo.wins, duo.gamesPlayed);
-  const mapImg = mapImageFor(duo.bestMap);
+  const mapImg = duo.bestMap ? (maps[mapSlug(duo.bestMap)]?.image_url ?? null) : null;
 
   const hero = (
     <>
@@ -200,13 +202,15 @@ export function DuoDetail({
           <StatCell label="Rounds" color={rateGradientColor(winRatePct(duo.roundsWon, duo.roundsPlayed))}>
             {duo.roundsWon}–{duo.roundsPlayed - duo.roundsWon}
           </StatCell>
-          <StatCell label="Comb. ADR">{duo.combinedAdr.toFixed(1)}</StatCell>
+          <StatCell label="Comb. ADR" title={`${a.name}: ${duo.aStats.adr.toFixed(1)}\n${b.name}: ${duo.bStats.adr.toFixed(1)}`}>
+            {duo.combinedAdr.toFixed(1)}
+          </StatCell>
         </div>
 
         <div className="grid grid-cols-3 gap-2.5 mt-2.5">
-          <StatCell label="Comb. Kills">{duo.combinedKills}</StatCell>
-          <StatCell label="Comb. Assists">{duo.combinedAssists}</StatCell>
-          <StatCell label="Comb. Deaths">{duo.combinedDeaths}</StatCell>
+          <StatCell label="Comb. Kills"   title={`${a.name}: ${duo.aStats.kills}\n${b.name}: ${duo.bStats.kills}`}>{duo.combinedKills}</StatCell>
+          <StatCell label="Comb. Assists" title={`${a.name}: ${duo.aStats.assists}\n${b.name}: ${duo.bStats.assists}`}>{duo.combinedAssists}</StatCell>
+          <StatCell label="Comb. Deaths"  title={`${a.name}: ${duo.aStats.deaths}\n${b.name}: ${duo.bStats.deaths}`}>{duo.combinedDeaths}</StatCell>
         </div>
 
         {!minimal && duo.matches.length > 0 && (
@@ -248,36 +252,8 @@ export function DuoDetail({
   );
 }
 
-function H2HStatPair({ aValue, bValue }: { aValue: string; bValue: string }) {
-  return (
-    <span>
-      <span style={{ color: 'var(--color-t)' }}>{aValue}</span>
-      <span className="text-[12px] font-normal text-[var(--color-text-secondary)] mx-1">–</span>
-      <span style={{ color: 'var(--color-ct)' }}>{bValue}</span>
-    </span>
-  );
-}
-
 function kdr(stats: H2HStats['aStats']): number {
   return stats.deaths > 0 ? stats.kills / stats.deaths : stats.kills;
-}
-
-function H2HStatsGrid({ rival }: { rival: H2HStats }) {
-  return (
-    <>
-      <div className="grid grid-cols-3 gap-2.5 mt-4">
-        <StatCell label="RWR%">
-          <H2HStatPair aValue={`${rival.aStats.rwr.toFixed(1)}%`} bValue={`${rival.bStats.rwr.toFixed(1)}%`} />
-        </StatCell>
-        <StatCell label="KDR">
-          <H2HStatPair aValue={kdr(rival.aStats).toFixed(2)} bValue={kdr(rival.bStats).toFixed(2)} />
-        </StatCell>
-        <StatCell label="ADR">
-          <H2HStatPair aValue={rival.aStats.adr.toFixed(0)} bValue={rival.bStats.adr.toFixed(0)} />
-        </StatCell>
-      </div>
-    </>
-  );
 }
 
 export function RivalDetail({
@@ -297,12 +273,13 @@ export function RivalDetail({
   rivalryRating?: number;
   ratingBreakdown?: string;
 }) {
+  const maps = useMapLookup();
   const a = players.get(rival.playerA);
   const b = players.get(rival.playerB);
   if (!a || !b) return null;
 
   const total = rival.aWins + rival.bWins || 1;
-  const mapImg = mapImageFor(rival.lastMap);
+  const mapImg = rival.lastMap ? (maps[mapSlug(rival.lastMap)]?.image_url ?? null) : null;
 
   const circleValue = rivalryRating ?? 50;
   const rivalCircle = <RatingCircle value={circleValue} colorStart="black" colorEnd="var(--color-accent-red-fg)" size="lg" title={ratingBreakdown ?? "50% times faced² · 30% game outcome closeness² · 20% avg round closeness²"} />;
@@ -347,8 +324,8 @@ export function RivalDetail({
         { player: a, stats: rival.aStats, color: 'var(--color-t)' },
         { player: b, stats: rival.bStats, color: 'var(--color-ct)' },
       ] as const).map(({ player, stats, color }) => (
-        <Link key={player.id} href={`/players/${player.id}`} className="relative z-[2] flex items-center gap-2 py-1.5 border-t border-[var(--color-border-tertiary)] hover:opacity-80 transition-opacity">
-          <PlayerAvatar name={player.name} imageUrl={player.steam_avatar_url} size="sm" />
+        <Link key={player.id} href={`/players/${player.id}`} className="lift-row relative z-[2] flex items-center gap-2 py-1.5 border-t border-[var(--color-border-tertiary)]">
+          <span className="ml-2 shrink-0"><PlayerAvatar name={player.name} imageUrl={player.steam_avatar_url} size="sm" /></span>
           <span className="flex-1 font-display font-semibold text-[12px] truncate" style={{ color }}>{player.name}</span>
           <span className={smCol}>{stats.kills}</span>
           <span className={smCol}>{stats.assists}</span>

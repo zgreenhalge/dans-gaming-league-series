@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
+import type { Metadata } from 'next';
 import { TopbarShell } from '@/components/TopbarShell';
 import {
   getSeason,
@@ -10,6 +11,7 @@ import {
   getLinkedGauntlet,
   getLinkedRegularSeason,
   getH2HData,
+  getSeasonEhogRatings,
   type WeekWithMatches,
   type GauntletRound,
 } from '@/lib/queries';
@@ -27,10 +29,29 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>;
-}) {
+}): Promise<Metadata> {
   const { id } = await params;
-  const season = await getSeason(Number(id));
-  return { title: season?.name ?? 'Season' };
+  const seasonId = Number(id);
+  const season = await getSeason(seasonId);
+  if (!season) return { title: 'Season' };
+
+  const title = seasonTitle(season.name);
+  const statusLabel = season.status === 'ACTIVE' ? ' · Live' : season.status === 'UPCOMING' ? ' · Soon' : '';
+  const description = `${title}${statusLabel} — standings, schedule, and match results in DGLS.`;
+
+  return {
+    title: season.name,
+    description,
+    openGraph: {
+      title: `DGLS · ${title}`,
+      description,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `DGLS · ${title}`,
+      description,
+    },
+  };
 }
 
 function countMatches(schedule: WeekWithMatches[]) {
@@ -109,10 +130,11 @@ export default async function SeasonPage({
     if (linked) redirect(`/seasons/${linked.id}`);
 
     // Orphan gauntlet with no paired regular season — render standalone
-    const [rounds, leaderboard, h2hData] = await Promise.all([
+    const [rounds, leaderboard, h2hData, ehogRatings] = await Promise.all([
       getGauntletRounds(seasonId),
       getGauntletSeasonLeaderboard(seasonId),
       getH2HData({ filter: seasonId, includeRegular: false, includeGauntlet: true }),
+      getSeasonEhogRatings(seasonId),
     ]);
     const matchCount = countGauntletMatches(rounds);
 
@@ -146,6 +168,7 @@ export default async function SeasonPage({
             seasonStatus={season.status}
             currentPlayerId={currentPlayerId}
             h2hData={h2hData}
+            ehogRatings={ehogRatings}
           />
         </main>
       </div>
@@ -155,7 +178,7 @@ export default async function SeasonPage({
   // Regular season — check for paired gauntlet
   const linkedGauntlet = await getLinkedGauntlet(season.name);
 
-  const [leaderboard, schedule, gauntletRounds, gauntletLeaderboard, h2hData, gauntletH2hData] = await Promise.all([
+  const [leaderboard, schedule, gauntletRounds, gauntletLeaderboard, h2hData, gauntletH2hData, ehogRatings, gauntletEhogRatings] = await Promise.all([
     getSeasonLeaderboard(seasonId),
     getSeasonSchedule(seasonId),
     linkedGauntlet ? getGauntletRounds(linkedGauntlet.id) : Promise.resolve(null),
@@ -164,6 +187,8 @@ export default async function SeasonPage({
     linkedGauntlet
       ? getH2HData({ filter: seasonId, includeRegular: false, includeGauntlet: true })
       : Promise.resolve(null),
+    getSeasonEhogRatings(seasonId),
+    linkedGauntlet ? getSeasonEhogRatings(linkedGauntlet.id) : Promise.resolve(null),
   ]);
   const matchCount = countMatches(schedule);
 
@@ -202,6 +227,8 @@ export default async function SeasonPage({
             currentPlayerId={currentPlayerId}
             h2hData={h2hData}
             gauntletH2hData={gauntletH2hData}
+            ehogRatings={ehogRatings}
+            gauntletEhogRatings={gauntletEhogRatings ?? undefined}
           />
         ) : (
           <SeasonTabView
@@ -212,6 +239,7 @@ export default async function SeasonPage({
             seasonStatus={season.status}
             currentPlayerId={currentPlayerId}
             h2hData={h2hData}
+            ehogRatings={ehogRatings}
           />
         )}
       </main>

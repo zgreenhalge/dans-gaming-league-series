@@ -1,8 +1,8 @@
 'use client';
 
 import { MatchCard } from './MatchCard';
-import { YouBadge } from './YouBadge';
-import { isPlayedScore } from '@/lib/util';
+import { PlayerName } from './PlayerName';
+import { isPlayedScore, canonicalGauntletRankMap } from '@/lib/util';
 import type { GauntletRound, GauntletMatch } from '@/lib/queries';
 
 function computeGauntletRecords(matches: GauntletMatch[]) {
@@ -12,14 +12,14 @@ function computeGauntletRecords(matches: GauntletMatch[]) {
   >();
   for (const m of matches) {
     if (!isPlayedScore(m.final_score)) continue;
-    for (const p of [...m.shirts, ...m.skins]) {
+    for (const p of [...m.shirts_stats, ...m.skins_stats]) {
       const prev = records.get(p.player_id) ?? {
         player_id: p.player_id,
         name: p.player_name,
         wins: 0,
         losses: 0,
       };
-      p.is_win ? prev.wins++ : prev.losses++;
+      if (p.is_win) prev.wins++; else prev.losses++;
       records.set(p.player_id, prev);
     }
   }
@@ -31,17 +31,23 @@ function computeGauntletRecords(matches: GauntletMatch[]) {
 function GauntletRoundCard({
   round,
   allRounds,
+  rankMap,
   currentPlayerId,
   isOpen,
   onToggle,
 }: {
   round: GauntletRound;
   allRounds: GauntletRound[];
+  rankMap: Map<number, number>;
   currentPlayerId: number | null;
   isOpen: boolean;
   onToggle: () => void;
 }) {
-  const records = computeGauntletRecords(round.matches);
+  const unsortedRecords = computeGauntletRecords(round.matches);
+  const records = rankMap.size > 0
+    ? [...unsortedRecords].sort((a, b) =>
+        (rankMap.get(a.player_id) ?? Infinity) - (rankMap.get(b.player_id) ?? Infinity))
+    : unsortedRecords;
   const allPlayed =
     round.matches.length > 0 && round.matches.every((m) => isPlayedScore(m.final_score));
   const maxRoundNumber = Math.max(...allRounds.map((r) => r.round_number));
@@ -51,7 +57,7 @@ function GauntletRoundCard({
   for (const r of allRounds) {
     if (r.round_number <= round.round_number) continue;
     for (const m of r.matches) {
-      for (const p of [...m.shirts, ...m.skins]) {
+      for (const p of [...m.shirts_stats, ...m.skins_stats]) {
         playerIdsInLaterRounds.add(p.player_id);
       }
     }
@@ -80,13 +86,13 @@ function GauntletRoundCard({
               <MatchCard
                 key={m.id}
                 href={`/matches/${m.id}`}
-                map={m.map}
+                map={m.shirts_pick ?? m.picked_map}
                 label={{ type: 'game', gameNumber: i + 1 }}
                 right={played ? { type: 'score', score: m.final_score! } : { type: 'pending' }}
-                shirtsStats={m.shirts}
-                skinsStats={m.skins}
-                shirtsFallback={m.shirts.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
-                skinsFallback={m.skins.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
+                shirtsStats={m.shirts_stats}
+                skinsStats={m.skins_stats}
+                shirtsFallback={m.shirts_stats.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
+                skinsFallback={m.skins_stats.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
                 currentPlayerId={currentPlayerId}
               />
             );
@@ -106,8 +112,7 @@ function GauntletRoundCard({
                   const isChampion =
                     isFinalRound &&
                     allPlayed &&
-                    records[0]?.player_id === r.player_id &&
-                    r.wins > r.losses;
+                    rankMap.get(r.player_id) === 1;
                   return (
                     <div key={r.player_id} className="flex items-center justify-between gap-3">
                       <span
@@ -122,10 +127,7 @@ function GauntletRoundCard({
                                 : 'var(--color-text-primary)',
                         }}
                       >
-                        {r.name}
-                        {currentPlayerId !== null && r.player_id === currentPlayerId && (
-                          <YouBadge />
-                        )}
+                        <PlayerName name={r.name} isMe={currentPlayerId !== null && r.player_id === currentPlayerId} />
                       </span>
                       <div className="flex items-center gap-2">
                         <span
@@ -180,6 +182,8 @@ export default function GauntletRoundsList({
   onToggleRound: (roundNumber: number) => void;
   currentPlayerId: number | null;
 }) {
+  const rankMap = canonicalGauntletRankMap(allRounds);
+
   if (displayRounds.length === 0) {
     return (
       <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
@@ -195,6 +199,7 @@ export default function GauntletRoundsList({
           key={r.round_number}
           round={r}
           allRounds={allRounds}
+          rankMap={rankMap}
           currentPlayerId={currentPlayerId}
           isOpen={openRounds.has(r.round_number)}
           onToggle={() => onToggleRound(r.round_number)}

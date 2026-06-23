@@ -1,15 +1,9 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { type SupabaseClient } from '@supabase/supabase-js';
 
-let _browserClient: SupabaseClient | null = null;
-
-export function getBrowserClient(): SupabaseClient {
-  if (_browserClient) return _browserClient;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  _browserClient = createClient(url, anon);
-  return _browserClient;
-}
+type GlobalWithServerClient = typeof globalThis & {
+  __dgls_serverClient?: SupabaseClient;
+};
 
 // Server-side Supabase client. Currently uses no-op cookie handlers because
 // there's no auth yet — this keeps pages eligible for ISR (calling cookies()
@@ -20,10 +14,9 @@ export function getBrowserClient(): SupabaseClient {
 //             (those routes will no longer be ISR-cacheable, which is correct
 //             — authenticated reads/writes must hit the database per-request).
 //   - browser: createBrowserClient for client components that need auth state.
-let _client: SupabaseClient | null = null;
-
 function getClient(): SupabaseClient {
-  if (_client) return _client;
+  const g = globalThis as GlobalWithServerClient;
+  if (g.__dgls_serverClient) return g.__dgls_serverClient;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) {
@@ -31,17 +24,18 @@ function getClient(): SupabaseClient {
       'Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local (local) and Vercel project settings (deployed).',
     );
   }
-  _client = createServerClient(url, anon, {
+  g.__dgls_serverClient = createServerClient(url, anon, {
     cookies: {
       getAll() {
         return [];
       },
-      setAll(_cookies: { name: string; value: string; options: CookieOptions }[]) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      setAll(_: { name: string; value: string; options: CookieOptions }[]) {
         // no-op until auth is wired up
       },
     },
   });
-  return _client;
+  return g.__dgls_serverClient;
 }
 
 export const supabase = new Proxy({} as SupabaseClient, {

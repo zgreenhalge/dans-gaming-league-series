@@ -6,9 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "tsx src/lib/util.test.ts && tsx src/lib/replay/replay.test.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1069.0",
+    "@aws-sdk/s3-request-presigner": "^3.1069.0",
+    "@laihoe/demoparser2": "^0.41.3",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.1",
     "@vercel/analytics": "^1.6.1",
@@ -16,6 +20,7 @@
     "lucide-react": "^1.16.0",
     "next": "^16.2.6",
     "next-auth": "^4.24.14",
+    "openskill": "^5.0.1",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -27,6 +32,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }

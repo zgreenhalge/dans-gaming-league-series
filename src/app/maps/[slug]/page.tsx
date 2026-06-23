@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getMapDetail, getH2HData } from '@/lib/queries';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
+import { getMapLookup } from '@/lib/queries';
 import { extractSeasonNumber } from '@/lib/util';
 import MapDetailView from '@/components/MapDetailView';
 
@@ -49,10 +51,33 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
-}) {
+}): Promise<Metadata> {
   const { slug } = await params;
   const detail = await getMapDetail(slug);
-  return { title: detail ? toSentenceCase(detail.name) : 'Map' };
+  if (!detail) return { title: 'Map' };
+
+  const name = toSentenceCase(detail.name);
+  const parts: string[] = [];
+  if (detail.pickCount > 0) parts.push(`${detail.pickCount} picks`);
+  if (detail.banCount > 0) parts.push(`${detail.banCount} bans`);
+  const seasonCount = detail.seasons.filter(s => !s.is_gauntlet).length;
+  if (seasonCount > 0) parts.push(`${seasonCount} season${seasonCount > 1 ? 's' : ''}`);
+  const description = parts.length > 0
+    ? `${name} — ${parts.join(', ')} in DGLS.`
+    : `${name} map stats in DGLS.`;
+  return {
+    title: name,
+    description,
+    openGraph: {
+      title: `DGLS · ${name}`,
+      description,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `DGLS · ${name}`,
+      description,
+    },
+  };
 }
 
 export default async function MapPage({
@@ -61,13 +86,15 @@ export default async function MapPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [detail, h2hData] = await Promise.all([
+  const [detail, h2hData, mapLookup] = await Promise.all([
     getMapDetail(slug),
     getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true, map: slug }),
+    getMapLookup(),
   ]);
   if (!detail) notFound();
 
-  const img = mapImageFor(detail.name);
+  const img = mapImageFor(detail.name, mapLookup);
+  const workshopUrl = mapLookup[slug]?.workshop_url ?? null;
 
   return (
     <div className="min-h-screen">
@@ -111,6 +138,17 @@ export default async function MapPage({
               </span>
             )}
           </div>
+          {workshopUrl && (
+            <a
+              href={workshopUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`inline-flex items-center gap-1.5 font-mono text-[11px] mt-2 transition-colors ${img ? 'text-white/60 hover:text-white/90' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'}`}
+            >
+              <span>Steam Workshop</span>
+              <span className="text-[9px]">↗</span>
+            </a>
+          )}
           <SeasonPoolChips seasons={detail.seasons} onImg={!!img} />
         </div>
       </div>

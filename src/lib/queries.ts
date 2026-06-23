@@ -1,13 +1,20 @@
+import { gunzipSync } from 'node:zlib';
 import { supabase } from './supabase';
-import { isPlayedScore, winRatePct } from './util';
+import { getR2Object, replayKey, heatmapKey } from './r2';
+import type { ReplayPayload, ReplayPlayerMeta, ReplayEvent } from './replay/types';
+import type { HeatmapArtifact, HeatmapKind } from './replay/heatmap';
+import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
 import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
+import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
 import type {
   Season,
   Week,
   Match,
   Player,
   PlayerMatchStat,
+  PlayerMatchSabremetrics,
+  SabFields,
   LeaderboardRow,
   LeaderboardRowWithId,
   MapIndexEntry,
@@ -59,10 +66,18 @@ export interface PlayerHistoryRow extends PlayerMatchStat {
   is_gauntlet: boolean;
   map: string | null;
   final_score: string | null;
+  scheduled_at: string | null;
   shirts: { player_id: number; player_name: string }[];
   skins: { player_id: number; player_name: string }[];
   shirts_stats: RosterStat[];
   skins_stats: RosterStat[];
+  picked_map: string | null;
+  shirts_pick: string | null;
+  skins_starting_side: 'CT' | 'T' | null;
+  shirts_ban: string | null;
+  shirts_ban2: string | null;
+  skins_ban1: string | null;
+  skins_ban2: string | null;
 }
 
 export interface PlayerDetail {
@@ -97,6 +112,10 @@ function normalizeRow(r: LeaderboardRow): LeaderboardRow {
 interface PerPlayerStats {
   assists: number;
   rounds_won: number;
+  kills_in_wins: number;
+  deaths_in_wins: number;
+  kills_in_losses: number;
+  deaths_in_losses: number;
 }
 
 /**
@@ -104,13 +123,21 @@ interface PerPlayerStats {
  * from the leaderboard view). Excludes playoff games. Returns a Map keyed by
  * `${season_id}:${player_id}`.
  */
-async function getPerPlayerSeasonStats(): Promise<Map<string, PerPlayerStats>> {
+/**
+ * Fetches the three shared tables (weeks, matches, player_match_stats) once
+ * and returns both derived outputs, replacing two back-to-back triple-fetches
+ * with a single shared fetch.
+ */
+async function getSeasonBaseData(): Promise<{
+  perPlayerStats: Map<string, PerPlayerStats>;
+  rosterBySeason: Map<number, Set<number>>;
+}> {
   const [
     { data: stats, error: sErr },
     { data: matches, error: mErr },
     { data: weeks, error: wErr },
   ] = await Promise.all([
-    supabase.from('player_match_stats').select('player_id, assists, rounds_won, match_id'),
+    supabase.from('player_match_stats').select('player_id, assists, rounds_won, match_id, kills, deaths, is_win'),
     supabase.from('matches').select('id, week_id, is_playoff_game, final_score'),
     supabase.from('weeks').select('id, season_id'),
   ]);
@@ -122,77 +149,55 @@ async function getPerPlayerSeasonStats(): Promise<Map<string, PerPlayerStats>> {
   for (const w of (weeks ?? []) as { id: number; season_id: number }[])
     weekToSeason.set(w.id, w.season_id);
 
-  const seasonOfMatch = new Map<number, number>();
-  for (const m of (matches ?? []) as {
-    id: number;
-    week_id: number;
-    is_playoff_game: boolean;
-    final_score: string | null;
-  }[]) {
-    if (m.is_playoff_game || !isPlayedScore(m.final_score)) continue;
+  // played non-playoff matches → their season (for perPlayerStats)
+  const playedMatchSeason = new Map<number, number>();
+  // unplayed matches → their season (for rosterBySeason)
+  const unplayedMatchSeason = new Map<number, number>();
+  for (const m of (matches ?? []) as { id: number; week_id: number; is_playoff_game: boolean; final_score: string | null }[]) {
     const sid = weekToSeason.get(m.week_id);
-    if (sid != null) seasonOfMatch.set(m.id, sid);
+    if (sid == null) continue;
+    if (isPlayedScore(m.final_score) && !m.is_playoff_game) playedMatchSeason.set(m.id, sid);
+    if (!isPlayedScore(m.final_score)) unplayedMatchSeason.set(m.id, sid);
   }
 
-  const out = new Map<string, PerPlayerStats>();
+  const perPlayerStats = new Map<string, PerPlayerStats>();
+  const rosterBySeason = new Map<number, Set<number>>();
+
   for (const s of (stats ?? []) as {
     player_id: number;
     assists: number | null;
     rounds_won: number | null;
     match_id: number;
+    kills: number | null;
+    deaths: number | null;
+    is_win: boolean | null;
   }[]) {
-    const sid = seasonOfMatch.get(s.match_id);
-    if (sid == null) continue;
-    const key = `${sid}:${s.player_id}`;
-    const prev = out.get(key) ?? { assists: 0, rounds_won: 0 };
-    out.set(key, {
-      assists: prev.assists + (s.assists ?? 0),
-      rounds_won: prev.rounds_won + (s.rounds_won ?? 0),
-    });
-  }
-  return out;
-}
+    const playedSid = playedMatchSeason.get(s.match_id);
+    if (playedSid != null) {
+      const key = `${playedSid}:${s.player_id}`;
+      const prev = perPlayerStats.get(key) ?? { assists: 0, rounds_won: 0, kills_in_wins: 0, deaths_in_wins: 0, kills_in_losses: 0, deaths_in_losses: 0 };
+      const win = !!s.is_win;
+      const k = s.kills ?? 0;
+      const d = s.deaths ?? 0;
+      perPlayerStats.set(key, {
+        assists: prev.assists + (s.assists ?? 0),
+        rounds_won: prev.rounds_won + (s.rounds_won ?? 0),
+        kills_in_wins: prev.kills_in_wins + (win ? k : 0),
+        deaths_in_wins: prev.deaths_in_wins + (win ? d : 0),
+        kills_in_losses: prev.kills_in_losses + (win ? 0 : k),
+        deaths_in_losses: prev.deaths_in_losses + (win ? 0 : d),
+      });
+    }
 
-/**
- * Returns unique (season_id → Set<player_id>) for players appearing in
- * player_match_stats for matches that have NOT yet been played. Used to
- * populate zero-stat leaderboard rows for upcoming seasons.
- */
-async function getRosterPlayersBySeason(): Promise<Map<number, Set<number>>> {
-  const [
-    { data: stats, error: sErr },
-    { data: matches, error: mErr },
-    { data: weeks, error: wErr },
-  ] = await Promise.all([
-    supabase.from('player_match_stats').select('player_id, match_id'),
-    supabase.from('matches').select('id, week_id, final_score'),
-    supabase.from('weeks').select('id, season_id'),
-  ]);
-  if (sErr) throw sErr;
-  if (mErr) throw mErr;
-  if (wErr) throw wErr;
-
-  const weekToSeason = new Map<number, number>();
-  for (const w of (weeks ?? []) as { id: number; season_id: number }[])
-    weekToSeason.set(w.id, w.season_id);
-
-  const unplayedMatchToSeason = new Map<number, number>();
-  for (const m of (matches ?? []) as { id: number; week_id: number; final_score: string | null }[]) {
-    if (!isPlayedScore(m.final_score)) {
-      const sid = weekToSeason.get(m.week_id);
-      if (sid != null) unplayedMatchToSeason.set(m.id, sid);
+    const unplayedSid = unplayedMatchSeason.get(s.match_id);
+    if (unplayedSid != null) {
+      const set = rosterBySeason.get(unplayedSid) ?? new Set<number>();
+      set.add(s.player_id);
+      rosterBySeason.set(unplayedSid, set);
     }
   }
 
-  const out = new Map<number, Set<number>>();
-  for (const s of (stats ?? []) as { player_id: number; match_id: number }[]) {
-    const sid = unplayedMatchToSeason.get(s.match_id);
-    if (sid == null) continue;
-    const set = out.get(sid) ?? new Set<number>();
-    set.add(s.player_id);
-    out.set(sid, set);
-  }
-  return out;
+  return { perPlayerStats, rosterBySeason };
 }
 
 function zeroStatRows(
@@ -217,6 +222,10 @@ function zeroStatRows(
     total_rounds_won: 0,
     rwr_percentage: 0,
     overall_adr: 0,
+    kills_in_wins: 0,
+    deaths_in_wins: 0,
+    kills_in_losses: 0,
+    deaths_in_losses: 0,
   }));
 }
 
@@ -389,24 +398,83 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   return { match: m, week: w, season: season as Season, stats: statRows };
 }
 
+export interface MatchSabremetricsRow extends PlayerMatchSabremetrics {
+  player_id: number;
+  player_name: string;
+  faction: Faction;
+}
+
+export async function getMatchSabremetrics(matchId: number): Promise<MatchSabremetricsRow[]> {
+  const { data: pmsRows } = await supabase
+    .from('player_match_stats')
+    .select('id, player_id, faction')
+    .eq('match_id', matchId);
+  if (!pmsRows || pmsRows.length === 0) return [];
+
+  const pmsIds = (pmsRows as { id: number; player_id: number; faction: string }[]).map((r) => r.id);
+  const { data: sabRows } = await supabase
+    .from('player_match_sabremetrics')
+    .select('*')
+    .in('player_match_stats_id', pmsIds);
+  if (!sabRows || sabRows.length === 0) return [];
+
+  const players = await getPlayersById();
+  const pmsLookup = new Map(
+    (pmsRows as { id: number; player_id: number; faction: string }[]).map((r) => [r.id, r]),
+  );
+
+  return (sabRows as PlayerMatchSabremetrics[]).map((sab) => {
+    const pms = pmsLookup.get(sab.player_match_stats_id)!;
+    return {
+      ...sab,
+      player_id: pms.player_id,
+      player_name: players.get(pms.player_id)?.name ?? `#${pms.player_id}`,
+      faction: pms.faction as Faction,
+    };
+  });
+}
+
+export interface MapLeagueAvg {
+  wins: number;
+  losses: number;
+  adr: number;
+  avgKills: number;
+  avgDeaths: number;
+  avgAssists: number;
+}
+
+export interface MapStat {
+  games: number;
+  wins: number;
+  losses: number;
+  adr: number;
+  rwr: number;
+  avgKills: number;
+  avgDeaths: number;
+  avgAssists: number;
+}
+
 export interface ScoutingPlayer {
   id: number;
   name: string;
   steam_avatar_url: string | null;
-  /** Average ADR across this player's recent played matches. */
+  /** Average ADR across all played matches. */
   adr: number;
+  /** Average rounds-won rate across all played matches. */
+  rwr: number;
   /** Last-5 results, oldest → most recent. */
   form: boolean[];
   streak: { result: 'W' | 'L'; count: number } | null;
   /** Chronological ADR values (most recent ~6 matches), for the mini sparkline. */
   adrSeries: number[];
-  /** Average ADR on the upcoming match's map, or null if they haven't played it / map is unknown. */
-  mapAdr: number | null;
+  /** Per-map aggregates keyed by mapSlug. */
+  mapStats: Record<string, MapStat>;
 }
 
 export interface MatchScoutingData {
-  shirts: ScoutingPlayer[];
-  skins: ScoutingPlayer[];
+  shirts: [ScoutingPlayer, ScoutingPlayer];
+  skins: [ScoutingPlayer, ScoutingPlayer];
+  mapLeagueAverages: Record<string, MapLeagueAvg>;
 }
 
 /**
@@ -422,8 +490,6 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
     .maybeSingle();
   if (mErr) throw mErr;
   if (!match) return null;
-  const m = match as Match;
-  const matchMapKey = mapSlug((m.shirts_pick ?? m.picked_map) ?? '') || null;
 
   const { data: roster, error: rErr } = await supabase
     .from('player_match_stats')
@@ -434,11 +500,16 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   if (rosterRows.length === 0) return null;
   const playerIds = rosterRows.map((r) => r.player_id);
 
-  const [{ data: statRows, error: sErr }, players] = await Promise.all([
-    supabase.from('player_match_stats').select('*').in('player_id', playerIds),
+  // TODO: replace unbounded fetches with paginated queries — see GH issue #73.
+  const [{ data: statRows, error: sErr }, players, { data: leagueStatRows, error: lsErr }, { data: leagueMatchRows, error: lmErr }] = await Promise.all([
+    supabase.from('player_match_stats').select('*').in('player_id', playerIds).limit(10000),
     getPlayersById(),
+    supabase.from('player_match_stats').select('match_id, adr, kills, deaths, assists, is_win').gt('rounds_played', 0).limit(10000),
+    supabase.from('matches').select('id, final_score, shirts_pick, picked_map').limit(10000),
   ]);
   if (sErr) throw sErr;
+  if (lsErr) throw lsErr;
+  if (lmErr) throw lmErr;
   const allStats = (statRows ?? []) as PlayerMatchStat[];
 
   const matchIds = Array.from(new Set(allStats.map((s) => s.match_id)));
@@ -482,7 +553,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
       ); // chronological, oldest first
 
     const adrAll = rows.map((r) => r.stat.adr);
-    const adr = adrAll.length > 0 ? adrAll.reduce((s, v) => s + v, 0) / adrAll.length : 0;
+    const adr = adrAll.length > 0 ? avgOf(adrAll) : 0;
 
     const form = rows.slice(-5).map((r) => r.stat.is_win);
 
@@ -496,26 +567,84 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
 
     const adrSeries = rows.slice(-6).map((r) => r.stat.adr);
 
-    const mapRows = matchMapKey
-      ? rows.filter((r) => mapSlug((r.match.shirts_pick ?? r.match.picked_map) ?? '') === matchMapKey)
-      : [];
-    const mapAdr = mapRows.length > 0 ? mapRows.reduce((s, r) => s + r.stat.adr, 0) / mapRows.length : null;
+    const rwrAll = rows.map((r) => r.stat.rounds_won / Math.max(1, r.stat.rounds_played));
+    const rwr = rwrAll.length > 0 ? avgOf(rwrAll) : 0;
+
+    const mapGroups = new Map<string, typeof rows>();
+    for (const r of rows) {
+      const slug = mapSlug((r.match.shirts_pick ?? r.match.picked_map) ?? '');
+      if (!slug) continue;
+      if (!mapGroups.has(slug)) mapGroups.set(slug, []);
+      mapGroups.get(slug)!.push(r);
+    }
+    const mapStats: Record<string, MapStat> = {};
+    for (const [slug, mRows] of mapGroups) {
+      const n = mRows.length;
+      mapStats[slug] = {
+        games: n,
+        wins: mRows.filter((r) => r.stat.is_win).length,
+        losses: mRows.filter((r) => !r.stat.is_win).length,
+        adr: mRows.reduce((s, r) => s + r.stat.adr, 0) / n,
+        rwr: mRows.reduce((s, r) => s + r.stat.rounds_won / Math.max(1, r.stat.rounds_played), 0) / n,
+        avgKills: mRows.reduce((s, r) => s + r.stat.kills, 0) / n,
+        avgDeaths: mRows.reduce((s, r) => s + r.stat.deaths, 0) / n,
+        avgAssists: mRows.reduce((s, r) => s + r.stat.assists, 0) / n,
+      };
+    }
 
     return {
       id: playerId,
       name: p?.name ?? `#${playerId}`,
       steam_avatar_url: p?.steam_avatar_url ?? null,
       adr,
+      rwr,
       form,
       streak,
       adrSeries,
-      mapAdr,
+      mapStats,
     };
   }
 
+  type LeagueMatchRow = { id: number; final_score: string | null; shirts_pick: string | null; picked_map: string | null };
+  const leagueMatchById = new Map<number, LeagueMatchRow>();
+  for (const mm of (leagueMatchRows ?? []) as LeagueMatchRow[]) leagueMatchById.set(mm.id, mm);
+
+  type LeagueStatRow = { match_id: number; adr: number; kills: number; deaths: number; assists: number; is_win: boolean };
+  // Use a Set of match IDs to count unique matches (not player-stat rows).
+  // Each Wingman match has 2 player rows per side, so row-counting would inflate counts by 2×.
+  const leagueMapGroups = new Map<string, { adr: number[]; kills: number[]; deaths: number[]; assists: number[]; matches: Set<number> }>();
+  for (const s of (leagueStatRows ?? []) as LeagueStatRow[]) {
+    const mm = leagueMatchById.get(s.match_id);
+    if (!mm || !isPlayedScore(mm.final_score)) continue;
+    const slug = mapSlug((mm.shirts_pick ?? mm.picked_map) ?? '');
+    if (!slug) continue;
+    if (!leagueMapGroups.has(slug)) leagueMapGroups.set(slug, { adr: [], kills: [], deaths: [], assists: [], matches: new Set() });
+    const g = leagueMapGroups.get(slug)!;
+    g.adr.push(s.adr);
+    g.kills.push(s.kills);
+    g.deaths.push(s.deaths);
+    g.assists.push(s.assists);
+    g.matches.add(s.match_id);
+  }
+  const mapLeagueAverages: Record<string, MapLeagueAvg> = {};
+  for (const [slug, g] of leagueMapGroups) {
+    mapLeagueAverages[slug] = {
+      wins: g.matches.size,
+      losses: 0,
+      adr: avgOf(g.adr),
+      avgKills: avgOf(g.kills),
+      avgDeaths: avgOf(g.deaths),
+      avgAssists: avgOf(g.assists),
+    };
+  }
+
+  const shirts = rosterRows.filter((r) => r.faction === 'SHIRTS').map((r) => buildPlayer(r.player_id));
+  const skins = rosterRows.filter((r) => r.faction === 'SKINS').map((r) => buildPlayer(r.player_id));
+  if (shirts.length !== 2 || skins.length !== 2) return null;
   return {
-    shirts: rosterRows.filter((r) => r.faction === 'SHIRTS').map((r) => buildPlayer(r.player_id)),
-    skins: rosterRows.filter((r) => r.faction === 'SKINS').map((r) => buildPlayer(r.player_id)),
+    shirts: shirts as [ScoutingPlayer, ScoutingPlayer],
+    skins: skins as [ScoutingPlayer, ScoutingPlayer],
+    mapLeagueAverages,
   };
 }
 
@@ -529,7 +658,8 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
   if (!player) return null;
 
   const [{ data: stats, error: sErr }, medalists] = await Promise.all([
-    supabase.from('player_match_stats').select('*').eq('player_id', playerId),
+    // TODO: replace with paginated fetch — see GH issue #73. Using a high limit for now.
+    supabase.from('player_match_stats').select('*').eq('player_id', playerId).limit(10000),
     getAllSeasonMedalists(),
   ]);
   if (sErr) throw sErr;
@@ -644,13 +774,21 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         is_gauntlet: se.is_gauntlet,
         map: m.shirts_pick ?? m.picked_map,
         final_score: m.final_score,
+        scheduled_at: m.scheduled_at,
         shirts: roster.shirts,
         skins: roster.skins,
         shirts_stats: roster.shirts_stats ?? [],
         skins_stats: roster.skins_stats ?? [],
+        picked_map: m.picked_map,
+        shirts_pick: m.shirts_pick,
+        skins_starting_side: m.skins_starting_side,
+        shirts_ban: m.shirts_ban,
+        shirts_ban2: m.shirts_ban2,
+        skins_ban1: m.skins_ban1,
+        skins_ban2: m.skins_ban2,
       };
     })
-    .filter((r): r is PlayerHistoryRow => r !== null && isPlayedScore(r.final_score))
+    .filter((r): r is PlayerHistoryRow => r !== null)
     .sort((a, b) =>
       compareMatchRefDesc(
         { seasonNumber: extractSeasonNumber(a.season_name), isGauntlet: a.is_gauntlet, weekNumber: a.week_number, matchNumber: a.match_number },
@@ -664,14 +802,13 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
 export async function getSeasonLeaderboard(
   seasonId: number,
 ): Promise<LeaderboardRowWithId[]> {
-  const [{ data: rows, error }, playersById, perPlayer, rosterBySeason] = await Promise.all([
+  const [{ data: rows, error }, playersById, { perPlayerStats: perPlayer, rosterBySeason }] = await Promise.all([
     supabase
       .from('player_season_leaderboard')
       .select('*')
       .eq('season_id', seasonId),
     getPlayersById(),
-    getPerPlayerSeasonStats(),
-    getRosterPlayersBySeason(),
+    getSeasonBaseData(),
   ]);
   if (error) throw error;
 
@@ -684,6 +821,10 @@ export async function getSeasonLeaderboard(
       total_assists: ps?.assists ?? 0,
       total_rounds_won,
       rwr_percentage: total_rounds_played > 0 ? (total_rounds_won / total_rounds_played) * 100 : 0,
+      kills_in_wins: ps?.kills_in_wins ?? 0,
+      deaths_in_wins: ps?.deaths_in_wins ?? 0,
+      kills_in_losses: ps?.kills_in_losses ?? 0,
+      deaths_in_losses: ps?.deaths_in_losses ?? 0,
     };
   });
 
@@ -705,11 +846,20 @@ export async function getSeasonLeaderboard(
  * are re-derived from totals so the math stays correct.
  */
 export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
-  const [{ data: rows, error }, perPlayer] = await Promise.all([
+  const [{ data: rows, error }, { perPlayerStats: perPlayer, rosterBySeason }, playersById, { data: seasonRows, error: sErr }] = await Promise.all([
     supabase.from('player_season_leaderboard').select('*'),
-    getPerPlayerSeasonStats(),
+    getSeasonBaseData(),
+    getPlayersById(),
+    supabase.from('seasons').select('id, status'),
   ]);
   if (error) throw error;
+  if (sErr) throw sErr;
+
+  const activeSeasonIds = new Set(
+    ((seasonRows ?? []) as { id: number; status: string }[])
+      .filter((s) => s.status === 'ACTIVE' || s.status === 'UPCOMING')
+      .map((s) => s.id),
+  );
 
   type Agg = {
     player_id: number;
@@ -722,8 +872,13 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
     total_damage: number;
     total_rounds_played: number;
     total_rounds_won: number;
+    kills_in_wins: number;
+    deaths_in_wins: number;
+    kills_in_losses: number;
+    deaths_in_losses: number;
     seasons: Set<number>;
   };
+  const byId = new Map<number, Agg>();
   const byName = new Map<string, Agg>();
   for (const raw of (rows ?? []) as LeaderboardRow[]) {
     const r = normalizeRow(raw);
@@ -741,6 +896,10 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
         total_damage: 0,
         total_rounds_played: 0,
         total_rounds_won: 0,
+        kills_in_wins: 0,
+        deaths_in_wins: 0,
+        kills_in_losses: 0,
+        deaths_in_losses: 0,
         seasons: new Set<number>(),
       } as Agg);
     const ps = perPlayer.get(`${r.season_id}:${r.player_id}`);
@@ -753,8 +912,43 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
     agg.total_damage += r.total_damage;
     agg.total_rounds_played += r.total_rounds_played;
     agg.total_rounds_won += ps?.rounds_won ?? 0;
+    agg.kills_in_wins += ps?.kills_in_wins ?? 0;
+    agg.deaths_in_wins += ps?.deaths_in_wins ?? 0;
+    agg.kills_in_losses += ps?.kills_in_losses ?? 0;
+    agg.deaths_in_losses += ps?.deaths_in_losses ?? 0;
     agg.seasons.add(r.season_id);
     byName.set(r.player_name, agg);
+    byId.set(r.player_id, agg);
+  }
+
+  // Add zero-stat entries for players rostered in active/upcoming seasons who
+  // haven't played yet and therefore don't appear in player_season_leaderboard.
+  for (const [seasonId, playerIds] of rosterBySeason) {
+    if (!activeSeasonIds.has(seasonId)) continue;
+    for (const pid of playerIds) {
+      if (byId.has(pid)) continue;
+      const player = playersById.get(pid);
+      if (!player) continue;
+      const agg: Agg = {
+        player_id: pid,
+        matches_played: 0,
+        matches_won: 0,
+        matches_lost: 0,
+        total_kills: 0,
+        total_assists: 0,
+        total_deaths: 0,
+        total_damage: 0,
+        total_rounds_played: 0,
+        total_rounds_won: 0,
+        kills_in_wins: 0,
+        deaths_in_wins: 0,
+        kills_in_losses: 0,
+        deaths_in_losses: 0,
+        seasons: new Set(),
+      };
+      byName.set(player.name, agg);
+      byId.set(pid, agg);
+    }
   }
 
   const out: LeaderboardRowWithId[] = [];
@@ -778,6 +972,10 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
       rwr_percentage: a.total_rounds_played > 0 ? (a.total_rounds_won / a.total_rounds_played) * 100 : 0,
       overall_adr:
         a.total_rounds_played > 0 ? a.total_damage / a.total_rounds_played : 0,
+      kills_in_wins: a.kills_in_wins,
+      deaths_in_wins: a.deaths_in_wins,
+      kills_in_losses: a.kills_in_losses,
+      deaths_in_losses: a.deaths_in_losses,
     });
   }
   return out.sort(canonicalSort);
@@ -796,6 +994,10 @@ function aggToRow(
     total_damage: number;
     total_rounds_played: number;
     total_rounds_won: number;
+    kills_in_wins: number;
+    deaths_in_wins: number;
+    kills_in_losses: number;
+    deaths_in_losses: number;
   },
   season_id: number,
 ): LeaderboardRowWithId {
@@ -828,6 +1030,10 @@ function aggToRow(
       agg.total_rounds_played > 0
         ? agg.total_damage / agg.total_rounds_played
         : 0,
+    kills_in_wins: agg.kills_in_wins,
+    deaths_in_wins: agg.deaths_in_wins,
+    kills_in_losses: agg.kills_in_losses,
+    deaths_in_losses: agg.deaths_in_losses,
   };
 }
 
@@ -906,6 +1112,10 @@ export async function getGauntletStats(): Promise<{
     total_damage: number;
     total_rounds_played: number;
     total_rounds_won: number;
+    kills_in_wins: number;
+    deaths_in_wins: number;
+    kills_in_losses: number;
+    deaths_in_losses: number;
   };
 
   const bySeasonPlayer = new Map<string, Agg>();
@@ -928,6 +1138,10 @@ export async function getGauntletStats(): Promise<{
       total_damage: 0,
       total_rounds_played: 0,
       total_rounds_won: 0,
+      kills_in_wins: 0,
+      deaths_in_wins: 0,
+      kills_in_losses: 0,
+      deaths_in_losses: 0,
     };
     agg.matches_played += 1;
     agg.matches_won += s.is_win ? 1 : 0;
@@ -938,6 +1152,10 @@ export async function getGauntletStats(): Promise<{
     agg.total_damage += s.damage;
     agg.total_rounds_played += s.rounds_played;
     agg.total_rounds_won += s.rounds_won;
+    agg.kills_in_wins += s.is_win ? s.kills : 0;
+    agg.deaths_in_wins += s.is_win ? s.deaths : 0;
+    agg.kills_in_losses += s.is_win ? 0 : s.kills;
+    agg.deaths_in_losses += s.is_win ? 0 : s.deaths;
     bySeasonPlayer.set(key, agg);
   }
 
@@ -961,6 +1179,10 @@ export async function getGauntletStats(): Promise<{
       prev.total_damage += agg.total_damage;
       prev.total_rounds_played += agg.total_rounds_played;
       prev.total_rounds_won += agg.total_rounds_won;
+      prev.kills_in_wins += agg.kills_in_wins;
+      prev.deaths_in_wins += agg.deaths_in_wins;
+      prev.kills_in_losses += agg.kills_in_losses;
+      prev.deaths_in_losses += agg.deaths_in_losses;
     }
     careerByPlayer.set(agg.player_id, prev);
   }
@@ -989,10 +1211,12 @@ export interface GauntletPlayerStat {
 export interface GauntletMatch {
   id: number;
   match_number: number;
-  map: string | null;
   final_score: string | null;
-  shirts: GauntletPlayerStat[];
-  skins: GauntletPlayerStat[];
+  picked_map: string | null;
+  shirts_pick: string | null;
+  skins_starting_side: 'CT' | 'T' | null;
+  shirts_stats: GauntletPlayerStat[];
+  skins_stats: GauntletPlayerStat[];
 }
 
 export interface GauntletRound {
@@ -1057,6 +1281,10 @@ export async function getGauntletSeasonLeaderboard(
     total_damage: number;
     total_rounds_played: number;
     total_rounds_won: number;
+    kills_in_wins: number;
+    deaths_in_wins: number;
+    kills_in_losses: number;
+    deaths_in_losses: number;
   };
 
   const byPlayer = new Map<number, Agg>();
@@ -1075,6 +1303,10 @@ export async function getGauntletSeasonLeaderboard(
       total_damage: 0,
       total_rounds_played: 0,
       total_rounds_won: 0,
+      kills_in_wins: 0,
+      deaths_in_wins: 0,
+      kills_in_losses: 0,
+      deaths_in_losses: 0,
     };
     agg.matches_played += 1;
     agg.matches_won += s.is_win ? 1 : 0;
@@ -1085,6 +1317,10 @@ export async function getGauntletSeasonLeaderboard(
     agg.total_damage += s.damage;
     agg.total_rounds_played += s.rounds_played;
     agg.total_rounds_won += s.rounds_won;
+    agg.kills_in_wins += s.is_win ? s.kills : 0;
+    agg.deaths_in_wins += s.is_win ? s.deaths : 0;
+    agg.kills_in_losses += s.is_win ? 0 : s.kills;
+    agg.deaths_in_losses += s.is_win ? 0 : s.deaths;
     byPlayer.set(s.player_id, agg);
   }
 
@@ -1174,10 +1410,12 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
       return {
         id: m.id,
         match_number: m.match_number,
-        map: m.shirts_pick ?? m.picked_map,
         final_score: m.final_score,
-        shirts: allStats.filter((s) => s.faction === 'SHIRTS'),
-        skins: allStats.filter((s) => s.faction === 'SKINS'),
+        picked_map: m.picked_map,
+        shirts_pick: m.shirts_pick,
+        skins_starting_side: m.skins_starting_side,
+        shirts_stats: allStats.filter((s) => s.faction === 'SHIRTS'),
+        skins_stats: allStats.filter((s) => s.faction === 'SKINS'),
       };
     });
     rounds.push({ round_number: week.week_number, matches: gauntletMatches });
@@ -1512,6 +1750,9 @@ export interface MapMatchRow {
   final_score: string | null;
   shirts_stats: MapPlayerStat[];
   skins_stats: MapPlayerStat[];
+  picked_map: string | null;
+  shirts_pick: string | null;
+  skins_starting_side: 'CT' | 'T' | null;
 }
 
 export interface MapDetail {
@@ -1525,17 +1766,90 @@ export interface MapDetail {
   playerStats: LeaderboardRowWithId[];
 }
 
+/**
+ * Returns all played matches with pick/ban data and per-faction win flags.
+ * Used by the statistics page to compute league-wide map pick/ban and side stats.
+ */
+export async function getAllMatchesWithPickBan(): Promise<MapMatchRow[]> {
+  const { matches, weeks, seasons } = await fetchMapRawData();
+
+  const weekById = new Map<number, RawWeek>();
+  for (const w of weeks) weekById.set(w.id, w);
+  const seasonById = new Map<number, RawSeason>();
+  for (const s of seasons) seasonById.set(s.id, s);
+
+  const playedMatches = matches.filter(
+    (m) => isPlayedScore(m.final_score) && (m.shirts_pick != null || m.picked_map != null),
+  );
+  if (playedMatches.length === 0) return [];
+
+  const matchIds = playedMatches.map((m) => m.id);
+  const [{ data: statsData, error: sErr }, players] = await Promise.all([
+    supabase.from('player_match_stats').select('*').in('match_id', matchIds),
+    getPlayersById(),
+  ]);
+  if (sErr) throw sErr;
+  const statRows = (statsData ?? []) as PlayerMatchStat[];
+
+  const rosterByMatch = new Map<number, { shirts: MapPlayerStat[]; skins: MapPlayerStat[] }>();
+  for (const s of statRows) {
+    const entry = rosterByMatch.get(s.match_id) ?? { shirts: [], skins: [] };
+    const player = players.get(s.player_id);
+    const stat: MapPlayerStat = {
+      player_id: s.player_id,
+      player_name: player?.name ?? `#${s.player_id}`,
+      faction: s.faction,
+      kills: s.kills,
+      assists: s.assists ?? 0,
+      deaths: s.deaths,
+      adr: s.adr ?? 0,
+      damage: s.damage ?? 0,
+      rounds_played: s.rounds_played ?? 0,
+      rounds_won: s.rounds_won ?? 0,
+      is_win: !!s.is_win,
+    };
+    if (s.faction === 'SHIRTS') entry.shirts.push(stat);
+    else entry.skins.push(stat);
+    rosterByMatch.set(s.match_id, entry);
+  }
+
+  return playedMatches
+    .map((m) => {
+      const week = weekById.get(m.week_id);
+      if (!week) return null;
+      const season = seasonById.get(week.season_id);
+      if (!season) return null;
+      const roster = rosterByMatch.get(m.id) ?? { shirts: [], skins: [] };
+      return {
+        match_id: m.id,
+        match_number: m.match_number,
+        week_number: week.week_number,
+        season_id: season.id,
+        season_number: extractSeasonNumber(season.name),
+        season_name: season.name,
+        is_gauntlet: season.is_gauntlet,
+        is_playoff_game: m.is_playoff_game,
+        final_score: m.final_score,
+        shirts_stats: roster.shirts,
+        skins_stats: roster.skins,
+        picked_map: m.picked_map,
+        shirts_pick: m.shirts_pick,
+        skins_starting_side: m.skins_starting_side,
+      };
+    })
+    .filter((r): r is MapMatchRow => r !== null);
+}
+
 /** Returns leaderboards for every season, keyed by season_id. */
 export async function getAllLeaderboards(): Promise<
   Map<number, LeaderboardRowWithId[]>
 > {
-  const [{ data: rows, error }, playersById, perPlayer, rosterBySeason] = await Promise.all([
+  const [{ data: rows, error }, playersById, { perPlayerStats: perPlayer, rosterBySeason }] = await Promise.all([
     supabase
       .from('player_season_leaderboard')
       .select('*'),
     getPlayersById(),
-    getPerPlayerSeasonStats(),
-    getRosterPlayersBySeason(),
+    getSeasonBaseData(),
   ]);
   if (error) throw error;
 
@@ -1549,6 +1863,10 @@ export async function getAllLeaderboards(): Promise<
       total_assists: ps?.assists ?? 0,
       total_rounds_won,
       rwr_percentage: total_rounds_played > 0 ? (total_rounds_won / total_rounds_played) * 100 : 0,
+      kills_in_wins: ps?.kills_in_wins ?? 0,
+      deaths_in_wins: ps?.deaths_in_wins ?? 0,
+      kills_in_losses: ps?.kills_in_losses ?? 0,
+      deaths_in_losses: ps?.deaths_in_losses ?? 0,
     };
     const list = out.get(r.season_id) ?? [];
     list.push(withId);
@@ -1587,6 +1905,7 @@ type RawMatch = {
   skins_ban1: string | null;
   skins_ban2: string | null;
   is_playoff_game: boolean;
+  skins_starting_side: 'CT' | 'T' | null;
 };
 
 type RawWeek = { id: number; season_id: number; week_number: number };
@@ -1599,7 +1918,7 @@ async function fetchMapRawData(): Promise<{
 }> {
   const [{ data: matches, error: mErr }, { data: weeks, error: wErr }, { data: seasons, error: sErr }] =
     await Promise.all([
-      supabase.from('matches').select('id, week_id, match_number, final_score, shirts_pick, picked_map, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game'),
+      supabase.from('matches').select('id, week_id, match_number, final_score, shirts_pick, picked_map, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game, skins_starting_side'),
       supabase.from('weeks').select('id, season_id, week_number'),
       supabase.from('seasons').select('id, name, is_gauntlet, map_pool'),
     ]);
@@ -1933,6 +2252,9 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
         final_score: m.final_score,
         shirts_stats: roster.shirts,
         skins_stats: roster.skins,
+        picked_map: m.picked_map,
+        shirts_pick: m.shirts_pick,
+        skins_starting_side: m.skins_starting_side,
       };
     })
     .filter((r): r is MapMatchRow => r !== null)
@@ -1948,6 +2270,8 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
     matches_played: number; matches_won: number; matches_lost: number;
     total_kills: number; total_assists: number; total_deaths: number;
     total_damage: number; total_rounds_played: number; total_rounds_won: number;
+    kills_in_wins: number; deaths_in_wins: number;
+    kills_in_losses: number; deaths_in_losses: number;
   };
   const byPlayer = new Map<number, Agg>();
   for (const s of statRows) {
@@ -1958,6 +2282,8 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
       matches_played: 0, matches_won: 0, matches_lost: 0,
       total_kills: 0, total_assists: 0, total_deaths: 0,
       total_damage: 0, total_rounds_played: 0, total_rounds_won: 0,
+      kills_in_wins: 0, deaths_in_wins: 0,
+      kills_in_losses: 0, deaths_in_losses: 0,
     };
     agg.matches_played += 1;
     agg.matches_won += s.is_win ? 1 : 0;
@@ -1968,6 +2294,10 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
     agg.total_damage += s.damage ?? 0;
     agg.total_rounds_played += s.rounds_played ?? 0;
     agg.total_rounds_won += s.rounds_won ?? 0;
+    agg.kills_in_wins += s.is_win ? s.kills : 0;
+    agg.deaths_in_wins += s.is_win ? s.deaths : 0;
+    agg.kills_in_losses += s.is_win ? 0 : s.kills;
+    agg.deaths_in_losses += s.is_win ? 0 : s.deaths;
     byPlayer.set(s.player_id, agg);
   }
 
@@ -1991,6 +2321,10 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
       total_rounds_won: rw,
       rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
       overall_adr: rp > 0 ? a.total_damage / rp : 0,
+      kills_in_wins: a.kills_in_wins,
+      deaths_in_wins: a.deaths_in_wins,
+      kills_in_losses: a.kills_in_losses,
+      deaths_in_losses: a.deaths_in_losses,
     };
   }).sort(canonicalSort);
 
@@ -2050,6 +2384,8 @@ export interface DuoStats {
   combinedDeaths: number;
   roundsWon: number;
   roundsPlayed: number;
+  aStats: H2HPlayerStats;
+  bStats: H2HPlayerStats;
   bestMap: string | null;
   matches: DuoMatchSummary[];
 }
@@ -2129,7 +2465,7 @@ function pairKey(a: number, b: number): string {
 }
 
 /**
- * Returns a scorer for the "Best Friends" blended metric — see "Blended score" in GLOSSARY.md.
+ * Returns a scorer for the "Best Friends" blended metric — see "Blended score" in docs/glossary.md.
  * Computes normalisation maxes once across `duos` then returns a closure. Shared by
  * `H2HSection` (ranking) and `H2HMatrix` (cell coloring) so both use the same formula.
  * IMPORTANT: if you change weights here, update the hover `title` in H2HSection.tsx ("Best Friends").
@@ -2146,7 +2482,7 @@ export function duoBlendedScorer(duos: DuoStats[]): (d: DuoStats) => number {
 }
 
 /**
- * Returns a scorer for the "Closest Rivals" blended metric — see "Blended score" in GLOSSARY.md.
+ * Returns a scorer for the "Closest Rivals" blended metric — see "Blended score" in docs/glossary.md.
  * Computes normalisation maxes once across `rivals` then returns a closure. Shared by
  * `H2HSection` (ranking) and `H2HMatrix` (cell coloring) so both use the same formula.
  * IMPORTANT: if you change weights here, update the hover `title` in H2HSection.tsx ("Closest Rivals" and "Best Friends").
@@ -2203,6 +2539,8 @@ interface DuoAgg {
   deaths: number;
   roundsWon: number;
   roundsPlayed: number;
+  aStats: RivalPlayerAgg;
+  bStats: RivalPlayerAgg;
   mapTotals: Map<string, { games: number; wins: number; adrSum: number }>;
   matches: DuoMatchSummary[];
 }
@@ -2351,7 +2689,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     const key = pairKey(a, b);
     let agg = duoAgg.get(key);
     if (!agg) {
-      agg = { a, b, games: 0, wins: 0, losses: 0, adrSum: 0, kills: 0, assists: 0, deaths: 0, roundsWon: 0, roundsPlayed: 0, mapTotals: new Map(), matches: [] };
+      agg = { a, b, games: 0, wins: 0, losses: 0, adrSum: 0, kills: 0, assists: 0, deaths: 0, roundsWon: 0, roundsPlayed: 0, aStats: emptyRivalPlayerAgg(), bStats: emptyRivalPlayerAgg(), mapTotals: new Map(), matches: [] };
       duoAgg.set(key, agg);
     }
     return agg;
@@ -2407,6 +2745,18 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
           // x and y are teammates, so they share identical round totals for this match — count once.
           agg.roundsWon += x.rounds_won;
           agg.roundsPlayed += x.rounds_played;
+          // Per-player stats: aStats belongs to the lower-id player (agg.a), bStats to the higher.
+          const aRow = x.player_id === agg.a ? x : y;
+          const bRow = aRow === x ? y : x;
+          for (const [statAgg, row] of [[agg.aStats, aRow], [agg.bStats, bRow]] as const) {
+            statAgg.games += 1;
+            statAgg.kills += row.kills;
+            statAgg.assists += row.assists ?? 0;
+            statAgg.deaths += row.deaths;
+            statAgg.adrSum += row.adr;
+            statAgg.roundsWon += row.rounds_won;
+            statAgg.roundsPlayed += row.rounds_played;
+          }
           if (playedMap) {
             const mapKey = playedMap.toLowerCase();
             const mapAgg = agg.mapTotals.get(mapKey) ?? { games: 0, wins: 0, adrSum: 0 };
@@ -2479,6 +2829,8 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     combinedDeaths: d.deaths,
     roundsWon: d.roundsWon,
     roundsPlayed: d.roundsPlayed,
+    aStats: finalizeRivalPlayerStats(d.aStats),
+    bStats: finalizeRivalPlayerStats(d.bStats),
     bestMap: bestMapFor(d.mapTotals),
     matches: [...d.matches].sort(compareMatchRefDesc), // most recent first
   }));
@@ -2507,4 +2859,554 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return { duos, rivals, players: playerList };
+}
+
+// ---------------------------------------------------------------------------
+// EHOG rating data
+// ---------------------------------------------------------------------------
+
+const SUPABASE_IN_BATCH = 200;
+
+async function batchedIn<T>(
+  table: string,
+  column: string,
+  ids: number[],
+  select: string,
+): Promise<T[]> {
+  const results: T[] = [];
+  for (let i = 0; i < ids.length; i += SUPABASE_IN_BATCH) {
+    const chunk = ids.slice(i, i + SUPABASE_IN_BATCH);
+    const { data, error } = await supabase.from(table).select(select).in(column, chunk);
+    if (error) throw error;
+    if (data) results.push(...(data as T[]));
+  }
+  return results;
+}
+
+interface MatchContext {
+  matchById: Map<number, { match_number: number; week_id: number }>;
+  weekById: Map<number, { season_id: number; week_number: number }>;
+  seasonById: Map<number, { name: string; is_gauntlet: boolean }>;
+}
+
+async function resolveMatchContext(matchIds: number[]): Promise<MatchContext> {
+  const matches = await batchedIn<{ id: number; match_number: number; week_id: number }>(
+    'matches', 'id', matchIds, 'id, match_number, week_id',
+  );
+  const matchById = new Map(matches.map((m) => [m.id, m]));
+
+  const weekIds = Array.from(new Set(matches.map((m) => m.week_id)));
+  const weeks = await batchedIn<{ id: number; season_id: number; week_number: number }>(
+    'weeks', 'id', weekIds, 'id, season_id, week_number',
+  );
+  const weekById = new Map(weeks.map((w) => [w.id, w]));
+
+  const seasonIds = Array.from(new Set(weeks.map((w) => w.season_id)));
+  const seasons = await batchedIn<{ id: number; name: string; is_gauntlet: boolean }>(
+    'seasons', 'id', seasonIds, 'id, name, is_gauntlet',
+  );
+  const seasonById = new Map(seasons.map((s) => [s.id, s]));
+
+  return { matchById, weekById, seasonById };
+}
+
+function matchSeasonInfo(
+  matchId: number,
+  ctx: MatchContext,
+): { seasonName: string; seasonNumber: number | null; isGauntlet: boolean; weekNumber: number; matchNumber: number } {
+  const m = ctx.matchById.get(matchId);
+  const w = m ? ctx.weekById.get(m.week_id) : undefined;
+  const s = w ? ctx.seasonById.get(w.season_id) : undefined;
+  return {
+    seasonName: s?.name ?? '',
+    seasonNumber: s ? extractSeasonNumber(s.name) : null,
+    isGauntlet: s?.is_gauntlet ?? false,
+    weekNumber: w?.week_number ?? 0,
+    matchNumber: m?.match_number ?? 0,
+  };
+}
+
+export interface EhogRatingPoint {
+  matchId: number;
+  sequenceIndex: number;
+  ehogRating: number;
+  ratingDelta: number;
+  seasonName: string;
+  seasonNumber: number | null;
+  isGauntlet: boolean;
+  weekNumber: number;
+  matchNumber: number;
+}
+
+export interface EhogPlayerData {
+  currentRating: number | null;
+  history: EhogRatingPoint[];
+}
+
+export async function getPlayerEhogRating(playerId: number): Promise<EhogPlayerData> {
+  const [currentRes, historyRes] = await Promise.all([
+    supabase
+      .from('player_current_ratings')
+      .select('ehog_v1')
+      .eq('player_id', playerId)
+      .maybeSingle(),
+    supabase
+      .from('player_rating_history')
+      .select('match_id, sequence_index, ehog_rating, rating_delta')
+      .eq('player_id', playerId)
+      .eq('formula_version', 'ehog_v1')
+      .order('sequence_index', { ascending: true }),
+  ]);
+  if (currentRes.error) throw currentRes.error;
+  if (historyRes.error) throw historyRes.error;
+
+  const currentRating: number | null = currentRes.data?.ehog_v1 ?? null;
+  const rows = historyRes.data ?? [];
+
+  if (rows.length === 0) return { currentRating, history: [] };
+
+  const ctx = await resolveMatchContext(rows.map((r) => r.match_id));
+
+  const history: EhogRatingPoint[] = rows.map((r) => ({
+    matchId: r.match_id,
+    sequenceIndex: r.sequence_index,
+    ehogRating: r.ehog_rating,
+    ratingDelta: r.rating_delta,
+    ...matchSeasonInfo(r.match_id, ctx),
+  }));
+
+  return { currentRating, history };
+}
+
+export interface EhogSnapshotRow {
+  playerId: number;
+  ehogRating: number;
+  sequenceIndex: number;
+  seasonNumber: number | null;
+  isGauntlet: boolean;
+}
+
+export async function getAllEhogSnapshots(): Promise<EhogSnapshotRow[]> {
+  const { data, error } = await supabase
+    .from('player_rating_history')
+    .select('player_id, ehog_rating, sequence_index, match_id')
+    .eq('formula_version', 'ehog_v1')
+    .order('sequence_index', { ascending: true });
+  if (error) throw error;
+  if (!data || data.length === 0) return [];
+
+  const matchIds = Array.from(new Set(data.map((r) => r.match_id)));
+  const ctx = await resolveMatchContext(matchIds);
+
+  // Reduce to latest snapshot per player per (seasonNumber, isGauntlet) segment
+  const latest = new Map<string, EhogSnapshotRow>();
+  for (const r of data) {
+    const info = matchSeasonInfo(r.match_id, ctx);
+    const key = `${r.player_id}:${info.seasonNumber}:${info.isGauntlet}`;
+    const prev = latest.get(key);
+    if (!prev || r.sequence_index > prev.sequenceIndex) {
+      latest.set(key, {
+        playerId: r.player_id,
+        ehogRating: r.ehog_rating,
+        sequenceIndex: r.sequence_index,
+        seasonNumber: info.seasonNumber,
+        isGauntlet: info.isGauntlet,
+      });
+    }
+  }
+  return Array.from(latest.values());
+}
+
+export async function getSeasonEhogRatings(seasonId: number): Promise<Record<number, number>> {
+  const { data: weeks, error: wErr } = await supabase
+    .from('weeks')
+    .select('id')
+    .eq('season_id', seasonId);
+  if (wErr) throw wErr;
+  if (!weeks || weeks.length === 0) return {};
+
+  const weekIds = weeks.map((w) => w.id);
+  const matches = await batchedIn<{ id: number }>('matches', 'week_id', weekIds, 'id');
+  if (matches.length === 0) return {};
+
+  const matchIds = matches.map((m) => m.id);
+  const rows: { player_id: number; ehog_rating: number; sequence_index: number }[] = [];
+  for (let i = 0; i < matchIds.length; i += SUPABASE_IN_BATCH) {
+    const chunk = matchIds.slice(i, i + SUPABASE_IN_BATCH);
+    const { data, error } = await supabase
+      .from('player_rating_history')
+      .select('player_id, ehog_rating, sequence_index')
+      .eq('formula_version', 'ehog_v1')
+      .in('match_id', chunk);
+    if (error) throw error;
+    if (data) rows.push(...data);
+  }
+
+  const latest: Record<number, { rating: number; seq: number }> = {};
+  for (const row of rows) {
+    const prev = latest[row.player_id];
+    if (!prev || row.sequence_index > prev.seq) {
+      latest[row.player_id] = { rating: row.ehog_rating, seq: row.sequence_index };
+    }
+  }
+  const result: Record<number, number> = {};
+  for (const [pid, val] of Object.entries(latest)) result[Number(pid)] = val.rating;
+  return result;
+}
+
+export async function getBatchMatchRatingDeltas(matchIds: number[]): Promise<Map<number, Map<number, number>>> {
+  if (matchIds.length === 0) return new Map();
+  const rows: { match_id: number; player_id: number; rating_delta: number; ehog_rating: number; sequence_index: number }[] = [];
+  for (let i = 0; i < matchIds.length; i += SUPABASE_IN_BATCH) {
+    const chunk = matchIds.slice(i, i + SUPABASE_IN_BATCH);
+    const { data, error } = await supabase
+      .from('player_rating_history')
+      .select('match_id, player_id, rating_delta, ehog_rating, sequence_index')
+      .in('match_id', chunk)
+      .eq('formula_version', 'ehog_v1');
+    if (error) throw error;
+    if (data) rows.push(...data);
+  }
+  const result = new Map<number, Map<number, number>>();
+  for (const r of rows) {
+    let inner = result.get(r.match_id);
+    if (!inner) { inner = new Map(); result.set(r.match_id, inner); }
+    inner.set(r.player_id, r.rating_delta);
+  }
+  return result;
+}
+
+export async function getMatchRatingDeltas(matchId: number): Promise<Map<number, number>> {
+  const { data, error } = await supabase
+    .from('player_rating_history')
+    .select('player_id, rating_delta, ehog_rating, sequence_index')
+    .eq('match_id', matchId)
+    .eq('formula_version', 'ehog_v1');
+  if (error) throw error;
+  const map = new Map<number, number>();
+  for (const row of data ?? []) {
+    map.set(row.player_id, row.rating_delta);
+  }
+  return map;
+}
+
+export interface PlayerMuSigma {
+  playerId: number;
+  mu: number;
+  sigma: number;
+  ehogRating: number;
+}
+
+export async function getPlayerRatings(playerIds: number[]): Promise<PlayerMuSigma[]> {
+  if (playerIds.length === 0) return [];
+  const rows = await batchedIn<{ player_id: number; mu: number; sigma: number; ehog_rating: number; sequence_index: number }>(
+    'player_rating_history', 'player_id', playerIds,
+    'player_id, mu, sigma, ehog_rating, sequence_index',
+  );
+
+  const latest = new Map<number, { mu: number; sigma: number; ehogRating: number; seq: number }>();
+  for (const r of rows) {
+    const prev = latest.get(r.player_id);
+    if (!prev || r.sequence_index > prev.seq) {
+      latest.set(r.player_id, { mu: r.mu, sigma: r.sigma, ehogRating: r.ehog_rating, seq: r.sequence_index });
+    }
+  }
+
+  return playerIds.map((pid) => {
+    const s = latest.get(pid);
+    if (s) return { playerId: pid, mu: s.mu, sigma: s.sigma, ehogRating: s.ehogRating };
+    return { playerId: pid, mu: MU_DEFAULT, sigma: SIGMA_DEFAULT, ehogRating: DEFAULT_EHOG };
+  });
+}
+
+export interface SabremetricMatchRow {
+  player_id: number;
+  player_name: string;
+  match_id: number;
+  season_id: number;
+  is_gauntlet: boolean;
+  rounds_played: number;
+  sab: SabFields;
+}
+
+export async function getAllSabremetrics(): Promise<SabremetricMatchRow[]> {
+  const [
+    { data: sabRows, error: sabErr },
+    { data: pmsRows, error: pmsErr },
+    { data: matchRows, error: matchErr },
+    { data: weekRows, error: weekErr },
+    { data: seasonRows, error: seasonErr },
+    playersById,
+  ] = await Promise.all([
+    supabase.from('player_match_sabremetrics').select('*'),
+    supabase.from('player_match_stats').select('id, player_id, match_id, rounds_played'),
+    supabase.from('matches').select('id, week_id, final_score'),
+    supabase.from('weeks').select('id, season_id'),
+    supabase.from('seasons').select('id, is_gauntlet'),
+    getPlayersById(),
+  ]);
+  if (sabErr) throw sabErr;
+  if (pmsErr) throw pmsErr;
+  if (matchErr) throw matchErr;
+  if (weekErr) throw weekErr;
+  if (seasonErr) throw seasonErr;
+
+  const weekToSeason = new Map<number, number>();
+  for (const w of (weekRows ?? []) as { id: number; season_id: number }[])
+    weekToSeason.set(w.id, w.season_id);
+
+  const seasonIsGauntlet = new Map<number, boolean>();
+  for (const s of (seasonRows ?? []) as { id: number; is_gauntlet: boolean }[])
+    seasonIsGauntlet.set(s.id, s.is_gauntlet);
+
+  const matchSeason = new Map<number, number>();
+  for (const m of (matchRows ?? []) as { id: number; week_id: number; final_score: string | null }[]) {
+    if (!isPlayedScore(m.final_score)) continue;
+    const sid = weekToSeason.get(m.week_id);
+    if (sid != null) matchSeason.set(m.id, sid);
+  }
+
+  const pmsLookup = new Map<number, { player_id: number; match_id: number; rounds_played: number }>();
+  for (const r of (pmsRows ?? []) as { id: number; player_id: number; match_id: number; rounds_played: number }[])
+    pmsLookup.set(r.id, r);
+
+  const result: SabremetricMatchRow[] = [];
+  for (const raw of (sabRows ?? []) as PlayerMatchSabremetrics[]) {
+    const pms = pmsLookup.get(raw.player_match_stats_id);
+    if (!pms) continue;
+    const sid = matchSeason.get(pms.match_id);
+    if (sid == null) continue;
+    const player = playersById.get(pms.player_id);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { player_match_stats_id: _, ...sab } = raw;
+    result.push({
+      player_id: pms.player_id,
+      player_name: player?.name ?? `#${pms.player_id}`,
+      match_id: pms.match_id,
+      season_id: sid,
+      is_gauntlet: seasonIsGauntlet.get(sid) ?? false,
+      rounds_played: pms.rounds_played,
+      sab,
+    });
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Admin check
+// ---------------------------------------------------------------------------
+
+export async function isPlayerAdmin(playerId: number): Promise<boolean> {
+  const { data } = await supabase
+    .from('players')
+    .select('is_admin')
+    .eq('id', playerId)
+    .maybeSingle();
+  return !!(data as { is_admin?: boolean } | null)?.is_admin;
+}
+
+// ---------------------------------------------------------------------------
+// Maps table lookup
+// ---------------------------------------------------------------------------
+
+export type MapRow = {
+  id: number;
+  name: string;
+  slug: string;
+  workshop_url: string | null;
+  image_url: string | null;
+};
+
+export async function getMapLookup(): Promise<Record<string, { image_url: string | null; workshop_url: string | null }>> {
+  const { data, error } = await supabase.from('maps').select('*');
+  if (error) throw error;
+  const lookup: Record<string, { image_url: string | null; workshop_url: string | null }> = {};
+  for (const row of (data ?? []) as MapRow[]) {
+    lookup[row.slug] = { image_url: row.image_url, workshop_url: row.workshop_url };
+  }
+  return lookup;
+}
+
+/** A map's radar calibration triplet (Phase 3). `null` when the map isn't calibrated. */
+export interface MapCalibration {
+  mapId: number;
+  posX: number;
+  posY: number;
+  scale: number;
+  source: string | null;
+}
+
+/**
+ * Read a map's radar calibration by slug. Returns `null` unless the full triplet AND
+ * a radar image are present — callers (the replay player, the heatmap) fall back to
+ * auto-fit when uncalibrated, so a partially-filled row is treated as uncalibrated.
+ */
+export async function getMapCalibration(slug: string): Promise<MapCalibration | null> {
+  const { data } = await supabase
+    .from('maps')
+    .select('id, radar_pos_x, radar_pos_y, radar_scale, radar_image_url, radar_source')
+    .eq('slug', slug)
+    .maybeSingle();
+  const r = data as {
+    id: number;
+    radar_pos_x: number | null;
+    radar_pos_y: number | null;
+    radar_scale: number | null;
+    radar_image_url: string | null;
+    radar_source: string | null;
+  } | null;
+  if (!r || r.radar_pos_x == null || r.radar_pos_y == null || r.radar_scale == null) return null;
+  if (!r.radar_image_url) return null;
+  return { mapId: r.id, posX: r.radar_pos_x, posY: r.radar_pos_y, scale: r.radar_scale, source: r.radar_source };
+}
+
+/** One heatmap point tagged with its source match (so the map page can season-filter). */
+export interface MapHeatmapPoint {
+  matchId: number;
+  kind: HeatmapKind;
+  x: number;
+  y: number;
+  side: 'CT' | 'T' | null;
+}
+
+/**
+ * Aggregate the compact `heatmap.json` artifacts (kill/death/grenade points) for a
+ * set of matches into a flat, match-tagged list for the map Heatmap tab. Matches
+ * without a replay yet are silently skipped (no artifact in R2). Reads are small
+ * gzipped files; we fan out with Promise.all and let the page's revalidate cache it.
+ */
+export async function getMapHeatmap(matchIds: number[]): Promise<MapHeatmapPoint[]> {
+  const perMatch = await Promise.all(
+    matchIds.map(async (matchId): Promise<MapHeatmapPoint[]> => {
+      const buf = await getR2Object(heatmapKey(matchId));
+      if (!buf) return [];
+      try {
+        const json =
+          buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b ? gunzipSync(buf) : buf;
+        const art = JSON.parse(json.toString('utf8')) as HeatmapArtifact;
+        return art.points.map((p) => ({
+          matchId,
+          kind: p.kind,
+          x: p.x,
+          y: p.y,
+          side: p.side,
+        }));
+      } catch {
+        return [];
+      }
+    }),
+  );
+  return perMatch.flat();
+}
+
+/**
+ * Match ids played on a given map (case-insensitive), for the match-page scouting
+ * report's Map Intel heatmap. The played map is the pick (`shirts_pick`) falling back
+ * to `picked_map` — the same rule `getMapDetail` uses. Only played matches qualify;
+ * matches without a replay artifact are silently dropped later by `getMapHeatmap`.
+ */
+export async function getMatchIdsForMap(mapName: string): Promise<number[]> {
+  const nameLower = mapName.trim().toLowerCase();
+  if (!nameLower) return [];
+  const { data, error } = await supabase
+    .from('matches')
+    .select('id, shirts_pick, picked_map, final_score')
+    .limit(10000);
+  if (error) throw error;
+  type Row = { id: number; shirts_pick: string | null; picked_map: string | null; final_score: string | null };
+  return ((data ?? []) as Row[])
+    .filter(
+      (m) =>
+        (m.shirts_pick ?? m.picked_map ?? '').trim().toLowerCase() === nameLower &&
+        isPlayedScore(m.final_score),
+    )
+    .map((m) => m.id);
+}
+
+// --- Match replay / events (issue #121; see docs/replay.md) ---
+
+export type ReplayStatus = 'none' | 'queued' | 'running' | 'ready' | 'failed';
+
+export interface ReplayJobState {
+  status: ReplayStatus;
+  stage: string | null;
+  ghRunUrl: string | null;
+  errorMessage: string | null;
+}
+
+/**
+ * Read a match's replay status + latest job state. Defensive: if the
+ * `replay_status` column / `background_jobs` table don't exist yet (the user
+ * adds them in the Supabase dashboard — see docs/replay.md), this returns
+ * `'none'` so the match page never breaks.
+ */
+export async function getReplayJobState(matchId: number): Promise<ReplayJobState> {
+  const none: ReplayJobState = { status: 'none', stage: null, ghRunUrl: null, errorMessage: null };
+  try {
+    // Independent reads — run them together to avoid a serial round-trip on the
+    // (hot) match page render.
+    const [{ data: matchRow, error: matchErr }, { data: jobRow }] = await Promise.all([
+      supabase.from('matches').select('replay_status').eq('id', matchId).maybeSingle(),
+      supabase
+        .from('background_jobs')
+        .select('stage, gh_run_url, error_message')
+        .eq('job_type', 'replay_extract')
+        .eq('match_id', matchId)
+        .maybeSingle(),
+    ]);
+    if (matchErr) return none;
+    const status = ((matchRow as { replay_status?: string } | null)?.replay_status ??
+      'none') as ReplayStatus;
+
+    const job = jobRow as
+      | { stage: string | null; gh_run_url: string | null; error_message: string | null }
+      | null;
+
+    return {
+      status,
+      stage: job?.stage ?? null,
+      ghRunUrl: job?.gh_run_url ?? null,
+      errorMessage: job?.error_message ?? null,
+    };
+  } catch {
+    return none;
+  }
+}
+
+export interface ReplayEventsRound {
+  round: number;
+  sideByFaction: Record<Faction, 'CT' | 'T'>;
+  events: ReplayEvent[];
+}
+
+export interface ReplayEventsView {
+  players: ReplayPlayerMeta[];
+  rounds: ReplayEventsRound[];
+}
+
+/**
+ * Fetch the replay payload from R2 and project it down to just what the Events
+ * tab needs (players + per-round events) — frames/grenades are dropped to keep
+ * the client payload small. Returns `null` if no replay is present.
+ */
+export async function getReplayEventsView(matchId: number): Promise<ReplayEventsView | null> {
+  const buf = await getR2Object(replayKey(matchId));
+  if (!buf) return null;
+  // Stored gzipped; tolerate either.
+  const json =
+    buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b ? gunzipSync(buf) : buf;
+  let payload: ReplayPayload;
+  try {
+    payload = JSON.parse(json.toString('utf8')) as ReplayPayload;
+  } catch {
+    return null;
+  }
+  return {
+    players: payload.players,
+    rounds: payload.rounds.map((r) => ({
+      round: r.round,
+      sideByFaction: r.sideByFaction,
+      events: r.events,
+    })),
+  };
 }

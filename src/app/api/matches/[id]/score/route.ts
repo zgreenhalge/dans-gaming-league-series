@@ -1,13 +1,12 @@
+import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { createClient } from '@supabase/supabase-js';
 import { authOptions } from '@/lib/authOptions';
 import { isPlayedScore } from '@/lib/util';
+import { getAdminClient } from '@/lib/supabase-admin';
+import type { DemoSabremetricStat, RoundHistoryEntry } from '@/lib/types';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+const supabaseAdmin = getAdminClient();
 
 type PlayerStatInput = {
   player_id: number;
@@ -35,6 +34,33 @@ type MatchRow = {
   };
 };
 
+const ROUND_CONDITIONS = new Set(['elim', 'bomb', 'defuse', 'time']);
+
+/**
+ * Validate the optional round-history payload. Returns a clean array, or null
+ * if absent/malformed — never throws, since this data is display-only.
+ */
+function sanitizeRoundHistory(input: unknown): RoundHistoryEntry[] | null {
+  if (!Array.isArray(input) || input.length === 0) return null;
+  const clean: RoundHistoryEntry[] = [];
+  for (const r of input) {
+    if (!r || typeof r !== 'object') return null;
+    const { n, winner, side, condition } = r as Record<string, unknown>;
+    if (
+      typeof n !== 'number' ||
+      !Number.isInteger(n) ||
+      (winner !== 'SHIRTS' && winner !== 'SKINS') ||
+      (side !== 'CT' && side !== 'T') ||
+      typeof condition !== 'string' ||
+      !ROUND_CONDITIONS.has(condition)
+    ) {
+      return null;
+    }
+    clean.push({ n, winner, side, condition: condition as RoundHistoryEntry['condition'] });
+  }
+  return clean;
+}
+
 function isVetoComplete(match: MatchRow): boolean {
   const isGauntlet = match.weeks?.seasons?.is_gauntlet ?? false;
   const isPlayoff = match.is_playoff_game && !isGauntlet;
@@ -51,6 +77,20 @@ function isVetoComplete(match: MatchRow): boolean {
     match.shirts_pick &&
     match.skins_starting_side
   );
+}
+
+async function triggerRatingRecompute(): Promise<void> {
+  const secret = process.env.RECOMPUTE_SECRET;
+  if (!secret) return;
+  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+  try {
+    await fetch(`${base}/api/ehog/recompute`, {
+      method: 'POST',
+      headers: { 'x-recompute-secret': secret },
+    });
+  } catch (e) {
+    console.error('EHOG recompute trigger failed:', e);
+  }
 }
 
 export async function PATCH(
@@ -114,10 +154,12 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
-  const { shirts, skins, player_stats } = body as {
+  const { shirts, skins, player_stats, sabremetrics, round_history } = body as {
     shirts: unknown;
     skins: unknown;
     player_stats: unknown;
+    sabremetrics?: DemoSabremetricStat[];
+    round_history?: unknown;
   };
 
   if (typeof shirts !== 'number' || typeof skins !== 'number' || !Number.isInteger(shirts) || !Number.isInteger(skins)) {
@@ -194,11 +236,14 @@ export async function PATCH(
     });
   }
 
+  // Sanitize round history (display-only; store a clean array or null)
+  const roundHistory = sanitizeRoundHistory(round_history);
+
   // Write final_score first
   const finalScore = `${shirts}-${skins}`;
   const { error: matchErr } = await supabaseAdmin
     .from('matches')
-    .update({ final_score: finalScore })
+    .update({ final_score: finalScore, round_history: roundHistory })
     .eq('id', matchId);
   if (matchErr) {
     return NextResponse.json({ error: matchErr.message }, { status: 500 });
@@ -224,6 +269,48 @@ export async function PATCH(
       return NextResponse.json({ error: statErr.message }, { status: 500 });
     }
   }
+
+  // Sabremetrics: upsert or clean up (non-fatal — never rolls back the committed score)
+  try {
+    if (sabremetrics && sabremetrics.length > 0) {
+      const { data: pmsRows } = await supabaseAdmin
+        .from('player_match_stats')
+        .select('id, player_id')
+        .eq('match_id', matchId);
+      const pmsById = new Map(
+        ((pmsRows ?? []) as { id: number; player_id: number }[]).map((r) => [r.player_id, r.id]),
+      );
+
+      const sabRows = sabremetrics
+        .map((s) => {
+          const pmsId = pmsById.get(s.player_id);
+          if (!pmsId) return null;
+          return { player_match_stats_id: pmsId, ...s.sabremetrics };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+
+      if (sabRows.length > 0) {
+        await supabaseAdmin
+          .from('player_match_sabremetrics')
+          .upsert(sabRows, { onConflict: 'player_match_stats_id' });
+      }
+    } else {
+      const { data: ids } = await supabaseAdmin
+        .from('player_match_stats')
+        .select('id')
+        .eq('match_id', matchId);
+      if (ids && ids.length > 0) {
+        await supabaseAdmin
+          .from('player_match_sabremetrics')
+          .delete()
+          .in('player_match_stats_id', (ids as { id: number }[]).map((r) => r.id));
+      }
+    }
+  } catch (e) {
+    console.error('Sabremetrics write/delete failed (non-fatal):', e);
+  }
+
+  after(() => triggerRatingRecompute());
 
   return NextResponse.json({ ok: true });
 }

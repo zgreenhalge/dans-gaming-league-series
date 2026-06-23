@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getBrowserClient } from '@/lib/supabase';
-import { mapImageFor, mapSlug, toSentenceCase } from '@/lib/maps';
+import { getBrowserClient } from '@/lib/supabase-browser';
+import { mapSlug, toSentenceCase } from '@/lib/maps';
+import { isPlayedScore } from '@/lib/util';
+import { useMapLookup } from './MapContext';
 import type { Match } from '@/lib/types';
 
 const REGULAR_STEPS = [
@@ -70,9 +72,17 @@ interface Props {
 
 export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, playerFaction, gauntletPlayerIndex, isAdmin }: Props) {
   const router = useRouter();
+  const mapLookup = useMapLookup();
   const [isPending, startTransition] = useTransition();
   const [activeField, setActiveField] = useState<StepField | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Optimistic values: applied immediately on submit, cleared when server confirms via match prop update
+  const [optimisticFields, setOptimisticFields] = useState<Map<StepField, string | null>>(new Map());
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOptimisticFields(new Map());
+  }, [match]);
 
   useEffect(() => {
     const channel = getBrowserClient()
@@ -104,10 +114,15 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   const nextCls =
     'bg-[var(--color-bg-secondary)] border border-[var(--color-accent-amber-pickborder)] [&_.lbl]:text-[var(--color-accent-amber-fg)] [&_.val]:text-[var(--color-text-secondary)]';
 
-  // For non-gauntlet: the first unfilled step in sequence order
-  const sequenceNextField = steps.find((s) => getFieldValue(match, s.field as StepField) === null)?.field as
-    | StepField
-    | undefined;
+  function displayValue(field: StepField): string | null {
+    return optimisticFields.has(field) ? optimisticFields.get(field)! : getFieldValue(match, field);
+  }
+
+  // For non-gauntlet: the first unfilled step in sequence order (excluding optimistically submitted fields)
+  const sequenceNextField = steps.find((s) => {
+    const f = s.field as StepField;
+    return displayValue(f) === null;
+  })?.field as StepField | undefined;
 
   // The field the current player can act on for NEW entries (unfilled slots)
   const actionableField: StepField | undefined = (() => {
@@ -119,7 +134,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
         playerFaction === 'SHIRTS'
           ? (gauntletPlayerIndex === 0 ? 'shirts_ban' : 'shirts_ban2')
           : (gauntletPlayerIndex === 0 ? 'skins_ban1' : 'skins_ban2');
-      return getFieldValue(match, myField) === null ? myField : undefined;
+      return displayValue(myField) === null ? myField : undefined;
     }
     if (!sequenceNextField) return undefined;
     if (isAdmin) return sequenceNextField;
@@ -131,6 +146,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   // Whether a filled tile can be overwritten by the current user
   function isOverwritable(field: StepField): boolean {
     if (!canVeto) return false;
+    if (optimisticFields.has(field)) return false;
     if (isAdmin) return true;
     if (isGauntlet) {
       if (!playerFaction || gauntletPlayerIndex === null) return false;
@@ -162,6 +178,9 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
 
   async function submitVeto(field: StepField, value: string | null) {
     setError(null);
+    setActiveField(null);
+    // Apply optimistically so the tile updates immediately before the server round-trip
+    setOptimisticFields((prev) => new Map([...prev, [field, value]]));
     startTransition(async () => {
       const res = await fetch(`/api/matches/${match.id}/veto`, {
         method: 'PATCH',
@@ -171,10 +190,10 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         setError(json.error ?? 'Something went wrong');
+        // Revert optimistic value on failure
+        setOptimisticFields((prev) => { const next = new Map(prev); next.delete(field); return next; });
         return;
       }
-      setActiveField(null);
-      router.refresh();
     });
   }
 
@@ -184,7 +203,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   }
 
   function handleTileClick(field: StepField) {
-    const val = getFieldValue(match, field);
+    const val = displayValue(field);
     const canClick = field === actionableField || (val !== null && isOverwritable(field));
     if (!canClick) return;
     setActiveField(activeField === field ? null : field);
@@ -194,7 +213,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
   const pool = mapPool ?? [];
   // Exclude the active field's current value so it can be re-selected or replaced freely
   const banned = usedMaps(match).filter(
-    (m) => activeField === null || m !== getFieldValue(match, activeField),
+    (m) => activeField === null || m !== displayValue(activeField),
   );
 
   return (
@@ -202,10 +221,10 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
       <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
         <div className="flex items-stretch gap-1 flex-wrap p-3">
           {steps.map((s, i) => {
-            const val = getFieldValue(match, s.field as StepField);
+            const val = displayValue(s.field as StepField);
             const isNext = s.field === actionableField;
             const isActive = activeField === s.field;
-            const banImg = s.type === 'ban' && val ? mapImageFor(val) : null;
+            const banImg = s.type === 'ban' && val ? (mapLookup[mapSlug(val)]?.image_url ?? null) : null;
             return (
               <span key={s.field} className="flex items-center gap-1 flex-1 min-w-[88px]">
                 {i > 0 && (
@@ -241,7 +260,9 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
                     <div className="lbl tracked text-[9px] font-semibold mb-0.5 flex items-center gap-1">
                       {s.label}
                       {isNext && val === null && (
-                        <span className="ml-auto text-[var(--color-accent-amber-strong)] text-[8px] font-bold tracking-wide">NEXT</span>
+                        <span className="ml-auto text-[var(--color-accent-amber-strong)] text-[8px] font-bold tracking-wide">
+                          {s.type === 'pick' ? 'YOUR PICK' : s.type === 'side' ? 'YOUR SIDE' : 'YOUR BAN'}
+                        </span>
                       )}
                     </div>
                     <div className="val font-display text-[14px] font-semibold leading-tight">
@@ -280,6 +301,27 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
         </div>
       </div>
 
+      {/* Workshop link for picked map (hidden once stats are recorded) */}
+      {(() => {
+        const pickedMap = match.shirts_pick ?? match.picked_map ?? autoPickedMap;
+        if (!pickedMap || isPlayedScore(match.final_score)) return null;
+        const workshopUrl = mapLookup[mapSlug(pickedMap)]?.workshop_url;
+        if (!workshopUrl) return null;
+        return (
+          <div className="mt-1.5 px-1">
+            <a
+              href={workshopUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+            >
+              <span>Steam Workshop</span>
+              <span className="text-[9px]">↗</span>
+            </a>
+          </div>
+        );
+      })()}
+
       {/* Map selection panel */}
       {activeField && canVeto && (
         <div className="mt-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] p-3">
@@ -307,7 +349,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
           ) : (
             <div className="flex gap-2 flex-wrap">
               {[...pool].sort((a, b) => a.localeCompare(b)).map((map) => {
-                const img = mapImageFor(map);
+                const img = mapLookup[mapSlug(map)]?.image_url ?? null;
                 const isUsed = banned.includes(map);
                 return (
                   <button

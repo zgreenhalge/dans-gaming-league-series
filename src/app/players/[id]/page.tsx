@@ -1,10 +1,14 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getPlayer, getCareerLeaderboard, getH2HData } from '@/lib/queries';
+import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas, getAllSabremetrics } from '@/lib/queries';
+import { getPlayerMeta } from '@/lib/og';
+import { isPlayedScore } from '@/lib/util';
 import { maybeRefreshSteamProfile } from '@/lib/steam';
 import PlayerView from '@/components/PlayerView';
 import PlayerAvatar from '@/components/PlayerAvatar';
+import EhogBadge from '@/components/EhogBadge';
 
 export const revalidate = 60;
 
@@ -12,10 +16,23 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>;
-}) {
+}): Promise<Metadata> {
   const { id } = await params;
-  const detail = await getPlayer(Number(id));
-  return { title: detail?.player.name ?? 'Player' };
+  const meta = await getPlayerMeta(Number(id));
+  if (!meta) return { title: 'Player' };
+  return {
+    title: meta.name,
+    description: meta.description,
+    openGraph: {
+      title: `DGLS · ${meta.name}`,
+      description: meta.description,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `DGLS · ${meta.name}`,
+      description: meta.description,
+    },
+  };
 }
 
 export default async function PlayerPage({
@@ -26,12 +43,24 @@ export default async function PlayerPage({
   const { id } = await params;
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
-  const [detail, careerLeaderboard, h2hData] = await Promise.all([
+  const [detail, careerLeaderboard, h2hData, ehog, leagueSabremetrics] = await Promise.all([
     getPlayer(playerId),
     getCareerLeaderboard(),
     getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
+    getPlayerEhogRating(playerId),
+    // League-wide rows so the Advanced tab can compute Plus stats (player vs. league avg).
+    getAllSabremetrics(),
   ]);
   if (!detail) notFound();
+
+  const playedMatchIds = detail.history
+    .filter((h) => isPlayedScore(h.final_score) && h.rounds_played > 0)
+    .map((h) => h.match_id);
+  const matchDeltasMap = await getBatchMatchRatingDeltas(playedMatchIds);
+  const matchDeltas: Record<number, Record<number, number>> = {};
+  for (const [matchId, playerMap] of matchDeltasMap) {
+    matchDeltas[matchId] = Object.fromEntries(playerMap);
+  }
 
   const freshSteam = await maybeRefreshSteamProfile(detail.player);
   if (freshSteam) {
@@ -51,7 +80,7 @@ export default async function PlayerPage({
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6 flex items-center gap-5">
           <PlayerAvatar name={detail.player.name} imageUrl={detail.player.steam_avatar_url} size="lg" />
-          <div>
+          <div className="flex-1 min-w-0">
             <div className="font-display text-[42px] font-semibold leading-tight">
               {detail.player.name}
             </div>
@@ -66,6 +95,9 @@ export default async function PlayerPage({
               </Link>
             )}
           </div>
+          {ehog.currentRating != null && (
+            <EhogBadge rating={ehog.currentRating} />
+          )}
         </div>
         <PlayerView
           playerId={detail.player.id}
@@ -73,7 +105,9 @@ export default async function PlayerPage({
           trophies={detail.trophies}
           careerLeaderboard={careerLeaderboard}
           h2hData={h2hData}
-          isDev={process.env.NODE_ENV === 'development'}
+          ehogHistory={ehog.history}
+          matchDeltas={matchDeltas}
+          sabremetrics={leagueSabremetrics}
         />
       </main>
     </div>
