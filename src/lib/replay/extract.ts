@@ -260,7 +260,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
   }
 
   // --- Events + grenades + shots, bucketed per round ---
-  const eventsByRound = collectEvents(demoBuffer, deathRows, context, playerIdOf, reasonByRound);
+  const eventsByRound = collectEvents(demoBuffer, deathRows, context, playerIdOf, reasonByRound, roundBounds);
   const grenadesByRound = collectGrenades(demoBuffer, context, roundBounds, playerIdOf, interval);
   const shotsByRound = collectShots(demoBuffer, context, playerIdOf);
   const blindsByRound = collectBlinds(demoBuffer, context, playerIdOf);
@@ -325,6 +325,7 @@ function collectEvents(
   context: ReturnType<typeof buildMatchContext>,
   playerIdOf: (s: string | null | undefined) => number | null,
   reasonByRound: Map<number, string | null>,
+  roundBounds: { round: number; startTick: number; frameEndTick: number }[],
 ): Map<number, ReplayEvent[]> {
   const byRound = new Map<number, ReplayEvent[]>();
   const push = (round: number, ev: ReplayEvent) => {
@@ -332,11 +333,23 @@ function collectEvents(
     byRound.get(round)!.push(ev);
   };
 
-  // Kills (mid-round events count rounds completed, so round = +1)
+  // Map a tick to the round whose playback window (including the post-round span) covers
+  // it — windows don't overlap, so a tick lands in at most one round. Kills are bucketed
+  // by tick (not `total_rounds_played + 1`): a kill *after* `round_end` has the counter
+  // already incremented, so the round-counter math would misfile it into the next round
+  // where its tick falls before the live frames and the kill feed never shows it.
+  const roundForTick = (tick: number): number | null => {
+    for (const b of roundBounds) {
+      if (tick >= b.startTick && tick <= b.frameEndTick) return b.round;
+    }
+    return null;
+  };
+
+  // Kills — bucketed by tick so post-round kills stay in the round that just ended.
   for (const d of deathRows) {
     if (d.is_warmup_period) continue;
-    const round = d.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const round = roundForTick(d.tick);
+    if (round === null || !context.liveRounds.has(round)) continue;
     const ax = pick<number>(d, ['attacker_X']);
     const ay = pick<number>(d, ['attacker_Y']);
     const vx = pick<number>(d, ['user_X']);
