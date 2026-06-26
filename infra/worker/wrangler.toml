@@ -1,0 +1,21 @@
+# Cloudflare Worker `ingest-demo` — receives MatchZy demo POSTs and streams them to R2.
+# See infra/worker/README.md for deploy steps. This is a separate deploy target from the Next app.
+
+name = "ingest-demo"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+# R2 binding to the EXISTING DGLS demos bucket. Set bucket_name to the value of
+# CLOUDFLARE_R2_BUCKET_NAME (the same bucket the Next app uses via the S3 API). The Worker reaches
+# it through this native binding, not the S3 endpoint.
+[[r2_buckets]]
+binding = "DEMOS"
+bucket_name = "REPLACE_WITH_CLOUDFLARE_R2_BUCKET_NAME"
+
+# Non-secret config. NOTIFY_URL points at the deployed Next route.
+[vars]
+NOTIFY_URL = "https://REPLACE_WITH_PROD_DOMAIN/api/ingest/notify"
+
+# Secrets are NOT stored here. Set them with:
+#   wrangler secret put UPLOAD_SECRET     # MatchZy sends this as X-MatchZy-Token
+#   wrangler secret put NOTIFY_SECRET     # must equal the Next app's INGEST_NOTIFY_SECRET
