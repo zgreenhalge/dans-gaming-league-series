@@ -10,6 +10,7 @@ import { getMapLookup } from '@/lib/queries';
 import { TopbarShell } from '@/components/TopbarShell';
 import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
+import MatchServerPanel from '@/components/MatchServerPanel';
 import MatchTabView from '@/components/MatchTabView';
 import RoundHistoryStrip from '@/components/RoundHistoryStrip';
 import { authOptions } from '@/lib/authOptions';
@@ -196,6 +197,7 @@ export default async function MatchPage({
   let gauntletPlayerIndex: 0 | 1 | null = null;
   let vetoIsAdmin = false;
   let isCurrentUserAdmin = false;
+  let canManageServer = false; // admin or in-match → can start/stop the match server
   if (currentPlayerId !== null) {
     const myStatRow = stats.find((s) => s.player_id === currentPlayerId);
     const isInMatch = !!myStatRow;
@@ -207,6 +209,7 @@ export default async function MatchPage({
     const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
     isCurrentUserAdmin = isAdmin;
     const authorized = isInMatch || isAdmin;
+    canManageServer = authorized;
     if (authorized && !played) {
       // Non-admins are blocked from veto until the window opens
       canVeto = isAdmin || vetoWindowOpen;
@@ -302,6 +305,15 @@ export default async function MatchPage({
                 />
               </div>
             </>
+          )}
+
+          {/* Match server (Phase 4) — below pick/ban, still in the header. Always shown in dev. */}
+          {(vetoComplete || process.env.NODE_ENV === 'development') && (
+            <div className="pb-6 flex justify-center">
+              <div className="w-full max-w-md">
+                <MatchServerPanel matchId={match.id} canManage={canManageServer} />
+              </div>
+            </div>
           )}
 
         </div>
