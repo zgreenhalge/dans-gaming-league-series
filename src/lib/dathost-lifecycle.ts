@@ -59,6 +59,24 @@ export async function resolveMapWorkshopId(
   return workshopIdFromUrl((mapRow as { workshop_url: string | null } | null)?.workshop_url);
 }
 
+export interface MatchzyConfigContext {
+  configUrl: string;
+  configAuth: { headerKey: string; headerValue: string };
+}
+
+/**
+ * Build the authenticated `matchzy_loadmatch_url` context for a match, or `null` if hosting isn't
+ * configured (`MATCHZY_CONFIG_SECRET` unset). Shared by the provision route and the veto auto-trigger.
+ */
+export function matchzyConfigContext(baseUrl: string, matchId: number): MatchzyConfigContext | null {
+  const secret = process.env.MATCHZY_CONFIG_SECRET;
+  if (!secret) return null;
+  return {
+    configUrl: `${baseUrl}/api/matches/${matchId}/matchzy-config`,
+    configAuth: { headerKey: 'X-MatchZy-Token', headerValue: secret },
+  };
+}
+
 export interface ProvisionResult {
   connect: string; // `ip:port`
   serverId: string;

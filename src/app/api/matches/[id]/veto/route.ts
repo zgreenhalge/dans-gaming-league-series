@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { isPlayedScore } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { isVetoComplete, type VetoFields } from '@/lib/veto';
+import { provisionMatchServer, matchzyConfigContext } from '@/lib/dathost-lifecycle';
 
 const supabaseAdmin = getAdminClient();
 
@@ -234,6 +236,23 @@ export async function PATCH(
   const { error } = await supabaseAdmin.from('matches').update(update).eq('id', matchId);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Auto-provision the match server the moment the pick/ban just completed (incomplete → complete).
+  const isGauntletOrPlayoff = isGauntlet || isPlayoff;
+  const merged = { ...m, ...update } as VetoFields;
+  if (!isVetoComplete(m, isGauntletOrPlayoff) && isVetoComplete(merged, isGauntletOrPlayoff)) {
+    const base = process.env.APP_BASE_URL ?? req.nextUrl.origin;
+    const ctx = matchzyConfigContext(base, matchId);
+    if (ctx) {
+      after(async () => {
+        try {
+          await provisionMatchServer(supabaseAdmin, matchId, ctx.configUrl, ctx.configAuth);
+        } catch (err) {
+          console.error(`auto-provision(${matchId}) failed:`, err);
+        }
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });

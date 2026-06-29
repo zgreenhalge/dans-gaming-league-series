@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { isPlayedScore } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import type { DemoSabremetricStat, RoundHistoryEntry } from '@/lib/types';
 
 const supabaseAdmin = getAdminClient();
@@ -311,6 +312,18 @@ export async function PATCH(
   }
 
   after(() => triggerRatingRecompute());
+
+  // Score reported → tear down the match server (reuse model = stop, never delete). Best-effort;
+  // skipped when hosting isn't configured.
+  if (process.env.DATHOST_SERVER_ID) {
+    after(async () => {
+      try {
+        await teardownMatchServer(supabaseAdmin, matchId);
+      } catch (err) {
+        console.error(`auto-teardown(${matchId}) failed:`, err);
+      }
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }
