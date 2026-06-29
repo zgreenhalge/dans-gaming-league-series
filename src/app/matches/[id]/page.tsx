@@ -11,6 +11,7 @@ import { TopbarShell } from '@/components/TopbarShell';
 import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
 import MatchServerPanel from '@/components/MatchServerPanel';
+import MatchDemoReviewBlock from '@/components/MatchDemoReviewBlock';
 import MatchTabView from '@/components/MatchTabView';
 import RoundHistoryStrip from '@/components/RoundHistoryStrip';
 import { authOptions } from '@/lib/authOptions';
@@ -312,6 +313,15 @@ export default async function MatchPage({
             <div className="pb-6 flex justify-center">
               <div className="w-full max-w-md">
                 <MatchServerPanel matchId={match.id} canManage={canManageServer} />
+              </div>
+            </div>
+          )}
+
+          {/* Pending demo result (Phase 3) — admin/in-match review & confirm; self-hides when none. */}
+          {canManageServer && (
+            <div className="pb-6 flex justify-center">
+              <div className="w-full max-w-md">
+                <MatchDemoReviewBlock matchId={match.id} />
               </div>
             </div>
           )}
