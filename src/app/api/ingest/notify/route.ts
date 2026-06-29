@@ -18,6 +18,7 @@ import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { r2, R2_BUCKET, demoKey } from '@/lib/r2';
+import { dispatchWorkflow } from '@/lib/gh-dispatch';
 
 const JOB_TYPE = 'demo_ingest';
 
@@ -102,5 +103,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ ok: true, matchId, status: 'received', demoBytes, rosterCount });
+  // Kick off the demo-ingest Action (parse → quarantine → stage a result). Best-effort: if dispatch
+  // isn't configured/fails, the demo is safely in R2 and the manual upload→parse→confirm flow still
+  // covers it. On success, advance the job to `queued` (the Action moves it to running→parsed).
+  const dispatch = await dispatchWorkflow('demo-ingest.yml', matchId);
+  if (dispatch.ok) {
+    await supabaseAdmin
+      .from('background_jobs')
+      .update({ status: 'queued', stage: 'queued', updated_at: new Date().toISOString() })
+      .eq('job_type', JOB_TYPE)
+      .eq('match_id', matchId);
+  } else {
+    console.error(`demo-ingest dispatch failed for match ${matchId}: ${dispatch.error}`);
+  }
+
+  return NextResponse.json({
+    ok: true,
+    matchId,
+    status: dispatch.ok ? 'queued' : 'received',
+    demoBytes,
+    rosterCount,
+  });
 }
