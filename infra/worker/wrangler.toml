@@ -1,7 +1,8 @@
 # Cloudflare Worker `ingest-demo` — receives MatchZy demo POSTs and streams them to R2.
 # See infra/worker/README.md for deploy steps. This is a separate deploy target from the Next app.
 
-name = "ingest-demo"
+# Must match the Cloudflare Workers Builds project name (CI overrides it otherwise).
+name = "dans-gaming-league-series"
 main = "src/index.ts"
 compatibility_date = "2026-01-01"
 
