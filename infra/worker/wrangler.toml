@@ -10,11 +10,11 @@ compatibility_date = "2026-01-01"
 # it through this native binding, not the S3 endpoint.
 [[r2_buckets]]
 binding = "DEMOS"
-bucket_name = "REPLACE_WITH_CLOUDFLARE_R2_BUCKET_NAME"
+bucket_name = "dgls-match-demos"
 
 # Non-secret config. NOTIFY_URL points at the deployed Next route.
 [vars]
-NOTIFY_URL = "https://REPLACE_WITH_PROD_DOMAIN/api/ingest/notify"
+NOTIFY_URL = "https://dans-gaming-league-series.vercel.app/api/ingest/notify"
 
 # Secrets are NOT stored here. Set them with:
 #   wrangler secret put UPLOAD_SECRET     # MatchZy sends this as X-MatchZy-Token
