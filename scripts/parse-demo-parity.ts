@@ -25,12 +25,12 @@
 //   --target <n>         target win rounds (default 13).
 //   --json               print the full raw parser output as JSON instead of the readable report.
 
-import { gunzipSync } from 'node:zlib';
 import { readFileSync } from 'node:fs';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { parseDemoFile, type RosterEntry, type DemoPlayerStat } from '../src/lib/demoParser';
 import { parseDemoSabremetrics } from '../src/lib/demoOrchestrator';
 import { r2, R2_BUCKET, demoKey } from '../src/lib/r2';
+import { gunzipMaybe } from '../src/lib/gzip';
 
 // --- tiny arg parser (no deps) ---
 function parseArgs(argv: string[]): Record<string, string | boolean> {
@@ -53,12 +53,6 @@ function parseArgs(argv: string[]): Record<string, string | boolean> {
 function die(msg: string): never {
   console.error(`\n✖ ${msg}\n`);
   process.exit(1);
-}
-
-// Mirror the parse route's gzip handling (browser/Worker may store compressed).
-function decompressIfNeeded(buf: Buffer): Buffer {
-  if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) return gunzipSync(buf);
-  return buf;
 }
 
 async function loadDemoFromR2(matchId: number): Promise<Buffer> {
@@ -146,7 +140,7 @@ async function main() {
   const rawBuf = hasDemo
     ? readFileSync(args.demo as string)
     : await loadDemoFromR2(Number(args.match));
-  const demoBuffer = decompressIfNeeded(rawBuf);
+  const demoBuffer = gunzipMaybe(rawBuf);
 
   console.log('\n=== Phase-0 parser parity harness ===');
   console.log(`source        : ${hasDemo ? `file ${args.demo}` : `R2 ${demoKey(Number(args.match))}`}`);

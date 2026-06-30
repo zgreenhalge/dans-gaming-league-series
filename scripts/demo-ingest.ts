@@ -9,16 +9,15 @@
 // Env (from the workflow): MATCH_ID, GH_RUN_ID, GH_RUN_URL, R2 creds, SUPABASE_SERVICE_ROLE_KEY /
 // NEXT_PUBLIC_SUPABASE_URL. Storage is schema-free: background_jobs.status + the R2 artifact.
 
-import { gunzipSync, gzipSync } from 'node:zlib';
+import { gzipSync } from 'node:zlib';
 import { parseDemoFile } from '../src/lib/demoParser';
 import { parseDemoSabremetrics } from '../src/lib/demoOrchestrator';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { quarantineDemo } from '../src/lib/demo/quarantine';
 import { getR2Object, putR2Object, demoKey, demoResultKey } from '../src/lib/r2';
 import { getAdminClient } from '../src/lib/supabase-admin';
-import type { DemoIngestResult } from '../src/lib/demo/ingestResult';
-
-const JOB_TYPE = 'demo_ingest';
+import { gunzipMaybe } from '../src/lib/gzip';
+import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '../src/lib/demo/ingestResult';
 
 const matchId = Number(process.env.MATCH_ID);
 const ghRunId = process.env.GH_RUN_ID ? Number(process.env.GH_RUN_ID) : null;
@@ -44,10 +43,6 @@ async function fail(err: unknown) {
   process.exit(1);
 }
 
-function decompressIfNeeded(buf: Buffer): Buffer {
-  return buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b ? gunzipSync(buf) : buf;
-}
-
 async function main() {
   if (!Number.isInteger(matchId) || matchId <= 0) throw new Error(`Bad MATCH_ID: ${process.env.MATCH_ID}`);
 
@@ -64,7 +59,7 @@ async function main() {
 
   const raw = await getR2Object(demoKey(matchId));
   if (!raw) throw new Error(`No demo in R2 at ${demoKey(matchId)}`);
-  const demo = decompressIfNeeded(raw);
+  const demo = gunzipMaybe(raw);
 
   const parsed = parseDemoFile(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
   const sab = parseDemoSabremetrics(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);

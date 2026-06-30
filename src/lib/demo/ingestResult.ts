@@ -3,6 +3,12 @@
 
 import type { DemoSabremetricStat, RoundHistoryEntry } from '../types';
 
+/** `background_jobs.job_type` for the demo-ingest pipeline (notify → Action → review block). */
+export const DEMO_INGEST_JOB_TYPE = 'demo_ingest';
+
+/** Statuses where the Action is still working and the result isn't staged yet. */
+export const DEMO_INGEST_IN_PROGRESS: ReadonlySet<string> = new Set(['received', 'queued', 'running']);
+
 /** Confirm-ready payload — exactly the `PATCH /api/matches/[id]/score` request body. */
 export interface DemoConfirmPayload {
   shirts: number;

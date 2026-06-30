@@ -1,4 +1,3 @@
-import { gunzipSync } from 'zlib';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
@@ -8,18 +7,11 @@ import { parseDemoSabremetrics } from '@/lib/demoOrchestrator';
 import { getReplayInputs } from '@/lib/replay/inputs';
 import { r2, R2_BUCKET, demoKey } from '@/lib/r2';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { gunzipMaybe } from '@/lib/gzip';
 
 export const maxDuration = 300;
 
 const MAX_DEMO_BYTES = 200 * 1024 * 1024; // 200 MB
-
-function decompressIfNeeded(buf: Buffer): Buffer {
-  // Gzip magic bytes: 0x1f 0x8b
-  if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
-    return gunzipSync(buf);
-  }
-  return buf;
-}
 
 export async function POST(
   req: NextRequest,
@@ -80,7 +72,7 @@ export async function POST(
   for await (const chunk of r2Res.Body as AsyncIterable<Uint8Array>) {
     chunks.push(Buffer.from(chunk));
   }
-  const demoBuffer = decompressIfNeeded(Buffer.concat(chunks));
+  const demoBuffer = gunzipMaybe(Buffer.concat(chunks));
 
   let result, sabremetricsResult;
   try {

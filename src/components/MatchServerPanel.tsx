@@ -9,8 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getBrowserClient } from '@/lib/supabase-browser';
-
-type ServerState = 'idle' | 'provisioning' | 'live' | 'tearing_down' | 'done' | 'failed';
+import type { ServerState } from '@/lib/dathost-lifecycle';
 
 interface StatusResponse {
   serverState: ServerState;

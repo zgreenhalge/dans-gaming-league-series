@@ -1,6 +1,6 @@
 // Shared session gate for match-scoped mutations: the caller must be a site admin or a player in
 // the match. Composes the existing auth (next-auth session + `players.is_admin`) — it does not modify
-// auth logic. Mirrors the inline check in `POST /api/matches/[id]/demo/upload-url`.
+// auth logic. Used by the demo upload-url / result and server provision/status/teardown routes.
 
 import { getServerSession } from 'next-auth';
 import { authOptions } from './authOptions';

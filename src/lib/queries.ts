@@ -1,4 +1,4 @@
-import { gunzipSync } from 'node:zlib';
+import { gunzipMaybe } from './gzip';
 import { supabase } from './supabase';
 import { getR2Object, replayKey, heatmapKey } from './r2';
 import type { ReplayPayload, ReplayPlayerMeta, ReplayEvent } from './replay/types';
@@ -3281,8 +3281,7 @@ export async function getMapHeatmap(matchIds: number[]): Promise<MapHeatmapPoint
       const buf = await getR2Object(heatmapKey(matchId));
       if (!buf) return [];
       try {
-        const json =
-          buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b ? gunzipSync(buf) : buf;
+        const json = gunzipMaybe(buf);
         const art = JSON.parse(json.toString('utf8')) as HeatmapArtifact;
         return art.points.map((p) => ({
           matchId,
@@ -3393,8 +3392,7 @@ export async function getReplayEventsView(matchId: number): Promise<ReplayEvents
   const buf = await getR2Object(replayKey(matchId));
   if (!buf) return null;
   // Stored gzipped; tolerate either.
-  const json =
-    buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b ? gunzipSync(buf) : buf;
+  const json = gunzipMaybe(buf);
   let payload: ReplayPayload;
   try {
     payload = JSON.parse(json.toString('utf8')) as ReplayPayload;

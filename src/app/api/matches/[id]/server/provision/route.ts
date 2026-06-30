@@ -6,14 +6,15 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireMatchAccess } from '@/lib/match-access';
 import { provisionMatchServer, matchzyConfigContext } from '@/lib/dathost-lifecycle';
+import { parseMatchId } from '@/lib/util';
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const matchId = Number(id);
-  if (!Number.isInteger(matchId) || matchId <= 0) {
+  const matchId = parseMatchId(id);
+  if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
 
