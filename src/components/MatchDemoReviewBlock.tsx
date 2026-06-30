@@ -4,23 +4,26 @@
 // demo-ingest Action, this shows the staged result and lets an admin/in-match player confirm it
 // (→ existing PATCH /score) or dismiss it. Self-hides when there's nothing staged. Auto-commit is #138.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { DemoIngestResult } from '@/lib/demo/ingestResult';
+import { getBrowserClient } from '@/lib/supabase-browser';
+import {
+  DEMO_INGEST_JOB_TYPE,
+  DEMO_INGEST_IN_PROGRESS,
+  type DemoIngestResult,
+} from '@/lib/demo/ingestResult';
 
 interface ResultResponse {
   status: string | null; // background_jobs status
   result: DemoIngestResult | null;
+  resultError?: string; // set when the staged artifact exists but couldn't be read
 }
-
-const IN_PROGRESS = new Set(['received', 'queued', 'running']);
 
 export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
   const router = useRouter();
   const [data, setData] = useState<ResultResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -37,22 +40,25 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
     refresh();
   }, [refresh]);
 
-  // Poll only while the Action is in flight (no staged result yet).
+  // Live updates off the `background_jobs` row — no polling. Mirrors MatchServerPanel's pattern on
+  // `matches`. Requires `background_jobs` in the Supabase realtime publication. Each status change
+  // (received → queued → running → parsed/quarantined/failed) re-reads the staged result.
   useEffect(() => {
-    const inProgress = !!data && data.result === null && !!data.status && IN_PROGRESS.has(data.status);
-    if (inProgress && !pollRef.current) {
-      pollRef.current = setInterval(refresh, 8000);
-    } else if (!inProgress && pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
+    const channel = getBrowserClient()
+      .channel(`demo-ingest-${matchId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'background_jobs', filter: `match_id=eq.${matchId}` },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as { job_type?: string } | null;
+          if (row?.job_type === DEMO_INGEST_JOB_TYPE) refresh();
+        },
+      )
+      .subscribe();
     return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
+      getBrowserClient().removeChannel(channel);
     };
-  }, [data, refresh]);
+  }, [matchId, refresh]);
 
   const dispose = async (disposition: 'confirmed' | 'dismissed') => {
     await fetch(`/api/matches/${matchId}/demo/result?disposition=${disposition}`, { method: 'DELETE' }).catch(() => {});
@@ -92,7 +98,7 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
   const { status, result } = data;
 
   // Parsing in flight.
-  if (!result && status && IN_PROGRESS.has(status)) {
+  if (!result && status && DEMO_INGEST_IN_PROGRESS.has(status)) {
     return (
       <Card>
         <Header />
@@ -100,6 +106,19 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-border-primary)] border-t-[var(--color-text-primary)]" />
           Parsing demo…
         </div>
+      </Card>
+    );
+  }
+
+  // Parse failed, or the staged artifact is unreadable — surface it instead of rendering nothing.
+  if (!result && (status === 'failed' || data.resultError)) {
+    return (
+      <Card>
+        <Header />
+        <div className="text-sm text-red-300">
+          {data.resultError ?? 'Demo parsing failed — enter the result manually.'}
+        </div>
+        <DismissLink onClick={dismiss} busy={busy} />
       </Card>
     );
   }

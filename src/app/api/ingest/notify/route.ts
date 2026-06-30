@@ -13,32 +13,21 @@
 // Auth: shared secret in the `x-ingest-secret` header, compared in constant time against
 // `INGEST_NOTIFY_SECRET`. No session — this is called by the Worker, not a browser.
 
-import { timingSafeEqual } from 'node:crypto';
 import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { r2, R2_BUCKET, demoKey } from '@/lib/r2';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
-
-const JOB_TYPE = 'demo_ingest';
-
-function secretsMatch(provided: string | null, expected: string): boolean {
-  if (!provided) return false;
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false; // timingSafeEqual throws on length mismatch
-  return timingSafeEqual(a, b);
-}
+import { machineSecretGuard } from '@/lib/machine-auth';
+import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '@/lib/demo/ingestResult';
 
 export async function POST(req: NextRequest) {
-  const expected = process.env.INGEST_NOTIFY_SECRET;
-  if (!expected) {
-    // Fail closed: a missing secret must not become an open endpoint.
-    return NextResponse.json({ error: 'Ingestion not configured' }, { status: 503 });
-  }
-  if (!secretsMatch(req.headers.get('x-ingest-secret'), expected)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const denied = machineSecretGuard(
+    req.headers.get('x-ingest-secret'),
+    process.env.INGEST_NOTIFY_SECRET,
+    'Ingestion not configured',
+  );
+  if (denied) return denied;
 
   let body: { matchId?: unknown };
   try {
@@ -82,6 +71,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Duplicate guard: if a job for this match is already in flight (Worker/MatchZy retry, or a
+  // double-POST), don't reset its status or fire a second redundant Action.
+  const { data: existing } = await supabaseAdmin
+    .from('background_jobs')
+    .select('status')
+    .eq('job_type', JOB_TYPE)
+    .eq('match_id', matchId)
+    .maybeSingle();
+  const existingStatus = (existing as { status?: string } | null)?.status;
+  if (existingStatus && DEMO_INGEST_IN_PROGRESS.has(existingStatus)) {
+    return NextResponse.json({ ok: true, matchId, status: existingStatus, deduped: true });
+  }
+
   // Record `received` in the shared job state machine (reused from the replay pipeline).
   const now = new Date().toISOString();
   const { error: upsertErr } = await supabaseAdmin.from('background_jobs').upsert(
@@ -108,11 +110,14 @@ export async function POST(req: NextRequest) {
   // covers it. On success, advance the job to `queued` (the Action moves it to running→parsed).
   const dispatch = await dispatchWorkflow('demo-ingest.yml', matchId);
   if (dispatch.ok) {
+    // Only advance the row we just wrote — `.eq('status','received')` so a concurrent Action that
+    // already moved it to running/parsed isn't clobbered back to queued.
     await supabaseAdmin
       .from('background_jobs')
       .update({ status: 'queued', stage: 'queued', updated_at: new Date().toISOString() })
       .eq('job_type', JOB_TYPE)
-      .eq('match_id', matchId);
+      .eq('match_id', matchId)
+      .eq('status', 'received');
   } else {
     console.error(`demo-ingest dispatch failed for match ${matchId}: ${dispatch.error}`);
   }

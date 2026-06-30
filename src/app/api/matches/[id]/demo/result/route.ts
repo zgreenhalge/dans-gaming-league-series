@@ -3,14 +3,13 @@
 //   DELETE → remove the R2 artifact + mark the job (confirmed | dismissed). Called by the review block
 //            after a successful confirm (→ PATCH /score) or a dismiss.
 
-import { gunzipSync } from 'node:zlib';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireMatchAccess } from '@/lib/match-access';
 import { getR2Object, deleteR2Object, demoResultKey } from '@/lib/r2';
-import type { DemoIngestResult } from '@/lib/demo/ingestResult';
-
-const JOB_TYPE = 'demo_ingest';
+import { gunzipMaybe } from '@/lib/gzip';
+import { parseMatchId } from '@/lib/util';
+import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '@/lib/demo/ingestResult';
 
 async function jobStatus(matchId: number): Promise<string | null> {
   const { data } = await getAdminClient()
@@ -27,21 +26,30 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const matchId = Number(id);
-  if (!Number.isInteger(matchId) || matchId <= 0) {
+  const matchId = parseMatchId(id);
+  if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
   const access = await requireMatchAccess(matchId);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
-  const status = await jobStatus(matchId);
-  const buf = await getR2Object(demoResultKey(matchId));
+  const [status, buf] = await Promise.all([jobStatus(matchId), getR2Object(demoResultKey(matchId))]);
   if (!buf) {
     // No staged artifact — return the job status alone so the UI can show "parsing…" vs nothing.
     return NextResponse.json({ status, result: null });
   }
-  const result = JSON.parse(gunzipSync(buf).toString()) as DemoIngestResult;
-  return NextResponse.json({ status, result });
+  // A truncated/corrupt artifact (partial write, aborted Action) must not 500 into a silently
+  // swallowed error — surface it so the UI can show a failure and let the user dismiss it.
+  try {
+    const result = JSON.parse(gunzipMaybe(buf).toString()) as DemoIngestResult;
+    return NextResponse.json({ status, result });
+  } catch {
+    return NextResponse.json({
+      status,
+      result: null,
+      resultError: 'The staged demo result is unreadable (corrupt or incomplete).',
+    });
+  }
 }
 
 export async function DELETE(
@@ -49,8 +57,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const matchId = Number(id);
-  if (!Number.isInteger(matchId) || matchId <= 0) {
+  const matchId = parseMatchId(id);
+  if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
   const access = await requireMatchAccess(matchId);
