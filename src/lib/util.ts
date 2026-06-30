@@ -8,6 +8,15 @@ export function isPlayedScore(finalScore: string | null | undefined): boolean {
   return !/^\s*0\s*[-–]\s*0\s*$/.test(finalScore);
 }
 
+/**
+ * Parse a route's `[id]` segment into a positive integer match id, or `null` if it isn't one.
+ * Shared by every match-scoped API route so the param contract is identical everywhere.
+ */
+export function parseMatchId(id: string): number | null {
+  const n = Number(id);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 export function relativeTime(iso: string): string {
   const diff = new Date(iso).getTime() - Date.now();
   const days = Math.round(diff / 86_400_000);

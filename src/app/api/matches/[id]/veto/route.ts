@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
-import { isPlayedScore } from '@/lib/util';
+import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { isVetoComplete, type VetoFields } from '@/lib/veto';
+import { provisionMatchServer, matchzyConfigContext } from '@/lib/dathost-lifecycle';
 
 const supabaseAdmin = getAdminClient();
 
@@ -55,8 +57,8 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const matchId = Number(id);
-  if (!Number.isFinite(matchId)) {
+  const matchId = parseMatchId(id);
+  if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
 
@@ -234,6 +236,33 @@ export async function PATCH(
   const { error } = await supabaseAdmin.from('matches').update(update).eq('id', matchId);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Auto-provision the match server whenever the pick/ban is complete — not just on the first
+  // completing edit — so a post-completion map correction re-provisions with the new map. But never
+  // disrupt a server that's already booting/live: an admin stops it first to change the map. (The
+  // `server_state` gate also keeps a redundant edit from re-provisioning an already-running server.)
+  const isGauntletOrPlayoff = isGauntlet || isPlayoff;
+  const merged = { ...m, ...update } as VetoFields;
+  if (isVetoComplete(merged, isGauntletOrPlayoff)) {
+    const { data: srv } = await supabaseAdmin
+      .from('matches')
+      .select('server_state')
+      .eq('id', matchId)
+      .maybeSingle();
+    const serverState = (srv as { server_state?: string | null } | null)?.server_state;
+    const serverBusy = serverState === 'provisioning' || serverState === 'live';
+    const base = process.env.APP_BASE_URL ?? req.nextUrl.origin;
+    const ctx = matchzyConfigContext(base, matchId);
+    if (!serverBusy && ctx) {
+      after(async () => {
+        try {
+          await provisionMatchServer(supabaseAdmin, matchId, ctx.configUrl, ctx.configAuth);
+        } catch (err) {
+          console.error(`auto-provision(${matchId}) failed:`, err);
+        }
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });

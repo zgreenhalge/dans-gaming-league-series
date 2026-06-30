@@ -1,0 +1,57 @@
+# Action — demo-ingest (Phase 3 of #131)
+#
+# demo (R2) → parse + quarantine → staged confirm-ready result (R2 `<matchId>/demo-result.json`).
+# Heavy parsing runs here, NOT on Vercel (kills the parse route's MAX_DEMO_BYTES ceiling). Triggered
+# by the app via workflow_dispatch (from `/api/ingest/notify` after a demo lands), or manually.
+#
+# Idempotent: deterministic R2 key, re-dispatch overwrites. The script updates background_jobs.status
+# (received → queued → running → parsed|quarantined|failed) so the app shows state without Actions.
+
+name: demo-ingest
+
+on:
+  workflow_dispatch:
+    inputs:
+      match_id:
+        description: Match ID to ingest the demo for
+        required: true
+        type: string
+  repository_dispatch:
+    types: [demo-ingest]
+
+concurrency:
+  group: demo-ingest-${{ github.event.inputs.match_id || github.event.client_payload.match_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MATCH_ID: ${{ github.event.inputs.match_id || github.event.client_payload.match_id }}
+      GH_RUN_ID: ${{ github.run_id }}
+      GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CLOUDFLARE_R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID }}
+      CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Ingest demo
+        run: npx tsx scripts/demo-ingest.ts

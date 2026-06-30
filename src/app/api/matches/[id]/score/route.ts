@@ -2,8 +2,9 @@ import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
-import { isPlayedScore } from '@/lib/util';
+import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import type { DemoSabremetricStat, RoundHistoryEntry } from '@/lib/types';
 
 const supabaseAdmin = getAdminClient();
@@ -103,8 +104,8 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const matchId = Number(id);
-  if (!Number.isFinite(matchId)) {
+  const matchId = parseMatchId(id);
+  if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
 
@@ -311,6 +312,19 @@ export async function PATCH(
   }
 
   after(() => triggerRatingRecompute());
+
+  // Score reported → tear down the match server (reuse model = stop, never delete). Best-effort;
+  // skipped when hosting isn't configured. `onlyIfOwnsServer` ensures editing one match's score
+  // never stops another match's live server on the shared host.
+  if (process.env.DATHOST_SERVER_ID) {
+    after(async () => {
+      try {
+        await teardownMatchServer(supabaseAdmin, matchId, { onlyIfOwnsServer: true });
+      } catch (err) {
+        console.error(`auto-teardown(${matchId}) failed:`, err);
+      }
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

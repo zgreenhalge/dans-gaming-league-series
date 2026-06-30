@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getR2Object, replayKey } from '@/lib/r2';
+import { isGzip } from '@/lib/gzip';
 
 // Serves the full `replay.json` payload (frames + grenades + events) for the client
 // `<ReplayPlayer>`. The Events tab uses a stripped server-side projection
@@ -29,7 +30,7 @@ export async function GET(
   // Stored gzipped (Action A gzips before upload). Detect the gzip magic bytes and
   // pass the compressed bytes straight through with Content-Encoding so the browser
   // inflates it — no server-side gunzip/re-gzip round trip.
-  const gz = buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b;
+  const gz = isGzip(buf);
   const body = new Uint8Array(buf);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json; charset=utf-8',
