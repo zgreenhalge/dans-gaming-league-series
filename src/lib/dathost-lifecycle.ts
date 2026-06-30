@@ -125,12 +125,37 @@ export async function provisionMatchServer(
   }
 }
 
-/** Tear down the match server (reuse model → stop, never delete). Idempotent-safe. */
+/**
+ * Tear down the match server (reuse model → stop, never delete). Idempotent-safe.
+ *
+ * Because every match shares ONE persistent server (D2), an unconditional stop here would let one
+ * match kill another match's live server. Pass `onlyIfOwnsServer` (used by the score-report
+ * auto-teardown) to no-op unless THIS match is the current occupant — i.e. its `server_state` is
+ * still active (`provisioning`/`live`/`tearing_down`) and its `dathost_server_id` matches. The
+ * explicit teardown route omits the flag, since that's a deliberate operator stop.
+ */
 export async function teardownMatchServer(
   supabaseAdmin: SupabaseClient,
   matchId: number,
+  opts: { onlyIfOwnsServer?: boolean } = {},
 ): Promise<void> {
   const serverId = dathostServerId();
+
+  if (opts.onlyIfOwnsServer) {
+    const { data } = await supabaseAdmin
+      .from('matches')
+      .select('server_state, dathost_server_id')
+      .eq('id', matchId)
+      .maybeSingle();
+    const row = data as { server_state?: string | null; dathost_server_id?: string | null } | null;
+    const active =
+      row?.server_state === 'provisioning' ||
+      row?.server_state === 'live' ||
+      row?.server_state === 'tearing_down';
+    const ownsServer = !row?.dathost_server_id || row.dathost_server_id === serverId;
+    if (!active || !ownsServer) return; // this match isn't the live occupant — leave the server alone
+  }
+
   await setServerState(supabaseAdmin, matchId, { server_state: 'tearing_down' }).catch(() => {});
   await stopServer(serverId);
   await setServerState(supabaseAdmin, matchId, {
