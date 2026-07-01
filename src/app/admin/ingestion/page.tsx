@@ -90,6 +90,22 @@ function JobRow({ job }: { job: DemoIngestJobRow }) {
             {job.errorMessage}
           </div>
         )}
+        {job.quarantineFlags.map((f, i) => (
+          <div
+            key={`q${i}`}
+            className="font-mono text-[11px] text-[var(--color-accent-amber-fg)] mt-1 break-words"
+          >
+            ⚠ {f}
+          </div>
+        ))}
+        {job.warnings.map((w, i) => (
+          <div
+            key={`w${i}`}
+            className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1 break-words"
+          >
+            {w}
+          </div>
+        ))}
       </div>
       <div className="flex flex-col items-end gap-1 text-right">
         <StatusPill status={job.status} />

@@ -1,13 +1,13 @@
 import { gunzipMaybe } from './gzip';
 import { supabase } from './supabase';
-import { getR2Object, replayKey, heatmapKey } from './r2';
+import { getR2Object, replayKey, heatmapKey, demoResultKey } from './r2';
 import type { ReplayPayload, ReplayPlayerMeta, ReplayEvent } from './replay/types';
 import type { HeatmapArtifact, HeatmapKind } from './replay/heatmap';
 import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
 import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
-import { DEMO_INGEST_JOB_TYPE } from './demo/ingestResult';
+import { DEMO_INGEST_JOB_TYPE, type DemoIngestResult } from './demo/ingestResult';
 import type {
   Season,
   Week,
@@ -3398,7 +3398,15 @@ export interface DemoIngestJobRow {
   weekNumber: number | null;
   seasonName: string | null;
   isGauntlet: boolean;
+  // Parse warnings + quarantine flags from the staged R2 artifact (present only while
+  // the job has one: `parsed`/`quarantined`). This is how side-mismatch and other
+  // otherwise-silent issues surface on the admin panel.
+  warnings: string[];
+  quarantineFlags: string[];
 }
+
+/** Job statuses that still have a staged `demo-result.json` artifact in R2 to read detail from. */
+const DEMO_INGEST_STAGED_STATUSES: ReadonlySet<string> = new Set(['parsed', 'quarantined']);
 
 /**
  * All demo-ingest jobs, newest activity first. Additive read for the admin
@@ -3456,10 +3464,31 @@ export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
     const weekById = new Map(weeks.map((w) => [w.id, w]));
     const seasonById = new Map(seasons.map((s) => [s.id, s]));
 
+    // Enrich staged jobs with their parse warnings / quarantine flags from R2 (bounded:
+    // only `parsed`/`quarantined` rows still have an artifact). Read in parallel.
+    const staged = jobRows.filter((j) => DEMO_INGEST_STAGED_STATUSES.has(j.status ?? ''));
+    const detailByMatch = new Map<number, { warnings: string[]; quarantineFlags: string[] }>();
+    await Promise.all(
+      staged.map(async (j) => {
+        try {
+          const buf = await getR2Object(demoResultKey(j.match_id));
+          if (!buf) return;
+          const r = JSON.parse(gunzipMaybe(buf).toString()) as DemoIngestResult;
+          detailByMatch.set(j.match_id, {
+            warnings: r.warnings ?? [],
+            quarantineFlags: r.quarantineFlags ?? [],
+          });
+        } catch {
+          /* corrupt/partial artifact — leave detail empty, status still shows */
+        }
+      }),
+    );
+
     return jobRows.map((j) => {
       const m = matchById.get(j.match_id) ?? null;
       const w = m ? weekById.get(m.week_id) ?? null : null;
       const s = w ? seasonById.get(w.season_id) ?? null : null;
+      const detail = detailByMatch.get(j.match_id);
       return {
         matchId: j.match_id,
         status: j.status ?? 'unknown',
@@ -3476,6 +3505,8 @@ export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
         weekNumber: w?.week_number ?? null,
         seasonName: s?.name ?? null,
         isGauntlet: s?.is_gauntlet ?? false,
+        warnings: detail?.warnings ?? [],
+        quarantineFlags: detail?.quarantineFlags ?? [],
       };
     });
   } catch {
