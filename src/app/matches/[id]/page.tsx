@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledTimes } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/og';
 import { projectRatingDeltas, type RatingProjection } from '@/lib/ehog';
 import { isPlayedScore, parseScore } from '@/lib/util';
@@ -236,6 +236,11 @@ export default async function MatchPage({
 
   const window = matchWeekWindow(season.start_date, week.week_number);
 
+  // Other unplayed matches' scheduled times, for the single-server scheduling-collision warning
+  // (#134). Only needed when this match is actually schedulable here.
+  const otherScheduled =
+    !played && canEdit && !season.is_gauntlet ? await getOtherScheduledTimes(match.id) : [];
+
   return (
     <div className="min-h-screen">
       <div className="centering">{match.is_feature_match && <FeatureMatchBanner />}</div>
@@ -262,6 +267,7 @@ export default async function MatchPage({
               canEdit={canEdit}
               played={played}
               isGauntlet={season.is_gauntlet}
+              otherScheduled={otherScheduled}
             />
 
             {score && (

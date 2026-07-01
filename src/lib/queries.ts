@@ -399,6 +399,23 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   return { match: m, week: w, season: season as Season, stats: statRows };
 }
 
+/**
+ * Scheduled times (ISO) of other unplayed matches — used to warn when a match is scheduled close to
+ * another, since they'd contend for the single shared DatHost server (#134). Played matches are
+ * excluded (their scheduled time is moot).
+ */
+export async function getOtherScheduledTimes(matchId: number): Promise<string[]> {
+  const { data } = await supabase
+    .from('matches')
+    .select('id, scheduled_at, final_score')
+    .not('scheduled_at', 'is', null)
+    .neq('id', matchId);
+  const rows = (data ?? []) as { scheduled_at: string | null; final_score: string | null }[];
+  return rows
+    .filter((r) => r.scheduled_at && !isPlayedScore(r.final_score))
+    .map((r) => r.scheduled_at as string);
+}
+
 export interface MatchSabremetricsRow extends PlayerMatchSabremetrics {
   player_id: number;
   player_name: string;
