@@ -110,6 +110,19 @@ export const authOptions = {
         token.playerName = sessionData.playerName;
       }
 
+      // Backfill is_admin for sessions that predate the field — no re-login needed. The jwt callback
+      // runs on every session read, so an existing token picks it up on its next request (e.g. the
+      // client Topbar's useSession) and the updated token is re-persisted to the cookie. Only queries
+      // when unset, so it's a one-time hit per stale session (fresh sign-ins set it above).
+      if (token.isAdmin === undefined && token.playerId != null) {
+        const { data: p } = await supabase
+          .from("players")
+          .select("is_admin")
+          .eq("id", token.playerId)
+          .maybeSingle();
+        token.isAdmin = !!p?.is_admin;
+      }
+
       return token;
     },
 
