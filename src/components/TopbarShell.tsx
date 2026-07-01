@@ -153,6 +153,14 @@ export function TopbarShell({
           {process.env.NODE_ENV === "development" && status !== "loading" && (
             <DevToggle />
           )}
+          {user?.isAdmin && (
+            <Link
+              href="/admin"
+              className="tracked text-[10px] font-semibold px-2.5 py-1.5 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
+            >
+              Admin
+            </Link>
+          )}
           <ThemeToggle />
           <div className="flex items-center">
             {status === "loading" ? (

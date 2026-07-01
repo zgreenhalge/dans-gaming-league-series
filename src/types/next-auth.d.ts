@@ -9,6 +9,7 @@ declare module "next-auth" {
       steamId?: string | null;
       playerId?: number | null;
       playerName?: string | null;
+      isAdmin?: boolean;
     };
   }
 }

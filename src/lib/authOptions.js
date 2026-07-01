@@ -72,23 +72,25 @@ export const authOptions = {
       if (user?.devPlayerId) {
         const { data: player } = await supabase
           .from("players")
-          .select("id, name")
+          .select("id, name, is_admin")
           .eq("id", user.devPlayerId)
           .single();
         token.playerId = player?.id ?? null;
         token.playerName = player?.name ?? null;
+        token.isAdmin = !!player?.is_admin;
       } else if (user?.steamId) {
         token.steamId = user.steamId;
         token.avatarUrl = user.image ?? "";
 
         const { data: player } = await supabase
           .from("players")
-          .select("id, name")
+          .select("id, name, is_admin")
           .eq("steam_id", String(user.steamId))
           .single();
 
         token.playerId = player?.id ?? null;
         token.playerName = player?.name ?? null;
+        token.isAdmin = !!player?.is_admin;
 
         // Keep Steam profile info fresh in the DB on every login
         if (player) {
@@ -117,6 +119,7 @@ export const authOptions = {
         session.user.image = token.avatarUrl;
         session.user.playerId = token.playerId ?? null;
         session.user.playerName = token.playerName ?? null;
+        session.user.isAdmin = !!token.isAdmin;
       }
       return session;
     },
