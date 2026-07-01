@@ -4,6 +4,7 @@ import { useState, useTransition, useEffect, useSyncExternalStore } from 'react'
 import Link from 'next/link';
 import { toSentenceCase, mapSlug } from '@/lib/maps';
 import { useRouter } from 'next/navigation';
+import { findScheduleCollision } from '@/lib/schedule';
 
 const noopSubscribe = () => () => {};
 const returnFalse = () => false;
@@ -97,19 +98,6 @@ function isOutsideWindow(localDt: string, weekStart: string | null, weekEnd: str
   return d < new Date(weekStart + 'T00:00:00') || d > new Date(weekEnd + 'T23:59:59');
 }
 
-// Matches within an hour of each other contend for the single shared DatHost server (#134).
-const COLLISION_WINDOW_MS = 60 * 60 * 1000;
-/** ISO of the nearest other match within the collision window of `localValue`, or null. */
-function collidingTime(localValue: string, others: string[]): string | null {
-  const t = new Date(localValue).getTime();
-  if (Number.isNaN(t)) return null;
-  for (const iso of others) {
-    const o = new Date(iso).getTime();
-    if (!Number.isNaN(o) && Math.abs(o - t) <= COLLISION_WINDOW_MS) return iso;
-  }
-  return null;
-}
-
 export default function MatchHeaderSection({
   map,
   matchId,
@@ -145,7 +133,7 @@ export default function MatchHeaderSection({
         setWarning('window');
         return;
       }
-      if (collidingTime(value, otherScheduled)) {
+      if (findScheduleCollision(value, otherScheduled)) {
         setWarning('collision');
         return;
       }

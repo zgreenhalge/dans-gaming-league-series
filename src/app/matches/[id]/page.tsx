@@ -17,6 +17,8 @@ import RoundHistoryStrip from '@/components/RoundHistoryStrip';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 import { FeatureMatchBanner } from '@/components/FeatureMatch';
+import { SchedulingOverlapBanner } from '@/components/SchedulingOverlapBanner';
+import { findScheduleCollision } from '@/lib/schedule';
 import { HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { r2, R2_BUCKET, demoKey as makeDemoKey } from '@/lib/r2';
@@ -237,13 +239,18 @@ export default async function MatchPage({
   const window = matchWeekWindow(season.start_date, week.week_number);
 
   // Other unplayed matches' scheduled times, for the single-server scheduling-collision warning
-  // (#134). Only needed when this match is actually schedulable here.
+  // (#134) — both the schedule editor and the overlap banner. Fetched for any viewer of an unplayed
+  // non-gauntlet match so the banner shows regardless of edit rights.
   const otherScheduled =
-    !played && canEdit && !season.is_gauntlet ? await getOtherScheduledTimes(match.id) : [];
+    !played && !season.is_gauntlet ? await getOtherScheduledTimes(match.id) : [];
+  const scheduleCollision = findScheduleCollision(match.scheduled_at, otherScheduled);
 
   return (
     <div className="min-h-screen">
-      <div className="centering">{match.is_feature_match && <FeatureMatchBanner />}</div>
+      <div className="centering">
+        {match.is_feature_match && <FeatureMatchBanner />}
+        {scheduleCollision && <SchedulingOverlapBanner />}
+      </div>
       <Topbar seasonId={season.id} seasonName={season.name} weekNumber={week.week_number} matchNumber={match.match_number} isGauntlet={season.is_gauntlet} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         {/* Header + veto wrapped in map backdrop — gradient shows regardless of image */}
