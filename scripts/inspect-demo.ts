@@ -1,34 +1,40 @@
-// Phase-0 parity harness for the DatHost + MatchZy spike (see
-// `dathost_handoff/DATHOST_PHASE0_PLAN.md`). Runs the *exact* production parsers
-// (`parseDemoFile` + `parseDemoSabremetrics`) against a real MatchZy `.dem`, with a hand-built
-// roster and a known starting side — mirroring `POST /api/matches/[id]/demo/parse` but with **no
-// Supabase or session dependency**. Prints a diff-friendly report so its numbers can be checked
-// against the in-game scoreboard and MatchZy's `matchzy_get_match_stats` CSV / `map_result`.
+// Inspect a CS2 demo through DGLS's production parsers.
 //
-// This is a throwaway spike tool, not part of the app runtime. It writes nothing (no R2, no DB).
+// Runs the exact parsers the app uses (`parseDemoFile` + `parseDemoSabremetrics`) against any demo —
+// a local `.dem` or one pulled from R2 by match id — and prints what they produce: the derived
+// score, per-player stats, sabremetrics, the demo-inferred starting side, and any warnings. Reads
+// only; writes nothing (no R2, no DB), and has no session dependency.
+//
+// Handy for verifying parser output, debugging a specific match, checking a new demo source, or
+// seeing what the pipeline would produce before it runs. Interpret the numbers against whatever
+// source of truth applies to your case (scoreboard, official result, another tool).
 //
 // Usage:
-//   tsx scripts/parse-demo-parity.ts --demo ./game.dem --roster ./roster.json --skins-side CT
-//   tsx scripts/parse-demo-parity.ts --match 123 --roster ./roster.json   # pulls demo from R2
-//   tsx scripts/parse-demo-parity.ts --demo ./game.dem --roster ./roster.json --skins-side unknown
-//                                                       # exercises the manual-score warning path
+//   tsx scripts/inspect-demo.ts --match 123                         # roster/side/target from DB
+//   tsx scripts/inspect-demo.ts --match 123 --skins-side unknown    # ignore stored side; infer it
+//   tsx scripts/inspect-demo.ts --demo ./game.dem --roster ./roster.json --skins-side CT
 //
 // Flags:
 //   --demo <path>        local .dem file (gzip auto-detected). Mutually exclusive with --match.
-//   --match <id>         pull the demo from R2 at demoKey(id) (needs CLOUDFLARE_R2_* env).
-//   --roster <path>      REQUIRED. JSON array of RosterEntry:
+//   --match <id>         pull the demo from R2 at demoKey(id) (needs CLOUDFLARE_R2_* + Supabase env).
+//                        With --match, roster / skins-side / target default from the DB
+//                        (getReplayInputs) — no --roster needed. --demo still requires --roster.
+//   --roster <path>      JSON array of RosterEntry (REQUIRED for --demo; optional override for --match):
 //                          [{ "player_id": 1, "faction": "SHIRTS",
 //                             "steam_id": "7656119...", "name": "Zach",
 //                             "steam_nickname": "zg" }, ...]
 //                        steam_id must match the demo's accounts; name/steam_nickname are display.
-//   --skins-side CT|T|unknown   default "unknown" → passes null (no score derived; warning fires).
-//   --target <n>         target win rounds (default 13).
+//   --skins-side CT|T|unknown   the side SKINS started on. "unknown" → null, so the parser infers it
+//                        from the demo. Default: the DB's stored side for --match, else "unknown".
+//   --target <n>         target win rounds. Default: the DB's value for --match, else 13.
 //   --json               print the full raw parser output as JSON instead of the readable report.
 
 import { readFileSync } from 'node:fs';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { parseDemoFile, type RosterEntry, type DemoPlayerStat } from '../src/lib/demoParser';
 import { parseDemoSabremetrics } from '../src/lib/demoOrchestrator';
+import { getReplayInputs } from '../src/lib/replay/inputs';
+import { getAdminClient } from '../src/lib/supabase-admin';
 import { r2, R2_BUCKET, demoKey } from '../src/lib/r2';
 import { gunzipMaybe } from '../src/lib/gzip';
 
@@ -105,35 +111,57 @@ function printWarnings(warnings: string[]): void {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
-  if (!args.roster || typeof args.roster !== 'string') {
-    die('Missing --roster <path.json> (hand-built RosterEntry[]). See the header for the shape.');
-  }
   const hasDemo = typeof args.demo === 'string';
   const hasMatch = typeof args.match === 'string';
   if (hasDemo === hasMatch) {
     die('Provide exactly one of --demo <path> or --match <id>.');
   }
+  const hasRoster = typeof args.roster === 'string';
 
-  // Roster
-  let roster: RosterEntry[];
-  try {
-    roster = JSON.parse(readFileSync(args.roster as string, 'utf8')) as RosterEntry[];
-  } catch (e) {
-    die(`Could not read/parse roster JSON: ${e instanceof Error ? e.message : String(e)}`);
+  // For --match, roster / side / target default from the DB (getReplayInputs) — the same inputs the
+  // app parses a match with — so a quick check is just `--match <id>`. --demo has no DB context.
+  let dbRoster: RosterEntry[] | null = null;
+  let dbSide: 'CT' | 'T' | null = null;
+  let dbTarget = 13;
+  if (hasMatch) {
+    const inputs = await getReplayInputs(getAdminClient(), Number(args.match));
+    dbRoster = inputs.roster as RosterEntry[];
+    dbSide = inputs.skinsSide;
+    dbTarget = inputs.targetWinRounds;
   }
-  if (!Array.isArray(roster) || roster.length === 0) die('Roster JSON must be a non-empty array.');
 
-  // Side
-  const sideRaw = (typeof args['skins-side'] === 'string' ? args['skins-side'] : 'unknown')
-    .toString()
-    .toUpperCase();
+  // Roster: an explicit --roster file wins; otherwise the DB roster (--match only).
+  let roster: RosterEntry[];
+  let rosterSource: string;
+  if (hasRoster) {
+    try {
+      roster = JSON.parse(readFileSync(args.roster as string, 'utf8')) as RosterEntry[];
+    } catch (e) {
+      die(`Could not read/parse roster JSON: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    rosterSource = `file ${args.roster}`;
+  } else if (dbRoster) {
+    roster = dbRoster;
+    rosterSource = 'DB (getReplayInputs)';
+  } else {
+    die('Missing --roster <path.json> (required with --demo). See the header for the shape.');
+  }
+  if (!Array.isArray(roster) || roster.length === 0) die('Roster must be a non-empty array.');
+
+  // Side: --skins-side overrides; else the DB's stored side (--match) or unknown (--demo).
   let skinsSide: 'CT' | 'T' | null;
-  if (sideRaw === 'CT') skinsSide = 'CT';
-  else if (sideRaw === 'T') skinsSide = 'T';
-  else if (sideRaw === 'UNKNOWN') skinsSide = null;
-  else die(`--skins-side must be CT, T, or unknown (got "${sideRaw}").`);
+  const sideArg = args['skins-side'];
+  if (typeof sideArg === 'string') {
+    const sideRaw = sideArg.toUpperCase();
+    if (sideRaw === 'CT') skinsSide = 'CT';
+    else if (sideRaw === 'T') skinsSide = 'T';
+    else if (sideRaw === 'UNKNOWN') skinsSide = null;
+    else die(`--skins-side must be CT, T, or unknown (got "${sideRaw}").`);
+  } else {
+    skinsSide = dbSide;
+  }
 
-  const targetWinRounds = args.target ? Number(args.target) : 13;
+  const targetWinRounds = args.target ? Number(args.target) : dbTarget;
   if (!Number.isFinite(targetWinRounds) || targetWinRounds <= 0) die('--target must be a positive number.');
 
   // Demo bytes
@@ -142,11 +170,11 @@ async function main() {
     : await loadDemoFromR2(Number(args.match));
   const demoBuffer = gunzipMaybe(rawBuf);
 
-  console.log('\n=== Phase-0 parser parity harness ===');
+  console.log('\n=== demo inspection (production parsers) ===');
   console.log(`source        : ${hasDemo ? `file ${args.demo}` : `R2 ${demoKey(Number(args.match))}`}`);
   console.log(`demo size     : ${(demoBuffer.length / 1024 / 1024).toFixed(2)} MB`);
-  console.log(`roster        : ${roster.length} players`);
-  console.log(`skins side    : ${skinsSide ?? 'unknown (null → score not derived, expect a warning)'}`);
+  console.log(`roster        : ${roster.length} players (${rosterSource})`);
+  console.log(`stored side   : ${skinsSide ?? 'unknown (null → rely on demo inference)'}`);
   console.log(`target rounds : ${targetWinRounds}`);
 
   // Run the EXACT production parsers (same call as the parse route).
@@ -160,8 +188,17 @@ async function main() {
   }
 
   printStatsTable(result.stats, roster);
+  const effectiveSide = skinsSide ?? result.inferred_side;
   console.log(
-    `\nScore (derived): SHIRTS ${result.shirts_score ?? '—'}  vs  SKINS ${result.skins_score ?? '—'}`,
+    `\nInferred side  : skins ${result.inferred_side ?? 'could not infer'} (from demo round-1 team_num)`,
+  );
+  console.log(
+    `Effective side : skins ${effectiveSide ?? 'none — score not derived'}` +
+      `${skinsSide === null && result.inferred_side !== null ? '  ← inferred (no stored side)' : ''}` +
+      `${skinsSide !== null && result.inferred_side !== null && skinsSide !== result.inferred_side ? '  ← STORED wins; demo disagrees!' : ''}`,
+  );
+  console.log(
+    `Score (derived): SHIRTS ${result.shirts_score ?? '—'}  vs  SKINS ${result.skins_score ?? '—'}`,
   );
   console.log(`Rounds in history: ${result.round_history?.length ?? 0}`);
 
@@ -179,7 +216,7 @@ async function main() {
   }
 
   printWarnings(warnings);
-  console.log('\nDiff these numbers against the in-game scoreboard + MatchZy CSV / map_result.\n');
+  console.log('');
 }
 
 main().catch((e) => {

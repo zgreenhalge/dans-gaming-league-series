@@ -116,7 +116,7 @@ These are GitHub's official hardening practices ([security-hardening for GitHub 
 4. **Status surface** — read via a new additive getter mirroring `getReplayJobState`; add a domain
    mirror column only if a hot page needs it.
 5. **Local dry-run** — `set -a; . ./.env.local; set +a` then `MATCH_ID=<id> npx tsx scripts/<job>.ts`.
-   (Tip: `scripts/dump-roster.ts` and `scripts/parse-demo-parity.ts` are read-only harnesses that run
+   (Tip: `scripts/dump-roster.ts` and `scripts/inspect-demo.ts` are read-only harnesses that run
    the same shared lib locally.)
 6. **Docs** — note job-specific details in the owning doc (e.g. `replay.md`, `demo-ingestion.md`); the
    *generic* pattern stays here.
