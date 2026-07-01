@@ -4,6 +4,7 @@ import type { SabFields, DemoSabremetricStat, ParsedDemoSabremetricsResult } fro
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
 import { buildMatchContext, type PlayerDeathRow } from './parsers/matchContext';
 import type { RoundEndRow } from './parsers/roundSides';
+import { inferSkinsStartingSide, resolveEffectiveSide } from './parsers/sideInference';
 import { collectAccumulators } from './parsers/accumulators';
 import { collectEntry } from './parsers/entry';
 import { collectKast } from './parsers/kast';
@@ -72,10 +73,20 @@ export function parseDemoSabremetrics(
     demoBuffer, 'bomb_defused', [], ['total_rounds_played'],
   ) as BombEventRow[];
 
-  // 3. Build match context
+  // 3. Build match context — resolve the starting side the same way parseDemoFile does
+  // (stored wins; otherwise infer from the demo) so sabremetrics and the score agree.
+  const sabLiveRounds = roundEndEvents.filter(
+    (e) => !e.is_warmup_period && e.winner !== null && e.total_rounds_played > 0,
+  );
+  const inferredSide =
+    sabLiveRounds.length > 0
+      ? inferSkinsStartingSide(demoBuffer, sabLiveRounds[0].tick, steamToPlayer)
+      : null;
+  const { side: effectiveSide } = resolveEffectiveSide(skinsSide, inferredSide);
+
   const context = buildMatchContext(
     demoBuffer, roundEndEvents, deathEvents,
-    steamToPlayer, skinsSide, targetWinRounds,
+    steamToPlayer, effectiveSide, targetWinRounds,
   );
   warnings.push(...context.warnings);
 

@@ -1,6 +1,11 @@
 import { parseEvent, parseTicks } from '@laihoe/demoparser2';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
 import { buildRoundSides } from './parsers/roundSides';
+import {
+  inferSkinsStartingSide,
+  resolveEffectiveSide,
+  sideDisagreementWarning,
+} from './parsers/sideInference';
 import type { RoundCondition, RoundHistoryEntry } from './types';
 
 /** Map a CS2 round_end `reason` string to the win-condition icon bucket. */
@@ -48,6 +53,8 @@ export interface ParsedDemoResult {
   skins_score: number | null;
   round_history: RoundHistoryEntry[] | null;
   warnings: string[];
+  /** Side inferred from the demo's round-1 `team_num` (null if unresolvable); for diagnostics. */
+  inferred_side: 'CT' | 'T' | null;
 }
 
 export function parseDemoFile(
@@ -105,6 +112,17 @@ export function parseDemoFile(
     }
   }
 
+  // --- Starting side: stored wins; fall back to inferring it from the demo (the
+  // round-1 anchor gauntlet/knife matches have no stored value for). ---
+  const inferredSide =
+    liveRounds.length > 0
+      ? inferSkinsStartingSide(demoBuffer, liveRounds[0].tick, steamToPlayer)
+      : null;
+  const { side: effectiveSide, disagreed } = resolveEffectiveSide(skinsSide, inferredSide);
+  if (disagreed && skinsSide !== null && inferredSide !== null) {
+    warnings.push(sideDisagreementWarning(skinsSide, inferredSide));
+  }
+
   // --- Round outcomes (via shared side logic) ---
   let shirtsRoundsWon = 0;
   let skinsRoundsWon = 0;
@@ -116,7 +134,7 @@ export function parseDemoFile(
       winner: e.winner,
       is_warmup_period: false,
     })),
-    skinsSide,
+    effectiveSide,
     targetWinRounds,
   );
 
@@ -139,7 +157,7 @@ export function parseDemoFile(
         condition: reasonToCondition(liveRounds[i]?.reason ?? null),
       });
     }
-  } else if (skinsSide === null) {
+  } else if (effectiveSide === null) {
     warnings.push(
       'Starting side unknown — rounds won cannot be determined from the demo. Enter the score manually.',
     );
@@ -153,7 +171,7 @@ export function parseDemoFile(
     const dmg = damage.get(steamId) ?? 0;
     const adr = totalRounds > 0 ? Math.round(dmg / totalRounds) : 0;
     const isWin =
-      skinsSide !== null &&
+      effectiveSide !== null &&
       (faction === 'SHIRTS' ? shirtsRoundsWon > skinsRoundsWon : skinsRoundsWon > shirtsRoundsWon);
 
     stats.push({
@@ -172,9 +190,10 @@ export function parseDemoFile(
 
   return {
     stats,
-    shirts_score: skinsSide !== null ? shirtsRoundsWon : null,
-    skins_score: skinsSide !== null ? skinsRoundsWon : null,
+    shirts_score: effectiveSide !== null ? shirtsRoundsWon : null,
+    skins_score: effectiveSide !== null ? skinsRoundsWon : null,
     round_history: roundHistory,
     warnings,
+    inferred_side: inferredSide,
   };
 }
