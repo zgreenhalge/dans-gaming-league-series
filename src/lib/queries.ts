@@ -7,6 +7,7 @@ import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
 import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
+import { DEMO_INGEST_JOB_TYPE } from './demo/ingestResult';
 import type {
   Season,
   Week,
@@ -3369,6 +3370,116 @@ export async function getReplayJobState(matchId: number): Promise<ReplayJobState
     };
   } catch {
     return none;
+  }
+}
+
+/**
+ * One row of the admin demo-ingestion dashboard (issue #136) — a `background_jobs`
+ * row (`job_type='demo_ingest'`) plus enough match context to label and link it.
+ * The dashboard is the notification channel for anything that would otherwise fail
+ * silently (parse failures, quarantines). Full per-match detail (parse warnings,
+ * quarantine flags, the staged score) lives in the R2 artifact and is shown on the
+ * match page's review block — this list links there rather than duplicating it.
+ */
+export interface DemoIngestJobRow {
+  matchId: number;
+  status: string;
+  stage: string | null;
+  errorMessage: string | null;
+  ghRunUrl: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  // Match context (null when the match row was deleted after the job ran).
+  matchNumber: number | null;
+  pickedMap: string | null;
+  finalScore: string | null;
+  weekNumber: number | null;
+  seasonName: string | null;
+  isGauntlet: boolean;
+}
+
+/**
+ * All demo-ingest jobs, newest activity first. Additive read for the admin
+ * ingestion-status page. Defensive: returns `[]` if `background_jobs` isn't present
+ * yet so the page never hard-fails.
+ */
+export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
+  try {
+    const { data: jobs, error } = await supabase
+      .from('background_jobs')
+      .select(
+        'match_id, status, stage, error_message, gh_run_url, created_at, updated_at, started_at, finished_at',
+      )
+      .eq('job_type', DEMO_INGEST_JOB_TYPE)
+      .order('updated_at', { ascending: false });
+    if (error || !jobs) return [];
+
+    type JobRow = {
+      match_id: number;
+      status: string | null;
+      stage: string | null;
+      error_message: string | null;
+      gh_run_url: string | null;
+      created_at: string | null;
+      updated_at: string | null;
+      started_at: string | null;
+      finished_at: string | null;
+    };
+    const jobRows = jobs as JobRow[];
+
+    // Batch the match → week → season context in three queries (not per-row).
+    const matchIds = Array.from(new Set(jobRows.map((j) => j.match_id)));
+    const { data: matchRows } = await supabase
+      .from('matches')
+      .select('id, match_number, picked_map, final_score, week_id')
+      .in('id', matchIds);
+    const matches = (matchRows ?? []) as Pick<
+      Match,
+      'id' | 'match_number' | 'picked_map' | 'final_score' | 'week_id'
+    >[];
+
+    const weekIds = Array.from(new Set(matches.map((m) => m.week_id)));
+    const { data: weekRows } = weekIds.length
+      ? await supabase.from('weeks').select('id, week_number, season_id').in('id', weekIds)
+      : { data: [] as Pick<Week, 'id' | 'week_number' | 'season_id'>[] };
+    const weeks = (weekRows ?? []) as Pick<Week, 'id' | 'week_number' | 'season_id'>[];
+
+    const seasonIds = Array.from(new Set(weeks.map((w) => w.season_id)));
+    const { data: seasonRows } = seasonIds.length
+      ? await supabase.from('seasons').select('id, name, is_gauntlet').in('id', seasonIds)
+      : { data: [] as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[] };
+    const seasons = (seasonRows ?? []) as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[];
+
+    const matchById = new Map(matches.map((m) => [m.id, m]));
+    const weekById = new Map(weeks.map((w) => [w.id, w]));
+    const seasonById = new Map(seasons.map((s) => [s.id, s]));
+
+    return jobRows.map((j) => {
+      const m = matchById.get(j.match_id) ?? null;
+      const w = m ? weekById.get(m.week_id) ?? null : null;
+      const s = w ? seasonById.get(w.season_id) ?? null : null;
+      return {
+        matchId: j.match_id,
+        status: j.status ?? 'unknown',
+        stage: j.stage,
+        errorMessage: j.error_message,
+        ghRunUrl: j.gh_run_url,
+        createdAt: j.created_at,
+        updatedAt: j.updated_at,
+        startedAt: j.started_at,
+        finishedAt: j.finished_at,
+        matchNumber: m?.match_number ?? null,
+        pickedMap: m?.picked_map ?? null,
+        finalScore: m?.final_score ?? null,
+        weekNumber: w?.week_number ?? null,
+        seasonName: s?.name ?? null,
+        isGauntlet: s?.is_gauntlet ?? false,
+      };
+    });
+  } catch {
+    return [];
   }
 }
 
