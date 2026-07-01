@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledTimes } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/og';
 import { projectRatingDeltas, type RatingProjection } from '@/lib/ehog';
 import { isPlayedScore, parseScore } from '@/lib/util';
@@ -242,14 +242,14 @@ export default async function MatchPage({
   // (#134) — both the schedule editor and the overlap banner. Fetched for any viewer of an unplayed
   // non-gauntlet match so the banner shows regardless of edit rights.
   const otherScheduled =
-    !played && !season.is_gauntlet ? await getOtherScheduledTimes(match.id) : [];
+    !played && !season.is_gauntlet ? await getOtherScheduledMatches(match.id) : [];
   const scheduleCollision = findScheduleCollision(match.scheduled_at, otherScheduled);
 
   return (
     <div className="min-h-screen">
       <div className="centering">
         {match.is_feature_match && <FeatureMatchBanner />}
-        {scheduleCollision && <SchedulingOverlapBanner />}
+        {scheduleCollision && <SchedulingOverlapBanner conflict={scheduleCollision} />}
       </div>
       <Topbar seasonId={season.id} seasonName={season.name} weekNumber={week.week_number} matchNumber={match.match_number} isGauntlet={season.is_gauntlet} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">

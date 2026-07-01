@@ -8,6 +8,7 @@ import { mapSlug } from './maps';
 import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
 import { DEMO_INGEST_JOB_TYPE, type DemoIngestResult } from './demo/ingestResult';
+import type { ScheduledMatchRef } from './schedule';
 import type {
   Season,
   Week,
@@ -400,20 +401,42 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
 }
 
 /**
- * Scheduled times (ISO) of other unplayed matches — used to warn when a match is scheduled close to
- * another, since they'd contend for the single shared DatHost server (#134). Played matches are
- * excluded (their scheduled time is moot).
+ * Other unplayed matches that have a scheduled time — used to warn (and link) when a match is
+ * scheduled close to another, since they'd contend for the single shared DatHost server (#134).
+ * Played matches are excluded (their scheduled time is moot).
  */
-export async function getOtherScheduledTimes(matchId: number): Promise<string[]> {
+export async function getOtherScheduledMatches(matchId: number): Promise<ScheduledMatchRef[]> {
   const { data } = await supabase
     .from('matches')
-    .select('id, scheduled_at, final_score')
+    .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
     .not('scheduled_at', 'is', null)
     .neq('id', matchId);
-  const rows = (data ?? []) as { scheduled_at: string | null; final_score: string | null }[];
+  type Row = {
+    id: number;
+    match_number: number | null;
+    scheduled_at: string | null;
+    final_score: string | null;
+    weeks: { week_number: number | null; seasons: { name: string | null } | null } | null;
+  };
+  // Supabase types embedded to-one relations as arrays, but returns objects at runtime — cast through
+  // unknown (same pattern as other nested selects here).
+  const rows = (data ?? []) as unknown as Row[];
   return rows
     .filter((r) => r.scheduled_at && !isPlayedScore(r.final_score))
-    .map((r) => r.scheduled_at as string);
+    .map((r) => {
+      const season = r.weeks?.seasons?.name;
+      const wk = r.weeks?.week_number;
+      const parts = [
+        season,
+        wk != null ? `Wk ${wk}` : null,
+        r.match_number != null ? `Match ${r.match_number}` : null,
+      ].filter(Boolean);
+      return {
+        id: r.id,
+        scheduledAt: r.scheduled_at as string,
+        label: parts.length ? parts.join(' · ') : `Match #${r.id}`,
+      };
+    });
 }
 
 export interface MatchSabremetricsRow extends PlayerMatchSabremetrics {

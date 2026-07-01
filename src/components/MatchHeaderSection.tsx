@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect, useSyncExternalStore } from 'react'
 import Link from 'next/link';
 import { toSentenceCase, mapSlug } from '@/lib/maps';
 import { useRouter } from 'next/navigation';
-import { findScheduleCollision } from '@/lib/schedule';
+import { findScheduleCollision, type ScheduledMatchRef } from '@/lib/schedule';
 
 const noopSubscribe = () => () => {};
 const returnFalse = () => false;
@@ -19,8 +19,8 @@ interface Props {
   canEdit: boolean;
   played: boolean;
   isGauntlet: boolean;
-  /** Scheduled times (ISO) of other unplayed matches — drives the shared-server collision warning (#134). */
-  otherScheduled?: string[];
+  /** Other unplayed scheduled matches — drives the shared-server collision warning (#134). */
+  otherScheduled?: ScheduledMatchRef[];
 }
 
 function formatCountdown(iso: string): string {
@@ -114,6 +114,7 @@ export default function MatchHeaderSection({
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
   const [warning, setWarning] = useState<'window' | 'collision' | null>(null);
+  const [collisionWith, setCollisionWith] = useState<ScheduledMatchRef | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const countdown = useCountdown(scheduledAt);
@@ -133,7 +134,9 @@ export default function MatchHeaderSection({
         setWarning('window');
         return;
       }
-      if (findScheduleCollision(value, otherScheduled)) {
+      const clash = findScheduleCollision(value, otherScheduled);
+      if (clash) {
+        setCollisionWith(clash);
         setWarning('collision');
         return;
       }
@@ -287,9 +290,21 @@ export default function MatchHeaderSection({
         <div className="flex justify-start">
           <div className="border border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)] px-3 py-2.5 flex flex-col gap-2">
             <span className="text-[12px] text-[var(--color-accent-amber-fg)]">
-              {warning === 'collision'
-                ? 'Another match is scheduled within an hour — they share one game server, so they may contend.'
-                : `Outside week window${windowLabel ? ` (${windowLabel})` : ''}.`}
+              {warning === 'collision' ? (
+                <>
+                  Within an hour of{' '}
+                  {collisionWith ? (
+                    <Link href={`/matches/${collisionWith.id}`} className="underline hover:opacity-80">
+                      {collisionWith.label}
+                    </Link>
+                  ) : (
+                    'another match'
+                  )}{' '}
+                  — they share one game server and may contend.
+                </>
+              ) : (
+                `Outside week window${windowLabel ? ` (${windowLabel})` : ''}.`
+              )}
             </span>
             <div className="flex items-center justify-end gap-3">
               <button
