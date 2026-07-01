@@ -25,6 +25,39 @@ import {
 
 export type ServerState = 'idle' | 'provisioning' | 'live' | 'tearing_down' | 'done' | 'failed';
 
+/** Server-states in which a match currently occupies the single shared server (D2). */
+const OCCUPYING_STATES: readonly ServerState[] = ['provisioning', 'live', 'tearing_down'];
+
+/** Thrown when a provision is refused because another match already holds the shared server (#134). */
+export class ServerBusyError extends Error {
+  constructor(readonly occupantMatchId: number) {
+    super(`The match server is already in use by match ${occupantMatchId}.`);
+    this.name = 'ServerBusyError';
+  }
+}
+
+/**
+ * The id of another match currently occupying the shared server, or `null` if it's free (#134).
+ * Since all matches reuse ONE server (D2), any *other* match in an occupying state holds it. Returns
+ * `null` when hosting isn't configured (no server to contend for).
+ */
+export async function findServerOccupant(
+  supabaseAdmin: SupabaseClient,
+  exceptMatchId: number,
+): Promise<number | null> {
+  const serverId = process.env.DATHOST_SERVER_ID;
+  if (!serverId) return null;
+  const { data } = await supabaseAdmin
+    .from('matches')
+    .select('id')
+    .eq('dathost_server_id', serverId)
+    .in('server_state', OCCUPYING_STATES as unknown as string[])
+    .neq('id', exceptMatchId)
+    .limit(1);
+  const rows = (data ?? []) as { id: number }[];
+  return rows.length ? rows[0].id : null;
+}
+
 async function setServerState(
   supabaseAdmin: SupabaseClient,
   matchId: number,
@@ -97,6 +130,14 @@ export async function provisionMatchServer(
   configAuth: { headerKey: string; headerValue: string },
 ): Promise<ProvisionResult> {
   const serverId = dathostServerId();
+
+  // Hard safety (#134): never clobber a server another match is already using. Checked BEFORE we
+  // claim (set `provisioning`), so a refusal doesn't mark THIS match failed. There's a tiny
+  // check-then-claim window, but veto completions are seconds+ apart in practice and this turns the
+  // common overlap from a silent mid-game clobber into a clean refusal.
+  const occupant = await findServerOccupant(supabaseAdmin, matchId);
+  if (occupant !== null) throw new ServerBusyError(occupant);
+
   try {
     await setServerState(supabaseAdmin, matchId, {
       server_state: 'provisioning',

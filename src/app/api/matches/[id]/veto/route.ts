@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/authOptions';
 import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { isVetoComplete, type VetoFields } from '@/lib/veto';
-import { provisionMatchServer, matchzyConfigContext } from '@/lib/dathost-lifecycle';
+import { provisionMatchServer, matchzyConfigContext, ServerBusyError } from '@/lib/dathost-lifecycle';
 
 const supabaseAdmin = getAdminClient();
 
@@ -259,7 +259,13 @@ export async function PATCH(
         try {
           await provisionMatchServer(supabaseAdmin, matchId, ctx.configUrl, ctx.configAuth);
         } catch (err) {
-          console.error(`auto-provision(${matchId}) failed:`, err);
+          // Expected when another match already holds the shared server (#134) — the guard refused
+          // rather than clobbering it. Not a failure.
+          if (err instanceof ServerBusyError) {
+            console.warn(`auto-provision(${matchId}) skipped: ${err.message}`);
+          } else {
+            console.error(`auto-provision(${matchId}) failed:`, err);
+          }
         }
       });
     }
