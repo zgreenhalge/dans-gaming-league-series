@@ -146,7 +146,7 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
       )}
       <div className="mt-3 flex items-center gap-2">
         <button
-          onClick={() => confirm(result.payload)}
+          onClick={() => confirm(result.payload, result.warnings)}
           disabled={busy}
           className="rounded-md border border-green-500 bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50"
         >

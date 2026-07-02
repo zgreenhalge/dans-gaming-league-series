@@ -44,18 +44,25 @@ export function useDemoIngestActions(matchId: number, opts: Options = {}) {
   /** Write the staged score, then clear the staged artifact. `payload` avoids a refetch when the
    *  caller already has it (the match page does); otherwise the staged result is fetched first. */
   const confirm = useCallback(
-    (payload?: DemoConfirmPayload | null) =>
+    (payload?: DemoConfirmPayload | null, warnings?: string[]) =>
       run(async () => {
         let p = payload ?? null;
-        if (!p) {
+        let w = warnings ?? null;
+        // Fetch the staged result if the caller didn't hand us the payload/warnings (dashboard rows).
+        if (!p || !w) {
           const r = await fetch(`/api/matches/${matchId}/demo/result`);
-          if (r.ok) p = ((await r.json()) as { result?: { payload?: DemoConfirmPayload | null } })?.result?.payload ?? null;
+          if (r.ok) {
+            const j = (await r.json()) as { result?: { payload?: DemoConfirmPayload | null; warnings?: string[] } };
+            p = p ?? j?.result?.payload ?? null;
+            w = w ?? j?.result?.warnings ?? null;
+          }
         }
         if (!p) return 'No derivable score to confirm — re-parse or enter the score manually.';
         const res = await fetch(`/api/matches/${matchId}/score`, {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(p),
+          // Forward warnings so the score route can learn steam ids from elimination matches.
+          body: JSON.stringify({ ...p, warnings: w ?? [] }),
         });
         if (!res.ok) return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'Could not save the score';
         await fetch(`/api/matches/${matchId}/demo/result?disposition=confirmed`, { method: 'DELETE' }).catch(() => {});

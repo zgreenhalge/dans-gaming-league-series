@@ -5,6 +5,26 @@ function normName(s: string | null | undefined): string {
   return (s ?? '').toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
+export interface EliminationResolution {
+  demoName: string;
+  steamId: string;
+  rosterName: string;
+}
+
+/**
+ * The warning emitted when a demo player is matched to a roster slot by elimination. Its format is
+ * the single source of truth — `parseEliminationWarning` reads it back, so keep the two in sync.
+ */
+export function eliminationWarning(demoName: string, steamId: string, rosterName: string): string {
+  return `Resolved "${demoName}" (${steamId}) to roster player "${rosterName}" by elimination — verify this is correct.`;
+}
+
+/** Parse an elimination warning back into its parts, or `null` if the string isn't one. */
+export function parseEliminationWarning(warning: string): EliminationResolution | null {
+  const m = warning.match(/^Resolved "(.+?)" \((\d+)\) to roster player "(.+?)" by elimination/);
+  return m ? { demoName: m[1], steamId: m[2], rosterName: m[3] } : null;
+}
+
 export function readDemoPlayers(
   demoBuffer: Buffer,
 ): { steamId: string; name: string }[] {
@@ -55,9 +75,7 @@ export function resolveRoster(
   const open = roster.filter((r) => !usedIds.has(r.player_id));
   if (remaining.length === 1 && open.length === 1) {
     const d = remaining[0];
-    warnings.push(
-      `Resolved "${d.name}" (${d.steamId}) to roster player "${open[0].name}" by elimination — verify this is correct.`,
-    );
+    warnings.push(eliminationWarning(d.name, d.steamId, open[0].name));
     resolved.set(d.steamId, { player_id: open[0].player_id, faction: open[0].faction });
     remaining = [];
   }
