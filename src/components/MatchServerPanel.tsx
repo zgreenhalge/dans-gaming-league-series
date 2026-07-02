@@ -101,7 +101,9 @@ export default function MatchServerPanel({
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error ?? 'Could not start the server');
-        setState('failed');
+        // 409 = another match holds the shared server (#134). Not a failure — revert to idle so the
+        // manager can retry once it frees up, instead of showing the "failed / Retry" state.
+        setState(res.status === 409 ? 'idle' : 'failed');
       }
     } finally {
       setBusy(false);

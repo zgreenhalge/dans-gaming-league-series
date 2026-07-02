@@ -14,10 +14,11 @@
 // `INGEST_NOTIFY_SECRET`. No session — this is called by the Worker, not a browser.
 
 import { HeadObjectCommand } from '@aws-sdk/client-s3';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { r2, R2_BUCKET, demoKey } from '@/lib/r2';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
+import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import { machineSecretGuard } from '@/lib/machine-auth';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '@/lib/demo/ingestResult';
 
@@ -120,6 +121,20 @@ export async function POST(req: NextRequest) {
       .eq('status', 'received');
   } else {
     console.error(`demo-ingest dispatch failed for match ${matchId}: ${dispatch.error}`);
+  }
+
+  // The demo landing means the match is over → tear down the shared server now, without waiting for
+  // the score write (#135). Best-effort, skipped when hosting isn't configured; `onlyIfOwnsServer`
+  // so a demo for one match never stops another match's live server. Score-write teardown remains
+  // the fallback.
+  if (process.env.DATHOST_SERVER_ID) {
+    after(async () => {
+      try {
+        await teardownMatchServer(supabaseAdmin, matchId, { onlyIfOwnsServer: true });
+      } catch (err) {
+        console.error(`notify auto-teardown(${matchId}) failed:`, err);
+      }
+    });
   }
 
   return NextResponse.json({

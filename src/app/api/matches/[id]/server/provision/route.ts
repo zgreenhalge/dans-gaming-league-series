@@ -5,7 +5,12 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireMatchAccess } from '@/lib/match-access';
-import { provisionMatchServer, matchzyConfigContext } from '@/lib/dathost-lifecycle';
+import {
+  provisionMatchServer,
+  matchzyConfigContext,
+  findServerOccupant,
+  ServerBusyError,
+} from '@/lib/dathost-lifecycle';
 import { parseMatchId } from '@/lib/util';
 
 export async function POST(
@@ -28,12 +33,28 @@ export async function POST(
     return NextResponse.json({ error: 'Server hosting not configured' }, { status: 503 });
   }
 
+  // Refuse up front if another match holds the shared server (#134), so the panel gets a clear 409
+  // instead of a silent no-op. `provisionMatchServer` re-checks authoritatively to close the race.
+  const occupant = await findServerOccupant(getAdminClient(), matchId);
+  if (occupant !== null) {
+    return NextResponse.json(
+      { error: `Another match (#${occupant}) is currently using the server.`, code: 'server_busy' },
+      { status: 409 },
+    );
+  }
+
   // Boot is slow (~15–20s) — run it after the response and let the client subscribe for updates.
   after(async () => {
     try {
       await provisionMatchServer(getAdminClient(), matchId, ctx.configUrl, ctx.configAuth);
     } catch (err) {
-      console.error(`provisionMatchServer(${matchId}) failed:`, err);
+      // A ServerBusyError here is the race-loser (another match claimed between the check and now) —
+      // expected, not a failure. Anything else is a real provisioning error.
+      if (err instanceof ServerBusyError) {
+        console.warn(`provision(${matchId}) skipped: ${err.message}`);
+      } else {
+        console.error(`provisionMatchServer(${matchId}) failed:`, err);
+      }
     }
   });
 

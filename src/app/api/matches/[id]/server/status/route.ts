@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { getReconciledServerState } from '@/lib/dathost-lifecycle';
 import { requireMatchAccess } from '@/lib/match-access';
 import { parseMatchId } from '@/lib/util';
 
@@ -19,21 +20,7 @@ export async function GET(
   const access = await requireMatchAccess(matchId);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
-  const { data, error } = await getAdminClient()
-    .from('matches')
-    .select('server_state, connect_string, server_started_at')
-    .eq('id', matchId)
-    .maybeSingle();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  const row = (data ?? {}) as {
-    server_state?: string | null;
-    connect_string?: string | null;
-    server_started_at?: string | null;
-  };
-  return NextResponse.json({
-    serverState: row.server_state ?? 'idle',
-    connectString: row.connect_string ?? null,
-    serverStartedAt: row.server_started_at ?? null,
-  });
+  // Reconciles a stale `live` against real DatHost state (#135) so the UI never offers a dead server.
+  const view = await getReconciledServerState(getAdminClient(), matchId);
+  return NextResponse.json(view);
 }

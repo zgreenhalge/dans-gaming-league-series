@@ -1,12 +1,14 @@
 import { gunzipMaybe } from './gzip';
 import { supabase } from './supabase';
-import { getR2Object, replayKey, heatmapKey } from './r2';
+import { getR2Object, replayKey, heatmapKey, demoResultKey } from './r2';
 import type { ReplayPayload, ReplayPlayerMeta, ReplayEvent } from './replay/types';
 import type { HeatmapArtifact, HeatmapKind } from './replay/heatmap';
 import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
 import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
+import { DEMO_INGEST_JOB_TYPE, type DemoIngestResult } from './demo/ingestResult';
+import type { ScheduledMatchRef } from './schedule';
 import type {
   Season,
   Week,
@@ -396,6 +398,45 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   );
 
   return { match: m, week: w, season: season as Season, stats: statRows };
+}
+
+/**
+ * Other unplayed matches that have a scheduled time — used to warn (and link) when a match is
+ * scheduled close to another, since they'd contend for the single shared DatHost server (#134).
+ * Played matches are excluded (their scheduled time is moot).
+ */
+export async function getOtherScheduledMatches(matchId: number): Promise<ScheduledMatchRef[]> {
+  const { data } = await supabase
+    .from('matches')
+    .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
+    .not('scheduled_at', 'is', null)
+    .neq('id', matchId);
+  type Row = {
+    id: number;
+    match_number: number | null;
+    scheduled_at: string | null;
+    final_score: string | null;
+    weeks: { week_number: number | null; seasons: { name: string | null } | null } | null;
+  };
+  // Supabase types embedded to-one relations as arrays, but returns objects at runtime — cast through
+  // unknown (same pattern as other nested selects here).
+  const rows = (data ?? []) as unknown as Row[];
+  return rows
+    .filter((r) => r.scheduled_at && !isPlayedScore(r.final_score))
+    .map((r) => {
+      const season = r.weeks?.seasons?.name;
+      const wk = r.weeks?.week_number;
+      const parts = [
+        season,
+        wk != null ? `Wk ${wk}` : null,
+        r.match_number != null ? `Match ${r.match_number}` : null,
+      ].filter(Boolean);
+      return {
+        id: r.id,
+        scheduledAt: r.scheduled_at as string,
+        label: parts.length ? parts.join(' · ') : `Match #${r.id}`,
+      };
+    });
 }
 
 export interface MatchSabremetricsRow extends PlayerMatchSabremetrics {
@@ -3369,6 +3410,147 @@ export async function getReplayJobState(matchId: number): Promise<ReplayJobState
     };
   } catch {
     return none;
+  }
+}
+
+/**
+ * One row of the admin demo-ingestion dashboard (issue #136) — a `background_jobs`
+ * row (`job_type='demo_ingest'`) plus enough match context to label and link it.
+ * The dashboard is the notification channel for anything that would otherwise fail
+ * silently (parse failures, quarantines). Full per-match detail (parse warnings,
+ * quarantine flags, the staged score) lives in the R2 artifact and is shown on the
+ * match page's review block — this list links there rather than duplicating it.
+ */
+export interface DemoIngestJobRow {
+  matchId: number;
+  status: string;
+  stage: string | null;
+  errorMessage: string | null;
+  ghRunUrl: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  // Match context (null when the match row was deleted after the job ran).
+  matchNumber: number | null;
+  pickedMap: string | null;
+  finalScore: string | null;
+  weekNumber: number | null;
+  seasonName: string | null;
+  isGauntlet: boolean;
+  // Parse warnings + quarantine flags from the staged R2 artifact (present only while
+  // the job has one: `parsed`/`quarantined`). This is how side-mismatch and other
+  // otherwise-silent issues surface on the admin panel.
+  warnings: string[];
+  quarantineFlags: string[];
+}
+
+/** Job statuses that still have a staged `demo-result.json` artifact in R2 to read detail from. */
+const DEMO_INGEST_STAGED_STATUSES: ReadonlySet<string> = new Set(['parsed', 'quarantined']);
+
+/**
+ * All demo-ingest jobs, newest activity first. Additive read for the admin
+ * ingestion-status page. Defensive: returns `[]` if `background_jobs` isn't present
+ * yet so the page never hard-fails.
+ */
+export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
+  try {
+    const { data: jobs, error } = await supabase
+      .from('background_jobs')
+      .select(
+        'match_id, status, stage, error_message, gh_run_url, created_at, updated_at, started_at, finished_at',
+      )
+      .eq('job_type', DEMO_INGEST_JOB_TYPE)
+      .order('updated_at', { ascending: false });
+    if (error || !jobs) return [];
+
+    type JobRow = {
+      match_id: number;
+      status: string | null;
+      stage: string | null;
+      error_message: string | null;
+      gh_run_url: string | null;
+      created_at: string | null;
+      updated_at: string | null;
+      started_at: string | null;
+      finished_at: string | null;
+    };
+    const jobRows = jobs as JobRow[];
+
+    // Batch the match → week → season context in three queries (not per-row).
+    const matchIds = Array.from(new Set(jobRows.map((j) => j.match_id)));
+    const { data: matchRows } = await supabase
+      .from('matches')
+      .select('id, match_number, picked_map, final_score, week_id')
+      .in('id', matchIds);
+    const matches = (matchRows ?? []) as Pick<
+      Match,
+      'id' | 'match_number' | 'picked_map' | 'final_score' | 'week_id'
+    >[];
+
+    const weekIds = Array.from(new Set(matches.map((m) => m.week_id)));
+    const { data: weekRows } = weekIds.length
+      ? await supabase.from('weeks').select('id, week_number, season_id').in('id', weekIds)
+      : { data: [] as Pick<Week, 'id' | 'week_number' | 'season_id'>[] };
+    const weeks = (weekRows ?? []) as Pick<Week, 'id' | 'week_number' | 'season_id'>[];
+
+    const seasonIds = Array.from(new Set(weeks.map((w) => w.season_id)));
+    const { data: seasonRows } = seasonIds.length
+      ? await supabase.from('seasons').select('id, name, is_gauntlet').in('id', seasonIds)
+      : { data: [] as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[] };
+    const seasons = (seasonRows ?? []) as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[];
+
+    const matchById = new Map(matches.map((m) => [m.id, m]));
+    const weekById = new Map(weeks.map((w) => [w.id, w]));
+    const seasonById = new Map(seasons.map((s) => [s.id, s]));
+
+    // Enrich staged jobs with their parse warnings / quarantine flags from R2 (bounded:
+    // only `parsed`/`quarantined` rows still have an artifact). Read in parallel.
+    const staged = jobRows.filter((j) => DEMO_INGEST_STAGED_STATUSES.has(j.status ?? ''));
+    const detailByMatch = new Map<number, { warnings: string[]; quarantineFlags: string[] }>();
+    await Promise.all(
+      staged.map(async (j) => {
+        try {
+          const buf = await getR2Object(demoResultKey(j.match_id));
+          if (!buf) return;
+          const r = JSON.parse(gunzipMaybe(buf).toString()) as DemoIngestResult;
+          detailByMatch.set(j.match_id, {
+            warnings: r.warnings ?? [],
+            quarantineFlags: r.quarantineFlags ?? [],
+          });
+        } catch {
+          /* corrupt/partial artifact — leave detail empty, status still shows */
+        }
+      }),
+    );
+
+    return jobRows.map((j) => {
+      const m = matchById.get(j.match_id) ?? null;
+      const w = m ? weekById.get(m.week_id) ?? null : null;
+      const s = w ? seasonById.get(w.season_id) ?? null : null;
+      const detail = detailByMatch.get(j.match_id);
+      return {
+        matchId: j.match_id,
+        status: j.status ?? 'unknown',
+        stage: j.stage,
+        errorMessage: j.error_message,
+        ghRunUrl: j.gh_run_url,
+        createdAt: j.created_at,
+        updatedAt: j.updated_at,
+        startedAt: j.started_at,
+        finishedAt: j.finished_at,
+        matchNumber: m?.match_number ?? null,
+        pickedMap: m?.picked_map ?? null,
+        finalScore: m?.final_score ?? null,
+        weekNumber: w?.week_number ?? null,
+        seasonName: s?.name ?? null,
+        isGauntlet: s?.is_gauntlet ?? false,
+        warnings: detail?.warnings ?? [],
+        quarantineFlags: detail?.quarantineFlags ?? [],
+      };
+    });
+  } catch {
+    return [];
   }
 }
 

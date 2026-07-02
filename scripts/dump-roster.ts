@@ -1,6 +1,6 @@
-// Dump a match's RosterEntry[] (via the shared `getReplayInputs` resolver) as JSON, to feed
-// `scripts/parse-demo-parity.ts`. Prints the roster array to stdout; prints map / skinsSide /
-// targetWinRounds to stderr so you know which `--skins-side` to pass the harness.
+// Dump a match's RosterEntry[] (via the shared `getReplayInputs` resolver) as JSON, e.g. to feed
+// `scripts/inspect-demo.ts --demo <file> --roster <this>`. Prints the roster array to stdout; prints
+// map / skinsSide / targetWinRounds to stderr so you know which `--skins-side` to pass.
 //
 // Needs Supabase creds in env (source .env.local first):
 //   set -a; . ./.env.local; set +a

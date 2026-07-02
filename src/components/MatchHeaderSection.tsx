@@ -4,6 +4,7 @@ import { useState, useTransition, useEffect, useSyncExternalStore } from 'react'
 import Link from 'next/link';
 import { toSentenceCase, mapSlug } from '@/lib/maps';
 import { useRouter } from 'next/navigation';
+import { findScheduleCollision, type ScheduledMatchRef } from '@/lib/schedule';
 
 const noopSubscribe = () => () => {};
 const returnFalse = () => false;
@@ -18,6 +19,8 @@ interface Props {
   canEdit: boolean;
   played: boolean;
   isGauntlet: boolean;
+  /** Other unplayed scheduled matches — drives the shared-server collision warning (#134). */
+  otherScheduled?: ScheduledMatchRef[];
 }
 
 function formatCountdown(iso: string): string {
@@ -104,12 +107,14 @@ export default function MatchHeaderSection({
   canEdit,
   played,
   isGauntlet,
+  otherScheduled = [],
 }: Props) {
   const router = useRouter();
   const isClient = useIsClient();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
-  const [warning, setWarning] = useState(false);
+  const [warning, setWarning] = useState<'window' | 'collision' | null>(null);
+  const [collisionWith, setCollisionWith] = useState<ScheduledMatchRef | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const countdown = useCountdown(scheduledAt);
@@ -124,11 +129,19 @@ export default function MatchHeaderSection({
 
   async function save(override = false) {
     if (!value) return;
-    if (!override && isOutsideWindow(value, weekStart, weekEnd)) {
-      setWarning(true);
-      return;
+    if (!override) {
+      if (isOutsideWindow(value, weekStart, weekEnd)) {
+        setWarning('window');
+        return;
+      }
+      const clash = findScheduleCollision(value, otherScheduled);
+      if (clash) {
+        setCollisionWith(clash);
+        setWarning('collision');
+        return;
+      }
     }
-    setWarning(false);
+    setWarning(null);
     setError(null);
     const res = await fetch(`/api/matches/${matchId}/schedule`, {
       method: 'PATCH',
@@ -213,12 +226,12 @@ export default function MatchHeaderSection({
         type="datetime-local"
         value={value}
         onChange={(e) => {
-          if (!e.target.value) { setValue(''); setWarning(false); return; }
+          if (!e.target.value) { setValue(''); setWarning(null); return; }
           const d = new Date(e.target.value);
           d.setMinutes(Math.round(d.getMinutes() / 15) * 15, 0, 0);
           const pad = (n: number) => String(n).padStart(2, '0');
           setValue(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
-          setWarning(false);
+          setWarning(null);
         }}
         className="font-mono text-[13px] px-2 py-1.5 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
       />
@@ -239,7 +252,7 @@ export default function MatchHeaderSection({
         </button>
       )}
       <button
-        onClick={() => { setEditing(false); setWarning(false); setError(null); }}
+        onClick={() => { setEditing(false); setWarning(null); setError(null); }}
         className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
       >
         Cancel
@@ -277,7 +290,21 @@ export default function MatchHeaderSection({
         <div className="flex justify-start">
           <div className="border border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)] px-3 py-2.5 flex flex-col gap-2">
             <span className="text-[12px] text-[var(--color-accent-amber-fg)]">
-              Outside week window{windowLabel ? ` (${windowLabel})` : ''}.
+              {warning === 'collision' ? (
+                <>
+                  Within an hour of{' '}
+                  {collisionWith ? (
+                    <Link href={`/matches/${collisionWith.id}`} className="underline hover:opacity-80">
+                      {collisionWith.label}
+                    </Link>
+                  ) : (
+                    'another match'
+                  )}{' '}
+                  — they share one game server and may contend.
+                </>
+              ) : (
+                `Outside week window${windowLabel ? ` (${windowLabel})` : ''}.`
+              )}
             </span>
             <div className="flex items-center justify-end gap-3">
               <button
@@ -287,7 +314,7 @@ export default function MatchHeaderSection({
                 Schedule anyway
               </button>
               <button
-                onClick={() => setWarning(false)}
+                onClick={() => setWarning(null)}
                 className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
               >
                 Cancel

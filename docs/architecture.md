@@ -26,6 +26,9 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/statistics` | Cross-season career leaderboard + gauntlet stats |
 | `/maps` | Map index — pick/ban/skip counts per map |
 | `/maps/[slug]` | Map detail — match history + per-player stats on that map |
+| `/admin` | Admin hub — links to admin tools (linked from the Topbar when `session.user.isAdmin`) |
+| `/admin/ingestion` | Admin demo-ingestion dashboard — every `demo_ingest` job + warnings/quarantine flags (see [`hosting.md`](./hosting.md)) |
+| `/admin/seasons/new` | Create a new season (admin only) |
 | `/auth/steam` | Steam auth landing — completes `signIn()` after the OpenID bounce |
 
 `/career-stats` is a permanent redirect to `/statistics`, not a standalone page.
@@ -39,21 +42,28 @@ Players authenticate via **Steam OpenID**. The flow:
 3. The `/auth/steam` page calls NextAuth's `signIn("steam-credentials", { token })` to establish a session
 4. On first login a `RegisterModal` appears — the player links their Steam account to their existing player record (or creates a new one)
 
-Once linked, `session.user.playerId` is set. Admin players (`players.is_admin = true`) get elevated permissions: editing submitted scores, clearing pick/ban steps, and setting season start dates.
+Once linked, `session.user.playerId` is set. Admin players (`players.is_admin = true`) get elevated permissions: editing submitted scores, clearing pick/ban steps, and setting season start dates. `is_admin` is carried on the session token as `session.user.isAdmin` (backfilled into existing sessions on their next request), which gates the Topbar's admin-hub link; admin **pages** still re-check `isPlayerAdmin` server-side.
 
 **Development shortcut:** When `NODE_ENV=development`, two mock login providers (`dev-zach-mock` / `dev-dan-mock`) appear that skip Steam auth entirely and sign you in as a known player. No `STEAM_API_KEY` needed locally.
 
 ## API Routes (mutation endpoints)
 
-All mutation routes require a valid session. Most require the caller to be in the match or an admin.
+Most mutation routes require a valid session (caller in the match or an admin). The DatHost/MatchZy
+hosting + ingestion routes are their own subsystem — see [`hosting.md`](./hosting.md); the machine-auth
+ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a browser.
 
 | Method | Path | Description |
 |---|---|---|
-| `PATCH` | `/api/matches/[id]/veto` | Submit a single pick/ban step |
-| `PATCH` | `/api/matches/[id]/score` | Submit final score + player stats |
+| `PATCH` | `/api/matches/[id]/veto` | Submit a single pick/ban step (auto-provisions the server on completion) |
+| `PATCH` | `/api/matches/[id]/score` | Submit final score + player stats (tears down the server) |
 | `PATCH` | `/api/matches/[id]/schedule` | Set a match's scheduled time |
 | `POST` | `/api/matches/[id]/demo/upload-url` | Mint a presigned Cloudflare R2 URL to upload a `.dem` file |
 | `POST` | `/api/matches/[id]/demo/parse` | Parse the uploaded demo into match + sabremetric stats (see [`demo-ingestion.md`](./demo-ingestion.md)) |
+| `GET/DELETE` | `/api/matches/[id]/demo/result` | Read / dispose the staged auto-ingest result ([`hosting.md`](./hosting.md)) |
+| `GET/POST` | `/api/matches/[id]/server/{status,provision,teardown}` | Per-match DatHost server lifecycle ([`hosting.md`](./hosting.md)) |
+| `GET` | `/api/matches/[id]/matchzy-config` | Machine-auth MatchZy config (`matchzy_loadmatch_url` target) |
+| `POST` | `/api/ingest/notify` | Machine-auth: demo landed → record job, dispatch parse, tear down |
+| `POST` | `/api/matches/[id]/replay/dispatch` | (Re)trigger the replay Action ([`replay.md`](./replay.md)) |
 | `PATCH` | `/api/seasons/[id]/start-date` | Set season start date (admin only) |
 | `GET/POST` | `/api/players/register` | List unlinked players / link a Steam account to a player record |
 | `GET` | `/api/cron/refresh-steam` | Refresh Steam avatars/nicknames for all linked players (Vercel cron; see below) |
@@ -68,11 +78,12 @@ Supabase (`public` schema). RLS is **off** on all tables — do not enable it wi
 |---|---|
 | `seasons` | One row per season. Key fields: `name`, `status` (`UPCOMING`/`ACTIVE`/`COMPLETED`), `is_gauntlet` (bool), `start_date`, `map_pool` (text[]), `target_win_rounds`, `buy_in_amount` |
 | `weeks` | Linked to `seasons`. Has `week_number` and `bye_player_id` (who sits out that week) |
-| `matches` | Linked to `weeks`. Veto fields: `shirts_ban`, `shirts_ban2`, `skins_ban1`, `skins_ban2`, `shirts_pick`, `picked_map`, `skins_starting_side`. Also: `final_score`, `is_playoff_game`, `scheduled_at`, `screenshot_url_front/back`, `notes` |
+| `matches` | Linked to `weeks`. Veto fields: `shirts_ban`, `shirts_ban2`, `skins_ban1`, `skins_ban2`, `shirts_pick`, `picked_map`, `skins_starting_side`. Also: `final_score`, `is_playoff_game`, `scheduled_at`, `screenshot_url_front/back`, `notes`. Hosting (see [`hosting.md`](./hosting.md)): `server_state`, `dathost_server_id`, `connect_string`, `server_started_at` |
 | `players` | Global player registry. Unique `name`. Steam fields: `steam_id`, `steam_nickname`, `steam_avatar_url`, `steam_refreshed_at`. Admin flag: `is_admin` |
 | `player_match_stats` | Per-player per-match basics: `faction` (`SHIRTS`/`SKINS`), K/A/D, `damage`, `adr`, `rounds_played`, `rounds_won`, `is_win` |
 | `player_match_sabremetrics` | Demo-derived advanced stats, one row per `player_match_stats` row (FK `player_match_stats_id`): CT/T side splits, opening duels, KAST, clutches, utility, objectives. Written only when a demo is parsed. See [`demo-ingestion.md`](./demo-ingestion.md). |
 | `player_rating_history` / `player_current_ratings` | EHOG skill-rating storage (μ/σ history + current standings). Written by the EHOG recompute. See [`ehog.md`](./ehog.md). |
+| `background_jobs` | Background-job state machine, one row per (`job_type`, `match_id`). `job_type` is `replay_extract` ([`replay.md`](./replay.md)) or `demo_ingest` ([`hosting.md`](./hosting.md)); tracks `status`/`stage`/`error_message` + GitHub Action run refs. |
 
 ### View: `player_season_leaderboard`
 

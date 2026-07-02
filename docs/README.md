@@ -14,6 +14,7 @@ follow the link that matches what you're doing. New to the codebase? Read
 | [`visual-conventions.md`](./visual-conventions.md) | The shared CSS hover/glow/accent system and UI primitives |
 | [`ehog.md`](./ehog.md) | The EHOG player skill rating engine (OpenSkill) |
 | [`demo-ingestion.md`](./demo-ingestion.md) | The in-app CS2 demo upload → parse → stats pipeline |
+| [`hosting.md`](./hosting.md) | DatHost + MatchZy per-match server hosting, the auto-ingestion pipeline, and admin surfaces |
 | [`replay.md`](./replay.md) | The 2D match replay + core-events pipeline (`replay.json`, GitHub Actions jobs, `background_jobs`) |
 | [`github-actions.md`](./github-actions.md) | When to run work as a GitHub Action vs a Vercel function, and how to build a background-job Action (the dispatch → workflow → `scripts/*` pattern) |
 

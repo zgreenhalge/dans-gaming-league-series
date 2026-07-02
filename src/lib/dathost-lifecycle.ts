@@ -20,9 +20,43 @@ import {
   loadMatch,
   connectHost,
   workshopIdFromUrl,
+  getServer,
 } from './dathost';
 
 export type ServerState = 'idle' | 'provisioning' | 'live' | 'tearing_down' | 'done' | 'failed';
+
+/** Server-states in which a match currently occupies the single shared server (D2). */
+const OCCUPYING_STATES: readonly ServerState[] = ['provisioning', 'live', 'tearing_down'];
+
+/** Thrown when a provision is refused because another match already holds the shared server (#134). */
+export class ServerBusyError extends Error {
+  constructor(readonly occupantMatchId: number) {
+    super(`The match server is already in use by match ${occupantMatchId}.`);
+    this.name = 'ServerBusyError';
+  }
+}
+
+/**
+ * The id of another match currently occupying the shared server, or `null` if it's free (#134).
+ * Since all matches reuse ONE server (D2), any *other* match in an occupying state holds it. Returns
+ * `null` when hosting isn't configured (no server to contend for).
+ */
+export async function findServerOccupant(
+  supabaseAdmin: SupabaseClient,
+  exceptMatchId: number,
+): Promise<number | null> {
+  const serverId = process.env.DATHOST_SERVER_ID;
+  if (!serverId) return null;
+  const { data } = await supabaseAdmin
+    .from('matches')
+    .select('id')
+    .eq('dathost_server_id', serverId)
+    .in('server_state', OCCUPYING_STATES as unknown as string[])
+    .neq('id', exceptMatchId)
+    .limit(1);
+  const rows = (data ?? []) as { id: number }[];
+  return rows.length ? rows[0].id : null;
+}
 
 async function setServerState(
   supabaseAdmin: SupabaseClient,
@@ -96,6 +130,14 @@ export async function provisionMatchServer(
   configAuth: { headerKey: string; headerValue: string },
 ): Promise<ProvisionResult> {
   const serverId = dathostServerId();
+
+  // Hard safety (#134): never clobber a server another match is already using. Checked BEFORE we
+  // claim (set `provisioning`), so a refusal doesn't mark THIS match failed. There's a tiny
+  // check-then-claim window, but veto completions are seconds+ apart in practice and this turns the
+  // common overlap from a silent mid-game clobber into a clean refusal.
+  const occupant = await findServerOccupant(supabaseAdmin, matchId);
+  if (occupant !== null) throw new ServerBusyError(occupant);
+
   try {
     await setServerState(supabaseAdmin, matchId, {
       server_state: 'provisioning',
@@ -162,4 +204,58 @@ export async function teardownMatchServer(
     server_state: 'done',
     connect_string: null,
   });
+}
+
+export interface ServerStatusView {
+  serverState: ServerState;
+  connectString: string | null;
+  serverStartedAt: string | null;
+}
+
+/**
+ * Read a match's server-state, reconciling a stale `live` against real DatHost state (#135). After a
+ * match ends the shared server auto-stops (`autostop`, 10 min idle) while the row can stay `live` —
+ * so the panel keeps offering a dead connect link until the score is entered. Here, when the DB says
+ * `live` but DatHost reports the server stopped, flip it to `done` (connect cleared) so the panel
+ * stops presenting it as joinable.
+ *
+ * Only `live` is reconciled: `provisioning` is legitimately `on:false/booting` mid-boot, and we only
+ * ever *downgrade* on a confirmed stop — a running server is left alone (concurrent-occupancy is
+ * #134's problem, not this one). Best-effort: hosting-unconfigured or a DatHost error returns the DB
+ * value unchanged so the panel never breaks.
+ */
+export async function getReconciledServerState(
+  supabaseAdmin: SupabaseClient,
+  matchId: number,
+): Promise<ServerStatusView> {
+  const { data } = await supabaseAdmin
+    .from('matches')
+    .select('server_state, connect_string, server_started_at, dathost_server_id')
+    .eq('id', matchId)
+    .maybeSingle();
+  const row = (data ?? {}) as {
+    server_state?: string | null;
+    connect_string?: string | null;
+    server_started_at?: string | null;
+    dathost_server_id?: string | null;
+  };
+  let serverState = (row.server_state ?? 'idle') as ServerState;
+  let connectString = row.connect_string ?? null;
+
+  const serverId = process.env.DATHOST_SERVER_ID;
+  const ownsServer = !row.dathost_server_id || row.dathost_server_id === serverId;
+  if (serverState === 'live' && serverId && ownsServer) {
+    try {
+      const server = await getServer(serverId);
+      if (!server.on && !server.booting) {
+        await setServerState(supabaseAdmin, matchId, { server_state: 'done', connect_string: null });
+        serverState = 'done';
+        connectString = null;
+      }
+    } catch {
+      /* DatHost unreachable — keep the DB value so the panel still renders */
+    }
+  }
+
+  return { serverState, connectString, serverStartedAt: row.server_started_at ?? null };
 }

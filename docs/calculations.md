@@ -54,8 +54,11 @@ Raw numbers, direct from the game scoreboard
 ## Side Splits
 
 CT/T splits for kills, deaths, assists, damage, and headshot kills are derived deterministically
-from the roster's faction (SHIRTS/SKINS), the stored `skins_starting_side`, and the round number.
-No per-tick `team_num` lookups are used.
+from the roster's faction (SHIRTS/SKINS), the starting side, and the round number. The per-round side
+logic never does per-tick `team_num` lookups. The starting-side **anchor** is `skins_starting_side`
+when stored, and is otherwise inferred from a **single** round-1 `team_num` read when it isn't set
+(gauntlet/knife) — stored always wins; see
+[`demo-ingestion.md`](./demo-ingestion.md#starting-side-inference).
 
 - **Regulation:** Rounds 1–`regRoundsPerHalf` (= `target_win_rounds - 1`) use starting sides;
   rounds `regRoundsPerHalf + 1`–`regRoundsPerHalf * 2` use swapped sides.
