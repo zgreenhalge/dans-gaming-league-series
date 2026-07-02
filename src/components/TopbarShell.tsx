@@ -174,12 +174,12 @@ export function TopbarShell({
                 <PlayerAvatar name={user.name ?? "?"} imageUrl={user.image} size="md" round />
               )
             ) : (
-              <a
+              <Link
                 href="/api/auth/steam"
                 className="text-[13px] font-medium tracking-wide text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
               >
                 Login
-              </a>
+              </Link>
             )}
           </div>
         </div>

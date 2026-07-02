@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useHasMounted } from './useHasMounted';
 
 type Pref = 'system' | 'light' | 'dark';
 type Resolved = 'light' | 'dark';
@@ -61,13 +62,10 @@ const OPTIONS: { value: Pref; label: string; Icon: () => ReactElement }[] = [
 ];
 
 export function ThemeToggle() {
-  const [pref, setPref] = useState<Pref>('system');
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setPref(readPref());
-    setMounted(true);
-  }, []);
+  // Lazy-initialized on the client only; rendering is gated on `mounted` below so
+  // this never causes a hydration mismatch even though it reads localStorage.
+  const [pref, setPref] = useState<Pref>(() => readPref());
+  const mounted = useHasMounted();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 

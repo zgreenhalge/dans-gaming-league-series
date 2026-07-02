@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
+import { usePersistedToggle } from './usePersistedToggle';
 
 interface NavState {
   mobileOpen: boolean;
@@ -13,20 +14,7 @@ const NavContext = createContext<NavState | null>(null);
 
 export function NavProvider({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [desktopOpen, setDesktopOpen] = useState(true);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('sidenav-desktop-open');
-    if (stored !== null) setDesktopOpen(stored === 'true');
-  }, []);
-
-  function toggleDesktop() {
-    setDesktopOpen((v) => {
-      const next = !v;
-      localStorage.setItem('sidenav-desktop-open', String(next));
-      return next;
-    });
-  }
+  const [desktopOpen, toggleDesktop] = usePersistedToggle('sidenav-desktop-open', true);
 
   return (
     <NavContext.Provider value={{ mobileOpen, setMobileOpen, desktopOpen, toggleDesktop }}>

@@ -5,7 +5,7 @@
 // and the save/clear PATCHes to `/schedule`, so the match page and the console can't drift. Each
 // surface renders its own markup (hero vs compact row) off this hook.
 
-import { useEffect, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { findScheduleCollision, type ScheduledMatchRef } from '@/lib/schedule';
 
@@ -62,9 +62,12 @@ export function useScheduleEditor(opts: {
   const [, startTransition] = useTransition();
 
   // Keep the field in sync when the underlying schedule changes (e.g. another client edits it).
-  useEffect(() => {
+  // Adjusted during render (not an effect) per https://react.dev/learn/you-might-not-need-an-effect.
+  const [prevScheduledAt, setPrevScheduledAt] = useState(scheduledAt);
+  if (scheduledAt !== prevScheduledAt) {
+    setPrevScheduledAt(scheduledAt);
     if (scheduledAt) setValueState(toDatetimeLocal(scheduledAt));
-  }, [scheduledAt]);
+  }
 
   const setValue = (raw: string) => {
     if (!raw) {
