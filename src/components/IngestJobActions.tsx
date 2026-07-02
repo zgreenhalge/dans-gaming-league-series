@@ -1,13 +1,11 @@
 'use client';
 
-// Client islands for the admin ingestion dashboard (#136). Per-row actions (confirm / re-parse /
-// dismiss) over the shared `useDemoIngestActions` hook, plus a Realtime refresher so the list stays
-// live. The dashboard page stays a server component; these are the only interactive bits.
+// Per-row demo-ingest actions for the admin jobs dashboard (#136 / #145): confirm / re-parse /
+// dismiss over the shared `useDemoIngestActions` hook. The dashboard page stays a server component;
+// this is the interactive bit for demo rows (replay/radar rows use `JobRetryButton`).
 
-import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getBrowserClient } from '@/lib/supabase-browser';
-import { DEMO_INGEST_JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '@/lib/demo/ingestResult';
+import { DEMO_INGEST_IN_PROGRESS } from '@/lib/demo/ingestResult';
 import { useDemoIngestActions } from './useDemoIngestActions';
 
 export function IngestJobActions({
@@ -68,26 +66,4 @@ export function IngestJobActions({
       {error && <span className="font-mono text-[10px] text-[var(--color-accent-red-fg)]">{error}</span>}
     </div>
   );
-}
-
-/** Refreshes the dashboard when any `demo_ingest` job row changes. Renders nothing. */
-export function IngestLiveRefresh() {
-  const router = useRouter();
-  useEffect(() => {
-    const channel = getBrowserClient()
-      .channel('admin-ingestion')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'background_jobs' },
-        (payload) => {
-          const row = (payload.new ?? payload.old) as { job_type?: string } | null;
-          if (row?.job_type === DEMO_INGEST_JOB_TYPE) router.refresh();
-        },
-      )
-      .subscribe();
-    return () => {
-      getBrowserClient().removeChannel(channel);
-    };
-  }, [router]);
-  return null;
 }

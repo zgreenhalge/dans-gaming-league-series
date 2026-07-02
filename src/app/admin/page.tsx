@@ -15,9 +15,9 @@ export const metadata = {
 // this hub is a convenience surface, not the security boundary).
 const TOOLS: { href: string; title: string; desc: string }[] = [
   {
-    href: '/admin/ingestion',
-    title: 'Demo Ingestion',
-    desc: 'DatHost/MatchZy pipeline status — parse results, quarantines, and failures.',
+    href: '/admin/jobs',
+    title: 'Background Jobs',
+    desc: 'Every pipeline — demo ingest, replay, and radar — with status, warnings, and retry.',
   },
   {
     href: '/admin/servers',
