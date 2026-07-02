@@ -119,6 +119,18 @@ async function applyEliminationSteamIds(matchId: number, warnings: string[]): Pr
   const target = ((players ?? []) as { id: number; name: string }[]).find((p) => p.name === rosterName);
   if (!target) return;
 
+  // Never duplicate a steam id across players — don't rely on a DB constraint that may not exist.
+  const { data: clash } = await supabaseAdmin
+    .from('players')
+    .select('id')
+    .eq('steam_id', steamId)
+    .neq('id', target.id)
+    .limit(1);
+  if (clash && clash.length > 0) {
+    console.warn(`learn steam id skipped: ${steamId} already belongs to player ${(clash[0] as { id: number }).id}`);
+    return;
+  }
+
   const { error } = await supabaseAdmin
     .from('players')
     .update({ steam_id: steamId, steam_nickname: demoName })
@@ -348,9 +360,10 @@ export async function PATCH(
 
   // Learn steam ids from elimination-resolved players: if the confirm forwarded parser warnings and
   // exactly one player was matched by elimination, persist that demo's steam id/nickname onto the
-  // roster player, so next time they resolve by exact id — no guess. Best-effort in `after()`; a
-  // unique-constraint hit (that id already belongs to someone) is skipped, never breaking the score.
-  if (Array.isArray(warnings)) {
+  // roster player, so next time they resolve by exact id — no guess. Best-effort in `after()`.
+  // ADMIN-ONLY: `warnings` is client-supplied and this writes to `players.steam_id`, so trusting a
+  // non-admin caller would let an in-match player forge a warning and hijack another's steam identity.
+  if (isAdmin && Array.isArray(warnings)) {
     after(async () => {
       try {
         await applyEliminationSteamIds(matchId, warnings as string[]);
