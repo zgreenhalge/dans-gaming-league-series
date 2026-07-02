@@ -6,8 +6,8 @@ import { MatchCard } from './MatchCard';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import TabBar from './TabBar';
 import { AdvancedStatsView } from './AdvancedStatsView';
-import { tabCls, canonicalSort, deriveRates } from '@/lib/util';
-import type { MapMatchRow, MapDetail, MapPlayerStat, H2HData } from '@/lib/queries';
+import { tabCls, canonicalSort, computeH2H, deriveRates, mapMatchRowsToH2HInput } from '@/lib/util';
+import type { MapMatchRow, MapDetail, MapPlayerStat } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import H2HSection from './H2HSection';
 import MapHeatmap from './MapHeatmap';
@@ -102,10 +102,10 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
 
 export default function MapDetailView({
   detail,
-  h2hData,
+  players,
 }: {
   detail: MapDetail;
-  h2hData: H2HData;
+  players: { id: number; name: string; steam_avatar_url: string | null }[];
 }) {
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter();
   const [tab, setTab] = useState<Tab>('leaderboard');
@@ -130,6 +130,13 @@ export default function MapDetailView({
   const filteredPlayerStats = useMemo(
     () => aggregatePlayerStats(filteredMatches),
     [filteredMatches],
+  );
+
+  const playersById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
+
+  const h2hData = useMemo(
+    () => computeH2H(mapMatchRowsToH2HInput(filteredMatches), playersById),
+    [filteredMatches, playersById],
   );
 
   // Stable list of every match id for this map — the Heatmap tab fetches its artifacts

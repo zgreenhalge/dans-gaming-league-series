@@ -6,7 +6,7 @@ import {
   getSeasons,
   getGauntletStats,
   getAllSeasonMedalists,
-  getH2HData,
+  getPlayersById,
   getAllMatchesWithPickBan,
   getAllEhogSnapshots,
   getAllSabremetrics,
@@ -23,18 +23,26 @@ export const metadata = {
 };
 
 export default async function StatisticsPage() {
-  const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, h2hData, allMatches, ehogSnapshots, allSabremetrics] =
+  const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, playersById, allMatches, ehogSnapshots, allSabremetrics] =
     await Promise.all([
       getCareerLeaderboard(),
       getAllLeaderboards(),
       getSeasons(),
       getGauntletStats(),
       getAllSeasonMedalists(),
-      getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
+      getPlayersById(),
       getAllMatchesWithPickBan(),
       getAllEhogSnapshots(),
       getAllSabremetrics(),
     ]);
+
+  // H2H is computed client-side (see CareerStatsView) so its tab can honor the
+  // season filter — only the id/name/avatar players need for it are passed down.
+  const players = Array.from(playersById.values()).map((p) => ({
+    id: p.id,
+    name: p.name,
+    steam_avatar_url: p.steam_avatar_url,
+  }));
 
   const bySeason: Record<number, LeaderboardRowWithId[]> = {};
   for (const [sid, rows] of allLeaderboards) bySeason[sid] = rows;
@@ -73,7 +81,7 @@ export default async function StatisticsPage() {
             gauntletCareerRows={gauntletStats.career}
             gauntletBySeason={gauntletStats.bySeason}
             trophiesByPlayer={trophiesByPlayer}
-            h2hData={h2hData}
+            players={players}
             allMatches={allMatches}
             ehogSnapshots={ehogSnapshots}
             allSabremetrics={allSabremetrics}
