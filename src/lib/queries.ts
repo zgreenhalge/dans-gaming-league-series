@@ -5,7 +5,8 @@ import type { ReplayPayload, ReplayPlayerMeta, ReplayEvent } from './replay/type
 import type { HeatmapArtifact, HeatmapKind } from './replay/heatmap';
 import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
-import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc, matchLabel, weekWindow } from './util';
+import { extractSeasonNumber, buildRegularToGauntletMap, canonicalSort, compareMatchRefDesc, matchLabel, weekWindow, computeH2H } from './util';
+import type { DuoStats, H2HStats, H2HData, H2HMatchInput } from './util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
 import { DEMO_INGEST_JOB_TYPE, type DemoIngestResult } from './demo/ingestResult';
 import {
@@ -2460,91 +2461,26 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
 
 // ─── H2H data layer ──────────────────────────────────────────────────────────
 //
-// Powers the H2H tab on the Statistics page and the match scouting report.
-// Aggregated client-side (in this query function) from `player_match_stats` —
-// see `design_handoff/IMPLEMENTATION_PLAN.md` Phase 2 for why no DB view is
-// warranted at this league's scale.
-
-/** A player's individual stat line for a single match. */
-export interface MatchPlayerStats {
-  kills: number;
-  assists: number;
-  deaths: number;
-}
-
-/** One match `playerA`+`playerB` played as partners (same faction). */
-export interface DuoMatchSummary {
-  matchId: number;
-  seasonNumber: number | null;
-  isGauntlet: boolean;
-  weekNumber: number;
-  matchNumber: number;
-  map: string | null;
-  score: { duo: number; opponents: number } | null;
-  won: boolean | null;
-  opponents: { player_id: number; player_name: string }[];
-}
-
-/** One match `playerA` and `playerB` met as opponents (different factions). */
-export interface RivalMatchSummary {
-  matchId: number;
-  seasonNumber: number | null;
-  isGauntlet: boolean;
-  weekNumber: number;
-  matchNumber: number;
-  map: string | null;
-  score: { a: number; b: number } | null;
-  aWon: boolean | null;
-  aMatchStats: MatchPlayerStats;
-  bMatchStats: MatchPlayerStats;
-}
-
-export interface DuoStats {
-  playerA: number;
-  playerB: number;
-  gamesPlayed: number;
-  wins: number;
-  losses: number;
-  combinedAdr: number;
-  combinedKills: number;
-  combinedAssists: number;
-  combinedDeaths: number;
-  roundsWon: number;
-  roundsPlayed: number;
-  aStats: H2HPlayerStats;
-  bStats: H2HPlayerStats;
-  bestMap: string | null;
-  matches: DuoMatchSummary[];
-}
-
-/** A player's aggregated performance across their meetings with a given rival. */
-export interface H2HPlayerStats {
-  kills: number;
-  assists: number;
-  deaths: number;
-  adr: number;
-  rwr: number;
-  roundsWon: number;
-  roundsPlayed: number;
-}
-
-export interface H2HStats {
-  playerA: number;
-  playerB: number;
-  meetings: number;
-  aWins: number;
-  bWins: number;
-  lastMap: string | null;
-  aStats: H2HPlayerStats;
-  bStats: H2HPlayerStats;
-  matches: RivalMatchSummary[];
-}
-
-export interface H2HData {
-  duos: DuoStats[];
-  rivals: H2HStats[];
-  players: { id: number; name: string; steam_avatar_url: string | null }[];
-}
+// Powers the H2H tab on the Statistics page, the Map detail page, and the
+// match scouting report. The aggregation core (`computeH2H`) lives in
+// `util.ts` — client-bundle-safe (no supabase import) — so the Statistics and
+// Map pages, which already load full match history client-side for their
+// other tabs, can compute H2H directly from it and honor a live season filter
+// instead of a static server-fetched snapshot. `getH2HData` below is the
+// DB-backed entry point for pages that don't already hold that data (player
+// page, season page, match scouting) — see `docs/patterns.md` re: extracting
+// shared aggregation logic instead of duplicating it.
+//
+// Types re-exported here for backward compatibility with existing imports.
+export type {
+  MatchPlayerStats,
+  DuoMatchSummary,
+  RivalMatchSummary,
+  DuoStats,
+  H2HPlayerStats,
+  H2HStats,
+  H2HData,
+} from './util';
 
 /**
  * Resolved season selection for H2H — mirrors how `CareerStatsView` resolves
@@ -2585,10 +2521,6 @@ function resolveH2HSeasonIds(
     ids.add(regularToGauntlet.get(selection.filter) ?? selection.filter);
   }
   return ids;
-}
-
-function pairKey(a: number, b: number): string {
-  return a < b ? `${a}:${b}` : `${b}:${a}`;
 }
 
 /**
@@ -2654,86 +2586,11 @@ export function rivalBreakdownScorer(rivals: H2HStats[]): (r: H2HStats) => strin
 }
 
 
-interface DuoAgg {
-  a: number;
-  b: number;
-  games: number;
-  wins: number;
-  losses: number;
-  adrSum: number;
-  kills: number;
-  assists: number;
-  deaths: number;
-  roundsWon: number;
-  roundsPlayed: number;
-  aStats: RivalPlayerAgg;
-  bStats: RivalPlayerAgg;
-  mapTotals: Map<string, { games: number; wins: number; adrSum: number }>;
-  matches: DuoMatchSummary[];
-}
-
-interface RivalPlayerAgg {
-  games: number;
-  kills: number;
-  assists: number;
-  deaths: number;
-  adrSum: number;
-  roundsWon: number;
-  roundsPlayed: number;
-}
-
-function emptyRivalPlayerAgg(): RivalPlayerAgg {
-  return { games: 0, kills: 0, assists: 0, deaths: 0, adrSum: 0, roundsWon: 0, roundsPlayed: 0 };
-}
-
-function finalizeRivalPlayerStats(agg: RivalPlayerAgg): H2HPlayerStats {
-  return {
-    kills: agg.kills,
-    assists: agg.assists,
-    deaths: agg.deaths,
-    adr: agg.games > 0 ? agg.adrSum / agg.games : 0,
-    rwr: agg.roundsPlayed > 0 ? (agg.roundsWon / agg.roundsPlayed) * 100 : 0,
-    roundsWon: agg.roundsWon,
-    roundsPlayed: agg.roundsPlayed,
-  };
-}
-
-interface RivalAgg {
-  a: number;
-  b: number;
-  meetings: number;
-  aWins: number;
-  bWins: number;
-  aStats: RivalPlayerAgg;
-  bStats: RivalPlayerAgg;
-  matches: RivalMatchSummary[];
-}
-
-/**
- * The map a duo has won together most often. If multiple maps are tied for
- * the most wins, there's no clear "best" — return null rather than picking
- * one arbitrarily.
- */
-function bestMapFor(mapTotals: Map<string, { games: number; wins: number; adrSum: number }>): string | null {
-  let bestMap: string | null = null;
-  let bestWins = -1;
-  let tied = false;
-  for (const [map, t] of mapTotals) {
-    if (t.wins > bestWins) {
-      bestMap = map;
-      bestWins = t.wins;
-      tied = false;
-    } else if (t.wins === bestWins) {
-      tied = true;
-    }
-  }
-  return tied ? null : bestMap;
-}
-
 /**
  * Computes head-to-head relationship data — partner records (`duos`) and
  * opponent records (`rivals`) — for the given resolved season selection.
- * Only played matches count (see `isPlayedScore`).
+ * Only played matches count (see `isPlayedScore`). Fetches the raw match/stat
+ * rows and delegates the actual aggregation to `computeH2H` (util.ts).
  */
 export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData> {
   const seasons = await getSeasons();
@@ -2807,185 +2664,34 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     statsByMatch.set(s.match_id, list);
   }
 
-  const duoAgg = new Map<string, DuoAgg>();
-  const rivalAgg = new Map<string, RivalAgg>();
-  const playerIds = new Set<number>();
-
-  function getDuo(x: StatRow, y: StatRow): DuoAgg {
-    const [a, b] = x.player_id < y.player_id ? [x.player_id, y.player_id] : [y.player_id, x.player_id];
-    const key = pairKey(a, b);
-    let agg = duoAgg.get(key);
-    if (!agg) {
-      agg = { a, b, games: 0, wins: 0, losses: 0, adrSum: 0, kills: 0, assists: 0, deaths: 0, roundsWon: 0, roundsPlayed: 0, aStats: emptyRivalPlayerAgg(), bStats: emptyRivalPlayerAgg(), mapTotals: new Map(), matches: [] };
-      duoAgg.set(key, agg);
-    }
-    return agg;
-  }
-
-  function getRival(x: StatRow, y: StatRow): RivalAgg {
-    const [a, b] = x.player_id < y.player_id ? [x.player_id, y.player_id] : [y.player_id, x.player_id];
-    const key = pairKey(a, b);
-    let agg = rivalAgg.get(key);
-    if (!agg) {
-      agg = { a, b, meetings: 0, aWins: 0, bWins: 0, aStats: emptyRivalPlayerAgg(), bStats: emptyRivalPlayerAgg(), matches: [] };
-      rivalAgg.set(key, agg);
-    }
-    return agg;
-  }
-
-  for (const m of playedMatches) {
+  const matchInputs: H2HMatchInput[] = [];
+  for (const m of filteredMatches) {
     const roster = statsByMatch.get(m.id) ?? [];
     if (roster.length === 0) continue;
-    for (const r of roster) playerIds.add(r.player_id);
-
-    // Partner/opponent grouping is purely faction-based: two players are
-    // partners if they share a `faction` (SHIRTS/SKINS) in a match, opponents
-    // if they don't. There's no explicit "duo"/"team" entity in the schema —
-    // this only produces correct results because the format is always 2v2
-    // Wingman. Revisit if the format ever changes.
-    const shirts = roster.filter((r) => r.faction === 'SHIRTS');
-    const skins = roster.filter((r) => r.faction === 'SKINS');
-    const weekNumber = weekNumberById.get(m.week_id) ?? 0;
     const seasonId = seasonIdByWeek.get(m.week_id) ?? -1;
-    const seasonNumber = seasonNumberById.get(seasonId) ?? null;
-    const isGauntlet = seasonIsGauntletById.get(seasonId) ?? false;
-    const parsedScore = parseScore(m.final_score);
-    const playedMap = mapFor(m);
-
-    const teams = [
-      { roster: shirts, opponents: skins, ourScore: parsedScore?.shirts ?? null, theirScore: parsedScore?.skins ?? null },
-      { roster: skins, opponents: shirts, ourScore: parsedScore?.skins ?? null, theirScore: parsedScore?.shirts ?? null },
-    ];
-    for (const { roster: team, opponents, ourScore, theirScore } of teams) {
-      for (let i = 0; i < team.length; i++) {
-        for (let j = i + 1; j < team.length; j++) {
-          const x = team[i];
-          const y = team[j];
-          const agg = getDuo(x, y);
-          agg.games += 1;
-          if (x.is_win) agg.wins += 1;
-          else agg.losses += 1;
-          agg.adrSum += x.adr + y.adr;
-          agg.kills += x.kills + y.kills;
-          agg.assists += (x.assists ?? 0) + (y.assists ?? 0);
-          agg.deaths += x.deaths + y.deaths;
-          // x and y are teammates, so they share identical round totals for this match — count once.
-          agg.roundsWon += x.rounds_won;
-          agg.roundsPlayed += x.rounds_played;
-          // Per-player stats: aStats belongs to the lower-id player (agg.a), bStats to the higher.
-          const aRow = x.player_id === agg.a ? x : y;
-          const bRow = aRow === x ? y : x;
-          for (const [statAgg, row] of [[agg.aStats, aRow], [agg.bStats, bRow]] as const) {
-            statAgg.games += 1;
-            statAgg.kills += row.kills;
-            statAgg.assists += row.assists ?? 0;
-            statAgg.deaths += row.deaths;
-            statAgg.adrSum += row.adr;
-            statAgg.roundsWon += row.rounds_won;
-            statAgg.roundsPlayed += row.rounds_played;
-          }
-          if (playedMap) {
-            const mapKey = playedMap.toLowerCase();
-            const mapAgg = agg.mapTotals.get(mapKey) ?? { games: 0, wins: 0, adrSum: 0 };
-            mapAgg.games += 1;
-            if (x.is_win) mapAgg.wins += 1;
-            mapAgg.adrSum += x.adr + y.adr;
-            agg.mapTotals.set(mapKey, mapAgg);
-          }
-          agg.matches.push({
-            matchId: m.id,
-            seasonNumber,
-            isGauntlet,
-            weekNumber,
-            matchNumber: m.match_number,
-            map: playedMap,
-            score: ourScore != null && theirScore != null ? { duo: ourScore, opponents: theirScore } : null,
-            won: x.is_win,
-            opponents: opponents.map((r) => ({ player_id: r.player_id, player_name: players.get(r.player_id)?.name ?? `#${r.player_id}` })),
-          });
-        }
-      }
-    }
-
-    for (const x of shirts) {
-      for (const y of skins) {
-        const agg = getRival(x, y);
-        agg.meetings += 1;
-        const aRow = x.player_id === agg.a ? x : y;
-        const bRow = aRow === x ? y : x;
-        if (aRow.is_win) agg.aWins += 1;
-        else agg.bWins += 1;
-
-        for (const [statAgg, row] of [[agg.aStats, aRow], [agg.bStats, bRow]] as const) {
-          statAgg.games += 1;
-          statAgg.kills += row.kills;
-          statAgg.assists += row.assists ?? 0;
-          statAgg.deaths += row.deaths;
-          statAgg.adrSum += row.adr;
-          statAgg.roundsWon += row.rounds_won;
-          statAgg.roundsPlayed += row.rounds_played;
-        }
-
-        const aScore = parsedScore ? (aRow.faction === 'SHIRTS' ? parsedScore.shirts : parsedScore.skins) : null;
-        const bScore = parsedScore ? (bRow.faction === 'SHIRTS' ? parsedScore.shirts : parsedScore.skins) : null;
-        agg.matches.push({
-          matchId: m.id,
-          seasonNumber,
-          isGauntlet,
-          weekNumber,
-          matchNumber: m.match_number,
-          map: playedMap,
-          score: aScore != null && bScore != null ? { a: aScore, b: bScore } : null,
-          aWon: aRow.is_win,
-          aMatchStats: { kills: aRow.kills, assists: aRow.assists ?? 0, deaths: aRow.deaths },
-          bMatchStats: { kills: bRow.kills, assists: bRow.assists ?? 0, deaths: bRow.deaths },
-        });
-      }
-    }
+    matchInputs.push({
+      matchId: m.id,
+      weekNumber: weekNumberById.get(m.week_id) ?? 0,
+      matchNumber: m.match_number,
+      seasonNumber: seasonNumberById.get(seasonId) ?? null,
+      isGauntlet: seasonIsGauntletById.get(seasonId) ?? false,
+      map: mapFor(m),
+      finalScore: m.final_score,
+      roster: roster.map((r) => ({
+        player_id: r.player_id,
+        faction: r.faction,
+        kills: r.kills,
+        assists: r.assists ?? 0,
+        deaths: r.deaths,
+        adr: r.adr,
+        is_win: r.is_win,
+        rounds_won: r.rounds_won,
+        rounds_played: r.rounds_played,
+      })),
+    });
   }
 
-  const duos: DuoStats[] = [...duoAgg.values()].map((d) => ({
-    playerA: d.a,
-    playerB: d.b,
-    gamesPlayed: d.games,
-    wins: d.wins,
-    losses: d.losses,
-    combinedAdr: d.games > 0 ? d.adrSum / d.games : 0,
-    combinedKills: d.kills,
-    combinedAssists: d.assists,
-    combinedDeaths: d.deaths,
-    roundsWon: d.roundsWon,
-    roundsPlayed: d.roundsPlayed,
-    aStats: finalizeRivalPlayerStats(d.aStats),
-    bStats: finalizeRivalPlayerStats(d.bStats),
-    bestMap: bestMapFor(d.mapTotals),
-    matches: [...d.matches].sort(compareMatchRefDesc), // most recent first
-  }));
-
-  const rivals: H2HStats[] = [...rivalAgg.values()].map((r) => {
-    const sortedMatches = [...r.matches].sort(compareMatchRefDesc); // most recent first
-    return {
-      playerA: r.a,
-      playerB: r.b,
-      meetings: r.meetings,
-      aWins: r.aWins,
-      bWins: r.bWins,
-      lastMap: sortedMatches[0]?.map ?? null,
-      aStats: finalizeRivalPlayerStats(r.aStats),
-      bStats: finalizeRivalPlayerStats(r.bStats),
-      matches: sortedMatches,
-    };
-  });
-
-  const playerList = [...playerIds]
-    .map((id) => ({
-      id,
-      name: players.get(id)?.name ?? `#${id}`,
-      steam_avatar_url: players.get(id)?.steam_avatar_url ?? null,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  return { duos, rivals, players: playerList };
+  return computeH2H(matchInputs, players);
 }
 
 // ---------------------------------------------------------------------------
