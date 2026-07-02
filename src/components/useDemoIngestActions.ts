@@ -30,6 +30,10 @@ export function useDemoIngestActions(matchId: number, opts: Options = {}) {
         }
         onSuccess?.();
         return true;
+      } catch (e) {
+        // Network/unexpected failure — surface it instead of a silent unhandled rejection.
+        setError(e instanceof Error ? e.message : 'Something went wrong');
+        return false;
       } finally {
         setBusy(false);
       }

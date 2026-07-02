@@ -5,17 +5,7 @@ import Link from 'next/link';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getDemoIngestJobs, isPlayerAdmin, type DemoIngestJobRow } from '@/lib/queries';
 import { IngestJobActions, IngestLiveRefresh } from '@/components/IngestJobActions';
-
-// Compact, deterministic UTC timestamp (`MM-DD HH:MM UTC`) — day-granular relative
-// time is too coarse for an ops dashboard where jobs move minute-to-minute, and a
-// fixed UTC render avoids server/client locale drift.
-function fmtWhen(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
-}
+import { fmtUtcShort, matchLabel } from '@/lib/util';
 
 export const metadata = {
   title: 'Demo Ingestion',
@@ -65,11 +55,13 @@ function StatusPill({ status }: { status: string }) {
 }
 
 function JobRow({ job }: { job: DemoIngestJobRow }) {
-  const label =
-    job.seasonName && job.weekNumber !== null
-      ? `${job.seasonName} · Wk ${job.weekNumber} · Match ${job.matchNumber ?? '?'}`
-      : `Match #${job.matchId}`;
-  const when = fmtWhen(job.updatedAt);
+  const label = matchLabel({
+    matchId: job.matchId,
+    seasonName: job.seasonName,
+    weekNumber: job.weekNumber,
+    matchNumber: job.matchNumber,
+  });
+  const when = fmtUtcShort(job.updatedAt) ?? '—';
   return (
     <div className="lift-row grid grid-cols-[1fr_auto] gap-2 items-start px-3 py-3 border-b border-[var(--color-border-tertiary)]">
       <div className="min-w-0">

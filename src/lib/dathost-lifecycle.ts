@@ -11,6 +11,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
+import { matchLabel } from './util';
 import {
   dathostServerId,
   applyGoldenSettings,
@@ -298,14 +299,14 @@ export async function getActiveServerMatch(
   const reconciled = await getReconciledServerState(supabaseAdmin, row.id);
   if (!OCCUPYING_STATES.includes(reconciled.serverState)) return null;
 
-  const parts = [
-    row.weeks?.seasons?.name,
-    row.weeks?.week_number != null ? `Wk ${row.weeks.week_number}` : null,
-    row.match_number != null ? `Match ${row.match_number}` : null,
-  ].filter(Boolean);
   return {
     matchId: row.id,
-    label: parts.length ? parts.join(' · ') : `Match #${row.id}`,
+    label: matchLabel({
+      matchId: row.id,
+      seasonName: row.weeks?.seasons?.name,
+      weekNumber: row.weeks?.week_number,
+      matchNumber: row.match_number,
+    }),
     serverState: reconciled.serverState,
     connectString: reconciled.connectString,
     serverStartedAt: reconciled.serverStartedAt,

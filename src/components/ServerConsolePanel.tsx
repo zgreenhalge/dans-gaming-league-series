@@ -9,15 +9,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase-browser';
+import { fmtUtcShort } from '@/lib/util';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
-
-function fmtWhen(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
-}
 
 export function ServerConsolePanel({ active }: { active: ActiveServerMatch | null }) {
   const router = useRouter();
@@ -60,7 +53,7 @@ export function ServerConsolePanel({ active }: { active: ActiveServerMatch | nul
     );
   }
 
-  const since = fmtWhen(active.serverStartedAt);
+  const since = fmtUtcShort(active.serverStartedAt);
   return (
     <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
       <div className="flex items-start justify-between gap-4">
