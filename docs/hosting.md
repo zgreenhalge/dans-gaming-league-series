@@ -74,7 +74,7 @@ MatchZy (map ends) ──POST .dem──▶ Cloudflare Worker ──▶ R2 (demo
                     scripts/demo-ingest.ts: parse + quarantine ─▶ R2 (demoResultKey)  status: parsed | quarantined
                                                                               │
    in-match MatchDemoReviewBlock  ──admin Confirm──▶ PATCH /score  (status: confirmed)   │  or Dismiss (dismissed)
-   admin /admin/ingestion         ── read-only dashboard of every job + warnings/quarantine flags ─┘
+   admin /admin/jobs              ── dashboard of every background job + warnings/quarantine flags ─┘
 ```
 
 - The Worker writes the **same** deterministic `demoKey(matchId)` a browser upload would, so the two
@@ -96,13 +96,16 @@ Schema-free by design — status lives in the existing table, detail lives in th
 
 - **`/admin`** — hub, linked from the Topbar (visible only when `session.user.isAdmin`). Add a tool
   via the `TOOLS` array.
-- **`/admin/ingestion`** — dashboard: every `demo_ingest` job, newest first, with a color-coded
-  status pill, stage/error, the Action log link, and each staged job's parse warnings + quarantine
-  flags (read from R2). This is the notification channel — the surface for anything that would
-  otherwise fail silently (Discord is deprioritized). Each row has inline actions — **Confirm** (a
-  cleanly parsed, score-derived result only), **Re-parse**, **Dismiss** — driven by the shared
-  `useDemoIngestActions` hook (the same one the in-match `MatchDemoReviewBlock` uses, so they can't
-  drift). The list stays live via Realtime on `background_jobs`.
+- **`/admin/jobs`** — dashboard over **all** `background_jobs` pipelines (`demo_ingest`,
+  `replay_extract`, `radar_build`; #145), newest first, each row badged by type with a color-coded
+  status pill, stage/error, the Action log link, and — for staged demo jobs — parse warnings +
+  quarantine flags (read from R2). This is the notification channel: the surface for anything that
+  would otherwise fail silently (Discord is deprioritized). Demo rows carry inline actions —
+  **Confirm** (a cleanly parsed, score-derived result only), **Re-parse**, **Dismiss** — driven by
+  the shared `useDemoIngestActions` hook (the same one the in-match `MatchDemoReviewBlock` uses, so
+  they can't drift); replay/radar rows carry a **Retry** that re-dispatches their Action
+  (`JobRetryButton`). Data comes from `getBackgroundJobs()`; the list stays live via Realtime on
+  `background_jobs`.
 - **`/admin/servers`** — server console: the single shared server's current occupant (reconciled via
   `getActiveServerMatch`), connect string, and a **Teardown** control for a server left live (the
   autostop-failed safety valve). Live via Realtime on `matches`. Provisioning stays automatic (veto)
@@ -146,8 +149,9 @@ everything degrades to the manual flow.
 `getActiveServerMatch` + `findServerOccupant`) · `src/lib/matchzy.ts` · `src/lib/schedule.ts` ·
 `src/components/MatchServerPanel.tsx` · `src/components/MatchDemoReviewBlock.tsx` ·
 `src/components/useDemoIngestActions.ts` (shared confirm/dismiss/re-parse) ·
-`src/components/IngestJobActions.tsx` · `src/components/ServerConsolePanel.tsx` ·
-`src/components/SchedulingOverlapBanner.tsx` · `src/app/admin/ingestion/page.tsx` ·
+`src/components/IngestJobActions.tsx` · `src/components/JobActions.tsx` (generic retry + live refresh) ·
+`src/components/ServerConsolePanel.tsx` ·
+`src/components/SchedulingOverlapBanner.tsx` · `src/app/admin/jobs/page.tsx` ·
 `src/app/admin/servers/page.tsx` · `scripts/demo-ingest.ts` · `scripts/gen-matchzy-config.ts` ·
 `scripts/inspect-demo.ts` · `infra/matchzy/` · `infra/worker/`.
 

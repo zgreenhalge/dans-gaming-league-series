@@ -27,7 +27,7 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/maps` | Map index — pick/ban/skip counts per map |
 | `/maps/[slug]` | Map detail — match history + per-player stats on that map |
 | `/admin` | Admin hub — links to admin tools (linked from the Topbar when `session.user.isAdmin`) |
-| `/admin/ingestion` | Admin demo-ingestion dashboard — every `demo_ingest` job + warnings/quarantine flags, with confirm/re-parse/dismiss actions (see [`hosting.md`](./hosting.md)) |
+| `/admin/jobs` | Admin background-jobs dashboard — every `background_jobs` row across all three pipelines (`demo_ingest`, `replay_extract`, `radar_build`) with warnings/quarantine flags and per-type actions: confirm/re-parse/dismiss for demo, retry for replay/radar (see [`hosting.md`](./hosting.md)) |
 | `/admin/servers` | Admin server console — shared DatHost server status + teardown (see [`hosting.md`](./hosting.md)) |
 | `/admin/seasons/new` | Create a new season (admin only) |
 | `/auth/steam` | Steam auth landing — completes `signIn()` after the OpenID bounce |
@@ -66,6 +66,7 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `GET` | `/api/matches/[id]/matchzy-config` | Machine-auth MatchZy config (`matchzy_loadmatch_url` target) |
 | `POST` | `/api/ingest/notify` | Machine-auth: demo landed → record job, dispatch parse, tear down |
 | `POST` | `/api/matches/[id]/replay/dispatch` | (Re)trigger the replay Action ([`replay.md`](./replay.md)) |
+| `POST` | `/api/maps/[slug]/radar/dispatch` | (Re)trigger the radar-build Action for a map (admin only; [`replay.md`](./replay.md)) |
 | `PATCH` | `/api/seasons/[id]/start-date` | Set season start date (admin only) |
 | `GET/POST` | `/api/players/register` | List unlinked players / link a Steam account to a player record |
 | `GET` | `/api/cron/refresh-steam` | Refresh Steam avatars/nicknames for all linked players (Vercel cron; see below) |

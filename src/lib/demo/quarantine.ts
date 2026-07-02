@@ -28,7 +28,7 @@ export interface QuarantineInput {
 
 export interface QuarantineResult {
   ok: boolean;
-  /** Human-readable reasons; empty when `ok`. Surfaced on the admin/ingestion page. */
+  /** Human-readable reasons; empty when `ok`. Surfaced on the admin jobs dashboard (`/admin/jobs`). */
   flags: string[];
 }
 

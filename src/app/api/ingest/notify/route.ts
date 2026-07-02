@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
   // Kick off the demo-ingest Action (parse → quarantine → stage a result). Best-effort: if dispatch
   // isn't configured/fails, the demo is safely in R2 and the manual upload→parse→confirm flow still
   // covers it. On success, advance the job to `queued` (the Action moves it to running→parsed).
-  const dispatch = await dispatchWorkflow('demo-ingest.yml', matchId);
+  const dispatch = await dispatchWorkflow('demo-ingest.yml', { match_id: String(matchId) });
   if (dispatch.ok) {
     // Only advance the row we just wrote — `.eq('status','received')` so a concurrent Action that
     // already moved it to running/parsed isn't clobbered back to queued.

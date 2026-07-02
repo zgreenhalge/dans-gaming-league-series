@@ -170,7 +170,7 @@ keys, re-dispatch overwrites); run the same `src/lib/replay/*` code via `tsx`.
 |---|---|---|---|
 | **A — `replay-extract`** | auto, after demo upload/parse | `replay.json` **and** compact `heatmap.json` → R2 `<matchId>/…` | **built** (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
 | **A′ — `replay-extract-all`** | manual (Actions UI / dispatch) | re-runs A for **every** match with a demo, as a matrix | **built** (`replay-extract-all.yml` + `scripts/list-demo-matches.ts`) |
-| **B — `radar-build`** | per map (Actions UI / dispatch) | radar PNG → R2 `maps/<id>/radar.png` + `maps` row calibration | **built** (`radar-build.yml` + `scripts/radar-build.ts`); first real run validates the SteamCMD/Source2Viewer invocations |
+| **B — `radar-build`** | per map (Actions UI, or admin `POST /api/maps/[slug]/radar/dispatch`) | radar PNG → R2 `maps/<id>/radar.png` + `maps` row calibration | **built** (`radar-build.yml` + `scripts/radar-build.ts`); first real run validates the SteamCMD/Source2Viewer invocations |
 
 > **Backfilling a logic/schema change:** when the extract or heatmap output shape changes
 > (e.g. the post-round-kill fix, or a future `HEATMAP_SCHEMA_VERSION` bump for per-player

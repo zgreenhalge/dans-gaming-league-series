@@ -8,6 +8,12 @@ import { mapSlug } from './maps';
 import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc, matchLabel } from './util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
 import { DEMO_INGEST_JOB_TYPE, type DemoIngestResult } from './demo/ingestResult';
+import {
+  BACKGROUND_JOB_TYPES,
+  type BackgroundJobType,
+  type BackgroundJobSubject,
+  type BackgroundJobRow,
+} from './jobs';
 import type { ScheduledMatchRef } from './schedule';
 import type {
   Season,
@@ -3409,61 +3415,128 @@ export async function getReplayJobState(matchId: number): Promise<ReplayJobState
   }
 }
 
-/**
- * One row of the admin demo-ingestion dashboard (issue #136) — a `background_jobs`
- * row (`job_type='demo_ingest'`) plus enough match context to label and link it.
- * The dashboard is the notification channel for anything that would otherwise fail
- * silently (parse failures, quarantines). Full per-match detail (parse warnings,
- * quarantine flags, the staged score) lives in the R2 artifact and is shown on the
- * match page's review block — this list links there rather than duplicating it.
- */
-export interface DemoIngestJobRow {
-  matchId: number;
-  status: string;
-  stage: string | null;
-  errorMessage: string | null;
-  ghRunUrl: string | null;
-  createdAt: string | null;
-  updatedAt: string | null;
-  startedAt: string | null;
-  finishedAt: string | null;
-  // Match context (null when the match row was deleted after the job ran).
-  matchNumber: number | null;
-  pickedMap: string | null;
-  finalScore: string | null;
-  weekNumber: number | null;
-  seasonName: string | null;
-  isGauntlet: boolean;
-  // Parse warnings + quarantine flags from the staged R2 artifact (present only while
-  // the job has one: `parsed`/`quarantined`). This is how side-mismatch and other
-  // otherwise-silent issues surface on the admin panel.
-  warnings: string[];
-  quarantineFlags: string[];
-  /** Whether the staged result carries a confirm-ready score (false → side unknown / not derived). */
-  hasPayload: boolean;
-}
-
 /** Job statuses that still have a staged `demo-result.json` artifact in R2 to read detail from. */
 const DEMO_INGEST_STAGED_STATUSES: ReadonlySet<string> = new Set(['parsed', 'quarantined']);
 
+/** Display context for a match-keyed background job (`buildJobSubject` turns this into a subject). */
+interface MatchJobContext {
+  label: string;
+  seasonNumber: number | null;
+  weekNumber: number | null;
+  matchNumber: number | null;
+  pickedMap: string | null;
+  finalScore: string | null;
+  isGauntlet: boolean;
+}
+
 /**
- * All demo-ingest jobs, newest activity first. Additive read for the admin
- * ingestion-status page. Defensive: returns `[]` if `background_jobs` isn't present
- * yet so the page never hard-fails.
+ * Batch-load display context (match → week → season) for match-keyed background jobs in
+ * three queries, not per-row. Shared by the jobs dashboard so demo and replay rows label
+ * identically.
  */
-export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
+async function loadMatchJobContext(matchIds: number[]): Promise<Map<number, MatchJobContext>> {
+  const out = new Map<number, MatchJobContext>();
+  if (!matchIds.length) return out;
+
+  const { data: matchRows } = await supabase
+    .from('matches')
+    .select('id, match_number, picked_map, final_score, week_id')
+    .in('id', matchIds);
+  const matches = (matchRows ?? []) as Pick<
+    Match,
+    'id' | 'match_number' | 'picked_map' | 'final_score' | 'week_id'
+  >[];
+
+  const weekIds = Array.from(new Set(matches.map((m) => m.week_id)));
+  const { data: weekRows } = weekIds.length
+    ? await supabase.from('weeks').select('id, week_number, season_id').in('id', weekIds)
+    : { data: [] as Pick<Week, 'id' | 'week_number' | 'season_id'>[] };
+  const weeks = (weekRows ?? []) as Pick<Week, 'id' | 'week_number' | 'season_id'>[];
+
+  const seasonIds = Array.from(new Set(weeks.map((w) => w.season_id)));
+  const { data: seasonRows } = seasonIds.length
+    ? await supabase.from('seasons').select('id, name, is_gauntlet').in('id', seasonIds)
+    : { data: [] as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[] };
+  const seasons = (seasonRows ?? []) as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[];
+
+  const weekById = new Map(weeks.map((w) => [w.id, w]));
+  const seasonById = new Map(seasons.map((s) => [s.id, s]));
+
+  for (const m of matches) {
+    const w = weekById.get(m.week_id) ?? null;
+    const s = w ? seasonById.get(w.season_id) ?? null : null;
+    out.set(m.id, {
+      label: matchLabel({
+        matchId: m.id,
+        seasonName: s?.name ?? null,
+        weekNumber: w?.week_number ?? null,
+        matchNumber: m.match_number ?? null,
+      }),
+      seasonNumber: s?.name ? extractSeasonNumber(s.name) : null,
+      weekNumber: w?.week_number ?? null,
+      matchNumber: m.match_number ?? null,
+      pickedMap: m.picked_map ?? null,
+      finalScore: m.final_score ?? null,
+      isGauntlet: s?.is_gauntlet ?? false,
+    });
+  }
+  return out;
+}
+
+/** Resolve a job row's subject (match vs map) to a labeled, linkable descriptor. */
+function buildJobSubject(
+  job: { jobType: BackgroundJobType; matchId: number | null; mapId: number | null },
+  matchCtx: Map<number, MatchJobContext>,
+  mapById: Map<number, { name: string; slug: string }>,
+): BackgroundJobSubject {
+  if (job.jobType === 'radar_build') {
+    const mapId = job.mapId ?? 0;
+    const m = mapId ? mapById.get(mapId) : undefined;
+    return {
+      kind: 'map',
+      mapId,
+      slug: m?.slug ?? '',
+      label: m?.name ?? `Map #${mapId}`,
+      href: m?.slug ? `/maps/${m.slug}` : '/maps',
+    };
+  }
+  const matchId = job.matchId ?? 0;
+  const ctx = matchId ? matchCtx.get(matchId) : undefined;
+  return {
+    kind: 'match',
+    matchId,
+    label: ctx?.label ?? `Match #${matchId}`,
+    href: `/matches/${matchId}`,
+    seasonNumber: ctx?.seasonNumber ?? null,
+    weekNumber: ctx?.weekNumber ?? null,
+    matchNumber: ctx?.matchNumber ?? null,
+    pickedMap: ctx?.pickedMap ?? null,
+    finalScore: ctx?.finalScore ?? null,
+    isGauntlet: ctx?.isGauntlet ?? false,
+  };
+}
+
+/**
+ * All background jobs across every pipeline, newest activity first. The admin jobs
+ * dashboard (#145) is the single notification channel for anything that would otherwise
+ * fail silently. Defensive: returns `[]` if `background_jobs` isn't present yet so the
+ * page never hard-fails.
+ */
+export async function getBackgroundJobs(): Promise<BackgroundJobRow[]> {
   try {
     const { data: jobs, error } = await supabase
       .from('background_jobs')
       .select(
-        'match_id, status, stage, error_message, gh_run_url, created_at, updated_at, started_at, finished_at',
+        'job_type, match_id, map_id, status, stage, error_message, gh_run_url, created_at, updated_at, started_at, finished_at',
       )
-      .eq('job_type', DEMO_INGEST_JOB_TYPE)
+      .in('job_type', [...BACKGROUND_JOB_TYPES])
       .order('updated_at', { ascending: false });
     if (error || !jobs) return [];
 
     type JobRow = {
-      match_id: number;
+      job_type: BackgroundJobType;
+      match_id: number | null;
+      map_id: number | null;
       status: string | null;
       stage: string | null;
       error_message: string | null;
@@ -3475,44 +3548,40 @@ export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
     };
     const jobRows = jobs as JobRow[];
 
-    // Batch the match → week → season context in three queries (not per-row).
-    const matchIds = Array.from(new Set(jobRows.map((j) => j.match_id)));
-    const { data: matchRows } = await supabase
-      .from('matches')
-      .select('id, match_number, picked_map, final_score, week_id')
-      .in('id', matchIds);
-    const matches = (matchRows ?? []) as Pick<
-      Match,
-      'id' | 'match_number' | 'picked_map' | 'final_score' | 'week_id'
-    >[];
+    // Batch subject context: match → week → season for match-keyed jobs, and maps for radar.
+    const matchIds = Array.from(
+      new Set(jobRows.filter((j) => j.match_id != null).map((j) => j.match_id as number)),
+    );
+    const mapIds = Array.from(
+      new Set(jobRows.filter((j) => j.map_id != null).map((j) => j.map_id as number)),
+    );
 
-    const weekIds = Array.from(new Set(matches.map((m) => m.week_id)));
-    const { data: weekRows } = weekIds.length
-      ? await supabase.from('weeks').select('id, week_number, season_id').in('id', weekIds)
-      : { data: [] as Pick<Week, 'id' | 'week_number' | 'season_id'>[] };
-    const weeks = (weekRows ?? []) as Pick<Week, 'id' | 'week_number' | 'season_id'>[];
+    const matchCtx = await loadMatchJobContext(matchIds);
 
-    const seasonIds = Array.from(new Set(weeks.map((w) => w.season_id)));
-    const { data: seasonRows } = seasonIds.length
-      ? await supabase.from('seasons').select('id, name, is_gauntlet').in('id', seasonIds)
-      : { data: [] as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[] };
-    const seasons = (seasonRows ?? []) as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[];
+    const { data: mapRows } = mapIds.length
+      ? await supabase.from('maps').select('id, name, slug').in('id', mapIds)
+      : { data: [] as { id: number; name: string; slug: string }[] };
+    const mapById = new Map(
+      ((mapRows ?? []) as { id: number; name: string; slug: string }[]).map((m) => [m.id, m]),
+    );
 
-    const matchById = new Map(matches.map((m) => [m.id, m]));
-    const weekById = new Map(weeks.map((w) => [w.id, w]));
-    const seasonById = new Map(seasons.map((s) => [s.id, s]));
-
-    // Enrich staged jobs with their parse warnings / quarantine flags from R2 (bounded:
+    // Enrich staged demo-ingest jobs with parse warnings / quarantine flags from R2 (bounded:
     // only `parsed`/`quarantined` rows still have an artifact). Read in parallel.
-    const staged = jobRows.filter((j) => DEMO_INGEST_STAGED_STATUSES.has(j.status ?? ''));
+    const staged = jobRows.filter(
+      (j) =>
+        j.job_type === DEMO_INGEST_JOB_TYPE &&
+        j.match_id != null &&
+        DEMO_INGEST_STAGED_STATUSES.has(j.status ?? ''),
+    );
     const detailByMatch = new Map<number, { warnings: string[]; quarantineFlags: string[]; hasPayload: boolean }>();
     await Promise.all(
       staged.map(async (j) => {
+        const matchId = j.match_id as number;
         try {
-          const buf = await getR2Object(demoResultKey(j.match_id));
+          const buf = await getR2Object(demoResultKey(matchId));
           if (!buf) return;
           const r = JSON.parse(gunzipMaybe(buf).toString()) as DemoIngestResult;
-          detailByMatch.set(j.match_id, {
+          detailByMatch.set(matchId, {
             warnings: r.warnings ?? [],
             quarantineFlags: r.quarantineFlags ?? [],
             hasPayload: r.payload != null,
@@ -3523,13 +3592,10 @@ export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
       }),
     );
 
-    return jobRows.map((j) => {
-      const m = matchById.get(j.match_id) ?? null;
-      const w = m ? weekById.get(m.week_id) ?? null : null;
-      const s = w ? seasonById.get(w.season_id) ?? null : null;
-      const detail = detailByMatch.get(j.match_id);
+    return jobRows.map((j): BackgroundJobRow => {
+      const detail = j.match_id != null ? detailByMatch.get(j.match_id) : undefined;
       return {
-        matchId: j.match_id,
+        jobType: j.job_type,
         status: j.status ?? 'unknown',
         stage: j.stage,
         errorMessage: j.error_message,
@@ -3538,12 +3604,11 @@ export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
         updatedAt: j.updated_at,
         startedAt: j.started_at,
         finishedAt: j.finished_at,
-        matchNumber: m?.match_number ?? null,
-        pickedMap: m?.picked_map ?? null,
-        finalScore: m?.final_score ?? null,
-        weekNumber: w?.week_number ?? null,
-        seasonName: s?.name ?? null,
-        isGauntlet: s?.is_gauntlet ?? false,
+        subject: buildJobSubject(
+          { jobType: j.job_type, matchId: j.match_id, mapId: j.map_id },
+          matchCtx,
+          mapById,
+        ),
         warnings: detail?.warnings ?? [],
         quarantineFlags: detail?.quarantineFlags ?? [],
         hasPayload: detail?.hasPayload ?? false,
