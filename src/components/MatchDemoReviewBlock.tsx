@@ -12,6 +12,7 @@ import {
   DEMO_INGEST_IN_PROGRESS,
   type DemoIngestResult,
 } from '@/lib/demo/ingestResult';
+import { useDemoIngestActions } from './useDemoIngestActions';
 
 interface ResultResponse {
   status: string | null; // background_jobs status
@@ -22,8 +23,12 @@ interface ResultResponse {
 export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
   const router = useRouter();
   const [data, setData] = useState<ResultResponse | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { confirm, dismiss, busy, error } = useDemoIngestActions(matchId, {
+    onSuccess: () => {
+      setData(null);
+      router.refresh();
+    },
+  });
 
   const refresh = useCallback(async () => {
     try {
@@ -59,40 +64,6 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
       getBrowserClient().removeChannel(channel);
     };
   }, [matchId, refresh]);
-
-  const dispose = async (disposition: 'confirmed' | 'dismissed') => {
-    await fetch(`/api/matches/${matchId}/demo/result?disposition=${disposition}`, { method: 'DELETE' }).catch(() => {});
-  };
-
-  const confirm = async () => {
-    if (!data?.result?.payload) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/matches/${matchId}/score`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(data.result.payload),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? 'Could not save the score');
-        return;
-      }
-      await dispose('confirmed');
-      setData(null);
-      router.refresh();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const dismiss = async () => {
-    setBusy(true);
-    await dispose('dismissed');
-    setData(null);
-    setBusy(false);
-  };
 
   if (!data) return null;
   const { status, result } = data;
@@ -175,7 +146,7 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
       )}
       <div className="mt-3 flex items-center gap-2">
         <button
-          onClick={confirm}
+          onClick={() => confirm(result.payload)}
           disabled={busy}
           className="rounded-md border border-green-500 bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50"
         >
