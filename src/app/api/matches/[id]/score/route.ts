@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/authOptions';
 import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { teardownMatchServer } from '@/lib/dathost-lifecycle';
+import { triggerRatingRecompute } from '@/lib/ehog-recompute';
 import { parseEliminationWarning } from '@/lib/parsers/rosterResolver';
 import type { DemoSabremetricStat, RoundHistoryEntry } from '@/lib/types';
 
@@ -79,20 +80,6 @@ function isVetoComplete(match: MatchRow): boolean {
     match.shirts_pick &&
     match.skins_starting_side
   );
-}
-
-async function triggerRatingRecompute(): Promise<void> {
-  const secret = process.env.RECOMPUTE_SECRET;
-  if (!secret) return;
-  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
-  try {
-    await fetch(`${base}/api/ehog/recompute`, {
-      method: 'POST',
-      headers: { 'x-recompute-secret': secret },
-    });
-  } catch (e) {
-    console.error('EHOG recompute trigger failed:', e);
-  }
 }
 
 /**

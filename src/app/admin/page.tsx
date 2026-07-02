@@ -25,6 +25,11 @@ const TOOLS: { href: string; title: string; desc: string }[] = [
     desc: 'Reschedule, clear/redo a pick-ban, and toggle the feature match from one place.',
   },
   {
+    href: '/admin/players',
+    title: 'Manage Players',
+    desc: 'Rename players, grant/remove admin, manage Steam links, and recompute EHOG ratings.',
+  },
+  {
     href: '/admin/servers',
     title: 'Match Server',
     desc: 'Shared DatHost server status — who holds it, and a teardown control.',

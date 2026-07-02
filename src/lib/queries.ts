@@ -515,6 +515,16 @@ export async function getAdminMatches(): Promise<AdminMatchRow[]> {
   return out;
 }
 
+/**
+ * All players for the admin player console (#144), sorted by display name. Returns the full `Player`
+ * row (name, `is_admin`, and the steam-link fields) so the console can edit them in place.
+ */
+export async function getAdminPlayers(): Promise<Player[]> {
+  const { data, error } = await supabase.from('players').select('*').order('name');
+  if (error || !data) return [];
+  return data as Player[];
+}
+
 export interface MatchSabremetricsRow extends PlayerMatchSabremetrics {
   player_id: number;
   player_name: string;

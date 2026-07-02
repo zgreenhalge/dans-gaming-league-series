@@ -30,6 +30,7 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/admin/jobs` | Admin background-jobs dashboard — every `background_jobs` row across all three pipelines (`demo_ingest`, `replay_extract`, `radar_build`) with warnings/quarantine flags and per-type actions: confirm/re-parse/dismiss for demo, retry for replay/radar (see [`hosting.md`](./hosting.md)) |
 | `/admin/servers` | Admin server console — shared DatHost server status + teardown (see [`hosting.md`](./hosting.md)) |
 | `/admin/matches` | Admin match console — search a match to reschedule, clear/redo its pick-ban, or toggle the feature flag (reuses the match-page editors; score/stats editing stays on the match page) |
+| `/admin/players` | Admin player console — search a player to rename, toggle `is_admin`, or manage their Steam link (unlink / set SteamID64 by hand); also a manual EHOG rating recompute |
 | `/admin/seasons/new` | Create a new season (admin only) |
 | `/auth/steam` | Steam auth landing — completes `signIn()` after the OpenID bounce |
 
@@ -70,6 +71,8 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `POST` | `/api/matches/[id]/replay/dispatch` | (Re)trigger the replay Action ([`replay.md`](./replay.md)) |
 | `POST` | `/api/maps/[slug]/radar/dispatch` | (Re)trigger the radar-build Action for a map (admin only; [`replay.md`](./replay.md)) |
 | `PATCH` | `/api/seasons/[id]/start-date` | Set season start date (admin only) |
+| `PATCH` | `/api/players/[id]` | Edit a player — display name, `is_admin` (can't demote yourself), or Steam link (unlink / set SteamID64) (admin only) |
+| `POST` | `/api/ehog/recompute/trigger` | Admin-gated "recompute EHOG ratings now" — fires the full rating walk in the background (admin only) |
 | `GET/POST` | `/api/players/register` | List unlinked players / link a Steam account to a player record |
 | `GET` | `/api/cron/refresh-steam` | Refresh Steam avatars/nicknames for all linked players (Vercel cron; see below) |
 

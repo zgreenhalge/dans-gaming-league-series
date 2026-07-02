@@ -57,7 +57,7 @@ Follow the shape of an existing dynamic route, e.g. `src/app/players/[id]/page.t
    client/server component — keep the page itself thin (param handling + data fetching only).
    **Admin pages breadcrumb back through the hub:** any page under `/admin/*` sets crumbs
    `DGLS › Admin (→ /admin) › <this page>`, so `Admin` is always a link back to the hub — see
-   `/admin/jobs`, `/admin/matches`, `/admin/servers`, `/admin/seasons/new`. The hub itself
+   `/admin/jobs`, `/admin/matches`, `/admin/players`, `/admin/servers`, `/admin/seasons/new`. The hub itself
    (`/admin`) ends the trail with a plain `Admin` crumb (no `href`).
 6. **Add the route to the table in [`architecture.md`](./architecture.md)** once it's live.
 
