@@ -5,7 +5,7 @@ import type { ReplayPayload, ReplayPlayerMeta, ReplayEvent } from './replay/type
 import type { HeatmapArtifact, HeatmapKind } from './replay/heatmap';
 import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
-import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
+import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc, matchLabel } from './util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
 import { DEMO_INGEST_JOB_TYPE, type DemoIngestResult } from './demo/ingestResult';
 import type { ScheduledMatchRef } from './schedule';
@@ -423,20 +423,16 @@ export async function getOtherScheduledMatches(matchId: number): Promise<Schedul
   const rows = (data ?? []) as unknown as Row[];
   return rows
     .filter((r) => r.scheduled_at && !isPlayedScore(r.final_score))
-    .map((r) => {
-      const season = r.weeks?.seasons?.name;
-      const wk = r.weeks?.week_number;
-      const parts = [
-        season,
-        wk != null ? `Wk ${wk}` : null,
-        r.match_number != null ? `Match ${r.match_number}` : null,
-      ].filter(Boolean);
-      return {
-        id: r.id,
-        scheduledAt: r.scheduled_at as string,
-        label: parts.length ? parts.join(' · ') : `Match #${r.id}`,
-      };
-    });
+    .map((r) => ({
+      id: r.id,
+      scheduledAt: r.scheduled_at as string,
+      label: matchLabel({
+        matchId: r.id,
+        seasonName: r.weeks?.seasons?.name,
+        weekNumber: r.weeks?.week_number,
+        matchNumber: r.match_number,
+      }),
+    }));
 }
 
 export interface MatchSabremetricsRow extends PlayerMatchSabremetrics {
@@ -3443,6 +3439,8 @@ export interface DemoIngestJobRow {
   // otherwise-silent issues surface on the admin panel.
   warnings: string[];
   quarantineFlags: string[];
+  /** Whether the staged result carries a confirm-ready score (false → side unknown / not derived). */
+  hasPayload: boolean;
 }
 
 /** Job statuses that still have a staged `demo-result.json` artifact in R2 to read detail from. */
@@ -3507,7 +3505,7 @@ export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
     // Enrich staged jobs with their parse warnings / quarantine flags from R2 (bounded:
     // only `parsed`/`quarantined` rows still have an artifact). Read in parallel.
     const staged = jobRows.filter((j) => DEMO_INGEST_STAGED_STATUSES.has(j.status ?? ''));
-    const detailByMatch = new Map<number, { warnings: string[]; quarantineFlags: string[] }>();
+    const detailByMatch = new Map<number, { warnings: string[]; quarantineFlags: string[]; hasPayload: boolean }>();
     await Promise.all(
       staged.map(async (j) => {
         try {
@@ -3517,6 +3515,7 @@ export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
           detailByMatch.set(j.match_id, {
             warnings: r.warnings ?? [],
             quarantineFlags: r.quarantineFlags ?? [],
+            hasPayload: r.payload != null,
           });
         } catch {
           /* corrupt/partial artifact — leave detail empty, status still shows */
@@ -3547,6 +3546,7 @@ export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
         isGauntlet: s?.is_gauntlet ?? false,
         warnings: detail?.warnings ?? [],
         quarantineFlags: detail?.quarantineFlags ?? [],
+        hasPayload: detail?.hasPayload ?? false,
       };
     });
   } catch {

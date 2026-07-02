@@ -11,6 +11,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
+import { matchLabel } from './util';
 import {
   dathostServerId,
   applyGoldenSettings,
@@ -258,4 +259,56 @@ export async function getReconciledServerState(
   }
 
   return { serverState, connectString, serverStartedAt: row.server_started_at ?? null };
+}
+
+export interface ActiveServerMatch {
+  matchId: number;
+  label: string;
+  serverState: ServerState;
+  connectString: string | null;
+  serverStartedAt: string | null;
+}
+
+/**
+ * The match currently holding the shared server (reconciled against real DatHost state), or `null` if
+ * it's idle. For the admin server console (#134/#135) — the single-server model (D2) means at most
+ * one occupant. Returns `null` when hosting isn't configured.
+ */
+export async function getActiveServerMatch(
+  supabaseAdmin: SupabaseClient,
+): Promise<ActiveServerMatch | null> {
+  const serverId = process.env.DATHOST_SERVER_ID;
+  if (!serverId) return null;
+  const { data } = await supabaseAdmin
+    .from('matches')
+    .select('id, match_number, server_started_at, weeks(week_number, seasons(name))')
+    .eq('dathost_server_id', serverId)
+    .in('server_state', OCCUPYING_STATES as unknown as string[])
+    .order('server_started_at', { ascending: false })
+    .limit(1);
+  const rows = (data ?? []) as unknown as {
+    id: number;
+    match_number: number | null;
+    server_started_at: string | null;
+    weeks: { week_number: number | null; seasons: { name: string | null } | null } | null;
+  }[];
+  const row = rows[0];
+  if (!row) return null;
+
+  // Reconcile so a server that already auto-stopped isn't shown as occupied.
+  const reconciled = await getReconciledServerState(supabaseAdmin, row.id);
+  if (!OCCUPYING_STATES.includes(reconciled.serverState)) return null;
+
+  return {
+    matchId: row.id,
+    label: matchLabel({
+      matchId: row.id,
+      seasonName: row.weeks?.seasons?.name,
+      weekNumber: row.weeks?.week_number,
+      matchNumber: row.match_number,
+    }),
+    serverState: reconciled.serverState,
+    connectString: reconciled.connectString,
+    serverStartedAt: reconciled.serverStartedAt,
+  };
 }

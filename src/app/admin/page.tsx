@@ -20,6 +20,11 @@ const TOOLS: { href: string; title: string; desc: string }[] = [
     desc: 'DatHost/MatchZy pipeline status — parse results, quarantines, and failures.',
   },
   {
+    href: '/admin/servers',
+    title: 'Match Server',
+    desc: 'Shared DatHost server status — who holds it, and a teardown control.',
+  },
+  {
     href: '/admin/seasons/new',
     title: 'Create Season',
     desc: 'Start a new regular season with its map pool.',

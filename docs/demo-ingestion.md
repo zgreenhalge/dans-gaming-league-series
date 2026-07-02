@@ -25,7 +25,16 @@ in [`architecture.md`](./architecture.md).
 
 Both parsers take the same inputs: the demo buffer, the resolved **roster**, `skins_starting_side`,
 and the season's `target_win_rounds`. The roster (which Steam player maps to which DGLS player and
-faction) is resolved server-side before parsing — see `parsers/rosterResolver.ts`.
+faction) is resolved server-side before parsing — see `parsers/rosterResolver.ts` (exact steam-id →
+name → elimination fallback).
+
+**Learning steam ids on confirm.** When a demo player is matched by the elimination fallback,
+`rosterResolver.ts` emits a warning (`eliminationWarning()`) carrying the demo steam id + the roster
+player it was matched to. The confirm forwards parser `warnings` to `PATCH /score`, which — **for an
+admin confirm only**, and **only when exactly one** player was inferred — parses that warning and
+writes the steam id/nickname onto the player (`applyEliminationSteamIds`), so future parses resolve
+them by exact id. Guards: admin-gated (the warnings are client-supplied), single-elimination only,
+and it skips if that steam id already belongs to another player. Best-effort — never blocks the score.
 
 `skins_starting_side` is **optional**. When it's `null` (gauntlet/knife matches, which have no
 stored side), the parser infers it from the demo — see "Starting-side inference" below — so those

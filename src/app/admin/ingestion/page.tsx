@@ -4,17 +4,8 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getDemoIngestJobs, isPlayerAdmin, type DemoIngestJobRow } from '@/lib/queries';
-
-// Compact, deterministic UTC timestamp (`MM-DD HH:MM UTC`) — day-granular relative
-// time is too coarse for an ops dashboard where jobs move minute-to-minute, and a
-// fixed UTC render avoids server/client locale drift.
-function fmtWhen(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
-}
+import { IngestJobActions, IngestLiveRefresh } from '@/components/IngestJobActions';
+import { fmtUtcShort, matchLabel } from '@/lib/util';
 
 export const metadata = {
   title: 'Demo Ingestion',
@@ -47,6 +38,8 @@ const STATUS_STYLE: Record<string, { label: string; bg: string; fg: string; bord
 };
 
 function StatusPill({ status }: { status: string }) {
+  // A confirmed job needs no status chip — it's done and scored; the row stays for history.
+  if (status === 'confirmed') return null;
   const s = STATUS_STYLE[status] ?? {
     label: status,
     bg: 'transparent',
@@ -64,11 +57,13 @@ function StatusPill({ status }: { status: string }) {
 }
 
 function JobRow({ job }: { job: DemoIngestJobRow }) {
-  const label =
-    job.seasonName && job.weekNumber !== null
-      ? `${job.seasonName} · Wk ${job.weekNumber} · Match ${job.matchNumber ?? '?'}`
-      : `Match #${job.matchId}`;
-  const when = fmtWhen(job.updatedAt);
+  const label = matchLabel({
+    matchId: job.matchId,
+    seasonName: job.seasonName,
+    weekNumber: job.weekNumber,
+    matchNumber: job.matchNumber,
+  });
+  const when = fmtUtcShort(job.updatedAt) ?? '—';
   return (
     <div className="lift-row grid grid-cols-[1fr_auto] gap-2 items-start px-3 py-3 border-b border-[var(--color-border-tertiary)]">
       <div className="min-w-0">
@@ -120,6 +115,7 @@ function JobRow({ job }: { job: DemoIngestJobRow }) {
             action log ↗
           </a>
         )}
+        <IngestJobActions matchId={job.matchId} status={job.status} hasPayload={job.hasPayload} />
       </div>
     </div>
   );
@@ -135,6 +131,7 @@ export default async function IngestionStatusPage() {
   return (
     <div className="min-h-screen">
       <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Demo Ingestion' }]} />
+      <IngestLiveRefresh />
       <main className="max-w-[760px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">
           <div className="font-display text-[28px] font-semibold leading-tight">Demo Ingestion</div>

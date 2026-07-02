@@ -316,6 +316,8 @@ export default function DemoUploadModal({
           player_stats,
           sabremetrics: parsed.sabremetrics,
           round_history: parsed.round_history ?? null,
+          // Forward warnings so the score route can learn steam ids from elimination matches.
+          warnings: parsed.warnings,
         }),
       });
       if (!res.ok) {

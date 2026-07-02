@@ -31,6 +31,34 @@ export function fmtWindowDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
+/**
+ * Compact, deterministic UTC timestamp (`MM-DD HH:MM UTC`), or `null` for a missing/invalid date.
+ * Used by admin/ops surfaces where day-granular relative time is too coarse and a fixed UTC render
+ * avoids server/client locale drift.
+ */
+export function fmtUtcShort(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
+}
+
+/** Human label for a match: "Season · Wk N · Match M", falling back to "Match #id". */
+export function matchLabel(opts: {
+  matchId: number;
+  seasonName?: string | null;
+  weekNumber?: number | null;
+  matchNumber?: number | null;
+}): string {
+  const parts = [
+    opts.seasonName,
+    opts.weekNumber != null ? `Wk ${opts.weekNumber}` : null,
+    opts.matchNumber != null ? `Match ${opts.matchNumber}` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : `Match #${opts.matchId}`;
+}
+
 export function weekWindow(
   startDate: string | null,
   weekNumber: number,
