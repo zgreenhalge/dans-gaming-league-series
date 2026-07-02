@@ -20,6 +20,11 @@ const TOOLS: { href: string; title: string; desc: string }[] = [
     desc: 'Every pipeline — demo ingest, replay, and radar — with status, warnings, and retry.',
   },
   {
+    href: '/admin/matches',
+    title: 'Manage Matches',
+    desc: 'Reschedule, clear/redo a pick-ban, and toggle the feature match from one place.',
+  },
+  {
     href: '/admin/servers',
     title: 'Match Server',
     desc: 'Shared DatHost server status — who holds it, and a teardown control.',

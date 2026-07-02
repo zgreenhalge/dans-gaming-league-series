@@ -40,6 +40,16 @@ type StepField =
   | 'shirts_pick'
   | 'skins_starting_side';
 
+// Every veto slot — used by the admin "Clear all" to wipe the pick-ban regardless of format.
+const ALL_VETO_FIELDS: StepField[] = [
+  'shirts_ban',
+  'shirts_ban2',
+  'skins_ban1',
+  'skins_ban2',
+  'shirts_pick',
+  'skins_starting_side',
+];
+
 function getSteps(match: Match, isGauntlet: boolean) {
   if (isGauntlet) return GAUNTLET_STEPS;
   if (match.is_playoff_game) return PLAYOFF_STEPS;
@@ -124,11 +134,11 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
     return displayValue(f) === null;
   })?.field as StepField | undefined;
 
-  // The field the current player can act on for NEW entries (unfilled slots)
-  const actionableField: StepField | undefined = (() => {
+  // The slot this player owns by faction, independent of any admin override — drives the "your turn"
+  // hint, so an admin who is *also* in the match still sees it on their own slot.
+  const playerTurnField: StepField | undefined = (() => {
     if (!canVeto) return undefined;
     if (isGauntlet) {
-      if (isAdmin) return sequenceNextField;
       if (!playerFaction || gauntletPlayerIndex === null) return undefined;
       const myField: StepField =
         playerFaction === 'SHIRTS'
@@ -136,12 +146,18 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
           : (gauntletPlayerIndex === 0 ? 'skins_ban1' : 'skins_ban2');
       return displayValue(myField) === null ? myField : undefined;
     }
-    if (!sequenceNextField) return undefined;
-    if (isAdmin) return sequenceNextField;
-    if (!playerFaction) return undefined;
+    if (!sequenceNextField || !playerFaction) return undefined;
     const stepFaction = sequenceNextField.startsWith('shirts_') ? 'SHIRTS' : 'SKINS';
     return playerFaction === stepFaction ? sequenceNextField : undefined;
   })();
+
+  // What the current user can act on for NEW entries: admins get the next slot in sequence; players
+  // get only their own faction's slot.
+  const actionableField: StepField | undefined = !canVeto
+    ? undefined
+    : isAdmin
+      ? sequenceNextField
+      : playerTurnField;
 
   // Whether a filled tile can be overwritten by the current user
   function isOverwritable(field: StepField): boolean {
@@ -202,6 +218,36 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
     submitVeto(field, null);
   }
 
+  // Admin-only: clear every set veto slot in one go. Clearing is order-independent (the route just
+  // nulls each field), so we fire them together and optimistically blank them all first.
+  const setFields = ALL_VETO_FIELDS.filter((f) => displayValue(f) !== null);
+  function clearAll() {
+    if (setFields.length === 0) return;
+    setError(null);
+    setActiveField(null);
+    setOptimisticFields((prev) => {
+      const next = new Map(prev);
+      for (const f of setFields) next.set(f, null);
+      return next;
+    });
+    startTransition(async () => {
+      await Promise.all(
+        setFields.map(async (field) => {
+          const res = await fetch(`/api/matches/${match.id}/veto`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ field, value: null }),
+          });
+          if (!res.ok) {
+            const json = await res.json().catch(() => ({}));
+            setError(json.error ?? 'Something went wrong');
+            setOptimisticFields((prev) => { const n = new Map(prev); n.delete(field); return n; });
+          }
+        }),
+      );
+    });
+  }
+
   function handleTileClick(field: StepField) {
     const val = displayValue(field);
     const canClick = field === actionableField || (val !== null && isOverwritable(field));
@@ -259,7 +305,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
                   <div className={banImg ? 'relative z-10' : undefined}>
                     <div className="lbl tracked text-[9px] font-semibold mb-0.5 flex items-center gap-1">
                       {s.label}
-                      {isNext && val === null && (
+                      {s.field === playerTurnField && val === null && (
                         <span className="ml-auto text-[var(--color-accent-amber-strong)] text-[8px] font-bold tracking-wide">
                           {s.type === 'pick' ? 'YOUR PICK' : s.type === 'side' ? 'YOUR SIDE' : 'YOUR BAN'}
                         </span>
@@ -300,6 +346,20 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
           )}
         </div>
       </div>
+
+      {/* Admin: wipe the whole pick-ban in one action. */}
+      {isAdmin && setFields.length > 0 && (
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={clearAll}
+            className="font-mono text-[10px] px-2 py-[3px] rounded border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg)] hover:border-[var(--color-accent-red-border)] transition-colors disabled:opacity-40"
+          >
+            Clear all pick/bans
+          </button>
+        </div>
+      )}
 
       {/* Workshop link for picked map (hidden once stats are recorded) */}
       {(() => {

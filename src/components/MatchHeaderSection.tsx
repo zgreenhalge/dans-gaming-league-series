@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useTransition, useEffect, useSyncExternalStore } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { toSentenceCase, mapSlug } from '@/lib/maps';
-import { useRouter } from 'next/navigation';
-import { findScheduleCollision, type ScheduledMatchRef } from '@/lib/schedule';
+import { type ScheduledMatchRef } from '@/lib/schedule';
+import { useScheduleEditor } from './useScheduleEditor';
 
 const noopSubscribe = () => () => {};
 const returnFalse = () => false;
@@ -62,15 +62,6 @@ function useCountdown(iso: string | null): string {
   return label;
 }
 
-function toDatetimeLocal(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
-    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
-  );
-}
-
 function fmtWindowDate(dateStr: string): string {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
     month: 'short',
@@ -92,11 +83,6 @@ function useIsClient(): boolean {
   return useSyncExternalStore(noopSubscribe, returnTrue, returnFalse);
 }
 
-function isOutsideWindow(localDt: string, weekStart: string | null, weekEnd: string | null): boolean {
-  if (!weekStart || !weekEnd || !localDt) return false;
-  const d = new Date(localDt);
-  return d < new Date(weekStart + 'T00:00:00') || d > new Date(weekEnd + 'T23:59:59');
-}
 
 export default function MatchHeaderSection({
   map,
@@ -109,71 +95,25 @@ export default function MatchHeaderSection({
   isGauntlet,
   otherScheduled = [],
 }: Props) {
-  const router = useRouter();
   const isClient = useIsClient();
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState('');
-  const [warning, setWarning] = useState<'window' | 'collision' | null>(null);
-  const [collisionWith, setCollisionWith] = useState<ScheduledMatchRef | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
   const countdown = useCountdown(scheduledAt);
-
-  useEffect(() => {
-    if (scheduledAt) setValue(toDatetimeLocal(scheduledAt));
-  }, [scheduledAt]);
+  const {
+    editing,
+    value,
+    warning,
+    collisionWith,
+    error,
+    setValue,
+    startEditing,
+    cancel,
+    dismissWarning,
+    save,
+    clear,
+  } = useScheduleEditor({ matchId, scheduledAt, weekStart, weekEnd, otherScheduled });
 
   const showSchedule = !played && !isGauntlet;
   const windowLabel =
     isClient && weekStart && weekEnd ? `${fmtWindowDate(weekStart)} – ${fmtWindowDate(weekEnd)}` : null;
-
-  async function save(override = false) {
-    if (!value) return;
-    if (!override) {
-      if (isOutsideWindow(value, weekStart, weekEnd)) {
-        setWarning('window');
-        return;
-      }
-      const clash = findScheduleCollision(value, otherScheduled);
-      if (clash) {
-        setCollisionWith(clash);
-        setWarning('collision');
-        return;
-      }
-    }
-    setWarning(null);
-    setError(null);
-    const res = await fetch(`/api/matches/${matchId}/schedule`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scheduled_at: new Date(value).toISOString() }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? 'Failed to save.');
-      return;
-    }
-    setEditing(false);
-    startTransition(() => router.refresh());
-  }
-
-  async function clear() {
-    setError(null);
-    const res = await fetch(`/api/matches/${matchId}/schedule`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scheduled_at: null }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? 'Failed to clear.');
-      return;
-    }
-    setEditing(false);
-    startTransition(() => router.refresh());
-  }
-
-  const startEditing = () => { setValue(scheduledAt ? toDatetimeLocal(scheduledAt) : ''); setEditing(true); };
 
   const scheduleReadView = showSchedule && !editing && (
     <div className="flex items-center gap-2">
@@ -225,14 +165,7 @@ export default function MatchHeaderSection({
       <input
         type="datetime-local"
         value={value}
-        onChange={(e) => {
-          if (!e.target.value) { setValue(''); setWarning(null); return; }
-          const d = new Date(e.target.value);
-          d.setMinutes(Math.round(d.getMinutes() / 15) * 15, 0, 0);
-          const pad = (n: number) => String(n).padStart(2, '0');
-          setValue(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
-          setWarning(null);
-        }}
+        onChange={(e) => setValue(e.target.value)}
         className="font-mono text-[13px] px-2 py-1.5 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
       />
       <button
@@ -252,7 +185,7 @@ export default function MatchHeaderSection({
         </button>
       )}
       <button
-        onClick={() => { setEditing(false); setWarning(null); setError(null); }}
+        onClick={cancel}
         className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
       >
         Cancel
@@ -314,7 +247,7 @@ export default function MatchHeaderSection({
                 Schedule anyway
               </button>
               <button
-                onClick={() => setWarning(null)}
+                onClick={dismissWarning}
                 className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
               >
                 Cancel

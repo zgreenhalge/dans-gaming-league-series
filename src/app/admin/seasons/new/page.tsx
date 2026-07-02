@@ -40,7 +40,7 @@ export default async function NewSeasonPage() {
       <TopbarShell
         crumbs={[
           { label: 'DGLS', href: '/' },
-          { label: 'Seasons', href: '/seasons' },
+          { label: 'Admin', href: '/admin' },
           { label: 'Create Season' },
         ]}
       />
