@@ -22,6 +22,27 @@ export interface MatchContext {
   hasSides: boolean;
 }
 
+/**
+ * Groups death rounds per victim: round+1 offset, gated to live rounds, only for known players.
+ * Shared by buildMatchContext and the test fixture (matchContextFixture.ts) so the two can't drift.
+ */
+export function buildRoundDeaths(
+  deathEvents: PlayerDeathRow[],
+  liveRounds: Set<number>,
+  isKnownPlayer: (steamId: string) => boolean,
+): Map<string, Set<number>> {
+  const roundDeaths = new Map<string, Set<number>>();
+  for (const d of deathEvents) {
+    const roundNumber = d.total_rounds_played + 1;
+    if (!liveRounds.has(roundNumber)) continue;
+    const victim = d.user_steamid;
+    if (!victim || !isKnownPlayer(victim)) continue;
+    if (!roundDeaths.has(victim)) roundDeaths.set(victim, new Set());
+    roundDeaths.get(victim)!.add(roundNumber);
+  }
+  return roundDeaths;
+}
+
 export function buildMatchContext(
   demoBuffer: Buffer,
   roundEndEvents: RoundEndRow[],
@@ -76,15 +97,7 @@ export function buildMatchContext(
     }
   }
 
-  const roundDeaths = new Map<string, Set<number>>();
-  for (const d of deathEvents) {
-    const roundNumber = d.total_rounds_played + 1;
-    if (!liveRounds.has(roundNumber)) continue;
-    const victim = d.user_steamid;
-    if (!victim || !steamToPlayer.has(victim)) continue;
-    if (!roundDeaths.has(victim)) roundDeaths.set(victim, new Set());
-    roundDeaths.get(victim)!.add(roundNumber);
-  }
+  const roundDeaths = buildRoundDeaths(deathEvents, liveRounds, (steamId) => steamToPlayer.has(steamId));
 
   return {
     rounds,

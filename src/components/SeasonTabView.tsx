@@ -30,6 +30,12 @@ type GauntletMode = { kind: 'gauntlet'; rounds: GauntletRound[] };
 
 export type { Tab as SeasonTab };
 
+// Stable empty-array fallbacks so `schedule`/`rounds` keep a consistent identity across
+// renders when the season is the other kind — a fresh `[]` literal here would break the
+// downstream `useMemo` dependency checks below.
+const EMPTY_SCHEDULE: WeekWithMatches[] = [];
+const EMPTY_ROUNDS: GauntletRound[] = [];
+
 type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   leaderboard: LeaderboardRowWithId[];
   seasonStatus: string;
@@ -44,8 +50,8 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
 export default function SeasonTabView(props: SeasonTabViewProps) {
   const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings } = props;
   const isGauntlet = props.kind === 'gauntlet';
-  const schedule = props.kind === 'regular' ? props.schedule : [];
-  const rounds = props.kind === 'gauntlet' ? props.rounds : [];
+  const schedule = props.kind === 'regular' ? props.schedule : EMPTY_SCHEDULE;
+  const rounds = props.kind === 'gauntlet' ? props.rounds : EMPTY_ROUNDS;
   const seasonStartDate = props.kind === 'regular' ? props.seasonStartDate : null;
 
   const gauntletRanking = useMemo(

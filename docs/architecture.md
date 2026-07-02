@@ -130,3 +130,7 @@ Vercel auto-detects the Next.js project from the repo root. Set all env vars in 
 
 - **Cron** — `GET /api/cron/refresh-steam` runs daily at `0 4 * * *` (04:00 UTC) to refresh Steam avatars/nicknames. The route is `CRON_SECRET`-bearer-gated and batches players through the Steam `GetPlayerSummaries` API 100 at a time.
 - **Python function** — `api/ehog/recompute.py` is deployed on the `@vercel/python` runtime with `ehog/**` bundled via `includeFiles`. It runs the EHOG full recompute after a score is submitted. See [`ehog.md`](./ehog.md).
+
+### CI
+
+`.github/workflows/ci.yml` gates PRs and pushes to `main`: a `frontend` job (`npm run lint && npm test && npm run build`) and an `ingestion` job (`python3 -m unittest tests.test_ingest`), each skipped unless its area's paths changed. The frontend job needs `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` as repo secrets — `next build` prerenders static pages that read from Supabase. This is separate from `demo-ingest.yml`/`radar-build.yml`, which are `workflow_dispatch`/`repository_dispatch`-triggered ingestion jobs, not PR gates.

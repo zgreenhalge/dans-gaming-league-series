@@ -37,7 +37,7 @@ function demoKey(matchId: number): string {
   return `${matchId}/game.dem`;
 }
 
-export default {
+const worker: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method !== 'POST') {
       return new Response('Method Not Allowed', { status: 405 });
@@ -89,3 +89,5 @@ export default {
     });
   },
 };
+
+export default worker;

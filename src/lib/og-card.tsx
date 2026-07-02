@@ -80,6 +80,7 @@ export function CardShell({ children, subtitle, bgImage }: { children: React.Rea
       {bgImage && (
         <img
           src={bgImage}
+          alt=""
           style={{
             position: 'absolute',
             top: 0,

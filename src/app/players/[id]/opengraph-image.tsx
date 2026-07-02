@@ -33,6 +33,7 @@ export default async function Image({
             {meta.image && (
               <img
                 src={meta.image}
+                alt=""
                 width={160}
                 height={160}
                 style={{ borderRadius: '12px', border: `3px solid ${colors.BORDER}` }}

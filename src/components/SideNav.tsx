@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNav } from './NavContext';
+import { usePersistedToggle } from './usePersistedToggle';
 import { extractSeasonNumber } from '@/lib/util';
 
 interface NavSeason {
@@ -50,26 +51,13 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
 
 export function SideNav({ seasons }: Props) {
   const { desktopOpen, mobileOpen, setMobileOpen } = useNav();
-  const [seasonsOpen, setSeasonsOpen] = useState(true);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('sidenav-seasons-open');
-    if (stored !== null) setSeasonsOpen(stored === 'true');
-  }, []);
+  const [seasonsOpen, toggleSeasons] = usePersistedToggle('sidenav-seasons-open', true);
   const pathname = usePathname();
 
   // Close mobile drawer on navigation
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname, setMobileOpen]);
-
-  function toggleSeasons() {
-    setSeasonsOpen((v) => {
-      const next = !v;
-      localStorage.setItem('sidenav-seasons-open', String(next));
-      return next;
-    });
-  }
 
   const regularSeasons = seasons
     .filter((s) => !s.name.toLowerCase().includes('gauntlet'))
