@@ -41,7 +41,7 @@ export function IngestJobActions({
           <button
             onClick={() => confirm()}
             disabled={busy}
-            className="font-mono text-[10px] px-2 py-[3px] rounded border border-[var(--color-accent-green-border)] bg-[var(--color-accent-green-bg)] text-[var(--color-accent-green-fg)] disabled:opacity-50"
+            className="font-mono text-[10px] px-2 py-[3px] rounded border border-[var(--color-accent-green-border)] bg-[var(--color-accent-green-bg)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-border)] transition-colors disabled:opacity-50"
           >
             {busy ? '…' : 'Confirm'}
           </button>
@@ -49,7 +49,7 @@ export function IngestJobActions({
         <button
           onClick={() => retry()}
           disabled={busy}
-          className="font-mono text-[10px] px-2 py-[3px] rounded border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] disabled:opacity-50"
+          className="font-mono text-[10px] px-2 py-[3px] rounded border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors disabled:opacity-50"
         >
           Re-parse
         </button>
@@ -57,9 +57,11 @@ export function IngestJobActions({
           <button
             onClick={() => dismiss()}
             disabled={busy}
-            className="font-mono text-[10px] text-[var(--color-text-secondary)] underline hover:text-[var(--color-text-primary)] disabled:opacity-50"
+            title="Dismiss"
+            aria-label="Dismiss"
+            className="font-mono text-[13px] leading-none text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg)] transition-colors disabled:opacity-50"
           >
-            Dismiss
+            ✕
           </button>
         )}
       </div>

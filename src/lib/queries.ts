@@ -3447,9 +3447,9 @@ export interface DemoIngestJobRow {
 const DEMO_INGEST_STAGED_STATUSES: ReadonlySet<string> = new Set(['parsed', 'quarantined']);
 
 /**
- * All demo-ingest jobs, newest activity first. Additive read for the admin
- * ingestion-status page. Defensive: returns `[]` if `background_jobs` isn't present
- * yet so the page never hard-fails.
+ * Demo-ingest jobs for the admin dashboard, newest activity first. Excludes `confirmed`
+ * (done + scored — nothing to show or act on). Defensive: returns `[]` if `background_jobs`
+ * isn't present yet so the page never hard-fails.
  */
 export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
   try {
@@ -3459,6 +3459,7 @@ export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
         'match_id, status, stage, error_message, gh_run_url, created_at, updated_at, started_at, finished_at',
       )
       .eq('job_type', DEMO_INGEST_JOB_TYPE)
+      .neq('status', 'confirmed') // confirmed = done and scored — nothing to show or act on
       .order('updated_at', { ascending: false });
     if (error || !jobs) return [];
 
