@@ -28,7 +28,7 @@ export default async function ManageMatchesPage() {
 
   return (
     <div className="min-h-screen">
-      <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Manage Matches' }]} />
+      <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Admin', href: '/admin' }, { label: 'Manage Matches' }]} />
       <main className="max-w-[760px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">
           <div className="font-display text-[28px] font-semibold leading-tight">Manage Matches</div>
