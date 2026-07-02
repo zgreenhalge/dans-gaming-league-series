@@ -1,11 +1,12 @@
-// Fire a GitHub Actions `workflow_dispatch` for a match-scoped job. Mirrors the inline call in
-// `replay/dispatch`; shared so the demo-ingest dispatch (from the machine-auth notify route) doesn't
-// duplicate it. Uses workflow_dispatch (needs Actions: write) — the workflow must exist on the
-// dispatched ref's default branch to be triggerable.
+// Fire a GitHub Actions `workflow_dispatch` with arbitrary inputs. Mirrors the inline call in
+// `replay/dispatch`; shared so every dispatcher (demo-ingest by match, radar-build by map) sends the
+// same request without duplicating it. Uses workflow_dispatch (needs Actions: write) — the workflow
+// must exist on the dispatched ref's default branch to be triggerable. The caller owns the input
+// shape (e.g. `{ match_id }` or `{ map_id }`) so this stays subject-agnostic.
 
 export async function dispatchWorkflow(
   workflowFile: string,
-  matchId: number,
+  inputs: Record<string, string>,
 ): Promise<{ ok: boolean; error?: string }> {
   const token = process.env.GITHUB_DISPATCH_TOKEN;
   const repo = process.env.GITHUB_REPO; // "owner/name"
@@ -24,7 +25,7 @@ export async function dispatchWorkflow(
           'X-GitHub-Api-Version': '2022-11-28',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ref, inputs: { match_id: String(matchId) } }),
+        body: JSON.stringify({ ref, inputs }),
       },
     );
     if (!res.ok) {

@@ -37,7 +37,7 @@ export async function POST(
     return NextResponse.json({ ok: true, status: existingStatus, alreadyRunning: true });
   }
 
-  const dispatch = await dispatchWorkflow('demo-ingest.yml', matchId);
+  const dispatch = await dispatchWorkflow('demo-ingest.yml', { match_id: String(matchId) });
   if (!dispatch.ok) {
     return NextResponse.json(
       { error: `Could not start a re-parse: ${dispatch.error}` },
