@@ -50,6 +50,11 @@ test('isVetoComplete: regular season with all 4 bans but no pick is incomplete',
   assert.equal(isVetoComplete(m, false), false);
 });
 
+test('isVetoComplete: regular season missing just shirts_ban2 is incomplete', () => {
+  const m: VetoFields = { ...full, shirts_ban2: null };
+  assert.equal(isVetoComplete(m, false), false);
+});
+
 test('isVetoComplete: regular season with a pick but no starting side is incomplete', () => {
   const m: VetoFields = { ...full, skins_starting_side: null };
   assert.equal(isVetoComplete(m, false), false);

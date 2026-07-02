@@ -4,7 +4,7 @@
  * round-end events) and lets a test specify per-player sides and round winners directly. Not a
  * *.test.ts file itself — it's imported by the actual test files, not run by `npm test`.
  */
-import type { MatchContext, PlayerDeathRow } from './matchContext';
+import { buildRoundDeaths, type MatchContext, type PlayerDeathRow } from './matchContext';
 import type { RoundSideInfo } from './roundSides';
 
 export function makeContext(opts: {
@@ -14,6 +14,7 @@ export function makeContext(opts: {
   deaths?: PlayerDeathRow[];
   tickRate?: number;
   hasSides?: boolean;
+  warnings?: string[];
 }): MatchContext {
   const rounds: RoundSideInfo[] = opts.rounds.map((r) => ({
     roundNumber: r.roundNumber,
@@ -23,26 +24,22 @@ export function makeContext(opts: {
   }));
 
   const liveRounds = new Set(rounds.map((r) => r.roundNumber));
+  // Mirrors buildMatchContext: playerSides is only populated when sides are actually known.
+  const hasSides = opts.hasSides ?? true;
 
   const playerSides = new Map<string, Map<number, 'CT' | 'T'>>();
-  for (const sid of Object.keys(opts.sides)) {
-    const m = new Map<number, 'CT' | 'T'>();
-    for (const r of rounds) {
-      const override = opts.sidesByRound?.[r.roundNumber]?.[sid];
-      m.set(r.roundNumber, override ?? opts.sides[sid]);
+  if (hasSides) {
+    for (const sid of Object.keys(opts.sides)) {
+      const m = new Map<number, 'CT' | 'T'>();
+      for (const r of rounds) {
+        const override = opts.sidesByRound?.[r.roundNumber]?.[sid];
+        m.set(r.roundNumber, override ?? opts.sides[sid]);
+      }
+      playerSides.set(sid, m);
     }
-    playerSides.set(sid, m);
   }
 
-  const roundDeaths = new Map<string, Set<number>>();
-  for (const d of opts.deaths ?? []) {
-    const round = d.total_rounds_played + 1;
-    if (!liveRounds.has(round)) continue;
-    const victim = d.user_steamid;
-    if (!victim || !(victim in opts.sides)) continue;
-    if (!roundDeaths.has(victim)) roundDeaths.set(victim, new Set());
-    roundDeaths.get(victim)!.add(round);
-  }
+  const roundDeaths = buildRoundDeaths(opts.deaths ?? [], liveRounds, (sid) => sid in opts.sides);
 
   return {
     rounds,
@@ -52,8 +49,8 @@ export function makeContext(opts: {
     playerSides,
     roundDeaths,
     factionOf: new Map(),
-    warnings: [],
-    hasSides: opts.hasSides ?? true,
+    warnings: opts.warnings ?? [],
+    hasSides,
   };
 }
 

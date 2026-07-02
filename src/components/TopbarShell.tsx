@@ -174,12 +174,17 @@ export function TopbarShell({
                 <PlayerAvatar name={user.name ?? "?"} imageUrl={user.image} size="md" round />
               )
             ) : (
-              <Link
+              // Intentionally a plain <a>, not next/link's <Link>: this route is a Route Handler
+              // that 302s to steamcommunity.com for the OpenID flow, not an app page. Link's
+              // client-side soft-navigation expects an RSC payload and isn't built for redirecting
+              // route handlers.
+              // eslint-disable-next-line @next/next/no-html-link-for-pages
+              <a
                 href="/api/auth/steam"
                 className="text-[13px] font-medium tracking-wide text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
               >
                 Login
-              </Link>
+              </a>
             )}
           </div>
         </div>

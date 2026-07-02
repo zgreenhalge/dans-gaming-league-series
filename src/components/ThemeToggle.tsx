@@ -111,14 +111,18 @@ export function ThemeToggle() {
 
   const current = OPTIONS.find(o => o.value === pref) ?? OPTIONS[0];
   const CurrentIcon = current.Icon;
+  // Server always renders as 'system' (readPref() sees no window); keep the label/aria-label
+  // matching that until mounted, even though `pref` itself is read eagerly — otherwise these
+  // attributes (which suppressHydrationWarning does NOT cover, only text content) can mismatch.
+  const displayLabel = mounted ? current.label : OPTIONS[0].label;
 
   return (
     <div ref={ref} className="relative" suppressHydrationWarning>
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        aria-label={`Theme: ${current.label}`}
-        title={`Theme: ${current.label}`}
+        aria-label={`Theme: ${displayLabel}`}
+        title={`Theme: ${displayLabel}`}
         suppressHydrationWarning
         className="inline-flex items-center justify-center w-7 h-7 border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors shrink-0"
       >

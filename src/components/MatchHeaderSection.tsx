@@ -1,14 +1,11 @@
 'use client';
 
-import { useState, useEffect, useSyncExternalStore } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { toSentenceCase, mapSlug } from '@/lib/maps';
 import { type ScheduledMatchRef } from '@/lib/schedule';
 import { useScheduleEditor } from './useScheduleEditor';
-
-const noopSubscribe = () => () => {};
-const returnFalse = () => false;
-const returnTrue = () => true;
+import { useHasMounted } from './useHasMounted';
 
 interface Props {
   map: string | null;
@@ -79,11 +76,6 @@ function fmtScheduled(iso: string): string {
   });
 }
 
-function useIsClient(): boolean {
-  return useSyncExternalStore(noopSubscribe, returnTrue, returnFalse);
-}
-
-
 export default function MatchHeaderSection({
   map,
   matchId,
@@ -95,7 +87,7 @@ export default function MatchHeaderSection({
   isGauntlet,
   otherScheduled = [],
 }: Props) {
-  const isClient = useIsClient();
+  const isClient = useHasMounted();
   const countdown = useCountdown(scheduledAt);
   const {
     editing,
