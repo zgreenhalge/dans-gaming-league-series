@@ -134,11 +134,11 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
     return displayValue(f) === null;
   })?.field as StepField | undefined;
 
-  // The field the current player can act on for NEW entries (unfilled slots)
-  const actionableField: StepField | undefined = (() => {
+  // The slot this player owns by faction, independent of any admin override — drives the "your turn"
+  // hint, so an admin who is *also* in the match still sees it on their own slot.
+  const playerTurnField: StepField | undefined = (() => {
     if (!canVeto) return undefined;
     if (isGauntlet) {
-      if (isAdmin) return sequenceNextField;
       if (!playerFaction || gauntletPlayerIndex === null) return undefined;
       const myField: StepField =
         playerFaction === 'SHIRTS'
@@ -146,12 +146,18 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
           : (gauntletPlayerIndex === 0 ? 'skins_ban1' : 'skins_ban2');
       return displayValue(myField) === null ? myField : undefined;
     }
-    if (!sequenceNextField) return undefined;
-    if (isAdmin) return sequenceNextField;
-    if (!playerFaction) return undefined;
+    if (!sequenceNextField || !playerFaction) return undefined;
     const stepFaction = sequenceNextField.startsWith('shirts_') ? 'SHIRTS' : 'SKINS';
     return playerFaction === stepFaction ? sequenceNextField : undefined;
   })();
+
+  // What the current user can act on for NEW entries: admins get the next slot in sequence; players
+  // get only their own faction's slot.
+  const actionableField: StepField | undefined = !canVeto
+    ? undefined
+    : isAdmin
+      ? sequenceNextField
+      : playerTurnField;
 
   // Whether a filled tile can be overwritten by the current user
   function isOverwritable(field: StepField): boolean {
@@ -299,7 +305,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
                   <div className={banImg ? 'relative z-10' : undefined}>
                     <div className="lbl tracked text-[9px] font-semibold mb-0.5 flex items-center gap-1">
                       {s.label}
-                      {isNext && val === null && !isAdmin && (
+                      {s.field === playerTurnField && val === null && (
                         <span className="ml-auto text-[var(--color-accent-amber-strong)] text-[8px] font-bold tracking-wide">
                           {s.type === 'pick' ? 'YOUR PICK' : s.type === 'side' ? 'YOUR SIDE' : 'YOUR BAN'}
                         </span>
