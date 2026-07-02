@@ -96,11 +96,17 @@ Schema-free by design — status lives in the existing table, detail lives in th
 
 - **`/admin`** — hub, linked from the Topbar (visible only when `session.user.isAdmin`). Add a tool
   via the `TOOLS` array.
-- **`/admin/ingestion`** — read-only dashboard: every `demo_ingest` job, newest first, with a
-  color-coded status pill, stage/error, the Action log link, and each staged job's parse warnings +
-  quarantine flags (read from R2). This is the notification channel — the surface for anything that
-  would otherwise fail silently (Discord is deprioritized). Rows link to the match, where the review
-  block does the actual confirm.
+- **`/admin/ingestion`** — dashboard: every `demo_ingest` job, newest first, with a color-coded
+  status pill, stage/error, the Action log link, and each staged job's parse warnings + quarantine
+  flags (read from R2). This is the notification channel — the surface for anything that would
+  otherwise fail silently (Discord is deprioritized). Each row has inline actions — **Confirm** (a
+  cleanly parsed, score-derived result only), **Re-parse**, **Dismiss** — driven by the shared
+  `useDemoIngestActions` hook (the same one the in-match `MatchDemoReviewBlock` uses, so they can't
+  drift). The list stays live via Realtime on `background_jobs`.
+- **`/admin/servers`** — server console: the single shared server's current occupant (reconciled via
+  `getActiveServerMatch`), connect string, and a **Teardown** control for a server left live (the
+  autostop-failed safety valve). Live via Realtime on `matches`. Provisioning stays automatic (veto)
+  / on the match page; this is the global operator view.
 
 `is_admin` is threaded into the session JWT (`authOptions.js`) and typed on `session.user.isAdmin`;
 existing sessions are backfilled on their next request (no re-login needed). Every admin page still
@@ -124,6 +130,7 @@ reused by the `scripts/gen-matchzy-config.ts` CLI. Versioned golden settings + c
 | GET | `/api/matches/[id]/matchzy-config` | machine (`X-MatchZy-Token`) | the `matchzy_loadmatch_url` target |
 | POST | `/api/ingest/notify` | machine (`x-ingest-secret`) | demo landed → record + dispatch + teardown |
 | GET·DELETE | `/api/matches/[id]/demo/result` | session | read / dispose the staged `DemoIngestResult` |
+| POST | `/api/matches/[id]/demo/dispatch` | session | re-parse the demo in R2 (manual counterpart to notify) |
 | POST | `/api/matches/[id]/replay/dispatch` | session | (re)trigger the replay Action |
 
 ## Environment
@@ -135,11 +142,14 @@ everything degrades to the manual flow.
 
 ## Key files
 
-`src/lib/dathost.ts` · `src/lib/dathost-lifecycle.ts` · `src/lib/matchzy.ts` · `src/lib/schedule.ts` ·
+`src/lib/dathost.ts` · `src/lib/dathost-lifecycle.ts` (lifecycle + `getReconciledServerState` +
+`getActiveServerMatch` + `findServerOccupant`) · `src/lib/matchzy.ts` · `src/lib/schedule.ts` ·
 `src/components/MatchServerPanel.tsx` · `src/components/MatchDemoReviewBlock.tsx` ·
+`src/components/useDemoIngestActions.ts` (shared confirm/dismiss/re-parse) ·
+`src/components/IngestJobActions.tsx` · `src/components/ServerConsolePanel.tsx` ·
 `src/components/SchedulingOverlapBanner.tsx` · `src/app/admin/ingestion/page.tsx` ·
-`scripts/demo-ingest.ts` · `scripts/gen-matchzy-config.ts` · `scripts/inspect-demo.ts` ·
-`infra/matchzy/` · `infra/worker/`.
+`src/app/admin/servers/page.tsx` · `scripts/demo-ingest.ts` · `scripts/gen-matchzy-config.ts` ·
+`scripts/inspect-demo.ts` · `infra/matchzy/` · `infra/worker/`.
 
 ## Known limitations / friction
 

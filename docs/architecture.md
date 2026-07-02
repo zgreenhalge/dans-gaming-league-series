@@ -27,7 +27,8 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/maps` | Map index — pick/ban/skip counts per map |
 | `/maps/[slug]` | Map detail — match history + per-player stats on that map |
 | `/admin` | Admin hub — links to admin tools (linked from the Topbar when `session.user.isAdmin`) |
-| `/admin/ingestion` | Admin demo-ingestion dashboard — every `demo_ingest` job + warnings/quarantine flags (see [`hosting.md`](./hosting.md)) |
+| `/admin/ingestion` | Admin demo-ingestion dashboard — every `demo_ingest` job + warnings/quarantine flags, with confirm/re-parse/dismiss actions (see [`hosting.md`](./hosting.md)) |
+| `/admin/servers` | Admin server console — shared DatHost server status + teardown (see [`hosting.md`](./hosting.md)) |
 | `/admin/seasons/new` | Create a new season (admin only) |
 | `/auth/steam` | Steam auth landing — completes `signIn()` after the OpenID bounce |
 
@@ -60,6 +61,7 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `POST` | `/api/matches/[id]/demo/upload-url` | Mint a presigned Cloudflare R2 URL to upload a `.dem` file |
 | `POST` | `/api/matches/[id]/demo/parse` | Parse the uploaded demo into match + sabremetric stats (see [`demo-ingestion.md`](./demo-ingestion.md)) |
 | `GET/DELETE` | `/api/matches/[id]/demo/result` | Read / dispose the staged auto-ingest result ([`hosting.md`](./hosting.md)) |
+| `POST` | `/api/matches/[id]/demo/dispatch` | Re-parse the demo already in R2 (manual counterpart to `ingest/notify`) |
 | `GET/POST` | `/api/matches/[id]/server/{status,provision,teardown}` | Per-match DatHost server lifecycle ([`hosting.md`](./hosting.md)) |
 | `GET` | `/api/matches/[id]/matchzy-config` | Machine-auth MatchZy config (`matchzy_loadmatch_url` target) |
 | `POST` | `/api/ingest/notify` | Machine-auth: demo landed → record job, dispatch parse, tear down |
