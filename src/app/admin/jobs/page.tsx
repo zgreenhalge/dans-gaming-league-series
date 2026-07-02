@@ -30,7 +30,7 @@ export default async function BackgroundJobsPage() {
 
   return (
     <div className="min-h-screen">
-      <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Background Jobs' }]} />
+      <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Admin', href: '/admin' }, { label: 'Background Jobs' }]} />
       <main className="max-w-[760px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">
           <div className="font-display text-[28px] font-semibold leading-tight">Background Jobs</div>
