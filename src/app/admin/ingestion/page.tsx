@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getDemoIngestJobs, isPlayerAdmin, type DemoIngestJobRow } from '@/lib/queries';
+import { IngestJobActions, IngestLiveRefresh } from '@/components/IngestJobActions';
 
 // Compact, deterministic UTC timestamp (`MM-DD HH:MM UTC`) — day-granular relative
 // time is too coarse for an ops dashboard where jobs move minute-to-minute, and a
@@ -120,6 +121,7 @@ function JobRow({ job }: { job: DemoIngestJobRow }) {
             action log ↗
           </a>
         )}
+        <IngestJobActions matchId={job.matchId} status={job.status} hasPayload={job.hasPayload} />
       </div>
     </div>
   );
@@ -135,6 +137,7 @@ export default async function IngestionStatusPage() {
   return (
     <div className="min-h-screen">
       <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Demo Ingestion' }]} />
+      <IngestLiveRefresh />
       <main className="max-w-[760px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">
           <div className="font-display text-[28px] font-semibold leading-tight">Demo Ingestion</div>

@@ -3443,6 +3443,8 @@ export interface DemoIngestJobRow {
   // otherwise-silent issues surface on the admin panel.
   warnings: string[];
   quarantineFlags: string[];
+  /** Whether the staged result carries a confirm-ready score (false → side unknown / not derived). */
+  hasPayload: boolean;
 }
 
 /** Job statuses that still have a staged `demo-result.json` artifact in R2 to read detail from. */
@@ -3507,7 +3509,7 @@ export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
     // Enrich staged jobs with their parse warnings / quarantine flags from R2 (bounded:
     // only `parsed`/`quarantined` rows still have an artifact). Read in parallel.
     const staged = jobRows.filter((j) => DEMO_INGEST_STAGED_STATUSES.has(j.status ?? ''));
-    const detailByMatch = new Map<number, { warnings: string[]; quarantineFlags: string[] }>();
+    const detailByMatch = new Map<number, { warnings: string[]; quarantineFlags: string[]; hasPayload: boolean }>();
     await Promise.all(
       staged.map(async (j) => {
         try {
@@ -3517,6 +3519,7 @@ export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
           detailByMatch.set(j.match_id, {
             warnings: r.warnings ?? [],
             quarantineFlags: r.quarantineFlags ?? [],
+            hasPayload: r.payload != null,
           });
         } catch {
           /* corrupt/partial artifact — leave detail empty, status still shows */
@@ -3547,6 +3550,7 @@ export async function getDemoIngestJobs(): Promise<DemoIngestJobRow[]> {
         isGauntlet: s?.is_gauntlet ?? false,
         warnings: detail?.warnings ?? [],
         quarantineFlags: detail?.quarantineFlags ?? [],
+        hasPayload: detail?.hasPayload ?? false,
       };
     });
   } catch {
