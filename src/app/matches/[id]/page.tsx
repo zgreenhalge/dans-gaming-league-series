@@ -321,8 +321,10 @@ export default async function MatchPage({
             </>
           )}
 
-          {/* Match server (Phase 4) — below pick/ban, still in the header. Always shown in dev. */}
-          {(vetoComplete || process.env.NODE_ENV === 'development') && (
+          {/* Match server (Phase 4) — below pick/ban, still in the header. Always shown in dev.
+              Hidden once the match has a final score — a scored match doesn't need a server,
+              whether or not it went through the demo pipeline (#140). */}
+          {!played && (vetoComplete || process.env.NODE_ENV === 'development') && (
             <div className="pb-6 flex justify-center">
               <div className="w-full max-w-md">
                 <MatchServerPanel matchId={match.id} canManage={canManageServer} />
