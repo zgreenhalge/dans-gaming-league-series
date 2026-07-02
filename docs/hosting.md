@@ -60,9 +60,10 @@ claims the server (so a refusal never marks *it* failed). There is a tiny check-
 (two vetos completing within the same DB round-trip); accepted, since veto completions are seconds+
 apart in practice and this turns a silent mid-game clobber into a clean refusal.
 
-A **soft scheduling warning** (`src/lib/schedule.ts`) flags — on the match page and in the schedule
-editor — when two matches are scheduled **strictly under an hour** apart (they'd contend for the one
-server); it links the conflicting match and never blocks scheduling.
+A **soft scheduling warning** (`src/lib/schedule.ts`) flags — on the match page and in the admin
+match console (both render the shared `ScheduleEditor` over `useScheduleEditor`) — when two matches
+are scheduled **strictly under an hour** apart (they'd contend for the one server); it links the
+conflicting match and never blocks scheduling.
 
 ## Auto-ingestion pipeline
 
