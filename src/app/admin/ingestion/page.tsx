@@ -38,6 +38,8 @@ const STATUS_STYLE: Record<string, { label: string; bg: string; fg: string; bord
 };
 
 function StatusPill({ status }: { status: string }) {
+  // A confirmed job needs no status chip — it's done and scored; the row stays for history.
+  if (status === 'confirmed') return null;
   const s = STATUS_STYLE[status] ?? {
     label: status,
     bg: 'transparent',
