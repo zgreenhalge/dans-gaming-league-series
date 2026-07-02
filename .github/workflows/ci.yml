@@ -36,6 +36,9 @@ jobs:
             frontend:
               - '**'
               - '!ingestion/**'
+              - '!docs/**'
+              - '!*.md'
+              - '!LICENSE'
             ingestion:
               - 'ingestion/**'
 
