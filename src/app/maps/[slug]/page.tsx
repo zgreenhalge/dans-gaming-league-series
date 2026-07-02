@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getMapDetail, getH2HData } from '@/lib/queries';
+import { getMapDetail, getPlayersById } from '@/lib/queries';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
 import { extractSeasonNumber } from '@/lib/util';
@@ -86,12 +86,20 @@ export default async function MapPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [detail, h2hData, mapLookup] = await Promise.all([
+  const [detail, playersById, mapLookup] = await Promise.all([
     getMapDetail(slug),
-    getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true, map: slug }),
+    getPlayersById(),
     getMapLookup(),
   ]);
   if (!detail) notFound();
+
+  // H2H is computed client-side (see MapDetailView) so its tab can honor the
+  // season filter — only the id/name/avatar players need for it are passed down.
+  const players = Array.from(playersById.values()).map((p) => ({
+    id: p.id,
+    name: p.name,
+    steam_avatar_url: p.steam_avatar_url,
+  }));
 
   const img = mapImageFor(detail.name, mapLookup);
   const workshopUrl = mapLookup[slug]?.workshop_url ?? null;
@@ -154,7 +162,7 @@ export default async function MapPage({
       </div>
 
       <main className="max-w-[1080px] mx-auto px-6 pb-16 mt-8">
-        <MapDetailView detail={detail} h2hData={h2hData} />
+        <MapDetailView detail={detail} players={players} />
       </main>
     </div>
   );
