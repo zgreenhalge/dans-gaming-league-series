@@ -22,6 +22,27 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** The map a match was played on — the pick lives in `shirts_pick`, falling back to `picked_map`. */
+function mapFor(m: AdminMatchRow): string | null {
+  return m.match.shirts_pick ?? m.match.picked_map;
+}
+
+/**
+ * Lowercased searchable text for a match: its full label, shorthand tokens (`s1`/`s1g`/`w5`/`r3`/`m2`
+ * — so "S1 W5 M2" works, not just the full "Season 1 · Wk 5"), the played map, and the score. Search
+ * is token-AND (every whitespace-separated term must appear), so partial shorthand narrows the list.
+ */
+function searchText(m: AdminMatchRow): string {
+  const parts = [m.label, mapFor(m), m.match.picked_map, m.match.shirts_pick, m.match.final_score];
+  if (m.seasonNumber != null) parts.push(`s${m.seasonNumber}${m.isGauntlet ? 'g' : ''}`);
+  if (m.weekNumber != null) {
+    parts.push(`w${m.weekNumber}`);
+    if (m.isGauntlet) parts.push(`r${m.weekNumber}`); // gauntlet weeks read as rounds
+  }
+  if (m.match.match_number != null) parts.push(`m${m.match.match_number}`);
+  return parts.filter(Boolean).join(' ').toLowerCase();
+}
+
 export function MatchManager({ matches }: { matches: AdminMatchRow[] }) {
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<number | null>(null);
@@ -36,16 +57,14 @@ export function MatchManager({ matches }: { matches: AdminMatchRow[] }) {
     [matches],
   );
 
+  // Precompute each match's searchable text once, not on every keystroke.
+  const indexed = useMemo(() => matches.map((m) => ({ m, text: searchText(m) })), [matches]);
+
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return matches;
-    return matches.filter(
-      (m) =>
-        m.label.toLowerCase().includes(q) ||
-        (m.match.picked_map ?? '').toLowerCase().includes(q) ||
-        (m.match.final_score ?? '').toLowerCase().includes(q),
-    );
-  }, [matches, query]);
+    const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return matches;
+    return indexed.filter(({ text }) => tokens.every((t) => text.includes(t))).map(({ m }) => m);
+  }, [indexed, matches, query]);
 
   return (
     <>
@@ -82,7 +101,7 @@ export function MatchManager({ matches }: { matches: AdminMatchRow[] }) {
                     </div>
                     <div className="font-mono text-[11px] text-[var(--color-text-secondary)] flex flex-wrap gap-x-3 gap-y-1 mt-1">
                       <span>#{m.match.id}</span>
-                      {m.match.picked_map && <span>{m.match.picked_map}</span>}
+                      {mapFor(m) && <span>{mapFor(m)}</span>}
                       {played && m.match.final_score && <span>{m.match.final_score}</span>}
                       {m.isGauntlet && <span className="text-[var(--color-accent-amber-fg)]">gauntlet</span>}
                     </div>
