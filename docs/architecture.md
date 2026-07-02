@@ -29,6 +29,7 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/admin` | Admin hub — links to admin tools (linked from the Topbar when `session.user.isAdmin`) |
 | `/admin/jobs` | Admin background-jobs dashboard — every `background_jobs` row across all three pipelines (`demo_ingest`, `replay_extract`, `radar_build`) with warnings/quarantine flags and per-type actions: confirm/re-parse/dismiss for demo, retry for replay/radar (see [`hosting.md`](./hosting.md)) |
 | `/admin/servers` | Admin server console — shared DatHost server status + teardown (see [`hosting.md`](./hosting.md)) |
+| `/admin/matches` | Admin match console — search a match to reschedule, clear/redo its pick-ban, or toggle the feature flag (reuses the match-page editors; score/stats editing stays on the match page) |
 | `/admin/seasons/new` | Create a new season (admin only) |
 | `/auth/steam` | Steam auth landing — completes `signIn()` after the OpenID bounce |
 
@@ -58,6 +59,7 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `PATCH` | `/api/matches/[id]/veto` | Submit a single pick/ban step (auto-provisions the server on completion) |
 | `PATCH` | `/api/matches/[id]/score` | Submit final score + player stats (tears down the server) |
 | `PATCH` | `/api/matches/[id]/schedule` | Set a match's scheduled time |
+| `PATCH` | `/api/matches/[id]/feature` | Toggle a match's `is_feature_match` flag (admin only) |
 | `POST` | `/api/matches/[id]/demo/upload-url` | Mint a presigned Cloudflare R2 URL to upload a `.dem` file |
 | `POST` | `/api/matches/[id]/demo/parse` | Parse the uploaded demo into match + sabremetric stats (see [`demo-ingestion.md`](./demo-ingestion.md)) |
 | `GET/DELETE` | `/api/matches/[id]/demo/result` | Read / dispose the staged auto-ingest result ([`hosting.md`](./hosting.md)) |
