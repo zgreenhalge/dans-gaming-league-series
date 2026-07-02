@@ -75,7 +75,7 @@ per-round lookup the split logic deliberately avoids.
 
 Precedence: **a stored side always wins** (it was entered deliberately); the demo only fills a missing
 value. When a stored side and the demo disagree, the parser keeps the stored side and emits a warning,
-which surfaces on the admin ingestion page (`/admin/ingestion`) as a data-quality flag.
+which surfaces on the admin jobs dashboard (`/admin/jobs`) as a data-quality flag.
 
 ## Environment
 
