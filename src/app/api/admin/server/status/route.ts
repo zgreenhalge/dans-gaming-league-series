@@ -5,12 +5,13 @@
 import { NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { dathostServerId, getServer, type DathostServer } from '@/lib/dathost';
+import { dathostServerId, getServer, connectHost, type DathostServer } from '@/lib/dathost';
 import { getActiveServerMatch, type ActiveServerMatch } from '@/lib/dathost-lifecycle';
 
 export interface AdminServerStatus {
   configured: boolean;
   server: DathostServer | null;
+  connect: string | null;
   active: ActiveServerMatch | null;
   error: string | null;
 }
@@ -24,18 +25,20 @@ export async function GET() {
     serverId = dathostServerId();
   } catch {
     return NextResponse.json(
-      { configured: false, server: null, active: null, error: null } satisfies AdminServerStatus,
+      { configured: false, server: null, connect: null, active: null, error: null } satisfies AdminServerStatus,
     );
   }
 
-  let server: DathostServer | null = null;
-  let error: string | null = null;
-  try {
-    server = await getServer(serverId);
-  } catch (err) {
-    error = err instanceof Error ? err.message : 'Could not reach DatHost';
-  }
+  // Independent calls (DatHost REST vs. Supabase) — run concurrently rather than paying the sum of
+  // both latencies on a route hit every 15s per open tab plus after every action.
+  const [serverResult, active] = await Promise.all([
+    getServer(serverId)
+      .then((s) => ({ server: s, error: null as string | null }))
+      .catch((err) => ({ server: null, error: err instanceof Error ? err.message : 'Could not reach DatHost' })),
+    getActiveServerMatch(getAdminClient()),
+  ]);
 
-  const active = await getActiveServerMatch(getAdminClient());
-  return NextResponse.json({ configured: true, server, active, error } satisfies AdminServerStatus);
+  const { server, error } = serverResult;
+  const connect = server ? connectHost(server) : null;
+  return NextResponse.json({ configured: true, server, connect, active, error } satisfies AdminServerStatus);
 }

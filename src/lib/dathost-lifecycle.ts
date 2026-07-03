@@ -22,6 +22,7 @@ import {
   connectHost,
   workshopIdFromUrl,
   getServer,
+  type DathostServer,
 } from './dathost';
 
 export type ServerState = 'idle' | 'provisioning' | 'live' | 'tearing_down' | 'done' | 'failed';
@@ -311,4 +312,35 @@ export async function getActiveServerMatch(
     connectString: reconciled.connectString,
     serverStartedAt: reconciled.serverStartedAt,
   };
+}
+
+export interface ServerOccupancy {
+  active: ActiveServerMatch | null;
+  playersOnline: number | null;
+  occupied: boolean;
+}
+
+/**
+ * Whether the shared server is "in use" for a raw admin action (start/stop/apply-config), combining
+ * two signals: a DGLS match holding it (`active`, DB truth) OR live players present with no DGLS match
+ * at all (`playersOnline`) — the latter catches someone using the server casually/manually outside the
+ * match state machine, which `active` alone can't see. `server` is passed in (already fetched by the
+ * caller) rather than fetched here, so callers that already have it don't pay for a second DatHost call.
+ */
+export async function getServerOccupancy(
+  supabaseAdmin: SupabaseClient,
+  server: DathostServer | null,
+): Promise<ServerOccupancy> {
+  const active = await getActiveServerMatch(supabaseAdmin);
+  const playersOnline = server?.players_online ?? null;
+  const occupied = active !== null || (playersOnline ?? 0) > 0;
+  return { active, playersOnline, occupied };
+}
+
+/** Human-readable reason for a `server_occupied` refusal, for the 409 body / admin console prompt. */
+export function occupancyMessage(occupancy: ServerOccupancy): string {
+  if (occupancy.active) {
+    return `Match ${occupancy.active.label} is currently ${occupancy.active.serverState} on this server.`;
+  }
+  return `${occupancy.playersOnline ?? 0} player(s) are currently on the server outside of a DGLS match.`;
 }

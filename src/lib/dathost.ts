@@ -57,7 +57,12 @@ export const CONFIG_SET_OPTIONS: ConfigSetOption[] = Object.entries(CONFIG_SETS)
 function buildCs2Fields(cs2Settings: Record<string, unknown>): Record<string, string> {
   const fields: Record<string, string> = {};
   for (const [key, value] of Object.entries(cs2Settings)) {
-    if (Array.isArray(value) || MAP_SELECTION_KEYS.has(key)) continue;
+    if (MAP_SELECTION_KEYS.has(key)) continue;
+    // Arrays (e.g. metamod_plugins) are DatHost-preserved, not re-asserted — see above. `null` and any
+    // other non-primitive (a nested object) have no defined PUT encoding here; String()-ing them would
+    // silently send "null"/"[object Object]" to the live server, so skip rather than guess.
+    // `typeof null === 'object'`, so this one check covers null, arrays, and nested objects together.
+    if (typeof value === 'object') continue;
     fields[`cs2_settings.${key}`] = String(value);
   }
   return fields;
@@ -210,9 +215,15 @@ export async function loadMatch(
   await runConsole(id, line);
 }
 
-/** `connect <ip:port>` host (host only, no `connect ` prefix). Prefers raw IP over the hostname. */
+/**
+ * `connect <ip:port>` host (host only, no `connect ` prefix). Prefers `custom_domain` (a stable,
+ * human-readable address, e.g. "dgls.pals.rip") over `raw_ip`/`ip`, since the raw IP can change across
+ * a server restart/migration while the domain stays put. This is the single source of the connect
+ * host — every consumer (per-match `connect_string`, the admin console) should go through this
+ * function rather than reading `raw_ip`/`custom_domain` directly, so they can't drift apart again.
+ */
 export function connectHost(server: DathostServer): string | null {
-  const host = server.raw_ip ?? server.ip;
+  const host = server.custom_domain ?? server.raw_ip ?? server.ip;
   const port = server.ports?.game;
   if (!host || !port) return null;
   return `${host}:${port}`;
