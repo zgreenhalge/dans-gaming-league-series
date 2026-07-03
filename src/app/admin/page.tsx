@@ -31,8 +31,8 @@ const TOOLS: { href: string; title: string; desc: string }[] = [
   },
   {
     href: '/admin/servers',
-    title: 'Match Server',
-    desc: 'Shared DatHost server status — who holds it, and a teardown control.',
+    title: 'Server Console',
+    desc: 'Shared DatHost server state, manual start/stop, config-set + map apply, and match occupancy.',
   },
   {
     href: '/admin/seasons/new',
