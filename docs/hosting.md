@@ -2,7 +2,9 @@
 
 How DGLS provisions a CS2 server per match, runs MatchZy on it, and flows the resulting GOTV demo
 back into match stats automatically. This is the "hands-off" path; the manual upload → parse →
-confirm flow ([`demo-ingestion.md`](./demo-ingestion.md)) always remains as the failsafe.
+confirm flow ([`demo-ingestion.md`](./demo-ingestion.md)) always remains as the failsafe. For
+general DatHost/MatchZy/CounterStrikeSharp knowledge — best practices, gotchas, external docs — not
+specific to DGLS's own implementation, see [`cs2-stack-reference.md`](./cs2-stack-reference.md).
 
 > The original design/rollout notes lived in a local `dathost_handoff/` scratch dir (gitignored).
 > This doc is the tracked record — update it here, not there.

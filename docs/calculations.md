@@ -99,10 +99,10 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 ### Player Rating (not yet implemented)
 
 A weighted sabremetric composite for individual performance. Independent from the
-[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). The underlying `+` stats
-(Entry+, KAST+, Objective+, Utility+, Clutch+, Choke+, …) are already computed by demo ingestion and
-shown live in `SabremetricsLeaderboardView.tsx` — this composite itself, combining them into one
-number, hasn't been implemented yet.
+[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). Most of the underlying `+`
+stats (Entry+, KAST+, Objective+, Utility+, Clutch+) are already computed by demo ingestion and shown
+live in `SabremetricsLeaderboardView.tsx`; Choke+ is documented above but not yet computed/displayed
+anywhere. The composite itself, combining these into one number, hasn't been implemented either.
 
 ```
 Player Rating = 1.00

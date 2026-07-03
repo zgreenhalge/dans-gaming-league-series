@@ -27,8 +27,12 @@ boots but silently doesn't run match logic.
   the match-management plugin: ready-up, knife, live config loading, demo recording/upload, stats
   reporting.
 - **DatHost** — game server host with a REST API for provisioning, config, and console access.
-  [readthedocs](https://dathost.readthedocs.io/en/latest/api.html) ·
-  [readme.io CS2 REST API](https://dathost.readme.io/reference/cs2-servers-rest-api).
+  [readme.io CS2 REST API](https://dathost.readme.io/reference/cs2-servers-rest-api) (the actual
+  endpoint reference — HTTP Basic auth, `/api/0.1` base path). DatHost also publishes a
+  [Python client library on readthedocs](https://dathost.readthedocs.io/en/latest/api.html) that
+  wraps the same REST API in `Awaiting`/`Blocking` classes, if a Python wrapper is ever useful
+  instead of calling the REST API directly (DGLS doesn't use it — `src/lib/dathost.ts` calls the
+  REST API directly from TypeScript).
 
 **Maintenance reality:** CS2 patches regularly break Metamod/CSSharp/MatchZy until each project
 ships a compatible update — this is recurring, not a one-time risk. A golden image or config
@@ -90,11 +94,13 @@ fresh per-match config without hand-authoring one). Key fields, per the
 ### Gotcha: MatchZy locks the server to the roster — spectators get kicked too
 
 Once a match JSON is loaded, MatchZy kicks anyone connecting who isn't listed in
-`team1`/`team2`/`spectators` (confirmed live; see
-[MatchZy issue #372](https://github.com/shobhit-pathak/MatchZy/issues/372) for the same report from
-another server operator). This is easy to miss because a *player* roster mismatch fails loudly, but
-a missing `spectators` list fails silently — a friend trying to watch just gets booted with no
-obvious cause pointing back to the config.
+`team1`/`team2`/`spectators` (confirmed live on DGLS's own server; see
+[MatchZy issue #372](https://github.com/shobhit-pathak/MatchZy/issues/372) for another operator
+independently hitting the same underlying lockout — a rostered player getting kicked because their
+SteamID wasn't in the loaded config — which is the general mechanism behind the spectator case too,
+even though that issue itself isn't about spectators specifically). This is easy to miss because a
+*player* roster mismatch fails loudly, but a missing `spectators` list fails silently — a friend
+trying to watch just gets booted with no obvious cause pointing back to the config.
 
 **Fix pattern:** populate `spectators.players` with every account that should be allowed to watch,
 not just the two rostered teams. DGLS's `buildMatchzyConfig()`
@@ -197,10 +203,10 @@ already relies on.
 
 [mat.sivert.io](https://mat.sivert.io/getting-started/server-setup/) documents a full tournament
 platform built on a **MatchZy Enhanced fork**, not mainline MatchZy — it adds event webhooks
-mainline MatchZy doesn't expose, at the cost of requiring the fork server-side. This is the
-concrete shape of the tradeoff behind DGLS's own **D1 decision** (documented in
-`dathost_handoff/DATHOST_MATCHZY_HANDOFF.md`): mainline gets you DatHost compatibility and no
-fork-maintenance risk, the Enhanced fork gets you richer events and an auto-updater at the cost of
+mainline MatchZy doesn't expose, at the cost of requiring the fork server-side. This is the concrete
+shape of the mainline-vs-fork tradeoff DGLS weighed and settled on mainline for: mainline gets you
+DatHost compatibility and no fork-maintenance risk, the Enhanced fork gets you richer events and an
+auto-updater at the cost of
 depending on a smaller, less-guaranteed-to-track-CS2-patches project. Useful to revisit if DGLS
 ever needs an event MatchZy mainline doesn't emit.
 
@@ -263,8 +269,10 @@ for the DGLS-specific layout.
 - CounterStrikeSharp docs: [docs.cssharp.dev](https://docs.cssharp.dev/) · hello-world plugin guide:
   [docfx/docs/guides/hello-world-plugin.md](https://github.com/roflmuffin/CounterStrikeSharp/blob/main/docfx/docs/guides/hello-world-plugin.md)
 - Metamod:Source: [sourcemm.net](https://www.sourcemm.net/)
-- DatHost API: [dathost.readthedocs.io](https://dathost.readthedocs.io/en/latest/api.html) ·
-  [dathost.readme.io CS2 REST API](https://dathost.readme.io/reference/cs2-servers-rest-api) ·
+- DatHost API: [dathost.readme.io CS2 REST API](https://dathost.readme.io/reference/cs2-servers-rest-api)
+  (the endpoint reference) ·
+  [dathost.readthedocs.io](https://dathost.readthedocs.io/en/latest/api.html) (Python client library,
+  not the REST reference — see above) ·
   [CS2 Match API](https://dathost.readme.io/docs/cs2-match-api-introduction) (higher-level
   alternative, not currently used — see above) ·
   [GOTV demo recording guide](https://help.dathost.net/article/140-cs2-record-gotv-demo)
