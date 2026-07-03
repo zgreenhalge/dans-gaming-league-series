@@ -17,7 +17,11 @@ visible. (Overflow concurrency, if ever needed, is the documented `duplicate`/`d
 fallback — not the per-match path.)
 
 Because the server is reconfigured for recreational modes between matches, **provisioning must
-re-assert the full golden `cs2_settings` before every launch** (`applyGoldenSettings`).
+re-assert the full golden `cs2_settings` before every launch** (`applyGoldenSettings`). Map
+selection is always pinned to a single workshop map per match — `workshop_collection` mode doesn't
+behave reliably on this server, so `applyGoldenSettings` throws if a match's map isn't resolved yet
+rather than falling back to it. See [`infra/matchzy/README.md`](../infra/matchzy/README.md) for the
+full golden-config layout and the diff/apply tooling that keeps it in sync with the live server.
 
 ## Server-state machine
 
@@ -154,7 +158,9 @@ everything degrades to the manual flow.
 `src/components/ServerConsolePanel.tsx` ·
 `src/components/SchedulingOverlapBanner.tsx` · `src/app/admin/jobs/page.tsx` ·
 `src/app/admin/servers/page.tsx` · `scripts/demo-ingest.ts` · `scripts/gen-matchzy-config.ts` ·
-`scripts/inspect-demo.ts` · `infra/matchzy/` · `infra/worker/`.
+`scripts/inspect-demo.ts` · `scripts/dathost-golden-diff.ts` · `scripts/dathost-golden-apply.ts`
+(golden-config diff/capture/reassert — see [`infra/matchzy/README.md`](../infra/matchzy/README.md))
+· `infra/matchzy/` · `infra/worker/`.
 
 ## Known limitations / friction
 
