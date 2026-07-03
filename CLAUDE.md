@@ -1,15 +1,12 @@
 @AGENTS.md
 
-**New to this codebase (human or agent)?** All reference docs live in [`docs/`](./docs/) — see
-[`docs/README.md`](./docs/README.md) for the index. Read [`docs/glossary.md`](./docs/glossary.md)
-first: it defines DGLS-specific domain terms (gauntlet, H2H, faction, RWR, etc.) and maps concepts
-to the files that implement them. For cross-cutting conventions every change should follow, see
-[`docs/patterns.md`](./docs/patterns.md). For step-by-step patterns on common changes (new stat, new
-page, new query helper), see [`docs/recipes.md`](./docs/recipes.md). For routes/schema/API/deployment,
-see [`docs/architecture.md`](./docs/architecture.md). For the shared CSS hover/glow/accent system,
-see [`docs/visual-conventions.md`](./docs/visual-conventions.md). For the formulas behind every stat
-and ranking (sabremetrics, canonical regular-season and gauntlet rankings, narrative metrics), see
-[`docs/calculations.md`](./docs/calculations.md).
+**New to this codebase (human or agent)?** All reference docs live in [`docs/`](./docs/) —
+[`docs/README.md`](./docs/README.md)'s index table maps every area (routes, formulas, hosting,
+replay, CSS, …) to its owning doc; treat that table as authoritative rather than any list here, since
+it's the one place new docs get added. Read [`docs/glossary.md`](./docs/glossary.md) first: it
+defines DGLS-specific domain terms (gauntlet, H2H, faction, RWR, etc.) and maps concepts to the files
+that implement them. For cross-cutting conventions every change should follow, see
+[`docs/patterns.md`](./docs/patterns.md).
 
 When citing code in docs, comments, or commits, reference it by **symbol name** (e.g.
 `getGauntletStats()` in `queries.ts`), never by line number — line numbers rot. See
@@ -24,7 +21,7 @@ When citing code in docs, comments, or commits, reference it by **symbol name** 
 ## Working with the user
 
 - **Questions and planning requests are not implementation triggers.** When the user asks "what could we do about X?" or asks for a plan, respond with analysis and stop — don't start editing until they say to proceed.
-- **Read the doc that owns the area before changing code in it.** [`docs/README.md`](./docs/README.md) maps each area to its doc (formulas → `calculations.md`, queries → `recipes.md`, routes/API/schema → `architecture.md`, CSS → `visual-conventions.md`, EHOG → `ehog.md`). The cross-cutting design heuristics — KISS, YAGNI, DRY, WYSIWYG, SOLID-as-modules, POLA — live in [`docs/patterns.md`](./docs/patterns.md). Reading first beats reverse-engineering, and you update the relevant doc in the same change that alters its behavior.
+- **Read the doc that owns the area before changing code in it.** [`docs/README.md`](./docs/README.md)'s index table maps every area to its doc — check it rather than assuming from memory, since new docs get added there first. `docs/patterns.md`'s "Read the doc that owns the area" section has a quick-reference for the most common cases. The cross-cutting design heuristics — KISS, YAGNI, DRY, WYSIWYG, SOLID-as-modules, POLA — live in [`docs/patterns.md`](./docs/patterns.md). Reading first beats reverse-engineering, and you update the relevant doc in the same change that alters its behavior.
 - **The user verifies UI on the deployed preview (often on their phone), not localhost.** Don't spin up the dev server to self-diagnose a visual change — you can't see the result and they don't expose localhost to the internet. Finish the change, hand it back, and let them test. Use `npm run build` to catch type/lint errors, not the dev server to "check" UI.
 - **When a number looks wrong, investigate the data before changing code.** Stats often look off because matches were entered out of chronological order or pre-staged (S3's `"0-0"` rows) — not because the logic is broken. Confirm the data is what you think it is before restructuring a query or derivation to "explain" an anomaly. Reverting a needless logic change costs more than a `select`.
 - **Git: commit only when asked, in logical groups, on a feature branch.** When the user asks you to commit, default to **multiple logically-grouped commits** (not one mega-commit) on a feature branch, then push and write a PR description. Never commit work the user hasn't confirmed. Cite code by symbol name in commit messages (see [`docs/patterns.md`](./docs/patterns.md)).
