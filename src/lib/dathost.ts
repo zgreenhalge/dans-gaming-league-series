@@ -20,22 +20,43 @@ import goldenServerSettings from '../../infra/matchzy/golden-server-settings.jso
 const BASE = 'https://dathost.com/api/0.1';
 
 /**
- * cs2_settings keys that are set per-match at provision time (the picked workshop map), not part of
- * the static golden baseline — see `per_match_overrides` in golden-server-settings.json.
+ * cs2_settings keys that are set per-match/per-apply (the picked workshop map), not part of any
+ * static config set's baseline — see `per_match_overrides` in golden-server-settings.json.
  */
 const MAP_SELECTION_KEYS = new Set(['maps_source', 'workshop_collection_id', 'workshop_single_map_id']);
 
 /**
- * The scalar `cs2_settings` we re-assert before every match to undo recreational-mode drift, read
- * from `infra/matchzy/golden-server-settings.json` (the canonical, version-controlled snapshot) so
- * this file can't drift out of sync with it. We intentionally only PUT scalar fields —
- * `metamod_plugins` (an array) is preserved by DatHost across game-mode changes, so re-asserting it
- * would mean guessing array form-encoding for no benefit. Map-selection keys are excluded here and
- * set per-match instead, see `applyGoldenSettings`.
+ * Named, selectable `cs2_settings` baselines. `golden` (read from `infra/matchzy/golden-server-
+ * settings.json`, the canonical version-controlled snapshot) is the only one today — the DGLS match
+ * server has never needed a second. Adding one: version a new settings JSON next to
+ * golden-server-settings.json the same way, `import` it here, and add one entry below. Everything
+ * that applies a config set (auto per-match provisioning, the admin console) goes through this
+ * registry, so a new set is immediately available everywhere without further wiring.
  */
-function buildGoldenCs2Fields(): Record<string, string> {
+const CONFIG_SETS: Record<string, { label: string; cs2Settings: Record<string, unknown> }> = {
+  golden: { label: 'DGLS Season 3 Default', cs2Settings: goldenServerSettings.cs2_settings },
+};
+
+export interface ConfigSetOption {
+  key: string;
+  label: string;
+}
+
+/** For UI pickers (e.g. the admin server console) — key/label pairs, in registry order. */
+export const CONFIG_SET_OPTIONS: ConfigSetOption[] = Object.entries(CONFIG_SETS).map(([key, v]) => ({
+  key,
+  label: v.label,
+}));
+
+/**
+ * The scalar `cs2_settings` PUT fields for one config set. We intentionally only include scalar
+ * fields — `metamod_plugins` (an array) is preserved by DatHost across game-mode changes, so
+ * re-asserting it would mean guessing array form-encoding for no benefit. Map-selection keys are
+ * excluded here and set per-apply instead, see `applyConfigSet`.
+ */
+function buildCs2Fields(cs2Settings: Record<string, unknown>): Record<string, string> {
   const fields: Record<string, string> = {};
-  for (const [key, value] of Object.entries(goldenServerSettings.cs2_settings)) {
+  for (const [key, value] of Object.entries(cs2Settings)) {
     if (Array.isArray(value) || MAP_SELECTION_KEYS.has(key)) continue;
     fields[`cs2_settings.${key}`] = String(value);
   }
@@ -49,10 +70,12 @@ export interface DathostServer {
   booting: boolean;
   ip: string | null;
   raw_ip: string | null;
+  custom_domain: string | null;
   ports: { game: number; gotv: number | null } | null;
   match_id: string | null;
   cs2_settings: Record<string, unknown> | null;
   server_error: string | null;
+  players_online: number | null;
 }
 
 export class DathostError extends Error {
@@ -132,30 +155,39 @@ export async function stopServer(id: string): Promise<void> {
 }
 
 /**
- * PUT golden `cs2_settings` (+ the picked map) to overwrite any recreational-mode drift.
+ * PUT a named config set's `cs2_settings` (+ a pinned map) to overwrite any recreational-mode drift.
  *
  * `workshop_collection` mode does not behave reliably on the DGLS server (confirmed live) — every
- * provision must pin a single workshop map instead, so a resolved `mapWorkshopId` is required. Callers
- * (`provisionMatchServer`) must resolve the match's picked map before calling this; if that's not yet
- * possible (e.g. a manual provision before veto completes), this throws rather than silently falling
- * back to the broken collection mode.
+ * apply must pin a single workshop map instead, so a resolved `mapWorkshopId` is required; this
+ * throws rather than silently falling back to the broken collection mode. Also throws on an unknown
+ * `configSetKey` — see `CONFIG_SET_OPTIONS` for the valid keys.
  */
-export async function applyGoldenSettings(
+export async function applyConfigSet(
   id: string,
+  configSetKey: string,
   opts: { mapWorkshopId?: string | null } = {},
 ): Promise<void> {
+  const set = CONFIG_SETS[configSetKey];
+  if (!set) {
+    throw new Error(`Unknown config set "${configSetKey}" — valid keys: ${Object.keys(CONFIG_SETS).join(', ')}`);
+  }
   if (!opts.mapWorkshopId) {
     throw new Error(
-      'applyGoldenSettings requires a resolved map workshop id — the match must have a picked map ' +
-        '(with a maps.workshop_url) before the server can be provisioned.',
+      'applyConfigSet requires a resolved map workshop id — the server can only be configured with a ' +
+        'single pinned workshop map, never a collection.',
     );
   }
   const fields: Record<string, string> = {
-    ...buildGoldenCs2Fields(),
+    ...buildCs2Fields(set.cs2Settings),
     'cs2_settings.maps_source': 'workshop_single_map',
     'cs2_settings.workshop_single_map_id': opts.mapWorkshopId,
   };
   await call('PUT', `/game-servers/${id}`, fields);
+}
+
+/** Per-match provisioning always uses the `golden` config set — this is a thin, named wrapper. */
+export async function applyGoldenSettings(id: string, opts: { mapWorkshopId?: string | null } = {}): Promise<void> {
+  return applyConfigSet(id, 'golden', opts);
 }
 
 /** Issue a console/RCON command on the server. */

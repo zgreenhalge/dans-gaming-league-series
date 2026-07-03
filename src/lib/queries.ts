@@ -5,6 +5,7 @@ import type { ReplayPayload, ReplayPlayerMeta, ReplayEvent } from './replay/type
 import type { HeatmapArtifact, HeatmapKind } from './replay/heatmap';
 import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
+import { workshopIdFromUrl } from './replay/radar';
 import { extractSeasonNumber, buildRegularToGauntletMap, canonicalSort, compareMatchRefDesc, matchLabel, weekWindow, computeH2H } from './util';
 import type { DuoStats, H2HStats, H2HData, H2HMatchInput } from './util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
@@ -3058,6 +3059,24 @@ export async function getMapLookup(): Promise<Record<string, { image_url: string
     lookup[row.slug] = { image_url: row.image_url, workshop_url: row.workshop_url };
   }
   return lookup;
+}
+
+export interface WorkshopMapOption {
+  name: string;
+  workshopId: string;
+}
+
+/** Maps with a resolvable workshop id, for a workshop-map picker (e.g. the admin server console). */
+export async function getMapsForWorkshopPicker(): Promise<WorkshopMapOption[]> {
+  const { data, error } = await supabase.from('maps').select('name, workshop_url').order('name');
+  if (error) throw error;
+  const rows = (data ?? []) as { name: string; workshop_url: string | null }[];
+  const options: WorkshopMapOption[] = [];
+  for (const row of rows) {
+    const workshopId = workshopIdFromUrl(row.workshop_url);
+    if (workshopId) options.push({ name: row.name, workshopId });
+  }
+  return options;
 }
 
 /** A map's radar calibration triplet (Phase 3). `null` when the map isn't calibrated. */
