@@ -5,7 +5,7 @@
 //
 // Updates via Supabase Realtime on the `matches` row (no polling) — the same channel pattern as
 // VetoSequence; the table is already in the realtime publication. The fill is an *estimate* against
-// the observed ~14s boot; the moment the row flips to `live` we jump straight to the Join button.
+// the observed ~20s boot; the moment the row flips to `live` we jump straight to the Join button.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getBrowserClient } from '@/lib/supabase-browser';
@@ -17,7 +17,7 @@ interface StatusResponse {
   serverStartedAt: string | null;
 }
 
-const EST_BOOT_MS = 14_000; // observed boot time from the live probe
+const EST_BOOT_MS = 20_000; // observed boot time from the live probe
 
 export default function MatchServerPanel({
   matchId,
