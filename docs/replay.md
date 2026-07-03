@@ -3,8 +3,8 @@
 The 2D match replay and core-events list (issue #121). Every uploaded CS2 demo is turned into a
 **`replay.json`** payload that drives two products, both surfaced as sub-tabs under the match page's
 **Recap** tab (`MatchRecapTab.tsx`): an **Events** list (kills, plants, defuses, round ends) and a
-**2D Replay** rendered in-browser by **`<ReplayPlayer>`** on a canvas. An optional mp4 is produced on
-demand. This is a sibling pipeline to
+**2D Replay** rendered in-browser by **`<ReplayPlayer>`** on a canvas, plus a map-level **Heatmap**
+tab (see below) built from the same artifacts. This is a sibling pipeline to
 [`demo-ingestion.md`](./demo-ingestion.md): that path parses **stats** (which need human review before
 they write scores); this path parses **positions/events** (which need no review, so it runs fully
 async in GitHub Actions). Both pipelines parse demos through the same library — see
@@ -20,8 +20,8 @@ deterministic key; Vercel only **dispatches** jobs and **reads** the finished pa
 
 ### Three actors
 
-- **App (Vercel)** — serves the Recap tab (Events list + replay player), the admin radar-calibration UI, and *dispatches*
-  the GitHub jobs. No ffmpeg, no server canvas on the request path.
+- **App (Vercel)** — serves the Recap tab (Events list + replay player) and the map Heatmap tab, and
+  *dispatches* the GitHub jobs. No ffmpeg, no server canvas on the request path.
 - **GitHub Actions** — all heavy compute (parse, render, radar extraction). See "Background jobs".
 - **Client `<ReplayPlayer>`** — a canvas component that loads `replay.json` and plays it back
   interactively. The renderer.
@@ -29,8 +29,7 @@ deterministic key; Vercel only **dispatches** jobs and **reads** the finished pa
 ## The `replay.json` contract
 
 Locked as a typed schema in **`src/lib/replay/types.ts`** (`ReplayPayload`). Lock the shape there
-before changing the extract code, the Action, the player, or the mp4 Action — they all contract
-against it. `REPLAY_SCHEMA_VERSION` is bumped on incompatible changes; the player refuses payloads it
+before changing the extract code, the Action, or the player — they all contract against it. `REPLAY_SCHEMA_VERSION` is bumped on incompatible changes; the player refuses payloads it
 doesn't understand.
 
 Shape (see the types file for the authoritative, commented definition):
@@ -114,7 +113,7 @@ re-trigger the blink for a steady burn. `draw.ts` paints these as fading alpha o
 encodes **remaining HP**: the team-colour fill rises from the bottom of the dot with `hp/100`
 (`fillHpSegment`), leaving the missing chunk dimmed, so a hurt player reads as a partly-drained dot.
 
-### Known Phase-1 limitations
+### Known limitations
 
 - **Bomb is tracked without reading the C4 entity.** `frame.bomb` stays `null` (per-tick C4 entity
   position isn't exposed by the parser). Instead `round.bombCarrier` holds carrier change-points:
@@ -135,7 +134,7 @@ encodes **remaining HP**: the team-colour fill rises from the bottom of the dot 
   because those were unreliable, and filters `weapon_fire` to firearms only (`isBulletWeapon`) so
   grenade throws and knife swings don't draw tracers.
 
-## Client renderer (Phase 2)
+## Client renderer
 
 The 2D Replay sub-tab is `<ReplayPlayer>` (`src/components/ReplayPlayer.tsx`), a canvas component
 loaded lazily with `ssr: false` (its payload fetch + RAF loop are browser-only). It fetches the full
@@ -144,14 +143,14 @@ straight from R2 with `Content-Encoding: gzip` — only when the user opens the 
 multi-MB payload never bloats the server-rendered match page (the Events tab keeps using the
 stripped `getReplayEventsView` projection).
 
-The render is split into **three pure, runtime-agnostic modules** so the browser player and the
-Phase-4 mp4 Action share one code path with **no draw drift**:
+The render is split into **three pure, runtime-agnostic modules** so the browser player and any
+future headless renderer can share one code path with **no draw drift**:
 
 | Module | Responsibility |
 |---|---|
-| `src/lib/replay/project.ts` | world (x,y) → canvas px. `autoFitProjector` (fit the payload's bounding box; default) and `calibratedProjector` (a map's radar triplet; Phase 3) behind one `Projector` interface. `projectorFor()` picks. |
+| `src/lib/replay/project.ts` | world (x,y) → canvas px. `autoFitProjector` (fit the payload's bounding box; default) and `calibratedProjector` (a map's radar triplet) behind one `Projector` interface. `projectorFor()` picks. |
 | `src/lib/replay/playback.ts` | `viewStateAt(round, tick, tickRate)` — interpolates positions between downsampled frames (shortest-path yaw lerp), reconstructs planted-bomb state from plant/defuse events, and resolves active grenades / tracers / kill-feed by tick window. No clock. |
-| `src/lib/replay/draw.ts` | `drawScene()` — paints one moment onto a structural `Ctx2D` (the Canvas2D subset used), taking colors from a passed `ReplayTheme` (the player reads CSS vars; the mp4 Action hardcodes them). No DOM, no React. |
+| `src/lib/replay/draw.ts` | `drawScene()` — paints one moment onto a structural `Ctx2D` (the Canvas2D subset used), taking colors from a passed `ReplayTheme` — the player reads CSS vars, so a future non-DOM renderer would just pass its own theme. No DOM, no React. |
 
 `<ReplayPlayer>` is the thin shell: a DPR-aware canvas sized by `ResizeObserver`, a RAF clock that
 advances `tick` (auto-advancing across rounds), and the controls (play/pause, 0.5–4× speed, round
@@ -161,18 +160,48 @@ header in the Recap tab's **Events** timeline (`MatchRecapTab`) switches to the 
 jumps the player to that round (the `n` nonce lets a repeat click on the same round re-fire). The pure modules are unit-tested in `src/lib/replay/replay.test.ts`
 (`npm test`).
 
+## Heatmap tab
+
+Kill/death/grenade locations on `/maps/[slug]`, respecting the season filter (shared with the rest
+of the page) plus a CT/T side toggle and per-layer toggles, plotted via the shared `project.ts`
+(real radar when calibrated, else auto-fit) over the `heatmap.json` artifacts each match's
+`replay-extract` run produces — there is no separate Action for this. The aggregation is **lazy**:
+`MapHeatmap` (with the shared `useMapRadar` hook) fetches the points only when the Heatmap tab
+opens — it POSTs the map's match ids to `/api/maps/[slug]/heatmap`, which calls `getMapHeatmap()` to
+fan out one R2 GET per match, so the map page never pays that fan-out on every render. `MapHeatmap`
+then renders the density additively on a canvas, with grenades drawn as their effect area. (Decoys
+are excluded from `heatmap.json` entirely — `buildHeatmapPoints()` skips them; they carry no signal
+worth plotting and the tab has no decoy layer.)
+
+`MapHeatmap` is reused in two more places (#128), both passing explicit match-id sets to the same
+component/route: the **Recap tab**'s *Heatmap* sub-tab scopes it to the single match
+(`matchIds={[matchId]}`), and the **Scouting Report**'s *Map Intel* sub-tab plots the picked map's
+full history (`getMatchIdsForMap()` resolves the ids server-side, passed down through
+`MatchTabView` → `ScoutingReport`). No new aggregation path — same lazy POST to
+`/api/maps/[slug]/heatmap`.
+
+> **Scaling note:** the per-match R2 fan-out is fine for current match counts but grows linearly. A
+> precomputed per-map rollup (or a streamed response) is tracked in issue #127 for when it matters.
+
+The player loads a map's calibration via `GET /api/maps/[slug]/calibration` + `…/radar` and switches
+`projectorFor()` to the calibrated branch (auto-fit fallback when uncalibrated). There is no in-site
+manual radar-calibration/correction UI — `radar-build`'s automated extraction from the workshop VPK
+has proven accurate across the whole map pool (it calibrated the entire pool by running the Action
+from the Actions UI), so one wasn't needed.
+
 ## Background jobs (GitHub Actions)
 
 Three workflows, all triggered via `repository_dispatch` (from the app) or `workflow_dispatch`
-(manual). Conventions: pin actions to commit SHAs; minimal `permissions:`; secrets in GH Actions
-secrets (R2 creds + Supabase service key + URL); `timeout-minutes` bound; idempotent (deterministic R2
-keys, re-dispatch overwrites); run the same `src/lib/replay/*` code via `tsx`.
+(manual). They follow the generic job conventions in
+[`github-actions.md`](./github-actions.md) (SHA-pinned actions, least-privilege `permissions:`,
+`timeout-minutes`, the `stage()`/`background_jobs` state machine); this section covers what's
+replay-specific.
 
-| Action | Trigger | Output | Status |
-|---|---|---|---|
-| **A — `replay-extract`** | auto, after demo upload/parse | `replay.json` **and** compact `heatmap.json` → R2 `<matchId>/…` | **built** (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
-| **A′ — `replay-extract-all`** | manual (Actions UI / dispatch) | re-runs A for **every** match with a demo, as a matrix | **built** (`replay-extract-all.yml` + `scripts/list-demo-matches.ts`) |
-| **B — `radar-build`** | per map (Actions UI, or admin `POST /api/maps/[slug]/radar/dispatch`) | radar PNG → R2 `maps/<id>/radar.png` + `maps` row calibration | **built** (`radar-build.yml` + `scripts/radar-build.ts`); first real run validates the SteamCMD/Source2Viewer invocations |
+| Action | Trigger | Output |
+|---|---|---|
+| **A — `replay-extract`** | auto, after demo upload/parse | `replay.json` **and** compact `heatmap.json` → R2 `<matchId>/…` (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
+| **A′ — `replay-extract-all`** | manual (Actions UI / dispatch) | re-runs A for **every** match with a demo, as a matrix (`replay-extract-all.yml` + `scripts/list-demo-matches.ts`) |
+| **B — `radar-build`** | per map (Actions UI, or admin `POST /api/maps/[slug]/radar/dispatch`) | radar PNG → R2 `maps/<id>/radar.png` + `maps` row calibration (`radar-build.yml` + `scripts/radar-build.ts`) |
 
 > **Backfilling a logic/schema change:** when the extract or heatmap output shape changes
 > (e.g. the post-round-kill fix, or a future `HEATMAP_SCHEMA_VERSION` bump for per-player
@@ -182,51 +211,37 @@ keys, re-dispatch overwrites); run the same `src/lib/replay/*` code via `tsx`.
 > The Action runs the dispatched ref's code, so dispatch it on the branch/`main` that has
 > the fix.
 
-> The mp4 render Action (originally Phase 4) was **dropped in favor of the map Heatmap
-> tab**. Heatmaps need no separate Action — the extract Action emits the `heatmap.json`
-> artifact (`buildHeatmapPoints()`), and the map page aggregates those small files.
+### Stage lists
 
-### Observability
+Each job's ordered `stage()` list (see [`github-actions.md`](./github-actions.md#conventions-every-job-follows)
+for what stages are and how they're surfaced):
 
-Each job declares an **ordered list of named stages**, reported two ways: collapsible GitHub logs
-(`::group::`/`::notice::`/`::warning::`/`::error::`) AND `background_jobs.stage` (so the app shows
-`stage X of N` + a "view logs" deep-link via `gh_run_url` without anyone opening Actions). A failure
-records `status=failed`, the failing stage, and the message — no silent hangs.
-
-`replay-extract` stages: `validate → download-demo → decompress → parse-ticks → parse-events →
+`replay-extract`: `validate → download-demo → decompress → parse-ticks → parse-events →
 parse-grenades → assemble → gzip → upload → heatmap → done`. (`buildReplay()` does the three parse
 stages plus `assemble` in one library pass; they're surfaced as ordered stages around that call for
 progress. `heatmap` builds + uploads the `heatmap.json` points artifact.)
 
-`radar-build` stages: `validate-workshop-id → steamcmd-download → extract-vpk → decode-vtex →
+`radar-build`: `validate-workshop-id → steamcmd-download → extract-vpk → decode-vtex →
 compute-calibration → upload-radar → upsert-map → done`. The deterministic parsing
 (`parseOverview()`, `workshopIdFromUrl()` in `radar.ts`) is unit-tested; the SteamCMD/Source2Viewer
 orchestration is best-effort and isolated — a choke leaves the map uncalibrated (auto-fit fallback),
 never blocking playback.
 
-### No duplicate in-flight jobs
+## Schema
 
-Defense-in-depth: (1) the UI disables the trigger while status is `queued`/`running`; (2) the
-**dispatch endpoint** no-ops if a `queued`/`running` job already exists for `(job_type, match_id)` —
-the real guard against double-clicks / multiple admins; (3) GH `concurrency` cancels an older run as a
-backstop.
+Schema lives directly in the Supabase dashboard, not migrations — the user maintains it there.
+RLS stays **off** (consistent with the rest of the site); Actions write via the service-role key,
+the app reads server-side. Outputs live at deterministic R2 keys, so there are **no URL columns on
+`matches`** — derive the key from the match/map id.
 
-## DB changes
-
-> The user maintains schema directly in the Supabase dashboard — these are **column/table adds to
-> apply there**, not migrations. RLS stays **off** (consistent with the rest of the site); Actions
-> write via the service-role key, the app reads server-side. Outputs live at deterministic R2 keys, so
-> there are **no URL columns** — derive the key from the match/map id.
-
-**`matches` — add two status enums** (denormalized cache for cheap match-page reads; mirrors the
-existing `round_history`/`screenshot_url_*` precedent):
+**`matches`** — denormalized status cache for cheap match-page reads (mirrors the existing
+`round_history`/`screenshot_url_*` precedent):
 
 | Column | Type | Purpose |
 |---|---|---|
 | `replay_status` | text | `none\|queued\|running\|ready\|failed` — gates the Recap tab's Events/Replay sub-tabs |
-| `mp4_status` | text | same lifecycle — gates the download control (Phase 4) |
 
-**`maps` — add calibration columns** (Phase 3; workshop link already present):
+**`maps`** — calibration columns (workshop link already present):
 
 | Column | Type | Purpose |
 |---|---|---|
@@ -235,19 +250,20 @@ existing `round_history`/`screenshot_url_*` precedent):
 | `radar_scale` | real | world units per pixel |
 | `radar_source` | text | `'vpk'` \| `'auto'` \| `'manual'` |
 
-**`background_jobs` — new table** (latest-run state only, NOT a log):
+**`background_jobs`** — latest-run state only, NOT a log; shared with every other background-job
+pipeline (`demo_ingest` — see [`hosting.md`](./hosting.md) — as well as `replay_extract`/`radar_build`):
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | bigint pk | |
-| `job_type` | text | `replay_extract\|replay_mp4\|radar_build` |
-| `match_id` | fk → matches, null | target (extract/mp4) |
+| `job_type` | text | `replay_extract\|radar_build\|demo_ingest` |
+| `match_id` | fk → matches, null | target (extract) |
 | `map_id` | fk → maps, null | target (radar_build) |
 | `status` | text | `queued\|running\|succeeded\|failed\|canceled` |
 | `stage` | text | current named stage |
 | `error_message` | text | on failure |
 | `gh_run_id` / `gh_run_url` | bigint / text | deep-link to the run |
-| `requested_by` | fk → players, null | who clicked (mp4) |
+| `requested_by` | fk → players, null | who triggered a manual dispatch |
 | `created_at`/`started_at`/`finished_at`/`updated_at` | timestamptz | |
 
 **Retention is bounded by design — no cleanup job.** One row per `(job_type, match_id)` (and
@@ -274,35 +290,3 @@ The Action needs these as **GitHub Actions secrets** (same values as the app's e
 `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_R2_BUCKET_NAME`. The app additionally needs a
 **least-privilege token with `actions:write`** (fine-grained PAT or GitHub App) to dispatch the
 workflow — see the dispatch endpoint.
-
-## Phases
-
-1. **`replay.json` schema (locked) + `replay-extract` Action + Events tab.** — **built.**
-2. **`<ReplayPlayer>` (client), calibration-free auto-fit + overlays + controls.** — **built**
-   (`project.ts` / `playback.ts` / `draw.ts` + the payload route; see "Client renderer").
-3. **`radar-build` Action + calibration read path** — **built.** The Action extracts the radar +
-   triplet from the workshop VPK; the player loads it via `GET /api/maps/[slug]/calibration` +
-   `…/radar` and switches `projectorFor()` to the calibrated branch (auto-fit fallback when
-   uncalibrated). The whole map pool was calibrated by running `radar-build` from the Actions UI. The
-   originally-planned in-site admin trigger + manual calibration/correction UI were **not pursued** —
-   the auto extraction proved accurate enough across every map, so they're unnecessary.
-4. ~~On-demand `replay-mp4` Action~~ — **dropped** in favor of the **map Heatmap tab** — **built.**
-   Kill/death/grenade locations on `/maps/[slug]`, respecting the season filter (shared with the rest
-   of the page) + a CT/T side toggle + per-layer toggles, plotted via the shared `project.ts` (real
-   radar when calibrated, else auto-fit) over the `heatmap.json` artifacts. The aggregation is
-   **lazy**: `MapHeatmap` (with the shared `useMapRadar` hook) fetches the points only when the
-   Heatmap tab opens — it POSTs the map's match ids to `/api/maps/[slug]/heatmap`, which calls
-   `getMapHeatmap()` to fan out one R2 GET per match. The map page no longer pays that fan-out on
-   every render. `MapHeatmap` then renders the density additively on a canvas, with grenades drawn
-   as their effect area. (Decoys are excluded from `heatmap.json` entirely — `buildHeatmapPoints()`
-   skips them; they carry no signal worth plotting and the tab has no decoy layer.)
-
-   `MapHeatmap` is reused in two more places on the **match page** (#128), both passing explicit
-   match-id sets to the same component/route: the **Recap tab**'s *Heatmap* sub-tab scopes it to the
-   single match (`matchIds={[matchId]}`), and the **Scouting Report**'s *Map Intel* sub-tab plots the
-   picked map's full history (`getMatchIdsForMap()` resolves the ids server-side, passed down through
-   `MatchTabView` → `ScoutingReport`). No new aggregation path — same lazy POST to
-   `/api/maps/[slug]/heatmap`.
-
-   > **Scaling note:** the per-match R2 fan-out is fine for current match counts but grows linearly.
-   > A precomputed per-map rollup (or a streamed response) is tracked in issue #127 for when it matters.
