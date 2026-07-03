@@ -321,7 +321,7 @@ export function ServerConsolePanel({
           <select
             value={configSet}
             onChange={(e) => setConfigSet(e.target.value)}
-            className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-transparent"
+            className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
           >
             {configSets.map((c) => (
               <option key={c.key} value={c.key}>
@@ -332,7 +332,7 @@ export function ServerConsolePanel({
           <select
             value={mapChoice}
             onChange={(e) => setMapChoice(e.target.value)}
-            className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-transparent"
+            className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
           >
             <option value="">Select a map…</option>
             {maps.map((m) => (
@@ -347,7 +347,7 @@ export function ServerConsolePanel({
               value={customMapId}
               onChange={(e) => setCustomMapId(e.target.value)}
               placeholder="Steam workshop ID"
-              className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-transparent"
+              className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
             />
           )}
           <button
