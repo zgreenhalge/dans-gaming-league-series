@@ -10,7 +10,7 @@
   "cs2_settings": {
     "slots": 8,
     "game_mode": "competitive",
-    "enable_gotv": true,
+    "enable_gotv": false,
     "enable_gotv_secondary": false,
     "disable_bots": true,
     "insecure": false,
