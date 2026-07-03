@@ -7,7 +7,9 @@ The 2D match replay and core-events list (issue #121). Every uploaded CS2 demo i
 demand. This is a sibling pipeline to
 [`demo-ingestion.md`](./demo-ingestion.md): that path parses **stats** (which need human review before
 they write scores); this path parses **positions/events** (which need no review, so it runs fully
-async in GitHub Actions).
+async in GitHub Actions). Both pipelines parse demos through the same library — see
+[`demo-parsing-reference.md`](./demo-parsing-reference.md) for external/community knowledge about it
+and the CS2 demo format.
 
 ## Why GitHub Actions, not Vercel
 

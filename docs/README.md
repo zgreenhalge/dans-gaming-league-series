@@ -17,6 +17,7 @@ follow the link that matches what you're doing. New to the codebase? Read
 | [`hosting.md`](./hosting.md) | DatHost + MatchZy per-match server hosting, the auto-ingestion pipeline, and admin surfaces |
 | [`cs2-stack-reference.md`](./cs2-stack-reference.md) | DatHost/MatchZy/CounterStrikeSharp best practices, gotchas, and external references (tool-level, not DGLS architecture) |
 | [`replay.md`](./replay.md) | The 2D match replay + core-events pipeline (`replay.json`, GitHub Actions jobs, `background_jobs`) |
+| [`demo-parsing-reference.md`](./demo-parsing-reference.md) | External/community knowledge about the CS2 demo format and the `demoparser2` library (tool-level, shared by demo-ingestion and replay) |
 | [`github-actions.md`](./github-actions.md) | When to run work as a GitHub Action vs a Vercel function, and how to build a background-job Action (the dispatch → workflow → `scripts/*` pattern) |
 
 For quick-start, env vars, and npm commands see the root [`README.md`](../README.md). Agent-specific

@@ -3,7 +3,9 @@
 How an uploaded CS2 `.dem` file becomes match and sabremetric stats. This is the live in-app
 ingestion path (distinct from the historical CSV pipeline in `ingestion/`). The formulas the parser
 feeds are defined in [`calculations.md`](./calculations.md); the storage/route surface is summarized
-in [`architecture.md`](./architecture.md).
+in [`architecture.md`](./architecture.md). For external/community knowledge about the underlying
+parsing library and the CS2 demo format itself, see
+[`demo-parsing-reference.md`](./demo-parsing-reference.md).
 
 ## Pipeline
 
