@@ -7,7 +7,10 @@ concrete step-by-step changes see [`recipes.md`](./recipes.md).
 ## Read the doc that owns the area before you change it
 
 These docs exist so you don't have to reverse-engineer intent from the code. Before editing in an
-unfamiliar area, read the doc that owns it — [`README.md`](./README.md) maps every area to its doc:
+unfamiliar area, read the doc that owns it. **[`README.md`](./README.md)'s index table is the
+authoritative, up-to-date map of every doc to its area** — the quick-reference list below covers the
+most common cases but isn't exhaustive by design, so when in doubt check the index rather than
+assuming this list is complete:
 
 - Changing a stat or ranking formula → [`calculations.md`](./calculations.md) **first** (the math is
   load-bearing and easy to get subtly wrong).
@@ -15,7 +18,13 @@ unfamiliar area, read the doc that owns it — [`README.md`](./README.md) maps e
 - A route, the mutation API, the schema, or deployment → [`architecture.md`](./architecture.md).
 - CSS, hover/lift, layout, or a shared UI primitive → [`visual-conventions.md`](./visual-conventions.md).
 - The EHOG rating engine → [`ehog.md`](./ehog.md) (and mirror any math change Python ↔ TS).
-- The demo upload/parse pipeline → [`demo-ingestion.md`](./demo-ingestion.md).
+- The demo upload/parse pipeline → [`demo-ingestion.md`](./demo-ingestion.md); the demo-format/parser
+  library itself (not DGLS's use of it) → [`demo-parsing-reference.md`](./demo-parsing-reference.md).
+- DatHost/MatchZy server hosting + auto-ingestion → [`hosting.md`](./hosting.md); general
+  DatHost/MatchZy/CounterStrikeSharp knowledge (not DGLS's use of it) →
+  [`cs2-stack-reference.md`](./cs2-stack-reference.md).
+- The 2D replay / core-events / heatmap pipeline → [`replay.md`](./replay.md).
+- A new background-job GitHub Action → [`github-actions.md`](./github-actions.md).
 
 Reading the right doc first is faster than guessing, and it stops you re-deriving something a helper
 already does. The flip side is below in **Document what *is***: when your change alters behavior a

@@ -96,11 +96,13 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 - `Choke+` = `Player Choke Score` / `League Avg Choke Score`
   - `Choke Score` = `1v1 losses` + 2 * `1v2 losses` + 5 * `2v1 losses`
 
-### Player Rating (aspirational — requires demo data)
+### Player Rating (not yet implemented)
 
 A weighted sabremetric composite for individual performance. Independent from the
-[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). These formulas
-will be implemented once demo ingestion provides the underlying stats (Entry+, KAST+, etc.).
+[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). Most of the underlying `+`
+stats (Entry+, KAST+, Objective+, Utility+, Clutch+) are already computed by demo ingestion and shown
+live in `SabremetricsLeaderboardView.tsx`; Choke+ is documented above but not yet computed/displayed
+anywhere. The composite itself, combining these into one number, hasn't been implemented either.
 
 ```
 Player Rating = 1.00
