@@ -5,6 +5,12 @@
 // See `dathost_handoff/` for the contract: `matchid` = DGLS match_id (MatchZy stamps the demo with
 // it → self-labels for R2); teams keyed by steamid64; `players_per_team: 2` (Wingman); conditional
 // `map_sides` (stored side → forced, else knife); demo upload cvars.
+//
+// MatchZy locks the server to the roster once a match JSON is loaded — anyone not listed in
+// team1/team2/spectators gets kicked on connect, including would-be spectators (confirmed live,
+// see shobhit-pathak/MatchZy issue #372). `spectators` is populated with every known DGLS player's
+// steamid64 (minus whoever's already placed on team1/team2) so any league member can watch without
+// being kicked; it does not cover spectators outside the player roster.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getReplayInputs } from './replay/inputs';
@@ -19,6 +25,7 @@ export interface MatchzyConfig {
   clinch_series: boolean;
   team1: { name: string; players: Record<string, string> };
   team2: { name: string; players: Record<string, string> };
+  spectators: { players: Record<string, string> };
   cvars: Record<string, string>;
 }
 
@@ -73,6 +80,17 @@ export async function buildMatchzyConfig(
     warnings.push('match has no picked map — maplist is empty; set the picked map first.');
   }
 
+  const team1Players = playersOf(inputs.roster, 'SHIRTS');
+  const team2Players = playersOf(inputs.roster, 'SKINS');
+  const rosteredSteamIds = new Set([...Object.keys(team1Players), ...Object.keys(team2Players)]);
+
+  const { data: allPlayers } = await supabaseAdmin.from('players').select('steam_id, steam_nickname, name');
+  const spectators: Record<string, string> = {};
+  for (const p of allPlayers ?? []) {
+    if (!p.steam_id || rosteredSteamIds.has(p.steam_id)) continue;
+    spectators[p.steam_id] = p.steam_nickname || p.name;
+  }
+
   const cvars: Record<string, string> = {};
   if (opts.demoUploadUrl) {
     cvars.matchzy_demo_upload_url = opts.demoUploadUrl;
@@ -87,8 +105,9 @@ export async function buildMatchzyConfig(
     maplist: maplistValue ? [maplistValue] : [],
     map_sides: mapSides(inputs.skinsSide),
     clinch_series: true,
-    team1: { name: 'SHIRTS', players: playersOf(inputs.roster, 'SHIRTS') },
-    team2: { name: 'SKINS', players: playersOf(inputs.roster, 'SKINS') },
+    team1: { name: 'SHIRTS', players: team1Players },
+    team2: { name: 'SKINS', players: team2Players },
+    spectators: { players: spectators },
     cvars,
   };
 
