@@ -15,25 +15,32 @@
 //   DATHOST_EMAIL, DATHOST_PASSWORD   HTTP Basic creds (account email + API password)
 //   DATHOST_SERVER_ID                 the persistent DGLS match server id
 
+import goldenServerSettings from '../../infra/matchzy/golden-server-settings.json';
+
 const BASE = 'https://dathost.com/api/0.1';
 
-/** Golden DatHost workshop collection for DGLS maps (see infra/matchzy/golden-server-settings.json). */
-const WORKSHOP_COLLECTION_ID = '3753985997';
+/**
+ * cs2_settings keys that are set per-match at provision time (the picked workshop map), not part of
+ * the static golden baseline — see `per_match_overrides` in golden-server-settings.json.
+ */
+const MAP_SELECTION_KEYS = new Set(['maps_source', 'workshop_collection_id', 'workshop_single_map_id']);
 
 /**
- * The scalar `cs2_settings` we re-assert before every match to undo recreational-mode drift. Mirrors
- * `infra/matchzy/golden-server-settings.json` (the canonical, version-controlled snapshot). We
- * intentionally only PUT scalar fields — `metamod_plugins` (an array) is preserved by DatHost across
- * game-mode changes, so re-asserting it would mean guessing array form-encoding for no benefit.
+ * The scalar `cs2_settings` we re-assert before every match to undo recreational-mode drift, read
+ * from `infra/matchzy/golden-server-settings.json` (the canonical, version-controlled snapshot) so
+ * this file can't drift out of sync with it. We intentionally only PUT scalar fields —
+ * `metamod_plugins` (an array) is preserved by DatHost across game-mode changes, so re-asserting it
+ * would mean guessing array form-encoding for no benefit. Map-selection keys are excluded here and
+ * set per-match instead, see `applyGoldenSettings`.
  */
-const GOLDEN_CS2_SETTINGS: Record<string, string> = {
-  'cs2_settings.game_mode': 'wingman',
-  'cs2_settings.enable_gotv': 'true',
-  'cs2_settings.enable_metamod': 'true',
-  'cs2_settings.disable_bots': 'true',
-  'cs2_settings.slots': '8',
-  'cs2_settings.private_server': 'true',
-};
+function buildGoldenCs2Fields(): Record<string, string> {
+  const fields: Record<string, string> = {};
+  for (const [key, value] of Object.entries(goldenServerSettings.cs2_settings)) {
+    if (Array.isArray(value) || MAP_SELECTION_KEYS.has(key)) continue;
+    fields[`cs2_settings.${key}`] = String(value);
+  }
+  return fields;
+}
 
 export interface DathostServer {
   id: string;
@@ -124,21 +131,30 @@ export async function stopServer(id: string): Promise<void> {
   await call('POST', `/game-servers/${id}/stop`);
 }
 
-/** PUT golden `cs2_settings` (+ the picked map) to overwrite any recreational-mode drift. */
+/**
+ * PUT golden `cs2_settings` (+ the picked map) to overwrite any recreational-mode drift.
+ *
+ * `workshop_collection` mode does not behave reliably on the DGLS server (confirmed live) — every
+ * provision must pin a single workshop map instead, so a resolved `mapWorkshopId` is required. Callers
+ * (`provisionMatchServer`) must resolve the match's picked map before calling this; if that's not yet
+ * possible (e.g. a manual provision before veto completes), this throws rather than silently falling
+ * back to the broken collection mode.
+ */
 export async function applyGoldenSettings(
   id: string,
   opts: { mapWorkshopId?: string | null } = {},
 ): Promise<void> {
-  const fields: Record<string, string> = { ...GOLDEN_CS2_SETTINGS };
-  if (opts.mapWorkshopId) {
-    // Force the single picked workshop map for the match.
-    fields['cs2_settings.maps_source'] = 'workshop_single_map';
-    fields['cs2_settings.workshop_single_map_id'] = opts.mapWorkshopId;
-  } else {
-    // No specific map → fall back to the DGLS collection (baseline).
-    fields['cs2_settings.maps_source'] = 'workshop_collection';
-    fields['cs2_settings.workshop_collection_id'] = WORKSHOP_COLLECTION_ID;
+  if (!opts.mapWorkshopId) {
+    throw new Error(
+      'applyGoldenSettings requires a resolved map workshop id — the match must have a picked map ' +
+        '(with a maps.workshop_url) before the server can be provisioned.',
+    );
   }
+  const fields: Record<string, string> = {
+    ...buildGoldenCs2Fields(),
+    'cs2_settings.maps_source': 'workshop_single_map',
+    'cs2_settings.workshop_single_map_id': opts.mapWorkshopId,
+  };
   await call('PUT', `/game-servers/${id}`, fields);
 }
 
