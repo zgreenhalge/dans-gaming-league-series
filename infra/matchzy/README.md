@@ -59,7 +59,7 @@ here as the versioned baseline / disaster-recovery copy.
    (`cs2_settings.maps_source=workshop_single_map`, `cs2_settings.workshop_single_map_id=<picked
    map>` — always required, see above).
 2. (optional) **push `cfg/` files** via `POST /game-servers/{id}/files/{path}`.
-3. **`POST /game-servers/{id}/start`** → boot (~14s).
+3. **`POST /game-servers/{id}/start`** → boot (~20s).
 4. **`matchzy_loadmatch[_url]`** via `POST /game-servers/{id}/console` — per-match teams / matchid /
    map_sides / cvars (from `scripts/gen-matchzy-config.ts`).
 5. (teardown) **`POST /game-servers/{id}/stop`** on confirmed score/demo. Never `delete` (reuse model).
