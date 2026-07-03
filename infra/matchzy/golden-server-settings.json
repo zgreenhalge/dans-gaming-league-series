@@ -1,5 +1,5 @@
 {
-  "note": "Canonical golden DatHost cs2_settings for the DGLS match server (id 6824c4d10bf4444f5817d188). Captured live 2026-06-29. Provisioning PUTs these (dotted, e.g. `cs2_settings.game_mode`) to /game-servers/{id} BEFORE start, to overwrite any recreational-mode drift made in the panel between matches. Secrets (rcon, passwords, FTP/MySQL, GSLT) are intentionally omitted — never commit them.",
+  "note": "Canonical golden DatHost cs2_settings for the DGLS match server (id 6824c4d10bf4444f5817d188). Provisioning PUTs these (dotted, e.g. `cs2_settings.game_mode`) to /game-servers/{id} BEFORE start, to overwrite any recreational-mode drift made in the panel between matches. `game_mode: competitive` is intentional for this season — a 'competitive-style wingman' hybrid (for xplay consistency), with the wingman-specific rules (round count, warmup, overtime, economy) layered on top via cfg/gamemode_competitive2v2_server.cfg and cfg/MatchZy/live_override.cfg. Secrets (rcon, passwords, FTP/MySQL, GSLT) are intentionally omitted — never commit them. Captured live 2026-07-03.",
   "server": {
     "location": "chicago",
     "autostop": true,
@@ -9,20 +9,21 @@
   },
   "cs2_settings": {
     "slots": 8,
-    "game_mode": "wingman",
+    "game_mode": "competitive",
     "enable_gotv": true,
     "enable_gotv_secondary": false,
     "disable_bots": true,
     "insecure": false,
     "private_server": true,
     "enable_metamod": true,
-    "metamod_plugins": ["654a32ea452c94f085961b91", "65538a41f7b98449a05fe3b9"],
-    "disable_workshop_command_filtering": false,
-    "maps_source": "workshop_collection",
-    "workshop_collection_id": "3753985997"
+    "metamod_plugins": [
+      "654a32ea452c94f085961b91",
+      "65538a41f7b98449a05fe3b9"
+    ],
+    "disable_workshop_command_filtering": false
   },
   "per_match_overrides": {
-    "note": "Set at provision time, per match — NOT part of the static golden baseline.",
+    "note": "Map selection is set at provision time, per match — NOT part of the static golden baseline (src/lib/dathost.ts excludes these keys from the static PUT and sets them separately in applyGoldenSettings). `workshop_collection` mode does not behave reliably on this server — confirmed live — so every provision requires a resolved single map; applyGoldenSettings throws rather than falling back to it.",
     "cs2_settings.maps_source": "workshop_single_map",
     "cs2_settings.workshop_single_map_id": "<the picked map's Steam workshop id, extracted from maps.workshop_url>"
   }
