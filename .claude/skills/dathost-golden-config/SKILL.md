@@ -81,7 +81,7 @@ Notes on what the apply script does and doesn't do:
 - Array-valued fields (e.g. `cs2_settings.metamod_plugins`) are **never**
   auto-reasserted — DatHost preserves them across changes, and guessing the
   form-encoding for an array isn't worth the risk (matches the existing
-  reasoning in `src/lib/dathost.ts`'s `buildGoldenCs2Fields()`). If those
+  reasoning in `src/lib/dathost.ts`'s `buildCs2Fields()`). If those
   need to change, that's a manual panel edit.
 - `per_match_overrides` in `golden-server-settings.json` is never touched —
   map selection (`maps_source` / `workshop_single_map_id`) is set per match
@@ -105,4 +105,4 @@ commit on its own (see this repo's git policy: only commit when asked).
 `scripts/dathost-golden-shared.ts` (auth/fetch helpers + the tracked cfg-file
 list, shared by both scripts) · `infra/matchzy/golden-server-settings.json` ·
 `infra/matchzy/cfg/` · `infra/matchzy/README.md` · `src/lib/dathost.ts`
-(`buildGoldenCs2Fields`, `applyGoldenSettings`) · `docs/hosting.md`.
+(`buildCs2Fields`, `applyGoldenSettings`) · `docs/hosting.md`.

@@ -1,10 +1,15 @@
 'use client';
 
-// Admin server console (#134/#135, admin console b — now server-centric). Two sections: raw DatHost
-// server state + start/stop + apply-a-config-set (map picker + config-set dropdown, settings only —
-// doesn't start the server) combined in one panel, and match occupancy (who holds it right now +
-// Teardown, for the autostop-failed safety valve). The per-match MatchServerPanel still handles
-// per-match provisioning on the match page; this is the global operator view.
+// Admin server console (#134/#135, admin console b — now server-centric). Two sections: match
+// occupancy (who holds it right now + Teardown, for the autostop-failed safety valve) and a combined
+// panel below it — raw DatHost server state + start/stop + apply-a-config-set (map picker +
+// config-set dropdown, settings only — doesn't start the server). The per-match MatchServerPanel still
+// handles per-match provisioning on the match page; this is the global operator view.
+//
+// Start/Stop/Apply are occupancy-checked server-side (getServerOccupancy) — a DGLS match holding the
+// server, or live players on it with no DGLS match at all (casual/manual use), both refuse the action
+// with a 409 unless `override: true`. On that refusal this component shows an inline confirm-or-cancel
+// prompt rather than silently blocking or silently proceeding.
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -13,12 +18,15 @@ import { Copy, Check } from 'lucide-react';
 import { getBrowserClient } from '@/lib/supabase-browser';
 import { fmtUtcShort } from '@/lib/util';
 import { toSentenceCase } from '@/lib/maps';
+import { workshopIdFromUrl } from '@/lib/replay/radar';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
 import type { ConfigSetOption } from '@/lib/dathost';
 import type { WorkshopMapOption } from '@/lib/queries';
 import type { AdminServerStatus } from '@/app/api/admin/server/status/route';
 
 const CUSTOM_MAP_CHOICE = '__custom__';
+
+type PendingAction = { kind: 'start' | 'stop' | 'apply'; message: string };
 
 function StatePill({ configured, server }: { configured: boolean; server: AdminServerStatus['server'] }) {
   if (!configured) {
@@ -77,7 +85,7 @@ function CopyConnectButton({ connect }: { connect: string }) {
 }
 
 export function ServerConsolePanel({
-  active,
+  active: initialActive,
   configSets,
   maps,
 }: {
@@ -102,6 +110,8 @@ export function ServerConsolePanel({
 
   const [teardownBusy, setTeardownBusy] = useState(false);
   const [teardownError, setTeardownError] = useState<string | null>(null);
+
+  const [pending, setPending] = useState<PendingAction | null>(null);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -136,8 +146,9 @@ export function ServerConsolePanel({
     return () => clearInterval(interval);
   }, [refreshStatus]);
 
-  // Keep the console live — any match-row change (provision/teardown/reconcile) re-renders the
-  // occupancy section and re-reads raw server status (start/stop/config changes made elsewhere).
+  // Keep the console live — any match-row change (provision/teardown/reconcile) re-reads raw server
+  // status; router.refresh() re-fetches this component's `active` prop for consistency, but the
+  // occupancy section below prefers status.active (fresher, from the same fetch) once it's loaded.
   useEffect(() => {
     const channel = getBrowserClient()
       .channel('admin-servers')
@@ -151,41 +162,62 @@ export function ServerConsolePanel({
     };
   }, [router, refreshStatus]);
 
-  const startServer = async () => {
+  const startServer = async (override = false) => {
     setStartStopBusy(true);
     setStartStopError(null);
     try {
-      const res = await fetch('/api/admin/server/start', { method: 'POST' });
+      const res = await fetch('/api/admin/server/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ override }),
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        if (body.code === 'server_occupied' && !override) {
+          setPending({ kind: 'start', message: body.error });
+          return;
+        }
         setStartStopError(body.error ?? 'Could not start the server');
         return;
       }
+      setPending(null);
       await refreshStatus();
     } finally {
       setStartStopBusy(false);
     }
   };
 
-  const stopServer = async () => {
+  const stopServer = async (override = false) => {
     setStartStopBusy(true);
     setStartStopError(null);
     try {
-      const res = await fetch('/api/admin/server/stop', { method: 'POST' });
+      const res = await fetch('/api/admin/server/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ override }),
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        if (body.code === 'server_occupied' && !override) {
+          setPending({ kind: 'stop', message: body.error });
+          return;
+        }
         setStartStopError(body.error ?? 'Could not stop the server');
         return;
       }
+      setPending(null);
       await refreshStatus();
     } finally {
       setStartStopBusy(false);
     }
   };
 
-  const resolvedMapId = mapChoice === CUSTOM_MAP_CHOICE ? customMapId.trim() : mapChoice;
+  // Lenient: accepts a bare numeric ID or a full workshop URL (same parser used elsewhere for map
+  // workshop URLs), so pasting either into the custom field just works.
+  const resolvedMapId = mapChoice === CUSTOM_MAP_CHOICE ? workshopIdFromUrl(customMapId.trim()) : mapChoice || null;
+  const customMapInvalid = mapChoice === CUSTOM_MAP_CHOICE && customMapId.trim() !== '' && !resolvedMapId;
 
-  const applyConfig = async () => {
+  const applyConfig = async (override = false) => {
     if (!configSet || !resolvedMapId) return;
     setApplyBusy(true);
     setApplyError(null);
@@ -194,18 +226,32 @@ export function ServerConsolePanel({
       const res = await fetch('/api/admin/server/apply-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ configSet, mapWorkshopId: resolvedMapId }),
+        body: JSON.stringify({ configSet, mapWorkshopId: resolvedMapId, override }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        if (body.code === 'server_occupied' && !override) {
+          setPending({ kind: 'apply', message: body.error });
+          return;
+        }
         setApplyError(body.error ?? 'Could not apply config');
         return;
       }
+      setPending(null);
       setApplySuccess(true);
       await refreshStatus();
     } finally {
       setApplyBusy(false);
     }
+  };
+
+  const confirmPending = () => {
+    if (!pending) return;
+    const kind = pending.kind;
+    setPending(null);
+    if (kind === 'start') startServer(true);
+    else if (kind === 'stop') stopServer(true);
+    else applyConfig(true);
   };
 
   const teardown = async () => {
@@ -228,8 +274,12 @@ export function ServerConsolePanel({
 
   const server = status?.server ?? null;
   const configured = status?.configured ?? true;
+  // Prefer status.active (fresher — refetched on load/poll/action) once we have it at all; only fall
+  // back to the server-rendered initial prop before the first client fetch resolves.
+  const active = status ? status.active : initialActive;
   const canStart = configured && server && !server.on && !server.booting;
   const canStop = configured && server && (server.on || server.booting);
+  const casualUse = configured && server && !active && (server.players_online ?? 0) > 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -271,6 +321,26 @@ export function ServerConsolePanel({
 
       {/* Server state + apply config */}
       <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
+        {pending && (
+          <div className="border border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)] rounded px-3 py-2 mb-3">
+            <div className="font-mono text-[11px] text-[var(--color-accent-amber-fg)] mb-2">{pending.message}</div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPending(null)}
+                className="font-mono text-[11px] px-3 py-1 rounded border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmPending}
+                className="font-mono text-[11px] px-3 py-1 rounded border border-[var(--color-accent-amber-border)] text-[var(--color-accent-amber-fg)] hover:bg-[var(--color-accent-amber-bg)]"
+              >
+                Override anyway
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="min-w-0">
             <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-1 flex items-center gap-2">
@@ -279,21 +349,26 @@ export function ServerConsolePanel({
             </div>
             {server && (
               <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-2 flex flex-col gap-y-1">
-                {(server.custom_domain ?? server.raw_ip) && server.ports?.game && (
+                {status?.connect && (
                   <span className="inline-flex items-center gap-1.5">
-                    connect {server.custom_domain ?? server.raw_ip}:{server.ports.game}
-                    <CopyConnectButton connect={`${server.custom_domain ?? server.raw_ip}:${server.ports.game}`} />
+                    connect {status.connect}
+                    <CopyConnectButton connect={status.connect} />
                   </span>
                 )}
                 {server.cs2_settings?.game_mode != null && <span>mode {String(server.cs2_settings.game_mode)}</span>}
-                {server.players_online != null && <span>{server.players_online} player(s) online</span>}
+                {server.players_online != null && (
+                  <span className={casualUse ? 'text-[var(--color-accent-amber-fg)]' : undefined}>
+                    {server.players_online} player(s) online
+                    {casualUse && ' — no active DGLS match (manual/casual use?)'}
+                  </span>
+                )}
               </div>
             )}
           </div>
           <div className="shrink-0 flex gap-2">
             {canStart && (
               <button
-                onClick={startServer}
+                onClick={() => startServer()}
                 disabled={startStopBusy}
                 className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
               >
@@ -302,7 +377,7 @@ export function ServerConsolePanel({
             )}
             {canStop && (
               <button
-                onClick={stopServer}
+                onClick={() => stopServer()}
                 disabled={startStopBusy}
                 className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)] hover:bg-[var(--color-accent-red-bg)] disabled:opacity-50"
               >
@@ -343,15 +418,22 @@ export function ServerConsolePanel({
             <option value={CUSTOM_MAP_CHOICE}>Custom workshop ID…</option>
           </select>
           {mapChoice === CUSTOM_MAP_CHOICE && (
-            <input
-              value={customMapId}
-              onChange={(e) => setCustomMapId(e.target.value)}
-              placeholder="Steam workshop ID"
-              className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
-            />
+            <>
+              <input
+                value={customMapId}
+                onChange={(e) => setCustomMapId(e.target.value)}
+                placeholder="Steam workshop ID or URL"
+                className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
+              />
+              {customMapInvalid && (
+                <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">
+                  Enter a valid Steam workshop ID or URL.
+                </div>
+              )}
+            </>
           )}
           <button
-            onClick={applyConfig}
+            onClick={() => applyConfig()}
             disabled={!configSet || !resolvedMapId || applyBusy}
             className="self-start font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
           >

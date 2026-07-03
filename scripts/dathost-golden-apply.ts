@@ -10,7 +10,7 @@
 //                                   whatever recreational-mode drift happened in the panel)
 //
 // Both mutate real state (repo files on disk, or the live match server) and require --yes.
-// --reassert only PUTs scalar cs2_settings/server fields (mirrors buildGoldenCs2Fields() in
+// --reassert only PUTs scalar cs2_settings/server fields (mirrors buildCs2Fields() in
 // src/lib/dathost.ts) — array fields like metamod_plugins are skipped, matching that file's
 // documented reasoning: DatHost preserves them across changes, so guessing form-encoding for an
 // array isn't worth the risk. --reassert also does not touch per_match_overrides (those are
@@ -78,15 +78,17 @@ async function reassert(serverId: string) {
 
   const fields: Record<string, string> = {};
   for (const [key, val] of Object.entries(localServer)) {
-    if (Array.isArray(val)) {
-      console.error(`  ~ skipping server.${key} (array — not re-asserted, see script header)`);
+    // `typeof null === 'object'`, so this also catches null/absent fields — String()-ing those would
+    // silently PUT the literal "null"/"[object Object]" to the live server instead of being rejected.
+    if (typeof val === 'object') {
+      console.error(`  ~ skipping server.${key} (array/null/object — not re-asserted, see script header)`);
       continue;
     }
     fields[key] = String(val);
   }
   for (const [key, val] of Object.entries(localCs2)) {
-    if (Array.isArray(val)) {
-      console.error(`  ~ skipping cs2_settings.${key} (array — not re-asserted, see script header)`);
+    if (typeof val === 'object') {
+      console.error(`  ~ skipping cs2_settings.${key} (array/null/object — not re-asserted, see script header)`);
       continue;
     }
     fields[`cs2_settings.${key}`] = String(val);
