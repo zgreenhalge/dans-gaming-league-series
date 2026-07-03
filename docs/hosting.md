@@ -7,7 +7,7 @@ confirm flow ([`demo-ingestion.md`](./demo-ingestion.md)) always remains as the 
 > The original design/rollout notes lived in a local `dathost_handoff/` scratch dir (gitignored).
 > This doc is the tracked record — update it here, not there.
 
-## The reuse model (decision D2)
+## The reuse model
 
 DGLS reuses **one persistent DatHost server** for every match — teardown is `stop`, never `delete`.
 A `stop`→`start` gives a fresh CS2 process each match (which fixed the Season-2 long-uptime
