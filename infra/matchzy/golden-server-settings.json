@@ -1,5 +1,5 @@
 {
-  "note": "Canonical golden DatHost cs2_settings for the DGLS match server (id 6824c4d10bf4444f5817d188). Provisioning PUTs these (dotted, e.g. `cs2_settings.game_mode`) to /game-servers/{id} BEFORE start, to overwrite any recreational-mode drift made in the panel between matches. `game_mode: competitive` is intentional for this season — a 'competitive-style wingman' hybrid (for xplay consistency), with the wingman-specific rules (round count, warmup, overtime, economy) layered on top via cfg/gamemode_competitive2v2_server.cfg and cfg/MatchZy/live_override.cfg. Secrets (rcon, passwords, FTP/MySQL, GSLT) are intentionally omitted — never commit them. Captured live 2026-07-03.",
+  "note": "Canonical golden DatHost cs2_settings for the DGLS match server (id 6824c4d10bf4444f5817d188). Provisioning PUTs these (dotted, e.g. `cs2_settings.game_mode`) to /game-servers/{id} BEFORE start, to overwrite any recreational-mode drift made in the panel between matches. `game_mode: competitive` is intentional for this season — a 'competitive-style wingman' hybrid (for xplay consistency), with the wingman-specific rules (round count, warmup, overtime, economy) layered on top via cfg/gamemode_competitive2v2_server.cfg and cfg/MatchZy/live_override.cfg. Secrets (rcon, passwords, FTP/MySQL, GSLT) are intentionally omitted — never commit them. Captured live 2026-07-03. `enable_gotv` re-enabled 2026-07-03: match 44 produced zero demo files with it disabled (contradicting docs/cs2-stack-reference.md's prior 'independent systems' claim, which was never actually validated with GOTV off) — see docs/cs2-stack-reference.md for the pending write-up once this is confirmed live. `cfg/server.cfg` already sets `tv_autorecord 0`/`tv_delay 0` so GOTV doesn't fight MatchZy for recording control.",
   "server": {
     "location": "chicago",
     "autostop": true,
@@ -10,7 +10,7 @@
   "cs2_settings": {
     "slots": 8,
     "game_mode": "competitive",
-    "enable_gotv": false,
+    "enable_gotv": true,
     "enable_gotv_secondary": false,
     "disable_bots": true,
     "insecure": false,
