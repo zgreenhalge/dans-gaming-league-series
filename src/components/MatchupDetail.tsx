@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import type { DuoStats, H2HStats } from '@/lib/queries';
+import type { DuoStats, H2HStats, H2HMapStat } from '@/lib/queries';
 import { rateGradientColor, winRatePct } from '@/lib/util';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
@@ -51,12 +51,21 @@ function matchRefLabel(seasonNumber: number | null, isGauntlet: boolean, weekNum
   return sLabel ? `${sLabel}·${wLabel}` : wLabel;
 }
 
+/** Veto context for a match's map — see "Veto" in docs/glossary.md. `null` for gauntlet matches (no veto data). */
+function vetoTitle(pickedBy: 'SHIRTS' | 'SKINS' | null, startingSide: 'CT' | 'T' | null): string | undefined {
+  const parts: string[] = [];
+  if (pickedBy) parts.push(`${pickedBy === 'SHIRTS' ? 'Shirts' : 'Skins'} pick`);
+  if (startingSide) parts.push(`Skins started ${startingSide}`);
+  return parts.length > 0 ? parts.join(' · ') : undefined;
+}
+
 function MatchHistoryRow({
   matchId,
   matchLabel,
   labelColor = 'var(--color-text-secondary)',
   map,
   mapColor = 'var(--color-ct)',
+  mapTitle,
   scoreLabel,
   scoreColor,
   scorePosition = 'right',
@@ -69,6 +78,7 @@ function MatchHistoryRow({
   labelColor?: string;
   map: string | null;
   mapColor?: string;
+  mapTitle?: string;
   scoreLabel: string | null;
   scoreColor?: string;
   scorePosition?: 'left' | 'right';
@@ -92,6 +102,7 @@ function MatchHistoryRow({
         {scorePosition === 'left' && <div className="w-[36px] shrink-0 whitespace-nowrap text-center">{score}</div>}
       </div>
       <span
+        title={mapTitle}
         className={`font-mono text-[11px] w-[48px] shrink-0 truncate capitalize ${scorePosition === 'left' ? 'ml-1.5' : ''}`}
         style={{ color: mapColor }}
       >
@@ -105,6 +116,59 @@ function MatchHistoryRow({
         </span>
       )}
     </Link>
+  );
+}
+
+/**
+ * Per-pair, per-map record — aggregated straight from `computeH2H`'s match
+ * history (`duo.mapBreakdown`/`rival.mapBreakdown`), not from either player's
+ * individual career map stats. Pass `aLabel`/`bLabel` for rivals, where ADR
+ * splits per player; omit them for duos, where ADR is already combined.
+ */
+function MapIntelTable({ rows, aLabel, bLabel }: { rows: H2HMapStat[]; aLabel?: string; bLabel?: string }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)]">
+      <div className="tracked text-[8px] text-[var(--color-text-secondary)] mb-1.5">Map Intel</div>
+      <table className="w-full text-[11px]">
+        <thead>
+          <tr className="text-[var(--color-text-secondary)]">
+            <th className="text-left font-normal tracked text-[8px] pb-1">Map</th>
+            <th className="text-right font-normal tracked text-[8px] pb-1">Games</th>
+            <th className="text-right font-normal tracked text-[8px] pb-1">W-L</th>
+            <th className="text-right font-normal tracked text-[8px] pb-1">Rounds</th>
+            {aLabel ? (
+              <>
+                <th className="text-right font-normal tracked text-[8px] pb-1" title={aLabel}>ADR·A</th>
+                <th className="text-right font-normal tracked text-[8px] pb-1" title={bLabel}>ADR·B</th>
+              </>
+            ) : (
+              <th className="text-right font-normal tracked text-[8px] pb-1">ADR</th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.map} className="border-t border-[var(--color-border-tertiary)]">
+              <td className="py-1 font-display font-semibold truncate">
+                <Link href={`/maps/${mapSlug(r.map)}`} className="hover:underline capitalize">{toSentenceCase(r.map)}</Link>
+              </td>
+              <td className="py-1 text-right font-mono tnum">{r.games}</td>
+              <td className="py-1 text-right font-mono tnum">{r.wins}–{r.losses}</td>
+              <td className="py-1 text-right font-mono tnum">{r.roundsWon}–{r.roundsPlayed - r.roundsWon}</td>
+              {aLabel ? (
+                <>
+                  <td className="py-1 text-right font-mono tnum">{r.aAdr.toFixed(1)}</td>
+                  <td className="py-1 text-right font-mono tnum">{r.bAdr.toFixed(1)}</td>
+                </>
+              ) : (
+                <td className="py-1 text-right font-mono tnum">{r.aAdr.toFixed(1)}</td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -213,6 +277,8 @@ export function DuoDetail({
           <StatCell label="Comb. Deaths"  title={`${a.name}: ${duo.aStats.deaths}\n${b.name}: ${duo.bStats.deaths}`}>{duo.combinedDeaths}</StatCell>
         </div>
 
+        {!minimal && <MapIntelTable rows={duo.mapBreakdown} />}
+
         {!minimal && duo.matches.length > 0 && (
           <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)]">
             {duo.matches.map((m) => {
@@ -226,6 +292,7 @@ export function DuoDetail({
                   labelColor="var(--color-text-primary)"
                   map={m.map}
                   mapColor="var(--color-text-primary)"
+                  mapTitle={vetoTitle(m.pickedBy, m.startingSide)}
                   scoreLabel={scoreLabel}
                   scoreColor={resultColor}
                   scorePosition="left"
@@ -381,6 +448,8 @@ export function RivalDetail({
 
         <div className="mt-3.5">{statsTable}</div>
 
+        <MapIntelTable rows={rival.mapBreakdown} aLabel={a.name} bLabel={b.name} />
+
         {rival.meetings > 0 && (
           <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)]">
             {rival.matches.map((m) => {
@@ -394,6 +463,7 @@ export function RivalDetail({
                   labelColor="var(--color-text-primary)"
                   map={m.map}
                   mapColor="var(--color-text-primary)"
+                  mapTitle={vetoTitle(m.pickedBy, m.startingSide)}
                   scoreLabel={scoreLabel}
                   scoreColor={scoreColor}
                   scorePosition="left"
