@@ -172,4 +172,7 @@ everything degrades to the manual flow.
 - **Concurrency guard has a tiny check-then-claim window** (above) — a fully atomic claim would need a
   Postgres advisory-lock RPC, judged not worth it for the rarity.
 - **Nightly reset (#132)** is DatHost-panel config, not code: a daily `css_endmatch` scheduled command
-  + `autostop_minutes: 10` as the idle/billing backstop.
+  + `autostop_minutes: 10` as the idle/billing backstop. Disk cleanup is a separate, code-side piece
+  of the same issue — see [`infra/matchzy/README.md`](../infra/matchzy/README.md) for
+  `scripts/dathost-cleanup.ts`, which the DatHost panel's command scheduler can't do since it only
+  reaches in-game RCON, not the file manager.

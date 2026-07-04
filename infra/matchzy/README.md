@@ -64,4 +64,9 @@ here as the versioned baseline / disaster-recovery copy.
    map_sides / cvars (from `scripts/gen-matchzy-config.ts`).
 5. (teardown) **`POST /game-servers/{id}/stop`** on confirmed score/demo. Never `delete` (reuse model).
 
-Nightly cleanup/reset safety net: issue #132.
+**Disk cleanup (issue #132):** MatchZy never removes its own per-match artifacts (round-resume
+backups, stat CSVs, player-name caches, recorded demos) — they accumulate on the server's disk
+against a fixed size cap every match. `scripts/dathost-cleanup.ts` + `.github/workflows/
+dathost-cleanup.yml` remove a match's files once they're old enough that nothing needs them
+locally (7-day default retention), and — for the demo specifically — only once R2 has its own
+confirmed copy. Runs weekly; also dispatchable manually (defaults to a dry run).
