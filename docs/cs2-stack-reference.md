@@ -133,16 +133,19 @@ MatchZy also POSTs match events (including final `map_result`) to `matchzy_remot
 exposes `matchzy_get_match_stats <matchId>` as a console command — a useful independent
 cross-check against whatever your own parser derives from the demo.
 
-### GOTV vs demo recording — they're independent
+### GOTV vs demo recording — in practice, not actually independent
 
 `tv_enable`/GOTV (live spectating via the in-game TV relay) and MatchZy's own demo
-recording/upload are **separate systems** — disabling GOTV entirely does not affect MatchZy's
-ability to record and upload the match demo. DGLS disabled `enable_gotv` in its golden config after
-GOTV was suspected of contributing to in-game weirdness players reported, with no effect on demo
-capture, confirming the two are decoupled. If you do run GOTV: leave `tv_autorecord 0` so MatchZy
-(not GOTV's own auto-record) controls demo recording, and set `tv_delay` at the server level rather
-than toggling it inside per-phase cfgs (warmup/live) — MatchZy's phase transitions aren't the right
-place to be flipping broadcast-delay state.
+recording/upload are documented as **separate systems**, and DGLS initially treated them that way —
+disabling `enable_gotv` in the golden config (after GOTV was suspected of contributing to in-game
+weirdness players reported) was believed to have no effect on demo capture. That belief was never
+actually tested with GOTV off: match 44 ran with `enable_gotv: false` and produced **zero demo
+files**. `enable_gotv` was re-enabled afterward, and demo recording is confirmed working again with
+GOTV on. Treat "GOTV and MatchZy demo recording are independent" as **not confirmed on this stack** —
+whether it's a MatchZy/CSSharp version quirk or something DGLS-specific hasn't been isolated. If you
+do run GOTV: leave `tv_autorecord 0` so MatchZy (not GOTV's own auto-record) controls demo recording,
+and set `tv_delay` at the server level rather than toggling it inside per-phase cfgs (warmup/live) —
+MatchZy's phase transitions aren't the right place to be flipping broadcast-delay state.
 
 ## Common MatchZy cvars worth knowing
 
@@ -217,9 +220,11 @@ independently warns against `tv_autorecord` ("can cause a lot of problems and is
 this matches the `tv_autorecord 0` convention already documented above and is a second, unrelated
 source confirming it's not just a MatchZy-specific quirk. Their guidance is silent on any
 MatchZy-specific interaction, which is itself informative: nothing in DatHost's own docs suggests
-GOTV and match plugins fight each other, so if in-game weirdness recurs after `enable_gotv` is
-re-enabled for some reason, look at MatchZy/CSSharp version compatibility before re-suspecting GOTV
-itself.
+GOTV and match plugins fight each other outright — but DGLS's own match 44 result (zero demo files
+with `enable_gotv: false`) contradicts the "fully independent" framing in practice on this stack. If
+in-game weirdness recurs with `enable_gotv` re-enabled, look at MatchZy/CSSharp version compatibility
+before re-disabling GOTV — disabling it has a confirmed cost (broken demo recording) that outright
+requires a live match to re-validate before trying again.
 
 ### Valve's own dedicated-server docs
 
@@ -257,7 +262,8 @@ for the DGLS-specific layout.
 | Symptom | Root cause | Fix |
 |---|---|---|
 | Spectators got kicked on connect | MatchZy locks the server to `team1`/`team2`/`spectators` once a match JSON loads; `spectators` was empty | Populate `spectators.players` with every known player minus the rostered two teams (`buildMatchzyConfig`) |
-| Players reported in-game weirdness during matches | Suspected GOTV interaction (`enable_gotv`) | Disabled `enable_gotv` in the golden config; confirmed demo recording is unaffected since MatchZy's recording is independent of GOTV |
+| Players reported in-game weirdness during matches | Suspected GOTV interaction (`enable_gotv`) | Disabled `enable_gotv` in the golden config to test the theory |
+| Match 44 recorded zero demo files | `enable_gotv` was disabled — turns out demo recording isn't independent of GOTV on this stack after all | Re-enabled `enable_gotv` in the golden config; `tv_autorecord 0`/`tv_delay 0` in `cfg/server.cfg` keep GOTV from fighting MatchZy for recording control |
 | "Server starting" progress UI finished before the server was actually ready | Boot-time estimate was measured once and went stale as real boot time drifted longer | Re-measured against live behavior and bumped the estimate (14s → 20s); treat any hardcoded boot estimate as needing periodic re-validation, not a one-time constant |
 | `workshop_collection` map rotation behaved unreliably | DatHost's collection-based map source doesn't reliably resolve/rotate on this server | Always pin a single workshop map per launch (`workshop_single_map`); the provisioning code throws rather than silently falling back to a collection |
 
