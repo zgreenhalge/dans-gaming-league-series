@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import H2HMatrix, { type H2HPair } from './H2HMatrix';
-import { DuoDetail, RivalDetail } from './H2HDetail';
+import { DuoDetail, RivalDetail } from './MatchupDetail';
 import { winRatePct } from '@/lib/util';
 import type { H2HData } from '@/lib/queries';
 import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';

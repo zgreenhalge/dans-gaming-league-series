@@ -7,7 +7,7 @@ import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
 import { avgOf, tabCls } from '@/lib/util';
 import Link from 'next/link';
-import { DuoDetail, RivalDetail } from './H2HDetail';
+import { DuoDetail, RivalDetail } from './MatchupDetail';
 import MapHeatmap from './MapHeatmap';
 
 function h2hHref(nameA: string, nameB: string, type: 'partner' | 'opponent'): string {
@@ -34,6 +34,14 @@ function normalizeRival(rival: H2HStats, desiredA: number): H2HStats {
     lastMap: rival.lastMap,
     aStats: rival.bStats,
     bStats: rival.aStats,
+    mapBreakdown: rival.mapBreakdown.map((s) => ({
+      ...s,
+      wins: s.losses,
+      losses: s.wins,
+      roundsWon: s.roundsPlayed - s.roundsWon,
+      aAdr: s.bAdr,
+      bAdr: s.aAdr,
+    })),
     matches: rival.matches.map((m) => ({
       ...m,
       aWon: m.aWon == null ? null : !m.aWon,

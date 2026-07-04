@@ -201,7 +201,7 @@ export default function CareerStatsView({
         bordered
         className="mb-3"
         controls={
-          (tab === 'leaderboard' || tab === 'stats' || tab === 'advanced') ? (
+          (tab === 'leaderboard' || tab === 'stats' || tab === 'advanced' || tab === 'h2h') ? (
             <>
               <SeasonFilter
                 filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }}
