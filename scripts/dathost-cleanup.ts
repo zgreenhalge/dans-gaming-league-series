@@ -21,6 +21,13 @@
 // NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CLOUDFLARE_R2_* (for the demo R2 check).
 // RETENTION_DAYS overrides the default 7-day minimum age (matches don't need same-week local
 // backups; the demo's own R2 presence check is a stronger, independent safety condition anyway).
+//
+// The workflow itself always runs on a fixed daily cron — how *often* it actually does anything is
+// a separate, admin-adjustable knob (CLEANUP_INTERVAL_DAYS, a repo Actions variable set from
+// /admin/servers) that this script checks itself, rather than editing the cron schedule in the
+// workflow file. Only applies when triggered by `schedule` — a manual run (workflow_dispatch, e.g.
+// the admin console's "run now") always runs regardless of the interval. Needs GITHUB_TOKEN +
+// GITHUB_REPOSITORY (both automatic in a GitHub Actions run) to check the last completed run.
 
 import { api } from './dathost-golden-shared';
 import { getAdminClient } from '../src/lib/supabase-admin';
@@ -29,7 +36,39 @@ import { HeadObjectCommand } from '@aws-sdk/client-s3';
 
 const DRY_RUN = !/^(0|false)$/i.test(process.env.DRY_RUN ?? 'true');
 const RETENTION_DAYS = Number(process.env.RETENTION_DAYS ?? '7');
+const CLEANUP_INTERVAL_DAYS = Number(process.env.CLEANUP_INTERVAL_DAYS ?? '1');
 const DEMO_INGEST_DONE = new Set(['confirmed', 'dismissed']);
+
+/** Whether a `schedule`-triggered run should actually do anything, based on how long it's been
+ *  since the last completed run vs. CLEANUP_INTERVAL_DAYS. Any other trigger (workflow_dispatch)
+ *  always runs. Fails open (runs) if the check itself can't be made — a missing/misconfigured
+ *  throttle should never be the reason cleanup silently stops happening. */
+async function scheduleShouldRun(): Promise<boolean> {
+  if (process.env.GITHUB_EVENT_NAME !== 'schedule') return true;
+  const token = process.env.GITHUB_TOKEN;
+  const repo = process.env.GITHUB_REPOSITORY;
+  if (!token || !repo) return true;
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${repo}/actions/workflows/dathost-cleanup.yml/runs?status=completed&per_page=1`,
+      {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      },
+    );
+    if (!res.ok) return true;
+    const data = (await res.json()) as { workflow_runs?: Array<{ created_at?: string }> };
+    const lastCreatedAt = data.workflow_runs?.[0]?.created_at;
+    if (!lastCreatedAt) return true;
+    const elapsedDays = (Date.now() - new Date(lastCreatedAt).getTime()) / (1000 * 60 * 60 * 24);
+    return elapsedDays >= CLEANUP_INTERVAL_DAYS;
+  } catch {
+    return true;
+  }
+}
 
 function notice(msg: string) {
   console.log(`::notice::${msg}`);
@@ -138,6 +177,11 @@ async function deleteFile(serverId: string, path: string): Promise<void> {
 }
 
 async function main() {
+  if (!(await scheduleShouldRun())) {
+    notice(`scheduled run skipped — last completed run was under the ${CLEANUP_INTERVAL_DAYS}d interval`);
+    return;
+  }
+
   const serverId = process.argv[2] || process.env.DATHOST_SERVER_ID;
   if (!serverId) throw new Error('Set DATHOST_SERVER_ID or pass a server id as an argument.');
   notice(`dathost-cleanup: server ${serverId}, retention ${RETENTION_DAYS}d, dry_run=${DRY_RUN}`);
