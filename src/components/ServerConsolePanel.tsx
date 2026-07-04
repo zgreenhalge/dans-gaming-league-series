@@ -1,10 +1,12 @@
 'use client';
 
-// Admin server console (#134/#135, admin console b — now server-centric). Two sections: match
-// occupancy (who holds it right now + Teardown, for the autostop-failed safety valve) and a combined
+// Admin server console (#134/#135, admin console b — now server-centric). Three sections: match
+// occupancy (who holds it right now + Teardown, for the autostop-failed safety valve), a combined
 // panel below it — raw DatHost server state + start/stop + apply-a-config-set (map picker +
-// config-set dropdown, settings only — doesn't start the server). The per-match MatchServerPanel still
-// handles per-match provisioning on the match page; this is the global operator view.
+// config-set dropdown, settings only — doesn't start the server), and disk cleanup (issue #132) —
+// enable/disable + interval + a manual "run now" for the dathost-cleanup GitHub Action. The
+// per-match MatchServerPanel still handles per-match provisioning on the match page; this is the
+// global operator view.
 //
 // Start/Stop/Apply are occupancy-checked server-side (getServerOccupancy) — a DGLS match holding the
 // server, or live players on it with no DGLS match at all (casual/manual use), both refuse the action
@@ -23,6 +25,7 @@ import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
 import type { ConfigSetOption } from '@/lib/dathost';
 import type { WorkshopMapOption } from '@/lib/queries';
 import type { AdminServerStatus } from '@/app/api/admin/server/status/route';
+import type { DathostCleanupStatus } from '@/app/api/admin/dathost-cleanup/status/route';
 
 const CUSTOM_MAP_CHOICE = '__custom__';
 
@@ -82,6 +85,14 @@ function CopyConnectButton({ connect }: { connect: string }) {
       {copied ? <Check size={12} /> : <Copy size={12} />}
     </button>
   );
+}
+
+function lastRunSummary(lastRun: DathostCleanupStatus['lastRun']): string {
+  if (!lastRun) return 'never run';
+  const when = fmtUtcShort(lastRun.createdAt);
+  const outcome = lastRun.status === 'completed' ? (lastRun.conclusion ?? 'unknown') : lastRun.status;
+  const trigger = lastRun.event === 'workflow_dispatch' ? 'manual' : lastRun.event;
+  return `${outcome} · ${when} · ${trigger}`;
 }
 
 export function ServerConsolePanel({
@@ -161,6 +172,112 @@ export function ServerConsolePanel({
       getBrowserClient().removeChannel(channel);
     };
   }, [router, refreshStatus]);
+
+  const [cleanup, setCleanup] = useState<DathostCleanupStatus | null>(null);
+  const [cleanupError, setCleanupError] = useState<string | null>(null);
+  const [cleanupToggleBusy, setCleanupToggleBusy] = useState(false);
+  const [cleanupRunBusy, setCleanupRunBusy] = useState(false);
+  const [cleanupRunMessage, setCleanupRunMessage] = useState<string | null>(null);
+  const [intervalInput, setIntervalInput] = useState('');
+  const [intervalBusy, setIntervalBusy] = useState(false);
+  const [intervalSaved, setIntervalSaved] = useState(false);
+
+  const refreshCleanup = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/dathost-cleanup/status');
+      if (!res.ok) {
+        setCleanupError('Could not load cleanup status');
+        return;
+      }
+      const data = (await res.json()) as DathostCleanupStatus;
+      setCleanup(data);
+      setCleanupError(data.error);
+      setIntervalInput((prev) => (prev === '' ? String(data.intervalDays) : prev));
+    } catch {
+      setCleanupError('Could not load cleanup status');
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!cancelled) await refreshCleanup();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshCleanup]);
+
+  // Lower-frequency than the server-state poll — this only changes once a day at most.
+  useEffect(() => {
+    const interval = setInterval(refreshCleanup, 60_000);
+    return () => clearInterval(interval);
+  }, [refreshCleanup]);
+
+  const toggleCleanupEnabled = async () => {
+    if (!cleanup) return;
+    setCleanupToggleBusy(true);
+    setCleanupError(null);
+    try {
+      const res = await fetch('/api/admin/dathost-cleanup/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !cleanup.enabled }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setCleanupError(body.error ?? 'Could not update cleanup schedule');
+        return;
+      }
+      await refreshCleanup();
+    } finally {
+      setCleanupToggleBusy(false);
+    }
+  };
+
+  const saveInterval = async () => {
+    const days = Number(intervalInput);
+    if (!Number.isInteger(days) || days < 1) return;
+    setIntervalBusy(true);
+    setIntervalSaved(false);
+    setCleanupError(null);
+    try {
+      const res = await fetch('/api/admin/dathost-cleanup/interval', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ days }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setCleanupError(body.error ?? 'Could not save interval');
+        return;
+      }
+      setIntervalSaved(true);
+      await refreshCleanup();
+    } finally {
+      setIntervalBusy(false);
+    }
+  };
+
+  const runCleanupNow = async () => {
+    setCleanupRunBusy(true);
+    setCleanupRunMessage(null);
+    setCleanupError(null);
+    try {
+      const res = await fetch('/api/admin/dathost-cleanup/run', { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setCleanupError(body.error ?? 'Could not trigger cleanup');
+        return;
+      }
+      setCleanupRunMessage('Triggered — check the Actions log for progress.');
+      // The new run won't show up in the status endpoint for a few seconds; one delayed refresh
+      // is enough for an admin glancing back at this panel, no need to poll tightly for it.
+      setTimeout(refreshCleanup, 5000);
+    } finally {
+      setCleanupRunBusy(false);
+    }
+  };
 
   const startServer = async (override = false) => {
     setStartStopBusy(true);
@@ -444,6 +561,87 @@ export function ServerConsolePanel({
             <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
           )}
         </div>
+      </div>
+
+      {/* Disk cleanup (#132) */}
+      <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
+        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">
+          Disk cleanup <span className="text-[var(--color-text-secondary)]">— stale per-match MatchZy artifacts</span>
+        </div>
+        {!cleanup ? (
+          <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">Loading…</div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <div className="font-mono text-[11px] text-[var(--color-text-secondary)] flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span
+                className={
+                  cleanup.enabled === false ? 'text-[var(--color-accent-amber-fg)]' : 'text-[var(--color-accent-green-fg)]'
+                }
+              >
+                {cleanup.enabled === null ? 'unknown' : cleanup.enabled ? 'scheduled' : 'paused'}
+              </span>
+              <span>last run: {lastRunSummary(cleanup.lastRun)}</span>
+              {cleanup.lastRun && (
+                <a
+                  href={cleanup.lastRun.htmlUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[var(--color-accent-blue-fg)] hover:underline"
+                >
+                  view run
+                </a>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={toggleCleanupEnabled}
+                disabled={cleanupToggleBusy || cleanup.enabled === null}
+                className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-border-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)] disabled:opacity-50"
+              >
+                {cleanupToggleBusy ? '…' : cleanup.enabled ? 'Pause schedule' : 'Resume schedule'}
+              </button>
+              <button
+                onClick={runCleanupNow}
+                disabled={cleanupRunBusy}
+                className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
+              >
+                {cleanupRunBusy ? 'Triggering…' : 'Run now'}
+              </button>
+            </div>
+            {cleanupRunMessage && (
+              <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">{cleanupRunMessage}</div>
+            )}
+
+            <div className="flex items-center gap-2 mt-1">
+              <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">Run every</span>
+              <input
+                type="number"
+                min={1}
+                value={intervalInput}
+                onChange={(e) => {
+                  setIntervalInput(e.target.value);
+                  setIntervalSaved(false);
+                }}
+                className="w-16 font-mono text-[12px] px-2 py-1 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
+              />
+              <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">day(s)</span>
+              <button
+                onClick={saveInterval}
+                disabled={intervalBusy || !intervalInput || Number(intervalInput) === cleanup.intervalDays}
+                className="font-mono text-[11px] px-3 py-1 rounded border border-[var(--color-border-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)] disabled:opacity-50"
+              >
+                {intervalBusy ? 'Saving…' : 'Save'}
+              </button>
+              {intervalSaved && <span className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Saved.</span>}
+            </div>
+            <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
+              The underlying job still checks daily — this only controls how often it actually deletes anything.
+            </div>
+
+            {cleanupError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{cleanupError}</div>}
+          </div>
+        )}
       </div>
     </div>
   );
