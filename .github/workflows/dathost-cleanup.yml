@@ -2,16 +2,19 @@
 #
 # Removes stale per-match MatchZy artifacts (round-resume backups, stat CSVs, player-name
 # caches, and confirmed-uploaded demos) from the shared DatHost match server's local disk.
-# Nothing else purges these — they accumulate every match against a fixed disk-size cap.
+# Nothing else purges these — they accumulate every match against a fixed disk-size cap. The
+# server also hosts non-DGLS games between matches, which leave the same kind of residue with no
+# `matches` row to age off — the script deletes that immediately (see its header comment), so a
+# daily cadence keeps that from piling up rather than sitting for a full retention window.
 #
-# Runs weekly, and can be dispatched manually any time. Manual runs default to a dry run (list
+# Runs daily, and can be dispatched manually any time. Manual runs default to a dry run (list
 # only) as a safety net; the scheduled run always deletes for real.
 
 name: dathost-cleanup
 
 on:
   schedule:
-    - cron: '17 9 * * 1' # every Monday, off the hour to avoid GitHub's cron pile-up
+    - cron: '17 9 * * *' # daily, off the hour to avoid GitHub's cron pile-up
   workflow_dispatch:
     inputs:
       dry_run:

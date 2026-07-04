@@ -5,10 +5,13 @@
 // in R2. None of this self-cleans — MatchZy writes it per match and never removes it, so it
 // accumulates forever on a disk with a fixed size cap.
 //
-// A match's files are only eligible once they're old enough that nothing still needs them
-// locally, and — for the demo specifically — only once R2 has its own confirmed copy. This is a
-// fail-safe default: a match this script can't confidently place in time is left alone rather
-// than guessed at.
+// The server also hosts non-DGLS games between matches (recreational-mode drift, ad-hoc testing),
+// and MatchZy leaves the exact same kind of residue for those — but they have no `matches` row to
+// derive an age from, and we don't care about them at all, so they're deleted immediately rather
+// than aged. A file whose id *does* match a real `matches` row is only eligible once it's old
+// enough that nothing still needs it locally (7-day default), and — for the demo specifically —
+// only once R2 has its own confirmed copy. A tracked match this script can't confidently place in
+// time (no resolved job, no scheduled_at) is left alone rather than guessed at.
 //
 //   set -a; . ./.env.local; set +a
 //   DRY_RUN=false npx tsx scripts/dathost-cleanup.ts        # actually delete
@@ -79,13 +82,16 @@ function daysAgo(iso: string | null): number | null {
   return (Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24);
 }
 
-/** The date to measure a match's age from: the demo-ingest job's resolution time if it reached a
- *  terminal state, else the match's scheduled time (covers matches scored without a demo, e.g. a
- *  recording failure), else null — unknown age, never eligible. */
+/** Whether `matchId` is a real DGLS match, and if so, the date to measure its age from: the
+ *  demo-ingest job's resolution time if it reached a terminal state, else the match's scheduled
+ *  time (covers matches scored without a demo, e.g. a recording failure), else null — unknown
+ *  age, never eligible. `tracked: false` means no `matches` row exists at all — not a DGLS match
+ *  (a non-DGLS game or ad-hoc test reusing MatchZy on the shared server), so nothing here is worth
+ *  retaining regardless of age. */
 async function ageInfoFor(
   supabase: ReturnType<typeof getAdminClient>,
   matchId: number,
-): Promise<{ days: number | null; jobStatus: string | null }> {
+): Promise<{ tracked: boolean; days: number | null; jobStatus: string | null }> {
   const [{ data: job }, { data: match }] = await Promise.all([
     supabase
       .from('background_jobs')
@@ -96,10 +102,17 @@ async function ageInfoFor(
     supabase.from('matches').select('scheduled_at').eq('id', matchId).maybeSingle(),
   ]);
   const jobStatus = (job as { status?: string } | null)?.status ?? null;
-  if (jobStatus && DEMO_INGEST_DONE.has(jobStatus)) {
-    return { days: daysAgo((job as { updated_at?: string }).updated_at ?? null), jobStatus };
+  if (!match) {
+    return { tracked: false, days: null, jobStatus };
   }
-  return { days: daysAgo((match as { scheduled_at?: string } | null)?.scheduled_at ?? null), jobStatus };
+  if (jobStatus && DEMO_INGEST_DONE.has(jobStatus)) {
+    return { tracked: true, days: daysAgo((job as { updated_at?: string }).updated_at ?? null), jobStatus };
+  }
+  return {
+    tracked: true,
+    days: daysAgo((match as { scheduled_at?: string }).scheduled_at ?? null),
+    jobStatus,
+  };
 }
 
 async function demoIsSafeInR2(matchId: number): Promise<boolean> {
@@ -140,14 +153,15 @@ async function main() {
 
   for (const [matchId, matchFiles] of [...byMatch.entries()].sort((a, b) => a[0] - b[0])) {
     console.log(`::group::match ${matchId} (${matchFiles.length} file(s))`);
-    const { days, jobStatus } = await ageInfoFor(supabase, matchId);
-    if (days === null) {
-      warning(`match ${matchId}: no matches row and no resolved demo_ingest job — skipping (unknown age)`);
+    const { tracked, days, jobStatus } = await ageInfoFor(supabase, matchId);
+    if (!tracked) {
+      console.log(`match ${matchId}: no matches row — not a DGLS match, deleting immediately (no retention)`);
+    } else if (days === null) {
+      warning(`match ${matchId}: no resolved demo_ingest job and no scheduled_at — skipping (unknown age)`);
       skippedMatches++;
       console.log('::endgroup::');
       continue;
-    }
-    if (days < RETENTION_DAYS) {
+    } else if (days < RETENTION_DAYS) {
       console.log(`match ${matchId}: ${days.toFixed(1)}d old (job=${jobStatus ?? 'none'}), under ${RETENTION_DAYS}d retention — skipping`);
       skippedMatches++;
       console.log('::endgroup::');

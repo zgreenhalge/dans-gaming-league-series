@@ -69,4 +69,6 @@ backups, stat CSVs, player-name caches, recorded demos) — they accumulate on t
 against a fixed size cap every match. `scripts/dathost-cleanup.ts` + `.github/workflows/
 dathost-cleanup.yml` remove a match's files once they're old enough that nothing needs them
 locally (7-day default retention), and — for the demo specifically — only once R2 has its own
-confirmed copy. Runs weekly; also dispatchable manually (defaults to a dry run).
+confirmed copy — except for residue with no `matches` row at all (a non-DGLS game reusing MatchZy
+on the shared server), which is deleted immediately since none of it is ever worth keeping. Runs
+daily; also dispatchable manually (defaults to a dry run).
