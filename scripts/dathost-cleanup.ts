@@ -170,7 +170,10 @@ async function main() {
 
     for (const file of matchFiles) {
       const isDemo = /^MatchZy\/.*\.dem$/.test(file.path);
-      if (isDemo) {
+      // Only a tracked DGLS match's demo goes through our own upload pipeline — an untracked
+      // match's demo will never be in R2, and we don't want it there, so don't gate its deletion
+      // on a check that can only ever fail.
+      if (isDemo && tracked) {
         const safe = await demoIsSafeInR2(matchId);
         if (!safe) {
           warning(`match ${matchId}: demo not confirmed in R2 (${demoKey(matchId)}) — leaving ${file.path} on disk`);
