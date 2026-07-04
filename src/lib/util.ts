@@ -358,6 +358,8 @@ export interface DuoMatchSummary {
   weekNumber: number;
   matchNumber: number;
   map: string | null;
+  pickedBy: 'SHIRTS' | 'SKINS' | null;
+  startingSide: 'CT' | 'T' | null;
   score: { duo: number; opponents: number } | null;
   won: boolean | null;
   opponents: { player_id: number; player_name: string }[];
@@ -371,10 +373,27 @@ export interface RivalMatchSummary {
   weekNumber: number;
   matchNumber: number;
   map: string | null;
+  pickedBy: 'SHIRTS' | 'SKINS' | null;
+  startingSide: 'CT' | 'T' | null;
   score: { a: number; b: number } | null;
   aWon: boolean | null;
   aMatchStats: MatchPlayerStats;
   bMatchStats: MatchPlayerStats;
+}
+
+/** A pair's aggregated record on a single map, across every meeting on it. */
+export interface H2HMapStat {
+  map: string;
+  games: number;
+  /** duo: wins as a pair | rival: playerA's wins on this map */
+  wins: number;
+  losses: number;
+  roundsWon: number;
+  roundsPlayed: number;
+  /** duo: combined ADR (both players) | rival: playerA's ADR */
+  aAdr: number;
+  /** duo: unused (0) | rival: playerB's ADR */
+  bAdr: number;
 }
 
 export interface DuoStats {
@@ -392,6 +411,7 @@ export interface DuoStats {
   aStats: H2HPlayerStats;
   bStats: H2HPlayerStats;
   bestMap: string | null;
+  mapBreakdown: H2HMapStat[];
   matches: DuoMatchSummary[];
 }
 
@@ -415,6 +435,7 @@ export interface H2HStats {
   lastMap: string | null;
   aStats: H2HPlayerStats;
   bStats: H2HPlayerStats;
+  mapBreakdown: H2HMapStat[];
   matches: RivalMatchSummary[];
 }
 
@@ -445,6 +466,10 @@ export interface H2HMatchInput {
   seasonNumber: number | null;
   isGauntlet: boolean;
   map: string | null;
+  /** Who picked the played map — see "Who picked" in docs/glossary.md. `null` for gauntlet matches (no veto data). */
+  pickedBy: 'SHIRTS' | 'SKINS' | null;
+  /** Skins' starting side for the played map. `null` for gauntlet matches (no veto data). */
+  startingSide: 'CT' | 'T' | null;
   finalScore: string | null;
   roster: H2HRosterRow[];
 }
@@ -479,6 +504,36 @@ function finalizeH2HPlayerStats(agg: H2HRivalPlayerAgg): H2HPlayerStats {
   };
 }
 
+interface H2HMapAgg {
+  games: number;
+  wins: number;
+  losses: number;
+  roundsWon: number;
+  roundsPlayed: number;
+  aAdrSum: number;
+  bAdrSum: number;
+}
+
+function emptyH2HMapAgg(): H2HMapAgg {
+  return { games: 0, wins: 0, losses: 0, roundsWon: 0, roundsPlayed: 0, aAdrSum: 0, bAdrSum: 0 };
+}
+
+/** Finalizes a per-map aggregation map into a `games`-descending list. */
+function finalizeMapBreakdown(mapTotals: Map<string, H2HMapAgg>): H2HMapStat[] {
+  return [...mapTotals.entries()]
+    .map(([map, t]) => ({
+      map,
+      games: t.games,
+      wins: t.wins,
+      losses: t.losses,
+      roundsWon: t.roundsWon,
+      roundsPlayed: t.roundsPlayed,
+      aAdr: t.games > 0 ? t.aAdrSum / t.games : 0,
+      bAdr: t.games > 0 ? t.bAdrSum / t.games : 0,
+    }))
+    .sort((x, y) => y.games - x.games);
+}
+
 interface H2HDuoAgg {
   a: number;
   b: number;
@@ -493,7 +548,7 @@ interface H2HDuoAgg {
   roundsPlayed: number;
   aStats: H2HRivalPlayerAgg;
   bStats: H2HRivalPlayerAgg;
-  mapTotals: Map<string, { games: number; wins: number; adrSum: number }>;
+  mapTotals: Map<string, H2HMapAgg>;
   matches: DuoMatchSummary[];
 }
 
@@ -505,6 +560,7 @@ interface H2HRivalAgg {
   bWins: number;
   aStats: H2HRivalPlayerAgg;
   bStats: H2HRivalPlayerAgg;
+  mapTotals: Map<string, H2HMapAgg>;
   matches: RivalMatchSummary[];
 }
 
@@ -513,7 +569,7 @@ interface H2HRivalAgg {
  * the most wins, there's no clear "best" — return null rather than picking
  * one arbitrarily.
  */
-function bestH2HMapFor(mapTotals: Map<string, { games: number; wins: number; adrSum: number }>): string | null {
+function bestH2HMapFor(mapTotals: Map<string, { games: number; wins: number }>): string | null {
   let bestMap: string | null = null;
   let bestWins = -1;
   let tied = false;
@@ -560,7 +616,7 @@ export function computeH2H(
     const key = h2hPairKey(a, b);
     let agg = rivalAgg.get(key);
     if (!agg) {
-      agg = { a, b, meetings: 0, aWins: 0, bWins: 0, aStats: emptyH2HRivalPlayerAgg(), bStats: emptyH2HRivalPlayerAgg(), matches: [] };
+      agg = { a, b, meetings: 0, aWins: 0, bWins: 0, aStats: emptyH2HRivalPlayerAgg(), bStats: emptyH2HRivalPlayerAgg(), mapTotals: new Map(), matches: [] };
       rivalAgg.set(key, agg);
     }
     return agg;
@@ -615,10 +671,13 @@ export function computeH2H(
           }
           if (playedMap) {
             const mapKey = playedMap.toLowerCase();
-            const mapAgg = agg.mapTotals.get(mapKey) ?? { games: 0, wins: 0, adrSum: 0 };
+            const mapAgg = agg.mapTotals.get(mapKey) ?? emptyH2HMapAgg();
             mapAgg.games += 1;
             if (x.is_win) mapAgg.wins += 1;
-            mapAgg.adrSum += x.adr + y.adr;
+            else mapAgg.losses += 1;
+            mapAgg.roundsWon += x.rounds_won;
+            mapAgg.roundsPlayed += x.rounds_played;
+            mapAgg.aAdrSum += x.adr + y.adr;
             agg.mapTotals.set(mapKey, mapAgg);
           }
           agg.matches.push({
@@ -628,6 +687,8 @@ export function computeH2H(
             weekNumber: m.weekNumber,
             matchNumber: m.matchNumber,
             map: playedMap,
+            pickedBy: m.pickedBy,
+            startingSide: m.startingSide,
             score: ourScore != null && theirScore != null ? { duo: ourScore, opponents: theirScore } : null,
             won: x.is_win,
             opponents: opponents.map((r) => ({ player_id: r.player_id, player_name: players.get(r.player_id)?.name ?? `#${r.player_id}` })),
@@ -655,6 +716,19 @@ export function computeH2H(
           statAgg.roundsPlayed += row.rounds_played;
         }
 
+        if (playedMap) {
+          const mapKey = playedMap.toLowerCase();
+          const mapAgg = agg.mapTotals.get(mapKey) ?? emptyH2HMapAgg();
+          mapAgg.games += 1;
+          if (aRow.is_win) mapAgg.wins += 1;
+          else mapAgg.losses += 1;
+          mapAgg.roundsWon += aRow.rounds_won;
+          mapAgg.roundsPlayed += aRow.rounds_played;
+          mapAgg.aAdrSum += aRow.adr;
+          mapAgg.bAdrSum += bRow.adr;
+          agg.mapTotals.set(mapKey, mapAgg);
+        }
+
         const aScore = parsedScore ? (aRow.faction === 'SHIRTS' ? parsedScore.shirts : parsedScore.skins) : null;
         const bScore = parsedScore ? (bRow.faction === 'SHIRTS' ? parsedScore.shirts : parsedScore.skins) : null;
         agg.matches.push({
@@ -664,6 +738,8 @@ export function computeH2H(
           weekNumber: m.weekNumber,
           matchNumber: m.matchNumber,
           map: playedMap,
+          pickedBy: m.pickedBy,
+          startingSide: m.startingSide,
           score: aScore != null && bScore != null ? { a: aScore, b: bScore } : null,
           aWon: aRow.is_win,
           aMatchStats: { kills: aRow.kills, assists: aRow.assists ?? 0, deaths: aRow.deaths },
@@ -688,6 +764,7 @@ export function computeH2H(
     aStats: finalizeH2HPlayerStats(d.aStats),
     bStats: finalizeH2HPlayerStats(d.bStats),
     bestMap: bestH2HMapFor(d.mapTotals),
+    mapBreakdown: finalizeMapBreakdown(d.mapTotals),
     matches: [...d.matches].sort(compareMatchRefDesc), // most recent first
   }));
 
@@ -702,6 +779,7 @@ export function computeH2H(
       lastMap: sortedMatches[0]?.map ?? null,
       aStats: finalizeH2HPlayerStats(r.aStats),
       bStats: finalizeH2HPlayerStats(r.bStats),
+      mapBreakdown: finalizeMapBreakdown(r.mapTotals),
       matches: sortedMatches,
     };
   });
@@ -739,8 +817,20 @@ interface _H2HSourceMatch {
   final_score: string | null;
   picked_map: string | null;
   shirts_pick: string | null;
+  skins_starting_side: 'CT' | 'T' | null;
   shirts_stats: _H2HSourceStat[];
   skins_stats: _H2HSourceStat[];
+}
+
+/**
+ * Who picked the played map — see "Who picked" in docs/glossary.md. `shirts_pick`
+ * set means shirts picked; otherwise `picked_map` set means skins picked; neither
+ * set (e.g. gauntlet matches, which have no veto data) means unknown.
+ */
+export function resolveH2HPickedBy(shirtsPick: string | null, pickedMap: string | null): 'SHIRTS' | 'SKINS' | null {
+  if (shirtsPick != null) return 'SHIRTS';
+  if (pickedMap != null) return 'SKINS';
+  return null;
 }
 
 /**
@@ -760,6 +850,8 @@ export function mapMatchRowsToH2HInput(matches: _H2HSourceMatch[]): H2HMatchInpu
     // `picked_map` — same fallback used throughout the codebase (see
     // `getMatchById`, `getCareerMatchHistory`, `getH2HData`).
     map: m.shirts_pick ?? m.picked_map,
+    pickedBy: resolveH2HPickedBy(m.shirts_pick, m.picked_map),
+    startingSide: m.skins_starting_side,
     finalScore: m.final_score,
     roster: [...m.shirts_stats, ...m.skins_stats],
   }));

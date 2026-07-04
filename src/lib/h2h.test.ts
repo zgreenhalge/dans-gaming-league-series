@@ -51,6 +51,8 @@ function match(overrides: Partial<H2HMatchInput> & { matchId: number; roster: H2
     seasonNumber: 1,
     isGauntlet: false,
     map: 'de_test',
+    pickedBy: null,
+    startingSide: null,
     finalScore: '13-9',
     ...overrides,
   };
@@ -196,6 +198,7 @@ test('mapMatchRowsToH2HInput adapts a MapMatchRow-shaped source into computeH2H 
       final_score: '13-7',
       picked_map: null,
       shirts_pick: 'de_overpass',
+      skins_starting_side: 'CT' as const,
       shirts_stats: [
         { player_id: 1, faction: 'SHIRTS' as const, kills: 20, assists: 3, deaths: 10, adr: 90, rounds_played: 20, rounds_won: 13, is_win: true },
         { player_id: 2, faction: 'SHIRTS' as const, kills: 18, assists: 5, deaths: 12, adr: 85, rounds_played: 20, rounds_won: 13, is_win: true },
@@ -209,6 +212,8 @@ test('mapMatchRowsToH2HInput adapts a MapMatchRow-shaped source into computeH2H 
   const inputs = mapMatchRowsToH2HInput(source);
   assert.equal(inputs.length, 1);
   assert.equal(inputs[0].map, 'de_overpass', 'falls back to shirts_pick when picked_map is null');
+  assert.equal(inputs[0].pickedBy, 'SHIRTS', 'shirts_pick set means shirts picked');
+  assert.equal(inputs[0].startingSide, 'CT');
   assert.equal(inputs[0].roster.length, 4);
 
   const result = computeH2H(inputs, players);
@@ -216,6 +221,86 @@ test('mapMatchRowsToH2HInput adapts a MapMatchRow-shaped source into computeH2H 
   assert.equal(result.rivals.length, 4);
   const duo = result.duos.find((d) => d.playerA === 1 && d.playerB === 2)!;
   assert.equal(duo.bestMap, 'de_overpass');
+});
+
+// --- Per-pair map breakdown ---
+test('mapBreakdown aggregates duo and rival records per map, sorted by games desc', () => {
+  const roster1 = [
+    stat({ player_id: 1, faction: 'SHIRTS', is_win: true, adr: 100 }),
+    stat({ player_id: 2, faction: 'SHIRTS', is_win: true, adr: 80 }),
+    stat({ player_id: 3, faction: 'SKINS', is_win: false, adr: 60 }),
+    stat({ player_id: 4, faction: 'SKINS', is_win: false, adr: 50 }),
+  ];
+  const roster2 = [
+    stat({ player_id: 1, faction: 'SHIRTS', is_win: false, adr: 70 }),
+    stat({ player_id: 2, faction: 'SHIRTS', is_win: false, adr: 60 }),
+    stat({ player_id: 3, faction: 'SKINS', is_win: true, adr: 90 }),
+    stat({ player_id: 4, faction: 'SKINS', is_win: true, adr: 95 }),
+  ];
+  const roster3 = [
+    stat({ player_id: 1, faction: 'SHIRTS', is_win: true, adr: 110 }),
+    stat({ player_id: 2, faction: 'SHIRTS', is_win: true, adr: 90 }),
+    stat({ player_id: 3, faction: 'SKINS', is_win: false, adr: 65 }),
+    stat({ player_id: 4, faction: 'SKINS', is_win: false, adr: 55 }),
+  ];
+  const result = computeH2H(
+    [
+      match({ matchId: 1, roster: roster1, map: 'de_mirage' }),
+      match({ matchId: 2, roster: roster2, map: 'de_inferno' }),
+      match({ matchId: 3, roster: roster3, map: 'de_mirage' }),
+    ],
+    players,
+  );
+
+  const duo = result.duos.find((d) => d.playerA === 1 && d.playerB === 2)!;
+  assert.equal(duo.mapBreakdown.length, 2);
+  assert.equal(duo.mapBreakdown[0].map, 'de_mirage', 'sorted by games desc — mirage played twice');
+  assert.equal(duo.mapBreakdown[0].games, 2);
+  assert.equal(duo.mapBreakdown[0].wins, 2);
+  assert.equal(duo.mapBreakdown[0].losses, 0);
+  assert.equal(duo.mapBreakdown[0].aAdr, (100 + 80 + 110 + 90) / 2);
+  assert.equal(duo.mapBreakdown[1].map, 'de_inferno');
+  assert.equal(duo.mapBreakdown[1].games, 1);
+  assert.equal(duo.mapBreakdown[1].wins, 0);
+
+  const rival = result.rivals.find((r) => r.playerA === 1 && r.playerB === 3)!;
+  assert.equal(rival.mapBreakdown.length, 2);
+  const mirage = rival.mapBreakdown.find((m) => m.map === 'de_mirage')!;
+  assert.equal(mirage.games, 2);
+  assert.equal(mirage.wins, 2, 'playerA (1) won both mirage meetings');
+  assert.equal(mirage.aAdr, (100 + 110) / 2);
+  assert.equal(mirage.bAdr, (60 + 65) / 2);
+});
+
+// --- Veto context propagation ---
+test('pickedBy and startingSide propagate onto duo and rival match summaries', () => {
+  const roster = [
+    stat({ player_id: 1, faction: 'SHIRTS' }),
+    stat({ player_id: 2, faction: 'SHIRTS' }),
+    stat({ player_id: 3, faction: 'SKINS', is_win: false }),
+    stat({ player_id: 4, faction: 'SKINS', is_win: false }),
+  ];
+  const result = computeH2H(
+    [match({ matchId: 1, roster, pickedBy: 'SKINS', startingSide: 'T' })],
+    players,
+  );
+  const duo = result.duos.find((d) => d.playerA === 1 && d.playerB === 2)!;
+  assert.equal(duo.matches[0].pickedBy, 'SKINS');
+  assert.equal(duo.matches[0].startingSide, 'T');
+  const rival = result.rivals.find((r) => r.playerA === 1 && r.playerB === 3)!;
+  assert.equal(rival.matches[0].pickedBy, 'SKINS');
+  assert.equal(rival.matches[0].startingSide, 'T');
+});
+
+// --- Gauntlet matches have no veto data ---
+test('pickedBy/startingSide are null when no veto data is available (e.g. gauntlet matches)', () => {
+  const roster = [
+    stat({ player_id: 1, faction: 'SHIRTS' }),
+    stat({ player_id: 2, faction: 'SKINS', is_win: false }),
+  ];
+  const result = computeH2H([match({ matchId: 1, roster, isGauntlet: true })], players);
+  assert.equal(result.rivals[0].matches[0].pickedBy, null);
+  assert.equal(result.rivals[0].matches[0].startingSide, null);
 });
 
 console.log(`\n${passed} passed, ${failures.length} failed`);

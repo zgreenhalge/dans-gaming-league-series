@@ -6,7 +6,7 @@ import type { HeatmapArtifact, HeatmapKind } from './replay/heatmap';
 import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
 import { workshopIdFromUrl } from './replay/radar';
-import { extractSeasonNumber, buildRegularToGauntletMap, canonicalSort, compareMatchRefDesc, matchLabel, weekWindow, computeH2H } from './util';
+import { extractSeasonNumber, buildRegularToGauntletMap, canonicalSort, compareMatchRefDesc, matchLabel, weekWindow, computeH2H, resolveH2HPickedBy } from './util';
 import type { DuoStats, H2HStats, H2HData, H2HMatchInput } from './util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
 import { DEMO_INGEST_JOB_TYPE, type DemoIngestResult } from './demo/ingestResult';
@@ -2480,6 +2480,7 @@ export type {
   DuoStats,
   H2HPlayerStats,
   H2HStats,
+  H2HMapStat,
   H2HData,
 } from './util';
 
@@ -2616,7 +2617,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
 
   const { data: matches, error: mErr } = await supabase
     .from('matches')
-    .select('id, week_id, match_number, final_score, shirts_pick, picked_map')
+    .select('id, week_id, match_number, final_score, shirts_pick, picked_map, skins_starting_side')
     .in('week_id', weekRows.map((w) => w.id));
   if (mErr) throw mErr;
 
@@ -2627,6 +2628,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     final_score: string | null;
     shirts_pick: string | null;
     picked_map: string | null;
+    skins_starting_side: 'CT' | 'T' | null;
   };
   // Some seasons recorded the played map under `shirts_pick` rather than
   // `picked_map` — fall back the same way the rest of the codebase does
@@ -2677,6 +2679,8 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
       seasonNumber: seasonNumberById.get(seasonId) ?? null,
       isGauntlet: seasonIsGauntletById.get(seasonId) ?? false,
       map: mapFor(m),
+      pickedBy: resolveH2HPickedBy(m.shirts_pick, m.picked_map),
+      startingSide: m.skins_starting_side,
       finalScore: m.final_score,
       roster: roster.map((r) => ({
         player_id: r.player_id,
