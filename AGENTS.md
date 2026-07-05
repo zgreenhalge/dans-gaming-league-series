@@ -4,6 +4,26 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+# Artifacts describe the present, not the past
+
+Everything committed to this repo — docs, code comments, README / `note` / config fields, `.cfg`
+files, tracked JSON — describes how things **are**, never how they **got that way**. No change
+history, no changelog prose, no dates, no `previously / used to / re-enabled / now / we discovered /
+confirmed live / disproved`, and no citing past incidents or prior versions *as explanation*.
+
+Rationale for a **current** choice is welcome (`game_mode is competitive because the season is a
+wingman hybrid`). Narration of the **change** is not (`game_mode was recreational, flipped on
+2026-07-03 after X broke`).
+
+**Litmus test:** if a sentence only makes sense to someone who saw the previous version, delete it. A
+reader arriving fresh should never be able to tell the file was ever different. The "why it changed"
+context belongs in the commit message, the PR, or the conversation — **never in the tree.**
+
+This is a hard rule, not a style preference. The single exception is a *deliberately maintained*
+decision log kept to stop the team regressing to a known-bad configuration (e.g. the "Issues we've
+hit and how they were resolved" table in `docs/cs2-stack-reference.md`): it lives in **one designated
+place**, framed as forward guidance — not license to scatter history into other files.
+
 # Tools and scripts should be task-agnostic
 
 When you build something reusable — anything in `scripts/`, a CLI, a shared helper — keep it general

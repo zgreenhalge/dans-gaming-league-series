@@ -96,12 +96,28 @@ season filters, the hover/lift classes, the responsive-table treatment — preci
 for the visual primitives. When you genuinely need something new, ask whether it's a new *shape* or
 just a new *parameter* (color, count) of an existing primitive — usually it's the latter.
 
-## Document what *is*, and keep it in sync at change time
+## Document what *is*, not how it changed
 
-Docs describe the system as it currently works — not its history. No changelog entries, no "we used
-to do X," no decision archaeology unless explicitly asked. When a change alters behavior, update the
-relevant doc in the **same** change, and when you add a domain concept add it to
-[`glossary.md`](./glossary.md). A stale doc is worse than no doc.
+**This applies to every committed artifact — docs, code comments, README / `note` / config fields,
+`.cfg` files, tracked JSON — not just files under `docs/`.** Each describes how the system works
+*now*, never how it got there. AGENTS.md's "Artifacts describe the present, not the past" is the
+hard-rule statement; this is the working detail.
+
+Cut on sight: dates, changelog prose, and the tells `previously / used to / earlier / re-enabled /
+now / we discovered / confirmed live / disproved`, plus any past incident or prior version cited *as
+explanation*. Rationale for a **current** choice stays (`X is set because Y`); narration of the
+**change** goes (`X was Z, flipped to Y after W broke`).
+
+**Litmus test:** if a sentence only makes sense to someone who saw the previous version, delete it.
+The "why it changed" belongs in the commit message, PR, or conversation — never in the tree.
+
+**One exception:** a deliberately maintained decision log kept to prevent regressing to a known-bad
+configuration (e.g. the "Issues we've hit and how they were resolved" table in
+[`cs2-stack-reference.md`](./cs2-stack-reference.md)) — in its one designated place, framed as forward
+guidance, not scattered elsewhere.
+
+When a change alters behavior, update the relevant doc in the **same** change, and when you add a
+domain concept add it to [`glossary.md`](./glossary.md). A stale doc is worse than no doc.
 
 ## Client-only values: dates, times, and hydration safety
 
