@@ -15,6 +15,9 @@ export interface DathostCleanupStatus {
   lastRun: LatestRun | null;
   intervalDays: number;
   error: string | null;
+  // Reading the interval needs the token's "Variables" permission (distinct from "Actions") — kept
+  // separate from `error` so a missing scope only degrades the interval control, not the whole panel.
+  intervalError: string | null;
 }
 
 export async function GET() {
@@ -27,12 +30,13 @@ export async function GET() {
     getRepoVariable(INTERVAL_VARIABLE),
   ]);
 
-  const firstError = [wf, run, variable].find((r) => !r.ok) as { error: string } | undefined;
+  const firstError = [wf, run].find((r) => !r.ok) as { error: string } | undefined;
 
   return NextResponse.json({
     enabled: wf.ok ? wf.workflow.state === 'active' : null,
     lastRun: run.ok ? run.run : null,
     intervalDays: variable.ok && variable.value ? Number(variable.value) : DEFAULT_INTERVAL_DAYS,
     error: firstError?.error ?? null,
+    intervalError: variable.ok ? null : variable.error,
   } satisfies DathostCleanupStatus);
 }

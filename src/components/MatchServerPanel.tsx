@@ -1,23 +1,21 @@
 'use client';
 
 // In-match server panel (Phase 4). Once the 5-stage veto completes, this drives the hosting UX:
-//   idle → (provision) → "Starting server.. 8s" progress fill → Join + copy-`connect` → hidden on teardown.
+//   idle → (provision) → "Starting server…" spinner → Join + copy-`connect` → hidden on teardown.
 //
 // Updates via Supabase Realtime on the `matches` row (no polling) — the same channel pattern as
-// VetoSequence; the table is already in the realtime publication. The fill is an *estimate* against
-// the observed ~20s boot; the moment the row flips to `live` we jump straight to the Join button.
+// VetoSequence; the table is already in the realtime publication. The moment the row flips to `live`
+// we swap the spinner for the Join button.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getBrowserClient } from '@/lib/supabase-browser';
 import type { ServerState } from '@/lib/dathost-lifecycle';
+import { ServerSpinner } from '@/components/ServerSpinner';
 
 interface StatusResponse {
   serverState: ServerState;
   connectString: string | null; // `ip:port`
-  serverStartedAt: string | null;
 }
-
-const EST_BOOT_MS = 20_000; // observed boot time from the live probe
 
 export default function MatchServerPanel({
   matchId,
@@ -28,17 +26,13 @@ export default function MatchServerPanel({
 }) {
   const [state, setState] = useState<ServerState>('idle');
   const [connect, setConnect] = useState<string | null>(null);
-  const [startedAtMs, setStartedAtMs] = useState<number | null>(null);
-  const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const channelStartRef = useRef<number | null>(null);
 
-  const apply = useCallback((s: ServerState, conn: string | null, startedAt: string | null) => {
+  const apply = useCallback((s: ServerState, conn: string | null) => {
     setState(s);
     setConnect(conn);
-    setStartedAtMs(startedAt ? new Date(startedAt).getTime() : channelStartRef.current);
   }, []);
 
   // Initial read (Realtime only delivers subsequent changes).
@@ -49,7 +43,7 @@ export default function MatchServerPanel({
         const res = await fetch(`/api/matches/${matchId}/server/status`);
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as StatusResponse;
-        if (!cancelled) apply(data.serverState, data.connectString, data.serverStartedAt);
+        if (!cancelled) apply(data.serverState, data.connectString);
       } catch {
         /* transient — Realtime will still deliver updates */
       }
@@ -70,9 +64,8 @@ export default function MatchServerPanel({
           const row = payload.new as {
             server_state?: ServerState;
             connect_string?: string | null;
-            server_started_at?: string | null;
           };
-          apply(row.server_state ?? 'idle', row.connect_string ?? null, row.server_started_at ?? null);
+          apply(row.server_state ?? 'idle', row.connect_string ?? null);
         },
       )
       .subscribe();
@@ -81,20 +74,10 @@ export default function MatchServerPanel({
     };
   }, [matchId, apply]);
 
-  // Tick the elapsed clock only while provisioning (drives the fill + the "..8s" counter).
-  useEffect(() => {
-    if (state !== 'provisioning') return;
-    const t = setInterval(() => setNow(Date.now()), 250);
-    return () => clearInterval(t);
-  }, [state]);
-
   const provision = async () => {
     setBusy(true);
     setError(null);
-    // Optimistic: show the progress fill immediately, before Realtime confirms.
-    channelStartRef.current = Date.now();
-    setStartedAtMs(Date.now());
-    setNow(Date.now());
+    // Optimistic: show the spinner immediately, before Realtime confirms.
     setState('provisioning');
     try {
       const res = await fetch(`/api/matches/${matchId}/server/provision`, { method: 'POST' });
@@ -138,11 +121,6 @@ export default function MatchServerPanel({
   const isDev = process.env.NODE_ENV === 'development';
   if (!isDev && (state === 'done' || state === 'tearing_down')) return null;
 
-  const elapsedMs = startedAtMs ? Math.max(0, now - startedAtMs) : 0;
-  const elapsedSec = Math.floor(elapsedMs / 1000);
-  // Cap the estimate-based fill at 92% so it never looks "done" while we're still waiting.
-  const fillPct = Math.min(92, (elapsedMs / EST_BOOT_MS) * 100);
-
   return (
     <div className="lift-card rounded-lg border border-[var(--color-border-secondary)] bg-[var(--color-bg-secondary)] p-4 shadow-lg">
       <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Match server</div>
@@ -163,17 +141,8 @@ export default function MatchServerPanel({
       )}
 
       {state === 'provisioning' && (
-        // Button-shaped progress fill — fills toward Join over the estimated boot, then we swap in
-        // the real Join button the instant the row flips to `live`.
-        <div className="relative h-9 w-full overflow-hidden rounded-md border border-green-500/70 bg-green-600/10">
-          <div
-            className="absolute inset-y-0 left-0 bg-green-600/40 transition-[width] duration-200 ease-linear"
-            style={{ width: `${fillPct}%` }}
-          />
-          <span className="relative flex h-full items-center justify-center text-sm font-semibold text-[var(--color-text-primary)]">
-            Starting server.. {elapsedSec}s
-          </span>
-        </div>
+        // Spinner until the row flips to `live`, then we swap in the real Join button.
+        <ServerSpinner label="Starting server…" />
       )}
 
       {state === 'live' && connect && (
