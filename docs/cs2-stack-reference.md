@@ -135,14 +135,12 @@ cross-check against whatever your own parser derives from the demo.
 
 ### GOTV vs demo recording — MatchZy's recording *is* GOTV, not a separate system
 
-An earlier version of this doc claimed GOTV and MatchZy's demo recording are independent systems —
-that's wrong, and DGLS's own match 44 disproved it (`enable_gotv: false` produced **zero demo
-files**). Looking at MatchZy's source
-([`DemoManagement.cs`](https://github.com/shobhit-pathak/MatchZy/blob/dev/DemoManagement.cs))
-confirms why: MatchZy's `StartDemoRecording()`/`StopDemoRecording()` are thin wrappers around the
-native `tv_record`/`tv_stoprecord` console commands — i.e. MatchZy doesn't record independently, it
-drives the same GOTV/SourceTV recording mechanism GOTV itself uses. `tv_record` has no meaning
-without an active GOTV host, so `enable_gotv: false` silently produces no demo. This is inherited
+MatchZy's demo recording is not independent of GOTV — it's a thin wrapper around it. MatchZy's
+`StartDemoRecording()`/`StopDemoRecording()`
+([`DemoManagement.cs`](https://github.com/shobhit-pathak/MatchZy/blob/dev/DemoManagement.cs)) call
+the native `tv_record`/`tv_stoprecord` console commands, driving the same GOTV/SourceTV recording
+mechanism GOTV itself uses. `tv_record` has no meaning without an active GOTV host, so
+`enable_gotv: false` silently produces no demo. This is inherited
 from **Get5**, MatchZy's config-format ancestor: Get5's
 [`recording.sp`](https://github.com/splewis/get5/blob/master/scripting/get5/recording.sp) uses the
 identical `tv_record` approach, but explicitly checks `IsTVEnabled()` first and logs `"Demo
@@ -230,10 +228,10 @@ this matches the `tv_autorecord 0` convention already documented above. The deep
 MatchZy's recording being a `tv_record` wrapper, requiring GOTV to be on — is confirmed directly in
 source rather than by inference: see [`DemoManagement.cs`](https://github.com/shobhit-pathak/MatchZy/blob/dev/DemoManagement.cs)
 and, more explicitly, Get5's [`recording.sp`](https://github.com/splewis/get5/blob/master/scripting/get5/recording.sp)
-(which checks `IsTVEnabled()` and logs an explicit error if GOTV is off — the exact failure mode
-DGLS hit via match 44, just silent instead of logged on MatchZy). If in-game weirdness recurs with
-`enable_gotv` re-enabled, look at MatchZy/CSSharp version compatibility before re-disabling GOTV —
-disabling it has a confirmed, unconditional cost (no demo recording at all), not just a maybe.
+(which checks `IsTVEnabled()` and logs an explicit error if GOTV is off — the same failure mode, just
+silent instead of logged on MatchZy). If in-game weirdness appears with GOTV on, look at
+MatchZy/CSSharp version compatibility before disabling GOTV — disabling it has an unconditional cost
+(no demo recording at all), not just a maybe.
 
 ### Valve's own dedicated-server docs
 

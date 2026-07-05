@@ -43,13 +43,11 @@ File Manager / FTP as a fallback)
 - `cfg/MatchZy/live_override.cfg` — cvars applied when a match goes live (round/eco/overtime
   economy, comms); overlaps with `gamemode_competitive2v2_server.cfg`.
 - `cfg/MatchZy/live_wingman_override.cfg` — **this is the file MatchZy actually execs at go-live**,
-  not `live_override.cfg` directly. DGLS's engine `game_mode` convar evaluates to Wingman (2) at
-  match-live (confirmed via `mp_freezetime` live-checking as `10`, the packaged `live_wingman.cfg`
-  default, not the `15` set in `live_override.cfg`) — so MatchZy's `ExecLiveCFG()` takes the
-  wingman branch (`live_wingman.cfg` → `exec MatchZy/live_wingman_override.cfg`), never the
-  standard one. This file was previously 1-byte/empty on the live server, meaning **every cvar in
-  `live_override.cfg` had never actually applied to a real match** until this was wired up. It's
-  now just `exec MatchZy/live_override.cfg` so both paths share one baseline rather than drifting.
+  not `live_override.cfg` directly: DGLS's engine `game_mode` evaluates to Wingman (2) at match-live,
+  so MatchZy's `ExecLiveCFG()` takes the wingman branch (`live_wingman.cfg` →
+  `exec MatchZy/live_wingman_override.cfg`) rather than the standard one. It just `exec`s
+  `live_override.cfg` so both mode paths share one baseline — if it's empty, **none of
+  `live_override.cfg`'s cvars reach a real match.**
 - other customized `cfg/MatchZy/*.cfg` **not yet captured here** — `live.cfg`, `warmup.cfg`,
   `knife.cfg` — add them the same way if they turn out to matter.
 - `cfg/server.cfg` / `cfg/autoexec.cfg` — base server cvars, if present.
@@ -60,7 +58,7 @@ Once captured, match-critical cvars (e.g. `matchzy_demo_recording_enabled`, read
 is self-contained and independent of whatever cfg files happen to be on the server. The rest stays
 here as the versioned baseline / disaster-recovery copy.
 
-## Provision sequence (all endpoints verified live 2026-06-29)
+## Provision sequence
 
 1. **`PUT /game-servers/{id}`** — re-assert `golden-server-settings.json` + the per-match map
    (`cs2_settings.maps_source=workshop_single_map`, `cs2_settings.workshop_single_map_id=<picked
