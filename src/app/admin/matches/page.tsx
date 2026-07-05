@@ -32,10 +32,6 @@ export default async function ManageMatchesPage() {
       <main className="max-w-[760px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">
           <div className="font-display text-[28px] font-semibold leading-tight">Manage Matches</div>
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">
-            Reschedule, clear or redo a pick-ban, and toggle the feature match. Score + stats editing
-            lives on each match page.
-          </div>
         </div>
 
         <MatchManager matches={matches} />

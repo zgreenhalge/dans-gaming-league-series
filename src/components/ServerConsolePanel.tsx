@@ -13,11 +13,12 @@
 // with a 409 unless `override: true`. On that refusal this component shows an inline confirm-or-cancel
 // prompt rather than silently blocking or silently proceeding.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Copy, Check } from 'lucide-react';
 import { getBrowserClient } from '@/lib/supabase-browser';
+import { ServerSpinner } from '@/components/ServerSpinner';
 import { fmtUtcShort } from '@/lib/util';
 import { toSentenceCase } from '@/lib/maps';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
@@ -28,6 +29,10 @@ import type { AdminServerStatus } from '@/app/api/admin/server/status/route';
 import type { DathostCleanupStatus } from '@/app/api/admin/dathost-cleanup/status/route';
 
 const CUSTOM_MAP_CHOICE = '__custom__';
+
+// Safety cap for the start/stop spinner — matches DatHost's own ready timeout (waitUntilReady). If an
+// action hasn't visibly settled by now, drop the spinner and show whatever raw state we have.
+const ACTION_CAP_MS = 90_000;
 
 type PendingAction = { kind: 'start' | 'stop' | 'apply'; message: string };
 
@@ -111,6 +116,33 @@ export function ServerConsolePanel({
 
   const [startStopBusy, setStartStopBusy] = useState(false);
   const [startStopError, setStartStopError] = useState<string | null>(null);
+  // In-flight action flags: set the moment Start/Stop is clicked, cleared by the status poll once the
+  // action has truly landed. They swap the button for a spinner so the pill + details stay visible.
+  // Refs mirror them so the []-dep refreshStatus reads the live value without a stale closure.
+  const [starting, setStarting] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const startingRef = useRef(false);
+  const stoppingRef = useRef(false);
+  // A fresh boot flips through a spurious `on` *before* it enters `booting`, so we can't treat the
+  // first `on` as ready — latch that we've seen `booting`, then accept `on && !booting`. `actionAt`
+  // caps the wait so a start/stop that never settles can't strand the spinner forever.
+  const sawBootingRef = useRef(false);
+  const actionAtRef = useRef(0);
+
+  const beginAction = (kind: 'start' | 'stop') => {
+    sawBootingRef.current = false;
+    actionAtRef.current = Date.now();
+    startingRef.current = kind === 'start';
+    stoppingRef.current = kind === 'stop';
+    setStarting(kind === 'start');
+    setStopping(kind === 'stop');
+  };
+  const endAction = () => {
+    startingRef.current = false;
+    stoppingRef.current = false;
+    setStarting(false);
+    setStopping(false);
+  };
 
   const [configSet, setConfigSet] = useState(configSets[0]?.key ?? '');
   const [mapChoice, setMapChoice] = useState('');
@@ -131,7 +163,31 @@ export function ServerConsolePanel({
         setStatusError('Could not load server status');
         return;
       }
-      setStatus((await res.json()) as AdminServerStatus);
+      const data = (await res.json()) as AdminServerStatus;
+      setStatus(data);
+      // Clear the in-flight spinner once the action has truly landed. Start: only after the box has
+      // passed through `booting` and settled to a connectable `on` (ignore the spurious pre-boot
+      // `on`). Stop: once it's fully off. Either way, give up after ACTION_CAP_MS.
+      const s = data.server;
+      if (s) {
+        const capped = Date.now() - actionAtRef.current > ACTION_CAP_MS;
+        const done = (timedOut: boolean, verb: string) => {
+          startingRef.current = false;
+          stoppingRef.current = false;
+          setStarting(false);
+          setStopping(false);
+          if (timedOut) setStartStopError(`Server never reported '${verb}' success`);
+        };
+        if (startingRef.current) {
+          if (s.booting) sawBootingRef.current = true;
+          const ready = s.on && !s.booting && !!data.connect;
+          if (sawBootingRef.current && ready) done(false, 'start');
+          else if (capped) done(true, 'start');
+        } else if (stoppingRef.current) {
+          if (!s.on && !s.booting) done(false, 'stop');
+          else if (capped) done(true, 'stop');
+        }
+      }
       setStatusError(null);
     } catch {
       setStatusError('Could not load server status');
@@ -151,9 +207,10 @@ export function ServerConsolePanel({
   }, [refreshStatus]);
 
   // Raw DatHost state can change with no `matches` row write at all (autostop after idle, a start/
-  // stop from the DatHost panel directly) — poll so the console doesn't go stale between those.
+  // stop from the DatHost panel directly, boot completing) — poll every 2s so the Start/Stop button
+  // and boot spinner stay in sync with the real server state.
   useEffect(() => {
-    const interval = setInterval(refreshStatus, 15_000);
+    const interval = setInterval(refreshStatus, 2_000);
     return () => clearInterval(interval);
   }, [refreshStatus]);
 
@@ -181,6 +238,7 @@ export function ServerConsolePanel({
   const [intervalInput, setIntervalInput] = useState('');
   const [intervalBusy, setIntervalBusy] = useState(false);
   const [intervalSaved, setIntervalSaved] = useState(false);
+  const [intervalError, setIntervalError] = useState<string | null>(null);
 
   const refreshCleanup = useCallback(async () => {
     try {
@@ -192,6 +250,7 @@ export function ServerConsolePanel({
       const data = (await res.json()) as DathostCleanupStatus;
       setCleanup(data);
       setCleanupError(data.error);
+      setIntervalError(data.intervalError);
       setIntervalInput((prev) => (prev === '' ? String(data.intervalDays) : prev));
     } catch {
       setCleanupError('Could not load cleanup status');
@@ -240,7 +299,7 @@ export function ServerConsolePanel({
     if (!Number.isInteger(days) || days < 1) return;
     setIntervalBusy(true);
     setIntervalSaved(false);
-    setCleanupError(null);
+    setIntervalError(null);
     try {
       const res = await fetch('/api/admin/dathost-cleanup/interval', {
         method: 'POST',
@@ -249,7 +308,7 @@ export function ServerConsolePanel({
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setCleanupError(body.error ?? 'Could not save interval');
+        setIntervalError(body.error ?? 'Could not save interval');
         return;
       }
       setIntervalSaved(true);
@@ -282,6 +341,9 @@ export function ServerConsolePanel({
   const startServer = async (override = false) => {
     setStartStopBusy(true);
     setStartStopError(null);
+    // Optimistic: show the spinner immediately. The 2s status poll clears it once boot has settled —
+    // don't refreshStatus() here, or the flag could clear mid-flight and briefly flash the button.
+    beginAction('start');
     try {
       const res = await fetch('/api/admin/server/start', {
         method: 'POST',
@@ -290,6 +352,7 @@ export function ServerConsolePanel({
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        endAction();
         if (body.code === 'server_occupied' && !override) {
           setPending({ kind: 'start', message: body.error });
           return;
@@ -298,7 +361,6 @@ export function ServerConsolePanel({
         return;
       }
       setPending(null);
-      await refreshStatus();
     } finally {
       setStartStopBusy(false);
     }
@@ -307,6 +369,8 @@ export function ServerConsolePanel({
   const stopServer = async (override = false) => {
     setStartStopBusy(true);
     setStartStopError(null);
+    // Optimistic: show the stopping spinner immediately; the poll clears it once the box is fully off.
+    beginAction('stop');
     try {
       const res = await fetch('/api/admin/server/stop', {
         method: 'POST',
@@ -315,6 +379,7 @@ export function ServerConsolePanel({
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        endAction();
         if (body.code === 'server_occupied' && !override) {
           setPending({ kind: 'stop', message: body.error });
           return;
@@ -323,7 +388,6 @@ export function ServerConsolePanel({
         return;
       }
       setPending(null);
-      await refreshStatus();
     } finally {
       setStartStopBusy(false);
     }
@@ -476,30 +540,43 @@ export function ServerConsolePanel({
                 {server.players_online != null && (
                   <span className={casualUse ? 'text-[var(--color-accent-amber-fg)]' : undefined}>
                     {server.players_online} player(s) online
-                    {casualUse && ' — no active DGLS match (manual/casual use?)'}
                   </span>
                 )}
               </div>
             )}
           </div>
+          {/* Button slot: an in-flight action shows a spinner in place of the button until the
+              opposite control is available, so the pill + details above stay put. */}
           <div className="shrink-0 flex gap-2">
-            {canStart && (
-              <button
-                onClick={() => startServer()}
-                disabled={startStopBusy}
-                className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
-              >
-                {startStopBusy ? '…' : 'Start'}
-              </button>
-            )}
-            {canStop && (
-              <button
-                onClick={() => stopServer()}
-                disabled={startStopBusy}
-                className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)] hover:bg-[var(--color-accent-red-bg)] disabled:opacity-50"
-              >
-                {startStopBusy ? '…' : 'Stop'}
-              </button>
+            {starting ? (
+              <div className="w-40">
+                <ServerSpinner label="Starting server…" />
+              </div>
+            ) : stopping ? (
+              <div className="w-40">
+                <ServerSpinner label="Stopping server…" tone="stop" />
+              </div>
+            ) : (
+              <>
+                {canStart && (
+                  <button
+                    onClick={() => startServer()}
+                    disabled={startStopBusy}
+                    className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
+                  >
+                    {startStopBusy ? '…' : 'Start'}
+                  </button>
+                )}
+                {canStop && (
+                  <button
+                    onClick={() => stopServer()}
+                    disabled={startStopBusy}
+                    className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)] hover:bg-[var(--color-accent-red-bg)] disabled:opacity-50"
+                  >
+                    {startStopBusy ? '…' : 'Stop'}
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -565,9 +642,7 @@ export function ServerConsolePanel({
 
       {/* Disk cleanup (#132) */}
       <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">
-          Disk cleanup <span className="text-[var(--color-text-secondary)]">— stale per-match MatchZy artifacts</span>
-        </div>
+        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">Disk cleanup</div>
         {!cleanup ? (
           <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">Loading…</div>
         ) : (
@@ -635,10 +710,7 @@ export function ServerConsolePanel({
               </button>
               {intervalSaved && <span className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Saved.</span>}
             </div>
-            <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-              The underlying job still checks daily — this only controls how often it actually deletes anything.
-            </div>
-
+            {intervalError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{intervalError}</div>}
             {cleanupError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{cleanupError}</div>}
           </div>
         )}

@@ -1,5 +1,5 @@
 {
-  "note": "Canonical golden DatHost cs2_settings for the DGLS match server (id 6824c4d10bf4444f5817d188). Provisioning PUTs these (dotted, e.g. `cs2_settings.game_mode`) to /game-servers/{id} BEFORE start, to overwrite any recreational-mode drift made in the panel between matches. `game_mode: competitive` is intentional for this season — a 'competitive-style wingman' hybrid (for xplay consistency), with the wingman-specific rules (round count, warmup, overtime, economy) layered on top via cfg/gamemode_competitive2v2_server.cfg and cfg/MatchZy/live_override.cfg. Secrets (rcon, passwords, FTP/MySQL, GSLT) are intentionally omitted — never commit them. Captured live 2026-07-03. `enable_gotv` re-enabled 2026-07-03: match 44 produced zero demo files with it disabled (contradicting docs/cs2-stack-reference.md's prior 'independent systems' claim, which was never actually validated with GOTV off) — see docs/cs2-stack-reference.md for the pending write-up once this is confirmed live. `cfg/server.cfg` already sets `tv_autorecord 0`/`tv_delay 0` so GOTV doesn't fight MatchZy for recording control.",
+  "note": "Canonical golden DatHost cs2_settings for the DGLS match server (id 6824c4d10bf4444f5817d188). Provisioning PUTs these (dotted, e.g. `cs2_settings.game_mode`) to /game-servers/{id} before start, to overwrite any recreational-mode drift made in the panel between matches. `game_mode: competitive` is intentional — a 'competitive-style wingman' hybrid (for xplay consistency), with the wingman-specific rules (round count, warmup, overtime, economy) layered on top via cfg/gamemode_competitive2v2_server.cfg and cfg/MatchZy/live_override.cfg. Secrets (rcon, passwords, FTP/MySQL, GSLT) are intentionally omitted — never commit them. `enable_gotv` must stay `true`: MatchZy's demo recording is a `tv_record` wrapper that produces no demo without an active GOTV host (see docs/cs2-stack-reference.md), and `cfg/server.cfg` sets `tv_autorecord 0` so MatchZy — not GOTV auto-record — controls recording. `disable_workshop_command_filtering` is `true` because CS2's workshop command filter (active whenever a workshop map is loaded — always, for this league) otherwise discards cvars set via any cfg `exec` or plugin `Server.ExecuteCommand`, so cfg-file cvars (live_override.cfg's economy/round settings and its `sv_spec_hear` spectator-chat cvar) would silently fail to apply.",
   "server": {
     "location": "chicago",
     "autostop": true,
@@ -20,7 +20,7 @@
       "654a32ea452c94f085961b91",
       "65538a41f7b98449a05fe3b9"
     ],
-    "disable_workshop_command_filtering": false
+    "disable_workshop_command_filtering": true
   },
   "per_match_overrides": {
     "note": "Map selection is set at provision time, per match — NOT part of the static golden baseline (src/lib/dathost.ts excludes these keys from the static PUT and sets them separately in applyGoldenSettings). `workshop_collection` mode does not behave reliably on this server — confirmed live — so every provision requires a resolved single map; applyGoldenSettings throws rather than falling back to it.",
