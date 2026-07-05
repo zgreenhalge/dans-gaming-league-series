@@ -33,10 +33,6 @@ export default async function ManagePlayersPage() {
       <main className="max-w-[760px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">
           <div className="font-display text-[28px] font-semibold leading-tight">Manage Players</div>
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">
-            Rename a player, grant or remove admin access, and manage Steam links. Force an EHOG rating
-            recompute below.
-          </div>
         </div>
 
         <PlayerManager players={players} selfId={selfId} />

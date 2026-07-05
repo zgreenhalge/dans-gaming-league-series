@@ -1,0 +1,71 @@
+# dathost-cleanup (issue #132)
+#
+# Removes stale per-match MatchZy artifacts (round-resume backups, stat CSVs, player-name
+# caches, and confirmed-uploaded demos) from the shared DatHost match server's local disk.
+# Nothing else purges these — they accumulate every match against a fixed disk-size cap. The
+# server also hosts non-DGLS games between matches, which leave the same kind of residue with no
+# `matches` row to age off — the script deletes that immediately (see its header comment), so a
+# daily cadence keeps that from piling up rather than sitting for a full retention window.
+#
+# Runs daily, and can be dispatched manually any time. Manual runs default to a dry run (list
+# only) as a safety net; the scheduled run always deletes for real — subject to CLEANUP_INTERVAL_DAYS
+# (a repo Actions variable, adjustable from /admin/servers): the cron cadence itself always stays
+# daily, but the script no-ops on a scheduled run until that many days have passed since the last
+# completed run, so "how often" is adjustable without editing this file. A manual (workflow_dispatch)
+# run always runs regardless of the interval.
+
+name: dathost-cleanup
+
+on:
+  schedule:
+    - cron: '17 9 * * *' # daily, off the hour to avoid GitHub's cron pile-up — see CLEANUP_INTERVAL_DAYS above
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List what would be deleted without deleting anything
+        type: boolean
+        default: true
+
+concurrency:
+  group: dathost-cleanup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # actions: read — only to check the last completed run's timestamp for the interval throttle.
+    permissions:
+      contents: read
+      actions: read
+    env:
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+      CLEANUP_INTERVAL_DAYS: ${{ vars.DATHOST_CLEANUP_INTERVAL_DAYS }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DATHOST_EMAIL: ${{ secrets.DATHOST_EMAIL }}
+      DATHOST_PASSWORD: ${{ secrets.DATHOST_PASSWORD }}
+      DATHOST_SERVER_ID: ${{ secrets.DATHOST_SERVER_ID }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CLOUDFLARE_R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID }}
+      CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Clean up stale DatHost match artifacts
+        run: npx tsx scripts/dathost-cleanup.ts

@@ -133,16 +133,26 @@ MatchZy also POSTs match events (including final `map_result`) to `matchzy_remot
 exposes `matchzy_get_match_stats <matchId>` as a console command — a useful independent
 cross-check against whatever your own parser derives from the demo.
 
-### GOTV vs demo recording — they're independent
+### GOTV vs demo recording — MatchZy's recording *is* GOTV, not a separate system
 
-`tv_enable`/GOTV (live spectating via the in-game TV relay) and MatchZy's own demo
-recording/upload are **separate systems** — disabling GOTV entirely does not affect MatchZy's
-ability to record and upload the match demo. DGLS disabled `enable_gotv` in its golden config after
-GOTV was suspected of contributing to in-game weirdness players reported, with no effect on demo
-capture, confirming the two are decoupled. If you do run GOTV: leave `tv_autorecord 0` so MatchZy
-(not GOTV's own auto-record) controls demo recording, and set `tv_delay` at the server level rather
-than toggling it inside per-phase cfgs (warmup/live) — MatchZy's phase transitions aren't the right
-place to be flipping broadcast-delay state.
+MatchZy's demo recording is not independent of GOTV — it's a thin wrapper around it. MatchZy's
+`StartDemoRecording()`/`StopDemoRecording()`
+([`DemoManagement.cs`](https://github.com/shobhit-pathak/MatchZy/blob/dev/DemoManagement.cs)) call
+the native `tv_record`/`tv_stoprecord` console commands, driving the same GOTV/SourceTV recording
+mechanism GOTV itself uses. `tv_record` has no meaning without an active GOTV host, so
+`enable_gotv: false` silently produces no demo. This is inherited
+from **Get5**, MatchZy's config-format ancestor: Get5's
+[`recording.sp`](https://github.com/splewis/get5/blob/master/scripting/get5/recording.sp) uses the
+identical `tv_record` approach, but explicitly checks `IsTVEnabled()` first and logs `"Demo
+recording will not work with tv_enable 0..."` if it isn't — a guard-rail MatchZy doesn't reproduce,
+so on MatchZy the failure is silent instead of logged. **`enable_gotv` must stay `true`** for demo
+recording to work at all; MatchZy's own docs
+([shobhit-pathak.github.io/MatchZy/gotv](https://shobhit-pathak.github.io/MatchZy/gotv/)) gesture at
+this ("changing `tv_delay` or `tv_enable`... is going to cause problems with your demos") without
+spelling out the underlying `tv_record` dependency. Leave `tv_autorecord 0` so MatchZy (not GOTV's
+own auto-record) controls recording, and set `tv_delay` at the server level rather than toggling it
+inside per-phase cfgs (warmup/live) — MatchZy's phase transitions aren't the right place to be
+flipping broadcast-delay state.
 
 ## Common MatchZy cvars worth knowing
 
@@ -214,12 +224,14 @@ ever needs an event MatchZy mainline doesn't emit.
 
 DatHost's own support article on [recording GOTV demos](https://help.dathost.net/article/140-cs2-record-gotv-demo)
 independently warns against `tv_autorecord` ("can cause a lot of problems and isn't recommended") —
-this matches the `tv_autorecord 0` convention already documented above and is a second, unrelated
-source confirming it's not just a MatchZy-specific quirk. Their guidance is silent on any
-MatchZy-specific interaction, which is itself informative: nothing in DatHost's own docs suggests
-GOTV and match plugins fight each other, so if in-game weirdness recurs after `enable_gotv` is
-re-enabled for some reason, look at MatchZy/CSSharp version compatibility before re-suspecting GOTV
-itself.
+this matches the `tv_autorecord 0` convention already documented above. The deeper mechanism —
+MatchZy's recording being a `tv_record` wrapper, requiring GOTV to be on — is confirmed directly in
+source rather than by inference: see [`DemoManagement.cs`](https://github.com/shobhit-pathak/MatchZy/blob/dev/DemoManagement.cs)
+and, more explicitly, Get5's [`recording.sp`](https://github.com/splewis/get5/blob/master/scripting/get5/recording.sp)
+(which checks `IsTVEnabled()` and logs an explicit error if GOTV is off — the same failure mode, just
+silent instead of logged on MatchZy). If in-game weirdness appears with GOTV on, look at
+MatchZy/CSSharp version compatibility before disabling GOTV — disabling it has an unconditional cost
+(no demo recording at all), not just a maybe.
 
 ### Valve's own dedicated-server docs
 
@@ -257,9 +269,13 @@ for the DGLS-specific layout.
 | Symptom | Root cause | Fix |
 |---|---|---|
 | Spectators got kicked on connect | MatchZy locks the server to `team1`/`team2`/`spectators` once a match JSON loads; `spectators` was empty | Populate `spectators.players` with every known player minus the rostered two teams (`buildMatchzyConfig`) |
-| Players reported in-game weirdness during matches | Suspected GOTV interaction (`enable_gotv`) | Disabled `enable_gotv` in the golden config; confirmed demo recording is unaffected since MatchZy's recording is independent of GOTV |
+| Players reported in-game weirdness during matches | Suspected GOTV interaction (`enable_gotv`) | Disabled `enable_gotv` in the golden config to test the theory |
+| Match 44 recorded zero demo files | `enable_gotv` was disabled; MatchZy's demo recording is a `tv_record` wrapper with no independent recording path, so it silently no-ops without GOTV (confirmed in MatchZy/Get5 source, see below) | Re-enabled `enable_gotv` in the golden config; `tv_autorecord 0` in `cfg/server.cfg` keeps GOTV from fighting MatchZy for recording control |
 | "Server starting" progress UI finished before the server was actually ready | Boot-time estimate was measured once and went stale as real boot time drifted longer | Re-measured against live behavior and bumped the estimate (14s → 20s); treat any hardcoded boot estimate as needing periodic re-validation, not a one-time constant |
 | `workshop_collection` map rotation behaved unreliably | DatHost's collection-based map source doesn't reliably resolve/rotate on this server | Always pin a single workshop map per launch (`workshop_single_map`); the provisioning code throws rather than silently falling back to a collection |
+| cfg-file cvars silently didn't apply (round/eco settings, comms, `sv_tags`) — regardless of which file or mechanism set them | CS2's **workshop command filter** (active whenever a workshop map is loaded — i.e. always, for this league) discards cvars set via any cfg `exec` or plugin `Server.ExecuteCommand`; only cvars typed into an authenticated RCON/console session get through (`DISALLOWED WORKSHOP CONVAR` in the server console log) | Set `disable_workshop_command_filtering: true` in the golden `cs2_settings` — the precondition for any cfg-based cvar (below) to take effect at all |
+| `live_override.cfg` cvars never took effect in real matches | DGLS engine-detects as Wingman (`game_mode` 2) at go-live, so MatchZy's `ExecLiveCFG()` execs `live_wingman.cfg` → `live_wingman_override.cfg`, **not** `live_override.cfg`; that override file was empty (confirmed via `mp_freezetime` live-check reading `10`, the wingman default, not the `15` in `live_override.cfg`) | Point `live_wingman_override.cfg` at `exec MatchZy/live_override.cfg` so both mode paths share one baseline instead of drifting |
+| In-server spectators couldn't see players' all-chat | In CS2, spectator chat visibility is gated by the `sv_spec_hear` voice-scope cvar; at its match default spectators receive neither voice nor text | `sv_spec_hear 2` in `live_override.cfg` — spectators see text chat with no voice bleed (`sv_spec_hear 1` also passes player voice through; spectators are never *heard* by players either way, so match integrity holds regardless) |
 
 ## External references
 

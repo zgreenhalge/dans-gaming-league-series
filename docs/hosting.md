@@ -116,7 +116,10 @@ Schema-free by design — status lives in the existing table, detail lives in th
 - **`/admin/servers`** — server console: the single shared server's current occupant (reconciled via
   `getActiveServerMatch`), connect string, and a **Teardown** control for a server left live (the
   autostop-failed safety valve). Live via Realtime on `matches`. Provisioning stays automatic (veto)
-  / on the match page; this is the global operator view.
+  / on the match page; this is the global operator view. Also hosts the **disk cleanup** controls
+  (issue #132, see `infra/matchzy/README.md`) — enable/disable the `dathost-cleanup` workflow, set
+  its interval, and a **Run now** button, all through `src/lib/gh-dispatch.ts`'s GitHub Actions
+  helpers rather than `background_jobs` (there's no per-match/per-map target for this job).
 
 `is_admin` is threaded into the session JWT (`authOptions.js`) and typed on `session.user.isAdmin`;
 existing sessions are backfilled on their next request (no re-login needed). Every admin page still
@@ -148,7 +151,9 @@ reused by the `scripts/gen-matchzy-config.ts` CLI. Versioned golden settings + c
 `DATHOST_EMAIL`, `DATHOST_PASSWORD`, `DATHOST_SERVER_ID`, `MATCHZY_CONFIG_SECRET`, `APP_BASE_URL`
 (the origin the DatHost server fetches the config from), `INGEST_WORKER_URL`, `INGEST_UPLOAD_SECRET`,
 `INGEST_NOTIFY_SECRET`. Hosting auto-triggers are env-gated on `DATHOST_SERVER_ID`, so with it unset
-everything degrades to the manual flow.
+everything degrades to the manual flow. The disk-cleanup admin controls additionally need
+`GITHUB_DISPATCH_TOKEN`/`GITHUB_REPO` (shared with every other Action dispatch) with the token's
+"Variables" repository permission also granted, for the interval control.
 
 ## Key files
 
@@ -162,7 +167,8 @@ everything degrades to the manual flow.
 `src/app/admin/servers/page.tsx` · `scripts/demo-ingest.ts` · `scripts/gen-matchzy-config.ts` ·
 `scripts/inspect-demo.ts` · `scripts/dathost-golden-diff.ts` · `scripts/dathost-golden-apply.ts`
 (golden-config diff/capture/reassert — see [`infra/matchzy/README.md`](../infra/matchzy/README.md))
-· `infra/matchzy/` · `infra/worker/`.
+· `scripts/dathost-cleanup.ts` (disk cleanup, issue #132) · `src/lib/gh-dispatch.ts` (workflow
+dispatch + enable/disable/runs/variables helpers) · `infra/matchzy/` · `infra/worker/`.
 
 ## Known limitations / friction
 
@@ -172,4 +178,7 @@ everything degrades to the manual flow.
 - **Concurrency guard has a tiny check-then-claim window** (above) — a fully atomic claim would need a
   Postgres advisory-lock RPC, judged not worth it for the rarity.
 - **Nightly reset (#132)** is DatHost-panel config, not code: a daily `css_endmatch` scheduled command
-  + `autostop_minutes: 10` as the idle/billing backstop.
+  + `autostop_minutes: 10` as the idle/billing backstop. Disk cleanup is a separate, code-side piece
+  of the same issue — see [`infra/matchzy/README.md`](../infra/matchzy/README.md) for
+  `scripts/dathost-cleanup.ts`, which the DatHost panel's command scheduler can't do since it only
+  reaches in-game RCON, not the file manager.

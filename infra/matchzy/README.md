@@ -41,10 +41,15 @@ File Manager / FTP as a fallback)
 - `cfg/MatchZy/config.cfg` — main MatchZy server config (ready threshold, demo recording, knife,
   overtime, etc.). **Most important.**
 - `cfg/MatchZy/live_override.cfg` — cvars applied when a match goes live (round/eco/overtime
-  economy); overlaps with `gamemode_competitive2v2_server.cfg`.
+  economy, comms); overlaps with `gamemode_competitive2v2_server.cfg`.
+- `cfg/MatchZy/live_wingman_override.cfg` — **this is the file MatchZy actually execs at go-live**,
+  not `live_override.cfg` directly: DGLS's engine `game_mode` evaluates to Wingman (2) at match-live,
+  so MatchZy's `ExecLiveCFG()` takes the wingman branch (`live_wingman.cfg` →
+  `exec MatchZy/live_wingman_override.cfg`) rather than the standard one. It just `exec`s
+  `live_override.cfg` so both mode paths share one baseline — if it's empty, **none of
+  `live_override.cfg`'s cvars reach a real match.**
 - other customized `cfg/MatchZy/*.cfg` **not yet captured here** — `live.cfg`, `warmup.cfg`,
-  `knife.cfg`, `live_wingman_override.cfg` (1-byte, likely vestigial) — add them the same way if
-  they turn out to matter.
+  `knife.cfg` — add them the same way if they turn out to matter.
 - `cfg/server.cfg` / `cfg/autoexec.cfg` — base server cvars, if present.
 - `cfg/gamemode_competitive2v2_server.cfg` — the 2v2 hybrid-mode overrides mentioned above.
 
@@ -53,7 +58,7 @@ Once captured, match-critical cvars (e.g. `matchzy_demo_recording_enabled`, read
 is self-contained and independent of whatever cfg files happen to be on the server. The rest stays
 here as the versioned baseline / disaster-recovery copy.
 
-## Provision sequence (all endpoints verified live 2026-06-29)
+## Provision sequence
 
 1. **`PUT /game-servers/{id}`** — re-assert `golden-server-settings.json` + the per-match map
    (`cs2_settings.maps_source=workshop_single_map`, `cs2_settings.workshop_single_map_id=<picked
@@ -64,4 +69,17 @@ here as the versioned baseline / disaster-recovery copy.
    map_sides / cvars (from `scripts/gen-matchzy-config.ts`).
 5. (teardown) **`POST /game-servers/{id}/stop`** on confirmed score/demo. Never `delete` (reuse model).
 
-Nightly cleanup/reset safety net: issue #132.
+**Disk cleanup (issue #132):** MatchZy never removes its own per-match artifacts (round-resume
+backups, stat CSVs, player-name caches, recorded demos) — they accumulate on the server's disk
+against a fixed size cap every match. `scripts/dathost-cleanup.ts` + `.github/workflows/
+dathost-cleanup.yml` remove a match's files once they're old enough that nothing needs them
+locally (7-day default retention), and — for the demo specifically — only once R2 has its own
+confirmed copy — except for residue with no `matches` row at all (a non-DGLS game reusing MatchZy
+on the shared server), which is deleted immediately since none of it is ever worth keeping. The
+underlying job always checks daily, but `CLEANUP_INTERVAL_DAYS` (a repo Actions variable,
+`DATHOST_CLEANUP_INTERVAL_DAYS`) throttles how often a *scheduled* run actually deletes anything —
+a manual run always runs regardless. Controlled from `/admin/servers` (enable/disable, interval,
+"Run now" — the run route temporarily re-enables a paused workflow just long enough to dispatch it,
+since GitHub's disable blocks `workflow_dispatch` too, then restores whatever state it was in).
+`GITHUB_DISPATCH_TOKEN` needs the "Variables" repository permission (distinct from "Actions") for
+the interval control to work.

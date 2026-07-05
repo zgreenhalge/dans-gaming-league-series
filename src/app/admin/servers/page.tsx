@@ -38,11 +38,6 @@ export default async function AdminServersPage() {
       <main className="max-w-[760px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">
           <div className="font-display text-[28px] font-semibold leading-tight">Server Console</div>
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">
-            The shared DatHost server. Provisioning is automatic when a veto completes; use this to
-            check its raw state, start/stop it directly, manually apply a config set + map, or tear
-            down a match that&apos;s stuck live.
-          </div>
         </div>
         <ServerConsolePanel active={active} configSets={CONFIG_SET_OPTIONS} maps={maps} />
       </main>
