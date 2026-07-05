@@ -18,6 +18,8 @@ When citing code in docs, comments, or commits, reference it by **symbol name** 
 
 **Always prefer extracting/abstracting shared logic whenever possible.** If you're about to write a join/aggregation/derivation that already exists elsewhere (even inline in a component), factor it into a shared helper (`src/lib/queries.ts` or `src/lib/util.ts`) and have both call sites use it — don't let two copies of the same logic drift apart.
 
+**Artifacts describe the present, not the past.** Docs, code comments, config `note` fields — everything committed describes how things *are*, never how they changed. No dates, no changelog prose, no "previously / used to / re-enabled." This is a hard rule: see AGENTS.md's "Artifacts describe the present, not the past" and [`docs/patterns.md`](./docs/patterns.md). The lone exception is a deliberate decision log kept to avoid regressing to known-bad config.
+
 ## Working with the user
 
 - **Questions and planning requests are not implementation triggers.** When the user asks "what could we do about X?" or asks for a plan, respond with analysis and stop — don't start editing until they say to proceed.
