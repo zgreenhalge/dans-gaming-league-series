@@ -52,9 +52,6 @@ export default async function AdminHubPage() {
       <main className="max-w-[760px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">
           <div className="font-display text-[28px] font-semibold leading-tight">Admin</div>
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">
-            Tools for running the league.
-          </div>
         </div>
 
         <div className="flex flex-col gap-3">
