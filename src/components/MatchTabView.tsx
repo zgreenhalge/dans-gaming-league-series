@@ -475,6 +475,8 @@ export default function MatchTabView({
   const canDispatchReplay =
     isCurrentUserAdmin ||
     (currentPlayerId !== null && matchPlayers.some((p) => p.player_id === currentPlayerId));
+  // Recording is editable by the same people who can enter results: admins and in-match players.
+  const canEditRecording = canDispatchReplay;
 
   const sabMap = new Map<number, SabFields>(
     sabremetrics.map((s) => [s.player_id, s]),
@@ -522,12 +524,9 @@ export default function MatchTabView({
           ) : undefined
         }
       >
-        {
-          <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
-            Scoreboard
-          </button>
-        }
-
+        <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
+          Scoreboard
+        </button>
         {hasSab && (
           <>
             <button type="button" className={tabCls(tab === 'impact')} onClick={() => setTab('impact')}>
@@ -551,7 +550,7 @@ export default function MatchTabView({
           </button>
         )}
 
-        {played && (
+        {played && (recordingURL || canEditRecording) && (
           <button type="button" className={tabCls(tab === 'recording')} onClick={() => setTab('recording')}>
             Recording
           </button>
@@ -650,9 +649,11 @@ export default function MatchTabView({
       )}
 
       {tab === 'recording' && (
-        <div>
-          <RecordingViewer embedURL={recordingURL} />
-          <RecordingUrlForm matchId={matchId} />
+        <div className="mt-4 flex flex-col gap-6">
+          <RecordingViewer videoId={recordingURL} />
+          {canEditRecording && (
+            <RecordingUrlForm matchId={matchId} videoId={recordingURL} />
+          )}
         </div>
       )}
     </>
