@@ -13,9 +13,10 @@ import TabBar from '@/components/TabBar';
 import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView } from '@/lib/queries';
 import type { SabFields } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
+import { RecordingViewer, RecordingUrlForm } from '@/components/RecordingViewer';
 
 type Faction = 'CT' | 'T' | null;
-type Tab = 'leaderboard' | 'impact' | 'utility' | 'scouting' | 'recap';
+type Tab = 'leaderboard' | 'impact' | 'utility' | 'scouting' | 'recap' | 'recording';
 
 function factionClass(f: Faction): string {
   if (f === 'CT') return 'faction-ct';
@@ -426,6 +427,7 @@ export default function MatchTabView({
   sabremetrics = [],
   replayJob,
   replayEvents = null,
+  recordingURL,
 }: {
   shirts: MatchStatRow[];
   skins: MatchStatRow[];
@@ -454,6 +456,7 @@ export default function MatchTabView({
   sabremetrics?: MatchSabremetricsRow[];
   replayJob: ReplayJobState;
   replayEvents?: ReplayEventsView | null;
+  recordingURL: string | null;
 }) {
   const hasScoutingData = !!(scoutingData && scoutingH2H);
   const hasProjections = ratingProjections.length > 0;
@@ -472,6 +475,8 @@ export default function MatchTabView({
   const canDispatchReplay =
     isCurrentUserAdmin ||
     (currentPlayerId !== null && matchPlayers.some((p) => p.player_id === currentPlayerId));
+  // Recording is editable by the same people who can enter results: admins and in-match players.
+  const canEditRecording = canDispatchReplay;
 
   const sabMap = new Map<number, SabFields>(
     sabremetrics.map((s) => [s.player_id, s]),
@@ -532,14 +537,22 @@ export default function MatchTabView({
             </button>
           </>
         )}
+
         {hasScoutingData && (
           <button type="button" className={tabCls(tab === 'scouting')} onClick={() => setTab('scouting')}>
             Scouting Report
           </button>
         )}
+
         {played && hasRecap && (
           <button type="button" className={tabCls(tab === 'recap')} onClick={() => setTab('recap')}>
             Recap
+          </button>
+        )}
+
+        {played && (recordingURL || canEditRecording) && (
+          <button type="button" className={tabCls(tab === 'recording')} onClick={() => setTab('recording')}>
+            Recording
           </button>
         )}
       </TabBar>
@@ -633,6 +646,15 @@ export default function MatchTabView({
           matchMap={matchMap}
           canDispatch={canDispatchReplay}
         />
+      )}
+
+      {tab === 'recording' && (
+        <div className="mt-4 flex flex-col gap-6">
+          <RecordingViewer videoId={recordingURL} />
+          {canEditRecording && (
+            <RecordingUrlForm matchId={matchId} videoId={recordingURL} />
+          )}
+        </div>
       )}
     </>
   );
