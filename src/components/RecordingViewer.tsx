@@ -9,6 +9,11 @@ function parseEmbedCodeFromUrl(url: string): string | null {
     const path = parsed.pathname.replace(/\/$/, '');
 
     if (host === 'www.youtube.com' || host === 'youtube.com') {
+      // Case 1: https://www.youtube.com/watch?v=VIDEO_ID
+      const v = parsed.searchParams.get('v');
+      if (v) return v;
+      
+      // Case 2: https://www.youtube.com/embed/VIDEO_ID
       const match = path.match(/^\/embed\/([A-Za-z0-9_-]+)$/);
       return match ? match[1] : null;
     }
@@ -33,12 +38,11 @@ export function RecordingViewer(
     embedCode ? (
       <div className="flex items-center justify-center py-8">
         <iframe
-          width="560"
-          height="315"
           src={`https://www.youtube.com/embed/${embedCode}`}
-          className="border rounded"
+          className="border rounded w-full aspect-video"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
+          sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
         >
         </iframe>
       </div>
@@ -55,12 +59,12 @@ export function RecordingUrlForm(
 
   const handleSubmit = async (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const embedCode = parseEmbedCodeFromUrl(text) ? parseEmbedCodeFromUrl(text) : null;
+    const embedCode = parseEmbedCodeFromUrl(text) ?? null;
     setIsSaving(true);
     await fetch(`/api/matches/${matchId}/recording`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matchId, value: embedCode }),
+      body: JSON.stringify({ value: embedCode }),
     });
     setIsSaving(false);
     setText("");
@@ -71,7 +75,7 @@ export function RecordingUrlForm(
     await fetch(`/api/matches/${matchId}/recording`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matchId, value: null }),
+      body: JSON.stringify({ value: null }),
     });
     setText("");
     setIsSaving(false);
@@ -83,7 +87,7 @@ export function RecordingUrlForm(
         <input
           id="match-recording"
           className="border rounded py-2 px-4"
-          defaultValue={text}
+          value={text}
           onChange={(e) => setText(e.target.value)}
           />
 

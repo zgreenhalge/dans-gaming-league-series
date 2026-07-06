@@ -382,6 +382,7 @@ export default async function MatchPage({
           sabremetrics={sabremetrics}
           replayJob={replayJob}
           replayEvents={replayEvents}
+          recordingURL={match.recording_url}
         />
       </main>
     </div>

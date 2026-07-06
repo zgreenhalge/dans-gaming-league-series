@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { getAdminClient } from '@/lib/supabase-admin';
 
 
-export async function POST(request: NextRequest) {
-  const { matchId, value } = await request.json();
+const supabaseAdmin = getAdminClient();
 
-  const { error } = await supabase
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const matchId = Number(id);
+  const value = await request.json()
+
+  const { error } = await supabaseAdmin
     .from("matches")
-    .update({ recording_url: value })
+    .update({ recording_url: value.value })
     .eq("id", matchId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

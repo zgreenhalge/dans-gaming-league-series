@@ -14,11 +14,9 @@ import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, Re
 import type { SabFields } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
 import { RecordingViewer, RecordingUrlForm } from '@/components/RecordingViewer';
-import type { MatchStatRow, MatchScoutingData, H2HData } from '@/lib/queries';
 
 type Faction = 'CT' | 'T' | null;
-type Tab = 'leaderboard' | 'impact' | 'utility' | 'scouting' | 'recap';
-type Tab = 'leaderboard' | 'scouting' | 'recording';
+type Tab = 'leaderboard' | 'impact' | 'utility' | 'scouting' | 'recap' | 'recording';
 
 function factionClass(f: Faction): string {
   if (f === 'CT') return 'faction-ct';
@@ -524,9 +522,12 @@ export default function MatchTabView({
           ) : undefined
         }
       >
-        <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
-          Scoreboard
-        </button>
+        {
+          <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
+            Scoreboard
+          </button>
+        }
+
         {hasSab && (
           <>
             <button type="button" className={tabCls(tab === 'impact')} onClick={() => setTab('impact')}>
@@ -537,43 +538,23 @@ export default function MatchTabView({
             </button>
           </>
         )}
+
         {hasScoutingData && (
           <button type="button" className={tabCls(tab === 'scouting')} onClick={() => setTab('scouting')}>
             Scouting Report
           </button>
         )}
+
         {played && hasRecap && (
           <button type="button" className={tabCls(tab === 'recap')} onClick={() => setTab('recap')}>
             Recap
           </button>
-      <div className="mt-10 flex items-center justify-between mb-2">
-        <div className="flex gap-1">
-          <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
-            Scoreboard
-          </button>
-          {hasScoutingData && (
-            <button type="button" className={tabCls(tab === 'scouting')} onClick={() => setTab('scouting')}>
-              Scouting Report
-            </button>
-          )}
+        )}
+
+        {played && (
           <button type="button" className={tabCls(tab === 'recording')} onClick={() => setTab('recording')}>
             Recording
           </button>
-        </div>
-        {tab === 'leaderboard' && canEnterResults && (
-          <EnterResultsModal
-            matchId={matchId}
-            players={matchPlayers}
-            isAdmin={isCurrentUserAdmin}
-            alreadyPlayed={played}
-            targetWinRounds={targetWinRounds}
-            skinsSide={skinsSide}
-            initialShirtsScore={initialShirtsScore}
-            initialSkinsScore={initialSkinsScore}
-            initialScreenshotFrontUrl={initialScreenshotFrontUrl}
-            initialScreenshotBackUrl={initialScreenshotBackUrl}
-            initialStats={initialStats}
-          />
         )}
       </TabBar>
 
@@ -669,11 +650,10 @@ export default function MatchTabView({
       )}
 
       {tab === 'recording' && (
-        <RecordingViewer embedURL={recordingURL} />
-      )}
-
-      {tab === 'recording' && (
-        <RecordingUrlForm matchId={matchId} />
+        <div>
+          <RecordingViewer embedURL={recordingURL} />
+          <RecordingUrlForm matchId={matchId} />
+        </div>
       )}
     </>
   );
