@@ -19,10 +19,12 @@ function parseEmbedCodeFromUrl(url: string): string | null {
     }
 
     if (host === 'youtu.be') {
+      // Pattern from the SHARE button link https://youtu.be/VIDEO_ID
       const match = path.match(/^\/([A-Za-z0-9_-]+)$/);
       return match ? match[1] : null;
     }
 
+    // Non-Youtube hosts should do nothing
     return null;
   } catch (e) {
     return null;
@@ -56,17 +58,20 @@ export function RecordingUrlForm(
 ) {
   const [text, setText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const handleSubmit = async (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const embedCode = parseEmbedCodeFromUrl(text) ?? null;
-    setIsSaving(true);
-    await fetch(`/api/matches/${matchId}/recording`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ value: embedCode }),
-    });
-    setIsSaving(false);
+    if (embedCode) {
+      setIsSaving(true);
+      await fetch(`/api/matches/${matchId}/recording`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: embedCode }),
+      });
+      setIsSaving(false);
+    }
     setText("");
   };
 
@@ -79,6 +84,7 @@ export function RecordingUrlForm(
     });
     setText("");
     setIsSaving(false);
+    setShowClearConfirm(false);
   };
 
   return (
@@ -88,16 +94,51 @@ export function RecordingUrlForm(
           id="match-recording"
           className="border rounded py-2 px-4"
           value={text}
+          placeholder="Provide a YouTube URL"
           onChange={(e) => setText(e.target.value)}
           />
 
-        <button type="submit" disabled={isSaving} className="bg-blue-500 text-white py-2 px-4 rounded">
+        <button type="submit" disabled={isSaving} className="bg-blue-500 text-[var(--color-text-primary)] py-2 px-4 rounded">
           Save
         </button>
-        <button type="button" onClick={handleClear} disabled={isSaving} className="bg-red-500 text-white py-2 px-4 rounded">
+        <button type="button" onClick={() => setShowClearConfirm(true)} disabled={isSaving} className="bg-red-500 text-[var(--color-text-primary)] py-2 px-4 rounded">
           Remove
         </button>
       </form>
+
+      {showClearConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={() => setShowClearConfirm(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-4 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="mb-4 text-sm text-gray-700">
+              Are you sure?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleClear}
+                disabled={isSaving}
+                className="rounded bg-red-500 px-3 py-2 text-sm text-[var(--color-text-primary)]"
+              >
+                {isSaving ? "Removing..." : "Yes, remove it."}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowClearConfirm(false)}
+                disabled={isSaving}
+                className="rounded bg-gray-200 px-3 py-2 text-sm text-[var(--color-text-secondary)]"
+              >
+                No, keep it.
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
