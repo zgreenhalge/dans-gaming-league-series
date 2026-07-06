@@ -3,7 +3,9 @@
 How an uploaded CS2 `.dem` file becomes match and sabremetric stats. This is the live in-app
 ingestion path (distinct from the historical CSV pipeline in `ingestion/`). The formulas the parser
 feeds are defined in [`calculations.md`](./calculations.md); the storage/route surface is summarized
-in [`architecture.md`](./architecture.md).
+in [`architecture.md`](./architecture.md). For external/community knowledge about the underlying
+parsing library and the CS2 demo format itself, see
+[`demo-parsing-reference.md`](./demo-parsing-reference.md).
 
 ## Pipeline
 
@@ -25,7 +27,20 @@ in [`architecture.md`](./architecture.md).
 
 Both parsers take the same inputs: the demo buffer, the resolved **roster**, `skins_starting_side`,
 and the season's `target_win_rounds`. The roster (which Steam player maps to which DGLS player and
-faction) is resolved server-side before parsing — see `parsers/rosterResolver.ts`.
+faction) is resolved server-side before parsing — see `parsers/rosterResolver.ts` (exact steam-id →
+name → elimination fallback).
+
+**Learning steam ids on confirm.** When a demo player is matched by the elimination fallback,
+`rosterResolver.ts` emits a warning (`eliminationWarning()`) carrying the demo steam id + the roster
+player it was matched to. The confirm forwards parser `warnings` to `PATCH /score`, which — **for an
+admin confirm only**, and **only when exactly one** player was inferred — parses that warning and
+writes the steam id/nickname onto the player (`applyEliminationSteamIds`), so future parses resolve
+them by exact id. Guards: admin-gated (the warnings are client-supplied), single-elimination only,
+and it skips if that steam id already belongs to another player. Best-effort — never blocks the score.
+
+`skins_starting_side` is **optional**. When it's `null` (gauntlet/knife matches, which have no
+stored side), the parser infers it from the demo — see "Starting-side inference" below — so those
+matches still self-derive a score and stats with no manual entry.
 
 ## Sabremetric collectors
 
@@ -44,13 +59,25 @@ faction) is resolved server-side before parsing — see `parsers/rosterResolver.
 | `utility.ts` | Flash assists, utility damage, teamflash/self-flash (`Utility+`, Beer Tax) |
 | `objectives.ts` | Bomb plants/defuses (`Objective+`) |
 
-## Side splits (no per-tick team lookups)
+## Side splits (deterministic from the round-1 anchor)
 
-CT/T splits are derived **deterministically** from faction (SHIRTS/SKINS), the stored
-`skins_starting_side`, and the round number — never from per-tick `team_num` reads. The regulation
-half-swap and overtime (MR3) side logic lives in `parsers/roundSides.ts`; per-round deltas come from
+CT/T splits are derived **deterministically** from faction (SHIRTS/SKINS), the starting side, and the
+round number — the regulation half-swap and overtime (MR3) logic in `parsers/roundSides.ts` walks the
+sides from that single round-1 anchor, with no per-round `team_num` reads. Per-round deltas come from
 the engine's `ActionTrackingServices` accumulators in `parsers/accumulators.ts`. See
 [`calculations.md`](./calculations.md#side-splits) for the exact rules.
+
+### Starting-side inference
+
+The anchor is `skins_starting_side` when stored. When it's absent (gauntlet/knife), `parsers/
+sideInference.ts` reads `team_num` **once**, at the first live round's tick, and maps each resolved
+player's side to their faction to decide which side SKINS started on (majority vote; falls back to the
+inverse of SHIRTS if no SKINS player resolved). This is a single anchor read — not the fragile
+per-round lookup the split logic deliberately avoids.
+
+Precedence: **a stored side always wins** (it was entered deliberately); the demo only fills a missing
+value. When a stored side and the demo disagree, the parser keeps the stored side and emits a warning,
+which surfaces on the admin jobs dashboard (`/admin/jobs`) as a data-quality flag.
 
 ## Environment
 

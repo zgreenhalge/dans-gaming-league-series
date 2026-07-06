@@ -1,0 +1,15 @@
+{
+  "name": "ingest-demo-worker",
+  "private": true,
+  "description": "Cloudflare Worker that receives MatchZy demo POSTs and streams them to R2.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260101.0",
+    "typescript": "^5",
+    "wrangler": "^4"
+  }
+}

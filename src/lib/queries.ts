@@ -1,12 +1,22 @@
-import { gunzipSync } from 'node:zlib';
+import { gunzipMaybe } from './gzip';
 import { supabase } from './supabase';
-import { getR2Object, replayKey, heatmapKey } from './r2';
+import { getR2Object, replayKey, heatmapKey, demoResultKey } from './r2';
 import type { ReplayPayload, ReplayPlayerMeta, ReplayEvent } from './replay/types';
 import type { HeatmapArtifact, HeatmapKind } from './replay/heatmap';
 import { isPlayedScore, winRatePct, avgOf } from './util';
 import { mapSlug } from './maps';
-import { extractSeasonNumber, buildRegularToGauntletMap, parseScore, canonicalSort, compareMatchRefDesc } from './util';
+import { workshopIdFromUrl } from './replay/radar';
+import { extractSeasonNumber, buildRegularToGauntletMap, canonicalSort, compareMatchRefDesc, matchLabel, weekWindow, computeH2H } from './util';
+import type { DuoStats, H2HStats, H2HData, H2HMatchInput } from './util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
+import { DEMO_INGEST_JOB_TYPE, type DemoIngestResult } from './demo/ingestResult';
+import {
+  BACKGROUND_JOB_TYPES,
+  type BackgroundJobType,
+  type BackgroundJobSubject,
+  type BackgroundJobRow,
+} from './jobs';
+import type { ScheduledMatchRef } from './schedule';
 import type {
   Season,
   Week,
@@ -396,6 +406,125 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   );
 
   return { match: m, week: w, season: season as Season, stats: statRows };
+}
+
+/**
+ * Other unplayed matches that have a scheduled time — used to warn (and link) when a match is
+ * scheduled close to another, since they'd contend for the single shared DatHost server (#134).
+ * Played matches are excluded (their scheduled time is moot).
+ */
+export async function getOtherScheduledMatches(matchId: number): Promise<ScheduledMatchRef[]> {
+  const { data } = await supabase
+    .from('matches')
+    .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
+    .not('scheduled_at', 'is', null)
+    .neq('id', matchId);
+  type Row = {
+    id: number;
+    match_number: number | null;
+    scheduled_at: string | null;
+    final_score: string | null;
+    weeks: { week_number: number | null; seasons: { name: string | null } | null } | null;
+  };
+  // Supabase types embedded to-one relations as arrays, but returns objects at runtime — cast through
+  // unknown (same pattern as other nested selects here).
+  const rows = (data ?? []) as unknown as Row[];
+  return rows
+    .filter((r) => r.scheduled_at && !isPlayedScore(r.final_score))
+    .map((r) => ({
+      id: r.id,
+      scheduledAt: r.scheduled_at as string,
+      label: matchLabel({
+        matchId: r.id,
+        seasonName: r.weeks?.seasons?.name,
+        weekNumber: r.weeks?.week_number,
+        matchNumber: r.match_number,
+      }),
+    }));
+}
+
+/** One row of the admin match-management console (#144) — a full match plus the context its editors
+ *  (reschedule, clear/redo pick-ban, feature toggle) need. */
+export interface AdminMatchRow {
+  match: Match;
+  label: string;
+  seasonNumber: number | null;
+  weekNumber: number | null;
+  isGauntlet: boolean;
+  mapPool: string[] | null;
+  /** Week window (yyyy-mm-dd) for the schedule editor's out-of-window warning; null if undated. */
+  weekStart: string | null;
+  weekEnd: string | null;
+}
+
+/**
+ * Every match with the context the admin match console (#144) needs to reschedule, clear/redo the
+ * pick-ban, or toggle the feature flag: the full row plus season/week labels, map pool, gauntlet flag,
+ * and week window. Sorted newest (season → week → match) first — same canonical order as the rest of
+ * the site. Admin-only surface; the page gates access.
+ */
+export async function getAdminMatches(): Promise<AdminMatchRow[]> {
+  const { data, error } = await supabase
+    .from('matches')
+    .select('*, weeks(week_number, seasons(name, is_gauntlet, map_pool, start_date))');
+  if (error || !data) return [];
+
+  type Row = Match & {
+    weeks: {
+      week_number: number | null;
+      seasons: {
+        name: string | null;
+        is_gauntlet: boolean | null;
+        map_pool: string[] | null;
+        start_date: string | null;
+      } | null;
+    } | null;
+  };
+  // Supabase types embedded to-one relations as arrays but returns objects at runtime (same cast as
+  // getOtherScheduledMatches above).
+  const rows = data as unknown as Row[];
+
+  const out = rows.map((r): AdminMatchRow => {
+    const { weeks, ...match } = r;
+    const season = weeks?.seasons ?? null;
+    const weekNumber = weeks?.week_number ?? null;
+    const win =
+      season?.start_date && weekNumber != null ? weekWindow(season.start_date, weekNumber) : null;
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    return {
+      match: match as Match,
+      label: matchLabel({
+        matchId: r.id,
+        seasonName: season?.name ?? null,
+        weekNumber,
+        matchNumber: r.match_number,
+      }),
+      seasonNumber: season?.name ? extractSeasonNumber(season.name) : null,
+      weekNumber,
+      isGauntlet: season?.is_gauntlet ?? false,
+      mapPool: season?.map_pool ?? null,
+      weekStart: win ? fmt(win.start) : null,
+      weekEnd: win ? fmt(win.end) : null,
+    };
+  });
+
+  out.sort((a, b) =>
+    compareMatchRefDesc(
+      { seasonNumber: a.seasonNumber, isGauntlet: a.isGauntlet, weekNumber: a.weekNumber ?? 0, matchNumber: a.match.match_number ?? 0 },
+      { seasonNumber: b.seasonNumber, isGauntlet: b.isGauntlet, weekNumber: b.weekNumber ?? 0, matchNumber: b.match.match_number ?? 0 },
+    ),
+  );
+  return out;
+}
+
+/**
+ * All players for the admin player console (#144), sorted by display name. Returns the full `Player`
+ * row (name, `is_admin`, and the steam-link fields) so the console can edit them in place.
+ */
+export async function getAdminPlayers(): Promise<Player[]> {
+  const { data, error } = await supabase.from('players').select('*').order('name');
+  if (error || !data) return [];
+  return data as Player[];
 }
 
 export interface MatchSabremetricsRow extends PlayerMatchSabremetrics {
@@ -2333,91 +2462,26 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
 
 // ─── H2H data layer ──────────────────────────────────────────────────────────
 //
-// Powers the H2H tab on the Statistics page and the match scouting report.
-// Aggregated client-side (in this query function) from `player_match_stats` —
-// see `design_handoff/IMPLEMENTATION_PLAN.md` Phase 2 for why no DB view is
-// warranted at this league's scale.
-
-/** A player's individual stat line for a single match. */
-export interface MatchPlayerStats {
-  kills: number;
-  assists: number;
-  deaths: number;
-}
-
-/** One match `playerA`+`playerB` played as partners (same faction). */
-export interface DuoMatchSummary {
-  matchId: number;
-  seasonNumber: number | null;
-  isGauntlet: boolean;
-  weekNumber: number;
-  matchNumber: number;
-  map: string | null;
-  score: { duo: number; opponents: number } | null;
-  won: boolean | null;
-  opponents: { player_id: number; player_name: string }[];
-}
-
-/** One match `playerA` and `playerB` met as opponents (different factions). */
-export interface RivalMatchSummary {
-  matchId: number;
-  seasonNumber: number | null;
-  isGauntlet: boolean;
-  weekNumber: number;
-  matchNumber: number;
-  map: string | null;
-  score: { a: number; b: number } | null;
-  aWon: boolean | null;
-  aMatchStats: MatchPlayerStats;
-  bMatchStats: MatchPlayerStats;
-}
-
-export interface DuoStats {
-  playerA: number;
-  playerB: number;
-  gamesPlayed: number;
-  wins: number;
-  losses: number;
-  combinedAdr: number;
-  combinedKills: number;
-  combinedAssists: number;
-  combinedDeaths: number;
-  roundsWon: number;
-  roundsPlayed: number;
-  aStats: H2HPlayerStats;
-  bStats: H2HPlayerStats;
-  bestMap: string | null;
-  matches: DuoMatchSummary[];
-}
-
-/** A player's aggregated performance across their meetings with a given rival. */
-export interface H2HPlayerStats {
-  kills: number;
-  assists: number;
-  deaths: number;
-  adr: number;
-  rwr: number;
-  roundsWon: number;
-  roundsPlayed: number;
-}
-
-export interface H2HStats {
-  playerA: number;
-  playerB: number;
-  meetings: number;
-  aWins: number;
-  bWins: number;
-  lastMap: string | null;
-  aStats: H2HPlayerStats;
-  bStats: H2HPlayerStats;
-  matches: RivalMatchSummary[];
-}
-
-export interface H2HData {
-  duos: DuoStats[];
-  rivals: H2HStats[];
-  players: { id: number; name: string; steam_avatar_url: string | null }[];
-}
+// Powers the H2H tab on the Statistics page, the Map detail page, and the
+// match scouting report. The aggregation core (`computeH2H`) lives in
+// `util.ts` — client-bundle-safe (no supabase import) — so the Statistics and
+// Map pages, which already load full match history client-side for their
+// other tabs, can compute H2H directly from it and honor a live season filter
+// instead of a static server-fetched snapshot. `getH2HData` below is the
+// DB-backed entry point for pages that don't already hold that data (player
+// page, season page, match scouting) — see `docs/patterns.md` re: extracting
+// shared aggregation logic instead of duplicating it.
+//
+// Types re-exported here for backward compatibility with existing imports.
+export type {
+  MatchPlayerStats,
+  DuoMatchSummary,
+  RivalMatchSummary,
+  DuoStats,
+  H2HPlayerStats,
+  H2HStats,
+  H2HData,
+} from './util';
 
 /**
  * Resolved season selection for H2H — mirrors how `CareerStatsView` resolves
@@ -2458,10 +2522,6 @@ function resolveH2HSeasonIds(
     ids.add(regularToGauntlet.get(selection.filter) ?? selection.filter);
   }
   return ids;
-}
-
-function pairKey(a: number, b: number): string {
-  return a < b ? `${a}:${b}` : `${b}:${a}`;
 }
 
 /**
@@ -2527,86 +2587,11 @@ export function rivalBreakdownScorer(rivals: H2HStats[]): (r: H2HStats) => strin
 }
 
 
-interface DuoAgg {
-  a: number;
-  b: number;
-  games: number;
-  wins: number;
-  losses: number;
-  adrSum: number;
-  kills: number;
-  assists: number;
-  deaths: number;
-  roundsWon: number;
-  roundsPlayed: number;
-  aStats: RivalPlayerAgg;
-  bStats: RivalPlayerAgg;
-  mapTotals: Map<string, { games: number; wins: number; adrSum: number }>;
-  matches: DuoMatchSummary[];
-}
-
-interface RivalPlayerAgg {
-  games: number;
-  kills: number;
-  assists: number;
-  deaths: number;
-  adrSum: number;
-  roundsWon: number;
-  roundsPlayed: number;
-}
-
-function emptyRivalPlayerAgg(): RivalPlayerAgg {
-  return { games: 0, kills: 0, assists: 0, deaths: 0, adrSum: 0, roundsWon: 0, roundsPlayed: 0 };
-}
-
-function finalizeRivalPlayerStats(agg: RivalPlayerAgg): H2HPlayerStats {
-  return {
-    kills: agg.kills,
-    assists: agg.assists,
-    deaths: agg.deaths,
-    adr: agg.games > 0 ? agg.adrSum / agg.games : 0,
-    rwr: agg.roundsPlayed > 0 ? (agg.roundsWon / agg.roundsPlayed) * 100 : 0,
-    roundsWon: agg.roundsWon,
-    roundsPlayed: agg.roundsPlayed,
-  };
-}
-
-interface RivalAgg {
-  a: number;
-  b: number;
-  meetings: number;
-  aWins: number;
-  bWins: number;
-  aStats: RivalPlayerAgg;
-  bStats: RivalPlayerAgg;
-  matches: RivalMatchSummary[];
-}
-
-/**
- * The map a duo has won together most often. If multiple maps are tied for
- * the most wins, there's no clear "best" — return null rather than picking
- * one arbitrarily.
- */
-function bestMapFor(mapTotals: Map<string, { games: number; wins: number; adrSum: number }>): string | null {
-  let bestMap: string | null = null;
-  let bestWins = -1;
-  let tied = false;
-  for (const [map, t] of mapTotals) {
-    if (t.wins > bestWins) {
-      bestMap = map;
-      bestWins = t.wins;
-      tied = false;
-    } else if (t.wins === bestWins) {
-      tied = true;
-    }
-  }
-  return tied ? null : bestMap;
-}
-
 /**
  * Computes head-to-head relationship data — partner records (`duos`) and
  * opponent records (`rivals`) — for the given resolved season selection.
- * Only played matches count (see `isPlayedScore`).
+ * Only played matches count (see `isPlayedScore`). Fetches the raw match/stat
+ * rows and delegates the actual aggregation to `computeH2H` (util.ts).
  */
 export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData> {
   const seasons = await getSeasons();
@@ -2680,185 +2665,34 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
     statsByMatch.set(s.match_id, list);
   }
 
-  const duoAgg = new Map<string, DuoAgg>();
-  const rivalAgg = new Map<string, RivalAgg>();
-  const playerIds = new Set<number>();
-
-  function getDuo(x: StatRow, y: StatRow): DuoAgg {
-    const [a, b] = x.player_id < y.player_id ? [x.player_id, y.player_id] : [y.player_id, x.player_id];
-    const key = pairKey(a, b);
-    let agg = duoAgg.get(key);
-    if (!agg) {
-      agg = { a, b, games: 0, wins: 0, losses: 0, adrSum: 0, kills: 0, assists: 0, deaths: 0, roundsWon: 0, roundsPlayed: 0, aStats: emptyRivalPlayerAgg(), bStats: emptyRivalPlayerAgg(), mapTotals: new Map(), matches: [] };
-      duoAgg.set(key, agg);
-    }
-    return agg;
-  }
-
-  function getRival(x: StatRow, y: StatRow): RivalAgg {
-    const [a, b] = x.player_id < y.player_id ? [x.player_id, y.player_id] : [y.player_id, x.player_id];
-    const key = pairKey(a, b);
-    let agg = rivalAgg.get(key);
-    if (!agg) {
-      agg = { a, b, meetings: 0, aWins: 0, bWins: 0, aStats: emptyRivalPlayerAgg(), bStats: emptyRivalPlayerAgg(), matches: [] };
-      rivalAgg.set(key, agg);
-    }
-    return agg;
-  }
-
-  for (const m of playedMatches) {
+  const matchInputs: H2HMatchInput[] = [];
+  for (const m of filteredMatches) {
     const roster = statsByMatch.get(m.id) ?? [];
     if (roster.length === 0) continue;
-    for (const r of roster) playerIds.add(r.player_id);
-
-    // Partner/opponent grouping is purely faction-based: two players are
-    // partners if they share a `faction` (SHIRTS/SKINS) in a match, opponents
-    // if they don't. There's no explicit "duo"/"team" entity in the schema —
-    // this only produces correct results because the format is always 2v2
-    // Wingman. Revisit if the format ever changes.
-    const shirts = roster.filter((r) => r.faction === 'SHIRTS');
-    const skins = roster.filter((r) => r.faction === 'SKINS');
-    const weekNumber = weekNumberById.get(m.week_id) ?? 0;
     const seasonId = seasonIdByWeek.get(m.week_id) ?? -1;
-    const seasonNumber = seasonNumberById.get(seasonId) ?? null;
-    const isGauntlet = seasonIsGauntletById.get(seasonId) ?? false;
-    const parsedScore = parseScore(m.final_score);
-    const playedMap = mapFor(m);
-
-    const teams = [
-      { roster: shirts, opponents: skins, ourScore: parsedScore?.shirts ?? null, theirScore: parsedScore?.skins ?? null },
-      { roster: skins, opponents: shirts, ourScore: parsedScore?.skins ?? null, theirScore: parsedScore?.shirts ?? null },
-    ];
-    for (const { roster: team, opponents, ourScore, theirScore } of teams) {
-      for (let i = 0; i < team.length; i++) {
-        for (let j = i + 1; j < team.length; j++) {
-          const x = team[i];
-          const y = team[j];
-          const agg = getDuo(x, y);
-          agg.games += 1;
-          if (x.is_win) agg.wins += 1;
-          else agg.losses += 1;
-          agg.adrSum += x.adr + y.adr;
-          agg.kills += x.kills + y.kills;
-          agg.assists += (x.assists ?? 0) + (y.assists ?? 0);
-          agg.deaths += x.deaths + y.deaths;
-          // x and y are teammates, so they share identical round totals for this match — count once.
-          agg.roundsWon += x.rounds_won;
-          agg.roundsPlayed += x.rounds_played;
-          // Per-player stats: aStats belongs to the lower-id player (agg.a), bStats to the higher.
-          const aRow = x.player_id === agg.a ? x : y;
-          const bRow = aRow === x ? y : x;
-          for (const [statAgg, row] of [[agg.aStats, aRow], [agg.bStats, bRow]] as const) {
-            statAgg.games += 1;
-            statAgg.kills += row.kills;
-            statAgg.assists += row.assists ?? 0;
-            statAgg.deaths += row.deaths;
-            statAgg.adrSum += row.adr;
-            statAgg.roundsWon += row.rounds_won;
-            statAgg.roundsPlayed += row.rounds_played;
-          }
-          if (playedMap) {
-            const mapKey = playedMap.toLowerCase();
-            const mapAgg = agg.mapTotals.get(mapKey) ?? { games: 0, wins: 0, adrSum: 0 };
-            mapAgg.games += 1;
-            if (x.is_win) mapAgg.wins += 1;
-            mapAgg.adrSum += x.adr + y.adr;
-            agg.mapTotals.set(mapKey, mapAgg);
-          }
-          agg.matches.push({
-            matchId: m.id,
-            seasonNumber,
-            isGauntlet,
-            weekNumber,
-            matchNumber: m.match_number,
-            map: playedMap,
-            score: ourScore != null && theirScore != null ? { duo: ourScore, opponents: theirScore } : null,
-            won: x.is_win,
-            opponents: opponents.map((r) => ({ player_id: r.player_id, player_name: players.get(r.player_id)?.name ?? `#${r.player_id}` })),
-          });
-        }
-      }
-    }
-
-    for (const x of shirts) {
-      for (const y of skins) {
-        const agg = getRival(x, y);
-        agg.meetings += 1;
-        const aRow = x.player_id === agg.a ? x : y;
-        const bRow = aRow === x ? y : x;
-        if (aRow.is_win) agg.aWins += 1;
-        else agg.bWins += 1;
-
-        for (const [statAgg, row] of [[agg.aStats, aRow], [agg.bStats, bRow]] as const) {
-          statAgg.games += 1;
-          statAgg.kills += row.kills;
-          statAgg.assists += row.assists ?? 0;
-          statAgg.deaths += row.deaths;
-          statAgg.adrSum += row.adr;
-          statAgg.roundsWon += row.rounds_won;
-          statAgg.roundsPlayed += row.rounds_played;
-        }
-
-        const aScore = parsedScore ? (aRow.faction === 'SHIRTS' ? parsedScore.shirts : parsedScore.skins) : null;
-        const bScore = parsedScore ? (bRow.faction === 'SHIRTS' ? parsedScore.shirts : parsedScore.skins) : null;
-        agg.matches.push({
-          matchId: m.id,
-          seasonNumber,
-          isGauntlet,
-          weekNumber,
-          matchNumber: m.match_number,
-          map: playedMap,
-          score: aScore != null && bScore != null ? { a: aScore, b: bScore } : null,
-          aWon: aRow.is_win,
-          aMatchStats: { kills: aRow.kills, assists: aRow.assists ?? 0, deaths: aRow.deaths },
-          bMatchStats: { kills: bRow.kills, assists: bRow.assists ?? 0, deaths: bRow.deaths },
-        });
-      }
-    }
+    matchInputs.push({
+      matchId: m.id,
+      weekNumber: weekNumberById.get(m.week_id) ?? 0,
+      matchNumber: m.match_number,
+      seasonNumber: seasonNumberById.get(seasonId) ?? null,
+      isGauntlet: seasonIsGauntletById.get(seasonId) ?? false,
+      map: mapFor(m),
+      finalScore: m.final_score,
+      roster: roster.map((r) => ({
+        player_id: r.player_id,
+        faction: r.faction,
+        kills: r.kills,
+        assists: r.assists ?? 0,
+        deaths: r.deaths,
+        adr: r.adr,
+        is_win: r.is_win,
+        rounds_won: r.rounds_won,
+        rounds_played: r.rounds_played,
+      })),
+    });
   }
 
-  const duos: DuoStats[] = [...duoAgg.values()].map((d) => ({
-    playerA: d.a,
-    playerB: d.b,
-    gamesPlayed: d.games,
-    wins: d.wins,
-    losses: d.losses,
-    combinedAdr: d.games > 0 ? d.adrSum / d.games : 0,
-    combinedKills: d.kills,
-    combinedAssists: d.assists,
-    combinedDeaths: d.deaths,
-    roundsWon: d.roundsWon,
-    roundsPlayed: d.roundsPlayed,
-    aStats: finalizeRivalPlayerStats(d.aStats),
-    bStats: finalizeRivalPlayerStats(d.bStats),
-    bestMap: bestMapFor(d.mapTotals),
-    matches: [...d.matches].sort(compareMatchRefDesc), // most recent first
-  }));
-
-  const rivals: H2HStats[] = [...rivalAgg.values()].map((r) => {
-    const sortedMatches = [...r.matches].sort(compareMatchRefDesc); // most recent first
-    return {
-      playerA: r.a,
-      playerB: r.b,
-      meetings: r.meetings,
-      aWins: r.aWins,
-      bWins: r.bWins,
-      lastMap: sortedMatches[0]?.map ?? null,
-      aStats: finalizeRivalPlayerStats(r.aStats),
-      bStats: finalizeRivalPlayerStats(r.bStats),
-      matches: sortedMatches,
-    };
-  });
-
-  const playerList = [...playerIds]
-    .map((id) => ({
-      id,
-      name: players.get(id)?.name ?? `#${id}`,
-      steam_avatar_url: players.get(id)?.steam_avatar_url ?? null,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  return { duos, rivals, players: playerList };
+  return computeH2H(matchInputs, players);
 }
 
 // ---------------------------------------------------------------------------
@@ -3227,6 +3061,24 @@ export async function getMapLookup(): Promise<Record<string, { image_url: string
   return lookup;
 }
 
+export interface WorkshopMapOption {
+  name: string;
+  workshopId: string;
+}
+
+/** Maps with a resolvable workshop id, for a workshop-map picker (e.g. the admin server console). */
+export async function getMapsForWorkshopPicker(): Promise<WorkshopMapOption[]> {
+  const { data, error } = await supabase.from('maps').select('name, workshop_url').order('name');
+  if (error) throw error;
+  const rows = (data ?? []) as { name: string; workshop_url: string | null }[];
+  const options: WorkshopMapOption[] = [];
+  for (const row of rows) {
+    const workshopId = workshopIdFromUrl(row.workshop_url);
+    if (workshopId) options.push({ name: row.name, workshopId });
+  }
+  return options;
+}
+
 /** A map's radar calibration triplet (Phase 3). `null` when the map isn't calibrated. */
 export interface MapCalibration {
   mapId: number;
@@ -3281,8 +3133,7 @@ export async function getMapHeatmap(matchIds: number[]): Promise<MapHeatmapPoint
       const buf = await getR2Object(heatmapKey(matchId));
       if (!buf) return [];
       try {
-        const json =
-          buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b ? gunzipSync(buf) : buf;
+        const json = gunzipMaybe(buf);
         const art = JSON.parse(json.toString('utf8')) as HeatmapArtifact;
         return art.points.map((p) => ({
           matchId,
@@ -3373,6 +3224,210 @@ export async function getReplayJobState(matchId: number): Promise<ReplayJobState
   }
 }
 
+/** Job statuses that still have a staged `demo-result.json` artifact in R2 to read detail from. */
+const DEMO_INGEST_STAGED_STATUSES: ReadonlySet<string> = new Set(['parsed', 'quarantined']);
+
+/** Display context for a match-keyed background job (`buildJobSubject` turns this into a subject). */
+interface MatchJobContext {
+  label: string;
+  seasonNumber: number | null;
+  weekNumber: number | null;
+  matchNumber: number | null;
+  pickedMap: string | null;
+  finalScore: string | null;
+  isGauntlet: boolean;
+}
+
+/**
+ * Batch-load display context (match → week → season) for match-keyed background jobs in
+ * three queries, not per-row. Shared by the jobs dashboard so demo and replay rows label
+ * identically.
+ */
+async function loadMatchJobContext(matchIds: number[]): Promise<Map<number, MatchJobContext>> {
+  const out = new Map<number, MatchJobContext>();
+  if (!matchIds.length) return out;
+
+  const { data: matchRows } = await supabase
+    .from('matches')
+    .select('id, match_number, picked_map, final_score, week_id')
+    .in('id', matchIds);
+  const matches = (matchRows ?? []) as Pick<
+    Match,
+    'id' | 'match_number' | 'picked_map' | 'final_score' | 'week_id'
+  >[];
+
+  const weekIds = Array.from(new Set(matches.map((m) => m.week_id)));
+  const { data: weekRows } = weekIds.length
+    ? await supabase.from('weeks').select('id, week_number, season_id').in('id', weekIds)
+    : { data: [] as Pick<Week, 'id' | 'week_number' | 'season_id'>[] };
+  const weeks = (weekRows ?? []) as Pick<Week, 'id' | 'week_number' | 'season_id'>[];
+
+  const seasonIds = Array.from(new Set(weeks.map((w) => w.season_id)));
+  const { data: seasonRows } = seasonIds.length
+    ? await supabase.from('seasons').select('id, name, is_gauntlet').in('id', seasonIds)
+    : { data: [] as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[] };
+  const seasons = (seasonRows ?? []) as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[];
+
+  const weekById = new Map(weeks.map((w) => [w.id, w]));
+  const seasonById = new Map(seasons.map((s) => [s.id, s]));
+
+  for (const m of matches) {
+    const w = weekById.get(m.week_id) ?? null;
+    const s = w ? seasonById.get(w.season_id) ?? null : null;
+    out.set(m.id, {
+      label: matchLabel({
+        matchId: m.id,
+        seasonName: s?.name ?? null,
+        weekNumber: w?.week_number ?? null,
+        matchNumber: m.match_number ?? null,
+      }),
+      seasonNumber: s?.name ? extractSeasonNumber(s.name) : null,
+      weekNumber: w?.week_number ?? null,
+      matchNumber: m.match_number ?? null,
+      pickedMap: m.picked_map ?? null,
+      finalScore: m.final_score ?? null,
+      isGauntlet: s?.is_gauntlet ?? false,
+    });
+  }
+  return out;
+}
+
+/** Resolve a job row's subject (match vs map) to a labeled, linkable descriptor. */
+function buildJobSubject(
+  job: { jobType: BackgroundJobType; matchId: number | null; mapId: number | null },
+  matchCtx: Map<number, MatchJobContext>,
+  mapById: Map<number, { name: string; slug: string }>,
+): BackgroundJobSubject {
+  if (job.jobType === 'radar_build') {
+    const mapId = job.mapId ?? 0;
+    const m = mapId ? mapById.get(mapId) : undefined;
+    return {
+      kind: 'map',
+      mapId,
+      slug: m?.slug ?? '',
+      label: m?.name ?? `Map #${mapId}`,
+      href: m?.slug ? `/maps/${m.slug}` : '/maps',
+    };
+  }
+  const matchId = job.matchId ?? 0;
+  const ctx = matchId ? matchCtx.get(matchId) : undefined;
+  return {
+    kind: 'match',
+    matchId,
+    label: ctx?.label ?? `Match #${matchId}`,
+    href: `/matches/${matchId}`,
+    seasonNumber: ctx?.seasonNumber ?? null,
+    weekNumber: ctx?.weekNumber ?? null,
+    matchNumber: ctx?.matchNumber ?? null,
+    pickedMap: ctx?.pickedMap ?? null,
+    finalScore: ctx?.finalScore ?? null,
+    isGauntlet: ctx?.isGauntlet ?? false,
+  };
+}
+
+/**
+ * All background jobs across every pipeline, newest activity first. The admin jobs
+ * dashboard (#145) is the single notification channel for anything that would otherwise
+ * fail silently. Defensive: returns `[]` if `background_jobs` isn't present yet so the
+ * page never hard-fails.
+ */
+export async function getBackgroundJobs(): Promise<BackgroundJobRow[]> {
+  try {
+    const { data: jobs, error } = await supabase
+      .from('background_jobs')
+      .select(
+        'job_type, match_id, map_id, status, stage, error_message, gh_run_url, created_at, updated_at, started_at, finished_at',
+      )
+      .in('job_type', [...BACKGROUND_JOB_TYPES])
+      .order('updated_at', { ascending: false });
+    if (error || !jobs) return [];
+
+    type JobRow = {
+      job_type: BackgroundJobType;
+      match_id: number | null;
+      map_id: number | null;
+      status: string | null;
+      stage: string | null;
+      error_message: string | null;
+      gh_run_url: string | null;
+      created_at: string | null;
+      updated_at: string | null;
+      started_at: string | null;
+      finished_at: string | null;
+    };
+    const jobRows = jobs as JobRow[];
+
+    // Batch subject context: match → week → season for match-keyed jobs, and maps for radar.
+    const matchIds = Array.from(
+      new Set(jobRows.filter((j) => j.match_id != null).map((j) => j.match_id as number)),
+    );
+    const mapIds = Array.from(
+      new Set(jobRows.filter((j) => j.map_id != null).map((j) => j.map_id as number)),
+    );
+
+    const matchCtx = await loadMatchJobContext(matchIds);
+
+    const { data: mapRows } = mapIds.length
+      ? await supabase.from('maps').select('id, name, slug').in('id', mapIds)
+      : { data: [] as { id: number; name: string; slug: string }[] };
+    const mapById = new Map(
+      ((mapRows ?? []) as { id: number; name: string; slug: string }[]).map((m) => [m.id, m]),
+    );
+
+    // Enrich staged demo-ingest jobs with parse warnings / quarantine flags from R2 (bounded:
+    // only `parsed`/`quarantined` rows still have an artifact). Read in parallel.
+    const staged = jobRows.filter(
+      (j) =>
+        j.job_type === DEMO_INGEST_JOB_TYPE &&
+        j.match_id != null &&
+        DEMO_INGEST_STAGED_STATUSES.has(j.status ?? ''),
+    );
+    const detailByMatch = new Map<number, { warnings: string[]; quarantineFlags: string[]; hasPayload: boolean }>();
+    await Promise.all(
+      staged.map(async (j) => {
+        const matchId = j.match_id as number;
+        try {
+          const buf = await getR2Object(demoResultKey(matchId));
+          if (!buf) return;
+          const r = JSON.parse(gunzipMaybe(buf).toString()) as DemoIngestResult;
+          detailByMatch.set(matchId, {
+            warnings: r.warnings ?? [],
+            quarantineFlags: r.quarantineFlags ?? [],
+            hasPayload: r.payload != null,
+          });
+        } catch {
+          /* corrupt/partial artifact — leave detail empty, status still shows */
+        }
+      }),
+    );
+
+    return jobRows.map((j): BackgroundJobRow => {
+      const detail = j.match_id != null ? detailByMatch.get(j.match_id) : undefined;
+      return {
+        jobType: j.job_type,
+        status: j.status ?? 'unknown',
+        stage: j.stage,
+        errorMessage: j.error_message,
+        ghRunUrl: j.gh_run_url,
+        createdAt: j.created_at,
+        updatedAt: j.updated_at,
+        startedAt: j.started_at,
+        finishedAt: j.finished_at,
+        subject: buildJobSubject(
+          { jobType: j.job_type, matchId: j.match_id, mapId: j.map_id },
+          matchCtx,
+          mapById,
+        ),
+        warnings: detail?.warnings ?? [],
+        quarantineFlags: detail?.quarantineFlags ?? [],
+        hasPayload: detail?.hasPayload ?? false,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 export interface ReplayEventsRound {
   round: number;
   sideByFaction: Record<Faction, 'CT' | 'T'>;
@@ -3393,8 +3448,7 @@ export async function getReplayEventsView(matchId: number): Promise<ReplayEvents
   const buf = await getR2Object(replayKey(matchId));
   if (!buf) return null;
   // Stored gzipped; tolerate either.
-  const json =
-    buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b ? gunzipSync(buf) : buf;
+  const json = gunzipMaybe(buf);
   let payload: ReplayPayload;
   try {
     payload = JSON.parse(json.toString('utf8')) as ReplayPayload;

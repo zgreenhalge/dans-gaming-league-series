@@ -7,10 +7,7 @@ import { getMapHeatmap } from '@/lib/queries';
 // only when the Heatmap tab opens, so the per-match R2 fan-out is no longer paid on
 // every map-page render. See `docs/replay.md` and issue #121 for a scalable rollup.
 
-export async function POST(
-  req: NextRequest,
-  _ctx: { params: Promise<{ slug: string }> },
-) {
+export async function POST(req: NextRequest) {
   let matchIds: unknown;
   try {
     ({ matchIds } = await req.json());

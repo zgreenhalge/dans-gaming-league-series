@@ -1,10 +1,6 @@
 'use client';
 
-import { useSyncExternalStore } from 'react';
-
-const subscribe = () => () => {};
-const getServerSnapshot = () => false;
-const getClientSnapshot = () => true;
+import { useHasMounted } from './useHasMounted';
 
 export function LocalTime({
   iso,
@@ -13,7 +9,7 @@ export function LocalTime({
   iso: string;
   opts?: Intl.DateTimeFormatOptions;
 }) {
-  const isClient = useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot);
+  const isClient = useHasMounted();
   if (!isClient) return null;
 
   const formatted = new Date(iso).toLocaleString(

@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 export const r2 = new S3Client({
   region: 'auto',
@@ -34,6 +34,12 @@ export function radarKey(mapId: number): string {
   return `maps/${mapId}/radar.png`;
 }
 
+/** Deterministic key for a match's pending demo-ingest result (gzipped JSON). Transient — written by
+ *  the demo-ingest Action, deleted on confirm/dismiss. */
+export function demoResultKey(matchId: number): string {
+  return `${matchId}/demo-result.json`;
+}
+
 /** Download an R2 object into a Buffer, or `null` if it doesn't exist. */
 export async function getR2Object(key: string): Promise<Buffer | null> {
   try {
@@ -65,4 +71,9 @@ export async function putR2Object(
       ContentEncoding: opts.contentEncoding,
     }),
   );
+}
+
+/** Delete an R2 object. No-op-safe: deleting a missing key does not throw. */
+export async function deleteR2Object(key: string): Promise<void> {
+  await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
 }

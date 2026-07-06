@@ -153,6 +153,14 @@ export function TopbarShell({
           {process.env.NODE_ENV === "development" && status !== "loading" && (
             <DevToggle />
           )}
+          {user?.isAdmin && (
+            <Link
+              href="/admin"
+              className="tracked text-[10px] font-semibold px-2.5 py-1.5 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
+            >
+              Admin
+            </Link>
+          )}
           <ThemeToggle />
           <div className="flex items-center">
             {status === "loading" ? (
@@ -166,6 +174,11 @@ export function TopbarShell({
                 <PlayerAvatar name={user.name ?? "?"} imageUrl={user.image} size="md" round />
               )
             ) : (
+              // Intentionally a plain <a>, not next/link's <Link>: this route is a Route Handler
+              // that 302s to steamcommunity.com for the OpenID flow, not an app page. Link's
+              // client-side soft-navigation expects an RSC payload and isn't built for redirecting
+              // route handlers.
+              // eslint-disable-next-line @next/next/no-html-link-for-pages
               <a
                 href="/api/auth/steam"
                 className="text-[13px] font-medium tracking-wide text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"

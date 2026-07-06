@@ -10,11 +10,12 @@
 // Env (from the workflow): MATCH_ID, GH_RUN_ID, GH_RUN_URL, plus R2 creds and
 // SUPABASE_SERVICE_ROLE_KEY / NEXT_PUBLIC_SUPABASE_URL (GH Actions secrets).
 
-import { gunzipSync, gzipSync } from 'node:zlib';
+import { gzipSync } from 'node:zlib';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { buildReplay } from '../src/lib/replay/extract';
 import { buildHeatmapPoints } from '../src/lib/replay/heatmap';
 import { getR2Object, putR2Object, demoKey, replayKey, heatmapKey } from '../src/lib/r2';
+import { gunzipMaybe } from '../src/lib/gzip';
 import { getAdminClient } from '../src/lib/supabase-admin';
 
 const JOB_TYPE = 'replay_extract';
@@ -129,13 +130,7 @@ async function main() {
     return buf;
   });
 
-  demoBuffer = await stage('decompress', () => {
-    // Gzip magic bytes: 0x1f 0x8b
-    if (demoBuffer.length >= 2 && demoBuffer[0] === 0x1f && demoBuffer[1] === 0x8b) {
-      return gunzipSync(demoBuffer);
-    }
-    return demoBuffer;
-  });
+  demoBuffer = await stage('decompress', () => gunzipMaybe(demoBuffer));
 
   // buildReplay() does parse-ticks → parse-events → parse-grenades → assemble in one
   // pass; we surface those as ordered stages around it for progress reporting.

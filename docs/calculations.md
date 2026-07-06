@@ -54,8 +54,11 @@ Raw numbers, direct from the game scoreboard
 ## Side Splits
 
 CT/T splits for kills, deaths, assists, damage, and headshot kills are derived deterministically
-from the roster's faction (SHIRTS/SKINS), the stored `skins_starting_side`, and the round number.
-No per-tick `team_num` lookups are used.
+from the roster's faction (SHIRTS/SKINS), the starting side, and the round number. The per-round side
+logic never does per-tick `team_num` lookups. The starting-side **anchor** is `skins_starting_side`
+when stored, and is otherwise inferred from a **single** round-1 `team_num` read when it isn't set
+(gauntlet/knife) — stored always wins; see
+[`demo-ingestion.md`](./demo-ingestion.md#starting-side-inference).
 
 - **Regulation:** Rounds 1–`regRoundsPerHalf` (= `target_win_rounds - 1`) use starting sides;
   rounds `regRoundsPerHalf + 1`–`regRoundsPerHalf * 2` use swapped sides.
@@ -93,11 +96,13 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 - `Choke+` = `Player Choke Score` / `League Avg Choke Score`
   - `Choke Score` = `1v1 losses` + 2 * `1v2 losses` + 5 * `2v1 losses`
 
-### Player Rating (aspirational — requires demo data)
+### Player Rating (not yet implemented)
 
 A weighted sabremetric composite for individual performance. Independent from the
-[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). These formulas
-will be implemented once demo ingestion provides the underlying stats (Entry+, KAST+, etc.).
+[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). Most of the underlying `+`
+stats (Entry+, KAST+, Objective+, Utility+, Clutch+) are already computed by demo ingestion and shown
+live in `SabremetricsLeaderboardView.tsx`; Choke+ is documented above but not yet computed/displayed
+anywhere. The composite itself, combining these into one number, hasn't been implemented either.
 
 ```
 Player Rating = 1.00

@@ -3,3 +3,43 @@
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
+
+# Artifacts describe the present, not the past
+
+Everything committed to this repo — docs, code comments, README / `note` / config fields, `.cfg`
+files, tracked JSON — describes how things **are**, never how they **got that way**. No change
+history, no changelog prose, no dates, no `previously / used to / re-enabled / now / we discovered /
+confirmed live / disproved`, and no citing past incidents or prior versions *as explanation*.
+
+Rationale for a **current** choice is welcome (`game_mode is competitive because the season is a
+wingman hybrid`). Narration of the **change** is not (`game_mode was recreational, flipped on
+2026-07-03 after X broke`).
+
+**Litmus test:** if a sentence only makes sense to someone who saw the previous version, delete it. A
+reader arriving fresh should never be able to tell the file was ever different. The "why it changed"
+context belongs in the commit message, the PR, or the conversation — **never in the tree.**
+
+This is a hard rule, not a style preference. The single exception is a *deliberately maintained*
+decision log kept to stop the team regressing to a known-bad configuration (e.g. the "Issues we've
+hit and how they were resolved" table in `docs/cs2-stack-reference.md`): it lives in **one designated
+place**, framed as forward guidance — not license to scatter history into other files.
+
+# Tools and scripts should be task-agnostic
+
+When you build something reusable — anything in `scripts/`, a CLI, a shared helper — keep it general
+and neutral. **Don't bake the current task into it.** No references to the issue/phase/spike you
+happen to be working on, no assumptions about *why* it's being run, no comments narrating the
+investigation in progress, no "throwaway"/"spike" framing that discourages reuse. Name it for what it
+does (`inspect-demo`, not `parse-demo-parity`), document its inputs/outputs factually, and let the
+caller interpret the results for their situation. A tool written for "verify X for feature Y" quietly
+rots into a single-use script; the same tool written as "inspect X" stays reusable. Put the
+task-specific interpretation in the conversation, the PR, or a doc — not in the tool.
+
+# Local `*_handoff/` dirs are gitignored scratch
+
+Directories matching `*_handoff/` (e.g. `dathost_handoff/`, `ehog_handoff/`) hold planning and
+handoff material piped down from Claude online sessions to drive iterative implementation. They are
+**gitignored and local-only** (`.gitignore`: `*handoff/`) — nothing in them is tracked or expected
+to persist beyond local disk. Use them freely for plans, specs, and session-to-session progress
+notes, but don't commit them, don't rely on them existing in a fresh clone, and keep anything that
+must outlive the work in tracked docs (`docs/`) or code.

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import SabremetricsTable from '@/components/SabremetricsTable';
+import { useHasMounted } from './useHasMounted';
 import type { SabFields, RoundHistoryEntry } from '@/lib/types';
 type Faction = 'CT' | 'T' | null;
 
@@ -119,8 +120,7 @@ export default function DemoUploadModal({
   const [skinsScore, setSkinsScore] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  const mounted = useHasMounted();
 
   if (!mounted) return null;
   if (alreadyPlayed && !isAdmin) return null;
@@ -316,6 +316,8 @@ export default function DemoUploadModal({
           player_stats,
           sabremetrics: parsed.sabremetrics,
           round_history: parsed.round_history ?? null,
+          // Forward warnings so the score route can learn steam ids from elimination matches.
+          warnings: parsed.warnings,
         }),
       });
       if (!res.ok) {

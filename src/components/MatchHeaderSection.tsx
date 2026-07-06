@@ -1,13 +1,11 @@
 'use client';
 
-import { useState, useTransition, useEffect, useSyncExternalStore } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { toSentenceCase, mapSlug } from '@/lib/maps';
-import { useRouter } from 'next/navigation';
-
-const noopSubscribe = () => () => {};
-const returnFalse = () => false;
-const returnTrue = () => true;
+import { type ScheduledMatchRef } from '@/lib/schedule';
+import { useScheduleEditor } from './useScheduleEditor';
+import { useHasMounted } from './useHasMounted';
 
 interface Props {
   map: string | null;
@@ -18,6 +16,8 @@ interface Props {
   canEdit: boolean;
   played: boolean;
   isGauntlet: boolean;
+  /** Other unplayed scheduled matches — drives the shared-server collision warning (#134). */
+  otherScheduled?: ScheduledMatchRef[];
 }
 
 function formatCountdown(iso: string): string {
@@ -59,15 +59,6 @@ function useCountdown(iso: string | null): string {
   return label;
 }
 
-function toDatetimeLocal(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
-    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
-  );
-}
-
 function fmtWindowDate(dateStr: string): string {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
     month: 'short',
@@ -85,16 +76,6 @@ function fmtScheduled(iso: string): string {
   });
 }
 
-function useIsClient(): boolean {
-  return useSyncExternalStore(noopSubscribe, returnTrue, returnFalse);
-}
-
-function isOutsideWindow(localDt: string, weekStart: string | null, weekEnd: string | null): boolean {
-  if (!weekStart || !weekEnd || !localDt) return false;
-  const d = new Date(localDt);
-  return d < new Date(weekStart + 'T00:00:00') || d > new Date(weekEnd + 'T23:59:59');
-}
-
 export default function MatchHeaderSection({
   map,
   matchId,
@@ -104,63 +85,27 @@ export default function MatchHeaderSection({
   canEdit,
   played,
   isGauntlet,
+  otherScheduled = [],
 }: Props) {
-  const router = useRouter();
-  const isClient = useIsClient();
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState('');
-  const [warning, setWarning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
+  const isClient = useHasMounted();
   const countdown = useCountdown(scheduledAt);
-
-  useEffect(() => {
-    if (scheduledAt) setValue(toDatetimeLocal(scheduledAt));
-  }, [scheduledAt]);
+  const {
+    editing,
+    value,
+    warning,
+    collisionWith,
+    error,
+    setValue,
+    startEditing,
+    cancel,
+    dismissWarning,
+    save,
+    clear,
+  } = useScheduleEditor({ matchId, scheduledAt, weekStart, weekEnd, otherScheduled });
 
   const showSchedule = !played && !isGauntlet;
   const windowLabel =
     isClient && weekStart && weekEnd ? `${fmtWindowDate(weekStart)} – ${fmtWindowDate(weekEnd)}` : null;
-
-  async function save(override = false) {
-    if (!value) return;
-    if (!override && isOutsideWindow(value, weekStart, weekEnd)) {
-      setWarning(true);
-      return;
-    }
-    setWarning(false);
-    setError(null);
-    const res = await fetch(`/api/matches/${matchId}/schedule`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scheduled_at: new Date(value).toISOString() }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? 'Failed to save.');
-      return;
-    }
-    setEditing(false);
-    startTransition(() => router.refresh());
-  }
-
-  async function clear() {
-    setError(null);
-    const res = await fetch(`/api/matches/${matchId}/schedule`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scheduled_at: null }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? 'Failed to clear.');
-      return;
-    }
-    setEditing(false);
-    startTransition(() => router.refresh());
-  }
-
-  const startEditing = () => { setValue(scheduledAt ? toDatetimeLocal(scheduledAt) : ''); setEditing(true); };
 
   const scheduleReadView = showSchedule && !editing && (
     <div className="flex items-center gap-2">
@@ -212,14 +157,7 @@ export default function MatchHeaderSection({
       <input
         type="datetime-local"
         value={value}
-        onChange={(e) => {
-          if (!e.target.value) { setValue(''); setWarning(false); return; }
-          const d = new Date(e.target.value);
-          d.setMinutes(Math.round(d.getMinutes() / 15) * 15, 0, 0);
-          const pad = (n: number) => String(n).padStart(2, '0');
-          setValue(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
-          setWarning(false);
-        }}
+        onChange={(e) => setValue(e.target.value)}
         className="font-mono text-[13px] px-2 py-1.5 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
       />
       <button
@@ -239,7 +177,7 @@ export default function MatchHeaderSection({
         </button>
       )}
       <button
-        onClick={() => { setEditing(false); setWarning(false); setError(null); }}
+        onClick={cancel}
         className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
       >
         Cancel
@@ -277,7 +215,21 @@ export default function MatchHeaderSection({
         <div className="flex justify-start">
           <div className="border border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)] px-3 py-2.5 flex flex-col gap-2">
             <span className="text-[12px] text-[var(--color-accent-amber-fg)]">
-              Outside week window{windowLabel ? ` (${windowLabel})` : ''}.
+              {warning === 'collision' ? (
+                <>
+                  Within an hour of{' '}
+                  {collisionWith ? (
+                    <Link href={`/matches/${collisionWith.id}`} className="underline hover:opacity-80">
+                      {collisionWith.label}
+                    </Link>
+                  ) : (
+                    'another match'
+                  )}{' '}
+                  — they share one game server and may contend.
+                </>
+              ) : (
+                `Outside week window${windowLabel ? ` (${windowLabel})` : ''}.`
+              )}
             </span>
             <div className="flex items-center justify-end gap-3">
               <button
@@ -287,7 +239,7 @@ export default function MatchHeaderSection({
                 Schedule anyway
               </button>
               <button
-                onClick={() => setWarning(false)}
+                onClick={dismissWarning}
                 className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
               >
                 Cancel

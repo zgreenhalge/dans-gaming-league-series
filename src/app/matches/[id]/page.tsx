@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/og';
 import { projectRatingDeltas, type RatingProjection } from '@/lib/ehog';
 import { isPlayedScore, parseScore } from '@/lib/util';
@@ -10,11 +10,15 @@ import { getMapLookup } from '@/lib/queries';
 import { TopbarShell } from '@/components/TopbarShell';
 import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
+import MatchServerPanel from '@/components/MatchServerPanel';
+import MatchDemoReviewBlock from '@/components/MatchDemoReviewBlock';
 import MatchTabView from '@/components/MatchTabView';
 import RoundHistoryStrip from '@/components/RoundHistoryStrip';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 import { FeatureMatchBanner } from '@/components/FeatureMatch';
+import { SchedulingOverlapBanner } from '@/components/SchedulingOverlapBanner';
+import { findScheduleCollision } from '@/lib/schedule';
 import { HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { r2, R2_BUCKET, demoKey as makeDemoKey } from '@/lib/r2';
@@ -196,6 +200,7 @@ export default async function MatchPage({
   let gauntletPlayerIndex: 0 | 1 | null = null;
   let vetoIsAdmin = false;
   let isCurrentUserAdmin = false;
+  let canManageServer = false; // admin or in-match → can start/stop the match server
   if (currentPlayerId !== null) {
     const myStatRow = stats.find((s) => s.player_id === currentPlayerId);
     const isInMatch = !!myStatRow;
@@ -207,6 +212,7 @@ export default async function MatchPage({
     const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
     isCurrentUserAdmin = isAdmin;
     const authorized = isInMatch || isAdmin;
+    canManageServer = authorized;
     if (authorized && !played) {
       // Non-admins are blocked from veto until the window opens
       canVeto = isAdmin || vetoWindowOpen;
@@ -232,9 +238,19 @@ export default async function MatchPage({
 
   const window = matchWeekWindow(season.start_date, week.week_number);
 
+  // Other unplayed matches' scheduled times, for the single-server scheduling-collision warning
+  // (#134) — both the schedule editor and the overlap banner. Fetched for any viewer of an unplayed
+  // non-gauntlet match so the banner shows regardless of edit rights.
+  const otherScheduled =
+    !played && !season.is_gauntlet ? await getOtherScheduledMatches(match.id) : [];
+  const scheduleCollision = findScheduleCollision(match.scheduled_at, otherScheduled);
+
   return (
     <div className="min-h-screen">
-      <div className="centering">{match.is_feature_match && <FeatureMatchBanner />}</div>
+      <div className="centering">
+        {match.is_feature_match && <FeatureMatchBanner />}
+        {scheduleCollision && <SchedulingOverlapBanner conflict={scheduleCollision} />}
+      </div>
       <Topbar seasonId={season.id} seasonName={season.name} weekNumber={week.week_number} matchNumber={match.match_number} isGauntlet={season.is_gauntlet} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         {/* Header + veto wrapped in map backdrop — gradient shows regardless of image */}
@@ -258,6 +274,7 @@ export default async function MatchPage({
               canEdit={canEdit}
               played={played}
               isGauntlet={season.is_gauntlet}
+              otherScheduled={otherScheduled}
             />
 
             {score && (
@@ -302,6 +319,26 @@ export default async function MatchPage({
                 />
               </div>
             </>
+          )}
+
+          {/* Match server (Phase 4) — below pick/ban, still in the header. Always shown in dev.
+              Hidden once the match has a final score — a scored match doesn't need a server,
+              whether or not it went through the demo pipeline (#140). */}
+          {!played && (vetoComplete || process.env.NODE_ENV === 'development') && (
+            <div className="pb-6 flex justify-center">
+              <div className="w-full max-w-md">
+                <MatchServerPanel matchId={match.id} canManage={canManageServer} />
+              </div>
+            </div>
+          )}
+
+          {/* Pending demo result (Phase 3) — admin/in-match review & confirm; self-hides when none. */}
+          {canManageServer && (
+            <div className="pb-6 flex justify-center">
+              <div className="w-full max-w-md">
+                <MatchDemoReviewBlock matchId={match.id} />
+              </div>
+            </div>
           )}
 
         </div>

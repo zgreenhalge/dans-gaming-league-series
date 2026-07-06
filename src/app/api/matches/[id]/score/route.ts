@@ -2,8 +2,11 @@ import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
-import { isPlayedScore } from '@/lib/util';
+import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { teardownMatchServer } from '@/lib/dathost-lifecycle';
+import { triggerRatingRecompute } from '@/lib/ehog-recompute';
+import { parseEliminationWarning } from '@/lib/parsers/rosterResolver';
 import type { DemoSabremetricStat, RoundHistoryEntry } from '@/lib/types';
 
 const supabaseAdmin = getAdminClient();
@@ -79,18 +82,47 @@ function isVetoComplete(match: MatchRow): boolean {
   );
 }
 
-async function triggerRatingRecompute(): Promise<void> {
-  const secret = process.env.RECOMPUTE_SECRET;
-  if (!secret) return;
-  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
-  try {
-    await fetch(`${base}/api/ehog/recompute`, {
-      method: 'POST',
-      headers: { 'x-recompute-secret': secret },
-    });
-  } catch (e) {
-    console.error('EHOG recompute trigger failed:', e);
+/**
+ * Persist demo-learned steam ids. When exactly one player in this match was resolved by elimination
+ * (the ambiguous fallback), the warning carries that demo's steam id + the roster player it was
+ * matched to — write it onto the player so future parses resolve by exact id. Guarded to the
+ * single-elimination case only; a unique-constraint hit is skipped (that id belongs to someone else).
+ */
+async function applyEliminationSteamIds(matchId: number, warnings: string[]): Promise<void> {
+  const elims = warnings
+    .map(parseEliminationWarning)
+    .filter((e): e is NonNullable<typeof e> => e !== null);
+  if (elims.length !== 1) return; // safety: only when a single player was inferred
+  const { rosterName, steamId, demoName } = elims[0];
+
+  const { data: statRows } = await supabaseAdmin
+    .from('player_match_stats')
+    .select('player_id')
+    .eq('match_id', matchId);
+  const ids = ((statRows ?? []) as { player_id: number }[]).map((r) => r.player_id);
+  if (ids.length === 0) return;
+
+  const { data: players } = await supabaseAdmin.from('players').select('id, name').in('id', ids);
+  const target = ((players ?? []) as { id: number; name: string }[]).find((p) => p.name === rosterName);
+  if (!target) return;
+
+  // Never duplicate a steam id across players — don't rely on a DB constraint that may not exist.
+  const { data: clash } = await supabaseAdmin
+    .from('players')
+    .select('id')
+    .eq('steam_id', steamId)
+    .neq('id', target.id)
+    .limit(1);
+  if (clash && clash.length > 0) {
+    console.warn(`learn steam id skipped: ${steamId} already belongs to player ${(clash[0] as { id: number }).id}`);
+    return;
   }
+
+  const { error } = await supabaseAdmin
+    .from('players')
+    .update({ steam_id: steamId, steam_nickname: demoName })
+    .eq('id', target.id);
+  if (error) console.warn(`learn steam id skipped for player ${target.id}: ${error.message}`);
 }
 
 export async function PATCH(
@@ -103,8 +135,8 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const matchId = Number(id);
-  if (!Number.isFinite(matchId)) {
+  const matchId = parseMatchId(id);
+  if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
 
@@ -154,12 +186,13 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
-  const { shirts, skins, player_stats, sabremetrics, round_history } = body as {
+  const { shirts, skins, player_stats, sabremetrics, round_history, warnings } = body as {
     shirts: unknown;
     skins: unknown;
     player_stats: unknown;
     sabremetrics?: DemoSabremetricStat[];
     round_history?: unknown;
+    warnings?: unknown; // parser warnings forwarded from the confirm — used to learn steam ids
   };
 
   if (typeof shirts !== 'number' || typeof skins !== 'number' || !Number.isInteger(shirts) || !Number.isInteger(skins)) {
@@ -311,6 +344,34 @@ export async function PATCH(
   }
 
   after(() => triggerRatingRecompute());
+
+  // Learn steam ids from elimination-resolved players: if the confirm forwarded parser warnings and
+  // exactly one player was matched by elimination, persist that demo's steam id/nickname onto the
+  // roster player, so next time they resolve by exact id — no guess. Best-effort in `after()`.
+  // ADMIN-ONLY: `warnings` is client-supplied and this writes to `players.steam_id`, so trusting a
+  // non-admin caller would let an in-match player forge a warning and hijack another's steam identity.
+  if (isAdmin && Array.isArray(warnings)) {
+    after(async () => {
+      try {
+        await applyEliminationSteamIds(matchId, warnings as string[]);
+      } catch (err) {
+        console.error(`learn steam id(${matchId}) failed:`, err);
+      }
+    });
+  }
+
+  // Score reported → tear down the match server (reuse model = stop, never delete). Best-effort;
+  // skipped when hosting isn't configured. `onlyIfOwnsServer` ensures editing one match's score
+  // never stops another match's live server on the shared host.
+  if (process.env.DATHOST_SERVER_ID) {
+    after(async () => {
+      try {
+        await teardownMatchServer(supabaseAdmin, matchId, { onlyIfOwnsServer: true });
+      } catch (err) {
+        console.error(`auto-teardown(${matchId}) failed:`, err);
+      }
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

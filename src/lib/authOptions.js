@@ -72,23 +72,25 @@ export const authOptions = {
       if (user?.devPlayerId) {
         const { data: player } = await supabase
           .from("players")
-          .select("id, name")
+          .select("id, name, is_admin")
           .eq("id", user.devPlayerId)
           .single();
         token.playerId = player?.id ?? null;
         token.playerName = player?.name ?? null;
+        token.isAdmin = !!player?.is_admin;
       } else if (user?.steamId) {
         token.steamId = user.steamId;
         token.avatarUrl = user.image ?? "";
 
         const { data: player } = await supabase
           .from("players")
-          .select("id, name")
+          .select("id, name, is_admin")
           .eq("steam_id", String(user.steamId))
           .single();
 
         token.playerId = player?.id ?? null;
         token.playerName = player?.name ?? null;
+        token.isAdmin = !!player?.is_admin;
 
         // Keep Steam profile info fresh in the DB on every login
         if (player) {
@@ -108,6 +110,19 @@ export const authOptions = {
         token.playerName = sessionData.playerName;
       }
 
+      // Backfill is_admin for sessions that predate the field — no re-login needed. The jwt callback
+      // runs on every session read, so an existing token picks it up on its next request (e.g. the
+      // client Topbar's useSession) and the updated token is re-persisted to the cookie. Only queries
+      // when unset, so it's a one-time hit per stale session (fresh sign-ins set it above).
+      if (token.isAdmin === undefined && token.playerId != null) {
+        const { data: p } = await supabase
+          .from("players")
+          .select("is_admin")
+          .eq("id", token.playerId)
+          .maybeSingle();
+        token.isAdmin = !!p?.is_admin;
+      }
+
       return token;
     },
 
@@ -117,6 +132,7 @@ export const authOptions = {
         session.user.image = token.avatarUrl;
         session.user.playerId = token.playerId ?? null;
         session.user.playerName = token.playerName ?? null;
+        session.user.isAdmin = !!token.isAdmin;
       }
       return session;
     },

@@ -6,9 +6,9 @@ import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import H2HSection from './H2HSection';
 import { AdvancedStatsView } from './AdvancedStatsView';
-import { buildRegularToGauntletMap, deriveRates, extractSeasonNumber, seasonTitle, tabCls } from '@/lib/util';
+import { buildRegularToGauntletMap, computeH2H, deriveRates, extractSeasonNumber, mapMatchRowsToH2HInput, seasonTitle, tabCls } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import type { TrophyEntry, H2HData, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow } from '@/lib/queries';
+import type { TrophyEntry, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow } from '@/lib/queries';
 import type { H2HPair } from './H2HMatrix';
 import EhogTierBar from './EhogTierBar';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
@@ -57,7 +57,7 @@ export default function CareerStatsView({
   gauntletCareerRows,
   gauntletBySeason,
   trophiesByPlayer,
-  h2hData,
+  players,
   allMatches = [],
   ehogSnapshots = [],
   allSabremetrics = [],
@@ -69,7 +69,7 @@ export default function CareerStatsView({
   gauntletCareerRows: LeaderboardRowWithId[];
   gauntletBySeason: Record<number, LeaderboardRowWithId[]>;
   trophiesByPlayer: Record<number, TrophyEntry[]>;
-  h2hData: H2HData;
+  players: { id: number; name: string; steam_avatar_url: string | null }[];
   allMatches?: MapMatchRow[];
   ehogSnapshots?: EhogSnapshotRow[];
   allSabremetrics?: SabremetricMatchRow[];
@@ -85,11 +85,11 @@ export default function CareerStatsView({
     const bName = searchParams.get('b');
     const type = searchParams.get('type') === 'opponent' ? 'opponent' : 'partner';
     if (!aName || !bName) return null;
-    const a = h2hData.players.find((p) => p.name.toLowerCase() === aName.toLowerCase());
-    const b = h2hData.players.find((p) => p.name.toLowerCase() === bName.toLowerCase());
+    const a = players.find((p) => p.name.toLowerCase() === aName.toLowerCase());
+    const b = players.find((p) => p.name.toLowerCase() === bName.toLowerCase());
     if (!a || !b) return null;
     return { a: a.id, b: b.id, type };
-  }, [searchParams, h2hData.players]);
+  }, [searchParams, players]);
 
   function toggleRegular() { baseToggleRegular(); setFilter('career'); }
   function toggleGauntlet() { baseToggleGauntlet(); setFilter('career'); }
@@ -140,6 +140,13 @@ export default function CareerStatsView({
       return false;
     });
   }, [filter, allMatches, includeRegular, includeGauntlet, regularToGauntlet]);
+
+  const playersById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
+
+  const h2hData = useMemo(
+    () => computeH2H(mapMatchRowsToH2HInput(filteredMatches), playersById),
+    [filteredMatches, playersById],
+  );
 
   const filteredSabremetrics = useMemo(() => {
     if (filter === 'career') {

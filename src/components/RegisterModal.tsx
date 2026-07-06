@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
+import { useHasMounted } from "./useHasMounted";
 
 type UnlinkedPlayer = { id: number; name: string };
 
@@ -14,9 +15,7 @@ export default function RegisterModal() {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => { setMounted(true); }, []);
+  const mounted = useHasMounted();
 
   const show = !!session?.user && session.user.playerId == null;
 

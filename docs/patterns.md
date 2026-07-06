@@ -7,7 +7,10 @@ concrete step-by-step changes see [`recipes.md`](./recipes.md).
 ## Read the doc that owns the area before you change it
 
 These docs exist so you don't have to reverse-engineer intent from the code. Before editing in an
-unfamiliar area, read the doc that owns it — [`README.md`](./README.md) maps every area to its doc:
+unfamiliar area, read the doc that owns it. **[`README.md`](./README.md)'s index table is the
+authoritative, up-to-date map of every doc to its area** — the quick-reference list below covers the
+most common cases but isn't exhaustive by design, so when in doubt check the index rather than
+assuming this list is complete:
 
 - Changing a stat or ranking formula → [`calculations.md`](./calculations.md) **first** (the math is
   load-bearing and easy to get subtly wrong).
@@ -15,7 +18,13 @@ unfamiliar area, read the doc that owns it — [`README.md`](./README.md) maps e
 - A route, the mutation API, the schema, or deployment → [`architecture.md`](./architecture.md).
 - CSS, hover/lift, layout, or a shared UI primitive → [`visual-conventions.md`](./visual-conventions.md).
 - The EHOG rating engine → [`ehog.md`](./ehog.md) (and mirror any math change Python ↔ TS).
-- The demo upload/parse pipeline → [`demo-ingestion.md`](./demo-ingestion.md).
+- The demo upload/parse pipeline → [`demo-ingestion.md`](./demo-ingestion.md); the demo-format/parser
+  library itself (not DGLS's use of it) → [`demo-parsing-reference.md`](./demo-parsing-reference.md).
+- DatHost/MatchZy server hosting + auto-ingestion → [`hosting.md`](./hosting.md); general
+  DatHost/MatchZy/CounterStrikeSharp knowledge (not DGLS's use of it) →
+  [`cs2-stack-reference.md`](./cs2-stack-reference.md).
+- The 2D replay / core-events / heatmap pipeline → [`replay.md`](./replay.md).
+- A new background-job GitHub Action → [`github-actions.md`](./github-actions.md).
 
 Reading the right doc first is faster than guessing, and it stops you re-deriving something a helper
 already does. The flip side is below in **Document what *is***: when your change alters behavior a
@@ -87,12 +96,28 @@ season filters, the hover/lift classes, the responsive-table treatment — preci
 for the visual primitives. When you genuinely need something new, ask whether it's a new *shape* or
 just a new *parameter* (color, count) of an existing primitive — usually it's the latter.
 
-## Document what *is*, and keep it in sync at change time
+## Document what *is*, not how it changed
 
-Docs describe the system as it currently works — not its history. No changelog entries, no "we used
-to do X," no decision archaeology unless explicitly asked. When a change alters behavior, update the
-relevant doc in the **same** change, and when you add a domain concept add it to
-[`glossary.md`](./glossary.md). A stale doc is worse than no doc.
+**This applies to every committed artifact — docs, code comments, README / `note` / config fields,
+`.cfg` files, tracked JSON — not just files under `docs/`.** Each describes how the system works
+*now*, never how it got there. AGENTS.md's "Artifacts describe the present, not the past" is the
+hard-rule statement; this is the working detail.
+
+Cut on sight: dates, changelog prose, and the tells `previously / used to / earlier / re-enabled /
+now / we discovered / confirmed live / disproved`, plus any past incident or prior version cited *as
+explanation*. Rationale for a **current** choice stays (`X is set because Y`); narration of the
+**change** goes (`X was Z, flipped to Y after W broke`).
+
+**Litmus test:** if a sentence only makes sense to someone who saw the previous version, delete it.
+The "why it changed" belongs in the commit message, PR, or conversation — never in the tree.
+
+**One exception:** a deliberately maintained decision log kept to prevent regressing to a known-bad
+configuration (e.g. the "Issues we've hit and how they were resolved" table in
+[`cs2-stack-reference.md`](./cs2-stack-reference.md)) — in its one designated place, framed as forward
+guidance, not scattered elsewhere.
+
+When a change alters behavior, update the relevant doc in the **same** change, and when you add a
+domain concept add it to [`glossary.md`](./glossary.md). A stale doc is worse than no doc.
 
 ## Client-only values: dates, times, and hydration safety
 
