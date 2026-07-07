@@ -103,26 +103,37 @@ test('aggregateMapPickBanStats: results sort by picked count descending', () => 
   assert.equal(out[0].picked, 2);
 });
 
-test('aggregateScoreDistribution: margin buckets (close/comfortable/landslide) and OT', () => {
+test('aggregateScoreDistribution: loser-round buckets (crushed/convincing/competitive/close) and CRAZY', () => {
   const matches = [
-    match({ final_score: '13-12' }), // margin 1 -> close
-    match({ final_score: '13-9' }), // margin 4 -> comfortable
-    match({ final_score: '13-2' }), // margin 11 -> landslide
-    match({ final_score: '16-14' }), // winner > 13 -> OT (checked before margin)
+    match({ final_score: '13-11' }), // loser 11 -> close
+    match({ final_score: '13-8' }), // loser 8 -> competitive
+    match({ final_score: '13-5' }), // loser 5 -> convincing
+    match({ final_score: '13-2' }), // loser 2 -> crushed
+    match({ final_score: '16-14' }), // winner > 13 -> CRAZY (checked before loser buckets)
     match({ final_score: '0-0' }), // unplayed -> excluded
   ];
   const out = aggregateScoreDistribution(matches);
-  assert.equal(out.total, 4);
+  assert.equal(out.total, 5);
+  assert.equal(out.crushed, 1);
+  assert.equal(out.convincing, 1);
+  assert.equal(out.competitive, 1);
   assert.equal(out.close, 1);
-  assert.equal(out.comfortable, 1);
-  assert.equal(out.landslide, 1);
-  assert.equal(out.ot, 1);
+  assert.equal(out.crazy, 1);
 });
 
-test('aggregateScoreDistribution: margin exactly 2 is close, exactly 3 is comfortable (boundary)', () => {
-  const out = aggregateScoreDistribution([match({ final_score: '13-11' }), match({ final_score: '13-10' })]);
+test('aggregateScoreDistribution: loser-round bucket boundaries', () => {
+  const out = aggregateScoreDistribution([
+    match({ final_score: '13-3' }), // loser 3 -> crushed
+    match({ final_score: '13-4' }), // loser 4 -> convincing
+    match({ final_score: '13-6' }), // loser 6 -> convincing
+    match({ final_score: '13-7' }), // loser 7 -> competitive
+    match({ final_score: '13-9' }), // loser 9 -> competitive
+    match({ final_score: '13-10' }), // loser 10 -> close
+  ]);
+  assert.equal(out.crushed, 1);
+  assert.equal(out.convincing, 2);
+  assert.equal(out.competitive, 2);
   assert.equal(out.close, 1);
-  assert.equal(out.comfortable, 1);
 });
 
 if (failures.length) {

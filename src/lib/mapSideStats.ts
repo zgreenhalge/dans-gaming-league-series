@@ -72,15 +72,18 @@ export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickB
 }
 
 export interface ScoreDistribution {
-  ot: number;
+  crazy: number;
   close: number;
-  comfortable: number;
-  landslide: number;
+  competitive: number;
+  convincing: number;
+  crushed: number;
   total: number;
 }
 
+// Buckets are keyed on the losing team's round count. Overtime (winner > 13)
+// is its own "crazy" bucket, checked before the loser-round buckets.
 export function aggregateScoreDistribution(matches: MatchPickBanInput[]): ScoreDistribution {
-  const out: ScoreDistribution = { ot: 0, close: 0, comfortable: 0, landslide: 0, total: 0 };
+  const out: ScoreDistribution = { crazy: 0, close: 0, competitive: 0, convincing: 0, crushed: 0, total: 0 };
   for (const m of matches) {
     if (!isPlayedScore(m.final_score)) continue;
     const parsed = parseScore(m.final_score);
@@ -88,12 +91,12 @@ export function aggregateScoreDistribution(matches: MatchPickBanInput[]): ScoreD
     const { shirts, skins } = parsed;
     const winner = Math.max(shirts, skins);
     const loser = Math.min(shirts, skins);
-    const margin = winner - loser;
     out.total++;
-    if (winner > 13) out.ot++;
-    else if (margin <= 2) out.close++;
-    else if (margin <= 4) out.comfortable++;
-    else out.landslide++;
+    if (winner > 13) out.crazy++;
+    else if (loser <= 3) out.crushed++;
+    else if (loser <= 6) out.convincing++;
+    else if (loser <= 9) out.competitive++;
+    else out.close++;
   }
   return out;
 }

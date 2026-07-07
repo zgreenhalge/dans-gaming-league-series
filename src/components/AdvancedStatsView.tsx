@@ -472,10 +472,11 @@ function AverageGameStatsTable({ data }: { data: RowWithStats[] }) {
 
 function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
   const buckets = [
-    { label: 'Landslide',   count: dist.landslide,    note: '13–8 or worse' },
-    { label: 'Comfortable', count: dist.comfortable,  note: '13–9 or 13–10' },
-    { label: 'Close',       count: dist.close,        note: '13–11 or 13–12' },
-    { label: 'OT',          count: dist.ot,           note: 'Overtime' },
+    { label: 'Crushed',     count: dist.crushed,     note: '13–3 or worse' },
+    { label: 'Convincing',  count: dist.convincing,  note: '13–4 to 13–6' },
+    { label: 'Competitive', count: dist.competitive, note: '13–7 to 13–9' },
+    { label: 'Close',       count: dist.close,       note: '13–10 or 13–11' },
+    { label: 'CRAZY',       count: dist.crazy,       note: 'Overtime' },
   ];
   return (
     <div>
