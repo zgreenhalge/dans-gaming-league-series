@@ -134,6 +134,22 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 - `Choke+` = `Player Choke Score` / `League Avg Choke Score`
   - `Choke Score` = `1v1 losses` + 2 * `1v2 losses` + 5 * `2v1 losses`
 
+### Mechanics (raw, ungated)
+
+Raw accuracy stats derived straight from `weapon_fire`/`player_hurt` events — not yet part of any
+`+` composite. "Raw" because they aren't gated on whether the enemy was actually spotted/visible
+(Leetify's "Accuracy (Enemy Spotted)"); CS2's spotted mask (`m_bSpotted`) is known-flaky, so these
+ship ungated first per `docs/demo-parsing-reference.md`'s guidance on that tradeoff.
+
+- `Accuracy` = `Shots Hit` / `Shots Fired` — guns only; grenade throws, knife, and C4 don't count
+  as "shots". Hits from grenades (HE, molotov/incendiary) are excluded from `Shots Hit` the same
+  way.
+- `Head Accuracy` = `Headshot Hits` / `Shots Hit` — hits landing on the head hitgroup,
+  independent of whether the hit was a kill (distinct from the kill-only `Headshot %` above).
+- Shotguns firing multiple pellets per `weapon_fire` (and wallbang penetration hitting more than
+  one player) mean `Shots Fired` and `Shots Hit` aren't a strict 1:1 shot-to-hit correspondence —
+  an accepted imprecision of "raw" accuracy, not a bug.
+
 ### Player Rating (not yet implemented)
 
 A weighted sabremetric composite for individual performance. Independent from the

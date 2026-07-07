@@ -167,6 +167,9 @@ export interface PlayerMatchSabremetrics {
   he_damage: number;
   blind_duration_max_sum: number;
   effective_flashes: number;
+  shots_fired: number;
+  shots_hit: number;
+  headshot_hits: number;
 }
 
 export type SabFields = Omit<PlayerMatchSabremetrics, 'player_match_stats_id'>;

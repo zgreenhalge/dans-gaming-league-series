@@ -14,6 +14,7 @@ import { collectUtility, type PlayerBlindRow, type WeaponFireRow } from './parse
 import { collectObjectives, type BombEventRow } from './parsers/objectives';
 import { collectTrades } from './parsers/trades';
 import { collectHeGrenades } from './parsers/heGrenade';
+import { collectAccuracy } from './parsers/accuracy';
 
 const ZERO: SabFields = {
   kills_ct: 0, kills_t: 0,
@@ -45,6 +46,9 @@ const ZERO: SabFields = {
   he_damage: 0,
   blind_duration_max_sum: 0,
   effective_flashes: 0,
+  shots_fired: 0,
+  shots_hit: 0,
+  headshot_hits: 0,
 };
 
 export function parseDemoSabremetrics(
@@ -87,7 +91,7 @@ export function parseDemoSabremetrics(
   ) as BombEventRow[];
 
   const hurtEvents = parseEvent(
-    demoBuffer, 'player_hurt', [], ['total_rounds_played', 'weapon', 'dmg_health'],
+    demoBuffer, 'player_hurt', [], ['total_rounds_played', 'weapon', 'dmg_health', 'hitgroup'],
   ) as PlayerHurtRow[];
 
   // 3. Build match context — resolve the starting side the same way parseDemoFile does
@@ -124,6 +128,7 @@ export function parseDemoSabremetrics(
   const objectiveStats = collectObjectives(plantEvents, defuseEvents, context, steamIds);
   const tradeStats = collectTrades(deathEvents, hurtEvents, context, steamIds);
   const heStats = collectHeGrenades(fireEvents, hurtEvents, context, steamIds);
+  const accuracyStats = collectAccuracy(fireEvents, hurtEvents, context, steamIds);
 
   // 6. Merge with zero defaults
   const sabremetrics: DemoSabremetricStat[] = steamIds.map((steamId) => ({
@@ -139,6 +144,7 @@ export function parseDemoSabremetrics(
       ...objectiveStats.get(steamId),
       ...tradeStats.get(steamId),
       ...heStats.get(steamId),
+      ...accuracyStats.get(steamId),
     },
   }));
 

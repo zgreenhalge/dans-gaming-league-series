@@ -79,6 +79,7 @@ export function hurt(opts: {
   attacker?: string | null;
   weapon?: string;
   dmgHealth?: number;
+  hitgroup?: number;
 }): PlayerHurtRow {
   return {
     tick: opts.tick,
@@ -87,5 +88,6 @@ export function hurt(opts: {
     attacker_steamid: opts.attacker ?? null,
     weapon: opts.weapon ?? '',
     dmg_health: opts.dmgHealth ?? 0,
+    hitgroup: opts.hitgroup ?? 0,
   };
 }

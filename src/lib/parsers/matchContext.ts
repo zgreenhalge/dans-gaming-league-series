@@ -36,6 +36,7 @@ export interface PlayerHurtRow {
   user_steamid: string | null;
   weapon: string;
   dmg_health: number;
+  hitgroup: number;
 }
 
 export interface MatchContext {

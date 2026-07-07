@@ -39,6 +39,9 @@ interface AggregatedSab {
   he_damage: number;
   blind_duration_max_sum: number;
   effective_flashes: number;
+  shots_fired: number;
+  shots_hit: number;
+  headshot_hits: number;
 }
 
 function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
@@ -65,6 +68,7 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
         traded_death_opportunities: 0, traded_death_attempts: 0, traded_death_successes: 0,
         he_thrown: 0, he_damage: 0,
         blind_duration_max_sum: 0, effective_flashes: 0,
+        shots_fired: 0, shots_hit: 0, headshot_hits: 0,
       };
       byPlayer.set(r.player_id, agg);
       matchesSeen.set(r.player_id, new Set());
@@ -107,6 +111,9 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
     agg.he_damage += s.he_damage;
     agg.blind_duration_max_sum += s.blind_duration_max_sum;
     agg.effective_flashes += s.effective_flashes;
+    agg.shots_fired += s.shots_fired;
+    agg.shots_hit += s.shots_hit;
+    agg.headshot_hits += s.headshot_hits;
   }
 
   return Array.from(byPlayer.values());
@@ -261,6 +268,8 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
         case 'opening_pct': aVal = (a.opening_kills + a.opening_deaths) / arp; bVal = (b.opening_kills + b.opening_deaths) / brp; break;
         case 'opening_success': aVal = a.opening_kills / ((a.opening_kills + a.opening_deaths) || 1); bVal = b.opening_kills / ((b.opening_kills + b.opening_deaths) || 1); break;
         case 'hs': aVal = a.headshot_kills / (a.kills || 1); bVal = b.headshot_kills / (b.kills || 1); break;
+        case 'acc': aVal = a.shots_hit / (a.shots_fired || 1); bVal = b.shots_hit / (b.shots_fired || 1); break;
+        case 'head_acc': aVal = a.headshot_hits / (a.shots_hit || 1); bVal = b.headshot_hits / (b.shots_hit || 1); break;
         case 'kast': aVal = a.kast_rounds / arp; bVal = b.kast_rounds / brp; break;
         case '2k': aVal = a.two_k_rounds; bVal = b.two_k_rounds; break;
         case '1v1': aVal = a.clutch_1v1_wins; bVal = b.clutch_1v1_wins; break;
@@ -299,6 +308,8 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
               <SortableTh label="Opening %" title="Percentage of rounds where this player took the opening duel" sortKey="opening_pct" state={sort} onClick={toggleSort} />
               <SortableTh label="Opening Success" title="Opening kills / (opening kills + opening deaths)" sortKey="opening_success" state={sort} onClick={toggleSort} />
               <SortableTh label="Headshot %" title="Headshot kill percentage" sortKey="hs" state={sort} onClick={toggleSort} />
+              <SortableTh label="Accuracy" title="Shots that hit an enemy / shots fired (guns only, not gated on enemy visibility)" sortKey="acc" state={sort} onClick={toggleSort} />
+              <SortableTh label="Head Accuracy" title="Hits landing on the head / total hits" sortKey="head_acc" state={sort} onClick={toggleSort} />
               <SortableTh label="KAST" title="Percentage of rounds with a Kill, Assist, Survived, or Traded" sortKey="kast" state={sort} onClick={toggleSort} />
               <SortableTh label="Double Kills" title="Rounds where both opponents were eliminated" sortKey="2k" state={sort} onClick={toggleSort} />
               <SortableTh label="1v1" title="1v1 clutch wins / attempts" sortKey="1v1" state={sort} onClick={toggleSort} />
@@ -320,6 +331,8 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
                   <td className={tdRight}>{pct(totalDuels, a.rounds_played)}</td>
                   <td className={tdRight}>{pct(a.opening_kills, totalDuels)}</td>
                   <td className={tdRight}>{pct(a.headshot_kills, a.kills)}</td>
+                  <td className={tdRight}>{pct(a.shots_hit, a.shots_fired)}</td>
+                  <td className={tdRight}>{pct(a.headshot_hits, a.shots_hit)}</td>
                   <td className={tdRight}>{pct(a.kast_rounds, a.rounds_played)}</td>
                   <td className={tdRight}>{a.two_k_rounds}</td>
                   <td className={tdRight}>{a.clutch_1v1_wins}/{a.clutch_1v1_attempts}</td>
@@ -520,6 +533,8 @@ function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leag
     { label: 'Opening %', title: 'Percentage of rounds where this player took the opening duel', value: pct(totalDuels, agg.rounds_played) },
     { label: 'Opening Success', title: 'Opening kills / (opening kills + opening deaths)', value: pct(agg.opening_kills, totalDuels) },
     { label: 'Headshot %', title: 'Headshot kill percentage', value: pct(agg.headshot_kills, agg.kills) },
+    { label: 'Accuracy', title: 'Shots that hit an enemy / shots fired (guns only, not gated on enemy visibility)', value: pct(agg.shots_hit, agg.shots_fired) },
+    { label: 'Head Accuracy', title: 'Hits landing on the head / total hits', value: pct(agg.headshot_hits, agg.shots_hit) },
     { label: 'KAST', title: 'Percentage of rounds with a Kill, Assist, Survived, or Traded', value: pct(agg.kast_rounds, agg.rounds_played) },
     { label: 'Double Kills', title: 'Rounds where both opponents were eliminated', value: agg.two_k_rounds },
     { label: '1v1 Clutches', title: '1v1 clutch wins / attempts', value: `${agg.clutch_1v1_wins}/${agg.clutch_1v1_attempts}` },
