@@ -31,6 +31,11 @@ export function collectUtility(
 
   const flashAssistWindow = Math.round(3 * context.tickRate);
 
+  // Leetify excludes "half-blind" exposure (< 1.1s) from flash effectiveness stats
+  // (enemies_flashed, flash assists). blind_duration_dealt/teamflash_duration stay
+  // ungated — they're raw exposure measures, not effectiveness measures.
+  const HALF_BLIND_THRESHOLD = 1.1;
+
   // --- Flash assists, blind_duration_dealt, teamflash_duration ---
 
   // Build death lookup: steamId → [{tick, round}]
@@ -65,21 +70,25 @@ export function collectUtility(
     if (isEnemy) {
       p.blind_duration_dealt = ((p.blind_duration_dealt as number) ?? 0) + duration;
 
-      // Flash assist: enemy is killed by a teammate of the flasher
-      // within flashAssistWindow ticks after the blind expires
-      const blindExpireTick = b.tick + Math.round(duration * context.tickRate);
-      const windowEnd = blindExpireTick + flashAssistWindow;
-      const victimDeaths = deathLookup.get(blinded) ?? [];
-      const assisted = victimDeaths.some((d) => {
-        if (d.round !== round) return false;
-        if (d.tick > windowEnd || d.tick < b.tick) return false;
-        // Killed by a teammate of the flasher (not the flasher themselves)
-        if (!d.attacker || d.attacker === flasher) return false;
-        const killerSide = context.playerSides.get(d.attacker)?.get(round);
-        return killerSide != null && killerSide === flasherSide;
-      });
-      if (assisted) {
-        p.flash_assists = ((p.flash_assists as number) ?? 0) + 1;
+      if (duration >= HALF_BLIND_THRESHOLD) {
+        p.enemies_flashed = ((p.enemies_flashed as number) ?? 0) + 1;
+
+        // Flash assist: enemy is killed by a teammate of the flasher
+        // within flashAssistWindow ticks after the blind expires
+        const blindExpireTick = b.tick + Math.round(duration * context.tickRate);
+        const windowEnd = blindExpireTick + flashAssistWindow;
+        const victimDeaths = deathLookup.get(blinded) ?? [];
+        const assisted = victimDeaths.some((d) => {
+          if (d.round !== round) return false;
+          if (d.tick > windowEnd || d.tick < b.tick) return false;
+          // Killed by a teammate of the flasher (not the flasher themselves)
+          if (!d.attacker || d.attacker === flasher) return false;
+          const killerSide = context.playerSides.get(d.attacker)?.get(round);
+          return killerSide != null && killerSide === flasherSide;
+        });
+        if (assisted) {
+          p.flash_assists = ((p.flash_assists as number) ?? 0) + 1;
+        }
       }
     } else if (isTeammate) {
       p.teamflash_duration = ((p.teamflash_duration as number) ?? 0) + duration;

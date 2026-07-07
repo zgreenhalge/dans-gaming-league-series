@@ -7,7 +7,9 @@ type CollectorOut = Map<string, Partial<SabFields>>;
 const NS = 'CCSPlayerController.CCSPlayerController_ActionTrackingServices';
 
 const SPLIT_PROPS = ['m_iKills', 'm_iDeaths', 'm_iAssists', 'm_iDamage', 'm_iHeadShotKills'] as const;
-const UNSPLIT_PROPS = ['m_iUtilityDamage', 'm_iEnemiesFlashed'] as const;
+// m_iEnemiesFlashed is not read here: enemies_flashed is computed in utility.ts from
+// player_blind events so it can apply the half-blind (1.1s) threshold.
+const UNSPLIT_PROPS = ['m_iUtilityDamage'] as const;
 
 const SPLIT_FIELDS: Record<string, { ct: keyof SabFields; t: keyof SabFields }> = {
   m_iKills: { ct: 'kills_ct', t: 'kills_t' },
@@ -19,7 +21,6 @@ const SPLIT_FIELDS: Record<string, { ct: keyof SabFields; t: keyof SabFields }> 
 
 const UNSPLIT_FIELDS: Record<string, keyof SabFields> = {
   m_iUtilityDamage: 'utility_damage',
-  m_iEnemiesFlashed: 'enemies_flashed',
 };
 
 export function collectAccumulators(

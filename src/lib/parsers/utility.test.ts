@@ -1,7 +1,9 @@
 /**
  * Unit tests for collectUtility — flash stats (blind_duration_dealt, teamflash_duration,
- * flash_assists, flashes_thrown). The flash-assist window math (blind expiry + a fixed window) is
- * the riskiest part: a boundary slip either double-counts or silently drops a real assist.
+ * flash_assists, flashes_thrown, enemies_flashed). The flash-assist window math (blind expiry +
+ * a fixed window) is the riskiest part: a boundary slip either double-counts or silently drops a
+ * real assist. The half-blind threshold (1.1s) gates enemies_flashed/flash_assists but not
+ * blind_duration_dealt, which stays a raw, ungated exposure measure.
  *
  * Run:  npx tsx src/lib/parsers/utility.test.ts
  */
@@ -55,25 +57,56 @@ test('collectUtility: a self-flash is ignored entirely', () => {
 });
 
 test('collectUtility: a teammate finishing the blinded enemy inside the window counts as a flash assist', () => {
-  // duration 1s @ 64 tick -> blind expires at tick+64; window is 3s (192 ticks) after that -> tick+256.
-  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1 })];
-  const deaths = [death({ round: 1, tick: 356, victim: 'c', attacker: 'b' })]; // b is a's CT teammate, at the exact window edge
+  // duration 1.1s (at the half-blind threshold) @ 64 tick -> blind expires at tick+70;
+  // window is 3s (192 ticks) after that -> tick+262.
+  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1.1 })];
+  const deaths = [death({ round: 1, tick: 362, victim: 'c', attacker: 'b' })]; // b is a's CT teammate, at the exact window edge
   const ctx = makeContext({ rounds, sides, deaths, tickRate });
   const out = collectUtility(blinds, deaths, [], ctx, ids);
   assert.equal(out.get('a')?.flash_assists, 1);
 });
 
 test('collectUtility: a kill one tick past the assist window does not count', () => {
-  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1 })];
-  const deaths = [death({ round: 1, tick: 357, victim: 'c', attacker: 'b' })];
+  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1.1 })];
+  const deaths = [death({ round: 1, tick: 363, victim: 'c', attacker: 'b' })];
   const ctx = makeContext({ rounds, sides, deaths, tickRate });
   const out = collectUtility(blinds, deaths, [], ctx, ids);
   assert.equal(out.get('a')?.flash_assists ?? 0, 0);
 });
 
 test('collectUtility: the flasher finishing their own flashed enemy is a kill, not an assist', () => {
-  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1 })];
+  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1.1 })];
   const deaths = [death({ round: 1, tick: 150, victim: 'c', attacker: 'a' })]; // a gets the kill themself
+  const ctx = makeContext({ rounds, sides, deaths, tickRate });
+  const out = collectUtility(blinds, deaths, [], ctx, ids);
+  assert.equal(out.get('a')?.flash_assists ?? 0, 0);
+});
+
+test('collectUtility: a blind at or above the 1.1s half-blind threshold counts as enemies_flashed', () => {
+  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1.1 })];
+  const ctx = makeContext({ rounds, sides, tickRate });
+  const out = collectUtility(blinds, [], [], ctx, ids);
+  assert.equal(out.get('a')?.enemies_flashed, 1);
+});
+
+test('collectUtility: a blind below the 1.1s half-blind threshold does not count as enemies_flashed', () => {
+  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1.09 })];
+  const ctx = makeContext({ rounds, sides, tickRate });
+  const out = collectUtility(blinds, [], [], ctx, ids);
+  assert.equal(out.get('a')?.enemies_flashed ?? 0, 0);
+});
+
+test('collectUtility: a half-blind still accumulates raw blind_duration_dealt', () => {
+  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 0.5 })];
+  const ctx = makeContext({ rounds, sides, tickRate });
+  const out = collectUtility(blinds, [], [], ctx, ids);
+  assert.equal(out.get('a')?.blind_duration_dealt, 0.5);
+  assert.equal(out.get('a')?.enemies_flashed ?? 0, 0);
+});
+
+test('collectUtility: a half-blind kill does not count as a flash assist even inside the window', () => {
+  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1 })]; // below 1.1s threshold
+  const deaths = [death({ round: 1, tick: 150, victim: 'c', attacker: 'b' })]; // b is a's CT teammate
   const ctx = makeContext({ rounds, sides, deaths, tickRate });
   const out = collectUtility(blinds, deaths, [], ctx, ids);
   assert.equal(out.get('a')?.flash_assists ?? 0, 0);
