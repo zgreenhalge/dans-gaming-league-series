@@ -6,12 +6,12 @@ type CollectorOut = Map<string, Partial<SabFields>>;
 
 const NS = 'CCSPlayerController.CCSPlayerController_ActionTrackingServices';
 
-const SPLIT_PROPS = ['m_iKills', 'm_iDeaths', 'm_iAssists', 'm_iDamage', 'm_iHeadShotKills'] as const;
+export const SPLIT_PROPS = ['m_iKills', 'm_iDeaths', 'm_iAssists', 'm_iDamage', 'm_iHeadShotKills'] as const;
 // m_iEnemiesFlashed is not read here: enemies_flashed is computed in utility.ts from
 // player_blind events so it can apply the half-blind (1.1s) threshold.
-const UNSPLIT_PROPS = ['m_iUtilityDamage'] as const;
+export const UNSPLIT_PROPS = ['m_iUtilityDamage'] as const;
 
-const SPLIT_FIELDS: Record<string, { ct: keyof SabFields; t: keyof SabFields }> = {
+export const SPLIT_FIELDS: Record<string, { ct: keyof SabFields; t: keyof SabFields }> = {
   m_iKills: { ct: 'kills_ct', t: 'kills_t' },
   m_iDeaths: { ct: 'deaths_ct', t: 'deaths_t' },
   m_iAssists: { ct: 'assists_ct', t: 'assists_t' },
@@ -19,7 +19,7 @@ const SPLIT_FIELDS: Record<string, { ct: keyof SabFields; t: keyof SabFields }> 
   m_iHeadShotKills: { ct: 'headshot_kills_ct', t: 'headshot_kills_t' },
 };
 
-const UNSPLIT_FIELDS: Record<string, keyof SabFields> = {
+export const UNSPLIT_FIELDS: Record<string, keyof SabFields> = {
   m_iUtilityDamage: 'utility_damage',
 };
 
