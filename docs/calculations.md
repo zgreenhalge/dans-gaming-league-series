@@ -113,6 +113,8 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   - `Flash Assists` and `Enemies Flashed` only count blinds of **1.1s or longer** ("half-blind"
     exposure is excluded), matching Leetify's flash-effectiveness definition. `Blind Duration
     Dealt`/`Teamflash Duration` are raw exposure totals and stay ungated.
+  - `HE Damage/Throw` = `HE Damage` / `HE Thrown` — damage dealt to enemies by HE grenades
+    (teamdamage and self-damage excluded), divided by HE grenades thrown.
 - `Clutch+` = `Player Clutch Score` / `League Avg Clutch Score`
   - `Clutch Score` = `1v1 wins` + 3 * `1v2 wins`
 - `Choke+` = `Player Choke Score` / `League Avg Choke Score`

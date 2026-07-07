@@ -8,8 +8,8 @@
  */
 
 import assert from 'node:assert/strict';
-import { collectTrades, type PlayerHurtRow } from './trades';
-import { makeContext, death } from './matchContextFixture';
+import { collectTrades } from './trades';
+import { makeContext, death, hurt } from './matchContextFixture';
 
 let passed = 0;
 const failures: string[] = [];
@@ -21,10 +21,6 @@ function test(name: string, fn: () => void) {
   } catch (err) {
     failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
   }
-}
-
-function hurt(opts: { round: number; tick: number; attacker: string | null; victim: string | null }): PlayerHurtRow {
-  return { tick: opts.tick, total_rounds_played: opts.round - 1, attacker_steamid: opts.attacker, user_steamid: opts.victim };
 }
 
 const sides = { a: 'CT', b: 'CT', c: 'T', d: 'T' } as const;

@@ -2,7 +2,7 @@ import { parseEvent } from '@laihoe/demoparser2';
 import type { RosterEntry } from './demoParser';
 import type { SabFields, DemoSabremetricStat, ParsedDemoSabremetricsResult } from './types';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
-import { buildMatchContext, findMatchStartTick, type PlayerDeathRow } from './parsers/matchContext';
+import { buildMatchContext, findMatchStartTick, type PlayerDeathRow, type PlayerHurtRow } from './parsers/matchContext';
 import type { RoundEndRow } from './parsers/roundSides';
 import { inferSkinsStartingSide, resolveEffectiveSide } from './parsers/sideInference';
 import { collectAccumulators } from './parsers/accumulators';
@@ -12,7 +12,8 @@ import { collectMultikill } from './parsers/multikill';
 import { collectClutch } from './parsers/clutch';
 import { collectUtility, type PlayerBlindRow, type WeaponFireRow } from './parsers/utility';
 import { collectObjectives, type BombEventRow } from './parsers/objectives';
-import { collectTrades, type PlayerHurtRow } from './parsers/trades';
+import { collectTrades } from './parsers/trades';
+import { collectHeGrenades } from './parsers/heGrenade';
 
 const ZERO: SabFields = {
   kills_ct: 0, kills_t: 0,
@@ -39,6 +40,8 @@ const ZERO: SabFields = {
   traded_death_opportunities: 0,
   traded_death_attempts: 0,
   traded_death_successes: 0,
+  he_thrown: 0,
+  he_damage: 0,
 };
 
 export function parseDemoSabremetrics(
@@ -81,7 +84,7 @@ export function parseDemoSabremetrics(
   ) as BombEventRow[];
 
   const hurtEvents = parseEvent(
-    demoBuffer, 'player_hurt', [], ['total_rounds_played'],
+    demoBuffer, 'player_hurt', [], ['total_rounds_played', 'weapon', 'dmg_health'],
   ) as PlayerHurtRow[];
 
   // 3. Build match context — resolve the starting side the same way parseDemoFile does
@@ -117,6 +120,7 @@ export function parseDemoSabremetrics(
   const utilityStats = collectUtility(blindEvents, deathEvents, fireEvents, context, steamIds);
   const objectiveStats = collectObjectives(plantEvents, defuseEvents, context, steamIds);
   const tradeStats = collectTrades(deathEvents, hurtEvents, context, steamIds);
+  const heStats = collectHeGrenades(fireEvents, hurtEvents, context, steamIds);
 
   // 6. Merge with zero defaults
   const sabremetrics: DemoSabremetricStat[] = steamIds.map((steamId) => ({
@@ -131,6 +135,7 @@ export function parseDemoSabremetrics(
       ...utilityStats.get(steamId),
       ...objectiveStats.get(steamId),
       ...tradeStats.get(steamId),
+      ...heStats.get(steamId),
     },
   }));
 

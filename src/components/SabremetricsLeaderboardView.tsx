@@ -33,6 +33,8 @@ interface AggregatedSab {
   traded_death_opportunities: number;
   traded_death_attempts: number;
   traded_death_successes: number;
+  he_thrown: number;
+  he_damage: number;
 }
 
 function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
@@ -57,6 +59,7 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
         plants: 0, defuses: 0, two_k_rounds: 0,
         trade_kill_opportunities: 0, trade_kill_attempts: 0, trade_kill_successes: 0,
         traded_death_opportunities: 0, traded_death_attempts: 0, traded_death_successes: 0,
+        he_thrown: 0, he_damage: 0,
       };
       byPlayer.set(r.player_id, agg);
       matchesSeen.set(r.player_id, new Set());
@@ -93,6 +96,8 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
     agg.traded_death_opportunities += s.traded_death_opportunities;
     agg.traded_death_attempts += s.traded_death_attempts;
     agg.traded_death_successes += s.traded_death_successes;
+    agg.he_thrown += s.he_thrown;
+    agg.he_damage += s.he_damage;
   }
 
   return Array.from(byPlayer.values());
@@ -341,6 +346,12 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
         case 'ud_r': aVal = a.utility_damage / (a.rounds_played || 1); bVal = b.utility_damage / (b.rounds_played || 1); break;
         case 'fa_r': aVal = a.flash_assists / (a.rounds_played || 1); bVal = b.flash_assists / (b.rounds_played || 1); break;
         case 'ef_r': aVal = a.enemies_flashed / (a.rounds_played || 1); bVal = b.enemies_flashed / (b.rounds_played || 1); break;
+        case 'he_thrown': aVal = a.he_thrown; bVal = b.he_thrown; break;
+        case 'he_dmg': aVal = a.he_damage; bVal = b.he_damage; break;
+        case 'he_dmg_throw':
+          aVal = a.he_damage / (a.he_thrown || 1);
+          bVal = b.he_damage / (b.he_thrown || 1);
+          break;
         default: return 0;
       }
       return sort.asc ? aVal - bVal : bVal - aVal;
@@ -364,6 +375,9 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
               <SortableTh label="Enemies Flashed/Round" title="Enemies flashed per round" sortKey="ef_r" state={sort} onClick={toggleSort} />
               <SortableTh label="Plants" title="Bomb plants" sortKey="pl" state={sort} onClick={toggleSort} />
               <SortableTh label="Defuses" title="Bomb defuses" sortKey="df" state={sort} onClick={toggleSort} />
+              <SortableTh label="HE Thrown" title="HE grenades thrown" sortKey="he_thrown" state={sort} onClick={toggleSort} />
+              <SortableTh label="HE Damage" title="Damage dealt to enemies by HE grenades" sortKey="he_dmg" state={sort} onClick={toggleSort} />
+              <SortableTh label="HE Dmg/Throw" title="HE damage per HE grenade thrown" sortKey="he_dmg_throw" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -380,6 +394,9 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
                   <td className={tdRight}>{fmtNum(a.enemies_flashed / rp, 2)}</td>
                   <td className={tdRight}>{a.plants}</td>
                   <td className={tdRight}>{a.defuses}</td>
+                  <td className={tdRight}>{a.he_thrown}</td>
+                  <td className={tdRight}>{a.he_damage}</td>
+                  <td className={tdRight}>{fmtNum(a.he_damage / (a.he_thrown || 1), 1)}</td>
                 </tr>
               );
             })}
@@ -497,6 +514,9 @@ function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leag
     { label: 'Enemies Flashed/Round', title: 'Enemies flashed per round', value: fmtNum(agg.enemies_flashed / rp, 2) },
     { label: 'Plants', title: 'Bomb plants', value: agg.plants },
     { label: 'Defuses', title: 'Bomb defuses', value: agg.defuses },
+    { label: 'HE Thrown', title: 'HE grenades thrown', value: agg.he_thrown },
+    { label: 'HE Damage', title: 'Damage dealt to enemies by HE grenades', value: agg.he_damage },
+    { label: 'HE Dmg/Throw', title: 'HE damage per HE grenade thrown', value: fmtNum(agg.he_damage / (agg.he_thrown || 1), 1) },
   ];
 
   // Plus stats need the league as a baseline; comparing a player to only

@@ -29,6 +29,15 @@ export interface PlayerDeathRow {
   assister_steamid: string | null;
 }
 
+export interface PlayerHurtRow {
+  tick: number;
+  total_rounds_played: number;
+  attacker_steamid: string | null;
+  user_steamid: string | null;
+  weapon: string;
+  dmg_health: number;
+}
+
 export interface MatchContext {
   rounds: RoundSideInfo[];
   liveRounds: Set<number>;

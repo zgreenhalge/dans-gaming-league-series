@@ -4,7 +4,7 @@
  * round-end events) and lets a test specify per-player sides and round winners directly. Not a
  * *.test.ts file itself — it's imported by the actual test files, not run by `npm test`.
  */
-import { buildRoundDeaths, type MatchContext, type PlayerDeathRow } from './matchContext';
+import { buildRoundDeaths, type MatchContext, type PlayerDeathRow, type PlayerHurtRow } from './matchContext';
 import type { RoundSideInfo } from './roundSides';
 
 export function makeContext(opts: {
@@ -69,5 +69,23 @@ export function death(opts: {
     attacker_steamid: opts.attacker ?? null,
     assister_steamid: opts.assister ?? null,
     headshot: opts.headshot ?? false,
+  };
+}
+
+export function hurt(opts: {
+  round: number;
+  tick: number;
+  victim: string | null;
+  attacker?: string | null;
+  weapon?: string;
+  dmgHealth?: number;
+}): PlayerHurtRow {
+  return {
+    tick: opts.tick,
+    total_rounds_played: opts.round - 1,
+    user_steamid: opts.victim,
+    attacker_steamid: opts.attacker ?? null,
+    weapon: opts.weapon ?? '',
+    dmg_health: opts.dmgHealth ?? 0,
   };
 }

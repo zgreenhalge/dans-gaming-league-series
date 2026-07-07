@@ -1,15 +1,8 @@
 import type { SabFields } from '../types';
-import type { MatchContext, PlayerDeathRow } from './matchContext';
+import type { MatchContext, PlayerDeathRow, PlayerHurtRow } from './matchContext';
 import { TRADE_WINDOW_SECONDS } from './constants';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
-
-export interface PlayerHurtRow {
-  tick: number;
-  total_rounds_played: number;
-  attacker_steamid: string | null;
-  user_steamid: string | null;
-}
 
 // Same permissive convention as kast.ts's KAST qualifiers: an unknown side never disqualifies —
 // it only excludes when both sides are known and actually differ.

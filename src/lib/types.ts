@@ -162,6 +162,8 @@ export interface PlayerMatchSabremetrics {
   traded_death_opportunities: number;
   traded_death_attempts: number;
   traded_death_successes: number;
+  he_thrown: number;
+  he_damage: number;
 }
 
 export type SabFields = Omit<PlayerMatchSabremetrics, 'player_match_stats_id'>;
