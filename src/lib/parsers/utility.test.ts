@@ -74,12 +74,30 @@ test('collectUtility: a kill one tick past the assist window does not count', ()
   assert.equal(out.get('a')?.flash_assists ?? 0, 0);
 });
 
-test('collectUtility: the flasher finishing their own flashed enemy is a kill, not an assist', () => {
+test('collectUtility: the flasher finishing their own flashed enemy is a kill, not an assist — but does count as flashes_leading_to_kill', () => {
   const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1.1 })];
-  const deaths = [death({ round: 1, tick: 150, victim: 'c', attacker: 'a' })]; // a gets the kill themself
+  const deaths = [death({ round: 1, tick: 150, victim: 'c', attacker: 'a' })]; // a gets the kill themself, while c is still blinded
   const ctx = makeContext({ rounds, sides, deaths, tickRate });
   const out = collectUtility(blinds, deaths, [], ctx, ids);
   assert.equal(out.get('a')?.flash_assists ?? 0, 0);
+  assert.equal(out.get('a')?.flashes_leading_to_kill, 1);
+});
+
+test('collectUtility: flashes_leading_to_kill does not count a kill after the blind has expired', () => {
+  // duration 1.1s @ 64 tick -> blind expires at tick+70 (170); this kill lands one tick later.
+  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1.1 })];
+  const deaths = [death({ round: 1, tick: 171, victim: 'c', attacker: 'a' })];
+  const ctx = makeContext({ rounds, sides, deaths, tickRate });
+  const out = collectUtility(blinds, deaths, [], ctx, ids);
+  assert.equal(out.get('a')?.flashes_leading_to_kill ?? 0, 0);
+});
+
+test('collectUtility: a half-blind kill does not count as flashes_leading_to_kill', () => {
+  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1 })]; // below 1.1s threshold
+  const deaths = [death({ round: 1, tick: 150, victim: 'c', attacker: 'a' })];
+  const ctx = makeContext({ rounds, sides, deaths, tickRate });
+  const out = collectUtility(blinds, deaths, [], ctx, ids);
+  assert.equal(out.get('a')?.flashes_leading_to_kill ?? 0, 0);
 });
 
 test('collectUtility: a blind at or above the 1.1s half-blind threshold counts as enemies_flashed', () => {

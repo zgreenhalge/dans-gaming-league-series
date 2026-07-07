@@ -82,11 +82,23 @@ export function collectUtility(
         if (!flashGroups.has(flashKey)) flashGroups.set(flashKey, []);
         flashGroups.get(flashKey)!.push(duration);
 
+        const blindExpireTick = b.tick + Math.round(duration * context.tickRate);
+        const victimDeaths = deathLookup.get(blinded) ?? [];
+
+        // flashes_leading_to_kill (Leetify-style): the victim died while still blinded by
+        // this flash — [blind_start_tick, blind_expire_tick] — by anyone, including the
+        // flasher's own kill. Distinct from flash_assists below, which only credits a
+        // teammate's kill inside a fixed window after the blind expires.
+        const ledToKill = victimDeaths.some(
+          (d) => d.round === round && d.tick >= b.tick && d.tick <= blindExpireTick,
+        );
+        if (ledToKill) {
+          p.flashes_leading_to_kill = ((p.flashes_leading_to_kill as number) ?? 0) + 1;
+        }
+
         // Flash assist: enemy is killed by a teammate of the flasher
         // within flashAssistWindow ticks after the blind expires
-        const blindExpireTick = b.tick + Math.round(duration * context.tickRate);
         const windowEnd = blindExpireTick + flashAssistWindow;
-        const victimDeaths = deathLookup.get(blinded) ?? [];
         const assisted = victimDeaths.some((d) => {
           if (d.round !== round) return false;
           if (d.tick > windowEnd || d.tick < b.tick) return false;

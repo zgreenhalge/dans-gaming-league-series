@@ -113,6 +113,13 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   - `Flash Assists` and `Enemies Flashed` only count blinds of **1.1s or longer** ("half-blind"
     exposure is excluded), matching Leetify's flash-effectiveness definition. `Blind Duration
     Dealt`/`Teamflash Duration` are raw exposure totals and stay ungated.
+  - `Flash Assists` credits a **teammate's** kill on the blinded enemy within a fixed window
+    after the blind expires (own kills excluded) — this is the scoreboard-style definition and
+    keeps its name/meaning for continuity.
+  - `Flashes Leading to Kill` is Leetify's definition: the blinded enemy died **while still
+    blinded** (death tick between the blind's start and expiry), by anyone — including the
+    flasher's own kill. `Utility+` keeps using `Flash Assists`, not `Flashes Leading to Kill`,
+    unless the league decides otherwise.
   - `HE Damage/Throw` = `HE Damage` / `HE Thrown` — damage dealt to enemies by HE grenades
     (teamdamage and self-damage excluded), divided by HE grenades thrown.
   - `Enemies Flashed/Flash` = `Enemies Flashed` / `Flashes Thrown`

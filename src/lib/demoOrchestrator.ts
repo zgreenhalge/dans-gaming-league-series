@@ -26,6 +26,7 @@ const ZERO: SabFields = {
   clutch_1v1_attempts: 0, clutch_1v1_wins: 0,
   clutch_1v2_attempts: 0, clutch_1v2_wins: 0,
   flash_assists: 0,
+  flashes_leading_to_kill: 0,
   utility_damage: 0,
   blind_duration_dealt: 0,
   enemies_flashed: 0,

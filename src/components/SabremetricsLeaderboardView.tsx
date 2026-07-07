@@ -22,6 +22,7 @@ interface AggregatedSab {
   clutch_1v2_wins: number;
   clutch_1v2_attempts: number;
   flash_assists: number;
+  flashes_leading_to_kill: number;
   utility_damage: number;
   enemies_flashed: number;
   flashes_thrown: number;
@@ -58,7 +59,7 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
         kast_rounds: 0,
         clutch_1v1_wins: 0, clutch_1v1_attempts: 0,
         clutch_1v2_wins: 0, clutch_1v2_attempts: 0,
-        flash_assists: 0, utility_damage: 0, enemies_flashed: 0, flashes_thrown: 0,
+        flash_assists: 0, flashes_leading_to_kill: 0, utility_damage: 0, enemies_flashed: 0, flashes_thrown: 0,
         plants: 0, defuses: 0, two_k_rounds: 0,
         trade_kill_opportunities: 0, trade_kill_attempts: 0, trade_kill_successes: 0,
         traded_death_opportunities: 0, traded_death_attempts: 0, traded_death_successes: 0,
@@ -89,6 +90,7 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
     agg.clutch_1v2_wins += s.clutch_1v2_wins;
     agg.clutch_1v2_attempts += s.clutch_1v2_attempts;
     agg.flash_assists += s.flash_assists;
+    agg.flashes_leading_to_kill += s.flashes_leading_to_kill;
     agg.utility_damage += s.utility_damage;
     agg.enemies_flashed += s.enemies_flashed;
     agg.flashes_thrown += s.flashes_thrown;
@@ -352,6 +354,7 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
         case 'df': aVal = a.defuses; bVal = b.defuses; break;
         case 'ud_r': aVal = a.utility_damage / (a.rounds_played || 1); bVal = b.utility_damage / (b.rounds_played || 1); break;
         case 'fa_r': aVal = a.flash_assists / (a.rounds_played || 1); bVal = b.flash_assists / (b.rounds_played || 1); break;
+        case 'fltk': aVal = a.flashes_leading_to_kill; bVal = b.flashes_leading_to_kill; break;
         case 'ef_r': aVal = a.enemies_flashed / (a.rounds_played || 1); bVal = b.enemies_flashed / (b.rounds_played || 1); break;
         case 'ef_flash':
           aVal = a.enemies_flashed / (a.flashes_thrown || 1);
@@ -386,6 +389,7 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
               <SortableTh label="Util Dmg/Round" title="Utility damage per round" sortKey="ud_r" state={sort} onClick={toggleSort} />
               <SortableTh label="Flash Assists" title="Kills by a teammate on an enemy you flashbanged" sortKey="fa" state={sort} onClick={toggleSort} />
               <SortableTh label="Flash Assists/Round" title="Flash assists per round" sortKey="fa_r" state={sort} onClick={toggleSort} />
+              <SortableTh label="Flashes → Kill" title="Enemies killed by anyone (including you) while still blinded by your flash — Leetify's flash-effectiveness definition" sortKey="fltk" state={sort} onClick={toggleSort} />
               <SortableTh label="Enemies Flashed" title="Enemy players blinded by your flashbangs" sortKey="ef" state={sort} onClick={toggleSort} />
               <SortableTh label="Enemies Flashed/Round" title="Enemies flashed per round" sortKey="ef_r" state={sort} onClick={toggleSort} />
               <SortableTh label="Enemies Flashed/Flash" title="Enemies flashed (1.1s+) per flashbang thrown" sortKey="ef_flash" state={sort} onClick={toggleSort} />
@@ -407,6 +411,7 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
                   <td className={tdRight}>{fmtNum(a.utility_damage / rp, 1)}</td>
                   <td className={tdRight}>{a.flash_assists}</td>
                   <td className={tdRight}>{fmtNum(a.flash_assists / rp, 2)}</td>
+                  <td className={tdRight}>{a.flashes_leading_to_kill}</td>
                   <td className={tdRight}>{a.enemies_flashed}</td>
                   <td className={tdRight}>{fmtNum(a.enemies_flashed / rp, 2)}</td>
                   <td className={tdRight}>{fmtNum(a.enemies_flashed / (a.flashes_thrown || 1), 2)}</td>
@@ -529,6 +534,7 @@ function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leag
     { label: 'Util Dmg/Round', title: 'Utility damage per round', value: fmtNum(agg.utility_damage / rp, 1) },
     { label: 'Flash Assists', title: 'Kills by a teammate on an enemy you flashbanged', value: agg.flash_assists },
     { label: 'Flash Assists/Round', title: 'Flash assists per round', value: fmtNum(agg.flash_assists / rp, 2) },
+    { label: 'Flashes → Kill', title: 'Enemies killed by anyone (including you) while still blinded by your flash — Leetify\'s flash-effectiveness definition', value: agg.flashes_leading_to_kill },
     { label: 'Enemies Flashed', title: 'Enemy players blinded by your flashbangs', value: agg.enemies_flashed },
     { label: 'Enemies Flashed/Round', title: 'Enemies flashed per round', value: fmtNum(agg.enemies_flashed / rp, 2) },
     { label: 'Enemies Flashed/Flash', title: 'Enemies flashed (1.1s+) per flashbang thrown', value: fmtNum(agg.enemies_flashed / (agg.flashes_thrown || 1), 2) },
