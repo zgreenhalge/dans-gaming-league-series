@@ -112,6 +112,37 @@ test('collectUtility: a half-blind kill does not count as a flash assist even in
   assert.equal(out.get('a')?.flash_assists ?? 0, 0);
 });
 
+test('collectUtility: one flash blinding two enemies counts as one effective flash, using the longest duration', () => {
+  // Same (attacker, tick) = one detonation; c gets the longer blind, d the shorter.
+  const blinds = [
+    blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 2.5 }),
+    blind({ round: 1, tick: 100, attacker: 'a', user: 'd', duration: 1.5 }),
+  ];
+  const ctx = makeContext({ rounds, sides, tickRate });
+  const out = collectUtility(blinds, [], [], ctx, ids);
+  assert.equal(out.get('a')?.effective_flashes, 1);
+  assert.equal(out.get('a')?.blind_duration_max_sum, 2.5);
+});
+
+test('collectUtility: two separate flashes sum their own max durations', () => {
+  const blinds = [
+    blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1.2 }),
+    blind({ round: 1, tick: 500, attacker: 'a', user: 'd', duration: 3 }),
+  ];
+  const ctx = makeContext({ rounds, sides, tickRate });
+  const out = collectUtility(blinds, [], [], ctx, ids);
+  assert.equal(out.get('a')?.effective_flashes, 2);
+  assert.equal(out.get('a')?.blind_duration_max_sum, 4.2);
+});
+
+test('collectUtility: a flash with only a sub-threshold blind is not an effective flash', () => {
+  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 0.8 })];
+  const ctx = makeContext({ rounds, sides, tickRate });
+  const out = collectUtility(blinds, [], [], ctx, ids);
+  assert.equal(out.get('a')?.effective_flashes ?? 0, 0);
+  assert.equal(out.get('a')?.blind_duration_max_sum ?? 0, 0);
+});
+
 test('collectUtility: flashes_thrown counts only weapon_flashbang fire events', () => {
   const fires: WeaponFireRow[] = [
     { tick: 100, total_rounds_played: 0, user_steamid: 'a', weapon: 'weapon_flashbang' },

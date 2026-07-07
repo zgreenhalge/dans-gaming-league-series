@@ -115,6 +115,13 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     Dealt`/`Teamflash Duration` are raw exposure totals and stay ungated.
   - `HE Damage/Throw` = `HE Damage` / `HE Thrown` — damage dealt to enemies by HE grenades
     (teamdamage and self-damage excluded), divided by HE grenades thrown.
+  - `Enemies Flashed/Flash` = `Enemies Flashed` / `Flashes Thrown`
+  - `Avg Blind/Flash` = `Blind Duration Max Sum` / `Effective Flashes` — for each flash that
+    blinded at least one enemy for 1.1s+, take the *longest* blind duration it caused (not the
+    sum across every enemy hit); average that across all such flashes. A flash that only
+    half-blinds (or misses) every enemy doesn't count as an effective flash. All enemies blinded
+    by the same detonation are identified by sharing an (attacker, tick) pair, since there's no
+    explicit flash-entity id on the underlying event.
 - `Clutch+` = `Player Clutch Score` / `League Avg Clutch Score`
   - `Clutch Score` = `1v1 wins` + 3 * `1v2 wins`
 - `Choke+` = `Player Choke Score` / `League Avg Choke Score`

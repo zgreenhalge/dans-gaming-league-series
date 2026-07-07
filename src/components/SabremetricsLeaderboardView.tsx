@@ -24,6 +24,7 @@ interface AggregatedSab {
   flash_assists: number;
   utility_damage: number;
   enemies_flashed: number;
+  flashes_thrown: number;
   plants: number;
   defuses: number;
   two_k_rounds: number;
@@ -35,6 +36,8 @@ interface AggregatedSab {
   traded_death_successes: number;
   he_thrown: number;
   he_damage: number;
+  blind_duration_max_sum: number;
+  effective_flashes: number;
 }
 
 function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
@@ -55,11 +58,12 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
         kast_rounds: 0,
         clutch_1v1_wins: 0, clutch_1v1_attempts: 0,
         clutch_1v2_wins: 0, clutch_1v2_attempts: 0,
-        flash_assists: 0, utility_damage: 0, enemies_flashed: 0,
+        flash_assists: 0, utility_damage: 0, enemies_flashed: 0, flashes_thrown: 0,
         plants: 0, defuses: 0, two_k_rounds: 0,
         trade_kill_opportunities: 0, trade_kill_attempts: 0, trade_kill_successes: 0,
         traded_death_opportunities: 0, traded_death_attempts: 0, traded_death_successes: 0,
         he_thrown: 0, he_damage: 0,
+        blind_duration_max_sum: 0, effective_flashes: 0,
       };
       byPlayer.set(r.player_id, agg);
       matchesSeen.set(r.player_id, new Set());
@@ -87,6 +91,7 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
     agg.flash_assists += s.flash_assists;
     agg.utility_damage += s.utility_damage;
     agg.enemies_flashed += s.enemies_flashed;
+    agg.flashes_thrown += s.flashes_thrown;
     agg.plants += s.plants;
     agg.defuses += s.defuses;
     agg.two_k_rounds += s.two_k_rounds;
@@ -98,6 +103,8 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
     agg.traded_death_successes += s.traded_death_successes;
     agg.he_thrown += s.he_thrown;
     agg.he_damage += s.he_damage;
+    agg.blind_duration_max_sum += s.blind_duration_max_sum;
+    agg.effective_flashes += s.effective_flashes;
   }
 
   return Array.from(byPlayer.values());
@@ -346,6 +353,14 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
         case 'ud_r': aVal = a.utility_damage / (a.rounds_played || 1); bVal = b.utility_damage / (b.rounds_played || 1); break;
         case 'fa_r': aVal = a.flash_assists / (a.rounds_played || 1); bVal = b.flash_assists / (b.rounds_played || 1); break;
         case 'ef_r': aVal = a.enemies_flashed / (a.rounds_played || 1); bVal = b.enemies_flashed / (b.rounds_played || 1); break;
+        case 'ef_flash':
+          aVal = a.enemies_flashed / (a.flashes_thrown || 1);
+          bVal = b.enemies_flashed / (b.flashes_thrown || 1);
+          break;
+        case 'blind_flash':
+          aVal = a.blind_duration_max_sum / (a.effective_flashes || 1);
+          bVal = b.blind_duration_max_sum / (b.effective_flashes || 1);
+          break;
         case 'he_thrown': aVal = a.he_thrown; bVal = b.he_thrown; break;
         case 'he_dmg': aVal = a.he_damage; bVal = b.he_damage; break;
         case 'he_dmg_throw':
@@ -373,6 +388,8 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
               <SortableTh label="Flash Assists/Round" title="Flash assists per round" sortKey="fa_r" state={sort} onClick={toggleSort} />
               <SortableTh label="Enemies Flashed" title="Enemy players blinded by your flashbangs" sortKey="ef" state={sort} onClick={toggleSort} />
               <SortableTh label="Enemies Flashed/Round" title="Enemies flashed per round" sortKey="ef_r" state={sort} onClick={toggleSort} />
+              <SortableTh label="Enemies Flashed/Flash" title="Enemies flashed (1.1s+) per flashbang thrown" sortKey="ef_flash" state={sort} onClick={toggleSort} />
+              <SortableTh label="Avg Blind/Flash" title="Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+" sortKey="blind_flash" state={sort} onClick={toggleSort} />
               <SortableTh label="Plants" title="Bomb plants" sortKey="pl" state={sort} onClick={toggleSort} />
               <SortableTh label="Defuses" title="Bomb defuses" sortKey="df" state={sort} onClick={toggleSort} />
               <SortableTh label="HE Thrown" title="HE grenades thrown" sortKey="he_thrown" state={sort} onClick={toggleSort} />
@@ -392,6 +409,8 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
                   <td className={tdRight}>{fmtNum(a.flash_assists / rp, 2)}</td>
                   <td className={tdRight}>{a.enemies_flashed}</td>
                   <td className={tdRight}>{fmtNum(a.enemies_flashed / rp, 2)}</td>
+                  <td className={tdRight}>{fmtNum(a.enemies_flashed / (a.flashes_thrown || 1), 2)}</td>
+                  <td className={tdRight}>{fmtNum(a.blind_duration_max_sum / (a.effective_flashes || 1), 2)}</td>
                   <td className={tdRight}>{a.plants}</td>
                   <td className={tdRight}>{a.defuses}</td>
                   <td className={tdRight}>{a.he_thrown}</td>
@@ -512,6 +531,8 @@ function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leag
     { label: 'Flash Assists/Round', title: 'Flash assists per round', value: fmtNum(agg.flash_assists / rp, 2) },
     { label: 'Enemies Flashed', title: 'Enemy players blinded by your flashbangs', value: agg.enemies_flashed },
     { label: 'Enemies Flashed/Round', title: 'Enemies flashed per round', value: fmtNum(agg.enemies_flashed / rp, 2) },
+    { label: 'Enemies Flashed/Flash', title: 'Enemies flashed (1.1s+) per flashbang thrown', value: fmtNum(agg.enemies_flashed / (agg.flashes_thrown || 1), 2) },
+    { label: 'Avg Blind/Flash', title: 'Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+', value: fmtNum(agg.blind_duration_max_sum / (agg.effective_flashes || 1), 2) },
     { label: 'Plants', title: 'Bomb plants', value: agg.plants },
     { label: 'Defuses', title: 'Bomb defuses', value: agg.defuses },
     { label: 'HE Thrown', title: 'HE grenades thrown', value: agg.he_thrown },

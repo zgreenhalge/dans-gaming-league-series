@@ -42,6 +42,8 @@ const ZERO: SabFields = {
   traded_death_successes: 0,
   he_thrown: 0,
   he_damage: 0,
+  blind_duration_max_sum: 0,
+  effective_flashes: 0,
 };
 
 export function parseDemoSabremetrics(

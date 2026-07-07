@@ -49,6 +49,11 @@ export function collectUtility(
     deathLookup.get(victim)!.push({ tick: d.tick, round, attacker: d.attacker_steamid });
   }
 
+  // All enemies blinded by the same flashbang detonate at the same tick — there's no explicit
+  // flash-entity id on this event, so (flasher, tick) reconstructs "one flash" for the per-flash
+  // averages below (0.3). Only durations >=1.1s go in, matching the half-blind gate.
+  const flashGroups = new Map<string, number[]>();
+
   for (const b of blindEvents) {
     const round = b.total_rounds_played + 1;
     if (!context.liveRounds.has(round)) continue;
@@ -73,6 +78,10 @@ export function collectUtility(
       if (duration >= HALF_BLIND_THRESHOLD) {
         p.enemies_flashed = ((p.enemies_flashed as number) ?? 0) + 1;
 
+        const flashKey = `${flasher}::${round}::${b.tick}`;
+        if (!flashGroups.has(flashKey)) flashGroups.set(flashKey, []);
+        flashGroups.get(flashKey)!.push(duration);
+
         // Flash assist: enemy is killed by a teammate of the flasher
         // within flashAssistWindow ticks after the blind expires
         const blindExpireTick = b.tick + Math.round(duration * context.tickRate);
@@ -93,6 +102,16 @@ export function collectUtility(
     } else if (isTeammate) {
       p.teamflash_duration = ((p.teamflash_duration as number) ?? 0) + duration;
     }
+  }
+
+  // --- Per-flash effectiveness averages (0.3) ---
+  // One effective flash per (flasher, round, tick) group; its contribution to the average is
+  // the longest qualifying blind it caused, not the sum across every enemy it hit.
+  for (const [key, durations] of flashGroups) {
+    const flasher = key.split('::')[0];
+    const p = out.get(flasher)!;
+    p.effective_flashes = ((p.effective_flashes as number) ?? 0) + 1;
+    p.blind_duration_max_sum = ((p.blind_duration_max_sum as number) ?? 0) + Math.max(...durations);
   }
 
   // --- Flashes thrown ---
