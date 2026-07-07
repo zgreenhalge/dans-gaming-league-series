@@ -1,5 +1,6 @@
 import type { SabFields } from '../types';
 import type { MatchContext, PlayerDeathRow } from './matchContext';
+import { TRADE_WINDOW_SECONDS } from './constants';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -12,7 +13,7 @@ export function collectKast(
   const steamSet = new Set(steamIds);
   for (const sid of steamIds) out.set(sid, {});
 
-  const tradeWindow = Math.round(5 * context.tickRate);
+  const tradeWindow = Math.round(TRADE_WINDOW_SECONDS * context.tickRate);
 
   // Group deaths by round
   const deathsByRound = new Map<number, PlayerDeathRow[]>();
