@@ -58,6 +58,7 @@ matches still self-derive a score and stats with no manual entry.
 | `clutch.ts` | 1vN attempts/wins (`Clutch+`, `Choke+`) |
 | `utility.ts` | Flash assists, utility damage, teamflash/self-flash (`Utility+`, Beer Tax) |
 | `objectives.ts` | Bomb plants/defuses (`Objective+`) |
+| `trades.ts` | Trade-kill/traded-death opportunity/attempt/success counts, sharing `kast.ts`'s trade window |
 
 ## Match start (skipping warmup and stray knife rounds)
 

@@ -12,6 +12,7 @@ import { collectMultikill } from './parsers/multikill';
 import { collectClutch } from './parsers/clutch';
 import { collectUtility, type PlayerBlindRow, type WeaponFireRow } from './parsers/utility';
 import { collectObjectives, type BombEventRow } from './parsers/objectives';
+import { collectTrades, type PlayerHurtRow } from './parsers/trades';
 
 const ZERO: SabFields = {
   kills_ct: 0, kills_t: 0,
@@ -32,6 +33,12 @@ const ZERO: SabFields = {
   plants: 0,
   defuses: 0,
   two_k_rounds: 0,
+  trade_kill_opportunities: 0,
+  trade_kill_attempts: 0,
+  trade_kill_successes: 0,
+  traded_death_opportunities: 0,
+  traded_death_attempts: 0,
+  traded_death_successes: 0,
 };
 
 export function parseDemoSabremetrics(
@@ -73,6 +80,10 @@ export function parseDemoSabremetrics(
     demoBuffer, 'bomb_defused', [], ['total_rounds_played'],
   ) as BombEventRow[];
 
+  const hurtEvents = parseEvent(
+    demoBuffer, 'player_hurt', [], ['total_rounds_played'],
+  ) as PlayerHurtRow[];
+
   // 3. Build match context — resolve the starting side the same way parseDemoFile does
   // (stored wins; otherwise infer from the demo) so sabremetrics and the score agree.
   const matchStartTick = findMatchStartTick(demoBuffer);
@@ -105,6 +116,7 @@ export function parseDemoSabremetrics(
   const clutchStats = collectClutch(deathEvents, context, steamIds);
   const utilityStats = collectUtility(blindEvents, deathEvents, fireEvents, context, steamIds);
   const objectiveStats = collectObjectives(plantEvents, defuseEvents, context, steamIds);
+  const tradeStats = collectTrades(deathEvents, hurtEvents, context, steamIds);
 
   // 6. Merge with zero defaults
   const sabremetrics: DemoSabremetricStat[] = steamIds.map((steamId) => ({
@@ -118,6 +130,7 @@ export function parseDemoSabremetrics(
       ...clutchStats.get(steamId),
       ...utilityStats.get(steamId),
       ...objectiveStats.get(steamId),
+      ...tradeStats.get(steamId),
     },
   }));
 

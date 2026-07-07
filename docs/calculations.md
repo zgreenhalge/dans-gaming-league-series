@@ -87,6 +87,25 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 - `KAST+` = `Player KAST` / `League Avg KAST`
   - `KAST` = `Rounds with Kill, Assist, Survived, or Traded` / `Rounds played`
   - `Trade Score` = `KAST` - (`Untraded Deaths` * 10)
+  - **Trade Kills** — from the perspective of the player who could avenge a teammate:
+    - `Trade Kill Opportunities` = times a teammate died while this player was still alive
+      (the chance to trade existed)
+    - `Trade Kill Attempts` = opportunities where this player damaged the killer within the
+      trade window
+    - `Trade Kill Successes` = opportunities where this player killed the killer within the
+      trade window — the same condition that qualifies a round as "Traded" for KAST
+  - **Traded Deaths** — the mirror, from the perspective of the player who died:
+    - `Traded Death Opportunities` = times this player died while at least one teammate was
+      still alive (someone had the chance to trade them)
+    - `Traded Death Attempts` = opportunities where a teammate damaged the killer within the
+      trade window
+    - `Traded Death Successes` = opportunities where a teammate killed the killer within the
+      trade window
+  - In wingman there's exactly one teammate, so `Opportunities` degenerates to a single
+    yes/no check per death rather than a count across a full side.
+  - The trade window (currently 5s, `TRADE_WINDOW_SECONDS` in `src/lib/parsers/constants.ts`)
+    is shared between KAST's `Traded` qualifier and the trade-kill/traded-death collector so
+    the two can never disagree.
 - `Objective+` = `Player Objective Score` / `League Avg Objective Score`
   - `Objective Score` = (2 * `Plants`) + (3 * `Defuses`)
 - `Utility+` = `Player Utility Score` / `League Avg Utility Score`

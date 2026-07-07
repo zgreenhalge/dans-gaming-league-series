@@ -27,6 +27,12 @@ interface AggregatedSab {
   plants: number;
   defuses: number;
   two_k_rounds: number;
+  trade_kill_opportunities: number;
+  trade_kill_attempts: number;
+  trade_kill_successes: number;
+  traded_death_opportunities: number;
+  traded_death_attempts: number;
+  traded_death_successes: number;
 }
 
 function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
@@ -49,6 +55,8 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
         clutch_1v2_wins: 0, clutch_1v2_attempts: 0,
         flash_assists: 0, utility_damage: 0, enemies_flashed: 0,
         plants: 0, defuses: 0, two_k_rounds: 0,
+        trade_kill_opportunities: 0, trade_kill_attempts: 0, trade_kill_successes: 0,
+        traded_death_opportunities: 0, traded_death_attempts: 0, traded_death_successes: 0,
       };
       byPlayer.set(r.player_id, agg);
       matchesSeen.set(r.player_id, new Set());
@@ -79,6 +87,12 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
     agg.plants += s.plants;
     agg.defuses += s.defuses;
     agg.two_k_rounds += s.two_k_rounds;
+    agg.trade_kill_opportunities += s.trade_kill_opportunities;
+    agg.trade_kill_attempts += s.trade_kill_attempts;
+    agg.trade_kill_successes += s.trade_kill_successes;
+    agg.traded_death_opportunities += s.traded_death_opportunities;
+    agg.traded_death_attempts += s.traded_death_attempts;
+    agg.traded_death_successes += s.traded_death_successes;
   }
 
   return Array.from(byPlayer.values());
@@ -244,6 +258,14 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
           bVal = bAttempts > 0 ? (b.clutch_1v1_wins + b.clutch_1v2_wins) / bAttempts : 0;
           break;
         }
+        case 'trade_kill_pct':
+          aVal = a.trade_kill_successes / (a.trade_kill_opportunities || 1);
+          bVal = b.trade_kill_successes / (b.trade_kill_opportunities || 1);
+          break;
+        case 'traded_death_pct':
+          aVal = a.traded_death_successes / (a.traded_death_opportunities || 1);
+          bVal = b.traded_death_successes / (b.traded_death_opportunities || 1);
+          break;
         default: return 0;
       }
       return sort.asc ? aVal - bVal : bVal - aVal;
@@ -268,6 +290,8 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
               <SortableTh label="1v1" title="1v1 clutch wins / attempts" sortKey="1v1" state={sort} onClick={toggleSort} />
               <SortableTh label="1v2" title="1v2 clutch wins / attempts" sortKey="1v2" state={sort} onClick={toggleSort} />
               <SortableTh label="Clutch %" title="Overall clutch success rate (1v1 + 1v2 wins / attempts)" sortKey="clutch_pct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Trade Kills" title="Trade kills (successes/opportunities): times you killed the enemy who killed your teammate, out of the times you had the chance to" sortKey="trade_kill_pct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Traded Deaths" title="Traded deaths (successes/opportunities): times a teammate killed the enemy who killed you, out of the times a teammate had the chance to" sortKey="traded_death_pct" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -287,6 +311,8 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
                   <td className={tdRight}>{a.clutch_1v1_wins}/{a.clutch_1v1_attempts}</td>
                   <td className={tdRight}>{a.clutch_1v2_wins}/{a.clutch_1v2_attempts}</td>
                   <td className={tdRight}>{pct(clutchWins, clutchAttempts)}</td>
+                  <td className={tdRight}>{a.trade_kill_successes}/{a.trade_kill_opportunities}</td>
+                  <td className={tdRight}>{a.traded_death_successes}/{a.traded_death_opportunities}</td>
                 </tr>
               );
             })}
@@ -458,6 +484,8 @@ function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leag
     { label: '1v1 Clutches', title: '1v1 clutch wins / attempts', value: `${agg.clutch_1v1_wins}/${agg.clutch_1v1_attempts}` },
     { label: '1v2 Clutches', title: '1v2 clutch wins / attempts', value: `${agg.clutch_1v2_wins}/${agg.clutch_1v2_attempts}` },
     { label: 'Clutch %', title: 'Overall clutch success rate (1v1 + 1v2 wins / attempts)', value: pct(clutchWins, clutchAttempts) },
+    { label: 'Trade Kills', title: 'Trade kills (successes/opportunities): times you killed the enemy who killed your teammate, out of the times you had the chance to', value: `${agg.trade_kill_successes}/${agg.trade_kill_opportunities}` },
+    { label: 'Traded Deaths', title: 'Traded deaths (successes/opportunities): times a teammate killed the enemy who killed you, out of the times a teammate had the chance to', value: `${agg.traded_death_successes}/${agg.traded_death_opportunities}` },
   ];
 
   const utility: StatTile[] = [

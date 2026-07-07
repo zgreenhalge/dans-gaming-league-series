@@ -156,6 +156,12 @@ export interface PlayerMatchSabremetrics {
   plants: number;
   defuses: number;
   two_k_rounds: number;
+  trade_kill_opportunities: number;
+  trade_kill_attempts: number;
+  trade_kill_successes: number;
+  traded_death_opportunities: number;
+  traded_death_attempts: number;
+  traded_death_successes: number;
 }
 
 export type SabFields = Omit<PlayerMatchSabremetrics, 'player_match_stats_id'>;
