@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import type { DuoStats, H2HStats, H2HMapStat } from '@/lib/queries';
-import { firstName, rateGradientColor, winRatePct } from '@/lib/util';
+import { rateGradientColor, winRatePct } from '@/lib/util';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
 import PlayerAvatar from './PlayerAvatar';
@@ -59,6 +59,13 @@ function vetoTitle(pickedBy: 'SHIRTS' | 'SKINS' | null, startingSide: 'CT' | 'T'
   return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
+/**
+ * A match-history entry, stacked over two lines rather than crammed onto one:
+ * a meta line (match ref, full map name, score) and a detail line for
+ * per-side content (teammates, K/A/D, etc). Stacking — instead of widening
+ * the whole card — is what gives the map name and detail content room to
+ * breathe without truncating or overlapping.
+ */
 function MatchHistoryRow({
   matchId,
   matchLabel,
@@ -68,9 +75,6 @@ function MatchHistoryRow({
   mapTitle,
   scoreLabel,
   scoreColor,
-  scorePosition = 'right',
-  resultLabel,
-  resultColor,
   rightContent,
 }: {
   matchId: number;
@@ -81,13 +85,10 @@ function MatchHistoryRow({
   mapTitle?: string;
   scoreLabel: string | null;
   scoreColor?: string;
-  scorePosition?: 'left' | 'right';
-  resultLabel?: string | null;
-  resultColor?: string;
   rightContent: React.ReactNode;
 }) {
   const score = scoreLabel ? (
-    <span className="display-numeral text-[12px] whitespace-nowrap" style={{ color: scoreColor }}>{scoreLabel}</span>
+    <span className="display-numeral text-[13px] whitespace-nowrap" style={{ color: scoreColor }}>{scoreLabel}</span>
   ) : (
     <span className="tracked text-[8px] text-[var(--color-accent-amber-fg)] whitespace-nowrap">TBD</span>
   );
@@ -95,26 +96,16 @@ function MatchHistoryRow({
   return (
     <Link
       href={`/matches/${matchId}`}
-      className="lift-row flex items-center gap-2 py-2 px-1 -mx-1 border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors"
+      className="lift-row flex flex-col gap-1.5 py-2.5 px-1.5 -mx-1.5 border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors"
     >
-      <div className="flex items-center gap-1 shrink-0">
-        <span className="font-mono text-[10px] w-[62px] shrink-0" style={{ color: labelColor }}>{matchLabel}</span>
-        {scorePosition === 'left' && <div className="w-[36px] shrink-0 whitespace-nowrap text-center">{score}</div>}
-      </div>
-      <span
-        title={mapTitle}
-        className={`font-mono text-[11px] w-[48px] shrink-0 truncate capitalize ${scorePosition === 'left' ? 'ml-1.5' : ''}`}
-        style={{ color: mapColor }}
-      >
-        {map ?? '—'}
-      </span>
-      <div className="flex-1 min-w-0 flex items-center gap-1.5">{rightContent}</div>
-      {scorePosition === 'right' && score}
-      {resultLabel != null && (
-        <span className="tracked text-[7px] font-bold w-[18px] text-center" style={{ color: resultColor }}>
-          {resultLabel}
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-[10px] shrink-0" style={{ color: labelColor }}>{matchLabel}</span>
+        <span title={mapTitle} className="font-mono text-[11px] flex-1 min-w-0 truncate capitalize" style={{ color: mapColor }}>
+          {map ?? '—'}
         </span>
-      )}
+        {score}
+      </div>
+      <div className="flex items-center gap-1.5">{rightContent}</div>
     </Link>
   );
 }
@@ -295,7 +286,6 @@ export function DuoDetail({
                   mapTitle={vetoTitle(m.pickedBy, m.startingSide)}
                   scoreLabel={scoreLabel}
                   scoreColor={resultColor}
-                  scorePosition="left"
                   rightContent={
                     <>
                       <span className="tracked text-[8px] text-[var(--color-text-secondary)] mr-1">vs</span>
@@ -452,6 +442,16 @@ export function RivalDetail({
 
         {rival.meetings > 0 && (
           <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)]">
+            <div className="flex items-center justify-end gap-3 px-1.5 mb-1">
+              <div className="flex items-center gap-1.5">
+                <span className="tracked text-[7px] text-[var(--color-text-secondary)]">Teammate</span>
+                <StatTrio values={['K', 'A', 'D']} />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <StatTrio values={['K', 'A', 'D']} />
+                <span className="tracked text-[7px] text-[var(--color-text-secondary)]">Teammate</span>
+              </div>
+            </div>
             {rival.matches.map((m) => {
               const scoreLabel = m.score ? `${m.score.a}–${m.score.b}` : null;
               const scoreColor = m.aWon == null ? undefined : m.aWon ? 'var(--color-t)' : 'var(--color-ct)';
@@ -468,15 +468,12 @@ export function RivalDetail({
                   mapTitle={vetoTitle(m.pickedBy, m.startingSide)}
                   scoreLabel={scoreLabel}
                   scoreColor={scoreColor}
-                  scorePosition="left"
                   rightContent={
                     <div className="w-full flex items-center justify-end gap-3">
                       <div className="flex items-center gap-1.5 min-w-0" title={aTeammate ? `Teamed with ${aTeammate.name}` : undefined}>
-                        {aTeammate && (
-                          <span className="tracked text-[7px] text-[var(--color-text-secondary)] truncate max-w-[58px]">
-                            w/ {firstName(aTeammate.name)}
-                          </span>
-                        )}
+                        <span className="font-display font-semibold text-[10px] truncate max-w-[110px]" style={{ color: 'var(--color-t)' }}>
+                          {aTeammate ? aTeammate.name : '—'}
+                        </span>
                         <StatTrio
                           values={[m.aMatchStats.kills, m.aMatchStats.assists, m.aMatchStats.deaths]}
                           color="var(--color-t)"
@@ -487,11 +484,9 @@ export function RivalDetail({
                           values={[m.bMatchStats.kills, m.bMatchStats.assists, m.bMatchStats.deaths]}
                           color="var(--color-ct)"
                         />
-                        {bTeammate && (
-                          <span className="tracked text-[7px] text-[var(--color-text-secondary)] truncate max-w-[58px]">
-                            w/ {firstName(bTeammate.name)}
-                          </span>
-                        )}
+                        <span className="font-display font-semibold text-[10px] truncate max-w-[110px] text-right" style={{ color: 'var(--color-ct)' }}>
+                          {bTeammate ? bTeammate.name : '—'}
+                        </span>
                       </div>
                     </div>
                   }
