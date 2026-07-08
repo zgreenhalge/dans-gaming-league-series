@@ -231,7 +231,11 @@ export default function H2HSection({ data, initialPair }: { data: H2HData; initi
           onSelect={setSel}
         />
 
-        <div className="flex flex-col gap-3.5">
+        {/* Fixed height (not just capped) at lg+: hovering the matrix swaps this card's content on
+            every mouse move, and an intrinsic height here would resize the grid row underneath the
+            cursor on every hover, fighting the user's scroll. A constant height keeps the page from
+            moving at all — any card taller than this scrolls internally instead. */}
+        <div className="flex flex-col gap-3.5 lg:h-[800px] lg:overflow-y-auto no-scrollbar">
           {activeDuo && <DuoDetail duo={activeDuo} players={playersById} onFlip={flipToOpponent} friendshipRating={Math.round(duoScore(activeDuo) * 100)} ratingBreakdown={duoBreakdown(activeDuo)} />}
           {activeRival && <RivalDetail rival={activeRival} players={playersById} onFlip={flipToPartner} rivalryRating={Math.round(rivalScore(activeRival) * 100)} ratingBreakdown={rivalBreakdown(activeRival)} />}
         </div>

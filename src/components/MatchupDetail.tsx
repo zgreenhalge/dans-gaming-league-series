@@ -303,7 +303,7 @@ export function DuoDetail({
         {!minimal && <MapIntelTable rows={duo.mapBreakdown} />}
 
         {!minimal && duo.matches.length > 0 && (
-          <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)] max-h-[380px] overflow-y-auto no-scrollbar">
+          <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)]">
             {duo.matches.map((m) => {
               const scoreLabel = m.score ? `${m.score.duo}–${m.score.opponents}` : null;
               const resultColor = m.won ? 'var(--color-accent-green-fg)' : 'var(--color-accent-red-fg)';
@@ -473,7 +473,7 @@ export function RivalDetail({
         <MapIntelTable rows={rival.mapBreakdown} aLabel={a.name} bLabel={b.name} />
 
         {rival.meetings > 0 && (
-          <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)] max-h-[380px] overflow-y-auto no-scrollbar">
+          <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)]">
             {rival.matches.map((m) => {
               const scoreLabel = m.score ? `${m.score.a}–${m.score.b}` : null;
               const scoreColor = m.aWon == null ? undefined : m.aWon ? 'var(--color-t)' : 'var(--color-ct)';
