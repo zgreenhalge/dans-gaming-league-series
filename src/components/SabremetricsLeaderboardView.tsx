@@ -2,9 +2,42 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
-import type { SabremetricMatchRow } from '@/lib/queries';
+import type { SabFields } from '@/lib/types';
 import { tabCls } from '@/lib/util';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
+
+/**
+ * The fields this view actually reads off a per-match sabremetric row — a structural subset of
+ * `SabremetricMatchRow` (src/lib/queries.ts), so the season/career callers (which pass full
+ * `SabremetricMatchRow[]`) satisfy this without any change, and match-page callers can build a
+ * lighter-weight row (no season_id/is_gauntlet, which this view never uses) from per-match data.
+ */
+export interface SabremetricStatRow {
+  player_id: number;
+  player_name: string;
+  match_id: number;
+  rounds_played: number;
+  sab: SabFields;
+}
+
+// Side-tint helper (CT/T, not SHIRTS/SKINS) — matches MatchTabView.tsx's own factionClass(),
+// duplicated locally per this codebase's existing pattern of small per-file copies (also
+// independently defined in DemoUploadModal.tsx and app/matches/[id]/page.tsx).
+type Side = 'CT' | 'T' | null;
+function factionClass(side: Side): string {
+  if (side === 'CT') return 'faction-ct';
+  if (side === 'T') return 'faction-t';
+  return '';
+}
+
+/** One team's slice of a match-page sabremetrics view — filters the aggregate to its
+ *  `playerIds` and wraps it in `header` (typically a `<TeamHeader>`) and side tinting. */
+export interface TeamGroup {
+  key: string;
+  playerIds: Set<number>;
+  side: Side;
+  header?: React.ReactNode;
+}
 
 interface AggregatedSab {
   player_id: number;
@@ -50,7 +83,7 @@ interface AggregatedSab {
   smokes_blocking_push: number;
 }
 
-function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
+function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
   const byPlayer = new Map<number, AggregatedSab>();
   const matchesSeen = new Map<number, Set<number>>();
 
@@ -268,7 +301,7 @@ const tdRight = 'px-3 py-2 text-right tnum';
 
 // --- Impact Stats ---
 
-function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]; singlePlayer: boolean }) {
+function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggregated: AggregatedSab[]; singlePlayer: boolean; showHeading?: boolean }) {
   const [sort, toggleSort] = useSortState('kast');
 
   const sorted = useMemo(() => {
@@ -302,7 +335,7 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
 
   return (
     <div className="my-6">
-      <h3 className="text-sm font-semibold mb-3">Impact</h3>
+      {showHeading && <h3 className="text-sm font-semibold mb-3">Impact</h3>}
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-xs">
           <thead>
@@ -348,7 +381,7 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
 
 // --- Mechanics Stats (raw, ungated — see docs/calculations.md) ---
 
-function MechanicsTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]; singlePlayer: boolean }) {
+function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggregated: AggregatedSab[]; singlePlayer: boolean; showHeading?: boolean }) {
   const [sort, toggleSort] = useSortState('acc');
 
   const sorted = useMemo(() => {
@@ -375,7 +408,7 @@ function MechanicsTable({ aggregated, singlePlayer }: { aggregated: AggregatedSa
 
   return (
     <div className="my-6">
-      <h3 className="text-sm font-semibold mb-3">Mechanics</h3>
+      {showHeading && <h3 className="text-sm font-semibold mb-3">Mechanics</h3>}
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-xs">
           <thead>
@@ -406,7 +439,7 @@ function MechanicsTable({ aggregated, singlePlayer }: { aggregated: AggregatedSa
 
 // --- Trade Stats ---
 
-function TradesTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]; singlePlayer: boolean }) {
+function TradesTable({ aggregated, singlePlayer, showHeading = true }: { aggregated: AggregatedSab[]; singlePlayer: boolean; showHeading?: boolean }) {
   const [sort, toggleSort] = useSortState('trade_kill_pct');
 
   const sorted = useMemo(() => {
@@ -431,7 +464,7 @@ function TradesTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
 
   return (
     <div className="my-6">
-      <h3 className="text-sm font-semibold mb-3">Trades</h3>
+      {showHeading && <h3 className="text-sm font-semibold mb-3">Trades</h3>}
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-xs">
           <thead>
@@ -458,7 +491,7 @@ function TradesTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
 
 // --- Utility Stats ---
 
-function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]; singlePlayer: boolean }) {
+function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggregated: AggregatedSab[]; singlePlayer: boolean; showHeading?: boolean }) {
   const [sort, toggleSort] = useSortState('ud');
 
   const sorted = useMemo(() => {
@@ -499,7 +532,7 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
 
   return (
     <div className="my-6">
-      <h3 className="text-sm font-semibold mb-3">Utility</h3>
+      {showHeading && <h3 className="text-sm font-semibold mb-3">Utility</h3>}
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-xs">
           <thead>
@@ -714,7 +747,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
 
 type SubTab = 'impact' | 'mechanics' | 'trades' | 'utility' | 'plus';
 
-const SUB_TABS: { key: SubTab; label: string }[] = [
+const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'impact', label: 'Impact' },
   { key: 'mechanics', label: 'Mechanics' },
   { key: 'trades', label: 'Trades' },
@@ -722,18 +755,55 @@ const SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'plus', label: 'Stats Plus' },
 ];
 
+/** Renders `render(agg)` once per `groups`, filtered to that group's `playerIds` and wrapped in
+ *  its `header` (typically a `<TeamHeader>`, supplied by the caller) and side tint — the
+ *  match-page shape. Falls back to a single ungrouped `render(aggregated)` call for the
+ *  season/career leaderboard shape, where `groups` is omitted. */
+function GroupedOrFlat({
+  aggregated,
+  groups,
+  render,
+}: {
+  aggregated: AggregatedSab[];
+  groups?: TeamGroup[];
+  render: (agg: AggregatedSab[]) => React.ReactNode;
+}) {
+  if (!groups) return <>{render(aggregated)}</>;
+  return (
+    <>
+      {groups.map((g, i) => (
+        <div key={g.key} className={i > 0 ? 'mt-6' : undefined}>
+          {g.header}
+          <div className={`faction-tint ${factionClass(g.side)}`}>
+            {render(aggregated.filter((a) => g.playerIds.has(a.player_id)))}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
 export default function SabremetricsLeaderboardView({
   rows,
   leagueRows,
   singlePlayer = false,
+  teamGroups,
+  showPlusStats = true,
 }: {
-  rows: SabremetricMatchRow[];
+  rows: SabremetricStatRow[];
   /** League-wide rows used as the Plus-stat baseline in single-player mode. Defaults to `rows`. */
-  leagueRows?: SabremetricMatchRow[];
+  leagueRows?: SabremetricStatRow[];
   singlePlayer?: boolean;
+  /** Match-page mode: split the tables into per-team blocks instead of one flat leaderboard.
+   *  Ignored in singlePlayer mode. */
+  teamGroups?: TeamGroup[];
+  /** Plus stats compare a player to a league-wide baseline — not meaningful over just the
+   *  handful of players in one match, so match-page callers should pass `false`. */
+  showPlusStats?: boolean;
 }) {
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);
   const leagueAggregated = useMemo(() => aggregateRows(leagueRows ?? rows), [leagueRows, rows]);
+  const subTabs = showPlusStats ? ALL_SUB_TABS : ALL_SUB_TABS.filter((t) => t.key !== 'plus');
   const [sub, setSub] = useState<SubTab>('impact');
 
   if (aggregated.length === 0) {
@@ -746,7 +816,7 @@ export default function SabremetricsLeaderboardView({
 
   const tabBar = (
     <div className="flex flex-wrap items-center gap-2">
-      {SUB_TABS.map((t) => (
+      {subTabs.map((t) => (
         <button key={t.key} type="button" className={tabCls(sub === t.key)} onClick={() => setSub(t.key)}>
           {t.label}
         </button>
@@ -770,14 +840,32 @@ export default function SabremetricsLeaderboardView({
     );
   }
 
+  const showHeading = !teamGroups;
+
   return (
     <div className="space-y-4">
       {tabBar}
-      {sub === 'impact' && <ImpactTable aggregated={aggregated} singlePlayer={singlePlayer} />}
-      {sub === 'mechanics' && <MechanicsTable aggregated={aggregated} singlePlayer={singlePlayer} />}
-      {sub === 'trades' && <TradesTable aggregated={aggregated} singlePlayer={singlePlayer} />}
-      {sub === 'utility' && <UtilityTable aggregated={aggregated} singlePlayer={singlePlayer} />}
-      {sub === 'plus' && <PlusStatsTable aggregated={aggregated} />}
+      {sub === 'impact' && (
+        <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
+          <ImpactTable aggregated={agg} singlePlayer={singlePlayer} showHeading={showHeading} />
+        )} />
+      )}
+      {sub === 'mechanics' && (
+        <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
+          <MechanicsTable aggregated={agg} singlePlayer={singlePlayer} showHeading={showHeading} />
+        )} />
+      )}
+      {sub === 'trades' && (
+        <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
+          <TradesTable aggregated={agg} singlePlayer={singlePlayer} showHeading={showHeading} />
+        )} />
+      )}
+      {sub === 'utility' && (
+        <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
+          <UtilityTable aggregated={agg} singlePlayer={singlePlayer} showHeading={showHeading} />
+        )} />
+      )}
+      {sub === 'plus' && showPlusStats && <PlusStatsTable aggregated={aggregated} />}
     </div>
   );
 }
