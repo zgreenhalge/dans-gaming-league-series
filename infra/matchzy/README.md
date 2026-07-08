@@ -13,7 +13,7 @@ config every time, before launch — the panel is not a reliable source of truth
 | Path | What | Source of truth |
 |---|---|---|
 | `golden-server-settings.json` | DatHost `cs2_settings` (game mode, GOTV, plugins, bots). PUT to `/game-servers/{id}` before start. Map selection is **not** in here — see below. | captured from the live API |
-| `cfg/` | In-game `.cfg` files (MatchZy cvars, server.cfg). Pushed via the files API, or folded into the per-match loadmatch `cvars`. | **captured from the server filesystem** |
+| `cfg/` | In-game `.cfg` files (MatchZy cvars, server.cfg). Auto-pushed to the server before every boot by `pushCfgFiles` (provisioning + `dathost-golden-apply.ts --reassert`), so the repo is the source of truth — a panel-only edit is overwritten on the next provision. | `infra/matchzy/cfg/` (this repo) |
 
 `game_mode` is currently `competitive` — a **"competitive-style wingman" hybrid** for this season
 (for consistency with xplay), with the wingman-specific rules (round count, warmup, overtime,

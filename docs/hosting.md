@@ -40,9 +40,11 @@ Orchestration lives in **`src/lib/dathost-lifecycle.ts`** over the typed client 
 **`src/lib/dathost.ts`** (DatHost REST `/api/0.1`, HTTP Basic auth):
 
 - **`provisionMatchServer`** — `findServerOccupant` guard → `provisioning` → `applyGoldenSettings`
-  (golden `cs2_settings` + the picked workshop map) → `startServer` → `waitUntilReady`
-  (`on && !booting` + connectable) → `loadMatch` (`matchzy_loadmatch_url`) → `live` + `connect_string`.
-  Marks `failed` and rethrows on any error.
+  (golden `cs2_settings` + the picked workshop map) → `pushCfgFiles` (reassert the versioned
+  `infra/matchzy/cfg/**` before boot, since cfg files are `exec`'d at boot / go-live) → `startServer`
+  → `waitUntilReady` (`on && !booting` + connectable) → `loadMatch` (`matchzy_loadmatch_url`) → `live`
+  + `connect_string`. Marks `failed` and rethrows on any error. A per-file cfg-push failure is logged,
+  not fatal.
 - **`teardownMatchServer`** — `stop` (never delete) → `done`. `onlyIfOwnsServer` no-ops unless this
   match is the current occupant, so tearing down one match never stops another's server.
 - **`getReconciledServerState`** — reconciles a stale `live` against reality (see below).
@@ -114,12 +116,18 @@ Schema-free by design — status lives in the existing table, detail lives in th
   (`JobRetryButton`). Data comes from `getBackgroundJobs()`; the list stays live via Realtime on
   `background_jobs`.
 - **`/admin/servers`** — server console: the single shared server's current occupant (reconciled via
-  `getActiveServerMatch`), connect string, and a **Teardown** control for a server left live (the
-  autostop-failed safety valve). Live via Realtime on `matches`. Provisioning stays automatic (veto)
-  / on the match page; this is the global operator view. Also hosts the **disk cleanup** controls
-  (issue #132, see `infra/matchzy/README.md`) — enable/disable the `dathost-cleanup` workflow, set
-  its interval, and a **Run now** button, all through `src/lib/gh-dispatch.ts`'s GitHub Actions
-  helpers rather than `background_jobs` (there's no per-match/per-map target for this job).
+  `getActiveServerMatch`), connect string, and — on the occupying match — two controls: **Apply match
+  settings** (re-push that match's MatchZy config via `matchzy_loadmatch_url`, restoring forced
+  `map_sides` + demo-upload cvars after an "Apply config set" or panel edit clobbered them; sends the
+  server back to warmup/knife-select) and **Teardown** (stop a server left live — the autostop-failed
+  safety valve). The **Config vs golden** block runs `diffGoldenConfig` read-only (settings + every
+  cfg file, cvar-by-cvar), the same comparison the `dathost-golden-diff` CLI renders. **Apply config
+  set** pushes a server-level `cs2_settings` baseline (map picker + config-set dropdown) — it does
+  *not* load a match config, so run **Apply match settings** after it if a match is mid-setup. Live via
+  Realtime on `matches`. Also hosts the **disk cleanup** controls (issue #132, see
+  `infra/matchzy/README.md`) — enable/disable the `dathost-cleanup` workflow, set its interval, and a
+  **Run now** button, all through `src/lib/gh-dispatch.ts`'s GitHub Actions helpers rather than
+  `background_jobs` (there's no per-match/per-map target for this job).
 
 `is_admin` is threaded into the session JWT (`authOptions.js`) and typed on `session.user.isAdmin`;
 existing sessions are backfilled on their next request (no re-login needed). Every admin page still
@@ -133,13 +141,22 @@ the machine-auth `GET /api/matches/[id]/matchzy-config` route (the `matchzy_load
 reused by the `scripts/gen-matchzy-config.ts` CLI. Versioned golden settings + captured cfgs live in
 `infra/matchzy/`; the Worker lives in `infra/worker/`.
 
+**`src/lib/dathost-config.ts`** is the single source for the cfg-file dimension: the tracked
+`CFG_FILES` list, `pushCfgFiles` (reasserts them to the server — called at provision and by
+`dathost-golden-apply.ts --reassert`), and `diffGoldenConfig` (the read-only drift comparison shared
+by the admin console and `dathost-golden-diff.ts`). Because provisioning re-pushes these before every
+boot, the repo is the source of truth for cfg files — a cfg edited only in the DatHost panel is
+overwritten on the next provision.
+
 ## Routes
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/api/matches/[id]/server/status` | session (admin/in-match) | reconciled server state for the panel |
 | POST | `/api/matches/[id]/server/provision` | session | provision (202; boots in `after()`; 409 if busy) |
+| POST | `/api/matches/[id]/server/apply-match-config` | session | re-push the match's loadmatch config (409 if busy) |
 | POST | `/api/matches/[id]/server/teardown` | session | stop the server |
+| GET | `/api/admin/server/config-diff` | admin | read-only golden-config drift (`diffGoldenConfig`) |
 | GET | `/api/matches/[id]/matchzy-config` | machine (`X-MatchZy-Token`) | the `matchzy_loadmatch_url` target |
 | POST | `/api/ingest/notify` | machine (`x-ingest-secret`) | demo landed → record + dispatch + teardown |
 | GET·DELETE | `/api/matches/[id]/demo/result` | session | read / dispose the staged `DemoIngestResult` |
