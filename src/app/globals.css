@@ -534,15 +534,23 @@ body::before {
 }
 
 /* Scrollable region that stays scrollable via wheel/touch/drag but never
-   paints a scrollbar track — used where a fixed-height panel needs internal
-   overflow (H2H matrix, H2H detail match history) without a bar that clashes
-   with the site's chrome or crowds a narrow sidebar. */
+   paints a scrollbar track — used where overflow is expected (H2H matrix's
+   horizontal scroll) without a bar that clashes with the site's chrome. */
 .no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* Opts an element out of the browser's scroll-anchoring heuristic, which
+   otherwise "corrects" the page's scroll position whenever this element's
+   size changes — the correction itself is the jump, not a fix for one. Use
+   on any region whose height changes in response to something other than
+   the user's own scrolling (e.g. hover-driven content swaps). */
+.no-scroll-anchor {
+  overflow-anchor: none;
 }
 
 /* Pin a table's first column while the rest scrolls horizontally.
