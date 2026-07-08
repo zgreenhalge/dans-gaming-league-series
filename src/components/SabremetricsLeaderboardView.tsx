@@ -44,6 +44,8 @@ interface AggregatedSab {
   headshot_hits: number;
   counter_strafe_shots: number;
   counter_strafe_good_shots: number;
+  spray_shots_fired: number;
+  spray_shots_hit: number;
 }
 
 function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
@@ -72,6 +74,7 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
         blind_duration_max_sum: 0, effective_flashes: 0,
         shots_fired: 0, shots_hit: 0, headshot_hits: 0,
         counter_strafe_shots: 0, counter_strafe_good_shots: 0,
+        spray_shots_fired: 0, spray_shots_hit: 0,
       };
       byPlayer.set(r.player_id, agg);
       matchesSeen.set(r.player_id, new Set());
@@ -119,6 +122,8 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
     agg.headshot_hits += s.headshot_hits;
     agg.counter_strafe_shots += s.counter_strafe_shots;
     agg.counter_strafe_good_shots += s.counter_strafe_good_shots;
+    agg.spray_shots_fired += s.spray_shots_fired;
+    agg.spray_shots_hit += s.spray_shots_hit;
   }
 
   return Array.from(byPlayer.values());
@@ -279,6 +284,10 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
           aVal = a.counter_strafe_good_shots / (a.counter_strafe_shots || 1);
           bVal = b.counter_strafe_good_shots / (b.counter_strafe_shots || 1);
           break;
+        case 'spray':
+          aVal = a.spray_shots_hit / (a.spray_shots_fired || 1);
+          bVal = b.spray_shots_hit / (b.spray_shots_fired || 1);
+          break;
         case 'kast': aVal = a.kast_rounds / arp; bVal = b.kast_rounds / brp; break;
         case '2k': aVal = a.two_k_rounds; bVal = b.two_k_rounds; break;
         case '1v1': aVal = a.clutch_1v1_wins; bVal = b.clutch_1v1_wins; break;
@@ -320,6 +329,7 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
               <SortableTh label="Accuracy" title="Shots that hit an enemy / shots fired (guns only, not gated on enemy visibility)" sortKey="acc" state={sort} onClick={toggleSort} />
               <SortableTh label="Head Accuracy" title="Hits landing on the head / total hits" sortKey="head_acc" state={sort} onClick={toggleSort} />
               <SortableTh label="Counter-Strafe %" title="Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)" sortKey="cstrafe" state={sort} onClick={toggleSort} />
+              <SortableTh label="Spray Accuracy" title="Hits / shots within sequences of 3+ consecutive rifle shots" sortKey="spray" state={sort} onClick={toggleSort} />
               <SortableTh label="KAST" title="Percentage of rounds with a Kill, Assist, Survived, or Traded" sortKey="kast" state={sort} onClick={toggleSort} />
               <SortableTh label="Double Kills" title="Rounds where both opponents were eliminated" sortKey="2k" state={sort} onClick={toggleSort} />
               <SortableTh label="1v1" title="1v1 clutch wins / attempts" sortKey="1v1" state={sort} onClick={toggleSort} />
@@ -344,6 +354,7 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
                   <td className={tdRight}>{pct(a.shots_hit, a.shots_fired)}</td>
                   <td className={tdRight}>{pct(a.headshot_hits, a.shots_hit)}</td>
                   <td className={tdRight}>{pct(a.counter_strafe_good_shots, a.counter_strafe_shots)}</td>
+                  <td className={tdRight}>{pct(a.spray_shots_hit, a.spray_shots_fired)}</td>
                   <td className={tdRight}>{pct(a.kast_rounds, a.rounds_played)}</td>
                   <td className={tdRight}>{a.two_k_rounds}</td>
                   <td className={tdRight}>{a.clutch_1v1_wins}/{a.clutch_1v1_attempts}</td>
@@ -547,6 +558,7 @@ function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leag
     { label: 'Accuracy', title: 'Shots that hit an enemy / shots fired (guns only, not gated on enemy visibility)', value: pct(agg.shots_hit, agg.shots_fired) },
     { label: 'Head Accuracy', title: 'Hits landing on the head / total hits', value: pct(agg.headshot_hits, agg.shots_hit) },
     { label: 'Counter-Strafe %', title: 'Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)', value: pct(agg.counter_strafe_good_shots, agg.counter_strafe_shots) },
+    { label: 'Spray Accuracy', title: 'Hits / shots within sequences of 3+ consecutive rifle shots', value: pct(agg.spray_shots_hit, agg.spray_shots_fired) },
     { label: 'KAST', title: 'Percentage of rounds with a Kill, Assist, Survived, or Traded', value: pct(agg.kast_rounds, agg.rounds_played) },
     { label: 'Double Kills', title: 'Rounds where both opponents were eliminated', value: agg.two_k_rounds },
     { label: '1v1 Clutches', title: '1v1 clutch wins / attempts', value: `${agg.clutch_1v1_wins}/${agg.clutch_1v1_attempts}` },

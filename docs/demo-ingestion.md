@@ -62,6 +62,7 @@ matches still self-derive a score and stats with no manual entry.
 | `heGrenade.ts` | HE grenades thrown and enemy damage dealt (HE Damage/Throw) |
 | `accuracy.ts` | Raw accuracy / head accuracy from `weapon_fire`/`player_hurt` |
 | `counterStrafe.ts` | Counter-strafe % from per-tick duck-state/position reads at rifle `weapon_fire` ticks |
+| `sprayAccuracy.ts` | Spray accuracy within sequences of 3+ consecutive rifle shots |
 
 ## Match start (skipping warmup and stray knife rounds)
 

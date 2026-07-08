@@ -156,6 +156,11 @@ ship ungated first per `docs/demo-parsing-reference.md`'s guidance on that trade
   (`m_flMaxspeed`, which already factors in the held weapon's speed penalty — no separate
   per-weapon speed table needed). This parser exposes no direct velocity read, so speed is
   derived from the position delta between the fire tick and one tick earlier.
+- `Spray Accuracy` = `Spray Shots Hit` / `Spray Shots Fired` — rifles only, within sequences of
+  3+ consecutive shots from the same weapon (a gap of 0.25s+ between shots starts a new
+  sequence; taps and short bursts under 3 shots don't count at all). Reports the league's overall
+  total, not a per-rifle breakdown — a per-rifle version would need per-weapon columns or a
+  child table, deferred until that's actually wanted.
 
 ### Player Rating (not yet implemented)
 

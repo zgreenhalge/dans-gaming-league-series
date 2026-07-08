@@ -18,6 +18,7 @@ import { collectAccuracy } from './parsers/accuracy';
 import {
   collectCounterStrafe, neededCounterStrafeTicks, type PlayerTickRow,
 } from './parsers/counterStrafe';
+import { collectSprayAccuracy } from './parsers/sprayAccuracy';
 
 const ZERO: SabFields = {
   kills_ct: 0, kills_t: 0,
@@ -54,6 +55,8 @@ const ZERO: SabFields = {
   headshot_hits: 0,
   counter_strafe_shots: 0,
   counter_strafe_good_shots: 0,
+  spray_shots_fired: 0,
+  spray_shots_hit: 0,
 };
 
 export function parseDemoSabremetrics(
@@ -160,6 +163,7 @@ export function parseDemoSabremetrics(
     }));
   }
   const counterStrafeStats = collectCounterStrafe(fireEvents, csTickRows, context, steamIds);
+  const sprayStats = collectSprayAccuracy(fireEvents, hurtEvents, context, steamIds);
 
   // 6. Merge with zero defaults
   const sabremetrics: DemoSabremetricStat[] = steamIds.map((steamId) => ({
@@ -177,6 +181,7 @@ export function parseDemoSabremetrics(
       ...heStats.get(steamId),
       ...accuracyStats.get(steamId),
       ...counterStrafeStats.get(steamId),
+      ...sprayStats.get(steamId),
     },
   }));
 
