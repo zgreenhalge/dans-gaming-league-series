@@ -16,9 +16,10 @@
 // array isn't worth the risk. --reassert also does not touch per_match_overrides (those are
 // per-match, not part of the static baseline) or cfg file uploads if the files endpoint 404s.
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BASE, REPO_ROOT, GOLDEN_JSON_PATH, CFG_FILES, authHeader, api } from './dathost-golden-shared';
+import { REPO_ROOT, GOLDEN_JSON_PATH, CFG_FILES, api } from './dathost-golden-shared';
+import { pushCfgFiles } from '../src/lib/dathost-config';
 
 function loadGoldenRaw(): Record<string, unknown> {
   return JSON.parse(readFileSync(GOLDEN_JSON_PATH, 'utf8'));
@@ -102,28 +103,11 @@ async function reassert(serverId: string) {
   }
   console.error(`✓ settings pushed (${put.status})`);
 
-  for (const { local, remote } of CFG_FILES) {
-    const localPath = join(REPO_ROOT, local);
-    if (!existsSync(localPath)) {
-      console.error(`  ⚠ missing local ${local} — skipped`);
-      continue;
-    }
-    console.error(`— POST /game-servers/${serverId}/files/${remote} —`);
-    const content = readFileSync(localPath, 'utf8');
-    const res = await fetch(`${BASE}/game-servers/${serverId}/files/${remote}`, {
-      method: 'POST',
-      headers: { Authorization: authHeader() },
-      body: (() => {
-        const form = new FormData();
-        form.append('file', new Blob([content]), remote.split('/').pop());
-        return form;
-      })(),
-    });
-    if (!res.ok) {
-      console.error(`  ✗ upload failed (${res.status}) for ${remote}`);
-    } else {
-      console.error(`  ✓ pushed ${local} → ${remote}`);
-    }
+  console.error(`— POST /game-servers/${serverId}/files/* (${CFG_FILES.length} cfg files) —`);
+  for (const r of await pushCfgFiles(serverId)) {
+    if (r.status === 0) console.error(`  ⚠ missing local file for ${r.remote} — skipped`);
+    else if (!r.ok) console.error(`  ✗ upload failed (${r.status}) for ${r.remote}`);
+    else console.error(`  ✓ pushed ${r.remote}`);
   }
 
   console.error('\nSettings apply on next provision (or next PUT). cfg files apply on next server boot.');

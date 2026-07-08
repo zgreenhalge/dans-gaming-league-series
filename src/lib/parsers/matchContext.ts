@@ -1,5 +1,24 @@
-import { parseHeader } from '@laihoe/demoparser2';
+import { parseEvent, parseHeader } from '@laihoe/demoparser2';
 import { buildRoundSides, sideForFaction, type RoundEndRow, type RoundSideInfo } from './roundSides';
+
+/**
+ * Tick the live match starts at — the last `begin_new_match`. MatchZy fires it on every warmup
+ * restart and on the knife→match transition, so the max tick is the real start. Any round_end
+ * before it is warmup or an erroneously-recorded knife round; callers drop those. Returns 0 when
+ * the demo has no `begin_new_match` (so nothing is filtered by tick).
+ */
+export function findMatchStartTick(demoBuffer: Buffer): number {
+  let maxTick = 0;
+  try {
+    const events: { tick: number }[] = parseEvent(demoBuffer, 'begin_new_match');
+    for (const e of events) {
+      if (typeof e.tick === 'number' && e.tick > maxTick) maxTick = e.tick;
+    }
+  } catch {
+    // event absent/unreadable — leave 0 so no rounds are filtered by tick
+  }
+  return maxTick;
+}
 
 export interface PlayerDeathRow {
   tick: number;
@@ -66,7 +85,8 @@ export function buildMatchContext(
     // header unreadable — keep the 64 default
   }
 
-  const rounds = buildRoundSides(roundEndEvents, skinsStartingSide, targetWinRounds);
+  const matchStartTick = findMatchStartTick(demoBuffer);
+  const rounds = buildRoundSides(roundEndEvents, skinsStartingSide, targetWinRounds, matchStartTick);
   const hasSides = rounds.length > 0;
 
   if (!hasSides && skinsStartingSide === null) {

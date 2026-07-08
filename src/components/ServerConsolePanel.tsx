@@ -1,12 +1,14 @@
 'use client';
 
-// Admin server console (#134/#135, admin console b — now server-centric). Three sections: match
-// occupancy (who holds it right now + Teardown, for the autostop-failed safety valve), a combined
-// panel below it — raw DatHost server state + start/stop + apply-a-config-set (map picker +
-// config-set dropdown, settings only — doesn't start the server), and disk cleanup (issue #132) —
-// enable/disable + interval + a manual "run now" for the dathost-cleanup GitHub Action. The
-// per-match MatchServerPanel still handles per-match provisioning on the match page; this is the
-// global operator view.
+// Admin server console (#134/#135, admin console b — now server-centric). Sections: match occupancy
+// (who holds it right now + "Apply match settings" — re-push the match's loadmatch config to restore
+// forced map_sides + demo-upload cvars — and Teardown, the autostop-failed safety valve); a combined
+// panel below it — raw DatHost server state + start/stop + "Apply config set" (map picker + config-set
+// dropdown, server-level settings only — doesn't start the server and doesn't load a match config);
+// "Config vs golden" (read-only drift check against the versioned infra/matchzy/ config); and disk
+// cleanup (issue #132) — enable/disable + interval + a manual "run now" for the dathost-cleanup GitHub
+// Action. The per-match MatchServerPanel still handles per-match provisioning on the match page; this
+// is the global operator view.
 //
 // Start/Stop/Apply are occupancy-checked server-side (getServerOccupancy) — a DGLS match holding the
 // server, or live players on it with no DGLS match at all (casual/manual use), both refuse the action
@@ -24,6 +26,9 @@ import { toSentenceCase } from '@/lib/maps';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
 import type { ConfigSetOption } from '@/lib/dathost';
+// Type-only — `import type` is erased at compile, so this never pulls dathost-config's node:fs into
+// the client bundle.
+import type { GoldenDiff, DiffRow, CfgFileDiff } from '@/lib/dathost-config';
 import type { WorkshopMapOption } from '@/lib/queries';
 import type { AdminServerStatus } from '@/app/api/admin/server/status/route';
 import type { DathostCleanupStatus } from '@/app/api/admin/dathost-cleanup/status/route';
@@ -92,6 +97,64 @@ function CopyConnectButton({ connect }: { connect: string }) {
   );
 }
 
+// Read-only render of the golden-config diff — only rows that differ (drift/missing), so a clean
+// server shows nothing but the "matches golden" line. `drift` (a real value mismatch) is red;
+// `missing` (present one side only) is amber.
+function DriftRows({ rows }: { rows: DiffRow[] }) {
+  const changed = rows.filter((r) => r.status === 'drift' || r.status === 'missing');
+  if (changed.length === 0) return null;
+  return (
+    <div className="font-mono text-[11px] flex flex-col gap-1 mt-1">
+      {changed.map((r) => (
+        <div key={r.key} className="flex flex-wrap items-baseline gap-x-2">
+          <span className="text-[var(--color-text-primary)]">{r.key}</span>
+          <span className="text-[var(--color-text-secondary)]">golden {r.local}</span>
+          <span className="text-[var(--color-text-secondary)]">→</span>
+          <span className={r.status === 'drift' ? 'text-[var(--color-accent-red-fg)]' : 'text-[var(--color-accent-amber-fg)]'}>
+            live {r.live}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ConfigDiffView({ diff }: { diff: GoldenDiff }) {
+  const settingsDrift = diff.settings.filter((r) => r.status === 'drift' || r.status === 'missing');
+  const cfgWithDrift = diff.cfgFiles.filter(
+    (f: CfgFileDiff) => f.error || f.rows.some((r) => r.status === 'drift' || r.status === 'missing'),
+  );
+  return (
+    <div className="flex flex-col gap-3 mt-2">
+      <div
+        className={`font-mono text-[11px] ${
+          diff.clean ? 'text-[var(--color-accent-green-fg)]' : 'text-[var(--color-accent-red-fg)]'
+        }`}
+      >
+        {diff.clean ? '✓ live server matches the versioned golden config.' : '✗ drift found — nothing was changed.'}
+      </div>
+
+      {settingsDrift.length > 0 && (
+        <div>
+          <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">Settings (cs2_settings)</div>
+          <DriftRows rows={diff.settings} />
+        </div>
+      )}
+
+      {cfgWithDrift.map((f: CfgFileDiff) => (
+        <div key={f.remote}>
+          <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">{f.remote}</div>
+          {f.error ? (
+            <div className="font-mono text-[11px] text-[var(--color-accent-amber-fg)] mt-1">{f.error}</div>
+          ) : (
+            <DriftRows rows={f.rows} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function lastRunSummary(lastRun: DathostCleanupStatus['lastRun']): string {
   if (!lastRun) return 'never run';
   const when = fmtUtcShort(lastRun.createdAt);
@@ -153,6 +216,14 @@ export function ServerConsolePanel({
 
   const [teardownBusy, setTeardownBusy] = useState(false);
   const [teardownError, setTeardownError] = useState<string | null>(null);
+
+  const [matchCfgBusy, setMatchCfgBusy] = useState(false);
+  const [matchCfgError, setMatchCfgError] = useState<string | null>(null);
+  const [matchCfgSuccess, setMatchCfgSuccess] = useState(false);
+
+  const [diff, setDiff] = useState<GoldenDiff | null>(null);
+  const [diffBusy, setDiffBusy] = useState(false);
+  const [diffError, setDiffError] = useState<string | null>(null);
 
   const [pending, setPending] = useState<PendingAction | null>(null);
 
@@ -453,6 +524,45 @@ export function ServerConsolePanel({
     }
   };
 
+  // Re-push the occupying match's MatchZy config (RCON loadmatch) — restores forced `map_sides` and
+  // the demo-upload cvars after an "Apply config set" (or panel edit) clobbered them. Distinct from
+  // "Apply config set" above, which pushes the server-level baseline and *wipes* the match config.
+  const applyMatchConfig = async () => {
+    if (!active) return;
+    setMatchCfgBusy(true);
+    setMatchCfgError(null);
+    setMatchCfgSuccess(false);
+    try {
+      const res = await fetch(`/api/matches/${active.matchId}/server/apply-match-config`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setMatchCfgError(body.error ?? 'Could not apply match settings');
+        return;
+      }
+      setMatchCfgSuccess(true);
+    } finally {
+      setMatchCfgBusy(false);
+    }
+  };
+
+  const runDiff = async () => {
+    setDiffBusy(true);
+    setDiffError(null);
+    try {
+      const res = await fetch('/api/admin/server/config-diff');
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setDiffError(body.error ?? 'Could not compare config');
+        return;
+      }
+      setDiff((await res.json()) as GoldenDiff);
+    } catch {
+      setDiffError('Could not compare config');
+    } finally {
+      setDiffBusy(false);
+    }
+  };
+
   const server = status?.server ?? null;
   const configured = status?.configured ?? true;
   // Prefer status.active (fresher — refetched on load/poll/action) once we have it at all; only fall
@@ -487,14 +597,30 @@ export function ServerConsolePanel({
                   {active.serverStartedAt && <span>since {fmtUtcShort(active.serverStartedAt)}</span>}
                 </div>
               </div>
-              <button
-                onClick={teardown}
-                disabled={teardownBusy}
-                className="shrink-0 font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)] hover:bg-[var(--color-accent-red-bg)] disabled:opacity-50"
-              >
-                {teardownBusy ? 'Stopping…' : 'Tear down'}
-              </button>
+              <div className="shrink-0 flex flex-col items-end gap-2">
+                <button
+                  onClick={applyMatchConfig}
+                  disabled={matchCfgBusy}
+                  title="Re-push this match's config (forced side + demo upload) via RCON loadmatch"
+                  className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
+                >
+                  {matchCfgBusy ? 'Applying…' : 'Apply match settings'}
+                </button>
+                <button
+                  onClick={teardown}
+                  disabled={teardownBusy}
+                  className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)] hover:bg-[var(--color-accent-red-bg)] disabled:opacity-50"
+                >
+                  {teardownBusy ? 'Stopping…' : 'Tear down'}
+                </button>
+              </div>
             </div>
+            {matchCfgError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-2">{matchCfgError}</div>}
+            {matchCfgSuccess && !matchCfgError && (
+              <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)] mt-2">
+                Match config re-pushed — the server is in warmup / knife-select.
+              </div>
+            )}
             {teardownError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-2">{teardownError}</div>}
           </div>
         )}
@@ -631,13 +757,29 @@ export function ServerConsolePanel({
             disabled={!configSet || !resolvedMapId || applyBusy}
             className="self-start font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
           >
-            {applyBusy ? 'Applying…' : 'Apply config'}
+            {applyBusy ? 'Applying…' : 'Apply config set'}
           </button>
           {applyError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{applyError}</div>}
           {applySuccess && !applyError && (
             <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
           )}
         </div>
+      </div>
+
+      {/* Config vs golden — read-only drift check against the versioned infra/matchzy/ config. */}
+      <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">Config vs golden</div>
+          <button
+            onClick={runDiff}
+            disabled={diffBusy}
+            className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-border-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)] disabled:opacity-50"
+          >
+            {diffBusy ? 'Comparing…' : 'Compare to golden'}
+          </button>
+        </div>
+        {diffError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-2">{diffError}</div>}
+        {diff && !diffError && <ConfigDiffView diff={diff} />}
       </div>
 
       {/* Disk cleanup (#132) */}

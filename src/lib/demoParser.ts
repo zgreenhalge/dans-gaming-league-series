@@ -1,5 +1,6 @@
 import { parseEvent, parseTicks } from '@laihoe/demoparser2';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
+import { findMatchStartTick } from './parsers/matchContext';
 import { buildRoundSides } from './parsers/roundSides';
 import {
   inferSkinsStartingSide,
@@ -78,8 +79,11 @@ export function parseDemoFile(
     is_warmup_period: boolean | number;
   }[] = parseEvent(demoBuffer, 'round_end', [], ['winner', 'reason', 'is_warmup_period']);
 
+  // The live match starts here; anything before it is warmup or an erroneously-recorded knife
+  // round (which the engine counts as a real round). Drop those by tick — see findMatchStartTick.
+  const matchStartTick = findMatchStartTick(demoBuffer);
   const liveRounds = roundEndEvents.filter(
-    (e) => !e.is_warmup_period && e.winner !== null && e.round > 0,
+    (e) => !e.is_warmup_period && e.winner !== null && e.round > 0 && e.tick >= matchStartTick,
   );
   const totalRounds = liveRounds.length;
 
@@ -136,6 +140,7 @@ export function parseDemoFile(
     })),
     effectiveSide,
     targetWinRounds,
+    matchStartTick,
   );
 
   // buildRoundSides filters identically to `liveRounds` above and preserves

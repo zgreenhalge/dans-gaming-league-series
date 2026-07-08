@@ -24,6 +24,7 @@ import {
   getServer,
   type DathostServer,
 } from './dathost';
+import { pushCfgFiles } from './dathost-config';
 
 export type ServerState = 'idle' | 'provisioning' | 'live' | 'tearing_down' | 'done' | 'failed';
 
@@ -150,6 +151,14 @@ export async function provisionMatchServer(
 
     const mapWorkshopId = await resolveMapWorkshopId(supabaseAdmin, matchId);
     await applyGoldenSettings(serverId, { mapWorkshopId });
+    // Reassert the versioned cfg files before boot (they're `exec`'d at boot / go-live), so the cfg
+    // dimension can't drift from the repo. A per-file failure shouldn't block the match, so log and
+    // continue rather than throw.
+    const pushed = await pushCfgFiles(serverId);
+    const failed = pushed.filter((p) => !p.ok);
+    if (failed.length) {
+      console.warn(`pushCfgFiles(${matchId}): ${failed.length} file(s) failed:`, failed);
+    }
     await startServer(serverId);
     const server = await waitUntilReady(serverId);
     await loadMatch(serverId, configUrl, configAuth);

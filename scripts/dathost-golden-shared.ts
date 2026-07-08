@@ -8,14 +8,10 @@ export const BASE = 'https://dathost.com/api/0.1';
 export const REPO_ROOT = join(__dirname, '..');
 export const GOLDEN_JSON_PATH = join(REPO_ROOT, 'infra/matchzy/golden-server-settings.json');
 
-// Local cfg path -> remote path, rooted at the DatHost file-manager root (i.e. includes `cfg/`) —
-// confirmed against the live API + https://dathost.readme.io/reference/get_game_server_files_item.
-export const CFG_FILES: Array<{ local: string; remote: string }> = [
-  { local: 'infra/matchzy/cfg/MatchZy/config.cfg', remote: 'cfg/MatchZy/config.cfg' },
-  { local: 'infra/matchzy/cfg/server.cfg', remote: 'cfg/server.cfg' },
-  { local: 'infra/matchzy/cfg/gamemode_competitive2v2_server.cfg', remote: 'cfg/gamemode_competitive2v2_server.cfg' },
-  { local: 'infra/matchzy/cfg/MatchZy/live_override.cfg', remote: 'cfg/MatchZy/live_override.cfg' },
-];
+// The tracked cfg-file list lives in `src/lib/dathost-config.ts` (the same module the app uses to
+// push/diff them), so the CLI and the app can never disagree on which files are golden. Re-exported
+// here so the scripts keep a single import point.
+export { CFG_FILES } from '../src/lib/dathost-config';
 
 export function authHeader(): string {
   const email = process.env.DATHOST_EMAIL;

@@ -2,7 +2,7 @@ import { parseEvent } from '@laihoe/demoparser2';
 import type { RosterEntry } from './demoParser';
 import type { SabFields, DemoSabremetricStat, ParsedDemoSabremetricsResult } from './types';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
-import { buildMatchContext, type PlayerDeathRow } from './parsers/matchContext';
+import { buildMatchContext, findMatchStartTick, type PlayerDeathRow } from './parsers/matchContext';
 import type { RoundEndRow } from './parsers/roundSides';
 import { inferSkinsStartingSide, resolveEffectiveSide } from './parsers/sideInference';
 import { collectAccumulators } from './parsers/accumulators';
@@ -75,8 +75,9 @@ export function parseDemoSabremetrics(
 
   // 3. Build match context — resolve the starting side the same way parseDemoFile does
   // (stored wins; otherwise infer from the demo) so sabremetrics and the score agree.
+  const matchStartTick = findMatchStartTick(demoBuffer);
   const sabLiveRounds = roundEndEvents.filter(
-    (e) => !e.is_warmup_period && e.winner !== null && e.total_rounds_played > 0,
+    (e) => !e.is_warmup_period && e.winner !== null && e.total_rounds_played > 0 && e.tick >= matchStartTick,
   );
   const inferredSide =
     sabLiveRounds.length > 0
