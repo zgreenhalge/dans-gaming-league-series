@@ -17,7 +17,7 @@
 
 import goldenServerSettings from '../../infra/matchzy/golden-server-settings.json';
 
-const BASE = 'https://dathost.com/api/0.1';
+export const BASE = 'https://dathost.com/api/0.1';
 
 /**
  * cs2_settings keys that are set per-match/per-apply (the picked workshop map), not part of any
@@ -94,7 +94,7 @@ export class DathostError extends Error {
   }
 }
 
-function authHeader(): string {
+export function authHeader(): string {
   const email = process.env.DATHOST_EMAIL;
   const password = process.env.DATHOST_PASSWORD;
   if (!email || !password) {
