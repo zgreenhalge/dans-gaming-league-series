@@ -59,6 +59,21 @@ matches still self-derive a score and stats with no manual entry.
 | `utility.ts` | Flash assists, utility damage, teamflash/self-flash (`Utility+`, Beer Tax) |
 | `objectives.ts` | Bomb plants/defuses (`Objective+`) |
 
+## Match start (skipping warmup and stray knife rounds)
+
+Both parsers derive rounds only from the live match. The live match begins at the last
+`begin_new_match` tick (`findMatchStartTick()` in `parsers/matchContext.ts`); any `round_end` before
+it is warmup or a knife round and is dropped by tick. This matters when a knife round is
+**erroneously recorded as a live round** — the engine counts it as `total_rounds_played = 1` and
+never resets its counter, so the real rounds carry numbers 2..N.
+
+Survivors keep their engine `total_rounds_played` — they are **not** renumbered to 1..N. The in-game
+half-swap fires on the engine round counter (which counts the stray knife round), so preserving the
+original number keeps the derived side-swap boundary aligned with what the game actually did. The
+score, per-player rounds, and the accumulator-based side splits (which diff cumulative counters that
+reset at `begin_new_match`) all read from the post-start rounds, so a stray knife round no longer
+inflates the score or corrupts the splits.
+
 ## Side splits (deterministic from the round-1 anchor)
 
 CT/T splits are derived **deterministically** from faction (SHIRTS/SKINS), the starting side, and the
