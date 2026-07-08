@@ -747,10 +747,13 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
 
 type SubTab = 'impact' | 'mechanics' | 'trades' | 'utility' | 'plus';
 
+// Ordered to roughly match Leetify's match-page grouping (Aim, then situational Duels/Trades,
+// then Impact, then Utility) — see #173's Leetify-parity discussion. Stats Plus has no Leetify
+// analog (it's DGLS's own league-relative composite), so it stays last.
 const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
-  { key: 'impact', label: 'Impact' },
-  { key: 'mechanics', label: 'Mechanics' },
+  { key: 'mechanics', label: 'Aim' },
   { key: 'trades', label: 'Trades' },
+  { key: 'impact', label: 'Impact' },
   { key: 'utility', label: 'Utility' },
   { key: 'plus', label: 'Stats Plus' },
 ];
@@ -804,7 +807,7 @@ export default function SabremetricsLeaderboardView({
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);
   const leagueAggregated = useMemo(() => aggregateRows(leagueRows ?? rows), [leagueRows, rows]);
   const subTabs = showPlusStats ? ALL_SUB_TABS : ALL_SUB_TABS.filter((t) => t.key !== 'plus');
-  const [sub, setSub] = useState<SubTab>('impact');
+  const [sub, setSub] = useState<SubTab>('mechanics');
 
   if (aggregated.length === 0) {
     return (
