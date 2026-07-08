@@ -379,6 +379,8 @@ export interface RivalMatchSummary {
   aWon: boolean | null;
   aMatchStats: MatchPlayerStats;
   bMatchStats: MatchPlayerStats;
+  aTeammate: { player_id: number; player_name: string } | null;
+  bTeammate: { player_id: number; player_name: string } | null;
 }
 
 /** A pair's aggregated record on a single map, across every meeting on it. */
@@ -731,6 +733,11 @@ export function computeH2H(
 
         const aScore = parsedScore ? (aRow.faction === 'SHIRTS' ? parsedScore.shirts : parsedScore.skins) : null;
         const bScore = parsedScore ? (bRow.faction === 'SHIRTS' ? parsedScore.shirts : parsedScore.skins) : null;
+        // 2v2 Wingman, so each side's "teammate" is simply the other roster row sharing that faction.
+        const aTeam = aRow.faction === 'SHIRTS' ? shirts : skins;
+        const bTeam = bRow.faction === 'SHIRTS' ? shirts : skins;
+        const aTeammateRow = aTeam.find((r) => r.player_id !== aRow.player_id) ?? null;
+        const bTeammateRow = bTeam.find((r) => r.player_id !== bRow.player_id) ?? null;
         agg.matches.push({
           matchId: m.matchId,
           seasonNumber: m.seasonNumber,
@@ -744,6 +751,8 @@ export function computeH2H(
           aWon: aRow.is_win,
           aMatchStats: { kills: aRow.kills, assists: aRow.assists ?? 0, deaths: aRow.deaths },
           bMatchStats: { kills: bRow.kills, assists: bRow.assists ?? 0, deaths: bRow.deaths },
+          aTeammate: aTeammateRow ? { player_id: aTeammateRow.player_id, player_name: players.get(aTeammateRow.player_id)?.name ?? `#${aTeammateRow.player_id}` } : null,
+          bTeammate: bTeammateRow ? { player_id: bTeammateRow.player_id, player_name: players.get(bTeammateRow.player_id)?.name ?? `#${bTeammateRow.player_id}` } : null,
         });
       }
     }

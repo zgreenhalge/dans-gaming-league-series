@@ -455,6 +455,8 @@ export function RivalDetail({
             {rival.matches.map((m) => {
               const scoreLabel = m.score ? `${m.score.a}–${m.score.b}` : null;
               const scoreColor = m.aWon == null ? undefined : m.aWon ? 'var(--color-t)' : 'var(--color-ct)';
+              const aTeammate = m.aTeammate ? players.get(m.aTeammate.player_id) : undefined;
+              const bTeammate = m.bTeammate ? players.get(m.bTeammate.player_id) : undefined;
               return (
                 <MatchHistoryRow
                   key={m.matchId}
@@ -468,15 +470,21 @@ export function RivalDetail({
                   scoreColor={scoreColor}
                   scorePosition="left"
                   rightContent={
-                    <div className="w-full flex items-center justify-end gap-5">
-                      <StatTrio
-                        values={[m.aMatchStats.kills, m.aMatchStats.assists, m.aMatchStats.deaths]}
-                        color="var(--color-t)"
-                      />
-                      <StatTrio
-                        values={[m.bMatchStats.kills, m.bMatchStats.assists, m.bMatchStats.deaths]}
-                        color="var(--color-ct)"
-                      />
+                    <div className="w-full flex items-center justify-end gap-3.5">
+                      <div className="flex items-center gap-1 min-w-0" title={aTeammate ? `w/ ${aTeammate.name}` : undefined}>
+                        {aTeammate && <PlayerAvatar name={aTeammate.name} imageUrl={aTeammate.steam_avatar_url} size="sm" />}
+                        <StatTrio
+                          values={[m.aMatchStats.kills, m.aMatchStats.assists, m.aMatchStats.deaths]}
+                          color="var(--color-t)"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1 min-w-0" title={bTeammate ? `w/ ${bTeammate.name}` : undefined}>
+                        <StatTrio
+                          values={[m.bMatchStats.kills, m.bMatchStats.assists, m.bMatchStats.deaths]}
+                          color="var(--color-ct)"
+                        />
+                        {bTeammate && <PlayerAvatar name={bTeammate.name} imageUrl={bTeammate.steam_avatar_url} size="sm" />}
+                      </div>
                     </div>
                   }
                 />
