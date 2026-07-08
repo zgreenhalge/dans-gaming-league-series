@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import type { DuoStats, H2HStats } from '@/lib/queries';
+import type { DuoStats, H2HStats, H2HMapStat, MatchRosterPlayer } from '@/lib/queries';
 import { rateGradientColor, winRatePct } from '@/lib/util';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
@@ -33,12 +33,57 @@ function RecycleButton({ onClick, title }: { onClick: () => void; title: string 
   );
 }
 
-/** Three right-aligned, fixed-width numeric columns — keeps K/A/D figures lined up across rows (and under a header). */
-function StatTrio({ values, color }: { values: [React.ReactNode, React.ReactNode, React.ReactNode]; color?: string }) {
+/**
+ * A match's per-side roster (2 players — teammates in Wingman), styled after
+ * MatchCard's TeamStatBlock (header row + K/A/D columns per player) so each
+ * player reads as its own roster row with its own stats. `bold` marks which
+ * rows draw at full weight — the player(s) this card is centered on — with
+ * the rest reading as supporting context.
+ */
+function MatchRosterColumn({
+  roster,
+  bold,
+  color,
+  align = 'left',
+}: {
+  roster: MatchRosterPlayer[];
+  bold: (playerId: number) => boolean;
+  color: string;
+  align?: 'left' | 'right';
+}) {
+  // K/A/D stay in that left-to-right order on both sides — only the name's
+  // position flips — so the columns still line up under a single "K A D"
+  // header regardless of which side is mirrored.
+  const kad = (values: [React.ReactNode, React.ReactNode, React.ReactNode], cls: string) =>
+    values.map((v, i) => (
+      <span key={i} className={cls}>{v}</span>
+    ));
+  const headerCls = 'w-[18px] text-center tracked text-[7px] text-[var(--color-text-secondary)]';
+  const statCls = 'w-[18px] text-center font-mono text-[10px] tabular-nums';
+  const name = (p: MatchRosterPlayer) => (
+    <span
+      className={`flex-1 min-w-0 truncate font-display text-[11px] ${bold(p.player_id) ? 'font-bold' : 'opacity-60'} ${align === 'right' ? 'text-right' : ''}`}
+      style={{ color }}
+    >
+      {p.player_name}
+    </span>
+  );
+
+  const spacer = <span className="flex-1" />;
+
   return (
-    <div className="flex items-center gap-1.5 font-mono text-[11px] tabular-nums" style={{ color }}>
-      {values.map((v, i) => (
-        <span key={i} className="w-[20px] text-right">{v}</span>
+    <div className="flex-1 min-w-0 px-2 py-1">
+      <div className="flex items-center gap-1">
+        {align === 'left' && spacer}
+        {kad(['K', 'A', 'D'], headerCls)}
+        {align === 'right' && spacer}
+      </div>
+      {roster.map((p) => (
+        <div key={p.player_id} className="flex items-center gap-1">
+          {align === 'left' && name(p)}
+          {kad([p.kills, p.assists, p.deaths], statCls)}
+          {align === 'right' && name(p)}
+        </div>
       ))}
     </div>
   );
@@ -51,17 +96,29 @@ function matchRefLabel(seasonNumber: number | null, isGauntlet: boolean, weekNum
   return sLabel ? `${sLabel}·${wLabel}` : wLabel;
 }
 
+/** Veto context for a match's map — see "Veto" in docs/glossary.md. `null` for gauntlet matches (no veto data). */
+function vetoTitle(pickedBy: 'SHIRTS' | 'SKINS' | null, startingSide: 'CT' | 'T' | null): string | undefined {
+  const parts: string[] = [];
+  if (pickedBy) parts.push(`${pickedBy === 'SHIRTS' ? 'Shirts' : 'Skins'} pick`);
+  if (startingSide) parts.push(`Skins started ${startingSide}`);
+  return parts.length > 0 ? parts.join(' · ') : undefined;
+}
+
+/**
+ * A match-history entry, stacked over two lines: a meta line (match ref,
+ * full map name, score) and a detail line for per-side content (teammates,
+ * K/A/D, etc). Stacking gives the map name and detail content room to
+ * breathe at the card's normal width.
+ */
 function MatchHistoryRow({
   matchId,
   matchLabel,
   labelColor = 'var(--color-text-secondary)',
   map,
   mapColor = 'var(--color-ct)',
+  mapTitle,
   scoreLabel,
   scoreColor,
-  scorePosition = 'right',
-  resultLabel,
-  resultColor,
   rightContent,
 }: {
   matchId: number;
@@ -69,15 +126,13 @@ function MatchHistoryRow({
   labelColor?: string;
   map: string | null;
   mapColor?: string;
+  mapTitle?: string;
   scoreLabel: string | null;
   scoreColor?: string;
-  scorePosition?: 'left' | 'right';
-  resultLabel?: string | null;
-  resultColor?: string;
   rightContent: React.ReactNode;
 }) {
   const score = scoreLabel ? (
-    <span className="display-numeral text-[12px] whitespace-nowrap" style={{ color: scoreColor }}>{scoreLabel}</span>
+    <span className="display-numeral text-[13px] whitespace-nowrap" style={{ color: scoreColor }}>{scoreLabel}</span>
   ) : (
     <span className="tracked text-[8px] text-[var(--color-accent-amber-fg)] whitespace-nowrap">TBD</span>
   );
@@ -85,26 +140,70 @@ function MatchHistoryRow({
   return (
     <Link
       href={`/matches/${matchId}`}
-      className="lift-row flex items-center gap-2 py-2 px-1 -mx-1 border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors"
+      className="lift-row flex flex-col gap-1.5 py-2.5 px-1.5 -mx-1.5 border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors"
     >
-      <div className="flex items-center gap-1 shrink-0">
-        <span className="font-mono text-[10px] w-[52px] shrink-0" style={{ color: labelColor }}>{matchLabel}</span>
-        {scorePosition === 'left' && <div className="w-[36px] shrink-0 whitespace-nowrap text-center">{score}</div>}
-      </div>
-      <span
-        className={`font-mono text-[11px] w-[48px] shrink-0 truncate capitalize ${scorePosition === 'left' ? 'ml-1.5' : ''}`}
-        style={{ color: mapColor }}
-      >
-        {map ?? '—'}
-      </span>
-      <div className="flex-1 min-w-0 flex items-center gap-1.5">{rightContent}</div>
-      {scorePosition === 'right' && score}
-      {resultLabel != null && (
-        <span className="tracked text-[7px] font-bold w-[18px] text-center" style={{ color: resultColor }}>
-          {resultLabel}
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-[10px] shrink-0" style={{ color: labelColor }}>{matchLabel}</span>
+        <span title={mapTitle} className="font-mono text-[11px] flex-1 min-w-0 truncate capitalize" style={{ color: mapColor }}>
+          {map ?? '—'}
         </span>
-      )}
+        {score}
+      </div>
+      <div className="flex items-center gap-1.5">{rightContent}</div>
     </Link>
+  );
+}
+
+/**
+ * Per-pair, per-map record — aggregated straight from `computeH2H`'s match
+ * history (`duo.mapBreakdown`/`rival.mapBreakdown`), not from either player's
+ * individual career map stats. Pass `aLabel`/`bLabel` for rivals, where ADR
+ * splits per player; omit them for duos, where ADR is already combined.
+ */
+function MapIntelTable({ rows, aLabel, bLabel }: { rows: H2HMapStat[]; aLabel?: string; bLabel?: string }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)]">
+      <div className="tracked text-[8px] text-[var(--color-text-secondary)] mb-1.5">Map Intel</div>
+      <table className="w-full text-[11px]">
+        <thead>
+          <tr className="text-[var(--color-text-secondary)]">
+            <th className="text-left font-normal tracked text-[8px] pb-1">Map</th>
+            <th className="text-right font-normal tracked text-[8px] pb-1">Games</th>
+            <th className="text-right font-normal tracked text-[8px] pb-1">W-L</th>
+            <th className="text-right font-normal tracked text-[8px] pb-1">Rounds</th>
+            {aLabel ? (
+              <>
+                <th className="text-right font-normal tracked text-[8px] pb-1" title={aLabel}>ADR·A</th>
+                <th className="text-right font-normal tracked text-[8px] pb-1" title={bLabel}>ADR·B</th>
+              </>
+            ) : (
+              <th className="text-right font-normal tracked text-[8px] pb-1">ADR</th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.map} className="border-t border-[var(--color-border-tertiary)]">
+              <td className="py-1 font-display font-semibold truncate">
+                <Link href={`/maps/${mapSlug(r.map)}`} className="hover:underline capitalize">{toSentenceCase(r.map)}</Link>
+              </td>
+              <td className="py-1 text-right font-mono tnum">{r.games}</td>
+              <td className="py-1 text-right font-mono tnum">{r.wins}–{r.losses}</td>
+              <td className="py-1 text-right font-mono tnum">{r.roundsWon}–{r.roundsPlayed - r.roundsWon}</td>
+              {aLabel ? (
+                <>
+                  <td className="py-1 text-right font-mono tnum">{r.aAdr.toFixed(1)}</td>
+                  <td className="py-1 text-right font-mono tnum">{r.bAdr.toFixed(1)}</td>
+                </>
+              ) : (
+                <td className="py-1 text-right font-mono tnum">{r.aAdr.toFixed(1)}</td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -213,6 +312,8 @@ export function DuoDetail({
           <StatCell label="Comb. Deaths"  title={`${a.name}: ${duo.aStats.deaths}\n${b.name}: ${duo.bStats.deaths}`}>{duo.combinedDeaths}</StatCell>
         </div>
 
+        {!minimal && <MapIntelTable rows={duo.mapBreakdown} />}
+
         {!minimal && duo.matches.length > 0 && (
           <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)]">
             {duo.matches.map((m) => {
@@ -226,21 +327,14 @@ export function DuoDetail({
                   labelColor="var(--color-text-primary)"
                   map={m.map}
                   mapColor="var(--color-text-primary)"
+                  mapTitle={vetoTitle(m.pickedBy, m.startingSide)}
                   scoreLabel={scoreLabel}
                   scoreColor={resultColor}
-                  scorePosition="left"
                   rightContent={
-                    <>
-                      <span className="tracked text-[8px] text-[var(--color-text-secondary)] mr-1">vs</span>
-                      <div className="flex -space-x-1.5">
-                        {m.opponents.map((o) => (
-                          <PlayerAvatar key={o.player_id} name={o.player_name} imageUrl={null} size="sm" />
-                        ))}
-                      </div>
-                      <span className="font-display font-semibold text-[10px] truncate ml-1">
-                        {m.opponents.map((o) => o.player_name).join(' & ')}
-                      </span>
-                    </>
+                    <div className="w-full flex items-stretch divide-x divide-[var(--color-border-tertiary)] border border-[var(--color-border-tertiary)]">
+                      <MatchRosterColumn roster={m.team} bold={() => true} color="var(--color-accent-green-fg)" />
+                      <MatchRosterColumn roster={m.opponents} bold={() => false} color="var(--color-text-primary)" align="right" />
+                    </div>
                   }
                 />
               );
@@ -381,6 +475,8 @@ export function RivalDetail({
 
         <div className="mt-3.5">{statsTable}</div>
 
+        <MapIntelTable rows={rival.mapBreakdown} aLabel={a.name} bLabel={b.name} />
+
         {rival.meetings > 0 && (
           <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)]">
             {rival.matches.map((m) => {
@@ -394,19 +490,13 @@ export function RivalDetail({
                   labelColor="var(--color-text-primary)"
                   map={m.map}
                   mapColor="var(--color-text-primary)"
+                  mapTitle={vetoTitle(m.pickedBy, m.startingSide)}
                   scoreLabel={scoreLabel}
                   scoreColor={scoreColor}
-                  scorePosition="left"
                   rightContent={
-                    <div className="w-full flex items-center justify-end gap-5">
-                      <StatTrio
-                        values={[m.aMatchStats.kills, m.aMatchStats.assists, m.aMatchStats.deaths]}
-                        color="var(--color-t)"
-                      />
-                      <StatTrio
-                        values={[m.bMatchStats.kills, m.bMatchStats.assists, m.bMatchStats.deaths]}
-                        color="var(--color-ct)"
-                      />
+                    <div className="w-full flex items-stretch divide-x divide-[var(--color-border-tertiary)] border border-[var(--color-border-tertiary)]">
+                      <MatchRosterColumn roster={m.aTeam} bold={(id) => id === rival.playerA} color="var(--color-t)" />
+                      <MatchRosterColumn roster={m.bTeam} bold={(id) => id === rival.playerB} color="var(--color-ct)" align="right" />
                     </div>
                   }
                 />

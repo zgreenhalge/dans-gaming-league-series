@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { winRatePct, tabCls } from '@/lib/util';
 import type { H2HData } from '@/lib/queries';
 import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdownScorer } from '@/lib/queries';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
+import { DuoDetail, RivalDetail } from './MatchupDetail';
 
 type H2HSortCol = 'name' | 'rating' | 'wl' | 'games' | 'wr' | 'rwr' | 'kills' | 'assists' | 'deaths' | 'kd' | 'adr';
 type B2BSortCol = 'name' | 'rating' | 'wl' | 'games' | 'wr' | 'rwr' | 'kills' | 'assists' | 'deaths' | 'kd' | 'adr';
@@ -90,6 +91,8 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
   const [h2hAsc, setH2hAsc] = useState(false);
   const [b2bSort, setB2bSort] = useState<B2BSortCol>('rating');
   const [b2bAsc, setB2bAsc] = useState(false);
+  const [expandedOpponent, setExpandedOpponent] = useState<number | null>(null);
+  const [expandedTeammate, setExpandedTeammate] = useState<number | null>(null);
 
   const playersById = useMemo(() => {
     const m = new Map<number, (typeof h2hData.players)[number]>();
@@ -368,53 +371,50 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                   const rating = Math.round(rivalScore(row._raw) * 100);
                   const bg = rowBg(rating, RED);
                   const hoverBg = rowHoverBg(rating, RED);
+                  const isExpanded = expandedOpponent === row.other;
                   return (
-                    <tr
-                      key={row.other}
-                      className="border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer transition-colors"
-                      style={{ background: bg }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = hoverBg; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = bg; }}
-                    >
-                      <td className="sticky-col pl-4 pr-2 py-2.5">
-                        <Link href={`/players/${p.id}`} className="flex items-center gap-2 w-full h-full">
-                          <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
-                          <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
-                        </Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-center">
-                        <Link href={`/players/${p.id}`} className="flex justify-center">
-                          <RatingCircle value={rating} colorStart="black" colorEnd={RED} size="xs" title={rivalBreakdown(row._raw)} />
-                        </Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum">
-                        <Link href={`/players/${p.id}`} className="block">{row.myWins}–{row.myLosses}</Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum">
-                        <Link href={`/players/${p.id}`} className="block">{row.games}</Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum font-semibold">
-                        <Link href={`/players/${p.id}`} className="block">{row.wr.toFixed(1)}%</Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum">
-                        <Link href={`/players/${p.id}`} className="block">{row.rwr.toFixed(1)}%</Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum">
-                        <Link href={`/players/${p.id}`} className="block">{row.kills}</Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum">
-                        <Link href={`/players/${p.id}`} className="block">{row.assists}</Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum">
-                        <Link href={`/players/${p.id}`} className="block">{row.deaths}</Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum">
-                        <Link href={`/players/${p.id}`} className="block">{row.kd.toFixed(2)}</Link>
-                      </td>
-                      <td className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold">
-                        <Link href={`/players/${p.id}`} className="block">{row.adr.toFixed(2)}</Link>
-                      </td>
-                    </tr>
+                    <Fragment key={row.other}>
+                      <tr
+                        className="border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer transition-colors"
+                        style={{ background: isExpanded ? hoverBg : bg }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = hoverBg; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? hoverBg : bg; }}
+                        onClick={() => setExpandedOpponent(isExpanded ? null : row.other)}
+                      >
+                        <td className="sticky-col pl-4 pr-2 py-2.5">
+                          <Link href={`/players/${p.id}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 w-full h-full">
+                            <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
+                            <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
+                          </Link>
+                        </td>
+                        <td className="py-2.5 px-2 text-center">
+                          <div className="flex justify-center">
+                            <RatingCircle value={rating} colorStart="black" colorEnd={RED} size="xs" title={rivalBreakdown(row._raw)} />
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.myWins}–{row.myLosses}</td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.games}</td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum font-semibold">{row.wr.toFixed(1)}%</td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.rwr.toFixed(1)}%</td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.kills}</td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.assists}</td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.deaths}</td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.kd.toFixed(2)}</td>
+                        <td className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold">{row.adr.toFixed(2)}</td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                          <td colSpan={H2H_COLS.length + 1} className="p-3 bg-[var(--color-bg-secondary)]">
+                            <RivalDetail
+                              rival={row._raw}
+                              players={playersById}
+                              rivalryRating={rating}
+                              ratingBreakdown={rivalBreakdown(row._raw)}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -450,53 +450,50 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
                   const hoverBg = rowHoverBg(rating, GREEN);
                   const myKd = row.myStats.deaths > 0 ? row.myStats.kills / row.myStats.deaths : row.myStats.kills;
                   const theirKd = row.theirStats.deaths > 0 ? row.theirStats.kills / row.theirStats.deaths : row.theirStats.kills;
+                  const isExpanded = expandedTeammate === row.other;
                   return (
-                    <tr
-                      key={row.other}
-                      className="border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer transition-colors"
-                      style={{ background: bg }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = hoverBg; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = bg; }}
-                    >
-                      <td className="sticky-col pl-4 pr-2 py-2.5">
-                        <Link href={`/players/${p.id}`} className="flex items-center gap-2 w-full h-full">
-                          <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
-                          <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
-                        </Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-center">
-                        <Link href={`/players/${p.id}`} className="flex justify-center">
-                          <RatingCircle value={rating} colorStart="black" colorEnd={GREEN} size="xs" title={duoBreakdown(row._raw)} />
-                        </Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum">
-                        <Link href={`/players/${p.id}`} className="block">{row.wins}–{row.losses}</Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum">
-                        <Link href={`/players/${p.id}`} className="block">{row.games}</Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum font-semibold">
-                        <Link href={`/players/${p.id}`} className="block">{row.wr.toFixed(1)}%</Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum">
-                        <Link href={`/players/${p.id}`} className="block">{row.rwr.toFixed(1)}%</Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.kills}\n${p.name}: ${row.theirStats.kills}`}>
-                        <Link href={`/players/${p.id}`} className="block">{row.kills}</Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.assists}\n${p.name}: ${row.theirStats.assists}`}>
-                        <Link href={`/players/${p.id}`} className="block">{row.assists}</Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.deaths}\n${p.name}: ${row.theirStats.deaths}`}>
-                        <Link href={`/players/${p.id}`} className="block">{row.deaths}</Link>
-                      </td>
-                      <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${myKd.toFixed(2)}\n${p.name}: ${theirKd.toFixed(2)}`}>
-                        <Link href={`/players/${p.id}`} className="block">{row.kd.toFixed(2)}</Link>
-                      </td>
-                      <td className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold" title={`${myName}: ${row.myStats.adr.toFixed(1)}\n${p.name}: ${row.theirStats.adr.toFixed(1)}`}>
-                        <Link href={`/players/${p.id}`} className="block">{row.adr.toFixed(2)}</Link>
-                      </td>
-                    </tr>
+                    <Fragment key={row.other}>
+                      <tr
+                        className="border-b border-[var(--color-border-tertiary)] last:border-b-0 cursor-pointer transition-colors"
+                        style={{ background: isExpanded ? hoverBg : bg }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = hoverBg; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = isExpanded ? hoverBg : bg; }}
+                        onClick={() => setExpandedTeammate(isExpanded ? null : row.other)}
+                      >
+                        <td className="sticky-col pl-4 pr-2 py-2.5">
+                          <Link href={`/players/${p.id}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 w-full h-full">
+                            <PlayerAvatar name={p.name} imageUrl={p.steam_avatar_url} size="sm" />
+                            <span className="font-display font-semibold text-[13px] truncate">{p.name}</span>
+                          </Link>
+                        </td>
+                        <td className="py-2.5 px-2 text-center">
+                          <div className="flex justify-center">
+                            <RatingCircle value={rating} colorStart="black" colorEnd={GREEN} size="xs" title={duoBreakdown(row._raw)} />
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.wins}–{row.losses}</td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.games}</td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum font-semibold">{row.wr.toFixed(1)}%</td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum">{row.rwr.toFixed(1)}%</td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.kills}\n${p.name}: ${row.theirStats.kills}`}>{row.kills}</td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.assists}\n${p.name}: ${row.theirStats.assists}`}>{row.assists}</td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${row.myStats.deaths}\n${p.name}: ${row.theirStats.deaths}`}>{row.deaths}</td>
+                        <td className="py-2.5 px-2 text-right font-mono tnum" title={`${myName}: ${myKd.toFixed(2)}\n${p.name}: ${theirKd.toFixed(2)}`}>{row.kd.toFixed(2)}</td>
+                        <td className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold" title={`${myName}: ${row.myStats.adr.toFixed(1)}\n${p.name}: ${row.theirStats.adr.toFixed(1)}`}>{row.adr.toFixed(2)}</td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                          <td colSpan={B2B_COLS.length + 1} className="p-3 bg-[var(--color-bg-secondary)]">
+                            <DuoDetail
+                              duo={row._raw}
+                              players={playersById}
+                              friendshipRating={rating}
+                              ratingBreakdown={duoBreakdown(row._raw)}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>

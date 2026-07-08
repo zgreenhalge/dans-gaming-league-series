@@ -64,7 +64,11 @@ so you don't have to reverse-engineer them from scratch each time.
   live inside `H2HData` (`src/lib/queries.ts`):
   - **Duos** (`DuoStats`) — performance when two players are *teammates* (same faction)
   - **Rivals** (`H2HStats`) — performance when two players are *opponents* (different factions)
-  Rendered by `H2HMatrix.tsx` (overview grid) and `H2HDetail.tsx` (drill-down for a pair).
+  Rendered by `H2HMatrix.tsx` (overview grid) and `MatchupDetail.tsx` (drill-down for a pair —
+  `DuoDetail`/`RivalDetail`, shared by the Statistics H2H tab, a player's Matchups tab, and a
+  match's Scouting Report). Each pair's drill-down includes **Map Intel**: a per-pair,
+  per-map record (`DuoStats.mapBreakdown` / `H2HStats.mapBreakdown`) aggregated directly from
+  that pair's own match history — not from either player's individual career map stats.
 - **Blended score** (H2H rankings) — how the "Best Friends"/"Closest Rivals" cards
   (`topDuos`/`topRivals` in `H2HSection.tsx`) rank pairs, and how the `H2HMatrix` colors
   its cells. Shared via `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/queries.ts`.
@@ -99,7 +103,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | Map name → image/slug lookups | `src/lib/maps.ts` |
 | Season filter state (career/season/regular/gauntlet) | `src/components/SeasonFilter.tsx` |
 | Veto sequence rendering | `src/components/VetoSequence.tsx` |
-| H2H overview grid / drill-down | `src/components/H2HMatrix.tsx`, `src/components/H2HDetail.tsx` |
+| H2H overview grid / drill-down | `src/components/H2HMatrix.tsx`, `src/components/MatchupDetail.tsx` |
 | Pre-match prep view | `src/components/ScoutingReport.tsx` |
 | Gauntlet bracket rendering | `src/components/GauntletRoundsList.tsx`, `src/components/GauntletStandings.tsx` |
 | Career vs per-season stat views | `src/components/CareerStatsView.tsx`, `src/components/SeasonTabView.tsx`, `src/components/CombinedSeasonTabView.tsx` |
