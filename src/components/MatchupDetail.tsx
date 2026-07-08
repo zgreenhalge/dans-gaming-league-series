@@ -36,8 +36,8 @@ function RecycleButton({ onClick, title }: { onClick: () => void; title: string 
 /**
  * A rival match's per-side roster — the matchup player plus their 2v2
  * teammate — styled after MatchCard's TeamStatBlock (header row + K/A/D
- * columns per player) so a teammate reads as its own roster row with its
- * own stats, instead of a name squeezed in next to someone else's numbers.
+ * columns per player), so a teammate reads as its own roster row with its
+ * own stats.
  */
 function RivalTeamRoster({
   roster,
@@ -104,11 +104,10 @@ function vetoTitle(pickedBy: 'SHIRTS' | 'SKINS' | null, startingSide: 'CT' | 'T'
 }
 
 /**
- * A match-history entry, stacked over two lines rather than crammed onto one:
- * a meta line (match ref, full map name, score) and a detail line for
- * per-side content (teammates, K/A/D, etc). Stacking — instead of widening
- * the whole card — is what gives the map name and detail content room to
- * breathe without truncating or overlapping.
+ * A match-history entry, stacked over two lines: a meta line (match ref,
+ * full map name, score) and a detail line for per-side content (teammates,
+ * K/A/D, etc). Stacking gives the map name and detail content room to
+ * breathe at the card's normal width.
  */
 function MatchHistoryRow({
   matchId,

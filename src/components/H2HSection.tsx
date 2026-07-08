@@ -232,9 +232,9 @@ export default function H2HSection({ data, initialPair }: { data: H2HData; initi
         />
 
         {/* Hovering the matrix swaps this card's content on every mouse move, so its height
-            changes constantly. `no-scroll-anchor` (overflow-anchor: none) stops the browser's
-            scroll-anchoring heuristic from "correcting" the page's scroll position in response —
-            that correction is what was dragging the matrix cell out from under the cursor. */}
+            changes constantly. `no-scroll-anchor` (overflow-anchor: none) keeps the browser's
+            scroll-anchoring heuristic from "correcting" the page's scroll position in response,
+            which would otherwise drag whatever matrix cell is under the cursor along with it. */}
         <div className="flex flex-col gap-3.5 no-scroll-anchor">
           {activeDuo && <DuoDetail duo={activeDuo} players={playersById} onFlip={flipToOpponent} friendshipRating={Math.round(duoScore(activeDuo) * 100)} ratingBreakdown={duoBreakdown(activeDuo)} />}
           {activeRival && <RivalDetail rival={activeRival} players={playersById} onFlip={flipToPartner} rivalryRating={Math.round(rivalScore(activeRival) * 100)} ratingBreakdown={rivalBreakdown(activeRival)} />}
