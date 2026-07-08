@@ -303,6 +303,31 @@ test('pickedBy/startingSide are null when no veto data is available (e.g. gauntl
   assert.equal(result.rivals[0].matches[0].startingSide, null);
 });
 
+// --- Rival match rosters (playerA/playerB + their 2v2 teammate) ---
+test('rival match aTeam/bTeam carry both players on each side, with their own stats', () => {
+  const roster = [
+    stat({ player_id: 1, faction: 'SHIRTS', kills: 20, assists: 3, deaths: 10, adr: 90 }),
+    stat({ player_id: 2, faction: 'SHIRTS', kills: 18, assists: 5, deaths: 12, adr: 85 }),
+    stat({ player_id: 3, faction: 'SKINS', kills: 15, assists: 1, deaths: 14, adr: 70, is_win: false }),
+    stat({ player_id: 4, faction: 'SKINS', kills: 12, assists: 4, deaths: 16, adr: 65, is_win: false }),
+  ];
+  const result = computeH2H([match({ matchId: 1, roster })], players);
+
+  const rival = result.rivals.find((r) => r.playerA === 1 && r.playerB === 3)!;
+  const m = rival.matches[0];
+  assert.equal(m.aTeam.length, 2, 'playerA (1) + their SHIRTS teammate (2)');
+  assert.deepEqual(new Set(m.aTeam.map((p) => p.player_id)), new Set([1, 2]));
+  assert.equal(m.bTeam.length, 2, 'playerB (3) + their SKINS teammate (4)');
+  assert.deepEqual(new Set(m.bTeam.map((p) => p.player_id)), new Set([3, 4]));
+
+  const teammateTwo = m.aTeam.find((p) => p.player_id === 2)!;
+  assert.equal(teammateTwo.player_name, 'Bob');
+  assert.equal(teammateTwo.kills, 18);
+  assert.equal(teammateTwo.assists, 5);
+  assert.equal(teammateTwo.deaths, 12);
+  assert.equal(teammateTwo.adr, 85);
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length > 0) {
   console.error('\nFailures:\n');

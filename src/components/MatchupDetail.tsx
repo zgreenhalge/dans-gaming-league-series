@@ -40,36 +40,48 @@ function RecycleButton({ onClick, title }: { onClick: () => void; title: string 
  * own stats, instead of a name squeezed in next to someone else's numbers.
  */
 function RivalTeamRoster({
-  players,
+  roster,
   highlightId,
   color,
   align = 'left',
 }: {
-  players: MatchRosterPlayer[];
+  roster: MatchRosterPlayer[];
   highlightId: number;
   color: string;
   align?: 'left' | 'right';
 }) {
-  const reverse = align === 'right' ? 'flex-row-reverse' : '';
+  // K/A/D stay in that left-to-right order on both sides — only the name's
+  // position flips — so the columns still line up under a single "K A D"
+  // header regardless of which side is mirrored.
+  const kad = (values: [React.ReactNode, React.ReactNode, React.ReactNode], cls: string) =>
+    values.map((v, i) => (
+      <span key={i} className={cls}>{v}</span>
+    ));
+  const headerCls = 'w-[18px] text-center tracked text-[7px] text-[var(--color-text-secondary)]';
+  const statCls = 'w-[18px] text-center font-mono text-[10px] tabular-nums';
+  const name = (p: MatchRosterPlayer) => (
+    <span
+      className={`flex-1 min-w-0 truncate font-display text-[11px] ${p.player_id === highlightId ? 'font-bold' : 'opacity-60'} ${align === 'right' ? 'text-right' : ''}`}
+      style={{ color }}
+    >
+      {p.player_name}
+    </span>
+  );
+
+  const spacer = <span className="flex-1" />;
+
   return (
     <div className="flex-1 min-w-0 px-2 py-1">
-      <div className={`flex items-center gap-1 ${reverse}`}>
-        <span className="flex-1" />
-        {['K', 'A', 'D'].map((h) => (
-          <span key={h} className="w-[14px] text-center tracked text-[7px] text-[var(--color-text-secondary)]">{h}</span>
-        ))}
+      <div className="flex items-center gap-1">
+        {align === 'left' && spacer}
+        {kad(['K', 'A', 'D'], headerCls)}
+        {align === 'right' && spacer}
       </div>
-      {players.map((p) => (
-        <div key={p.player_id} className={`flex items-center gap-1 ${reverse}`}>
-          <span
-            className={`flex-1 min-w-0 truncate font-display text-[11px] ${p.player_id === highlightId ? 'font-bold' : 'opacity-60'}`}
-            style={{ color }}
-          >
-            {p.player_name}
-          </span>
-          <span className="w-[14px] text-center font-mono text-[10px] tabular-nums">{p.kills}</span>
-          <span className="w-[14px] text-center font-mono text-[10px] tabular-nums">{p.assists}</span>
-          <span className="w-[14px] text-center font-mono text-[10px] tabular-nums">{p.deaths}</span>
+      {roster.map((p) => (
+        <div key={p.player_id} className="flex items-center gap-1">
+          {align === 'left' && name(p)}
+          {kad([p.kills, p.assists, p.deaths], statCls)}
+          {align === 'right' && name(p)}
         </div>
       ))}
     </div>
@@ -490,8 +502,8 @@ export function RivalDetail({
                   scoreColor={scoreColor}
                   rightContent={
                     <div className="w-full flex items-stretch divide-x divide-[var(--color-border-tertiary)] border border-[var(--color-border-tertiary)]">
-                      <RivalTeamRoster players={m.aTeam} highlightId={rival.playerA} color="var(--color-t)" />
-                      <RivalTeamRoster players={m.bTeam} highlightId={rival.playerB} color="var(--color-ct)" align="right" />
+                      <RivalTeamRoster roster={m.aTeam} highlightId={rival.playerA} color="var(--color-t)" />
+                      <RivalTeamRoster roster={m.bTeam} highlightId={rival.playerB} color="var(--color-ct)" align="right" />
                     </div>
                   }
                 />
