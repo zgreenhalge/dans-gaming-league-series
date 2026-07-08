@@ -6,14 +6,15 @@ import ScheduleList from './ScheduleList';
 import GauntletStandings from './GauntletStandings';
 import GauntletRoundsList from './GauntletRoundsList';
 import H2HSection from './H2HSection';
-import { AdvancedStatsView } from './AdvancedStatsView';
+import { BasicStatsView } from './BasicStatsView';
+import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import TabBar from './TabBar';
-import type { WeekWithMatches, GauntletRound, H2HData } from '@/lib/queries';
+import type { WeekWithMatches, GauntletRound, H2HData, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { MatchPickBanInput } from '@/lib/mapSideStats';
 import { isPlayedScore, tabCls, canonicalGauntletRankMap } from '@/lib/util';
 
-type Tab = 'leaderboard' | 'schedule' | 'h2h' | 'stats';
+type Tab = 'leaderboard' | 'schedule' | 'h2h' | 'stats' | 'advanced';
 
 function playerInMatch(
   match: { shirts_stats: { player_id: number }[]; skins_stats: { player_id: number }[] },
@@ -45,10 +46,14 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   tab?: Tab;
   onTabChange?: (t: Tab) => void;
   ehogRatings?: Record<number, number>;
+  /** This season's per-match sabremetrics — the Advanced Stats tab only shows once at least
+   *  one match here has a parsed demo. */
+  sabremetrics?: SabremetricMatchRow[];
 };
 
 export default function SeasonTabView(props: SeasonTabViewProps) {
-  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings } = props;
+  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings, sabremetrics } = props;
+  const hasSab = !!sabremetrics && sabremetrics.length > 0;
   const isGauntlet = props.kind === 'gauntlet';
   const schedule = props.kind === 'regular' ? props.schedule : EMPTY_SCHEDULE;
   const rounds = props.kind === 'gauntlet' ? props.rounds : EMPTY_ROUNDS;
@@ -188,6 +193,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'leaderboard', label: 'Leaderboard' },
     { key: 'stats', label: 'Stats' },
+    ...(hasSab ? [{ key: 'advanced' as const, label: 'Advanced Stats' }] : []),
     { key: 'h2h', label: 'H2H' },
     { key: 'schedule', label: isGauntlet ? 'Rounds' : 'Schedule' },
   ];
@@ -269,8 +275,12 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
             No stats available yet.
           </div>
         ) : (
-          <AdvancedStatsView rows={leaderboard} matches={allMatches} />
+          <BasicStatsView rows={leaderboard} matches={allMatches} />
         )
+      )}
+
+      {tab === 'advanced' && hasSab && (
+        <SabremetricsLeaderboardView rows={sabremetrics!} />
       )}
 
       {tab === 'h2h' && <H2HSection data={h2hData} />}

@@ -10,13 +10,14 @@ import MatchRecapTab from '@/components/MatchRecapTab';
 import ScoutingReport from '@/components/ScoutingReport';
 import { Checkbox } from '@/components/SeasonFilter';
 import TabBar from '@/components/TabBar';
+import SabremetricsLeaderboardView, { type SabremetricStatRow, type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView } from '@/lib/queries';
 import type { SabFields } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
 import { RecordingViewer, RecordingUrlForm } from '@/components/RecordingViewer';
 
 type Faction = 'CT' | 'T' | null;
-type Tab = 'leaderboard' | 'impact' | 'utility' | 'scouting' | 'recap' | 'recording';
+type Tab = 'leaderboard' | 'advanced' | 'scouting' | 'recap' | 'recording';
 
 function factionClass(f: Faction): string {
   if (f === 'CT') return 'faction-ct';
@@ -156,110 +157,6 @@ function Scoreboard({
     </div>
   );
 }
-
-interface SabStatCol {
-  header: string;
-  title: string;
-  render: (s: SabFields, roundsPlayed: number) => React.ReactNode;
-}
-
-const tdStatCls = 'px-3 py-2.5 text-right font-mono tnum';
-
-function pctStr(num: number, den: number): string {
-  if (den === 0) return '—';
-  return `${Math.round((num / den) * 100)}%`;
-}
-
-function SabStatTable({
-  players,
-  faction,
-  sabMap,
-  cols,
-}: {
-  players: MatchStatRow[];
-  faction: Faction;
-  sabMap: Map<number, SabFields>;
-  cols: SabStatCol[];
-}) {
-  const cls = factionClass(faction);
-  const thCls = 'tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-right px-3 py-2.5 border-b border-[var(--color-border-primary)]';
-
-  return (
-    <div className={`border border-[var(--color-border-primary)] overflow-x-auto faction-tint ${cls}`}>
-      <table className="w-full min-w-max border-collapse text-[13px]">
-        <thead>
-          <tr className="bg-[var(--color-bg-secondary)]">
-            <th className="sticky-col tracked text-[10px] font-semibold text-[var(--color-text-secondary)] text-left pl-4 pr-3 py-2.5 border-b border-[var(--color-border-primary)]">
-              Player
-            </th>
-            {cols.map((c, i) => (
-              <th key={i} className={thCls} title={c.title}>{c.header}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {players.map((p) => {
-            const sab = sabMap.get(p.player_id);
-            return (
-              <tr
-                key={p.player_id}
-                className="lift-row faction-tint-row border-b border-[var(--color-border-tertiary)] last:border-b-0"
-              >
-                <td className="sticky-col pl-4 pr-3 py-2.5 font-display font-semibold faction-fg">
-                  {p.player_name}
-                </td>
-                {cols.map((c, i) => (
-                  <td key={i} className={i === cols.length - 1 ? `${tdStatCls} pr-4 font-semibold` : tdStatCls}>
-                    {sab ? c.render(sab, p.rounds_played) : '—'}
-                  </td>
-                ))}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-const IMPACT_COLS: SabStatCol[] = [
-  {
-    header: 'Opening Duels',
-    title: 'First kill and first death of each round (wins-losses)',
-    render: (s) => (
-      <span>
-        <span className="text-[var(--color-accent-green-fg)]">{s.opening_kills}</span>
-        <span className="text-[var(--color-text-secondary)]">-</span>
-        <span className="text-[var(--color-accent-red-fg)]">{s.opening_deaths}</span>
-      </span>
-    ),
-  },
-  { header: 'Opening %', title: 'Percentage of rounds where this player took the opening duel', render: (s, rp) => pctStr(s.opening_kills + s.opening_deaths, rp) },
-  { header: 'KAST', title: 'Percentage of rounds with a Kill, Assist, Survived, or Traded', render: (s, rp) => pctStr(s.kast_rounds, rp) },
-  { header: '2K', title: 'Rounds where this player eliminated both opponents', render: (s) => s.two_k_rounds },
-  { header: '1v1', title: '1v1 clutch wins / attempts', render: (s) => `${s.clutch_1v1_wins}/${s.clutch_1v1_attempts}` },
-  { header: '1v2', title: '1v2 clutch wins / attempts', render: (s) => `${s.clutch_1v2_wins}/${s.clutch_1v2_attempts}` },
-  {
-    header: 'Clutch %',
-    title: 'Overall clutch success rate (1v1 + 1v2 wins / attempts)',
-    render: (s) => {
-      const attempts = s.clutch_1v1_attempts + s.clutch_1v2_attempts;
-      const wins = s.clutch_1v1_wins + s.clutch_1v2_wins;
-      return pctStr(wins, attempts);
-    },
-  },
-];
-
-const UTILITY_COLS: SabStatCol[] = [
-  { header: 'Utility Damage', title: 'Damage dealt with grenades (HE, molotov, incendiary)', render: (s) => s.utility_damage },
-  { header: 'Flash Assists', title: 'Kills by a teammate on an enemy you flashbanged', render: (s) => s.flash_assists },
-  { header: 'Enemies Flashed', title: 'Enemy players blinded by your flashbangs', render: (s) => s.enemies_flashed },
-  { header: 'Blind Duration', title: 'Total seconds of flashbang blindness dealt to enemies', render: (s) => `${s.blind_duration_dealt.toFixed(1)}s` },
-  { header: 'Flashes Thrown', title: 'Total flashbangs thrown', render: (s) => s.flashes_thrown },
-  { header: 'Teamflash', title: 'Total seconds of flashbang blindness dealt to teammates', render: (s) => `${s.teamflash_duration.toFixed(1)}s` },
-  { header: 'Plants', title: 'Bomb plants', render: (s) => s.plants },
-  { header: 'Defuses', title: 'Bomb defuses', render: (s) => s.defuses },
-];
 
 function TeamHeader({
   name,
@@ -482,6 +379,49 @@ export default function MatchTabView({
     sabremetrics.map((s) => [s.player_id, s]),
   );
 
+  // Adapts this match's players + sabremetrics into the shape SabremetricsLeaderboardView
+  // expects (same component the season/career Advanced Stats view uses), so the two never
+  // drift apart on stat definitions.
+  const toSabRows = (players: MatchStatRow[]): SabremetricStatRow[] =>
+    players
+      .filter((p) => sabMap.has(p.player_id))
+      .map((p) => ({
+        player_id: p.player_id,
+        player_name: p.player_name,
+        match_id: matchId,
+        rounds_played: p.rounds_played,
+        sab: sabMap.get(p.player_id)!,
+      }));
+  const advancedStatRows = [...toSabRows(shirts), ...toSabRows(skins)];
+  const advancedStatTeams: TeamGroup[] = [
+    {
+      key: 'shirts',
+      side: shirtsF,
+      playerIds: new Set(shirts.map((p) => p.player_id)),
+      header: (
+        <TeamHeader
+          name="Shirts"
+          faction={shirtsF}
+          score={score?.shirts ?? null}
+          outcome={score ? (shirtsWon ? 'WON' : 'LOST') : null}
+        />
+      ),
+    },
+    {
+      key: 'skins',
+      side: skinsF,
+      playerIds: new Set(skins.map((p) => p.player_id)),
+      header: (
+        <TeamHeader
+          name="Skins"
+          faction={skinsF}
+          score={score?.skins ?? null}
+          outcome={score ? (!shirtsWon ? 'WON' : 'LOST') : null}
+        />
+      ),
+    },
+  ];
+
   return (
     <>
       <TabBar
@@ -528,14 +468,9 @@ export default function MatchTabView({
           Scoreboard
         </button>
         {hasSab && (
-          <>
-            <button type="button" className={tabCls(tab === 'impact')} onClick={() => setTab('impact')}>
-              Impact
-            </button>
-            <button type="button" className={tabCls(tab === 'utility')} onClick={() => setTab('utility')}>
-              Utility
-            </button>
-          </>
+          <button type="button" className={tabCls(tab === 'advanced')} onClick={() => setTab('advanced')}>
+            Advanced Stats
+          </button>
         )}
 
         {hasScoutingData && (
@@ -596,27 +531,8 @@ export default function MatchTabView({
         </>
       )}
 
-      {(tab === 'impact' || tab === 'utility') && statsRecorded && (
-        <>
-          <div>
-            <TeamHeader
-              name="Shirts"
-              faction={shirtsF}
-              score={score?.shirts ?? null}
-              outcome={score ? (shirtsWon ? 'WON' : 'LOST') : null}
-            />
-            <SabStatTable players={shirts} faction={shirtsF} sabMap={sabMap} cols={tab === 'impact' ? IMPACT_COLS : UTILITY_COLS} />
-          </div>
-          <div className="mt-6">
-            <TeamHeader
-              name="Skins"
-              faction={skinsF}
-              score={score?.skins ?? null}
-              outcome={score ? (!shirtsWon ? 'WON' : 'LOST') : null}
-            />
-            <SabStatTable players={skins} faction={skinsF} sabMap={sabMap} cols={tab === 'impact' ? IMPACT_COLS : UTILITY_COLS} />
-          </div>
-        </>
+      {tab === 'advanced' && statsRecorded && (
+        <SabremetricsLeaderboardView rows={advancedStatRows} teamGroups={advancedStatTeams} showPlusStats={false} />
       )}
 
       {tab === 'scouting' && (

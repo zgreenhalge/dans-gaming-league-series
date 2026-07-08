@@ -2963,7 +2963,9 @@ export interface SabremetricMatchRow {
   sab: SabFields;
 }
 
-export async function getAllSabremetrics(): Promise<SabremetricMatchRow[]> {
+/** All sabremetrics, or (with `seasonId`) just one season's — same join, filtered at the end so
+ *  season-scoped callers (the season page) can't drift from the career-wide one. */
+export async function getAllSabremetrics(seasonId?: number): Promise<SabremetricMatchRow[]> {
   const [
     { data: sabRows, error: sabErr },
     { data: pmsRows, error: pmsErr },
@@ -3010,6 +3012,7 @@ export async function getAllSabremetrics(): Promise<SabremetricMatchRow[]> {
     if (!pms) continue;
     const sid = matchSeason.get(pms.match_id);
     if (sid == null) continue;
+    if (seasonId != null && sid !== seasonId) continue;
     const player = playersById.get(pms.player_id);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { player_match_stats_id: _, ...sab } = raw;

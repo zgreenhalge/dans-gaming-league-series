@@ -31,6 +31,11 @@ export function collectUtility(
 
   const flashAssistWindow = Math.round(3 * context.tickRate);
 
+  // Leetify excludes "half-blind" exposure (< 1.1s) from flash effectiveness stats
+  // (enemies_flashed, flash assists). blind_duration_dealt/teamflash_duration stay
+  // ungated — they're raw exposure measures, not effectiveness measures.
+  const HALF_BLIND_THRESHOLD = 1.1;
+
   // --- Flash assists, blind_duration_dealt, teamflash_duration ---
 
   // Build death lookup: steamId → [{tick, round}]
@@ -43,6 +48,11 @@ export function collectUtility(
     if (!deathLookup.has(victim)) deathLookup.set(victim, []);
     deathLookup.get(victim)!.push({ tick: d.tick, round, attacker: d.attacker_steamid });
   }
+
+  // All enemies blinded by the same flashbang detonate at the same tick — there's no explicit
+  // flash-entity id on this event, so (flasher, tick) reconstructs "one flash" for the per-flash
+  // averages below (0.3). Only durations >=1.1s go in, matching the half-blind gate.
+  const flashGroups = new Map<string, number[]>();
 
   for (const b of blindEvents) {
     const round = b.total_rounds_played + 1;
@@ -65,25 +75,55 @@ export function collectUtility(
     if (isEnemy) {
       p.blind_duration_dealt = ((p.blind_duration_dealt as number) ?? 0) + duration;
 
-      // Flash assist: enemy is killed by a teammate of the flasher
-      // within flashAssistWindow ticks after the blind expires
-      const blindExpireTick = b.tick + Math.round(duration * context.tickRate);
-      const windowEnd = blindExpireTick + flashAssistWindow;
-      const victimDeaths = deathLookup.get(blinded) ?? [];
-      const assisted = victimDeaths.some((d) => {
-        if (d.round !== round) return false;
-        if (d.tick > windowEnd || d.tick < b.tick) return false;
-        // Killed by a teammate of the flasher (not the flasher themselves)
-        if (!d.attacker || d.attacker === flasher) return false;
-        const killerSide = context.playerSides.get(d.attacker)?.get(round);
-        return killerSide != null && killerSide === flasherSide;
-      });
-      if (assisted) {
-        p.flash_assists = ((p.flash_assists as number) ?? 0) + 1;
+      if (duration >= HALF_BLIND_THRESHOLD) {
+        p.enemies_flashed = ((p.enemies_flashed as number) ?? 0) + 1;
+
+        const flashKey = `${flasher}::${round}::${b.tick}`;
+        if (!flashGroups.has(flashKey)) flashGroups.set(flashKey, []);
+        flashGroups.get(flashKey)!.push(duration);
+
+        const blindExpireTick = b.tick + Math.round(duration * context.tickRate);
+        const victimDeaths = deathLookup.get(blinded) ?? [];
+
+        // flashes_leading_to_kill (Leetify-style): the victim died while still blinded by
+        // this flash — [blind_start_tick, blind_expire_tick] — by anyone, including the
+        // flasher's own kill. Distinct from flash_assists below, which only credits a
+        // teammate's kill inside a fixed window after the blind expires.
+        const ledToKill = victimDeaths.some(
+          (d) => d.round === round && d.tick >= b.tick && d.tick <= blindExpireTick,
+        );
+        if (ledToKill) {
+          p.flashes_leading_to_kill = ((p.flashes_leading_to_kill as number) ?? 0) + 1;
+        }
+
+        // Flash assist: enemy is killed by a teammate of the flasher
+        // within flashAssistWindow ticks after the blind expires
+        const windowEnd = blindExpireTick + flashAssistWindow;
+        const assisted = victimDeaths.some((d) => {
+          if (d.round !== round) return false;
+          if (d.tick > windowEnd || d.tick < b.tick) return false;
+          // Killed by a teammate of the flasher (not the flasher themselves)
+          if (!d.attacker || d.attacker === flasher) return false;
+          const killerSide = context.playerSides.get(d.attacker)?.get(round);
+          return killerSide != null && killerSide === flasherSide;
+        });
+        if (assisted) {
+          p.flash_assists = ((p.flash_assists as number) ?? 0) + 1;
+        }
       }
     } else if (isTeammate) {
       p.teamflash_duration = ((p.teamflash_duration as number) ?? 0) + duration;
     }
+  }
+
+  // --- Per-flash effectiveness averages (0.3) ---
+  // One effective flash per (flasher, round, tick) group; its contribution to the average is
+  // the longest qualifying blind it caused, not the sum across every enemy it hit.
+  for (const [key, durations] of flashGroups) {
+    const flasher = key.split('::')[0];
+    const p = out.get(flasher)!;
+    p.effective_flashes = ((p.effective_flashes as number) ?? 0) + 1;
+    p.blind_duration_max_sum = ((p.blind_duration_max_sum as number) ?? 0) + Math.max(...durations);
   }
 
   // --- Flashes thrown ---

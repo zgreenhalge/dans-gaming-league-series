@@ -148,6 +148,7 @@ export interface PlayerMatchSabremetrics {
   clutch_1v2_attempts: number;
   clutch_1v2_wins: number;
   flash_assists: number;
+  flashes_leading_to_kill: number;
   utility_damage: number;
   blind_duration_dealt: number;
   enemies_flashed: number;
@@ -156,6 +157,24 @@ export interface PlayerMatchSabremetrics {
   plants: number;
   defuses: number;
   two_k_rounds: number;
+  trade_kill_opportunities: number;
+  trade_kill_attempts: number;
+  trade_kill_successes: number;
+  traded_death_opportunities: number;
+  traded_death_attempts: number;
+  traded_death_successes: number;
+  he_thrown: number;
+  he_damage: number;
+  blind_duration_max_sum: number;
+  effective_flashes: number;
+  shots_fired: number;
+  shots_hit: number;
+  headshot_hits: number;
+  counter_strafe_shots: number;
+  counter_strafe_good_shots: number;
+  spray_shots_fired: number;
+  spray_shots_hit: number;
+  smokes_blocking_push: number;
 }
 
 export type SabFields = Omit<PlayerMatchSabremetrics, 'player_match_stats_id'>;

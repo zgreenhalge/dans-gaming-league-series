@@ -87,14 +87,87 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 - `KAST+` = `Player KAST` / `League Avg KAST`
   - `KAST` = `Rounds with Kill, Assist, Survived, or Traded` / `Rounds played`
   - `Trade Score` = `KAST` - (`Untraded Deaths` * 10)
+  - **Trade Kills** — from the perspective of the player who could avenge a teammate:
+    - `Trade Kill Opportunities` = times a teammate died while this player was still alive
+      (the chance to trade existed)
+    - `Trade Kill Attempts` = opportunities where this player damaged the killer within the
+      trade window
+    - `Trade Kill Successes` = opportunities where this player killed the killer within the
+      trade window — the same condition that qualifies a round as "Traded" for KAST
+  - **Traded Deaths** — the mirror, from the perspective of the player who died:
+    - `Traded Death Opportunities` = times this player died while at least one teammate was
+      still alive (someone had the chance to trade them)
+    - `Traded Death Attempts` = opportunities where a teammate damaged the killer within the
+      trade window
+    - `Traded Death Successes` = opportunities where a teammate killed the killer within the
+      trade window
+  - In wingman there's exactly one teammate, so `Opportunities` degenerates to a single
+    yes/no check per death rather than a count across a full side.
+  - The trade window (currently 5s, `TRADE_WINDOW_SECONDS` in `src/lib/parsers/constants.ts`)
+    is shared between KAST's `Traded` qualifier and the trade-kill/traded-death collector so
+    the two can never disagree.
 - `Objective+` = `Player Objective Score` / `League Avg Objective Score`
   - `Objective Score` = (2 * `Plants`) + (3 * `Defuses`)
 - `Utility+` = `Player Utility Score` / `League Avg Utility Score`
   - `Utility Score` = `Flash Assists` + (`Utility Damage` / 50)
+  - `Flash Assists` and `Enemies Flashed` only count blinds of **1.1s or longer** ("half-blind"
+    exposure is excluded), matching Leetify's flash-effectiveness definition. `Blind Duration
+    Dealt`/`Teamflash Duration` are raw exposure totals and stay ungated.
+  - `Flash Assists` credits a **teammate's** kill on the blinded enemy within a fixed window
+    after the blind expires (own kills excluded) — this is the scoreboard-style definition and
+    keeps its name/meaning for continuity.
+  - `Flashes Leading to Kill` is Leetify's definition: the blinded enemy died **while still
+    blinded** (death tick between the blind's start and expiry), by anyone — including the
+    flasher's own kill. `Utility+` keeps using `Flash Assists`, not `Flashes Leading to Kill`,
+    unless the league decides otherwise.
+  - `HE Damage/Throw` = `HE Damage` / `HE Thrown` — damage dealt to enemies by HE grenades
+    (teamdamage and self-damage excluded), divided by HE grenades thrown.
+  - `Enemies Flashed/Flash` = `Enemies Flashed` / `Flashes Thrown`
+  - `Avg Blind/Flash` = `Blind Duration Max Sum` / `Effective Flashes` — for each flash that
+    blinded at least one enemy for 1.1s+, take the *longest* blind duration it caused (not the
+    sum across every enemy hit); average that across all such flashes. A flash that only
+    half-blinds (or misses) every enemy doesn't count as an effective flash. All enemies blinded
+    by the same detonation are identified by sharing an (attacker, tick) pair, since there's no
+    explicit flash-entity id on the underlying event.
 - `Clutch+` = `Player Clutch Score` / `League Avg Clutch Score`
   - `Clutch Score` = `1v1 wins` + 3 * `1v2 wins`
 - `Choke+` = `Player Choke Score` / `League Avg Choke Score`
   - `Choke Score` = `1v1 losses` + 2 * `1v2 losses` + 5 * `2v1 losses`
+
+### Mechanics (raw, ungated)
+
+Raw accuracy stats derived straight from `weapon_fire`/`player_hurt` events — not yet part of any
+`+` composite. "Raw" because they aren't gated on whether the enemy was actually spotted/visible
+(Leetify's "Accuracy (Enemy Spotted)"); CS2's spotted mask (`m_bSpotted`) is known-flaky, so these
+ship ungated first per `docs/demo-parsing-reference.md`'s guidance on that tradeoff.
+
+- `Accuracy` = `Shots Hit` / `Shots Fired` — guns only; grenade throws, knife, and C4 don't count
+  as "shots". Hits from grenades (HE, molotov/incendiary) are excluded from `Shots Hit` the same
+  way.
+- `Head Accuracy` = `Headshot Hits` / `Shots Hit` — hits landing on the head hitgroup,
+  independent of whether the hit was a kill (distinct from the kill-only `Headshot %` above).
+- Shotguns firing multiple pellets per `weapon_fire` (and wallbang penetration hitting more than
+  one player) mean `Shots Fired` and `Shots Hit` aren't a strict 1:1 shot-to-hit correspondence —
+  an accepted imprecision of "raw" accuracy, not a bug.
+- `Counter-Strafe %` = `Counter-Strafe Good Shots` / `Counter-Strafe Shots` — rifles only
+  (`RIFLE_WEAPONS` in `src/lib/parsers/counterStrafe.ts`). A shot is eligible (`Counter-Strafe
+  Shots`) if the shooter wasn't crouched (`m_bDucked`) at the moment of firing; it's "good" if
+  their speed at that instant was under 34% of the weapon's current max speed
+  (`m_flMaxspeed`, which already factors in the held weapon's speed penalty — no separate
+  per-weapon speed table needed). This parser exposes no direct velocity read, so speed is
+  derived from the position delta between the fire tick and one tick earlier.
+- `Spray Accuracy` = `Spray Shots Hit` / `Spray Shots Fired` — rifles only, within sequences of
+  3+ consecutive shots from the same weapon (a gap of 0.25s+ between shots starts a new
+  sequence; taps and short bursts under 3 shots don't count at all). Reports the league's overall
+  total, not a per-rifle breakdown — a per-rifle version would need per-weapon columns or a
+  child table, deferred until that's actually wanted.
+- `Smokes Blocking Push` = count of smokes a player threw where an enemy came within ~800 game
+  units of the detonation position at some sampled point during the smoke's life (~800 is the
+  issue's own approximation, not verified against the live Leetify glossary). Paired from the
+  `smokegrenade_detonate`/`smokegrenade_expired` events via a shared `entityid` (confirmed
+  against a real DGLS demo); a smoke whose round ends before it expires falls back to the
+  round's end tick. This is position-based, not a true visibility/render check — see
+  `docs/demo-parsing-reference.md` for why that's out of scope.
 
 ### Player Rating (not yet implemented)
 

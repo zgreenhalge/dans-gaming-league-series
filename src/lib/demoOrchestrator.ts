@@ -1,8 +1,8 @@
-import { parseEvent } from '@laihoe/demoparser2';
+import { parseEvent, parseTicks } from '@laihoe/demoparser2';
 import type { RosterEntry } from './demoParser';
 import type { SabFields, DemoSabremetricStat, ParsedDemoSabremetricsResult } from './types';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
-import { buildMatchContext, findMatchStartTick, type PlayerDeathRow } from './parsers/matchContext';
+import { buildMatchContext, findMatchStartTick, type PlayerDeathRow, type PlayerHurtRow } from './parsers/matchContext';
 import type { RoundEndRow } from './parsers/roundSides';
 import { inferSkinsStartingSide, resolveEffectiveSide } from './parsers/sideInference';
 import { collectAccumulators } from './parsers/accumulators';
@@ -12,6 +12,16 @@ import { collectMultikill } from './parsers/multikill';
 import { collectClutch } from './parsers/clutch';
 import { collectUtility, type PlayerBlindRow, type WeaponFireRow } from './parsers/utility';
 import { collectObjectives, type BombEventRow } from './parsers/objectives';
+import { collectTrades } from './parsers/trades';
+import { collectHeGrenades } from './parsers/heGrenade';
+import { collectAccuracy } from './parsers/accuracy';
+import {
+  collectCounterStrafe, neededCounterStrafeTicks, type PlayerTickRow,
+} from './parsers/counterStrafe';
+import { collectSprayAccuracy } from './parsers/sprayAccuracy';
+import {
+  collectSmokes, neededSmokeTicks, type SmokeEventRow, type PlayerPositionRow,
+} from './parsers/smokes';
 
 const ZERO: SabFields = {
   kills_ct: 0, kills_t: 0,
@@ -24,6 +34,7 @@ const ZERO: SabFields = {
   clutch_1v1_attempts: 0, clutch_1v1_wins: 0,
   clutch_1v2_attempts: 0, clutch_1v2_wins: 0,
   flash_assists: 0,
+  flashes_leading_to_kill: 0,
   utility_damage: 0,
   blind_duration_dealt: 0,
   enemies_flashed: 0,
@@ -32,6 +43,24 @@ const ZERO: SabFields = {
   plants: 0,
   defuses: 0,
   two_k_rounds: 0,
+  trade_kill_opportunities: 0,
+  trade_kill_attempts: 0,
+  trade_kill_successes: 0,
+  traded_death_opportunities: 0,
+  traded_death_attempts: 0,
+  traded_death_successes: 0,
+  he_thrown: 0,
+  he_damage: 0,
+  blind_duration_max_sum: 0,
+  effective_flashes: 0,
+  shots_fired: 0,
+  shots_hit: 0,
+  headshot_hits: 0,
+  counter_strafe_shots: 0,
+  counter_strafe_good_shots: 0,
+  spray_shots_fired: 0,
+  spray_shots_hit: 0,
+  smokes_blocking_push: 0,
 };
 
 export function parseDemoSabremetrics(
@@ -73,6 +102,18 @@ export function parseDemoSabremetrics(
     demoBuffer, 'bomb_defused', [], ['total_rounds_played'],
   ) as BombEventRow[];
 
+  const hurtEvents = parseEvent(
+    demoBuffer, 'player_hurt', [], ['total_rounds_played', 'weapon', 'dmg_health', 'hitgroup'],
+  ) as PlayerHurtRow[];
+
+  const smokeDetonateEvents = parseEvent(
+    demoBuffer, 'smokegrenade_detonate', [], ['total_rounds_played'],
+  ) as SmokeEventRow[];
+
+  const smokeExpireEvents = parseEvent(
+    demoBuffer, 'smokegrenade_expired', [], ['total_rounds_played'],
+  ) as SmokeEventRow[];
+
   // 3. Build match context — resolve the starting side the same way parseDemoFile does
   // (stored wins; otherwise infer from the demo) so sabremetrics and the score agree.
   const matchStartTick = findMatchStartTick(demoBuffer);
@@ -105,6 +146,53 @@ export function parseDemoSabremetrics(
   const clutchStats = collectClutch(deathEvents, context, steamIds);
   const utilityStats = collectUtility(blindEvents, deathEvents, fireEvents, context, steamIds);
   const objectiveStats = collectObjectives(plantEvents, defuseEvents, context, steamIds);
+  const tradeStats = collectTrades(deathEvents, hurtEvents, context, steamIds);
+  const heStats = collectHeGrenades(fireEvents, hurtEvents, context, steamIds);
+  const accuracyStats = collectAccuracy(fireEvents, hurtEvents, context, steamIds);
+
+  // Counter-strafe needs per-tick position/duck-state reads (not a plain event stream), so it
+  // fetches its own tick list — same shape as accumulators.ts's round-end reads, but keyed to
+  // rifle weapon_fire ticks instead.
+  const csTicks = neededCounterStrafeTicks(fireEvents, context.liveRounds);
+  let csTickRows: PlayerTickRow[] = [];
+  if (csTicks.length > 0) {
+    const rawTickRows = parseTicks(
+      demoBuffer,
+      [
+        'CCSPlayerPawn.CCSPlayer_MovementServices.m_bDucked',
+        'CCSPlayerPawn.CCSPlayer_MovementServices.m_flMaxspeed',
+        'X', 'Y',
+      ],
+      csTicks,
+    ) as Record<string, unknown>[];
+    csTickRows = rawTickRows.map((r) => ({
+      tick: Number(r.tick),
+      steamid: String(r.steamid ?? ''),
+      ducked: Boolean(r['CCSPlayerPawn.CCSPlayer_MovementServices.m_bDucked']),
+      maxSpeed: Number(r['CCSPlayerPawn.CCSPlayer_MovementServices.m_flMaxspeed'] ?? 0),
+      x: Number(r.X ?? 0),
+      y: Number(r.Y ?? 0),
+    }));
+  }
+  const counterStrafeStats = collectCounterStrafe(fireEvents, csTickRows, context, steamIds);
+  const sprayStats = collectSprayAccuracy(fireEvents, hurtEvents, context, steamIds);
+
+  // Smokes need every player's position sampled across each smoke's life, not a plain event
+  // stream — same per-tick-fetch shape as counter-strafe above.
+  const smokeTicks = neededSmokeTicks(smokeDetonateEvents, smokeExpireEvents, context);
+  let smokePositionRows: PlayerPositionRow[] = [];
+  if (smokeTicks.length > 0) {
+    const rawSmokeRows = parseTicks(demoBuffer, ['X', 'Y'], smokeTicks) as Record<string, unknown>[];
+    smokePositionRows = rawSmokeRows.map((r) => ({
+      tick: Number(r.tick),
+      steamid: String(r.steamid ?? ''),
+      x: Number(r.X ?? 0),
+      y: Number(r.Y ?? 0),
+    }));
+  }
+  const smokeStats = collectSmokes(
+    smokeDetonateEvents, smokeExpireEvents, smokePositionRows, context, steamIds,
+  );
 
   // 6. Merge with zero defaults
   const sabremetrics: DemoSabremetricStat[] = steamIds.map((steamId) => ({
@@ -118,6 +206,12 @@ export function parseDemoSabremetrics(
       ...clutchStats.get(steamId),
       ...utilityStats.get(steamId),
       ...objectiveStats.get(steamId),
+      ...tradeStats.get(steamId),
+      ...heStats.get(steamId),
+      ...accuracyStats.get(steamId),
+      ...counterStrafeStats.get(steamId),
+      ...sprayStats.get(steamId),
+      ...smokeStats.get(steamId),
     },
   }));
 

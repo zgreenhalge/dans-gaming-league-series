@@ -6,6 +6,7 @@ import { LeaderboardRowWithId } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
 import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type MatchPickBanInput } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
+import { tabCls } from '@/lib/util';
 
 type SortKey = string;
 
@@ -516,8 +517,104 @@ function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
   );
 }
 
-export function AdvancedStatsView({ rows, matches, singleMap = false }: { rows: LeaderboardRowWithId[]; matches?: MatchPickBanInput[]; singleMap?: boolean }) {
+function MapsAndSidesSection({
+  singleMap,
+  scoreDistribution,
+  mapPickBanStats,
+  perSideStats,
+}: {
+  singleMap: boolean;
+  scoreDistribution: ScoreDistribution | null;
+  mapPickBanStats: MapPickBanStat[];
+  perSideStats: PerSideStat[];
+}) {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Score Distribution (singleMap) or Map Pick/Ban Stats (multi-map) */}
+      {singleMap && scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
+      {!singleMap && <div>
+        <div className="flex items-baseline justify-between mb-3">
+          <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban stats</span>
+        </div>
+        {mapPickBanStats.length === 0 ? (
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+            No map data.
+          </div>
+        ) : (
+          <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
+            <table className="w-full border-collapse text-[12px]">
+              <thead>
+                <tr className="bg-[var(--color-bg-secondary)]">
+                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Map</th>
+                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Picked</th>
+                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">CT</th>
+                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">T</th>
+                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mapPickBanStats.map((m) => (
+                  <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                    <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">
+                      <Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-accent)] transition-colors">{m.map}</Link>
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.ctPicked}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.tPicked}</td>
+                    <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>}
+
+      {/* Per-Side Stats */}
+      <div>
+        <div className="flex items-baseline justify-between mb-3">
+          <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Per-side stats</span>
+        </div>
+        {perSideStats.length === 0 ? (
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+            No side data.
+          </div>
+        ) : (
+          <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
+            <table className="w-full border-collapse text-[12px]">
+              <thead>
+                <tr className="bg-[var(--color-bg-secondary)]">
+                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Side</th>
+                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Times Picked</th>
+                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W-L</th>
+                </tr>
+              </thead>
+              <tbody>
+                {perSideStats.map((s) => (
+                  <tr key={s.side} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                    <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{s.side}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.numTimesPicked}</td>
+                    <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type BasicStatsTab = 'basic' | 'kills' | 'games' | 'averages' | 'sides';
+
+/**
+ * The site's baseline K/D/A/ADR-family stats — named to stay distinct from the demo-derived
+ * "Advanced Stats" tab (SabremetricsLeaderboardView), which this predates and is unrelated to.
+ */
+export function BasicStatsView({ rows, matches, singleMap = false }: { rows: LeaderboardRowWithId[]; matches?: MatchPickBanInput[]; singleMap?: boolean }) {
   const data = useMemo(() => rows.map((row) => ({ row, stats: computeAdvancedStats(row) })), [rows]);
+  const [tab, setTab] = useState<BasicStatsTab>('basic');
 
   const mapPickBanStats = useMemo<MapPickBanStat[]>(
     () => (matches && !singleMap ? aggregateMapPickBanStats(matches) : []),
@@ -534,88 +631,35 @@ export function AdvancedStatsView({ rows, matches, singleMap = false }: { rows: 
     [matches, singleMap],
   );
 
-  return (
-    <div className="space-y-6">
-      {matches && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Score Distribution (singleMap) or Map Pick/Ban Stats (multi-map) */}
-          {singleMap && scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
-          {!singleMap && <div>
-            <div className="flex items-baseline justify-between mb-3">
-              <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban stats</span>
-            </div>
-            {mapPickBanStats.length === 0 ? (
-              <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                No map data.
-              </div>
-            ) : (
-              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
-                <table className="w-full border-collapse text-[12px]">
-                  <thead>
-                    <tr className="bg-[var(--color-bg-secondary)]">
-                      <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Map</th>
-                      <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Picked</th>
-                      <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">CT</th>
-                      <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">T</th>
-                      <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mapPickBanStats.map((m) => (
-                      <tr key={m.map} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                        <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">
-                          <Link href={`/maps/${mapSlug(m.map)}`} className="hover:text-[var(--color-accent)] transition-colors">{m.map}</Link>
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
-                        <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.ctPicked}</td>
-                        <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.tPicked}</td>
-                        <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>}
+  const tabs: { key: BasicStatsTab; label: string }[] = [
+    { key: 'basic', label: 'Basic Stats' },
+    { key: 'kills', label: 'Kill Stats' },
+    { key: 'games', label: 'Game Stats' },
+    { key: 'averages', label: 'Averages' },
+    ...(matches ? [{ key: 'sides' as const, label: 'Maps & Sides' }] : []),
+  ];
 
-          {/* Per-Side Stats */}
-          <div>
-            <div className="flex items-baseline justify-between mb-3">
-              <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Per-side stats</span>
-            </div>
-            {perSideStats.length === 0 ? (
-              <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                No side data.
-              </div>
-            ) : (
-              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
-                <table className="w-full border-collapse text-[12px]">
-                  <thead>
-                    <tr className="bg-[var(--color-bg-secondary)]">
-                      <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Side</th>
-                      <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Times Picked</th>
-                      <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W-L</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {perSideStats.map((s) => (
-                      <tr key={s.side} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                        <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{s.side}</td>
-                        <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.numTimesPicked}</td>
-                        <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {tabs.map((t) => (
+          <button key={t.key} type="button" className={tabCls(tab === t.key)} onClick={() => setTab(t.key)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === 'basic' && <BasicStatsTable data={data} />}
+      {tab === 'kills' && <KillStatsTable data={data} />}
+      {tab === 'games' && <GameStatsTable data={data} />}
+      {tab === 'averages' && <AverageGameStatsTable data={data} />}
+      {tab === 'sides' && matches && (
+        <MapsAndSidesSection
+          singleMap={singleMap}
+          scoreDistribution={scoreDistribution}
+          mapPickBanStats={mapPickBanStats}
+          perSideStats={perSideStats}
+        />
       )}
-      <BasicStatsTable data={data} />
-      <KillStatsTable data={data} />
-      <GameStatsTable data={data} />
-      <AverageGameStatsTable data={data} />
     </div>
   );
 }
