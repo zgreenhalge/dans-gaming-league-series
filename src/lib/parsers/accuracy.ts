@@ -10,15 +10,16 @@ const NON_GUN_FIRE_WEAPONS = new Set([
   'weapon_incgrenade', 'weapon_decoy', 'weapon_knife', 'weapon_knifegg', 'weapon_c4',
 ]);
 
-// player_hurt's short weapon names for the same non-gun sources. Fire damage (molotov/incendiary)
-// is conventionally reported as 'inferno' rather than the grenade's own name — unverified against
-// an actual DGLS demo, same caveat as heGrenade.ts's 'hegrenade' assumption.
+// player_hurt's short weapon names for the same non-gun sources (confirmed unprefixed-friendly
+// format against a real DGLS demo, e.g. 'hkp2000', 'glock' for guns). Fire damage (molotov/
+// incendiary) is conventionally reported as 'inferno' rather than the grenade's own name.
 const NON_GUN_HURT_WEAPONS = new Set([
   'hegrenade', 'flashbang', 'inferno', 'decoy', 'knife', 'knifegg', 'c4',
 ]);
 
-// CS2's hitgroup enum: 0 generic, 1 head, 2 chest, 3 stomach, 4/5 arms, 6/7 legs.
-const HITGROUP_HEAD = 1;
+// player_hurt's hitgroup is already decoded to a friendly string ('head', 'chest',
+// 'right_arm', ...), not the raw HITGROUP_* enum int — confirmed against a real DGLS demo.
+const HITGROUP_HEAD = 'head';
 
 /**
  * Raw accuracy / head accuracy (#173 phase 3.3). "Raw" because it isn't gated on the enemy

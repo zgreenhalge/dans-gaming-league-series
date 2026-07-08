@@ -48,7 +48,7 @@ test('collectAccuracy: a gun hit on an enemy counts toward shots_hit', () => {
 });
 
 test('collectAccuracy: a headshot hitgroup counts toward headshot_hits as well as shots_hit', () => {
-  const hurts = [hurt({ round: 1, tick: 100, attacker: 'a', victim: 'c', weapon: 'ak47', dmgHealth: 100, hitgroup: 1 })];
+  const hurts = [hurt({ round: 1, tick: 100, attacker: 'a', victim: 'c', weapon: 'ak47', dmgHealth: 100, hitgroup: 'head' })];
   const ctx = makeContext({ rounds, sides });
   const out = collectAccuracy([], hurts, ctx, ids);
   assert.equal(out.get('a')?.shots_hit, 1);
@@ -56,7 +56,7 @@ test('collectAccuracy: a headshot hitgroup counts toward headshot_hits as well a
 });
 
 test('collectAccuracy: a non-head hitgroup does not count toward headshot_hits', () => {
-  const hurts = [hurt({ round: 1, tick: 100, attacker: 'a', victim: 'c', weapon: 'ak47', dmgHealth: 27, hitgroup: 2 })];
+  const hurts = [hurt({ round: 1, tick: 100, attacker: 'a', victim: 'c', weapon: 'ak47', dmgHealth: 27, hitgroup: 'chest' })];
   const ctx = makeContext({ rounds, sides });
   const out = collectAccuracy([], hurts, ctx, ids);
   assert.equal(out.get('a')?.headshot_hits ?? 0, 0);
