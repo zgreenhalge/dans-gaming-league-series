@@ -174,6 +174,7 @@ export interface PlayerMatchSabremetrics {
   counter_strafe_good_shots: number;
   spray_shots_fired: number;
   spray_shots_hit: number;
+  smokes_blocking_push: number;
 }
 
 export type SabFields = Omit<PlayerMatchSabremetrics, 'player_match_stats_id'>;

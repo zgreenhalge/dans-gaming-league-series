@@ -46,6 +46,7 @@ interface AggregatedSab {
   counter_strafe_good_shots: number;
   spray_shots_fired: number;
   spray_shots_hit: number;
+  smokes_blocking_push: number;
 }
 
 function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
@@ -75,6 +76,7 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
         shots_fired: 0, shots_hit: 0, headshot_hits: 0,
         counter_strafe_shots: 0, counter_strafe_good_shots: 0,
         spray_shots_fired: 0, spray_shots_hit: 0,
+        smokes_blocking_push: 0,
       };
       byPlayer.set(r.player_id, agg);
       matchesSeen.set(r.player_id, new Set());
@@ -124,6 +126,7 @@ function aggregateRows(rows: SabremetricMatchRow[]): AggregatedSab[] {
     agg.counter_strafe_good_shots += s.counter_strafe_good_shots;
     agg.spray_shots_fired += s.spray_shots_fired;
     agg.spray_shots_hit += s.spray_shots_hit;
+    agg.smokes_blocking_push += s.smokes_blocking_push;
   }
 
   return Array.from(byPlayer.values());
@@ -405,6 +408,7 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
           aVal = a.he_damage / (a.he_thrown || 1);
           bVal = b.he_damage / (b.he_thrown || 1);
           break;
+        case 'smoke_block': aVal = a.smokes_blocking_push; bVal = b.smokes_blocking_push; break;
         default: return 0;
       }
       return sort.asc ? aVal - bVal : bVal - aVal;
@@ -434,6 +438,7 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
               <SortableTh label="HE Thrown" title="HE grenades thrown" sortKey="he_thrown" state={sort} onClick={toggleSort} />
               <SortableTh label="HE Damage" title="Damage dealt to enemies by HE grenades" sortKey="he_dmg" state={sort} onClick={toggleSort} />
               <SortableTh label="HE Dmg/Throw" title="HE damage per HE grenade thrown" sortKey="he_dmg_throw" state={sort} onClick={toggleSort} />
+              <SortableTh label="Smokes Blocking" title="Smokes thrown that had an enemy within ~800 units of the bloom at some point during its life" sortKey="smoke_block" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -456,6 +461,7 @@ function UtilityTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[
                   <td className={tdRight}>{a.he_thrown}</td>
                   <td className={tdRight}>{a.he_damage}</td>
                   <td className={tdRight}>{fmtNum(a.he_damage / (a.he_thrown || 1), 1)}</td>
+                  <td className={tdRight}>{a.smokes_blocking_push}</td>
                 </tr>
               );
             })}
@@ -583,6 +589,7 @@ function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leag
     { label: 'HE Thrown', title: 'HE grenades thrown', value: agg.he_thrown },
     { label: 'HE Damage', title: 'Damage dealt to enemies by HE grenades', value: agg.he_damage },
     { label: 'HE Dmg/Throw', title: 'HE damage per HE grenade thrown', value: fmtNum(agg.he_damage / (agg.he_thrown || 1), 1) },
+    { label: 'Smokes Blocking', title: 'Smokes thrown that had an enemy within ~800 units of the bloom at some point during its life', value: agg.smokes_blocking_push },
   ];
 
   // Plus stats need the league as a baseline; comparing a player to only

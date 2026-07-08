@@ -63,6 +63,7 @@ matches still self-derive a score and stats with no manual entry.
 | `accuracy.ts` | Raw accuracy / head accuracy from `weapon_fire`/`player_hurt` |
 | `counterStrafe.ts` | Counter-strafe % from per-tick duck-state/position reads at rifle `weapon_fire` ticks |
 | `sprayAccuracy.ts` | Spray accuracy within sequences of 3+ consecutive rifle shots |
+| `smokes.ts` | Smokes interfering with pushes, from `smokegrenade_detonate`/`_expired` + sampled enemy positions |
 
 ## Match start (skipping warmup and stray knife rounds)
 

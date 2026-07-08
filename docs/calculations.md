@@ -161,6 +161,13 @@ ship ungated first per `docs/demo-parsing-reference.md`'s guidance on that trade
   sequence; taps and short bursts under 3 shots don't count at all). Reports the league's overall
   total, not a per-rifle breakdown — a per-rifle version would need per-weapon columns or a
   child table, deferred until that's actually wanted.
+- `Smokes Blocking Push` = count of smokes a player threw where an enemy came within ~800 game
+  units of the detonation position at some sampled point during the smoke's life (~800 is the
+  issue's own approximation, not verified against the live Leetify glossary). Paired from the
+  `smokegrenade_detonate`/`smokegrenade_expired` events via a shared `entityid` (confirmed
+  against a real DGLS demo); a smoke whose round ends before it expires falls back to the
+  round's end tick. This is position-based, not a true visibility/render check — see
+  `docs/demo-parsing-reference.md` for why that's out of scope.
 
 ### Player Rating (not yet implemented)
 

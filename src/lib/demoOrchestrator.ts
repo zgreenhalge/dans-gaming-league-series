@@ -19,6 +19,9 @@ import {
   collectCounterStrafe, neededCounterStrafeTicks, type PlayerTickRow,
 } from './parsers/counterStrafe';
 import { collectSprayAccuracy } from './parsers/sprayAccuracy';
+import {
+  collectSmokes, neededSmokeTicks, type SmokeEventRow, type PlayerPositionRow,
+} from './parsers/smokes';
 
 const ZERO: SabFields = {
   kills_ct: 0, kills_t: 0,
@@ -57,6 +60,7 @@ const ZERO: SabFields = {
   counter_strafe_good_shots: 0,
   spray_shots_fired: 0,
   spray_shots_hit: 0,
+  smokes_blocking_push: 0,
 };
 
 export function parseDemoSabremetrics(
@@ -101,6 +105,14 @@ export function parseDemoSabremetrics(
   const hurtEvents = parseEvent(
     demoBuffer, 'player_hurt', [], ['total_rounds_played', 'weapon', 'dmg_health', 'hitgroup'],
   ) as PlayerHurtRow[];
+
+  const smokeDetonateEvents = parseEvent(
+    demoBuffer, 'smokegrenade_detonate', [], ['total_rounds_played'],
+  ) as SmokeEventRow[];
+
+  const smokeExpireEvents = parseEvent(
+    demoBuffer, 'smokegrenade_expired', [], ['total_rounds_played'],
+  ) as SmokeEventRow[];
 
   // 3. Build match context — resolve the starting side the same way parseDemoFile does
   // (stored wins; otherwise infer from the demo) so sabremetrics and the score agree.
@@ -165,6 +177,23 @@ export function parseDemoSabremetrics(
   const counterStrafeStats = collectCounterStrafe(fireEvents, csTickRows, context, steamIds);
   const sprayStats = collectSprayAccuracy(fireEvents, hurtEvents, context, steamIds);
 
+  // Smokes need every player's position sampled across each smoke's life, not a plain event
+  // stream — same per-tick-fetch shape as counter-strafe above.
+  const smokeTicks = neededSmokeTicks(smokeDetonateEvents, smokeExpireEvents, context);
+  let smokePositionRows: PlayerPositionRow[] = [];
+  if (smokeTicks.length > 0) {
+    const rawSmokeRows = parseTicks(demoBuffer, ['X', 'Y'], smokeTicks) as Record<string, unknown>[];
+    smokePositionRows = rawSmokeRows.map((r) => ({
+      tick: Number(r.tick),
+      steamid: String(r.steamid ?? ''),
+      x: Number(r.X ?? 0),
+      y: Number(r.Y ?? 0),
+    }));
+  }
+  const smokeStats = collectSmokes(
+    smokeDetonateEvents, smokeExpireEvents, smokePositionRows, context, steamIds,
+  );
+
   // 6. Merge with zero defaults
   const sabremetrics: DemoSabremetricStat[] = steamIds.map((steamId) => ({
     player_id: steamToPlayer.get(steamId)!.player_id,
@@ -182,6 +211,7 @@ export function parseDemoSabremetrics(
       ...accuracyStats.get(steamId),
       ...counterStrafeStats.get(steamId),
       ...sprayStats.get(steamId),
+      ...smokeStats.get(steamId),
     },
   }));
 
