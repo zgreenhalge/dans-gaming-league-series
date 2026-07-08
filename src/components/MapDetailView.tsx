@@ -5,7 +5,7 @@ import LeaderboardTable from './LeaderboardTable';
 import { MatchCard } from './MatchCard';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import TabBar from './TabBar';
-import { AdvancedStatsView } from './AdvancedStatsView';
+import { BasicStatsView } from './BasicStatsView';
 import { tabCls, canonicalSort, computeH2H, deriveRates, mapMatchRowsToH2HInput } from '@/lib/util';
 import type { MapMatchRow, MapDetail, MapPlayerStat } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
@@ -190,7 +190,7 @@ export default function MapDetailView({
         filteredPlayerStats.length === 0 ? (
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No data for this selection.</div>
         ) : (
-          <AdvancedStatsView rows={filteredPlayerStats} matches={filteredMatches} singleMap />
+          <BasicStatsView rows={filteredPlayerStats} matches={filteredMatches} singleMap />
         )
       )}
 

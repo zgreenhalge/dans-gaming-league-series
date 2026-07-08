@@ -6,7 +6,7 @@ import ScheduleList from './ScheduleList';
 import GauntletStandings from './GauntletStandings';
 import GauntletRoundsList from './GauntletRoundsList';
 import H2HSection from './H2HSection';
-import { AdvancedStatsView } from './AdvancedStatsView';
+import { BasicStatsView } from './BasicStatsView';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import TabBar from './TabBar';
 import type { WeekWithMatches, GauntletRound, H2HData, SabremetricMatchRow } from '@/lib/queries';
@@ -275,7 +275,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
             No stats available yet.
           </div>
         ) : (
-          <AdvancedStatsView rows={leaderboard} matches={allMatches} />
+          <BasicStatsView rows={leaderboard} matches={allMatches} />
         )
       )}
 

@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import H2HSection from './H2HSection';
-import { AdvancedStatsView } from './AdvancedStatsView';
+import { BasicStatsView } from './BasicStatsView';
 import { buildRegularToGauntletMap, computeH2H, deriveRates, extractSeasonNumber, mapMatchRowsToH2HInput, seasonTitle, tabCls } from '@/lib/util';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { TrophyEntry, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow } from '@/lib/queries';
@@ -267,7 +267,7 @@ export default function CareerStatsView({
             No data for this selection.
           </div>
         ) : (
-          <AdvancedStatsView rows={rows} matches={filteredMatches} />
+          <BasicStatsView rows={rows} matches={filteredMatches} />
         )
       )}
 
