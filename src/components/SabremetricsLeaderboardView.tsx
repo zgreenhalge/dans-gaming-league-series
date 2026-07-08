@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { SabremetricMatchRow } from '@/lib/queries';
+import { tabCls } from '@/lib/util';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
 
 interface AggregatedSab {
@@ -281,16 +282,6 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
         case 'opening_pct': aVal = (a.opening_kills + a.opening_deaths) / arp; bVal = (b.opening_kills + b.opening_deaths) / brp; break;
         case 'opening_success': aVal = a.opening_kills / ((a.opening_kills + a.opening_deaths) || 1); bVal = b.opening_kills / ((b.opening_kills + b.opening_deaths) || 1); break;
         case 'hs': aVal = a.headshot_kills / (a.kills || 1); bVal = b.headshot_kills / (b.kills || 1); break;
-        case 'acc': aVal = a.shots_hit / (a.shots_fired || 1); bVal = b.shots_hit / (b.shots_fired || 1); break;
-        case 'head_acc': aVal = a.headshot_hits / (a.shots_hit || 1); bVal = b.headshot_hits / (b.shots_hit || 1); break;
-        case 'cstrafe':
-          aVal = a.counter_strafe_good_shots / (a.counter_strafe_shots || 1);
-          bVal = b.counter_strafe_good_shots / (b.counter_strafe_shots || 1);
-          break;
-        case 'spray':
-          aVal = a.spray_shots_hit / (a.spray_shots_fired || 1);
-          bVal = b.spray_shots_hit / (b.spray_shots_fired || 1);
-          break;
         case 'kast': aVal = a.kast_rounds / arp; bVal = b.kast_rounds / brp; break;
         case '2k': aVal = a.two_k_rounds; bVal = b.two_k_rounds; break;
         case '1v1': aVal = a.clutch_1v1_wins; bVal = b.clutch_1v1_wins; break;
@@ -302,14 +293,6 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
           bVal = bAttempts > 0 ? (b.clutch_1v1_wins + b.clutch_1v2_wins) / bAttempts : 0;
           break;
         }
-        case 'trade_kill_pct':
-          aVal = a.trade_kill_successes / (a.trade_kill_opportunities || 1);
-          bVal = b.trade_kill_successes / (b.trade_kill_opportunities || 1);
-          break;
-        case 'traded_death_pct':
-          aVal = a.traded_death_successes / (a.traded_death_opportunities || 1);
-          bVal = b.traded_death_successes / (b.traded_death_opportunities || 1);
-          break;
         default: return 0;
       }
       return sort.asc ? aVal - bVal : bVal - aVal;
@@ -329,17 +312,11 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
               <SortableTh label="Opening %" title="Percentage of rounds where this player took the opening duel" sortKey="opening_pct" state={sort} onClick={toggleSort} />
               <SortableTh label="Opening Success" title="Opening kills / (opening kills + opening deaths)" sortKey="opening_success" state={sort} onClick={toggleSort} />
               <SortableTh label="Headshot %" title="Headshot kill percentage" sortKey="hs" state={sort} onClick={toggleSort} />
-              <SortableTh label="Accuracy" title="Shots that hit an enemy / shots fired (guns only, not gated on enemy visibility)" sortKey="acc" state={sort} onClick={toggleSort} />
-              <SortableTh label="Head Accuracy" title="Hits landing on the head / total hits" sortKey="head_acc" state={sort} onClick={toggleSort} />
-              <SortableTh label="Counter-Strafe %" title="Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)" sortKey="cstrafe" state={sort} onClick={toggleSort} />
-              <SortableTh label="Spray Accuracy" title="Hits / shots within sequences of 3+ consecutive rifle shots" sortKey="spray" state={sort} onClick={toggleSort} />
               <SortableTh label="KAST" title="Percentage of rounds with a Kill, Assist, Survived, or Traded" sortKey="kast" state={sort} onClick={toggleSort} />
               <SortableTh label="Double Kills" title="Rounds where both opponents were eliminated" sortKey="2k" state={sort} onClick={toggleSort} />
               <SortableTh label="1v1" title="1v1 clutch wins / attempts" sortKey="1v1" state={sort} onClick={toggleSort} />
               <SortableTh label="1v2" title="1v2 clutch wins / attempts" sortKey="1v2" state={sort} onClick={toggleSort} />
               <SortableTh label="Clutch %" title="Overall clutch success rate (1v1 + 1v2 wins / attempts)" sortKey="clutch_pct" state={sort} onClick={toggleSort} />
-              <SortableTh label="Trade Kills" title="Trade kills (successes/opportunities): times you killed the enemy who killed your teammate, out of the times you had the chance to" sortKey="trade_kill_pct" state={sort} onClick={toggleSort} />
-              <SortableTh label="Traded Deaths" title="Traded deaths (successes/opportunities): times a teammate killed the enemy who killed you, out of the times a teammate had the chance to" sortKey="traded_death_pct" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -354,20 +331,124 @@ function ImpactTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]
                   <td className={tdRight}>{pct(totalDuels, a.rounds_played)}</td>
                   <td className={tdRight}>{pct(a.opening_kills, totalDuels)}</td>
                   <td className={tdRight}>{pct(a.headshot_kills, a.kills)}</td>
-                  <td className={tdRight}>{pct(a.shots_hit, a.shots_fired)}</td>
-                  <td className={tdRight}>{pct(a.headshot_hits, a.shots_hit)}</td>
-                  <td className={tdRight}>{pct(a.counter_strafe_good_shots, a.counter_strafe_shots)}</td>
-                  <td className={tdRight}>{pct(a.spray_shots_hit, a.spray_shots_fired)}</td>
                   <td className={tdRight}>{pct(a.kast_rounds, a.rounds_played)}</td>
                   <td className={tdRight}>{a.two_k_rounds}</td>
                   <td className={tdRight}>{a.clutch_1v1_wins}/{a.clutch_1v1_attempts}</td>
                   <td className={tdRight}>{a.clutch_1v2_wins}/{a.clutch_1v2_attempts}</td>
                   <td className={tdRight}>{pct(clutchWins, clutchAttempts)}</td>
-                  <td className={tdRight}>{a.trade_kill_successes}/{a.trade_kill_opportunities}</td>
-                  <td className={tdRight}>{a.traded_death_successes}/{a.traded_death_opportunities}</td>
                 </tr>
               );
             })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// --- Mechanics Stats (raw, ungated — see docs/calculations.md) ---
+
+function MechanicsTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]; singlePlayer: boolean }) {
+  const [sort, toggleSort] = useSortState('acc');
+
+  const sorted = useMemo(() => {
+    const copy = [...aggregated];
+    copy.sort((a, b) => {
+      let aVal: number, bVal: number;
+      switch (sort.col) {
+        case 'acc': aVal = a.shots_hit / (a.shots_fired || 1); bVal = b.shots_hit / (b.shots_fired || 1); break;
+        case 'head_acc': aVal = a.headshot_hits / (a.shots_hit || 1); bVal = b.headshot_hits / (b.shots_hit || 1); break;
+        case 'cstrafe':
+          aVal = a.counter_strafe_good_shots / (a.counter_strafe_shots || 1);
+          bVal = b.counter_strafe_good_shots / (b.counter_strafe_shots || 1);
+          break;
+        case 'spray':
+          aVal = a.spray_shots_hit / (a.spray_shots_fired || 1);
+          bVal = b.spray_shots_hit / (b.spray_shots_fired || 1);
+          break;
+        default: return 0;
+      }
+      return sort.asc ? aVal - bVal : bVal - aVal;
+    });
+    return copy;
+  }, [aggregated, sort]);
+
+  return (
+    <div className="my-6">
+      <h3 className="text-sm font-semibold mb-3">Mechanics</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-max border-collapse text-xs">
+          <thead>
+            <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
+              {!singlePlayer && <th className={playerThCls}>Player</th>}
+              <SortableTh label="Accuracy" title="Shots that hit an enemy / shots fired (guns only, not gated on enemy visibility)" sortKey="acc" state={sort} onClick={toggleSort} />
+              <SortableTh label="Head Accuracy" title="Hits landing on the head / total hits" sortKey="head_acc" state={sort} onClick={toggleSort} />
+              <SortableTh label="Counter-Strafe %" title="Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)" sortKey="cstrafe" state={sort} onClick={toggleSort} />
+              <SortableTh label="Spray Accuracy" title="Hits / shots within sequences of 3+ consecutive rifle shots" sortKey="spray" state={sort} onClick={toggleSort} />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((a) => (
+              <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
+                <td className={tdRight}>{pct(a.shots_hit, a.shots_fired)}</td>
+                <td className={tdRight}>{pct(a.headshot_hits, a.shots_hit)}</td>
+                <td className={tdRight}>{pct(a.counter_strafe_good_shots, a.counter_strafe_shots)}</td>
+                <td className={tdRight}>{pct(a.spray_shots_hit, a.spray_shots_fired)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// --- Trade Stats ---
+
+function TradesTable({ aggregated, singlePlayer }: { aggregated: AggregatedSab[]; singlePlayer: boolean }) {
+  const [sort, toggleSort] = useSortState('trade_kill_pct');
+
+  const sorted = useMemo(() => {
+    const copy = [...aggregated];
+    copy.sort((a, b) => {
+      let aVal: number, bVal: number;
+      switch (sort.col) {
+        case 'trade_kill_pct':
+          aVal = a.trade_kill_successes / (a.trade_kill_opportunities || 1);
+          bVal = b.trade_kill_successes / (b.trade_kill_opportunities || 1);
+          break;
+        case 'traded_death_pct':
+          aVal = a.traded_death_successes / (a.traded_death_opportunities || 1);
+          bVal = b.traded_death_successes / (b.traded_death_opportunities || 1);
+          break;
+        default: return 0;
+      }
+      return sort.asc ? aVal - bVal : bVal - aVal;
+    });
+    return copy;
+  }, [aggregated, sort]);
+
+  return (
+    <div className="my-6">
+      <h3 className="text-sm font-semibold mb-3">Trades</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-max border-collapse text-xs">
+          <thead>
+            <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
+              {!singlePlayer && <th className={playerThCls}>Player</th>}
+              <SortableTh label="Trade Kills" title="Trade kills (successes/opportunities): times you killed the enemy who killed your teammate, out of the times you had the chance to" sortKey="trade_kill_pct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Traded Deaths" title="Traded deaths (successes/opportunities): times a teammate killed the enemy who killed you, out of the times a teammate had the chance to" sortKey="traded_death_pct" state={sort} onClick={toggleSort} />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((a) => (
+              <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
+                <td className={tdRight}>{a.trade_kill_successes}/{a.trade_kill_opportunities}</td>
+                <td className={tdRight}>{a.traded_death_successes}/{a.traded_death_opportunities}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -550,7 +631,15 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
 // metrics into a label/value stat-tile grid — the shared `StatTileGrid`, so it
 // matches the player Overview panel exactly. See docs/visual-conventions.md.
 
-function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leagueAggregated: AggregatedSab[] }) {
+interface SinglePlayerTiles {
+  impact: StatTile[];
+  mechanics: StatTile[];
+  trades: StatTile[];
+  utility: StatTile[];
+  plus: StatTile[];
+}
+
+function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: AggregatedSab[]): SinglePlayerTiles {
   const rp = agg.rounds_played || 1;
   const totalDuels = agg.opening_kills + agg.opening_deaths;
   const clutchAttempts = agg.clutch_1v1_attempts + agg.clutch_1v2_attempts;
@@ -561,15 +650,21 @@ function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leag
     { label: 'Opening %', title: 'Percentage of rounds where this player took the opening duel', value: pct(totalDuels, agg.rounds_played) },
     { label: 'Opening Success', title: 'Opening kills / (opening kills + opening deaths)', value: pct(agg.opening_kills, totalDuels) },
     { label: 'Headshot %', title: 'Headshot kill percentage', value: pct(agg.headshot_kills, agg.kills) },
-    { label: 'Accuracy', title: 'Shots that hit an enemy / shots fired (guns only, not gated on enemy visibility)', value: pct(agg.shots_hit, agg.shots_fired) },
-    { label: 'Head Accuracy', title: 'Hits landing on the head / total hits', value: pct(agg.headshot_hits, agg.shots_hit) },
-    { label: 'Counter-Strafe %', title: 'Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)', value: pct(agg.counter_strafe_good_shots, agg.counter_strafe_shots) },
-    { label: 'Spray Accuracy', title: 'Hits / shots within sequences of 3+ consecutive rifle shots', value: pct(agg.spray_shots_hit, agg.spray_shots_fired) },
     { label: 'KAST', title: 'Percentage of rounds with a Kill, Assist, Survived, or Traded', value: pct(agg.kast_rounds, agg.rounds_played) },
     { label: 'Double Kills', title: 'Rounds where both opponents were eliminated', value: agg.two_k_rounds },
     { label: '1v1 Clutches', title: '1v1 clutch wins / attempts', value: `${agg.clutch_1v1_wins}/${agg.clutch_1v1_attempts}` },
     { label: '1v2 Clutches', title: '1v2 clutch wins / attempts', value: `${agg.clutch_1v2_wins}/${agg.clutch_1v2_attempts}` },
     { label: 'Clutch %', title: 'Overall clutch success rate (1v1 + 1v2 wins / attempts)', value: pct(clutchWins, clutchAttempts) },
+  ];
+
+  const mechanics: StatTile[] = [
+    { label: 'Accuracy', title: 'Shots that hit an enemy / shots fired (guns only, not gated on enemy visibility)', value: pct(agg.shots_hit, agg.shots_fired) },
+    { label: 'Head Accuracy', title: 'Hits landing on the head / total hits', value: pct(agg.headshot_hits, agg.shots_hit) },
+    { label: 'Counter-Strafe %', title: 'Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)', value: pct(agg.counter_strafe_good_shots, agg.counter_strafe_shots) },
+    { label: 'Spray Accuracy', title: 'Hits / shots within sequences of 3+ consecutive rifle shots', value: pct(agg.spray_shots_hit, agg.spray_shots_fired) },
+  ];
+
+  const trades: StatTile[] = [
     { label: 'Trade Kills', title: 'Trade kills (successes/opportunities): times you killed the enemy who killed your teammate, out of the times you had the chance to', value: `${agg.trade_kill_successes}/${agg.trade_kill_opportunities}` },
     { label: 'Traded Deaths', title: 'Traded deaths (successes/opportunities): times a teammate killed the enemy who killed you, out of the times a teammate had the chance to', value: `${agg.traded_death_successes}/${agg.traded_death_opportunities}` },
   ];
@@ -608,14 +703,24 @@ function SinglePlayerStats({ agg, leagueAggregated }: { agg: AggregatedSab; leag
     { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)', value: fmtNum(plus.clutch, 2), valueStyle: plusStyle(plus.clutch) },
   ] : [];
 
-  return (
-    <div className="space-y-6">
-      <StatTileGrid heading="Impact" tiles={impact} />
-      <StatTileGrid heading="Utility" tiles={utility} />
-      {plus && <StatTileGrid heading="Stats Plus" hint="1.00 = league average. Values above 1 are better than average, below 1 are worse." tiles={plusTiles} />}
-    </div>
-  );
+  return { impact, mechanics, trades, utility, plus: plusTiles };
 }
+
+// --- Sub-tabs ---
+//
+// Five sections is too much to stack on one page (both the wide multi-player tables and the
+// single-player tile grids) — see the Impact/Mechanics/Trades split above. One tab state drives
+// both render paths so they never drift out of sync with each other.
+
+type SubTab = 'impact' | 'mechanics' | 'trades' | 'utility' | 'plus';
+
+const SUB_TABS: { key: SubTab; label: string }[] = [
+  { key: 'impact', label: 'Impact' },
+  { key: 'mechanics', label: 'Mechanics' },
+  { key: 'trades', label: 'Trades' },
+  { key: 'utility', label: 'Utility' },
+  { key: 'plus', label: 'Stats Plus' },
+];
 
 export default function SabremetricsLeaderboardView({
   rows,
@@ -629,6 +734,7 @@ export default function SabremetricsLeaderboardView({
 }) {
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);
   const leagueAggregated = useMemo(() => aggregateRows(leagueRows ?? rows), [leagueRows, rows]);
+  const [sub, setSub] = useState<SubTab>('impact');
 
   if (aggregated.length === 0) {
     return (
@@ -638,15 +744,40 @@ export default function SabremetricsLeaderboardView({
     );
   }
 
+  const tabBar = (
+    <div className="flex flex-wrap items-center gap-2">
+      {SUB_TABS.map((t) => (
+        <button key={t.key} type="button" className={tabCls(sub === t.key)} onClick={() => setSub(t.key)}>
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+
   if (singlePlayer) {
-    return <SinglePlayerStats agg={aggregated[0]} leagueAggregated={leagueAggregated} />;
+    const tiles = buildSinglePlayerTiles(aggregated[0], leagueAggregated);
+    return (
+      <div className="space-y-4">
+        {tabBar}
+        {sub === 'impact' && <StatTileGrid heading="Impact" tiles={tiles.impact} />}
+        {sub === 'mechanics' && <StatTileGrid heading="Mechanics" tiles={tiles.mechanics} />}
+        {sub === 'trades' && <StatTileGrid heading="Trades" tiles={tiles.trades} />}
+        {sub === 'utility' && <StatTileGrid heading="Utility" tiles={tiles.utility} />}
+        {sub === 'plus' && tiles.plus.length > 0 && (
+          <StatTileGrid heading="Stats Plus" hint="1.00 = league average. Values above 1 are better than average, below 1 are worse." tiles={tiles.plus} />
+        )}
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <ImpactTable aggregated={aggregated} singlePlayer={singlePlayer} />
-      <UtilityTable aggregated={aggregated} singlePlayer={singlePlayer} />
-      <PlusStatsTable aggregated={aggregated} />
+    <div className="space-y-4">
+      {tabBar}
+      {sub === 'impact' && <ImpactTable aggregated={aggregated} singlePlayer={singlePlayer} />}
+      {sub === 'mechanics' && <MechanicsTable aggregated={aggregated} singlePlayer={singlePlayer} />}
+      {sub === 'trades' && <TradesTable aggregated={aggregated} singlePlayer={singlePlayer} />}
+      {sub === 'utility' && <UtilityTable aggregated={aggregated} singlePlayer={singlePlayer} />}
+      {sub === 'plus' && <PlusStatsTable aggregated={aggregated} />}
     </div>
   );
 }
