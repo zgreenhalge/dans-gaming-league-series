@@ -45,10 +45,8 @@ function normalizeRival(rival: H2HStats, desiredA: number): H2HStats {
     matches: rival.matches.map((m) => ({
       ...m,
       aWon: m.aWon == null ? null : !m.aWon,
-      aMatchStats: m.bMatchStats,
-      bMatchStats: m.aMatchStats,
-      aTeammate: m.bTeammate,
-      bTeammate: m.aTeammate,
+      aTeam: m.bTeam,
+      bTeam: m.aTeam,
       score: m.score ? { a: m.score.b, b: m.score.a } : null,
     })),
   };

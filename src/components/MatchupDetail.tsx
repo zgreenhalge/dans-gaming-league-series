@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import type { DuoStats, H2HStats, H2HMapStat } from '@/lib/queries';
+import type { DuoStats, H2HStats, H2HMapStat, MatchRosterPlayer } from '@/lib/queries';
 import { rateGradientColor, winRatePct } from '@/lib/util';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
@@ -33,12 +33,44 @@ function RecycleButton({ onClick, title }: { onClick: () => void; title: string 
   );
 }
 
-/** Three right-aligned, fixed-width numeric columns — keeps K/A/D figures lined up across rows (and under a header). */
-function StatTrio({ values, color }: { values: [React.ReactNode, React.ReactNode, React.ReactNode]; color?: string }) {
+/**
+ * A rival match's per-side roster — the matchup player plus their 2v2
+ * teammate — styled after MatchCard's TeamStatBlock (header row + K/A/D
+ * columns per player) so a teammate reads as its own roster row with its
+ * own stats, instead of a name squeezed in next to someone else's numbers.
+ */
+function RivalTeamRoster({
+  players,
+  highlightId,
+  color,
+  align = 'left',
+}: {
+  players: MatchRosterPlayer[];
+  highlightId: number;
+  color: string;
+  align?: 'left' | 'right';
+}) {
+  const reverse = align === 'right' ? 'flex-row-reverse' : '';
   return (
-    <div className="flex items-center gap-1.5 font-mono text-[11px] tabular-nums" style={{ color }}>
-      {values.map((v, i) => (
-        <span key={i} className="w-[20px] text-right">{v}</span>
+    <div className="flex-1 min-w-0 px-2 py-1">
+      <div className={`flex items-center gap-1 ${reverse}`}>
+        <span className="flex-1" />
+        {['K', 'A', 'D'].map((h) => (
+          <span key={h} className="w-[14px] text-center tracked text-[7px] text-[var(--color-text-secondary)]">{h}</span>
+        ))}
+      </div>
+      {players.map((p) => (
+        <div key={p.player_id} className={`flex items-center gap-1 ${reverse}`}>
+          <span
+            className={`flex-1 min-w-0 truncate font-display text-[11px] ${p.player_id === highlightId ? 'font-bold' : 'opacity-60'}`}
+            style={{ color }}
+          >
+            {p.player_name}
+          </span>
+          <span className="w-[14px] text-center font-mono text-[10px] tabular-nums">{p.kills}</span>
+          <span className="w-[14px] text-center font-mono text-[10px] tabular-nums">{p.assists}</span>
+          <span className="w-[14px] text-center font-mono text-[10px] tabular-nums">{p.deaths}</span>
+        </div>
       ))}
     </div>
   );
@@ -442,21 +474,9 @@ export function RivalDetail({
 
         {rival.meetings > 0 && (
           <div className="mt-3.5 pt-2.5 border-t border-[var(--color-border-primary)]">
-            <div className="flex items-center justify-end gap-3 px-1.5 mb-1">
-              <div className="flex items-center gap-1.5">
-                <span className="tracked text-[7px] text-[var(--color-text-secondary)]">Teammate</span>
-                <StatTrio values={['K', 'A', 'D']} />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <StatTrio values={['K', 'A', 'D']} />
-                <span className="tracked text-[7px] text-[var(--color-text-secondary)]">Teammate</span>
-              </div>
-            </div>
             {rival.matches.map((m) => {
               const scoreLabel = m.score ? `${m.score.a}–${m.score.b}` : null;
               const scoreColor = m.aWon == null ? undefined : m.aWon ? 'var(--color-t)' : 'var(--color-ct)';
-              const aTeammate = m.aTeammate ? players.get(m.aTeammate.player_id) : undefined;
-              const bTeammate = m.bTeammate ? players.get(m.bTeammate.player_id) : undefined;
               return (
                 <MatchHistoryRow
                   key={m.matchId}
@@ -469,25 +489,9 @@ export function RivalDetail({
                   scoreLabel={scoreLabel}
                   scoreColor={scoreColor}
                   rightContent={
-                    <div className="w-full flex items-center justify-end gap-3">
-                      <div className="flex items-center gap-1.5 min-w-0" title={aTeammate ? `Teamed with ${aTeammate.name}` : undefined}>
-                        <span className="font-display font-semibold text-[10px] truncate max-w-[110px]" style={{ color: 'var(--color-t)' }}>
-                          {aTeammate ? aTeammate.name : '—'}
-                        </span>
-                        <StatTrio
-                          values={[m.aMatchStats.kills, m.aMatchStats.assists, m.aMatchStats.deaths]}
-                          color="var(--color-t)"
-                        />
-                      </div>
-                      <div className="flex items-center gap-1.5 min-w-0" title={bTeammate ? `Teamed with ${bTeammate.name}` : undefined}>
-                        <StatTrio
-                          values={[m.bMatchStats.kills, m.bMatchStats.assists, m.bMatchStats.deaths]}
-                          color="var(--color-ct)"
-                        />
-                        <span className="font-display font-semibold text-[10px] truncate max-w-[110px] text-right" style={{ color: 'var(--color-ct)' }}>
-                          {bTeammate ? bTeammate.name : '—'}
-                        </span>
-                      </div>
+                    <div className="w-full flex items-stretch divide-x divide-[var(--color-border-tertiary)] border border-[var(--color-border-tertiary)]">
+                      <RivalTeamRoster players={m.aTeam} highlightId={rival.playerA} color="var(--color-t)" />
+                      <RivalTeamRoster players={m.bTeam} highlightId={rival.playerB} color="var(--color-ct)" align="right" />
                     </div>
                   }
                 />

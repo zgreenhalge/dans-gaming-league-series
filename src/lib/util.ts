@@ -343,13 +343,6 @@ export function parseScore(
 // filter). Lives here instead of queries.ts so it stays importable from client
 // components without pulling in the supabase client.
 
-/** A player's individual stat line for a single match. */
-export interface MatchPlayerStats {
-  kills: number;
-  assists: number;
-  deaths: number;
-}
-
 /** One match `playerA`+`playerB` played as partners (same faction). */
 export interface DuoMatchSummary {
   matchId: number;
@@ -377,10 +370,20 @@ export interface RivalMatchSummary {
   startingSide: 'CT' | 'T' | null;
   score: { a: number; b: number } | null;
   aWon: boolean | null;
-  aMatchStats: MatchPlayerStats;
-  bMatchStats: MatchPlayerStats;
-  aTeammate: { player_id: number; player_name: string } | null;
-  bTeammate: { player_id: number; player_name: string } | null;
+  /** playerA's roster (playerA + their 2v2 teammate) for this match. */
+  aTeam: MatchRosterPlayer[];
+  /** playerB's roster (playerB + their 2v2 teammate) for this match. */
+  bTeam: MatchRosterPlayer[];
+}
+
+/** A roster player's stat line for a single match — mirrors `MatchCardPlayer` in MatchCard.tsx. */
+export interface MatchRosterPlayer {
+  player_id: number;
+  player_name: string;
+  kills: number;
+  assists: number;
+  deaths: number;
+  adr: number;
 }
 
 /** A pair's aggregated record on a single map, across every meeting on it. */
@@ -733,11 +736,15 @@ export function computeH2H(
 
         const aScore = parsedScore ? (aRow.faction === 'SHIRTS' ? parsedScore.shirts : parsedScore.skins) : null;
         const bScore = parsedScore ? (bRow.faction === 'SHIRTS' ? parsedScore.shirts : parsedScore.skins) : null;
-        // 2v2 Wingman, so each side's "teammate" is simply the other roster row sharing that faction.
-        const aTeam = aRow.faction === 'SHIRTS' ? shirts : skins;
-        const bTeam = bRow.faction === 'SHIRTS' ? shirts : skins;
-        const aTeammateRow = aTeam.find((r) => r.player_id !== aRow.player_id) ?? null;
-        const bTeammateRow = bTeam.find((r) => r.player_id !== bRow.player_id) ?? null;
+        const toRosterPlayer = (row: H2HRosterRow): MatchRosterPlayer => ({
+          player_id: row.player_id,
+          player_name: players.get(row.player_id)?.name ?? `#${row.player_id}`,
+          kills: row.kills,
+          assists: row.assists ?? 0,
+          deaths: row.deaths,
+          adr: row.adr,
+        });
+        // 2v2 Wingman, so each side's full roster is just the shirts/skins group aRow/bRow belongs to.
         agg.matches.push({
           matchId: m.matchId,
           seasonNumber: m.seasonNumber,
@@ -749,10 +756,8 @@ export function computeH2H(
           startingSide: m.startingSide,
           score: aScore != null && bScore != null ? { a: aScore, b: bScore } : null,
           aWon: aRow.is_win,
-          aMatchStats: { kills: aRow.kills, assists: aRow.assists ?? 0, deaths: aRow.deaths },
-          bMatchStats: { kills: bRow.kills, assists: bRow.assists ?? 0, deaths: bRow.deaths },
-          aTeammate: aTeammateRow ? { player_id: aTeammateRow.player_id, player_name: players.get(aTeammateRow.player_id)?.name ?? `#${aTeammateRow.player_id}` } : null,
-          bTeammate: bTeammateRow ? { player_id: bTeammateRow.player_id, player_name: players.get(bTeammateRow.player_id)?.name ?? `#${bTeammateRow.player_id}` } : null,
+          aTeam: (aRow.faction === 'SHIRTS' ? shirts : skins).map(toRosterPlayer),
+          bTeam: (bRow.faction === 'SHIRTS' ? shirts : skins).map(toRosterPlayer),
         });
       }
     }

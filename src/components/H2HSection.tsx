@@ -221,7 +221,7 @@ export default function H2HSection({ data, initialPair }: { data: H2HData; initi
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
         <H2HMatrix
           players={players}
           duos={duos}

@@ -2474,7 +2474,7 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
 //
 // Types re-exported here for backward compatibility with existing imports.
 export type {
-  MatchPlayerStats,
+  MatchRosterPlayer,
   DuoMatchSummary,
   RivalMatchSummary,
   DuoStats,
