@@ -98,7 +98,7 @@ function MatchHistoryRow({
       className="lift-row flex items-center gap-2 py-2 px-1 -mx-1 border-b border-[var(--color-border-tertiary)] last:border-b-0 transition-colors"
     >
       <div className="flex items-center gap-1 shrink-0">
-        <span className="font-mono text-[10px] w-[52px] shrink-0" style={{ color: labelColor }}>{matchLabel}</span>
+        <span className="font-mono text-[10px] w-[62px] shrink-0" style={{ color: labelColor }}>{matchLabel}</span>
         {scorePosition === 'left' && <div className="w-[36px] shrink-0 whitespace-nowrap text-center">{score}</div>}
       </div>
       <span
@@ -473,7 +473,7 @@ export function RivalDetail({
                     <div className="w-full flex items-center justify-end gap-3">
                       <div className="flex items-center gap-1.5 min-w-0" title={aTeammate ? `Teamed with ${aTeammate.name}` : undefined}>
                         {aTeammate && (
-                          <span className="tracked text-[7px] text-[var(--color-text-secondary)] truncate max-w-[42px]">
+                          <span className="tracked text-[7px] text-[var(--color-text-secondary)] truncate max-w-[58px]">
                             w/ {firstName(aTeammate.name)}
                           </span>
                         )}
@@ -488,7 +488,7 @@ export function RivalDetail({
                           color="var(--color-ct)"
                         />
                         {bTeammate && (
-                          <span className="tracked text-[7px] text-[var(--color-text-secondary)] truncate max-w-[42px]">
+                          <span className="tracked text-[7px] text-[var(--color-text-secondary)] truncate max-w-[58px]">
                             w/ {firstName(bTeammate.name)}
                           </span>
                         )}
