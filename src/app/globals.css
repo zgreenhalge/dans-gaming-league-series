@@ -116,6 +116,14 @@ html, body {
   background: var(--color-bg-tertiary);
   color: var(--color-text-primary);
   font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Scroll anchoring corrects scrollY to keep some node's viewport position stable whenever
+     layout shifts anywhere on the page — not just in the element that resized. Scoping the
+     opt-out to just the resizing element only stops it from being chosen as the anchor itself;
+     the browser is still free to pick some other node (a sibling, an ancestor, anything) and
+     "correct" toward that instead, which is exactly what produces jumps in dynamic UI like the
+     H2H matrix's hover-driven detail card. Disabling it document-wide is the only way to
+     guarantee scroll position stays put regardless of which node the heuristic would've picked. */
+  overflow-anchor: none;
 }
 
 /* Page atmosphere — paper grain (light) or scanlines (dark), faintly applied. */
@@ -542,15 +550,6 @@ body::before {
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
-}
-
-/* Opts an element out of the browser's scroll-anchoring heuristic, which
-   otherwise "corrects" the page's scroll position whenever this element's
-   size changes — the correction itself is the jump, not a fix for one. Use
-   on any region whose height changes in response to something other than
-   the user's own scrolling (e.g. hover-driven content swaps). */
-.no-scroll-anchor {
-  overflow-anchor: none;
 }
 
 /* Pin a table's first column while the rest scrolls horizontally.

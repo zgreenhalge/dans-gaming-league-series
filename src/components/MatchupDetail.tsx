@@ -267,7 +267,7 @@ export function DuoDetail({
   );
 
   return (
-    <div className={`border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] no-scroll-anchor${minimal && statsHref ? ' relative cursor-pointer lift-card' : ''}`}>
+    <div className={`border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]${minimal && statsHref ? ' relative cursor-pointer lift-card' : ''}`}>
       {minimal && statsHref && <Link href={statsHref} className="absolute inset-0 z-[1]" aria-label="View in H2H statistics" />}
       <div className="px-5 py-2.5 border-b border-[var(--color-border-tertiary)] flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -434,7 +434,7 @@ export function RivalDetail({
 
   if (minimal) {
     return (
-      <div className={`border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] no-scroll-anchor${statsHref ? ' relative cursor-pointer lift-card' : ''}`}>
+      <div className={`border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]${statsHref ? ' relative cursor-pointer lift-card' : ''}`}>
         {statsHref && <Link href={statsHref} className="absolute inset-0 z-[1]" aria-label="View in H2H statistics" />}
         <div className="px-4 pt-3.5 pb-1">
           <div className="flex items-center gap-3 mb-2">
@@ -450,7 +450,7 @@ export function RivalDetail({
   }
 
   return (
-    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] no-scroll-anchor">
+    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
       <div className="px-5 py-2.5 border-b border-[var(--color-border-tertiary)] flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           {onFlip && <RecycleButton onClick={onFlip} title="View this pair as friends" />}
