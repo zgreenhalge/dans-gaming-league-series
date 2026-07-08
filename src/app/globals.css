@@ -533,6 +533,18 @@ body::before {
   box-shadow: inset 3px 0 0 0 var(--lift-accent, var(--color-site-accent));
 }
 
+/* Scrollable region that stays scrollable via wheel/touch/drag but never
+   paints a scrollbar track — used where a fixed-height panel needs internal
+   overflow (H2H matrix, H2H detail match history) without a bar that clashes
+   with the site's chrome or crowds a narrow sidebar. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Pin a table's first column while the rest scrolls horizontally.
    `background: inherit` makes the cell paint whatever color its row is
    currently painting (medal/zone tint, hover, etc.), so the pinned column
