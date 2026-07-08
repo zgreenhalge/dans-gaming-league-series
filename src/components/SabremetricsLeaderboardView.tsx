@@ -311,9 +311,6 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
       const arp = a.rounds_played || 1;
       const brp = b.rounds_played || 1;
       switch (sort.col) {
-        case 'duels': aVal = a.opening_kills - a.opening_deaths; bVal = b.opening_kills - b.opening_deaths; break;
-        case 'opening_pct': aVal = (a.opening_kills + a.opening_deaths) / arp; bVal = (b.opening_kills + b.opening_deaths) / brp; break;
-        case 'opening_success': aVal = a.opening_kills / ((a.opening_kills + a.opening_deaths) || 1); bVal = b.opening_kills / ((b.opening_kills + b.opening_deaths) || 1); break;
         case 'hs': aVal = a.headshot_kills / (a.kills || 1); bVal = b.headshot_kills / (b.kills || 1); break;
         case 'kast': aVal = a.kast_rounds / arp; bVal = b.kast_rounds / brp; break;
         case '2k': aVal = a.two_k_rounds; bVal = b.two_k_rounds; break;
@@ -341,9 +338,6 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
           <thead>
             <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
-              <SortableTh label="Opening Duels" title="First kill and first death of each round (wins-losses)" sortKey="duels" state={sort} onClick={toggleSort} />
-              <SortableTh label="Opening %" title="Percentage of rounds where this player took the opening duel" sortKey="opening_pct" state={sort} onClick={toggleSort} />
-              <SortableTh label="Opening Success" title="Opening kills / (opening kills + opening deaths)" sortKey="opening_success" state={sort} onClick={toggleSort} />
               <SortableTh label="Headshot %" title="Headshot kill percentage" sortKey="hs" state={sort} onClick={toggleSort} />
               <SortableTh label="KAST" title="Percentage of rounds with a Kill, Assist, Survived, or Traded" sortKey="kast" state={sort} onClick={toggleSort} />
               <SortableTh label="Double Kills" title="Rounds where both opponents were eliminated" sortKey="2k" state={sort} onClick={toggleSort} />
@@ -354,21 +348,71 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
           </thead>
           <tbody>
             {sorted.map((a) => {
-              const totalDuels = a.opening_kills + a.opening_deaths;
               const clutchAttempts = a.clutch_1v1_attempts + a.clutch_1v2_attempts;
               const clutchWins = a.clutch_1v1_wins + a.clutch_1v2_wins;
               return (
                 <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                   {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
-                  <td className={tdRight}><OpeningDuels wins={a.opening_kills} losses={a.opening_deaths} /></td>
-                  <td className={tdRight}>{pct(totalDuels, a.rounds_played)}</td>
-                  <td className={tdRight}>{pct(a.opening_kills, totalDuels)}</td>
                   <td className={tdRight}>{pct(a.headshot_kills, a.kills)}</td>
                   <td className={tdRight}>{pct(a.kast_rounds, a.rounds_played)}</td>
                   <td className={tdRight}>{a.two_k_rounds}</td>
                   <td className={tdRight}>{a.clutch_1v1_wins}/{a.clutch_1v1_attempts}</td>
                   <td className={tdRight}>{a.clutch_1v2_wins}/{a.clutch_1v2_attempts}</td>
                   <td className={tdRight}>{pct(clutchWins, clutchAttempts)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// --- Opening Duels ---
+
+function OpeningDuelsTable({ aggregated, singlePlayer, showHeading = true }: { aggregated: AggregatedSab[]; singlePlayer: boolean; showHeading?: boolean }) {
+  const [sort, toggleSort] = useSortState('opening_success');
+
+  const sorted = useMemo(() => {
+    const copy = [...aggregated];
+    copy.sort((a, b) => {
+      let aVal: number, bVal: number;
+      const arp = a.rounds_played || 1;
+      const brp = b.rounds_played || 1;
+      switch (sort.col) {
+        case 'duels': aVal = a.opening_kills - a.opening_deaths; bVal = b.opening_kills - b.opening_deaths; break;
+        case 'opening_pct': aVal = (a.opening_kills + a.opening_deaths) / arp; bVal = (b.opening_kills + b.opening_deaths) / brp; break;
+        case 'opening_success': aVal = a.opening_kills / ((a.opening_kills + a.opening_deaths) || 1); bVal = b.opening_kills / ((b.opening_kills + b.opening_deaths) || 1); break;
+        default: return 0;
+      }
+      return sort.asc ? aVal - bVal : bVal - aVal;
+    });
+    return copy;
+  }, [aggregated, sort]);
+
+  return (
+    <div className="my-6">
+      {showHeading && <h3 className="text-sm font-semibold mb-3">Opening Duels</h3>}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-max border-collapse text-xs">
+          <thead>
+            <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
+              {!singlePlayer && <th className={playerThCls}>Player</th>}
+              <SortableTh label="Opening Duels" title="First kill and first death of each round (wins-losses)" sortKey="duels" state={sort} onClick={toggleSort} />
+              <SortableTh label="Opening %" title="Percentage of rounds where this player took the opening duel" sortKey="opening_pct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Opening Success" title="Opening kills / (opening kills + opening deaths)" sortKey="opening_success" state={sort} onClick={toggleSort} />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((a) => {
+              const totalDuels = a.opening_kills + a.opening_deaths;
+              return (
+                <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                  {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
+                  <td className={tdRight}><OpeningDuels wins={a.opening_kills} losses={a.opening_deaths} /></td>
+                  <td className={tdRight}>{pct(totalDuels, a.rounds_played)}</td>
+                  <td className={tdRight}>{pct(a.opening_kills, totalDuels)}</td>
                 </tr>
               );
             })}
@@ -447,10 +491,16 @@ function TradesTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
     copy.sort((a, b) => {
       let aVal: number, bVal: number;
       switch (sort.col) {
+        case 'trade_kill_opp': aVal = a.trade_kill_opportunities; bVal = b.trade_kill_opportunities; break;
+        case 'trade_kill_att': aVal = a.trade_kill_attempts; bVal = b.trade_kill_attempts; break;
+        case 'trade_kill_succ': aVal = a.trade_kill_successes; bVal = b.trade_kill_successes; break;
         case 'trade_kill_pct':
           aVal = a.trade_kill_successes / (a.trade_kill_opportunities || 1);
           bVal = b.trade_kill_successes / (b.trade_kill_opportunities || 1);
           break;
+        case 'traded_death_opp': aVal = a.traded_death_opportunities; bVal = b.traded_death_opportunities; break;
+        case 'traded_death_att': aVal = a.traded_death_attempts; bVal = b.traded_death_attempts; break;
+        case 'traded_death_succ': aVal = a.traded_death_successes; bVal = b.traded_death_successes; break;
         case 'traded_death_pct':
           aVal = a.traded_death_successes / (a.traded_death_opportunities || 1);
           bVal = b.traded_death_successes / (b.traded_death_opportunities || 1);
@@ -470,16 +520,28 @@ function TradesTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
           <thead>
             <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
-              <SortableTh label="Trade Kills" title="Trade kills (successes/opportunities): times you killed the enemy who killed your teammate, out of the times you had the chance to" sortKey="trade_kill_pct" state={sort} onClick={toggleSort} />
-              <SortableTh label="Traded Deaths" title="Traded deaths (successes/opportunities): times a teammate killed the enemy who killed you, out of the times a teammate had the chance to" sortKey="traded_death_pct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Trade Kill Opps" title="Trade kill opportunities: times a teammate died while this player was still alive (the chance to trade existed)" sortKey="trade_kill_opp" state={sort} onClick={toggleSort} />
+              <SortableTh label="Trade Kill Attempts" title="Trade kill attempts: opportunities where this player damaged the killer within the trade window" sortKey="trade_kill_att" state={sort} onClick={toggleSort} />
+              <SortableTh label="Trade Kills" title="Trade kill successes: opportunities where this player killed the killer within the trade window" sortKey="trade_kill_succ" state={sort} onClick={toggleSort} />
+              <SortableTh label="Trade Kill %" title="Trade kill successes / opportunities" sortKey="trade_kill_pct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Traded Death Opps" title="Traded death opportunities: times this player died while at least one teammate was still alive (someone had the chance to trade them)" sortKey="traded_death_opp" state={sort} onClick={toggleSort} />
+              <SortableTh label="Traded Death Attempts" title="Traded death attempts: opportunities where a teammate damaged the killer within the trade window" sortKey="traded_death_att" state={sort} onClick={toggleSort} />
+              <SortableTh label="Traded Deaths" title="Traded death successes: opportunities where a teammate killed the killer within the trade window" sortKey="traded_death_succ" state={sort} onClick={toggleSort} />
+              <SortableTh label="Traded Death %" title="Traded death successes / opportunities" sortKey="traded_death_pct" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
             {sorted.map((a) => (
               <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                 {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
-                <td className={tdRight}>{a.trade_kill_successes}/{a.trade_kill_opportunities}</td>
-                <td className={tdRight}>{a.traded_death_successes}/{a.traded_death_opportunities}</td>
+                <td className={tdRight}>{a.trade_kill_opportunities}</td>
+                <td className={tdRight}>{a.trade_kill_attempts}</td>
+                <td className={tdRight}>{a.trade_kill_successes}</td>
+                <td className={tdRight}>{pct(a.trade_kill_successes, a.trade_kill_opportunities)}</td>
+                <td className={tdRight}>{a.traded_death_opportunities}</td>
+                <td className={tdRight}>{a.traded_death_attempts}</td>
+                <td className={tdRight}>{a.traded_death_successes}</td>
+                <td className={tdRight}>{pct(a.traded_death_successes, a.traded_death_opportunities)}</td>
               </tr>
             ))}
           </tbody>
@@ -666,6 +728,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
 
 interface SinglePlayerTiles {
   impact: StatTile[];
+  duels: StatTile[];
   mechanics: StatTile[];
   trades: StatTile[];
   utility: StatTile[];
@@ -678,10 +741,13 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   const clutchAttempts = agg.clutch_1v1_attempts + agg.clutch_1v2_attempts;
   const clutchWins = agg.clutch_1v1_wins + agg.clutch_1v2_wins;
 
-  const impact: StatTile[] = [
+  const duels: StatTile[] = [
     { label: 'Opening Duels', title: 'First kill and first death of each round (wins-losses)', value: <OpeningDuels wins={agg.opening_kills} losses={agg.opening_deaths} /> },
     { label: 'Opening %', title: 'Percentage of rounds where this player took the opening duel', value: pct(totalDuels, agg.rounds_played) },
     { label: 'Opening Success', title: 'Opening kills / (opening kills + opening deaths)', value: pct(agg.opening_kills, totalDuels) },
+  ];
+
+  const impact: StatTile[] = [
     { label: 'Headshot %', title: 'Headshot kill percentage', value: pct(agg.headshot_kills, agg.kills) },
     { label: 'KAST', title: 'Percentage of rounds with a Kill, Assist, Survived, or Traded', value: pct(agg.kast_rounds, agg.rounds_played) },
     { label: 'Double Kills', title: 'Rounds where both opponents were eliminated', value: agg.two_k_rounds },
@@ -698,8 +764,12 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   ];
 
   const trades: StatTile[] = [
-    { label: 'Trade Kills', title: 'Trade kills (successes/opportunities): times you killed the enemy who killed your teammate, out of the times you had the chance to', value: `${agg.trade_kill_successes}/${agg.trade_kill_opportunities}` },
-    { label: 'Traded Deaths', title: 'Traded deaths (successes/opportunities): times a teammate killed the enemy who killed you, out of the times a teammate had the chance to', value: `${agg.traded_death_successes}/${agg.traded_death_opportunities}` },
+    { label: 'Trade Kill Opps', title: 'Trade kill opportunities: times a teammate died while this player was still alive (the chance to trade existed)', value: agg.trade_kill_opportunities },
+    { label: 'Trade Kill Attempts', title: 'Trade kill attempts: opportunities where this player damaged the killer within the trade window', value: agg.trade_kill_attempts },
+    { label: 'Trade Kills', title: 'Trade kill successes / opportunities: times you killed the enemy who killed your teammate, out of the times you had the chance to', value: `${agg.trade_kill_successes}/${agg.trade_kill_opportunities}` },
+    { label: 'Traded Death Opps', title: 'Traded death opportunities: times this player died while at least one teammate was still alive (someone had the chance to trade them)', value: agg.traded_death_opportunities },
+    { label: 'Traded Death Attempts', title: 'Traded death attempts: opportunities where a teammate damaged the killer within the trade window', value: agg.traded_death_attempts },
+    { label: 'Traded Deaths', title: 'Traded death successes / opportunities: times a teammate killed the enemy who killed you, out of the times a teammate had the chance to', value: `${agg.traded_death_successes}/${agg.traded_death_opportunities}` },
   ];
 
   const utility: StatTile[] = [
@@ -736,7 +806,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)', value: fmtNum(plus.clutch, 2), valueStyle: plusStyle(plus.clutch) },
   ] : [];
 
-  return { impact, mechanics, trades, utility, plus: plusTiles };
+  return { impact, duels, mechanics, trades, utility, plus: plusTiles };
 }
 
 // --- Sub-tabs ---
@@ -745,13 +815,14 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
 // single-player tile grids) — see the Impact/Mechanics/Trades split above. One tab state drives
 // both render paths so they never drift out of sync with each other.
 
-type SubTab = 'impact' | 'mechanics' | 'trades' | 'utility' | 'plus';
+type SubTab = 'impact' | 'duels' | 'mechanics' | 'trades' | 'utility' | 'plus';
 
 // Ordered to roughly match Leetify's match-page grouping (Aim, then situational Duels/Trades,
 // then Impact, then Utility) — see #173's Leetify-parity discussion. Stats Plus has no Leetify
 // analog (it's DGLS's own league-relative composite), so it stays last.
 const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'mechanics', label: 'Aim' },
+  { key: 'duels', label: 'Opening Duels' },
   { key: 'trades', label: 'Trades' },
   { key: 'impact', label: 'Impact' },
   { key: 'utility', label: 'Utility' },
@@ -833,6 +904,7 @@ export default function SabremetricsLeaderboardView({
       <div className="space-y-4">
         {tabBar}
         {sub === 'impact' && <StatTileGrid heading="Impact" tiles={tiles.impact} />}
+        {sub === 'duels' && <StatTileGrid heading="Opening Duels" tiles={tiles.duels} />}
         {sub === 'mechanics' && <StatTileGrid heading="Mechanics" tiles={tiles.mechanics} />}
         {sub === 'trades' && <StatTileGrid heading="Trades" tiles={tiles.trades} />}
         {sub === 'utility' && <StatTileGrid heading="Utility" tiles={tiles.utility} />}
@@ -851,6 +923,11 @@ export default function SabremetricsLeaderboardView({
       {sub === 'impact' && (
         <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
           <ImpactTable aggregated={agg} singlePlayer={singlePlayer} showHeading={showHeading} />
+        )} />
+      )}
+      {sub === 'duels' && (
+        <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
+          <OpeningDuelsTable aggregated={agg} singlePlayer={singlePlayer} showHeading={showHeading} />
         )} />
       )}
       {sub === 'mechanics' && (
