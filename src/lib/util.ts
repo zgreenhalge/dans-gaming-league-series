@@ -355,7 +355,9 @@ export interface DuoMatchSummary {
   startingSide: 'CT' | 'T' | null;
   score: { duo: number; opponents: number } | null;
   won: boolean | null;
-  opponents: { player_id: number; player_name: string }[];
+  /** playerA + playerB's roster for this match. */
+  team: MatchRosterPlayer[];
+  opponents: MatchRosterPlayer[];
 }
 
 /** One match `playerA` and `playerB` met as opponents (different factions). */
@@ -627,6 +629,15 @@ export function computeH2H(
     return agg;
   }
 
+  const toRosterPlayer = (row: H2HRosterRow): MatchRosterPlayer => ({
+    player_id: row.player_id,
+    player_name: players.get(row.player_id)?.name ?? `#${row.player_id}`,
+    kills: row.kills,
+    assists: row.assists ?? 0,
+    deaths: row.deaths,
+    adr: row.adr,
+  });
+
   for (const m of matches) {
     const roster = m.roster;
     if (roster.length === 0) continue;
@@ -696,7 +707,8 @@ export function computeH2H(
             startingSide: m.startingSide,
             score: ourScore != null && theirScore != null ? { duo: ourScore, opponents: theirScore } : null,
             won: x.is_win,
-            opponents: opponents.map((r) => ({ player_id: r.player_id, player_name: players.get(r.player_id)?.name ?? `#${r.player_id}` })),
+            team: team.map(toRosterPlayer),
+            opponents: opponents.map(toRosterPlayer),
           });
         }
       }
@@ -736,14 +748,6 @@ export function computeH2H(
 
         const aScore = parsedScore ? (aRow.faction === 'SHIRTS' ? parsedScore.shirts : parsedScore.skins) : null;
         const bScore = parsedScore ? (bRow.faction === 'SHIRTS' ? parsedScore.shirts : parsedScore.skins) : null;
-        const toRosterPlayer = (row: H2HRosterRow): MatchRosterPlayer => ({
-          player_id: row.player_id,
-          player_name: players.get(row.player_id)?.name ?? `#${row.player_id}`,
-          kills: row.kills,
-          assists: row.assists ?? 0,
-          deaths: row.deaths,
-          adr: row.adr,
-        });
         // 2v2 Wingman, so each side's full roster is just the shirts/skins group aRow/bRow belongs to.
         agg.matches.push({
           matchId: m.matchId,

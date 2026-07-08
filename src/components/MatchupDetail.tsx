@@ -34,19 +34,20 @@ function RecycleButton({ onClick, title }: { onClick: () => void; title: string 
 }
 
 /**
- * A rival match's per-side roster — the matchup player plus their 2v2
- * teammate — styled after MatchCard's TeamStatBlock (header row + K/A/D
- * columns per player), so a teammate reads as its own roster row with its
- * own stats.
+ * A match's per-side roster (2 players — teammates in Wingman), styled after
+ * MatchCard's TeamStatBlock (header row + K/A/D columns per player) so each
+ * player reads as its own roster row with its own stats. `bold` marks which
+ * rows draw at full weight — the player(s) this card is centered on — with
+ * the rest reading as supporting context.
  */
-function RivalTeamRoster({
+function MatchRosterColumn({
   roster,
-  highlightId,
+  bold,
   color,
   align = 'left',
 }: {
   roster: MatchRosterPlayer[];
-  highlightId: number;
+  bold: (playerId: number) => boolean;
   color: string;
   align?: 'left' | 'right';
 }) {
@@ -61,7 +62,7 @@ function RivalTeamRoster({
   const statCls = 'w-[18px] text-center font-mono text-[10px] tabular-nums';
   const name = (p: MatchRosterPlayer) => (
     <span
-      className={`flex-1 min-w-0 truncate font-display text-[11px] ${p.player_id === highlightId ? 'font-bold' : 'opacity-60'} ${align === 'right' ? 'text-right' : ''}`}
+      className={`flex-1 min-w-0 truncate font-display text-[11px] ${bold(p.player_id) ? 'font-bold' : 'opacity-60'} ${align === 'right' ? 'text-right' : ''}`}
       style={{ color }}
     >
       {p.player_name}
@@ -266,7 +267,7 @@ export function DuoDetail({
   );
 
   return (
-    <div className={`border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]${minimal && statsHref ? ' relative cursor-pointer lift-card' : ''}`}>
+    <div className={`border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] no-scroll-anchor${minimal && statsHref ? ' relative cursor-pointer lift-card' : ''}`}>
       {minimal && statsHref && <Link href={statsHref} className="absolute inset-0 z-[1]" aria-label="View in H2H statistics" />}
       <div className="px-5 py-2.5 border-b border-[var(--color-border-tertiary)] flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -330,17 +331,10 @@ export function DuoDetail({
                   scoreLabel={scoreLabel}
                   scoreColor={resultColor}
                   rightContent={
-                    <>
-                      <span className="tracked text-[8px] text-[var(--color-text-secondary)] mr-1">vs</span>
-                      <div className="flex -space-x-1.5">
-                        {m.opponents.map((o) => (
-                          <PlayerAvatar key={o.player_id} name={o.player_name} imageUrl={null} size="sm" />
-                        ))}
-                      </div>
-                      <span className="font-display font-semibold text-[10px] truncate ml-1">
-                        {m.opponents.map((o) => o.player_name).join(' & ')}
-                      </span>
-                    </>
+                    <div className="w-full flex items-stretch divide-x divide-[var(--color-border-tertiary)] border border-[var(--color-border-tertiary)]">
+                      <MatchRosterColumn roster={m.team} bold={() => true} color="var(--color-accent-green-fg)" />
+                      <MatchRosterColumn roster={m.opponents} bold={() => false} color="var(--color-text-primary)" align="right" />
+                    </div>
                   }
                 />
               );
@@ -440,7 +434,7 @@ export function RivalDetail({
 
   if (minimal) {
     return (
-      <div className={`border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]${statsHref ? ' relative cursor-pointer lift-card' : ''}`}>
+      <div className={`border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] no-scroll-anchor${statsHref ? ' relative cursor-pointer lift-card' : ''}`}>
         {statsHref && <Link href={statsHref} className="absolute inset-0 z-[1]" aria-label="View in H2H statistics" />}
         <div className="px-4 pt-3.5 pb-1">
           <div className="flex items-center gap-3 mb-2">
@@ -456,7 +450,7 @@ export function RivalDetail({
   }
 
   return (
-    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
+    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] no-scroll-anchor">
       <div className="px-5 py-2.5 border-b border-[var(--color-border-tertiary)] flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           {onFlip && <RecycleButton onClick={onFlip} title="View this pair as friends" />}
@@ -501,8 +495,8 @@ export function RivalDetail({
                   scoreColor={scoreColor}
                   rightContent={
                     <div className="w-full flex items-stretch divide-x divide-[var(--color-border-tertiary)] border border-[var(--color-border-tertiary)]">
-                      <RivalTeamRoster roster={m.aTeam} highlightId={rival.playerA} color="var(--color-t)" />
-                      <RivalTeamRoster roster={m.bTeam} highlightId={rival.playerB} color="var(--color-ct)" align="right" />
+                      <MatchRosterColumn roster={m.aTeam} bold={(id) => id === rival.playerA} color="var(--color-t)" />
+                      <MatchRosterColumn roster={m.bTeam} bold={(id) => id === rival.playerB} color="var(--color-ct)" align="right" />
                     </div>
                   }
                 />

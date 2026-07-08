@@ -328,6 +328,31 @@ test('rival match aTeam/bTeam carry both players on each side, with their own st
   assert.equal(teammateTwo.adr, 85);
 });
 
+// --- Duo match rosters (playerA/playerB's own team + the opposing roster) ---
+test('duo match team/opponents carry both rosters, with their own stats', () => {
+  const roster = [
+    stat({ player_id: 1, faction: 'SHIRTS', kills: 20, assists: 3, deaths: 10, adr: 90 }),
+    stat({ player_id: 2, faction: 'SHIRTS', kills: 18, assists: 5, deaths: 12, adr: 85 }),
+    stat({ player_id: 3, faction: 'SKINS', kills: 15, assists: 1, deaths: 14, adr: 70, is_win: false }),
+    stat({ player_id: 4, faction: 'SKINS', kills: 12, assists: 4, deaths: 16, adr: 65, is_win: false }),
+  ];
+  const result = computeH2H([match({ matchId: 1, roster })], players);
+
+  const duo = result.duos.find((d) => d.playerA === 1 && d.playerB === 2)!;
+  const m = duo.matches[0];
+  assert.equal(m.team.length, 2, 'playerA (1) + playerB (2), their own SHIRTS roster');
+  assert.deepEqual(new Set(m.team.map((p) => p.player_id)), new Set([1, 2]));
+  assert.equal(m.opponents.length, 2, 'the opposing SKINS roster');
+  assert.deepEqual(new Set(m.opponents.map((p) => p.player_id)), new Set([3, 4]));
+
+  const opponentFour = m.opponents.find((p) => p.player_id === 4)!;
+  assert.equal(opponentFour.player_name, 'Dee');
+  assert.equal(opponentFour.kills, 12);
+  assert.equal(opponentFour.assists, 4);
+  assert.equal(opponentFour.deaths, 16);
+  assert.equal(opponentFour.adr, 65);
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length > 0) {
   console.error('\nFailures:\n');
