@@ -149,6 +149,13 @@ ship ungated first per `docs/demo-parsing-reference.md`'s guidance on that trade
 - Shotguns firing multiple pellets per `weapon_fire` (and wallbang penetration hitting more than
   one player) mean `Shots Fired` and `Shots Hit` aren't a strict 1:1 shot-to-hit correspondence —
   an accepted imprecision of "raw" accuracy, not a bug.
+- `Counter-Strafe %` = `Counter-Strafe Good Shots` / `Counter-Strafe Shots` — rifles only
+  (`RIFLE_WEAPONS` in `src/lib/parsers/counterStrafe.ts`). A shot is eligible (`Counter-Strafe
+  Shots`) if the shooter wasn't crouched (`m_bDucked`) at the moment of firing; it's "good" if
+  their speed at that instant was under 34% of the weapon's current max speed
+  (`m_flMaxspeed`, which already factors in the held weapon's speed penalty — no separate
+  per-weapon speed table needed). This parser exposes no direct velocity read, so speed is
+  derived from the position delta between the fire tick and one tick earlier.
 
 ### Player Rating (not yet implemented)
 

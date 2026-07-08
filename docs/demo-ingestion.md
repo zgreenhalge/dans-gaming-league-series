@@ -61,6 +61,7 @@ matches still self-derive a score and stats with no manual entry.
 | `trades.ts` | Trade-kill/traded-death opportunity/attempt/success counts, sharing `kast.ts`'s trade window |
 | `heGrenade.ts` | HE grenades thrown and enemy damage dealt (HE Damage/Throw) |
 | `accuracy.ts` | Raw accuracy / head accuracy from `weapon_fire`/`player_hurt` |
+| `counterStrafe.ts` | Counter-strafe % from per-tick duck-state/position reads at rifle `weapon_fire` ticks |
 
 ## Match start (skipping warmup and stray knife rounds)
 

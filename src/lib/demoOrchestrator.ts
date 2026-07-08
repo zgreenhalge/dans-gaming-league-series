@@ -1,4 +1,4 @@
-import { parseEvent } from '@laihoe/demoparser2';
+import { parseEvent, parseTicks } from '@laihoe/demoparser2';
 import type { RosterEntry } from './demoParser';
 import type { SabFields, DemoSabremetricStat, ParsedDemoSabremetricsResult } from './types';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
@@ -15,6 +15,9 @@ import { collectObjectives, type BombEventRow } from './parsers/objectives';
 import { collectTrades } from './parsers/trades';
 import { collectHeGrenades } from './parsers/heGrenade';
 import { collectAccuracy } from './parsers/accuracy';
+import {
+  collectCounterStrafe, neededCounterStrafeTicks, type PlayerTickRow,
+} from './parsers/counterStrafe';
 
 const ZERO: SabFields = {
   kills_ct: 0, kills_t: 0,
@@ -49,6 +52,8 @@ const ZERO: SabFields = {
   shots_fired: 0,
   shots_hit: 0,
   headshot_hits: 0,
+  counter_strafe_shots: 0,
+  counter_strafe_good_shots: 0,
 };
 
 export function parseDemoSabremetrics(
@@ -130,6 +135,32 @@ export function parseDemoSabremetrics(
   const heStats = collectHeGrenades(fireEvents, hurtEvents, context, steamIds);
   const accuracyStats = collectAccuracy(fireEvents, hurtEvents, context, steamIds);
 
+  // Counter-strafe needs per-tick position/duck-state reads (not a plain event stream), so it
+  // fetches its own tick list — same shape as accumulators.ts's round-end reads, but keyed to
+  // rifle weapon_fire ticks instead.
+  const csTicks = neededCounterStrafeTicks(fireEvents, context.liveRounds);
+  let csTickRows: PlayerTickRow[] = [];
+  if (csTicks.length > 0) {
+    const rawTickRows = parseTicks(
+      demoBuffer,
+      [
+        'CCSPlayerPawn.CCSPlayer_MovementServices.m_bDucked',
+        'CCSPlayerPawn.CCSPlayer_MovementServices.m_flMaxspeed',
+        'X', 'Y',
+      ],
+      csTicks,
+    ) as Record<string, unknown>[];
+    csTickRows = rawTickRows.map((r) => ({
+      tick: Number(r.tick),
+      steamid: String(r.steamid ?? ''),
+      ducked: Boolean(r['CCSPlayerPawn.CCSPlayer_MovementServices.m_bDucked']),
+      maxSpeed: Number(r['CCSPlayerPawn.CCSPlayer_MovementServices.m_flMaxspeed'] ?? 0),
+      x: Number(r.X ?? 0),
+      y: Number(r.Y ?? 0),
+    }));
+  }
+  const counterStrafeStats = collectCounterStrafe(fireEvents, csTickRows, context, steamIds);
+
   // 6. Merge with zero defaults
   const sabremetrics: DemoSabremetricStat[] = steamIds.map((steamId) => ({
     player_id: steamToPlayer.get(steamId)!.player_id,
@@ -145,6 +176,7 @@ export function parseDemoSabremetrics(
       ...tradeStats.get(steamId),
       ...heStats.get(steamId),
       ...accuracyStats.get(steamId),
+      ...counterStrafeStats.get(steamId),
     },
   }));
 
