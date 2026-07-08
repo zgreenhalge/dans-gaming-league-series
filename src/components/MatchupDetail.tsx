@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import type { DuoStats, H2HStats, H2HMapStat } from '@/lib/queries';
-import { rateGradientColor, winRatePct } from '@/lib/util';
+import { firstName, rateGradientColor, winRatePct } from '@/lib/util';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
 import PlayerAvatar from './PlayerAvatar';
@@ -470,20 +470,28 @@ export function RivalDetail({
                   scoreColor={scoreColor}
                   scorePosition="left"
                   rightContent={
-                    <div className="w-full flex items-center justify-end gap-3.5">
-                      <div className="flex items-center gap-1 min-w-0" title={aTeammate ? `w/ ${aTeammate.name}` : undefined}>
-                        {aTeammate && <PlayerAvatar name={aTeammate.name} imageUrl={aTeammate.steam_avatar_url} size="sm" />}
+                    <div className="w-full flex items-center justify-end gap-3">
+                      <div className="flex items-center gap-1.5 min-w-0" title={aTeammate ? `Teamed with ${aTeammate.name}` : undefined}>
+                        {aTeammate && (
+                          <span className="tracked text-[7px] text-[var(--color-text-secondary)] truncate max-w-[42px]">
+                            w/ {firstName(aTeammate.name)}
+                          </span>
+                        )}
                         <StatTrio
                           values={[m.aMatchStats.kills, m.aMatchStats.assists, m.aMatchStats.deaths]}
                           color="var(--color-t)"
                         />
                       </div>
-                      <div className="flex items-center gap-1 min-w-0" title={bTeammate ? `w/ ${bTeammate.name}` : undefined}>
+                      <div className="flex items-center gap-1.5 min-w-0" title={bTeammate ? `Teamed with ${bTeammate.name}` : undefined}>
                         <StatTrio
                           values={[m.bMatchStats.kills, m.bMatchStats.assists, m.bMatchStats.deaths]}
                           color="var(--color-ct)"
                         />
-                        {bTeammate && <PlayerAvatar name={bTeammate.name} imageUrl={bTeammate.steam_avatar_url} size="sm" />}
+                        {bTeammate && (
+                          <span className="tracked text-[7px] text-[var(--color-text-secondary)] truncate max-w-[42px]">
+                            w/ {firstName(bTeammate.name)}
+                          </span>
+                        )}
                       </div>
                     </div>
                   }
