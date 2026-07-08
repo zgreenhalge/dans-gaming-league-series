@@ -77,6 +77,39 @@ test('buildRoundSides: skinsStartingSide T flips the initial assignment', () => 
   assert.equal(sides[0].shirtsSide, 'CT');
 });
 
+test('buildRoundSides: a pre-match round (erroneous knife round) is excluded by matchStartTick', () => {
+  // The engine counted an erroneous knife round as total_rounds_played 1, then never reset its
+  // counter, so the real rounds carry numbers 2..14. matchStartTick sits between the knife
+  // round_end and the first real round_end, so the knife round is dropped by TICK.
+  const knife: RoundEndRow = { tick: 100, total_rounds_played: 1, winner: 'T', is_warmup_period: false };
+  const real = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map((n) => round(n));
+  const sides = buildRoundSides([knife, ...real], 'CT', 13, 500);
+
+  // Knife round gone; the 13 real rounds survive.
+  assert.equal(sides.length, 13);
+  assert.ok(!sides.some((s) => s.roundNumber === 1));
+});
+
+test('buildRoundSides: excluded knife round does NOT renumber survivors (half-swap tracks the engine counter)', () => {
+  // The in-game half-swap fires on the engine's round counter, which counted the knife round, so
+  // the swap lands after engine round 12. Survivors keep their total_rounds_played, NOT 1..N —
+  // renumbering would move the swap and mislabel every side.
+  const knife: RoundEndRow = { tick: 100, total_rounds_played: 1, winner: 'T', is_warmup_period: false };
+  const real = [2, 12, 13, 14].map((n) => round(n));
+  const sides = buildRoundSides([knife, ...real], 'CT', 13, 500);
+
+  const byNum = new Map(sides.map((s) => [s.roundNumber, s]));
+  assert.equal(byNum.get(2)!.shirtsSide, 'T'); // still first half
+  assert.equal(byNum.get(12)!.shirtsSide, 'T'); // last round of first half
+  assert.equal(byNum.get(13)!.shirtsSide, 'CT'); // first round of second half
+  assert.equal(byNum.get(14)!.shirtsSide, 'CT');
+});
+
+test('buildRoundSides: matchStartTick defaults to 0 (no tick filtering) for demos with no knife round', () => {
+  const events = [round(1), round(2)];
+  assert.equal(buildRoundSides(events, 'CT', 13).length, 2);
+});
+
 test('sideForFaction: SHIRTS returns the round shirts side, SKINS returns the opposite', () => {
   const info = { roundNumber: 1, endTick: 0, winnerSide: 'CT' as const, shirtsSide: 'T' as const };
   assert.equal(sideForFaction(info, 'SHIRTS'), 'T');
