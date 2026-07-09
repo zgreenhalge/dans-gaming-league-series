@@ -71,6 +71,7 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `POST` | `/api/matches/[id]/replay/dispatch` | (Re)trigger the replay Action ([`replay.md`](./replay.md)) |
 | `POST` | `/api/maps/[slug]/radar/dispatch` | (Re)trigger the radar-build Action for a map (admin only; [`replay.md`](./replay.md)) |
 | `PATCH` | `/api/seasons/[id]/start-date` | Set season start date (admin only) |
+| `POST` | `/api/seasons/[id]/gauntlet` | Create the paired gauntlet season for an active regular season and build + materialize its bracket (admin only) |
 | `PATCH` | `/api/players/[id]` | Edit a player — display name, `is_admin` (can't demote yourself), or Steam link (unlink / set SteamID64) (admin only) |
 | `POST` | `/api/ehog/recompute/trigger` | Admin-gated "recompute EHOG ratings now" — fires the full rating walk in the background (admin only) |
 | `GET/POST` | `/api/players/register` | List unlinked players / link a Steam account to a player record |
@@ -92,6 +93,8 @@ Supabase (`public` schema). RLS is **off** on all tables — do not enable it wi
 | `player_match_sabremetrics` | Demo-derived advanced stats, one row per `player_match_stats` row (FK `player_match_stats_id`): CT/T side splits, opening duels, KAST, clutches, utility, objectives. Written only when a demo is parsed. See [`demo-ingestion.md`](./demo-ingestion.md). |
 | `player_rating_history` / `player_current_ratings` | EHOG skill-rating storage (μ/σ history + current standings). Written by the EHOG recompute. See [`ehog.md`](./ehog.md). |
 | `background_jobs` | Background-job state machine, one row per (`job_type`, `match_id`). `job_type` is `replay_extract` ([`replay.md`](./replay.md)) or `demo_ingest` ([`hosting.md`](./hosting.md)); tracks `status`/`stage`/`error_message` + GitHub Action run refs. |
+| `gauntlet_pods` | One row per pod in a gauntlet bracket: `season_id`, `round_number` (== `weeks.week_number`), `pod_index`, `advance_rule` (`single`/`wildcard`), `is_final`, `week_id`, `match1_id`/`match2_id` (set once materialized). Frozen at bracket creation — nothing re-derives it. |
+| `gauntlet_pod_slots` | The 4 slots (`slot_index` 0-3) feeding each pod: `source_kind` (`seed`/`pod`), `source_seed` (for seed slots) or `source_pod_id` (the advancement edge, for pod slots), and the resolved `player_id`. |
 
 ### View: `player_season_leaderboard`
 
@@ -106,6 +109,24 @@ Seasons with `is_gauntlet = true` use a different format:
 - Stats are computed directly from `player_match_stats` in `getGauntletStats()` / `getGauntletSeasonLeaderboard()`
 
 See [`glossary.md`](./glossary.md) for the full gauntlet semantics and [`calculations.md`](./calculations.md#canonical-gauntlet-ranking) for the canonical ranking.
+
+### Gauntlet bracket scheduling
+
+`buildGauntletBracket(N)` in `src/lib/gauntlet-bracket.ts` is a pure, deterministic function of the
+qualifier field size — it has a literal worked shape for every `N` from 4 to 20 (unit-tested against
+the full reference table in `gauntlet-bracket.test.ts`) and throws for anything outside that range
+rather than guessing an unspecified shape. Its output is a plan of **pods** — 4 players playing 2
+games with two distinct partner pairings, guaranteeing exactly one 2-0 and one 0-2 result — each
+tagged `single` (only the 2-0 survives) or `wildcard` (only the 0-2 is eliminated).
+
+`POST /api/seasons/[id]/gauntlet` takes a regular season's id, seeds the bracket from
+`getSeasonLeaderboard()`'s canonical-sort order (seed 1 = leader), creates the paired
+`"Season N Gauntlet"` season row, and persists + materializes the bracket in one action — see
+`persistAndMaterializeBracket()` in `src/lib/gauntlet-engine.ts`. Round 1 (and any pod whose slots
+are all seed-sourced) materializes immediately; later rounds materialize automatically as their pod
+resolves, via a non-fatal hook (`resolveAndPropagate()`) appended to `PATCH /api/matches/[id]/score`
+after the score commit. A pod's `advance_rule` and `is_final` also drive the "pod stakes" label shown
+on the round list and match page (`GAUNTLET_POD_STAKES_LABEL` in `src/lib/util.ts`).
 
 ## Data Ingestion
 
