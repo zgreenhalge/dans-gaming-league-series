@@ -200,12 +200,16 @@ season rows and has one admin-triggered and two automatic transitions, all in
   standings. A season with no matches yet, or with any match still unplayed, is never "fully
   played" — nothing fires until the literal last match is scored.
 - **`→ ARCHIVED`** (gauntlet seasons, cascading to their paired regular season) is also fully
-  automatic — `checkGauntletCompletion()` runs from a non-fatal hook on every gauntlet match score.
-  Once the gauntlet's final round (the max `round_number`, per `canonicalGauntletRankMap`'s
-  contract) is fully played, it archives the gauntlet season and, via `getLinkedRegularSeason()`,
-  its paired regular season too — regardless of the regular season's current status. A season isn't
-  fully "in the books" until its playoffs conclude, so `ARCHIVED` is reached through the gauntlet,
-  not the regular season's own match completion.
+  automatic — `checkGauntletCompletion()` runs from a non-fatal hook on every gauntlet match score,
+  sharing the same `isSeasonFullyPlayed()` check `checkSeasonCompletion()` uses (every match under
+  the season, not just the highest `round_number`'s). Once true, it archives the gauntlet season
+  and, via `getLinkedRegularSeason()`, its paired regular season too — regardless of the regular
+  season's current status. A season isn't fully "in the books" until its playoffs conclude, so
+  `ARCHIVED` is reached through the gauntlet, not the regular season's own match completion.
+  Checking every match rather than only the final round matters for manually-built gauntlets (see
+  below) — an automated bracket's final round can't materialize until every earlier pod has
+  resolved, so the two checks coincide there, but nothing enforces that ordering for a hand-built
+  one.
 
 Gauntlet seasons are born `ACTIVE` at creation and have no `UPCOMING` phase or admin-triggered
 transition of their own — `ACTIVE → ARCHIVED` is their entire lifecycle, driven by
