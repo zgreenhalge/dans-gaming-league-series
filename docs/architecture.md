@@ -72,7 +72,7 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `POST` | `/api/maps/[slug]/radar/dispatch` | (Re)trigger the radar-build Action for a map (admin only; [`replay.md`](./replay.md)) |
 | `PATCH` | `/api/seasons/[id]/start-date` | Set season start date (admin only) |
 | `PATCH` | `/api/seasons/[id]/status` | Transition a regular season `UPCOMING` → `ACTIVE` ("go live"); best-effort builds its gauntlet shape (admin only) |
-| `PATCH` | `/api/seasons/[id]/ops-error` | Dismiss a season's `ops_error` (admin only) |
+| `DELETE` | `/api/ops-errors/[id]` | Dismiss an `ops_errors` row, any entity type (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet` | Create the paired gauntlet season for an active regular season and build its bracket *shape* — unseeded, nothing materialized (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet/seed` | Seed an existing shape from the season's current leaderboard order and materialize round 1 (admin only) |
 | `DELETE` | `/api/seasons/[id]/gauntlet` | Reset a gauntlet — deletes it and everything materialized under it; refuses if any match has a score unless `{ force: true }` is passed (admin only) |
@@ -91,7 +91,7 @@ Supabase (`public` schema). RLS is **off** on all tables — do not enable it wi
 
 | Table | Purpose |
 |---|---|
-| `seasons` | One row per season. Key fields: `name`, `status` (`UPCOMING`/`ACTIVE`/`COMPLETED`/`ARCHIVED`), `is_gauntlet` (bool), `start_date`, `map_pool` (text[]), `target_win_rounds`, `buy_in_amount`, `ops_error`/`ops_error_at` (best-effort gauntlet operation failures — see "Season status lifecycle") |
+| `seasons` | One row per season. Key fields: `name`, `status` (`UPCOMING`/`ACTIVE`/`COMPLETED`/`ARCHIVED`), `is_gauntlet` (bool), `start_date`, `map_pool` (text[]), `target_win_rounds`, `buy_in_amount` |
 | `weeks` | Linked to `seasons`. Has `week_number` and `bye_player_id` (who sits out that week) |
 | `matches` | Linked to `weeks`. Veto fields: `shirts_ban`, `shirts_ban2`, `skins_ban1`, `skins_ban2`, `shirts_pick`, `picked_map`, `skins_starting_side`. Also: `final_score`, `is_playoff_game`, `scheduled_at`, `screenshot_url_front/back`, `notes`. Hosting (see [`hosting.md`](./hosting.md)): `server_state`, `dathost_server_id`, `connect_string`, `server_started_at` |
 | `players` | Global player registry. Unique `name`. Steam fields: `steam_id`, `steam_nickname`, `steam_avatar_url`, `steam_refreshed_at`. Admin flag: `is_admin` |
@@ -101,6 +101,7 @@ Supabase (`public` schema). RLS is **off** on all tables — do not enable it wi
 | `background_jobs` | Background-job state machine, one row per (`job_type`, `match_id`). `job_type` is `replay_extract` ([`replay.md`](./replay.md)) or `demo_ingest` ([`hosting.md`](./hosting.md)); tracks `status`/`stage`/`error_message` + GitHub Action run refs. |
 | `gauntlet_pods` | One row per pod in a gauntlet bracket: `season_id`, `round_number` (== `weeks.week_number`), `pod_index`, `advance_rule` (`single`/`wildcard`), `is_final`, `week_id`, `match1_id`/`match2_id` (set once materialized). Frozen at bracket creation — nothing re-derives it. |
 | `gauntlet_pod_slots` | The 4 slots (`slot_index` 0-3) feeding each pod: `source_kind` (`seed`/`pod`), `source_seed` (for seed slots) or `source_pod_id` (the advancement edge, for pod slots), and the resolved `player_id`. |
+| `ops_errors` | Generic best-effort-operation-failure surface: `entity_type` (`season`/`match`/`player`/`system`), `entity_id` (`0` for the `system` singleton), `operation`, `message`, `occurred_at`. Unique on `(entity_type, entity_id, operation)`. See "Surfacing best-effort failures". |
 
 ### View: `player_season_leaderboard`
 
@@ -216,23 +217,40 @@ Gauntlet seasons are born `ACTIVE` at creation and have no `UPCOMING` phase or a
 transition of their own — `ACTIVE → ARCHIVED` is their entire lifecycle, driven by
 `checkGauntletCompletion()` alone.
 
-#### Surfacing best-effort failures (`ops_error`)
+#### Surfacing best-effort failures (`ops_errors`)
 
-Every best-effort gauntlet operation above (auto-build in `activateSeason()`, auto-seed in
-`checkSeasonCompletion()`, auto-archive in `checkGauntletCompletion()`) records its outcome on the
-relevant season row's `ops_error`/`ops_error_at` columns, rather than only `console.error`-ing —
-application logs aren't visible to an admin deciding what to do next. A roster drift caught by
-`trySeedGauntlet()` (its `drift` result) is recorded the same way, since it needs the same admin
-attention as a thrown error even though it isn't one. `ops_error` is cleared automatically the next
-time that same operation succeeds — `tryBuildGauntletShape()` and `trySeedGauntlet()` clear it
-themselves on success, `deleteGauntletSeason()` clears it as part of a reset — via a shared
-`clearOpsError()` helper in `gauntlet-engine.ts`; `season-lifecycle.ts` has the matching
-`recordOpsError()` helper for the write side.
+Any best-effort operation that fails (or produces an outcome needing admin attention, like a roster
+drift) records it in the generic `ops_errors` table via `recordOpsError()` / `clearOpsError()`
+(`src/lib/ops-errors.ts`), rather than only `console.error`-ing — application logs aren't visible to
+an admin deciding what to do next. Rows are keyed by `(entity_type, entity_id, operation)`, not just
+`entity_id`, since more than one operation can attach to the same entity (a match's steam-id
+learning and its server teardown, for instance) — without `operation` in the key, one operation's
+success would clear an unrelated operation's still-live failure. `entity_id` is `0` for the one
+operation with no single entity (the site-wide EHOG recompute), using `entity_type = 'system'`.
 
-`/admin/seasons/gauntlet` reads every season with a non-null `ops_error` (regular or gauntlet) into
-an "Attention Needed" section above the rest of the page (`OpsErrorList.tsx`), with a per-season
-Dismiss button that clears it via `PATCH /api/seasons/[id]/ops-error` without waiting for the
-underlying operation to succeed on its own.
+Wired into seven operations today:
+
+| Operation | Entity | Recorded from |
+|---|---|---|
+| `gauntlet_build` | `season` (regular) | `activateSeason()` |
+| `gauntlet_seed` | `season` (regular) | `checkSeasonCompletion()` (including a `trySeedGauntlet()` roster-`drift` result, which needs the same admin attention as a thrown error even though it isn't one) |
+| `gauntlet_archive` | `season` (gauntlet) | `checkGauntletCompletion()` |
+| `steam_id_learn` | `match` | `applyEliminationSteamIds()`'s hook in the score route |
+| `server_teardown` | `match` | `teardownMatchServer()`'s hooks in the score route and `/api/ingest/notify` |
+| `sabremetrics_persist` | `match` | `persistSabremetrics()`/`clearSabremetrics()`'s hook in the score route |
+| `ehog_recompute` | `system` (id `0`) | `triggerRatingRecompute()` |
+
+Each is cleared automatically the next time that same (entity, operation) succeeds —
+`tryBuildGauntletShape()` and `trySeedGauntlet()` clear their own on success, `deleteGauntletSeason()`
+clears both gauntlet operations as part of a reset, and the four non-gauntlet hooks above clear
+theirs inline once their surrounding try block completes without error.
+
+`getOpsErrors()` in `queries.ts` reads every live row, resolving `entity_id` to a display name
+(season/match/player name, or "EHOG Recompute" for `system`). `/admin/ops-errors` lists all of them;
+`/admin/seasons/gauntlet` shows the same list filtered to `entity_type = 'season'` in an "Attention
+Needed" section above the rest of the page (`OpsErrorList.tsx`, shared by both). Either page's
+Dismiss button clears a row via `DELETE /api/ops-errors/[id]` without waiting for the underlying
+operation to succeed on its own.
 
 ## Data Ingestion
 
