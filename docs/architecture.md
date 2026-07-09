@@ -72,6 +72,7 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `POST` | `/api/maps/[slug]/radar/dispatch` | (Re)trigger the radar-build Action for a map (admin only; [`replay.md`](./replay.md)) |
 | `PATCH` | `/api/seasons/[id]/start-date` | Set season start date (admin only) |
 | `PATCH` | `/api/seasons/[id]/status` | Transition a regular season `UPCOMING` → `ACTIVE` ("go live"); best-effort builds its gauntlet shape (admin only) |
+| `PATCH` | `/api/seasons/[id]/ops-error` | Dismiss a season's `ops_error` (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet` | Create the paired gauntlet season for an active regular season and build its bracket *shape* — unseeded, nothing materialized (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet/seed` | Seed an existing shape from the season's current leaderboard order and materialize round 1 (admin only) |
 | `DELETE` | `/api/seasons/[id]/gauntlet` | Reset a gauntlet — deletes it and everything materialized under it; refuses if any match has a score unless `{ force: true }` is passed (admin only) |
@@ -90,7 +91,7 @@ Supabase (`public` schema). RLS is **off** on all tables — do not enable it wi
 
 | Table | Purpose |
 |---|---|
-| `seasons` | One row per season. Key fields: `name`, `status` (`UPCOMING`/`ACTIVE`/`COMPLETED`), `is_gauntlet` (bool), `start_date`, `map_pool` (text[]), `target_win_rounds`, `buy_in_amount` |
+| `seasons` | One row per season. Key fields: `name`, `status` (`UPCOMING`/`ACTIVE`/`COMPLETED`/`ARCHIVED`), `is_gauntlet` (bool), `start_date`, `map_pool` (text[]), `target_win_rounds`, `buy_in_amount`, `ops_error`/`ops_error_at` (best-effort gauntlet operation failures — see "Season status lifecycle") |
 | `weeks` | Linked to `seasons`. Has `week_number` and `bye_player_id` (who sits out that week) |
 | `matches` | Linked to `weeks`. Veto fields: `shirts_ban`, `shirts_ban2`, `skins_ban1`, `skins_ban2`, `shirts_pick`, `picked_map`, `skins_starting_side`. Also: `final_score`, `is_playoff_game`, `scheduled_at`, `screenshot_url_front/back`, `notes`. Hosting (see [`hosting.md`](./hosting.md)): `server_state`, `dathost_server_id`, `connect_string`, `server_started_at` |
 | `players` | Global player registry. Unique `name`. Steam fields: `steam_id`, `steam_nickname`, `steam_avatar_url`, `steam_refreshed_at`. Admin flag: `is_admin` |
@@ -214,6 +215,24 @@ season rows and has one admin-triggered and two automatic transitions, all in
 Gauntlet seasons are born `ACTIVE` at creation and have no `UPCOMING` phase or admin-triggered
 transition of their own — `ACTIVE → ARCHIVED` is their entire lifecycle, driven by
 `checkGauntletCompletion()` alone.
+
+#### Surfacing best-effort failures (`ops_error`)
+
+Every best-effort gauntlet operation above (auto-build in `activateSeason()`, auto-seed in
+`checkSeasonCompletion()`, auto-archive in `checkGauntletCompletion()`) records its outcome on the
+relevant season row's `ops_error`/`ops_error_at` columns, rather than only `console.error`-ing —
+application logs aren't visible to an admin deciding what to do next. A roster drift caught by
+`trySeedGauntlet()` (its `drift` result) is recorded the same way, since it needs the same admin
+attention as a thrown error even though it isn't one. `ops_error` is cleared automatically the next
+time that same operation succeeds — `tryBuildGauntletShape()` and `trySeedGauntlet()` clear it
+themselves on success, `deleteGauntletSeason()` clears it as part of a reset — via a shared
+`clearOpsError()` helper in `gauntlet-engine.ts`; `season-lifecycle.ts` has the matching
+`recordOpsError()` helper for the write side.
+
+`/admin/seasons/gauntlet` reads every season with a non-null `ops_error` (regular or gauntlet) into
+an "Attention Needed" section above the rest of the page (`OpsErrorList.tsx`), with a per-season
+Dismiss button that clears it via `PATCH /api/seasons/[id]/ops-error` without waiting for the
+underlying operation to succeed on its own.
 
 ## Data Ingestion
 
