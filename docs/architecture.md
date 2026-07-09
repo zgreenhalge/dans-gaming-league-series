@@ -72,6 +72,7 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `POST` | `/api/maps/[slug]/radar/dispatch` | (Re)trigger the radar-build Action for a map (admin only; [`replay.md`](./replay.md)) |
 | `PATCH` | `/api/seasons/[id]/start-date` | Set season start date (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet` | Create the paired gauntlet season for an active regular season and build + materialize its bracket (admin only) |
+| `DELETE` | `/api/seasons/[id]/gauntlet` | Reset an unplayed gauntlet — deletes it and everything materialized under it, refuses if any match has a score (admin only) |
 | `PATCH` | `/api/players/[id]` | Edit a player — display name, `is_admin` (can't demote yourself), or Steam link (unlink / set SteamID64) (admin only) |
 | `POST` | `/api/ehog/recompute/trigger` | Admin-gated "recompute EHOG ratings now" — fires the full rating walk in the background (admin only) |
 | `GET/POST` | `/api/players/register` | List unlinked players / link a Steam account to a player record |
@@ -127,6 +128,11 @@ are all seed-sourced) materializes immediately; later rounds materialize automat
 resolves, via a non-fatal hook (`resolveAndPropagate()`) appended to `PATCH /api/matches/[id]/score`
 after the score commit. A pod's `advance_rule` and `is_final` also drive the "pod stakes" label shown
 on the round list and match page (`GAUNTLET_POD_STAKES_LABEL` in `src/lib/util.ts`).
+
+`DELETE /api/seasons/[id]/gauntlet` reverses this — it refuses once any of the gauntlet's matches has
+a played score, otherwise deletes the gauntlet season and everything materialized under it
+(`deleteGauntletSeason()` in `gauntlet-engine.ts`), freeing the regular season to have its bracket
+rebuilt. `/admin/seasons/gauntlet` surfaces both the "build" and "reset" actions together.
 
 ## Data Ingestion
 

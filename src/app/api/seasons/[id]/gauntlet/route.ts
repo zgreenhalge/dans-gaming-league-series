@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { getSeason, getSeasonLeaderboard, getLinkedGauntlet } from '@/lib/queries';
-import { extractSeasonNumber } from '@/lib/util';
+import { getSeason, getSeasonLeaderboard, getLinkedGauntlet, getGauntletRounds } from '@/lib/queries';
+import { extractSeasonNumber, isPlayedScore } from '@/lib/util';
 import { buildGauntletBracket } from '@/lib/gauntlet-bracket';
-import { persistAndMaterializeBracket } from '@/lib/gauntlet-engine';
+import { persistAndMaterializeBracket, deleteGauntletSeason } from '@/lib/gauntlet-engine';
 
 const supabaseAdmin = getAdminClient();
 
@@ -83,12 +83,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await persistAndMaterializeBracket(supabaseAdmin, gauntletSeasonId, plan, playerBySeed);
   } catch (err) {
     // Best-effort cleanup so a retry isn't permanently blocked by the "already has a gauntlet"
-    // check above: delete the pods (cascades to their slots) and the season row itself. Any
-    // matches/weeks already materialized before the failure are left as harmless orphans — nothing
-    // still references them once the season row is gone, and cleaning those up would need
-    // visibility into this DB's existing FK cascade rules that isn't available here.
-    await supabaseAdmin.from('gauntlet_pods').delete().eq('season_id', gauntletSeasonId);
-    await supabaseAdmin.from('seasons').delete().eq('id', gauntletSeasonId);
+    // check above.
+    await deleteGauntletSeason(supabaseAdmin, gauntletSeasonId).catch((cleanupErr) => {
+      console.error(`gauntlet build cleanup(${gauntletSeasonId}) failed:`, cleanupErr);
+    });
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 
@@ -113,4 +111,46 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     },
     { status: 201 },
   );
+}
+
+/**
+ * Resets a gauntlet that hasn't started play yet — deletes the gauntlet season and everything
+ * materialized under it (pods, slots, matches, stats, weeks), freeing the regular season up to
+ * have its bracket rebuilt. Refuses once any match has a played score; there is no partial reset.
+ */
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const access = await requireAdminAccess();
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
+
+  const { id } = await params;
+  const regularSeasonId = Number(id);
+  if (!Number.isFinite(regularSeasonId)) {
+    return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
+  }
+
+  const regularSeason = await getSeason(regularSeasonId);
+  if (!regularSeason || regularSeason.is_gauntlet) {
+    return NextResponse.json({ error: 'Regular season not found' }, { status: 404 });
+  }
+
+  const gauntletSeason = await getLinkedGauntlet(regularSeason.name);
+  if (!gauntletSeason) {
+    return NextResponse.json({ error: 'This season has no gauntlet to reset' }, { status: 404 });
+  }
+
+  const rounds = await getGauntletRounds(gauntletSeason.id);
+  const started = rounds.some((r) => r.matches.some((m) => isPlayedScore(m.final_score)));
+  if (started) {
+    return NextResponse.json({ error: 'This gauntlet has already started — it cannot be reset' }, { status: 409 });
+  }
+
+  try {
+    await deleteGauntletSeason(supabaseAdmin, gauntletSeason.id);
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
 }

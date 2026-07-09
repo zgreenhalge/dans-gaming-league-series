@@ -215,6 +215,44 @@ export async function persistAndMaterializeBracket(
   }
 }
 
+/** Deletes a gauntlet season and everything materialized under it: pods/slots (cascade),
+ * player_match_stats, matches, weeks, and the season row itself. Used both to clean up a failed
+ * bracket build and to let an admin reset a gauntlet that hasn't started play yet — callers are
+ * responsible for verifying it's safe to delete (e.g. no played matches) before calling this. */
+export async function deleteGauntletSeason(supabaseAdmin: SupabaseClient, gauntletSeasonId: number): Promise<void> {
+  const { error: podsErr } = await supabaseAdmin.from('gauntlet_pods').delete().eq('season_id', gauntletSeasonId);
+  if (podsErr) throw podsErr;
+
+  const { data: weekRows, error: weekSelErr } = await supabaseAdmin
+    .from('weeks')
+    .select('id')
+    .eq('season_id', gauntletSeasonId);
+  if (weekSelErr) throw weekSelErr;
+  const weekIds = ((weekRows ?? []) as { id: number }[]).map((w) => w.id);
+
+  if (weekIds.length > 0) {
+    const { data: matchRows, error: matchSelErr } = await supabaseAdmin
+      .from('matches')
+      .select('id')
+      .in('week_id', weekIds);
+    if (matchSelErr) throw matchSelErr;
+    const matchIds = ((matchRows ?? []) as { id: number }[]).map((m) => m.id);
+
+    if (matchIds.length > 0) {
+      const { error: statsErr } = await supabaseAdmin.from('player_match_stats').delete().in('match_id', matchIds);
+      if (statsErr) throw statsErr;
+      const { error: matchDelErr } = await supabaseAdmin.from('matches').delete().in('id', matchIds);
+      if (matchDelErr) throw matchDelErr;
+    }
+
+    const { error: weekDelErr } = await supabaseAdmin.from('weeks').delete().in('id', weekIds);
+    if (weekDelErr) throw weekDelErr;
+  }
+
+  const { error: seasonDelErr } = await supabaseAdmin.from('seasons').delete().eq('id', gauntletSeasonId);
+  if (seasonDelErr) throw seasonDelErr;
+}
+
 /** Called from the score route's post-commit hook for every gauntlet match. No-op if the match
  * isn't part of a pod, if the pod's other match isn't played yet, or if the pod is the final
  * (nobody advances from it — canonicalGauntletRankMap computes the podium on read). */
