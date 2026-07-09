@@ -20,6 +20,7 @@ import SeasonTabView from '@/components/SeasonTabView';
 import CombinedSeasonTabView from '@/components/CombinedSeasonTabView';
 import type { Season } from '@/lib/types';
 import SeasonStartDateButton from '@/components/SeasonStartDateButton';
+import MarkSeasonActiveButton from '@/components/MarkSeasonActiveButton';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 import { seasonTitle } from '@/lib/util';
@@ -211,11 +212,16 @@ export default async function SeasonPage({
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5">
             {leaderboard.length} players · {matchCount} matches · {schedule.length} weeks
           </div>
-          <div className="mt-2">
+          <div className="mt-2 flex items-center gap-3 flex-wrap">
             <SeasonStartDateButton
               seasonId={season.id}
               startDate={season.start_date}
               canEdit={isAdmin && season.status !== 'ARCHIVED'}
+              seasonStatus={season.status}
+            />
+            <MarkSeasonActiveButton
+              seasonId={season.id}
+              canEdit={isAdmin}
               seasonStatus={season.status}
             />
           </div>

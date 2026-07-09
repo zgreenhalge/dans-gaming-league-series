@@ -2,7 +2,7 @@
 
 import { MatchCard } from './MatchCard';
 import { PlayerName } from './PlayerName';
-import { isPlayedScore, canonicalGauntletRankMap } from '@/lib/util';
+import { isPlayedScore, canonicalGauntletRankMap, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
 import type { GauntletRound, GauntletMatch } from '@/lib/queries';
 
 function computeGauntletRecords(matches: GauntletMatch[]) {
@@ -26,6 +26,28 @@ function computeGauntletRecords(matches: GauntletMatch[]) {
   return Array.from(records.values()).sort(
     (a, b) => b.wins - a.wins || a.name.localeCompare(b.name),
   );
+}
+
+/** Groups a round's matches back into their pods (2 matches each), preserving match order.
+ * Matches with no linked pod (gauntlets predating bracket scheduling) each stand alone with no
+ * stakes label. */
+function groupMatchesByPod(matches: GauntletMatch[]) {
+  const groups: { pod_index: number | null; advance_rule: GauntletMatch['advance_rule']; matches: GauntletMatch[] }[] = [];
+  const byPodIndex = new Map<number, (typeof groups)[number]>();
+  for (const m of matches) {
+    if (m.pod_index == null) {
+      groups.push({ pod_index: null, advance_rule: null, matches: [m] });
+      continue;
+    }
+    let g = byPodIndex.get(m.pod_index);
+    if (!g) {
+      g = { pod_index: m.pod_index, advance_rule: m.advance_rule, matches: [] };
+      byPodIndex.set(m.pod_index, g);
+      groups.push(g);
+    }
+    g.matches.push(m);
+  }
+  return groups;
 }
 
 function GauntletRoundCard({
@@ -80,23 +102,36 @@ function GauntletRoundCard({
 
       {isOpen && (
         <>
-          {round.matches.map((m, i) => {
-            const played = isPlayedScore(m.final_score);
-            return (
-              <MatchCard
-                key={m.id}
-                href={`/matches/${m.id}`}
-                map={m.shirts_pick ?? m.picked_map}
-                label={{ type: 'game', gameNumber: i + 1 }}
-                right={played ? { type: 'score', score: m.final_score! } : { type: 'pending' }}
-                shirtsStats={m.shirts_stats}
-                skinsStats={m.skins_stats}
-                shirtsFallback={m.shirts_stats.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
-                skinsFallback={m.skins_stats.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
-                currentPlayerId={currentPlayerId}
-              />
-            );
-          })}
+          {(() => {
+            let gameNumber = 0;
+            return groupMatchesByPod(round.matches).map((group, gi) => (
+              <div key={group.pod_index ?? `solo-${gi}`}>
+                {!isFinalRound && group.advance_rule && (
+                  <div className="px-4 py-1.5 font-mono text-[11px] text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-tertiary)]">
+                    {GAUNTLET_POD_STAKES_LABEL[group.advance_rule]}
+                  </div>
+                )}
+                {group.matches.map((m) => {
+                  gameNumber++;
+                  const played = isPlayedScore(m.final_score);
+                  return (
+                    <MatchCard
+                      key={m.id}
+                      href={`/matches/${m.id}`}
+                      map={m.shirts_pick ?? m.picked_map}
+                      label={{ type: 'game', gameNumber }}
+                      right={played ? { type: 'score', score: m.final_score! } : { type: 'pending' }}
+                      shirtsStats={m.shirts_stats}
+                      skinsStats={m.skins_stats}
+                      shirtsFallback={m.shirts_stats.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
+                      skinsFallback={m.skins_stats.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
+                      currentPlayerId={currentPlayerId}
+                    />
+                  );
+                })}
+              </div>
+            ));
+          })()}
 
           {records.length > 0 && (
             <div className="border-t-2 border-[var(--color-border-primary)] px-4 py-3 bg-[var(--color-bg-secondary)]">

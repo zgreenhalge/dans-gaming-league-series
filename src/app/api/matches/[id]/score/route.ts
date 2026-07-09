@@ -8,6 +8,8 @@ import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import { triggerRatingRecompute } from '@/lib/ehog-recompute';
 import { parseEliminationWarning } from '@/lib/parsers/rosterResolver';
 import { persistSabremetrics, clearSabremetrics } from '@/lib/demo/sabremetrics';
+import { resolveAndPropagate } from '@/lib/gauntlet-engine';
+import { checkSeasonCompletion, checkGauntletCompletion } from '@/lib/season-lifecycle';
 import type { DemoSabremetricStat, RoundHistoryEntry } from '@/lib/types';
 
 const supabaseAdmin = getAdminClient();
@@ -32,6 +34,7 @@ type MatchRow = {
   shirts_pick: string | null;
   skins_starting_side: string | null;
   weeks: {
+    season_id: number;
     seasons: {
       is_gauntlet: boolean;
     };
@@ -147,7 +150,7 @@ export async function PATCH(
     supabaseAdmin
       .from('matches')
       .select(
-        'id, final_score, is_playoff_game, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(seasons(is_gauntlet))',
+        'id, final_score, is_playoff_game, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(season_id, seasons(is_gauntlet))',
       )
       .eq('id', matchId)
       .maybeSingle(),
@@ -163,6 +166,7 @@ export async function PATCH(
   }
 
   const m = matchRow as unknown as MatchRow;
+  const isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
   const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
   const allStats = (matchStats ?? []) as { player_id: number; faction: string }[];
   const isInMatch = allStats.some((s) => s.player_id === playerId);
@@ -316,6 +320,40 @@ export async function PATCH(
   }
 
   after(() => triggerRatingRecompute());
+
+  // Gauntlet bracket advancement: resolve this match's pod, propagate the survivor(s) into
+  // downstream slots, and materialize the next pod once all four of its slots are filled.
+  // Best-effort in `after()` — a hook failure must never roll back the committed score.
+  if (isGauntlet) {
+    after(async () => {
+      try {
+        await resolveAndPropagate(supabaseAdmin, matchId);
+      } catch (err) {
+        console.error(`gauntlet propagate(${matchId}) failed:`, err);
+      }
+    });
+    // Gauntlet completion: once the final round is fully played, archive the gauntlet and its
+    // paired regular season together. Independent try/catch from propagation above — a
+    // completion-check failure shouldn't be masked by (or mask) a propagation failure.
+    after(async () => {
+      try {
+        await checkGauntletCompletion(supabaseAdmin, m.weeks.season_id);
+      } catch (err) {
+        console.error(`gauntlet completion check(${m.weeks.season_id}) failed:`, err);
+      }
+    });
+  } else {
+    // Regular-season completion: if this score means every match in the season has now been
+    // played, mark it COMPLETED and best-effort seed its linked gauntlet from final standings.
+    // Best-effort in `after()` — a hook failure must never roll back the committed score.
+    after(async () => {
+      try {
+        await checkSeasonCompletion(supabaseAdmin, m.weeks.season_id);
+      } catch (err) {
+        console.error(`season completion check(${m.weeks.season_id}) failed:`, err);
+      }
+    });
+  }
 
   // Learn steam ids from elimination-resolved players: if the confirm forwarded parser warnings and
   // exactly one player was matched by elimination, persist that demo's steam id/nickname onto the

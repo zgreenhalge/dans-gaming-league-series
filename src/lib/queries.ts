@@ -1346,6 +1346,10 @@ export interface GauntletMatch {
   skins_starting_side: 'CT' | 'T' | null;
   shirts_stats: GauntletPlayerStat[];
   skins_stats: GauntletPlayerStat[];
+  /** The pod this match belongs to — null for gauntlets predating the bracket-scheduling feature
+   * (historical CSV imports), which have no `gauntlet_pods` rows at all. */
+  pod_index: number | null;
+  advance_rule: 'single' | 'wildcard' | null;
 }
 
 export interface GauntletRound {
@@ -1461,6 +1465,34 @@ export async function getGauntletSeasonLeaderboard(
     .sort(canonicalSort);
 }
 
+/** The gauntlet pod a match belongs to, if any — null for non-gauntlet matches and for gauntlets
+ * predating the bracket-scheduling feature (no gauntlet_pods rows). Used to show the pod stakes
+ * label on the match detail page. */
+export async function getGauntletPodForMatch(
+  matchId: number,
+): Promise<{ advance_rule: 'single' | 'wildcard'; is_final: boolean } | null> {
+  const { data, error } = await supabase
+    .from('gauntlet_pods')
+    .select('advance_rule, is_final')
+    .or(`match1_id.eq.${matchId},match2_id.eq.${matchId}`)
+    .maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as { advance_rule: 'single' | 'wildcard'; is_final: boolean } | null;
+}
+
+/** Whether a gauntlet season has any `gauntlet_pods` rows at all — false for a hand-built gauntlet
+ * (created via the manual shell route, matches added directly with no pod graph), true for one
+ * built by `buildGauntletBracket`, seeded or not. Used to route a returning admin to the right
+ * builder UI (automated seed/reset vs. manual match adding). */
+export async function gauntletHasPods(seasonId: number): Promise<boolean> {
+  const { count, error } = await supabase
+    .from('gauntlet_pods')
+    .select('id', { count: 'exact', head: true })
+    .eq('season_id', seasonId);
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
 /** Fetches all matches for a gauntlet season and groups them into rounds by week_number. */
 export async function getGauntletRounds(seasonId: number): Promise<GauntletRound[]> {
   const { data: weeks, error: wErr } = await supabase
@@ -1484,14 +1516,27 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
   if (matchRows.length === 0) return [];
 
   const matchIds = matchRows.map((m) => m.id);
-  const [{ data: stats, error: sErr }, players] = await Promise.all([
+  const [{ data: stats, error: sErr }, players, { data: pods, error: pErr }] = await Promise.all([
     supabase
       .from('player_match_stats')
       .select('match_id, player_id, faction, kills, assists, deaths, adr, is_win')
       .in('match_id', matchIds),
     getPlayersById(),
+    supabase
+      .from('gauntlet_pods')
+      .select('pod_index, advance_rule, match1_id, match2_id')
+      .eq('season_id', seasonId),
   ]);
   if (sErr) throw sErr;
+  if (pErr) throw pErr;
+
+  // Absent for gauntlets predating the bracket-scheduling feature (historical CSV imports have no
+  // gauntlet_pods rows at all) — GauntletMatch.pod_index/advance_rule stay null for those.
+  const podByMatchId = new Map<number, { pod_index: number; advance_rule: 'single' | 'wildcard' }>();
+  for (const p of (pods ?? []) as { pod_index: number; advance_rule: 'single' | 'wildcard'; match1_id: number | null; match2_id: number | null }[]) {
+    if (p.match1_id != null) podByMatchId.set(p.match1_id, { pod_index: p.pod_index, advance_rule: p.advance_rule });
+    if (p.match2_id != null) podByMatchId.set(p.match2_id, { pod_index: p.pod_index, advance_rule: p.advance_rule });
+  }
 
   type RawStat = {
     match_id: number;
@@ -1536,6 +1581,7 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
     );
     const gauntletMatches: GauntletMatch[] = weekMatches.map((m) => {
       const allStats = statsByMatch.get(m.id) ?? [];
+      const pod = podByMatchId.get(m.id) ?? null;
       return {
         id: m.id,
         match_number: m.match_number,
@@ -1545,6 +1591,8 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
         skins_starting_side: m.skins_starting_side,
         shirts_stats: allStats.filter((s) => s.faction === 'SHIRTS'),
         skins_stats: allStats.filter((s) => s.faction === 'SKINS'),
+        pod_index: pod?.pod_index ?? null,
+        advance_rule: pod?.advance_rule ?? null,
       };
     });
     rounds.push({ round_number: week.week_number, matches: gauntletMatches });

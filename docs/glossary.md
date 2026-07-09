@@ -60,6 +60,13 @@ so you don't have to reverse-engineer them from scratch each time.
   matched **by name, not ID** (e.g. "Season 5" ↔ "Season 5 Gauntlet"). Always go through
   `extractSeasonNumber()` / `buildRegularToGauntletMap()` in `src/lib/util.ts`, or the
   `getLinkedGauntlet()` / `getLinkedRegularSeason()` query helpers — never assume adjacent IDs.
+- **Pod** — the atomic unit of a gauntlet bracket: 4 players, 2 games, two distinct partner
+  pairings (guaranteeing exactly one 2-0 and one 0-2 regardless of results). A pod's
+  `advance_rule` is `single` (only the 2-0 survives) or `wildcard` (only the 0-2 is eliminated).
+  Generated deterministically by `buildGauntletBracket(N)` in `src/lib/gauntlet-bracket.ts` and
+  stored as a real FK graph in `gauntlet_pods`/`gauntlet_pod_slots`; materialized into playable
+  `matches` rows by `src/lib/gauntlet-engine.ts` as the bracket progresses. See
+  [`architecture.md`](./architecture.md#gauntlet-bracket-scheduling).
 - **H2H (Head-to-Head)** — cross-player comparison surfaced in `getH2HData()`. Two distinct shapes
   live inside `H2HData` (`src/lib/queries.ts`):
   - **Duos** (`DuoStats`) — performance when two players are *teammates* (same faction)
@@ -106,6 +113,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | H2H overview grid / drill-down | `src/components/H2HMatrix.tsx`, `src/components/MatchupDetail.tsx` |
 | Pre-match prep view | `src/components/ScoutingReport.tsx` |
 | Gauntlet bracket rendering | `src/components/GauntletRoundsList.tsx`, `src/components/GauntletStandings.tsx` |
+| Gauntlet bracket generation + advancement engine | `src/lib/gauntlet-bracket.ts`, `src/lib/gauntlet-engine.ts` |
 | Career vs per-season stat views | `src/components/CareerStatsView.tsx`, `src/components/SeasonTabView.tsx`, `src/components/CombinedSeasonTabView.tsx` |
 | Pages (routes) | `src/app/**` — see the route table in [`architecture.md`](./architecture.md) |
 | Historical CSV ingestion (Python, not deployed) | `ingestion/` |
