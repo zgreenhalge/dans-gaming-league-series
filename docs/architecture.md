@@ -160,25 +160,34 @@ it (`deleteGauntletSeason()` in `gauntlet-engine.ts`, also reused to clean up a 
 freeing the regular season to have its bracket rebuilt from scratch. `/admin/seasons/gauntlet`
 surfaces build, seed, and reset together, one row per season, based on where it is in that lifecycle.
 
-### Regular-season status lifecycle
+### Season status lifecycle
 
-`seasons.status` (`UPCOMING`/`ACTIVE`/`COMPLETED`/`ARCHIVED`) has exactly one automatic and one
-admin-triggered transition, both in `src/lib/season-lifecycle.ts`:
+`seasons.status` (`UPCOMING`/`ACTIVE`/`COMPLETED`/`ARCHIVED`) applies to both regular and gauntlet
+season rows and has one admin-triggered and two automatic transitions, all in
+`src/lib/season-lifecycle.ts`:
 
-- **`UPCOMING` → `ACTIVE`** ("go live") is an explicit admin action —
+- **`UPCOMING` → `ACTIVE`** ("go live", regular seasons only) is an explicit admin action —
   `PATCH /api/seasons/[id]/status` (`{ status: 'ACTIVE' }`), surfaced as the "Mark Active" button
   next to the start-date control on a season's page (`MarkSeasonActiveButton.tsx`). `activateSeason()`
   flips the status, then best-effort calls `tryBuildGauntletShape()` — a build failure never blocks
   the season going live.
-- **`ACTIVE` → `COMPLETED`** is fully automatic — `checkSeasonCompletion()` runs from a non-fatal
-  hook on `PATCH /api/matches/[id]/score` for every non-gauntlet match. If the score just committed
-  means every match in that season (via `weeks.season_id`) now has a played score, the season flips
-  to `COMPLETED` and `trySeedGauntlet()` runs best-effort against final standings. A season with no
-  matches yet, or with any match still unplayed, is never "fully played" — nothing fires until the
-  literal last match is scored.
+- **`ACTIVE` → `COMPLETED`** (regular seasons) is fully automatic — `checkSeasonCompletion()` runs
+  from a non-fatal hook on `PATCH /api/matches/[id]/score` for every non-gauntlet match. If the
+  score just committed means every match in that season (via `weeks.season_id`) now has a played
+  score, the season flips to `COMPLETED` and `trySeedGauntlet()` runs best-effort against final
+  standings. A season with no matches yet, or with any match still unplayed, is never "fully
+  played" — nothing fires until the literal last match is scored.
+- **`→ ARCHIVED`** (gauntlet seasons, cascading to their paired regular season) is also fully
+  automatic — `checkGauntletCompletion()` runs from a non-fatal hook on every gauntlet match score.
+  Once the gauntlet's final round (the max `round_number`, per `canonicalGauntletRankMap`'s
+  contract) is fully played, it archives the gauntlet season and, via `getLinkedRegularSeason()`,
+  its paired regular season too — regardless of the regular season's current status. A season isn't
+  fully "in the books" until its playoffs conclude, so `ARCHIVED` is reached through the gauntlet,
+  not the regular season's own match completion.
 
-There is no admin path to `ARCHIVED` today (still an out-of-band/manual step), and no automatic
-`UPCOMING → ACTIVE` trigger — a season only goes live when an admin says so.
+Gauntlet seasons are born `ACTIVE` at creation and have no `UPCOMING` phase or admin-triggered
+transition of their own — `ACTIVE → ARCHIVED` is their entire lifecycle, driven by
+`checkGauntletCompletion()` alone.
 
 ## Data Ingestion
 

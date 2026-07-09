@@ -9,7 +9,7 @@ import { triggerRatingRecompute } from '@/lib/ehog-recompute';
 import { parseEliminationWarning } from '@/lib/parsers/rosterResolver';
 import { persistSabremetrics, clearSabremetrics } from '@/lib/demo/sabremetrics';
 import { resolveAndPropagate } from '@/lib/gauntlet-engine';
-import { checkSeasonCompletion } from '@/lib/season-lifecycle';
+import { checkSeasonCompletion, checkGauntletCompletion } from '@/lib/season-lifecycle';
 import type { DemoSabremetricStat, RoundHistoryEntry } from '@/lib/types';
 
 const supabaseAdmin = getAdminClient();
@@ -330,6 +330,16 @@ export async function PATCH(
         await resolveAndPropagate(supabaseAdmin, matchId);
       } catch (err) {
         console.error(`gauntlet propagate(${matchId}) failed:`, err);
+      }
+    });
+    // Gauntlet completion: once the final round is fully played, archive the gauntlet and its
+    // paired regular season together. Independent try/catch from propagation above — a
+    // completion-check failure shouldn't be masked by (or mask) a propagation failure.
+    after(async () => {
+      try {
+        await checkGauntletCompletion(supabaseAdmin, m.weeks.season_id);
+      } catch (err) {
+        console.error(`gauntlet completion check(${m.weeks.season_id}) failed:`, err);
       }
     });
   } else {

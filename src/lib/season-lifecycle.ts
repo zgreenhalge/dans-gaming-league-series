@@ -1,15 +1,20 @@
 /**
- * Regular-season status transitions and their gauntlet side effects. `seasons.status` has no
- * automatic transitions anywhere else in the app — UPCOMING -> ACTIVE is an explicit admin action
- * (`activateSeason`), ACTIVE -> COMPLETED is automatic, detected from the score route once every
- * match in the season has been played (`checkSeasonCompletion`). Both side effects
- * (build/seed the linked gauntlet) are best-effort: a failure here never blocks the status
- * transition that triggered it.
+ * Season status transitions and their gauntlet side effects, for both regular and gauntlet season
+ * rows. UPCOMING -> ACTIVE is an explicit admin action (`activateSeason`); every other transition
+ * is automatic, detected from the score route:
+ *   - ACTIVE -> COMPLETED once every match in a regular season has been played
+ *     (`checkSeasonCompletion`), which also best-effort seeds its linked gauntlet.
+ *   - -> ARCHIVED once a gauntlet's final round has been fully played
+ *     (`checkGauntletCompletion`) — archives the gauntlet *and* its paired regular season
+ *     together, since a season isn't fully "in the books" until its playoffs conclude.
+ * All side effects are best-effort: a failure here never blocks the status transition that
+ * triggered it.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isPlayedScore } from './util';
 import { tryBuildGauntletShape, trySeedGauntlet } from './gauntlet-engine';
+import { getGauntletRounds, getLinkedRegularSeason } from './queries';
 
 /** Transitions a regular season UPCOMING -> ACTIVE, then best-effort builds its gauntlet bracket
  * shape (sized from the roster at go-live time — see `tryBuildGauntletShape`). Throws only if the
@@ -67,5 +72,38 @@ export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seaso
     await trySeedGauntlet(supabaseAdmin, seasonId);
   } catch (err) {
     console.error(`gauntlet auto-seed(season ${seasonId}) failed:`, err);
+  }
+}
+
+/** Called from the score route's post-commit hook for every gauntlet match. Once the gauntlet's
+ * final round has been fully played, archives the gauntlet season and — if a paired regular season
+ * exists — archives it too, regardless of its current status. Idempotent: no-ops once the gauntlet
+ * is already ARCHIVED, or if its final round isn't fully played yet. */
+export async function checkGauntletCompletion(supabaseAdmin: SupabaseClient, gauntletSeasonId: number): Promise<void> {
+  const { data: seasonRow, error: seasonErr } = await supabaseAdmin
+    .from('seasons')
+    .select('name, status, is_gauntlet')
+    .eq('id', gauntletSeasonId)
+    .maybeSingle();
+  if (seasonErr) throw seasonErr;
+  const season = seasonRow as { name: string; status: string; is_gauntlet: boolean } | null;
+  if (!season || !season.is_gauntlet || season.status === 'ARCHIVED') return;
+
+  const rounds = await getGauntletRounds(gauntletSeasonId);
+  if (rounds.length === 0) return;
+  const finalRound = rounds.reduce((max, r) => (r.round_number > max.round_number ? r : max));
+  const finalPlayed = finalRound.matches.length > 0 && finalRound.matches.every((m) => isPlayedScore(m.final_score));
+  if (!finalPlayed) return;
+
+  const { error: gauntletUpdErr } = await supabaseAdmin
+    .from('seasons')
+    .update({ status: 'ARCHIVED' })
+    .eq('id', gauntletSeasonId);
+  if (gauntletUpdErr) throw gauntletUpdErr;
+
+  const regularSeason = await getLinkedRegularSeason(season.name);
+  if (regularSeason) {
+    const { error: regUpdErr } = await supabaseAdmin.from('seasons').update({ status: 'ARCHIVED' }).eq('id', regularSeason.id);
+    if (regUpdErr) throw regUpdErr;
   }
 }
