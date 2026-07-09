@@ -7,6 +7,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import { triggerRatingRecompute } from '@/lib/ehog-recompute';
 import { parseEliminationWarning } from '@/lib/parsers/rosterResolver';
+import { persistSabremetrics, clearSabremetrics } from '@/lib/demo/sabremetrics';
 import type { DemoSabremetricStat, RoundHistoryEntry } from '@/lib/types';
 
 const supabaseAdmin = getAdminClient();
@@ -306,38 +307,9 @@ export async function PATCH(
   // Sabremetrics: upsert or clean up (non-fatal — never rolls back the committed score)
   try {
     if (sabremetrics && sabremetrics.length > 0) {
-      const { data: pmsRows } = await supabaseAdmin
-        .from('player_match_stats')
-        .select('id, player_id')
-        .eq('match_id', matchId);
-      const pmsById = new Map(
-        ((pmsRows ?? []) as { id: number; player_id: number }[]).map((r) => [r.player_id, r.id]),
-      );
-
-      const sabRows = sabremetrics
-        .map((s) => {
-          const pmsId = pmsById.get(s.player_id);
-          if (!pmsId) return null;
-          return { player_match_stats_id: pmsId, ...s.sabremetrics };
-        })
-        .filter((r): r is NonNullable<typeof r> => r !== null);
-
-      if (sabRows.length > 0) {
-        await supabaseAdmin
-          .from('player_match_sabremetrics')
-          .upsert(sabRows, { onConflict: 'player_match_stats_id' });
-      }
+      await persistSabremetrics(matchId, sabremetrics);
     } else {
-      const { data: ids } = await supabaseAdmin
-        .from('player_match_stats')
-        .select('id')
-        .eq('match_id', matchId);
-      if (ids && ids.length > 0) {
-        await supabaseAdmin
-          .from('player_match_sabremetrics')
-          .delete()
-          .in('player_match_stats_id', (ids as { id: number }[]).map((r) => r.id));
-      }
+      await clearSabremetrics(matchId);
     }
   } catch (e) {
     console.error('Sabremetrics write/delete failed (non-fatal):', e);
