@@ -39,6 +39,11 @@ const TOOLS: { href: string; title: string; desc: string }[] = [
     title: 'Create Season',
     desc: 'Start a new regular season with its map pool.',
   },
+  {
+    href: '/admin/seasons/gauntlet',
+    title: 'Start Gauntlet',
+    desc: 'Build the single-elimination bracket for an active season.',
+  },
 ];
 
 export default async function AdminHubPage() {
