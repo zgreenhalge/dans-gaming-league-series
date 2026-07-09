@@ -74,7 +74,9 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `PATCH` | `/api/seasons/[id]/status` | Transition a regular season `UPCOMING` → `ACTIVE` ("go live"); best-effort builds its gauntlet shape (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet` | Create the paired gauntlet season for an active regular season and build its bracket *shape* — unseeded, nothing materialized (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet/seed` | Seed an existing shape from the season's current leaderboard order and materialize round 1 (admin only) |
-| `DELETE` | `/api/seasons/[id]/gauntlet` | Reset an unplayed gauntlet (seeded or not) — deletes it and everything materialized under it, refuses if any match has a score (admin only) |
+| `DELETE` | `/api/seasons/[id]/gauntlet` | Reset a gauntlet — deletes it and everything materialized under it; refuses if any match has a score unless `{ force: true }` is passed (admin only) |
+| `POST` | `/api/seasons/[id]/gauntlet/manual` | Create an empty gauntlet season shell with no bracket shape, for hand-building outside `buildGauntletBracket` (admin only) |
+| `POST` | `/api/seasons/[id]/gauntlet/matches` | Hand-create a single match under a gauntlet season's given round, bypassing `gauntlet_pods` entirely (admin only) |
 | `PATCH` | `/api/players/[id]` | Edit a player — display name, `is_admin` (can't demote yourself), or Steam link (unlink / set SteamID64) (admin only) |
 | `POST` | `/api/ehog/recompute/trigger` | Admin-gated "recompute EHOG ratings now" — fires the full rating walk in the background (admin only) |
 | `GET/POST` | `/api/players/register` | List unlinked players / link a Steam account to a player record |
@@ -157,8 +159,28 @@ the "pod stakes" label shown on the round list and match page (`GAUNTLET_POD_STA
 `DELETE /api/seasons/[id]/gauntlet` reverses either step — it refuses once any of the gauntlet's
 matches has a played score, otherwise deletes the gauntlet season and everything materialized under
 it (`deleteGauntletSeason()` in `gauntlet-engine.ts`, also reused to clean up a failed build),
-freeing the regular season to have its bracket rebuilt from scratch. `/admin/seasons/gauntlet`
-surfaces build, seed, and reset together, one row per season, based on where it is in that lifecycle.
+freeing the regular season to have its bracket rebuilt from scratch. Pass `{ force: true }` to
+delete anyway even if matches have been played — there is no undo, so the admin UI (below) requires
+typing the gauntlet's name to confirm. If the gauntlet had already archived its paired regular
+season (see "Season status lifecycle"), deleting it reverts that season back to `COMPLETED` — an
+archived season with no gauntlet behind it is a dead end. `/admin/seasons/gauntlet` surfaces build,
+seed, and reset together, one row per season, based on where it is in that lifecycle.
+
+#### Manual bracket construction
+
+For league sizes outside `buildGauntletBracket`'s supported range (4–20) or a bracket shape the
+generator doesn't produce, `POST /api/seasons/[id]/gauntlet/manual` creates the paired gauntlet
+season with **no** `gauntlet_pods` rows at all (`createManualGauntletShell()`), and
+`POST /api/seasons/[id]/gauntlet/matches` (`createManualGauntletMatch()`) hand-creates individual
+matches directly under a given `round_number` — no pairing invariant, no `gauntlet_pods` linkage, no
+propagation. Every other read/write path treats a manual gauntlet identically to an automated one:
+`getGauntletRounds()` groups by `week_number` regardless of how a match was created,
+`canonicalGauntletRankMap()` only ever reads round numbers and match results, and
+`checkGauntletCompletion()` archives a manual gauntlet the same way once its highest-numbered round
+is fully played. `gauntletHasPods()` in `queries.ts` is how the admin UI (and any other caller)
+tells a manual gauntlet apart from an automated one. `/admin/seasons/gauntlet/manual/[id]` is the
+builder page (`id` = the regular season's id) — pick four players and a round number, add as many
+matches as needed.
 
 ### Season status lifecycle
 
