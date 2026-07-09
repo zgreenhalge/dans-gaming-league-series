@@ -19,6 +19,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { r2, R2_BUCKET, demoKey } from '@/lib/r2';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
 import { teardownMatchServer } from '@/lib/dathost-lifecycle';
+import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { machineSecretGuard } from '@/lib/machine-auth';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '@/lib/demo/ingestResult';
 
@@ -131,8 +132,10 @@ export async function POST(req: NextRequest) {
     after(async () => {
       try {
         await teardownMatchServer(supabaseAdmin, matchId, { onlyIfOwnsServer: true });
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'server_teardown');
       } catch (err) {
         console.error(`notify auto-teardown(${matchId}) failed:`, err);
+        await recordOpsError(supabaseAdmin, 'match', matchId, 'server_teardown', `Server teardown failed: ${(err as Error).message}`);
       }
     });
   }

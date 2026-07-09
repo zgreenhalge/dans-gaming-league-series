@@ -10,6 +10,7 @@ import { parseEliminationWarning } from '@/lib/parsers/rosterResolver';
 import { persistSabremetrics, clearSabremetrics } from '@/lib/demo/sabremetrics';
 import { resolveAndPropagate } from '@/lib/gauntlet-engine';
 import { checkSeasonCompletion, checkGauntletCompletion } from '@/lib/season-lifecycle';
+import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import type { DemoSabremetricStat, RoundHistoryEntry } from '@/lib/types';
 
 const supabaseAdmin = getAdminClient();
@@ -315,11 +316,13 @@ export async function PATCH(
     } else {
       await clearSabremetrics(matchId);
     }
+    await clearOpsError(supabaseAdmin, 'match', matchId, 'sabremetrics_persist');
   } catch (e) {
     console.error('Sabremetrics write/delete failed (non-fatal):', e);
+    await recordOpsError(supabaseAdmin, 'match', matchId, 'sabremetrics_persist', `Sabremetrics write failed: ${(e as Error).message}`);
   }
 
-  after(() => triggerRatingRecompute());
+  after(() => triggerRatingRecompute(supabaseAdmin));
 
   // Gauntlet bracket advancement: resolve this match's pod, propagate the survivor(s) into
   // downstream slots, and materialize the next pod once all four of its slots are filled.
@@ -364,8 +367,10 @@ export async function PATCH(
     after(async () => {
       try {
         await applyEliminationSteamIds(matchId, warnings as string[]);
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'steam_id_learn');
       } catch (err) {
         console.error(`learn steam id(${matchId}) failed:`, err);
+        await recordOpsError(supabaseAdmin, 'match', matchId, 'steam_id_learn', `Learn steam id failed: ${(err as Error).message}`);
       }
     });
   }
@@ -377,8 +382,10 @@ export async function PATCH(
     after(async () => {
       try {
         await teardownMatchServer(supabaseAdmin, matchId, { onlyIfOwnsServer: true });
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'server_teardown');
       } catch (err) {
         console.error(`auto-teardown(${matchId}) failed:`, err);
+        await recordOpsError(supabaseAdmin, 'match', matchId, 'server_teardown', `Server teardown failed: ${(err as Error).message}`);
       }
     });
   }
