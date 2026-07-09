@@ -1,10 +1,10 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/og';
 import { projectRatingDeltas, type RatingProjection } from '@/lib/ehog';
-import { isPlayedScore, parseScore } from '@/lib/util';
+import { isPlayedScore, parseScore, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
 import { TopbarShell } from '@/components/TopbarShell';
@@ -122,7 +122,7 @@ export default async function MatchPage({
 
   const showScouting = shirts.length === 2 && skins.length === 2;
   const key = makeDemoKey(matchId);
-  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds] = await Promise.all([
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod] = await Promise.all([
     showScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     showScouting
       ? getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true })
@@ -138,6 +138,7 @@ export default async function MatchPage({
     played ? getMatchSabremetrics(matchId) : Promise.resolve([]),
     // Match ids on this map — feeds the scouting report's Map Intel heatmap (#128).
     showScouting && map ? getMatchIdsForMap(map) : Promise.resolve<number[]>([]),
+    season.is_gauntlet ? getGauntletPodForMatch(matchId) : Promise.resolve(null),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
 
@@ -250,6 +251,11 @@ export default async function MatchPage({
       <div className="centering">
         {match.is_feature_match && <FeatureMatchBanner />}
         {scheduleCollision && <SchedulingOverlapBanner conflict={scheduleCollision} />}
+        {gauntletPod && !gauntletPod.is_final && (
+          <div className="font-mono text-[11px] text-[var(--color-text-secondary)] text-center py-2">
+            {GAUNTLET_POD_STAKES_LABEL[gauntletPod.advance_rule]}
+          </div>
+        )}
       </div>
       <Topbar seasonId={season.id} seasonName={season.name} weekNumber={week.week_number} matchNumber={match.match_number} isGauntlet={season.is_gauntlet} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
