@@ -5,7 +5,7 @@
 // duplicate mutation logic). Score + stats editing intentionally stays on the match page (it's one
 // coupled operation via /score).
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { isPlayedScore } from '@/lib/util';
 import type { AdminMatchRow } from '@/lib/queries';
@@ -13,6 +13,8 @@ import type { ScheduledMatchRef } from '@/lib/schedule';
 import VetoSequence from './VetoSequence';
 import { ScheduleEditor } from './ScheduleEditor';
 import { FeatureMatchToggle } from './FeatureMatchToggle';
+import { ReparseDemoButton } from './ReparseDemoButton';
+import { BulkReparseButton } from './BulkReparseButton';
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -46,6 +48,16 @@ function searchText(m: AdminMatchRow): string {
 export function MatchManager({ matches }: { matches: AdminMatchRow[] }) {
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<number | null>(null);
+  const [demoMatchIds, setDemoMatchIds] = useState<Set<number> | null>(null);
+
+  useEffect(() => {
+    fetch('/api/admin/matches/demo-list')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((j: { matchIds?: number[] } | null) => {
+        if (j?.matchIds) setDemoMatchIds(new Set(j.matchIds));
+      })
+      .catch(() => {});
+  }, []);
 
   // All unplayed, non-gauntlet scheduled matches — the collision pool the schedule editor checks
   // against (built once from the loaded list, so no per-row fetch).
@@ -68,6 +80,8 @@ export function MatchManager({ matches }: { matches: AdminMatchRow[] }) {
 
   return (
     <>
+      {demoMatchIds && <BulkReparseButton matchIds={[...demoMatchIds]} />}
+
       <input
         type="search"
         value={query}
@@ -140,6 +154,13 @@ export function MatchManager({ matches }: { matches: AdminMatchRow[] }) {
                       <SectionLabel>Feature match</SectionLabel>
                       <FeatureMatchToggle matchId={m.match.id} isFeature={m.match.is_feature_match} />
                     </section>
+
+                    {demoMatchIds?.has(m.match.id) && (
+                      <section>
+                        <SectionLabel>Demo</SectionLabel>
+                        <ReparseDemoButton matchId={m.match.id} />
+                      </section>
+                    )}
 
                     <Link
                       href={`/matches/${m.match.id}`}
