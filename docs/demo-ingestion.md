@@ -42,6 +42,22 @@ and it skips if that steam id already belongs to another player. Best-effort —
 stored side), the parser infers it from the demo — see "Starting-side inference" below — so those
 matches still self-derive a score and stats with no manual entry.
 
+## Reparsing an already-confirmed match
+
+Demos are kept in R2 indefinitely (`demoKey(matchId)` is never deleted), so a match can be reparsed at
+any time — most commonly to backfill fields from a sabremetric collector added after the match was
+first confirmed. The admin match console (`/admin/matches`) offers a per-match **reparse demo** button
+and a bulk **reparse all matches with demos** action; both re-dispatch `demo-ingest.yml`
+(`POST /api/matches/[id]/demo/dispatch`) exactly as a first-time parse does.
+
+The Action (`scripts/demo-ingest.ts`) treats a reparse of an already-scored match specially: if the
+freshly derived score matches the match's existing `final_score`, it upserts the refreshed
+sabremetrics directly (via `persistSabremetrics()`, shared with `PATCH /score`) and marks the job
+`confirmed` — no staged review. If the derived score differs from the stored one, it falls through to
+the normal staged-result flow so a human reviews and confirms it, the same as first-time ingestion.
+This means a reparse can change sabremetric fields silently but can never silently change a match's
+recorded score.
+
 ## Sabremetric collectors
 
 `demoOrchestrator.ts` composes one collector per metric family, each in `src/lib/parsers/`:

@@ -1,4 +1,10 @@
-import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  GetObjectCommand,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+} from '@aws-sdk/client-s3';
 
 export const r2 = new S3Client({
   region: 'auto',
@@ -76,4 +82,19 @@ export async function putR2Object(
 /** Delete an R2 object. No-op-safe: deleting a missing key does not throw. */
 export async function deleteR2Object(key: string): Promise<void> {
   await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+}
+
+/** Every match id with an uploaded demo (`<id>/game.dem`), ascending. Paginates the whole bucket. */
+export async function listDemoMatchIds(): Promise<number[]> {
+  const ids = new Set<number>();
+  let token: string | undefined;
+  do {
+    const res = await r2.send(new ListObjectsV2Command({ Bucket: R2_BUCKET, ContinuationToken: token }));
+    for (const obj of res.Contents ?? []) {
+      const m = /^(\d+)\/game\.dem$/.exec(obj.Key ?? '');
+      if (m) ids.add(Number(m[1]));
+    }
+    token = res.IsTruncated ? res.NextContinuationToken : undefined;
+  } while (token);
+  return [...ids].sort((a, b) => a - b);
 }
