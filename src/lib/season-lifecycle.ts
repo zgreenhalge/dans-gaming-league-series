@@ -9,13 +9,27 @@
  *     *and* its paired regular season together, since a season isn't fully "in the books" until
  *     its playoffs conclude.
  * All side effects are best-effort: a failure here never blocks the status transition that
- * triggered it.
+ * triggered it. Every failure (or roster-drift outcome that needs admin attention) is recorded on
+ * `seasons.ops_error` — cleared automatically the next time that same operation succeeds, whether
+ * that's another auto-trigger or a manual retry from the admin UI (`tryBuildGauntletShape` and
+ * `trySeedGauntlet` clear it themselves on success; `deleteGauntletSeason` clears it on reset).
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isPlayedScore } from './util';
 import { tryBuildGauntletShape, trySeedGauntlet } from './gauntlet-engine';
 import { getLinkedRegularSeason } from './queries';
+
+/** Records a best-effort operation's failure (or an outcome that needs admin attention, like a
+ * roster drift) against a season row — best-effort itself, since a failure here shouldn't turn a
+ * secondary logging problem into a thrown error. */
+async function recordOpsError(supabaseAdmin: SupabaseClient, seasonId: number, message: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('seasons')
+    .update({ ops_error: message, ops_error_at: new Date().toISOString() })
+    .eq('id', seasonId);
+  if (error) console.error(`ops-error record failed(season ${seasonId}):`, error);
+}
 
 export interface ActivateSeasonResult {
   gauntletBuilt: boolean;
@@ -26,8 +40,8 @@ export interface ActivateSeasonResult {
 
 /** Transitions a regular season UPCOMING -> ACTIVE, then best-effort builds its gauntlet bracket
  * shape (sized from the roster at go-live time — see `tryBuildGauntletShape`). Throws only if the
- * status update itself fails; a shape-build failure is reported in the return value, not thrown —
- * activation still succeeds either way. */
+ * status update itself fails; a shape-build failure is reported in the return value (and recorded
+ * as an `ops_error`), not thrown — activation still succeeds either way. */
 export async function activateSeason(supabaseAdmin: SupabaseClient, seasonId: number): Promise<ActivateSeasonResult> {
   const { error } = await supabaseAdmin.from('seasons').update({ status: 'ACTIVE' }).eq('id', seasonId);
   if (error) throw error;
@@ -38,10 +52,13 @@ export async function activateSeason(supabaseAdmin: SupabaseClient, seasonId: nu
       return { gauntletBuilt: true, gauntletBuildError: null };
     }
     const reason = result.status === 'not-eligible' ? result.reason : 'A gauntlet already exists for this season';
+    await recordOpsError(supabaseAdmin, seasonId, `Gauntlet build failed: ${reason}`);
     return { gauntletBuilt: false, gauntletBuildError: reason };
   } catch (err) {
     console.error(`gauntlet auto-build(season ${seasonId}) failed:`, err);
-    return { gauntletBuilt: false, gauntletBuildError: (err as Error).message };
+    const message = (err as Error).message;
+    await recordOpsError(supabaseAdmin, seasonId, `Gauntlet build failed: ${message}`);
+    return { gauntletBuilt: false, gauntletBuildError: message };
   }
 }
 
@@ -84,9 +101,17 @@ export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seaso
   if (updErr) throw updErr;
 
   try {
-    await trySeedGauntlet(supabaseAdmin, seasonId);
+    const result = await trySeedGauntlet(supabaseAdmin, seasonId);
+    if (result.status === 'drift') {
+      await recordOpsError(
+        supabaseAdmin,
+        seasonId,
+        `Auto-seed skipped: roster drifted since the bracket was built (shape expects ${result.shapeSeedCount} qualifiers, season now has ${result.currentCount}). Reset and rebuild the bracket.`,
+      );
+    }
   } catch (err) {
     console.error(`gauntlet auto-seed(season ${seasonId}) failed:`, err);
+    await recordOpsError(supabaseAdmin, seasonId, `Auto-seed failed: ${(err as Error).message}`);
   }
 }
 
@@ -112,15 +137,20 @@ export async function checkGauntletCompletion(supabaseAdmin: SupabaseClient, gau
 
   if (!(await isSeasonFullyPlayed(supabaseAdmin, gauntletSeasonId))) return;
 
-  const { error: gauntletUpdErr } = await supabaseAdmin
-    .from('seasons')
-    .update({ status: 'ARCHIVED' })
-    .eq('id', gauntletSeasonId);
-  if (gauntletUpdErr) throw gauntletUpdErr;
+  try {
+    const { error: gauntletUpdErr } = await supabaseAdmin
+      .from('seasons')
+      .update({ status: 'ARCHIVED' })
+      .eq('id', gauntletSeasonId);
+    if (gauntletUpdErr) throw gauntletUpdErr;
 
-  const regularSeason = await getLinkedRegularSeason(season.name);
-  if (regularSeason) {
-    const { error: regUpdErr } = await supabaseAdmin.from('seasons').update({ status: 'ARCHIVED' }).eq('id', regularSeason.id);
-    if (regUpdErr) throw regUpdErr;
+    const regularSeason = await getLinkedRegularSeason(season.name);
+    if (regularSeason) {
+      const { error: regUpdErr } = await supabaseAdmin.from('seasons').update({ status: 'ARCHIVED' }).eq('id', regularSeason.id);
+      if (regUpdErr) throw regUpdErr;
+    }
+  } catch (err) {
+    console.error(`gauntlet auto-archive(season ${gauntletSeasonId}) failed:`, err);
+    await recordOpsError(supabaseAdmin, gauntletSeasonId, `Auto-archive failed: ${(err as Error).message}`);
   }
 }
