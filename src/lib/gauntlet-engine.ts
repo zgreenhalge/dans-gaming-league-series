@@ -11,7 +11,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isPlayedScore, extractSeasonNumber } from './util';
 import { buildGauntletBracket, type AdvanceRule, type BracketPlan } from './gauntlet-bracket';
-import { getSeason, getSeasonLeaderboard, getLinkedGauntlet, getGauntletRounds } from './queries';
+import { getSeason, getSeasonLeaderboard, getLinkedGauntlet, getLinkedRegularSeason, getGauntletRounds } from './queries';
 
 export interface GauntletPodRow {
   id: number;
@@ -337,10 +337,21 @@ export async function seedBracket(
 }
 
 /** Deletes a gauntlet season and everything materialized under it: pods/slots (cascade),
- * player_match_stats, matches, weeks, and the season row itself. Used both to clean up a failed
- * bracket build and to let an admin reset a gauntlet that hasn't started play yet — callers are
- * responsible for verifying it's safe to delete (e.g. no played matches) before calling this. */
+ * player_match_stats, matches, weeks, and the season row itself. If its paired regular season was
+ * ARCHIVED (i.e. this gauntlet had already completed and archived it via `checkGauntletCompletion`),
+ * reverts that season back to COMPLETED — an archived season with no gauntlet behind it is a
+ * confusing dead end. Used both to clean up a failed bracket build and to let an admin reset a
+ * gauntlet — callers are responsible for deciding whether it's safe to delete (e.g. force-clearing
+ * one that has already started play) before calling this. */
 export async function deleteGauntletSeason(supabaseAdmin: SupabaseClient, gauntletSeasonId: number): Promise<void> {
+  const { data: gauntletRow, error: gauntletSelErr } = await supabaseAdmin
+    .from('seasons')
+    .select('name')
+    .eq('id', gauntletSeasonId)
+    .maybeSingle();
+  if (gauntletSelErr) throw gauntletSelErr;
+  const gauntletName = (gauntletRow as { name: string } | null)?.name ?? null;
+
   const { error: podsErr } = await supabaseAdmin.from('gauntlet_pods').delete().eq('season_id', gauntletSeasonId);
   if (podsErr) throw podsErr;
 
@@ -372,6 +383,17 @@ export async function deleteGauntletSeason(supabaseAdmin: SupabaseClient, gauntl
 
   const { error: seasonDelErr } = await supabaseAdmin.from('seasons').delete().eq('id', gauntletSeasonId);
   if (seasonDelErr) throw seasonDelErr;
+
+  if (gauntletName) {
+    const regularSeason = await getLinkedRegularSeason(gauntletName);
+    if (regularSeason && regularSeason.status === 'ARCHIVED') {
+      const { error: revertErr } = await supabaseAdmin
+        .from('seasons')
+        .update({ status: 'COMPLETED' })
+        .eq('id', regularSeason.id);
+      if (revertErr) throw revertErr;
+    }
+  }
 }
 
 /** Called from the score route's post-commit hook for every gauntlet match. No-op if the match
@@ -435,6 +457,43 @@ export async function resolveAndPropagate(supabaseAdmin: SupabaseClient, matchId
   }
 }
 
+type CreateSeasonRowResult =
+  | { status: 'created'; gauntletSeasonId: number }
+  | { status: 'already-exists' }
+  | { status: 'not-eligible'; reason: string };
+
+/** Parses the gauntlet name from an already-validated regular season and inserts its paired
+ * "Season N Gauntlet" row. Callers own the "regular season exists" / "not already linked" checks —
+ * this only does the name-parse + insert, so `tryBuildGauntletShape` and
+ * `createManualGauntletShell` can order those checks around their own extra validation
+ * (bracket-plan computation, for the automated path) without duplicating them here. */
+async function createGauntletSeasonRow(
+  supabaseAdmin: SupabaseClient,
+  regularSeason: { name: string; target_win_rounds: number },
+  opts: { startDate?: string | null } = {},
+): Promise<CreateSeasonRowResult> {
+  const seasonNumber = extractSeasonNumber(regularSeason.name);
+  if (seasonNumber == null) {
+    return { status: 'not-eligible', reason: `Could not parse a season number from "${regularSeason.name}"` };
+  }
+  const gauntletName = `Season ${seasonNumber} Gauntlet`;
+
+  const { data: gauntletSeason, error: insertErr } = await supabaseAdmin
+    .from('seasons')
+    .insert({
+      name: gauntletName,
+      is_gauntlet: true,
+      status: 'ACTIVE',
+      start_date: opts.startDate ?? null,
+      target_win_rounds: regularSeason.target_win_rounds,
+    })
+    .select('id')
+    .single();
+  if (insertErr) throw insertErr;
+
+  return { status: 'created', gauntletSeasonId: (gauntletSeason as { id: number }).id };
+}
+
 export type BuildShapeResult =
   | { status: 'built'; gauntletSeasonId: number; qualifiers: number; games: number; rounds: number }
   | { status: 'already-exists' }
@@ -466,25 +525,9 @@ export async function tryBuildGauntletShape(
     return { status: 'not-eligible', reason: (err as Error).message };
   }
 
-  const seasonNumber = extractSeasonNumber(regularSeason.name);
-  if (seasonNumber == null) {
-    return { status: 'not-eligible', reason: `Could not parse a season number from "${regularSeason.name}"` };
-  }
-  const gauntletName = `Season ${seasonNumber} Gauntlet`;
-
-  const { data: gauntletSeason, error: insertErr } = await supabaseAdmin
-    .from('seasons')
-    .insert({
-      name: gauntletName,
-      is_gauntlet: true,
-      status: 'ACTIVE',
-      start_date: opts.startDate ?? null,
-      target_win_rounds: regularSeason.target_win_rounds,
-    })
-    .select('id')
-    .single();
-  if (insertErr) throw insertErr;
-  const gauntletSeasonId = (gauntletSeason as { id: number }).id;
+  const created = await createGauntletSeasonRow(supabaseAdmin, regularSeason, opts);
+  if (created.status !== 'created') return created;
+  const { gauntletSeasonId } = created;
 
   try {
     await persistBracketShape(supabaseAdmin, gauntletSeasonId, plan);
@@ -504,6 +547,121 @@ export async function tryBuildGauntletShape(
     games: plan.games,
     rounds: Math.max(...plan.pods.map((p) => p.round_number)),
   };
+}
+
+export type CreateManualShellResult = CreateSeasonRowResult;
+
+/** Creates the paired "Season N Gauntlet" season row with no bracket shape at all — an empty shell
+ * for an admin to hand-build rounds/matches into via `createManualGauntletMatch()`, bypassing
+ * `buildGauntletBracket()` entirely. For league sizes (outside 4-20) or bracket shapes the
+ * generator doesn't cover. */
+export async function createManualGauntletShell(
+  supabaseAdmin: SupabaseClient,
+  regularSeasonId: number,
+  opts: { startDate?: string | null } = {},
+): Promise<CreateManualShellResult> {
+  const regularSeason = await getSeason(regularSeasonId);
+  if (!regularSeason || regularSeason.is_gauntlet) {
+    return { status: 'not-eligible', reason: 'Regular season not found' };
+  }
+
+  const existingGauntlet = await getLinkedGauntlet(regularSeason.name);
+  if (existingGauntlet) return { status: 'already-exists' };
+
+  return createGauntletSeasonRow(supabaseAdmin, regularSeason, opts);
+}
+
+export type CreateManualMatchResult =
+  | { status: 'created'; matchId: number }
+  | { status: 'not-gauntlet' }
+  | { status: 'invalid'; reason: string };
+
+/** Creates a single match directly under a gauntlet season's given round, bypassing
+ * `gauntlet_pods` entirely — no pairing/pod invariants enforced, no propagation, no
+ * auto-materialization. For hand-building rounds the automated generator doesn't cover. Creates
+ * the round's `weeks` row if it doesn't exist yet. Veto fields are left null, same as a
+ * generator-materialized match — it flows through the existing veto/score routes unchanged. */
+export async function createManualGauntletMatch(
+  supabaseAdmin: SupabaseClient,
+  gauntletSeasonId: number,
+  roundNumber: number,
+  shirtsPlayerIds: [number, number],
+  skinsPlayerIds: [number, number],
+): Promise<CreateManualMatchResult> {
+  const { data: seasonRow, error: seasonErr } = await supabaseAdmin
+    .from('seasons')
+    .select('is_gauntlet')
+    .eq('id', gauntletSeasonId)
+    .maybeSingle();
+  if (seasonErr) throw seasonErr;
+  if (!(seasonRow as { is_gauntlet: boolean } | null)?.is_gauntlet) {
+    return { status: 'not-gauntlet' };
+  }
+
+  const allIds = [...shirtsPlayerIds, ...skinsPlayerIds];
+  if (new Set(allIds).size !== 4) {
+    return { status: 'invalid', reason: 'All four players must be distinct' };
+  }
+  if (!Number.isInteger(roundNumber) || roundNumber < 1) {
+    return { status: 'invalid', reason: 'round_number must be a positive integer' };
+  }
+
+  const { data: existingWeek, error: weekSelErr } = await supabaseAdmin
+    .from('weeks')
+    .select('id')
+    .eq('season_id', gauntletSeasonId)
+    .eq('week_number', roundNumber)
+    .maybeSingle();
+  if (weekSelErr) throw weekSelErr;
+
+  let weekId = (existingWeek as { id: number } | null)?.id ?? null;
+  if (weekId == null) {
+    const { data: newWeek, error: weekInsErr } = await supabaseAdmin
+      .from('weeks')
+      .insert({ season_id: gauntletSeasonId, week_number: roundNumber, bye_player_id: null })
+      .select('id')
+      .single();
+    if (weekInsErr) throw weekInsErr;
+    weekId = (newWeek as { id: number }).id;
+  }
+
+  const { data: existingMatches, error: matchSelErr } = await supabaseAdmin
+    .from('matches')
+    .select('match_number')
+    .eq('week_id', weekId);
+  if (matchSelErr) throw matchSelErr;
+  const nextMatchNumber =
+    1 + Math.max(0, ...((existingMatches ?? []) as { match_number: number }[]).map((m) => m.match_number));
+
+  const { data: matchRow, error: matchInsErr } = await supabaseAdmin
+    .from('matches')
+    .insert({
+      week_id: weekId,
+      match_number: nextMatchNumber,
+      is_playoff_game: true,
+      final_score: null,
+      picked_map: null,
+      shirts_ban: null,
+      shirts_ban2: null,
+      skins_ban1: null,
+      skins_ban2: null,
+      shirts_pick: null,
+      skins_starting_side: null,
+    })
+    .select('id')
+    .single();
+  if (matchInsErr) throw matchInsErr;
+  const matchId = (matchRow as { id: number }).id;
+
+  const zeroStats = { kills: 0, assists: 0, deaths: 0, damage: 0, adr: 0, rounds_played: 0, rounds_won: 0, is_win: false };
+  const statRows = [
+    ...shirtsPlayerIds.map((player_id) => ({ match_id: matchId, player_id, faction: 'SHIRTS', ...zeroStats })),
+    ...skinsPlayerIds.map((player_id) => ({ match_id: matchId, player_id, faction: 'SKINS', ...zeroStats })),
+  ];
+  const { error: statsInsErr } = await supabaseAdmin.from('player_match_stats').insert(statRows);
+  if (statsInsErr) throw statsInsErr;
+
+  return { status: 'created', matchId };
 }
 
 export type SeedBandNames = { byes: string[]; playing: string[]; relegated: string[] };

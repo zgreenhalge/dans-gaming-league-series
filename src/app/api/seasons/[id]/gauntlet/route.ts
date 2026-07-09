@@ -67,9 +67,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 /**
- * Resets a gauntlet that hasn't started play yet — deletes the gauntlet season and everything
- * materialized under it (pods, slots, matches, stats, weeks), freeing the regular season up to
- * have its bracket rebuilt. Refuses once any match has a played score; there is no partial reset.
+ * Resets a gauntlet — deletes the gauntlet season and everything materialized under it (pods,
+ * slots, matches, stats, weeks), freeing the regular season up to have its bracket rebuilt. Refuses
+ * once any match has a played score unless `force: true` is passed, since that discards real
+ * results with no way to recover them. There is no partial reset either way.
  */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
@@ -83,6 +84,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }
 
+  const body = await req.json().catch(() => ({}));
+  const force = (body as { force?: boolean })?.force === true;
+
   const regularSeason = await getSeason(regularSeasonId);
   if (!regularSeason || regularSeason.is_gauntlet) {
     return NextResponse.json({ error: 'Regular season not found' }, { status: 404 });
@@ -95,8 +99,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const rounds = await getGauntletRounds(gauntletSeason.id);
   const started = rounds.some((r) => r.matches.some((m) => isPlayedScore(m.final_score)));
-  if (started) {
-    return NextResponse.json({ error: 'This gauntlet has already started — it cannot be reset' }, { status: 409 });
+  if (started && !force) {
+    return NextResponse.json(
+      { error: 'This gauntlet has already started — pass force to clear it anyway (results are not recoverable)' },
+      { status: 409 },
+    );
   }
 
   try {
@@ -105,5 +112,5 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, forced: started && force });
 }

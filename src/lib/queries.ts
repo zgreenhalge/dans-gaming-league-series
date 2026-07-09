@@ -1480,6 +1480,19 @@ export async function getGauntletPodForMatch(
   return (data ?? null) as { advance_rule: 'single' | 'wildcard'; is_final: boolean } | null;
 }
 
+/** Whether a gauntlet season has any `gauntlet_pods` rows at all — false for a hand-built gauntlet
+ * (created via the manual shell route, matches added directly with no pod graph), true for one
+ * built by `buildGauntletBracket`, seeded or not. Used to route a returning admin to the right
+ * builder UI (automated seed/reset vs. manual match adding). */
+export async function gauntletHasPods(seasonId: number): Promise<boolean> {
+  const { count, error } = await supabase
+    .from('gauntlet_pods')
+    .select('id', { count: 'exact', head: true })
+    .eq('season_id', seasonId);
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
 /** Fetches all matches for a gauntlet season and groups them into rounds by week_number. */
 export async function getGauntletRounds(seasonId: number): Promise<GauntletRound[]> {
   const { data: weeks, error: wErr } = await supabase
