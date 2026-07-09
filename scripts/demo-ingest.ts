@@ -6,6 +6,12 @@
 // it and the human confirms via the existing `PATCH /score`. Heavy parsing runs HERE, not on Vercel
 // (kills the parse route's MAX_DEMO_BYTES ceiling). Mirrors `replay-extract.ts`.
 //
+// Reparsing an already-confirmed match (e.g. to backfill fields from a newly added collector) skips
+// the staged-review step: when the freshly derived score matches the match's existing `final_score`,
+// the sabremetrics are upserted directly and the job is marked `confirmed`. A derived score that
+// differs from the stored one always falls through to the normal staged-result review instead, so a
+// reparse can never silently rewrite an already-agreed result.
+//
 // Env (from the workflow): MATCH_ID, GH_RUN_ID, GH_RUN_URL, R2 creds, SUPABASE_SERVICE_ROLE_KEY /
 // NEXT_PUBLIC_SUPABASE_URL. Storage is schema-free: background_jobs.status + the R2 artifact.
 
@@ -14,9 +20,11 @@ import { parseDemoFile } from '../src/lib/demoParser';
 import { parseDemoSabremetrics } from '../src/lib/demoOrchestrator';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { quarantineDemo } from '../src/lib/demo/quarantine';
-import { getR2Object, putR2Object, demoKey, demoResultKey } from '../src/lib/r2';
+import { getR2Object, putR2Object, deleteR2Object, demoKey, demoResultKey } from '../src/lib/r2';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { gunzipMaybe } from '../src/lib/gzip';
+import { isPlayedScore, parseScore } from '../src/lib/util';
+import { persistSabremetrics } from '../src/lib/demo/sabremetrics';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '../src/lib/demo/ingestResult';
 
 const matchId = Number(process.env.MATCH_ID);
@@ -71,6 +79,33 @@ async function main() {
     skinsScore: parsed.skins_score,
     targetWinRounds: inputs.targetWinRounds,
   });
+
+  // Reparse of an already-confirmed match with an unchanged score: apply the refreshed sabremetrics
+  // directly, no staged review needed.
+  if (q.ok && parsed.shirts_score !== null && parsed.skins_score !== null) {
+    const { data: matchRow } = await supabase
+      .from('matches')
+      .select('final_score')
+      .eq('id', matchId)
+      .maybeSingle();
+    const existingScore = (matchRow as { final_score: string | null } | null)?.final_score ?? null;
+    const existing = isPlayedScore(existingScore) ? parseScore(existingScore) : null;
+
+    if (existing && existing.shirts === parsed.shirts_score && existing.skins === parsed.skins_score) {
+      await persistSabremetrics(matchId, sab.sabremetrics);
+      await deleteR2Object(demoResultKey(matchId));
+      await setJob({
+        status: 'confirmed',
+        stage: 'confirmed',
+        error_message: null,
+        finished_at: new Date().toISOString(),
+      });
+      notice(
+        `demo-ingest match ${matchId}: reparsed, score unchanged (${parsed.shirts_score}-${parsed.skins_score}) — sabremetrics auto-confirmed`,
+      );
+      return;
+    }
+  }
 
   // Confirm-ready payload only when the side was known and the score derived (regular season).
   // Null → gauntlet/knife: the review block routes it to manual side-entry (issue #137).
