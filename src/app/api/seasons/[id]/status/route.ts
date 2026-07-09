@@ -10,7 +10,9 @@ const supabaseAdmin = getAdminClient();
  * Regular-season status transitions. Only UPCOMING -> ACTIVE ("go live") is supported today —
  * ACTIVE -> COMPLETED is automatic (see `checkSeasonCompletion` in season-lifecycle.ts, hooked onto
  * the score route), and there's no admin path to ARCHIVED yet. Going live best-effort builds the
- * season's gauntlet bracket shape (`activateSeason`).
+ * season's gauntlet bracket shape (`activateSeason`) — the response echoes whether that build
+ * succeeded (`gauntletBuilt`/`gauntletBuildError`) so a failure is visible in the UI at the moment
+ * of the click, not just in server logs. Activation itself always succeeds regardless.
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
@@ -39,10 +41,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   try {
-    await activateSeason(supabaseAdmin, seasonId);
+    const result = await activateSeason(supabaseAdmin, seasonId);
+    return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
-
-  return NextResponse.json({ ok: true });
 }
