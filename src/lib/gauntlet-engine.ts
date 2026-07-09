@@ -9,8 +9,9 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { isPlayedScore } from './util';
-import type { AdvanceRule, BracketPlan } from './gauntlet-bracket';
+import { isPlayedScore, extractSeasonNumber } from './util';
+import { buildGauntletBracket, type AdvanceRule, type BracketPlan } from './gauntlet-bracket';
+import { getSeason, getSeasonLeaderboard, getLinkedGauntlet, getGauntletRounds } from './queries';
 
 export interface GauntletPodRow {
   id: number;
@@ -432,4 +433,119 @@ export async function resolveAndPropagate(supabaseAdmin: SupabaseClient, matchId
   for (const downstreamPodId of downstreamPodIds) {
     await materializeIfReady(supabaseAdmin, downstreamPodId);
   }
+}
+
+export type BuildShapeResult =
+  | { status: 'built'; gauntletSeasonId: number; qualifiers: number; games: number; rounds: number }
+  | { status: 'already-exists' }
+  | { status: 'not-eligible'; reason: string };
+
+/** Creates the paired "Season N Gauntlet" season row and persists an unseeded bracket shape sized
+ * from the regular season's current roster. Shared by the admin creation route and
+ * `activateSeason()`'s auto-build — both just need to interpret the result differently. */
+export async function tryBuildGauntletShape(
+  supabaseAdmin: SupabaseClient,
+  regularSeasonId: number,
+  opts: { startDate?: string | null } = {},
+): Promise<BuildShapeResult> {
+  const regularSeason = await getSeason(regularSeasonId);
+  if (!regularSeason || regularSeason.is_gauntlet) {
+    return { status: 'not-eligible', reason: 'Regular season not found' };
+  }
+
+  const existingGauntlet = await getLinkedGauntlet(regularSeason.name);
+  if (existingGauntlet) return { status: 'already-exists' };
+
+  const leaderboard = await getSeasonLeaderboard(regularSeasonId);
+  const N = leaderboard.length;
+
+  let plan: BracketPlan;
+  try {
+    plan = buildGauntletBracket(N);
+  } catch (err) {
+    return { status: 'not-eligible', reason: (err as Error).message };
+  }
+
+  const seasonNumber = extractSeasonNumber(regularSeason.name);
+  if (seasonNumber == null) {
+    return { status: 'not-eligible', reason: `Could not parse a season number from "${regularSeason.name}"` };
+  }
+  const gauntletName = `Season ${seasonNumber} Gauntlet`;
+
+  const { data: gauntletSeason, error: insertErr } = await supabaseAdmin
+    .from('seasons')
+    .insert({
+      name: gauntletName,
+      is_gauntlet: true,
+      status: 'ACTIVE',
+      start_date: opts.startDate ?? null,
+      target_win_rounds: regularSeason.target_win_rounds,
+    })
+    .select('id')
+    .single();
+  if (insertErr) throw insertErr;
+  const gauntletSeasonId = (gauntletSeason as { id: number }).id;
+
+  try {
+    await persistBracketShape(supabaseAdmin, gauntletSeasonId, plan);
+  } catch (err) {
+    // Best-effort cleanup so a retry isn't permanently blocked by the "already has a gauntlet"
+    // check above.
+    await deleteGauntletSeason(supabaseAdmin, gauntletSeasonId).catch((cleanupErr) => {
+      console.error(`gauntlet build cleanup(${gauntletSeasonId}) failed:`, cleanupErr);
+    });
+    throw err;
+  }
+
+  return {
+    status: 'built',
+    gauntletSeasonId,
+    qualifiers: N,
+    games: plan.games,
+    rounds: Math.max(...plan.pods.map((p) => p.round_number)),
+  };
+}
+
+export type SeedBandNames = { byes: string[]; playing: string[]; relegated: string[] };
+
+export type SeedResult =
+  | { status: 'seeded'; bands: SeedBandNames }
+  | { status: 'no-shape' }
+  | { status: 'already-seeded' }
+  | { status: 'drift'; shapeSeedCount: number; currentCount: number };
+
+/** Seeds an already-built (but unseeded) gauntlet bracket from the regular season's *current*
+ * leaderboard order and materializes round 1. Shared by the admin seed route and
+ * `checkSeasonCompletion()`'s auto-seed — both just need to interpret the result differently. */
+export async function trySeedGauntlet(supabaseAdmin: SupabaseClient, regularSeasonId: number): Promise<SeedResult> {
+  const regularSeason = await getSeason(regularSeasonId);
+  if (!regularSeason || regularSeason.is_gauntlet) return { status: 'no-shape' };
+
+  const gauntletSeason = await getLinkedGauntlet(regularSeason.name);
+  if (!gauntletSeason) return { status: 'no-shape' };
+
+  const existingRounds = await getGauntletRounds(gauntletSeason.id);
+  if (existingRounds.length > 0) return { status: 'already-seeded' };
+
+  const leaderboard = await getSeasonLeaderboard(regularSeasonId);
+  const N = leaderboard.length;
+
+  // round1.length + byes.length reflects the shape's *actual* persisted seed count regardless of
+  // what N we pass in here — it's the right value to diff against the current roster size.
+  const bands = await getSeedBands(supabaseAdmin, gauntletSeason.id, N);
+  const shapeSeedCount = bands.round1.length + bands.byes.length;
+  if (shapeSeedCount === 0) return { status: 'no-shape' };
+  if (shapeSeedCount !== N) return { status: 'drift', shapeSeedCount, currentCount: N };
+
+  const playerBySeed = new Map<number, number>();
+  leaderboard.forEach((row, i) => playerBySeed.set(i + 1, row.player_id));
+  await seedBracket(supabaseAdmin, gauntletSeason.id, playerBySeed);
+
+  const nameBySeed = new Map(leaderboard.map((row, i) => [i + 1, row.player_name]));
+  const toNames = (seeds: number[]) => seeds.map((seed) => nameBySeed.get(seed)!);
+
+  return {
+    status: 'seeded',
+    bands: { byes: toNames(bands.byes), playing: toNames(bands.round1), relegated: toNames(bands.dropped) },
+  };
 }

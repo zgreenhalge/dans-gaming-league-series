@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { getSeason, getSeasonLeaderboard, getLinkedGauntlet, getGauntletRounds } from '@/lib/queries';
-import { extractSeasonNumber, isPlayedScore } from '@/lib/util';
-import { buildGauntletBracket } from '@/lib/gauntlet-bracket';
-import { persistBracketShape, deleteGauntletSeason } from '@/lib/gauntlet-engine';
+import { getSeason, getLinkedGauntlet, getGauntletRounds } from '@/lib/queries';
+import { isPlayedScore } from '@/lib/util';
+import { tryBuildGauntletShape, deleteGauntletSeason } from '@/lib/gauntlet-engine';
 
 const supabaseAdmin = getAdminClient();
 
@@ -14,6 +13,10 @@ const supabaseAdmin = getAdminClient();
  * the qualifier count, not on who qualified, so this can run as soon as the regular season's roster
  * is fixed (its full match schedule exists) — well before standings are final. Nothing is
  * materialized and nothing is playable until `POST .../gauntlet/seed` fills in seeds later.
+ *
+ * This is also called automatically by `activateSeason()` when a season goes live — this route is
+ * the manual/admin equivalent for building a shape by hand (e.g. for a season that was already
+ * ACTIVE before that automation existed).
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
@@ -41,65 +44,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Season must be ACTIVE to start its gauntlet' }, { status: 400 });
   }
 
-  const existingGauntlet = await getLinkedGauntlet(regularSeason.name);
-  if (existingGauntlet) {
+  let result;
+  try {
+    result = await tryBuildGauntletShape(supabaseAdmin, regularSeasonId, { startDate: start_date });
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
+
+  if (result.status === 'already-exists') {
     return NextResponse.json({ error: 'This season already has a gauntlet' }, { status: 409 });
   }
-
-  // Only the qualifier *count* matters for the shape — the roster, not the standings, which is
-  // exactly what's available this early (getSeasonLeaderboard returns every rostered player, zero
-  // stats and all, per rosterBySeason).
-  const leaderboard = await getSeasonLeaderboard(regularSeasonId);
-  const N = leaderboard.length;
-
-  let plan;
-  try {
-    plan = buildGauntletBracket(N);
-  } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
-  }
-
-  const seasonNumber = extractSeasonNumber(regularSeason.name);
-  if (seasonNumber == null) {
-    return NextResponse.json({ error: `Could not parse a season number from "${regularSeason.name}"` }, { status: 400 });
-  }
-  const gauntletName = `Season ${seasonNumber} Gauntlet`;
-
-  const { data: gauntletSeason, error: insertErr } = await supabaseAdmin
-    .from('seasons')
-    .insert({
-      name: gauntletName,
-      is_gauntlet: true,
-      status: 'ACTIVE',
-      start_date,
-      target_win_rounds: regularSeason.target_win_rounds,
-    })
-    .select('*')
-    .single();
-  if (insertErr) {
-    return NextResponse.json({ error: insertErr.message }, { status: 500 });
-  }
-  const gauntletSeasonId = (gauntletSeason as { id: number }).id;
-
-  try {
-    await persistBracketShape(supabaseAdmin, gauntletSeasonId, plan);
-  } catch (err) {
-    // Best-effort cleanup so a retry isn't permanently blocked by the "already has a gauntlet"
-    // check above.
-    await deleteGauntletSeason(supabaseAdmin, gauntletSeasonId).catch((cleanupErr) => {
-      console.error(`gauntlet build cleanup(${gauntletSeasonId}) failed:`, cleanupErr);
-    });
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  if (result.status === 'not-eligible') {
+    return NextResponse.json({ error: result.reason }, { status: 400 });
   }
 
   return NextResponse.json(
     {
-      season: gauntletSeason,
-      shape: {
-        qualifiers: N,
-        games: plan.games,
-        rounds: Math.max(...plan.pods.map((p) => p.round_number)),
-      },
+      shape: { qualifiers: result.qualifiers, games: result.games, rounds: result.rounds },
     },
     { status: 201 },
   );
