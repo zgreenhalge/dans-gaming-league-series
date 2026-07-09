@@ -44,6 +44,11 @@ const TOOLS: { href: string; title: string; desc: string }[] = [
     title: 'Start Gauntlet',
     desc: 'Build the single-elimination bracket for an active season.',
   },
+  {
+    href: '/admin/ops-errors',
+    title: 'Ops Errors',
+    desc: 'Every best-effort background operation currently failing or needing admin attention.',
+  },
 ];
 
 export default async function AdminHubPage() {

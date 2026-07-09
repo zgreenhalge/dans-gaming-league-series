@@ -3,22 +3,33 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-interface OpsErrorSeason {
+export interface OpsErrorItem {
   id: number;
-  name: string;
-  isGauntlet: boolean;
-  opsError: string;
-  opsErrorAt: string | null;
+  entityType: 'season' | 'match' | 'player' | 'system';
+  label: string;
+  operation: string;
+  message: string;
+  occurredAt: string;
 }
 
-function OpsErrorRow({ season }: { season: OpsErrorSeason }) {
+const OPERATION_LABELS: Record<string, string> = {
+  gauntlet_build: 'Gauntlet Build',
+  gauntlet_seed: 'Gauntlet Seed',
+  gauntlet_archive: 'Gauntlet Archive',
+  steam_id_learn: 'Steam ID Learning',
+  server_teardown: 'Server Teardown',
+  sabremetrics_persist: 'Sabremetrics',
+  ehog_recompute: 'EHOG Recompute',
+};
+
+function OpsErrorRow({ item }: { item: OpsErrorItem }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   async function dismiss() {
     setBusy(true);
     try {
-      const res = await fetch(`/api/seasons/${season.id}/ops-error`, { method: 'PATCH' });
+      const res = await fetch(`/api/ops-errors/${item.id}`, { method: 'DELETE' });
       if (res.ok) router.refresh();
     } finally {
       setBusy(false);
@@ -30,19 +41,17 @@ function OpsErrorRow({ season }: { season: OpsErrorSeason }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <span className="font-display text-[14px] font-semibold">{season.name}</span>
+            <span className="font-display text-[14px] font-semibold">{item.label}</span>
             <span className="tracked text-[9px] text-[var(--color-text-secondary)]">
-              {season.isGauntlet ? 'Gauntlet' : 'Regular'}
+              {OPERATION_LABELS[item.operation] ?? item.operation}
             </span>
           </div>
           <div className="font-mono text-[11px] text-[var(--color-accent-amber-fg)] mt-1 max-w-[520px]">
-            {season.opsError}
+            {item.message}
           </div>
-          {season.opsErrorAt && (
-            <div className="font-mono text-[10px] text-[var(--color-text-secondary)] mt-1">
-              {new Date(season.opsErrorAt).toLocaleString()}
-            </div>
-          )}
+          <div className="font-mono text-[10px] text-[var(--color-text-secondary)] mt-1">
+            {new Date(item.occurredAt).toLocaleString()}
+          </div>
         </div>
         <button
           type="button"
@@ -57,18 +66,20 @@ function OpsErrorRow({ season }: { season: OpsErrorSeason }) {
   );
 }
 
-/** Surfaces seasons with a live `ops_error` — a best-effort gauntlet operation (auto-build,
- * auto-seed, auto-archive) that failed or needs admin attention. Each row can be dismissed once
- * the admin has seen it, or resolves itself the next time that same operation succeeds. */
-export function OpsErrorList({ seasons }: { seasons: OpsErrorSeason[] }) {
-  if (seasons.length === 0) return null;
+/** Surfaces live `ops_errors` rows — best-effort operations (gauntlet build/seed/archive, steam-id
+ * learning, server teardown, sabremetrics, EHOG recompute) that failed or need admin attention.
+ * Each row can be dismissed once the admin has seen it, or resolves itself the next time that same
+ * operation succeeds. Used both filtered to one entity type (the gauntlet admin page) and
+ * unfiltered (the site-wide `/admin/ops-errors` console). */
+export function OpsErrorList({ items, title = 'Attention Needed' }: { items: OpsErrorItem[]; title?: string }) {
+  if (items.length === 0) return null;
 
   return (
     <div className="mb-8">
-      <div className="tracked text-[10px] text-[var(--color-accent-amber-fg)] mb-3">Attention Needed</div>
+      <div className="tracked text-[10px] text-[var(--color-accent-amber-fg)] mb-3">{title}</div>
       <div className="border border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)]">
-        {seasons.map((s) => (
-          <OpsErrorRow key={s.id} season={s} />
+        {items.map((item) => (
+          <OpsErrorRow key={item.id} item={item} />
         ))}
       </div>
     </div>

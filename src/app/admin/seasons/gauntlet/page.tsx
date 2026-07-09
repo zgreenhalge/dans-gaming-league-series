@@ -6,7 +6,7 @@ import { TopbarShell } from '@/components/TopbarShell';
 import { CreateGauntletForm } from '@/components/CreateGauntletForm';
 import { GauntletLifecycleList } from '@/components/GauntletLifecycleList';
 import { OpsErrorList } from '@/components/OpsErrorList';
-import { getSeasons, getGauntletRounds, gauntletHasPods, isPlayerAdmin } from '@/lib/queries';
+import { getSeasons, getGauntletRounds, gauntletHasPods, isPlayerAdmin, getOpsErrors } from '@/lib/queries';
 import { buildRegularToGauntletMap, isPlayedScore } from '@/lib/util';
 
 export const metadata = {
@@ -19,15 +19,13 @@ export default async function GauntletSeasonPage() {
   if (!session?.user?.playerId) redirect('/');
   if (!(await isPlayerAdmin(session.user.playerId))) redirect('/');
 
-  const seasons = await getSeasons();
+  const [seasons, opsErrors] = await Promise.all([getSeasons(), getOpsErrors()]);
   const regularSeasons = seasons.filter((s) => !s.is_gauntlet);
   const gauntletSeasons = seasons.filter((s) => s.is_gauntlet);
   const paired = buildRegularToGauntletMap(regularSeasons, gauntletSeasons);
   const gauntletById = new Map(gauntletSeasons.map((g) => [g.id, g]));
 
-  const withOpsError = seasons
-    .filter((s) => s.ops_error)
-    .map((s) => ({ id: s.id, name: s.name, isGauntlet: s.is_gauntlet, opsError: s.ops_error!, opsErrorAt: s.ops_error_at }));
+  const seasonOpsErrors = opsErrors.filter((e) => e.entityType === 'season');
 
   const activeRegular = regularSeasons.filter((s) => s.status === 'ACTIVE');
 
@@ -75,7 +73,7 @@ export default async function GauntletSeasonPage() {
             below.
           </div>
         </div>
-        <OpsErrorList seasons={withOpsError} />
+        <OpsErrorList items={seasonOpsErrors} />
 
         <CreateGauntletForm seasons={eligible} />
 
