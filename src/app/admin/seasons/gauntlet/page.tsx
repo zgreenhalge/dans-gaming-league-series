@@ -1,10 +1,11 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { TopbarShell } from '@/components/TopbarShell';
 import { CreateGauntletForm } from '@/components/CreateGauntletForm';
 import { GauntletLifecycleList } from '@/components/GauntletLifecycleList';
-import { getSeasons, getGauntletRounds, isPlayerAdmin } from '@/lib/queries';
+import { getSeasons, getGauntletRounds, gauntletHasPods, isPlayerAdmin } from '@/lib/queries';
 import { buildRegularToGauntletMap, isPlayedScore } from '@/lib/util';
 
 export const metadata = {
@@ -34,9 +35,10 @@ export default async function GauntletSeasonPage() {
       .filter((s) => paired.has(s.id))
       .map(async (s) => {
         const gauntletId = paired.get(s.id)!;
-        const rounds = await getGauntletRounds(gauntletId);
-        // Round rows only exist once at least one pod has materialized (round 1 for a seeded
-        // bracket) — an unseeded shape has zero weeks/matches, so getGauntletRounds returns [].
+        const [rounds, hasPods] = await Promise.all([getGauntletRounds(gauntletId), gauntletHasPods(gauntletId)]);
+        // Round rows only exist once at least one match has materialized — an unseeded automated
+        // shape or an empty manual shell both have zero weeks/matches, so getGauntletRounds
+        // returns []. hasPods distinguishes the two (manual gauntlets have none).
         const seeded = rounds.length > 0;
         const started = rounds.some((r) => r.matches.some((m) => isPlayedScore(m.final_score)));
         return {
@@ -45,6 +47,7 @@ export default async function GauntletSeasonPage() {
           gauntletName: gauntletById.get(gauntletId)?.name ?? `Season ${gauntletId} Gauntlet`,
           seeded,
           started,
+          manual: !hasPods,
         };
       }),
   );
@@ -68,6 +71,23 @@ export default async function GauntletSeasonPage() {
           </div>
         </div>
         <CreateGauntletForm seasons={eligible} />
+
+        {eligible.length > 0 && (
+          <div className="mt-6 flex flex-col gap-1">
+            <div className="tracked text-[9px] text-[var(--color-text-secondary)]">
+              Generator doesn&apos;t fit? Build a custom bracket by hand instead:
+            </div>
+            {eligible.map((s) => (
+              <Link
+                key={s.id}
+                href={`/admin/seasons/gauntlet/manual/${s.id}`}
+                className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] underline decoration-dotted w-fit"
+              >
+                Build {s.name} manually →
+              </Link>
+            ))}
+          </div>
+        )}
 
         {withGauntlet.length > 0 && (
           <div className="mt-12">
