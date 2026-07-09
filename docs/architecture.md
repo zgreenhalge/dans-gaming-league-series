@@ -71,6 +71,7 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `POST` | `/api/matches/[id]/replay/dispatch` | (Re)trigger the replay Action ([`replay.md`](./replay.md)) |
 | `POST` | `/api/maps/[slug]/radar/dispatch` | (Re)trigger the radar-build Action for a map (admin only; [`replay.md`](./replay.md)) |
 | `PATCH` | `/api/seasons/[id]/start-date` | Set season start date (admin only) |
+| `PATCH` | `/api/seasons/[id]/status` | Transition a regular season `UPCOMING` → `ACTIVE` ("go live"); best-effort builds its gauntlet shape (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet` | Create the paired gauntlet season for an active regular season and build its bracket *shape* — unseeded, nothing materialized (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet/seed` | Seed an existing shape from the season's current leaderboard order and materialize round 1 (admin only) |
 | `DELETE` | `/api/seasons/[id]/gauntlet` | Reset an unplayed gauntlet (seeded or not) — deletes it and everything materialized under it, refuses if any match has a score (admin only) |
@@ -130,14 +131,21 @@ qualifier *count*, not on who qualified:
    `src/lib/gauntlet-engine.ts`). `N` comes from the roster (`getSeasonLeaderboard()`'s row count,
    which includes zero-stat unplayed players), not from standings — so this can run as soon as the
    season's full match schedule exists, well before the regular season is complete. Nothing is
-   materialized; nothing is playable yet.
+   materialized; nothing is playable yet. Runs automatically when a season goes live (see below);
+   this route is the manual/admin equivalent.
 2. **`POST /api/seasons/[id]/gauntlet/seed`** takes the same regular season's id, reads its
    *current* `getSeasonLeaderboard()` order (seed 1 = leader), fills in every seed-sourced slot's
    `player_id`, and materializes every pod that becomes fully filled as a result — round 1, plus any
-   all-bye pod (`seedBracket()`). Call this once the regular season's games are actually done;
-   nothing enforces that timing — it's an admin operational call, like the rest of this feature. If
-   the roster has drifted since the shape was built (its seed-slot count no longer matches the
-   season's current player count), seeding is refused — reset and rebuild instead.
+   all-bye pod (`seedBracket()`). Refuses if the bracket is already seeded (re-seeding would desync
+   `gauntlet_pod_slots` from matches already materialized under the prior seeding), or if the roster
+   has drifted since the shape was built (its seed-slot count no longer matches the season's current
+   player count) — reset and rebuild instead. Runs automatically once the regular season is fully
+   played (see below); this route is the manual/admin equivalent, for seeding on demand.
+
+Both steps are also exposed as reusable functions — `tryBuildGauntletShape()` and
+`trySeedGauntlet()` — returning a discriminated result (`built`/`already-exists`/`not-eligible`,
+`seeded`/`no-shape`/`already-seeded`/`drift`) rather than throwing or coding an HTTP response, so
+both the admin routes and the automatic triggers below share one implementation.
 
 Later rounds materialize automatically as their pod resolves, via a non-fatal hook
 (`resolveAndPropagate()`) appended to `PATCH /api/matches/[id]/score` after the score commit; both it
@@ -151,6 +159,26 @@ matches has a played score, otherwise deletes the gauntlet season and everything
 it (`deleteGauntletSeason()` in `gauntlet-engine.ts`, also reused to clean up a failed build),
 freeing the regular season to have its bracket rebuilt from scratch. `/admin/seasons/gauntlet`
 surfaces build, seed, and reset together, one row per season, based on where it is in that lifecycle.
+
+### Regular-season status lifecycle
+
+`seasons.status` (`UPCOMING`/`ACTIVE`/`COMPLETED`/`ARCHIVED`) has exactly one automatic and one
+admin-triggered transition, both in `src/lib/season-lifecycle.ts`:
+
+- **`UPCOMING` → `ACTIVE`** ("go live") is an explicit admin action —
+  `PATCH /api/seasons/[id]/status` (`{ status: 'ACTIVE' }`), surfaced as the "Mark Active" button
+  next to the start-date control on a season's page (`MarkSeasonActiveButton.tsx`). `activateSeason()`
+  flips the status, then best-effort calls `tryBuildGauntletShape()` — a build failure never blocks
+  the season going live.
+- **`ACTIVE` → `COMPLETED`** is fully automatic — `checkSeasonCompletion()` runs from a non-fatal
+  hook on `PATCH /api/matches/[id]/score` for every non-gauntlet match. If the score just committed
+  means every match in that season (via `weeks.season_id`) now has a played score, the season flips
+  to `COMPLETED` and `trySeedGauntlet()` runs best-effort against final standings. A season with no
+  matches yet, or with any match still unplayed, is never "fully played" — nothing fires until the
+  literal last match is scored.
+
+There is no admin path to `ARCHIVED` today (still an out-of-band/manual step), and no automatic
+`UPCOMING → ACTIVE` trigger — a season only goes live when an admin says so.
 
 ## Data Ingestion
 
