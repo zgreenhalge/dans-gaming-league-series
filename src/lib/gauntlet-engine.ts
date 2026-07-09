@@ -12,6 +12,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { isPlayedScore, extractSeasonNumber } from './util';
 import { buildGauntletBracket, type AdvanceRule, type BracketPlan } from './gauntlet-bracket';
 import { getSeason, getSeasonLeaderboard, getLinkedGauntlet, getLinkedRegularSeason, getGauntletRounds } from './queries';
+import { clearOpsError } from './ops-errors';
 
 export interface GauntletPodRow {
   id: number;
@@ -340,11 +341,11 @@ export async function seedBracket(
  * player_match_stats, matches, weeks, and the season row itself. If its paired regular season was
  * ARCHIVED (i.e. this gauntlet had already completed and archived it via `checkGauntletCompletion`),
  * reverts that season back to COMPLETED — an archived season with no gauntlet behind it is a
- * confusing dead end. Also clears any stale `ops_error` on the regular season — resetting the
- * gauntlet is the recovery action for a roster-drift seed failure, so a fresh start shouldn't carry
- * the old failure forward. Used both to clean up a failed bracket build and to let an admin reset a
- * gauntlet — callers are responsible for deciding whether it's safe to delete (e.g. force-clearing
- * one that has already started play) before calling this. */
+ * confusing dead end. Also clears any stale build/seed `ops_errors` on the regular season —
+ * resetting the gauntlet is the recovery action for a roster-drift seed failure, so a fresh start
+ * shouldn't carry the old failure forward. Used both to clean up a failed bracket build and to let
+ * an admin reset a gauntlet — callers are responsible for deciding whether it's safe to delete
+ * (e.g. force-clearing one that has already started play) before calling this. */
 export async function deleteGauntletSeason(supabaseAdmin: SupabaseClient, gauntletSeasonId: number): Promise<void> {
   const { data: gauntletRow, error: gauntletSelErr } = await supabaseAdmin
     .from('seasons')
@@ -389,16 +390,15 @@ export async function deleteGauntletSeason(supabaseAdmin: SupabaseClient, gauntl
   if (gauntletName) {
     const regularSeason = await getLinkedRegularSeason(gauntletName);
     if (regularSeason) {
-      const patch: { status?: 'COMPLETED'; ops_error?: null; ops_error_at?: null } = {};
-      if (regularSeason.status === 'ARCHIVED') patch.status = 'COMPLETED';
-      if (regularSeason.ops_error) {
-        patch.ops_error = null;
-        patch.ops_error_at = null;
-      }
-      if (Object.keys(patch).length > 0) {
-        const { error: revertErr } = await supabaseAdmin.from('seasons').update(patch).eq('id', regularSeason.id);
+      if (regularSeason.status === 'ARCHIVED') {
+        const { error: revertErr } = await supabaseAdmin
+          .from('seasons')
+          .update({ status: 'COMPLETED' })
+          .eq('id', regularSeason.id);
         if (revertErr) throw revertErr;
       }
+      await clearOpsError(supabaseAdmin, 'season', regularSeason.id, 'gauntlet_build');
+      await clearOpsError(supabaseAdmin, 'season', regularSeason.id, 'gauntlet_seed');
     }
   }
 }
@@ -462,16 +462,6 @@ export async function resolveAndPropagate(supabaseAdmin: SupabaseClient, matchId
   for (const downstreamPodId of downstreamPodIds) {
     await materializeIfReady(supabaseAdmin, downstreamPodId);
   }
-}
-
-/** Clears a stale `ops_error` left by an earlier failed attempt at this same operation for this
- * season — best-effort, since a failure here shouldn't turn a real success into an error response. */
-async function clearOpsError(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from('seasons')
-    .update({ ops_error: null, ops_error_at: null })
-    .eq('id', seasonId);
-  if (error) console.error(`ops-error clear failed(season ${seasonId}):`, error);
 }
 
 type CreateSeasonRowResult =
@@ -557,7 +547,7 @@ export async function tryBuildGauntletShape(
     throw err;
   }
 
-  await clearOpsError(supabaseAdmin, regularSeasonId);
+  await clearOpsError(supabaseAdmin, 'season', regularSeasonId, 'gauntlet_build');
 
   return {
     status: 'built',
@@ -721,7 +711,7 @@ export async function trySeedGauntlet(supabaseAdmin: SupabaseClient, regularSeas
   const nameBySeed = new Map(leaderboard.map((row, i) => [i + 1, row.player_name]));
   const toNames = (seeds: number[]) => seeds.map((seed) => nameBySeed.get(seed)!);
 
-  await clearOpsError(supabaseAdmin, regularSeasonId);
+  await clearOpsError(supabaseAdmin, 'season', regularSeasonId, 'gauntlet_seed');
 
   return {
     status: 'seeded',

@@ -9,27 +9,19 @@
  *     *and* its paired regular season together, since a season isn't fully "in the books" until
  *     its playoffs conclude.
  * All side effects are best-effort: a failure here never blocks the status transition that
- * triggered it. Every failure (or roster-drift outcome that needs admin attention) is recorded on
- * `seasons.ops_error` — cleared automatically the next time that same operation succeeds, whether
- * that's another auto-trigger or a manual retry from the admin UI (`tryBuildGauntletShape` and
- * `trySeedGauntlet` clear it themselves on success; `deleteGauntletSeason` clears it on reset).
+ * triggered it. Every failure (or roster-drift outcome that needs admin attention) is recorded via
+ * `recordOpsError()` (`src/lib/ops-errors.ts`, entity type `season`, operation
+ * `gauntlet_build`/`gauntlet_seed`/`gauntlet_archive`) — cleared automatically the next time that
+ * same operation succeeds, whether that's another auto-trigger or a manual retry from the admin UI
+ * (`tryBuildGauntletShape` and `trySeedGauntlet` clear it themselves on success;
+ * `deleteGauntletSeason` clears it on reset).
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isPlayedScore } from './util';
 import { tryBuildGauntletShape, trySeedGauntlet } from './gauntlet-engine';
 import { getLinkedRegularSeason } from './queries';
-
-/** Records a best-effort operation's failure (or an outcome that needs admin attention, like a
- * roster drift) against a season row — best-effort itself, since a failure here shouldn't turn a
- * secondary logging problem into a thrown error. */
-async function recordOpsError(supabaseAdmin: SupabaseClient, seasonId: number, message: string): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from('seasons')
-    .update({ ops_error: message, ops_error_at: new Date().toISOString() })
-    .eq('id', seasonId);
-  if (error) console.error(`ops-error record failed(season ${seasonId}):`, error);
-}
+import { recordOpsError } from './ops-errors';
 
 export interface ActivateSeasonResult {
   gauntletBuilt: boolean;
@@ -52,12 +44,12 @@ export async function activateSeason(supabaseAdmin: SupabaseClient, seasonId: nu
       return { gauntletBuilt: true, gauntletBuildError: null };
     }
     const reason = result.status === 'not-eligible' ? result.reason : 'A gauntlet already exists for this season';
-    await recordOpsError(supabaseAdmin, seasonId, `Gauntlet build failed: ${reason}`);
+    await recordOpsError(supabaseAdmin, 'season', seasonId, 'gauntlet_build', `Gauntlet build failed: ${reason}`);
     return { gauntletBuilt: false, gauntletBuildError: reason };
   } catch (err) {
     console.error(`gauntlet auto-build(season ${seasonId}) failed:`, err);
     const message = (err as Error).message;
-    await recordOpsError(supabaseAdmin, seasonId, `Gauntlet build failed: ${message}`);
+    await recordOpsError(supabaseAdmin, 'season', seasonId, 'gauntlet_build', `Gauntlet build failed: ${message}`);
     return { gauntletBuilt: false, gauntletBuildError: message };
   }
 }
@@ -105,13 +97,15 @@ export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seaso
     if (result.status === 'drift') {
       await recordOpsError(
         supabaseAdmin,
+        'season',
         seasonId,
+        'gauntlet_seed',
         `Auto-seed skipped: roster drifted since the bracket was built (shape expects ${result.shapeSeedCount} qualifiers, season now has ${result.currentCount}). Reset and rebuild the bracket.`,
       );
     }
   } catch (err) {
     console.error(`gauntlet auto-seed(season ${seasonId}) failed:`, err);
-    await recordOpsError(supabaseAdmin, seasonId, `Auto-seed failed: ${(err as Error).message}`);
+    await recordOpsError(supabaseAdmin, 'season', seasonId, 'gauntlet_seed', `Auto-seed failed: ${(err as Error).message}`);
   }
 }
 
@@ -151,6 +145,12 @@ export async function checkGauntletCompletion(supabaseAdmin: SupabaseClient, gau
     }
   } catch (err) {
     console.error(`gauntlet auto-archive(season ${gauntletSeasonId}) failed:`, err);
-    await recordOpsError(supabaseAdmin, gauntletSeasonId, `Auto-archive failed: ${(err as Error).message}`);
+    await recordOpsError(
+      supabaseAdmin,
+      'season',
+      gauntletSeasonId,
+      'gauntlet_archive',
+      `Auto-archive failed: ${(err as Error).message}`,
+    );
   }
 }
