@@ -4,14 +4,16 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason, getSeasonLeaderboard, getLinkedGauntlet, getGauntletRounds } from '@/lib/queries';
 import { extractSeasonNumber, isPlayedScore } from '@/lib/util';
 import { buildGauntletBracket } from '@/lib/gauntlet-bracket';
-import { persistAndMaterializeBracket, deleteGauntletSeason } from '@/lib/gauntlet-engine';
+import { persistBracketShape, deleteGauntletSeason } from '@/lib/gauntlet-engine';
 
 const supabaseAdmin = getAdminClient();
 
 /**
- * Creates the paired "Season N Gauntlet" season row for a regular season and builds + materializes
- * its bracket in one action — there is no separate "create a gauntlet season" step, since an
- * unbracketed gauntlet season is not a state anything else in the app expects.
+ * Creates the paired "Season N Gauntlet" season row for a regular season and builds its bracket
+ * *shape* — pods and slots, with every slot unseeded (`player_id` null). The shape only depends on
+ * the qualifier count, not on who qualified, so this can run as soon as the regular season's roster
+ * is fixed (its full match schedule exists) — well before standings are final. Nothing is
+ * materialized and nothing is playable until `POST .../gauntlet/seed` fills in seeds later.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
@@ -44,6 +46,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'This season already has a gauntlet' }, { status: 409 });
   }
 
+  // Only the qualifier *count* matters for the shape — the roster, not the standings, which is
+  // exactly what's available this early (getSeasonLeaderboard returns every rostered player, zero
+  // stats and all, per rosterBySeason).
   const leaderboard = await getSeasonLeaderboard(regularSeasonId);
   const N = leaderboard.length;
 
@@ -53,9 +58,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
   }
-
-  const playerBySeed = new Map<number, number>();
-  leaderboard.forEach((row, i) => playerBySeed.set(i + 1, row.player_id));
 
   const seasonNumber = extractSeasonNumber(regularSeason.name);
   if (seasonNumber == null) {
@@ -80,7 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const gauntletSeasonId = (gauntletSeason as { id: number }).id;
 
   try {
-    await persistAndMaterializeBracket(supabaseAdmin, gauntletSeasonId, plan, playerBySeed);
+    await persistBracketShape(supabaseAdmin, gauntletSeasonId, plan);
   } catch (err) {
     // Best-effort cleanup so a retry isn't permanently blocked by the "already has a gauntlet"
     // check above.
@@ -90,23 +92,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 
-  const nameBySeed = new Map(leaderboard.map((row, i) => [i + 1, row.player_name]));
-  const round1Seeds = new Set(
-    plan.pods.filter((p) => p.round_number === 1).flatMap((p) => p.slots).filter((s) => s.source_kind === 'seed').map((s) => s.source_seed!),
-  );
-  const byeSeeds = plan.pods
-    .filter((p) => p.round_number > 1)
-    .flatMap((p) => p.slots)
-    .filter((s) => s.source_kind === 'seed')
-    .map((s) => s.source_seed!);
-
   return NextResponse.json(
     {
       season: gauntletSeason,
-      seed_bands: {
-        byes: byeSeeds.map((seed) => nameBySeed.get(seed)),
-        playing: [...round1Seeds].sort((a, b) => a - b).map((seed) => nameBySeed.get(seed)),
-        relegated: plan.drops.map((seed) => nameBySeed.get(seed)),
+      shape: {
+        qualifiers: N,
+        games: plan.games,
+        rounds: Math.max(...plan.pods.map((p) => p.round_number)),
       },
     },
     { status: 201 },

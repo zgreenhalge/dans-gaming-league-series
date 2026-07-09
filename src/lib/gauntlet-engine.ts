@@ -160,14 +160,15 @@ export async function materializePod(
   if (podUpdErr) throw podUpdErr;
 }
 
-/** Inserts all pods + slots for a freshly built bracket plan, resolves 'seed' slots to player_ids
- * from the seed snapshot, and materializes every pod whose slots are all seed-sourced (round 1,
- * plus any all-bye pod). Called once from the bracket creation route. */
-export async function persistAndMaterializeBracket(
+/** Inserts all pods + slots for a freshly built bracket plan. Every slot's `player_id` is left
+ * null, including 'seed' slots — the shape only encodes qualifier count, not who qualified, so it
+ * can be built as soon as the regular season's roster is fixed (its full match schedule exists),
+ * well before standings are final. Nothing is materialized; nothing is playable yet. Call
+ * `seedBracket()` once seeds are known to fill it in. */
+export async function persistBracketShape(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
   plan: BracketPlan,
-  playerBySeed: Map<number, number>,
 ): Promise<void> {
   const podIdByKey = new Map<string, number>();
   const key = (round: number, index: number) => `${round}:${index}`;
@@ -197,21 +198,140 @@ export async function persistAndMaterializeBracket(
       source_seed: slot.source_kind === 'seed' ? slot.source_seed : null,
       source_pod_id:
         slot.source_kind === 'pod' ? podIdByKey.get(key(slot.source_round!, slot.source_pod_index!)) : null,
-      player_id: slot.source_kind === 'seed' ? (playerBySeed.get(slot.source_seed!) ?? null) : null,
+      player_id: null,
     }));
     const { error } = await supabaseAdmin.from('gauntlet_pod_slots').insert(rows);
     if (error) throw error;
   }
+}
 
-  const seedByPlayer = new Map<number, number>();
-  for (const [seed, playerId] of playerBySeed) seedByPlayer.set(playerId, seed);
+/** All `gauntlet_pods.id` rows for a season — the two-step "get pod ids, then filter slots by
+ * them" shape used throughout this file, since `gauntlet_pod_slots` has two FKs into
+ * `gauntlet_pods` (`pod_id` and `source_pod_id`), making a direct embedded join ambiguous. */
+async function getPodIds(supabaseAdmin: SupabaseClient, seasonId: number): Promise<number[]> {
+  const { data, error } = await supabaseAdmin.from('gauntlet_pods').select('id').eq('season_id', seasonId);
+  if (error) throw error;
+  return ((data ?? []) as { id: number }[]).map((p) => p.id);
+}
 
-  for (const pod of plan.pods) {
-    if (pod.slots.every((s) => s.source_kind === 'seed')) {
-      const podId = podIdByKey.get(key(pod.round_number, pod.pod_index))!;
-      const occupants = pod.slots.map((s) => ({ player_id: playerBySeed.get(s.source_seed!)! }));
-      await materializePod(supabaseAdmin, { id: podId, season_id: seasonId, round_number: pod.round_number }, occupants, seedByPlayer);
-    }
+export interface SeedBands {
+  /** Seeds that play round 1. */
+  round1: number[];
+  /** Seeds whose only seed-sourced slot is in a later round (bye straight past round 1). */
+  byes: number[];
+  /** Seeds with no seed-sourced slot anywhere in the bracket (relegated at build time). */
+  dropped: number[];
+}
+
+/** Derives which seeds play round 1, which bye past it, and which were dropped entirely, from the
+ * persisted shape alone — works whether or not it's been seeded yet. `round1.length + byes.length`
+ * is the qualifier count N the shape was built for, used by `seedBracket()`'s caller to catch a
+ * roster that's drifted since the shape was built. */
+export async function getSeedBands(
+  supabaseAdmin: SupabaseClient,
+  seasonId: number,
+  qualifierCount: number,
+): Promise<SeedBands> {
+  const { data: pods, error: podsErr } = await supabaseAdmin
+    .from('gauntlet_pods')
+    .select('id, round_number')
+    .eq('season_id', seasonId);
+  if (podsErr) throw podsErr;
+  const podRows = (pods ?? []) as { id: number; round_number: number }[];
+  const roundByPodId = new Map(podRows.map((p) => [p.id, p.round_number]));
+  const podIds = podRows.map((p) => p.id);
+  if (podIds.length === 0) {
+    return { round1: [], byes: [], dropped: Array.from({ length: qualifierCount }, (_, i) => i + 1) };
+  }
+
+  const { data: seedSlots, error: slotsErr } = await supabaseAdmin
+    .from('gauntlet_pod_slots')
+    .select('pod_id, source_seed')
+    .eq('source_kind', 'seed')
+    .in('pod_id', podIds);
+  if (slotsErr) throw slotsErr;
+
+  const round1: number[] = [];
+  const byes: number[] = [];
+  const seenSeeds = new Set<number>();
+  for (const slot of (seedSlots ?? []) as { pod_id: number; source_seed: number }[]) {
+    seenSeeds.add(slot.source_seed);
+    if (roundByPodId.get(slot.pod_id) === 1) round1.push(slot.source_seed);
+    else byes.push(slot.source_seed);
+  }
+  const dropped: number[] = [];
+  for (let seed = 1; seed <= qualifierCount; seed++) {
+    if (!seenSeeds.has(seed)) dropped.push(seed);
+  }
+
+  return {
+    round1: round1.sort((a, b) => a - b),
+    byes: byes.sort((a, b) => a - b),
+    dropped,
+  };
+}
+
+/** Materializes a pod if all four of its slots are now filled and it hasn't been materialized
+ * already — shared by the seeding step (which can immediately ready round 1, or any all-bye pod)
+ * and the propagation hook (which readies later pods as their feeders resolve). */
+async function materializeIfReady(supabaseAdmin: SupabaseClient, podId: number): Promise<void> {
+  const { data: allSlots, error: allSlotsErr } = await supabaseAdmin
+    .from('gauntlet_pod_slots')
+    .select('player_id')
+    .eq('pod_id', podId);
+  if (allSlotsErr) throw allSlotsErr;
+  const occupants = (allSlots ?? []) as { player_id: number | null }[];
+  if (occupants.length !== 4 || occupants.some((o) => o.player_id == null)) return;
+
+  const { data: podRow, error: podErr } = await supabaseAdmin
+    .from('gauntlet_pods')
+    .select('id, season_id, round_number, match1_id')
+    .eq('id', podId)
+    .single();
+  if (podErr) throw podErr;
+  const pod = podRow as { id: number; season_id: number; round_number: number; match1_id: number | null };
+  if (pod.match1_id != null) return; // already materialized
+
+  const seedByPlayer = await getSeedByPlayer(supabaseAdmin, pod.season_id);
+  await materializePod(
+    supabaseAdmin,
+    { id: pod.id, season_id: pod.season_id, round_number: pod.round_number },
+    occupants.map((o) => ({ player_id: o.player_id! })),
+    seedByPlayer,
+  );
+}
+
+/** Fills in every 'seed'-sourced slot of an already-built bracket shape from the given seed →
+ * player snapshot, then materializes every pod that becomes fully filled as a result (round 1,
+ * plus any all-bye pod). Call once the regular season's standings are final — nothing about the
+ * shape itself needs to change, only the previously-null seed slots. */
+export async function seedBracket(
+  supabaseAdmin: SupabaseClient,
+  seasonId: number,
+  playerBySeed: Map<number, number>,
+): Promise<void> {
+  const podIds = await getPodIds(supabaseAdmin, seasonId);
+  const { data: seedSlots, error: seedSlotsErr } =
+    podIds.length === 0
+      ? { data: [], error: null }
+      : await supabaseAdmin
+          .from('gauntlet_pod_slots')
+          .select('id, pod_id, source_seed')
+          .eq('source_kind', 'seed')
+          .in('pod_id', podIds);
+  if (seedSlotsErr) throw seedSlotsErr;
+  const slots = (seedSlots ?? []) as { id: number; pod_id: number; source_seed: number }[];
+
+  for (const slot of slots) {
+    const playerId = playerBySeed.get(slot.source_seed);
+    if (playerId == null) continue;
+    const { error } = await supabaseAdmin.from('gauntlet_pod_slots').update({ player_id: playerId }).eq('id', slot.id);
+    if (error) throw error;
+  }
+
+  const affectedPodIds = [...new Set(slots.map((s) => s.pod_id))];
+  for (const podId of affectedPodIds) {
+    await materializeIfReady(supabaseAdmin, podId);
   }
 }
 
@@ -310,29 +430,6 @@ export async function resolveAndPropagate(supabaseAdmin: SupabaseClient, matchId
 
   const downstreamPodIds = [...new Set(slots.map((s) => s.pod_id))];
   for (const downstreamPodId of downstreamPodIds) {
-    const { data: allSlots, error: allSlotsErr } = await supabaseAdmin
-      .from('gauntlet_pod_slots')
-      .select('player_id')
-      .eq('pod_id', downstreamPodId);
-    if (allSlotsErr) throw allSlotsErr;
-    const occupants = (allSlots ?? []) as { player_id: number | null }[];
-    if (occupants.length !== 4 || occupants.some((o) => o.player_id == null)) continue;
-
-    const { data: downstreamPod, error: dpErr } = await supabaseAdmin
-      .from('gauntlet_pods')
-      .select('id, season_id, round_number, match1_id')
-      .eq('id', downstreamPodId)
-      .single();
-    if (dpErr) throw dpErr;
-    const dp = downstreamPod as { id: number; season_id: number; round_number: number; match1_id: number | null };
-    if (dp.match1_id != null) continue; // already materialized
-
-    const seedByPlayer = await getSeedByPlayer(supabaseAdmin, pod.season_id);
-    await materializePod(
-      supabaseAdmin,
-      { id: dp.id, season_id: dp.season_id, round_number: dp.round_number },
-      occupants.map((o) => ({ player_id: o.player_id! })),
-      seedByPlayer,
-    );
+    await materializeIfReady(supabaseAdmin, downstreamPodId);
   }
 }

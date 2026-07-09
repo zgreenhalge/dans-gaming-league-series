@@ -3,13 +3,13 @@ import { authOptions } from '@/lib/authOptions';
 import { redirect } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { CreateGauntletForm } from '@/components/CreateGauntletForm';
-import { ResetGauntletList } from '@/components/ResetGauntletList';
+import { GauntletLifecycleList } from '@/components/GauntletLifecycleList';
 import { getSeasons, getGauntletRounds, isPlayerAdmin } from '@/lib/queries';
 import { buildRegularToGauntletMap, isPlayedScore } from '@/lib/util';
 
 export const metadata = {
   title: 'Start Gauntlet',
-  description: 'Build or reset a gauntlet bracket for an active DGLS season.',
+  description: 'Build, seed, or reset a gauntlet bracket for an active DGLS season.',
 };
 
 export default async function GauntletSeasonPage() {
@@ -35,11 +35,15 @@ export default async function GauntletSeasonPage() {
       .map(async (s) => {
         const gauntletId = paired.get(s.id)!;
         const rounds = await getGauntletRounds(gauntletId);
+        // Round rows only exist once at least one pod has materialized (round 1 for a seeded
+        // bracket) — an unseeded shape has zero weeks/matches, so getGauntletRounds returns [].
+        const seeded = rounds.length > 0;
         const started = rounds.some((r) => r.matches.some((m) => isPlayedScore(m.final_score)));
         return {
           regularSeasonId: s.id,
           regularSeasonName: s.name,
           gauntletName: gauntletById.get(gauntletId)?.name ?? `Season ${gauntletId} Gauntlet`,
+          seeded,
           started,
         };
       }),
@@ -58,8 +62,9 @@ export default async function GauntletSeasonPage() {
         <div className="mt-8 mb-8">
           <div className="font-display text-[28px] font-semibold leading-tight">Start Gauntlet</div>
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">
-            Builds the single-elimination bracket from the season&apos;s current canonical-sort
-            leaderboard and creates the paired gauntlet season immediately.
+            Builds the single-elimination bracket shape for a season — sized from its current
+            roster, but unseeded. Seed it later, once the regular season is complete, from the list
+            below.
           </div>
         </div>
         <CreateGauntletForm seasons={eligible} />
@@ -69,7 +74,7 @@ export default async function GauntletSeasonPage() {
             <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-3">
               Existing Gauntlets
             </div>
-            <ResetGauntletList seasons={withGauntlet} />
+            <GauntletLifecycleList seasons={withGauntlet} />
           </div>
         )}
       </main>

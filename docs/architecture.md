@@ -71,8 +71,9 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `POST` | `/api/matches/[id]/replay/dispatch` | (Re)trigger the replay Action ([`replay.md`](./replay.md)) |
 | `POST` | `/api/maps/[slug]/radar/dispatch` | (Re)trigger the radar-build Action for a map (admin only; [`replay.md`](./replay.md)) |
 | `PATCH` | `/api/seasons/[id]/start-date` | Set season start date (admin only) |
-| `POST` | `/api/seasons/[id]/gauntlet` | Create the paired gauntlet season for an active regular season and build + materialize its bracket (admin only) |
-| `DELETE` | `/api/seasons/[id]/gauntlet` | Reset an unplayed gauntlet — deletes it and everything materialized under it, refuses if any match has a score (admin only) |
+| `POST` | `/api/seasons/[id]/gauntlet` | Create the paired gauntlet season for an active regular season and build its bracket *shape* — unseeded, nothing materialized (admin only) |
+| `POST` | `/api/seasons/[id]/gauntlet/seed` | Seed an existing shape from the season's current leaderboard order and materialize round 1 (admin only) |
+| `DELETE` | `/api/seasons/[id]/gauntlet` | Reset an unplayed gauntlet (seeded or not) — deletes it and everything materialized under it, refuses if any match has a score (admin only) |
 | `PATCH` | `/api/players/[id]` | Edit a player — display name, `is_admin` (can't demote yourself), or Steam link (unlink / set SteamID64) (admin only) |
 | `POST` | `/api/ehog/recompute/trigger` | Admin-gated "recompute EHOG ratings now" — fires the full rating walk in the background (admin only) |
 | `GET/POST` | `/api/players/register` | List unlinked players / link a Steam account to a player record |
@@ -120,19 +121,36 @@ rather than guessing an unspecified shape. Its output is a plan of **pods** — 
 games with two distinct partner pairings, guaranteeing exactly one 2-0 and one 0-2 result — each
 tagged `single` (only the 2-0 survives) or `wildcard` (only the 0-2 is eliminated).
 
-`POST /api/seasons/[id]/gauntlet` takes a regular season's id, seeds the bracket from
-`getSeasonLeaderboard()`'s canonical-sort order (seed 1 = leader), creates the paired
-`"Season N Gauntlet"` season row, and persists + materializes the bracket in one action — see
-`persistAndMaterializeBracket()` in `src/lib/gauntlet-engine.ts`. Round 1 (and any pod whose slots
-are all seed-sourced) materializes immediately; later rounds materialize automatically as their pod
-resolves, via a non-fatal hook (`resolveAndPropagate()`) appended to `PATCH /api/matches/[id]/score`
-after the score commit. A pod's `advance_rule` and `is_final` also drive the "pod stakes" label shown
-on the round list and match page (`GAUNTLET_POD_STAKES_LABEL` in `src/lib/util.ts`).
+Building and seeding a bracket are two separate steps, because the shape only depends on the
+qualifier *count*, not on who qualified:
 
-`DELETE /api/seasons/[id]/gauntlet` reverses this — it refuses once any of the gauntlet's matches has
-a played score, otherwise deletes the gauntlet season and everything materialized under it
-(`deleteGauntletSeason()` in `gauntlet-engine.ts`), freeing the regular season to have its bracket
-rebuilt. `/admin/seasons/gauntlet` surfaces both the "build" and "reset" actions together.
+1. **`POST /api/seasons/[id]/gauntlet`** takes a regular season's id, creates the paired
+   `"Season N Gauntlet"` season row, and persists the bracket *shape* — every `gauntlet_pods` /
+   `gauntlet_pod_slots` row, but every slot's `player_id` left null (`persistBracketShape()` in
+   `src/lib/gauntlet-engine.ts`). `N` comes from the roster (`getSeasonLeaderboard()`'s row count,
+   which includes zero-stat unplayed players), not from standings — so this can run as soon as the
+   season's full match schedule exists, well before the regular season is complete. Nothing is
+   materialized; nothing is playable yet.
+2. **`POST /api/seasons/[id]/gauntlet/seed`** takes the same regular season's id, reads its
+   *current* `getSeasonLeaderboard()` order (seed 1 = leader), fills in every seed-sourced slot's
+   `player_id`, and materializes every pod that becomes fully filled as a result — round 1, plus any
+   all-bye pod (`seedBracket()`). Call this once the regular season's games are actually done;
+   nothing enforces that timing — it's an admin operational call, like the rest of this feature. If
+   the roster has drifted since the shape was built (its seed-slot count no longer matches the
+   season's current player count), seeding is refused — reset and rebuild instead.
+
+Later rounds materialize automatically as their pod resolves, via a non-fatal hook
+(`resolveAndPropagate()`) appended to `PATCH /api/matches/[id]/score` after the score commit; both it
+and the seeding step share a `materializeIfReady()` helper that only materializes a pod once all four
+of its slots are filled and it hasn't already been. A pod's `advance_rule` and `is_final` also drive
+the "pod stakes" label shown on the round list and match page (`GAUNTLET_POD_STAKES_LABEL` in
+`src/lib/util.ts`).
+
+`DELETE /api/seasons/[id]/gauntlet` reverses either step — it refuses once any of the gauntlet's
+matches has a played score, otherwise deletes the gauntlet season and everything materialized under
+it (`deleteGauntletSeason()` in `gauntlet-engine.ts`, also reused to clean up a failed build),
+freeing the regular season to have its bracket rebuilt from scratch. `/admin/seasons/gauntlet`
+surfaces build, seed, and reset together, one row per season, based on where it is in that lifecycle.
 
 ## Data Ingestion
 

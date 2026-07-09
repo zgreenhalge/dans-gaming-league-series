@@ -6,14 +6,14 @@ interface Props {
   seasons: { id: number; name: string }[];
 }
 
-type SeedBands = { byes: string[]; playing: string[]; relegated: string[] };
+type Shape = { qualifiers: number; games: number; rounds: number };
 
 export function CreateGauntletForm({ seasons }: Props) {
   const [seasonId, setSeasonId] = useState<number | ''>(seasons[0]?.id ?? '');
   const [startDate, setStartDate] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<SeedBands | null>(null);
+  const [result, setResult] = useState<Shape | null>(null);
 
   async function submit() {
     if (!seasonId) return;
@@ -30,7 +30,7 @@ export function CreateGauntletForm({ seasons }: Props) {
         setError(body.error ?? 'Failed to build the gauntlet bracket.');
         return;
       }
-      setResult(body.seed_bands as SeedBands);
+      setResult(body.shape as Shape);
     } finally {
       setSubmitting(false);
     }
@@ -38,29 +38,13 @@ export function CreateGauntletForm({ seasons }: Props) {
 
   if (result) {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="border border-[var(--color-accent-green-border)] bg-[var(--color-accent-green-bg)] px-4 py-3">
-          <div className="tracked text-[10px] text-[var(--color-accent-green-fg)] mb-1">Bracket Built</div>
-          <div className="font-mono text-[12px] text-[var(--color-text-primary)]">
-            Round 1 matches are live. Publish this to the league:
-          </div>
+      <div className="border border-[var(--color-accent-green-border)] bg-[var(--color-accent-green-bg)] px-4 py-3">
+        <div className="tracked text-[10px] text-[var(--color-accent-green-fg)] mb-1">Bracket Shape Built</div>
+        <div className="font-mono text-[12px] text-[var(--color-text-primary)]">
+          {result.qualifiers} qualifiers, {result.games} games across {result.rounds} round
+          {result.rounds === 1 ? '' : 's'}. Nothing is playable yet — seed it from the &quot;Existing
+          Gauntlets&quot; list below once the regular season is complete.
         </div>
-        {result.byes.length > 0 && (
-          <div>
-            <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-1">Bye to the final</div>
-            <div className="font-display text-[15px]">{result.byes.join(', ')}</div>
-          </div>
-        )}
-        <div>
-          <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-1">Playing round 1</div>
-          <div className="font-display text-[15px]">{result.playing.join(', ')}</div>
-        </div>
-        {result.relegated.length > 0 && (
-          <div>
-            <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-1">Relegated</div>
-            <div className="font-display text-[15px]">{result.relegated.join(', ')}</div>
-          </div>
-        )}
       </div>
     );
   }
