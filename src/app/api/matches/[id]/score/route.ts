@@ -8,6 +8,7 @@ import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import { triggerRatingRecompute } from '@/lib/ehog-recompute';
 import { parseEliminationWarning } from '@/lib/parsers/rosterResolver';
 import { persistSabremetrics, clearSabremetrics } from '@/lib/demo/sabremetrics';
+import { resolveAndPropagate } from '@/lib/gauntlet-engine';
 import type { DemoSabremetricStat, RoundHistoryEntry } from '@/lib/types';
 
 const supabaseAdmin = getAdminClient();
@@ -163,6 +164,7 @@ export async function PATCH(
   }
 
   const m = matchRow as unknown as MatchRow;
+  const isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
   const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
   const allStats = (matchStats ?? []) as { player_id: number; faction: string }[];
   const isInMatch = allStats.some((s) => s.player_id === playerId);
@@ -316,6 +318,19 @@ export async function PATCH(
   }
 
   after(() => triggerRatingRecompute());
+
+  // Gauntlet bracket advancement: resolve this match's pod, propagate the survivor(s) into
+  // downstream slots, and materialize the next pod once all four of its slots are filled.
+  // Best-effort in `after()` — a hook failure must never roll back the committed score.
+  if (isGauntlet) {
+    after(async () => {
+      try {
+        await resolveAndPropagate(supabaseAdmin, matchId);
+      } catch (err) {
+        console.error(`gauntlet propagate(${matchId}) failed:`, err);
+      }
+    });
+  }
 
   // Learn steam ids from elimination-resolved players: if the confirm forwarded parser warnings and
   // exactly one player was matched by elimination, persist that demo's steam id/nickname onto the
