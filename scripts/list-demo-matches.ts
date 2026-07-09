@@ -6,28 +6,11 @@
 //
 // Runs in the GitHub Action via `tsx`, reusing the same `src/lib/r2` client as the app.
 
-import { ListObjectsV2Command, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import { appendFileSync } from 'node:fs';
-import { r2, R2_BUCKET, replayKey } from '../src/lib/r2';
+import { r2, R2_BUCKET, replayKey, listDemoMatchIds } from '../src/lib/r2';
 
 const ONLY_MISSING = /^(1|true)$/i.test(process.env.ONLY_MISSING ?? '');
-
-/** Every match id with a `<id>/game.dem` object, ascending. Paginates the whole bucket. */
-async function listDemoMatchIds(): Promise<number[]> {
-  const ids = new Set<number>();
-  let token: string | undefined;
-  do {
-    const res = await r2.send(
-      new ListObjectsV2Command({ Bucket: R2_BUCKET, ContinuationToken: token }),
-    );
-    for (const obj of res.Contents ?? []) {
-      const m = /^(\d+)\/game\.dem$/.exec(obj.Key ?? '');
-      if (m) ids.add(Number(m[1]));
-    }
-    token = res.IsTruncated ? res.NextContinuationToken : undefined;
-  } while (token);
-  return [...ids].sort((a, b) => a - b);
-}
 
 async function hasReplay(matchId: number): Promise<boolean> {
   try {
