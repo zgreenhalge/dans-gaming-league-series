@@ -9,6 +9,7 @@ import { triggerRatingRecompute } from '@/lib/ehog-recompute';
 import { parseEliminationWarning } from '@/lib/parsers/rosterResolver';
 import { persistSabremetrics, clearSabremetrics } from '@/lib/demo/sabremetrics';
 import { resolveAndPropagate } from '@/lib/gauntlet-engine';
+import { checkSeasonCompletion } from '@/lib/season-lifecycle';
 import type { DemoSabremetricStat, RoundHistoryEntry } from '@/lib/types';
 
 const supabaseAdmin = getAdminClient();
@@ -33,6 +34,7 @@ type MatchRow = {
   shirts_pick: string | null;
   skins_starting_side: string | null;
   weeks: {
+    season_id: number;
     seasons: {
       is_gauntlet: boolean;
     };
@@ -148,7 +150,7 @@ export async function PATCH(
     supabaseAdmin
       .from('matches')
       .select(
-        'id, final_score, is_playoff_game, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(seasons(is_gauntlet))',
+        'id, final_score, is_playoff_game, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(season_id, seasons(is_gauntlet))',
       )
       .eq('id', matchId)
       .maybeSingle(),
@@ -328,6 +330,17 @@ export async function PATCH(
         await resolveAndPropagate(supabaseAdmin, matchId);
       } catch (err) {
         console.error(`gauntlet propagate(${matchId}) failed:`, err);
+      }
+    });
+  } else {
+    // Regular-season completion: if this score means every match in the season has now been
+    // played, mark it COMPLETED and best-effort seed its linked gauntlet from final standings.
+    // Best-effort in `after()` — a hook failure must never roll back the committed score.
+    after(async () => {
+      try {
+        await checkSeasonCompletion(supabaseAdmin, m.weeks.season_id);
+      } catch (err) {
+        console.error(`season completion check(${m.weeks.season_id}) failed:`, err);
       }
     });
   }
