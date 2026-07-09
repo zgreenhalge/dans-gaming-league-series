@@ -4,9 +4,10 @@
  * is automatic, detected from the score route:
  *   - ACTIVE -> COMPLETED once every match in a regular season has been played
  *     (`checkSeasonCompletion`), which also best-effort seeds its linked gauntlet.
- *   - -> ARCHIVED once a gauntlet's final round has been fully played
- *     (`checkGauntletCompletion`) — archives the gauntlet *and* its paired regular season
- *     together, since a season isn't fully "in the books" until its playoffs conclude.
+ *   - -> ARCHIVED once every match in a gauntlet has been played (`checkGauntletCompletion`,
+ *     sharing the same "fully played" check as `checkSeasonCompletion`) — archives the gauntlet
+ *     *and* its paired regular season together, since a season isn't fully "in the books" until
+ *     its playoffs conclude.
  * All side effects are best-effort: a failure here never blocks the status transition that
  * triggered it.
  */
@@ -14,19 +15,33 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isPlayedScore } from './util';
 import { tryBuildGauntletShape, trySeedGauntlet } from './gauntlet-engine';
-import { getGauntletRounds, getLinkedRegularSeason } from './queries';
+import { getLinkedRegularSeason } from './queries';
+
+export interface ActivateSeasonResult {
+  gauntletBuilt: boolean;
+  /** Why the gauntlet wasn't built, when `gauntletBuilt` is false — surfaced by the PATCH route so
+   * the admin sees it in the UI at the moment of the click, not just in server logs. */
+  gauntletBuildError: string | null;
+}
 
 /** Transitions a regular season UPCOMING -> ACTIVE, then best-effort builds its gauntlet bracket
  * shape (sized from the roster at go-live time — see `tryBuildGauntletShape`). Throws only if the
- * status update itself fails; a shape-build failure is logged, not thrown. */
-export async function activateSeason(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+ * status update itself fails; a shape-build failure is reported in the return value, not thrown —
+ * activation still succeeds either way. */
+export async function activateSeason(supabaseAdmin: SupabaseClient, seasonId: number): Promise<ActivateSeasonResult> {
   const { error } = await supabaseAdmin.from('seasons').update({ status: 'ACTIVE' }).eq('id', seasonId);
   if (error) throw error;
 
   try {
-    await tryBuildGauntletShape(supabaseAdmin, seasonId);
+    const result = await tryBuildGauntletShape(supabaseAdmin, seasonId);
+    if (result.status === 'built') {
+      return { gauntletBuilt: true, gauntletBuildError: null };
+    }
+    const reason = result.status === 'not-eligible' ? result.reason : 'A gauntlet already exists for this season';
+    return { gauntletBuilt: false, gauntletBuildError: reason };
   } catch (err) {
     console.error(`gauntlet auto-build(season ${seasonId}) failed:`, err);
+    return { gauntletBuilt: false, gauntletBuildError: (err as Error).message };
   }
 }
 
@@ -75,10 +90,16 @@ export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seaso
   }
 }
 
-/** Called from the score route's post-commit hook for every gauntlet match. Once the gauntlet's
- * final round has been fully played, archives the gauntlet season and — if a paired regular season
- * exists — archives it too, regardless of its current status. Idempotent: no-ops once the gauntlet
- * is already ARCHIVED, or if its final round isn't fully played yet. */
+/** Called from the score route's post-commit hook for every gauntlet match. Once every match in
+ * the gauntlet has been played — not just the final round — archives the gauntlet season and, if a
+ * paired regular season exists, archives it too, regardless of its current status. Shares
+ * `isSeasonFullyPlayed()` with `checkSeasonCompletion()` rather than checking only the max
+ * `round_number`'s matches: for an automated (pod-based) bracket the final round structurally can't
+ * materialize until every earlier pod has resolved, so the two checks are equivalent there — but a
+ * manually-built gauntlet (see gauntlet-engine.ts's `createManualGauntletMatch`) has no such
+ * guarantee, since nothing stops an admin from adding a later round before an earlier one is
+ * finished. Idempotent: no-ops once the gauntlet is already ARCHIVED, or if any match is still
+ * unplayed. */
 export async function checkGauntletCompletion(supabaseAdmin: SupabaseClient, gauntletSeasonId: number): Promise<void> {
   const { data: seasonRow, error: seasonErr } = await supabaseAdmin
     .from('seasons')
@@ -89,11 +110,7 @@ export async function checkGauntletCompletion(supabaseAdmin: SupabaseClient, gau
   const season = seasonRow as { name: string; status: string; is_gauntlet: boolean } | null;
   if (!season || !season.is_gauntlet || season.status === 'ARCHIVED') return;
 
-  const rounds = await getGauntletRounds(gauntletSeasonId);
-  if (rounds.length === 0) return;
-  const finalRound = rounds.reduce((max, r) => (r.round_number > max.round_number ? r : max));
-  const finalPlayed = finalRound.matches.length > 0 && finalRound.matches.every((m) => isPlayedScore(m.final_score));
-  if (!finalPlayed) return;
+  if (!(await isSeasonFullyPlayed(supabaseAdmin, gauntletSeasonId))) return;
 
   const { error: gauntletUpdErr } = await supabaseAdmin
     .from('seasons')
