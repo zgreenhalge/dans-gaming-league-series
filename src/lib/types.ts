@@ -10,10 +10,6 @@ export interface Season {
   is_gauntlet: boolean;
   start_date: string | null;
   map_pool: string[] | null;
-  /** Set when a best-effort gauntlet operation (auto-build, auto-seed, auto-archive) fails —
-   * cleared on the next successful attempt at that same operation. Null in the common case. */
-  ops_error: string | null;
-  ops_error_at: string | null;
 }
 
 export interface Week {

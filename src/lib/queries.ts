@@ -17,6 +17,7 @@ import {
   type BackgroundJobRow,
 } from './jobs';
 import type { ScheduledMatchRef } from './schedule';
+import type { OpsErrorEntityType } from './ops-errors';
 import type {
   Season,
   Week,
@@ -3518,4 +3519,98 @@ export async function getReplayEventsView(matchId: number): Promise<ReplayEvents
       events: r.events,
     })),
   };
+}
+
+export interface OpsErrorRow {
+  id: number;
+  entityType: OpsErrorEntityType;
+  entityId: number;
+  operation: string;
+  message: string;
+  occurredAt: string;
+  /** Human-readable name for the row's entity — a season/match/player name, or "EHOG Recompute"
+   * for the system-wide singleton — resolved here so the admin UI never has to. */
+  label: string;
+}
+
+/**
+ * Every currently-live best-effort-operation failure, newest first — the single admin surface for
+ * anything recorded via `recordOpsError()` (`src/lib/ops-errors.ts`). Resolves each row's
+ * `entity_id` to a display name with a handful of batched follow-up queries, one per entity type
+ * present.
+ */
+export async function getOpsErrors(): Promise<OpsErrorRow[]> {
+  const { data, error } = await supabase
+    .from('ops_errors')
+    .select('id, entity_type, entity_id, operation, message, occurred_at')
+    .order('occurred_at', { ascending: false });
+  if (error) throw error;
+  type Row = {
+    id: number;
+    entity_type: OpsErrorEntityType;
+    entity_id: number;
+    operation: string;
+    message: string;
+    occurred_at: string;
+  };
+  const rows = (data ?? []) as Row[];
+  if (rows.length === 0) return [];
+
+  const seasonIds = rows.filter((r) => r.entity_type === 'season').map((r) => r.entity_id);
+  const matchIds = rows.filter((r) => r.entity_type === 'match').map((r) => r.entity_id);
+  const playerIds = rows.filter((r) => r.entity_type === 'player').map((r) => r.entity_id);
+
+  const [seasonRes, matchRes, playerRes] = await Promise.all([
+    seasonIds.length
+      ? supabase.from('seasons').select('id, name').in('id', seasonIds)
+      : Promise.resolve({ data: [] }),
+    matchIds.length
+      ? supabase.from('matches').select('id, match_number, weeks(week_number, seasons(name))').in('id', matchIds)
+      : Promise.resolve({ data: [] }),
+    playerIds.length
+      ? supabase.from('players').select('id, name').in('id', playerIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const seasonName = new Map(((seasonRes.data ?? []) as { id: number; name: string }[]).map((s) => [s.id, s.name]));
+  const playerName = new Map(((playerRes.data ?? []) as { id: number; name: string }[]).map((p) => [p.id, p.name]));
+  type MatchJoinRow = {
+    id: number;
+    match_number: number | null;
+    weeks: { week_number: number | null; seasons: { name: string | null } | null } | null;
+  };
+  const matchLbl = new Map(
+    ((matchRes.data ?? []) as unknown as MatchJoinRow[]).map((m) => [
+      m.id,
+      matchLabel({
+        matchId: m.id,
+        seasonName: m.weeks?.seasons?.name,
+        weekNumber: m.weeks?.week_number,
+        matchNumber: m.match_number,
+      }),
+    ]),
+  );
+
+  const labelFor = (r: Row): string => {
+    switch (r.entity_type) {
+      case 'season':
+        return seasonName.get(r.entity_id) ?? `Season #${r.entity_id}`;
+      case 'match':
+        return matchLbl.get(r.entity_id) ?? `Match #${r.entity_id}`;
+      case 'player':
+        return playerName.get(r.entity_id) ?? `Player #${r.entity_id}`;
+      case 'system':
+        return 'EHOG Recompute';
+    }
+  };
+
+  return rows.map((r) => ({
+    id: r.id,
+    entityType: r.entity_type,
+    entityId: r.entity_id,
+    operation: r.operation,
+    message: r.message,
+    occurredAt: r.occurred_at,
+    label: labelFor(r),
+  }));
 }
