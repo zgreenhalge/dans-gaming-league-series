@@ -20,9 +20,13 @@ interface StatusResponse {
 export default function MatchServerPanel({
   matchId,
   canManage,
+  autoProvisioning,
 }: {
   matchId: number;
   canManage: boolean;
+  /** Veto just completed, so a server provision is imminent (fired server-side in `after()`) —
+   *  show the spinner immediately instead of racing the idle state against the Realtime update. */
+  autoProvisioning?: boolean;
 }) {
   const [state, setState] = useState<ServerState>('idle');
   const [connect, setConnect] = useState<string | null>(null);
@@ -125,7 +129,9 @@ export default function MatchServerPanel({
     <div className="lift-card rounded-lg border border-[var(--color-border-secondary)] bg-[var(--color-bg-secondary)] p-4 shadow-lg">
       <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Match server</div>
 
-      {state === 'idle' && (
+      {state === 'idle' && autoProvisioning && <ServerSpinner label="Starting server…" />}
+
+      {state === 'idle' && !autoProvisioning && (
         <div className="flex items-center justify-between gap-3">
           <span className="text-sm text-[var(--color-text-secondary)]">No server running for this match.</span>
           {canManage && (
