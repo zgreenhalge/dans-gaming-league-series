@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { TopbarShell } from '@/components/TopbarShell';
 import { CreateGauntletForm } from '@/components/CreateGauntletForm';
 import { GauntletLifecycleList } from '@/components/GauntletLifecycleList';
-import { getSeasons, getGauntletRounds, gauntletHasPods, isPlayerAdmin } from '@/lib/queries';
+import { OpsErrorList } from '@/components/OpsErrorList';
+import { getSeasons, getGauntletRounds, gauntletHasPods, isPlayerAdmin, getOpsErrors } from '@/lib/queries';
 import { buildRegularToGauntletMap, isPlayedScore } from '@/lib/util';
 
 export const metadata = {
-  title: 'Start Gauntlet',
+  title: 'Manage Gauntlet',
   description: 'Build, seed, or reset a gauntlet bracket for an active DGLS season.',
 };
 
@@ -18,11 +19,13 @@ export default async function GauntletSeasonPage() {
   if (!session?.user?.playerId) redirect('/');
   if (!(await isPlayerAdmin(session.user.playerId))) redirect('/');
 
-  const seasons = await getSeasons();
+  const [seasons, opsErrors] = await Promise.all([getSeasons(), getOpsErrors()]);
   const regularSeasons = seasons.filter((s) => !s.is_gauntlet);
   const gauntletSeasons = seasons.filter((s) => s.is_gauntlet);
   const paired = buildRegularToGauntletMap(regularSeasons, gauntletSeasons);
   const gauntletById = new Map(gauntletSeasons.map((g) => [g.id, g]));
+
+  const seasonOpsErrors = opsErrors.filter((e) => e.entityType === 'season');
 
   const activeRegular = regularSeasons.filter((s) => s.status === 'ACTIVE');
 
@@ -58,18 +61,20 @@ export default async function GauntletSeasonPage() {
         crumbs={[
           { label: 'DGLS', href: '/' },
           { label: 'Admin', href: '/admin' },
-          { label: 'Start Gauntlet' },
+          { label: 'Manage Gauntlet' },
         ]}
       />
       <main className="max-w-[640px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-8">
-          <div className="font-display text-[28px] font-semibold leading-tight">Start Gauntlet</div>
+          <div className="font-display text-[28px] font-semibold leading-tight">Manage Gauntlet</div>
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">
-            Builds the single-elimination bracket shape for a season — sized from its current
+            Build the single-elimination bracket shape for a season — sized from its current
             roster, but unseeded. Seed it later, once the regular season is complete, from the list
             below.
           </div>
         </div>
+        <OpsErrorList items={seasonOpsErrors} />
+
         <CreateGauntletForm seasons={eligible} />
 
         {eligible.length > 0 && (

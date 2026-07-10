@@ -29,6 +29,6 @@ export async function POST() {
     return NextResponse.json({ error: 'Recompute not configured (RECOMPUTE_SECRET missing)' }, { status: 500 });
   }
 
-  after(() => triggerRatingRecompute());
+  after(() => triggerRatingRecompute(supabaseAdmin));
   return NextResponse.json({ ok: true });
 }
