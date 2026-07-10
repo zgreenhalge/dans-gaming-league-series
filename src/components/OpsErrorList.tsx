@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { LocalTime } from './LocalTime';
 
 export interface OpsErrorItem {
   id: number;
-  entityType: 'season' | 'match' | 'player' | 'system';
+  entityType: 'season' | 'match' | 'system';
   label: string;
   operation: string;
   message: string;
@@ -25,12 +26,19 @@ const OPERATION_LABELS: Record<string, string> = {
 function OpsErrorRow({ item }: { item: OpsErrorItem }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function dismiss() {
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch(`/api/ops-errors/${item.id}`, { method: 'DELETE' });
-      if (res.ok) router.refresh();
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? 'Failed to dismiss.');
+        return;
+      }
+      router.refresh();
     } finally {
       setBusy(false);
     }
@@ -50,8 +58,9 @@ function OpsErrorRow({ item }: { item: OpsErrorItem }) {
             {item.message}
           </div>
           <div className="font-mono text-[10px] text-[var(--color-text-secondary)] mt-1">
-            {new Date(item.occurredAt).toLocaleString()}
+            <LocalTime iso={item.occurredAt} />
           </div>
+          {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-1">{error}</div>}
         </div>
         <button
           type="button"

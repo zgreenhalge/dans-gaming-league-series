@@ -15,7 +15,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type OpsErrorEntityType = 'season' | 'match' | 'player' | 'system';
+export type OpsErrorEntityType = 'season' | 'match' | 'system';
 
 /** Records (or overwrites) the current failure for a given (entity, operation) pair — best-effort
  * itself, since a failure here shouldn't turn a secondary logging problem into a thrown error. */

@@ -5,8 +5,8 @@ import { getAdminClient } from '@/lib/supabase-admin';
 const supabaseAdmin = getAdminClient();
 
 /** Dismisses a single `ops_errors` row by its id — the admin has seen it and either fixed the
- * underlying issue or is choosing to ignore it. Applies to any entity type (season, match, player,
- * system) since they all share this one table. */
+ * underlying issue or is choosing to ignore it. Applies to any entity type (season, match, system)
+ * since they all share this one table. */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
   if (!access.ok) {
