@@ -17,6 +17,15 @@ export function toEhog(mu: number, sigma: number): number {
   return 10.0 + 90.0 / (1.0 + Math.exp(-(skill - EHOG_CENTER) / EHOG_SCALE));
 }
 
+/**
+ * Inverse of toEhog() — the mu that produces a given display rating at a fixed sigma.
+ * Domain: (10, 100) exclusive (the asymptotes are unreachable).
+ */
+export function fromEhog(targetEhog: number, sigma: number = SIGMA_DEFAULT): number {
+  const skill = EHOG_CENTER - EHOG_SCALE * Math.log(90.0 / (targetEhog - 10.0) - 1.0);
+  return skill + EHOG_LAMBDA * sigma;
+}
+
 export const DEFAULT_EHOG = toEhog(MU_DEFAULT, SIGMA_DEFAULT);
 
 export function marginMultiplier(scoreA: number, scoreB: number): number {

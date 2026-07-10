@@ -37,7 +37,7 @@ export async function PATCH(
   }
 
   const body = (await req.json().catch(() => null)) as
-    | { name?: unknown; is_admin?: unknown; steam_id?: unknown }
+    | { name?: unknown; is_admin?: unknown; steam_id?: unknown; seed_ehog?: unknown }
     | null;
   if (!body || typeof body !== 'object') {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
@@ -93,6 +93,19 @@ export async function PATCH(
       });
     } else {
       return NextResponse.json({ error: 'steam_id must be null or a 17-digit SteamID64' }, { status: 400 });
+    }
+  }
+
+  // Seed EHOG — the starting rating a known new player is seeded at, in place of the global
+  // default, until their first rated match. `null` clears it back to the default. The (10, 100)
+  // bound is exclusive: those are the display transform's unreachable asymptotes.
+  if ('seed_ehog' in body) {
+    if (body.seed_ehog === null) {
+      update.seed_ehog = null;
+    } else if (typeof body.seed_ehog === 'number' && body.seed_ehog > 10 && body.seed_ehog < 100) {
+      update.seed_ehog = body.seed_ehog;
+    } else {
+      return NextResponse.json({ error: 'seed_ehog must be null or a number strictly between 10 and 100' }, { status: 400 });
     }
   }
 

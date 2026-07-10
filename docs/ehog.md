@@ -22,6 +22,12 @@ every match via a full chronological recompute.
 Between seasons, μ and σ are regressed toward their defaults by `SEASON_REGRESSION` (10%) to keep
 ratings responsive without full resets.
 
+A brand-new player starts at `MU_DEFAULT`/`SIGMA_DEFAULT`, which is deliberately **below** `CENTER`
+(the display transform's own midpoint anchor) — so an unproven player starts in the low-30s rather
+than mid-band, and climbs as results come in. A player with a known skill level can instead be seeded
+at an admin-configured starting rating (`players.seed_ehog`, set on `/admin/players`) — see
+**Seeding a known player's starting rating** below.
+
 ## Display tiers
 
 The UI renders a color-coded badge (`EhogBadge.tsx`) and tier bar (`EhogTierBar.tsx`):
@@ -54,7 +60,7 @@ The UI renders a color-coded badge (`EhogBadge.tsx`) and tier bar (`EhogTierBar.
 
 | Key | Description |
 |---|---|
-| `MU_DEFAULT` | Starting μ for new players. Also the regression target between seasons. |
+| `MU_DEFAULT` | Starting μ for a brand-new player with no configured seed. Also the regression target between seasons. Set independently of `CENTER` so new players start below mid-band (EHOG ≈ 30). |
 | `SIGMA_DEFAULT` | Starting σ (uncertainty) for new players. Higher = more volatile early ratings. |
 | `BETA_FACTOR` | Multiplied by `SIGMA_DEFAULT` to get the OpenSkill β parameter (performance variance). |
 
@@ -62,7 +68,7 @@ The UI renders a color-coded badge (`EhogBadge.tsx`) and tier bar (`EhogTierBar.
 
 | Key | Description |
 |---|---|
-| `CENTER` | μ value that maps to the midpoint of the band (EHOG ≈ 55). Set to `MU_DEFAULT` so new players start mid-band. |
+| `CENTER` | μ value that maps to the midpoint of the band (EHOG ≈ 55) — the pool's average-skill anchor. Independent of `MU_DEFAULT`. |
 | `SCALE` | Controls how spread out ratings are. Smaller = more bunched in the middle, larger = wider use of the 10–100 range. **Primary tuning knob for dry-run spread.** |
 | `LAMBDA` | Conservatism. `skill = mu − LAMBDA × sigma`, so higher values penalize uncertain (low-game) players. 0 = pure μ (max upset reward). |
 
@@ -85,6 +91,17 @@ The UI renders a color-coded badge (`EhogBadge.tsx`) and tier bar (`EhogTierBar.
 | Key | Description |
 |---|---|
 | `FORMULA_VERSION` | Written to `player_rating_history.formula_version` and used as the column name in `player_current_ratings`. |
+
+## Seeding a known player's starting rating
+
+`players.seed_ehog` (nullable) holds an admin-entered EHOG value (10–100, exclusive — those are the
+display transform's unreachable asymptotes) for a player whose real-world skill is already known. Set
+it on `/admin/players`. `from_ehog()` — the inverse of `to_ehog()`, in both `engine.py` and
+`ehog.ts` — converts it to a starting μ at `SIGMA_DEFAULT` the first time that player appears in the
+chronological rating walk (`fetch_player_seeds()` / `compute_ratings()`'s `state_for()`); once a
+player has any `player_rating_history` rows, their seed no longer applies. The same conversion is
+used client-side (`getPlayerRatings()` in `queries.ts`) so a seeded player's pre-first-match rating
+projection shows their seed instead of the global default.
 
 ## Running
 

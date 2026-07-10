@@ -28,6 +28,9 @@ so you don't have to reverse-engineer them from scratch each time.
   after every score submission. See [`ehog.md`](./ehog.md) for the full engine docs.
   Not to be confused with the aspirational *Player Rating* sabremetric composite in
   [`calculations.md`](./calculations.md#player-rating-aspirational--requires-demo-data).
+- **Seed EHOG** — an admin-configured starting EHOG rating (`players.seed_ehog`) for a known new
+  player, used in place of the global new-player default until their first rated match. Set on
+  `/admin/players`; see [`ehog.md`](./ehog.md#seeding-a-known-players-starting-rating).
 - **Faction: SHIRTS / SKINS** — the two ad-hoc teams for a given match (CS2 Wingman is 2v2).
   Rosters are reshuffled weekly, hence "rotating mixer."
 - **Veto** — the map pick/ban sequence before a match (`shirts_ban`, `shirts_ban2`, `skins_ban1`,

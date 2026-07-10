@@ -18,10 +18,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from ehog.engine import (
     MU_DEFAULT, SIGMA_DEFAULT, SIGMA_FLOOR, BETA,
-    to_ehog, margin_multiplier, run_openskill_update,
+    to_ehog, from_ehog, margin_multiplier, run_openskill_update,
 )
 
 TOLERANCE = 1e-8
+
+EHOG_INVERSE_FIXTURES = [
+    {"label": "midpoint", "target_ehog": 55.0, "sigma": SIGMA_DEFAULT},
+    {"label": "provisional default seed", "target_ehog": 30.0, "sigma": SIGMA_DEFAULT},
+    {"label": "known strong new player", "target_ehog": 75.0, "sigma": SIGMA_DEFAULT},
+    {"label": "known weak new player", "target_ehog": 15.0, "sigma": SIGMA_DEFAULT},
+    {"label": "near-floor asymptote", "target_ehog": 10.5, "sigma": SIGMA_DEFAULT},
+    {"label": "near-ceiling asymptote", "target_ehog": 99.5, "sigma": SIGMA_DEFAULT},
+    {"label": "low sigma", "target_ehog": 60.0, "sigma": 2.0},
+]
 
 FIXTURES = [
     {
@@ -131,12 +141,25 @@ def compute_fixture(f: dict) -> dict:
     }
 
 
+def compute_inverse_fixture(f: dict) -> dict:
+    mu = from_ehog(f["target_ehog"], f["sigma"])
+    round_trip_ehog = to_ehog(mu, f["sigma"])
+    return {
+        "label": f["label"],
+        "target_ehog": f["target_ehog"],
+        "sigma": f["sigma"],
+        "mu": mu,
+        "round_trip_ehog": round_trip_ehog,
+    }
+
+
 def main():
     fixtures_path = Path(__file__).resolve().parent / "parity_fixtures.json"
     computed = [compute_fixture(f) for f in FIXTURES]
+    computed_inverse = [compute_inverse_fixture(f) for f in EHOG_INVERSE_FIXTURES]
     with open(fixtures_path, "w") as fp:
-        json.dump(computed, fp, indent=2)
-    print(f"Wrote {len(computed)} fixtures to {fixtures_path}")
+        json.dump({"match_updates": computed, "ehog_inverse": computed_inverse}, fp, indent=2)
+    print(f"Wrote {len(computed)} match-update fixtures + {len(computed_inverse)} ehog_inverse fixtures to {fixtures_path}")
 
     # Self-check: recompute and verify
     for case in computed:
@@ -154,6 +177,13 @@ def main():
                 if diff > TOLERANCE:
                     print(f"FAIL: {case['label']} {orig['team']}{orig['index']} {key}: {orig[key]} vs {recomp[key]} (diff={diff})")
                     sys.exit(1)
+
+    for case in computed_inverse:
+        diff = abs(case["round_trip_ehog"] - case["target_ehog"])
+        if diff > TOLERANCE:
+            print(f"FAIL: ehog_inverse {case['label']} round-trip: {case['round_trip_ehog']} vs {case['target_ehog']} (diff={diff})")
+            sys.exit(1)
+
     print("Self-check passed.")
 
 

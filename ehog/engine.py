@@ -56,6 +56,16 @@ def to_ehog(mu: float, sigma: float) -> float:
     return 10.0 + 90.0 / (1.0 + math.exp(-(skill - EHOG_CENTER) / EHOG_SCALE))
 
 
+def from_ehog(target_ehog: float, sigma: float = SIGMA_DEFAULT) -> float:
+    """
+    Inverse of to_ehog() — the mu that produces a given display rating at a fixed sigma.
+    Used to convert an admin-entered seed rating into a starting mu. Domain: (10, 100) exclusive
+    (the asymptotes are unreachable).
+    """
+    skill = EHOG_CENTER - EHOG_SCALE * math.log(90.0 / (target_ehog - 10.0) - 1.0)
+    return skill + EHOG_LAMBDA * sigma
+
+
 # ---------------------------------------------------------------------------
 # MARGIN-OF-VICTORY MULTIPLIER
 # ---------------------------------------------------------------------------
@@ -130,6 +140,12 @@ def fetch_all_season_numbers(sb) -> list[int]:
 def fetch_player_names(sb) -> dict[int, str]:
     resp = sb.table("players").select("id, name").execute()
     return {row["id"]: row["name"] for row in resp.data}
+
+
+def fetch_player_seeds(sb) -> dict[int, float]:
+    """Returns {player_id: seed_ehog} for players with a configured starting rating."""
+    resp = sb.table("players").select("id, seed_ehog").not_.is_("seed_ehog", "null").execute()
+    return {row["id"]: row["seed_ehog"] for row in resp.data}
 
 
 def fetch_chronological_matches(
@@ -246,6 +262,7 @@ PlayerState = dict[int, tuple[float, float, float]]  # {player_id: (mu, sigma, e
 def compute_ratings(
     ordered_matches: list[dict],
     stats_by_match: dict[int, list],
+    player_seeds: dict[int, float] | None = None,
     on_segment_end=None,
 ) -> tuple[list[dict], PlayerState, list[int]]:
     """
@@ -256,17 +273,27 @@ def compute_ratings(
       player_state      — {player_id: (mu, sigma, ehog_rating)} final state
       zero_round_matches — match IDs where total rounds == 0 (MoV defaulted)
 
+    player_seeds: optional {player_id: seed_ehog} for players with a configured starting
+        rating (see fetch_player_seeds). Only applies to a player's first appearance —
+        once a player has any rating_history state, that state takes over.
+
     on_segment_end: optional callable(segment, player_state) fired after the
         last match in each segment, before inter-season regression is applied.
         segment is (season_number: int, is_gauntlet: bool).
     """
     player_state: PlayerState = {}
+    player_seeds = player_seeds or {}
     zero_round_matches: list[int] = []
     history_rows: list[dict] = []
     current_segment = None
 
     def state_for(pid: int) -> tuple[float, float, float]:
-        return player_state.get(pid, (MU_DEFAULT, SIGMA_DEFAULT, to_ehog(MU_DEFAULT, SIGMA_DEFAULT)))
+        if pid in player_state:
+            return player_state[pid]
+        if pid in player_seeds:
+            seed_mu = from_ehog(player_seeds[pid], SIGMA_DEFAULT)
+            return (seed_mu, SIGMA_DEFAULT, to_ehog(seed_mu, SIGMA_DEFAULT))
+        return (MU_DEFAULT, SIGMA_DEFAULT, to_ehog(MU_DEFAULT, SIGMA_DEFAULT))
 
     for sequence_index, entry in enumerate(ordered_matches, start=1):
         match_id = entry["match_id"]

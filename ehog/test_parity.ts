@@ -11,7 +11,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { rate, rating } from 'openskill';
 import { plackettLuce } from 'openskill/models';
-import { toEhog, marginMultiplier, BETA } from '../src/lib/ehog';
+import { toEhog, fromEhog, marginMultiplier, BETA } from '../src/lib/ehog';
 import constants from './constants.json';
 
 const SIGMA_FLOOR = constants.SIGMA_FLOOR;
@@ -41,6 +41,19 @@ interface Fixture {
   };
   margin_multiplier: number;
   results: FixtureResult[];
+}
+
+interface EhogInverseFixture {
+  label: string;
+  target_ehog: number;
+  sigma: number;
+  mu: number;
+  round_trip_ehog: number;
+}
+
+interface ParityFixtures {
+  match_updates: Fixture[];
+  ehog_inverse: EhogInverseFixture[];
 }
 
 function runFixture(f: Fixture): FixtureResult[] {
@@ -90,7 +103,8 @@ function runFixture(f: Fixture): FixtureResult[] {
 }
 
 const fixturePath = join(__dirname, 'parity_fixtures.json');
-const fixtures: Fixture[] = JSON.parse(readFileSync(fixturePath, 'utf-8'));
+const { match_updates: fixtures, ehog_inverse: inverseFixtures }: ParityFixtures =
+  JSON.parse(readFileSync(fixturePath, 'utf-8'));
 
 let passed = 0;
 let failed = 0;
@@ -123,6 +137,17 @@ for (const fixture of fixtures) {
     console.error(
       `FAIL: "${fixture.label}" margin_multiplier: py=${fixture.margin_multiplier} ts=${tsM}`
     );
+    failed++;
+  } else {
+    passed++;
+  }
+}
+
+for (const fixture of inverseFixtures) {
+  const tsMu = fromEhog(fixture.target_ehog, fixture.sigma);
+  const diff = Math.abs(tsMu - fixture.mu);
+  if (diff > TOLERANCE) {
+    console.error(`FAIL: ehog_inverse "${fixture.label}" mu: py=${fixture.mu} ts=${tsMu} diff=${diff}`);
     failed++;
   } else {
     passed++;

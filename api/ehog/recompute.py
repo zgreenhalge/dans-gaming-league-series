@@ -32,6 +32,7 @@ from ehog.engine import (
     fetch_all_season_numbers,
     fetch_chronological_matches,
     fetch_match_player_stats,
+    fetch_player_seeds,
     compute_ratings,
     clear_ratings,
     write_ratings,
@@ -58,7 +59,8 @@ class handler(BaseHTTPRequestHandler):
             ordered_matches = fetch_chronological_matches(sb, season_numbers, include_gauntlet=True)
             match_ids = [m["match_id"] for m in ordered_matches]
             stats_by_match = fetch_match_player_stats(sb, match_ids)
-            history_rows, player_state, _ = compute_ratings(ordered_matches, stats_by_match)
+            player_seeds = fetch_player_seeds(sb)
+            history_rows, player_state, _ = compute_ratings(ordered_matches, stats_by_match, player_seeds=player_seeds)
             clear_ratings(sb)
             write_ratings(sb, history_rows, player_state)
             self._respond(200, {"ok": True, "matches": len(ordered_matches), "players": len(player_state)})
