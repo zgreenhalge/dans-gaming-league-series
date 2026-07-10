@@ -18,10 +18,48 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from ehog.engine import (
     MU_DEFAULT, SIGMA_DEFAULT, SIGMA_FLOOR, BETA,
-    to_ehog, from_ehog, margin_multiplier, run_openskill_update,
+    to_ehog, from_ehog, margin_multiplier, run_openskill_update, predict_win,
 )
 
 TOLERANCE = 1e-8
+
+WIN_PROB_FIXTURES = [
+    {
+        "label": "fresh vs fresh (default provisional)",
+        "team_a": [(MU_DEFAULT, SIGMA_DEFAULT), (MU_DEFAULT, SIGMA_DEFAULT)],
+        "team_b": [(MU_DEFAULT, SIGMA_DEFAULT), (MU_DEFAULT, SIGMA_DEFAULT)],
+    },
+    {
+        "label": "established vs fresh, clear favorite",
+        "team_a": [(35.0, 3.0), (33.0, 3.5)],
+        "team_b": [(MU_DEFAULT, SIGMA_DEFAULT), (MU_DEFAULT, SIGMA_DEFAULT)],
+    },
+    {
+        "label": "lopsided matchup",
+        "team_a": [(40.0, 2.0), (38.0, 2.5)],
+        "team_b": [(15.0, 3.0), (12.0, 3.5)],
+    },
+    {
+        "label": "close matchup, low sigma",
+        "team_a": [(28.0, 2.0), (26.0, 2.2)],
+        "team_b": [(27.0, 2.1), (27.5, 2.0)],
+    },
+    {
+        "label": "high sigma both sides pulls toward 50%",
+        "team_a": [(32.0, 9.0), (20.0, 9.0)],
+        "team_b": [(30.0, 9.0), (22.0, 9.0)],
+    },
+    {
+        "label": "one provisional teammate drags team uncertainty up",
+        "team_a": [(30.0, 3.0), (MU_DEFAULT, SIGMA_DEFAULT)],
+        "team_b": [(28.0, 3.2), (27.0, 3.1)],
+    },
+    {
+        "label": "seeded new player vs fresh provisional",
+        "team_a": [(from_ehog(75.0, SIGMA_DEFAULT), SIGMA_DEFAULT), (MU_DEFAULT, SIGMA_DEFAULT)],
+        "team_b": [(MU_DEFAULT, SIGMA_DEFAULT), (MU_DEFAULT, SIGMA_DEFAULT)],
+    },
+]
 
 EHOG_INVERSE_FIXTURES = [
     {"label": "midpoint", "target_ehog": 55.0, "sigma": SIGMA_DEFAULT},
@@ -141,6 +179,18 @@ def compute_fixture(f: dict) -> dict:
     }
 
 
+def compute_win_prob_fixture(f: dict) -> dict:
+    team_a_states = [tuple(s) for s in f["team_a"]]
+    team_b_states = [tuple(s) for s in f["team_b"]]
+    p_a = predict_win(team_a_states, team_b_states)
+    return {
+        "label": f["label"],
+        "team_a": f["team_a"],
+        "team_b": f["team_b"],
+        "p_a": p_a,
+    }
+
+
 def compute_inverse_fixture(f: dict) -> dict:
     mu = from_ehog(f["target_ehog"], f["sigma"])
     round_trip_ehog = to_ehog(mu, f["sigma"])
@@ -156,10 +206,18 @@ def compute_inverse_fixture(f: dict) -> dict:
 def main():
     fixtures_path = Path(__file__).resolve().parent / "parity_fixtures.json"
     computed = [compute_fixture(f) for f in FIXTURES]
+    computed_win_prob = [compute_win_prob_fixture(f) for f in WIN_PROB_FIXTURES]
     computed_inverse = [compute_inverse_fixture(f) for f in EHOG_INVERSE_FIXTURES]
     with open(fixtures_path, "w") as fp:
-        json.dump({"match_updates": computed, "ehog_inverse": computed_inverse}, fp, indent=2)
-    print(f"Wrote {len(computed)} match-update fixtures + {len(computed_inverse)} ehog_inverse fixtures to {fixtures_path}")
+        json.dump({
+            "match_updates": computed,
+            "win_prob": computed_win_prob,
+            "ehog_inverse": computed_inverse,
+        }, fp, indent=2)
+    print(
+        f"Wrote {len(computed)} match-update fixtures + {len(computed_win_prob)} win_prob fixtures "
+        f"+ {len(computed_inverse)} ehog_inverse fixtures to {fixtures_path}"
+    )
 
     # Self-check: recompute and verify
     for case in computed:
@@ -177,6 +235,13 @@ def main():
                 if diff > TOLERANCE:
                     print(f"FAIL: {case['label']} {orig['team']}{orig['index']} {key}: {orig[key]} vs {recomp[key]} (diff={diff})")
                     sys.exit(1)
+
+    for case in computed_win_prob:
+        recomputed = compute_win_prob_fixture(case)
+        diff = abs(recomputed["p_a"] - case["p_a"])
+        if diff > TOLERANCE:
+            print(f"FAIL: win_prob {case['label']}: {case['p_a']} vs {recomputed['p_a']} (diff={diff})")
+            sys.exit(1)
 
     for case in computed_inverse:
         diff = abs(case["round_trip_ehog"] - case["target_ehog"])

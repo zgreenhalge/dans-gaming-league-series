@@ -1,4 +1,4 @@
-import { rate, rating } from 'openskill';
+import { rate, rating, predictWin } from 'openskill';
 import { plackettLuce } from 'openskill/models';
 import constants from '../../ehog/constants.json';
 
@@ -40,6 +40,17 @@ export interface PlayerRating {
   mu: number;
   sigma: number;
   ehogRating: number;
+}
+
+/**
+ * Probability team A wins, from current OpenSkill state alone (no MOV, no trained model — the
+ * library's own PlackettLuce predictWin()).
+ */
+export function predictWinProbability(teamA: PlayerRating[], teamB: PlayerRating[]): number {
+  const rA = teamA.map((p) => rating({ mu: p.mu, sigma: p.sigma }));
+  const rB = teamB.map((p) => rating({ mu: p.mu, sigma: p.sigma }));
+  const [pA] = predictWin([rA, rB], { beta: BETA });
+  return pA;
 }
 
 function projectScenario(
