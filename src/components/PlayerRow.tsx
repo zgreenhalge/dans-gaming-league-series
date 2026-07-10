@@ -75,8 +75,11 @@ export function PlayerRow({ player, isSelf }: { player: Player; isSelf: boolean 
   async function saveSeed() {
     const trimmed = seedVal.trim();
     if (trimmed === '') {
-      if (player.seed_ehog != null && (await patch('seed', { seed_ehog: null }))) setEditingSeed(false);
-      else setEditingSeed(false);
+      if (player.seed_ehog == null) {
+        setEditingSeed(false);
+        return;
+      }
+      if (await patch('seed', { seed_ehog: null })) setEditingSeed(false);
       return;
     }
     const parsed = Number(trimmed);
