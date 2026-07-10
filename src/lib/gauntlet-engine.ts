@@ -11,8 +11,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isPlayedScore, extractSeasonNumber } from './util';
 import { buildGauntletBracket, type AdvanceRule, type BracketPlan } from './gauntlet-bracket';
-import { getSeason, getSeasonLeaderboard, getLinkedGauntlet, getLinkedRegularSeason, getGauntletRounds } from './queries';
+import {
+  getSeason,
+  getSeasonLeaderboard,
+  getLinkedGauntlet,
+  getLinkedRegularSeason,
+  getGauntletRounds,
+  getGauntletBracketShape,
+} from './queries';
 import { clearOpsError } from './ops-errors';
+import { validateIntegrity, type DraftPod } from './gauntlet-draft';
 
 export interface GauntletPodRow {
   id: number;
@@ -246,10 +254,16 @@ export async function getSeedBands(
     return { round1: [], byes: [], dropped: Array.from({ length: qualifierCount }, (_, i) => i + 1) };
   }
 
+  // `source_seed IS NOT NULL` matters here: a manually-placed slot (`GauntletPodEditor`) is also
+  // `source_kind: 'seed'`, but carries a real `player_id` and no abstract seed number at all — only
+  // a generator-built shape's seed slots (numbered, resolved later by `seedBracket()`) belong in
+  // this accounting. Without this filter, a manual gauntlet's slots would push `null` into
+  // `source_seed` below and corrupt the round1/byes/dropped bands.
   const { data: seedSlots, error: slotsErr } = await supabaseAdmin
     .from('gauntlet_pod_slots')
     .select('pod_id, source_seed')
     .eq('source_kind', 'seed')
+    .not('source_seed', 'is', null)
     .in('pod_id', podIds);
   if (slotsErr) throw slotsErr;
 
@@ -482,9 +496,9 @@ type CreateSeasonRowResult =
 
 /** Parses the gauntlet name from an already-validated regular season and inserts its paired
  * "Season N Gauntlet" row. Callers own the "regular season exists" / "not already linked" checks —
- * this only does the name-parse + insert, so `tryBuildGauntletShape` and
- * `createManualGauntletShell` can order those checks around their own extra validation
- * (bracket-plan computation, for the automated path) without duplicating them here. */
+ * this only does the name-parse + insert, so `tryBuildGauntletShape` and `saveManualDraft` can
+ * order those checks around their own extra validation (bracket-plan computation, for the
+ * automated path) without duplicating them here. */
 async function createGauntletSeasonRow(
   supabaseAdmin: SupabaseClient,
   regularSeason: { name: string; target_win_rounds: number },
@@ -569,119 +583,155 @@ export async function tryBuildGauntletShape(
   };
 }
 
-export type CreateManualShellResult = CreateSeasonRowResult;
+export type SaveDraftResult =
+  | { status: 'saved'; gauntletSeasonId: number }
+  | { status: 'invalid'; errors: string[] }
+  | { status: 'not-eligible'; reason: string };
 
-/** Creates the paired "Season N Gauntlet" season row with no bracket shape at all — an empty shell
- * for an admin to hand-build rounds/matches into via `createManualGauntletMatch()`, bypassing
- * `buildGauntletBracket()` entirely. For league sizes (outside 4-20) or bracket shapes the
- * generator doesn't cover. */
-export async function createManualGauntletShell(
+/** Reconciles the manual pod editor's (`GauntletPodEditor`) current draft against whatever's
+ * already persisted for this season's gauntlet — creating the paired "Season N Gauntlet" row on
+ * the first save, inserting new pods, updating or deleting not-yet-materialized ones that changed
+ * or were removed, and leaving materialized pods untouched. The client already ran
+ * `pruneInvalidReferences()` (`gauntlet-draft.ts`) so the submitted draft is internally
+ * self-consistent by construction — this only re-validates defensively (`validateIntegrity()`)
+ * rather than repeating cascade-clearing logic server-side. */
+export async function saveManualDraft(
   supabaseAdmin: SupabaseClient,
   regularSeasonId: number,
+  draftPods: DraftPod[],
   opts: { startDate?: string | null } = {},
-): Promise<CreateManualShellResult> {
+): Promise<SaveDraftResult> {
+  const integrity = validateIntegrity(draftPods);
+  if (!integrity.valid) return { status: 'invalid', errors: integrity.errors };
+
   const regularSeason = await getSeason(regularSeasonId);
   if (!regularSeason || regularSeason.is_gauntlet) {
     return { status: 'not-eligible', reason: 'Regular season not found' };
   }
 
   const existingGauntlet = await getLinkedGauntlet(regularSeason.name);
-  if (existingGauntlet) return { status: 'already-exists' };
-
-  return createGauntletSeasonRow(supabaseAdmin, regularSeason, opts);
-}
-
-export type CreateManualMatchResult =
-  | { status: 'created'; matchId: number }
-  | { status: 'not-gauntlet' }
-  | { status: 'invalid'; reason: string };
-
-/** Creates a single match directly under a gauntlet season's given round, bypassing
- * `gauntlet_pods` entirely — no pairing/pod invariants enforced, no propagation, no
- * auto-materialization. For hand-building rounds the automated generator doesn't cover. Creates
- * the round's `weeks` row if it doesn't exist yet. Veto fields are left null, same as a
- * generator-materialized match — it flows through the existing veto/score routes unchanged. */
-export async function createManualGauntletMatch(
-  supabaseAdmin: SupabaseClient,
-  gauntletSeasonId: number,
-  roundNumber: number,
-  shirtsPlayerIds: [number, number],
-  skinsPlayerIds: [number, number],
-): Promise<CreateManualMatchResult> {
-  const { data: seasonRow, error: seasonErr } = await supabaseAdmin
-    .from('seasons')
-    .select('is_gauntlet')
-    .eq('id', gauntletSeasonId)
-    .maybeSingle();
-  if (seasonErr) throw seasonErr;
-  if (!(seasonRow as { is_gauntlet: boolean } | null)?.is_gauntlet) {
-    return { status: 'not-gauntlet' };
+  let gauntletSeasonId: number;
+  if (existingGauntlet) {
+    gauntletSeasonId = existingGauntlet.id;
+  } else {
+    const created = await createGauntletSeasonRow(supabaseAdmin, regularSeason, opts);
+    // 'already-exists' can't actually happen here — `getLinkedGauntlet()` just returned nothing —
+    // but `createGauntletSeasonRow()`'s return type is shared with the auto-build path, which does
+    // need it. Treat it as the same "reload and try again" defensive case as a stale materialized
+    // pod below, rather than widening `SaveDraftResult` for an unreachable branch.
+    if (created.status === 'already-exists') {
+      return { status: 'invalid', errors: ['This season already has a gauntlet — reload and try again.'] };
+    }
+    if (created.status !== 'created') return created;
+    gauntletSeasonId = created.gauntletSeasonId;
   }
 
-  const allIds = [...shirtsPlayerIds, ...skinsPlayerIds];
-  if (new Set(allIds).size !== 4) {
-    return { status: 'invalid', reason: 'All four players must be distinct' };
-  }
-  if (!Number.isInteger(roundNumber) || roundNumber < 1) {
-    return { status: 'invalid', reason: 'round_number must be a positive integer' };
+  const currentPods = await getGauntletBracketShape(gauntletSeasonId);
+  const currentById = new Map(currentPods.map((p) => [p.id, p]));
+  const submittedIds = new Set(draftPods.map((p) => p.persistedId).filter((id): id is number => id != null));
+
+  for (const current of currentPods) {
+    if (current.materialized && !submittedIds.has(current.id)) {
+      return { status: 'invalid', errors: ['A materialized pod is missing from this save — reload and try again.'] };
+    }
   }
 
-  const { data: existingWeek, error: weekSelErr } = await supabaseAdmin
-    .from('weeks')
-    .select('id')
-    .eq('season_id', gauntletSeasonId)
-    .eq('week_number', roundNumber)
-    .maybeSingle();
-  if (weekSelErr) throw weekSelErr;
+  const toDelete = currentPods.filter((p) => !p.materialized && !submittedIds.has(p.id)).map((p) => p.id);
+  if (toDelete.length > 0) {
+    const { error: slotsDelErr } = await supabaseAdmin.from('gauntlet_pod_slots').delete().in('pod_id', toDelete);
+    if (slotsDelErr) throw slotsDelErr;
+    const { error: podsDelErr } = await supabaseAdmin.from('gauntlet_pods').delete().in('id', toDelete);
+    if (podsDelErr) throw podsDelErr;
+  }
 
-  let weekId = (existingWeek as { id: number } | null)?.id ?? null;
-  if (weekId == null) {
-    const { data: newWeek, error: weekInsErr } = await supabaseAdmin
-      .from('weeks')
-      .insert({ season_id: gauntletSeasonId, week_number: roundNumber, bye_player_id: null })
+  const keyToId = new Map<string, number>();
+  for (const pod of draftPods) {
+    if (pod.persistedId != null) keyToId.set(pod.key, pod.persistedId);
+  }
+
+  const newPods = draftPods.filter((p) => p.persistedId == null);
+  for (const pod of newPods) {
+    const { data, error } = await supabaseAdmin
+      .from('gauntlet_pods')
+      .insert({
+        season_id: gauntletSeasonId,
+        round_number: pod.round_number,
+        pod_index: pod.pod_index,
+        advance_rule: pod.advance_rule,
+        is_final: pod.is_final,
+      })
       .select('id')
       .single();
-    if (weekInsErr) throw weekInsErr;
-    weekId = (newWeek as { id: number }).id;
+    if (error) throw error;
+    keyToId.set(pod.key, (data as { id: number }).id);
   }
 
-  const { data: existingMatches, error: matchSelErr } = await supabaseAdmin
-    .from('matches')
-    .select('match_number')
-    .eq('week_id', weekId);
-  if (matchSelErr) throw matchSelErr;
-  const nextMatchNumber =
-    1 + Math.max(0, ...((existingMatches ?? []) as { match_number: number }[]).map((m) => m.match_number));
+  const updatedExisting = draftPods.filter((p) => {
+    if (p.persistedId == null) return false;
+    const current = currentById.get(p.persistedId);
+    return !!current && !current.materialized;
+  });
+  for (const pod of updatedExisting) {
+    const current = currentById.get(pod.persistedId!)!;
+    if (current.advance_rule !== pod.advance_rule || current.is_final !== pod.is_final) {
+      const { error } = await supabaseAdmin
+        .from('gauntlet_pods')
+        .update({ advance_rule: pod.advance_rule, is_final: pod.is_final })
+        .eq('id', pod.persistedId!);
+      if (error) throw error;
+    }
+  }
 
-  const { data: matchRow, error: matchInsErr } = await supabaseAdmin
-    .from('matches')
-    .insert({
-      week_id: weekId,
-      match_number: nextMatchNumber,
-      is_playoff_game: true,
-      final_score: null,
-      picked_map: null,
-      shirts_ban: null,
-      shirts_ban2: null,
-      skins_ban1: null,
-      skins_ban2: null,
-      shirts_pick: null,
-      skins_starting_side: null,
-    })
-    .select('id')
-    .single();
-  if (matchInsErr) throw matchInsErr;
-  const matchId = (matchRow as { id: number }).id;
+  // Not-yet-materialized pods have no matches depending on their slots yet, so a changed pod's
+  // slots are simply replaced wholesale rather than diffed row-by-row.
+  const podsNeedingSlotWrite = [...newPods, ...updatedExisting];
+  if (podsNeedingSlotWrite.length > 0) {
+    const rewrittenIds = updatedExisting.map((p) => p.persistedId!);
+    if (rewrittenIds.length > 0) {
+      const { error } = await supabaseAdmin.from('gauntlet_pod_slots').delete().in('pod_id', rewrittenIds);
+      if (error) throw error;
+    }
+    const rows = podsNeedingSlotWrite.flatMap((pod) => {
+      const podId = keyToId.get(pod.key)!;
+      return pod.slots.map((slot, slot_index) => {
+        if (slot.kind === 'player') {
+          return {
+            pod_id: podId,
+            slot_index,
+            source_kind: 'seed',
+            source_seed: null,
+            source_pod_id: null,
+            player_id: slot.playerId,
+          };
+        }
+        if (slot.kind === 'advance') {
+          return {
+            pod_id: podId,
+            slot_index,
+            source_kind: 'pod',
+            source_seed: null,
+            source_pod_id: keyToId.get(slot.sourcePodKey) ?? null,
+            player_id: null,
+          };
+        }
+        return { pod_id: podId, slot_index, source_kind: 'seed', source_seed: null, source_pod_id: null, player_id: null };
+      });
+    });
+    const { error } = await supabaseAdmin.from('gauntlet_pod_slots').insert(rows);
+    if (error) throw error;
+  }
 
-  const zeroStats = { kills: 0, assists: 0, deaths: 0, damage: 0, adr: 0, rounds_played: 0, rounds_won: 0, is_win: false };
-  const statRows = [
-    ...shirtsPlayerIds.map((player_id) => ({ match_id: matchId, player_id, faction: 'SHIRTS', ...zeroStats })),
-    ...skinsPlayerIds.map((player_id) => ({ match_id: matchId, player_id, faction: 'SKINS', ...zeroStats })),
-  ];
-  const { error: statsInsErr } = await supabaseAdmin.from('player_match_stats').insert(statRows);
-  if (statsInsErr) throw statsInsErr;
+  // Round order matters here in principle (an earlier round's pod should materialize before a
+  // later one references it), though in practice each pod's readiness only depends on its own 4
+  // slots' already-persisted `player_id` state, not on materialization order within this save.
+  const touched = podsNeedingSlotWrite
+    .map((pod) => ({ id: keyToId.get(pod.key)!, round_number: pod.round_number }))
+    .sort((a, b) => a.round_number - b.round_number);
+  for (const { id } of touched) {
+    await materializeIfReady(supabaseAdmin, id);
+  }
 
-  return { status: 'created', matchId };
+  return { status: 'saved', gauntletSeasonId };
 }
 
 export type SeedBandNames = { byes: string[]; playing: string[]; relegated: string[] };
