@@ -1,7 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { TopbarShell } from '@/components/TopbarShell';
 import { CreateGauntletForm } from '@/components/CreateGauntletForm';
 import { GauntletLifecycleList } from '@/components/GauntletLifecycleList';
@@ -76,23 +75,6 @@ export default async function GauntletSeasonPage() {
         <OpsErrorList items={seasonOpsErrors} />
 
         <CreateGauntletForm seasons={eligible} />
-
-        {eligible.length > 0 && (
-          <div className="mt-6 flex flex-col gap-1">
-            <div className="tracked text-[9px] text-[var(--color-text-secondary)]">
-              Generator doesn&apos;t fit? Build a custom bracket by hand instead:
-            </div>
-            {eligible.map((s) => (
-              <Link
-                key={s.id}
-                href={`/admin/seasons/gauntlet/manual/${s.id}`}
-                className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] underline decoration-dotted w-fit"
-              >
-                Build {s.name} manually →
-              </Link>
-            ))}
-          </div>
-        )}
 
         {withGauntlet.length > 0 && (
           <div className="mt-12">
