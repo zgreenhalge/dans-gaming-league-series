@@ -5,7 +5,7 @@ import { TopbarShell } from '@/components/TopbarShell';
 import { CreateGauntletForm } from '@/components/CreateGauntletForm';
 import { GauntletLifecycleList } from '@/components/GauntletLifecycleList';
 import { OpsErrorList } from '@/components/OpsErrorList';
-import { getSeasons, getGauntletRounds, gauntletHasPods, isPlayerAdmin, getOpsErrors } from '@/lib/queries';
+import { getSeasons, getGauntletRounds, isPlayerAdmin, getOpsErrors } from '@/lib/queries';
 import { buildRegularToGauntletMap, isPlayedScore } from '@/lib/util';
 
 export const metadata = {
@@ -37,10 +37,10 @@ export default async function GauntletSeasonPage() {
       .filter((s) => paired.has(s.id))
       .map(async (s) => {
         const gauntletId = paired.get(s.id)!;
-        const [rounds, hasPods] = await Promise.all([getGauntletRounds(gauntletId), gauntletHasPods(gauntletId)]);
-        // Round rows only exist once at least one match has materialized — an unseeded automated
-        // shape or an empty manual shell both have zero weeks/matches, so getGauntletRounds
-        // returns []. hasPods distinguishes the two (manual gauntlets have none).
+        const rounds = await getGauntletRounds(gauntletId);
+        // Round rows only exist once at least one pod has materialized — an unseeded shape (built
+        // by the generator, or hand-built but not yet saved with any complete pod) has zero
+        // weeks/matches, so getGauntletRounds returns [].
         const seeded = rounds.length > 0;
         const started = rounds.some((r) => r.matches.some((m) => isPlayedScore(m.final_score)));
         return {
@@ -49,7 +49,6 @@ export default async function GauntletSeasonPage() {
           gauntletName: gauntletById.get(gauntletId)?.name ?? `Season ${gauntletId} Gauntlet`,
           seeded,
           started,
-          manual: !hasPods,
         };
       }),
   );
