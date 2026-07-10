@@ -62,6 +62,7 @@ export interface Player {
   steam_avatar_url: string | null;
   steam_refreshed_at: string | null;
   is_admin: boolean;
+  seed_ehog: number | null;
 }
 
 export interface PlayerMatchStat {

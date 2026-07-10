@@ -1,4 +1,4 @@
-import { rate, rating } from 'openskill';
+import { rate, rating, predictWin } from 'openskill';
 import { plackettLuce } from 'openskill/models';
 import constants from '../../ehog/constants.json';
 
@@ -17,6 +17,15 @@ export function toEhog(mu: number, sigma: number): number {
   return 10.0 + 90.0 / (1.0 + Math.exp(-(skill - EHOG_CENTER) / EHOG_SCALE));
 }
 
+/**
+ * Inverse of toEhog() — the mu that produces a given display rating at a fixed sigma.
+ * Domain: (10, 100) exclusive (the asymptotes are unreachable).
+ */
+export function fromEhog(targetEhog: number, sigma: number = SIGMA_DEFAULT): number {
+  const skill = EHOG_CENTER - EHOG_SCALE * Math.log(90.0 / (targetEhog - 10.0) - 1.0);
+  return skill + EHOG_LAMBDA * sigma;
+}
+
 export const DEFAULT_EHOG = toEhog(MU_DEFAULT, SIGMA_DEFAULT);
 
 export function marginMultiplier(scoreA: number, scoreB: number): number {
@@ -31,6 +40,17 @@ export interface PlayerRating {
   mu: number;
   sigma: number;
   ehogRating: number;
+}
+
+/**
+ * Probability team A wins, from current OpenSkill state alone (no MOV, no trained model — the
+ * library's own PlackettLuce predictWin()).
+ */
+export function predictWinProbability(teamA: PlayerRating[], teamB: PlayerRating[]): number {
+  const rA = teamA.map((p) => rating({ mu: p.mu, sigma: p.sigma }));
+  const rB = teamB.map((p) => rating({ mu: p.mu, sigma: p.sigma }));
+  const [pA] = predictWin([rA, rB], { beta: BETA });
+  return pA;
 }
 
 function projectScenario(

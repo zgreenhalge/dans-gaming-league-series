@@ -11,7 +11,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { rate, rating } from 'openskill';
 import { plackettLuce } from 'openskill/models';
-import { toEhog, marginMultiplier, BETA } from '../src/lib/ehog';
+import { toEhog, fromEhog, marginMultiplier, predictWinProbability, BETA } from '../src/lib/ehog';
 import constants from './constants.json';
 
 const SIGMA_FLOOR = constants.SIGMA_FLOOR;
@@ -41,6 +41,32 @@ interface Fixture {
   };
   margin_multiplier: number;
   results: FixtureResult[];
+}
+
+interface EhogInverseFixture {
+  label: string;
+  target_ehog: number;
+  sigma: number;
+  mu: number;
+  round_trip_ehog: number;
+}
+
+interface WinProbFixture {
+  label: string;
+  team_a: [number, number][];
+  team_b: [number, number][];
+  p_a: number;
+}
+
+interface ParityFixtures {
+  match_updates: Fixture[];
+  win_prob: WinProbFixture[];
+  ehog_inverse: EhogInverseFixture[];
+}
+
+/** Wraps a bare (mu, sigma) tuple into the PlayerRating shape predictWinProbability expects. */
+function asRating(index: number, [mu, sigma]: [number, number]) {
+  return { playerId: index, mu, sigma, ehogRating: 0 };
 }
 
 function runFixture(f: Fixture): FixtureResult[] {
@@ -90,7 +116,8 @@ function runFixture(f: Fixture): FixtureResult[] {
 }
 
 const fixturePath = join(__dirname, 'parity_fixtures.json');
-const fixtures: Fixture[] = JSON.parse(readFileSync(fixturePath, 'utf-8'));
+const { match_updates: fixtures, win_prob: winProbFixtures, ehog_inverse: inverseFixtures }: ParityFixtures =
+  JSON.parse(readFileSync(fixturePath, 'utf-8'));
 
 let passed = 0;
 let failed = 0;
@@ -123,6 +150,30 @@ for (const fixture of fixtures) {
     console.error(
       `FAIL: "${fixture.label}" margin_multiplier: py=${fixture.margin_multiplier} ts=${tsM}`
     );
+    failed++;
+  } else {
+    passed++;
+  }
+}
+
+for (const fixture of winProbFixtures) {
+  const teamA = fixture.team_a.map((s, i) => asRating(i, s));
+  const teamB = fixture.team_b.map((s, i) => asRating(100 + i, s));
+  const tsP = predictWinProbability(teamA, teamB);
+  const diff = Math.abs(tsP - fixture.p_a);
+  if (diff > TOLERANCE) {
+    console.error(`FAIL: win_prob "${fixture.label}": py=${fixture.p_a} ts=${tsP} diff=${diff}`);
+    failed++;
+  } else {
+    passed++;
+  }
+}
+
+for (const fixture of inverseFixtures) {
+  const tsMu = fromEhog(fixture.target_ehog, fixture.sigma);
+  const diff = Math.abs(tsMu - fixture.mu);
+  if (diff > TOLERANCE) {
+    console.error(`FAIL: ehog_inverse "${fixture.label}" mu: py=${fixture.mu} ts=${tsMu} diff=${diff}`);
     failed++;
   } else {
     passed++;

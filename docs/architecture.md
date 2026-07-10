@@ -87,6 +87,8 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 
 Supabase (`public` schema). RLS is **off** on all tables — do not enable it without writing policies first. Types mirroring these shapes live in `src/lib/types.ts`.
 
+**Any Supabase MCP tool that mutates state** — `apply_migration`, a non-`SELECT` `execute_sql`, or any project/branch-management tool (`create_project`, `create_branch`, `delete_branch`, `merge_branch`, `rebase_branch`, `reset_branch`, `restore_project`, `pause_project`, `deploy_edge_function`, `confirm_cost`) — **requires the user's explicit approval of that exact command, given at the time it's about to run.** See [`../AGENTS.md`](../AGENTS.md)'s "Supabase changes require live, per-operation approval." Read-only tools (`list_tables`, `get_logs`, `get_advisors`, `search_docs`, `list_migrations`, `list_branches`, `list_extensions`, `list_projects`, `get_project`, `get_organization`, `list_organizations`, `get_cost`, `get_project_url`, `get_publishable_keys`, `list_edge_functions`, `get_edge_function`, `generate_typescript_types`, and a plain-`SELECT` `execute_sql`) don't need it.
+
 ### Tables
 
 | Table | Purpose |
@@ -94,7 +96,7 @@ Supabase (`public` schema). RLS is **off** on all tables — do not enable it wi
 | `seasons` | One row per season. Key fields: `name`, `status` (`UPCOMING`/`ACTIVE`/`COMPLETED`/`ARCHIVED`), `is_gauntlet` (bool), `start_date`, `map_pool` (text[]), `target_win_rounds`, `buy_in_amount` |
 | `weeks` | Linked to `seasons`. Has `week_number` and `bye_player_id` (who sits out that week) |
 | `matches` | Linked to `weeks`. Veto fields: `shirts_ban`, `shirts_ban2`, `skins_ban1`, `skins_ban2`, `shirts_pick`, `picked_map`, `skins_starting_side`. Also: `final_score`, `is_playoff_game`, `scheduled_at`, `screenshot_url_front/back`, `notes`. Hosting (see [`hosting.md`](./hosting.md)): `server_state`, `dathost_server_id`, `connect_string`, `server_started_at` |
-| `players` | Global player registry. Unique `name`. Steam fields: `steam_id`, `steam_nickname`, `steam_avatar_url`, `steam_refreshed_at`. Admin flag: `is_admin` |
+| `players` | Global player registry. Unique `name`. Steam fields: `steam_id`, `steam_nickname`, `steam_avatar_url`, `steam_refreshed_at`. Admin flag: `is_admin`. `seed_ehog` (nullable) — admin-configured starting EHOG rating for a known new player; see [`ehog.md`](./ehog.md) |
 | `player_match_stats` | Per-player per-match basics: `faction` (`SHIRTS`/`SKINS`), K/A/D, `damage`, `adr`, `rounds_played`, `rounds_won`, `is_win` |
 | `player_match_sabremetrics` | Demo-derived advanced stats, one row per `player_match_stats` row (FK `player_match_stats_id`): CT/T side splits, opening duels, KAST, clutches, utility, objectives. Written only when a demo is parsed. See [`demo-ingestion.md`](./demo-ingestion.md). |
 | `player_rating_history` / `player_current_ratings` | EHOG skill-rating storage (μ/σ history + current standings). Written by the EHOG recompute. See [`ehog.md`](./ehog.md). |

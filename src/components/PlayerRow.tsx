@@ -1,9 +1,10 @@
 'use client';
 
-// One row of the admin player table (#144): shows a player's name, admin flag, and Steam link
+// One row of the admin player table: shows a player's name, admin flag, seed EHOG, and Steam link
 // (nickname / id / action in their own columns) up front, and edits them in place via
-// `PATCH /api/players/[id]`. Name edits behind a pencil; the rare manual "set SteamID64" drops into
-// the Steam ID cell when you click Link — so a row stays compact until you act on it.
+// `PATCH /api/players/[id]`. Name and seed EHOG edits sit behind a pencil; the rare manual "set
+// SteamID64" drops into the Steam ID cell when you click Link — so a row stays compact until you
+// act on it.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -22,6 +23,8 @@ export function PlayerRow({ player, isSelf }: { player: Player; isSelf: boolean 
   const [steamVal, setSteamVal] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editingSeed, setEditingSeed] = useState(false);
+  const [seedVal, setSeedVal] = useState(player.seed_ehog != null ? String(player.seed_ehog) : '');
 
   // Send one field-set to the player route; `key` labels the in-flight control. On success refresh
   // the server data and drop back to the read-only view.
@@ -68,6 +71,24 @@ export function PlayerRow({ player, isSelf }: { player: Player; isSelf: boolean 
   }
 
   const steamValid = /^\d{17}$/.test(steamVal.trim());
+
+  async function saveSeed() {
+    const trimmed = seedVal.trim();
+    if (trimmed === '') {
+      if (player.seed_ehog == null) {
+        setEditingSeed(false);
+        return;
+      }
+      if (await patch('seed', { seed_ehog: null })) setEditingSeed(false);
+      return;
+    }
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed <= 10 || parsed >= 100) return;
+    if (await patch('seed', { seed_ehog: parsed })) setEditingSeed(false);
+  }
+
+  const seedTrimmed = seedVal.trim();
+  const seedValid = seedTrimmed === '' || (Number.isFinite(Number(seedTrimmed)) && Number(seedTrimmed) > 10 && Number(seedTrimmed) < 100);
 
   return (
     <>
@@ -125,6 +146,42 @@ export function PlayerRow({ player, isSelf }: { player: Player; isSelf: boolean 
           </button>
         </td>
 
+        {/* Seed EHOG — starting rating for a known new player, until their first rated match */}
+        <td className="px-3 py-2 align-middle">
+          {editingSeed ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                inputMode="decimal"
+                value={seedVal}
+                autoFocus
+                placeholder="10–100"
+                onChange={(e) => setSeedVal(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveSeed();
+                  if (e.key === 'Escape') { setSeedVal(player.seed_ehog != null ? String(player.seed_ehog) : ''); setEditingSeed(false); }
+                }}
+                className="w-20 font-mono text-[13px] px-1.5 py-0.5 border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] rounded focus:outline-none focus:border-[var(--color-text-secondary)]"
+              />
+              <button onClick={saveSeed} disabled={!seedValid || busy === 'seed'} className={cellBtn}>
+                {busy === 'seed' ? '…' : 'Save'}
+              </button>
+              <button onClick={() => { setSeedVal(player.seed_ehog != null ? String(player.seed_ehog) : ''); setEditingSeed(false); }} className={cellBtn}>✕</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className={muted}>{player.seed_ehog != null ? player.seed_ehog : '—'}</span>
+              <button
+                onClick={() => { setSeedVal(player.seed_ehog != null ? String(player.seed_ehog) : ''); setEditingSeed(true); }}
+                aria-label="Edit seed EHOG"
+                className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+              >
+                ✎
+              </button>
+            </div>
+          )}
+        </td>
+
         {/* Steam nickname */}
         <td className="px-3 py-2 align-middle">
           <span className={muted}>{player.steam_id ? (player.steam_nickname ?? '(no nickname)') : '—'}</span>
@@ -176,7 +233,7 @@ export function PlayerRow({ player, isSelf }: { player: Player; isSelf: boolean 
 
       {error && (
         <tr>
-          <td colSpan={5} className="px-3 pb-2 font-mono text-[11px] text-[var(--color-accent-red-fg)]">
+          <td colSpan={6} className="px-3 pb-2 font-mono text-[11px] text-[var(--color-accent-red-fg)]">
             {error}
           </td>
         </tr>
