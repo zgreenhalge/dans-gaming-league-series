@@ -3,6 +3,7 @@
 import type { CSSProperties } from 'react';
 import { PlayerName } from './PlayerName';
 import type { BracketPod, BracketSlot } from '@/lib/queries';
+import { capacityFor, groupLabel, ordinalWord, computeAdvanceOrdinals } from '@/lib/gauntlet-draft';
 
 const POD_W = 232;
 const HEADER_H = 28;
@@ -22,26 +23,17 @@ const STATUS_COLOR: Record<SlotStatus, string> = {
   placeholder: 'var(--color-text-secondary)',
 };
 
-const ORDINALS = ['First', 'Second', 'Third', 'Fourth'];
-
-/** Human name for a pod, used both in the stakes header and in downstream placeholder labels
- * ("Winner of Round 1 Group 1"). Groups are 1-indexed for display; `pod_index` is 0-indexed. */
-function groupName(pod: BracketPod): string {
-  return pod.is_final ? 'the Final' : `Round ${pod.round_number} Group ${pod.pod_index + 1}`;
-}
-
 /** Describes a slot whose occupant isn't decided yet, without ever surfacing a bare "TBD" — a seed
  * slot names the seed, and a pod-sourced slot names the pod it comes from plus, for a pod that sends
  * more than one survivor onward, which of those survivors ("First"/"Second"/...) this slot expects.
- * `ordinal` is this slot's 0-based position among every slot fed by the same source pod, in the
- * stable (round, pod_index, slot_index) order computed once by the caller. */
-function pendingSlotLabel(slot: BracketSlot, sourcePod: BracketPod | undefined, groupSize: number, ordinal: number): string {
+ * `ordinal` is this slot's 0-based position among every slot fed by the same source pod, from
+ * `computeAdvanceOrdinals()`. */
+function pendingSlotLabel(slot: BracketSlot, sourcePod: BracketPod | undefined, ordinal: number): string {
   if (slot.source_kind === 'seed' && slot.source_seed != null) return `Seed ${slot.source_seed}`;
   if (slot.source_kind === 'pod' && sourcePod) {
-    const name = groupName(sourcePod);
-    if (groupSize <= 1) return `Winner of ${name}`;
-    const ordinalWord = ORDINALS[ordinal] ?? `${ordinal + 1}th`;
-    return `${ordinalWord} of ${name}`;
+    const name = groupLabel(sourcePod);
+    if (capacityFor(sourcePod.advance_rule) <= 1) return `Winner of ${name}`;
+    return `${ordinalWord(ordinal)} of ${name}`;
   }
   return 'TBD';
 }
@@ -101,17 +93,7 @@ export function GauntletBracketDiagram({
 
   // Stable ordinal position of every pod-sourced slot among all slots fed by the same source pod —
   // used by `pendingSlotLabel` to distinguish "Winner of ..." from "Second of ...".
-  const orderedPods = [...pods].sort((a, b) => a.round_number - b.round_number || a.pod_index - b.pod_index);
-  const slotsBySourcePod = new Map<number, BracketSlot[]>();
-  for (const pod of orderedPods) {
-    for (const slot of pod.slots) {
-      if (slot.source_kind === 'pod' && slot.source_pod_id != null) {
-        const list = slotsBySourcePod.get(slot.source_pod_id) ?? [];
-        list.push(slot);
-        slotsBySourcePod.set(slot.source_pod_id, list);
-      }
-    }
-  }
+  const advanceOrdinals = computeAdvanceOrdinals(pods);
 
   function slotStatus(pod: BracketPod, slot: BracketSlot): SlotStatus {
     if (slot.player_id == null) return 'placeholder';
@@ -208,8 +190,7 @@ export function GauntletBracketDiagram({
               {pod.slots.map((slot) => {
                 const status = slotStatus(pod, slot);
                 const sourcePod = slot.source_pod_id != null ? podsById.get(slot.source_pod_id) : undefined;
-                const group = slot.source_pod_id != null ? slotsBySourcePod.get(slot.source_pod_id) ?? [] : [];
-                const ordinal = group.indexOf(slot);
+                const ordinal = advanceOrdinals.get(`${pod.id}:${slot.slot_index}`) ?? 0;
                 const isChampSlot = status === 'champion';
                 return (
                   <div
@@ -240,7 +221,7 @@ export function GauntletBracketDiagram({
                         isMe={currentPlayerId !== null && slot.player_id === currentPlayerId}
                       />
                     ) : (
-                      <span className="opacity-70">{pendingSlotLabel(slot, sourcePod, group.length, ordinal)}</span>
+                      <span className="opacity-70">{pendingSlotLabel(slot, sourcePod, ordinal)}</span>
                     )}
                   </div>
                 );
