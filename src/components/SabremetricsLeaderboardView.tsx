@@ -311,7 +311,6 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
       const arp = a.rounds_played || 1;
       const brp = b.rounds_played || 1;
       switch (sort.col) {
-        case 'hs': aVal = a.headshot_kills / (a.kills || 1); bVal = b.headshot_kills / (b.kills || 1); break;
         case 'kast': aVal = a.kast_rounds / arp; bVal = b.kast_rounds / brp; break;
         case '2k': aVal = a.two_k_rounds; bVal = b.two_k_rounds; break;
         case '1v1': aVal = a.clutch_1v1_wins; bVal = b.clutch_1v1_wins; break;
@@ -338,7 +337,6 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
           <thead>
             <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
-              <SortableTh label="Headshot %" title="Headshot kill percentage" sortKey="hs" state={sort} onClick={toggleSort} />
               <SortableTh label="KAST" title="Percentage of rounds with a Kill, Assist, Survived, or Traded" sortKey="kast" state={sort} onClick={toggleSort} />
               <SortableTh label="Double Kills" title="Rounds where both opponents were eliminated" sortKey="2k" state={sort} onClick={toggleSort} />
               <SortableTh label="1v1" title="1v1 clutch wins / attempts" sortKey="1v1" state={sort} onClick={toggleSort} />
@@ -353,7 +351,6 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
               return (
                 <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                   {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
-                  <td className={tdRight}>{pct(a.headshot_kills, a.kills)}</td>
                   <td className={tdRight}>{pct(a.kast_rounds, a.rounds_played)}</td>
                   <td className={tdRight}>{a.two_k_rounds}</td>
                   <td className={tdRight}>{a.clutch_1v1_wins}/{a.clutch_1v1_attempts}</td>
@@ -433,6 +430,7 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
     copy.sort((a, b) => {
       let aVal: number, bVal: number;
       switch (sort.col) {
+        case 'shots_fired': aVal = a.shots_fired; bVal = b.shots_fired; break;
         case 'acc': aVal = a.shots_hit / (a.shots_fired || 1); bVal = b.shots_hit / (b.shots_fired || 1); break;
         case 'head_acc': aVal = a.headshot_hits / (a.shots_hit || 1); bVal = b.headshot_hits / (b.shots_hit || 1); break;
         case 'cstrafe':
@@ -458,6 +456,7 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
           <thead>
             <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
+              <SortableTh label="Shots Fired" title="Shots fired (guns only, not gated on enemy visibility)" sortKey="shots_fired" state={sort} onClick={toggleSort} />
               <SortableTh label="Accuracy" title="Shots that hit an enemy / shots fired (guns only, not gated on enemy visibility)" sortKey="acc" state={sort} onClick={toggleSort} />
               <SortableTh label="Head Accuracy" title="Hits landing on the head / total hits" sortKey="head_acc" state={sort} onClick={toggleSort} />
               <SortableTh label="Counter-Strafe %" title="Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)" sortKey="cstrafe" state={sort} onClick={toggleSort} />
@@ -468,6 +467,7 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
             {sorted.map((a) => (
               <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                 {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
+                <td className={tdRight}>{a.shots_fired}</td>
                 <td className={tdRight}>{pct(a.shots_hit, a.shots_fired)}</td>
                 <td className={tdRight}>{pct(a.headshot_hits, a.shots_hit)}</td>
                 <td className={tdRight}>{pct(a.counter_strafe_good_shots, a.counter_strafe_shots)}</td>
@@ -495,15 +495,15 @@ function TradesTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
         case 'trade_kill_att': aVal = a.trade_kill_attempts; bVal = b.trade_kill_attempts; break;
         case 'trade_kill_succ': aVal = a.trade_kill_successes; bVal = b.trade_kill_successes; break;
         case 'trade_kill_pct':
-          aVal = a.trade_kill_successes / (a.trade_kill_opportunities || 1);
-          bVal = b.trade_kill_successes / (b.trade_kill_opportunities || 1);
+          aVal = a.trade_kill_successes / (a.trade_kill_attempts || 1);
+          bVal = b.trade_kill_successes / (b.trade_kill_attempts || 1);
           break;
         case 'traded_death_opp': aVal = a.traded_death_opportunities; bVal = b.traded_death_opportunities; break;
         case 'traded_death_att': aVal = a.traded_death_attempts; bVal = b.traded_death_attempts; break;
         case 'traded_death_succ': aVal = a.traded_death_successes; bVal = b.traded_death_successes; break;
         case 'traded_death_pct':
-          aVal = a.traded_death_successes / (a.traded_death_opportunities || 1);
-          bVal = b.traded_death_successes / (b.traded_death_opportunities || 1);
+          aVal = a.traded_death_successes / (a.traded_death_attempts || 1);
+          bVal = b.traded_death_successes / (b.traded_death_attempts || 1);
           break;
         default: return 0;
       }
@@ -523,11 +523,11 @@ function TradesTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
               <SortableTh label="Trade Kill Opps" title="Trade kill opportunities: times a teammate died while this player was still alive (the chance to trade existed)" sortKey="trade_kill_opp" state={sort} onClick={toggleSort} />
               <SortableTh label="Trade Kill Attempts" title="Trade kill attempts: opportunities where this player damaged the killer within the trade window" sortKey="trade_kill_att" state={sort} onClick={toggleSort} />
               <SortableTh label="Trade Kills" title="Trade kill successes: opportunities where this player killed the killer within the trade window" sortKey="trade_kill_succ" state={sort} onClick={toggleSort} />
-              <SortableTh label="Trade Kill %" title="Trade kill successes / opportunities" sortKey="trade_kill_pct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Trade Kill %" title="Trade kill successes / attempts" sortKey="trade_kill_pct" state={sort} onClick={toggleSort} />
               <SortableTh label="Traded Death Opps" title="Traded death opportunities: times this player died while at least one teammate was still alive (someone had the chance to trade them)" sortKey="traded_death_opp" state={sort} onClick={toggleSort} />
               <SortableTh label="Traded Death Attempts" title="Traded death attempts: opportunities where a teammate damaged the killer within the trade window" sortKey="traded_death_att" state={sort} onClick={toggleSort} />
               <SortableTh label="Traded Deaths" title="Traded death successes: opportunities where a teammate killed the killer within the trade window" sortKey="traded_death_succ" state={sort} onClick={toggleSort} />
-              <SortableTh label="Traded Death %" title="Traded death successes / opportunities" sortKey="traded_death_pct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Traded Death %" title="Traded death successes / attempts" sortKey="traded_death_pct" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -537,11 +537,11 @@ function TradesTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
                 <td className={tdRight}>{a.trade_kill_opportunities}</td>
                 <td className={tdRight}>{a.trade_kill_attempts}</td>
                 <td className={tdRight}>{a.trade_kill_successes}</td>
-                <td className={tdRight}>{pct(a.trade_kill_successes, a.trade_kill_opportunities)}</td>
+                <td className={tdRight}>{pct(a.trade_kill_successes, a.trade_kill_attempts)}</td>
                 <td className={tdRight}>{a.traded_death_opportunities}</td>
                 <td className={tdRight}>{a.traded_death_attempts}</td>
                 <td className={tdRight}>{a.traded_death_successes}</td>
-                <td className={tdRight}>{pct(a.traded_death_successes, a.traded_death_opportunities)}</td>
+                <td className={tdRight}>{pct(a.traded_death_successes, a.traded_death_attempts)}</td>
               </tr>
             ))}
           </tbody>
@@ -748,7 +748,6 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   ];
 
   const impact: StatTile[] = [
-    { label: 'Headshot %', title: 'Headshot kill percentage', value: pct(agg.headshot_kills, agg.kills) },
     { label: 'KAST', title: 'Percentage of rounds with a Kill, Assist, Survived, or Traded', value: pct(agg.kast_rounds, agg.rounds_played) },
     { label: 'Double Kills', title: 'Rounds where both opponents were eliminated', value: agg.two_k_rounds },
     { label: '1v1 Clutches', title: '1v1 clutch wins / attempts', value: `${agg.clutch_1v1_wins}/${agg.clutch_1v1_attempts}` },
@@ -757,6 +756,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   ];
 
   const mechanics: StatTile[] = [
+    { label: 'Shots Fired', title: 'Shots fired (guns only, not gated on enemy visibility)', value: agg.shots_fired },
     { label: 'Accuracy', title: 'Shots that hit an enemy / shots fired (guns only, not gated on enemy visibility)', value: pct(agg.shots_hit, agg.shots_fired) },
     { label: 'Head Accuracy', title: 'Hits landing on the head / total hits', value: pct(agg.headshot_hits, agg.shots_hit) },
     { label: 'Counter-Strafe %', title: 'Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)', value: pct(agg.counter_strafe_good_shots, agg.counter_strafe_shots) },
@@ -766,10 +766,10 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   const trades: StatTile[] = [
     { label: 'Trade Kill Opps', title: 'Trade kill opportunities: times a teammate died while this player was still alive (the chance to trade existed)', value: agg.trade_kill_opportunities },
     { label: 'Trade Kill Attempts', title: 'Trade kill attempts: opportunities where this player damaged the killer within the trade window', value: agg.trade_kill_attempts },
-    { label: 'Trade Kills', title: 'Trade kill successes / opportunities: times you killed the enemy who killed your teammate, out of the times you had the chance to', value: `${agg.trade_kill_successes}/${agg.trade_kill_opportunities}` },
+    { label: 'Trade Kills', title: 'Trade kill successes / attempts: times you killed the enemy who killed your teammate, out of the times you tried to', value: `${agg.trade_kill_successes}/${agg.trade_kill_attempts}` },
     { label: 'Traded Death Opps', title: 'Traded death opportunities: times this player died while at least one teammate was still alive (someone had the chance to trade them)', value: agg.traded_death_opportunities },
     { label: 'Traded Death Attempts', title: 'Traded death attempts: opportunities where a teammate damaged the killer within the trade window', value: agg.traded_death_attempts },
-    { label: 'Traded Deaths', title: 'Traded death successes / opportunities: times a teammate killed the enemy who killed you, out of the times a teammate had the chance to', value: `${agg.traded_death_successes}/${agg.traded_death_opportunities}` },
+    { label: 'Traded Deaths', title: 'Traded death successes / attempts: times a teammate killed the enemy who killed you, out of the times a teammate tried to', value: `${agg.traded_death_successes}/${agg.traded_death_attempts}` },
   ];
 
   const utility: StatTile[] = [
