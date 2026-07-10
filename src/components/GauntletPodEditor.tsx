@@ -204,7 +204,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
             disabled={saving}
             className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg)] transition-colors underline decoration-dotted disabled:opacity-40"
           >
-            Cancel — discard everything
+            Cancel
           </button>
         </div>
       </div>
@@ -310,7 +310,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
           onClick={cancel}
           className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg)] transition-colors underline decoration-dotted"
         >
-          Cancel — discard everything
+          Cancel
         </button>
       </div>
     </div>

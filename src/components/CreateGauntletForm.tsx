@@ -91,8 +91,7 @@ export function CreateGauntletForm({ seasons }: Props) {
           <div className="tracked text-[10px] text-[var(--color-accent-amber-fg)] mb-1">Preview — Nothing Saved Yet</div>
           <div className="font-mono text-[12px] text-[var(--color-text-primary)]">
             {shape.qualifiers} qualifiers, {shape.games} games across {shape.rounds} round
-            {shape.rounds === 1 ? '' : 's'}. Review the shape below, then confirm to write it — or
-            cancel and change the season or start date first.
+            {shape.rounds === 1 ? '' : 's'}.
           </div>
         </div>
         <GauntletBracketDiagram pods={pods} currentPlayerId={null} />
