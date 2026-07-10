@@ -41,8 +41,8 @@ const TOOLS: { href: string; title: string; desc: string }[] = [
   },
   {
     href: '/admin/seasons/gauntlet',
-    title: 'Start Gauntlet',
-    desc: 'Build the single-elimination bracket for an active season.',
+    title: 'Manage Gauntlet',
+    desc: 'Build, seed, or reset the single-elimination bracket for an active season.',
   },
   {
     href: '/admin/ops-errors',

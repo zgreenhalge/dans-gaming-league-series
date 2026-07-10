@@ -10,7 +10,7 @@ import { getSeasons, getGauntletRounds, gauntletHasPods, isPlayerAdmin, getOpsEr
 import { buildRegularToGauntletMap, isPlayedScore } from '@/lib/util';
 
 export const metadata = {
-  title: 'Start Gauntlet',
+  title: 'Manage Gauntlet',
   description: 'Build, seed, or reset a gauntlet bracket for an active DGLS season.',
 };
 
@@ -61,14 +61,14 @@ export default async function GauntletSeasonPage() {
         crumbs={[
           { label: 'DGLS', href: '/' },
           { label: 'Admin', href: '/admin' },
-          { label: 'Start Gauntlet' },
+          { label: 'Manage Gauntlet' },
         ]}
       />
       <main className="max-w-[640px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-8">
-          <div className="font-display text-[28px] font-semibold leading-tight">Start Gauntlet</div>
+          <div className="font-display text-[28px] font-semibold leading-tight">Manage Gauntlet</div>
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">
-            Builds the single-elimination bracket shape for a season — sized from its current
+            Build the single-elimination bracket shape for a season — sized from its current
             roster, but unseeded. Seed it later, once the regular season is complete, from the list
             below.
           </div>
