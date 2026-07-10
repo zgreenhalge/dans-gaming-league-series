@@ -1481,19 +1481,6 @@ export async function getGauntletPodForMatch(
   return (data ?? null) as { advance_rule: 'single' | 'wildcard'; is_final: boolean } | null;
 }
 
-/** Whether a gauntlet season has any `gauntlet_pods` rows at all — false for a hand-built gauntlet
- * (created via the manual shell route, matches added directly with no pod graph), true for one
- * built by `buildGauntletBracket`, seeded or not. Used to route a returning admin to the right
- * builder UI (automated seed/reset vs. manual match adding). */
-export async function gauntletHasPods(seasonId: number): Promise<boolean> {
-  const { count, error } = await supabase
-    .from('gauntlet_pods')
-    .select('id', { count: 'exact', head: true })
-    .eq('season_id', seasonId);
-  if (error) throw error;
-  return (count ?? 0) > 0;
-}
-
 export interface BracketSlot {
   slot_index: number;
   source_kind: 'seed' | 'pod';
@@ -1517,6 +1504,10 @@ export interface BracketPod {
   /** True once every match this pod has materialized is played. False for an unmaterialized pod
    * (no matches yet) as well as one still in progress. */
   played: boolean;
+  /** True once this pod's matches exist (`match1_id` set), whether or not they're played yet — the
+   * manual pod editor (`GauntletPodEditor`) locks a pod against further editing/deletion from this
+   * point on, since its scheduling is real. */
+  materialized: boolean;
   slots: BracketSlot[];
 }
 
@@ -1525,8 +1516,7 @@ export interface BracketPod {
  * until a pod materializes), this reads `gauntlet_pods`/`gauntlet_pod_slots` directly, so it also
  * covers the persisted-but-unseeded shape (`GauntletBracketDiagram`'s empty-state preview) and lets
  * the diagram trace each pod's advancement source (`source_pod_id`) across rounds regardless of
- * play progress. Returns `[]` for a manual gauntlet (no `gauntlet_pods` rows — see
- * `gauntletHasPods()`). */
+ * play progress. Returns `[]` for a gauntlet with no pods at all yet. */
 export async function getGauntletBracketShape(gauntletSeasonId: number): Promise<BracketPod[]> {
   const { data: podRows, error: podErr } = await supabase
     .from('gauntlet_pods')
@@ -1597,6 +1587,7 @@ export async function getGauntletBracketShape(gauntletSeasonId: number): Promise
       advance_rule: p.advance_rule,
       is_final: p.is_final,
       played: podMatchIds.length > 0 && podMatchIds.every((id) => playedMatch.get(id) === true),
+      materialized: p.match1_id != null,
       slots: (slotsByPod.get(p.id) ?? []).sort((a, b) => a.slot_index - b.slot_index),
     };
   });

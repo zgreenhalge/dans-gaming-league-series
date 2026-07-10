@@ -240,6 +240,7 @@ export interface PreviewPod {
   advance_rule: AdvanceRule;
   is_final: boolean;
   played: false;
+  materialized: false;
   slots: PreviewSlot[];
 }
 
@@ -259,6 +260,7 @@ export function planToPreviewPods(plan: BracketPlan): PreviewPod[] {
     advance_rule: pod.advance_rule,
     is_final: pod.is_final,
     played: false,
+    materialized: false,
     slots: pod.slots.map((slot) => ({
       slot_index: slot.slot_index,
       source_kind: slot.source_kind,
