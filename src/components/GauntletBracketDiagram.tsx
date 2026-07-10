@@ -117,12 +117,24 @@ export function GauntletBracketDiagram({
               const from = posByPodId.get(slot.source_pod_id);
               const to = posByPodId.get(pod.id);
               if (!from || !to) return null;
+              const resolved = slot.player_id != null;
+              // Once resolved, trace from the exact row in the source pod that actually advanced —
+              // found by matching the survivor's player_id back to their slot there — rather than
+              // the pod's generic mid-point, matching the destination end below (which already
+              // targets this slot's specific row). Still unresolved, we don't know which row will
+              // advance, so fall back to the pod's overall vertical center.
+              const sourcePod = podsById.get(slot.source_pod_id);
+              const sourceSlotIndex = resolved
+                ? sourcePod?.slots.find((s) => s.player_id === slot.player_id)?.slot_index
+                : undefined;
               const x1 = from.x + POD_W;
-              const y1 = from.y + HEADER_H + 2 * ROW_H;
+              const y1 =
+                sourceSlotIndex != null
+                  ? from.y + HEADER_H + sourceSlotIndex * ROW_H + ROW_H / 2
+                  : from.y + HEADER_H + 2 * ROW_H;
               const x2 = to.x;
               const y2 = to.y + HEADER_H + slot.slot_index * ROW_H + ROW_H / 2;
               const midX = (x1 + x2) / 2;
-              const resolved = slot.player_id != null;
               return (
                 <path
                   key={`${pod.id}-${slot.slot_index}`}
