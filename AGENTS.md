@@ -35,6 +35,28 @@ caller interpret the results for their situation. A tool written for "verify X f
 rots into a single-use script; the same tool written as "inspect X" stays reusable. Put the
 task-specific interpretation in the conversation, the PR, or a doc — not in the tool.
 
+# Supabase changes require live, per-operation approval
+
+A Supabase MCP connector is available in agent sessions working on this repo, with tools that
+directly read and mutate the live database — `apply_migration`, `execute_sql`, `create_project`,
+`create_branch`, `delete_branch`, `merge_branch`, `rebase_branch`, `reset_branch`,
+`restore_project`, `pause_project`, `deploy_edge_function`, `confirm_cost`, and any `execute_sql`
+call that isn't a plain read (`SELECT`). Before running any of these, show the user the **exact**
+command or statement you're about to run and get their explicit go-ahead **at that moment** — not a
+blanket "yes, go ahead" from earlier in the conversation, and not an approval that covered a
+different operation. Every mutating call gets its own explicit approval, every time, no exceptions.
+
+This holds even when a change looks obviously correct, reversible, or already agreed upon in
+principle (e.g. "add the seed_ehog column we discussed") — describe the literal command and wait for
+a yes before running it. RLS is off on every table in this project (see
+[`docs/architecture.md`](./docs/architecture.md)), so there is no database-level backstop if a
+mutation goes wrong — the live approval step is the only guardrail, and it is not optional.
+
+Read-only tools — `list_tables`, `get_logs`, `get_advisors`, `search_docs`, `list_migrations`,
+`list_branches`, `list_extensions`, `list_projects`, `get_project`, `get_organization`,
+`list_organizations`, `get_cost`, `get_project_url`, `get_publishable_keys`, and `execute_sql` for a
+plain `SELECT` — can be used freely for investigation without asking first.
+
 # Local `*_handoff/` dirs are gitignored scratch
 
 Directories matching `*_handoff/` (e.g. `dathost_handoff/`, `ehog_handoff/`) hold planning and
