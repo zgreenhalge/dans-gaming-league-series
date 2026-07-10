@@ -1493,6 +1493,114 @@ export async function gauntletHasPods(seasonId: number): Promise<boolean> {
   return (count ?? 0) > 0;
 }
 
+export interface BracketSlot {
+  slot_index: number;
+  source_kind: 'seed' | 'pod';
+  /** The initial tournament seed this slot is filled from, once assigned — set only for
+   * `source_kind = 'seed'` slots, and only for the round they first appear in (round 1, or later
+   * for a bye). */
+  source_seed: number | null;
+  /** The earlier pod this slot's occupant advances from — set only for `source_kind = 'pod'`
+   * slots. Draws the connector line between pods in `GauntletBracketDiagram`. */
+  source_pod_id: number | null;
+  player_id: number | null;
+  player_name: string | null;
+}
+
+export interface BracketPod {
+  id: number;
+  round_number: number;
+  pod_index: number;
+  advance_rule: 'single' | 'wildcard';
+  is_final: boolean;
+  /** True once every match this pod has materialized is played. False for an unmaterialized pod
+   * (no matches yet) as well as one still in progress. */
+  played: boolean;
+  slots: BracketSlot[];
+}
+
+/** The full bracket shape — every pod and slot for a gauntlet season, whether or not it's been
+ * seeded or played yet. Unlike `getGauntletRounds()` (which reads matches, and so returns nothing
+ * until a pod materializes), this reads `gauntlet_pods`/`gauntlet_pod_slots` directly, so it also
+ * covers the persisted-but-unseeded shape (`GauntletBracketDiagram`'s empty-state preview) and lets
+ * the diagram trace each pod's advancement source (`source_pod_id`) across rounds regardless of
+ * play progress. Returns `[]` for a manual gauntlet (no `gauntlet_pods` rows — see
+ * `gauntletHasPods()`). */
+export async function getGauntletBracketShape(gauntletSeasonId: number): Promise<BracketPod[]> {
+  const { data: podRows, error: podErr } = await supabase
+    .from('gauntlet_pods')
+    .select('id, round_number, pod_index, advance_rule, is_final, match1_id, match2_id')
+    .eq('season_id', gauntletSeasonId)
+    .order('round_number', { ascending: true })
+    .order('pod_index', { ascending: true });
+  if (podErr) throw podErr;
+  type PodRow = {
+    id: number;
+    round_number: number;
+    pod_index: number;
+    advance_rule: 'single' | 'wildcard';
+    is_final: boolean;
+    match1_id: number | null;
+    match2_id: number | null;
+  };
+  const pods = (podRows ?? []) as PodRow[];
+  if (pods.length === 0) return [];
+
+  const podIds = pods.map((p) => p.id);
+  const matchIds = pods.flatMap((p) => [p.match1_id, p.match2_id]).filter((id): id is number => id != null);
+
+  const [{ data: slotRows, error: slotErr }, { data: matchRows }, players] = await Promise.all([
+    supabase
+      .from('gauntlet_pod_slots')
+      .select('pod_id, slot_index, source_kind, source_seed, source_pod_id, player_id')
+      .in('pod_id', podIds),
+    matchIds.length
+      ? supabase.from('matches').select('id, final_score').in('id', matchIds)
+      : Promise.resolve({ data: [] as { id: number; final_score: string | null }[] }),
+    getPlayersById(),
+  ]);
+  if (slotErr) throw slotErr;
+
+  const playedMatch = new Map(
+    ((matchRows ?? []) as { id: number; final_score: string | null }[]).map((m) => [m.id, isPlayedScore(m.final_score)]),
+  );
+
+  type SlotRow = {
+    pod_id: number;
+    slot_index: number;
+    source_kind: 'seed' | 'pod';
+    source_seed: number | null;
+    source_pod_id: number | null;
+    player_id: number | null;
+  };
+  const slotsByPod = new Map<number, BracketSlot[]>();
+  for (const row of (slotRows ?? []) as SlotRow[]) {
+    const list = slotsByPod.get(row.pod_id) ?? [];
+    list.push({
+      slot_index: row.slot_index,
+      source_kind: row.source_kind,
+      source_seed: row.source_seed,
+      source_pod_id: row.source_pod_id,
+      player_id: row.player_id,
+      player_name: row.player_id != null ? (players.get(row.player_id)?.name ?? null) : null,
+    });
+    slotsByPod.set(row.pod_id, list);
+  }
+
+  return pods.map((p) => {
+    const podMatchIds = [p.match1_id, p.match2_id].filter((id): id is number => id != null);
+    return {
+      id: p.id,
+      round_number: p.round_number,
+      pod_index: p.pod_index,
+      advance_rule: p.advance_rule,
+      is_final: p.is_final,
+      played: podMatchIds.length > 0 && podMatchIds.every((id) => playedMatch.get(id) === true),
+      slots: (slotsByPod.get(p.id) ?? []).sort((a, b) => a.slot_index - b.slot_index),
+    };
+  });
+}
+
 /** Fetches all matches for a gauntlet season and groups them into rounds by week_number. */
 export async function getGauntletRounds(seasonId: number): Promise<GauntletRound[]> {
   const { data: weeks, error: wErr } = await supabase
