@@ -106,6 +106,20 @@ def run_openskill_update(
     return [(r.mu, r.sigma) for r in new_a], [(r.mu, r.sigma) for r in new_b]
 
 
+def predict_win(
+    team_a_states: list[tuple[float, float]],
+    team_b_states: list[tuple[float, float]],
+) -> float:
+    """
+    Probability team A wins, from current OpenSkill state alone (no MOV, no trained model —
+    the library's own PlackettLuce.predict_win()).
+    """
+    team_a = [_model.rating(mu=mu, sigma=sigma) for mu, sigma in team_a_states]
+    team_b = [_model.rating(mu=mu, sigma=sigma) for mu, sigma in team_b_states]
+    p_a, _ = _model.predict_win(teams=[team_a, team_b])
+    return p_a
+
+
 # ---------------------------------------------------------------------------
 # SCORE / SEASON HELPERS  (mirrors of src/lib/util.ts)
 # ---------------------------------------------------------------------------
@@ -264,6 +278,7 @@ def compute_ratings(
     stats_by_match: dict[int, list],
     player_seeds: dict[int, float] | None = None,
     on_segment_end=None,
+    on_before_match=None,
 ) -> tuple[list[dict], PlayerState, list[int]]:
     """
     Full chronological rating walk over ordered_matches.
@@ -280,6 +295,11 @@ def compute_ratings(
     on_segment_end: optional callable(segment, player_state) fired after the
         last match in each segment, before inter-season regression is applied.
         segment is (season_number: int, is_gauntlet: bool).
+
+    on_before_match: optional callable(match_id, team_a_states, team_b_states, a_won) fired
+        for each match once its pre-match (SHIRTS, SKINS) states are known, before the
+        rating update is applied. Used by the calibration harness (ehog/backfill.py
+        --calibration) to score pre-match win predictions; has no effect on the walk itself.
     """
     player_state: PlayerState = {}
     player_seeds = player_seeds or {}
@@ -332,6 +352,9 @@ def compute_ratings(
 
         team_a_states = [state_for(r["player_id"])[:2] for r in team_a_rows]
         team_b_states = [state_for(r["player_id"])[:2] for r in team_b_rows]
+
+        if on_before_match:
+            on_before_match(match_id, team_a_states, team_b_states, a_won)
 
         a_score = team_a_rows[0]["rounds_won"] or 0
         b_score = team_b_rows[0]["rounds_won"] or 0
