@@ -10,10 +10,6 @@ interface GauntletRow {
   gauntletName: string;
   seeded: boolean;
   started: boolean;
-  /** True for a gauntlet with no gauntlet_pods rows at all — built via the manual shell route
-   * rather than buildGauntletBracket. Seeding doesn't apply; shows a "continue building" link
-   * instead. */
-  manual: boolean;
 }
 
 type SeedBands = { byes: string[]; playing: string[]; relegated: string[] };
@@ -73,29 +69,23 @@ function GauntletLifecycleRow({ season }: { season: GauntletRow }) {
           <div className="font-display text-[14px] font-semibold">{season.gauntletName}</div>
           <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
             {season.regularSeasonName} —{' '}
-            {season.manual
-              ? season.started
-                ? 'manual, in progress'
-                : 'manual, being built'
-              : season.started
-                ? 'in progress'
-                : season.seeded
-                  ? 'seeded, round 1 not yet played'
-                  : 'shape built, not yet seeded'}
+            {season.started
+              ? 'in progress'
+              : season.seeded
+                ? 'seeded, round 1 not yet played'
+                : 'shape built, not yet seeded'}
           </div>
           {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-1">{error}</div>}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {season.manual && !season.started && (
-            <Link
-              href={`/admin/seasons/gauntlet/manual/${season.regularSeasonId}`}
-              className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
-            >
-              Continue Building
-            </Link>
-          )}
-          {!season.manual && !season.seeded && !season.started && (
+          <Link
+            href={`/admin/seasons/gauntlet/manual/${season.regularSeasonId}`}
+            className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
+          >
+            Manage Bracket
+          </Link>
+          {!season.seeded && !season.started && (
             <button
               type="button"
               onClick={seed}

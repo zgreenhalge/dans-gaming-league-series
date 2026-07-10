@@ -2,13 +2,14 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { redirect, notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
-import { ManualGauntletBuilder } from '@/components/ManualGauntletBuilder';
-import { getSeason, getSeasonLeaderboard, getLinkedGauntlet, getGauntletRounds, isPlayerAdmin } from '@/lib/queries';
-import { isPlayedScore } from '@/lib/util';
+import { GauntletPodEditor } from '@/components/GauntletPodEditor';
+import { getSeason, getSeasonLeaderboard, getLinkedGauntlet, getGauntletBracketShape, isPlayerAdmin } from '@/lib/queries';
+import { buildGauntletBracket } from '@/lib/gauntlet-bracket';
+import { fromPersistedShape, fromGeneratedPlan, emptyDraftPod, type DraftPod } from '@/lib/gauntlet-draft';
 
 export const metadata = {
-  title: 'Manual Gauntlet Builder',
-  description: 'Hand-build gauntlet rounds and matches outside the automated bracket generator.',
+  title: 'Gauntlet Bracket Editor',
+  description: 'Hand-build or extend a gauntlet bracket, pod by pod.',
 };
 
 export default async function ManualGauntletPage({ params }: { params: Promise<{ id: string }> }) {
@@ -27,18 +28,23 @@ export default async function ManualGauntletPage({ params }: { params: Promise<{
     getSeasonLeaderboard(regularSeasonId),
     getLinkedGauntlet(regularSeason.name),
   ]);
-  const rounds = gauntletSeason ? await getGauntletRounds(gauntletSeason.id) : [];
-
   const players = leaderboard.map((r) => ({ id: r.player_id, name: r.player_name }));
-  const roundSummaries = rounds.map((r) => ({
-    round_number: r.round_number,
-    matches: r.matches.map((m) => ({
-      id: m.id,
-      shirts: m.shirts_stats.map((s) => s.player_name),
-      skins: m.skins_stats.map((s) => s.player_name),
-      played: isPlayedScore(m.final_score),
-    })),
-  }));
+
+  // Loading the initial draft: an already-persisted shape (in-progress manual gauntlet, or a
+  // generator-built one the admin now wants to keep hand-editing) always wins; otherwise default to
+  // the same generated plan the generator's own preview would show (identical by construction, no
+  // data transfer needed from that flow), or — for a qualifier count outside buildGauntletBracket's
+  // supported range — a single empty round with one empty pod.
+  let initialDraft: DraftPod[];
+  if (gauntletSeason) {
+    initialDraft = fromPersistedShape(await getGauntletBracketShape(gauntletSeason.id));
+  } else {
+    try {
+      initialDraft = fromGeneratedPlan(buildGauntletBracket(players.length), leaderboard);
+    } catch {
+      initialDraft = [emptyDraftPod('1:0', 1, 0)];
+    }
+  }
 
   return (
     <div className="min-h-screen">
@@ -47,23 +53,26 @@ export default async function ManualGauntletPage({ params }: { params: Promise<{
           { label: 'DGLS', href: '/' },
           { label: 'Admin', href: '/admin' },
           { label: 'Manage Gauntlet', href: '/admin/seasons/gauntlet' },
-          { label: 'Manual Builder' },
+          { label: 'Bracket Editor' },
         ]}
       />
-      <main className="max-w-[640px] mx-auto px-6 pb-16">
+      <main className="max-w-[900px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-8">
-          <div className="font-display text-[28px] font-semibold leading-tight">Manual Gauntlet Builder</div>
+          <div className="font-display text-[28px] font-semibold leading-tight">Gauntlet Bracket Editor</div>
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">
-            {regularSeason.name} — hand-create rounds and matches, bypassing the automated bracket
-            generator entirely. No pairing invariant or advancement logic is enforced; each match
-            still flows through the normal veto/score routes once created.
+            {regularSeason.name} — add, edit, or remove pods by hand. A pod materializes into real
+            matches the instant all 4 of its slots are decided; once that happens it&apos;s locked here.
+            Nothing is saved until you review and confirm the bracket.
           </div>
         </div>
-        <ManualGauntletBuilder
+        <GauntletPodEditor
+          // Remounts (discarding client-side edit state) whenever the persisted shape actually
+          // changes underneath it — e.g. right after this same editor's own save, via
+          // `router.refresh()`. A plain prop change wouldn't reset `useState(initialPods)`.
+          key={initialDraft.map((p) => p.key).join(',')}
           regularSeasonId={regularSeasonId}
-          gauntletExists={!!gauntletSeason}
           players={players}
-          rounds={roundSummaries}
+          initialPods={initialDraft}
         />
       </main>
     </div>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { getSeason, getLinkedGauntlet, getGauntletRounds } from '@/lib/queries';
+import { getSeason, getLinkedGauntlet, getGauntletRounds, getGauntletBracketShape } from '@/lib/queries';
 import { isPlayedScore } from '@/lib/util';
 import { tryBuildGauntletShape, deleteGauntletSeason } from '@/lib/gauntlet-engine';
 
@@ -58,9 +58,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: result.reason }, { status: 400 });
   }
 
+  const pods = await getGauntletBracketShape(result.gauntletSeasonId);
+
   return NextResponse.json(
     {
       shape: { qualifiers: result.qualifiers, games: result.games, rounds: result.rounds },
+      pods,
     },
     { status: 201 },
   );

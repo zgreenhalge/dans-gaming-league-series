@@ -119,7 +119,7 @@ export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seaso
  * `isSeasonFullyPlayed()` with `checkSeasonCompletion()` rather than checking only the max
  * `round_number`'s matches: for an automated (pod-based) bracket the final round structurally can't
  * materialize until every earlier pod has resolved, so the two checks are equivalent there — but a
- * manually-built gauntlet (see gauntlet-engine.ts's `createManualGauntletMatch`) has no such
+ * manually-built gauntlet (see gauntlet-engine.ts's `saveManualDraft`) has no such
  * guarantee, since nothing stops an admin from adding a later round before an earlier one is
  * finished. Idempotent: no-ops once the gauntlet is already ARCHIVED, or if any match is still
  * unplayed. */

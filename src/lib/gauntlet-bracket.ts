@@ -223,3 +223,52 @@ export function buildGauntletBracket(N: number): BracketPlan {
   if (N === 20) return build20();
   throw new Error(`buildGauntletBracket: unsupported qualifier count N=${N} (supported: 4-20)`);
 }
+
+export interface PreviewSlot {
+  slot_index: number;
+  source_kind: 'seed' | 'pod';
+  source_seed: number | null;
+  source_pod_id: number | null;
+  player_id: null;
+  player_name: null;
+}
+
+export interface PreviewPod {
+  id: number;
+  round_number: number;
+  pod_index: number;
+  advance_rule: AdvanceRule;
+  is_final: boolean;
+  played: false;
+  materialized: false;
+  slots: PreviewSlot[];
+}
+
+/** Renders a freshly-computed (not yet persisted) bracket plan into the same shape
+ * `getGauntletBracketShape()` reads back from the database, so `GauntletBracketDiagram` can preview
+ * a plan before anything is written. Synthesizes sequential ids for pods since none exist yet —
+ * stable within one plan, not meaningful across calls or once the shape is actually persisted. */
+export function planToPreviewPods(plan: BracketPlan): PreviewPod[] {
+  const idByKey = new Map<string, number>();
+  const key = (round: number, index: number) => `${round}:${index}`;
+  plan.pods.forEach((pod, i) => idByKey.set(key(pod.round_number, pod.pod_index), i + 1));
+
+  return plan.pods.map((pod) => ({
+    id: idByKey.get(key(pod.round_number, pod.pod_index))!,
+    round_number: pod.round_number,
+    pod_index: pod.pod_index,
+    advance_rule: pod.advance_rule,
+    is_final: pod.is_final,
+    played: false,
+    materialized: false,
+    slots: pod.slots.map((slot) => ({
+      slot_index: slot.slot_index,
+      source_kind: slot.source_kind,
+      source_seed: slot.source_kind === 'seed' ? (slot.source_seed ?? null) : null,
+      source_pod_id:
+        slot.source_kind === 'pod' ? (idByKey.get(key(slot.source_round!, slot.source_pod_index!)) ?? null) : null,
+      player_id: null,
+      player_name: null,
+    })),
+  }));
+}
