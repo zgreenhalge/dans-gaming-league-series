@@ -81,8 +81,15 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   }, [isGauntlet, rounds, schedule]);
 
   const [localTab, setLocalTab] = useState<Tab>('leaderboard');
-  const tab = props.tab ?? localTab;
+  const rawTab = props.tab ?? localTab;
   const setTab = props.onTabChange ?? setLocalTab;
+
+  // A tab with nothing behind it (e.g. a gauntlet before any pod is seeded) is hidden rather than
+  // shown with a "nothing here yet" message — mirrors the H2H empty check in `H2HSection`.
+  const hasLeaderboard = leaderboard.length > 0;
+  const hasStats = leaderboard.length > 0;
+  const hasH2H = h2hData.players.length > 0 && (h2hData.duos.length > 0 || h2hData.rivals.length > 0);
+  const hasSchedule = isGauntlet ? bracketShape.length > 0 || rounds.length > 0 : schedule.length > 0;
   const [myGamesOnly, setMyGamesOnly] = useState(false);
   const [openItems, setOpenItems] = useState<Set<number>>(defaultOpenSet);
 
@@ -168,6 +175,17 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     }
   }
 
+  const tabs: { key: Tab; label: string }[] = [
+    ...(hasLeaderboard ? [{ key: 'leaderboard' as const, label: 'Leaderboard' }] : []),
+    ...(hasStats ? [{ key: 'stats' as const, label: 'Stats' }] : []),
+    ...(hasSab ? [{ key: 'advanced' as const, label: 'Advanced Stats' }] : []),
+    ...(hasH2H ? [{ key: 'h2h' as const, label: 'H2H' }] : []),
+    ...(hasSchedule ? [{ key: 'schedule' as const, label: isGauntlet ? 'Rounds' : 'Schedule' }] : []),
+  ];
+  // Falls back to the first surviving tab when the caller-controlled `tab` (shared between the
+  // regular and gauntlet sub-views in `CombinedSeasonTabView`) points at one this side has hidden.
+  const tab = tabs.some((t) => t.key === rawTab) ? rawTab : (tabs[0]?.key ?? rawTab);
+
   const scheduleControls = tab === 'schedule' && (
     <>
       {currentPlayerId !== null && (
@@ -193,14 +211,6 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     </>
   );
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'leaderboard', label: 'Leaderboard' },
-    { key: 'stats', label: 'Stats' },
-    ...(hasSab ? [{ key: 'advanced' as const, label: 'Advanced Stats' }] : []),
-    { key: 'h2h', label: 'H2H' },
-    { key: 'schedule', label: isGauntlet ? 'Rounds' : 'Schedule' },
-  ];
-
   const tabBarButtons = tabs.map((t) => (
     <button
       key={t.key}
@@ -224,19 +234,13 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
       {tab === 'leaderboard' && (
         <>
           {isGauntlet && <GauntletStandings rounds={rounds} leaderboard={leaderboard} />}
-          {leaderboard.length === 0 ? (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-              No leaderboard data yet.
-            </div>
-          ) : (
-            <LeaderboardTable
-              rows={leaderboard}
-              showMedals={seasonStatus === 'ARCHIVED'}
-              playoffZones={!isGauntlet && seasonStatus === 'ACTIVE' ? { top: 2, bottom: 4 } : undefined}
-              canonicalRanking={gauntletRanking}
-              ehogRatings={ehogRatings}
-            />
-          )}
+          <LeaderboardTable
+            rows={leaderboard}
+            showMedals={seasonStatus === 'ARCHIVED'}
+            playoffZones={!isGauntlet && seasonStatus === 'ACTIVE' ? { top: 2, bottom: 4 } : undefined}
+            canonicalRanking={gauntletRanking}
+            ehogRatings={ehogRatings}
+          />
         </>
       )}
 
@@ -252,13 +256,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
                 />
               </div>
             )}
-            {rounds.length === 0 ? (
-              bracketShape.length === 0 && (
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                  No rounds recorded.
-                </div>
-              )
-            ) : (
+            {rounds.length > 0 && (
               <GauntletRoundsList
                 displayRounds={displayRounds}
                 allRounds={rounds}
@@ -269,31 +267,17 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
             )}
           </>
         ) : (
-          schedule.length === 0 ? (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-              No weeks scheduled.
-            </div>
-          ) : (
-            <ScheduleList
-              displaySchedule={displaySchedule}
-              openWeeks={openItems}
-              onToggleWeek={toggleItem}
-              seasonStartDate={seasonStartDate}
-              currentPlayerId={currentPlayerId}
-            />
-          )
+          <ScheduleList
+            displaySchedule={displaySchedule}
+            openWeeks={openItems}
+            onToggleWeek={toggleItem}
+            seasonStartDate={seasonStartDate}
+            currentPlayerId={currentPlayerId}
+          />
         )
       )}
 
-      {tab === 'stats' && (
-        leaderboard.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-            No stats available yet.
-          </div>
-        ) : (
-          <BasicStatsView rows={leaderboard} matches={allMatches} />
-        )
-      )}
+      {tab === 'stats' && <BasicStatsView rows={leaderboard} matches={allMatches} />}
 
       {tab === 'advanced' && hasSab && (
         <SabremetricsLeaderboardView rows={sabremetrics!} />

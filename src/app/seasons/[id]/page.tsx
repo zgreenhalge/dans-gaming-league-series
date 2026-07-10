@@ -230,7 +230,15 @@ export default async function SeasonPage({
             />
           </div>
         </div>
-        {linkedGauntlet && gauntletRounds && gauntletBracketShape && gauntletLeaderboard && gauntletH2hData ? (
+        {linkedGauntlet &&
+        gauntletRounds &&
+        gauntletBracketShape &&
+        gauntletLeaderboard &&
+        gauntletH2hData &&
+        // The Gauntlet tab is only worth showing once there's something to see in it — a paired
+        // gauntlet season row can exist with no bracket shape yet (manual shell) and no rounds
+        // (unseeded), in which case it's indistinguishable from having no gauntlet at all.
+        (gauntletBracketShape.length > 0 || gauntletRounds.length > 0) ? (
           <CombinedSeasonTabView
             leaderboard={leaderboard}
             schedule={schedule}
