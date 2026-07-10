@@ -62,7 +62,7 @@ export default async function ManualGauntletPage({ params }: { params: Promise<{
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">
             {regularSeason.name} — add, edit, or remove pods by hand. A pod materializes into real
             matches the instant all 4 of its slots are decided; once that happens it&apos;s locked here.
-            Nothing below is saved until you click Save Bracket.
+            Nothing is saved until you review and confirm the bracket.
           </div>
         </div>
         <GauntletPodEditor

@@ -223,18 +223,24 @@ schema addition:
   `source_kind: 'seed'`, but with no seed number) would corrupt the round1/byes/dropped accounting
   that only makes sense for a generator-built shape.
 
-The editor is a **batch draft**: the admin builds and edits the whole bracket as client-side state
-(`DraftPod[]`, `src/lib/gauntlet-draft.ts` — pure, no DB access, shared between the editor and the
-save route), gets a live preview via the same `GauntletBracketDiagram` the season page uses, and
-nothing is written until `POST /api/seasons/[id]/gauntlet/pods` (`saveManualDraft()` in
-`gauntlet-engine.ts`) is called. That route diffs the submitted draft against whatever's currently
-persisted: new pods are inserted, changed-but-not-yet-materialized pods are updated, and
-not-yet-materialized pods missing from the submission are deleted — a pod with real matches
-(`materialized: true` in `BracketPod`) is always left alone and can't be edited or deleted from this
-UI. `gauntlet-draft.ts`'s `pruneInvalidReferences()` runs after every local edit or deletion, so by
-the time a draft is submitted it's already internally self-consistent (no slot references a pod that
-no longer exists, or an advancement beyond its source's capacity) — the save route only re-validates
-this defensively (`validateIntegrity()`), it doesn't repeat the cascade-clearing logic.
+The editor is a **batch draft** with an edit/preview split, mirroring the generator's own
+preview/confirm/cancel flow: the "editing" stage (`GauntletPodEditor.tsx`) is plain tables — a
+roster panel to mark players sitting out, and one card per pod with its elimination-scale toggle,
+Final checkbox, and 4 slot pickers — no diagram. Every player reference here is labeled by seed
+number ("Seed 3 — PlayerName"), since `players` is passed in canonical-sort order and a player's seed
+is just their 1-based position in that array; this keeps hand-building anchored to the same seed
+numbers the generator would have used. Clicking "Review Bracket" only switches to a "preview" stage —
+the same `GauntletBracketDiagram` the season page uses, plus the completeness status banner — behind
+Confirm/Back, exactly like the generator's own preview stage; nothing is written until Confirm calls
+`POST /api/seasons/[id]/gauntlet/pods` (`saveManualDraft()` in `gauntlet-engine.ts`). That route
+diffs the submitted draft against whatever's currently persisted: new pods are inserted,
+changed-but-not-yet-materialized pods are updated, and not-yet-materialized pods missing from the
+submission are deleted — a pod with real matches (`materialized: true` in `BracketPod`) is always
+left alone and can't be edited or deleted from this UI. `gauntlet-draft.ts`'s
+`pruneInvalidReferences()` runs after every local edit or deletion, so by the time a draft is
+submitted it's already internally self-consistent (no slot references a pod that no longer exists,
+or an advancement beyond its source's capacity) — the save route only re-validates this defensively
+(`validateIntegrity()`), it doesn't repeat the cascade-clearing logic.
 
 Loading the editor's initial draft: an already-persisted shape always wins
 (`fromPersistedShape()`); otherwise it defaults to the same plan the generator's own preview stage

@@ -44,13 +44,23 @@ function optionsExcludingSlot(pods: DraftPod[], podKey: string, slotIndex: numbe
   );
 }
 
+/** "Seed 3 — PlayerName" — `players` is passed in canonical-sort (seed) order from the page, so a
+ * player's seed is just their 1-based position in that array. Shown everywhere the editor
+ * references a player, so hand-building stays anchored to the same seed numbers the generator
+ * would have used. */
+function playerLabel(seedByPlayerId: Map<number, number>, player: Player): string {
+  return `Seed ${seedByPlayerId.get(player.id) ?? '?'} — ${player.name}`;
+}
+
 export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Props) {
   const router = useRouter();
   const [pods, setPods] = useState<DraftPod[]>(initialPods);
   const [droppedIds, setDroppedIds] = useState<Set<number>>(new Set());
+  const [stage, setStage] = useState<'edit' | 'preview'>('edit');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const seedByPlayerId = useMemo(() => new Map(players.map((p, i) => [p.id, i + 1])), [players]);
   const playerNameById = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
   const integrity = useMemo(() => validateIntegrity(pods), [pods]);
   const complete = useMemo(() => validateComplete(pods), [pods]);
@@ -72,9 +82,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
   }
 
   function setAdvanceRule(key: string, rule: AdvanceRule) {
-    apply(
-      pods.map((p) => (p.key === key && !p.materialized ? { ...p, advance_rule: rule } : p)),
-    );
+    apply(pods.map((p) => (p.key === key && !p.materialized ? { ...p, advance_rule: rule } : p)));
   }
 
   function setFinal(key: string, isFinal: boolean) {
@@ -107,7 +115,13 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
     });
   }
 
-  async function save() {
+  function reviewBracket() {
+    if (!integrity.valid || pods.length === 0) return;
+    setError(null);
+    setStage('preview');
+  }
+
+  async function confirmSave() {
     setSaving(true);
     setError(null);
     try {
@@ -127,39 +141,66 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
     }
   }
 
+  if (stage === 'preview') {
+    return (
+      <div className="flex flex-col gap-6">
+        <GauntletBracketDiagram pods={previewPods} currentPlayerId={null} />
+
+        <div
+          className="font-mono text-[12px] px-3 py-2 border"
+          style={
+            complete.complete
+              ? {
+                  borderColor: 'var(--color-accent-green-border)',
+                  background: 'var(--color-accent-green-bg)',
+                  color: 'var(--color-accent-green-fg)',
+                }
+              : {
+                  borderColor: 'var(--color-border-primary)',
+                  background: 'var(--color-bg-secondary)',
+                  color: 'var(--color-text-secondary)',
+                }
+          }
+        >
+          {complete.complete ? (
+            '✓ Bracket complete — reduces to one Final.'
+          ) : (
+            <ul className="list-disc list-inside">
+              {complete.issues.map((issue) => (
+                <li key={issue}>{issue}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {error && <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">{error}</div>}
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={confirmSave}
+            disabled={saving}
+            className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40"
+          >
+            {saving ? 'Saving…' : 'Confirm & Save'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setStage('edit')}
+            disabled={saving}
+            className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors disabled:opacity-40"
+          >
+            Back to Editing
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const availableRosterPlayers = players.filter((p) => !droppedIds.has(p.id));
 
   return (
     <div className="flex flex-col gap-8">
-      {previewPods.length > 0 && <GauntletBracketDiagram pods={previewPods} currentPlayerId={null} />}
-
-      <div
-        className="font-mono text-[12px] px-3 py-2 border"
-        style={
-          complete.complete
-            ? {
-                borderColor: 'var(--color-accent-green-border)',
-                background: 'var(--color-accent-green-bg)',
-                color: 'var(--color-accent-green-fg)',
-              }
-            : {
-                borderColor: 'var(--color-border-primary)',
-                background: 'var(--color-bg-secondary)',
-                color: 'var(--color-text-secondary)',
-              }
-        }
-      >
-        {complete.complete ? (
-          '✓ Bracket complete — reduces to one Final.'
-        ) : (
-          <ul className="list-disc list-inside">
-            {complete.issues.map((issue) => (
-              <li key={issue}>{issue}</li>
-            ))}
-          </ul>
-        )}
-      </div>
-
       <div>
         <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-2">
           Roster — mark anyone sitting out this gauntlet
@@ -187,7 +228,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
                       }
                 }
               >
-                {p.name}
+                {playerLabel(seedByPlayerId, p)}
               </button>
             );
           })}
@@ -206,6 +247,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
             pods={pods}
             players={availableRosterPlayers}
             droppedIds={droppedIds}
+            seedByPlayerId={seedByPlayerId}
             onDelete={() => deletePod(pod.key)}
             onSetAdvanceRule={(rule) => setAdvanceRule(pod.key, rule)}
             onSetFinal={(v) => setFinal(pod.key, v)}
@@ -242,11 +284,11 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
 
       <button
         type="button"
-        onClick={save}
-        disabled={saving || !integrity.valid || pods.length === 0}
+        onClick={reviewBracket}
+        disabled={!integrity.valid || pods.length === 0}
         className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40 self-start"
       >
-        {saving ? 'Saving…' : 'Save Bracket'}
+        Review Bracket
       </button>
     </div>
   );
@@ -257,6 +299,7 @@ function PodCard({
   pods,
   players,
   droppedIds,
+  seedByPlayerId,
   onDelete,
   onSetAdvanceRule,
   onSetFinal,
@@ -266,6 +309,7 @@ function PodCard({
   pods: DraftPod[];
   players: Player[];
   droppedIds: Set<number>;
+  seedByPlayerId: Map<number, number>;
   onDelete: () => void;
   onSetAdvanceRule: (rule: AdvanceRule) => void;
   onSetFinal: (v: boolean) => void;
@@ -280,9 +324,10 @@ function PodCard({
           {groupLabel(pod)} — locked (matches already exist)
         </div>
         <div className="font-mono text-[12px] flex flex-col gap-0.5">
-          {pod.slots.map((slot, i) => (
-            <div key={i}>{slot.kind === 'player' ? (players.find((p) => p.id === slot.playerId)?.name ?? `Player ${slot.playerId}`) : '—'}</div>
-          ))}
+          {pod.slots.map((slot, i) => {
+            const player = slot.kind === 'player' ? players.find((p) => p.id === slot.playerId) : undefined;
+            return <div key={i}>{player ? playerLabel(seedByPlayerId, player) : '—'}</div>;
+          })}
         </div>
       </div>
     );
@@ -339,6 +384,7 @@ function PodCard({
             slot={slot}
             players={players}
             droppedIds={droppedIds}
+            seedByPlayerId={seedByPlayerId}
             onChange={(s) => onUpdateSlot(i, s)}
           />
         ))}
@@ -365,6 +411,7 @@ function SlotPicker({
   slot,
   players,
   droppedIds,
+  seedByPlayerId,
   onChange,
 }: {
   pods: DraftPod[];
@@ -373,6 +420,7 @@ function SlotPicker({
   slot: DraftSlot;
   players: Player[];
   droppedIds: Set<number>;
+  seedByPlayerId: Map<number, number>;
   onChange: (slot: DraftSlot) => void;
 }) {
   const stripped = optionsExcludingSlot(pods, podKey, slotIndex);
@@ -397,7 +445,7 @@ function SlotPicker({
         <optgroup label="Players">
           {playerOptions.map((p) => (
             <option key={p.id} value={`player:${p.id}`}>
-              {p.name}
+              {playerLabel(seedByPlayerId, p)}
             </option>
           ))}
         </optgroup>
