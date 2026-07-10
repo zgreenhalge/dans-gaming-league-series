@@ -7,6 +7,7 @@ import {
   getSeasonLeaderboard,
   getSeasonSchedule,
   getGauntletRounds,
+  getGauntletBracketShape,
   getGauntletSeasonLeaderboard,
   getLinkedGauntlet,
   getLinkedRegularSeason,
@@ -132,8 +133,9 @@ export default async function SeasonPage({
     if (linked) redirect(`/seasons/${linked.id}`);
 
     // Orphan gauntlet with no paired regular season — render standalone
-    const [rounds, leaderboard, h2hData, ehogRatings, sabremetrics] = await Promise.all([
+    const [rounds, bracketShape, leaderboard, h2hData, ehogRatings, sabremetrics] = await Promise.all([
       getGauntletRounds(seasonId),
+      getGauntletBracketShape(seasonId),
       getGauntletSeasonLeaderboard(seasonId),
       getH2HData({ filter: seasonId, includeRegular: false, includeGauntlet: true }),
       getSeasonEhogRatings(seasonId),
@@ -167,6 +169,7 @@ export default async function SeasonPage({
           <SeasonTabView
             kind="gauntlet"
             rounds={rounds}
+            bracketShape={bracketShape}
             leaderboard={leaderboard}
             seasonStatus={season.status}
             currentPlayerId={currentPlayerId}
@@ -182,10 +185,11 @@ export default async function SeasonPage({
   // Regular season — check for paired gauntlet
   const linkedGauntlet = await getLinkedGauntlet(season.name);
 
-  const [leaderboard, schedule, gauntletRounds, gauntletLeaderboard, h2hData, gauntletH2hData, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics] = await Promise.all([
+  const [leaderboard, schedule, gauntletRounds, gauntletBracketShape, gauntletLeaderboard, h2hData, gauntletH2hData, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics] = await Promise.all([
     getSeasonLeaderboard(seasonId),
     getSeasonSchedule(seasonId),
     linkedGauntlet ? getGauntletRounds(linkedGauntlet.id) : Promise.resolve(null),
+    linkedGauntlet ? getGauntletBracketShape(linkedGauntlet.id) : Promise.resolve(null),
     linkedGauntlet ? getGauntletSeasonLeaderboard(linkedGauntlet.id) : Promise.resolve(null),
     getH2HData({ filter: seasonId, includeRegular: true, includeGauntlet: false }),
     linkedGauntlet
@@ -226,13 +230,14 @@ export default async function SeasonPage({
             />
           </div>
         </div>
-        {linkedGauntlet && gauntletRounds && gauntletLeaderboard && gauntletH2hData ? (
+        {linkedGauntlet && gauntletRounds && gauntletBracketShape && gauntletLeaderboard && gauntletH2hData ? (
           <CombinedSeasonTabView
             leaderboard={leaderboard}
             schedule={schedule}
             seasonStartDate={season.start_date}
             seasonStatus={season.status}
             gauntletRounds={gauntletRounds}
+            gauntletBracketShape={gauntletBracketShape}
             gauntletLeaderboard={gauntletLeaderboard}
             gauntletStatus={linkedGauntlet.status}
             currentPlayerId={currentPlayerId}

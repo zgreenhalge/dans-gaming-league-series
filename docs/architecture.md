@@ -161,6 +161,18 @@ the "pod stakes" label shown on the round list and match page (`GAUNTLET_POD_STA
 let completion see an incomplete round as "everything played" and archive before the final round
 materializes.
 
+**Bracket diagram.** `getGauntletBracketShape()` in `queries.ts` reads `gauntlet_pods`/
+`gauntlet_pod_slots` directly rather than matches, so — unlike `getGauntletRounds()`, which returns
+nothing until a pod's matches materialize — it also covers the persisted-but-unseeded shape. A
+season's "Gauntlet" tab (`SeasonTabView`) renders it via `GauntletBracketDiagram`
+(`src/components/GauntletBracketDiagram.tsx`): one box per pod, columns by round, with a connector
+line from a pod to every downstream pod a survivor's `source_pod_id` traces back to it — solid once
+resolved, dashed while still pending. This is what fills the previously-empty tab for an unseeded
+gauntlet (occupied slots read "Seed N" placeholders) and gives the round list above an at-a-glance
+overview once play starts; the existing round-by-round `GauntletRoundsList` below it still carries
+per-game detail (scores, maps, stats). Returns `[]` for a manual gauntlet (no `gauntlet_pods` rows),
+so the diagram silently no-ops there and the page falls back to the plain round list.
+
 `DELETE /api/seasons/[id]/gauntlet` reverses either step — it refuses once any of the gauntlet's
 matches has a played score, otherwise deletes the gauntlet season and everything materialized under
 it (`deleteGauntletSeason()` in `gauntlet-engine.ts`, also reused to clean up a failed build),

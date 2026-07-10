@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import SeasonTabView, { type SeasonTab } from './SeasonTabView';
 import { tabCls } from '@/lib/util';
-import type { WeekWithMatches, GauntletRound, H2HData, SabremetricMatchRow } from '@/lib/queries';
+import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 
 type TopTab = 'regular' | 'gauntlet';
@@ -34,6 +34,7 @@ export default function CombinedSeasonTabView({
   seasonStartDate,
   seasonStatus,
   gauntletRounds,
+  gauntletBracketShape,
   gauntletLeaderboard,
   gauntletStatus,
   currentPlayerId,
@@ -49,6 +50,7 @@ export default function CombinedSeasonTabView({
   seasonStartDate: string | null;
   seasonStatus: string;
   gauntletRounds: GauntletRound[];
+  gauntletBracketShape: BracketPod[];
   gauntletLeaderboard: LeaderboardRowWithId[];
   gauntletStatus: string;
   currentPlayerId: number | null;
@@ -88,6 +90,7 @@ export default function CombinedSeasonTabView({
           kind="gauntlet"
           leaderboard={gauntletLeaderboard}
           rounds={gauntletRounds}
+          bracketShape={gauntletBracketShape}
           seasonStatus={gauntletStatus}
           currentPlayerId={currentPlayerId}
           h2hData={gauntletH2hData}
