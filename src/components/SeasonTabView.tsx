@@ -5,11 +5,12 @@ import LeaderboardTable from './LeaderboardTable';
 import ScheduleList from './ScheduleList';
 import GauntletStandings from './GauntletStandings';
 import GauntletRoundsList from './GauntletRoundsList';
+import { GauntletBracketDiagram } from './GauntletBracketDiagram';
 import H2HSection from './H2HSection';
 import { BasicStatsView } from './BasicStatsView';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import TabBar from './TabBar';
-import type { WeekWithMatches, GauntletRound, H2HData, SabremetricMatchRow } from '@/lib/queries';
+import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { MatchPickBanInput } from '@/lib/mapSideStats';
 import { isPlayedScore, tabCls, canonicalGauntletRankMap } from '@/lib/util';
@@ -27,7 +28,7 @@ function playerInMatch(
 }
 
 type RegularMode = { kind: 'regular'; schedule: WeekWithMatches[]; seasonStartDate: string | null };
-type GauntletMode = { kind: 'gauntlet'; rounds: GauntletRound[] };
+type GauntletMode = { kind: 'gauntlet'; rounds: GauntletRound[]; bracketShape: BracketPod[] };
 
 export type { Tab as SeasonTab };
 
@@ -36,6 +37,7 @@ export type { Tab as SeasonTab };
 // downstream `useMemo` dependency checks below.
 const EMPTY_SCHEDULE: WeekWithMatches[] = [];
 const EMPTY_ROUNDS: GauntletRound[] = [];
+const EMPTY_BRACKET_SHAPE: BracketPod[] = [];
 
 type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   leaderboard: LeaderboardRowWithId[];
@@ -57,6 +59,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const isGauntlet = props.kind === 'gauntlet';
   const schedule = props.kind === 'regular' ? props.schedule : EMPTY_SCHEDULE;
   const rounds = props.kind === 'gauntlet' ? props.rounds : EMPTY_ROUNDS;
+  const bracketShape = props.kind === 'gauntlet' ? props.bracketShape : EMPTY_BRACKET_SHAPE;
   const seasonStartDate = props.kind === 'regular' ? props.seasonStartDate : null;
 
   const gauntletRanking = useMemo(
@@ -239,19 +242,32 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
 
       {tab === 'schedule' && (
         isGauntlet ? (
-          rounds.length === 0 ? (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-              No rounds recorded.
-            </div>
-          ) : (
-            <GauntletRoundsList
-              displayRounds={displayRounds}
-              allRounds={rounds}
-              openRounds={openItems}
-              onToggleRound={toggleItem}
-              currentPlayerId={currentPlayerId}
-            />
-          )
+          <>
+            {bracketShape.length > 0 && (
+              <div className="mb-6">
+                <GauntletBracketDiagram
+                  pods={bracketShape}
+                  currentPlayerId={currentPlayerId}
+                  rankMap={gauntletRanking}
+                />
+              </div>
+            )}
+            {rounds.length === 0 ? (
+              bracketShape.length === 0 && (
+                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+                  No rounds recorded.
+                </div>
+              )
+            ) : (
+              <GauntletRoundsList
+                displayRounds={displayRounds}
+                allRounds={rounds}
+                openRounds={openItems}
+                onToggleRound={toggleItem}
+                currentPlayerId={currentPlayerId}
+              />
+            )}
+          </>
         ) : (
           schedule.length === 0 ? (
             <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
