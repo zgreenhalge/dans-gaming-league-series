@@ -163,15 +163,21 @@ materializes.
 
 **Bracket diagram.** `getGauntletBracketShape()` in `queries.ts` reads `gauntlet_pods`/
 `gauntlet_pod_slots` directly rather than matches, so — unlike `getGauntletRounds()`, which returns
-nothing until a pod's matches materialize — it also covers the persisted-but-unseeded shape. A
-season's "Gauntlet" tab (`SeasonTabView`) renders it via `GauntletBracketDiagram`
-(`src/components/GauntletBracketDiagram.tsx`): one box per pod, columns by round, with a connector
-line from a pod to every downstream pod a survivor's `source_pod_id` traces back to it — solid once
-resolved, dashed while still pending. This is what fills the previously-empty tab for an unseeded
-gauntlet (occupied slots read "Seed N" placeholders) and gives the round list above an at-a-glance
-overview once play starts; the existing round-by-round `GauntletRoundsList` below it still carries
-per-game detail (scores, maps, stats). Returns `[]` for a manual gauntlet (no `gauntlet_pods` rows),
-so the diagram silently no-ops there and the page falls back to the plain round list.
+nothing until a pod's matches materialize — it also covers the persisted-but-unseeded shape.
+`GauntletBracketDiagram` (`src/components/GauntletBracketDiagram.tsx`) renders it: one box per pod,
+columns by round, with a connector line from a pod to every downstream pod a survivor's
+`source_pod_id` traces back to it — solid once resolved, dashed while still pending. It appears in
+both places a bracket shape exists to look at: inline in `CreateGauntletForm` right after
+`POST /api/seasons/[id]/gauntlet` builds a shape (that route's response includes the freshly-built
+`pods`), and in a season's "Gauntlet" tab (`SeasonTabView`) once the paired gauntlet has one — the
+tab itself is hidden (`src/app/seasons/[id]/page.tsx`) until `gauntletBracketShape` or
+`gauntletRounds` has something in it, so a bare gauntlet-season shell with neither shows no tab at
+all rather than an empty one. An unresolved slot never reads a bare "TBD" — a seed-sourced slot names
+the seed ("Seed 3"), and a pod-sourced slot names the source pod and, for a pod that sends more than
+one survivor onward, which of them ("Winner of Round 1 Group 1", "Second of Round 1 Group 2"). The
+existing round-by-round `GauntletRoundsList` below the diagram still carries per-game detail (scores,
+maps, stats). `getGauntletBracketShape()` returns `[]` for a manual gauntlet (no `gauntlet_pods`
+rows), so the diagram silently no-ops there and the page falls back to the plain round list.
 
 `DELETE /api/seasons/[id]/gauntlet` reverses either step — it refuses once any of the gauntlet's
 matches has a played score, otherwise deletes the gauntlet season and everything materialized under
