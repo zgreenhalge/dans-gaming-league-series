@@ -46,7 +46,7 @@ export default async function ManualGauntletPage({ params }: { params: Promise<{
         crumbs={[
           { label: 'DGLS', href: '/' },
           { label: 'Admin', href: '/admin' },
-          { label: 'Start Gauntlet', href: '/admin/seasons/gauntlet' },
+          { label: 'Manage Gauntlet', href: '/admin/seasons/gauntlet' },
           { label: 'Manual Builder' },
         ]}
       />

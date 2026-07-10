@@ -10,6 +10,7 @@ import { parseEliminationWarning } from '@/lib/parsers/rosterResolver';
 import { persistSabremetrics, clearSabremetrics } from '@/lib/demo/sabremetrics';
 import { resolveAndPropagate } from '@/lib/gauntlet-engine';
 import { checkSeasonCompletion, checkGauntletCompletion } from '@/lib/season-lifecycle';
+import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import type { DemoSabremetricStat, RoundHistoryEntry } from '@/lib/types';
 
 const supabaseAdmin = getAdminClient();
@@ -315,27 +316,28 @@ export async function PATCH(
     } else {
       await clearSabremetrics(matchId);
     }
+    await clearOpsError(supabaseAdmin, 'match', matchId, 'sabremetrics_persist');
   } catch (e) {
     console.error('Sabremetrics write/delete failed (non-fatal):', e);
+    await recordOpsError(supabaseAdmin, 'match', matchId, 'sabremetrics_persist', `Sabremetrics write failed: ${(e as Error).message}`);
   }
 
-  after(() => triggerRatingRecompute());
+  after(() => triggerRatingRecompute(supabaseAdmin));
 
   // Gauntlet bracket advancement: resolve this match's pod, propagate the survivor(s) into
   // downstream slots, and materialize the next pod once all four of its slots are filled.
   // Best-effort in `after()` — a hook failure must never roll back the committed score.
   if (isGauntlet) {
+    // Completion must run after propagation resolves — otherwise it can see an incomplete round
+    // (the final round not yet materialized) as "every existing match played" and archive early.
+    // Independent try/catch per step so a completion-check failure isn't masked by (or doesn't
+    // mask) a propagation failure.
     after(async () => {
       try {
         await resolveAndPropagate(supabaseAdmin, matchId);
       } catch (err) {
         console.error(`gauntlet propagate(${matchId}) failed:`, err);
       }
-    });
-    // Gauntlet completion: once the final round is fully played, archive the gauntlet and its
-    // paired regular season together. Independent try/catch from propagation above — a
-    // completion-check failure shouldn't be masked by (or mask) a propagation failure.
-    after(async () => {
       try {
         await checkGauntletCompletion(supabaseAdmin, m.weeks.season_id);
       } catch (err) {
@@ -364,8 +366,10 @@ export async function PATCH(
     after(async () => {
       try {
         await applyEliminationSteamIds(matchId, warnings as string[]);
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'steam_id_learn');
       } catch (err) {
         console.error(`learn steam id(${matchId}) failed:`, err);
+        await recordOpsError(supabaseAdmin, 'match', matchId, 'steam_id_learn', `Learn steam id failed: ${(err as Error).message}`);
       }
     });
   }
@@ -377,8 +381,10 @@ export async function PATCH(
     after(async () => {
       try {
         await teardownMatchServer(supabaseAdmin, matchId, { onlyIfOwnsServer: true });
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'server_teardown');
       } catch (err) {
         console.error(`auto-teardown(${matchId}) failed:`, err);
+        await recordOpsError(supabaseAdmin, 'match', matchId, 'server_teardown', `Server teardown failed: ${(err as Error).message}`);
       }
     });
   }
