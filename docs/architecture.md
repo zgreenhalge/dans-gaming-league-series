@@ -77,8 +77,7 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `POST` | `/api/seasons/[id]/gauntlet` | Create the paired gauntlet season for an active regular season and build its bracket *shape* — unseeded, nothing materialized (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet/seed` | Seed an existing shape from the season's current leaderboard order and materialize round 1 (admin only) |
 | `DELETE` | `/api/seasons/[id]/gauntlet` | Reset a gauntlet — deletes it and everything materialized under it; refuses if any match has a score unless `{ force: true }` is passed (admin only) |
-| `POST` | `/api/seasons/[id]/gauntlet/manual` | Create an empty gauntlet season shell with no bracket shape, for hand-building outside `buildGauntletBracket` (admin only) |
-| `POST` | `/api/seasons/[id]/gauntlet/matches` | Hand-create a single match under a gauntlet season's given round, bypassing `gauntlet_pods` entirely (admin only) |
+| `POST` | `/api/seasons/[id]/gauntlet/pods` | Save the manual pod editor's current draft — creates the paired gauntlet season if needed, then inserts/updates/deletes pods to match (admin only) |
 | `PATCH` | `/api/players/[id]` | Edit a player — display name, `is_admin` (can't demote yourself), or Steam link (unlink / set SteamID64) (admin only) |
 | `POST` | `/api/ehog/recompute/trigger` | Admin-gated "recompute EHOG ratings now" — fires the full rating walk in the background (admin only) |
 | `GET/POST` | `/api/players/register` | List unlinked players / link a Steam account to a player record |
@@ -206,19 +205,47 @@ seed, and reset together, one row per season, based on where it is in that lifec
 
 #### Manual bracket construction
 
-For league sizes outside `buildGauntletBracket`'s supported range (4–20) or a bracket shape the
-generator doesn't produce, `POST /api/seasons/[id]/gauntlet/manual` creates the paired gauntlet
-season with **no** `gauntlet_pods` rows at all (`createManualGauntletShell()`), and
-`POST /api/seasons/[id]/gauntlet/matches` (`createManualGauntletMatch()`) hand-creates individual
-matches directly under a given `round_number` — no pairing invariant, no `gauntlet_pods` linkage, no
-propagation. Every other read/write path treats a manual gauntlet identically to an automated one:
-`getGauntletRounds()` groups by `week_number` regardless of how a match was created,
-`canonicalGauntletRankMap()` only ever reads round numbers and match results, and
-`checkGauntletCompletion()` archives a manual gauntlet the same way once its highest-numbered round
-is fully played. `gauntletHasPods()` in `queries.ts` is how the admin UI (and any other caller)
-tells a manual gauntlet apart from an automated one. `/admin/seasons/gauntlet/manual/[id]` is the
-builder page (`id` = the regular season's id) — pick four players and a round number, add as many
-matches as needed.
+Manual bracket building (`/admin/seasons/gauntlet/manual/[id]`, `GauntletPodEditor.tsx`) shares the
+exact same `gauntlet_pods`/`gauntlet_pod_slots` model the generator produces — a hand-built pod and
+a generated one are indistinguishable to `resolveAndPropagate()`, `materializeIfReady()`,
+`getGauntletRounds()`, or `canonicalGauntletRankMap()`. Two conventions make this work without any
+schema addition:
+
+- A **directly-placed slot** is `source_kind: 'seed'` with `source_seed: null` and `player_id`
+  already set — skipping the generator's separate numeric-seed indirection entirely, since the admin
+  already knows the real player. An **advancement-sourced slot** is `source_kind: 'pod'` with
+  `source_pod_id` set and `player_id: null`, identical to a generated pod's "winner of an earlier
+  pod" slot — `resolveAndPropagate()` fills it in with zero pod-editor-specific code once that
+  source pod's 2 games finish, so a hand-built pod referencing "Round 1 Group 1's winner" resolves
+  automatically just like a generated one would.
+- `getSeedBands()` (used by `trySeedGauntlet()`) filters its `source_kind: 'seed'` query to
+  `source_seed IS NOT NULL` — otherwise a manual gauntlet's directly-placed slots (also
+  `source_kind: 'seed'`, but with no seed number) would corrupt the round1/byes/dropped accounting
+  that only makes sense for a generator-built shape.
+
+The editor is a **batch draft**: the admin builds and edits the whole bracket as client-side state
+(`DraftPod[]`, `src/lib/gauntlet-draft.ts` — pure, no DB access, shared between the editor and the
+save route), gets a live preview via the same `GauntletBracketDiagram` the season page uses, and
+nothing is written until `POST /api/seasons/[id]/gauntlet/pods` (`saveManualDraft()` in
+`gauntlet-engine.ts`) is called. That route diffs the submitted draft against whatever's currently
+persisted: new pods are inserted, changed-but-not-yet-materialized pods are updated, and
+not-yet-materialized pods missing from the submission are deleted — a pod with real matches
+(`materialized: true` in `BracketPod`) is always left alone and can't be edited or deleted from this
+UI. `gauntlet-draft.ts`'s `pruneInvalidReferences()` runs after every local edit or deletion, so by
+the time a draft is submitted it's already internally self-consistent (no slot references a pod that
+no longer exists, or an advancement beyond its source's capacity) — the save route only re-validates
+this defensively (`validateIntegrity()`), it doesn't repeat the cascade-clearing logic.
+
+Loading the editor's initial draft: an already-persisted shape always wins
+(`fromPersistedShape()`); otherwise it defaults to the same plan the generator's own preview stage
+would compute (`fromGeneratedPlan(buildGauntletBracket(N), leaderboard)` — identical by
+construction, so the "build by hand instead" link on that preview needs no data transfer, just a
+plain link to this page); or, for a qualifier count outside `buildGauntletBracket`'s range, a single
+empty round with one empty pod.
+
+Dropped players (sitting out this gauntlet entirely) are never persisted — same as the generator's
+own `BracketPlan.drops`, which `persistBracketShape()` also never writes anywhere. The editor just
+tracks a `droppedPlayerIds` set as ephemeral UI state so the slot pickers stop offering them.
 
 ### Season status lifecycle
 
