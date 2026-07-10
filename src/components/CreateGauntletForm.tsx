@@ -1,19 +1,22 @@
 'use client';
 
 import { useState } from 'react';
+import { GauntletBracketDiagram } from './GauntletBracketDiagram';
+import type { BracketPod } from '@/lib/queries';
 
 interface Props {
   seasons: { id: number; name: string }[];
 }
 
 type Shape = { qualifiers: number; games: number; rounds: number };
+type BuildResult = { shape: Shape; pods: BracketPod[] };
 
 export function CreateGauntletForm({ seasons }: Props) {
   const [seasonId, setSeasonId] = useState<number | ''>(seasons[0]?.id ?? '');
   const [startDate, setStartDate] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<Shape | null>(null);
+  const [result, setResult] = useState<BuildResult | null>(null);
 
   async function submit() {
     if (!seasonId) return;
@@ -30,21 +33,25 @@ export function CreateGauntletForm({ seasons }: Props) {
         setError(body.error ?? 'Failed to build the gauntlet bracket.');
         return;
       }
-      setResult(body.shape as Shape);
+      setResult({ shape: body.shape as Shape, pods: (body.pods as BracketPod[]) ?? [] });
     } finally {
       setSubmitting(false);
     }
   }
 
   if (result) {
+    const { shape, pods } = result;
     return (
-      <div className="border border-[var(--color-accent-green-border)] bg-[var(--color-accent-green-bg)] px-4 py-3">
-        <div className="tracked text-[10px] text-[var(--color-accent-green-fg)] mb-1">Bracket Shape Built</div>
-        <div className="font-mono text-[12px] text-[var(--color-text-primary)]">
-          {result.qualifiers} qualifiers, {result.games} games across {result.rounds} round
-          {result.rounds === 1 ? '' : 's'}. Nothing is playable yet — seed it from the &quot;Existing
-          Gauntlets&quot; list below once the regular season is complete.
+      <div className="flex flex-col gap-4">
+        <div className="border border-[var(--color-accent-green-border)] bg-[var(--color-accent-green-bg)] px-4 py-3">
+          <div className="tracked text-[10px] text-[var(--color-accent-green-fg)] mb-1">Bracket Shape Built</div>
+          <div className="font-mono text-[12px] text-[var(--color-text-primary)]">
+            {shape.qualifiers} qualifiers, {shape.games} games across {shape.rounds} round
+            {shape.rounds === 1 ? '' : 's'}. Nothing is playable yet — seed it from the &quot;Existing
+            Gauntlets&quot; list below once the regular season is complete.
+          </div>
         </div>
+        <GauntletBracketDiagram pods={pods} currentPlayerId={null} />
       </div>
     );
   }
