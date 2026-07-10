@@ -328,17 +328,16 @@ export async function PATCH(
   // downstream slots, and materialize the next pod once all four of its slots are filled.
   // Best-effort in `after()` — a hook failure must never roll back the committed score.
   if (isGauntlet) {
+    // Completion must run after propagation resolves — otherwise it can see an incomplete round
+    // (the final round not yet materialized) as "every existing match played" and archive early.
+    // Independent try/catch per step so a completion-check failure isn't masked by (or doesn't
+    // mask) a propagation failure.
     after(async () => {
       try {
         await resolveAndPropagate(supabaseAdmin, matchId);
       } catch (err) {
         console.error(`gauntlet propagate(${matchId}) failed:`, err);
       }
-    });
-    // Gauntlet completion: once the final round is fully played, archive the gauntlet and its
-    // paired regular season together. Independent try/catch from propagation above — a
-    // completion-check failure shouldn't be masked by (or mask) a propagation failure.
-    after(async () => {
       try {
         await checkGauntletCompletion(supabaseAdmin, m.weeks.season_id);
       } catch (err) {

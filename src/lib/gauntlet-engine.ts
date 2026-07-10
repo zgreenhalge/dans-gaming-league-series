@@ -337,15 +337,19 @@ export async function seedBracket(
   }
 }
 
-/** Deletes a gauntlet season and everything materialized under it: pods/slots (cascade),
- * player_match_stats, matches, weeks, and the season row itself. If its paired regular season was
+/** Deletes a gauntlet season and everything materialized under it: pod slots, pods,
+ * player_match_stats, matches, weeks, and the season row itself. Slots are deleted before pods
+ * since `gauntlet_pod_slots` has two FKs into `gauntlet_pods` (`pod_id` and `source_pod_id`) and
+ * there's no ON DELETE CASCADE on either. If its paired regular season was
  * ARCHIVED (i.e. this gauntlet had already completed and archived it via `checkGauntletCompletion`),
  * reverts that season back to COMPLETED — an archived season with no gauntlet behind it is a
- * confusing dead end. Also clears any stale build/seed `ops_errors` on the regular season —
- * resetting the gauntlet is the recovery action for a roster-drift seed failure, so a fresh start
- * shouldn't carry the old failure forward. Used both to clean up a failed bracket build and to let
- * an admin reset a gauntlet — callers are responsible for deciding whether it's safe to delete
- * (e.g. force-clearing one that has already started play) before calling this. */
+ * confusing dead end. Also clears any stale build/seed `ops_errors` on the regular season, and any
+ * stale archive `ops_errors` on the gauntlet season itself (otherwise it'd outlive the row it
+ * references and show up as a phantom "Season #N" entry) — resetting the gauntlet is the recovery
+ * action for a roster-drift seed failure, so a fresh start shouldn't carry the old failure forward.
+ * Used both to clean up a failed bracket build and to let an admin reset a gauntlet — callers are
+ * responsible for deciding whether it's safe to delete (e.g. force-clearing one that has already
+ * started play) before calling this. */
 export async function deleteGauntletSeason(supabaseAdmin: SupabaseClient, gauntletSeasonId: number): Promise<void> {
   const { data: gauntletRow, error: gauntletSelErr } = await supabaseAdmin
     .from('seasons')
@@ -355,6 +359,11 @@ export async function deleteGauntletSeason(supabaseAdmin: SupabaseClient, gauntl
   if (gauntletSelErr) throw gauntletSelErr;
   const gauntletName = (gauntletRow as { name: string } | null)?.name ?? null;
 
+  const podIds = await getPodIds(supabaseAdmin, gauntletSeasonId);
+  if (podIds.length > 0) {
+    const { error: slotsErr } = await supabaseAdmin.from('gauntlet_pod_slots').delete().in('pod_id', podIds);
+    if (slotsErr) throw slotsErr;
+  }
   const { error: podsErr } = await supabaseAdmin.from('gauntlet_pods').delete().eq('season_id', gauntletSeasonId);
   if (podsErr) throw podsErr;
 
@@ -386,6 +395,8 @@ export async function deleteGauntletSeason(supabaseAdmin: SupabaseClient, gauntl
 
   const { error: seasonDelErr } = await supabaseAdmin.from('seasons').delete().eq('id', gauntletSeasonId);
   if (seasonDelErr) throw seasonDelErr;
+
+  await clearOpsError(supabaseAdmin, 'season', gauntletSeasonId, 'gauntlet_archive');
 
   if (gauntletName) {
     const regularSeason = await getLinkedRegularSeason(gauntletName);
