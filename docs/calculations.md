@@ -94,6 +94,7 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
       trade window
     - `Trade Kill Successes` = opportunities where this player killed the killer within the
       trade window — the same condition that qualifies a round as "Traded" for KAST
+    - `Trade Kill %` = `Trade Kill Successes` / `Trade Kill Attempts`
   - **Traded Deaths** — the mirror, from the perspective of the player who died:
     - `Traded Death Opportunities` = times this player died while at least one teammate was
       still alive (someone had the chance to trade them)
@@ -101,6 +102,7 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
       trade window
     - `Traded Death Successes` = opportunities where a teammate killed the killer within the
       trade window
+    - `Traded Death %` = `Traded Death Successes` / `Traded Death Attempts`
   - In wingman there's exactly one teammate, so `Opportunities` degenerates to a single
     yes/no check per death rather than a count across a full side.
   - The trade window (currently 5s, `TRADE_WINDOW_SECONDS` in `src/lib/parsers/constants.ts`)
