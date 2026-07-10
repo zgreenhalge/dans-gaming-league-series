@@ -1,15 +1,16 @@
 'use client';
 
+import type { CSSProperties } from 'react';
 import { PlayerName } from './PlayerName';
 import type { BracketPod, BracketSlot } from '@/lib/queries';
 
-const POD_W = 176;
-const HEADER_H = 22;
-const ROW_H = 19;
+const POD_W = 232;
+const HEADER_H = 28;
+const ROW_H = 32;
 const POD_H = HEADER_H + 4 * ROW_H;
-const ROUND_GAP = 48;
-const POD_GAP = 16;
-const COLUMN_HEADER_H = 24;
+const ROUND_GAP = 64;
+const POD_GAP = 24;
+const COLUMN_HEADER_H = 30;
 
 type SlotStatus = 'champion' | 'advanced' | 'eliminated' | 'pending' | 'placeholder';
 
@@ -21,19 +22,37 @@ const STATUS_COLOR: Record<SlotStatus, string> = {
   placeholder: 'var(--color-text-secondary)',
 };
 
-function slotLabel(slot: BracketSlot): string {
-  if (slot.player_name) return slot.player_name;
+const ORDINALS = ['First', 'Second', 'Third', 'Fourth'];
+
+/** Human name for a pod, used both in the stakes header and in downstream placeholder labels
+ * ("Winner of Round 1 Group 1"). Groups are 1-indexed for display; `pod_index` is 0-indexed. */
+function groupName(pod: BracketPod): string {
+  return pod.is_final ? 'the Final' : `Round ${pod.round_number} Group ${pod.pod_index + 1}`;
+}
+
+/** Describes a slot whose occupant isn't decided yet, without ever surfacing a bare "TBD" — a seed
+ * slot names the seed, and a pod-sourced slot names the pod it comes from plus, for a pod that sends
+ * more than one survivor onward, which of those survivors ("First"/"Second"/...) this slot expects.
+ * `ordinal` is this slot's 0-based position among every slot fed by the same source pod, in the
+ * stable (round, pod_index, slot_index) order computed once by the caller. */
+function pendingSlotLabel(slot: BracketSlot, sourcePod: BracketPod | undefined, groupSize: number, ordinal: number): string {
   if (slot.source_kind === 'seed' && slot.source_seed != null) return `Seed ${slot.source_seed}`;
+  if (slot.source_kind === 'pod' && sourcePod) {
+    const name = groupName(sourcePod);
+    if (groupSize <= 1) return `Winner of ${name}`;
+    const ordinalWord = ORDINALS[ordinal] ?? `${ordinal + 1}th`;
+    return `${ordinalWord} of ${name}`;
+  }
   return 'TBD';
 }
 
 /** Overview flow diagram of a gauntlet bracket — one box per pod, grouped into columns by round,
  * with a connector line from a pod to every downstream pod a survivor advances into. Reads the
  * persisted `gauntlet_pods`/`gauntlet_pod_slots` shape (`getGauntletBracketShape()`), so it renders
- * identically whether the bracket is unseeded (placeholder "Seed N" rows, dashed future connectors),
- * mid-play, or complete. `rankMap` is optional — pass `canonicalGauntletRankMap(rounds)` to highlight
- * the champion once the final round is fully played; omit it (e.g. for the pre-seed preview, where
- * no rounds exist yet) and the final pod's occupants just render as pending. */
+ * identically whether the bracket is unseeded (placeholder "winner of ..." rows, dashed future
+ * connectors), mid-play, or complete. `rankMap` is optional — pass `canonicalGauntletRankMap(rounds)`
+ * to highlight the champion once the final round is fully played; omit it (e.g. for the pre-seed
+ * preview, where no rounds exist yet) and the final pod's occupants just render as pending. */
 export function GauntletBracketDiagram({
   pods,
   currentPlayerId,
@@ -57,6 +76,8 @@ export function GauntletBracketDiagram({
   const width = rounds.length * POD_W + (rounds.length - 1) * ROUND_GAP;
   const height = COLUMN_HEADER_H + maxPodsInRound * POD_H + (maxPodsInRound - 1) * POD_GAP;
 
+  const podsById = new Map(pods.map((p) => [p.id, p]));
+
   const posByPodId = new Map<number, { x: number; y: number }>();
   rounds.forEach((r, ri) => {
     podsByRound.get(r)!.forEach((p, pi) => {
@@ -78,6 +99,20 @@ export function GauntletBracketDiagram({
     }
   }
 
+  // Stable ordinal position of every pod-sourced slot among all slots fed by the same source pod —
+  // used by `pendingSlotLabel` to distinguish "Winner of ..." from "Second of ...".
+  const orderedPods = [...pods].sort((a, b) => a.round_number - b.round_number || a.pod_index - b.pod_index);
+  const slotsBySourcePod = new Map<number, BracketSlot[]>();
+  for (const pod of orderedPods) {
+    for (const slot of pod.slots) {
+      if (slot.source_kind === 'pod' && slot.source_pod_id != null) {
+        const list = slotsBySourcePod.get(slot.source_pod_id) ?? [];
+        list.push(slot);
+        slotsBySourcePod.set(slot.source_pod_id, list);
+      }
+    }
+  }
+
   function slotStatus(pod: BracketPod, slot: BracketSlot): SlotStatus {
     if (slot.player_id == null) return 'placeholder';
     if (pod.is_final) {
@@ -91,7 +126,7 @@ export function GauntletBracketDiagram({
   const maxRound = rounds[rounds.length - 1];
 
   return (
-    <div className="overflow-x-auto pb-2">
+    <div className="overflow-x-auto pb-3">
       <div className="relative" style={{ width, height }}>
         <svg width={width} height={height} className="absolute inset-0 pointer-events-none">
           {pods.map((pod) =>
@@ -112,9 +147,9 @@ export function GauntletBracketDiagram({
                   d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
                   fill="none"
                   stroke={resolved ? 'var(--color-accent-green-fg)' : 'var(--color-border-secondary)'}
-                  strokeWidth={resolved ? 1.5 : 1}
-                  strokeDasharray={resolved ? undefined : '3 3'}
-                  opacity={resolved ? 0.7 : 0.5}
+                  strokeWidth={resolved ? 2 : 1.25}
+                  strokeDasharray={resolved ? undefined : '4 4'}
+                  opacity={resolved ? 0.85 : 0.55}
                 />
               );
             }),
@@ -124,7 +159,7 @@ export function GauntletBracketDiagram({
         {rounds.map((r, ri) => (
           <div
             key={r}
-            className="absolute tracked text-[9px] text-[var(--color-text-secondary)]"
+            className="absolute tracked text-[11px] font-semibold text-[var(--color-text-secondary)]"
             style={{ left: ri * (POD_W + ROUND_GAP), top: 0, width: POD_W }}
           >
             {r === maxRound ? 'Final' : `Round ${r}`}
@@ -133,26 +168,71 @@ export function GauntletBracketDiagram({
 
         {pods.map((pod) => {
           const pos = posByPodId.get(pod.id)!;
-          const stakes = pod.is_final ? 'Final' : pod.advance_rule === 'single' ? 'Elimination' : 'Wildcard';
+          const stakes = pod.is_final ? 'Championship' : pod.advance_rule === 'single' ? 'Elimination' : 'Wildcard';
+          const isChampionPod =
+            pod.is_final && !!rankMap && pod.slots.some((s) => s.player_id != null && rankMap.get(s.player_id) === 1);
+          const accent = pod.is_final ? 'var(--color-accent-amber-strong)' : 'var(--color-site-accent)';
           return (
             <div
               key={pod.id}
-              className="absolute border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]"
-              style={{ left: pos.x, top: pos.y, width: POD_W, height: POD_H }}
+              className="lift-card absolute border bg-[var(--color-bg-primary)]"
+              style={
+                {
+                  left: pos.x,
+                  top: pos.y,
+                  width: POD_W,
+                  height: POD_H,
+                  borderWidth: pod.is_final ? 2 : 1,
+                  borderColor: pod.is_final ? 'var(--color-accent-amber-border)' : 'var(--color-border-primary)',
+                  boxShadow: isChampionPod
+                    ? '0 0 0 1px var(--color-accent-amber-border), 0 6px 20px rgba(0,0,0,0.12)'
+                    : undefined,
+                  '--lift-accent': accent,
+                } as CSSProperties
+              }
             >
               <div
-                className="tracked text-[8px] text-[var(--color-text-secondary)] px-1.5 flex items-center bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-tertiary)]"
-                style={{ height: HEADER_H }}
+                className="tracked text-[9px] font-semibold px-2 flex items-center justify-between"
+                style={{
+                  height: HEADER_H,
+                  color: pod.is_final ? 'var(--color-accent-amber-strong)' : 'var(--color-text-secondary)',
+                  background: pod.is_final
+                    ? 'color-mix(in srgb, var(--color-accent-amber-bg) 70%, var(--color-bg-primary))'
+                    : 'var(--color-bg-secondary)',
+                  borderBottom: '1px solid var(--color-border-tertiary)',
+                }}
               >
-                {stakes}
+                <span>{pod.is_final ? 'Final' : `Round ${pod.round_number} · Group ${pod.pod_index + 1}`}</span>
+                <span className="opacity-70">{stakes}</span>
               </div>
               {pod.slots.map((slot) => {
                 const status = slotStatus(pod, slot);
+                const sourcePod = slot.source_pod_id != null ? podsById.get(slot.source_pod_id) : undefined;
+                const group = slot.source_pod_id != null ? slotsBySourcePod.get(slot.source_pod_id) ?? [] : [];
+                const ordinal = group.indexOf(slot);
+                const isChampSlot = status === 'champion';
                 return (
                   <div
                     key={slot.slot_index}
-                    className="px-1.5 flex items-center font-mono text-[11px] truncate"
-                    style={{ height: ROW_H, color: STATUS_COLOR[status] }}
+                    className="px-2 flex items-center font-mono truncate"
+                    style={{
+                      height: ROW_H,
+                      color: STATUS_COLOR[status],
+                      fontSize: slot.player_name ? 14 : 10,
+                      fontWeight: isChampSlot ? 700 : 400,
+                      letterSpacing: slot.player_name ? undefined : '0.02em',
+                      textTransform: slot.player_name ? undefined : 'uppercase',
+                      textShadow: isChampSlot
+                        ? '0 0 10px color-mix(in srgb, var(--color-accent-amber-strong) 55%, transparent)'
+                        : undefined,
+                      background:
+                        status === 'advanced'
+                          ? 'color-mix(in srgb, var(--color-accent-green-bg) 45%, transparent)'
+                          : isChampSlot
+                            ? 'color-mix(in srgb, var(--color-accent-amber-bg) 55%, transparent)'
+                            : undefined,
+                      borderTop: slot.slot_index > 0 ? '1px solid var(--color-border-tertiary)' : undefined,
+                    }}
                   >
                     {slot.player_name ? (
                       <PlayerName
@@ -160,7 +240,7 @@ export function GauntletBracketDiagram({
                         isMe={currentPlayerId !== null && slot.player_id === currentPlayerId}
                       />
                     ) : (
-                      <span className="opacity-70">{slotLabel(slot)}</span>
+                      <span className="opacity-70">{pendingSlotLabel(slot, sourcePod, group.length, ordinal)}</span>
                     )}
                   </div>
                 );
