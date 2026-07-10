@@ -115,6 +115,18 @@ export function CreateGauntletForm({ seasons }: Props) {
             Cancel
           </button>
         </div>
+        <div className="flex flex-col gap-1">
+          <div className="tracked text-[9px] text-[var(--color-text-secondary)]">
+            Doesn&apos;t fit? Build a custom bracket by hand instead — it opens pre-loaded with this
+            same shape:
+          </div>
+          <Link
+            href={`/admin/seasons/gauntlet/manual/${seasonId}`}
+            className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] underline decoration-dotted w-fit"
+          >
+            Build manually →
+          </Link>
+        </div>
       </div>
     );
   }
@@ -165,21 +177,6 @@ export function CreateGauntletForm({ seasons }: Props) {
       >
         {previewing ? 'Loading Preview…' : 'Preview Bracket'}
       </button>
-
-      <div className="flex flex-col gap-1">
-        <div className="tracked text-[9px] text-[var(--color-text-secondary)]">
-          Generator doesn&apos;t fit? Build a custom bracket by hand instead:
-        </div>
-        {seasons.map((s) => (
-          <Link
-            key={s.id}
-            href={`/admin/seasons/gauntlet/manual/${s.id}`}
-            className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] underline decoration-dotted w-fit"
-          >
-            Build {s.name} manually →
-          </Link>
-        ))}
-      </div>
     </div>
   );
 }
