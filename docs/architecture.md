@@ -87,6 +87,8 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 
 Supabase (`public` schema). RLS is **off** on all tables — do not enable it without writing policies first. Types mirroring these shapes live in `src/lib/types.ts`.
 
+**Any Supabase MCP tool that mutates state** — `apply_migration`, a non-`SELECT` `execute_sql`, or any project/branch-management tool (`create_project`, `create_branch`, `delete_branch`, `merge_branch`, `rebase_branch`, `reset_branch`, `restore_project`, `pause_project`, `deploy_edge_function`, `confirm_cost`) — **requires the user's explicit approval of that exact command, given at the time it's about to run.** See [`../AGENTS.md`](../AGENTS.md)'s "Supabase changes require live, per-operation approval." Read-only tools (`list_tables`, `get_logs`, `get_advisors`, `search_docs`, `list_migrations`, `list_branches`, `list_extensions`, `list_projects`, `get_project`, `get_organization`, `list_organizations`, `get_cost`, `get_project_url`, `get_publishable_keys`, and a plain-`SELECT` `execute_sql`) don't need it.
+
 ### Tables
 
 | Table | Purpose |

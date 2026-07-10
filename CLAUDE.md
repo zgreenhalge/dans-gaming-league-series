@@ -27,6 +27,7 @@ When citing code in docs, comments, or commits, reference it by **symbol name** 
 - **The user verifies UI on the deployed preview (often on their phone), not localhost.** Don't spin up the dev server to self-diagnose a visual change — you can't see the result and they don't expose localhost to the internet. Finish the change, hand it back, and let them test. Use `npm run build` to catch type/lint errors, not the dev server to "check" UI.
 - **When a number looks wrong, investigate the data before changing code.** Stats often look off because matches were entered out of chronological order or pre-staged (S3's `"0-0"` rows) — not because the logic is broken. Confirm the data is what you think it is before restructuring a query or derivation to "explain" an anomaly. Reverting a needless logic change costs more than a `select`.
 - **Git: commit only when asked, in logical groups, on a feature branch.** When the user asks you to commit, default to **multiple logically-grouped commits** (not one mega-commit) on a feature branch, then push and write a PR description. Never commit work the user hasn't confirmed. Cite code by symbol name in commit messages (see [`docs/patterns.md`](./docs/patterns.md)).
+- **Supabase MCP mutations require live, per-operation approval.** This is a hard rule — see AGENTS.md's "Supabase changes require live, per-operation approval." Never run `apply_migration`, a non-`SELECT` `execute_sql`, or any project/branch-management tool without showing the user the exact command and getting an explicit yes *at that moment*; approval for one operation, or from earlier in the conversation, never carries over to the next one.
 
 ## Commands
 
@@ -45,7 +46,7 @@ Full schema is in [`docs/architecture.md`](./docs/architecture.md) and `src/lib/
 - **Canonical sort is WR% → RWR% → ADR** (all descending). Use `canonicalSort()` from `src/lib/util.ts` everywhere player rows are ranked. Never sort by ADR alone.
 - `total_assists` and `total_rounds_won` are absent from the view. `getPerPlayerSeasonStats()` in `src/lib/queries.ts` augments them by reading `player_match_stats` directly.
 - **Gauntlet seasons** store all matches as `is_playoff_game = true`, so they're excluded from the regular view. Use `getGauntletStats()` / `getGauntletSeasonLeaderboard()` for gauntlet data.
-- **RLS is off** on all tables. Enabling it without policies blocks all access.
+- **RLS is off** on all tables. Enabling it without policies blocks all access. Because of this, no Supabase credential or MCP tool is meaningfully "safe by default" — see the live-approval rule above.
 - **Season ↔ gauntlet pairing is name-based.** Use `extractSeasonNumber()` from `src/lib/util.ts` — don't assume paired seasons have adjacent IDs.
 - **Numeric precision is a storage-vs-display split.** Per-match `adr` in `player_match_stats` is stored as a whole number; aggregate ADR is *recomputed* from `total_damage / total_rounds_played` (see `overall_adr` in `queries.ts`) and is a true float — display layers show it at 2 decimals (`overall_adr.toFixed(2)`). Don't "fix" a decimal aggregate ADR to look like an integer, and don't massage match-card numbers — show them as stored.
 
