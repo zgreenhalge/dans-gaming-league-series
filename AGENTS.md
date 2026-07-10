@@ -54,8 +54,9 @@ mutation goes wrong — the live approval step is the only guardrail, and it is 
 
 Read-only tools — `list_tables`, `get_logs`, `get_advisors`, `search_docs`, `list_migrations`,
 `list_branches`, `list_extensions`, `list_projects`, `get_project`, `get_organization`,
-`list_organizations`, `get_cost`, `get_project_url`, `get_publishable_keys`, and `execute_sql` for a
-plain `SELECT` — can be used freely for investigation without asking first.
+`list_organizations`, `get_cost`, `get_project_url`, `get_publishable_keys`, `list_edge_functions`,
+`get_edge_function`, `generate_typescript_types`, and `execute_sql` for a plain `SELECT` — can be
+used freely for investigation without asking first.
 
 # Local `*_handoff/` dirs are gitignored scratch
 
