@@ -73,6 +73,7 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `PATCH` | `/api/seasons/[id]/start-date` | Set season start date (admin only) |
 | `PATCH` | `/api/seasons/[id]/status` | Transition a regular season `UPCOMING` → `ACTIVE` ("go live"); best-effort builds its gauntlet shape (admin only) |
 | `DELETE` | `/api/ops-errors/[id]` | Dismiss an `ops_errors` row, any entity type (admin only) |
+| `POST` | `/api/seasons/[id]/gauntlet/preview` | Compute what building would produce — qualifier count, games, rounds, pod/slot shape — without writing anything (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet` | Create the paired gauntlet season for an active regular season and build its bracket *shape* — unseeded, nothing materialized (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet/seed` | Seed an existing shape from the season's current leaderboard order and materialize round 1 (admin only) |
 | `DELETE` | `/api/seasons/[id]/gauntlet` | Reset a gauntlet — deletes it and everything materialized under it; refuses if any match has a score unless `{ force: true }` is passed (admin only) |
@@ -129,15 +130,24 @@ tagged `single` (only the 2-0 survives) or `wildcard` (only the 0-2 is eliminate
 Building and seeding a bracket are two separate steps, because the shape only depends on the
 qualifier *count*, not on who qualified:
 
-1. **`POST /api/seasons/[id]/gauntlet`** takes a regular season's id, creates the paired
+1. **`POST /api/seasons/[id]/gauntlet/preview`** takes a regular season's id and returns what
+   building would produce — qualifier count, games, rounds, and the full pod/slot shape
+   (`buildGauntletBracket()` plus `planToPreviewPods()` in `src/lib/gauntlet-bracket.ts`) — without
+   writing anything. `buildGauntletBracket()` is pure, so this is just that plan plus a read of the
+   current roster size; `planToPreviewPods()` renders it into the same shape
+   `getGauntletBracketShape()` reads back from the database (synthesizing sequential pod ids, since
+   none exist yet) so `GauntletBracketDiagram` can render it identically. `CreateGauntletForm` calls
+   this first and shows the diagram behind a confirm/cancel choice before anything is persisted.
+2. **`POST /api/seasons/[id]/gauntlet`** takes a regular season's id, creates the paired
    `"Season N Gauntlet"` season row, and persists the bracket *shape* — every `gauntlet_pods` /
    `gauntlet_pod_slots` row, but every slot's `player_id` left null (`persistBracketShape()` in
    `src/lib/gauntlet-engine.ts`). `N` comes from the roster (`getSeasonLeaderboard()`'s row count,
    which includes zero-stat unplayed players), not from standings — so this can run as soon as the
    season's full match schedule exists, well before the regular season is complete. Nothing is
    materialized; nothing is playable yet. Runs automatically when a season goes live (see below);
-   this route is the manual/admin equivalent.
-2. **`POST /api/seasons/[id]/gauntlet/seed`** takes the same regular season's id, reads its
+   this route is the manual/admin equivalent — and what `CreateGauntletForm` calls once the admin
+   confirms the preview.
+3. **`POST /api/seasons/[id]/gauntlet/seed`** takes the same regular season's id, reads its
    *current* `getSeasonLeaderboard()` order (seed 1 = leader), fills in every seed-sourced slot's
    `player_id`, and materializes every pod that becomes fully filled as a result — round 1, plus any
    all-bye pod (`seedBracket()`). Refuses if the bracket is already seeded (re-seeding would desync
@@ -166,11 +176,13 @@ materializes.
 nothing until a pod's matches materialize — it also covers the persisted-but-unseeded shape.
 `GauntletBracketDiagram` (`src/components/GauntletBracketDiagram.tsx`) renders it: one box per pod,
 columns by round, with a connector line from a pod to every downstream pod a survivor's
-`source_pod_id` traces back to it — solid once resolved, dashed while still pending. It appears in
-both places a bracket shape exists to look at: inline in `CreateGauntletForm` right after
-`POST /api/seasons/[id]/gauntlet` builds a shape (that route's response includes the freshly-built
-`pods`), and in a season's "Gauntlet" tab (`SeasonTabView`) once the paired gauntlet has one — the
-tab itself is hidden (`src/app/seasons/[id]/page.tsx`) until `gauntletBracketShape` or
+`source_pod_id` traces back to it — solid once resolved, dashed while still pending. It appears
+everywhere a bracket shape exists to look at: inline in `CreateGauntletForm` after
+`POST /api/seasons/[id]/gauntlet/preview` computes an unsaved plan (rendered from
+`planToPreviewPods()`'s output, structurally the same shape as a persisted one), again once
+`POST /api/seasons/[id]/gauntlet` actually commits it (that route's response includes the
+freshly-built `pods`), and in a season's "Gauntlet" tab (`SeasonTabView`) once the paired gauntlet has
+one — the tab itself is hidden (`src/app/seasons/[id]/page.tsx`) until `gauntletBracketShape` or
 `gauntletRounds` has something in it, so a bare gauntlet-season shell with neither shows no tab at
 all rather than an empty one. An unresolved slot never reads a bare "TBD" — a seed-sourced slot names
 the seed ("Seed 3"), and a pod-sourced slot names the source pod and, for a pod that sends more than

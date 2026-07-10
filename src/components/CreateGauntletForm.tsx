@@ -15,13 +15,33 @@ export function CreateGauntletForm({ seasons }: Props) {
   const [seasonId, setSeasonId] = useState<number | ''>(seasons[0]?.id ?? '');
   const [startDate, setStartDate] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  // Set once a preview has been fetched — nothing is written to the DB until the admin confirms it.
+  const [preview, setPreview] = useState<BuildResult | null>(null);
   const [result, setResult] = useState<BuildResult | null>(null);
 
-  async function submit() {
+  async function loadPreview() {
     if (!seasonId) return;
     setError(null);
-    setSubmitting(true);
+    setPreviewing(true);
+    try {
+      const res = await fetch(`/api/seasons/${seasonId}/gauntlet/preview`, { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(body.error ?? 'Failed to preview the gauntlet bracket.');
+        return;
+      }
+      setPreview({ shape: body.shape as Shape, pods: (body.pods as BracketPod[]) ?? [] });
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  async function confirm() {
+    if (!seasonId) return;
+    setError(null);
+    setConfirming(true);
     try {
       const res = await fetch(`/api/seasons/${seasonId}/gauntlet`, {
         method: 'POST',
@@ -34,9 +54,15 @@ export function CreateGauntletForm({ seasons }: Props) {
         return;
       }
       setResult({ shape: body.shape as Shape, pods: (body.pods as BracketPod[]) ?? [] });
+      setPreview(null);
     } finally {
-      setSubmitting(false);
+      setConfirming(false);
     }
+  }
+
+  function cancelPreview() {
+    setPreview(null);
+    setError(null);
   }
 
   if (result) {
@@ -52,6 +78,42 @@ export function CreateGauntletForm({ seasons }: Props) {
           </div>
         </div>
         <GauntletBracketDiagram pods={pods} currentPlayerId={null} />
+      </div>
+    );
+  }
+
+  if (preview) {
+    const { shape, pods } = preview;
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="border border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)] px-4 py-3">
+          <div className="tracked text-[10px] text-[var(--color-accent-amber-fg)] mb-1">Preview — Nothing Saved Yet</div>
+          <div className="font-mono text-[12px] text-[var(--color-text-primary)]">
+            {shape.qualifiers} qualifiers, {shape.games} games across {shape.rounds} round
+            {shape.rounds === 1 ? '' : 's'}. Review the shape below, then confirm to write it — or
+            cancel and change the season or start date first.
+          </div>
+        </div>
+        <GauntletBracketDiagram pods={pods} currentPlayerId={null} />
+        {error && <div className="text-[12px] text-[var(--color-accent-red-fg,#f87171)]">{error}</div>}
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={confirm}
+            disabled={confirming}
+            className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40"
+          >
+            {confirming ? 'Saving…' : 'Confirm & Build'}
+          </button>
+          <button
+            type="button"
+            onClick={cancelPreview}
+            disabled={confirming}
+            className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors disabled:opacity-40"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     );
   }
@@ -96,11 +158,11 @@ export function CreateGauntletForm({ seasons }: Props) {
 
       <button
         type="button"
-        onClick={submit}
-        disabled={submitting || !seasonId}
+        onClick={loadPreview}
+        disabled={previewing || !seasonId}
         className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40 self-start"
       >
-        {submitting ? 'Building…' : 'Build Bracket'}
+        {previewing ? 'Loading Preview…' : 'Preview Bracket'}
       </button>
     </div>
   );
