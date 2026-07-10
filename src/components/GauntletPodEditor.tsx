@@ -121,6 +121,12 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
     setStage('preview');
   }
 
+  /** Backs out of the whole editing session — nothing here was ever written (batch draft), so
+   * there's nothing to undo server-side; leaving the page is enough to discard it. */
+  function cancel() {
+    router.push('/admin/seasons/gauntlet');
+  }
+
   async function confirmSave() {
     setSaving(true);
     setError(null);
@@ -191,6 +197,14 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
             className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors disabled:opacity-40"
           >
             Back to Editing
+          </button>
+          <button
+            type="button"
+            onClick={cancel}
+            disabled={saving}
+            className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg)] transition-colors underline decoration-dotted disabled:opacity-40"
+          >
+            Cancel — discard everything
           </button>
         </div>
       </div>
@@ -282,14 +296,23 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
       )}
       {error && <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">{error}</div>}
 
-      <button
-        type="button"
-        onClick={reviewBracket}
-        disabled={!integrity.valid || pods.length === 0}
-        className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40 self-start"
-      >
-        Review Bracket
-      </button>
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={reviewBracket}
+          disabled={!integrity.valid || pods.length === 0}
+          className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40"
+        >
+          Review Bracket
+        </button>
+        <button
+          type="button"
+          onClick={cancel}
+          className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg)] transition-colors underline decoration-dotted"
+        >
+          Cancel — discard everything
+        </button>
+      </div>
     </div>
   );
 }
