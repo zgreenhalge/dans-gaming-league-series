@@ -55,6 +55,7 @@ export function PlayerManager({ players, selfId }: { players: Player[]; selfId: 
               <tr className="border-b border-[var(--color-border-tertiary)]">
                 <th className={th}>Player</th>
                 <th className={th}>Admin</th>
+                <th className={th}>Seed EHOG</th>
                 <th className={th}>Steam name</th>
                 <th className={th}>Steam ID</th>
                 <th className={`${th} text-right`}></th>
@@ -72,6 +73,8 @@ export function PlayerManager({ players, selfId }: { players: Player[]; selfId: 
       <div className="font-mono text-[10px] text-[var(--color-text-secondary)] mt-3">
         Admin changes apply to admin pages immediately; a player&apos;s own Topbar admin link updates
         on their next login. Nickname and avatar refresh from Steam automatically after a link change.
+        Seed EHOG (10–100) sets a known new player&apos;s starting rating in place of the default — it
+        only applies until their first rated match, and takes effect on the next EHOG recompute.
       </div>
     </>
   );

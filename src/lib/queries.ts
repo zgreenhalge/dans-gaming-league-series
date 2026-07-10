@@ -8,7 +8,7 @@ import { mapSlug } from './maps';
 import { workshopIdFromUrl } from './replay/radar';
 import { extractSeasonNumber, buildRegularToGauntletMap, canonicalSort, compareMatchRefDesc, matchLabel, weekWindow, computeH2H, resolveH2HPickedBy } from './util';
 import type { DuoStats, H2HStats, H2HData, H2HMatchInput } from './util';
-import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG } from './ehog';
+import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG, fromEhog } from './ehog';
 import { DEMO_INGEST_JOB_TYPE, type DemoIngestResult } from './demo/ingestResult';
 import {
   BACKGROUND_JOB_TYPES,
@@ -3098,9 +3098,23 @@ export async function getPlayerRatings(playerIds: number[]): Promise<PlayerMuSig
     }
   }
 
+  // Players with no rating_history yet may still have a configured seed_ehog (a known new
+  // player's starting rating) — use that instead of the global default for their preview.
+  const unratedIds = playerIds.filter((pid) => !latest.has(pid));
+  const seedRows = unratedIds.length > 0
+    ? await batchedIn<{ id: number; seed_ehog: number | null }>('players', 'id', unratedIds, 'id, seed_ehog')
+    : [];
+  const seedByPlayer = new Map(
+    seedRows.filter((r) => r.seed_ehog != null).map((r) => [r.id, r.seed_ehog as number]),
+  );
+
   return playerIds.map((pid) => {
     const s = latest.get(pid);
     if (s) return { playerId: pid, mu: s.mu, sigma: s.sigma, ehogRating: s.ehogRating };
+    const seedEhog = seedByPlayer.get(pid);
+    if (seedEhog != null) {
+      return { playerId: pid, mu: fromEhog(seedEhog, SIGMA_DEFAULT), sigma: SIGMA_DEFAULT, ehogRating: seedEhog };
+    }
     return { playerId: pid, mu: MU_DEFAULT, sigma: SIGMA_DEFAULT, ehogRating: DEFAULT_EHOG };
   });
 }

@@ -35,6 +35,7 @@ from ehog.engine import (
     fetch_chronological_matches,
     fetch_match_player_stats,
     fetch_player_names,
+    fetch_player_seeds,
     compute_ratings,
     clear_ratings,
     write_ratings,
@@ -75,6 +76,7 @@ def main() -> None:
 
     sb = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     player_names = fetch_player_names(sb)
+    player_seeds = fetch_player_seeds(sb)
 
     print(f"Fetching chronological match list for seasons {args.seasons}...")
     ordered_matches = fetch_chronological_matches(sb, args.seasons, include_gauntlet=True)
@@ -91,6 +93,7 @@ def main() -> None:
     history_rows, player_state, zero_round_matches = compute_ratings(
         ordered_matches,
         stats_by_match,
+        player_seeds=player_seeds,
         on_segment_end=on_segment_end if args.dry_run else None,
     )
 
