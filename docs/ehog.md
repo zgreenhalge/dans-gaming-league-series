@@ -19,8 +19,8 @@ every match via a full chronological recompute.
    EHOG = 10 + 90 / (1 + exp(−(skill − CENTER) / SCALE))
 ```
 
-Between seasons, μ and σ are regressed toward their defaults by `SEASON_REGRESSION` (10%) to keep
-ratings responsive without full resets.
+Between seasons, σ is regressed toward `SIGMA_DEFAULT` and μ toward `EHOG_CENTER` (not `MU_DEFAULT`
+— see below) by `SEASON_REGRESSION` (10%) to keep ratings responsive without full resets.
 
 A brand-new player starts at `MU_DEFAULT`/`SIGMA_DEFAULT`, which is deliberately **below** `CENTER`
 (the display transform's own midpoint anchor) — so an unproven player starts in the low-30s rather
@@ -60,7 +60,7 @@ The UI renders a color-coded badge (`EhogBadge.tsx`) and tier bar (`EhogTierBar.
 
 | Key | Description |
 |---|---|
-| `MU_DEFAULT` | Starting μ for a brand-new player with no configured seed. Also the regression target between seasons. Set independently of `CENTER` so new players start below mid-band (EHOG ≈ 30). |
+| `MU_DEFAULT` | Starting μ for a brand-new player with no configured seed. Set independently of `CENTER` so new players start below mid-band (EHOG ≈ 33). **Not** the season-regression target — see `CENTER` below. |
 | `SIGMA_DEFAULT` | Starting σ (uncertainty) for new players. Higher = more volatile early ratings. |
 | `BETA_FACTOR` | Multiplied by `SIGMA_DEFAULT` to get the OpenSkill β parameter (performance variance). |
 
@@ -68,7 +68,7 @@ The UI renders a color-coded badge (`EhogBadge.tsx`) and tier bar (`EhogTierBar.
 
 | Key | Description |
 |---|---|
-| `CENTER` | μ value that maps to the midpoint of the band (EHOG ≈ 55) — the pool's average-skill anchor. Independent of `MU_DEFAULT`. |
+| `CENTER` | μ value that maps to the midpoint of the band (EHOG ≈ 55) — the pool's average-skill anchor. Independent of `MU_DEFAULT`, and doubles as the inter-season regression target for μ (`compute_ratings()` in `engine.py`) — a new player starts low and climbs, but the *league* regresses toward the middle each season, not toward the new-player floor. |
 | `SCALE` | Controls how spread out ratings are. Smaller = more bunched in the middle, larger = wider use of the 10–100 range. **Primary tuning knob for dry-run spread.** |
 | `LAMBDA` | Conservatism. `skill = mu − LAMBDA × sigma`, so higher values penalize uncertain (low-game) players. 0 = pure μ (max upset reward). |
 

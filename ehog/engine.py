@@ -326,7 +326,12 @@ def compute_ratings(
             cur_season, _ = segment
             if cur_season != prev_season:
                 for pid, (mu, sigma, _) in player_state.items():
-                    regressed_mu = mu + (MU_DEFAULT - mu) * SEASON_REGRESSION
+                    # Regress toward EHOG_CENTER (the pool's average-skill anchor), not MU_DEFAULT
+                    # (a new player's starting point) — those are deliberately different values,
+                    # so conflating them would drag the whole league toward MU_DEFAULT every season
+                    # instead of toward the middle of the pack. Assumes EHOG_LAMBDA == 0 (mu == skill);
+                    # revisit if LAMBDA is ever tuned away from 0.
+                    regressed_mu = mu + (EHOG_CENTER - mu) * SEASON_REGRESSION
                     regressed_sigma = max(SIGMA_FLOOR, sigma + (SIGMA_DEFAULT - sigma) * SEASON_REGRESSION)
                     player_state[pid] = (regressed_mu, regressed_sigma, to_ehog(regressed_mu, regressed_sigma))
 
