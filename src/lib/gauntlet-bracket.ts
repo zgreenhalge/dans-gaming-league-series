@@ -224,6 +224,47 @@ export function buildGauntletBracket(N: number): BracketPlan {
   throw new Error(`buildGauntletBracket: unsupported qualifier count N=${N} (supported: 4-20)`);
 }
 
+/** Where a single seed would land if the bracket were built right now. */
+export type SeedPlacement =
+  | { qualifies: false }
+  | { qualifies: true; round: number; podIndex: number; isFinal: boolean; isBye: boolean };
+
+/**
+ * Projects every seed's fate in a gauntlet built from `qualifierCount` players *today* — without
+ * anyone actually qualifying yet or a gauntlet season existing. Pure function of `qualifierCount`
+ * alone; the caller maps seeds to player_ids from the regular season's current standings (seed 1 =
+ * canonical-sort leader, same convention as `buildGauntletBracket` itself).
+ *
+ * A seed either doesn't fit the bracket shape at this qualifier count (`plan.drops`) or owns exactly
+ * one 'seed'-sourced slot somewhere in the plan; `isBye` is true when that slot's round is later
+ * than round 1 (a live player who never plays round 1 at all). Returns `null` when `qualifierCount`
+ * falls outside `buildGauntletBracket`'s supported range (4-20) — there's no shape to project.
+ */
+export function projectGauntletSeeding(qualifierCount: number): Map<number, SeedPlacement> | null {
+  let plan: BracketPlan;
+  try {
+    plan = buildGauntletBracket(qualifierCount);
+  } catch {
+    return null;
+  }
+
+  const placements = new Map<number, SeedPlacement>();
+  for (const seed of plan.drops) placements.set(seed, { qualifies: false });
+  for (const pod of plan.pods) {
+    for (const slot of pod.slots) {
+      if (slot.source_kind !== 'seed' || slot.source_seed == null) continue;
+      placements.set(slot.source_seed, {
+        qualifies: true,
+        round: pod.round_number,
+        podIndex: pod.pod_index,
+        isFinal: pod.is_final,
+        isBye: pod.round_number > 1,
+      });
+    }
+  }
+  return placements;
+}
+
 export interface PreviewSlot {
   slot_index: number;
   source_kind: 'seed' | 'pod';

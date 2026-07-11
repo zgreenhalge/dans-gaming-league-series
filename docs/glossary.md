@@ -73,6 +73,14 @@ so you don't have to reverse-engineer them from scratch each time.
   stored as a real FK graph in `gauntlet_pods`/`gauntlet_pod_slots`; materialized into playable
   `matches` rows by `src/lib/gauntlet-engine.ts` as the bracket progresses. See
   [`architecture.md`](./architecture.md#gauntlet-bracket-scheduling).
+- **Gauntlet seeding projection** — a live "if the season ended today" preview shown on an *ACTIVE*
+  regular season's own leaderboard: gold row tint for a seed that would get a bye, red for a seed
+  that wouldn't fit the bracket at all (`buildGauntletBracket`'s `drops`), plus a text column
+  spelling out the projected round/pod. Recomputed from current standings on every render — no
+  gauntlet season needs to exist yet. Implemented by `projectGauntletSeeding()` in
+  `src/lib/gauntlet-bracket.ts`, called from `SeasonTabView.tsx` and passed as `gauntletSeeding` to
+  `LeaderboardTable`. Distinct from the canonical gauntlet ranking below, which only ever describes
+  a gauntlet that actually exists.
 - **H2H (Head-to-Head)** — cross-player comparison surfaced in `getH2HData()`. Two distinct shapes
   live inside `H2HData` (`src/lib/queries.ts`):
   - **Duos** (`DuoStats`) — performance when two players are *teammates* (same faction)

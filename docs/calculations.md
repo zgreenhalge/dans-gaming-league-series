@@ -269,6 +269,31 @@ Returns no ranking while the gauntlet is incomplete (final round not fully playe
 Implemented by `canonicalGauntletRankMap(rounds)` in `src/lib/util.ts`. Pass the result as the
 `canonicalRanking` prop to `LeaderboardTable` anywhere gauntlet leaderboards are ranked.
 
+## Gauntlet Seeding Projection
+
+A live preview, shown on an *ACTIVE* regular season's own leaderboard, of what the gauntlet bracket
+would look like if built from the current standings today — before any gauntlet season exists.
+
+Seed 1 is the canonical-sort leader, seed N the canonical-sort last place, same convention
+`buildGauntletBracket(N)` itself uses. For a qualifier count `N` = the current leaderboard's length
+(matching exactly what `tryBuildGauntletShape()` uses when it later builds the real bracket):
+
+| Outcome | Condition |
+|---------|-----------|
+| Bye (gold) | The seed's bracket-entry slot is in a round after round 1 |
+| Won't qualify (red) | The seed is in `buildGauntletBracket(N)`'s `drops` — too many qualifiers for this bracket size, so the bottom seeds don't fit |
+| Playing round 1 | Everyone else — placed straight into a round-1 pod |
+
+Every seed's projected round and pod are fully determined by `N` alone (no player-vs-player
+uncertainty), so the leaderboard shows a text label (e.g. "R1 · Pod 2", "Final (Bye)") alongside the
+row tint. Returns no projection for a qualifier count `buildGauntletBracket` doesn't support
+(outside 4-20).
+
+Implemented by `projectGauntletSeeding(qualifierCount)` in `src/lib/gauntlet-bracket.ts`, which maps
+seeds to placements; `SeasonTabView.tsx` zips that against the current standings (already in
+canonical-sort order) to key it by `player_id`, and passes the result as the `gauntletSeeding` prop
+to `LeaderboardTable`.
+
 ## Narrative Metrics
 
 Metrics derived from pairing-specific data
