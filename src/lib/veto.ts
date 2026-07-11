@@ -17,5 +17,5 @@ export interface VetoFields {
 export function isVetoComplete(m: VetoFields, isGauntletOrPlayoff: boolean): boolean {
   return isGauntletOrPlayoff
     ? !!(m.shirts_ban && m.shirts_ban2 && m.skins_ban1 && m.skins_ban2)
-    : !!(m.shirts_ban && m.shirts_ban2 && m.skins_ban1 && m.skins_ban2 && m.shirts_pick && m.skins_starting_side);
+    : !!(m.shirts_ban && m.skins_ban1 && m.skins_ban2 && m.shirts_pick && m.skins_starting_side);
 }
