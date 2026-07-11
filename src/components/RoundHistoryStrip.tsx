@@ -56,27 +56,37 @@ function dividerLabel(newSeg: number): { label: string; major: boolean } {
 }
 
 type Column =
-  | { type: 'round'; entry: RoundHistoryEntry }
+  | { type: 'round'; entry: RoundHistoryEntry; displayN: number }
   | { type: 'empty'; n: number }
   | { type: 'divider'; label: string; major: boolean; shirts: number; skins: number };
 
+/**
+ * `entry.n` is the raw parser round identity — it is NOT guaranteed to start at 1. When the demo
+ * has a stray knife round, the engine counts it and never resets, so every real round's `n` is
+ * shifted up by however many stray rounds preceded it (see `buildRoundSides()` in
+ * `src/lib/parsers/roundSides.ts`, which anchors the half-swap boundary the same way). Segment and
+ * regulation-length math here must use the round's position relative to the first surviving round,
+ * not its raw `n`, or the half divider lands one round early exactly like the score bug did.
+ */
 function buildColumns(
   rounds: RoundHistoryEntry[],
   regHalf: number,
 ): Column[] {
   const cols: Column[] = [];
+  const firstN = rounds.length > 0 ? rounds[0].n : 0;
+  const realRound = (n: number) => n - firstN + 1;
   let shirts = 0;
   let skins = 0;
   for (let i = 0; i < rounds.length; i++) {
     const entry = rounds[i];
-    cols.push({ type: 'round', entry });
+    cols.push({ type: 'round', entry, displayN: realRound(entry.n) });
     if (entry.winner === 'SHIRTS') shirts++;
     else skins++;
 
     const next = rounds[i + 1];
     if (next) {
-      const segHere = segmentOf(entry.n, regHalf);
-      const segNext = segmentOf(next.n, regHalf);
+      const segHere = segmentOf(realRound(entry.n), regHalf);
+      const segNext = segmentOf(realRound(next.n), regHalf);
       if (segNext !== segHere) {
         const { label, major } = dividerLabel(segNext);
         cols.push({ type: 'divider', label, major, shirts, skins });
@@ -86,24 +96,32 @@ function buildColumns(
 
   // If the game was clinched in regulation (no overtime), pad out the remaining
   // regulation rounds as greyed-out "unplayed" placeholders.
-  const lastN = rounds.length > 0 ? rounds[rounds.length - 1].n : 0;
+  const lastReal = rounds.length > 0 ? realRound(rounds[rounds.length - 1].n) : 0;
   const regMax = 2 * regHalf;
-  if (lastN < regMax) {
-    for (let n = lastN + 1; n <= regMax; n++) {
-      cols.push({ type: 'empty', n });
+  if (lastReal < regMax) {
+    for (let r = lastReal + 1; r <= regMax; r++) {
+      cols.push({ type: 'empty', n: r });
     }
   }
 
   return cols;
 }
 
-function RoundTile({ entry, color }: { entry: RoundHistoryEntry; color: string }) {
+function RoundTile({
+  entry,
+  displayN,
+  color,
+}: {
+  entry: RoundHistoryEntry;
+  displayN: number;
+  color: string;
+}) {
   const Icon = CONDITION_ICON[entry.condition];
   const onTop = entry.winner === 'SHIRTS';
   const teamName = entry.winner === 'SHIRTS' ? 'Shirts' : 'Skins';
   return (
     <div
-      title={`Round ${entry.n} — ${teamName} won (${CONDITION_LABEL[entry.condition]}), ${entry.side} side`}
+      title={`Round ${displayN} — ${teamName} won (${CONDITION_LABEL[entry.condition]}), ${entry.side} side`}
       className="relative h-[26px] w-[26px] rounded-[3px] border flex items-center justify-center"
       style={{
         background: `color-mix(in srgb, ${color} 16%, transparent)`,
@@ -163,17 +181,17 @@ export default function RoundHistoryStrip({
                   {/* top track (Shirts wins) */}
                   <div className="h-[34px] flex items-end justify-center">
                     {col.entry.winner === 'SHIRTS' && (
-                      <RoundTile entry={col.entry} color={sideColor(col.entry.side)} />
+                      <RoundTile entry={col.entry} displayN={col.displayN} color={sideColor(col.entry.side)} />
                     )}
                   </div>
                   {/* bottom track (Skins wins) */}
                   <div className="h-[34px] flex items-start justify-center">
                     {col.entry.winner === 'SKINS' && (
-                      <RoundTile entry={col.entry} color={sideColor(col.entry.side)} />
+                      <RoundTile entry={col.entry} displayN={col.displayN} color={sideColor(col.entry.side)} />
                     )}
                   </div>
                   <div className="h-[16px] flex items-center justify-center font-mono text-[9px] text-[var(--color-text-secondary)] tnum">
-                    {col.entry.n}
+                    {col.displayN}
                   </div>
                 </div>
               ) : col.type === 'empty' ? (
