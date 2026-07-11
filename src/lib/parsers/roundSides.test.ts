@@ -38,27 +38,30 @@ test('buildRoundSides: first regulation half keeps shirts on the start side', ()
 });
 
 test('buildRoundSides: second regulation half flips shirts to the other side', () => {
-  const events = [round(13), round(24)];
-  const sides = buildRoundSides(events, 'CT', 13);
-  assert.ok(sides.every((s) => s.shirtsSide === 'CT'));
+  // The half-swap boundary is relative to the first live round, so the full sequence from round 1
+  // has to be present for round 13/24 to land in the second half.
+  const events = Array.from({ length: 24 }, (_, i) => round(i + 1));
+  const byNum = new Map(buildRoundSides(events, 'CT', 13).map((s) => [s.roundNumber, s]));
+  assert.equal(byNum.get(13)!.shirtsSide, 'CT');
+  assert.equal(byNum.get(24)!.shirtsSide, 'CT');
 });
 
 test('buildRoundSides: round 12 (last of half 1) and round 13 (first of half 2) straddle the flip', () => {
-  const events = [round(12), round(13)];
-  const [r12, r13] = buildRoundSides(events, 'CT', 13);
-  assert.equal(r12.shirtsSide, 'T');
-  assert.equal(r13.shirtsSide, 'CT');
+  const events = Array.from({ length: 13 }, (_, i) => round(i + 1));
+  const byNum = new Map(buildRoundSides(events, 'CT', 13).map((s) => [s.roundNumber, s]));
+  assert.equal(byNum.get(12)!.shirtsSide, 'T');
+  assert.equal(byNum.get(13)!.shirtsSide, 'CT');
 });
 
 test('buildRoundSides: OT alternates every 3 rounds, starting with the "other" side', () => {
   // regRoundsPerHalf = 12, so OT starts at round 25. skinsStartingSide 'CT' -> shirts start 'T',
   // other side is 'CT'. otRound 1-3 -> otHalf 1 (other side, CT); otRound 4-6 -> otHalf 2 (start side, T).
-  const events = [round(25), round(27), round(28), round(30)];
-  const sides = buildRoundSides(events, 'CT', 13);
-  assert.equal(sides[0].shirtsSide, 'CT'); // round 25: otRound 1 -> otHalf 1 -> other (CT)
-  assert.equal(sides[1].shirtsSide, 'CT'); // round 27: otRound 3 -> otHalf 1 -> other (CT)
-  assert.equal(sides[2].shirtsSide, 'T'); // round 28: otRound 4 -> otHalf 2 -> start (T)
-  assert.equal(sides[3].shirtsSide, 'T'); // round 30: otRound 6 -> otHalf 2 -> start (T)
+  const events = Array.from({ length: 30 }, (_, i) => round(i + 1));
+  const byNum = new Map(buildRoundSides(events, 'CT', 13).map((s) => [s.roundNumber, s]));
+  assert.equal(byNum.get(25)!.shirtsSide, 'CT'); // round 25: otRound 1 -> otHalf 1 -> other (CT)
+  assert.equal(byNum.get(27)!.shirtsSide, 'CT'); // round 27: otRound 3 -> otHalf 1 -> other (CT)
+  assert.equal(byNum.get(28)!.shirtsSide, 'T'); // round 28: otRound 4 -> otHalf 2 -> start (T)
+  assert.equal(byNum.get(30)!.shirtsSide, 'T'); // round 30: otRound 6 -> otHalf 2 -> start (T)
 });
 
 test('buildRoundSides: warmup and rounds with no winner are excluded', () => {
@@ -90,19 +93,19 @@ test('buildRoundSides: a pre-match round (erroneous knife round) is excluded by 
   assert.ok(!sides.some((s) => s.roundNumber === 1));
 });
 
-test('buildRoundSides: excluded knife round does NOT renumber survivors (half-swap tracks the engine counter)', () => {
-  // The in-game half-swap fires on the engine's round counter, which counted the knife round, so
-  // the swap lands after engine round 12. Survivors keep their total_rounds_played, NOT 1..N —
-  // renumbering would move the swap and mislabel every side.
+test('buildRoundSides: half-swap boundary tracks the first surviving round, not the raw engine number', () => {
+  // The knife round shifted every real round's engine number up by 1 (real round 1 = engine 2,
+  // ..., real round 13 = engine 14). The half swap still lands after 12 *real* rounds — i.e. at
+  // engine round 14 (real round 13) — not at engine round 13, which is still real round 12.
   const knife: RoundEndRow = { tick: 100, total_rounds_played: 1, winner: 'T', is_warmup_period: false };
   const real = [2, 12, 13, 14].map((n) => round(n));
   const sides = buildRoundSides([knife, ...real], 'CT', 13, 500);
 
   const byNum = new Map(sides.map((s) => [s.roundNumber, s]));
-  assert.equal(byNum.get(2)!.shirtsSide, 'T'); // still first half
-  assert.equal(byNum.get(12)!.shirtsSide, 'T'); // last round of first half
-  assert.equal(byNum.get(13)!.shirtsSide, 'CT'); // first round of second half
-  assert.equal(byNum.get(14)!.shirtsSide, 'CT');
+  assert.equal(byNum.get(2)!.shirtsSide, 'T'); // real round 1: first half
+  assert.equal(byNum.get(12)!.shirtsSide, 'T'); // real round 11: still first half
+  assert.equal(byNum.get(13)!.shirtsSide, 'T'); // real round 12: last round of first half
+  assert.equal(byNum.get(14)!.shirtsSide, 'CT'); // real round 13: first round of second half
 });
 
 test('buildRoundSides: matchStartTick defaults to 0 (no tick filtering) for demos with no knife round', () => {

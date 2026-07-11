@@ -89,12 +89,16 @@ it is warmup or a knife round and is dropped by tick. This matters when a knife 
 **erroneously recorded as a live round** — the engine counts it as `total_rounds_played = 1` and
 never resets its counter, so the real rounds carry numbers 2..N.
 
-Survivors keep their engine `total_rounds_played` — they are **not** renumbered to 1..N. The in-game
-half-swap fires on the engine round counter (which counts the stray knife round), so preserving the
-original number keeps the derived side-swap boundary aligned with what the game actually did. The
-score, per-player rounds, and the accumulator-based side splits (which diff cumulative counters that
-reset at `begin_new_match`) all read from the post-start rounds, so a stray knife round no longer
-inflates the score or corrupts the splits.
+Survivors keep their engine `total_rounds_played` as their round identity — they are **not**
+renumbered to 1..N — since round-death/hurt events and accumulator ticks are keyed by that same
+number. The half-swap boundary, however, is computed relative to the *first surviving round*
+(`buildRoundSides()` in `parsers/roundSides.ts`), not the raw engine number: the actual in-game
+halftime swap lands after `regRoundsPerHalf` *real* rounds regardless of a stray knife round earlier
+in the engine's counter, so comparing the raw engine number directly against the half-length would
+move the boundary earlier by the knife round's shift and mislabel the round straddling it. The score,
+per-player rounds, and the accumulator-based side splits (which diff cumulative counters that reset
+at `begin_new_match`) all read from the post-start rounds, so a stray knife round no longer inflates
+the score or corrupts the splits.
 
 ## Side splits (deterministic from the round-1 anchor)
 
