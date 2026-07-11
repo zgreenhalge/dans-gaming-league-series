@@ -20,6 +20,28 @@ export function findMatchStartTick(demoBuffer: Buffer): number {
   return maxTick;
 }
 
+/**
+ * Tick the knife phase begins at — the last warmup-restart `begin_new_match`, i.e. the
+ * second-to-last `begin_new_match` overall (the last one is the knife→match transition;
+ * see `findMatchStartTick`). Used only to show the knife round itself (gauntlet replay);
+ * everything that counts toward the score still anchors on `findMatchStartTick`. Returns
+ * 0 when there are fewer than two `begin_new_match` events — no reliable boundary to
+ * anchor on, so nothing before the demo start is assumed to be the knife phase.
+ */
+export function findKnifePhaseStartTick(demoBuffer: Buffer): number {
+  let ticks: number[] = [];
+  try {
+    const events: { tick: number }[] = parseEvent(demoBuffer, 'begin_new_match');
+    ticks = events
+      .map((e) => e.tick)
+      .filter((t): t is number => typeof t === 'number')
+      .sort((a, b) => a - b);
+  } catch {
+    return 0;
+  }
+  return ticks.length < 2 ? 0 : ticks[ticks.length - 2];
+}
+
 export interface PlayerDeathRow {
   tick: number;
   total_rounds_played: number;

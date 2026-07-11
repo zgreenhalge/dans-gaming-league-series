@@ -62,6 +62,7 @@ export interface ReplayTheme {
 export interface BannerInfo {
   round: number;
   totalRounds: number;
+  isKnifeRound?: boolean;
   ctFaction: Faction;
   tFaction: Faction;
   ctScore: number;
@@ -529,7 +530,7 @@ function drawScore(ctx: Ctx2D, width: number, banner: BannerInfo, theme: ReplayT
   ctx.fillText(String(banner.ctScore), cx - 28, 8);
   ctx.fillStyle = theme.textDim;
   ctx.font = '11px ui-monospace, monospace';
-  ctx.fillText(`R${banner.round}`, cx, 11);
+  ctx.fillText(banner.isKnifeRound ? 'KNIFE' : `R${banner.round}`, cx, 11);
   ctx.font = 'bold 14px ui-monospace, monospace';
   ctx.fillStyle = theme.t;
   ctx.fillText(String(banner.tScore), cx + 28, 8);

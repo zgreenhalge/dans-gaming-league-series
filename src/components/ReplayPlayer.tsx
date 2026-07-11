@@ -56,6 +56,7 @@ function bannerFor(payload: ReplayPayload, roundIdx: number): BannerInfo {
   return {
     round: round.round,
     totalRounds: payload.rounds.length,
+    isKnifeRound: round.isKnifeRound,
     ctFaction,
     tFaction,
     ctScore,
@@ -308,7 +309,7 @@ export default function ReplayPlayer({
               <ChevronLeft size={14} />
             </button>
             <span className="font-mono tabular-nums text-[var(--color-text-secondary)] px-1">
-              Round {round.round} / {payload.rounds.length}
+              {round.isKnifeRound ? 'Knife Round' : `Round ${round.round} / ${payload.rounds.length}`}
             </span>
             <button
               type="button"

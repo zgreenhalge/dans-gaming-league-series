@@ -144,6 +144,7 @@ async function main() {
       roster: inputs.roster,
       skinsSide: inputs.skinsSide,
       targetWinRounds: inputs.targetWinRounds,
+      includeKnifeRound: inputs.isGauntlet,
     });
   });
   for (const n of notices) notice(n);
