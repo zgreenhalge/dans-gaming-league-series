@@ -140,16 +140,17 @@ mutually exclusive cases gated on `played`:
 - **Pre-match** (unplayed, current week, full 2v2 roster): computed live via `predictWinProbability()`
   from the same current ratings `RatingProjectionTable` already fetches — there's no persisted value
   yet, since `on_before_match` only ever fires for played matches.
-- **Post-match**: reads the frozen `matches.pre_match_win_prob` directly and marks whichever side
-  actually won with a ✓. Renders nothing if the column is still null (e.g. the match predates this
-  feature and hasn't been through a recompute since).
+- **Post-match**: reads the frozen `matches.pre_match_win_prob` directly, marks whichever side
+  actually won with a ✓, and fades the loser's fill toward the background (still tinted with their
+  own color) so the result reads at a glance. Renders nothing if the column is still null (e.g. the
+  match predates this feature and hasn't been through a recompute since).
 
-The pre-match bar always shows a `(?)` tooltip; its copy is static baseline text ("a narrow gap can
-still land near 50%, a wide gap can land at 80–90% — both are expected") with an extra sentence about
-provisional players appended only when `isProvisional()` (`ehog.ts`) finds any of the four players'
-current σ at or above `PROVISIONAL_SIGMA_THRESHOLD`. The post-match bar has no tooltip — the frozen
-number sits next to an actual result, and there's no way to know retroactively whether it was
-provisional at prediction time (only the scalar itself is frozen, not the σ that produced it).
+The pre-match bar shows a `(?)` tooltip only when `isProvisional()` (`ehog.ts`) finds any of the four
+players' current σ at or above `PROVISIONAL_SIGMA_THRESHOLD` — its copy is a single sentence flagging
+that the prediction carries extra uncertainty, nothing else. The post-match bar never shows a
+tooltip — the frozen number sits next to an actual result, and there's no way to know retroactively
+whether it was provisional at prediction time (only the scalar itself is frozen, not the σ that
+produced it).
 
 ## Seeding a known player's starting rating
 

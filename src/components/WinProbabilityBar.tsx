@@ -12,22 +12,15 @@ function factionColor(f: Faction): string {
   return 'var(--color-text-secondary)';
 }
 
-function WinProbabilityTooltip({ provisional }: { provisional: boolean }) {
+function WinProbabilityTooltip() {
   return (
     <span tabIndex={0} className="group relative inline-flex items-center cursor-help ml-1.5">
       <span className="border border-[var(--color-border-secondary)] rounded-full w-3.5 h-3.5 inline-flex items-center justify-center leading-none font-mono text-[9px] text-[var(--color-text-secondary)]">
         ?
       </span>
-      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 w-64 rounded border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] p-2 font-mono text-[10px] leading-snug normal-case text-[var(--color-text-secondary)] opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100 z-10">
-        EHOG win probability comes from each team&apos;s current rating alone. A narrow gap in a
-        small, wide-skill league can still land near 50%, and a wide gap can land at 80–90% — both
-        are expected, not a bug.
-        {provisional && (
-          <>
-            {' '}One or more players here are still early in their rating history, so this
-            prediction carries extra uncertainty beyond the number shown.
-          </>
-        )}
+      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 w-56 rounded border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] p-2 font-mono text-[10px] leading-snug normal-case text-[var(--color-text-secondary)] opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100 z-10">
+        One or more players are early in their rating history, so this prediction carries extra
+        uncertainty.
       </span>
     </span>
   );
@@ -69,7 +62,7 @@ export function WinProbabilityBar({
         <span style={{ color: shirtsLabelColor }}>
           SHIRTS {shirtsPct}%{played && shirtsWon ? ' ✓' : ''}
         </span>
-        {!played && <WinProbabilityTooltip provisional={provisional} />}
+        {!played && provisional && <WinProbabilityTooltip />}
         <span style={{ color: skinsLabelColor }}>
           {skinsPct}% SKINS{played && !shirtsWon ? ' ✓' : ''}
         </span>
