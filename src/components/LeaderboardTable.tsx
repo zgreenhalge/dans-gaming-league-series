@@ -91,14 +91,6 @@ function SortableTh({
 
 // In 'season' mode: first col shows season name linking to /seasons/[season_id].
 // In 'player' mode: first col shows rank + player name linking to /players/[player_id].
-/** Text color for a gauntlet placement badge, by status category — champion gold, still-alive
- * (playing/bye) the site accent, eliminated muted since they're out of contention. */
-function gauntletPlacementColor(label: string): string {
-  if (label === 'Champion') return '#f5c542';
-  if (label.startsWith('Eliminated')) return 'var(--color-text-secondary)';
-  return 'var(--color-site-accent)';
-}
-
 export default function LeaderboardTable({
   rows,
   firstColMode = 'player',
@@ -109,7 +101,6 @@ export default function LeaderboardTable({
   trophyCounts,
   canonicalRanking,
   ehogRatings,
-  gauntletPlacements,
   onPlayerHover,
 }: {
   rows: LeaderboardRowWithId[];
@@ -123,9 +114,6 @@ export default function LeaderboardTable({
   trophyCounts?: Map<number, Record<1 | 2 | 3, number>>;
   canonicalRanking?: Map<number, number>;
   ehogRatings?: Record<number, number>;
-  /** Each player's status in the paired gauntlet (e.g. "Champion", "Eliminated Round 2"),
-   *  keyed by player_id — see `gauntletPlacementMap()` in `src/lib/util.ts`. */
-  gauntletPlacements?: Map<number, string>;
   onPlayerHover?: (playerId: number | null) => void;
 }) {
   const { data: session } = useSession();
@@ -206,7 +194,6 @@ export default function LeaderboardTable({
   ];
 
   const hasEhog = ehogRatings && Object.keys(ehogRatings).length > 0;
-  const hasGauntletPlacements = gauntletPlacements && gauntletPlacements.size > 0;
 
   const STAT_COLS: { key: SortCol; label: string; title: string }[] = [
     { key: 'gp',  label: 'GP',   title: 'Games Played' },
@@ -240,11 +227,6 @@ export default function LeaderboardTable({
             {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => <SortableTh key={c.key} col={c} active={sortCol === c.key} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />)}
             {STAT_COLS.map((c) => <SortableTh key={c.key} col={c} active={sortCol === c.key} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />)}
             {hasEhog && <SortableTh col={{ key: 'ehog', label: 'EHOG', title: 'EHOG rating as of most recent match in this view' }} active={sortCol === 'ehog'} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />}
-            {hasGauntletPlacements && (
-              <th className="tracked text-[10px] font-semibold py-2.5 px-2 border-b border-[var(--color-border-primary)] whitespace-nowrap text-right text-[var(--color-text-secondary)]">
-                Gauntlet
-              </th>
-            )}
           </tr>
         </thead>
         <tbody>
@@ -310,15 +292,6 @@ export default function LeaderboardTable({
                     <Link href={href} className="block w-full h-full">
                       {ehogRatings[p.player_id] != null
                         ? ehogRatings[p.player_id].toFixed(1)
-                        : <span className="text-[var(--color-text-secondary)]">—</span>}
-                    </Link>
-                  </td>
-                )}
-                {hasGauntletPlacements && (
-                  <td className="py-2.5 pr-4 pl-2 text-right font-mono text-[11px] whitespace-nowrap">
-                    <Link href={href} className="block w-full h-full">
-                      {gauntletPlacements.get(p.player_id) != null
-                        ? <span style={{ color: gauntletPlacementColor(gauntletPlacements.get(p.player_id)!) }}>{gauntletPlacements.get(p.player_id)}</span>
                         : <span className="text-[var(--color-text-secondary)]">—</span>}
                     </Link>
                   </td>

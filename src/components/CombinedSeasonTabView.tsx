@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import SeasonTabView, { type SeasonTab } from './SeasonTabView';
-import { tabCls, gauntletPlacementMap } from '@/lib/util';
+import { tabCls } from '@/lib/util';
 import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 
@@ -64,13 +64,6 @@ export default function CombinedSeasonTabView({
   const [topTab, setTopTab] = useState<TopTab>('regular');
   const [subTab, setSubTab] = useState<SeasonTab>('leaderboard');
 
-  // Display-only join of gauntlet bracket progression onto the regular-season leaderboard — never
-  // merges into the regular-season stat set, and never touches the gauntlet tab's own leaderboard.
-  const gauntletPlacements = useMemo(
-    () => gauntletPlacementMap(gauntletRounds, gauntletBracketShape),
-    [gauntletRounds, gauntletBracketShape],
-  );
-
   return (
     <>
       <TopTabBar tab={topTab} setTab={setTopTab} />
@@ -89,7 +82,6 @@ export default function CombinedSeasonTabView({
           onTabChange={setSubTab}
           ehogRatings={ehogRatings}
           sabremetrics={sabremetrics}
-          gauntletPlacements={gauntletPlacements}
         />
       )}
 

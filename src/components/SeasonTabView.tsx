@@ -51,14 +51,10 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   /** This season's per-match sabremetrics — the Advanced Stats tab only shows once at least
    *  one match here has a parsed demo. */
   sabremetrics?: SabremetricMatchRow[];
-  /** Regular-season leaderboard only: each player's status in the paired gauntlet (e.g.
-   *  "Champion", "Eliminated Round 2", "Bye to Final"), keyed by player_id. Display-only join —
-   *  never set on the gauntlet-mode leaderboard, which ranks off its own stats. */
-  gauntletPlacements?: Map<number, string>;
 };
 
 export default function SeasonTabView(props: SeasonTabViewProps) {
-  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings, sabremetrics, gauntletPlacements } = props;
+  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings, sabremetrics } = props;
   const hasSab = !!sabremetrics && sabremetrics.length > 0;
   const isGauntlet = props.kind === 'gauntlet';
   const schedule = props.kind === 'regular' ? props.schedule : EMPTY_SCHEDULE;
@@ -244,7 +240,6 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
             playoffZones={!isGauntlet && seasonStatus === 'ACTIVE' ? { top: 2, bottom: 4 } : undefined}
             canonicalRanking={gauntletRanking}
             ehogRatings={ehogRatings}
-            gauntletPlacements={!isGauntlet ? gauntletPlacements : undefined}
           />
         </>
       )}
