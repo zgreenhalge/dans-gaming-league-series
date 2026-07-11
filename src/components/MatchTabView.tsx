@@ -248,9 +248,8 @@ export function RatingProjectionTable({
 
   return (
     <div className="mt-8">
-      <div className="flex items-baseline justify-between mb-3">
+      <div className="mb-3">
         <span className="tracked text-[10px] text-[var(--color-text-secondary)]">EHOG rating projections</span>
-        <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">based on current ratings</span>
       </div>
       <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
         <table className="w-full min-w-max text-[13px]">
