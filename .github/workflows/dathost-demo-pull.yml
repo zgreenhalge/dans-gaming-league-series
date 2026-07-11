@@ -1,0 +1,101 @@
+# dathost-demo-pull
+#
+# Pulls a match's demo directly off the DatHost server's local disk into R2 (`scripts/dathost-demo-
+# pull.ts`), then runs the normal demo-ingest parse (`scripts/demo-ingest.ts`) on it — the manual
+# counterpart to the auto-ingestion path for a match whose demo never reached R2 through the Worker
+# (e.g. the server was started/stopped manually instead of through the usual provision/loadmatch
+# flow). Manual dispatch only.
+
+name: dathost-demo-pull
+
+on:
+  workflow_dispatch:
+    inputs:
+      match_id:
+        description: Match ID to pull the demo for and ingest
+        required: true
+        type: string
+      map_filter:
+        description: Substring to narrow the server's demo files by map name (optional)
+        required: false
+        type: string
+      date_filter:
+        description: Substring to narrow the server's demo files by date, e.g. 2026-07-11 (optional)
+        required: false
+        type: string
+      demo_path:
+        description: Exact remote path of the demo file, bypassing map/date filtering (optional)
+        required: false
+        type: string
+
+concurrency:
+  group: dathost-demo-pull-${{ github.event.inputs.match_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MATCH_ID: ${{ inputs.match_id }}
+      MAP_FILTER: ${{ inputs.map_filter }}
+      DATE_FILTER: ${{ inputs.date_filter }}
+      DEMO_PATH: ${{ inputs.demo_path }}
+      DATHOST_EMAIL: ${{ secrets.DATHOST_EMAIL }}
+      DATHOST_PASSWORD: ${{ secrets.DATHOST_PASSWORD }}
+      DATHOST_SERVER_ID: ${{ secrets.DATHOST_SERVER_ID }}
+      CLOUDFLARE_R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID }}
+      CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Pull demo from DatHost server into R2
+        run: npx tsx scripts/dathost-demo-pull.ts
+
+  ingest:
+    needs: pull
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MATCH_ID: ${{ inputs.match_id }}
+      GH_RUN_ID: ${{ github.run_id }}
+      GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CLOUDFLARE_R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID }}
+      CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
+      AUTO_COMMIT_ENABLED: ${{ vars.AUTO_COMMIT_ENABLED }}
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+      RECOMPUTE_SECRET: ${{ secrets.RECOMPUTE_SECRET }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Ingest demo
+        run: npx tsx scripts/demo-ingest.ts

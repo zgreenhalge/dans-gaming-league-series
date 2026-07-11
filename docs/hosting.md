@@ -145,6 +145,19 @@ Schema-free by design — status lives in the existing table, detail lives in th
 Auto-commit takes the `running → confirmed` edge directly (no `parsed` stop) — the D5 predicate check
 and the write both happen inside the `running` stage.
 
+## Manual demo pull (Worker bypassed)
+
+If a match's server was started/stopped outside the normal provision/loadmatch flow (so
+`matchzy_demo_upload_url` was never set), the demo never reaches R2 through the Worker and no
+`background_jobs` row is ever created for it. `scripts/dathost-demo-pull.ts`, dispatched via the
+`dathost-demo-pull` Action (`match_id` + optional `map_filter`/`date_filter`/`demo_path` inputs),
+lists the `.dem` files under `MatchZy/` on the shared server, narrows to the one matching those
+filters (refusing to guess when more than one matches), uploads it to R2 at `demoKey(matchId)`, then
+chains into the normal `demo-ingest.ts` parse — landing the match at the same staged-review point
+(`/admin/jobs`) a Worker-delivered demo would. The embedded match id in MatchZy's own
+`{TIME}_{MATCH_ID}_{MAP}` filename isn't trustworthy in this path (the server may have been running a
+stale or broken match config), which is why the filters key on map/date instead.
+
 ## Admin surfaces
 
 - **`/admin`** — hub, linked from the Topbar (visible only when `session.user.isAdmin`). Add a tool
@@ -236,8 +249,9 @@ logged, still staged for manual confirm); `true` goes live.
 `src/components/IngestJobActions.tsx` · `src/components/JobActions.tsx` (generic retry + live refresh) ·
 `src/components/ServerConsolePanel.tsx` ·
 `src/components/SchedulingOverlapBanner.tsx` · `src/app/admin/jobs/page.tsx` ·
-`src/app/admin/servers/page.tsx` · `scripts/demo-ingest.ts` · `scripts/gen-matchzy-config.ts` ·
-`scripts/inspect-demo.ts` · `scripts/dathost-golden-diff.ts` · `scripts/dathost-golden-apply.ts`
+`src/app/admin/servers/page.tsx` · `scripts/demo-ingest.ts` · `scripts/dathost-demo-pull.ts` ·
+`scripts/gen-matchzy-config.ts` · `scripts/inspect-demo.ts` · `scripts/dathost-golden-diff.ts` ·
+`scripts/dathost-golden-apply.ts`
 (golden-config diff/capture/reassert — see [`infra/matchzy/README.md`](../infra/matchzy/README.md))
 · `scripts/dathost-cleanup.ts` (disk cleanup, issue #132) · `src/lib/gh-dispatch.ts` (workflow
 dispatch + enable/disable/runs/variables helpers) · `infra/matchzy/` · `infra/worker/`.
