@@ -3,7 +3,9 @@ EHOG rating recompute — Vercel Python serverless function.
 
 Called by src/app/api/matches/[id]/score/route.ts (via after()) after a score
 is persisted. Runs a full rating walk over all seasons and writes results to
-player_rating_history + player_current_ratings.
+player_rating_history + player_current_ratings, plus a frozen pre-match
+SHIRTS-win probability onto any match that doesn't have one yet
+(matches.pre_match_win_prob — see write_pre_match_win_probs in engine.py).
 
 Authentication: caller must send RECOMPUTE_SECRET in the x-recompute-secret header.
 
@@ -34,8 +36,10 @@ from ehog.engine import (
     fetch_match_player_stats,
     fetch_player_seeds,
     compute_ratings,
+    predict_win,
     clear_ratings,
     write_ratings,
+    write_pre_match_win_probs,
 )
 
 SUPABASE_URL = os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or os.environ.get("SUPABASE_URL") or ""
@@ -60,10 +64,24 @@ class handler(BaseHTTPRequestHandler):
             match_ids = [m["match_id"] for m in ordered_matches]
             stats_by_match = fetch_match_player_stats(sb, match_ids)
             player_seeds = fetch_player_seeds(sb)
-            history_rows, player_state, _ = compute_ratings(ordered_matches, stats_by_match, player_seeds=player_seeds)
+
+            predictions: dict[int, float] = {}
+
+            def on_before_match(match_id, team_a_states, team_b_states, a_won):
+                predictions[match_id] = predict_win(team_a_states, team_b_states)
+
+            history_rows, player_state, _ = compute_ratings(
+                ordered_matches, stats_by_match, player_seeds=player_seeds, on_before_match=on_before_match
+            )
             clear_ratings(sb)
             write_ratings(sb, history_rows, player_state)
-            self._respond(200, {"ok": True, "matches": len(ordered_matches), "players": len(player_state)})
+            predictions_written = write_pre_match_win_probs(sb, predictions)
+            self._respond(200, {
+                "ok": True,
+                "matches": len(ordered_matches),
+                "players": len(player_state),
+                "pre_match_predictions_written": predictions_written,
+            })
         except Exception as e:
             self._respond(500, {"error": str(e)})
 

@@ -11,6 +11,7 @@ const EHOG_LAMBDA = constants.EHOG_LAMBDA;
 const SIGMA_FLOOR = constants.SIGMA_FLOOR;
 const MOV_M_MIN = constants.MOV_M_MIN;
 const MOV_M_MAX = constants.MOV_M_MAX;
+const PROVISIONAL_SIGMA_THRESHOLD = constants.PROVISIONAL_SIGMA_THRESHOLD;
 
 export function toEhog(mu: number, sigma: number): number {
   const skill = mu - EHOG_LAMBDA * sigma;
@@ -51,6 +52,15 @@ export function predictWinProbability(teamA: PlayerRating[], teamB: PlayerRating
   const rB = teamB.map((p) => rating({ mu: p.mu, sigma: p.sigma }));
   const [pA] = predictWin([rA, rB], { beta: BETA });
   return pA;
+}
+
+/**
+ * True if any player across both teams is still above PROVISIONAL_SIGMA_THRESHOLD — early enough
+ * in their rating history that a win-probability prediction involving them carries extra
+ * uncertainty beyond what the number alone conveys.
+ */
+export function isProvisional(teamA: PlayerRating[], teamB: PlayerRating[]): boolean {
+  return [...teamA, ...teamB].some((p) => p.sigma >= PROVISIONAL_SIGMA_THRESHOLD);
 }
 
 function projectScenario(

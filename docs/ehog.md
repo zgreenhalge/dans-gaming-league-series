@@ -52,7 +52,7 @@ The UI renders a color-coded badge (`EhogBadge.tsx`) and tier bar (`EhogTierBar.
 | `ehog/test_parity.py` | Generates `parity_fixtures.json` from the Python engine. |
 | `ehog/test_parity.ts` | Verifies the TS predictor matches the Python fixtures exactly. |
 | `src/lib/ehog.ts` | TS predictor — mirrors the engine math for client-side match projections. |
-| `api/ehog/recompute.py` | Vercel Python function (configured in `vercel.json`), triggered after a score is submitted. Thin wrapper over `ehog/engine.py`. |
+| `api/ehog/recompute.py` | Vercel Python function (configured in `vercel.json`), triggered after a score is submitted. Thin wrapper over `ehog/engine.py`; also freezes each match's pre-match win probability on first recompute — see **Persisted pre-match snapshot** below. |
 
 ## `constants.json` reference
 
@@ -91,6 +91,7 @@ The UI renders a color-coded badge (`EhogBadge.tsx`) and tier bar (`EhogTierBar.
 | Key | Description |
 |---|---|
 | `FORMULA_VERSION` | Written to `player_rating_history.formula_version` and used as the column name in `player_current_ratings`. |
+| `PROVISIONAL_SIGMA_THRESHOLD` | σ above which a player is still early enough in their rating history that a win-probability prediction involving them gets a hedging note (see **Win probability UI** below). Not part of the rating math — a display-only threshold, so it has no Python-side consumer or parity fixture. |
 
 ## Pre-match win probability
 
@@ -115,6 +116,41 @@ Only `MOV_M_MIN`/`MOV_M_MAX` (and, unswept by this flag, `BETA_FACTOR`/`SIGMA_FL
 `SEASON_REGRESSION`) can move the score — `EHOG_SCALE`/`EHOG_LAMBDA` only reshape the μ/σ → display
 transform and never reach `predict_win`'s raw μ/σ inputs, so their columns are expected to be flat.
 Both modes are dry-run only; neither ever writes to the DB.
+
+### Persisted pre-match snapshot
+
+Every recompute (`api/ehog/recompute.py`, triggered after a score is submitted) predicts each
+match's SHIRTS-win probability from that match's pre-match team states via the same `on_before_match`
+hook the calibration harness uses, then writes it to `matches.pre_match_win_prob` — but only for
+matches that don't already have one (`write_pre_match_win_probs()` in `engine.py`). First write wins:
+once a match has a stored prediction it's frozen, so later formula or constant retunes (like a
+`MOV_M_MIN` change) never rewrite what was expected *at the time*. `pre_match_win_prob_formula_version`
+rides alongside it so a future formula version is distinguishable from matches predicted under an
+earlier one. `ehog/backfill.py`'s dry-run/calibration modes never touch this column — only the live
+recompute does.
+
+### Win probability UI
+
+`WinProbabilityBar` (`src/components/WinProbabilityBar.tsx`) is a head-to-head bar in the match
+header — SHIRTS and SKINS on either end, the fill split at the SHIRTS-win percentage, colored by each
+side's current faction (`--color-ct`/`--color-t`). It sits near the top of the match page
+(`src/app/matches/[id]/page.tsx`, just below the score), not buried in a tab, and covers two
+mutually exclusive cases gated on `played`:
+
+- **Pre-match** (unplayed, current week, full 2v2 roster): computed live via `predictWinProbability()`
+  from the same current ratings `RatingProjectionTable` already fetches — there's no persisted value
+  yet, since `on_before_match` only ever fires for played matches.
+- **Post-match**: reads the frozen `matches.pre_match_win_prob` directly, marks whichever side
+  actually won with a ✓, and fades the loser's fill toward the background (still tinted with their
+  own color) so the result reads at a glance. Renders nothing if the column is still null (e.g. the
+  match predates this feature and hasn't been through a recompute since).
+
+The pre-match bar shows a `(?)` tooltip only when `isProvisional()` (`ehog.ts`) finds any of the four
+players' current σ at or above `PROVISIONAL_SIGMA_THRESHOLD` — its copy is a single sentence flagging
+that the prediction carries extra uncertainty, nothing else. The post-match bar never shows a
+tooltip — the frozen number sits next to an actual result, and there's no way to know retroactively
+whether it was provisional at prediction time (only the scalar itself is frozen, not the σ that
+produced it).
 
 ## Seeding a known player's starting rating
 
