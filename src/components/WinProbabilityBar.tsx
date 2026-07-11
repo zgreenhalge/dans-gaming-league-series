@@ -51,17 +51,23 @@ export function WinProbabilityBar({
 }) {
   const shirtsPct = Math.round(pShirtsWin * 100);
   const skinsPct = 100 - shirtsPct;
-  const shirtsColor = factionColor(shirtsF);
-  const skinsColor = factionColor(skinsF);
+  // Once a match is played, the loser's side greys out (fill + label) so the checkmark isn't the
+  // only thing marking the winner — the bar itself reads as a result, not just a prediction.
+  const shirtsLost = played && !shirtsWon;
+  const skinsLost = played && shirtsWon;
+  const shirtsColor = shirtsLost ? 'var(--color-border-secondary)' : factionColor(shirtsF);
+  const skinsColor = skinsLost ? 'var(--color-border-secondary)' : factionColor(skinsF);
+  const shirtsLabelColor = shirtsLost ? 'var(--color-text-secondary)' : shirtsColor;
+  const skinsLabelColor = skinsLost ? 'var(--color-text-secondary)' : skinsColor;
 
   return (
     <div className="mt-5 max-w-md mx-auto">
       <div className="flex items-center justify-between mb-1.5 font-mono text-[13px] font-bold tracked">
-        <span style={{ color: shirtsColor }}>
+        <span style={{ color: shirtsLabelColor }}>
           SHIRTS {shirtsPct}%{played && shirtsWon ? ' ✓' : ''}
         </span>
         {!played && <WinProbabilityTooltip provisional={provisional} />}
-        <span style={{ color: skinsColor }}>
+        <span style={{ color: skinsLabelColor }}>
           {skinsPct}% SKINS{played && !shirtsWon ? ' ✓' : ''}
         </span>
       </div>
