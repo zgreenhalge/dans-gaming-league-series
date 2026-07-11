@@ -29,7 +29,14 @@ function playerInMatch(
 }
 
 type RegularMode = { kind: 'regular'; schedule: WeekWithMatches[]; seasonStartDate: string | null };
-type GauntletMode = { kind: 'gauntlet'; rounds: GauntletRound[]; bracketShape: BracketPod[] };
+type GauntletMode = {
+  kind: 'gauntlet';
+  rounds: GauntletRound[];
+  bracketShape: BracketPod[];
+  /** Seed number → player name from the paired regular season's current standings — lets the
+   *  bracket diagram name an unseeded seed slot before the gauntlet is actually seeded. */
+  seedNames?: Map<number, string>;
+};
 
 export type { Tab as SeasonTab };
 
@@ -62,6 +69,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const rounds = props.kind === 'gauntlet' ? props.rounds : EMPTY_ROUNDS;
   const bracketShape = props.kind === 'gauntlet' ? props.bracketShape : EMPTY_BRACKET_SHAPE;
   const seasonStartDate = props.kind === 'regular' ? props.seasonStartDate : null;
+  const seedNames = props.kind === 'gauntlet' ? props.seedNames : undefined;
 
   const gauntletRanking = useMemo(
     () => (isGauntlet ? canonicalGauntletRankMap(rounds) : undefined),
@@ -271,6 +279,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
                   pods={bracketShape}
                   currentPlayerId={currentPlayerId}
                   rankMap={gauntletRanking}
+                  seedNames={seedNames}
                 />
               </div>
             )}
