@@ -1,11 +1,15 @@
-# Action — demo-ingest (Phase 3 of #131)
+# Action — demo-ingest (Phase 3 + trusted auto-commit, Phase 5 / #138, of #131)
 #
-# demo (R2) → parse + quarantine → staged confirm-ready result (R2 `<matchId>/demo-result.json`).
-# Heavy parsing runs here, NOT on Vercel (kills the parse route's MAX_DEMO_BYTES ceiling). Triggered
-# by the app via workflow_dispatch (from `/api/ingest/notify` after a demo lands), or manually.
+# demo (R2) → parse + quarantine → auto-commit (AUTO_COMMIT_ENABLED, D5 predicate) or a staged
+# confirm-ready result (R2 `<matchId>/demo-result.json`). Heavy parsing runs here, NOT on Vercel
+# (kills the parse route's MAX_DEMO_BYTES ceiling). Triggered by the app via workflow_dispatch (from
+# `/api/ingest/notify` after a demo lands), or manually.
 #
 # Idempotent: deterministic R2 key, re-dispatch overwrites. The script updates background_jobs.status
-# (received → queued → running → parsed|quarantined|failed) so the app shows state without Actions.
+# (received → queued → running → parsed|quarantined|confirmed|failed) so the app shows state without
+# Actions. AUTO_COMMIT_ENABLED is a repo Actions variable (shadow mode when unset — the predicate is
+# evaluated and logged, but the score is always staged for manual confirm), adjustable without
+# editing this file.
 
 name: demo-ingest
 
@@ -40,6 +44,9 @@ jobs:
       CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
       CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
       CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
+      AUTO_COMMIT_ENABLED: ${{ vars.AUTO_COMMIT_ENABLED }}
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+      RECOMPUTE_SECRET: ${{ secrets.RECOMPUTE_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
