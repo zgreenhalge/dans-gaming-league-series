@@ -434,3 +434,33 @@ def write_ratings(sb, history_rows: list[dict], player_state: PlayerState) -> No
             FORMULA_VERSION: ehog_rating,
             "updated_at": now_iso,
         }, on_conflict="player_id").execute()
+
+
+def write_pre_match_win_probs(sb, predictions: dict[int, float]) -> int:
+    """
+    Persist each match's pre-match SHIRTS-win probability onto matches.pre_match_win_prob —
+    but only for matches that don't already have one. First-write-wins: once a match's
+    prediction is recorded it survives later formula/constant retunes, so it always reflects
+    what was expected at the time rather than being silently rewritten on the next recompute.
+
+    predictions: {match_id: p_shirts_win}, as collected by an on_before_match callback during
+        compute_ratings(). Returns the number of matches actually written.
+    """
+    match_ids = list(predictions.keys())
+    existing: dict[int, float | None] = {}
+    for i in range(0, len(match_ids), BATCH_SIZE):
+        chunk = match_ids[i: i + BATCH_SIZE]
+        rows = sb.table("matches").select("id, pre_match_win_prob").in_("id", chunk).execute().data
+        for row in rows:
+            existing[row["id"]] = row["pre_match_win_prob"]
+
+    written = 0
+    for match_id in match_ids:
+        if existing.get(match_id) is not None:
+            continue
+        sb.table("matches").update({
+            "pre_match_win_prob": predictions[match_id],
+            "pre_match_win_prob_formula_version": FORMULA_VERSION,
+        }).eq("id", match_id).execute()
+        written += 1
+    return written

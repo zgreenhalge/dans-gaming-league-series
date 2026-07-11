@@ -45,6 +45,8 @@ export interface Match {
   is_playoff_game: boolean;
   is_feature_match: boolean;
   is_interpolated: boolean;
+  pre_match_win_prob: number | null;
+  pre_match_win_prob_formula_version: string | null;
   notes: string | null;
   scheduled_at: string | null;
   screenshot_url_front: string | null;
