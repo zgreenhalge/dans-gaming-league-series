@@ -32,10 +32,14 @@ export async function GET(
   // Prefer the Steam workshop id for the maplist (the server force-loads it via cs2_settings);
   // buildMatchzyConfig falls back to the DGLS map name when unknown.
   const mapWorkshopId = await resolveMapWorkshopId(supabaseAdmin, matchId);
+  // The DatHost server POSTs remote-log events here, so the URL must be the public deployment origin.
+  const base = process.env.APP_BASE_URL ?? req.nextUrl.origin;
   const { config } = await buildMatchzyConfig(supabaseAdmin, matchId, {
     demoUploadUrl: process.env.INGEST_WORKER_URL,
     demoUploadSecret: process.env.INGEST_UPLOAD_SECRET,
     maplistOverride: mapWorkshopId ?? undefined,
+    remoteLogUrl: process.env.INGEST_REMOTE_LOG_SECRET ? `${base}/api/ingest/matchzy-log` : undefined,
+    remoteLogSecret: process.env.INGEST_REMOTE_LOG_SECRET,
   });
 
   return NextResponse.json(config);

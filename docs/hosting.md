@@ -77,29 +77,73 @@ conflicting match and never blocks scheduling.
 
 ```
 MatchZy (map ends) ──POST .dem──▶ Cloudflare Worker ──▶ R2 (demoKey)  +  POST /api/ingest/notify
+MatchZy (map_result event)   ──POST /api/ingest/matchzy-log──▶ R2 (mapResultKey)  [independent oracle]
                                                                               │
    background_jobs(demo_ingest): received → queued ──dispatch──▶ demo-ingest.yml (GitHub Action)
                                                                               │
-                    scripts/demo-ingest.ts: parse + quarantine ─▶ R2 (demoResultKey)  status: parsed | quarantined
+              scripts/demo-ingest.ts: parse + quarantine + D5 predicate check
+                                          │                              │
+                            predicate passes, AUTO_COMMIT_ENABLED  predicate fails / shadow mode
+                            writeMatchScore()  status: confirmed        R2 (demoResultKey)  status: parsed | quarantined
                                                                               │
-   in-match MatchDemoReviewBlock  ──admin Confirm──▶ PATCH /score  (status: confirmed)   │  or Dismiss (dismissed)
+                                          in-match MatchDemoReviewBlock  ──admin Confirm──▶ PATCH /score  (confirmed)
+                                                                              │  or Dismiss (dismissed)
    admin /admin/jobs              ── dashboard of every background job + warnings/quarantine flags ─┘
 ```
 
 - The Worker writes the **same** deterministic `demoKey(matchId)` a browser upload would, so the two
   paths are last-write-wins with no collision.
 - `/api/ingest/notify` (machine-auth `x-ingest-secret`) validates the match + roster + demo, records
-  `received`, dispatches the Action, and **tears down the server** (demo landed = match over).
+  `received`, dispatches the Action, and **tears down the server** (demo landed = match over) — the
+  Action never touches DatHost regardless of auto-commit or manual confirm.
+- `/api/ingest/matchzy-log` (machine-auth `x-matchzy-token`) is the `matchzy_remote_log_url` target.
+  MatchZy POSTs every match event here; only `map_result` is kept (at `mapResultKey`), everything else
+  is acknowledged and dropped.
 - The Action mirrors the replay pipeline (`scripts/replay-extract.ts`): heavy parsing runs in CI, not
-  in a Vercel request. It stages a `DemoIngestResult` (score + stats + sabremetrics + warnings +
-  quarantine flags) at `demoResultKey`, gzipped — deleted on confirm/dismiss.
-- Auto-commit (skip the human Confirm for clean matches) is **deferred → issue #138**.
+  in a Vercel request.
+
+### Trusted auto-commit (#138)
+
+A clean, corroborated parse skips the human Confirm. `evaluateAutoCommit()`
+(`src/lib/demo/autoCommit.ts`) is the **D5 predicate** — a pure decision over: the match has no
+existing confirmed score (auto-commit never overwrites a played match — a disagreement always routes
+to manual review, no matter how clean the new parse is), quarantine passes, zero parser warnings
+(which also covers full roster resolution and a clean stored-vs-demo side agreement),
+`skins_starting_side` was **stored** (not just demo-inferred — this always excludes the gauntlet
+knife path, whose self-derived score, #137, never has a stored side), and the demo-derived score
+matches MatchZy's own `map_result` event read from `mapResultKey` (`buildMatchzyConfig` fixes
+team1 = SHIRTS / team2 = SKINS, so it's a direct equality, no side remapping). `scripts/demo-ingest.ts`
+gathers the inputs, calls it after quarantine, and logs the verdict either way.
+
+`AUTO_COMMIT_ENABLED` (a repo Actions variable) gates the write on an eligible verdict: unset runs in
+**shadow mode** — the predicate is evaluated and logged (`::notice::`) but the result is always staged
+for manual confirm; `true` calls the shared `writeMatchScore()` (`src/lib/matchScore.ts`) directly,
+marks the job `confirmed`, and deletes the staged `demoResultKey` and `mapResultKey` artifacts. An
+ineligible verdict — including a disagreement between the demo score and `map_result`, or an
+already-confirmed match — always falls back to the staged-result review, regardless of the flag.
+
+`writeMatchScore()` is the single write path for a match score (validation, `matches.final_score` +
+`player_match_stats`, sabremetrics, rating recompute, gauntlet-propagate-or-season-completion, and
+admin-gated steam-id learning) — the interactive `PATCH /api/matches/[id]/score` route and the
+demo-ingest Action both call it, so the write behaves identically either way. It has no `next/server`
+dependency: the route defers its recompute/completion/steam-id hooks (run concurrently, since none
+gates another) past the response via its own `after()` (passed in as `opts.after`); the Action, which
+has no request scope and exits once `main()` returns, awaits them directly instead.
+
+Reparsing an already-**confirmed** match (e.g. to backfill a newly added sabremetric) never goes
+through auto-commit — a score-unchanged reparse upserts sabremetrics directly (the shortcut above the
+D5 check), and a score-*changed* reparse is exactly what the predicate's already-confirmed check
+excludes, so it always falls through to the staged-result review instead, regardless of how cleanly
+it parses.
 
 ### Job state (`background_jobs`, `job_type = 'demo_ingest'`)
 
 Schema-free by design — status lives in the existing table, detail lives in the R2 artifact:
 
 `received → queued → running → parsed | quarantined → confirmed | dismissed | failed`
+
+Auto-commit takes the `running → confirmed` edge directly (no `parsed` stop) — the D5 predicate check
+and the write both happen inside the `running` stage.
 
 ## Admin surfaces
 
@@ -159,6 +203,7 @@ overwritten on the next provision.
 | GET | `/api/admin/server/config-diff` | admin | read-only golden-config drift (`diffGoldenConfig`) |
 | GET | `/api/matches/[id]/matchzy-config` | machine (`X-MatchZy-Token`) | the `matchzy_loadmatch_url` target |
 | POST | `/api/ingest/notify` | machine (`x-ingest-secret`) | demo landed → record + dispatch + teardown |
+| POST | `/api/ingest/matchzy-log` | machine (`x-matchzy-token`) | remote-log event → keep `map_result` (auto-commit oracle), ignore the rest |
 | GET·DELETE | `/api/matches/[id]/demo/result` | session | read / dispose the staged `DemoIngestResult` |
 | POST | `/api/matches/[id]/demo/dispatch` | session | re-parse the demo in R2 (manual counterpart to notify) |
 | POST | `/api/matches/[id]/replay/dispatch` | session | (re)trigger the replay Action |
@@ -166,16 +211,26 @@ overwritten on the next provision.
 ## Environment
 
 `DATHOST_EMAIL`, `DATHOST_PASSWORD`, `DATHOST_SERVER_ID`, `MATCHZY_CONFIG_SECRET`, `APP_BASE_URL`
-(the origin the DatHost server fetches the config from), `INGEST_WORKER_URL`, `INGEST_UPLOAD_SECRET`,
-`INGEST_NOTIFY_SECRET`. Hosting auto-triggers are env-gated on `DATHOST_SERVER_ID`, so with it unset
-everything degrades to the manual flow. The disk-cleanup admin controls additionally need
+(the origin the DatHost server fetches the config from, and — on the demo-ingest Action — the origin
+`writeMatchScore()`'s recompute trigger calls), `INGEST_WORKER_URL`, `INGEST_UPLOAD_SECRET`,
+`INGEST_NOTIFY_SECRET`, `INGEST_REMOTE_LOG_SECRET` (the `matchzy_remote_log_url` cvars are only
+emitted once this is set). Hosting auto-triggers are env-gated on `DATHOST_SERVER_ID`, so with it
+unset everything degrades to the manual flow. The disk-cleanup admin controls additionally need
 `GITHUB_DISPATCH_TOKEN`/`GITHUB_REPO` (shared with every other Action dispatch) with the token's
 "Variables" repository permission also granted, for the interval control.
+
+The demo-ingest Action needs its own copies of `APP_BASE_URL` (repo Actions **variable** — it's
+public, unlike the rest of this list) and `RECOMPUTE_SECRET` (repo **secret**), since it runs outside
+Vercel and has no other way to reach the app's recompute endpoint. `AUTO_COMMIT_ENABLED` (repo
+variable) gates trusted auto-commit (#138) — unset runs the predicate in shadow mode (evaluated +
+logged, still staged for manual confirm); `true` goes live.
 
 ## Key files
 
 `src/lib/dathost.ts` · `src/lib/dathost-lifecycle.ts` (lifecycle + `getReconciledServerState` +
 `getActiveServerMatch` + `findServerOccupant`) · `src/lib/matchzy.ts` · `src/lib/schedule.ts` ·
+`src/lib/matchScore.ts` (`writeMatchScore()` — shared score-write + hooks, #138) ·
+`src/lib/demo/mapResult.ts` (`map_result` parse/R2 read-write) ·
 `src/components/MatchServerPanel.tsx` · `src/components/MatchDemoReviewBlock.tsx` ·
 `src/components/useDemoIngestActions.ts` (shared confirm/dismiss/re-parse) ·
 `src/components/IngestJobActions.tsx` · `src/components/JobActions.tsx` (generic retry + live refresh) ·

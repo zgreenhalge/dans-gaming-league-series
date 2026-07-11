@@ -173,7 +173,10 @@ const PIPELINES: PipelineDoc[] = [
   {
     jobType: 'demo_ingest',
     name: 'demo ingest',
-    purpose: "Parses a match's demo into its final score and player stats, then stages the result for review.",
+    purpose:
+      "Parses a match's demo into its final score and player stats. A clean parse corroborated by " +
+      "MatchZy's own map_result auto-commits the score directly (skipping straight to confirmed); " +
+      'otherwise the result is staged for human review.',
     lifecycle: [
       { label: 'received', tone: 'neutral' },
       { label: 'queued', tone: 'neutral' },

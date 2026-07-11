@@ -1,30 +1,48 @@
-// `demo-ingest` job entry point — runs in the GitHub Action via `tsx`. Phase 3 of the DatHost +
-// MatchZy initiative (manual-confirm; auto-commit is issue #138).
+// `demo-ingest` job entry point — runs in the GitHub Action via `tsx`. Phase 3 (manual-confirm) +
+// Phase 5 (trusted auto-commit, #138) of the DatHost + MatchZy initiative.
 //
 // demo (R2) → parseDemoFile + parseDemoSabremetrics (via getReplayInputs) → quarantine check →
-// stage a confirm-ready result at `demoResultKey` (R2, gzipped JSON). The in-match review block reads
-// it and the human confirms via the existing `PATCH /score`. Heavy parsing runs HERE, not on Vercel
-// (kills the parse route's MAX_DEMO_BYTES ceiling). Mirrors `replay-extract.ts`.
+// either auto-commit (writeMatchScore, D5 predicate) or stage a confirm-ready result at
+// `demoResultKey` (R2, gzipped JSON) for the in-match review block's human Confirm. Heavy parsing
+// runs HERE, not on Vercel (kills the parse route's MAX_DEMO_BYTES ceiling). Mirrors
+// `replay-extract.ts`.
+//
+// Auto-commit predicate (D5, `evaluateAutoCommit` in `src/lib/demo/autoCommit.ts`) — ALL must hold,
+// else fall back to the staged-result review: the match has no existing confirmed score, quarantine
+// passes, zero parser warnings (also covers full roster resolution: an unresolved player throws
+// before this point, and a stored-vs-demo side disagreement pushes a warning), `skins_starting_side`
+// was STORED rather than just demo-inferred (excludes the gauntlet knife path — #137's self-derived
+// score always has a payload, but never a stored side — always manual review), and the demo-derived
+// score matches MatchZy's own `map_result` remote-log event (the independent cross-check;
+// `buildMatchzyConfig` fixes team1 = SHIRTS, team2 = SKINS, so it's direct equality).
+// `AUTO_COMMIT_ENABLED=true` gates the actual write; unset runs the predicate in shadow mode —
+// evaluated and logged, still staged for manual confirm — so it can be watched on real matches
+// before it's trusted to write.
 //
 // Reparsing an already-confirmed match (e.g. to backfill fields from a newly added collector) skips
-// the staged-review step: when the freshly derived score matches the match's existing `final_score`,
-// the sabremetrics are upserted directly and the job is marked `confirmed`. A derived score that
-// differs from the stored one always falls through to the normal staged-result review instead, so a
-// reparse can never silently rewrite an already-agreed result.
+// both auto-commit and the staged-review step: when the freshly derived score matches the match's
+// existing `final_score`, the sabremetrics are upserted directly and the job is marked `confirmed`. A
+// derived score that differs from the stored one is exactly what the D5 predicate's `alreadyPlayed`
+// check excludes — it always falls through to the staged-result review instead, regardless of how
+// cleanly the new parse corroborates against `map_result`.
 //
 // Env (from the workflow): MATCH_ID, GH_RUN_ID, GH_RUN_URL, R2 creds, SUPABASE_SERVICE_ROLE_KEY /
-// NEXT_PUBLIC_SUPABASE_URL. Storage is schema-free: background_jobs.status + the R2 artifact.
+// NEXT_PUBLIC_SUPABASE_URL, AUTO_COMMIT_ENABLED, APP_BASE_URL + RECOMPUTE_SECRET (for the EHOG
+// recompute an auto-commit triggers). Storage is schema-free: background_jobs.status + R2 artifacts.
 
 import { gzipSync } from 'node:zlib';
 import { parseDemoFile } from '../src/lib/demoParser';
 import { parseDemoSabremetrics } from '../src/lib/demoOrchestrator';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { quarantineDemo } from '../src/lib/demo/quarantine';
-import { getR2Object, putR2Object, deleteR2Object, demoKey, demoResultKey } from '../src/lib/r2';
+import { getR2Object, putR2Object, deleteR2Object, demoKey, demoResultKey, mapResultKey } from '../src/lib/r2';
+import { getMapResult } from '../src/lib/demo/mapResult';
+import { evaluateAutoCommit } from '../src/lib/demo/autoCommit';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { gunzipMaybe } from '../src/lib/gzip';
 import { isPlayedScore, parseScore } from '../src/lib/util';
 import { persistSabremetrics } from '../src/lib/demo/sabremetrics';
+import { writeMatchScore } from '../src/lib/matchScore';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '../src/lib/demo/ingestResult';
 
 const matchId = Number(process.env.MATCH_ID);
@@ -80,35 +98,38 @@ async function main() {
     targetWinRounds: inputs.targetWinRounds,
   });
 
+  // The match's existing confirmed score, if any — shared by the reparse shortcut below and the D5
+  // predicate's `alreadyPlayed` check (auto-commit never overwrites a played match).
+  const { data: matchRow } = await supabase.from('matches').select('final_score').eq('id', matchId).maybeSingle();
+  const existingScore = (matchRow as { final_score: string | null } | null)?.final_score ?? null;
+  const existing = isPlayedScore(existingScore) ? parseScore(existingScore) : null;
+
   // Reparse of an already-confirmed match with an unchanged score: apply the refreshed sabremetrics
   // directly, no staged review needed.
-  if (q.ok && parsed.shirts_score !== null && parsed.skins_score !== null) {
-    const { data: matchRow } = await supabase
-      .from('matches')
-      .select('final_score')
-      .eq('id', matchId)
-      .maybeSingle();
-    const existingScore = (matchRow as { final_score: string | null } | null)?.final_score ?? null;
-    const existing = isPlayedScore(existingScore) ? parseScore(existingScore) : null;
-
-    if (existing && existing.shirts === parsed.shirts_score && existing.skins === parsed.skins_score) {
-      await persistSabremetrics(matchId, sab.sabremetrics);
-      await deleteR2Object(demoResultKey(matchId));
-      await setJob({
-        status: 'confirmed',
-        stage: 'confirmed',
-        error_message: null,
-        finished_at: new Date().toISOString(),
-      });
-      notice(
-        `demo-ingest match ${matchId}: reparsed, score unchanged (${parsed.shirts_score}-${parsed.skins_score}) — sabremetrics auto-confirmed`,
-      );
-      return;
-    }
+  if (
+    q.ok &&
+    parsed.shirts_score !== null &&
+    parsed.skins_score !== null &&
+    existing &&
+    existing.shirts === parsed.shirts_score &&
+    existing.skins === parsed.skins_score
+  ) {
+    await persistSabremetrics(matchId, sab.sabremetrics);
+    await deleteR2Object(demoResultKey(matchId));
+    await setJob({
+      status: 'confirmed',
+      stage: 'confirmed',
+      error_message: null,
+      finished_at: new Date().toISOString(),
+    });
+    notice(
+      `demo-ingest match ${matchId}: reparsed, score unchanged (${parsed.shirts_score}-${parsed.skins_score}) — sabremetrics auto-confirmed`,
+    );
+    return;
   }
 
-  // Confirm-ready payload only when the side was known and the score derived (regular season).
-  // Null → gauntlet/knife: the review block routes it to manual side-entry (issue #137).
+  // Confirm-ready payload whenever a score derived — including gauntlet/knife matches, which
+  // self-derive via demo-side inference (#137). Only null on a genuinely undecidable demo.
   const payload =
     parsed.shirts_score !== null && parsed.skins_score !== null
       ? {
@@ -126,6 +147,53 @@ async function main() {
           round_history: parsed.round_history,
         }
       : null;
+
+  // Trusted auto-commit (#138): a clean, corroborated parse skips the human Confirm. Roster
+  // resolution is already guaranteed here — an unresolved demo player throws inside parseDemoFile,
+  // well before this point — so the D5 predicate only needs to check what's left.
+  if (payload !== null) {
+    const mapResult = await getMapResult(matchId);
+    const decision = evaluateAutoCommit({
+      quarantinePassed: q.ok,
+      warningCount: warnings.length,
+      skinsSideStored: inputs.skinsSide !== null,
+      alreadyPlayed: existing !== null,
+      derived: { shirts: payload.shirts, skins: payload.skins },
+      mapResult: mapResult ? { shirts: mapResult.team1.score, skins: mapResult.team2.score } : null,
+    });
+
+    if (decision.eligible && process.env.AUTO_COMMIT_ENABLED === 'true') {
+      const written = await writeMatchScore(supabase, matchId, {
+        shirts: payload.shirts,
+        skins: payload.skins,
+        player_stats: payload.player_stats,
+        sabremetrics: payload.sabremetrics,
+        round_history: payload.round_history,
+      });
+      if (written.ok) {
+        await Promise.all([deleteR2Object(demoResultKey(matchId)), deleteR2Object(mapResultKey(matchId))]);
+        await setJob({
+          status: 'confirmed',
+          stage: 'confirmed',
+          error_message: null,
+          finished_at: new Date().toISOString(),
+        });
+        notice(
+          `demo-ingest match ${matchId}: auto-committed ${payload.shirts}-${payload.skins} (D5 predicate passed, corroborated by map_result)`,
+        );
+        return;
+      }
+      notice(
+        `demo-ingest match ${matchId}: auto-commit predicate passed but the write failed (${written.error}) — falling back to staged review`,
+      );
+    } else if (decision.eligible) {
+      notice(
+        `demo-ingest match ${matchId}: would auto-commit ${payload.shirts}-${payload.skins} (shadow mode — set AUTO_COMMIT_ENABLED=true to go live) — staging for manual confirm`,
+      );
+    } else {
+      notice(`demo-ingest match ${matchId}: not auto-committing (${decision.reason}) — staging for manual confirm`);
+    }
+  }
 
   const result: DemoIngestResult = {
     matchId,

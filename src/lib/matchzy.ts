@@ -39,6 +39,10 @@ export interface MatchzyConfigOptions {
   demoUploadUrl?: string;
   /** Shared secret sent as `X-MatchZy-Token` with the demo upload. */
   demoUploadSecret?: string;
+  /** Where MatchZy POSTs match events, including the final `map_result` (#138's auto-commit oracle). */
+  remoteLogUrl?: string;
+  /** Shared secret sent as `X-MatchZy-Token` with each remote-log event. */
+  remoteLogSecret?: string;
   /** Override `maplist` (e.g. the Steam workshop id for Phase 4 instead of the DGLS map name). */
   maplistOverride?: string;
 }
@@ -96,6 +100,11 @@ export async function buildMatchzyConfig(
     cvars.matchzy_demo_upload_url = opts.demoUploadUrl;
     cvars.matchzy_demo_upload_header_key = 'X-MatchZy-Token';
     if (opts.demoUploadSecret) cvars.matchzy_demo_upload_header_value = opts.demoUploadSecret;
+  }
+  if (opts.remoteLogUrl) {
+    cvars.matchzy_remote_log_url = opts.remoteLogUrl;
+    cvars.matchzy_remote_log_header_key = 'X-MatchZy-Token';
+    if (opts.remoteLogSecret) cvars.matchzy_remote_log_header_value = opts.remoteLogSecret;
   }
 
   const config: MatchzyConfig = {

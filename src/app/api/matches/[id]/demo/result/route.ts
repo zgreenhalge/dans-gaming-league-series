@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireMatchAccess } from '@/lib/match-access';
-import { getR2Object, deleteR2Object, demoResultKey } from '@/lib/r2';
+import { getR2Object, deleteR2Object, demoResultKey, mapResultKey } from '@/lib/r2';
 import { gunzipMaybe } from '@/lib/gzip';
 import { parseMatchId } from '@/lib/util';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '@/lib/demo/ingestResult';
@@ -65,7 +65,13 @@ export async function DELETE(
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
   const disposition = req.nextUrl.searchParams.get('disposition') === 'confirmed' ? 'confirmed' : 'dismissed';
-  await deleteR2Object(demoResultKey(matchId));
+  // The map_result oracle's job is done once a score is confirmed; a dismiss leaves it in place in
+  // case the demo is reparsed and re-staged.
+  const cleanup =
+    disposition === 'confirmed'
+      ? [deleteR2Object(demoResultKey(matchId)), deleteR2Object(mapResultKey(matchId))]
+      : [deleteR2Object(demoResultKey(matchId))];
+  await Promise.all(cleanup);
   await getAdminClient()
     .from('background_jobs')
     .update({ status: disposition, stage: disposition, updated_at: new Date().toISOString() })
