@@ -205,6 +205,67 @@ function deltaColor(delta: number, maxAbs: number): string {
   return 'rgba(255,255,255,0.5)';
 }
 
+function formatWinPct(p: number): string {
+  return `${Math.round(p * 100)}%`;
+}
+
+/**
+ * Tooltip copy is static baseline text plus a provisional-players sentence appended only when
+ * one of the four players is still early enough in their rating history (PROVISIONAL_SIGMA_THRESHOLD
+ * in constants.json) that the prediction carries extra uncertainty beyond the number shown.
+ */
+function WinProbabilityTooltip({ provisional }: { provisional: boolean }) {
+  return (
+    <span tabIndex={0} className="group relative inline-flex items-center cursor-help ml-1.5">
+      <span className="border border-[var(--color-border-secondary)] rounded-full w-3.5 h-3.5 inline-flex items-center justify-center leading-none font-mono text-[9px] text-[var(--color-text-secondary)]">
+        ?
+      </span>
+      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-64 rounded border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] p-2 font-mono text-[10px] leading-snug normal-case text-[var(--color-text-secondary)] opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100 z-10">
+        EHOG win probability comes from each team&apos;s current rating alone. A narrow gap in a
+        small, wide-skill league can still land near 50%, and a wide gap can land at 80–90% — both
+        are expected, not a bug.
+        {provisional && (
+          <>
+            {' '}One or more players here are still early in their rating history, so this
+            prediction carries extra uncertainty beyond the number shown.
+          </>
+        )}
+      </span>
+    </span>
+  );
+}
+
+function WinProbabilityBadge({
+  winProbability,
+  postMatchWinProb,
+  shirtsWon,
+}: {
+  winProbability: { pShirtsWin: number; provisional: boolean } | null;
+  postMatchWinProb: number | null;
+  shirtsWon: boolean;
+}) {
+  if (winProbability) {
+    const favored = winProbability.pShirtsWin >= 0.5 ? 'SHIRTS' : 'SKINS';
+    const pct = formatWinPct(Math.max(winProbability.pShirtsWin, 1 - winProbability.pShirtsWin));
+    return (
+      <div className="flex items-center font-mono text-[11px] text-[var(--color-text-secondary)] mb-3">
+        <span className="tracked">EHOG favors {favored} · {pct}</span>
+        <WinProbabilityTooltip provisional={winProbability.provisional} />
+      </div>
+    );
+  }
+  if (postMatchWinProb != null) {
+    const winner = shirtsWon ? 'SHIRTS' : 'SKINS';
+    const expected = formatWinPct(shirtsWon ? postMatchWinProb : 1 - postMatchWinProb);
+    return (
+      <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mb-3">
+        <span className="tracked">{winner} won · expected {expected}</span>
+      </div>
+    );
+  }
+  return null;
+}
+
 export function RatingProjectionTable({
   projections,
   shirts,
@@ -321,6 +382,8 @@ export default function MatchTabView({
   ratingDeltas,
   ratingProjections = [],
   ratingCurrent = {},
+  winProbability = null,
+  postMatchWinProb = null,
   sabremetrics = [],
   replayJob,
   replayEvents = null,
@@ -350,6 +413,8 @@ export default function MatchTabView({
   ratingDeltas: Record<number, number>;
   ratingProjections?: RatingProjection[];
   ratingCurrent?: Record<number, number>;
+  winProbability?: { pShirtsWin: number; provisional: boolean } | null;
+  postMatchWinProb?: number | null;
   sabremetrics?: MatchSabremetricsRow[];
   replayJob: ReplayJobState;
   replayEvents?: ReplayEventsView | null;
@@ -500,6 +565,7 @@ export default function MatchTabView({
             </div>
           ) : (
             <>
+              <WinProbabilityBadge winProbability={null} postMatchWinProb={postMatchWinProb} shirtsWon={shirtsWon} />
               <div>
                 <TeamHeader
                   name="Shirts"
@@ -521,12 +587,15 @@ export default function MatchTabView({
             </>
           )}
           {hasProjections && (
-            <RatingProjectionTable
-              projections={ratingProjections}
-              shirts={matchPlayers.filter((p) => p.faction === 'SHIRTS')}
-              skins={matchPlayers.filter((p) => p.faction === 'SKINS')}
-              current={ratingCurrent}
-            />
+            <>
+              <WinProbabilityBadge winProbability={winProbability} postMatchWinProb={null} shirtsWon={shirtsWon} />
+              <RatingProjectionTable
+                projections={ratingProjections}
+                shirts={matchPlayers.filter((p) => p.faction === 'SHIRTS')}
+                skins={matchPlayers.filter((p) => p.faction === 'SKINS')}
+                current={ratingCurrent}
+              />
+            </>
           )}
         </>
       )}

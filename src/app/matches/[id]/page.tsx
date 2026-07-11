@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
 import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/og';
-import { projectRatingDeltas, type RatingProjection } from '@/lib/ehog';
+import { projectRatingDeltas, predictWinProbability, isProvisional, type RatingProjection } from '@/lib/ehog';
 import { isPlayedScore, parseScore, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
@@ -159,6 +159,7 @@ export default async function MatchPage({
   const isCurrentWeek = matchWindow != null && new Date().toISOString().slice(0, 10) >= matchWindow.weekStart && new Date().toISOString().slice(0, 10) <= matchWindow.weekEnd;
   let ratingProjections: RatingProjection[] = [];
   const ratingCurrent: Record<number, number> = {};
+  let winProbability: { pShirtsWin: number; provisional: boolean } | null = null;
   if (!played && isCurrentWeek && shirts.length === 2 && skins.length === 2) {
     const allPlayerIds = [...shirts, ...skins].map((s) => s.player_id);
     const playerRatings = await getPlayerRatings(allPlayerIds);
@@ -167,7 +168,12 @@ export default async function MatchPage({
     const skinRatings = skins.map((s) => byId.get(s.player_id)!);
     ratingProjections = projectRatingDeltas(shirtRatings, skinRatings, season.target_win_rounds);
     for (const r of playerRatings) ratingCurrent[r.playerId] = r.ehogRating;
+    winProbability = {
+      pShirtsWin: predictWinProbability(shirtRatings, skinRatings),
+      provisional: isProvisional(shirtRatings, skinRatings),
+    };
   }
+  const postMatchWinProb = played ? match.pre_match_win_prob : null;
 
   const allByAdr = [...stats]
     .filter((s) => s.rounds_played > 0)
@@ -385,6 +391,8 @@ export default async function MatchPage({
           ratingDeltas={ratingDeltas}
           ratingProjections={ratingProjections}
           ratingCurrent={ratingCurrent}
+          winProbability={winProbability}
+          postMatchWinProb={postMatchWinProb}
           sabremetrics={sabremetrics}
           replayJob={replayJob}
           replayEvents={replayEvents}

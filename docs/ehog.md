@@ -91,6 +91,7 @@ The UI renders a color-coded badge (`EhogBadge.tsx`) and tier bar (`EhogTierBar.
 | Key | Description |
 |---|---|
 | `FORMULA_VERSION` | Written to `player_rating_history.formula_version` and used as the column name in `player_current_ratings`. |
+| `PROVISIONAL_SIGMA_THRESHOLD` | σ above which a player is still early enough in their rating history that a win-probability prediction involving them gets a hedging note (see **Win probability UI** below). Not part of the rating math — a display-only threshold, so it has no Python-side consumer or parity fixture. |
 
 ## Pre-match win probability
 
@@ -127,6 +128,26 @@ once a match has a stored prediction it's frozen, so later formula or constant r
 rides alongside it so a future formula version is distinguishable from matches predicted under an
 earlier one. `ehog/backfill.py`'s dry-run/calibration modes never touch this column — only the live
 recompute does.
+
+### Win probability UI
+
+`MatchTabView.tsx`'s `WinProbabilityBadge` renders two mutually exclusive cases, both gated on
+`played` the same way `RatingProjectionTable` and the post-match rating-delta badges already are:
+
+- **Pre-match** (unplayed, current week, full 2v2 roster): "EHOG favors SHIRTS · 68%", computed live
+  via `predictWinProbability()` from the same current ratings `RatingProjectionTable` already fetches
+  — there's no persisted value yet, since `on_before_match` only ever fires for played matches.
+- **Post-match**: "SKINS won · expected 25%", reading the frozen `matches.pre_match_win_prob`
+  directly and reframing it around whichever side actually won (`shirtsWon` is already a page prop).
+  Renders nothing if the column is still null (e.g. the match predates this feature and hasn't been
+  through a recompute since).
+
+The pre-match badge always shows a `(?)` tooltip; its copy is static baseline text ("a narrow gap can
+still land near 50%, a wide gap can land at 80–90% — both are expected") with an extra sentence about
+provisional players appended only when `isProvisional()` (`ehog.ts`) finds any of the four players'
+current σ at or above `PROVISIONAL_SIGMA_THRESHOLD`. The post-match badge has no tooltip — the frozen
+number sits next to an actual result, and there's no way to know retroactively whether it was
+provisional at prediction time (only the scalar itself is frozen, not the σ that produced it).
 
 ## Seeding a known player's starting rating
 
