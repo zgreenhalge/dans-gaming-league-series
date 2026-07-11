@@ -60,8 +60,9 @@ The UI renders a color-coded badge (`EhogBadge.tsx`) and tier bar (`EhogTierBar.
 
 | Key | Description |
 |---|---|
-| `MU_DEFAULT` | Starting μ for a brand-new player with no configured seed. Set independently of `CENTER` so new players start below mid-band (EHOG ≈ 33). **Not** the season-regression target — see `CENTER` below. |
+| `MU_DEFAULT` | Starting μ for a player debuting after `FOUNDING_SEASON_NUMBER`, with no configured seed. Set independently of `CENTER` so later debuts start below mid-band (EHOG ≈ 33). **Not** the season-regression target — see `CENTER` below. |
 | `SIGMA_DEFAULT` | Starting σ (uncertainty) for new players. Higher = more volatile early ratings. |
+| `FOUNDING_SEASON_NUMBER` | The season whose debutantes start at `CENTER` instead of `MU_DEFAULT` — the founding cohort's skill wasn't actually rookie-tier, the league just didn't have a rating system yet. Only affects a player's first-ever appearance; see **Seeding a known player's starting rating** below. |
 | `BETA_FACTOR` | Multiplied by `SIGMA_DEFAULT` to get the OpenSkill β parameter (performance variance). |
 
 ### Display transform — `EHOG = 10 + 90 / (1 + exp(−(skill − CENTER) / SCALE))`
@@ -162,6 +163,20 @@ chronological rating walk (`fetch_player_seeds()` / `compute_ratings()`'s `state
 player has any `player_rating_history` rows, their seed no longer applies. The same conversion is
 used client-side (`getPlayerRatings()` in `queries.ts`) so a seeded player's pre-first-match rating
 projection shows their seed instead of the global default.
+
+A player's actual first-appearance starting μ follows this precedence, all inside
+`compute_ratings()`'s `state_for()`:
+
+1. `players.seed_ehog`, if the admin has set one — an explicit, deliberate override.
+2. `EHOG_CENTER`, if their debut match falls in `FOUNDING_SEASON_NUMBER` — the founding cohort's
+   games were just as real as anyone else's, we only lacked a rating system to score them at the
+   time, so they don't get penalized as if they were unproven.
+3. `MU_DEFAULT`, for anyone debuting later — a genuinely new player with no track record starts
+   conservative.
+
+Because every recompute replays chronologically from scratch, this isn't a one-time bootstrap: it
+applies identically on every run, keyed off each player's actual debut match rather than any
+persisted "is founding member" flag.
 
 ## Running
 

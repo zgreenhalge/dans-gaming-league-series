@@ -40,6 +40,8 @@ SIGMA_FLOOR: float = _C["SIGMA_FLOOR"]
 MOV_M_MIN: float = _C["MOV_M_MIN"]
 MOV_M_MAX: float = _C["MOV_M_MAX"]
 
+FOUNDING_SEASON_NUMBER: int = _C["FOUNDING_SEASON_NUMBER"]
+
 BATCH_SIZE = 200
 
 # ---------------------------------------------------------------------------
@@ -292,6 +294,12 @@ def compute_ratings(
         rating (see fetch_player_seeds). Only applies to a player's first appearance —
         once a player has any rating_history state, that state takes over.
 
+    A player's first-appearance starting state, in precedence order: their own
+    player_seeds entry if set; otherwise EHOG_CENTER if their debut match falls in
+    FOUNDING_SEASON_NUMBER (the founding cohort's skill wasn't actually rookie-tier, we just
+    didn't have a rating system yet); otherwise the global MU_DEFAULT for anyone debuting
+    later.
+
     on_segment_end: optional callable(segment, player_state) fired after the
         last match in each segment, before inter-season regression is applied.
         segment is (season_number: int, is_gauntlet: bool).
@@ -307,12 +315,14 @@ def compute_ratings(
     history_rows: list[dict] = []
     current_segment = None
 
-    def state_for(pid: int) -> tuple[float, float, float]:
+    def state_for(pid: int, season_number: int) -> tuple[float, float, float]:
         if pid in player_state:
             return player_state[pid]
         if pid in player_seeds:
             seed_mu = from_ehog(player_seeds[pid], SIGMA_DEFAULT)
             return (seed_mu, SIGMA_DEFAULT, to_ehog(seed_mu, SIGMA_DEFAULT))
+        if season_number == FOUNDING_SEASON_NUMBER:
+            return (EHOG_CENTER, SIGMA_DEFAULT, to_ehog(EHOG_CENTER, SIGMA_DEFAULT))
         return (MU_DEFAULT, SIGMA_DEFAULT, to_ehog(MU_DEFAULT, SIGMA_DEFAULT))
 
     for sequence_index, entry in enumerate(ordered_matches, start=1):
@@ -355,8 +365,8 @@ def compute_ratings(
             continue
         a_won = a_wins.pop()
 
-        team_a_states = [state_for(r["player_id"])[:2] for r in team_a_rows]
-        team_b_states = [state_for(r["player_id"])[:2] for r in team_b_rows]
+        team_a_states = [state_for(r["player_id"], entry["season_number"])[:2] for r in team_a_rows]
+        team_b_states = [state_for(r["player_id"], entry["season_number"])[:2] for r in team_b_rows]
 
         if on_before_match:
             on_before_match(match_id, team_a_states, team_b_states, a_won)
@@ -378,7 +388,7 @@ def compute_ratings(
         ):
             for row, (uw_mu, uw_sigma), (prior_mu, prior_sigma) in zip(rows_team, unweighted_states, prior_states):
                 pid = row["player_id"]
-                _, _, prior_ehog = state_for(pid)
+                _, _, prior_ehog = state_for(pid, entry["season_number"])
 
                 new_mu = prior_mu + m * (uw_mu - prior_mu)
                 new_sigma = max(SIGMA_FLOOR, uw_sigma)
