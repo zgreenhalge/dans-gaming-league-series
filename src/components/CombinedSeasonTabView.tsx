@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import SeasonTabView, { type SeasonTab } from './SeasonTabView';
 import { tabCls } from '@/lib/util';
 import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow } from '@/lib/queries';
@@ -64,6 +64,14 @@ export default function CombinedSeasonTabView({
   const [topTab, setTopTab] = useState<TopTab>('regular');
   const [subTab, setSubTab] = useState<SeasonTab>('leaderboard');
 
+  // Seed number → player name from the regular season's own standings (already canonical-sorted,
+  // i.e. seed order) — lets the gauntlet bracket diagram name an unseeded seed slot before the
+  // gauntlet is actually seeded.
+  const seedNames = useMemo(
+    () => new Map(leaderboard.map((row, i) => [i + 1, row.player_name])),
+    [leaderboard],
+  );
+
   return (
     <>
       <TopTabBar tab={topTab} setTab={setTopTab} />
@@ -91,6 +99,7 @@ export default function CombinedSeasonTabView({
           leaderboard={gauntletLeaderboard}
           rounds={gauntletRounds}
           bracketShape={gauntletBracketShape}
+          seedNames={seedNames}
           seasonStatus={gauntletStatus}
           currentPlayerId={currentPlayerId}
           h2hData={gauntletH2hData}

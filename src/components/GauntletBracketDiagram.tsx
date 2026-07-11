@@ -27,9 +27,20 @@ const STATUS_COLOR: Record<SlotStatus, string> = {
  * slot names the seed, and a pod-sourced slot names the pod it comes from plus, for a pod that sends
  * more than one survivor onward, which of those survivors ("First"/"Second"/...) this slot expects.
  * `ordinal` is this slot's 0-based position among every slot fed by the same source pod, from
- * `computeAdvanceOrdinals()`. */
-function pendingSlotLabel(slot: BracketSlot, sourcePod: BracketPod | undefined, ordinal: number): string {
-  if (slot.source_kind === 'seed' && slot.source_seed != null) return `Seed ${slot.source_seed}`;
+ * `computeAdvanceOrdinals()`. `seedNames` (seed number → player name, from the paired regular
+ * season's *current* standings) fills in who that seed would be today — only ever shown before the
+ * bracket is actually seeded, since a seeded slot already has its own `player_name` and never reaches
+ * this function. */
+function pendingSlotLabel(
+  slot: BracketSlot,
+  sourcePod: BracketPod | undefined,
+  ordinal: number,
+  seedNames?: Map<number, string>,
+): string {
+  if (slot.source_kind === 'seed' && slot.source_seed != null) {
+    const name = seedNames?.get(slot.source_seed);
+    return name ? `Seed ${slot.source_seed} (${name})` : `Seed ${slot.source_seed}`;
+  }
   if (slot.source_kind === 'pod' && sourcePod) {
     const name = groupLabel(sourcePod);
     if (capacityFor(sourcePod.advance_rule) <= 1) return `Winner of ${name}`;
@@ -49,10 +60,15 @@ export function GauntletBracketDiagram({
   pods,
   currentPlayerId,
   rankMap,
+  seedNames,
 }: {
   pods: BracketPod[];
   currentPlayerId: number | null;
   rankMap?: Map<number, number>;
+  /** Seed number → player name from the paired regular season's current standings — labels an
+   *  unseeded seed slot with who currently holds it (e.g. "Seed 3 (PlayerName)"). Omit once the
+   *  bracket is actually seeded; seeded slots already carry their own `player_name`. */
+  seedNames?: Map<number, string>;
 }) {
   if (pods.length === 0) return null;
 
@@ -233,7 +249,7 @@ export function GauntletBracketDiagram({
                         isMe={currentPlayerId !== null && slot.player_id === currentPlayerId}
                       />
                     ) : (
-                      <span className="opacity-70">{pendingSlotLabel(slot, sourcePod, ordinal)}</span>
+                      <span className="opacity-70">{pendingSlotLabel(slot, sourcePod, ordinal, seedNames)}</span>
                     )}
                   </div>
                 );

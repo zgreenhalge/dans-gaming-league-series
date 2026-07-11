@@ -7,7 +7,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { buildGauntletBracket, type PodPlan } from './gauntlet-bracket';
+import { buildGauntletBracket, projectGauntletSeeding, type PodPlan } from './gauntlet-bracket';
 
 let passed = 0;
 const failures: string[] = [];
@@ -149,6 +149,41 @@ test('N=4 ladder edge case: straight to final, no elimination rounds', () => {
   assert.equal(plan.pods.length, 1);
   assert.equal(plan.games, 2);
   assert.deepEqual(seedsInPod(plan.pods[0]), [1, 2, 3, 4]);
+});
+
+// --- projectGauntletSeeding: live "if it ended today" seed placement ---
+test('projectGauntletSeeding: N=13 byes seed 1 straight to the final, everyone else placed round 1', () => {
+  const placements = projectGauntletSeeding(13)!;
+  assert.equal(placements.size, 13);
+  const seed1 = placements.get(1);
+  assert.deepEqual(seed1, { qualifies: true, round: 2, podIndex: 0, isFinal: true, isBye: true });
+  const seed2 = placements.get(2);
+  assert.equal(seed2?.qualifies, true);
+  assert.equal((seed2 as { isBye: boolean }).isBye, false);
+  assert.equal((seed2 as { round: number }).round, 1);
+});
+
+test('projectGauntletSeeding: N=14 drops the bottom seed, everyone else still qualifies', () => {
+  const placements = projectGauntletSeeding(14)!;
+  assert.deepEqual(placements.get(14), { qualifies: false });
+  for (let seed = 1; seed <= 13; seed++) {
+    assert.equal(placements.get(seed)?.qualifies, true, `seed ${seed} should qualify`);
+  }
+});
+
+test('projectGauntletSeeding: N=20 drops seeds 17-20, seeds 1-16 all start round 1 (no byes)', () => {
+  const placements = projectGauntletSeeding(20)!;
+  for (const seed of [17, 18, 19, 20]) assert.deepEqual(placements.get(seed), { qualifies: false });
+  for (let seed = 1; seed <= 16; seed++) {
+    const p = placements.get(seed);
+    assert.equal(p?.qualifies, true);
+    assert.equal((p as { isBye: boolean }).isBye, false, `seed ${seed} should not have a bye`);
+  }
+});
+
+test('projectGauntletSeeding: out-of-range qualifier count returns null instead of throwing', () => {
+  assert.equal(projectGauntletSeeding(3), null);
+  assert.equal(projectGauntletSeeding(21), null);
 });
 
 console.log(`${passed}/${passed + failures.length} passed`);
