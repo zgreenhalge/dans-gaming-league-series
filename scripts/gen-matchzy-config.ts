@@ -5,7 +5,8 @@
 //   tsx scripts/gen-matchzy-config.ts <matchId> > match.json
 //
 // The config shape lives in `src/lib/matchzy.ts` (shared with the `matchzy-config` route).
-// Env (optional, for the upload cvars): INGEST_WORKER_URL, INGEST_UPLOAD_SECRET.
+// Env (optional, for the upload/remote-log cvars): INGEST_WORKER_URL, INGEST_UPLOAD_SECRET,
+// APP_BASE_URL, INGEST_REMOTE_LOG_SECRET.
 // Read-only against Supabase.
 
 import { buildMatchzyConfig } from '../src/lib/matchzy';
@@ -21,6 +22,11 @@ async function main() {
   const { config, warnings } = await buildMatchzyConfig(getAdminClient(), matchId, {
     demoUploadUrl: process.env.INGEST_WORKER_URL,
     demoUploadSecret: process.env.INGEST_UPLOAD_SECRET,
+    remoteLogUrl:
+      process.env.APP_BASE_URL && process.env.INGEST_REMOTE_LOG_SECRET
+        ? `${process.env.APP_BASE_URL}/api/ingest/matchzy-log`
+        : undefined,
+    remoteLogSecret: process.env.INGEST_REMOTE_LOG_SECRET,
   });
 
   for (const w of warnings) console.error(`⚠ ${w}`);

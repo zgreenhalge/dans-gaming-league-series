@@ -46,6 +46,12 @@ export function demoResultKey(matchId: number): string {
   return `${matchId}/demo-result.json`;
 }
 
+/** Deterministic key for a match's staged MatchZy `map_result` event (gzipped JSON) — the trusted
+ *  auto-commit cross-check (#138). Transient — written by `POST /api/ingest/matchzy-log`. */
+export function mapResultKey(matchId: number): string {
+  return `${matchId}/map-result.json`;
+}
+
 /** Download an R2 object into a Buffer, or `null` if it doesn't exist. */
 export async function getR2Object(key: string): Promise<Buffer | null> {
   try {
