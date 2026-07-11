@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GauntletBracketDiagram } from './GauntletBracketDiagram';
 import type { BracketPod } from '@/lib/queries';
@@ -13,6 +14,7 @@ type Shape = { qualifiers: number; games: number; rounds: number };
 type BuildResult = { shape: Shape; pods: BracketPod[] };
 
 export function CreateGauntletForm({ seasons }: Props) {
+  const router = useRouter();
   const [seasonId, setSeasonId] = useState<number | ''>(seasons[0]?.id ?? '');
   const [startDate, setStartDate] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -20,14 +22,18 @@ export function CreateGauntletForm({ seasons }: Props) {
   const [confirming, setConfirming] = useState(false);
   // Set once a preview has been fetched — nothing is written to the DB until the admin confirms it.
   const [preview, setPreview] = useState<BuildResult | null>(null);
-  const [result, setResult] = useState<BuildResult | null>(null);
+
+  // Falls back to the first eligible season whenever `seasonId` no longer names one in the current
+  // `seasons` list — most notably right after a build, when `router.refresh()` drops the just-built
+  // season from `seasons` and the previously selected id would otherwise dangle.
+  const selectedSeasonId = seasons.some((s) => s.id === seasonId) ? seasonId : (seasons[0]?.id ?? '');
 
   async function loadPreview() {
-    if (!seasonId) return;
+    if (!selectedSeasonId) return;
     setError(null);
     setPreviewing(true);
     try {
-      const res = await fetch(`/api/seasons/${seasonId}/gauntlet/preview`, { method: 'POST' });
+      const res = await fetch(`/api/seasons/${selectedSeasonId}/gauntlet/preview`, { method: 'POST' });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(body.error ?? 'Failed to preview the gauntlet bracket.');
@@ -40,11 +46,11 @@ export function CreateGauntletForm({ seasons }: Props) {
   }
 
   async function confirm() {
-    if (!seasonId) return;
+    if (!selectedSeasonId) return;
     setError(null);
     setConfirming(true);
     try {
-      const res = await fetch(`/api/seasons/${seasonId}/gauntlet`, {
+      const res = await fetch(`/api/seasons/${selectedSeasonId}/gauntlet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ start_date: startDate || null }),
@@ -54,8 +60,10 @@ export function CreateGauntletForm({ seasons }: Props) {
         setError(body.error ?? 'Failed to build the gauntlet bracket.');
         return;
       }
-      setResult({ shape: body.shape as Shape, pods: (body.pods as BracketPod[]) ?? [] });
+      // Nothing left to preview — the built season now shows up under "Existing Gauntlets" once the
+      // page's server data refreshes, so there's no separate "just built" state to hold onto here.
       setPreview(null);
+      router.refresh();
     } finally {
       setConfirming(false);
     }
@@ -64,23 +72,6 @@ export function CreateGauntletForm({ seasons }: Props) {
   function cancelPreview() {
     setPreview(null);
     setError(null);
-  }
-
-  if (result) {
-    const { shape, pods } = result;
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="border border-[var(--color-accent-green-border)] bg-[var(--color-accent-green-bg)] px-4 py-3">
-          <div className="tracked text-[10px] text-[var(--color-accent-green-fg)] mb-1">Bracket Shape Built</div>
-          <div className="font-mono text-[12px] text-[var(--color-text-primary)]">
-            {shape.qualifiers} qualifiers, {shape.games} games across {shape.rounds} round
-            {shape.rounds === 1 ? '' : 's'}. Nothing is playable yet — seed it from the &quot;Existing
-            Gauntlets&quot; list below once the regular season is complete.
-          </div>
-        </div>
-        <GauntletBracketDiagram pods={pods} currentPlayerId={null} />
-      </div>
-    );
   }
 
   if (preview) {
@@ -120,7 +111,7 @@ export function CreateGauntletForm({ seasons }: Props) {
             same shape:
           </div>
           <Link
-            href={`/admin/seasons/gauntlet/manual/${seasonId}`}
+            href={`/admin/seasons/gauntlet/manual/${selectedSeasonId}`}
             className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] underline decoration-dotted w-fit"
           >
             Build manually →
@@ -144,7 +135,7 @@ export function CreateGauntletForm({ seasons }: Props) {
       <div>
         <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-2">Season</div>
         <select
-          value={seasonId}
+          value={selectedSeasonId}
           onChange={(e) => setSeasonId(Number(e.target.value))}
           className="w-full font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
         >
@@ -171,7 +162,7 @@ export function CreateGauntletForm({ seasons }: Props) {
       <button
         type="button"
         onClick={loadPreview}
-        disabled={previewing || !seasonId}
+        disabled={previewing || !selectedSeasonId}
         className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40 self-start"
       >
         {previewing ? 'Loading Preview…' : 'Preview Bracket'}
