@@ -7,7 +7,12 @@
 
 import { parseEvent, parseTicks, parseGrenades } from '@laihoe/demoparser2';
 import { readDemoPlayers, resolveRoster } from '../parsers/rosterResolver';
-import { buildMatchContext, type PlayerDeathRow } from '../parsers/matchContext';
+import {
+  buildMatchContext,
+  findKnifePhaseStartTick,
+  findMatchStartTick,
+  type PlayerDeathRow,
+} from '../parsers/matchContext';
 import { sideForFaction, type RoundEndRow } from '../parsers/roundSides';
 import type { RosterEntry } from '../demoParser';
 import type { RoundCondition, Faction } from '../types';
@@ -91,6 +96,13 @@ export interface BuildReplayInput {
   roster: RosterEntry[];
   skinsSide: Side | null;
   targetWinRounds: number;
+  /**
+   * Include the knife round as a visible, non-scoring opening segment. Regular-season
+   * matches pre-decide sides via the map-ban/pick draft, so their knife round is
+   * vestigial noise and stays excluded (default `false`). Gauntlet/knife matches have no
+   * pre-decided side — the knife round is what determines it — so it's worth showing.
+   */
+  includeKnifeRound?: boolean;
 }
 
 export interface BuildReplayResult {
@@ -101,7 +113,7 @@ export interface BuildReplayResult {
 }
 
 export function buildReplay(input: BuildReplayInput): BuildReplayResult {
-  const { demoBuffer, matchId, map, roster, skinsSide, targetWinRounds } = input;
+  const { demoBuffer, matchId, map, roster, skinsSide, targetWinRounds, includeKnifeRound } = input;
   const warnings: string[] = [];
   const notices: string[] = [];
 
@@ -163,6 +175,34 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     reasonByRound.set(e.total_rounds_played, (e.reason as string | null) ?? null);
   }
 
+  // --- Knife round (gauntlet/knife matches only — see `includeKnifeRound` docstring) ---
+  // The round_end(s) that `buildMatchContext` drops as pre-match (tick before the live
+  // match start) are exactly the knife round(s). We rebuild that same boundary here to
+  // pull them back in as their own non-scoring segment.
+  const knifeRounds: { roundNumber: number; endTick: number; winnerSide: 'CT' | 'T' | null }[] = [];
+  if (includeKnifeRound) {
+    const matchStartTick = findMatchStartTick(demoBuffer);
+    for (const e of roundEndRows) {
+      if (e.is_warmup_period || e.winner === null || e.total_rounds_played <= 0) continue;
+      if (e.tick >= matchStartTick) continue;
+      knifeRounds.push({
+        roundNumber: e.total_rounds_played,
+        endTick: e.tick,
+        winnerSide: e.winner as 'CT' | 'T' | null,
+      });
+    }
+    knifeRounds.sort((a, b) => a.endTick - b.endTick);
+  }
+  const knifeRoundNumbers = new Set(knifeRounds.map((k) => k.roundNumber));
+  // Collectors gate on `context.liveRounds` — widen it so knife-round events/frames are
+  // captured by the same per-round logic used for real rounds, without touching `context.
+  // rounds` (which stays exactly what the score/side-split math sees).
+  const contextForEvents =
+    knifeRoundNumbers.size > 0
+      ? { ...context, liveRounds: new Set([...context.liveRounds, ...knifeRoundNumbers]) }
+      : context;
+  const knifePhaseStartTick = knifeRounds.length > 0 ? findKnifePhaseStartTick(demoBuffer) : 0;
+
   // --- Round start ticks (round_start fires at freeze-time start) ---
   const roundStartRows = parseEvent(demoBuffer, 'round_start', [], []) as { tick: number }[];
   const startTicks = roundStartRows.map((r) => r.tick).sort((a, b) => a - b);
@@ -210,8 +250,15 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     wanted: number[];
   }[] = [];
   const allWantedTicks: number[] = [];
-  let prevEnd = 0;
-  for (const r of context.rounds) {
+  // Knife round(s), if any, always precede the real match rounds — start scanning for
+  // their round_start from the knife-phase boundary rather than tick 0, so an earlier
+  // warmup restart's round_start doesn't get picked up as the knife round's own start.
+  const allRoundEntries: { roundNumber: number; endTick: number }[] = [
+    ...knifeRounds,
+    ...context.rounds,
+  ];
+  let prevEnd = knifeRounds.length > 0 ? knifePhaseStartTick : 0;
+  for (const r of allRoundEntries) {
     const roundStart = startTickFor(r.endTick, prevEnd);
     prevEnd = r.endTick;
     // Begin playback ~PRE_LIVE_SECONDS before the round goes live, skipping the
@@ -260,17 +307,35 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
   }
 
   // --- Events + grenades + shots, bucketed per round ---
-  const eventsByRound = collectEvents(demoBuffer, deathRows, context, playerIdOf, reasonByRound, roundBounds);
-  const grenadesByRound = collectGrenades(demoBuffer, context, roundBounds, playerIdOf, interval);
-  const shotsByRound = collectShots(demoBuffer, context, playerIdOf);
-  const blindsByRound = collectBlinds(demoBuffer, context, playerIdOf);
-  const hurtsByRound = collectHurts(demoBuffer, context, playerIdOf);
+  const eventsByRound = collectEvents(demoBuffer, deathRows, contextForEvents, playerIdOf, reasonByRound, roundBounds);
+  const grenadesByRound = collectGrenades(demoBuffer, contextForEvents, roundBounds, playerIdOf, interval);
+  const shotsByRound = collectShots(demoBuffer, contextForEvents, playerIdOf);
+  const blindsByRound = collectBlinds(demoBuffer, contextForEvents, playerIdOf);
+  const hurtsByRound = collectHurts(demoBuffer, contextForEvents, playerIdOf);
   const { byRound: bombCarrierByRound, seededRounds } = collectBombCarrier(
     demoBuffer,
-    context,
+    contextForEvents,
     roundBounds,
     playerIdOf,
   );
+
+  // The knife round has no entry in `context.rounds` (it isn't a scoring round), so
+  // `collectEvents`'s round_end loop never sees it — push its round_end event directly.
+  for (const k of knifeRounds) {
+    const condition = reasonToCondition(reasonByRound.get(k.roundNumber) ?? null);
+    const evs = eventsByRound.get(k.roundNumber) ?? [];
+    evs.push({
+      type: 'round_end',
+      tick: k.endTick,
+      winnerSide: k.winnerSide,
+      // Sides aren't decided yet during the knife round — leave the faction unresolved
+      // rather than mislabel it from the post-knife side assignment.
+      winnerFaction: null,
+      condition,
+    });
+    evs.sort((a, b) => a.tick - b.tick);
+    eventsByRound.set(k.roundNumber, evs);
+  }
 
   // Capture counts surface in the Action's `assemble` stage — an empty array here is
   // the first sign a parser field name drifted (collectors fail soft / skip silently).
@@ -292,7 +357,9 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
 
   // --- Assemble rounds ---
   for (const b of roundBounds) {
-    const sideInfo = context.rounds.find((r) => r.roundNumber === b.round)!;
+    // The knife round has no computed side (nothing is decided yet) — borrow round 1's
+    // sideByFaction just to keep team colors consistent (see `ReplayRound.isKnifeRound`).
+    const sideInfo = context.rounds.find((r) => r.roundNumber === b.round) ?? context.rounds[0];
     const frames: ReplayFrame[] = b.wanted.map((tick) => ({
       tick,
       players: framesByTick.get(tick) ?? [],
@@ -302,6 +369,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
       round: b.round,
       startTick: b.startTick,
       endTick: b.endTick,
+      ...(knifeRoundNumbers.has(b.round) ? { isKnifeRound: true } : {}),
       sideByFaction: {
         SHIRTS: sideForFaction(sideInfo, 'SHIRTS'),
         SKINS: sideForFaction(sideInfo, 'SKINS'),

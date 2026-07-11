@@ -51,6 +51,14 @@ export interface ReplayRound {
   round: number;
   startTick: number;
   endTick: number;
+  /**
+   * True for the pre-match knife round, present only for gauntlet/knife matches that
+   * include it (see `docs/replay.md`). It's excluded entirely for regular-season matches,
+   * where sides are pre-decided and the knife round is vestigial. A knife round doesn't
+   * count toward the score and has no decided side yet, so `sideByFaction` here is
+   * borrowed from round 1 purely to keep team colors consistent, not a real side.
+   */
+  isKnifeRound?: boolean;
   /** Which side each faction played this round (regulation/OT swaps already applied). */
   sideByFaction: Record<Faction, Side>;
   /** Positional snapshots, downsampled to `frameRate`. */

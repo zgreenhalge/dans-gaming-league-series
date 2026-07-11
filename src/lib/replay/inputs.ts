@@ -13,6 +13,8 @@ export interface ReplayInputs {
   skinsSide: Side | null;
   targetWinRounds: number;
   roster: RosterEntry[];
+  /** True for gauntlet/knife-round seasons — see `BuildReplayInput.includeKnifeRound`. */
+  isGauntlet: boolean;
 }
 
 export async function getReplayInputs(
@@ -22,7 +24,7 @@ export async function getReplayInputs(
   const [{ data: matchRow, error: matchErr }, { data: matchStats }] = await Promise.all([
     supabaseAdmin
       .from('matches')
-      .select('id, shirts_pick, picked_map, skins_starting_side, weeks(seasons(target_win_rounds))')
+      .select('id, shirts_pick, picked_map, skins_starting_side, weeks(seasons(target_win_rounds, is_gauntlet))')
       .eq('id', matchId)
       .maybeSingle(),
     supabaseAdmin
@@ -44,8 +46,9 @@ export async function getReplayInputs(
   const weeksArr = Array.isArray(match.weeks) ? match.weeks : [match.weeks];
   const firstWeek = weeksArr[0] as { seasons: unknown } | undefined;
   const seasonsArr = Array.isArray(firstWeek?.seasons) ? firstWeek!.seasons : [firstWeek?.seasons];
-  const firstSeason = seasonsArr[0] as { target_win_rounds?: number } | undefined;
+  const firstSeason = seasonsArr[0] as { target_win_rounds?: number; is_gauntlet?: boolean } | undefined;
   const targetWinRounds = firstSeason?.target_win_rounds ?? 13;
+  const isGauntlet = firstSeason?.is_gauntlet ?? false;
 
   const allStats = (matchStats ?? []) as { player_id: number; faction: string }[];
   const playerIds = allStats.map((s) => s.player_id);
@@ -79,5 +82,6 @@ export async function getReplayInputs(
     skinsSide: match.skins_starting_side,
     targetWinRounds,
     roster,
+    isGauntlet,
   };
 }

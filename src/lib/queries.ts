@@ -3599,6 +3599,7 @@ export async function getBackgroundJobs(): Promise<BackgroundJobRow[]> {
 
 export interface ReplayEventsRound {
   round: number;
+  isKnifeRound?: boolean;
   sideByFaction: Record<Faction, 'CT' | 'T'>;
   events: ReplayEvent[];
 }
@@ -3628,6 +3629,7 @@ export async function getReplayEventsView(matchId: number): Promise<ReplayEvents
     players: payload.players,
     rounds: payload.rounds.map((r) => ({
       round: r.round,
+      isKnifeRound: r.isKnifeRound,
       sideByFaction: r.sideByFaction,
       events: r.events,
     })),

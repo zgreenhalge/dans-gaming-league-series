@@ -39,7 +39,7 @@ ReplayPayload {
   version, matchId, map, tickRate, frameRate,
   players: [{ id, name, faction, steamId }],
   rounds: [{
-    round, startTick, endTick,
+    round, startTick, endTick, isKnifeRound?,
     sideByFaction: { SHIRTS: 'CT'|'T', SKINS: 'CT'|'T' },
     frames:   [{ tick, players: [{ id, x, y, yaw, hp, alive, weapon }], bomb }],  // ~16 fps
     events:   [{ tick, type: 'kill'|'plant'|'defuse'|'round_end', … }],
@@ -71,6 +71,20 @@ script, mirroring the roster assembly in `POST /api/matches/[id]/demo/parse`.
 > *after* `round_end` has already bumped the counter, so the `+1` math would misfile it into the next
 > round (where its tick precedes the live frames and the kill feed never shows it). Kills are therefore
 > bucketed by **tick** into the round whose playback window (incl. the post-round span) covers them.
+
+**Knife round (gauntlet/knife matches only):** regular-season matches pre-decide sides via the
+map-ban/pick draft, so any knife round the server still plays is vestigial and stays excluded from the
+replay, same as it's excluded from the score (see `docs/demo-ingestion.md#match-start-skipping-warmup-and-stray-knife-rounds`).
+Gauntlet/knife matches have no pre-decided side — the knife round is what decides it — so
+`buildReplay()` is called with `includeKnifeRound: true` for them (`inputs.isGauntlet`, resolved by
+`getReplayInputs()`) and the knife round is pulled back in as its own leading `ReplayRound` with
+`isKnifeRound: true`. It doesn't count toward the score: its `round_end` event carries
+`winnerFaction: null` (only the raw `winnerSide` is known — which faction that side belongs to isn't
+decided yet) and it isn't in `context.rounds`, the source `buildRoundSides()`/side-split/score math
+reads from. Its `sideByFaction` is **borrowed from round 1** purely so player dots keep a consistent
+team color through the knife round rather than a meaningless default — it is not the round's real
+side. The client (`ReplayPlayer.tsx`, `MatchRecapTab.tsx`) labels it "Knife Round" instead of a round
+number.
 
 **Freeze-time trim + post-round:** each round opens with ~15s of freeze/buy time where everyone
 stands in spawn — dead air for a replay. The extract begins each round's frames only

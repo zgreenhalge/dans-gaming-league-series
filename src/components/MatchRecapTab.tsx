@@ -249,7 +249,7 @@ function EventsList({
               title="Watch this round in the 2D replay"
             >
               <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)]">
-                Round {round.round}
+                {round.isKnifeRound ? 'Knife Round' : `Round ${round.round}`}
               </span>
               <span className="ml-auto flex items-center gap-1 text-[10px] font-mono text-[var(--color-text-secondary)]">
                 <Play size={11} /> Replay
