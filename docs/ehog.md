@@ -131,21 +131,23 @@ recompute does.
 
 ### Win probability UI
 
-`MatchTabView.tsx`'s `WinProbabilityBadge` renders two mutually exclusive cases, both gated on
-`played` the same way `RatingProjectionTable` and the post-match rating-delta badges already are:
+`WinProbabilityBar` (`src/components/WinProbabilityBar.tsx`) is a head-to-head bar in the match
+header — SHIRTS and SKINS on either end, the fill split at the SHIRTS-win percentage, colored by each
+side's current faction (`--color-ct`/`--color-t`). It sits near the top of the match page
+(`src/app/matches/[id]/page.tsx`, just below the score), not buried in a tab, and covers two
+mutually exclusive cases gated on `played`:
 
-- **Pre-match** (unplayed, current week, full 2v2 roster): "EHOG favors SHIRTS · 68%", computed live
-  via `predictWinProbability()` from the same current ratings `RatingProjectionTable` already fetches
-  — there's no persisted value yet, since `on_before_match` only ever fires for played matches.
-- **Post-match**: "SKINS won · expected 25%", reading the frozen `matches.pre_match_win_prob`
-  directly and reframing it around whichever side actually won (`shirtsWon` is already a page prop).
-  Renders nothing if the column is still null (e.g. the match predates this feature and hasn't been
-  through a recompute since).
+- **Pre-match** (unplayed, current week, full 2v2 roster): computed live via `predictWinProbability()`
+  from the same current ratings `RatingProjectionTable` already fetches — there's no persisted value
+  yet, since `on_before_match` only ever fires for played matches.
+- **Post-match**: reads the frozen `matches.pre_match_win_prob` directly and marks whichever side
+  actually won with a ✓. Renders nothing if the column is still null (e.g. the match predates this
+  feature and hasn't been through a recompute since).
 
-The pre-match badge always shows a `(?)` tooltip; its copy is static baseline text ("a narrow gap can
+The pre-match bar always shows a `(?)` tooltip; its copy is static baseline text ("a narrow gap can
 still land near 50%, a wide gap can land at 80–90% — both are expected") with an extra sentence about
 provisional players appended only when `isProvisional()` (`ehog.ts`) finds any of the four players'
-current σ at or above `PROVISIONAL_SIGMA_THRESHOLD`. The post-match badge has no tooltip — the frozen
+current σ at or above `PROVISIONAL_SIGMA_THRESHOLD`. The post-match bar has no tooltip — the frozen
 number sits next to an actual result, and there's no way to know retroactively whether it was
 provisional at prediction time (only the scalar itself is frozen, not the σ that produced it).
 

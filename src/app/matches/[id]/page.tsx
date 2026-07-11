@@ -14,6 +14,7 @@ import MatchServerPanel from '@/components/MatchServerPanel';
 import MatchDemoReviewBlock from '@/components/MatchDemoReviewBlock';
 import MatchTabView from '@/components/MatchTabView';
 import RoundHistoryStrip from '@/components/RoundHistoryStrip';
+import { WinProbabilityBar } from '@/components/WinProbabilityBar';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 import { FeatureMatchBanner } from '@/components/FeatureMatch';
@@ -312,6 +313,17 @@ export default async function MatchPage({
                 </div>
               </div>
             )}
+
+            {(winProbability || postMatchWinProb != null) && (
+              <WinProbabilityBar
+                pShirtsWin={played ? postMatchWinProb! : winProbability!.pShirtsWin}
+                shirtsF={shirtsF}
+                skinsF={skinsF}
+                provisional={winProbability?.provisional ?? false}
+                played={played}
+                shirtsWon={shirtsWon}
+              />
+            )}
           </div>
 
           {(played || vetoIsAdmin || vetoWindowOpen) && (
@@ -391,8 +403,6 @@ export default async function MatchPage({
           ratingDeltas={ratingDeltas}
           ratingProjections={ratingProjections}
           ratingCurrent={ratingCurrent}
-          winProbability={winProbability}
-          postMatchWinProb={postMatchWinProb}
           sabremetrics={sabremetrics}
           replayJob={replayJob}
           replayEvents={replayEvents}
