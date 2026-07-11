@@ -51,14 +51,17 @@ export function WinProbabilityBar({
 }) {
   const shirtsPct = Math.round(pShirtsWin * 100);
   const skinsPct = 100 - shirtsPct;
-  // Once a match is played, the loser's side greys out (fill + label) so the checkmark isn't the
-  // only thing marking the winner — the bar itself reads as a result, not just a prediction.
+  const shirtsBase = factionColor(shirtsF);
+  const skinsBase = factionColor(skinsF);
+  // Once a match is played, the winner's side fills in solid with their team color; the loser's
+  // side fades toward the background (still tinted with their own color, not swapped to a flat
+  // neutral) — so the bar reads as a result at a glance, not just a prediction.
   const shirtsLost = played && !shirtsWon;
   const skinsLost = played && shirtsWon;
-  const shirtsColor = shirtsLost ? 'var(--color-border-secondary)' : factionColor(shirtsF);
-  const skinsColor = skinsLost ? 'var(--color-border-secondary)' : factionColor(skinsF);
-  const shirtsLabelColor = shirtsLost ? 'var(--color-text-secondary)' : shirtsColor;
-  const skinsLabelColor = skinsLost ? 'var(--color-text-secondary)' : skinsColor;
+  const shirtsFill = shirtsLost ? `color-mix(in srgb, ${shirtsBase} 25%, var(--color-bg-secondary))` : shirtsBase;
+  const skinsFill = skinsLost ? `color-mix(in srgb, ${skinsBase} 25%, var(--color-bg-secondary))` : skinsBase;
+  const shirtsLabelColor = shirtsLost ? 'var(--color-text-secondary)' : shirtsBase;
+  const skinsLabelColor = skinsLost ? 'var(--color-text-secondary)' : skinsBase;
 
   return (
     <div className="mt-5 max-w-md mx-auto">
@@ -72,8 +75,8 @@ export function WinProbabilityBar({
         </span>
       </div>
       <div className="h-3 w-full rounded-full overflow-hidden flex border border-[var(--color-border-primary)]">
-        <div style={{ width: `${shirtsPct}%`, background: shirtsColor }} />
-        <div style={{ width: `${skinsPct}%`, background: skinsColor }} />
+        <div style={{ width: `${shirtsPct}%`, background: shirtsFill }} />
+        <div style={{ width: `${skinsPct}%`, background: skinsFill }} />
       </div>
     </div>
   );
