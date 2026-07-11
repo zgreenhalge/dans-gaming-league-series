@@ -7,6 +7,14 @@ import type { LeaderboardRowWithId } from '@/lib/types';
 import { PlayerName } from './PlayerName';
 import { canonicalSort } from '@/lib/util';
 import { ehogColorFor } from './EhogBadge';
+import type { SeedPlacement } from '@/lib/gauntlet-bracket';
+
+/** Text label for a projected gauntlet seed placement — pairs with the row tint below. */
+function seedPlacementLabel(placement: SeedPlacement): string {
+  if (!placement.qualifies) return "Won't qualify";
+  const where = placement.isFinal ? 'Final' : `R${placement.round} · Pod ${placement.podIndex + 1}`;
+  return placement.isBye ? `${where} (Bye)` : where;
+}
 
 type SortCol =
   | 'name'
@@ -97,7 +105,7 @@ export default function LeaderboardTable({
   showMedals = true,
   showRank = true,
   stickyNameCol = true,
-  playoffZones,
+  gauntletSeeding,
   trophyCounts,
   canonicalRanking,
   ehogRatings,
@@ -110,7 +118,10 @@ export default function LeaderboardTable({
   /** Pin the name/season column while the rest scrolls. Off for narrow tables
    *  (e.g. player-page Season history) that fit without horizontal scroll. */
   stickyNameCol?: boolean;
-  playoffZones?: { top: number; bottom: number };
+  /** Live "if the season ended today" gauntlet seed projection — see `projectGauntletSeeding()`
+   *  in `src/lib/gauntlet-bracket.ts`. Gold row tint for a bye, red for a seed that wouldn't
+   *  qualify for the bracket at all; a text column spells out the projected round/pod. */
+  gauntletSeeding?: Map<number, SeedPlacement>;
   trophyCounts?: Map<number, Record<1 | 2 | 3, number>>;
   canonicalRanking?: Map<number, number>;
   ehogRatings?: Record<number, number>;
@@ -149,27 +160,25 @@ export default function LeaderboardTable({
     ? canonicalRanking
     : new Map([...rows].sort(canonicalSort).map((r, i) => [r.player_id, i + 1]));
 
-  // Playoff zone coloring: top N gold, bottom N red tint (overrides medals when provided)
+  // Gauntlet seeding projection coloring: gold for a bye, red for a seed that wouldn't qualify for
+  // the bracket at all (overrides medals when provided).
   const ZONE_COLORS = { top: '#f5c542', bottom: '#ef4444' } as const;
   const zoneColor = new Map<number, string>();
   const elimZone = new Set<number>();
-  if (playoffZones && firstColMode === 'player') {
-    const n = rows.length;
-    for (const r of rows) {
-      const rank = canonicalRankOf.get(r.player_id);
-      if (rank == null) continue;
-      if (rank <= playoffZones.top) {
-        zoneColor.set(r.player_id, ZONE_COLORS.top);
-      } else if (rank > n - playoffZones.bottom) {
-        zoneColor.set(r.player_id, ZONE_COLORS.bottom);
-        elimZone.add(r.player_id);
+  if (gauntletSeeding && firstColMode === 'player') {
+    for (const [playerId, placement] of gauntletSeeding) {
+      if (!placement.qualifies) {
+        zoneColor.set(playerId, ZONE_COLORS.bottom);
+        elimZone.add(playerId);
+      } else if (placement.isBye) {
+        zoneColor.set(playerId, ZONE_COLORS.top);
       }
     }
   }
 
-  // Medal positions (skipped when playoff zones are active)
+  // Medal positions (skipped when the gauntlet seeding projection is active)
   const medalRank = new Map<number, 1 | 2 | 3>();
-  if (showMedals && !playoffZones && firstColMode === 'player') {
+  if (showMedals && !gauntletSeeding && firstColMode === 'player') {
     for (const r of rows) {
       const rank = canonicalRankOf.get(r.player_id);
       if (rank === 1 || rank === 2 || rank === 3) medalRank.set(r.player_id, rank);
@@ -194,6 +203,7 @@ export default function LeaderboardTable({
   ];
 
   const hasEhog = ehogRatings && Object.keys(ehogRatings).length > 0;
+  const hasGauntletSeeding = gauntletSeeding && gauntletSeeding.size > 0;
 
   const STAT_COLS: { key: SortCol; label: string; title: string }[] = [
     { key: 'gp',  label: 'GP',   title: 'Games Played' },
@@ -227,6 +237,14 @@ export default function LeaderboardTable({
             {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => <SortableTh key={c.key} col={c} active={sortCol === c.key} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />)}
             {STAT_COLS.map((c) => <SortableTh key={c.key} col={c} active={sortCol === c.key} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />)}
             {hasEhog && <SortableTh col={{ key: 'ehog', label: 'EHOG', title: 'EHOG rating as of most recent match in this view' }} active={sortCol === 'ehog'} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />}
+            {hasGauntletSeeding && (
+              <th
+                title="Where each player would land in the gauntlet bracket if the season ended today — updates as standings change"
+                className="tracked text-[10px] font-semibold py-2.5 px-2 border-b border-[var(--color-border-primary)] whitespace-nowrap text-right text-[var(--color-text-secondary)]"
+              >
+                Gauntlet
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -292,6 +310,15 @@ export default function LeaderboardTable({
                     <Link href={href} className="block w-full h-full">
                       {ehogRatings[p.player_id] != null
                         ? ehogRatings[p.player_id].toFixed(1)
+                        : <span className="text-[var(--color-text-secondary)]">—</span>}
+                    </Link>
+                  </td>
+                )}
+                {hasGauntletSeeding && (
+                  <td className="py-2.5 pr-4 pl-2 text-right font-mono text-[11px] whitespace-nowrap">
+                    <Link href={href} className="block w-full h-full">
+                      {gauntletSeeding.get(p.player_id) != null
+                        ? <span style={{ color: zoneColor.get(p.player_id) }}>{seedPlacementLabel(gauntletSeeding.get(p.player_id)!)}</span>
                         : <span className="text-[var(--color-text-secondary)]">—</span>}
                     </Link>
                   </td>

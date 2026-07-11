@@ -14,6 +14,7 @@ import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMa
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { MatchPickBanInput } from '@/lib/mapSideStats';
 import { isPlayedScore, tabCls, canonicalGauntletRankMap } from '@/lib/util';
+import { projectGauntletSeeding, type SeedPlacement } from '@/lib/gauntlet-bracket';
 
 type Tab = 'leaderboard' | 'schedule' | 'h2h' | 'stats' | 'advanced';
 
@@ -66,6 +67,23 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     () => (isGauntlet ? canonicalGauntletRankMap(rounds) : undefined),
     [isGauntlet, rounds],
   );
+
+  // Live "if the season ended today" gauntlet seeding preview for an in-progress regular season —
+  // only meaningful before a real gauntlet exists, which is exactly while status is ACTIVE (the
+  // real one is only ever built once this season is archived and the next activates). `leaderboard`
+  // is already in canonical-sort order (getSeasonLeaderboard sorts it), which is the seeding order
+  // itself: index 0 = seed 1.
+  const gauntletSeeding = useMemo<Map<number, SeedPlacement> | undefined>(() => {
+    if (isGauntlet || seasonStatus !== 'ACTIVE') return undefined;
+    const placementBySeed = projectGauntletSeeding(leaderboard.length);
+    if (!placementBySeed) return undefined;
+    const byPlayer = new Map<number, SeedPlacement>();
+    leaderboard.forEach((row, i) => {
+      const placement = placementBySeed.get(i + 1);
+      if (placement) byPlayer.set(row.player_id, placement);
+    });
+    return byPlayer;
+  }, [isGauntlet, seasonStatus, leaderboard]);
 
   const defaultOpenSet = useMemo<Set<number>>(() => {
     if (isGauntlet) {
@@ -237,7 +255,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
           <LeaderboardTable
             rows={leaderboard}
             showMedals={seasonStatus === 'ARCHIVED'}
-            playoffZones={!isGauntlet && seasonStatus === 'ACTIVE' ? { top: 2, bottom: 4 } : undefined}
+            gauntletSeeding={gauntletSeeding}
             canonicalRanking={gauntletRanking}
             ehogRatings={ehogRatings}
           />
