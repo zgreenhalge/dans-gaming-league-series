@@ -30,6 +30,7 @@ import {
   formatEhogDelta,
   fmtUtcShort,
   canonicalGauntletRankMap,
+  gauntletPlacementMap,
 } from './util';
 import { mapSlug } from './maps';
 
@@ -338,6 +339,76 @@ test('canonicalGauntletRankMap: final-round wins rank above ties, RWR% breaks ti
   assert.ok((rank.get(8) as number) < (rank.get(5) as number));
   // Within round-2 eliminations, the round-2 winner (p9) ranks above the round-2 loser (p8).
   assert.ok((rank.get(9) as number) < (rank.get(8) as number));
+});
+
+// --- gauntletPlacementMap: display-only gauntlet status for the paired regular-season leaderboard ---
+type Slot = { source_kind: 'seed' | 'pod'; player_id: number | null };
+type Pod = { round_number: number; is_final: boolean; played: boolean; materialized: boolean; slots: Slot[] };
+function pod(p: Partial<Pod> & Pick<Pod, 'round_number' | 'slots'>): Pod {
+  return { is_final: false, played: false, materialized: true, ...p };
+}
+
+test('gauntletPlacementMap: completed gauntlet labels the champion and elimination rounds', () => {
+  // Same shape as the canonicalGauntletRankMap podium test: p1 champions the final, p3/p4/p2
+  // fill out the final round, p9/p8/p5 are eliminated in round 2, round 2, and round 1.
+  const rounds = [
+    {
+      round_number: 1,
+      matches: [
+        { final_score: '13-10', shirts_stats: [gp(5, 'SHIRTS', false, 50)], skins_stats: [gp(8, 'SKINS', true, 55)] },
+      ],
+    },
+    {
+      round_number: 2,
+      matches: [
+        { final_score: '13-11', shirts_stats: [gp(8, 'SHIRTS', false, 60)], skins_stats: [gp(9, 'SKINS', true, 65)] },
+      ],
+    },
+    {
+      round_number: 3,
+      matches: [
+        { final_score: '13-9', shirts_stats: [gp(1, 'SHIRTS', true, 90)], skins_stats: [gp(2, 'SKINS', false, 70)] },
+        { final_score: '13-11', shirts_stats: [gp(3, 'SHIRTS', true, 85)], skins_stats: [gp(4, 'SKINS', false, 65)] },
+      ],
+    },
+  ];
+  const labels = gauntletPlacementMap(rounds, []);
+  assert.equal(labels.get(1), 'Champion');
+  assert.equal(labels.get(3), 'Eliminated Final Round');
+  assert.equal(labels.get(4), 'Eliminated Final Round');
+  assert.equal(labels.get(2), 'Eliminated Final Round');
+  assert.equal(labels.get(9), 'Eliminated Round 2');
+  assert.equal(labels.get(8), 'Eliminated Round 2');
+  assert.equal(labels.get(5), 'Eliminated Round 1');
+});
+
+test('gauntletPlacementMap: in-progress gauntlet distinguishes eliminated, advancing, playing, and bye', () => {
+  const bracketShape: Pod[] = [
+    // Round 1 pod: played and materialized. Player 10 lost and has no further slot -> eliminated.
+    // Player 11 won and already has a slot in round 2 (propagated) -> not eliminated.
+    pod({ round_number: 1, played: true, materialized: true, slots: [
+      { source_kind: 'seed', player_id: 10 },
+      { source_kind: 'seed', player_id: 11 },
+    ] }),
+    // Round 1 pod still being played (materialized, not played yet).
+    pod({ round_number: 1, played: false, materialized: true, slots: [
+      { source_kind: 'seed', player_id: 12 },
+    ] }),
+    // Round 2 pod: player 11 advanced in via a 'pod' slot, still waiting on its other feeder pod.
+    pod({ round_number: 2, played: false, materialized: false, slots: [
+      { source_kind: 'pod', player_id: 11 },
+      { source_kind: 'pod', player_id: null },
+    ] }),
+    // Final: player 13 seeded straight in (bye) and the pod hasn't materialized yet.
+    pod({ round_number: 3, is_final: true, played: false, materialized: false, slots: [
+      { source_kind: 'seed', player_id: 13 },
+    ] }),
+  ];
+  const labels = gauntletPlacementMap([], bracketShape);
+  assert.equal(labels.get(10), 'Eliminated Round 1');
+  assert.equal(labels.get(11), 'Playing Round 2');
+  assert.equal(labels.get(12), 'Playing Round 1');
+  assert.equal(labels.get(13), 'Bye to Final');
 });
 
 // --- mapSlug: user-typed map names → stable URL segments ---

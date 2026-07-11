@@ -62,6 +62,12 @@ so you don't have to reverse-engineer them from scratch each time.
     full placement rules. Implemented by `canonicalGauntletRankMap()` in `src/lib/util.ts` — pass
     the result as `canonicalRanking` to `LeaderboardTable`. Returns an empty map while the gauntlet
     is in progress.
+  - **Gauntlet placement labels** — each player's status in a *linked* gauntlet (e.g. "Champion",
+    "Eliminated Round 2", "Bye to Final", "Playing Round 1"), shown as a display-only column on the
+    paired *regular* season's leaderboard — never merged into its stats. Implemented by
+    `gauntletPlacementMap()` in `src/lib/util.ts`, computed client-side from the already-fetched
+    `gauntletRounds`/`gauntletBracketShape` in `CombinedSeasonTabView.tsx` and passed as
+    `gauntletPlacements` to `LeaderboardTable`.
 - **Regular ↔ gauntlet pairing** — each regular season has a companion gauntlet season (playoffs),
   matched **by name, not ID** (e.g. "Season 5" ↔ "Season 5 Gauntlet"). Always go through
   `extractSeasonNumber()` / `buildRegularToGauntletMap()` in `src/lib/util.ts`, or the

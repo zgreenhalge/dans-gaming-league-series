@@ -221,11 +221,32 @@ export const GAUNTLET_POD_STAKES_LABEL: Record<'single' | 'wildcard', string> = 
   wildcard: 'Wildcard pod — only last place is eliminated (3 of 4 advance).',
 };
 
-// Minimal types for canonicalGauntletRankMap — mirrors GauntletRound/GauntletMatch
-// from queries.ts without creating a circular import.
+// Minimal types for canonicalGauntletRankMap/gauntletPlacementMap — mirror
+// GauntletRound/GauntletMatch/BracketPod from queries.ts without creating a circular import.
 interface _GauntletPlayer { player_id: number; faction: 'SHIRTS' | 'SKINS'; is_win: boolean; adr: number }
 interface _GauntletMatch { final_score: string | null; shirts_stats: _GauntletPlayer[]; skins_stats: _GauntletPlayer[] }
 interface _GauntletRound { round_number: number; matches: _GauntletMatch[] }
+interface _BracketSlot { source_kind: 'seed' | 'pod'; player_id: number | null }
+interface _BracketPod { round_number: number; is_final: boolean; played: boolean; materialized: boolean; slots: _BracketSlot[] }
+
+/** Every player's first and last round of appearance across a gauntlet's played matches. Shared
+ * by canonicalGauntletRankMap (elimination order) and gauntletPlacementMap (in-progress labels). */
+function playerAppearanceRounds(rounds: _GauntletRound[]): Map<number, { first: number; last: number }> {
+  const out = new Map<number, { first: number; last: number }>();
+  for (const r of rounds) {
+    for (const m of r.matches) {
+      for (const p of [...m.shirts_stats, ...m.skins_stats]) {
+        const prev = out.get(p.player_id);
+        if (!prev) out.set(p.player_id, { first: r.round_number, last: r.round_number });
+        else {
+          if (r.round_number < prev.first) prev.first = r.round_number;
+          if (r.round_number > prev.last) prev.last = r.round_number;
+        }
+      }
+    }
+  }
+  return out;
+}
 
 /**
  * Canonical gauntlet ranking — returns a Map<player_id, rank> (1-indexed) matching
@@ -271,18 +292,9 @@ export function canonicalGauntletRankMap(rounds: _GauntletRound[]): Map<number, 
     return agg;
   }
 
-  // Determine which players appeared in each round.
-  const playerFirstRound = new Map<number, number>();
+  // Determine each player's last round of appearance (their elimination round, if any).
   const playerLastRound = new Map<number, number>();
-  for (const r of rounds) {
-    for (const m of r.matches) {
-      for (const p of [...m.shirts_stats, ...m.skins_stats]) {
-        if (!playerFirstRound.has(p.player_id)) playerFirstRound.set(p.player_id, r.round_number);
-        const prev = playerLastRound.get(p.player_id) ?? 0;
-        if (r.round_number > prev) playerLastRound.set(p.player_id, r.round_number);
-      }
-    }
-  }
+  for (const [playerId, { last }] of playerAppearanceRounds(rounds)) playerLastRound.set(playerId, last);
 
   // Final round: rank 1–4 by record then RWR%.
   const finalAgg = aggregateRound(finalRound.matches);
@@ -322,6 +334,69 @@ export function canonicalGauntletRankMap(rounds: _GauntletRound[]): Map<number, 
   eliminated.forEach((p, i) => rankMap.set(p.player_id, nextRank + i));
 
   return rankMap;
+}
+
+/**
+ * Derives each player's current gauntlet status for display alongside their row on the *paired
+ * regular season's* leaderboard — a lighter derivation than canonicalGauntletRankMap, since it
+ * must also label a gauntlet that's still in progress, not just a completed one. Needs both
+ * `rounds` (match-derived stats, and the input to canonicalGauntletRankMap for the completed
+ * case) and `bracketShape` (which, unlike `rounds`, also carries seeded-but-unmaterialized bye
+ * slots — a player seeded straight into a later round produces no match row, and so no round in
+ * `rounds`, until that round's pod actually fills up).
+ *
+ * Labels: 'Champion' | 'Eliminated Final Round' | `Eliminated Round ${n}` | 'Bye to Final' |
+ * `Bye to Round ${n}` | 'Playing Final' | `Playing Round ${n}`.
+ */
+export function gauntletPlacementMap(
+  rounds: _GauntletRound[],
+  bracketShape: _BracketPod[],
+): Map<number, string> {
+  const labels = new Map<number, string>();
+  const rankMap = canonicalGauntletRankMap(rounds);
+
+  if (rankMap.size > 0) {
+    const maxRound = Math.max(...rounds.map((r) => r.round_number));
+    const finalRound = rounds.find((r) => r.round_number === maxRound)!;
+    const finalPlayerIds = new Set(
+      finalRound.matches.flatMap((m) => [...m.shirts_stats, ...m.skins_stats].map((p) => p.player_id)),
+    );
+    const appearance = playerAppearanceRounds(rounds);
+    for (const [playerId, rank] of rankMap) {
+      if (rank === 1) labels.set(playerId, 'Champion');
+      else if (finalPlayerIds.has(playerId)) labels.set(playerId, 'Eliminated Final Round');
+      else labels.set(playerId, `Eliminated Round ${appearance.get(playerId)?.last ?? maxRound}`);
+    }
+    return labels;
+  }
+
+  // Gauntlet in progress: derive each player's furthest known slot from the bracket shape, which
+  // (unlike `rounds`) also surfaces a bye slot before its pod has ever materialized into matches.
+  const current = new Map<number, { round_number: number; is_final: boolean; played: boolean; isBye: boolean }>();
+  for (const pod of bracketShape) {
+    for (const slot of pod.slots) {
+      if (slot.player_id == null) continue;
+      const prev = current.get(slot.player_id);
+      if (prev && prev.round_number >= pod.round_number) continue;
+      current.set(slot.player_id, {
+        round_number: pod.round_number,
+        is_final: pod.is_final,
+        played: pod.played,
+        isBye: !pod.materialized && slot.source_kind === 'seed',
+      });
+    }
+  }
+
+  for (const [playerId, info] of current) {
+    if (info.isBye) {
+      labels.set(playerId, info.is_final ? 'Bye to Final' : `Bye to Round ${info.round_number}`);
+    } else if (!info.played) {
+      labels.set(playerId, info.is_final ? 'Playing Final' : `Playing Round ${info.round_number}`);
+    } else {
+      labels.set(playerId, `Eliminated Round ${info.round_number}`);
+    }
+  }
+  return labels;
 }
 
 export function avgOf(arr: number[]): number {
