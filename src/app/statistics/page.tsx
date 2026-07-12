@@ -9,7 +9,7 @@ import {
   getPlayersById,
   getAllMatchesWithPickBan,
   getAllEhogSnapshots,
-  getAllSabremetrics,
+  getSabremetricSeasonTotals,
 } from '@/lib/queries';
 import CareerStatsView from '@/components/CareerStatsView';
 import type { LeaderboardRowWithId } from '@/lib/types';
@@ -33,7 +33,7 @@ export default async function StatisticsPage() {
       getPlayersById(),
       getAllMatchesWithPickBan(),
       getAllEhogSnapshots(),
-      getAllSabremetrics(),
+      getSabremetricSeasonTotals(),
     ]);
 
   // H2H is computed client-side (see CareerStatsView) so its tab can honor the

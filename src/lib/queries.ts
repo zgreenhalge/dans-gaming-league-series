@@ -3195,6 +3195,43 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
   return result;
 }
 
+function sumSabFields(a: SabFields, b: SabFields): SabFields {
+  const result = { ...a };
+  for (const key of Object.keys(b) as (keyof SabFields)[]) {
+    result[key] = result[key] + b[key];
+  }
+  return result;
+}
+
+/**
+ * Per-season sabremetric totals — one row per (player, season), with `sab` fields and
+ * `rounds_played` summed across all of that player's matches in the season. Same shape as
+ * `SabremetricMatchRow` (`match_id` is set to `season_id`, since there's exactly one row per
+ * player per season and no real match_id exists at this grain) so it's a drop-in replacement
+ * anywhere a caller only needs per-player totals — the Plus-stat league baseline or a
+ * season-filtered leaderboard — rather than true per-match rows. `SabremetricsLeaderboardView`
+ * (the only consumer) never reads `match_id` for anything but a distinct-match count that isn't
+ * displayed, so this loses no information any caller actually uses.
+ *
+ * Ships O(players × seasons) instead of O(players × matches) to the client, which is what keeps
+ * the player and statistics pages' RSC payload bounded as demo ingestion fills in every match.
+ */
+export async function getSabremetricSeasonTotals(seasonId?: number): Promise<SabremetricMatchRow[]> {
+  const perMatch = await getAllSabremetrics(seasonId);
+  const byPlayerSeason = new Map<string, SabremetricMatchRow>();
+  for (const row of perMatch) {
+    const key = `${row.player_id}:${row.season_id}`;
+    const existing = byPlayerSeason.get(key);
+    if (!existing) {
+      byPlayerSeason.set(key, { ...row, match_id: row.season_id, sab: { ...row.sab } });
+      continue;
+    }
+    existing.rounds_played += row.rounds_played;
+    existing.sab = sumSabFields(existing.sab, row.sab);
+  }
+  return Array.from(byPlayerSeason.values());
+}
+
 // ---------------------------------------------------------------------------
 // Admin check
 // ---------------------------------------------------------------------------
