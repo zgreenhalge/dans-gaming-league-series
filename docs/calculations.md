@@ -125,9 +125,9 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     missing.
   - `Flash Assists` and `Enemies Flashed` only count blinds of **1.1s or longer** ("half-blind"
     exposure is excluded), matching Leetify's flash-effectiveness definition. `Blind Duration
-    Dealt` is a raw exposure total and stays ungated. `Teamflash Duration` is also a raw, ungated
-    exposure total, but — unlike `Blind Duration Dealt` — it now feeds `Utility Score` directly as
-    a penalty, per above.
+    Dealt` is a raw, ungated exposure total with no half-blind gate and no role in `Utility Score`.
+    `Teamflash Duration` is likewise a raw, ungated exposure total, but feeds `Utility Score`
+    directly as a penalty, per above.
   - `Flash Assists` credits a **teammate's** kill on the blinded enemy within a fixed window
     after the blind expires (own kills excluded) — this is the scoreboard-style definition and
     keeps its name/meaning for continuity.

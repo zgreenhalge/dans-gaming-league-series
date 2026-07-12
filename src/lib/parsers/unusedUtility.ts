@@ -34,8 +34,7 @@ export function neededInventoryTicks(deathEvents: PlayerDeathRow[], context: Mat
  * Unused Utility on Death (Leetify's glossary stat): the buy-menu value of grenades still held
  * at the moment of death, summed across a player's deaths. Reads demoparser2's synthetic
  * "inventory" tick field (a list of weapon classnames the player is currently holding) — this
- * field isn't documented in the installed package and hasn't been confirmed against a real DGLS
- * demo (no demo file available to verify against in the environment this was built in);
+ * field isn't documented in the installed package and isn't confirmed against a real DGLS demo.
  * demoOrchestrator.ts wraps the parseTicks call so a wrong field name degrades this stat to zero
  * instead of failing the whole ingestion pipeline. Verify against the first real reparse and
  * adjust the prop name/GRENADE_VALUE's keys if the numbers don't look sane.
