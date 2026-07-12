@@ -395,19 +395,11 @@ export default async function MatchPage({
           }))}
           targetWinRounds={season.target_win_rounds}
           skinsSide={match.skins_starting_side}
-          scoutingData={scoutingData}
-          scoutingH2H={scoutingH2H}
-          matchMap={map}
-          mapMatchIds={mapMatchIds}
-          mapPool={season.map_pool}
-          demoDownloadUrl={demoDownloadUrl}
-          ratingDeltas={ratingDeltas}
-          ratingProjections={ratingProjections}
-          ratingCurrent={ratingCurrent}
           sabremetrics={sabremetrics}
-          replayJob={replayJob}
-          replayEvents={replayEvents}
-          recordingURL={match.recording_url}
+          ehog={{ deltas: ratingDeltas, projections: ratingProjections, current: ratingCurrent }}
+          scouting={{ data: scoutingData, h2h: scoutingH2H }}
+          mapInfo={{ map, matchIds: mapMatchIds, pool: season.map_pool }}
+          recap={{ demoDownloadUrl, job: replayJob, events: replayEvents, recordingURL: match.recording_url }}
         />
       </main>
     </div>
