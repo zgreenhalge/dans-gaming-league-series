@@ -115,10 +115,19 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 - `Objective+` = `Player Objective Score` / `League Avg Objective Score`
   - `Objective Score` = (2 * `Plants`) + (3 * `Defuses`)
 - `Utility+` = `Player Utility Score` / `League Avg Utility Score`
-  - `Utility Score` = `Flash Assists` + (`Utility Damage` / 50)
+  - `Utility Score` = `Flash Assists` + (`Utility Damage` / 50) + `Smokes Blocking Push` -
+    `Teamflash Duration` — a good CT smoke-block counts on the same 1-point-per-event scale as a
+    Flash Assist; each second spent blinding a teammate subtracts a point.
+  - `Utility Damage` is CS2's own `m_iUtilityDamage` engine accumulator (`accumulators.ts`) — not
+    a DGLS-computed sum — and has always combined HE grenade damage and Molotov/Incendiary damage
+    to enemies (teamdamage/self-damage excluded natively). `HE Damage` (below) is a separate,
+    HE-only event-based collector used for `HE Damage/Throw`, not a component `Utility Damage` is
+    missing.
   - `Flash Assists` and `Enemies Flashed` only count blinds of **1.1s or longer** ("half-blind"
     exposure is excluded), matching Leetify's flash-effectiveness definition. `Blind Duration
-    Dealt`/`Teamflash Duration` are raw exposure totals and stay ungated.
+    Dealt` is a raw exposure total and stays ungated. `Teamflash Duration` is also a raw, ungated
+    exposure total, but — unlike `Blind Duration Dealt` — it now feeds `Utility Score` directly as
+    a penalty, per above.
   - `Flash Assists` credits a **teammate's** kill on the blinded enemy within a fixed window
     after the blind expires (own kills excluded) — this is the scoreboard-style definition and
     keeps its name/meaning for continuity.
@@ -198,7 +207,8 @@ ship ungated first per `docs/demo-parsing-reference.md`'s guidance on that trade
   `smokegrenade_detonate`/`smokegrenade_expired` events via a shared `entityid` (confirmed
   against a real DGLS demo); a smoke whose round ends before it expires falls back to the
   round's end tick. This is position-based, not a true visibility/render check — see
-  `docs/demo-parsing-reference.md` for why that's out of scope.
+  `docs/demo-parsing-reference.md` for why that's out of scope. The raw `Smokes Blocking Push`
+  count (not the `%`) also feeds `Utility+` — see above.
 
 ### Player Rating (not yet implemented)
 

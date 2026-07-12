@@ -61,6 +61,7 @@ interface AggregatedSab {
   flash_assists: number;
   flashes_leading_to_kill: number;
   utility_damage: number;
+  teamflash_duration: number;
   enemies_flashed: number;
   flashes_thrown: number;
   plants: number;
@@ -109,7 +110,8 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
         clutch_1v1_wins: 0, clutch_1v1_attempts: 0,
         clutch_1v2_wins: 0, clutch_1v2_attempts: 0,
         clutch_2v1_wins: 0, clutch_2v1_attempts: 0,
-        flash_assists: 0, flashes_leading_to_kill: 0, utility_damage: 0, enemies_flashed: 0, flashes_thrown: 0,
+        flash_assists: 0, flashes_leading_to_kill: 0, utility_damage: 0, teamflash_duration: 0,
+        enemies_flashed: 0, flashes_thrown: 0,
         plants: 0, defuses: 0, two_k_rounds: 0,
         trade_kill_opportunities: 0, trade_kill_attempts: 0, trade_kill_successes: 0,
         traded_death_opportunities: 0, traded_death_attempts: 0, traded_death_successes: 0,
@@ -151,6 +153,7 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
     agg.flash_assists += s.flash_assists;
     agg.flashes_leading_to_kill += s.flashes_leading_to_kill;
     agg.utility_damage += s.utility_damage;
+    agg.teamflash_duration += s.teamflash_duration;
     agg.enemies_flashed += s.enemies_flashed;
     agg.flashes_thrown += s.flashes_thrown;
     agg.plants += s.plants;
@@ -218,6 +221,13 @@ function chokeScore(a: AggregatedSab): number {
     + 5 * (a.clutch_2v1_attempts - a.clutch_2v1_wins);
 }
 
+/** Utility Score = Flash Assists + (Utility Damage / 50) + Smokes Blocking Push - Teamflash
+ *  Duration — rewards damage/flash-assist utility and CT smoke-blocking on the same 1-point-per-
+ *  event scale as Flash Assists, and penalizes each second spent blinding a teammate. */
+function utilityScore(a: AggregatedSab): number {
+  return a.flash_assists + a.utility_damage / 50 + a.smokes_blocking_push - a.teamflash_duration;
+}
+
 function computePlusStats(agg: AggregatedSab, all: AggregatedSab[]): PlusStat {
   const rp = agg.rounds_played || 1;
 
@@ -243,7 +253,7 @@ function computePlusStats(agg: AggregatedSab, all: AggregatedSab[]): PlusStat {
   const avgTradeRate = totalTradeAttempts > 0 ? totalTradeSuccesses / totalTradeAttempts : 0;
 
   const avgObjScore = leagueAvgPerRound(all, (a) => 2 * a.plants + 3 * a.defuses);
-  const avgUtilScore = leagueAvgPerRound(all, (a) => a.flash_assists + a.utility_damage / 50);
+  const avgUtilScore = leagueAvgPerRound(all, utilityScore);
   const avgClutchScore = leagueAvgPerRound(all, (a) => a.clutch_1v1_wins + 3 * a.clutch_1v2_wins);
   const avgChokeScore = leagueAvgPerRound(all, chokeScore);
 
@@ -265,7 +275,7 @@ function computePlusStats(agg: AggregatedSab, all: AggregatedSab[]): PlusStat {
       avgTradeRate,
     ),
     objective: plusStat((2 * agg.plants + 3 * agg.defuses) / rp, avgObjScore),
-    utility: plusStat((agg.flash_assists + agg.utility_damage / 50) / rp, avgUtilScore),
+    utility: plusStat(utilityScore(agg) / rp, avgUtilScore),
     clutch: plusStat((agg.clutch_1v1_wins + 3 * agg.clutch_1v2_wins) / rp, avgClutchScore),
     choke: plusStat(chokeScore(agg) / rp, avgChokeScore),
   };
@@ -611,6 +621,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
       let aVal: number, bVal: number;
       switch (sort.col) {
         case 'ud': aVal = a.utility_damage; bVal = b.utility_damage; break;
+        case 'tf': aVal = a.teamflash_duration; bVal = b.teamflash_duration; break;
         case 'fa': aVal = a.flash_assists; bVal = b.flash_assists; break;
         case 'ef': aVal = a.enemies_flashed; bVal = b.enemies_flashed; break;
         case 'pl': aVal = a.plants; bVal = b.plants; break;
@@ -656,8 +667,9 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
           <thead>
             <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
-              <SortableTh label="Utility Damage" title="Damage dealt with grenades (HE, molotov, incendiary)" sortKey="ud" state={sort} onClick={toggleSort} />
+              <SortableTh label="Utility Damage" title="Damage dealt with grenades (HE, molotov, incendiary) — sourced from CS2's own m_iUtilityDamage engine accumulator, which combines both" sortKey="ud" state={sort} onClick={toggleSort} />
               <SortableTh label="Util Dmg/Round" title="Utility damage per round" sortKey="ud_r" state={sort} onClick={toggleSort} />
+              <SortableTh label="Teamflash Duration" title="Total seconds spent blinding teammates — subtracted from Utility Score" sortKey="tf" state={sort} onClick={toggleSort} />
               <SortableTh label="Flash Assists" title="Kills by a teammate on an enemy you flashbanged" sortKey="fa" state={sort} onClick={toggleSort} />
               <SortableTh label="Flash Assists/Round" title="Flash assists per round" sortKey="fa_r" state={sort} onClick={toggleSort} />
               <SortableTh label="Flashes → Kill" title="Enemies killed by anyone (including you) while still blinded by your flash — Leetify's flash-effectiveness definition" sortKey="fltk" state={sort} onClick={toggleSort} />
@@ -682,6 +694,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
                   {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
                   <td className={tdRight}>{a.utility_damage}</td>
                   <td className={tdRight}>{fmtNum(a.utility_damage / rp, 1)}</td>
+                  <td className={tdRight}>{fmtNum(a.teamflash_duration, 1)}</td>
                   <td className={tdRight}>{a.flash_assists}</td>
                   <td className={tdRight}>{fmtNum(a.flash_assists / rp, 2)}</td>
                   <td className={tdRight}>{a.flashes_leading_to_kill}</td>
@@ -756,7 +769,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
               <SortableTh label="KAST+" title="KAST per round vs league avg (1.00 = avg)" sortKey="kast" state={sort} onClick={toggleSort} />
               <SortableTh label="Trade+" title="Trade Kill % (trade kill successes / attempts) vs league avg (1.00 = avg)" sortKey="trade" state={sort} onClick={toggleSort} />
               <SortableTh label="Objective+" title="Objective score (2×plants + 3×defuses) per round vs league avg (1.00 = avg)" sortKey="objective" state={sort} onClick={toggleSort} />
-              <SortableTh label="Utility+" title="Utility score (flash assists + util damage/50) per round vs league avg (1.00 = avg)" sortKey="utility" state={sort} onClick={toggleSort} />
+              <SortableTh label="Utility+" title="Utility score (flash assists + util damage/50 + smokes blocking pushes - teamflash seconds) per round vs league avg (1.00 = avg)" sortKey="utility" state={sort} onClick={toggleSort} />
               <SortableTh label="Clutch+" title="Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)" sortKey="clutch" state={sort} onClick={toggleSort} />
               <SortableTh label="Choke+" title="Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (1.00 = avg, lower is better)" sortKey="choke" state={sort} onClick={toggleSort} />
             </tr>
@@ -841,8 +854,9 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   ];
 
   const utility: StatTile[] = [
-    { label: 'Utility Damage', title: 'Damage dealt with grenades (HE, molotov, incendiary)', value: agg.utility_damage },
+    { label: 'Utility Damage', title: 'Damage dealt with grenades (HE, molotov, incendiary) — sourced from CS2\'s own m_iUtilityDamage engine accumulator, which combines both', value: agg.utility_damage },
     { label: 'Util Dmg/Round', title: 'Utility damage per round', value: fmtNum(agg.utility_damage / rp, 1) },
+    { label: 'Teamflash Duration', title: 'Total seconds spent blinding teammates — subtracted from Utility Score', value: fmtNum(agg.teamflash_duration, 1) },
     { label: 'Flash Assists', title: 'Kills by a teammate on an enemy you flashbanged', value: agg.flash_assists },
     { label: 'Flash Assists/Round', title: 'Flash assists per round', value: fmtNum(agg.flash_assists / rp, 2) },
     { label: 'Flashes → Kill', title: 'Enemies killed by anyone (including you) while still blinded by your flash — Leetify\'s flash-effectiveness definition', value: agg.flashes_leading_to_kill },
@@ -873,7 +887,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'KAST+', title: 'KAST per round vs league avg (1.00 = avg)', value: fmtNum(plus.kast, 2), valueStyle: plusStyle(plus.kast) },
     { label: 'Trade+', title: 'Trade Kill % (trade kill successes / attempts) vs league avg (1.00 = avg)', value: fmtNum(plus.trade, 2), valueStyle: plusStyle(plus.trade) },
     { label: 'Objective+', title: 'Objective score (2×plants + 3×defuses) per round vs league avg (1.00 = avg)', value: fmtNum(plus.objective, 2), valueStyle: plusStyle(plus.objective) },
-    { label: 'Utility+', title: 'Utility score (flash assists + util damage/50) per round vs league avg (1.00 = avg)', value: fmtNum(plus.utility, 2), valueStyle: plusStyle(plus.utility) },
+    { label: 'Utility+', title: 'Utility score (flash assists + util damage/50 + smokes blocking pushes - teamflash seconds) per round vs league avg (1.00 = avg)', value: fmtNum(plus.utility, 2), valueStyle: plusStyle(plus.utility) },
     { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)', value: fmtNum(plus.clutch, 2), valueStyle: plusStyle(plus.clutch) },
     { label: 'Choke+', title: 'Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (1.00 = avg, lower is better)', value: fmtNum(plus.choke, 2), valueStyle: plusStyle(2 - plus.choke) },
   ] : [];
