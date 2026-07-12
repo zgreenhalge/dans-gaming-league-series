@@ -37,6 +37,7 @@ export async function generateMetadata({
   return {
     title: meta.title,
     description: meta.description,
+    alternates: { canonical: `/matches/${id}` },
     openGraph: {
       title: `DGLS · ${meta.title}`,
       description: meta.description,
