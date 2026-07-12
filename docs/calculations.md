@@ -166,13 +166,25 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     isn't attributable to a single "clutcher" — **both** players on the advantaged side are
     credited the attempt (and the win, if the round is won), since blowing a full-team numbers
     advantage is a shared failure, not one player's alone.
+- `Aim+` = `0.35 * Accuracy+` + `0.40 * Head Accuracy+` + `0.25 * Counter-Strafe+` (each itself
+  `Player X` / `League Avg X`, computed on `Accuracy`/`Head Accuracy`/`Counter-Strafe %` from the
+  Mechanics section below). A weighted blend rather than a sum on a shared point-scale like
+  `Utility Score` — these three are fairly orthogonal skills on different denominators (a great
+  spray-controller isn't necessarily a good counter-strafer), so there's no principled single
+  scale to weight them on directly. Once each is its own `1.00 = league average` ratio, blending
+  them is apples-to-apples; the weights themselves reflect that landing headshots matters most,
+  followed by raw accuracy, with counter-strafing weighted lowest of the three.
+- `Spray+` = `Player Spray Accuracy` / `League Avg Spray Accuracy` — a standalone ratio, not folded
+  into `Aim+`, since spraying and single-tapping are different enough mechanical skills to track
+  separately.
 
 ### Mechanics (raw, ungated)
 
-Raw accuracy stats derived straight from `weapon_fire`/`player_hurt` events — not yet part of any
-`+` composite. "Raw" because they aren't gated on whether the enemy was actually spotted/visible
-(Leetify's "Accuracy (Enemy Spotted)"); CS2's spotted mask (`m_bSpotted`) is known-flaky, so these
-ship ungated first per `docs/demo-parsing-reference.md`'s guidance on that tradeoff.
+Raw accuracy stats derived straight from `weapon_fire`/`player_hurt` events. "Raw" because they
+aren't gated on whether the enemy was actually spotted/visible (Leetify's "Accuracy (Enemy
+Spotted)"); CS2's spotted mask (`m_bSpotted`) is known-flaky, so these ship ungated first per
+`docs/demo-parsing-reference.md`'s guidance on that tradeoff. `Accuracy`, `Head Accuracy`, and
+`Counter-Strafe %` feed `Aim+`; `Spray Accuracy` feeds `Spray+` — see below.
 
 - `Shots Fired` = count of gun shots fired (guns only; grenade throws, knife, and C4 don't count).
 - `Accuracy` = `Shots Hit` / `Shots Fired` — guns only; grenade throws, knife, and C4 don't count

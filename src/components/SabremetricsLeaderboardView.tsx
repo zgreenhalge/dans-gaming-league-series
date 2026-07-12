@@ -211,6 +211,8 @@ interface PlusStat {
   utility: number;
   clutch: number;
   choke: number;
+  aim: number;
+  spray: number;
 }
 
 /** Choke Score = 1v1 losses + 2×1v2 losses + 5×2v1 losses — the mirror of Clutch Score, weighted
@@ -257,6 +259,36 @@ function computePlusStats(agg: AggregatedSab, all: AggregatedSab[]): PlusStat {
   const avgClutchScore = leagueAvgPerRound(all, (a) => a.clutch_1v1_wins + 3 * a.clutch_1v2_wins);
   const avgChokeScore = leagueAvgPerRound(all, chokeScore);
 
+  // Aim+ averages three already-normalized ratios (Accuracy+, Head Accuracy+, Counter-Strafe+)
+  // rather than summing raw percentages — they're fairly orthogonal skills on different
+  // denominators, so there's no principled point-scale to weight them on directly, but each is
+  // already "1.00 = league average" once ratio'd, so averaging those is apples-to-apples.
+  const totalShotsHit = all.reduce((s, a) => s + a.shots_hit, 0);
+  const totalShotsFired = all.reduce((s, a) => s + a.shots_fired, 0);
+  const avgAccuracy = totalShotsFired > 0 ? totalShotsHit / totalShotsFired : 0;
+
+  const totalHeadshotHitsNoAwp = all.reduce((s, a) => s + a.headshot_hits_no_awp, 0);
+  const totalShotsHitNoAwp = all.reduce((s, a) => s + a.shots_hit_no_awp, 0);
+  const avgHeadAccuracy = totalShotsHitNoAwp > 0 ? totalHeadshotHitsNoAwp / totalShotsHitNoAwp : 0;
+
+  const totalCsGood = all.reduce((s, a) => s + a.counter_strafe_good_shots, 0);
+  const totalCsShots = all.reduce((s, a) => s + a.counter_strafe_shots, 0);
+  const avgCounterStrafe = totalCsShots > 0 ? totalCsGood / totalCsShots : 0;
+
+  const accuracyPlus = plusStat(agg.shots_fired > 0 ? agg.shots_hit / agg.shots_fired : 0, avgAccuracy);
+  const headAccuracyPlus = plusStat(
+    agg.shots_hit_no_awp > 0 ? agg.headshot_hits_no_awp / agg.shots_hit_no_awp : 0,
+    avgHeadAccuracy,
+  );
+  const counterStrafePlus = plusStat(
+    agg.counter_strafe_shots > 0 ? agg.counter_strafe_good_shots / agg.counter_strafe_shots : 0,
+    avgCounterStrafe,
+  );
+
+  const totalSprayHit = all.reduce((s, a) => s + a.spray_shots_hit, 0);
+  const totalSprayFired = all.reduce((s, a) => s + a.spray_shots_fired, 0);
+  const avgSpray = totalSprayFired > 0 ? totalSprayHit / totalSprayFired : 0;
+
   return {
     kpr: plusStat(agg.kills / rp, avgKpr),
     apr: plusStat(agg.assists / rp, avgApr),
@@ -278,6 +310,8 @@ function computePlusStats(agg: AggregatedSab, all: AggregatedSab[]): PlusStat {
     utility: plusStat(utilityScore(agg) / rp, avgUtilScore),
     clutch: plusStat((agg.clutch_1v1_wins + 3 * agg.clutch_1v2_wins) / rp, avgClutchScore),
     choke: plusStat(chokeScore(agg) / rp, avgChokeScore),
+    aim: 0.35 * accuracyPlus + 0.40 * headAccuracyPlus + 0.25 * counterStrafePlus,
+    spray: plusStat(agg.spray_shots_fired > 0 ? agg.spray_shots_hit / agg.spray_shots_fired : 0, avgSpray),
   };
 }
 
@@ -745,6 +779,8 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
         case 'utility': aVal = a.plus.utility; bVal = b.plus.utility; break;
         case 'clutch': aVal = a.plus.clutch; bVal = b.plus.clutch; break;
         case 'choke': aVal = a.plus.choke; bVal = b.plus.choke; break;
+        case 'aim': aVal = a.plus.aim; bVal = b.plus.aim; break;
+        case 'spray': aVal = a.plus.spray; bVal = b.plus.spray; break;
         default: return 0;
       }
       return sort.asc ? aVal - bVal : bVal - aVal;
@@ -772,6 +808,8 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
               <SortableTh label="Utility+" title="Utility score (flash assists + util damage/50 + smokes blocking pushes - teamflash seconds) per round vs league avg (1.00 = avg)" sortKey="utility" state={sort} onClick={toggleSort} />
               <SortableTh label="Clutch+" title="Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)" sortKey="clutch" state={sort} onClick={toggleSort} />
               <SortableTh label="Choke+" title="Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (1.00 = avg, lower is better)" sortKey="choke" state={sort} onClick={toggleSort} />
+              <SortableTh label="Aim+" title="Weighted blend of Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (1.00 = avg)" sortKey="aim" state={sort} onClick={toggleSort} />
+              <SortableTh label="Spray+" title="Spray Accuracy vs league avg (1.00 = avg)" sortKey="spray" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -790,6 +828,8 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
                 <td className={tdRight} style={plusStyle(plus.utility)}>{fmtNum(plus.utility, 2)}</td>
                 <td className={tdRight} style={plusStyle(plus.clutch)}>{fmtNum(plus.clutch, 2)}</td>
                 <td className={tdRight} style={plusStyle(2 - plus.choke)}>{fmtNum(plus.choke, 2)}</td>
+                <td className={tdRight} style={plusStyle(plus.aim)}>{fmtNum(plus.aim, 2)}</td>
+                <td className={tdRight} style={plusStyle(plus.spray)}>{fmtNum(plus.spray, 2)}</td>
               </tr>
             ))}
           </tbody>
@@ -890,6 +930,8 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Utility+', title: 'Utility score (flash assists + util damage/50 + smokes blocking pushes - teamflash seconds) per round vs league avg (1.00 = avg)', value: fmtNum(plus.utility, 2), valueStyle: plusStyle(plus.utility) },
     { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)', value: fmtNum(plus.clutch, 2), valueStyle: plusStyle(plus.clutch) },
     { label: 'Choke+', title: 'Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (1.00 = avg, lower is better)', value: fmtNum(plus.choke, 2), valueStyle: plusStyle(2 - plus.choke) },
+    { label: 'Aim+', title: 'Weighted blend of Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (1.00 = avg)', value: fmtNum(plus.aim, 2), valueStyle: plusStyle(plus.aim) },
+    { label: 'Spray+', title: 'Spray Accuracy vs league avg (1.00 = avg)', value: fmtNum(plus.spray, 2), valueStyle: plusStyle(plus.spray) },
   ] : [];
 
   return { impact, duels, mechanics, trades, utility, plus: plusTiles };
