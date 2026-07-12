@@ -173,8 +173,9 @@ function sab(overrides: Partial<Row> & { player_match_stats_id: number }): Row {
     trade_kill_opportunities: 0, trade_kill_attempts: 0, trade_kill_successes: 0,
     traded_death_opportunities: 0, traded_death_attempts: 0, traded_death_successes: 0,
     he_thrown: 0, he_damage: 0, blind_duration_max_sum: 0, effective_flashes: 0,
-    shots_fired: 0, shots_hit: 0, headshot_hits: 0, counter_strafe_shots: 0, counter_strafe_good_shots: 0,
-    spray_shots_fired: 0, spray_shots_hit: 0, smokes_blocking_push: 0,
+    shots_fired: 0, shots_hit: 0, headshot_hits: 0, shots_hit_no_awp: 0, headshot_hits_no_awp: 0,
+    counter_strafe_shots: 0, counter_strafe_good_shots: 0,
+    spray_shots_fired: 0, spray_shots_hit: 0, smokes_blocking_push: 0, ct_smokes_thrown: 0,
     ...overrides,
   };
 }

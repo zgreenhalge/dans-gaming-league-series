@@ -56,11 +56,14 @@ const ZERO: SabFields = {
   shots_fired: 0,
   shots_hit: 0,
   headshot_hits: 0,
+  shots_hit_no_awp: 0,
+  headshot_hits_no_awp: 0,
   counter_strafe_shots: 0,
   counter_strafe_good_shots: 0,
   spray_shots_fired: 0,
   spray_shots_hit: 0,
   smokes_blocking_push: 0,
+  ct_smokes_thrown: 0,
 };
 
 export function parseDemoSabremetrics(

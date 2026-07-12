@@ -1,9 +1,11 @@
 /**
  * Unit tests for collectUtility — flash stats (blind_duration_dealt, teamflash_duration,
- * flash_assists, flashes_thrown, enemies_flashed). The flash-assist window math (blind expiry +
- * a fixed window) is the riskiest part: a boundary slip either double-counts or silently drops a
- * real assist. The half-blind threshold (1.1s) gates enemies_flashed/flash_assists but not
- * blind_duration_dealt, which stays a raw, ungated exposure measure.
+ * flash_assists, flashes_thrown, enemies_flashed, flashes_leading_to_kill). The flash-assist
+ * window math (blind expiry + a fixed window) and the flashes_leading_to_kill window (blind
+ * start through half the flash's own duration past expiry) are the riskiest parts: a boundary
+ * slip either double-counts or silently drops a real assist/kill credit. The half-blind
+ * threshold (1.1s) gates enemies_flashed/flash_assists but not blind_duration_dealt, which stays
+ * a raw, ungated exposure measure.
  *
  * Run:  npx tsx src/lib/parsers/utility.test.ts
  */
@@ -83,10 +85,21 @@ test('collectUtility: the flasher finishing their own flashed enemy is a kill, n
   assert.equal(out.get('a')?.flashes_leading_to_kill, 1);
 });
 
-test('collectUtility: flashes_leading_to_kill does not count a kill after the blind has expired', () => {
-  // duration 1.1s @ 64 tick -> blind expires at tick+70 (170); this kill lands one tick later.
+test('collectUtility: flashes_leading_to_kill still counts a kill shortly after the blind expires (widened window)', () => {
+  // duration 1.1s @ 64 tick -> blind expires at tick+70 (170); window extends half the duration
+  // (0.55s = 35 ticks) past that, to tick 205. This kill lands one tick after expiry, well inside.
   const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1.1 })];
   const deaths = [death({ round: 1, tick: 171, victim: 'c', attacker: 'a' })];
+  const ctx = makeContext({ rounds, sides, deaths, tickRate });
+  const out = collectUtility(blinds, deaths, [], ctx, ids);
+  assert.equal(out.get('a')?.flashes_leading_to_kill, 1);
+});
+
+test('collectUtility: flashes_leading_to_kill does not count a kill past the widened window', () => {
+  // duration 1.1s @ 64 tick -> blind expires at tick+70 (170); widened window ends at tick 205
+  // (170 + round(0.55 * 64) = 170 + 35). This kill lands one tick past that.
+  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1.1 })];
+  const deaths = [death({ round: 1, tick: 206, victim: 'c', attacker: 'a' })];
   const ctx = makeContext({ rounds, sides, deaths, tickRate });
   const out = collectUtility(blinds, deaths, [], ctx, ids);
   assert.equal(out.get('a')?.flashes_leading_to_kill ?? 0, 0);
