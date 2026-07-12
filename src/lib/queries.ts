@@ -3380,6 +3380,14 @@ export async function getMatchIdsForMap(mapName: string): Promise<number[]> {
     .map((m) => m.id);
 }
 
+/** Ids of every played match — for the sitemap. */
+export async function getAllPlayedMatchIds(): Promise<number[]> {
+  const { data, error } = await supabase.from('matches').select('id, final_score').limit(10000);
+  if (error) throw error;
+  type Row = { id: number; final_score: string | null };
+  return ((data ?? []) as Row[]).filter((m) => isPlayedScore(m.final_score)).map((m) => m.id);
+}
+
 // --- Match replay / events (issue #121; see docs/replay.md) ---
 
 export type ReplayStatus = 'none' | 'queued' | 'running' | 'ready' | 'failed';

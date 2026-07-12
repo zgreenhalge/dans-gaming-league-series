@@ -45,6 +45,7 @@ export async function generateMetadata({
   return {
     title: season.name,
     description,
+    alternates: { canonical: `/seasons/${seasonId}` },
     openGraph: {
       title: `DGLS · ${title}`,
       description,
