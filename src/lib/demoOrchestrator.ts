@@ -22,6 +22,9 @@ import { collectSprayAccuracy } from './parsers/sprayAccuracy';
 import {
   collectSmokes, neededSmokeTicks, type SmokeEventRow, type PlayerPositionRow,
 } from './parsers/smokes';
+import {
+  collectUnusedUtility, neededInventoryTicks, type PlayerInventoryRow,
+} from './parsers/unusedUtility';
 
 const ZERO: SabFields = {
   kills_ct: 0, kills_t: 0,
@@ -33,6 +36,7 @@ const ZERO: SabFields = {
   kast_rounds: 0,
   clutch_1v1_attempts: 0, clutch_1v1_wins: 0,
   clutch_1v2_attempts: 0, clutch_1v2_wins: 0,
+  clutch_2v1_attempts: 0, clutch_2v1_wins: 0,
   flash_assists: 0,
   flashes_leading_to_kill: 0,
   utility_damage: 0,
@@ -64,6 +68,7 @@ const ZERO: SabFields = {
   spray_shots_hit: 0,
   smokes_blocking_push: 0,
   ct_smokes_thrown: 0,
+  unused_util_value_on_death_total: 0,
 };
 
 export function parseDemoSabremetrics(
@@ -197,6 +202,26 @@ export function parseDemoSabremetrics(
     smokeDetonateEvents, smokeExpireEvents, smokePositionRows, context, steamIds,
   );
 
+  // Unused Utility on Death reads an unconfirmed demoparser2 tick field (see unusedUtility.ts) —
+  // wrapped so a wrong field name zeroes out just this stat instead of failing every collector.
+  const inventoryTicks = neededInventoryTicks(deathEvents, context);
+  let inventoryRows: PlayerInventoryRow[] = [];
+  if (inventoryTicks.length > 0) {
+    try {
+      const rawInventoryRows = parseTicks(demoBuffer, ['inventory'], inventoryTicks) as Record<string, unknown>[];
+      inventoryRows = rawInventoryRows.map((r) => ({
+        tick: Number(r.tick),
+        steamid: String(r.steamid ?? ''),
+        inventory: Array.isArray(r.inventory) ? (r.inventory as string[]) : [],
+      }));
+    } catch (err) {
+      warnings.push(
+        `Unused Utility on Death not computed: demoparser2's "inventory" tick field failed (${(err as Error).message}).`,
+      );
+    }
+  }
+  const unusedUtilStats = collectUnusedUtility(deathEvents, inventoryRows, context, steamIds);
+
   // 6. Merge with zero defaults
   const sabremetrics: DemoSabremetricStat[] = steamIds.map((steamId) => ({
     player_id: steamToPlayer.get(steamId)!.player_id,
@@ -215,6 +240,7 @@ export function parseDemoSabremetrics(
       ...counterStrafeStats.get(steamId),
       ...sprayStats.get(steamId),
       ...smokeStats.get(steamId),
+      ...unusedUtilStats.get(steamId),
     },
   }));
 

@@ -150,6 +150,8 @@ export interface PlayerMatchSabremetrics {
   clutch_1v1_wins: number;
   clutch_1v2_attempts: number;
   clutch_1v2_wins: number;
+  clutch_2v1_attempts: number;
+  clutch_2v1_wins: number;
   flash_assists: number;
   flashes_leading_to_kill: number;
   utility_damage: number;
@@ -181,6 +183,7 @@ export interface PlayerMatchSabremetrics {
   spray_shots_hit: number;
   smokes_blocking_push: number;
   ct_smokes_thrown: number;
+  unused_util_value_on_death_total: number;
 }
 
 export type SabFields = Omit<PlayerMatchSabremetrics, 'player_match_stats_id'>;

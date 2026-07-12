@@ -25,6 +25,8 @@
       "clutch_1v1_wins": 1,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 2,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -55,7 +57,8 @@
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
       "smokes_blocking_push": 0,
-      "ct_smokes_thrown": 0
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   },
   {
@@ -84,6 +87,8 @@
       "clutch_1v1_wins": 0,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 3,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -114,7 +119,8 @@
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
       "smokes_blocking_push": 0,
-      "ct_smokes_thrown": 0
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   },
   {
@@ -143,6 +149,8 @@
       "clutch_1v1_wins": 0,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 1,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -173,7 +181,8 @@
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
       "smokes_blocking_push": 0,
-      "ct_smokes_thrown": 0
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   },
   {
@@ -202,6 +211,8 @@
       "clutch_1v1_wins": 0,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 2,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -232,7 +243,8 @@
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
       "smokes_blocking_push": 0,
-      "ct_smokes_thrown": 0
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   },
   {
@@ -261,6 +273,8 @@
       "clutch_1v1_wins": 0,
       "clutch_1v2_attempts": 1,
       "clutch_1v2_wins": 1,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 1,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -291,7 +305,8 @@
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
       "smokes_blocking_push": 0,
-      "ct_smokes_thrown": 0
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   },
   {
@@ -320,6 +335,8 @@
       "clutch_1v1_wins": 0,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 3,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -350,7 +367,8 @@
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
       "smokes_blocking_push": 0,
-      "ct_smokes_thrown": 0
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   },
   {
@@ -379,6 +397,8 @@
       "clutch_1v1_wins": 0,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 1,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -409,7 +429,8 @@
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
       "smokes_blocking_push": 0,
-      "ct_smokes_thrown": 0
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   },
   {
@@ -438,6 +459,8 @@
       "clutch_1v1_wins": 0,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 2,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -468,7 +491,8 @@
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
       "smokes_blocking_push": 0,
-      "ct_smokes_thrown": 0
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   },
   {
@@ -497,6 +521,8 @@
       "clutch_1v1_wins": 1,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 1,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -527,7 +553,8 @@
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
       "smokes_blocking_push": 0,
-      "ct_smokes_thrown": 0
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   },
   {
@@ -556,6 +583,8 @@
       "clutch_1v1_wins": 0,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 2,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -586,7 +615,8 @@
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
       "smokes_blocking_push": 0,
-      "ct_smokes_thrown": 0
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   },
   {
@@ -615,6 +645,8 @@
       "clutch_1v1_wins": 0,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 0,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -645,7 +677,8 @@
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
       "smokes_blocking_push": 0,
-      "ct_smokes_thrown": 0
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   },
   {
@@ -674,6 +707,8 @@
       "clutch_1v1_wins": 0,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 0,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -704,7 +739,8 @@
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
       "smokes_blocking_push": 0,
-      "ct_smokes_thrown": 0
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   }
 ]

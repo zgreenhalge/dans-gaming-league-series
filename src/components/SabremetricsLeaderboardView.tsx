@@ -47,6 +47,7 @@ interface AggregatedSab {
   kills: number;
   deaths: number;
   assists: number;
+  damage: number;
   headshot_kills: number;
   opening_kills: number;
   opening_deaths: number;
@@ -55,6 +56,8 @@ interface AggregatedSab {
   clutch_1v1_attempts: number;
   clutch_1v2_wins: number;
   clutch_1v2_attempts: number;
+  clutch_2v1_wins: number;
+  clutch_2v1_attempts: number;
   flash_assists: number;
   flashes_leading_to_kill: number;
   utility_damage: number;
@@ -84,6 +87,7 @@ interface AggregatedSab {
   spray_shots_hit: number;
   smokes_blocking_push: number;
   ct_smokes_thrown: number;
+  unused_util_value_on_death_total: number;
 }
 
 function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
@@ -98,12 +102,13 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
         player_name: r.player_name,
         matches: 0,
         rounds_played: 0,
-        kills: 0, deaths: 0, assists: 0,
+        kills: 0, deaths: 0, assists: 0, damage: 0,
         headshot_kills: 0,
         opening_kills: 0, opening_deaths: 0,
         kast_rounds: 0,
         clutch_1v1_wins: 0, clutch_1v1_attempts: 0,
         clutch_1v2_wins: 0, clutch_1v2_attempts: 0,
+        clutch_2v1_wins: 0, clutch_2v1_attempts: 0,
         flash_assists: 0, flashes_leading_to_kill: 0, utility_damage: 0, enemies_flashed: 0, flashes_thrown: 0,
         plants: 0, defuses: 0, two_k_rounds: 0,
         trade_kill_opportunities: 0, trade_kill_attempts: 0, trade_kill_successes: 0,
@@ -115,6 +120,7 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
         counter_strafe_shots: 0, counter_strafe_good_shots: 0,
         spray_shots_fired: 0, spray_shots_hit: 0,
         smokes_blocking_push: 0, ct_smokes_thrown: 0,
+        unused_util_value_on_death_total: 0,
       };
       byPlayer.set(r.player_id, agg);
       matchesSeen.set(r.player_id, new Set());
@@ -131,6 +137,7 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
     agg.kills += s.kills_ct + s.kills_t;
     agg.deaths += s.deaths_ct + s.deaths_t;
     agg.assists += s.assists_ct + s.assists_t;
+    agg.damage += s.damage_ct + s.damage_t;
     agg.headshot_kills += s.headshot_kills;
     agg.opening_kills += s.opening_kills;
     agg.opening_deaths += s.opening_deaths;
@@ -139,6 +146,8 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
     agg.clutch_1v1_attempts += s.clutch_1v1_attempts;
     agg.clutch_1v2_wins += s.clutch_1v2_wins;
     agg.clutch_1v2_attempts += s.clutch_1v2_attempts;
+    agg.clutch_2v1_wins += s.clutch_2v1_wins;
+    agg.clutch_2v1_attempts += s.clutch_2v1_attempts;
     agg.flash_assists += s.flash_assists;
     agg.flashes_leading_to_kill += s.flashes_leading_to_kill;
     agg.utility_damage += s.utility_damage;
@@ -168,6 +177,7 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
     agg.spray_shots_hit += s.spray_shots_hit;
     agg.smokes_blocking_push += s.smokes_blocking_push;
     agg.ct_smokes_thrown += s.ct_smokes_thrown;
+    agg.unused_util_value_on_death_total += s.unused_util_value_on_death_total;
   }
 
   return Array.from(byPlayer.values());
@@ -189,12 +199,23 @@ interface PlusStat {
   kpr: number;
   apr: number;
   dpr: number;
+  adr: number;
   kdr: number;
   entry: number;
+  kast: number;
   trade: number;
   objective: number;
   utility: number;
   clutch: number;
+  choke: number;
+}
+
+/** Choke Score = 1v1 losses + 2×1v2 losses + 5×2v1 losses — the mirror of Clutch Score, weighted
+ *  by how big the blown numbers advantage was. A "loss" is attempts minus wins for each bucket. */
+function chokeScore(a: AggregatedSab): number {
+  return (a.clutch_1v1_attempts - a.clutch_1v1_wins)
+    + 2 * (a.clutch_1v2_attempts - a.clutch_1v2_wins)
+    + 5 * (a.clutch_2v1_attempts - a.clutch_2v1_wins);
 }
 
 function computePlusStats(agg: AggregatedSab, all: AggregatedSab[]): PlusStat {
@@ -203,24 +224,34 @@ function computePlusStats(agg: AggregatedSab, all: AggregatedSab[]): PlusStat {
   const avgKpr = leagueAvgPerRound(all, (a) => a.kills);
   const avgApr = leagueAvgPerRound(all, (a) => a.assists);
   const avgDpr = leagueAvgPerRound(all, (a) => a.deaths);
+  const avgAdr = leagueAvgPerRound(all, (a) => a.damage);
 
-  const kds = all.map((a) => (a.deaths > 0 ? a.kills / a.deaths : a.kills));
-  const avgKdr = kds.length > 0 ? kds.reduce((s, v) => s + v, 0) / kds.length : 1;
+  // Volume-weighted (league total / league total), matching every other Plus stat's baseline —
+  // a low-volume player's own rate no longer swings the average as hard as a high-volume one.
+  const totalKills = all.reduce((s, a) => s + a.kills, 0);
+  const totalDeaths = all.reduce((s, a) => s + a.deaths, 0);
+  const avgKdr = totalDeaths > 0 ? totalKills / totalDeaths : totalKills;
 
-  const entryRates = all.map((a) => {
-    const duels = a.opening_kills + a.opening_deaths;
-    return duels > 0 ? a.opening_kills / duels : 0;
-  });
-  const avgEntryRate = entryRates.length > 0 ? entryRates.reduce((s, v) => s + v, 0) / entryRates.length : 0.5;
+  const totalOpeningKills = all.reduce((s, a) => s + a.opening_kills, 0);
+  const totalOpeningDuels = all.reduce((s, a) => s + a.opening_kills + a.opening_deaths, 0);
+  const avgEntryRate = totalOpeningDuels > 0 ? totalOpeningKills / totalOpeningDuels : 0.5;
+
   const avgKast = leagueAvgPerRound(all, (a) => a.kast_rounds);
+
+  const totalTradeSuccesses = all.reduce((s, a) => s + a.trade_kill_successes, 0);
+  const totalTradeAttempts = all.reduce((s, a) => s + a.trade_kill_attempts, 0);
+  const avgTradeRate = totalTradeAttempts > 0 ? totalTradeSuccesses / totalTradeAttempts : 0;
+
   const avgObjScore = leagueAvgPerRound(all, (a) => 2 * a.plants + 3 * a.defuses);
   const avgUtilScore = leagueAvgPerRound(all, (a) => a.flash_assists + a.utility_damage / 50);
-  const avgClutchScore = leagueAvgPerRound(all, (a) => a.clutch_1v1_wins + 2 * a.clutch_1v2_wins);
+  const avgClutchScore = leagueAvgPerRound(all, (a) => a.clutch_1v1_wins + 3 * a.clutch_1v2_wins);
+  const avgChokeScore = leagueAvgPerRound(all, chokeScore);
 
   return {
     kpr: plusStat(agg.kills / rp, avgKpr),
     apr: plusStat(agg.assists / rp, avgApr),
     dpr: plusStat(agg.deaths / rp, avgDpr),
+    adr: plusStat(agg.damage / rp, avgAdr),
     kdr: plusStat(agg.deaths > 0 ? agg.kills / agg.deaths : agg.kills, avgKdr),
     entry: plusStat(
       (agg.opening_kills + agg.opening_deaths) > 0
@@ -228,10 +259,15 @@ function computePlusStats(agg: AggregatedSab, all: AggregatedSab[]): PlusStat {
         : 0,
       avgEntryRate,
     ),
-    trade: plusStat(agg.kast_rounds / rp, avgKast),
+    kast: plusStat(agg.kast_rounds / rp, avgKast),
+    trade: plusStat(
+      agg.trade_kill_attempts > 0 ? agg.trade_kill_successes / agg.trade_kill_attempts : 0,
+      avgTradeRate,
+    ),
     objective: plusStat((2 * agg.plants + 3 * agg.defuses) / rp, avgObjScore),
     utility: plusStat((agg.flash_assists + agg.utility_damage / 50) / rp, avgUtilScore),
     clutch: plusStat((agg.clutch_1v1_wins + 3 * agg.clutch_1v2_wins) / rp, avgClutchScore),
+    choke: plusStat(chokeScore(agg) / rp, avgChokeScore),
   };
 }
 
@@ -322,6 +358,10 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
         case '2k': aVal = a.two_k_rounds; bVal = b.two_k_rounds; break;
         case '1v1': aVal = a.clutch_1v1_wins; bVal = b.clutch_1v1_wins; break;
         case '1v2': aVal = a.clutch_1v2_wins; bVal = b.clutch_1v2_wins; break;
+        case '2v1_losses':
+          aVal = a.clutch_2v1_attempts - a.clutch_2v1_wins;
+          bVal = b.clutch_2v1_attempts - b.clutch_2v1_wins;
+          break;
         case 'clutch_pct': {
           const aAttempts = a.clutch_1v1_attempts + a.clutch_1v2_attempts;
           const bAttempts = b.clutch_1v1_attempts + b.clutch_1v2_attempts;
@@ -348,6 +388,7 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
               <SortableTh label="Double Kills" title="Rounds where both opponents were eliminated" sortKey="2k" state={sort} onClick={toggleSort} />
               <SortableTh label="1v1" title="1v1 clutch wins / attempts" sortKey="1v1" state={sort} onClick={toggleSort} />
               <SortableTh label="1v2" title="1v2 clutch wins / attempts" sortKey="1v2" state={sort} onClick={toggleSort} />
+              <SortableTh label="2v1 Losses" title="Rounds this player's side had a 2-vs-1 numbers advantage and still lost, out of all 2v1 advantages (the natural stat behind Choke Score)" sortKey="2v1_losses" state={sort} onClick={toggleSort} />
               <SortableTh label="Clutch %" title="Overall clutch success rate (1v1 + 1v2 wins / attempts)" sortKey="clutch_pct" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
@@ -362,6 +403,7 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
                   <td className={tdRight}>{a.two_k_rounds}</td>
                   <td className={tdRight}>{a.clutch_1v1_wins}/{a.clutch_1v1_attempts}</td>
                   <td className={tdRight}>{a.clutch_1v2_wins}/{a.clutch_1v2_attempts}</td>
+                  <td className={tdRight}>{a.clutch_2v1_attempts - a.clutch_2v1_wins}/{a.clutch_2v1_attempts}</td>
                   <td className={tdRight}>{pct(clutchWins, clutchAttempts)}</td>
                 </tr>
               );
@@ -595,6 +637,10 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
           aVal = a.smokes_blocking_push / (a.ct_smokes_thrown || 1);
           bVal = b.smokes_blocking_push / (b.ct_smokes_thrown || 1);
           break;
+        case 'unused_util':
+          aVal = a.unused_util_value_on_death_total / (a.deaths || 1);
+          bVal = b.unused_util_value_on_death_total / (b.deaths || 1);
+          break;
         default: return 0;
       }
       return sort.asc ? aVal - bVal : bVal - aVal;
@@ -625,6 +671,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
               <SortableTh label="HE Damage" title="Damage dealt to enemies by HE grenades" sortKey="he_dmg" state={sort} onClick={toggleSort} />
               <SortableTh label="HE Dmg/Throw" title="HE damage per HE grenade thrown" sortKey="he_dmg_throw" state={sort} onClick={toggleSort} />
               <SortableTh label="CT Smokes Blocking %" title="CT-side smokes that had an enemy within 800 units of the bloom at some point during its life, out of all CT smokes thrown (Leetify's [CT] Smokes That Stopped a Push)" sortKey="smoke_block" state={sort} onClick={toggleSort} />
+              <SortableTh label="Unused Util/Death" title="Buy-menu value of grenades still held at death, averaged across deaths (Leetify's Unused Utility on Death) — lower is better" sortKey="unused_util" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -648,6 +695,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
                   <td className={tdRight}>{a.he_damage}</td>
                   <td className={tdRight}>{fmtNum(a.he_damage / (a.he_thrown || 1), 1)}</td>
                   <td className={tdRight}>{pct(a.smokes_blocking_push, a.ct_smokes_thrown)}</td>
+                  <td className={tdRight}>{fmtNum(a.unused_util_value_on_death_total / (a.deaths || 1), 0)}</td>
                 </tr>
               );
             })}
@@ -661,7 +709,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
 // --- Plus Stats (1-scaled: 1.00 = league average) ---
 
 function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
-  const [sort, toggleSort] = useSortState('trade');
+  const [sort, toggleSort] = useSortState('kast');
 
   const withPlus = useMemo(() => {
     return aggregated.map((a) => ({ agg: a, plus: computePlusStats(a, aggregated) }));
@@ -675,12 +723,15 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
         case 'kpr': aVal = a.plus.kpr; bVal = b.plus.kpr; break;
         case 'apr': aVal = a.plus.apr; bVal = b.plus.apr; break;
         case 'dpr': aVal = a.plus.dpr; bVal = b.plus.dpr; break;
+        case 'adr': aVal = a.plus.adr; bVal = b.plus.adr; break;
         case 'kdr': aVal = a.plus.kdr; bVal = b.plus.kdr; break;
         case 'entry': aVal = a.plus.entry; bVal = b.plus.entry; break;
+        case 'kast': aVal = a.plus.kast; bVal = b.plus.kast; break;
         case 'trade': aVal = a.plus.trade; bVal = b.plus.trade; break;
         case 'objective': aVal = a.plus.objective; bVal = b.plus.objective; break;
         case 'utility': aVal = a.plus.utility; bVal = b.plus.utility; break;
         case 'clutch': aVal = a.plus.clutch; bVal = b.plus.clutch; break;
+        case 'choke': aVal = a.plus.choke; bVal = b.plus.choke; break;
         default: return 0;
       }
       return sort.asc ? aVal - bVal : bVal - aVal;
@@ -699,12 +750,15 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
               <SortableTh label="Kills/Round+" title="Kills per round vs league avg (1.00 = avg)" sortKey="kpr" state={sort} onClick={toggleSort} />
               <SortableTh label="Assists/Round+" title="Assists per round vs league avg (1.00 = avg)" sortKey="apr" state={sort} onClick={toggleSort} />
               <SortableTh label="Deaths/Round+" title="Deaths per round vs league avg (1.00 = avg, lower is better)" sortKey="dpr" state={sort} onClick={toggleSort} />
+              <SortableTh label="ADR+" title="Damage per round vs league avg (1.00 = avg)" sortKey="adr" state={sort} onClick={toggleSort} />
               <SortableTh label="K/D+" title="K/D ratio vs league avg (1.00 = avg)" sortKey="kdr" state={sort} onClick={toggleSort} />
               <SortableTh label="Entry+" title="Opening duel success rate (OK / total duels) vs league avg (1.00 = avg)" sortKey="entry" state={sort} onClick={toggleSort} />
-              <SortableTh label="KAST+" title="KAST per round vs league avg (1.00 = avg)" sortKey="trade" state={sort} onClick={toggleSort} />
+              <SortableTh label="KAST+" title="KAST per round vs league avg (1.00 = avg)" sortKey="kast" state={sort} onClick={toggleSort} />
+              <SortableTh label="Trade+" title="Trade Kill % (trade kill successes / attempts) vs league avg (1.00 = avg)" sortKey="trade" state={sort} onClick={toggleSort} />
               <SortableTh label="Objective+" title="Objective score (2×plants + 3×defuses) per round vs league avg (1.00 = avg)" sortKey="objective" state={sort} onClick={toggleSort} />
               <SortableTh label="Utility+" title="Utility score (flash assists + util damage/50) per round vs league avg (1.00 = avg)" sortKey="utility" state={sort} onClick={toggleSort} />
               <SortableTh label="Clutch+" title="Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)" sortKey="clutch" state={sort} onClick={toggleSort} />
+              <SortableTh label="Choke+" title="Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (1.00 = avg, lower is better)" sortKey="choke" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -714,12 +768,15 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
                 <td className={tdRight} style={plusStyle(plus.kpr)}>{fmtNum(plus.kpr, 2)}</td>
                 <td className={tdRight} style={plusStyle(plus.apr)}>{fmtNum(plus.apr, 2)}</td>
                 <td className={tdRight} style={plusStyle(2 - plus.dpr)}>{fmtNum(plus.dpr, 2)}</td>
+                <td className={tdRight} style={plusStyle(plus.adr)}>{fmtNum(plus.adr, 2)}</td>
                 <td className={tdRight} style={plusStyle(plus.kdr)}>{fmtNum(plus.kdr, 2)}</td>
                 <td className={tdRight} style={plusStyle(plus.entry)}>{fmtNum(plus.entry, 2)}</td>
+                <td className={tdRight} style={plusStyle(plus.kast)}>{fmtNum(plus.kast, 2)}</td>
                 <td className={tdRight} style={plusStyle(plus.trade)}>{fmtNum(plus.trade, 2)}</td>
                 <td className={tdRight} style={plusStyle(plus.objective)}>{fmtNum(plus.objective, 2)}</td>
                 <td className={tdRight} style={plusStyle(plus.utility)}>{fmtNum(plus.utility, 2)}</td>
                 <td className={tdRight} style={plusStyle(plus.clutch)}>{fmtNum(plus.clutch, 2)}</td>
+                <td className={tdRight} style={plusStyle(2 - plus.choke)}>{fmtNum(plus.choke, 2)}</td>
               </tr>
             ))}
           </tbody>
@@ -762,6 +819,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Double Kills', title: 'Rounds where both opponents were eliminated', value: agg.two_k_rounds },
     { label: '1v1 Clutches', title: '1v1 clutch wins / attempts', value: `${agg.clutch_1v1_wins}/${agg.clutch_1v1_attempts}` },
     { label: '1v2 Clutches', title: '1v2 clutch wins / attempts', value: `${agg.clutch_1v2_wins}/${agg.clutch_1v2_attempts}` },
+    { label: '2v1 Losses', title: 'Rounds this player\'s side had a 2-vs-1 numbers advantage and still lost, out of all 2v1 advantages (the natural stat behind Choke Score)', value: `${agg.clutch_2v1_attempts - agg.clutch_2v1_wins}/${agg.clutch_2v1_attempts}` },
     { label: 'Clutch %', title: 'Overall clutch success rate (1v1 + 1v2 wins / attempts)', value: pct(clutchWins, clutchAttempts) },
   ];
 
@@ -798,6 +856,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'HE Damage', title: 'Damage dealt to enemies by HE grenades', value: agg.he_damage },
     { label: 'HE Dmg/Throw', title: 'HE damage per HE grenade thrown', value: fmtNum(agg.he_damage / (agg.he_thrown || 1), 1) },
     { label: 'CT Smokes Blocking %', title: 'CT-side smokes that had an enemy within 800 units of the bloom at some point during its life, out of all CT smokes thrown (Leetify\'s [CT] Smokes That Stopped a Push)', value: pct(agg.smokes_blocking_push, agg.ct_smokes_thrown) },
+    { label: 'Unused Util/Death', title: 'Buy-menu value of grenades still held at death, averaged across deaths (Leetify\'s Unused Utility on Death) — lower is better', value: fmtNum(agg.unused_util_value_on_death_total / (agg.deaths || 1), 0) },
   ];
 
   // Plus stats need the league as a baseline; comparing a player to only
@@ -808,12 +867,15 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Kills/Round+', title: 'Kills per round vs league avg (1.00 = avg)', value: fmtNum(plus.kpr, 2), valueStyle: plusStyle(plus.kpr) },
     { label: 'Assists/Round+', title: 'Assists per round vs league avg (1.00 = avg)', value: fmtNum(plus.apr, 2), valueStyle: plusStyle(plus.apr) },
     { label: 'Deaths/Round+', title: 'Deaths per round vs league avg (1.00 = avg, lower is better)', value: fmtNum(plus.dpr, 2), valueStyle: plusStyle(2 - plus.dpr) },
+    { label: 'ADR+', title: 'Damage per round vs league avg (1.00 = avg)', value: fmtNum(plus.adr, 2), valueStyle: plusStyle(plus.adr) },
     { label: 'K/D+', title: 'K/D ratio vs league avg (1.00 = avg)', value: fmtNum(plus.kdr, 2), valueStyle: plusStyle(plus.kdr) },
     { label: 'Entry+', title: 'Opening duel success rate (OK / total duels) vs league avg (1.00 = avg)', value: fmtNum(plus.entry, 2), valueStyle: plusStyle(plus.entry) },
-    { label: 'KAST+', title: 'KAST per round vs league avg (1.00 = avg)', value: fmtNum(plus.trade, 2), valueStyle: plusStyle(plus.trade) },
+    { label: 'KAST+', title: 'KAST per round vs league avg (1.00 = avg)', value: fmtNum(plus.kast, 2), valueStyle: plusStyle(plus.kast) },
+    { label: 'Trade+', title: 'Trade Kill % (trade kill successes / attempts) vs league avg (1.00 = avg)', value: fmtNum(plus.trade, 2), valueStyle: plusStyle(plus.trade) },
     { label: 'Objective+', title: 'Objective score (2×plants + 3×defuses) per round vs league avg (1.00 = avg)', value: fmtNum(plus.objective, 2), valueStyle: plusStyle(plus.objective) },
     { label: 'Utility+', title: 'Utility score (flash assists + util damage/50) per round vs league avg (1.00 = avg)', value: fmtNum(plus.utility, 2), valueStyle: plusStyle(plus.utility) },
     { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)', value: fmtNum(plus.clutch, 2), valueStyle: plusStyle(plus.clutch) },
+    { label: 'Choke+', title: 'Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (1.00 = avg, lower is better)', value: fmtNum(plus.choke, 2), valueStyle: plusStyle(2 - plus.choke) },
   ] : [];
 
   return { impact, duels, mechanics, trades, utility, plus: plusTiles };

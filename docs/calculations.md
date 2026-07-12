@@ -89,7 +89,7 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   - `Opening Success Rate` = `Opening Kills` / (`Opening Kills` + `Opening Deaths`)
 - `KAST+` = `Player KAST` / `League Avg KAST`
   - `KAST` = `Rounds with Kill, Assist, Survived, or Traded` / `Rounds played`
-  - `Trade Score` = `KAST` - (`Untraded Deaths` * 10)
+- `Trade+` = `Player Trade Kill %` / `League Avg Trade Kill %`
   - **Trade Kills** — from the perspective of the player who could avenge a teammate:
     - `Trade Kill Opportunities` = times a teammate died while this player was still alive
       (the chance to trade existed)
@@ -98,7 +98,8 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     - `Trade Kill Successes` = opportunities where this player killed the killer within the
       trade window — the same condition that qualifies a round as "Traded" for KAST
     - `Trade Kill %` = `Trade Kill Successes` / `Trade Kill Attempts`
-  - **Traded Deaths** — the mirror, from the perspective of the player who died:
+  - **Traded Deaths** — the mirror, from the perspective of the player who died (tracked as its
+    own raw stat; not currently folded into `Trade+`):
     - `Traded Death Opportunities` = times this player died while at least one teammate was
       still alive (someone had the chance to trade them)
     - `Traded Death Attempts` = opportunities where a teammate damaged the killer within the
@@ -130,6 +131,12 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     decides otherwise.
   - `HE Damage/Throw` = `HE Damage` / `HE Thrown` — damage dealt to enemies by HE grenades
     (teamdamage and self-damage excluded), divided by HE grenades thrown.
+  - `Unused Util/Death` = `Unused Util Value on Death` / `Deaths` — Leetify's "Unused Utility on
+    Death": the buy-menu value (Valve's stable HE/Flash/Smoke/Molotov/Incendiary/Decoy prices) of
+    grenades still held at the moment of death, summed across a player's deaths and averaged per
+    death. Lower is better (utility bought and not used before dying). Read from demoparser2's
+    "inventory" tick field at each death — not yet confirmed against a real DGLS demo; see
+    `src/lib/parsers/unusedUtility.ts`. Tracked as its own raw stat, not folded into `Utility+`.
   - `Enemies Flashed/Flash` = `Enemies Flashed` / `Flashes Thrown`
   - `Avg Blind/Flash` = `Blind Duration Max Sum` / `Effective Flashes` — for each flash that
     blinded at least one enemy for 1.1s+, take the *longest* blind duration it caused (not the
@@ -139,8 +146,17 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     explicit flash-entity id on the underlying event.
 - `Clutch+` = `Player Clutch Score` / `League Avg Clutch Score`
   - `Clutch Score` = `1v1 wins` + 3 * `1v2 wins`
-- `Choke+` = `Player Choke Score` / `League Avg Choke Score`
+- `Choke+` = `Player Choke Score` / `League Avg Choke Score` — lower is better (fewer/smaller
+  blown advantages)
   - `Choke Score` = `1v1 losses` + 2 * `1v2 losses` + 5 * `2v1 losses`
+  - `1v1/1v2 losses` = the mirror of `Clutch Score`'s wins: `Clutch Attempts - Clutch Wins` for
+    each bucket.
+  - `2v1 Attempts`/`2v1 Wins` — a `2v1 Attempt` is a numbers advantage: this player's side has
+    **both** teammates alive against a single remaining enemy, and the round is decided from
+    there. `2v1 losses` = `2v1 Attempts - 2v1 Wins`. Unlike a 1v1/1v2 clutch, a 2v1 advantage
+    isn't attributable to a single "clutcher" — **both** players on the advantaged side are
+    credited the attempt (and the win, if the round is won), since blowing a full-team numbers
+    advantage is a shared failure, not one player's alone.
 
 ### Mechanics (raw, ungated)
 
@@ -187,10 +203,11 @@ ship ungated first per `docs/demo-parsing-reference.md`'s guidance on that trade
 ### Player Rating (not yet implemented)
 
 A weighted sabremetric composite for individual performance. Independent from the
-[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). Most of the underlying `+`
-stats (Entry+, KAST+, Objective+, Utility+, Clutch+) are already computed by demo ingestion and shown
-live in `SabremetricsLeaderboardView.tsx`; Choke+ is documented above but not yet computed/displayed
-anywhere. The composite itself, combining these into one number, hasn't been implemented either.
+[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). Every underlying `+` stat
+this formula references (`KPR+`, `ADR+`, `Entry+`, `Clutch+`, `Choke+`, `KAST+`, `Trade+`,
+`Objective+`, `Utility+`, `APR+`, `DPR+`, `K/D+`) is already computed by demo ingestion and shown
+live in `SabremetricsLeaderboardView.tsx`. The composite itself, combining these into one number,
+hasn't been implemented yet.
 
 ```
 Player Rating = 1.00
@@ -203,7 +220,6 @@ Player Rating = 1.00
   + 0.10(Utility+ - 1)
   + 0.10(APR+ - 1)
   - 0.10(DPR+ - 1)
-  - Beer Tax
 ```
 
 #### Role ratings
@@ -235,17 +251,6 @@ Setup Rating = 1.00
   + 0.10(Objective+ - 1)
   - 10 * Teamflash seconds
 ```
-
-#### Beer Tax
-
-```
-Beer Tax = (Teamflash seconds)
-  + 5 * (Forgot to buy full util rounds)
-  + 5 * (Died with bomb in spawn)
-  + 10 * (Forgot to buy armor rounds)
-  + 15 * (Knife deaths attempted)
-```
-
 
 ## Canonical Regular Season Ranking
 
