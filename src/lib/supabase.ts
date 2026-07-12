@@ -43,3 +43,13 @@ export const supabase = new Proxy({} as SupabaseClient, {
     return Reflect.get(getClient(), prop, receiver);
   },
 });
+
+/**
+ * Test-only: inject a fake client so `supabase` (and everything built on it, like
+ * `src/lib/queries.ts`) runs against it instead of a real Supabase connection. Call with
+ * `undefined` to restore real-client behavior. Not used by application code.
+ */
+export function __setTestClient(client: SupabaseClient | undefined): void {
+  const g = globalThis as GlobalWithServerClient;
+  g.__dgls_serverClient = client;
+}
