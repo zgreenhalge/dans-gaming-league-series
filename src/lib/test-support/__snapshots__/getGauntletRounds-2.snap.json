@@ -1,0 +1,61 @@
+[
+  {
+    "round_number": 1,
+    "matches": [
+      {
+        "id": 200,
+        "match_number": 1,
+        "final_score": "13-11",
+        "picked_map": "Foroglio",
+        "shirts_pick": "Foroglio",
+        "skins_starting_side": "T",
+        "shirts_stats": [
+          {
+            "player_id": 1,
+            "player_name": "Alice",
+            "faction": "SHIRTS",
+            "kills": 22,
+            "assists": 2,
+            "deaths": 18,
+            "adr": 88,
+            "is_win": true
+          },
+          {
+            "player_id": 2,
+            "player_name": "Bob",
+            "faction": "SHIRTS",
+            "kills": 19,
+            "assists": 4,
+            "deaths": 19,
+            "adr": 80,
+            "is_win": true
+          }
+        ],
+        "skins_stats": [
+          {
+            "player_id": 5,
+            "player_name": "Erin",
+            "faction": "SKINS",
+            "kills": 17,
+            "assists": 3,
+            "deaths": 21,
+            "adr": 70,
+            "is_win": false
+          },
+          {
+            "player_id": 6,
+            "player_name": "Frank",
+            "faction": "SKINS",
+            "kills": 15,
+            "assists": 5,
+            "deaths": 22,
+            "adr": 65,
+            "is_win": false
+          }
+        ],
+        "pod_index": 0,
+        "advance_rule": "single"
+      }
+    ]
+  }
+]

@@ -1,0 +1,140 @@
+{
+  "shirts": [
+    {
+      "id": 5,
+      "name": "Erin",
+      "steam_avatar_url": null,
+      "adr": 70,
+      "rwr": 0.4583333333333333,
+      "form": [
+        false
+      ],
+      "streak": {
+        "result": "L",
+        "count": 1
+      },
+      "adrSeries": [
+        70
+      ],
+      "mapStats": {
+        "foroglio": {
+          "games": 1,
+          "wins": 0,
+          "losses": 1,
+          "adr": 70,
+          "rwr": 0.4583333333333333,
+          "avgKills": 17,
+          "avgDeaths": 21,
+          "avgAssists": 3
+        }
+      }
+    },
+    {
+      "id": 6,
+      "name": "Frank",
+      "steam_avatar_url": null,
+      "adr": 65,
+      "rwr": 0.4583333333333333,
+      "form": [
+        false
+      ],
+      "streak": {
+        "result": "L",
+        "count": 1
+      },
+      "adrSeries": [
+        65
+      ],
+      "mapStats": {
+        "foroglio": {
+          "games": 1,
+          "wins": 0,
+          "losses": 1,
+          "adr": 65,
+          "rwr": 0.4583333333333333,
+          "avgKills": 15,
+          "avgDeaths": 22,
+          "avgAssists": 5
+        }
+      }
+    }
+  ],
+  "skins": [
+    {
+      "id": 7,
+      "name": "Grace",
+      "steam_avatar_url": null,
+      "adr": 45,
+      "rwr": 0.2777777777777778,
+      "form": [
+        false
+      ],
+      "streak": {
+        "result": "L",
+        "count": 1
+      },
+      "adrSeries": [
+        45
+      ],
+      "mapStats": {
+        "vertigo": {
+          "games": 1,
+          "wins": 0,
+          "losses": 1,
+          "adr": 45,
+          "rwr": 0.2777777777777778,
+          "avgKills": 8,
+          "avgDeaths": 16,
+          "avgAssists": 2
+        }
+      }
+    },
+    {
+      "id": 8,
+      "name": "Heidi",
+      "steam_avatar_url": null,
+      "adr": 40,
+      "rwr": 0.2777777777777778,
+      "form": [
+        false
+      ],
+      "streak": {
+        "result": "L",
+        "count": 1
+      },
+      "adrSeries": [
+        40
+      ],
+      "mapStats": {
+        "vertigo": {
+          "games": 1,
+          "wins": 0,
+          "losses": 1,
+          "adr": 40,
+          "rwr": 0.2777777777777778,
+          "avgKills": 7,
+          "avgDeaths": 17,
+          "avgAssists": 1
+        }
+      }
+    }
+  ],
+  "mapLeagueAverages": {
+    "foroglio": {
+      "wins": 2,
+      "losses": 0,
+      "adr": 73.97125,
+      "avgKills": 17.125,
+      "avgDeaths": 18.75,
+      "avgAssists": 4
+    },
+    "vertigo": {
+      "wins": 1,
+      "losses": 0,
+      "adr": 67,
+      "avgKills": 11.25,
+      "avgDeaths": 13.5,
+      "avgAssists": 1.75
+    }
+  }
+}

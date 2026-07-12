@@ -41,7 +41,7 @@ directions on purpose; the skill is knowing which one applies.
   layer, or DB column for a use case that doesn't exist yet. Build for the second *real* caller, not
   the imagined one — a speculative abstraction is harder to delete than a missing one is to add.
 - **DRY — Don't Repeat Yourself**, with its counterweight. Two copies of a *derivation* must never
-  drift — that's why `deriveRates()` and the `queries.ts` helpers exist. But don't DRY two things that
+  drift — that's why `deriveRates()` and the `queries/` helpers exist. But don't DRY two things that
   merely *look* alike: `deriveRates()` is shared while each caller keeps its own summation, because
   the input shapes are genuinely different. Rule of three — extract on the third real repetition, not
   the first coincidence.
@@ -51,7 +51,7 @@ directions on purpose; the skill is knowing which one applies.
   docs: describe what *is*.
 - **SOLID**, translated to this functional/module codebase — we favor **composition over
   inheritance** and there are almost no classes, so read these as module/component discipline:
-  - **S**ingle responsibility — a `queries.ts` helper fetches + shapes; a component renders; an
+  - **S**ingle responsibility — a `queries/*.ts` helper fetches + shapes; a component renders; an
     `api/` route validates + writes. Don't blur the three.
   - **O**pen/closed — extend a shared primitive by passing a new *parameter* (color, count, variant),
     not by forking it into a near-duplicate. Ask "new *shape* or new *parameter*?" — usually the latter.
@@ -64,15 +64,15 @@ directions on purpose; the skill is knowing which one applies.
 
 ## Cite code by symbol, not by line number
 
-Reference code by the **name** of the thing — `getGauntletStats()` in `src/lib/queries.ts`, the
-`LeaderboardRow` type in `src/lib/types.ts` — never by line number (`queries.ts:824`). Line numbers
+Reference code by the **name** of the thing — `getGauntletStats()` in `src/lib/queries/gauntlet.ts`, the
+`LeaderboardRow` type in `src/lib/types.ts` — never by line number (`gauntlet.ts:824`). Line numbers
 rot the instant anything above them changes, and a wrong line number is worse than none: it sends a
 reader to unrelated code. Symbol names survive refactors and stay greppable. This applies to docs,
 comments, commit messages, and PR descriptions alike.
 
 ## Centralize derivations; components only render
 
-Any join, aggregation, or derivation belongs in the data/util layer (`src/lib/queries.ts`,
+Any join, aggregation, or derivation belongs in the data/util layer (`src/lib/queries/`,
 `src/lib/util.ts`), behind a helper that returns a **fully-shaped** value. Components should render
 what they're handed, not re-derive it. If you catch yourself writing a `.reduce()`/join inside a
 `.tsx` file, that's the signal to move it into a shared helper and have every call site use it — two

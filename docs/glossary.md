@@ -82,7 +82,7 @@ so you don't have to reverse-engineer them from scratch each time.
   `LeaderboardTable`. Distinct from the canonical gauntlet ranking below, which only ever describes
   a gauntlet that actually exists.
 - **H2H (Head-to-Head)** — cross-player comparison surfaced in `getH2HData()`. Two distinct shapes
-  live inside `H2HData` (`src/lib/queries.ts`):
+  live inside `H2HData` (`src/lib/queries/h2h.ts`):
   - **Duos** (`DuoStats`) — performance when two players are *teammates* (same faction)
   - **Rivals** (`H2HStats`) — performance when two players are *opponents* (different factions)
   Rendered by `H2HMatrix.tsx` (overview grid) and `MatchupDetail.tsx` (drill-down for a pair —
@@ -92,7 +92,7 @@ so you don't have to reverse-engineer them from scratch each time.
   that pair's own match history — not from either player's individual career map stats.
 - **Blended score** (H2H rankings) — how the "Best Friends"/"Closest Rivals" cards
   (`topDuos`/`topRivals` in `H2HSection.tsx`) rank pairs, and how the `H2HMatrix` colors
-  its cells. Shared via `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/queries.ts`.
+  its cells. Shared via `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/queries/h2h.ts`.
   Each metric that feeds the score (games played, wins, round win rate, meetings,
   win-difference) lives on its own scale — raw counts can run into the dozens, rates top
   out at 100, differences shrink toward 0 as a rivalry gets closer. To combine them into
@@ -125,7 +125,7 @@ so you don't have to reverse-engineer them from scratch each time.
 
 | Concern | File(s) |
 |---|---|
-| All Supabase data-fetching | `src/lib/queries.ts` (grep for `export async function get…`) |
+| All Supabase data-fetching | `src/lib/queries/` — split by domain behind a barrel `index.ts` (grep for `export async function get…`); see `docs/recipes.md`'s query-helper recipe |
 | Shared types matching DB shape | `src/lib/types.ts` |
 | Cross-cutting helpers (score parsing, season pairing, tab styles, formatting) | `src/lib/util.ts` |
 | Map name → image/slug lookups | `src/lib/maps.ts` |
@@ -142,14 +142,15 @@ so you don't have to reverse-engineer them from scratch each time.
 ## Conventions to know before reading the query layer
 
 - **`player_season_leaderboard` is the source of truth for aggregates** — `total_assists` and
-  `total_rounds_won` are the two fields *missing* from it; `getPerPlayerSeasonStats()` patches
-  those in from `player_match_stats`.
+  `total_rounds_won` are the two fields *missing* from it; `getSeasonBaseData()`
+  (`src/lib/queries/leaderboard.ts`) patches those in from `player_match_stats`.
 - **Map names are user-typed strings** — always `.toLowerCase()` before comparing; use
   `mapSlug()` from `src/lib/maps.ts` for URL segments.
 - **`id` for routing/queries/props, `name` for display only** — don't key off display names.
-- Most `get*` functions in `queries.ts` return fully-shaped view-model objects (joins already done)
-  — components should not need to re-derive joins that already exist there. If you find yourself
-  writing one, it probably belongs in `queries.ts` or `util.ts` instead (see `CLAUDE.md`).
+- Most `get*` functions in `src/lib/queries/` return fully-shaped view-model objects (joins already
+  done) — components should not need to re-derive joins that already exist there. If you find
+  yourself writing one, it probably belongs in `src/lib/queries/` or `util.ts` instead (see
+  `CLAUDE.md`).
 
 ---
 *Keep this in sync as the schema/components evolve — a stale glossary is worse than none. If you

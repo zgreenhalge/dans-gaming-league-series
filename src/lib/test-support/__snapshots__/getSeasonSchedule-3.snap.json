@@ -1,0 +1,104 @@
+[
+  {
+    "id": 13,
+    "season_id": 3,
+    "week_number": 1,
+    "bye_player_id": null,
+    "bye_player_name": null,
+    "matches": [
+      {
+        "id": 400,
+        "week_id": 13,
+        "match_number": 1,
+        "final_score": null,
+        "picked_map": null,
+        "shirts_ban": null,
+        "shirts_ban2": null,
+        "skins_ban1": null,
+        "skins_ban2": null,
+        "shirts_pick": null,
+        "skins_starting_side": null,
+        "is_playoff_game": false,
+        "is_feature_match": false,
+        "is_interpolated": false,
+        "pre_match_win_prob": null,
+        "pre_match_win_prob_formula_version": null,
+        "notes": null,
+        "scheduled_at": null,
+        "screenshot_url_front": null,
+        "screenshot_url_back": null,
+        "round_history": null,
+        "recording_url": null,
+        "replay_status": "none",
+        "shirts": [
+          {
+            "player_id": 1,
+            "player_name": "Alice"
+          },
+          {
+            "player_id": 5,
+            "player_name": "Erin"
+          }
+        ],
+        "skins": [
+          {
+            "player_id": 6,
+            "player_name": "Frank"
+          },
+          {
+            "player_id": 7,
+            "player_name": "Grace"
+          }
+        ],
+        "shirts_stats": [
+          {
+            "match_id": 400,
+            "player_id": 1,
+            "player_name": "Alice",
+            "faction": "SHIRTS",
+            "kills": 0,
+            "assists": 0,
+            "deaths": 0,
+            "adr": 0,
+            "is_win": false
+          },
+          {
+            "match_id": 400,
+            "player_id": 5,
+            "player_name": "Erin",
+            "faction": "SHIRTS",
+            "kills": 0,
+            "assists": 0,
+            "deaths": 0,
+            "adr": 0,
+            "is_win": false
+          }
+        ],
+        "skins_stats": [
+          {
+            "match_id": 400,
+            "player_id": 6,
+            "player_name": "Frank",
+            "faction": "SKINS",
+            "kills": 0,
+            "assists": 0,
+            "deaths": 0,
+            "adr": 0,
+            "is_win": false
+          },
+          {
+            "match_id": 400,
+            "player_id": 7,
+            "player_name": "Grace",
+            "faction": "SKINS",
+            "kills": 0,
+            "assists": 0,
+            "deaths": 0,
+            "adr": 0,
+            "is_win": false
+          }
+        ]
+      }
+    ]
+  }
+]

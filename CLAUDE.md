@@ -9,14 +9,14 @@ that implement them. For cross-cutting conventions every change should follow, s
 [`docs/patterns.md`](./docs/patterns.md).
 
 When citing code in docs, comments, or commits, reference it by **symbol name** (e.g.
-`getGauntletStats()` in `queries.ts`), never by line number — line numbers rot. See
+`getGauntletStats()` in `src/lib/queries/gauntlet.ts`), never by line number — line numbers rot. See
 [`docs/patterns.md`](./docs/patterns.md).
 
 ## Guiding philosophy
 
 **Keep it simple and learnable.** Prefer straightforward solutions over clever ones. Every implementation choice should be easy to understand, modify, and extend without needing to unravel abstractions. When there are two ways to do something, pick the one a newcomer could follow. This is a real constraint — favor obvious code over abstraction.
 
-**Always prefer extracting/abstracting shared logic whenever possible.** If you're about to write a join/aggregation/derivation that already exists elsewhere (even inline in a component), factor it into a shared helper (`src/lib/queries.ts` or `src/lib/util.ts`) and have both call sites use it — don't let two copies of the same logic drift apart.
+**Always prefer extracting/abstracting shared logic whenever possible.** If you're about to write a join/aggregation/derivation that already exists elsewhere (even inline in a component), factor it into a shared helper (`src/lib/queries/` or `src/lib/util.ts`) and have both call sites use it — don't let two copies of the same logic drift apart.
 
 **Artifacts describe the present, not the past.** Docs, code comments, config `note` fields — everything committed describes how things *are*, never how they changed. No dates, no changelog prose, no "previously / used to / re-enabled." This is a hard rule: see AGENTS.md's "Artifacts describe the present, not the past" and [`docs/patterns.md`](./docs/patterns.md). The lone exception is a deliberate decision log kept to avoid regressing to known-bad config.
 
@@ -44,14 +44,14 @@ Full schema is in [`docs/architecture.md`](./docs/architecture.md) and `src/lib/
 
 - **Always read aggregates from `player_season_leaderboard`** — never compute them client-side.
 - **Canonical sort is WR% → RWR% → ADR** (all descending). Use `canonicalSort()` from `src/lib/util.ts` everywhere player rows are ranked. Never sort by ADR alone.
-- `total_assists` and `total_rounds_won` are absent from the view. `getPerPlayerSeasonStats()` in `src/lib/queries.ts` augments them by reading `player_match_stats` directly.
-- **Gauntlet seasons** store all matches as `is_playoff_game = true`, so they're excluded from the regular view. Use `getGauntletStats()` / `getGauntletSeasonLeaderboard()` for gauntlet data.
+- `total_assists` and `total_rounds_won` are absent from the view. `getSeasonBaseData()` in `src/lib/queries/leaderboard.ts` augments them by reading `player_match_stats` directly.
+- **Gauntlet seasons** store all matches as `is_playoff_game = true`, so they're excluded from the regular view. Use `getGauntletStats()` / `getGauntletSeasonLeaderboard()` (`src/lib/queries/gauntlet.ts`) for gauntlet data.
 - **RLS is off** on all tables. Enabling it without policies blocks all access. Because of this, no Supabase credential or MCP tool is meaningfully "safe by default" — see the live-approval rule above.
 - **Season ↔ gauntlet pairing is name-based.** Use `extractSeasonNumber()` from `src/lib/util.ts` — don't assume paired seasons have adjacent IDs.
-- **Numeric precision is a storage-vs-display split.** Per-match `adr` in `player_match_stats` is stored as a whole number; aggregate ADR is *recomputed* from `total_damage / total_rounds_played` (see `overall_adr` in `queries.ts`) and is a true float — display layers show it at 2 decimals (`overall_adr.toFixed(2)`). Don't "fix" a decimal aggregate ADR to look like an integer, and don't massage match-card numbers — show them as stored.
+- **Numeric precision is a storage-vs-display split.** Per-match `adr` in `player_match_stats` is stored as a whole number; aggregate ADR is *recomputed* from `total_damage / total_rounds_played` (see `overall_adr` in `src/lib/queries/leaderboard.ts`) and is a true float — display layers show it at 2 decimals (`overall_adr.toFixed(2)`). Don't "fix" a decimal aggregate ADR to look like an integer, and don't massage match-card numbers — show them as stored.
 
 ### Frontend patterns
-- **`src/lib/queries.ts`** — all data-fetching lives here. Don't write ad-hoc `supabase.from(...)` calls in page components.
+- **`src/lib/queries/`** — all data-fetching lives here, split by domain (`seasons.ts`, `match.ts`, `player.ts`, `leaderboard.ts`, `gauntlet.ts`, `maps.ts`, `h2h.ts`, `ehog.ts`, and more) behind a barrel `index.ts` — every existing `import { X } from '@/lib/queries'` still resolves unchanged. See `docs/recipes.md`'s query-helper recipe for which file a new function belongs in, and the `src/lib/queries-*.test.ts` / `src/lib/test-support/` regression harness for testing it. Don't write ad-hoc `supabase.from(...)` calls in page components.
 - Server Components by default. API routes exist only for authenticated mutations.
 - Dev mock auth providers (`dev-zach-mock`, `dev-dan-mock`) are active in `NODE_ENV=development` only — no Steam API key needed locally.
 - **Played match check:** use `isPlayedScore(m.final_score)` from `src/lib/util.ts`. `null` alone is not sufficient — S3 matches were pre-staged with `"0-0"` before scores were entered.

@@ -1,0 +1,168 @@
+{
+  "shirts": [
+    {
+      "id": 1,
+      "name": "Alice",
+      "steam_avatar_url": null,
+      "adr": 86.75,
+      "rwr": 0.5662878787878788,
+      "form": [
+        true,
+        true
+      ],
+      "streak": {
+        "result": "W",
+        "count": 2
+      },
+      "adrSeries": [
+        85.5,
+        88
+      ],
+      "mapStats": {
+        "foroglio": {
+          "games": 2,
+          "wins": 2,
+          "losses": 0,
+          "adr": 86.75,
+          "rwr": 0.5662878787878788,
+          "avgKills": 21,
+          "avgDeaths": 16.5,
+          "avgAssists": 2.5
+        }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Bob",
+      "steam_avatar_url": null,
+      "adr": 79.09,
+      "rwr": 0.5662878787878788,
+      "form": [
+        true,
+        true
+      ],
+      "streak": {
+        "result": "W",
+        "count": 2
+      },
+      "adrSeries": [
+        78.18,
+        80
+      ],
+      "mapStats": {
+        "foroglio": {
+          "games": 2,
+          "wins": 2,
+          "losses": 0,
+          "adr": 79.09,
+          "rwr": 0.5662878787878788,
+          "avgKills": 18.5,
+          "avgDeaths": 17.5,
+          "avgAssists": 4.5
+        }
+      }
+    }
+  ],
+  "skins": [
+    {
+      "id": 3,
+      "name": "Carol",
+      "steam_avatar_url": null,
+      "adr": 80,
+      "rwr": 0.5656565656565656,
+      "form": [
+        true,
+        false
+      ],
+      "streak": {
+        "result": "L",
+        "count": 1
+      },
+      "adrSeries": [
+        95,
+        65
+      ],
+      "mapStats": {
+        "vertigo": {
+          "games": 1,
+          "wins": 1,
+          "losses": 0,
+          "adr": 95,
+          "rwr": 0.7222222222222222,
+          "avgKills": 16,
+          "avgDeaths": 10,
+          "avgAssists": 1
+        },
+        "foroglio": {
+          "games": 1,
+          "wins": 0,
+          "losses": 1,
+          "adr": 65,
+          "rwr": 0.4090909090909091,
+          "avgKills": 14,
+          "avgDeaths": 19,
+          "avgAssists": 4
+        }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Dave",
+      "steam_avatar_url": null,
+      "adr": 74.045,
+      "rwr": 0.5656565656565656,
+      "form": [
+        true,
+        false
+      ],
+      "streak": {
+        "result": "L",
+        "count": 1
+      },
+      "adrSeries": [
+        88,
+        60.09
+      ],
+      "mapStats": {
+        "vertigo": {
+          "games": 1,
+          "wins": 1,
+          "losses": 0,
+          "adr": 88,
+          "rwr": 0.7222222222222222,
+          "avgKills": 14,
+          "avgDeaths": 11,
+          "avgAssists": 3
+        },
+        "foroglio": {
+          "games": 1,
+          "wins": 0,
+          "losses": 1,
+          "adr": 60.09,
+          "rwr": 0.4090909090909091,
+          "avgKills": 12,
+          "avgDeaths": 20,
+          "avgAssists": 6
+        }
+      }
+    }
+  ],
+  "mapLeagueAverages": {
+    "foroglio": {
+      "wins": 2,
+      "losses": 0,
+      "adr": 73.97125,
+      "avgKills": 17.125,
+      "avgDeaths": 18.75,
+      "avgAssists": 4
+    },
+    "vertigo": {
+      "wins": 1,
+      "losses": 0,
+      "adr": 67,
+      "avgKills": 11.25,
+      "avgDeaths": 13.5,
+      "avgAssists": 1.75
+    }
+  }
+}

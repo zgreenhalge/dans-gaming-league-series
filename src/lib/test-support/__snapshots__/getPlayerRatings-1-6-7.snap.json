@@ -1,0 +1,20 @@
+[
+  {
+    "playerId": 1,
+    "mu": 27,
+    "sigma": 6.8,
+    "ehogRating": 1450
+  },
+  {
+    "playerId": 6,
+    "mu": null,
+    "sigma": 8.3333333333,
+    "ehogRating": 1250
+  },
+  {
+    "playerId": 7,
+    "mu": 19.654007982690917,
+    "sigma": 8.3333333333,
+    "ehogRating": 33
+  }
+]

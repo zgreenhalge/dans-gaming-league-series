@@ -1,0 +1,113 @@
+{
+  "match": {
+    "id": 101,
+    "week_id": 10,
+    "match_number": 2,
+    "final_score": null,
+    "picked_map": null,
+    "shirts_ban": null,
+    "shirts_ban2": null,
+    "skins_ban1": null,
+    "skins_ban2": null,
+    "shirts_pick": null,
+    "skins_starting_side": null,
+    "is_playoff_game": false,
+    "is_feature_match": false,
+    "is_interpolated": false,
+    "pre_match_win_prob": null,
+    "pre_match_win_prob_formula_version": null,
+    "notes": null,
+    "scheduled_at": "2026-01-15T19:00:00.000Z",
+    "screenshot_url_front": null,
+    "screenshot_url_back": null,
+    "round_history": null,
+    "recording_url": null,
+    "replay_status": "none"
+  },
+  "week": {
+    "id": 10,
+    "season_id": 1,
+    "week_number": 1,
+    "bye_player_id": null
+  },
+  "season": {
+    "id": 1,
+    "name": "Season 5",
+    "status": "COMPLETED",
+    "target_win_rounds": 13,
+    "buy_in_amount": 20,
+    "is_gauntlet": false,
+    "start_date": "2026-01-01",
+    "map_pool": [
+      "Foroglio",
+      "Cobblestone",
+      "Vertigo"
+    ]
+  },
+  "stats": [
+    {
+      "kills": 0,
+      "assists": 0,
+      "deaths": 0,
+      "adr": 0,
+      "damage": 0,
+      "rounds_played": 0,
+      "rounds_won": 0,
+      "is_win": false,
+      "id": 1004,
+      "match_id": 101,
+      "player_id": 5,
+      "faction": "SHIRTS",
+      "player_name": "Erin",
+      "steam_avatar_url": null
+    },
+    {
+      "kills": 0,
+      "assists": 0,
+      "deaths": 0,
+      "adr": 0,
+      "damage": 0,
+      "rounds_played": 0,
+      "rounds_won": 0,
+      "is_win": false,
+      "id": 1005,
+      "match_id": 101,
+      "player_id": 6,
+      "faction": "SHIRTS",
+      "player_name": "Frank",
+      "steam_avatar_url": null
+    },
+    {
+      "kills": 0,
+      "assists": 0,
+      "deaths": 0,
+      "adr": 0,
+      "damage": 0,
+      "rounds_played": 0,
+      "rounds_won": 0,
+      "is_win": false,
+      "id": 1006,
+      "match_id": 101,
+      "player_id": 7,
+      "faction": "SKINS",
+      "player_name": "Grace",
+      "steam_avatar_url": null
+    },
+    {
+      "kills": 0,
+      "assists": 0,
+      "deaths": 0,
+      "adr": 0,
+      "damage": 0,
+      "rounds_played": 0,
+      "rounds_won": 0,
+      "is_win": false,
+      "id": 1007,
+      "match_id": 101,
+      "player_id": 8,
+      "faction": "SKINS",
+      "player_name": "Heidi",
+      "steam_avatar_url": null
+    }
+  ]
+}

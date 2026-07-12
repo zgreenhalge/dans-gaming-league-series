@@ -172,7 +172,7 @@ the "pod stakes" label shown on the round list and match page (`GAUNTLET_POD_STA
 let completion see an incomplete round as "everything played" and archive before the final round
 materializes.
 
-**Bracket diagram.** `getGauntletBracketShape()` in `queries.ts` reads `gauntlet_pods`/
+**Bracket diagram.** `getGauntletBracketShape()` in `src/lib/queries/gauntlet.ts` reads `gauntlet_pods`/
 `gauntlet_pod_slots` directly rather than matches, so — unlike `getGauntletRounds()`, which returns
 nothing until a pod's matches materialize — it also covers the persisted-but-unseeded shape.
 `GauntletBracketDiagram` (`src/components/GauntletBracketDiagram.tsx`) renders it: one box per pod,
@@ -321,7 +321,7 @@ clears `gauntlet_build`/`gauntlet_seed` on the regular season and `gauntlet_arch
 season itself as part of a reset, and the remaining hooks clear theirs inline once their surrounding
 try block completes without error.
 
-`getOpsErrors()` in `queries.ts` reads every live row, resolving `entity_id` to a display name
+`getOpsErrors()` in `src/lib/queries/ops.ts` reads every live row, resolving `entity_id` to a display name
 (season/match name, or "EHOG Recompute" for `system`). `/admin/ops-errors` lists all of them;
 `/admin/seasons/gauntlet` ("Manage Gauntlet") shows the same list filtered to `entity_type = 'season'`
 in an "Attention Needed" section above the rest of the page (`OpsErrorList.tsx`, shared by both).

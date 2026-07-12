@@ -1,0 +1,299 @@
+[
+  {
+    "id": 10,
+    "season_id": 1,
+    "week_number": 1,
+    "bye_player_id": null,
+    "bye_player_name": null,
+    "matches": [
+      {
+        "id": 100,
+        "week_id": 10,
+        "match_number": 1,
+        "final_score": "13-9",
+        "picked_map": "Foroglio",
+        "shirts_ban": "Vertigo",
+        "shirts_ban2": "Nuke",
+        "skins_ban1": "Inferno",
+        "skins_ban2": "Overpass",
+        "shirts_pick": "Foroglio",
+        "skins_starting_side": "CT",
+        "is_playoff_game": false,
+        "is_feature_match": false,
+        "is_interpolated": false,
+        "pre_match_win_prob": 0.55,
+        "pre_match_win_prob_formula_version": "ehog_v1",
+        "notes": null,
+        "scheduled_at": null,
+        "screenshot_url_front": null,
+        "screenshot_url_back": null,
+        "round_history": null,
+        "recording_url": null,
+        "replay_status": "ready",
+        "shirts": [
+          {
+            "player_id": 1,
+            "player_name": "Alice"
+          },
+          {
+            "player_id": 2,
+            "player_name": "Bob"
+          }
+        ],
+        "skins": [
+          {
+            "player_id": 3,
+            "player_name": "Carol"
+          },
+          {
+            "player_id": 4,
+            "player_name": "Dave"
+          }
+        ],
+        "shirts_stats": [
+          {
+            "match_id": 100,
+            "player_id": 1,
+            "player_name": "Alice",
+            "faction": "SHIRTS",
+            "kills": 20,
+            "assists": 3,
+            "deaths": 15,
+            "adr": 85.5,
+            "is_win": true
+          },
+          {
+            "match_id": 100,
+            "player_id": 2,
+            "player_name": "Bob",
+            "faction": "SHIRTS",
+            "kills": 18,
+            "assists": 5,
+            "deaths": 16,
+            "adr": 78.18,
+            "is_win": true
+          }
+        ],
+        "skins_stats": [
+          {
+            "match_id": 100,
+            "player_id": 3,
+            "player_name": "Carol",
+            "faction": "SKINS",
+            "kills": 14,
+            "assists": 4,
+            "deaths": 19,
+            "adr": 65,
+            "is_win": false
+          },
+          {
+            "match_id": 100,
+            "player_id": 4,
+            "player_name": "Dave",
+            "faction": "SKINS",
+            "kills": 12,
+            "assists": 6,
+            "deaths": 20,
+            "adr": 60.09,
+            "is_win": false
+          }
+        ]
+      },
+      {
+        "id": 101,
+        "week_id": 10,
+        "match_number": 2,
+        "final_score": null,
+        "picked_map": null,
+        "shirts_ban": null,
+        "shirts_ban2": null,
+        "skins_ban1": null,
+        "skins_ban2": null,
+        "shirts_pick": null,
+        "skins_starting_side": null,
+        "is_playoff_game": false,
+        "is_feature_match": false,
+        "is_interpolated": false,
+        "pre_match_win_prob": null,
+        "pre_match_win_prob_formula_version": null,
+        "notes": null,
+        "scheduled_at": "2026-01-15T19:00:00.000Z",
+        "screenshot_url_front": null,
+        "screenshot_url_back": null,
+        "round_history": null,
+        "recording_url": null,
+        "replay_status": "none",
+        "shirts": [
+          {
+            "player_id": 5,
+            "player_name": "Erin"
+          },
+          {
+            "player_id": 6,
+            "player_name": "Frank"
+          }
+        ],
+        "skins": [
+          {
+            "player_id": 7,
+            "player_name": "Grace"
+          },
+          {
+            "player_id": 8,
+            "player_name": "Heidi"
+          }
+        ],
+        "shirts_stats": [
+          {
+            "match_id": 101,
+            "player_id": 5,
+            "player_name": "Erin",
+            "faction": "SHIRTS",
+            "kills": 0,
+            "assists": 0,
+            "deaths": 0,
+            "adr": 0,
+            "is_win": false
+          },
+          {
+            "match_id": 101,
+            "player_id": 6,
+            "player_name": "Frank",
+            "faction": "SHIRTS",
+            "kills": 0,
+            "assists": 0,
+            "deaths": 0,
+            "adr": 0,
+            "is_win": false
+          }
+        ],
+        "skins_stats": [
+          {
+            "match_id": 101,
+            "player_id": 7,
+            "player_name": "Grace",
+            "faction": "SKINS",
+            "kills": 0,
+            "assists": 0,
+            "deaths": 0,
+            "adr": 0,
+            "is_win": false
+          },
+          {
+            "match_id": 101,
+            "player_id": 8,
+            "player_name": "Heidi",
+            "faction": "SKINS",
+            "kills": 0,
+            "assists": 0,
+            "deaths": 0,
+            "adr": 0,
+            "is_win": false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 11,
+    "season_id": 1,
+    "week_number": 2,
+    "bye_player_id": 5,
+    "bye_player_name": "Erin",
+    "matches": [
+      {
+        "id": 102,
+        "week_id": 11,
+        "match_number": 1,
+        "final_score": "0-0",
+        "picked_map": "Cobblestone",
+        "shirts_ban": null,
+        "shirts_ban2": null,
+        "skins_ban1": null,
+        "skins_ban2": null,
+        "shirts_pick": "Cobblestone",
+        "skins_starting_side": null,
+        "is_playoff_game": false,
+        "is_feature_match": false,
+        "is_interpolated": false,
+        "pre_match_win_prob": null,
+        "pre_match_win_prob_formula_version": null,
+        "notes": null,
+        "scheduled_at": null,
+        "screenshot_url_front": null,
+        "screenshot_url_back": null,
+        "round_history": null,
+        "recording_url": null,
+        "replay_status": "none",
+        "shirts": [
+          {
+            "player_id": 1,
+            "player_name": "Alice"
+          },
+          {
+            "player_id": 3,
+            "player_name": "Carol"
+          }
+        ],
+        "skins": [
+          {
+            "player_id": 2,
+            "player_name": "Bob"
+          },
+          {
+            "player_id": 4,
+            "player_name": "Dave"
+          }
+        ],
+        "shirts_stats": [
+          {
+            "match_id": 102,
+            "player_id": 1,
+            "player_name": "Alice",
+            "faction": "SHIRTS",
+            "kills": 0,
+            "assists": 0,
+            "deaths": 0,
+            "adr": 0,
+            "is_win": false
+          },
+          {
+            "match_id": 102,
+            "player_id": 3,
+            "player_name": "Carol",
+            "faction": "SHIRTS",
+            "kills": 0,
+            "assists": 0,
+            "deaths": 0,
+            "adr": 0,
+            "is_win": false
+          }
+        ],
+        "skins_stats": [
+          {
+            "match_id": 102,
+            "player_id": 2,
+            "player_name": "Bob",
+            "faction": "SKINS",
+            "kills": 0,
+            "assists": 0,
+            "deaths": 0,
+            "adr": 0,
+            "is_win": false
+          },
+          {
+            "match_id": 102,
+            "player_id": 4,
+            "player_name": "Dave",
+            "faction": "SKINS",
+            "kills": 0,
+            "assists": 0,
+            "deaths": 0,
+            "adr": 0,
+            "is_win": false
+          }
+        ]
+      }
+    ]
+  }
+]

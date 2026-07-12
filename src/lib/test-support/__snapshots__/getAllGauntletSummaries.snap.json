@@ -1,0 +1,27 @@
+{
+  "__type": "Map",
+  "entries": [
+    [
+      2,
+      {
+        "playerCount": 4,
+        "roundCount": 1,
+        "champion": {
+          "player_id": 1,
+          "name": "Alice"
+        }
+      }
+    ],
+    [
+      4,
+      {
+        "playerCount": 4,
+        "roundCount": 1,
+        "champion": {
+          "player_id": 3,
+          "name": "Carol"
+        }
+      }
+    ]
+  ]
+}

@@ -1,0 +1,122 @@
+[
+  {
+    "jobType": "radar_build",
+    "status": "running",
+    "stage": "calibrating",
+    "errorMessage": null,
+    "ghRunUrl": null,
+    "createdAt": "2026-04-01T00:00:00.000Z",
+    "updatedAt": "2026-04-01T00:01:00.000Z",
+    "startedAt": "2026-04-01T00:01:00.000Z",
+    "finishedAt": null,
+    "subject": {
+      "kind": "map",
+      "mapId": 2,
+      "slug": "vertigo",
+      "label": "Vertigo",
+      "href": "/maps/vertigo"
+    },
+    "warnings": [],
+    "quarantineFlags": [],
+    "hasPayload": false
+  },
+  {
+    "jobType": "replay_extract",
+    "status": "failed",
+    "stage": "parse",
+    "errorMessage": "ffmpeg exited 1",
+    "ghRunUrl": null,
+    "createdAt": "2026-03-02T00:00:00.000Z",
+    "updatedAt": "2026-03-02T00:02:00.000Z",
+    "startedAt": "2026-03-02T00:01:00.000Z",
+    "finishedAt": null,
+    "subject": {
+      "kind": "match",
+      "matchId": 200,
+      "label": "Season 5 Gauntlet · Wk 1 · Match 1",
+      "href": "/matches/200",
+      "seasonNumber": 5,
+      "weekNumber": 1,
+      "matchNumber": 1,
+      "pickedMap": "Foroglio",
+      "finalScore": "13-11",
+      "isGauntlet": true
+    },
+    "warnings": [],
+    "quarantineFlags": [],
+    "hasPayload": false
+  },
+  {
+    "jobType": "replay_extract",
+    "status": "succeeded",
+    "stage": null,
+    "errorMessage": null,
+    "ghRunUrl": "https://github.com/example/actions/runs/2",
+    "createdAt": "2026-01-05T00:06:00.000Z",
+    "updatedAt": "2026-01-05T00:10:00.000Z",
+    "startedAt": "2026-01-05T00:07:00.000Z",
+    "finishedAt": "2026-01-05T00:10:00.000Z",
+    "subject": {
+      "kind": "match",
+      "matchId": 100,
+      "label": "Season 5 · Wk 1 · Match 1",
+      "href": "/matches/100",
+      "seasonNumber": 5,
+      "weekNumber": 1,
+      "matchNumber": 1,
+      "pickedMap": "Foroglio",
+      "finalScore": "13-9",
+      "isGauntlet": false
+    },
+    "warnings": [],
+    "quarantineFlags": [],
+    "hasPayload": false
+  },
+  {
+    "jobType": "demo_ingest",
+    "status": "succeeded",
+    "stage": null,
+    "errorMessage": null,
+    "ghRunUrl": "https://github.com/example/actions/runs/1",
+    "createdAt": "2026-01-05T00:00:00.000Z",
+    "updatedAt": "2026-01-05T00:05:00.000Z",
+    "startedAt": "2026-01-05T00:01:00.000Z",
+    "finishedAt": "2026-01-05T00:05:00.000Z",
+    "subject": {
+      "kind": "match",
+      "matchId": 100,
+      "label": "Season 5 · Wk 1 · Match 1",
+      "href": "/matches/100",
+      "seasonNumber": 5,
+      "weekNumber": 1,
+      "matchNumber": 1,
+      "pickedMap": "Foroglio",
+      "finalScore": "13-9",
+      "isGauntlet": false
+    },
+    "warnings": [],
+    "quarantineFlags": [],
+    "hasPayload": false
+  },
+  {
+    "jobType": "radar_build",
+    "status": "succeeded",
+    "stage": null,
+    "errorMessage": null,
+    "ghRunUrl": "https://github.com/example/actions/runs/3",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:03:00.000Z",
+    "startedAt": "2026-01-01T00:01:00.000Z",
+    "finishedAt": "2026-01-01T00:03:00.000Z",
+    "subject": {
+      "kind": "map",
+      "mapId": 1,
+      "slug": "foroglio",
+      "label": "Foroglio",
+      "href": "/maps/foroglio"
+    },
+    "warnings": [],
+    "quarantineFlags": [],
+    "hasPayload": false
+  }
+]
