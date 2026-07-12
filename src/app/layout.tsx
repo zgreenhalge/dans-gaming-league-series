@@ -7,6 +7,7 @@ import { SideNav } from "@/components/SideNav";
 import { NavProvider } from "@/components/NavContext";
 import { MapProvider } from "@/components/MapContext";
 import { getSeasons, getMapLookup } from "@/lib/queries";
+import { SITE_URL } from "@/lib/site";
 import Script from "next/script";
 import "./globals.css";
 
@@ -31,8 +32,6 @@ const mono = JetBrains_Mono({
   variable: "--font-mono",
   display: "swap",
 });
-
-const SITE_URL = 'https://dans-gaming-league-series.vercel.app';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
