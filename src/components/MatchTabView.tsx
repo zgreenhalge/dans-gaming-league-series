@@ -311,19 +311,11 @@ export default function MatchTabView({
   matchPlayers,
   targetWinRounds,
   skinsSide,
-  scoutingData,
-  scoutingH2H,
-  matchMap,
-  mapMatchIds = [],
-  mapPool,
-  demoDownloadUrl,
-  ratingDeltas,
-  ratingProjections = [],
-  ratingCurrent = {},
   sabremetrics = [],
-  replayJob,
-  replayEvents = null,
-  recordingURL,
+  ehog,
+  scouting,
+  mapInfo,
+  recap,
 }: {
   shirts: MatchStatRow[];
   skins: MatchStatRow[];
@@ -340,20 +332,38 @@ export default function MatchTabView({
   matchPlayers: { player_id: number; player_name: string; faction: 'SHIRTS' | 'SKINS' }[];
   targetWinRounds: number;
   skinsSide: 'CT' | 'T' | null;
-  scoutingData: MatchScoutingData | null;
-  scoutingH2H: H2HData | null;
-  matchMap: string | null;
-  mapMatchIds?: number[];
-  mapPool: string[] | null;
-  demoDownloadUrl: string | null;
-  ratingDeltas: Record<number, number>;
-  ratingProjections?: RatingProjection[];
-  ratingCurrent?: Record<number, number>;
   sabremetrics?: MatchSabremetricsRow[];
-  replayJob: ReplayJobState;
-  replayEvents?: ReplayEventsView | null;
-  recordingURL: string | null;
+  /** EHOG skill-rating inputs: this match's rating deltas, pre-match projections, and each
+   *  player's current rating. */
+  ehog: {
+    deltas: Record<number, number>;
+    projections: RatingProjection[];
+    current: Record<number, number>;
+  };
+  /** Pre-match scouting report data for the Scouting Report tab. */
+  scouting: {
+    data: MatchScoutingData | null;
+    h2h: H2HData | null;
+  };
+  /** The picked map, other matches played on it (for the heatmap), and the season's map pool. */
+  mapInfo: {
+    map: string | null;
+    matchIds: number[];
+    pool: string[] | null;
+  };
+  /** Demo/replay/recording state for the Recap and Recording tabs. */
+  recap: {
+    demoDownloadUrl: string | null;
+    job: ReplayJobState;
+    events: ReplayEventsView | null;
+    recordingURL: string | null;
+  };
 }) {
+  const { deltas: ratingDeltas, projections: ratingProjections, current: ratingCurrent } = ehog;
+  const { data: scoutingData, h2h: scoutingH2H } = scouting;
+  const { map: matchMap, matchIds: mapMatchIds, pool: mapPool } = mapInfo;
+  const { demoDownloadUrl, job: replayJob, events: replayEvents, recordingURL } = recap;
+
   const hasScoutingData = !!(scoutingData && scoutingH2H);
   const hasProjections = ratingProjections.length > 0;
   const hasSab = sabremetrics.length > 0;
