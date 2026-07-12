@@ -137,6 +137,24 @@ test('collectClutch: blowing a 2v1 advantage down to a 1v1 credits both the 2v1 
   assert.equal(out.get('a')?.clutch_1v1_wins, 1);
 });
 
+test('collectClutch: a player outnumbered 3+ is not locked out of a real 1v2 once teammates trim the enemy count', () => {
+  // 4v1 (a alone vs e,f,g,h from the start). While a is still outnumbered 3-to-1 (untracked,
+  // enemyCount>2), a must not be marked "recorded" — otherwise the later, genuinely trackable
+  // 1v2 (once one more enemy dies) would be silently skipped as "already recorded".
+  const sides = { a: 'CT', e: 'T', f: 'T', g: 'T', h: 'T' } as const;
+  const ids = Object.keys(sides);
+  const rounds = [{ roundNumber: 1, winnerSide: 'CT' as const }];
+  const deaths = [
+    death({ round: 1, tick: 100, victim: 'f', attacker: 'a' }), // a now 1v3 (untracked, >2)
+    death({ round: 1, tick: 200, victim: 'g', attacker: 'a' }), // a now 1v2 — first trackable state
+  ];
+  const ctx = makeContext({ rounds, sides, deaths });
+  const out = collectClutch(deaths, ctx, ids);
+
+  assert.equal(out.get('a')?.clutch_1v2_attempts, 1);
+  assert.equal(out.get('a')?.clutch_1v2_wins, 1);
+});
+
 if (failures.length) {
   console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
   for (const f of failures) console.error(`  ✗ ${f}\n`);
