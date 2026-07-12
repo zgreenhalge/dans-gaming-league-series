@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas, getAllSabremetrics } from '@/lib/queries';
+import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals } from '@/lib/queries';
 import { getPlayerMeta } from '@/lib/og';
 import { isPlayedScore } from '@/lib/util';
 import { maybeRefreshSteamProfile } from '@/lib/steam';
@@ -48,8 +48,9 @@ export default async function PlayerPage({
     getCareerLeaderboard(),
     getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
     getPlayerEhogRating(playerId),
-    // League-wide rows so the Advanced tab can compute Plus stats (player vs. league avg).
-    getAllSabremetrics(),
+    // League-wide, per-season totals so the Advanced tab can compute Plus stats (player vs.
+    // league avg) without shipping every match row to the client.
+    getSabremetricSeasonTotals(),
   ]);
   if (!detail) notFound();
 
