@@ -607,6 +607,31 @@ export interface MatchScoutingData {
   mapLeagueAverages: Record<string, MapLeagueAvg>;
 }
 
+const SUPABASE_PAGE_SIZE = 1000;
+
+/**
+ * Runs `buildQuery` across successive `.range()` windows until a page comes back short,
+ * working around PostgREST's default 1000-row response cap — a plain `.select()` (or a
+ * `.limit()` above 1000) silently truncates once a table grows past that, biasing any
+ * aggregate computed from the result. Pass a query builder rather than a built query so this
+ * can attach `.range()` per page.
+ */
+async function fetchAllPages<T>(
+  buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const results: T[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + SUPABASE_PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = data ?? [];
+    results.push(...page);
+    if (page.length < SUPABASE_PAGE_SIZE) break;
+    from += SUPABASE_PAGE_SIZE;
+  }
+  return results;
+}
+
 /**
  * Pre-match intel for the four rostered players: recent form, ADR trend, and
  * how each has performed on the picked map. Used by the scouting report shown
@@ -630,17 +655,22 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   if (rosterRows.length === 0) return null;
   const playerIds = rosterRows.map((r) => r.player_id);
 
-  // TODO: replace unbounded fetches with paginated queries — see GH issue #73.
-  const [{ data: statRows, error: sErr }, players, { data: leagueStatRows, error: lsErr }, { data: leagueMatchRows, error: lmErr }] = await Promise.all([
-    supabase.from('player_match_stats').select('*').in('player_id', playerIds).limit(10000),
+  type LeagueMatchRow = { id: number; final_score: string | null; shirts_pick: string | null; picked_map: string | null };
+  type LeagueStatRow = { match_id: number; adr: number; kills: number; deaths: number; assists: number; is_win: boolean };
+
+  const [statRows, players, leagueStatRows, leagueMatchRows] = await Promise.all([
+    fetchAllPages<PlayerMatchStat>((from, to) =>
+      supabase.from('player_match_stats').select('*').in('player_id', playerIds).range(from, to),
+    ),
     getPlayersById(),
-    supabase.from('player_match_stats').select('match_id, adr, kills, deaths, assists, is_win').gt('rounds_played', 0).limit(10000),
-    supabase.from('matches').select('id, final_score, shirts_pick, picked_map').limit(10000),
+    fetchAllPages<LeagueStatRow>((from, to) =>
+      supabase.from('player_match_stats').select('match_id, adr, kills, deaths, assists, is_win').gt('rounds_played', 0).range(from, to),
+    ),
+    fetchAllPages<LeagueMatchRow>((from, to) =>
+      supabase.from('matches').select('id, final_score, shirts_pick, picked_map').range(from, to),
+    ),
   ]);
-  if (sErr) throw sErr;
-  if (lsErr) throw lsErr;
-  if (lmErr) throw lmErr;
-  const allStats = (statRows ?? []) as PlayerMatchStat[];
+  const allStats = statRows;
 
   const matchIds = Array.from(new Set(allStats.map((s) => s.match_id)));
   const { data: matches, error: matchesErr } = await supabase.from('matches').select('*').in('id', matchIds);
@@ -735,15 +765,13 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
     };
   }
 
-  type LeagueMatchRow = { id: number; final_score: string | null; shirts_pick: string | null; picked_map: string | null };
   const leagueMatchById = new Map<number, LeagueMatchRow>();
-  for (const mm of (leagueMatchRows ?? []) as LeagueMatchRow[]) leagueMatchById.set(mm.id, mm);
+  for (const mm of leagueMatchRows) leagueMatchById.set(mm.id, mm);
 
-  type LeagueStatRow = { match_id: number; adr: number; kills: number; deaths: number; assists: number; is_win: boolean };
   // Use a Set of match IDs to count unique matches (not player-stat rows).
   // Each Wingman match has 2 player rows per side, so row-counting would inflate counts by 2×.
   const leagueMapGroups = new Map<string, { adr: number[]; kills: number[]; deaths: number[]; assists: number[]; matches: Set<number> }>();
-  for (const s of (leagueStatRows ?? []) as LeagueStatRow[]) {
+  for (const s of leagueStatRows) {
     const mm = leagueMatchById.get(s.match_id);
     if (!mm || !isPlayedScore(mm.final_score)) continue;
     const slug = mapSlug((mm.shirts_pick ?? mm.picked_map) ?? '');
@@ -787,14 +815,13 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
   if (pErr) throw pErr;
   if (!player) return null;
 
-  const [{ data: stats, error: sErr }, medalists] = await Promise.all([
-    // TODO: replace with paginated fetch — see GH issue #73. Using a high limit for now.
-    supabase.from('player_match_stats').select('*').eq('player_id', playerId).limit(10000),
+  const [statRows, medalists] = await Promise.all([
+    fetchAllPages<PlayerMatchStat>((from, to) =>
+      supabase.from('player_match_stats').select('*').eq('player_id', playerId).range(from, to),
+    ),
     getAllSeasonMedalists(),
   ]);
-  if (sErr) throw sErr;
   const trophies = medalists.get(playerId) ?? [];
-  const statRows = (stats ?? []) as PlayerMatchStat[];
   if (statRows.length === 0) {
     return { player: player as Player, history: [], trophies };
   }
@@ -3365,13 +3392,11 @@ export async function getMapHeatmap(matchIds: number[]): Promise<MapHeatmapPoint
 export async function getMatchIdsForMap(mapName: string): Promise<number[]> {
   const nameLower = mapName.trim().toLowerCase();
   if (!nameLower) return [];
-  const { data, error } = await supabase
-    .from('matches')
-    .select('id, shirts_pick, picked_map, final_score')
-    .limit(10000);
-  if (error) throw error;
   type Row = { id: number; shirts_pick: string | null; picked_map: string | null; final_score: string | null };
-  return ((data ?? []) as Row[])
+  const rows = await fetchAllPages<Row>((from, to) =>
+    supabase.from('matches').select('id, shirts_pick, picked_map, final_score').range(from, to),
+  );
+  return rows
     .filter(
       (m) =>
         (m.shirts_pick ?? m.picked_map ?? '').trim().toLowerCase() === nameLower &&
@@ -3382,10 +3407,11 @@ export async function getMatchIdsForMap(mapName: string): Promise<number[]> {
 
 /** Ids of every played match — for the sitemap. */
 export async function getAllPlayedMatchIds(): Promise<number[]> {
-  const { data, error } = await supabase.from('matches').select('id, final_score').limit(10000);
-  if (error) throw error;
   type Row = { id: number; final_score: string | null };
-  return ((data ?? []) as Row[]).filter((m) => isPlayedScore(m.final_score)).map((m) => m.id);
+  const rows = await fetchAllPages<Row>((from, to) =>
+    supabase.from('matches').select('id, final_score').range(from, to),
+  );
+  return rows.filter((m) => isPlayedScore(m.final_score)).map((m) => m.id);
 }
 
 // --- Match replay / events (issue #121; see docs/replay.md) ---
