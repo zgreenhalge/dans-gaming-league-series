@@ -3,6 +3,16 @@ import type { MatchContext, PlayerDeathRow } from './matchContext';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
+function bumpClutch(
+  p: Partial<SabFields>,
+  attemptsKey: 'clutch_1v1_attempts' | 'clutch_1v2_attempts' | 'clutch_2v1_attempts',
+  winsKey: 'clutch_1v1_wins' | 'clutch_1v2_wins' | 'clutch_2v1_wins',
+  won: boolean,
+): void {
+  p[attemptsKey] = ((p[attemptsKey] as number) ?? 0) + 1;
+  if (won) p[winsKey] = ((p[winsKey] as number) ?? 0) + 1;
+}
+
 export function collectClutch(
   deathEvents: PlayerDeathRow[],
   context: MatchContext,
@@ -36,8 +46,14 @@ export function collectClutch(
     const ctAlive = new Set(ctPlayers);
     const tAlive = new Set(tPlayers);
 
-    // Track which player entered a clutch situation
+    // `round` is fixed for this whole iteration, so look it up once rather than per death/side.
+    const roundInfo = context.rounds.find((r) => r.roundNumber === round);
+
+    // Track which player entered a clutch situation, and which side entered a 2v1 advantage —
+    // both first-occurrence-only per round, same reasoning: once true it stays true until the
+    // next death changes the alive counts, so only the first check matters.
     const clutchRecorded = new Set<string>();
+    const advantageRecorded = new Set<string>();
 
     for (const death of deaths) {
       const victim = death.user_steamid;
@@ -47,31 +63,43 @@ export function collectClutch(
       ctAlive.delete(victim);
       tAlive.delete(victim);
 
-      // After this death, check if anyone is now in a clutch
-      // A clutch = one player alive on their side, enemies still alive
+      // After this death, check if anyone is now in a clutch, or a side now has the numbers
+      // advantage for a potential 2v1 choke.
       for (const side of ['CT', 'T'] as const) {
         const myAlive = side === 'CT' ? ctAlive : tAlive;
         const enemyAlive = side === 'CT' ? tAlive : ctAlive;
+        if (enemyAlive.size === 0) continue;
 
-        if (myAlive.size !== 1 || enemyAlive.size === 0) continue;
-
-        const clutcher = [...myAlive][0];
-        if (clutchRecorded.has(clutcher)) continue;
-        clutchRecorded.add(clutcher);
-
-        const enemyCount = enemyAlive.size;
-        if (enemyCount > 2) continue; // Only track 1v1 and 1v2
-
-        const p = out.get(clutcher)!;
-        const roundInfo = context.rounds.find((r) => r.roundNumber === round);
         const won = roundInfo?.winnerSide === side;
 
-        if (enemyCount === 1) {
-          p.clutch_1v1_attempts = ((p.clutch_1v1_attempts as number) ?? 0) + 1;
-          if (won) p.clutch_1v1_wins = ((p.clutch_1v1_wins as number) ?? 0) + 1;
-        } else if (enemyCount === 2) {
-          p.clutch_1v2_attempts = ((p.clutch_1v2_attempts as number) ?? 0) + 1;
-          if (won) p.clutch_1v2_wins = ((p.clutch_1v2_wins as number) ?? 0) + 1;
+        if (myAlive.size === 1) {
+          const clutcher = [...myAlive][0];
+          if (clutchRecorded.has(clutcher)) continue;
+
+          const enemyCount = enemyAlive.size;
+          // Only track 1v1/1v2. Checked before recording, not after: a player currently
+          // outnumbered 3+ shouldn't be locked out of a real 1v1/1v2 later this round once
+          // teammates cut the enemy count down.
+          if (enemyCount > 2) continue;
+
+          clutchRecorded.add(clutcher);
+          const p = out.get(clutcher)!;
+          if (enemyCount === 1) {
+            bumpClutch(p, 'clutch_1v1_attempts', 'clutch_1v1_wins', won);
+          } else if (enemyCount === 2) {
+            bumpClutch(p, 'clutch_1v2_attempts', 'clutch_1v2_wins', won);
+          }
+        } else if (myAlive.size === 2 && enemyAlive.size === 1) {
+          // A 2v1 numbers advantage — the natural stat driving Choke Score's "2v1 losses" term.
+          // Both players on the advantaged side share the attempt/loss: with a full-team-vs-one
+          // advantage, the choke isn't attributable to a single "clutcher" the way 1v1/1v2 is.
+          const advantageKey = `${round}::${side}`;
+          if (advantageRecorded.has(advantageKey)) continue;
+          advantageRecorded.add(advantageKey);
+
+          for (const teammate of myAlive) {
+            bumpClutch(out.get(teammate)!, 'clutch_2v1_attempts', 'clutch_2v1_wins', won);
+          }
         }
       }
     }

@@ -1,8 +1,9 @@
 /**
- * Unit tests for collectClutch — 1v1/1v2 clutch detection. Exercises the "one side down to a lone
+ * Unit tests for collectClutch — 1v1/1v2 clutch detection, and the 2v1 numbers-advantage
+ * detection that drives Choke Score's "2v1 losses" term. Exercises the "one side down to a lone
  * survivor while the enemy still has bodies" state machine: the 1v1 vs 1v2 branch, win detection off
  * the round's winnerSide, the >2-enemies-ignored cutoff, and the once-per-round "don't double count"
- * guard.
+ * guard — plus the 2v1 branch, where both alive teammates share the attempt/win credit.
  *
  * Run:  npx tsx src/lib/parsers/clutch.test.ts
  */
@@ -89,6 +90,69 @@ test('collectClutch: nobody down to a lone survivor yet means no clutch at all',
     assert.equal(out.get(sid)?.clutch_1v1_attempts ?? 0, 0);
     assert.equal(out.get(sid)?.clutch_1v2_attempts ?? 0, 0);
   }
+});
+
+test('collectClutch: a 2v1 numbers advantage is credited as a loss for both alive teammates when the round is lost', () => {
+  const sides = { a: 'CT', b: 'CT', c: 'T', d: 'T' } as const;
+  const ids = Object.keys(sides);
+  const rounds = [{ roundNumber: 1, winnerSide: 'T' as const }];
+  const deaths = [death({ round: 1, tick: 100, victim: 'd', attacker: 'a' })]; // CT now 2v1: a,b alive vs c
+  const ctx = makeContext({ rounds, sides, deaths });
+  const out = collectClutch(deaths, ctx, ids);
+
+  assert.equal(out.get('a')?.clutch_2v1_attempts, 1);
+  assert.equal(out.get('a')?.clutch_2v1_wins ?? 0, 0);
+  assert.equal(out.get('b')?.clutch_2v1_attempts, 1);
+  assert.equal(out.get('b')?.clutch_2v1_wins ?? 0, 0);
+});
+
+test('collectClutch: a 2v1 numbers advantage is credited as a win for both alive teammates when the round is won', () => {
+  const sides = { a: 'CT', b: 'CT', c: 'T', d: 'T' } as const;
+  const ids = Object.keys(sides);
+  const rounds = [{ roundNumber: 1, winnerSide: 'CT' as const }];
+  const deaths = [death({ round: 1, tick: 100, victim: 'd', attacker: 'a' })];
+  const ctx = makeContext({ rounds, sides, deaths });
+  const out = collectClutch(deaths, ctx, ids);
+
+  assert.equal(out.get('a')?.clutch_2v1_attempts, 1);
+  assert.equal(out.get('a')?.clutch_2v1_wins, 1);
+  assert.equal(out.get('b')?.clutch_2v1_attempts, 1);
+  assert.equal(out.get('b')?.clutch_2v1_wins, 1);
+});
+
+test('collectClutch: blowing a 2v1 advantage down to a 1v1 credits both the 2v1 attempt and the later 1v1 clutch', () => {
+  const sides = { a: 'CT', b: 'CT', c: 'T', d: 'T' } as const;
+  const ids = Object.keys(sides);
+  const rounds = [{ roundNumber: 1, winnerSide: 'CT' as const }];
+  const deaths = [
+    death({ round: 1, tick: 100, victim: 'd', attacker: 'a' }), // CT 2v1: a,b alive vs c
+    death({ round: 1, tick: 200, victim: 'b', attacker: 'c' }), // CT down to 1v1: a vs c
+  ];
+  const ctx = makeContext({ rounds, sides, deaths });
+  const out = collectClutch(deaths, ctx, ids);
+
+  assert.equal(out.get('a')?.clutch_2v1_attempts, 1);
+  assert.equal(out.get('b')?.clutch_2v1_attempts, 1);
+  assert.equal(out.get('a')?.clutch_1v1_attempts, 1);
+  assert.equal(out.get('a')?.clutch_1v1_wins, 1);
+});
+
+test('collectClutch: a player outnumbered 3+ is not locked out of a real 1v2 once teammates trim the enemy count', () => {
+  // 4v1 (a alone vs e,f,g,h from the start). While a is still outnumbered 3-to-1 (untracked,
+  // enemyCount>2), a must not be marked "recorded" — otherwise the later, genuinely trackable
+  // 1v2 (once one more enemy dies) would be silently skipped as "already recorded".
+  const sides = { a: 'CT', e: 'T', f: 'T', g: 'T', h: 'T' } as const;
+  const ids = Object.keys(sides);
+  const rounds = [{ roundNumber: 1, winnerSide: 'CT' as const }];
+  const deaths = [
+    death({ round: 1, tick: 100, victim: 'f', attacker: 'a' }), // a now 1v3 (untracked, >2)
+    death({ round: 1, tick: 200, victim: 'g', attacker: 'a' }), // a now 1v2 — first trackable state
+  ];
+  const ctx = makeContext({ rounds, sides, deaths });
+  const out = collectClutch(deaths, ctx, ids);
+
+  assert.equal(out.get('a')?.clutch_1v2_attempts, 1);
+  assert.equal(out.get('a')?.clutch_1v2_wins, 1);
 });
 
 if (failures.length) {

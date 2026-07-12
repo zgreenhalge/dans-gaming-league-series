@@ -25,6 +25,8 @@
       "clutch_1v1_wins": 1,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 2,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -48,11 +50,15 @@
       "shots_fired": 140,
       "shots_hit": 60,
       "headshot_hits": 25,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   },
   {
@@ -81,6 +87,8 @@
       "clutch_1v1_wins": 0,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 3,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -104,11 +112,15 @@
       "shots_fired": 130,
       "shots_hit": 50,
       "headshot_hits": 18,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   },
   {
@@ -137,6 +149,8 @@
       "clutch_1v1_wins": 0,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 1,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -160,11 +174,15 @@
       "shots_fired": 110,
       "shots_hit": 38,
       "headshot_hits": 12,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   },
   {
@@ -193,6 +211,8 @@
       "clutch_1v1_wins": 0,
       "clutch_1v2_attempts": 0,
       "clutch_1v2_wins": 0,
+      "clutch_2v1_attempts": 0,
+      "clutch_2v1_wins": 0,
       "flash_assists": 2,
       "flashes_leading_to_kill": 0,
       "utility_damage": 0,
@@ -216,11 +236,15 @@
       "shots_fired": 105,
       "shots_hit": 33,
       "headshot_hits": 9,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0,
+      "unused_util_value_on_death_total": 0
     }
   }
 ]

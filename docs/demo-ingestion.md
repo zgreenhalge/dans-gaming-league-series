@@ -69,17 +69,18 @@ recorded score.
 | `roundSides.ts` | Which side (CT/T) each faction is on each round — see "Side splits" below |
 | `accumulators.ts` | Per-side K/A/D/damage/headshot deltas from round-end accumulator ticks |
 | `entry.ts` | Opening kills/deaths (`Entry+`) |
-| `kast.ts` | KAST rounds + trade tracking (`KAST+`, Trade Score) |
+| `kast.ts` | KAST rounds + trade tracking (`KAST+`) |
 | `multikill.ts` | Multikill rounds |
-| `clutch.ts` | 1vN attempts/wins (`Clutch+`, `Choke+`) |
-| `utility.ts` | Flash assists, utility damage, teamflash/self-flash (`Utility+`, Beer Tax) |
+| `clutch.ts` | 1vN attempts/wins and 2v1 numbers-advantage attempts/wins (`Clutch+`, `Choke+`) |
+| `utility.ts` | Flash assists, utility damage, teamflash/self-flash (`Utility+`) |
 | `objectives.ts` | Bomb plants/defuses (`Objective+`) |
-| `trades.ts` | Trade-kill/traded-death opportunity/attempt/success counts, sharing `kast.ts`'s trade window |
+| `trades.ts` | Trade-kill/traded-death opportunity/attempt/success counts, sharing `kast.ts`'s trade window (`Trade+`) |
 | `heGrenade.ts` | HE grenades thrown and enemy damage dealt (HE Damage/Throw) |
-| `accuracy.ts` | Raw accuracy / head accuracy from `weapon_fire`/`player_hurt` |
+| `accuracy.ts` | Raw accuracy / head accuracy (AWP-excluded) from `weapon_fire`/`player_hurt` |
 | `counterStrafe.ts` | Counter-strafe % from per-tick duck-state/position reads at rifle `weapon_fire` ticks |
 | `sprayAccuracy.ts` | Spray accuracy within sequences of 3+ consecutive rifle shots |
-| `smokes.ts` | Smokes interfering with pushes, from `smokegrenade_detonate`/`_expired` + sampled enemy positions |
+| `smokes.ts` | CT-side smokes interfering with pushes, from `smokegrenade_detonate`/`_expired` + sampled enemy positions |
+| `unusedUtility.ts` | Buy-menu value of grenades held at death (`Unused Util/Death`) |
 
 ## Match start (skipping warmup and stray knife rounds)
 

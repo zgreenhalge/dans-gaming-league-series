@@ -150,6 +150,8 @@ export interface PlayerMatchSabremetrics {
   clutch_1v1_wins: number;
   clutch_1v2_attempts: number;
   clutch_1v2_wins: number;
+  clutch_2v1_attempts: number;
+  clutch_2v1_wins: number;
   flash_assists: number;
   flashes_leading_to_kill: number;
   utility_damage: number;
@@ -173,11 +175,15 @@ export interface PlayerMatchSabremetrics {
   shots_fired: number;
   shots_hit: number;
   headshot_hits: number;
+  shots_hit_no_awp: number;
+  headshot_hits_no_awp: number;
   counter_strafe_shots: number;
   counter_strafe_good_shots: number;
   spray_shots_fired: number;
   spray_shots_hit: number;
   smokes_blocking_push: number;
+  ct_smokes_thrown: number;
+  unused_util_value_on_death_total: number;
 }
 
 export type SabFields = Omit<PlayerMatchSabremetrics, 'player_match_stats_id'>;

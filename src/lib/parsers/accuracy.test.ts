@@ -82,6 +82,24 @@ test('collectAccuracy: teamdamage and self-damage are not credited', () => {
   assert.equal(out.get('a')?.shots_hit ?? 0, 0);
 });
 
+test('collectAccuracy: an AWP headshot counts toward shots_hit/headshot_hits but not the AWP-excluded pair', () => {
+  const hurts = [hurt({ round: 1, tick: 100, attacker: 'a', victim: 'c', weapon: 'awp', dmgHealth: 100, hitgroup: 'head' })];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectAccuracy([], hurts, ctx, ids);
+  assert.equal(out.get('a')?.shots_hit, 1);
+  assert.equal(out.get('a')?.headshot_hits, 1);
+  assert.equal(out.get('a')?.shots_hit_no_awp ?? 0, 0);
+  assert.equal(out.get('a')?.headshot_hits_no_awp ?? 0, 0);
+});
+
+test('collectAccuracy: a non-AWP headshot counts toward both the raw and AWP-excluded pairs', () => {
+  const hurts = [hurt({ round: 1, tick: 100, attacker: 'a', victim: 'c', weapon: 'ak47', dmgHealth: 100, hitgroup: 'head' })];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectAccuracy([], hurts, ctx, ids);
+  assert.equal(out.get('a')?.shots_hit_no_awp, 1);
+  assert.equal(out.get('a')?.headshot_hits_no_awp, 1);
+});
+
 if (failures.length) {
   console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
   for (const f of failures) console.error(`  ✗ ${f}\n`);

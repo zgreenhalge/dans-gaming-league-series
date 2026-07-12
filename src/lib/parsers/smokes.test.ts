@@ -1,7 +1,8 @@
 /**
- * Unit tests for collectSmokes — smokes interfering with pushes (#173 phase 3.5). detonate/
- * expire events are paired by (round, entityid) — confirmed against a real DGLS demo that both
- * events share the same entityid and detonation position.
+ * Unit tests for collectSmokes — CT-side smokes interfering with pushes (#173 phase 3.5),
+ * matching Leetify's "[CT] Smokes That Stopped a Push". detonate/expire events are paired by
+ * (round, entityid) — confirmed against a real DGLS demo that both events share the same
+ * entityid and detonation position.
  *
  * Run:  npx tsx src/lib/parsers/smokes.test.ts
  */
@@ -47,6 +48,26 @@ test('collectSmokes: an enemy within the block radius during the smoke\'s life c
   const ctx = makeContext({ rounds, sides, tickRate });
   const out = collectSmokes(detonates, expires, positions, ctx, ids);
   assert.equal(out.get('a')?.smokes_blocking_push, 1);
+});
+
+test('collectSmokes: every CT smoke thrown counts toward ct_smokes_thrown, blocking or not', () => {
+  const detonates = [detonate({ round: 1, tick: 1000, entityid: 50, user: 'a', x: 0, y: 0 })];
+  const expires = [expire({ round: 1, tick: 1256, entityid: 50, user: 'a', x: 0, y: 0 })];
+  const positions = [pos({ tick: 1128, steamid: 'c', x: 5000, y: 0 })]; // enemy far away, doesn't block
+  const ctx = makeContext({ rounds, sides, tickRate });
+  const out = collectSmokes(detonates, expires, positions, ctx, ids);
+  assert.equal(out.get('a')?.ct_smokes_thrown, 1);
+  assert.equal(out.get('a')?.smokes_blocking_push ?? 0, 0);
+});
+
+test('collectSmokes: a T-side smoke is not counted toward smokes_blocking_push or ct_smokes_thrown', () => {
+  const detonates = [detonate({ round: 1, tick: 1000, entityid: 50, user: 'c', x: 0, y: 0 })]; // c is T
+  const expires = [expire({ round: 1, tick: 1256, entityid: 50, user: 'c', x: 0, y: 0 })];
+  const positions = [pos({ tick: 1128, steamid: 'a', x: 100, y: 0 })]; // enemy CT, well within 800 units
+  const ctx = makeContext({ rounds, sides, tickRate });
+  const out = collectSmokes(detonates, expires, positions, ctx, ids);
+  assert.equal(out.get('c')?.smokes_blocking_push ?? 0, 0);
+  assert.equal(out.get('c')?.ct_smokes_thrown ?? 0, 0);
 });
 
 test('collectSmokes: no enemy within radius does not count', () => {

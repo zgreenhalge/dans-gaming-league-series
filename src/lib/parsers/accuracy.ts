@@ -21,6 +21,13 @@ const NON_GUN_HURT_WEAPONS = new Set([
 // 'right_arm', ...), not the raw HITGROUP_* enum int — confirmed against a real DGLS demo.
 const HITGROUP_HEAD = 'head';
 
+// Assumed short weapon name for the AWP, following the same unprefixed convention as
+// NON_GUN_HURT_WEAPONS (e.g. 'ak47', 'hkp2000') — not yet confirmed against a real DGLS demo with
+// an AWP kill, unlike those. Leetify's Headshot Accuracy excludes AWP shots entirely (both from
+// the headshot count and from its own hit denominator); general Accuracy/shots_hit still include
+// the AWP, since Leetify only carves it out of the head-accuracy stat specifically.
+const AWP_HURT_WEAPON = 'awp';
+
 /**
  * Raw accuracy / head accuracy (#173 phase 3.3). "Raw" because it isn't gated on the enemy
  * having been spotted — see docs/calculations.md for why that gate isn't implemented.
@@ -65,6 +72,12 @@ export function collectAccuracy(
     p.shots_hit = ((p.shots_hit as number) ?? 0) + 1;
     if (h.hitgroup === HITGROUP_HEAD) {
       p.headshot_hits = ((p.headshot_hits as number) ?? 0) + 1;
+    }
+    if (h.weapon !== AWP_HURT_WEAPON) {
+      p.shots_hit_no_awp = ((p.shots_hit_no_awp as number) ?? 0) + 1;
+      if (h.hitgroup === HITGROUP_HEAD) {
+        p.headshot_hits_no_awp = ((p.headshot_hits_no_awp as number) ?? 0) + 1;
+      }
     }
   }
 

@@ -21,6 +21,9 @@ Raw numbers, direct from the game scoreboard
 
 - K/D = Kills / Deaths
 - Dmg/Kill = Damage / Kills
+- HS% = Headshot Kills / Kills — kill-only headshot rate, from the in-game scoreboard; distinct
+  from the hit-based `Head Accuracy` sabremetric below (which counts every headshot *hit*, not
+  just kills, and excludes the AWP)
 - K/R = Kills / Rounds played
 - A/R = Assists / Rounds played
 - D/R = Deaths / Rounds played
@@ -86,7 +89,7 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   - `Opening Success Rate` = `Opening Kills` / (`Opening Kills` + `Opening Deaths`)
 - `KAST+` = `Player KAST` / `League Avg KAST`
   - `KAST` = `Rounds with Kill, Assist, Survived, or Traded` / `Rounds played`
-  - `Trade Score` = `KAST` - (`Untraded Deaths` * 10)
+- `Trade+` = `Player Trade Kill %` / `League Avg Trade Kill %`
   - **Trade Kills** — from the perspective of the player who could avenge a teammate:
     - `Trade Kill Opportunities` = times a teammate died while this player was still alive
       (the chance to trade existed)
@@ -95,7 +98,8 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     - `Trade Kill Successes` = opportunities where this player killed the killer within the
       trade window — the same condition that qualifies a round as "Traded" for KAST
     - `Trade Kill %` = `Trade Kill Successes` / `Trade Kill Attempts`
-  - **Traded Deaths** — the mirror, from the perspective of the player who died:
+  - **Traded Deaths** — the mirror, from the perspective of the player who died (tracked as its
+    own raw stat; not currently folded into `Trade+`):
     - `Traded Death Opportunities` = times this player died while at least one teammate was
       still alive (someone had the chance to trade them)
     - `Traded Death Attempts` = opportunities where a teammate damaged the killer within the
@@ -111,19 +115,37 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 - `Objective+` = `Player Objective Score` / `League Avg Objective Score`
   - `Objective Score` = (2 * `Plants`) + (3 * `Defuses`)
 - `Utility+` = `Player Utility Score` / `League Avg Utility Score`
-  - `Utility Score` = `Flash Assists` + (`Utility Damage` / 50)
+  - `Utility Score` = `Flash Assists` + (`Utility Damage` / 50) + `Smokes Blocking Push` -
+    `Teamflash Duration` — a good CT smoke-block counts on the same 1-point-per-event scale as a
+    Flash Assist; each second spent blinding a teammate subtracts a point.
+  - `Utility Damage` is CS2's own `m_iUtilityDamage` engine accumulator (`accumulators.ts`) — not
+    a DGLS-computed sum — and has always combined HE grenade damage and Molotov/Incendiary damage
+    to enemies (teamdamage/self-damage excluded natively). `HE Damage` (below) is a separate,
+    HE-only event-based collector used for `HE Damage/Throw`, not a component `Utility Damage` is
+    missing.
   - `Flash Assists` and `Enemies Flashed` only count blinds of **1.1s or longer** ("half-blind"
     exposure is excluded), matching Leetify's flash-effectiveness definition. `Blind Duration
-    Dealt`/`Teamflash Duration` are raw exposure totals and stay ungated.
+    Dealt` is a raw, ungated exposure total with no half-blind gate and no role in `Utility Score`.
+    `Teamflash Duration` is likewise a raw, ungated exposure total, but feeds `Utility Score`
+    directly as a penalty, per above.
   - `Flash Assists` credits a **teammate's** kill on the blinded enemy within a fixed window
     after the blind expires (own kills excluded) — this is the scoreboard-style definition and
     keeps its name/meaning for continuity.
-  - `Flashes Leading to Kill` is Leetify's definition: the blinded enemy died **while still
-    blinded** (death tick between the blind's start and expiry), by anyone — including the
-    flasher's own kill. `Utility+` keeps using `Flash Assists`, not `Flashes Leading to Kill`,
-    unless the league decides otherwise.
+  - `Flashes Leading to Kill` follows Leetify's own wording ("if the flashed player then gets
+    killed by you or a teammate"), which names no exact cutoff. This counts a death from the
+    blind's start through **half the flash's own duration past its expiry** — not just the
+    active-blind window — since a kill immediately after an enemy's vision clears is still
+    meaningfully attributable to the flash. Counts a kill by anyone, including the flasher's own.
+    `Utility+` keeps using `Flash Assists`, not `Flashes Leading to Kill`, unless the league
+    decides otherwise.
   - `HE Damage/Throw` = `HE Damage` / `HE Thrown` — damage dealt to enemies by HE grenades
     (teamdamage and self-damage excluded), divided by HE grenades thrown.
+  - `Unused Util/Death` = `Unused Util Value on Death` / `Deaths` — Leetify's "Unused Utility on
+    Death": the buy-menu value (Valve's stable HE/Flash/Smoke/Molotov/Incendiary/Decoy prices) of
+    grenades still held at the moment of death, summed across a player's deaths and averaged per
+    death. Lower is better (utility bought and not used before dying). Read from demoparser2's
+    "inventory" tick field at each death — not yet confirmed against a real DGLS demo; see
+    `src/lib/parsers/unusedUtility.ts`. Tracked as its own raw stat, not folded into `Utility+`.
   - `Enemies Flashed/Flash` = `Enemies Flashed` / `Flashes Thrown`
   - `Avg Blind/Flash` = `Blind Duration Max Sum` / `Effective Flashes` — for each flash that
     blinded at least one enemy for 1.1s+, take the *longest* blind duration it caused (not the
@@ -133,21 +155,46 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     explicit flash-entity id on the underlying event.
 - `Clutch+` = `Player Clutch Score` / `League Avg Clutch Score`
   - `Clutch Score` = `1v1 wins` + 3 * `1v2 wins`
-- `Choke+` = `Player Choke Score` / `League Avg Choke Score`
+- `Choke+` = `Player Choke Score` / `League Avg Choke Score` — lower is better (fewer/smaller
+  blown advantages)
   - `Choke Score` = `1v1 losses` + 2 * `1v2 losses` + 5 * `2v1 losses`
+  - `1v1/1v2 losses` = the mirror of `Clutch Score`'s wins: `Clutch Attempts - Clutch Wins` for
+    each bucket.
+  - `2v1 Attempts`/`2v1 Wins` — a `2v1 Attempt` is a numbers advantage: this player's side has
+    **both** teammates alive against a single remaining enemy, and the round is decided from
+    there. `2v1 losses` = `2v1 Attempts - 2v1 Wins`. Unlike a 1v1/1v2 clutch, a 2v1 advantage
+    isn't attributable to a single "clutcher" — **both** players on the advantaged side are
+    credited the attempt (and the win, if the round is won), since blowing a full-team numbers
+    advantage is a shared failure, not one player's alone.
+- `Aim+` = `0.35 * Accuracy+` + `0.40 * Head Accuracy+` + `0.25 * Counter-Strafe+` (each itself
+  `Player X` / `League Avg X`, computed on `Accuracy`/`Head Accuracy`/`Counter-Strafe %` from the
+  Mechanics section below). A weighted blend rather than a sum on a shared point-scale like
+  `Utility Score` — these three are fairly orthogonal skills on different denominators (a great
+  spray-controller isn't necessarily a good counter-strafer), so there's no principled single
+  scale to weight them on directly. Once each is its own `1.00 = league average` ratio, blending
+  them is apples-to-apples; the weights themselves reflect that landing headshots matters most,
+  followed by raw accuracy, with counter-strafing weighted lowest of the three.
+- `Spray+` = `Player Spray Accuracy` / `League Avg Spray Accuracy` — a standalone ratio, not folded
+  into `Aim+`, since spraying and single-tapping are different enough mechanical skills to track
+  separately.
 
 ### Mechanics (raw, ungated)
 
-Raw accuracy stats derived straight from `weapon_fire`/`player_hurt` events — not yet part of any
-`+` composite. "Raw" because they aren't gated on whether the enemy was actually spotted/visible
-(Leetify's "Accuracy (Enemy Spotted)"); CS2's spotted mask (`m_bSpotted`) is known-flaky, so these
-ship ungated first per `docs/demo-parsing-reference.md`'s guidance on that tradeoff.
+Raw accuracy stats derived straight from `weapon_fire`/`player_hurt` events. "Raw" because they
+aren't gated on whether the enemy was actually spotted/visible (Leetify's "Accuracy (Enemy
+Spotted)"); CS2's spotted mask (`m_bSpotted`) is known-flaky, so these ship ungated first per
+`docs/demo-parsing-reference.md`'s guidance on that tradeoff. `Accuracy`, `Head Accuracy`, and
+`Counter-Strafe %` feed `Aim+`; `Spray Accuracy` feeds `Spray+` — see below.
 
+- `Shots Fired` = count of gun shots fired (guns only; grenade throws, knife, and C4 don't count).
 - `Accuracy` = `Shots Hit` / `Shots Fired` — guns only; grenade throws, knife, and C4 don't count
   as "shots". Hits from grenades (HE, molotov/incendiary) are excluded from `Shots Hit` the same
   way.
-- `Head Accuracy` = `Headshot Hits` / `Shots Hit` — hits landing on the head hitgroup,
-  independent of whether the hit was a kill (distinct from the kill-only `Headshot %` above).
+- `Head Accuracy` = `Headshot Hits (excl. AWP)` / `Shots Hit (excl. AWP)` — hits landing on the
+  head hitgroup, independent of whether the hit was a kill (distinct from the kill-only `HS%`
+  above). AWP shots are excluded from both the numerator and denominator, matching Leetify's
+  Headshot Accuracy definition exactly ("Excludes shots with AWP"); general `Accuracy` still
+  includes the AWP, since Leetify only carves it out of this one stat.
 - Shotguns firing multiple pellets per `weapon_fire` (and wallbang penetration hitting more than
   one player) mean `Shots Fired` and `Shots Hit` aren't a strict 1:1 shot-to-hit correspondence —
   an accepted imprecision of "raw" accuracy, not a bug.
@@ -163,21 +210,26 @@ ship ungated first per `docs/demo-parsing-reference.md`'s guidance on that trade
   sequence; taps and short bursts under 3 shots don't count at all). Reports the league's overall
   total, not a per-rifle breakdown — a per-rifle version would need per-weapon columns or a
   child table, deferred until that's actually wanted.
-- `Smokes Blocking Push` = count of smokes a player threw where an enemy came within ~800 game
-  units of the detonation position at some sampled point during the smoke's life (~800 is the
-  issue's own approximation, not verified against the live Leetify glossary). Paired from the
+- `CT Smokes Blocking %` = `Smokes Blocking Push` / `CT Smokes Thrown` — CT-side only, matching
+  Leetify's `[CT] Smokes That Stopped a Push` exactly (both the CT-only scope and the percentage
+  shape; a T-side smoke serves a different tactical purpose — covering a plant/retake, not
+  stopping a push — and isn't counted). A CT smoke counts as "blocking" if an enemy came within
+  800 game units of the detonation position at some sampled point during the smoke's life (800
+  matches Leetify's own glossary wording exactly). Paired from the
   `smokegrenade_detonate`/`smokegrenade_expired` events via a shared `entityid` (confirmed
   against a real DGLS demo); a smoke whose round ends before it expires falls back to the
   round's end tick. This is position-based, not a true visibility/render check — see
-  `docs/demo-parsing-reference.md` for why that's out of scope.
+  `docs/demo-parsing-reference.md` for why that's out of scope. The raw `Smokes Blocking Push`
+  count (not the `%`) also feeds `Utility+` — see above.
 
 ### Player Rating (not yet implemented)
 
 A weighted sabremetric composite for individual performance. Independent from the
-[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). Most of the underlying `+`
-stats (Entry+, KAST+, Objective+, Utility+, Clutch+) are already computed by demo ingestion and shown
-live in `SabremetricsLeaderboardView.tsx`; Choke+ is documented above but not yet computed/displayed
-anywhere. The composite itself, combining these into one number, hasn't been implemented either.
+[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). Every underlying `+` stat
+this formula references (`KPR+`, `ADR+`, `Entry+`, `Clutch+`, `Choke+`, `KAST+`, `Trade+`,
+`Objective+`, `Utility+`, `APR+`, `DPR+`, `K/D+`) is already computed by demo ingestion and shown
+live in `SabremetricsLeaderboardView.tsx`. The composite itself, combining these into one number,
+hasn't been implemented yet.
 
 ```
 Player Rating = 1.00
@@ -190,7 +242,6 @@ Player Rating = 1.00
   + 0.10(Utility+ - 1)
   + 0.10(APR+ - 1)
   - 0.10(DPR+ - 1)
-  - Beer Tax
 ```
 
 #### Role ratings
@@ -222,17 +273,6 @@ Setup Rating = 1.00
   + 0.10(Objective+ - 1)
   - 10 * Teamflash seconds
 ```
-
-#### Beer Tax
-
-```
-Beer Tax = (Teamflash seconds)
-  + 5 * (Forgot to buy full util rounds)
-  + 5 * (Died with bomb in spawn)
-  + 10 * (Forgot to buy armor rounds)
-  + 15 * (Knife deaths attempted)
-```
-
 
 ## Canonical Regular Season Ranking
 

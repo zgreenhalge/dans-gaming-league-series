@@ -83,14 +83,19 @@ export function collectUtility(
         flashGroups.get(flashKey)!.push(duration);
 
         const blindExpireTick = b.tick + Math.round(duration * context.tickRate);
+        // Leetify's own wording ("if the flashed player then gets killed") doesn't specify an
+        // exact cutoff, so this stat extends half the flash's own duration past its expiry
+        // rather than stopping the instant the blind ends — a kill immediately after an enemy's
+        // vision clears is still meaningfully attributable to the flash.
+        const ledToKillWindowEnd = blindExpireTick + Math.round((duration / 2) * context.tickRate);
         const victimDeaths = deathLookup.get(blinded) ?? [];
 
-        // flashes_leading_to_kill (Leetify-style): the victim died while still blinded by
-        // this flash — [blind_start_tick, blind_expire_tick] — by anyone, including the
-        // flasher's own kill. Distinct from flash_assists below, which only credits a
-        // teammate's kill inside a fixed window after the blind expires.
+        // flashes_leading_to_kill (Leetify-style): the victim died within this widened window —
+        // [blind_start_tick, ledToKillWindowEnd] — by anyone, including the flasher's own kill.
+        // Distinct from flash_assists below, which only credits a teammate's kill inside a fixed
+        // window after the blind expires.
         const ledToKill = victimDeaths.some(
-          (d) => d.round === round && d.tick >= b.tick && d.tick <= blindExpireTick,
+          (d) => d.round === round && d.tick >= b.tick && d.tick <= ledToKillWindowEnd,
         );
         if (ledToKill) {
           p.flashes_leading_to_kill = ((p.flashes_leading_to_kill as number) ?? 0) + 1;

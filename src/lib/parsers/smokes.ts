@@ -24,9 +24,8 @@ export interface PlayerPositionRow {
 // than this stat needs.
 const SAMPLE_INTERVAL_SECONDS = 2;
 
-// Approximate "close enough to interfere with a push" radius (game units), per the issue's own
-// wording — not verified against the live Leetify glossary (blocked by this session's egress
-// policy). Adjust if it turns out to differ.
+// "Close enough to interfere with a push" radius (game units) — matches Leetify's own
+// "[CT] Smokes That Stopped a Push" glossary definition exactly (800 map units).
 const SMOKE_BLOCK_RADIUS = 800;
 
 interface SmokeLife {
@@ -96,7 +95,9 @@ export function neededSmokeTicks(
  * Smokes interfering with pushes (#173 phase 3.5): a smoke counts as "blocking" if an enemy of
  * the thrower came within SMOKE_BLOCK_RADIUS of its detonation position at any sampled tick
  * during its life. Position-based, not a true visibility/render check — see the issue for why
- * that's out of scope.
+ * that's out of scope. CT-only, matching Leetify's own "[CT] Smokes That Stopped a Push" — a
+ * T-side smoke is a different tactical use (covering a bomb plant/retake, not stopping a push)
+ * and isn't counted toward either this or `ct_smokes_thrown`.
  */
 export function collectSmokes(
   detonateEvents: SmokeEventRow[],
@@ -121,6 +122,10 @@ export function collectSmokes(
   for (const life of lives) {
     if (!steamSet.has(life.thrower)) continue;
     const throwerSide = context.playerSides.get(life.thrower)?.get(life.round);
+    if (throwerSide !== 'CT') continue;
+
+    const p = out.get(life.thrower)!;
+    p.ct_smokes_thrown = ((p.ct_smokes_thrown as number) ?? 0) + 1;
 
     let blocked = false;
     for (const t of sampleTicksForLife(life, intervalTicks)) {
@@ -141,7 +146,6 @@ export function collectSmokes(
     }
 
     if (blocked) {
-      const p = out.get(life.thrower)!;
       p.smokes_blocking_push = ((p.smokes_blocking_push as number) ?? 0) + 1;
     }
   }
