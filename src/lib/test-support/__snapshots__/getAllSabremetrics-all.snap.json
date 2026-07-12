@@ -48,11 +48,14 @@
       "shots_fired": 140,
       "shots_hit": 60,
       "headshot_hits": 25,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0
     }
   },
   {
@@ -104,11 +107,14 @@
       "shots_fired": 130,
       "shots_hit": 50,
       "headshot_hits": 18,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0
     }
   },
   {
@@ -160,11 +166,14 @@
       "shots_fired": 110,
       "shots_hit": 38,
       "headshot_hits": 12,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0
     }
   },
   {
@@ -216,11 +225,14 @@
       "shots_fired": 105,
       "shots_hit": 33,
       "headshot_hits": 9,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0
     }
   },
   {
@@ -272,11 +284,14 @@
       "shots_fired": 150,
       "shots_hit": 65,
       "headshot_hits": 28,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0
     }
   },
   {
@@ -328,11 +343,14 @@
       "shots_fired": 138,
       "shots_hit": 54,
       "headshot_hits": 19,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0
     }
   },
   {
@@ -384,11 +402,14 @@
       "shots_fired": 125,
       "shots_hit": 42,
       "headshot_hits": 13,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0
     }
   },
   {
@@ -440,11 +461,14 @@
       "shots_fired": 118,
       "shots_hit": 36,
       "headshot_hits": 10,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0
     }
   },
   {
@@ -496,11 +520,14 @@
       "shots_fired": 100,
       "shots_hit": 48,
       "headshot_hits": 22,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0
     }
   },
   {
@@ -552,11 +579,14 @@
       "shots_fired": 92,
       "shots_hit": 39,
       "headshot_hits": 15,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0
     }
   },
   {
@@ -608,11 +638,14 @@
       "shots_fired": 80,
       "shots_hit": 20,
       "headshot_hits": 5,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0
     }
   },
   {
@@ -664,11 +697,14 @@
       "shots_fired": 75,
       "shots_hit": 18,
       "headshot_hits": 4,
+      "shots_hit_no_awp": 0,
+      "headshot_hits_no_awp": 0,
       "counter_strafe_shots": 0,
       "counter_strafe_good_shots": 0,
       "spray_shots_fired": 0,
       "spray_shots_hit": 0,
-      "smokes_blocking_push": 0
+      "smokes_blocking_push": 0,
+      "ct_smokes_thrown": 0
     }
   }
 ]

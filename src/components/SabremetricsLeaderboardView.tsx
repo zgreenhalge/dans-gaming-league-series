@@ -76,11 +76,14 @@ interface AggregatedSab {
   shots_fired: number;
   shots_hit: number;
   headshot_hits: number;
+  shots_hit_no_awp: number;
+  headshot_hits_no_awp: number;
   counter_strafe_shots: number;
   counter_strafe_good_shots: number;
   spray_shots_fired: number;
   spray_shots_hit: number;
   smokes_blocking_push: number;
+  ct_smokes_thrown: number;
 }
 
 function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
@@ -108,9 +111,10 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
         he_thrown: 0, he_damage: 0,
         blind_duration_max_sum: 0, effective_flashes: 0,
         shots_fired: 0, shots_hit: 0, headshot_hits: 0,
+        shots_hit_no_awp: 0, headshot_hits_no_awp: 0,
         counter_strafe_shots: 0, counter_strafe_good_shots: 0,
         spray_shots_fired: 0, spray_shots_hit: 0,
-        smokes_blocking_push: 0,
+        smokes_blocking_push: 0, ct_smokes_thrown: 0,
       };
       byPlayer.set(r.player_id, agg);
       matchesSeen.set(r.player_id, new Set());
@@ -156,11 +160,14 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
     agg.shots_fired += s.shots_fired;
     agg.shots_hit += s.shots_hit;
     agg.headshot_hits += s.headshot_hits;
+    agg.shots_hit_no_awp += s.shots_hit_no_awp;
+    agg.headshot_hits_no_awp += s.headshot_hits_no_awp;
     agg.counter_strafe_shots += s.counter_strafe_shots;
     agg.counter_strafe_good_shots += s.counter_strafe_good_shots;
     agg.spray_shots_fired += s.spray_shots_fired;
     agg.spray_shots_hit += s.spray_shots_hit;
     agg.smokes_blocking_push += s.smokes_blocking_push;
+    agg.ct_smokes_thrown += s.ct_smokes_thrown;
   }
 
   return Array.from(byPlayer.values());
@@ -432,7 +439,7 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
       switch (sort.col) {
         case 'shots_fired': aVal = a.shots_fired; bVal = b.shots_fired; break;
         case 'acc': aVal = a.shots_hit / (a.shots_fired || 1); bVal = b.shots_hit / (b.shots_fired || 1); break;
-        case 'head_acc': aVal = a.headshot_hits / (a.shots_hit || 1); bVal = b.headshot_hits / (b.shots_hit || 1); break;
+        case 'head_acc': aVal = a.headshot_hits_no_awp / (a.shots_hit_no_awp || 1); bVal = b.headshot_hits_no_awp / (b.shots_hit_no_awp || 1); break;
         case 'cstrafe':
           aVal = a.counter_strafe_good_shots / (a.counter_strafe_shots || 1);
           bVal = b.counter_strafe_good_shots / (b.counter_strafe_shots || 1);
@@ -458,7 +465,7 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
               {!singlePlayer && <th className={playerThCls}>Player</th>}
               <SortableTh label="Shots Fired" title="Shots fired (guns only, not gated on enemy visibility)" sortKey="shots_fired" state={sort} onClick={toggleSort} />
               <SortableTh label="Accuracy" title="Shots that hit an enemy / shots fired (guns only, not gated on enemy visibility)" sortKey="acc" state={sort} onClick={toggleSort} />
-              <SortableTh label="Head Accuracy" title="Hits landing on the head / total hits" sortKey="head_acc" state={sort} onClick={toggleSort} />
+              <SortableTh label="Head Accuracy" title="Hits landing on the head / total hits, excluding AWP shots (matches Leetify's Headshot Accuracy)" sortKey="head_acc" state={sort} onClick={toggleSort} />
               <SortableTh label="Counter-Strafe %" title="Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)" sortKey="cstrafe" state={sort} onClick={toggleSort} />
               <SortableTh label="Spray Accuracy" title="Hits / shots within sequences of 3+ consecutive rifle shots" sortKey="spray" state={sort} onClick={toggleSort} />
             </tr>
@@ -469,7 +476,7 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
                 {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
                 <td className={tdRight}>{a.shots_fired}</td>
                 <td className={tdRight}>{pct(a.shots_hit, a.shots_fired)}</td>
-                <td className={tdRight}>{pct(a.headshot_hits, a.shots_hit)}</td>
+                <td className={tdRight}>{pct(a.headshot_hits_no_awp, a.shots_hit_no_awp)}</td>
                 <td className={tdRight}>{pct(a.counter_strafe_good_shots, a.counter_strafe_shots)}</td>
                 <td className={tdRight}>{pct(a.spray_shots_hit, a.spray_shots_fired)}</td>
               </tr>
@@ -584,7 +591,10 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
           aVal = a.he_damage / (a.he_thrown || 1);
           bVal = b.he_damage / (b.he_thrown || 1);
           break;
-        case 'smoke_block': aVal = a.smokes_blocking_push; bVal = b.smokes_blocking_push; break;
+        case 'smoke_block':
+          aVal = a.smokes_blocking_push / (a.ct_smokes_thrown || 1);
+          bVal = b.smokes_blocking_push / (b.ct_smokes_thrown || 1);
+          break;
         default: return 0;
       }
       return sort.asc ? aVal - bVal : bVal - aVal;
@@ -614,7 +624,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
               <SortableTh label="HE Thrown" title="HE grenades thrown" sortKey="he_thrown" state={sort} onClick={toggleSort} />
               <SortableTh label="HE Damage" title="Damage dealt to enemies by HE grenades" sortKey="he_dmg" state={sort} onClick={toggleSort} />
               <SortableTh label="HE Dmg/Throw" title="HE damage per HE grenade thrown" sortKey="he_dmg_throw" state={sort} onClick={toggleSort} />
-              <SortableTh label="Smokes Blocking" title="Smokes thrown that had an enemy within ~800 units of the bloom at some point during its life" sortKey="smoke_block" state={sort} onClick={toggleSort} />
+              <SortableTh label="CT Smokes Blocking %" title="CT-side smokes that had an enemy within 800 units of the bloom at some point during its life, out of all CT smokes thrown (Leetify's [CT] Smokes That Stopped a Push)" sortKey="smoke_block" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -637,7 +647,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
                   <td className={tdRight}>{a.he_thrown}</td>
                   <td className={tdRight}>{a.he_damage}</td>
                   <td className={tdRight}>{fmtNum(a.he_damage / (a.he_thrown || 1), 1)}</td>
-                  <td className={tdRight}>{a.smokes_blocking_push}</td>
+                  <td className={tdRight}>{pct(a.smokes_blocking_push, a.ct_smokes_thrown)}</td>
                 </tr>
               );
             })}
@@ -758,7 +768,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   const mechanics: StatTile[] = [
     { label: 'Shots Fired', title: 'Shots fired (guns only, not gated on enemy visibility)', value: agg.shots_fired },
     { label: 'Accuracy', title: 'Shots that hit an enemy / shots fired (guns only, not gated on enemy visibility)', value: pct(agg.shots_hit, agg.shots_fired) },
-    { label: 'Head Accuracy', title: 'Hits landing on the head / total hits', value: pct(agg.headshot_hits, agg.shots_hit) },
+    { label: 'Head Accuracy', title: 'Hits landing on the head / total hits, excluding AWP shots (matches Leetify\'s Headshot Accuracy)', value: pct(agg.headshot_hits_no_awp, agg.shots_hit_no_awp) },
     { label: 'Counter-Strafe %', title: 'Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)', value: pct(agg.counter_strafe_good_shots, agg.counter_strafe_shots) },
     { label: 'Spray Accuracy', title: 'Hits / shots within sequences of 3+ consecutive rifle shots', value: pct(agg.spray_shots_hit, agg.spray_shots_fired) },
   ];
@@ -787,7 +797,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'HE Thrown', title: 'HE grenades thrown', value: agg.he_thrown },
     { label: 'HE Damage', title: 'Damage dealt to enemies by HE grenades', value: agg.he_damage },
     { label: 'HE Dmg/Throw', title: 'HE damage per HE grenade thrown', value: fmtNum(agg.he_damage / (agg.he_thrown || 1), 1) },
-    { label: 'Smokes Blocking', title: 'Smokes thrown that had an enemy within ~800 units of the bloom at some point during its life', value: agg.smokes_blocking_push },
+    { label: 'CT Smokes Blocking %', title: 'CT-side smokes that had an enemy within 800 units of the bloom at some point during its life, out of all CT smokes thrown (Leetify\'s [CT] Smokes That Stopped a Push)', value: pct(agg.smokes_blocking_push, agg.ct_smokes_thrown) },
   ];
 
   // Plus stats need the league as a baseline; comparing a player to only

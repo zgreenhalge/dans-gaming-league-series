@@ -21,6 +21,9 @@ Raw numbers, direct from the game scoreboard
 
 - K/D = Kills / Deaths
 - Dmg/Kill = Damage / Kills
+- HS% = Headshot Kills / Kills — kill-only headshot rate, from the in-game scoreboard; distinct
+  from the hit-based `Head Accuracy` sabremetric below (which counts every headshot *hit*, not
+  just kills, and excludes the AWP)
 - K/R = Kills / Rounds played
 - A/R = Assists / Rounds played
 - D/R = Deaths / Rounds played
@@ -118,10 +121,13 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   - `Flash Assists` credits a **teammate's** kill on the blinded enemy within a fixed window
     after the blind expires (own kills excluded) — this is the scoreboard-style definition and
     keeps its name/meaning for continuity.
-  - `Flashes Leading to Kill` is Leetify's definition: the blinded enemy died **while still
-    blinded** (death tick between the blind's start and expiry), by anyone — including the
-    flasher's own kill. `Utility+` keeps using `Flash Assists`, not `Flashes Leading to Kill`,
-    unless the league decides otherwise.
+  - `Flashes Leading to Kill` follows Leetify's own wording ("if the flashed player then gets
+    killed by you or a teammate"), which names no exact cutoff. This counts a death from the
+    blind's start through **half the flash's own duration past its expiry** — not just the
+    active-blind window — since a kill immediately after an enemy's vision clears is still
+    meaningfully attributable to the flash. Counts a kill by anyone, including the flasher's own.
+    `Utility+` keeps using `Flash Assists`, not `Flashes Leading to Kill`, unless the league
+    decides otherwise.
   - `HE Damage/Throw` = `HE Damage` / `HE Thrown` — damage dealt to enemies by HE grenades
     (teamdamage and self-damage excluded), divided by HE grenades thrown.
   - `Enemies Flashed/Flash` = `Enemies Flashed` / `Flashes Thrown`
@@ -143,11 +149,15 @@ Raw accuracy stats derived straight from `weapon_fire`/`player_hurt` events — 
 (Leetify's "Accuracy (Enemy Spotted)"); CS2's spotted mask (`m_bSpotted`) is known-flaky, so these
 ship ungated first per `docs/demo-parsing-reference.md`'s guidance on that tradeoff.
 
+- `Shots Fired` = count of gun shots fired (guns only; grenade throws, knife, and C4 don't count).
 - `Accuracy` = `Shots Hit` / `Shots Fired` — guns only; grenade throws, knife, and C4 don't count
   as "shots". Hits from grenades (HE, molotov/incendiary) are excluded from `Shots Hit` the same
   way.
-- `Head Accuracy` = `Headshot Hits` / `Shots Hit` — hits landing on the head hitgroup,
-  independent of whether the hit was a kill (distinct from the kill-only `Headshot %` above).
+- `Head Accuracy` = `Headshot Hits (excl. AWP)` / `Shots Hit (excl. AWP)` — hits landing on the
+  head hitgroup, independent of whether the hit was a kill (distinct from the kill-only `HS%`
+  above). AWP shots are excluded from both the numerator and denominator, matching Leetify's
+  Headshot Accuracy definition exactly ("Excludes shots with AWP"); general `Accuracy` still
+  includes the AWP, since Leetify only carves it out of this one stat.
 - Shotguns firing multiple pellets per `weapon_fire` (and wallbang penetration hitting more than
   one player) mean `Shots Fired` and `Shots Hit` aren't a strict 1:1 shot-to-hit correspondence —
   an accepted imprecision of "raw" accuracy, not a bug.
@@ -163,9 +173,12 @@ ship ungated first per `docs/demo-parsing-reference.md`'s guidance on that trade
   sequence; taps and short bursts under 3 shots don't count at all). Reports the league's overall
   total, not a per-rifle breakdown — a per-rifle version would need per-weapon columns or a
   child table, deferred until that's actually wanted.
-- `Smokes Blocking Push` = count of smokes a player threw where an enemy came within ~800 game
-  units of the detonation position at some sampled point during the smoke's life (~800 is the
-  issue's own approximation, not verified against the live Leetify glossary). Paired from the
+- `CT Smokes Blocking %` = `Smokes Blocking Push` / `CT Smokes Thrown` — CT-side only, matching
+  Leetify's `[CT] Smokes That Stopped a Push` exactly (both the CT-only scope and the percentage
+  shape; a T-side smoke serves a different tactical purpose — covering a plant/retake, not
+  stopping a push — and isn't counted). A CT smoke counts as "blocking" if an enemy came within
+  800 game units of the detonation position at some sampled point during the smoke's life (800
+  matches Leetify's own glossary wording exactly). Paired from the
   `smokegrenade_detonate`/`smokegrenade_expired` events via a shared `entityid` (confirmed
   against a real DGLS demo); a smoke whose round ends before it expires falls back to the
   round's end tick. This is position-based, not a true visibility/render check — see
