@@ -161,7 +161,7 @@ it on `/admin/players`. `from_ehog()` — the inverse of `to_ehog()`, in both `e
 `ehog.ts` — converts it to a starting μ at `SIGMA_DEFAULT` the first time that player appears in the
 chronological rating walk (`fetch_player_seeds()` / `compute_ratings()`'s `state_for()`); once a
 player has any `player_rating_history` rows, their seed no longer applies. The same conversion is
-used client-side (`getPlayerRatings()` in `queries.ts`) so a seeded player's pre-first-match rating
+used client-side (`getPlayerRatings()` in `src/lib/queries/ehog.ts`) so a seeded player's pre-first-match rating
 projection shows their seed instead of the global default.
 
 A player's actual first-appearance starting μ follows this precedence, all inside
