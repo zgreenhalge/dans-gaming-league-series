@@ -40,8 +40,13 @@ function aggregateSabTotals(rows: SabremetricMatchRow[]) {
     matches: 0, rounds: 0, kills: 0, deaths: 0, assists: 0, damage: 0,
     openingKills: 0, openingDeaths: 0, kastRounds: 0,
     clutch1v1Attempts: 0, clutch1v1Wins: 0, clutch1v2Attempts: 0, clutch1v2Wins: 0,
-    flashAssists: 0, utilityDamage: 0, plants: 0, defuses: 0,
+    clutch2v1Attempts: 0, clutch2v1Wins: 0,
+    tradeKillAttempts: 0, tradeKillSuccesses: 0,
+    flashAssists: 0, utilityDamage: 0, teamflashDuration: 0,
+    smokesBlockingPush: 0, ctSmokesThrown: 0, unusedUtilValueOnDeathTotal: 0,
+    plants: 0, defuses: 0,
     shotsFired: 0, shotsHit: 0, headshotHits: 0,
+    shotsHitNoAwp: 0, headshotHitsNoAwp: 0,
     counterStrafeShots: 0, counterStrafeGoodShots: 0,
     sprayShotsFired: 0, sprayShotsHit: 0,
   };
@@ -59,13 +64,23 @@ function aggregateSabTotals(rows: SabremetricMatchRow[]) {
     totals.clutch1v1Wins += r.sab.clutch_1v1_wins;
     totals.clutch1v2Attempts += r.sab.clutch_1v2_attempts;
     totals.clutch1v2Wins += r.sab.clutch_1v2_wins;
+    totals.clutch2v1Attempts += r.sab.clutch_2v1_attempts;
+    totals.clutch2v1Wins += r.sab.clutch_2v1_wins;
+    totals.tradeKillAttempts += r.sab.trade_kill_attempts;
+    totals.tradeKillSuccesses += r.sab.trade_kill_successes;
     totals.flashAssists += r.sab.flash_assists;
     totals.utilityDamage += r.sab.utility_damage;
+    totals.teamflashDuration += r.sab.teamflash_duration;
+    totals.smokesBlockingPush += r.sab.smokes_blocking_push;
+    totals.ctSmokesThrown += r.sab.ct_smokes_thrown;
+    totals.unusedUtilValueOnDeathTotal += r.sab.unused_util_value_on_death_total;
     totals.plants += r.sab.plants;
     totals.defuses += r.sab.defuses;
     totals.shotsFired += r.sab.shots_fired;
     totals.shotsHit += r.sab.shots_hit;
     totals.headshotHits += r.sab.headshot_hits;
+    totals.shotsHitNoAwp += r.sab.shots_hit_no_awp;
+    totals.headshotHitsNoAwp += r.sab.headshot_hits_no_awp;
     totals.counterStrafeShots += r.sab.counter_strafe_shots;
     totals.counterStrafeGoodShots += r.sab.counter_strafe_good_shots;
     totals.sprayShotsFired += r.sab.spray_shots_fired;
@@ -80,9 +95,22 @@ function safeDiv(n: number, d: number): number | null {
   return d > 0 ? n / d : null;
 }
 
-/** "+" stats per docs/calculations.md — player rate / league rate for that season.
- *  Choke+ and the Player Rating composite are intentionally omitted: Choke+ needs 2v1 clutch
- *  data this schema doesn't collect yet, and Player Rating is documented as not implemented. */
+/** Choke Score = 1v1 losses + 2×1v2 losses + 5×2v1 losses — mirrors chokeScore() in
+ *  SabremetricsLeaderboardView.tsx. A "loss" is attempts minus wins for each bucket. */
+function chokeScoreTotal(t: SabTotals): number {
+  return (t.clutch1v1Attempts - t.clutch1v1Wins)
+    + 2 * (t.clutch1v2Attempts - t.clutch1v2Wins)
+    + 5 * (t.clutch2v1Attempts - t.clutch2v1Wins);
+}
+
+/** Utility Score = Flash Assists + (Utility Damage / 50) + Smokes Blocking Push - Teamflash
+ *  Duration — mirrors utilityScore() in SabremetricsLeaderboardView.tsx. */
+function utilityScoreTotal(t: SabTotals): number {
+  return t.flashAssists + t.utilityDamage / 50 + t.smokesBlockingPush - t.teamflashDuration;
+}
+
+/** "+" stats per docs/calculations.md — player rate / league rate for that season. Mirrors every
+ *  Plus stat SabremetricsLeaderboardView.tsx computes, so results can't drift from the site. */
 function plusStats(player: SabTotals, league: SabTotals) {
   const ratio = (p: number | null, l: number | null) => (p != null && l != null && l !== 0 ? p / l : null);
   const pKpr = safeDiv(player.kills, player.rounds), lKpr = safeDiv(league.kills, league.rounds);
@@ -93,12 +121,29 @@ function plusStats(player: SabTotals, league: SabTotals) {
   const pEntry = safeDiv(player.openingKills, player.openingKills + player.openingDeaths);
   const lEntry = safeDiv(league.openingKills, league.openingKills + league.openingDeaths);
   const pKast = safeDiv(player.kastRounds, player.rounds), lKast = safeDiv(league.kastRounds, league.rounds);
+  const pTrade = safeDiv(player.tradeKillSuccesses, player.tradeKillAttempts);
+  const lTrade = safeDiv(league.tradeKillSuccesses, league.tradeKillAttempts);
   const pObj = 2 * player.plants + 3 * player.defuses;
   const lObj = 2 * league.plants + 3 * league.defuses;
-  const pUtil = player.flashAssists + player.utilityDamage / 50;
-  const lUtil = league.flashAssists + league.utilityDamage / 50;
+  const pUtil = utilityScoreTotal(player), lUtil = utilityScoreTotal(league);
   const pClutch = player.clutch1v1Wins + 3 * player.clutch1v2Wins;
   const lClutch = league.clutch1v1Wins + 3 * league.clutch1v2Wins;
+  const pChoke = chokeScoreTotal(player), lChoke = chokeScoreTotal(league);
+
+  // Aim+ blends three league-relative ratios rather than raw percentages — see Aim+ in
+  // docs/calculations.md. Head Accuracy excludes AWP shots, matching Head Accuracy itself.
+  const accuracyPlus = ratio(safeDiv(player.shotsHit, player.shotsFired), safeDiv(league.shotsHit, league.shotsFired)) ?? 1;
+  const headAccuracyPlus = ratio(
+    safeDiv(player.headshotHitsNoAwp, player.shotsHitNoAwp),
+    safeDiv(league.headshotHitsNoAwp, league.shotsHitNoAwp),
+  ) ?? 1;
+  const counterStrafePlus = ratio(
+    safeDiv(player.counterStrafeGoodShots, player.counterStrafeShots),
+    safeDiv(league.counterStrafeGoodShots, league.counterStrafeShots),
+  ) ?? 1;
+  const pSpray = safeDiv(player.sprayShotsHit, player.sprayShotsFired);
+  const lSpray = safeDiv(league.sprayShotsHit, league.sprayShotsFired);
+
   return {
     sampleMatches: player.matches,
     kprPlus: ratio(pKpr, lKpr),
@@ -108,14 +153,20 @@ function plusStats(player: SabTotals, league: SabTotals) {
     adrPlus: ratio(pAdr, lAdr),
     entryPlus: ratio(pEntry, lEntry),
     kastPlus: ratio(pKast, lKast),
+    tradePlus: ratio(pTrade, lTrade),
     objectivePlus: ratio(pObj, lObj),
     utilityPlus: ratio(pUtil, lUtil),
     clutchPlus: ratio(pClutch, lClutch),
+    chokePlus: ratio(pChoke, lChoke),
+    aimPlus: 0.35 * accuracyPlus + 0.40 * headAccuracyPlus + 0.25 * counterStrafePlus,
+    sprayPlus: ratio(pSpray, lSpray),
     mechanics: {
       accuracy: safeDiv(player.shotsHit, player.shotsFired),
-      headAccuracy: safeDiv(player.headshotHits, player.shotsHit),
+      headAccuracy: safeDiv(player.headshotHitsNoAwp, player.shotsHitNoAwp),
       counterStrafePct: safeDiv(player.counterStrafeGoodShots, player.counterStrafeShots),
       sprayAccuracy: safeDiv(player.sprayShotsHit, player.sprayShotsFired),
+      ctSmokesBlockingPct: safeDiv(player.smokesBlockingPush, player.ctSmokesThrown),
+      unusedUtilPerDeath: safeDiv(player.unusedUtilValueOnDeathTotal, player.deaths),
     },
   };
 }
