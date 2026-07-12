@@ -1,0 +1,29 @@
+[
+  {
+    "id": 3,
+    "entityType": "system",
+    "entityId": 0,
+    "operation": "ehog_recompute",
+    "message": "Recompute failed: timeout",
+    "occurredAt": "2026-03-01T00:00:00.000Z",
+    "label": "EHOG Recompute"
+  },
+  {
+    "id": 1,
+    "entityType": "season",
+    "entityId": 1,
+    "operation": "gauntlet_auto_seed",
+    "message": "Could not seed pod 3: ambiguous tiebreak",
+    "occurredAt": "2026-02-01T00:00:00.000Z",
+    "label": "Season 5"
+  },
+  {
+    "id": 2,
+    "entityType": "match",
+    "entityId": 100,
+    "operation": "steam_id_learn",
+    "message": "Player Bob has no linked steam_id",
+    "occurredAt": "2026-01-10T00:00:00.000Z",
+    "label": "Season 5 · Wk 1 · Match 1"
+  }
+]

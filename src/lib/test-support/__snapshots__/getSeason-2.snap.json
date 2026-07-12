@@ -1,0 +1,10 @@
+{
+  "id": 2,
+  "name": "Season 5 Gauntlet",
+  "status": "COMPLETED",
+  "target_win_rounds": 13,
+  "buy_in_amount": null,
+  "is_gauntlet": true,
+  "start_date": "2026-03-01",
+  "map_pool": null
+}

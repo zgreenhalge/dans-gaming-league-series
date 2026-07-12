@@ -1,0 +1,174 @@
+[
+  {
+    "name": "Filler Map",
+    "slug": "filler-map",
+    "pickCount": 625,
+    "banCount": 0,
+    "noPickCount": 0,
+    "seasons": [],
+    "statsBySeason": []
+  },
+  {
+    "name": "Foroglio",
+    "slug": "foroglio",
+    "pickCount": 2,
+    "banCount": 0,
+    "noPickCount": 0,
+    "seasons": [
+      {
+        "id": 1,
+        "name": "Season 5",
+        "is_gauntlet": false
+      },
+      {
+        "id": 3,
+        "name": "Season 6",
+        "is_gauntlet": false
+      }
+    ],
+    "statsBySeason": [
+      {
+        "seasonId": 1,
+        "isGauntlet": false,
+        "pickCount": 1,
+        "banCount": 0,
+        "noPickCount": 0,
+        "totalKills": 64,
+        "totalAssists": 18,
+        "pickAndWon": 1
+      },
+      {
+        "seasonId": 2,
+        "isGauntlet": true,
+        "pickCount": 1,
+        "banCount": 0,
+        "noPickCount": 0,
+        "totalKills": 73,
+        "totalAssists": 14,
+        "pickAndWon": 1
+      }
+    ]
+  },
+  {
+    "name": "Vertigo",
+    "slug": "vertigo",
+    "pickCount": 1,
+    "banCount": 1,
+    "noPickCount": 0,
+    "seasons": [
+      {
+        "id": 1,
+        "name": "Season 5",
+        "is_gauntlet": false
+      }
+    ],
+    "statsBySeason": [
+      {
+        "seasonId": 1,
+        "isGauntlet": false,
+        "pickCount": 0,
+        "banCount": 1,
+        "noPickCount": 0,
+        "totalKills": 0,
+        "totalAssists": 0,
+        "pickAndWon": 0
+      },
+      {
+        "seasonId": 4,
+        "isGauntlet": true,
+        "pickCount": 1,
+        "banCount": 0,
+        "noPickCount": 0,
+        "totalKills": 45,
+        "totalAssists": 7,
+        "pickAndWon": 1
+      }
+    ]
+  },
+  {
+    "name": "Nuke",
+    "slug": "nuke",
+    "pickCount": 0,
+    "banCount": 1,
+    "noPickCount": 0,
+    "seasons": [],
+    "statsBySeason": [
+      {
+        "seasonId": 1,
+        "isGauntlet": false,
+        "pickCount": 0,
+        "banCount": 1,
+        "noPickCount": 0,
+        "totalKills": 0,
+        "totalAssists": 0,
+        "pickAndWon": 0
+      }
+    ]
+  },
+  {
+    "name": "Inferno",
+    "slug": "inferno",
+    "pickCount": 0,
+    "banCount": 1,
+    "noPickCount": 0,
+    "seasons": [],
+    "statsBySeason": [
+      {
+        "seasonId": 1,
+        "isGauntlet": false,
+        "pickCount": 0,
+        "banCount": 1,
+        "noPickCount": 0,
+        "totalKills": 0,
+        "totalAssists": 0,
+        "pickAndWon": 0
+      }
+    ]
+  },
+  {
+    "name": "Overpass",
+    "slug": "overpass",
+    "pickCount": 0,
+    "banCount": 1,
+    "noPickCount": 0,
+    "seasons": [],
+    "statsBySeason": [
+      {
+        "seasonId": 1,
+        "isGauntlet": false,
+        "pickCount": 0,
+        "banCount": 1,
+        "noPickCount": 0,
+        "totalKills": 0,
+        "totalAssists": 0,
+        "pickAndWon": 0
+      }
+    ]
+  },
+  {
+    "name": "Cobblestone",
+    "slug": "cobblestone",
+    "pickCount": 0,
+    "banCount": 0,
+    "noPickCount": 1,
+    "seasons": [
+      {
+        "id": 1,
+        "name": "Season 5",
+        "is_gauntlet": false
+      }
+    ],
+    "statsBySeason": [
+      {
+        "seasonId": 1,
+        "isGauntlet": false,
+        "pickCount": 0,
+        "banCount": 0,
+        "noPickCount": 1,
+        "totalKills": 0,
+        "totalAssists": 0,
+        "pickAndWon": 0
+      }
+    ]
+  }
+]

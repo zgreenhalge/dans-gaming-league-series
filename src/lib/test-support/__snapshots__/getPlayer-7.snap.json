@@ -1,0 +1,310 @@
+{
+  "player": {
+    "id": 7,
+    "name": "Grace",
+    "discord_id": null,
+    "steam_id": null,
+    "steam_nickname": null,
+    "steam_avatar_url": null,
+    "steam_refreshed_at": null,
+    "is_admin": false,
+    "seed_ehog": null
+  },
+  "history": [
+    {
+      "kills": 0,
+      "assists": 0,
+      "deaths": 0,
+      "adr": 0,
+      "damage": 0,
+      "rounds_played": 0,
+      "rounds_won": 0,
+      "is_win": false,
+      "id": 1023,
+      "match_id": 400,
+      "player_id": 7,
+      "faction": "SKINS",
+      "match_number": 1,
+      "week_number": 1,
+      "season_id": 3,
+      "season_number": 6,
+      "season_name": "Season 6",
+      "is_gauntlet": false,
+      "map": null,
+      "final_score": null,
+      "scheduled_at": null,
+      "shirts": [
+        {
+          "player_id": 1,
+          "player_name": "Alice"
+        },
+        {
+          "player_id": 5,
+          "player_name": "Erin"
+        }
+      ],
+      "skins": [
+        {
+          "player_id": 6,
+          "player_name": "Frank"
+        },
+        {
+          "player_id": 7,
+          "player_name": "Grace"
+        }
+      ],
+      "shirts_stats": [
+        {
+          "match_id": 400,
+          "player_id": 1,
+          "player_name": "Alice",
+          "faction": "SHIRTS",
+          "kills": 0,
+          "assists": 0,
+          "deaths": 0,
+          "adr": 0,
+          "is_win": false
+        },
+        {
+          "match_id": 400,
+          "player_id": 5,
+          "player_name": "Erin",
+          "faction": "SHIRTS",
+          "kills": 0,
+          "assists": 0,
+          "deaths": 0,
+          "adr": 0,
+          "is_win": false
+        }
+      ],
+      "skins_stats": [
+        {
+          "match_id": 400,
+          "player_id": 6,
+          "player_name": "Frank",
+          "faction": "SKINS",
+          "kills": 0,
+          "assists": 0,
+          "deaths": 0,
+          "adr": 0,
+          "is_win": false
+        },
+        {
+          "match_id": 400,
+          "player_id": 7,
+          "player_name": "Grace",
+          "faction": "SKINS",
+          "kills": 0,
+          "assists": 0,
+          "deaths": 0,
+          "adr": 0,
+          "is_win": false
+        }
+      ],
+      "picked_map": null,
+      "shirts_pick": null,
+      "skins_starting_side": null,
+      "shirts_ban": null,
+      "shirts_ban2": null,
+      "skins_ban1": null,
+      "skins_ban2": null
+    },
+    {
+      "kills": 0,
+      "assists": 0,
+      "deaths": 0,
+      "adr": 0,
+      "damage": 0,
+      "rounds_played": 0,
+      "rounds_won": 0,
+      "is_win": false,
+      "id": 1006,
+      "match_id": 101,
+      "player_id": 7,
+      "faction": "SKINS",
+      "match_number": 2,
+      "week_number": 1,
+      "season_id": 1,
+      "season_number": 5,
+      "season_name": "Season 5",
+      "is_gauntlet": false,
+      "map": null,
+      "final_score": null,
+      "scheduled_at": "2026-01-15T19:00:00.000Z",
+      "shirts": [
+        {
+          "player_id": 5,
+          "player_name": "Erin"
+        },
+        {
+          "player_id": 6,
+          "player_name": "Frank"
+        }
+      ],
+      "skins": [
+        {
+          "player_id": 7,
+          "player_name": "Grace"
+        },
+        {
+          "player_id": 8,
+          "player_name": "Heidi"
+        }
+      ],
+      "shirts_stats": [
+        {
+          "match_id": 101,
+          "player_id": 5,
+          "player_name": "Erin",
+          "faction": "SHIRTS",
+          "kills": 0,
+          "assists": 0,
+          "deaths": 0,
+          "adr": 0,
+          "is_win": false
+        },
+        {
+          "match_id": 101,
+          "player_id": 6,
+          "player_name": "Frank",
+          "faction": "SHIRTS",
+          "kills": 0,
+          "assists": 0,
+          "deaths": 0,
+          "adr": 0,
+          "is_win": false
+        }
+      ],
+      "skins_stats": [
+        {
+          "match_id": 101,
+          "player_id": 7,
+          "player_name": "Grace",
+          "faction": "SKINS",
+          "kills": 0,
+          "assists": 0,
+          "deaths": 0,
+          "adr": 0,
+          "is_win": false
+        },
+        {
+          "match_id": 101,
+          "player_id": 8,
+          "player_name": "Heidi",
+          "faction": "SKINS",
+          "kills": 0,
+          "assists": 0,
+          "deaths": 0,
+          "adr": 0,
+          "is_win": false
+        }
+      ],
+      "picked_map": null,
+      "shirts_pick": null,
+      "skins_starting_side": null,
+      "shirts_ban": null,
+      "shirts_ban2": null,
+      "skins_ban1": null,
+      "skins_ban2": null
+    },
+    {
+      "kills": 8,
+      "assists": 2,
+      "deaths": 16,
+      "adr": 45,
+      "damage": 810,
+      "rounds_played": 18,
+      "rounds_won": 5,
+      "is_win": false,
+      "id": 1018,
+      "match_id": 300,
+      "player_id": 7,
+      "faction": "SKINS",
+      "match_number": 1,
+      "week_number": 1,
+      "season_id": 4,
+      "season_number": 4,
+      "season_name": "Season 4 Gauntlet",
+      "is_gauntlet": true,
+      "map": "Vertigo",
+      "final_score": "13-5",
+      "scheduled_at": null,
+      "shirts": [
+        {
+          "player_id": 3,
+          "player_name": "Carol"
+        },
+        {
+          "player_id": 4,
+          "player_name": "Dave"
+        }
+      ],
+      "skins": [
+        {
+          "player_id": 7,
+          "player_name": "Grace"
+        },
+        {
+          "player_id": 8,
+          "player_name": "Heidi"
+        }
+      ],
+      "shirts_stats": [
+        {
+          "match_id": 300,
+          "player_id": 3,
+          "player_name": "Carol",
+          "faction": "SHIRTS",
+          "kills": 16,
+          "assists": 1,
+          "deaths": 10,
+          "adr": 95,
+          "is_win": true
+        },
+        {
+          "match_id": 300,
+          "player_id": 4,
+          "player_name": "Dave",
+          "faction": "SHIRTS",
+          "kills": 14,
+          "assists": 3,
+          "deaths": 11,
+          "adr": 88,
+          "is_win": true
+        }
+      ],
+      "skins_stats": [
+        {
+          "match_id": 300,
+          "player_id": 7,
+          "player_name": "Grace",
+          "faction": "SKINS",
+          "kills": 8,
+          "assists": 2,
+          "deaths": 16,
+          "adr": 45,
+          "is_win": false
+        },
+        {
+          "match_id": 300,
+          "player_id": 8,
+          "player_name": "Heidi",
+          "faction": "SKINS",
+          "kills": 7,
+          "assists": 1,
+          "deaths": 17,
+          "adr": 40,
+          "is_win": false
+        }
+      ],
+      "picked_map": "Vertigo",
+      "shirts_pick": "Vertigo",
+      "skins_starting_side": "CT",
+      "shirts_ban": null,
+      "shirts_ban2": null,
+      "skins_ban1": null,
+      "skins_ban2": null
+    }
+  ],
+  "trophies": []
+}

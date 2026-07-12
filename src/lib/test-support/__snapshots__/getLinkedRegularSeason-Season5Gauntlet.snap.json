@@ -1,0 +1,14 @@
+{
+  "id": 1,
+  "name": "Season 5",
+  "status": "COMPLETED",
+  "target_win_rounds": 13,
+  "buy_in_amount": 20,
+  "is_gauntlet": false,
+  "start_date": "2026-01-01",
+  "map_pool": [
+    "Foroglio",
+    "Cobblestone",
+    "Vertigo"
+  ]
+}

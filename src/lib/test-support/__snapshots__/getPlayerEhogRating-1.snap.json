@@ -1,0 +1,27 @@
+{
+  "currentRating": 1450,
+  "history": [
+    {
+      "matchId": 100,
+      "sequenceIndex": 1,
+      "ehogRating": 1420,
+      "ratingDelta": 20,
+      "seasonName": "Season 5",
+      "seasonNumber": 5,
+      "isGauntlet": false,
+      "weekNumber": 1,
+      "matchNumber": 1
+    },
+    {
+      "matchId": 200,
+      "sequenceIndex": 2,
+      "ehogRating": 1450,
+      "ratingDelta": 30,
+      "seasonName": "Season 5 Gauntlet",
+      "seasonNumber": 5,
+      "isGauntlet": true,
+      "weekNumber": 1,
+      "matchNumber": 1
+    }
+  ]
+}

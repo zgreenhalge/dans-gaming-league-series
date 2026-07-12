@@ -1,0 +1,6 @@
+{
+  "status": "ready",
+  "stage": "parse",
+  "ghRunUrl": null,
+  "errorMessage": "ffmpeg exited 1"
+}

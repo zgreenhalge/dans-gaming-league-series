@@ -1,0 +1,14 @@
+{
+  "foroglio": {
+    "image_url": "/maps/foroglio.jpg",
+    "workshop_url": "https://steamcommunity.com/sharedfiles/filedetails/?id=100001"
+  },
+  "vertigo": {
+    "image_url": "/maps/vertigo.jpg",
+    "workshop_url": "https://steamcommunity.com/sharedfiles/filedetails/?id=100002"
+  },
+  "cobblestone": {
+    "image_url": null,
+    "workshop_url": null
+  }
+}

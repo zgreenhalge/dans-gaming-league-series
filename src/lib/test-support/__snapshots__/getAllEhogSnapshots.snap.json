@@ -1,0 +1,65 @@
+[
+  {
+    "playerId": 1,
+    "ehogRating": 1420,
+    "sequenceIndex": 1,
+    "seasonNumber": 5,
+    "isGauntlet": false
+  },
+  {
+    "playerId": 2,
+    "ehogRating": 1360,
+    "sequenceIndex": 1,
+    "seasonNumber": 5,
+    "isGauntlet": false
+  },
+  {
+    "playerId": 3,
+    "ehogRating": 1300,
+    "sequenceIndex": 1,
+    "seasonNumber": 5,
+    "isGauntlet": false
+  },
+  {
+    "playerId": 4,
+    "ehogRating": 1320,
+    "sequenceIndex": 1,
+    "seasonNumber": 5,
+    "isGauntlet": false
+  },
+  {
+    "playerId": 5,
+    "ehogRating": 1200,
+    "sequenceIndex": 1,
+    "seasonNumber": 5,
+    "isGauntlet": true
+  },
+  {
+    "playerId": 1,
+    "ehogRating": 1450,
+    "sequenceIndex": 2,
+    "seasonNumber": 5,
+    "isGauntlet": true
+  },
+  {
+    "playerId": 2,
+    "ehogRating": 1380,
+    "sequenceIndex": 2,
+    "seasonNumber": 5,
+    "isGauntlet": true
+  },
+  {
+    "playerId": 3,
+    "ehogRating": 1290,
+    "sequenceIndex": 2,
+    "seasonNumber": 4,
+    "isGauntlet": true
+  },
+  {
+    "playerId": 4,
+    "ehogRating": 1310,
+    "sequenceIndex": 2,
+    "seasonNumber": 4,
+    "isGauntlet": true
+  }
+]

@@ -1,0 +1,586 @@
+{
+  "duos": [
+    {
+      "playerA": 1,
+      "playerB": 2,
+      "gamesPlayed": 1,
+      "wins": 1,
+      "losses": 0,
+      "combinedAdr": 163.68,
+      "combinedKills": 38,
+      "combinedAssists": 8,
+      "combinedDeaths": 31,
+      "roundsWon": 13,
+      "roundsPlayed": 22,
+      "aStats": {
+        "kills": 20,
+        "assists": 3,
+        "deaths": 15,
+        "adr": 85.5,
+        "rwr": 59.09090909090909,
+        "roundsWon": 13,
+        "roundsPlayed": 22
+      },
+      "bStats": {
+        "kills": 18,
+        "assists": 5,
+        "deaths": 16,
+        "adr": 78.18,
+        "rwr": 59.09090909090909,
+        "roundsWon": 13,
+        "roundsPlayed": 22
+      },
+      "bestMap": "foroglio",
+      "mapBreakdown": [
+        {
+          "map": "foroglio",
+          "games": 1,
+          "wins": 1,
+          "losses": 0,
+          "roundsWon": 13,
+          "roundsPlayed": 22,
+          "aAdr": 163.68,
+          "bAdr": 0
+        }
+      ],
+      "matches": [
+        {
+          "matchId": 100,
+          "seasonNumber": 5,
+          "isGauntlet": false,
+          "weekNumber": 1,
+          "matchNumber": 1,
+          "map": "Foroglio",
+          "pickedBy": "SHIRTS",
+          "startingSide": "CT",
+          "score": {
+            "duo": 13,
+            "opponents": 9
+          },
+          "won": true,
+          "team": [
+            {
+              "player_id": 1,
+              "player_name": "Alice",
+              "kills": 20,
+              "assists": 3,
+              "deaths": 15,
+              "adr": 85.5
+            },
+            {
+              "player_id": 2,
+              "player_name": "Bob",
+              "kills": 18,
+              "assists": 5,
+              "deaths": 16,
+              "adr": 78.18
+            }
+          ],
+          "opponents": [
+            {
+              "player_id": 3,
+              "player_name": "Carol",
+              "kills": 14,
+              "assists": 4,
+              "deaths": 19,
+              "adr": 65
+            },
+            {
+              "player_id": 4,
+              "player_name": "Dave",
+              "kills": 12,
+              "assists": 6,
+              "deaths": 20,
+              "adr": 60.09
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "playerA": 3,
+      "playerB": 4,
+      "gamesPlayed": 1,
+      "wins": 0,
+      "losses": 1,
+      "combinedAdr": 125.09,
+      "combinedKills": 26,
+      "combinedAssists": 10,
+      "combinedDeaths": 39,
+      "roundsWon": 9,
+      "roundsPlayed": 22,
+      "aStats": {
+        "kills": 14,
+        "assists": 4,
+        "deaths": 19,
+        "adr": 65,
+        "rwr": 40.909090909090914,
+        "roundsWon": 9,
+        "roundsPlayed": 22
+      },
+      "bStats": {
+        "kills": 12,
+        "assists": 6,
+        "deaths": 20,
+        "adr": 60.09,
+        "rwr": 40.909090909090914,
+        "roundsWon": 9,
+        "roundsPlayed": 22
+      },
+      "bestMap": "foroglio",
+      "mapBreakdown": [
+        {
+          "map": "foroglio",
+          "games": 1,
+          "wins": 0,
+          "losses": 1,
+          "roundsWon": 9,
+          "roundsPlayed": 22,
+          "aAdr": 125.09,
+          "bAdr": 0
+        }
+      ],
+      "matches": [
+        {
+          "matchId": 100,
+          "seasonNumber": 5,
+          "isGauntlet": false,
+          "weekNumber": 1,
+          "matchNumber": 1,
+          "map": "Foroglio",
+          "pickedBy": "SHIRTS",
+          "startingSide": "CT",
+          "score": {
+            "duo": 9,
+            "opponents": 13
+          },
+          "won": false,
+          "team": [
+            {
+              "player_id": 3,
+              "player_name": "Carol",
+              "kills": 14,
+              "assists": 4,
+              "deaths": 19,
+              "adr": 65
+            },
+            {
+              "player_id": 4,
+              "player_name": "Dave",
+              "kills": 12,
+              "assists": 6,
+              "deaths": 20,
+              "adr": 60.09
+            }
+          ],
+          "opponents": [
+            {
+              "player_id": 1,
+              "player_name": "Alice",
+              "kills": 20,
+              "assists": 3,
+              "deaths": 15,
+              "adr": 85.5
+            },
+            {
+              "player_id": 2,
+              "player_name": "Bob",
+              "kills": 18,
+              "assists": 5,
+              "deaths": 16,
+              "adr": 78.18
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "rivals": [
+    {
+      "playerA": 1,
+      "playerB": 3,
+      "meetings": 1,
+      "aWins": 1,
+      "bWins": 0,
+      "lastMap": "Foroglio",
+      "aStats": {
+        "kills": 20,
+        "assists": 3,
+        "deaths": 15,
+        "adr": 85.5,
+        "rwr": 59.09090909090909,
+        "roundsWon": 13,
+        "roundsPlayed": 22
+      },
+      "bStats": {
+        "kills": 14,
+        "assists": 4,
+        "deaths": 19,
+        "adr": 65,
+        "rwr": 40.909090909090914,
+        "roundsWon": 9,
+        "roundsPlayed": 22
+      },
+      "mapBreakdown": [
+        {
+          "map": "foroglio",
+          "games": 1,
+          "wins": 1,
+          "losses": 0,
+          "roundsWon": 13,
+          "roundsPlayed": 22,
+          "aAdr": 85.5,
+          "bAdr": 65
+        }
+      ],
+      "matches": [
+        {
+          "matchId": 100,
+          "seasonNumber": 5,
+          "isGauntlet": false,
+          "weekNumber": 1,
+          "matchNumber": 1,
+          "map": "Foroglio",
+          "pickedBy": "SHIRTS",
+          "startingSide": "CT",
+          "score": {
+            "a": 13,
+            "b": 9
+          },
+          "aWon": true,
+          "aTeam": [
+            {
+              "player_id": 1,
+              "player_name": "Alice",
+              "kills": 20,
+              "assists": 3,
+              "deaths": 15,
+              "adr": 85.5
+            },
+            {
+              "player_id": 2,
+              "player_name": "Bob",
+              "kills": 18,
+              "assists": 5,
+              "deaths": 16,
+              "adr": 78.18
+            }
+          ],
+          "bTeam": [
+            {
+              "player_id": 3,
+              "player_name": "Carol",
+              "kills": 14,
+              "assists": 4,
+              "deaths": 19,
+              "adr": 65
+            },
+            {
+              "player_id": 4,
+              "player_name": "Dave",
+              "kills": 12,
+              "assists": 6,
+              "deaths": 20,
+              "adr": 60.09
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "playerA": 1,
+      "playerB": 4,
+      "meetings": 1,
+      "aWins": 1,
+      "bWins": 0,
+      "lastMap": "Foroglio",
+      "aStats": {
+        "kills": 20,
+        "assists": 3,
+        "deaths": 15,
+        "adr": 85.5,
+        "rwr": 59.09090909090909,
+        "roundsWon": 13,
+        "roundsPlayed": 22
+      },
+      "bStats": {
+        "kills": 12,
+        "assists": 6,
+        "deaths": 20,
+        "adr": 60.09,
+        "rwr": 40.909090909090914,
+        "roundsWon": 9,
+        "roundsPlayed": 22
+      },
+      "mapBreakdown": [
+        {
+          "map": "foroglio",
+          "games": 1,
+          "wins": 1,
+          "losses": 0,
+          "roundsWon": 13,
+          "roundsPlayed": 22,
+          "aAdr": 85.5,
+          "bAdr": 60.09
+        }
+      ],
+      "matches": [
+        {
+          "matchId": 100,
+          "seasonNumber": 5,
+          "isGauntlet": false,
+          "weekNumber": 1,
+          "matchNumber": 1,
+          "map": "Foroglio",
+          "pickedBy": "SHIRTS",
+          "startingSide": "CT",
+          "score": {
+            "a": 13,
+            "b": 9
+          },
+          "aWon": true,
+          "aTeam": [
+            {
+              "player_id": 1,
+              "player_name": "Alice",
+              "kills": 20,
+              "assists": 3,
+              "deaths": 15,
+              "adr": 85.5
+            },
+            {
+              "player_id": 2,
+              "player_name": "Bob",
+              "kills": 18,
+              "assists": 5,
+              "deaths": 16,
+              "adr": 78.18
+            }
+          ],
+          "bTeam": [
+            {
+              "player_id": 3,
+              "player_name": "Carol",
+              "kills": 14,
+              "assists": 4,
+              "deaths": 19,
+              "adr": 65
+            },
+            {
+              "player_id": 4,
+              "player_name": "Dave",
+              "kills": 12,
+              "assists": 6,
+              "deaths": 20,
+              "adr": 60.09
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "playerA": 2,
+      "playerB": 3,
+      "meetings": 1,
+      "aWins": 1,
+      "bWins": 0,
+      "lastMap": "Foroglio",
+      "aStats": {
+        "kills": 18,
+        "assists": 5,
+        "deaths": 16,
+        "adr": 78.18,
+        "rwr": 59.09090909090909,
+        "roundsWon": 13,
+        "roundsPlayed": 22
+      },
+      "bStats": {
+        "kills": 14,
+        "assists": 4,
+        "deaths": 19,
+        "adr": 65,
+        "rwr": 40.909090909090914,
+        "roundsWon": 9,
+        "roundsPlayed": 22
+      },
+      "mapBreakdown": [
+        {
+          "map": "foroglio",
+          "games": 1,
+          "wins": 1,
+          "losses": 0,
+          "roundsWon": 13,
+          "roundsPlayed": 22,
+          "aAdr": 78.18,
+          "bAdr": 65
+        }
+      ],
+      "matches": [
+        {
+          "matchId": 100,
+          "seasonNumber": 5,
+          "isGauntlet": false,
+          "weekNumber": 1,
+          "matchNumber": 1,
+          "map": "Foroglio",
+          "pickedBy": "SHIRTS",
+          "startingSide": "CT",
+          "score": {
+            "a": 13,
+            "b": 9
+          },
+          "aWon": true,
+          "aTeam": [
+            {
+              "player_id": 1,
+              "player_name": "Alice",
+              "kills": 20,
+              "assists": 3,
+              "deaths": 15,
+              "adr": 85.5
+            },
+            {
+              "player_id": 2,
+              "player_name": "Bob",
+              "kills": 18,
+              "assists": 5,
+              "deaths": 16,
+              "adr": 78.18
+            }
+          ],
+          "bTeam": [
+            {
+              "player_id": 3,
+              "player_name": "Carol",
+              "kills": 14,
+              "assists": 4,
+              "deaths": 19,
+              "adr": 65
+            },
+            {
+              "player_id": 4,
+              "player_name": "Dave",
+              "kills": 12,
+              "assists": 6,
+              "deaths": 20,
+              "adr": 60.09
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "playerA": 2,
+      "playerB": 4,
+      "meetings": 1,
+      "aWins": 1,
+      "bWins": 0,
+      "lastMap": "Foroglio",
+      "aStats": {
+        "kills": 18,
+        "assists": 5,
+        "deaths": 16,
+        "adr": 78.18,
+        "rwr": 59.09090909090909,
+        "roundsWon": 13,
+        "roundsPlayed": 22
+      },
+      "bStats": {
+        "kills": 12,
+        "assists": 6,
+        "deaths": 20,
+        "adr": 60.09,
+        "rwr": 40.909090909090914,
+        "roundsWon": 9,
+        "roundsPlayed": 22
+      },
+      "mapBreakdown": [
+        {
+          "map": "foroglio",
+          "games": 1,
+          "wins": 1,
+          "losses": 0,
+          "roundsWon": 13,
+          "roundsPlayed": 22,
+          "aAdr": 78.18,
+          "bAdr": 60.09
+        }
+      ],
+      "matches": [
+        {
+          "matchId": 100,
+          "seasonNumber": 5,
+          "isGauntlet": false,
+          "weekNumber": 1,
+          "matchNumber": 1,
+          "map": "Foroglio",
+          "pickedBy": "SHIRTS",
+          "startingSide": "CT",
+          "score": {
+            "a": 13,
+            "b": 9
+          },
+          "aWon": true,
+          "aTeam": [
+            {
+              "player_id": 1,
+              "player_name": "Alice",
+              "kills": 20,
+              "assists": 3,
+              "deaths": 15,
+              "adr": 85.5
+            },
+            {
+              "player_id": 2,
+              "player_name": "Bob",
+              "kills": 18,
+              "assists": 5,
+              "deaths": 16,
+              "adr": 78.18
+            }
+          ],
+          "bTeam": [
+            {
+              "player_id": 3,
+              "player_name": "Carol",
+              "kills": 14,
+              "assists": 4,
+              "deaths": 19,
+              "adr": 65
+            },
+            {
+              "player_id": 4,
+              "player_name": "Dave",
+              "kills": 12,
+              "assists": 6,
+              "deaths": 20,
+              "adr": 60.09
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "players": [
+    {
+      "id": 1,
+      "name": "Alice",
+      "steam_avatar_url": null
+    },
+    {
+      "id": 2,
+      "name": "Bob",
+      "steam_avatar_url": null
+    },
+    {
+      "id": 3,
+      "name": "Carol",
+      "steam_avatar_url": null
+    },
+    {
+      "id": 4,
+      "name": "Dave",
+      "steam_avatar_url": null
+    }
+  ]
+}

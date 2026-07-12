@@ -1,0 +1,212 @@
+[
+  {
+    "match_id": 100,
+    "match_number": 1,
+    "week_number": 1,
+    "season_id": 1,
+    "season_number": 5,
+    "season_name": "Season 5",
+    "is_gauntlet": false,
+    "is_playoff_game": false,
+    "final_score": "13-9",
+    "shirts_stats": [
+      {
+        "player_id": 1,
+        "player_name": "Alice",
+        "faction": "SHIRTS",
+        "kills": 20,
+        "assists": 3,
+        "deaths": 15,
+        "adr": 85.5,
+        "damage": 1881,
+        "rounds_played": 22,
+        "rounds_won": 13,
+        "is_win": true
+      },
+      {
+        "player_id": 2,
+        "player_name": "Bob",
+        "faction": "SHIRTS",
+        "kills": 18,
+        "assists": 5,
+        "deaths": 16,
+        "adr": 78.18,
+        "damage": 1720,
+        "rounds_played": 22,
+        "rounds_won": 13,
+        "is_win": true
+      }
+    ],
+    "skins_stats": [
+      {
+        "player_id": 3,
+        "player_name": "Carol",
+        "faction": "SKINS",
+        "kills": 14,
+        "assists": 4,
+        "deaths": 19,
+        "adr": 65,
+        "damage": 1430,
+        "rounds_played": 22,
+        "rounds_won": 9,
+        "is_win": false
+      },
+      {
+        "player_id": 4,
+        "player_name": "Dave",
+        "faction": "SKINS",
+        "kills": 12,
+        "assists": 6,
+        "deaths": 20,
+        "adr": 60.09,
+        "damage": 1322,
+        "rounds_played": 22,
+        "rounds_won": 9,
+        "is_win": false
+      }
+    ],
+    "picked_map": "Foroglio",
+    "shirts_pick": "Foroglio",
+    "skins_starting_side": "CT"
+  },
+  {
+    "match_id": 200,
+    "match_number": 1,
+    "week_number": 1,
+    "season_id": 2,
+    "season_number": 5,
+    "season_name": "Season 5 Gauntlet",
+    "is_gauntlet": true,
+    "is_playoff_game": true,
+    "final_score": "13-11",
+    "shirts_stats": [
+      {
+        "player_id": 1,
+        "player_name": "Alice",
+        "faction": "SHIRTS",
+        "kills": 22,
+        "assists": 2,
+        "deaths": 18,
+        "adr": 88,
+        "damage": 2112,
+        "rounds_played": 24,
+        "rounds_won": 13,
+        "is_win": true
+      },
+      {
+        "player_id": 2,
+        "player_name": "Bob",
+        "faction": "SHIRTS",
+        "kills": 19,
+        "assists": 4,
+        "deaths": 19,
+        "adr": 80,
+        "damage": 1920,
+        "rounds_played": 24,
+        "rounds_won": 13,
+        "is_win": true
+      }
+    ],
+    "skins_stats": [
+      {
+        "player_id": 5,
+        "player_name": "Erin",
+        "faction": "SKINS",
+        "kills": 17,
+        "assists": 3,
+        "deaths": 21,
+        "adr": 70,
+        "damage": 1680,
+        "rounds_played": 24,
+        "rounds_won": 11,
+        "is_win": false
+      },
+      {
+        "player_id": 6,
+        "player_name": "Frank",
+        "faction": "SKINS",
+        "kills": 15,
+        "assists": 5,
+        "deaths": 22,
+        "adr": 65,
+        "damage": 1560,
+        "rounds_played": 24,
+        "rounds_won": 11,
+        "is_win": false
+      }
+    ],
+    "picked_map": "Foroglio",
+    "shirts_pick": "Foroglio",
+    "skins_starting_side": "T"
+  },
+  {
+    "match_id": 300,
+    "match_number": 1,
+    "week_number": 1,
+    "season_id": 4,
+    "season_number": 4,
+    "season_name": "Season 4 Gauntlet",
+    "is_gauntlet": true,
+    "is_playoff_game": true,
+    "final_score": "13-5",
+    "shirts_stats": [
+      {
+        "player_id": 3,
+        "player_name": "Carol",
+        "faction": "SHIRTS",
+        "kills": 16,
+        "assists": 1,
+        "deaths": 10,
+        "adr": 95,
+        "damage": 1710,
+        "rounds_played": 18,
+        "rounds_won": 13,
+        "is_win": true
+      },
+      {
+        "player_id": 4,
+        "player_name": "Dave",
+        "faction": "SHIRTS",
+        "kills": 14,
+        "assists": 3,
+        "deaths": 11,
+        "adr": 88,
+        "damage": 1584,
+        "rounds_played": 18,
+        "rounds_won": 13,
+        "is_win": true
+      }
+    ],
+    "skins_stats": [
+      {
+        "player_id": 7,
+        "player_name": "Grace",
+        "faction": "SKINS",
+        "kills": 8,
+        "assists": 2,
+        "deaths": 16,
+        "adr": 45,
+        "damage": 810,
+        "rounds_played": 18,
+        "rounds_won": 5,
+        "is_win": false
+      },
+      {
+        "player_id": 8,
+        "player_name": "Heidi",
+        "faction": "SKINS",
+        "kills": 7,
+        "assists": 1,
+        "deaths": 17,
+        "adr": 40,
+        "damage": 720,
+        "rounds_played": 18,
+        "rounds_won": 5,
+        "is_win": false
+      }
+    ],
+    "picked_map": "Vertigo",
+    "shirts_pick": "Vertigo",
+    "skins_starting_side": "CT"
+  }
+]
