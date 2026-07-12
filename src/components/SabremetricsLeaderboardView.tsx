@@ -188,10 +188,24 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
 
 // --- Plus stats (1-scaled: 1.00 = league average) ---
 
+/** General "league total X / league total Y" ratio, with a fallback (constant, or a function of
+ *  the total numerator) for when the denominator is zero. The shared base for every Plus stat's
+ *  league-average baseline — volume-weighted (totals over totals), so a low-volume player's own
+ *  rate can't swing the average as hard as a high-volume one. */
+function leagueAvgRatio(
+  all: AggregatedSab[],
+  numKey: (a: AggregatedSab) => number,
+  denKey: (a: AggregatedSab) => number,
+  fallback: number | ((totalNum: number) => number) = 0,
+): number {
+  const totalNum = all.reduce((s, a) => s + numKey(a), 0);
+  const totalDen = all.reduce((s, a) => s + denKey(a), 0);
+  if (totalDen > 0) return totalNum / totalDen;
+  return typeof fallback === 'function' ? fallback(totalNum) : fallback;
+}
+
 function leagueAvgPerRound(all: AggregatedSab[], key: (a: AggregatedSab) => number): number {
-  const totalVal = all.reduce((s, a) => s + key(a), 0);
-  const totalRounds = all.reduce((s, a) => s + a.rounds_played, 0);
-  return totalRounds > 0 ? totalVal / totalRounds : 0;
+  return leagueAvgRatio(all, key, (a) => a.rounds_played);
 }
 
 function plusStat(playerVal: number, avgVal: number): number {
@@ -230,88 +244,78 @@ function utilityScore(a: AggregatedSab): number {
   return a.flash_assists + a.utility_damage / 50 + a.smokes_blocking_push - a.teamflash_duration;
 }
 
-function computePlusStats(agg: AggregatedSab, all: AggregatedSab[]): PlusStat {
+interface LeagueAverages {
+  kpr: number; apr: number; dpr: number; adr: number; kdr: number;
+  entry: number; kast: number; trade: number;
+  objective: number; utility: number; clutch: number; choke: number;
+  accuracy: number; headAccuracy: number; counterStrafe: number; spray: number;
+}
+
+/** Every league-wide baseline computePlusStats() needs, computed once per aggregated-player-list
+ *  (not once per player) — walking `all` here instead of inside computePlusStats() is what keeps
+ *  a leaderboard of n players O(n) instead of O(n²). */
+function computeLeagueAverages(all: AggregatedSab[]): LeagueAverages {
+  const rounds = (a: AggregatedSab) => a.rounds_played;
+  return {
+    kpr: leagueAvgRatio(all, (a) => a.kills, rounds),
+    apr: leagueAvgRatio(all, (a) => a.assists, rounds),
+    dpr: leagueAvgRatio(all, (a) => a.deaths, rounds),
+    adr: leagueAvgRatio(all, (a) => a.damage, rounds),
+    kdr: leagueAvgRatio(all, (a) => a.kills, (a) => a.deaths, (totalKills) => totalKills),
+    entry: leagueAvgRatio(all, (a) => a.opening_kills, (a) => a.opening_kills + a.opening_deaths, 0.5),
+    kast: leagueAvgRatio(all, (a) => a.kast_rounds, rounds),
+    trade: leagueAvgRatio(all, (a) => a.trade_kill_successes, (a) => a.trade_kill_attempts),
+    objective: leagueAvgRatio(all, (a) => 2 * a.plants + 3 * a.defuses, rounds),
+    utility: leagueAvgRatio(all, utilityScore, rounds),
+    clutch: leagueAvgRatio(all, (a) => a.clutch_1v1_wins + 3 * a.clutch_1v2_wins, rounds),
+    choke: leagueAvgRatio(all, chokeScore, rounds),
+    accuracy: leagueAvgRatio(all, (a) => a.shots_hit, (a) => a.shots_fired),
+    headAccuracy: leagueAvgRatio(all, (a) => a.headshot_hits_no_awp, (a) => a.shots_hit_no_awp),
+    counterStrafe: leagueAvgRatio(all, (a) => a.counter_strafe_good_shots, (a) => a.counter_strafe_shots),
+    spray: leagueAvgRatio(all, (a) => a.spray_shots_hit, (a) => a.spray_shots_fired),
+  };
+}
+
+function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusStat {
   const rp = agg.rounds_played || 1;
-
-  const avgKpr = leagueAvgPerRound(all, (a) => a.kills);
-  const avgApr = leagueAvgPerRound(all, (a) => a.assists);
-  const avgDpr = leagueAvgPerRound(all, (a) => a.deaths);
-  const avgAdr = leagueAvgPerRound(all, (a) => a.damage);
-
-  // Volume-weighted (league total / league total), matching every other Plus stat's baseline —
-  // a low-volume player's own rate no longer swings the average as hard as a high-volume one.
-  const totalKills = all.reduce((s, a) => s + a.kills, 0);
-  const totalDeaths = all.reduce((s, a) => s + a.deaths, 0);
-  const avgKdr = totalDeaths > 0 ? totalKills / totalDeaths : totalKills;
-
-  const totalOpeningKills = all.reduce((s, a) => s + a.opening_kills, 0);
-  const totalOpeningDuels = all.reduce((s, a) => s + a.opening_kills + a.opening_deaths, 0);
-  const avgEntryRate = totalOpeningDuels > 0 ? totalOpeningKills / totalOpeningDuels : 0.5;
-
-  const avgKast = leagueAvgPerRound(all, (a) => a.kast_rounds);
-
-  const totalTradeSuccesses = all.reduce((s, a) => s + a.trade_kill_successes, 0);
-  const totalTradeAttempts = all.reduce((s, a) => s + a.trade_kill_attempts, 0);
-  const avgTradeRate = totalTradeAttempts > 0 ? totalTradeSuccesses / totalTradeAttempts : 0;
-
-  const avgObjScore = leagueAvgPerRound(all, (a) => 2 * a.plants + 3 * a.defuses);
-  const avgUtilScore = leagueAvgPerRound(all, utilityScore);
-  const avgClutchScore = leagueAvgPerRound(all, (a) => a.clutch_1v1_wins + 3 * a.clutch_1v2_wins);
-  const avgChokeScore = leagueAvgPerRound(all, chokeScore);
 
   // Aim+ averages three already-normalized ratios (Accuracy+, Head Accuracy+, Counter-Strafe+)
   // rather than summing raw percentages — they're fairly orthogonal skills on different
   // denominators, so there's no principled point-scale to weight them on directly, but each is
   // already "1.00 = league average" once ratio'd, so averaging those is apples-to-apples.
-  const totalShotsHit = all.reduce((s, a) => s + a.shots_hit, 0);
-  const totalShotsFired = all.reduce((s, a) => s + a.shots_fired, 0);
-  const avgAccuracy = totalShotsFired > 0 ? totalShotsHit / totalShotsFired : 0;
-
-  const totalHeadshotHitsNoAwp = all.reduce((s, a) => s + a.headshot_hits_no_awp, 0);
-  const totalShotsHitNoAwp = all.reduce((s, a) => s + a.shots_hit_no_awp, 0);
-  const avgHeadAccuracy = totalShotsHitNoAwp > 0 ? totalHeadshotHitsNoAwp / totalShotsHitNoAwp : 0;
-
-  const totalCsGood = all.reduce((s, a) => s + a.counter_strafe_good_shots, 0);
-  const totalCsShots = all.reduce((s, a) => s + a.counter_strafe_shots, 0);
-  const avgCounterStrafe = totalCsShots > 0 ? totalCsGood / totalCsShots : 0;
-
-  const accuracyPlus = plusStat(agg.shots_fired > 0 ? agg.shots_hit / agg.shots_fired : 0, avgAccuracy);
+  const accuracyPlus = plusStat(agg.shots_fired > 0 ? agg.shots_hit / agg.shots_fired : 0, la.accuracy);
   const headAccuracyPlus = plusStat(
     agg.shots_hit_no_awp > 0 ? agg.headshot_hits_no_awp / agg.shots_hit_no_awp : 0,
-    avgHeadAccuracy,
+    la.headAccuracy,
   );
   const counterStrafePlus = plusStat(
     agg.counter_strafe_shots > 0 ? agg.counter_strafe_good_shots / agg.counter_strafe_shots : 0,
-    avgCounterStrafe,
+    la.counterStrafe,
   );
 
-  const totalSprayHit = all.reduce((s, a) => s + a.spray_shots_hit, 0);
-  const totalSprayFired = all.reduce((s, a) => s + a.spray_shots_fired, 0);
-  const avgSpray = totalSprayFired > 0 ? totalSprayHit / totalSprayFired : 0;
-
   return {
-    kpr: plusStat(agg.kills / rp, avgKpr),
-    apr: plusStat(agg.assists / rp, avgApr),
-    dpr: plusStat(agg.deaths / rp, avgDpr),
-    adr: plusStat(agg.damage / rp, avgAdr),
-    kdr: plusStat(agg.deaths > 0 ? agg.kills / agg.deaths : agg.kills, avgKdr),
+    kpr: plusStat(agg.kills / rp, la.kpr),
+    apr: plusStat(agg.assists / rp, la.apr),
+    dpr: plusStat(agg.deaths / rp, la.dpr),
+    adr: plusStat(agg.damage / rp, la.adr),
+    kdr: plusStat(agg.deaths > 0 ? agg.kills / agg.deaths : agg.kills, la.kdr),
     entry: plusStat(
       (agg.opening_kills + agg.opening_deaths) > 0
         ? agg.opening_kills / (agg.opening_kills + agg.opening_deaths)
         : 0,
-      avgEntryRate,
+      la.entry,
     ),
-    kast: plusStat(agg.kast_rounds / rp, avgKast),
+    kast: plusStat(agg.kast_rounds / rp, la.kast),
     trade: plusStat(
       agg.trade_kill_attempts > 0 ? agg.trade_kill_successes / agg.trade_kill_attempts : 0,
-      avgTradeRate,
+      la.trade,
     ),
-    objective: plusStat((2 * agg.plants + 3 * agg.defuses) / rp, avgObjScore),
-    utility: plusStat(utilityScore(agg) / rp, avgUtilScore),
-    clutch: plusStat((agg.clutch_1v1_wins + 3 * agg.clutch_1v2_wins) / rp, avgClutchScore),
-    choke: plusStat(chokeScore(agg) / rp, avgChokeScore),
+    objective: plusStat((2 * agg.plants + 3 * agg.defuses) / rp, la.objective),
+    utility: plusStat(utilityScore(agg) / rp, la.utility),
+    clutch: plusStat((agg.clutch_1v1_wins + 3 * agg.clutch_1v2_wins) / rp, la.clutch),
+    choke: plusStat(chokeScore(agg) / rp, la.choke),
     aim: 0.35 * accuracyPlus + 0.40 * headAccuracyPlus + 0.25 * counterStrafePlus,
-    spray: plusStat(agg.spray_shots_fired > 0 ? agg.spray_shots_hit / agg.spray_shots_fired : 0, avgSpray),
+    spray: plusStat(agg.spray_shots_fired > 0 ? agg.spray_shots_hit / agg.spray_shots_fired : 0, la.spray),
   };
 }
 
@@ -759,7 +763,8 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
   const [sort, toggleSort] = useSortState('kast');
 
   const withPlus = useMemo(() => {
-    return aggregated.map((a) => ({ agg: a, plus: computePlusStats(a, aggregated) }));
+    const leagueAverages = computeLeagueAverages(aggregated);
+    return aggregated.map((a) => ({ agg: a, plus: computePlusStats(a, leagueAverages) }));
   }, [aggregated]);
 
   const sorted = useMemo(() => {
@@ -916,7 +921,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   // Plus stats need the league as a baseline; comparing a player to only
   // themselves yields all 1.00, so only render when we have other players.
   const hasLeagueBaseline = leagueAggregated.length > 1;
-  const plus = hasLeagueBaseline ? computePlusStats(agg, leagueAggregated) : null;
+  const plus = hasLeagueBaseline ? computePlusStats(agg, computeLeagueAverages(leagueAggregated)) : null;
   const plusTiles: StatTile[] = plus ? [
     { label: 'Kills/Round+', title: 'Kills per round vs league avg (1.00 = avg)', value: fmtNum(plus.kpr, 2), valueStyle: plusStyle(plus.kpr) },
     { label: 'Assists/Round+', title: 'Assists per round vs league avg (1.00 = avg)', value: fmtNum(plus.apr, 2), valueStyle: plusStyle(plus.apr) },
