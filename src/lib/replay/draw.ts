@@ -105,8 +105,10 @@ function grenadeColor(theme: ReplayTheme, type: string): string {
     case 'molotov':
     case 'incendiary':
       return theme.fire;
-    case 'flashbang':
+    case 'he':
       return theme.flash;
+    case 'flashbang':
+      return theme.he;
     case 'decoy':
       return theme.decoy;
     default:
@@ -115,9 +117,10 @@ function grenadeColor(theme: ReplayTheme, type: string): string {
 }
 
 /**
- * A distinct glyph for each AoE-less grenade detonation so they don't all read as the
- * same dot: HE bursts into spokes, the flashbang is a bright ring + core, and a decoy
- * (or anything else) is a small dot inside a ring. `fade` carries the lifetime/pulse.
+ * A distinct glyph for each point-detonating grenade so they don't read as the same
+ * dot: the flashbang bursts into radiating spokes (a blinding flare), and a decoy (or
+ * anything else) is a small dot inside a ring. `fade` carries the lifetime/pulse. HE
+ * has real AoE and is drawn separately as a blast ring (`drawHeBlast`).
  */
 function drawPointDetonation(
   ctx: Ctx2D,
@@ -129,7 +132,7 @@ function drawPointDetonation(
   const a = Math.max(0, Math.min(1, fade));
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
-  if (type === 'he') {
+  if (type === 'flashbang') {
     ctx.lineWidth = 2;
     ctx.globalAlpha = 0.9 * a;
     for (let i = 0; i < 8; i++) {
@@ -139,16 +142,6 @@ function drawPointDetonation(
       ctx.lineTo(p.x + Math.cos(ang) * 11, p.y + Math.sin(ang) * 11);
       ctx.stroke();
     }
-  } else if (type === 'flashbang') {
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.9 * a;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 9, 0, TWO_PI);
-    ctx.stroke();
-    ctx.globalAlpha = a;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 3, 0, TWO_PI);
-    ctx.fill();
   } else {
     // decoy / unknown — a dot inside a ring (the decoy's fade pulses, so it blinks)
     ctx.globalAlpha = 0.6 * a;
@@ -161,6 +154,27 @@ function drawPointDetonation(
     ctx.arc(p.x, p.y, 7, 0, TWO_PI);
     ctx.stroke();
   }
+}
+
+/**
+ * HE's blast as an expanding ring sized to its real AoE radius (`r`, already scaled
+ * to canvas units by the caller), plus a small fading core — so the glyph doubles as
+ * an accurate at-a-glance readout of who was in range. `fade` carries the lifetime.
+ */
+function drawHeBlast(ctx: Ctx2D, c: { x: number; y: number }, r: number, color: string, fade: number): void {
+  const a = Math.max(0, Math.min(1, fade));
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.3 * a;
+  ctx.beginPath();
+  ctx.arc(c.x, c.y, r * 0.12, 0, TWO_PI);
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.85 * a;
+  ctx.beginPath();
+  ctx.arc(c.x, c.y, r, 0, TWO_PI);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
 /**
@@ -320,11 +334,13 @@ export function drawScene(args: DrawSceneArgs): void {
       ctx.fill();
     } else if (g.radius > 0) {
       // Area effect, sized to its AoE and fading over its life. Smoke reads as a soft
-      // billowing cloud; fire as flickering tongues — so the two don't look like the
-      // same flat disc (issue #128).
+      // billowing cloud; fire as flickering tongues; HE as an expanding blast ring —
+      // so none of them look like the same flat disc (issue #128).
       const r = projector.scaleLength(g.radius);
       if (g.type === 'smoke') {
         drawSmokeCloud(ctx, p, r, color, g.fade, state.tick);
+      } else if (g.type === 'he') {
+        drawHeBlast(ctx, p, r, color, g.fade);
       } else {
         drawFire(ctx, p, r, color, g.fade, state.tick);
       }

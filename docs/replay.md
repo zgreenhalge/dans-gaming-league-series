@@ -102,14 +102,16 @@ are unreliable, so `shotTracersAt()` casts the ray from the shooter's **interpol
 along their current yaw at render time (skipping a shooter who isn't in-frame/alive) — no dependence on
 fragile event props. Kills keep their own brighter attacker→victim tracer. Grenade detonations linger
 and are sized per type in `GRENADE_EFFECT` (`playback.ts`): smoke blooms wide for ~18s,
-molotov/incendiary burn ~7s with the incendiary covering a larger area, decoy lasts ~15s as a dot that
-*pulses* (it pops gunshots intermittently — `activeGrenadesAt` gates its `fade` with a duty cycle), and
-he/flash are brief point pops. `draw.ts` renders the AoE in world units via `projector.scaleLength()`,
-drawing smoke as a **soft cloud** (`drawSmokeCloud` — a dense core ringed by translucent puffs that
-slowly rotate with the tick, `SMOKE_SPIN_RATE`) and
+molotov/incendiary burn ~7s with the incendiary covering a larger area, HE's blast rings its real ~350
+unit radius for ~0.6s, decoy lasts ~15s as a dot that *pulses* (it pops gunshots intermittently —
+`activeGrenadesAt` gates its `fade` with a duty cycle), and flash is a brief point pop. `draw.ts` renders
+the AoE in world units via `projector.scaleLength()`, drawing smoke as a **soft cloud** (`drawSmokeCloud`
+— a dense core ringed by translucent puffs that slowly rotate with the tick, `SMOKE_SPIN_RATE`),
 molotov/incendiary as **flickering fire** (`drawFire` — warm tongues whose size/alpha pulse with the
-tick) so the two don't read as the same flat disc. HE/flash/decoy get **distinct glyphs** (burst /
-ring+core / pulsing ring-dot). The planted bomb is a **C4 icon** (body + blinking light), not a dot;
+tick), and HE as an **expanding blast ring** (`drawHeBlast` — a small core plus a ring at the true AoE
+radius, so the glyph doubles as an at-a-glance readout of who was caught in range) so none of them read
+as the same flat disc. Flash/decoy get **distinct point glyphs** (radiating spokes — a blinding flare —
+/ pulsing ring-dot). The planted bomb is a **C4 icon** (body + blinking light), not a dot;
 when the round ends by `bomb` (the C4 detonates at the plant site on the `round_end` tick), `bombStateAt`
 drops the icon and `bombExplosionAt` surfaces a brief **blast** (`drawExplosion` — expanding shock ring +
 fireball) over the post-round window — both derived from the existing plant/round_end events, no schema
