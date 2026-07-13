@@ -237,18 +237,12 @@ function chokeScore(a: AggregatedSab): number {
     + 5 * (a.clutch_2v1_attempts - a.clutch_2v1_wins);
 }
 
-/** Utility Score = Flash Assists + (Utility Damage / 50) + Smokes Blocking Push - Teamflash
- *  Duration — rewards damage/flash-assist utility and CT smoke-blocking on the same 1-point-per-
- *  event scale as Flash Assists, and penalizes each second spent blinding a teammate. */
-function utilityScore(a: AggregatedSab): number {
-  return a.flash_assists + a.utility_damage / 50 + a.smokes_blocking_push - a.teamflash_duration;
-}
-
 interface LeagueAverages {
   kpr: number; apr: number; dpr: number; adr: number; kdr: number;
   entry: number; kast: number; trade: number;
-  objective: number; utility: number; clutch: number; choke: number;
+  objective: number; clutch: number; choke: number;
   accuracy: number; headAccuracy: number; counterStrafe: number; spray: number;
+  flashAssists: number; utilDamage: number; blockingSmoke: number; teamflash: number;
 }
 
 /** Every league-wide baseline computePlusStats() needs, computed once per aggregated-player-list
@@ -266,13 +260,16 @@ function computeLeagueAverages(all: AggregatedSab[]): LeagueAverages {
     kast: leagueAvgRatio(all, (a) => a.kast_rounds, rounds),
     trade: leagueAvgRatio(all, (a) => a.trade_kill_successes, (a) => a.trade_kill_attempts),
     objective: leagueAvgRatio(all, (a) => 2 * a.plants + 3 * a.defuses, rounds),
-    utility: leagueAvgRatio(all, utilityScore, rounds),
     clutch: leagueAvgRatio(all, (a) => a.clutch_1v1_wins + 3 * a.clutch_1v2_wins, rounds),
     choke: leagueAvgRatio(all, chokeScore, rounds),
     accuracy: leagueAvgRatio(all, (a) => a.shots_hit, (a) => a.shots_fired),
     headAccuracy: leagueAvgRatio(all, (a) => a.headshot_hits_no_awp, (a) => a.shots_hit_no_awp),
     counterStrafe: leagueAvgRatio(all, (a) => a.counter_strafe_good_shots, (a) => a.counter_strafe_shots),
     spray: leagueAvgRatio(all, (a) => a.spray_shots_hit, (a) => a.spray_shots_fired),
+    flashAssists: leagueAvgRatio(all, (a) => a.flash_assists, rounds),
+    utilDamage: leagueAvgRatio(all, (a) => a.utility_damage, rounds),
+    blockingSmoke: leagueAvgRatio(all, (a) => a.smokes_blocking_push, (a) => a.ct_smokes_thrown),
+    teamflash: leagueAvgRatio(all, (a) => a.teamflash_duration, rounds),
   };
 }
 
@@ -293,6 +290,19 @@ function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusStat {
     la.counterStrafe,
   );
 
+  // Utility+ averages four already-normalized ratios the same way Aim+ does, rather than a
+  // contrived raw-point score (flash assists + util damage/50 + smokes blocking - teamflash) whose
+  // league average could land near zero and blow up the ratio. Teamflash duration is "lower is
+  // better", so its ratio is folded in inverted (2 - teamflashPlus) to keep it on the same
+  // "1.00 = average" scale as the other three before weighting.
+  const flashAssistsPlus = plusStat(agg.flash_assists / rp, la.flashAssists);
+  const utilDamagePlus = plusStat(agg.utility_damage / rp, la.utilDamage);
+  const blockingSmokePlus = plusStat(
+    agg.ct_smokes_thrown > 0 ? agg.smokes_blocking_push / agg.ct_smokes_thrown : 0,
+    la.blockingSmoke,
+  );
+  const teamflashPlus = plusStat(agg.teamflash_duration / rp, la.teamflash);
+
   return {
     kpr: plusStat(agg.kills / rp, la.kpr),
     apr: plusStat(agg.assists / rp, la.apr),
@@ -311,7 +321,8 @@ function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusStat {
       la.trade,
     ),
     objective: plusStat((2 * agg.plants + 3 * agg.defuses) / rp, la.objective),
-    utility: plusStat(utilityScore(agg) / rp, la.utility),
+    utility: 0.30 * flashAssistsPlus + 0.30 * utilDamagePlus + 0.20 * blockingSmokePlus
+      + 0.20 * (2 - teamflashPlus),
     clutch: plusStat((agg.clutch_1v1_wins + 3 * agg.clutch_1v2_wins) / rp, la.clutch),
     choke: plusStat(chokeScore(agg) / rp, la.choke),
     aim: 0.35 * accuracyPlus + 0.40 * headAccuracyPlus + 0.25 * counterStrafePlus,
@@ -810,7 +821,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
               <SortableTh label="KAST+" title="KAST per round vs league avg (1.00 = avg)" sortKey="kast" state={sort} onClick={toggleSort} />
               <SortableTh label="Trade+" title="Trade Kill % (trade kill successes / attempts) vs league avg (1.00 = avg)" sortKey="trade" state={sort} onClick={toggleSort} />
               <SortableTh label="Objective+" title="Objective score (2×plants + 3×defuses) per round vs league avg (1.00 = avg)" sortKey="objective" state={sort} onClick={toggleSort} />
-              <SortableTh label="Utility+" title="Utility score (flash assists + util damage/50 + smokes blocking pushes - teamflash seconds) per round vs league avg (1.00 = avg)" sortKey="utility" state={sort} onClick={toggleSort} />
+              <SortableTh label="Utility+" title="Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (1.00 = avg)" sortKey="utility" state={sort} onClick={toggleSort} />
               <SortableTh label="Clutch+" title="Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)" sortKey="clutch" state={sort} onClick={toggleSort} />
               <SortableTh label="Choke+" title="Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (1.00 = avg, lower is better)" sortKey="choke" state={sort} onClick={toggleSort} />
               <SortableTh label="Aim+" title="Weighted blend of Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (1.00 = avg)" sortKey="aim" state={sort} onClick={toggleSort} />
@@ -932,7 +943,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'KAST+', title: 'KAST per round vs league avg (1.00 = avg)', value: fmtNum(plus.kast, 2), valueStyle: plusStyle(plus.kast) },
     { label: 'Trade+', title: 'Trade Kill % (trade kill successes / attempts) vs league avg (1.00 = avg)', value: fmtNum(plus.trade, 2), valueStyle: plusStyle(plus.trade) },
     { label: 'Objective+', title: 'Objective score (2×plants + 3×defuses) per round vs league avg (1.00 = avg)', value: fmtNum(plus.objective, 2), valueStyle: plusStyle(plus.objective) },
-    { label: 'Utility+', title: 'Utility score (flash assists + util damage/50 + smokes blocking pushes - teamflash seconds) per round vs league avg (1.00 = avg)', value: fmtNum(plus.utility, 2), valueStyle: plusStyle(plus.utility) },
+    { label: 'Utility+', title: 'Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (1.00 = avg)', value: fmtNum(plus.utility, 2), valueStyle: plusStyle(plus.utility) },
     { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)', value: fmtNum(plus.clutch, 2), valueStyle: plusStyle(plus.clutch) },
     { label: 'Choke+', title: 'Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (1.00 = avg, lower is better)', value: fmtNum(plus.choke, 2), valueStyle: plusStyle(2 - plus.choke) },
     { label: 'Aim+', title: 'Weighted blend of Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (1.00 = avg)', value: fmtNum(plus.aim, 2), valueStyle: plusStyle(plus.aim) },
