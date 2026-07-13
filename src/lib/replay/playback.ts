@@ -104,15 +104,16 @@ const KILLFEED_SECONDS = 6;
 /**
  * Per-grenade-type detonation effect: how long it lingers after `detonateTick` and
  * its area-of-effect radius in world units. Smoke blooms wide and lasts longest;
- * incendiary covers a larger area than a molotov; both burn ~7s. He/flash/decoy are
- * point pops with no AoE disc. Values are tuned to read well on the 2D radar, not to
- * mirror exact CS2 timings. See `docs/replay.md`.
+ * incendiary covers a larger area than a molotov; both burn ~7s. HE's radius traces
+ * its real blast range so the AoE ring reads accurately. Flash/decoy are point pops
+ * with no AoE disc. Values are tuned to read well on the 2D radar, not to mirror
+ * exact CS2 timings. See `docs/replay.md`.
  */
 const GRENADE_EFFECT: Record<string, { linger: number; radius: number }> = {
   smoke: { linger: 18, radius: 144 },
   molotov: { linger: 7, radius: 130 },
   incendiary: { linger: 7, radius: 165 },
-  he: { linger: 0.4, radius: 0 },
+  he: { linger: 0.6, radius: 350 },
   flashbang: { linger: 0.4, radius: 0 },
   decoy: { linger: 15, radius: 0 },
 };
