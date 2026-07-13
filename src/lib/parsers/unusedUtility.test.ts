@@ -1,9 +1,10 @@
 /**
  * Unit tests for collectUnusedUtility — Leetify's "Unused Utility on Death": the buy-menu value
- * of grenades still held at the moment of death, summed across a player's deaths. The
- * "inventory" tick field these rows represent is a demoOrchestrator.ts-side assumption (see
- * unusedUtility.ts) — these tests exercise the collector's own value-summing/round-filtering
- * logic given already-shaped inventory rows, not the parsing assumption itself.
+ * of grenades still held at the moment of death, summed across a player's deaths. Looks up
+ * inventory rows one tick before death (PRE_DEATH_TICK_OFFSET), since the engine has already
+ * stripped the pawn's weapon services by the death tick itself — these tests use tick - 1 rows
+ * to match, exercising the collector's own value-summing/round-filtering/offset logic given
+ * already-shaped inventory rows.
  *
  * Run:  npx tsx src/lib/parsers/unusedUtility.test.ts
  */
@@ -34,7 +35,7 @@ const rounds = [{ roundNumber: 1, winnerSide: 'CT' as const }];
 
 test('collectUnusedUtility: sums buy-menu grenade values held at the death tick', () => {
   const deaths = [death({ round: 1, tick: 100, victim: 'c', attacker: 'a' })];
-  const inventory = [inv({ tick: 100, steamid: 'c', inventory: ['weapon_hegrenade', 'weapon_flashbang'] })];
+  const inventory = [inv({ tick: 99, steamid: 'c', inventory: ['High Explosive Grenade', 'Flashbang'] })];
   const ctx = makeContext({ rounds, sides, deaths });
   const out = collectUnusedUtility(deaths, inventory, ctx, ids);
   assert.equal(out.get('c')?.unused_util_value_on_death_total, 500); // 300 (HE) + 200 (flash)
@@ -42,7 +43,7 @@ test('collectUnusedUtility: sums buy-menu grenade values held at the death tick'
 
 test('collectUnusedUtility: an empty inventory at death contributes zero', () => {
   const deaths = [death({ round: 1, tick: 100, victim: 'c', attacker: 'a' })];
-  const inventory = [inv({ tick: 100, steamid: 'c', inventory: [] })];
+  const inventory = [inv({ tick: 99, steamid: 'c', inventory: [] })];
   const ctx = makeContext({ rounds, sides, deaths });
   const out = collectUnusedUtility(deaths, inventory, ctx, ids);
   assert.equal(out.get('c')?.unused_util_value_on_death_total ?? 0, 0);
@@ -50,7 +51,7 @@ test('collectUnusedUtility: an empty inventory at death contributes zero', () =>
 
 test('collectUnusedUtility: non-grenade weapons in the inventory are ignored', () => {
   const deaths = [death({ round: 1, tick: 100, victim: 'c', attacker: 'a' })];
-  const inventory = [inv({ tick: 100, steamid: 'c', inventory: ['weapon_ak47', 'weapon_smokegrenade'] })];
+  const inventory = [inv({ tick: 99, steamid: 'c', inventory: ['AK-47', 'Smoke Grenade'] })];
   const ctx = makeContext({ rounds, sides, deaths });
   const out = collectUnusedUtility(deaths, inventory, ctx, ids);
   assert.equal(out.get('c')?.unused_util_value_on_death_total, 300); // smoke only
@@ -63,8 +64,8 @@ test('collectUnusedUtility: sums across multiple deaths in the match', () => {
     death({ round: 2, tick: 1100, victim: 'c', attacker: 'a' }),
   ];
   const inventory = [
-    inv({ tick: 100, steamid: 'c', inventory: ['weapon_decoy'] }),
-    inv({ tick: 1100, steamid: 'c', inventory: ['weapon_incgrenade'] }),
+    inv({ tick: 99, steamid: 'c', inventory: ['Decoy Grenade'] }),
+    inv({ tick: 1099, steamid: 'c', inventory: ['Incendiary Grenade'] }),
   ];
   const ctx = makeContext({ rounds: rounds2, sides, deaths });
   const out = collectUnusedUtility(deaths, inventory, ctx, ids);
@@ -75,6 +76,14 @@ test('collectUnusedUtility: a missing inventory row for a death contributes zero
   const deaths = [death({ round: 1, tick: 100, victim: 'c', attacker: 'a' })];
   const ctx = makeContext({ rounds, sides, deaths });
   const out = collectUnusedUtility(deaths, [], ctx, ids);
+  assert.equal(out.get('c')?.unused_util_value_on_death_total ?? 0, 0);
+});
+
+test('collectUnusedUtility: an inventory row at the death tick itself (already stripped) is not used', () => {
+  const deaths = [death({ round: 1, tick: 100, victim: 'c', attacker: 'a' })];
+  const inventory = [inv({ tick: 100, steamid: 'c', inventory: ['Smoke Grenade'] })];
+  const ctx = makeContext({ rounds, sides, deaths });
+  const out = collectUnusedUtility(deaths, inventory, ctx, ids);
   assert.equal(out.get('c')?.unused_util_value_on_death_total ?? 0, 0);
 });
 
