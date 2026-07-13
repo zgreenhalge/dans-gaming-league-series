@@ -39,12 +39,12 @@ const sides = { a: 'CT', b: 'CT', c: 'T', d: 'T' } as const;
 const ids = Object.keys(sides);
 const rounds = [{ roundNumber: 1, winnerSide: 'CT' as const, endTick: 10000 }];
 const tickRate = 64;
-// SAMPLE_INTERVAL_SECONDS = 2 -> 128 ticks at 64 tick rate.
+// SAMPLE_INTERVAL_SECONDS = 0.5 -> 32 ticks at 64 tick rate.
 
 test('collectSmokes: an enemy within the block radius during the smoke\'s life counts as blocking', () => {
   const detonates = [detonate({ round: 1, tick: 1000, entityid: 50, user: 'a', x: 0, y: 0 })];
   const expires = [expire({ round: 1, tick: 1256, entityid: 50, user: 'a', x: 0, y: 0 })];
-  const positions = [pos({ tick: 1128, steamid: 'c', x: 100, y: 0 })]; // enemy T, well within 800 units
+  const positions = [pos({ tick: 1128, steamid: 'c', x: 100, y: 0 })]; // enemy T, well within the 180-unit radius
   const ctx = makeContext({ rounds, sides, tickRate });
   const out = collectSmokes(detonates, expires, positions, ctx, ids);
   assert.equal(out.get('a')?.smokes_blocking_push, 1);

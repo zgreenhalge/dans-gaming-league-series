@@ -13,6 +13,9 @@ import { compareMatchRefDesc } from './util';
 export const BACKGROUND_JOB_TYPES = ['demo_ingest', 'replay_extract', 'radar_build'] as const;
 export type BackgroundJobType = (typeof BACKGROUND_JOB_TYPES)[number];
 
+/** `replay_extract`'s job-type literal, shared so dispatch routes don't each redeclare their own copy. */
+export const REPLAY_EXTRACT_JOB_TYPE: BackgroundJobType = 'replay_extract';
+
 /** Short badge per pipeline, for a scannable mixed list. */
 export const JOB_TYPE_LABEL: Record<BackgroundJobType, string> = {
   demo_ingest: 'demo',

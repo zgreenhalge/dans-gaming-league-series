@@ -205,15 +205,21 @@ from the Actions UI), so one wasn't needed.
 
 ## Background jobs (GitHub Actions)
 
-Three workflows, all triggered via `repository_dispatch` (from the app) or `workflow_dispatch`
-(manual). They follow the generic job conventions in
+Three workflows, all triggered via `workflow_dispatch` — from the app (`GITHUB_DISPATCH_TOKEN`,
+scoped to `Actions: write`) or manually (Actions UI). They follow the generic job conventions in
 [`github-actions.md`](./github-actions.md) (SHA-pinned actions, least-privilege `permissions:`,
 `timeout-minutes`, the `stage()`/`background_jobs` state machine); this section covers what's
 replay-specific.
 
+Action A's auto-dispatch fires only on a demo's first landing — a manual re-parse of either the
+stats (`demo_ingest`) or replay pipeline goes through its own dedicated dispatch route
+(`/api/matches/[id]/demo/dispatch` or the Recap tab's Generate/Retry button) and never re-triggers
+the other. `/api/ingest/notify` skips the auto-dispatch entirely if a `replay_extract` row already
+exists for the match, so a retried webhook call can't double-fire it.
+
 | Action | Trigger | Output |
 |---|---|---|
-| **A — `replay-extract`** | auto, after demo upload/parse | `replay.json` **and** compact `heatmap.json` → R2 `<matchId>/…` (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
+| **A — `replay-extract`** | auto, on first demo landing (`/api/ingest/notify`, opt-in via `REPLAY_AUTO_DISPATCH`) or manual (Recap tab / admin `POST /api/matches/[id]/replay/dispatch`) | `replay.json` **and** compact `heatmap.json` → R2 `<matchId>/…` (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
 | **A′ — `replay-extract-all`** | manual (Actions UI / dispatch) | re-runs A for **every** match with a demo, as a matrix (`replay-extract-all.yml` + `scripts/list-demo-matches.ts`) |
 | **B — `radar-build`** | per map (Actions UI, or admin `POST /api/maps/[slug]/radar/dispatch`) | radar PNG → R2 `maps/<id>/radar.png` + `maps` row calibration (`radar-build.yml` + `scripts/radar-build.ts`) |
 

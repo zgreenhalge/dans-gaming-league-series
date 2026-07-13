@@ -216,8 +216,9 @@ export function parseDemoSabremetrics(
   }
   const tradeStats = collectTrades(deathEvents, hurtEvents, tradePositionRows, context, steamIds);
 
-  // Unused Utility on Death reads an unconfirmed demoparser2 tick field (see unusedUtility.ts) —
-  // wrapped so a wrong field name zeroes out just this stat instead of failing every collector.
+  // Unused Utility on Death reads demoparser2's "inventory" tick field (see unusedUtility.ts) —
+  // wrapped so a future parser change to that field zeroes out just this stat instead of failing
+  // every collector.
   const inventoryTicks = neededInventoryTicks(deathEvents, context);
   let inventoryRows: PlayerInventoryRow[] = [];
   if (inventoryTicks.length > 0) {

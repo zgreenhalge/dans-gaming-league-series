@@ -19,14 +19,16 @@ export interface PlayerPositionRow {
   y: number;
 }
 
-// How far apart (seconds) to sample enemy positions during a smoke's life. Sampling every tick
-// over an ~18s smoke duration for every smoke thrown in a match would be far more tick data
-// than this stat needs.
-const SAMPLE_INTERVAL_SECONDS = 2;
+// How far apart (seconds) to sample enemy positions during a smoke's life. At SMOKE_BLOCK_RADIUS's
+// scale, a near-edge crossing at run speed can pass through in well under a second, so this needs
+// to be tight enough to reliably catch that — sampling every tick over an ~18s smoke duration for
+// every smoke thrown in a match would be far more tick data than this stat needs.
+const SAMPLE_INTERVAL_SECONDS = 0.5;
 
-// "Close enough to interfere with a push" radius (game units) — matches Leetify's own
-// "[CT] Smokes That Stopped a Push" glossary definition exactly (800 map units).
-const SMOKE_BLOCK_RADIUS = 800;
+// "Close enough to interfere with a push" radius (game units) — CS2 smoke clouds are volumetric
+// and can billow into an irregular shape, so this approximates the cloud with a circle at roughly
+// its actual radius rather than Leetify's much larger 800-unit "stopped a push" proximity check.
+const SMOKE_BLOCK_RADIUS = 180;
 
 interface SmokeLife {
   round: number;
