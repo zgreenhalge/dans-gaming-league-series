@@ -12,7 +12,7 @@ import { collectMultikill } from './parsers/multikill';
 import { collectClutch } from './parsers/clutch';
 import { collectUtility, type PlayerBlindRow, type WeaponFireRow } from './parsers/utility';
 import { collectObjectives, type BombEventRow } from './parsers/objectives';
-import { collectTrades } from './parsers/trades';
+import { collectTrades, neededTradeTicks } from './parsers/trades';
 import { collectHeGrenades } from './parsers/heGrenade';
 import { collectAccuracy } from './parsers/accuracy';
 import {
@@ -154,7 +154,6 @@ export function parseDemoSabremetrics(
   const clutchStats = collectClutch(deathEvents, context, steamIds);
   const utilityStats = collectUtility(blindEvents, deathEvents, fireEvents, context, steamIds);
   const objectiveStats = collectObjectives(plantEvents, defuseEvents, context, steamIds);
-  const tradeStats = collectTrades(deathEvents, hurtEvents, context, steamIds);
   const heStats = collectHeGrenades(fireEvents, hurtEvents, context, steamIds);
   const accuracyStats = collectAccuracy(fireEvents, hurtEvents, context, steamIds);
 
@@ -201,6 +200,21 @@ export function parseDemoSabremetrics(
   const smokeStats = collectSmokes(
     smokeDetonateEvents, smokeExpireEvents, smokePositionRows, context, steamIds,
   );
+
+  // Trade opportunities need each teammate's position at the moment of a death, to gate out
+  // "alive and on the same side, but across the map" — same per-tick-fetch shape as smokes above.
+  const tradeTicks = neededTradeTicks(deathEvents, context);
+  let tradePositionRows: PlayerPositionRow[] = [];
+  if (tradeTicks.length > 0) {
+    const rawTradeRows = parseTicks(demoBuffer, ['X', 'Y'], tradeTicks) as Record<string, unknown>[];
+    tradePositionRows = rawTradeRows.map((r) => ({
+      tick: Number(r.tick),
+      steamid: String(r.steamid ?? ''),
+      x: Number(r.X ?? 0),
+      y: Number(r.Y ?? 0),
+    }));
+  }
+  const tradeStats = collectTrades(deathEvents, hurtEvents, tradePositionRows, context, steamIds);
 
   // Unused Utility on Death reads an unconfirmed demoparser2 tick field (see unusedUtility.ts) —
   // wrapped so a wrong field name zeroes out just this stat instead of failing every collector.

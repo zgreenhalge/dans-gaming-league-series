@@ -1,8 +1,14 @@
 import type { SabFields } from '../types';
 import type { MatchContext, PlayerDeathRow, PlayerHurtRow } from './matchContext';
 import { TRADE_WINDOW_SECONDS } from './constants';
+import type { PlayerPositionRow } from './smokes';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
+
+// How close a teammate must be to a death, in game units, to count as a real trade
+// opportunity — otherwise "alive and on the same side" alone credits opportunities from
+// anywhere on the map. Same radius as Smokes Blocking Push's own distance gate.
+const TRADE_DISTANCE = 800;
 
 // Same permissive convention as kast.ts's KAST qualifiers: an unknown side never disqualifies —
 // it only excludes when both sides are known and actually differ.
@@ -12,11 +18,24 @@ function sameSide(context: MatchContext, round: number, a: string, b: string): b
   return sideA == null || sideB == null || sideA === sideB;
 }
 
+/** Tick list demoOrchestrator.ts needs to fetch (via parseTicks, all players): one per death, to
+ *  check whether a teammate was close enough to plausibly trade. */
+export function neededTradeTicks(deathEvents: PlayerDeathRow[], context: MatchContext): number[] {
+  const ticks = new Set<number>();
+  for (const d of deathEvents) {
+    const round = d.total_rounds_played + 1;
+    if (!context.liveRounds.has(round)) continue;
+    ticks.add(d.tick);
+  }
+  return [...ticks];
+}
+
 /**
  * Trade kill / traded death opportunity-attempt-success counts (#173 phase 1.1).
  *
- * - Opportunity: a teammate (of the dying player) was still alive when the death happened —
- *   i.e. had the chance to trade.
+ * - Opportunity: a teammate (of the dying player) was still alive when the death happened, and
+ *   within TRADE_DISTANCE of it — i.e. had a realistic chance to trade, not just a theoretical
+ *   one from anywhere on the map.
  * - Attempt: an opportunity where the teammate dealt damage to the killer within the trade
  *   window.
  * - Success: an opportunity where the teammate killed the killer within the trade window — the
@@ -29,6 +48,7 @@ function sameSide(context: MatchContext, round: number, a: string, b: string): b
 export function collectTrades(
   deathEvents: PlayerDeathRow[],
   hurtEvents: PlayerHurtRow[],
+  positionRows: PlayerPositionRow[],
   context: MatchContext,
   steamIds: string[],
 ): CollectorOut {
@@ -37,6 +57,11 @@ export function collectTrades(
   for (const sid of steamIds) out.set(sid, {});
 
   const tradeWindow = Math.round(TRADE_WINDOW_SECONDS * context.tickRate);
+
+  const positionByTickAndPlayer = new Map<string, { x: number; y: number }>();
+  for (const p of positionRows) {
+    positionByTickAndPlayer.set(`${p.tick}::${p.steamid}`, { x: p.x, y: p.y });
+  }
 
   const deathsByRound = new Map<number, PlayerDeathRow[]>();
   for (const d of deathEvents) {
@@ -74,15 +99,28 @@ export function collectTrades(
         return !teammateDeath || teammateDeath.tick > victimDeath.tick;
       });
 
+      // Being alive and on the same side isn't enough — a teammate across the map never had a
+      // realistic chance to trade. Missing position data (for either side of the check) fails
+      // closed, same convention as smokes.ts's block-radius check.
+      const victimPos = positionByTickAndPlayer.get(`${victimDeath.tick}::${victim}`);
+      const nearbyTeammates = aliveTeammates.filter((sid) => {
+        if (!victimPos) return false;
+        const teammatePos = positionByTickAndPlayer.get(`${victimDeath.tick}::${sid}`);
+        if (!teammatePos) return false;
+        const dx = teammatePos.x - victimPos.x;
+        const dy = teammatePos.y - victimPos.y;
+        return Math.sqrt(dx * dx + dy * dy) <= TRADE_DISTANCE;
+      });
+
       const victimOut = out.get(victim)!;
-      if (aliveTeammates.length > 0) {
+      if (nearbyTeammates.length > 0) {
         victimOut.traded_death_opportunities = ((victimOut.traded_death_opportunities as number) ?? 0) + 1;
       }
 
       let victimWasAttempted = false;
       let victimWasTraded = false;
 
-      for (const teammate of aliveTeammates) {
+      for (const teammate of nearbyTeammates) {
         const teammateOut = out.get(teammate)!;
         teammateOut.trade_kill_opportunities = ((teammateOut.trade_kill_opportunities as number) ?? 0) + 1;
 
