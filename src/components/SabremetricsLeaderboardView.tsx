@@ -720,7 +720,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
               <SortableTh label="HE Thrown" title="HE grenades thrown" sortKey="he_thrown" state={sort} onClick={toggleSort} />
               <SortableTh label="HE Damage" title="Damage dealt to enemies by HE grenades" sortKey="he_dmg" state={sort} onClick={toggleSort} />
               <SortableTh label="HE Dmg/Throw" title="HE damage per HE grenade thrown" sortKey="he_dmg_throw" state={sort} onClick={toggleSort} />
-              <SortableTh label="CT Smokes Blocking %" title="CT-side smokes that had an enemy within 800 units of the bloom at some point during its life, out of all CT smokes thrown (Leetify's [CT] Smokes That Stopped a Push)" sortKey="smoke_block" state={sort} onClick={toggleSort} />
+              <SortableTh label="CT Smokes Blocking %" title="CT-side smokes that had an enemy within the cloud's radius at some point during its life, out of all CT smokes thrown" sortKey="smoke_block" state={sort} onClick={toggleSort} />
               <SortableTh label="Unused Util/Death" title="Buy-menu value of grenades still held at death, averaged across deaths (Leetify's Unused Utility on Death) — lower is better" sortKey="unused_util" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
@@ -914,7 +914,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'HE Thrown', title: 'HE grenades thrown', value: agg.he_thrown },
     { label: 'HE Damage', title: 'Damage dealt to enemies by HE grenades', value: agg.he_damage },
     { label: 'HE Dmg/Throw', title: 'HE damage per HE grenade thrown', value: fmtNum(agg.he_damage / (agg.he_thrown || 1), 1) },
-    { label: 'CT Smokes Blocking %', title: 'CT-side smokes that had an enemy within 800 units of the bloom at some point during its life, out of all CT smokes thrown (Leetify\'s [CT] Smokes That Stopped a Push)', value: pct(agg.smokes_blocking_push, agg.ct_smokes_thrown) },
+    { label: 'CT Smokes Blocking %', title: 'CT-side smokes that had an enemy within the cloud\'s radius at some point during its life, out of all CT smokes thrown', value: pct(agg.smokes_blocking_push, agg.ct_smokes_thrown) },
     { label: 'Unused Util/Death', title: 'Buy-menu value of grenades still held at death, averaged across deaths (Leetify\'s Unused Utility on Death) — lower is better', value: fmtNum(agg.unused_util_value_on_death_total / (agg.deaths || 1), 0) },
   ];
 
