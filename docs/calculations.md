@@ -115,10 +115,13 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     the two can never disagree.
 - `Objective+` = `Player Objective Score` / `League Avg Objective Score`
   - `Objective Score` = (2 * `Plants`) + (3 * `Defuses`)
-- `Utility+` = `Player Utility Score` / `League Avg Utility Score`
-  - `Utility Score` = `Flash Assists` + (`Utility Damage` / 50) + `Smokes Blocking Push` -
-    `Teamflash Duration` — a good CT smoke-block counts on the same 1-point-per-event scale as a
-    Flash Assist; each second spent blinding a teammate subtracts a point.
+- `Utility+` = `0.30 * Flash Assists+` + `0.30 * Utility Damage+` + `0.20 * Blocking Smokes+` +
+  `0.20 * (2 - Teamflash+)` — a weighted average of four already-normalized `+` ratios (each vs.
+  its own league-average rate per round, or per CT smoke thrown for `Blocking Smokes+`), the same
+  way `Aim+` averages `Accuracy+`/`Head Accuracy+`/`Counter-Strafe+`, rather than a raw point score
+  whose league average could land near zero and blow up the ratio. `Teamflash+` is "lower is
+  better," so it's folded in inverted (`2 - Teamflash+`) to land on the same "1.00 = average" scale
+  as the other three before weighting.
   - `Utility Damage` is CS2's own `m_iUtilityDamage` engine accumulator (`accumulators.ts`) — not
     a DGLS-computed sum — and has always combined HE grenade damage and Molotov/Incendiary damage
     to enemies (teamdamage/self-damage excluded natively). `HE Damage` (below) is a separate,
@@ -127,8 +130,8 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   - `Flash Assists` and `Enemies Flashed` only count blinds of **1.1s or longer** ("half-blind"
     exposure is excluded), matching Leetify's flash-effectiveness definition. `Blind Duration
     Dealt` is a raw, ungated exposure total with no half-blind gate and no role in `Utility Score`.
-    `Teamflash Duration` is likewise a raw, ungated exposure total, but feeds `Utility Score`
-    directly as a penalty, per above.
+    `Teamflash Duration` is likewise a raw, ungated exposure total, but feeds `Utility+` as an
+    inverted ratio, per above.
   - `Flash Assists` credits a **teammate's** kill on the blinded enemy within a fixed window
     after the blind expires (own kills excluded) — this is the scoreboard-style definition and
     keeps its name/meaning for continuity.
@@ -145,8 +148,9 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     Death": the buy-menu value (Valve's stable HE/Flash/Smoke/Molotov/Incendiary/Decoy prices) of
     grenades still held at the moment of death, summed across a player's deaths and averaged per
     death. Lower is better (utility bought and not used before dying). Read from demoparser2's
-    "inventory" tick field at each death — not yet confirmed against a real DGLS demo; see
-    `src/lib/parsers/unusedUtility.ts`. Tracked as its own raw stat, not folded into `Utility+`.
+    "inventory" tick field one tick before death (the engine strips weapon services on the death
+    tick itself), confirmed against a real DGLS demo; see `src/lib/parsers/unusedUtility.ts`.
+    Tracked as its own raw stat, not folded into `Utility+`.
   - `Enemies Flashed/Flash` = `Enemies Flashed` / `Flashes Thrown`
   - `Avg Blind/Flash` = `Blind Duration Max Sum` / `Effective Flashes` — for each flash that
     blinded at least one enemy for 1.1s+, take the *longest* blind duration it caused (not the
@@ -212,11 +216,13 @@ Spotted)"); CS2's spotted mask (`m_bSpotted`) is known-flaky, so these ship unga
   total, not a per-rifle breakdown — a per-rifle version would need per-weapon columns or a
   child table, deferred until that's actually wanted.
 - `CT Smokes Blocking %` = `Smokes Blocking Push` / `CT Smokes Thrown` — CT-side only, matching
-  Leetify's `[CT] Smokes That Stopped a Push` exactly (both the CT-only scope and the percentage
-  shape; a T-side smoke serves a different tactical purpose — covering a plant/retake, not
-  stopping a push — and isn't counted). A CT smoke counts as "blocking" if an enemy came within
-  800 game units of the detonation position at some sampled point during the smoke's life (800
-  matches Leetify's own glossary wording exactly). Paired from the
+  the CT-only scope and percentage shape of Leetify's `[CT] Smokes That Stopped a Push` (a T-side
+  smoke serves a different tactical purpose — covering a plant/retake, not stopping a push — and
+  isn't counted). A CT smoke counts as "blocking" if an enemy came within `SMOKE_BLOCK_RADIUS`
+  (180 game units, `src/lib/parsers/smokes.ts`) of the detonation position at some sampled point
+  during the smoke's life — this approximates CS2's volumetric, irregularly-shaped smoke cloud
+  with a circle at roughly its actual radius, rather than Leetify's much larger 800-unit proximity
+  check. Paired from the
   `smokegrenade_detonate`/`smokegrenade_expired` events via a shared `entityid` (confirmed
   against a real DGLS demo); a smoke whose round ends before it expires falls back to the
   round's end tick. This is position-based, not a true visibility/render check — see
