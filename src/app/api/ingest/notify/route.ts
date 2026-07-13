@@ -5,10 +5,12 @@
 // `demoKey(matchId)` (Vercel's 4.5 MB body cap can't receive a GOTV demo), then fire-and-forgets a
 // POST here with `{ matchId }`. This route NEVER receives the demo bytes — it only reads from R2.
 //
-// Phase-2 scope: confirm the demo actually landed, confirm the match is set up (roster present), and
-// record a `received` row in the existing `background_jobs` state machine (`job_type='demo_ingest'`,
-// mirroring the replay pipeline). Downstream stays the existing manual parse → confirm flow. Phase 3
-// will extend this to auto-parse + stage a result.
+// Confirms the demo actually landed, confirms the match is set up (roster present), records a
+// `received` row in the `background_jobs` state machine (`job_type='demo_ingest'`), and dispatches
+// the `demo-ingest` Action (parse → quarantine → auto-commit or stage for manual confirm). Also
+// dispatches `replay-extract` for this same first-time landing, gated by `REPLAY_AUTO_DISPATCH` — a
+// later manual re-parse of either pipeline goes through its own dedicated dispatch route instead of
+// this one.
 //
 // Auth: shared secret in the `x-ingest-secret` header, compared in constant time against
 // `INGEST_NOTIFY_SECRET`. No session — this is called by the Worker, not a browser.
@@ -22,6 +24,8 @@ import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { machineSecretGuard } from '@/lib/machine-auth';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '@/lib/demo/ingestResult';
+
+const REPLAY_JOB_TYPE = 'replay_extract';
 
 export async function POST(req: NextRequest) {
   const denied = machineSecretGuard(
@@ -122,6 +126,40 @@ export async function POST(req: NextRequest) {
       .eq('status', 'received');
   } else {
     console.error(`demo-ingest dispatch failed for match ${matchId}: ${dispatch.error}`);
+  }
+
+  // Auto-dispatch replay-extract alongside demo-ingest, but only on this first-time landing — a
+  // manual re-parse goes through the separate `/api/matches/[id]/demo/dispatch` route and never
+  // reaches here, and an existing `replay_extract` row (already queued/succeeded/failed from this
+  // same landing) means it's not the first time, so skip. Opt-in via `REPLAY_AUTO_DISPATCH` (same
+  // shadow-first pattern as `AUTO_COMMIT_ENABLED`) so it can be watched before going live.
+  if (process.env.REPLAY_AUTO_DISPATCH === 'true') {
+    const { data: existingReplay } = await supabaseAdmin
+      .from('background_jobs')
+      .select('status')
+      .eq('job_type', REPLAY_JOB_TYPE)
+      .eq('match_id', matchId)
+      .maybeSingle();
+    if (!existingReplay) {
+      const replayDispatch = await dispatchWorkflow('replay-extract.yml', { match_id: String(matchId) });
+      if (replayDispatch.ok) {
+        await supabaseAdmin.from('background_jobs').upsert(
+          {
+            job_type: REPLAY_JOB_TYPE,
+            match_id: matchId,
+            status: 'queued',
+            stage: 'validate',
+            error_message: null,
+            created_at: now,
+            updated_at: now,
+          },
+          { onConflict: 'job_type,match_id' },
+        );
+        await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
+      } else {
+        console.error(`replay-extract auto-dispatch failed for match ${matchId}: ${replayDispatch.error}`);
+      }
+    }
   }
 
   // The demo landing means the match is over → tear down the shared server now, without waiting for
