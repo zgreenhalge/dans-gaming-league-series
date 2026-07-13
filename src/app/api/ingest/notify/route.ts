@@ -24,8 +24,7 @@ import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { machineSecretGuard } from '@/lib/machine-auth';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '@/lib/demo/ingestResult';
-
-const REPLAY_JOB_TYPE = 'replay_extract';
+import { REPLAY_EXTRACT_JOB_TYPE as REPLAY_JOB_TYPE } from '@/lib/jobs';
 
 export async function POST(req: NextRequest) {
   const denied = machineSecretGuard(
@@ -130,34 +129,49 @@ export async function POST(req: NextRequest) {
 
   // Auto-dispatch replay-extract alongside demo-ingest, but only on this first-time landing — a
   // manual re-parse goes through the separate `/api/matches/[id]/demo/dispatch` route and never
-  // reaches here, and an existing `replay_extract` row (already queued/succeeded/failed from this
-  // same landing) means it's not the first time, so skip. Opt-in via `REPLAY_AUTO_DISPATCH` (same
-  // shadow-first pattern as `AUTO_COMMIT_ENABLED`) so it can be watched before going live.
+  // reaches here. Opt-in via `REPLAY_AUTO_DISPATCH` (same shadow-first pattern as
+  // `AUTO_COMMIT_ENABLED`) so it can be watched before going live.
   if (process.env.REPLAY_AUTO_DISPATCH === 'true') {
-    const { data: existingReplay } = await supabaseAdmin
+    // First-landing guard as an atomic INSERT ... ON CONFLICT DO NOTHING (`ignoreDuplicates`): two
+    // concurrent notify calls can't both read "no row yet" and both dispatch — the loser gets back
+    // an empty `claimed` and skips, instead of racing a plain SELECT-then-insert.
+    const { data: claimed } = await supabaseAdmin
       .from('background_jobs')
-      .select('status')
-      .eq('job_type', REPLAY_JOB_TYPE)
-      .eq('match_id', matchId)
-      .maybeSingle();
-    if (!existingReplay) {
-      const replayDispatch = await dispatchWorkflow('replay-extract.yml', { match_id: String(matchId) });
-      if (replayDispatch.ok) {
-        await supabaseAdmin.from('background_jobs').upsert(
-          {
-            job_type: REPLAY_JOB_TYPE,
-            match_id: matchId,
-            status: 'queued',
-            stage: 'validate',
-            error_message: null,
-            created_at: now,
-            updated_at: now,
-          },
-          { onConflict: 'job_type,match_id' },
-        );
-        await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
-      } else {
+      .upsert(
+        {
+          job_type: REPLAY_JOB_TYPE,
+          match_id: matchId,
+          status: 'queued',
+          stage: 'validate',
+          error_message: null,
+          created_at: now,
+          updated_at: now,
+        },
+        { onConflict: 'job_type,match_id', ignoreDuplicates: true },
+      )
+      .select('match_id');
+    if (claimed && claimed.length > 0) {
+      const [, replayDispatch] = await Promise.all([
+        supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId),
+        dispatchWorkflow('replay-extract.yml', { match_id: String(matchId) }),
+      ]);
+      if (!replayDispatch.ok) {
+        // Roll the just-claimed row back to `failed` so a transient dispatch error is visible in
+        // the background_jobs dashboard instead of silently vanishing (mirrors the manual
+        // `/api/matches/[id]/replay/dispatch` route's markFailed).
         console.error(`replay-extract auto-dispatch failed for match ${matchId}: ${replayDispatch.error}`);
+        await Promise.all([
+          supabaseAdmin
+            .from('background_jobs')
+            .update({
+              status: 'failed',
+              error_message: `dispatch failed: ${replayDispatch.error}`,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('job_type', REPLAY_JOB_TYPE)
+            .eq('match_id', matchId),
+          supabaseAdmin.from('matches').update({ replay_status: 'failed' }).eq('id', matchId),
+        ]);
       }
     }
   }
