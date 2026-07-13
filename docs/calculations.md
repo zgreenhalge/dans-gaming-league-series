@@ -91,8 +91,9 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   - `KAST` = `Rounds with Kill, Assist, Survived, or Traded` / `Rounds played`
 - `Trade+` = `Player Trade Kill %` / `League Avg Trade Kill %`
   - **Trade Kills** — from the perspective of the player who could avenge a teammate:
-    - `Trade Kill Opportunities` = times a teammate died while this player was still alive
-      (the chance to trade existed)
+    - `Trade Kill Opportunities` = times a teammate died while this player was still alive and
+      within 800 game units of the death (the chance to trade realistically existed — matching
+      `Smokes Blocking Push`'s distance gate; adjust if a reparse run shows it needs tuning)
     - `Trade Kill Attempts` = opportunities where this player damaged the killer within the
       trade window
     - `Trade Kill Successes` = opportunities where this player killed the killer within the
@@ -101,7 +102,7 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   - **Traded Deaths** — the mirror, from the perspective of the player who died (tracked as its
     own raw stat; not currently folded into `Trade+`):
     - `Traded Death Opportunities` = times this player died while at least one teammate was
-      still alive (someone had the chance to trade them)
+      still alive and within 800 game units (someone had a realistic chance to trade them)
     - `Traded Death Attempts` = opportunities where a teammate damaged the killer within the
       trade window
     - `Traded Death Successes` = opportunities where a teammate killed the killer within the
