@@ -214,7 +214,6 @@ function EventRow({
   sideOf,
   onClick,
   active,
-  liRef,
 }: {
   ev: ReplayEvent;
   nameOf: (id: number | null) => string;
@@ -223,7 +222,6 @@ function EventRow({
   onClick?: () => void;
   /** Highlights the row as the one at the synced 2D replay's current tick. */
   active?: boolean;
-  liRef?: (el: HTMLLIElement | null) => void;
 }) {
   const name = (id: number | null) => <PlayerName id={id} nameOf={nameOf} sideOf={sideOf} />;
   const tint = ev.type === 'round_end' ? rowTint(ev.winnerSide) : { className: '' };
@@ -232,7 +230,7 @@ function EventRow({
 
   if (onClick) {
     return (
-      <li ref={liRef} className={`${tint.className} ${activeCls}`} style={tint.style}>
+      <li className={`${tint.className} ${activeCls}`} style={tint.style}>
         <button type="button" onClick={onClick} className={`${ROW_BASE} lift-row w-full text-left`}>
           {content}
         </button>
@@ -240,7 +238,7 @@ function EventRow({
     );
   }
   return (
-    <li ref={liRef} className={`${ROW_BASE} lift-row ${tint.className} ${activeCls}`} style={tint.style}>
+    <li className={`${ROW_BASE} lift-row ${tint.className} ${activeCls}`} style={tint.style}>
       {content}
     </li>
   );
@@ -326,7 +324,7 @@ function SyncedEventsPanel({
   const playerById = new Map(events.players.map((p) => [p.id, p]));
   const nameOf = (id: number | null): string =>
     id === null ? 'world' : (playerById.get(id)?.name ?? `#${id}`);
-  const itemRefs = useRef(new Map<string, HTMLLIElement>());
+  const roundRefs = useRef(new Map<number, HTMLDivElement>());
   const containerRef = useRef<HTMLDivElement>(null);
   // True while the user is mid-scroll (wheel/touch/scrollbar drag) — auto-follow backs
   // off so it doesn't fight them while they're reading back through the feed, then
@@ -357,8 +355,8 @@ function SyncedEventsPanel({
   }, []);
 
   useEffect(() => {
-    if (!active || userScrollingRef.current) return;
-    const el = itemRefs.current.get(`${active.round}-${active.index}`);
+    if (active === null || userScrollingRef.current) return;
+    const el = roundRefs.current.get(active.round);
     if (!el) return;
     programmaticRef.current = true;
     el.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -368,7 +366,10 @@ function SyncedEventsPanel({
     settleTimerRef.current = setTimeout(() => {
       programmaticRef.current = false;
     }, 500);
-  }, [active]);
+    // Only the round changing should re-snap — moving to the next event within the
+    // round already showing shouldn't re-trigger a scroll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.round]);
 
   return (
     <div
@@ -384,7 +385,14 @@ function SyncedEventsPanel({
             return round.sideByFaction[faction as Faction];
           };
           return (
-            <div key={round.round} className="border border-[var(--color-border-primary)]">
+            <div
+              key={round.round}
+              ref={(el) => {
+                if (el) roundRefs.current.set(round.round, el);
+                else roundRefs.current.delete(round.round);
+              }}
+              className="border border-[var(--color-border-primary)]"
+            >
               <button
                 type="button"
                 onClick={() => onSeek(round.round)}
@@ -404,11 +412,6 @@ function SyncedEventsPanel({
                     sideOf={sideOf}
                     active={active?.round === round.round && active.index === i}
                     onClick={() => onSeek(round.round, ev.tick)}
-                    liRef={(el) => {
-                      const key = `${round.round}-${i}`;
-                      if (el) itemRefs.current.set(key, el);
-                      else itemRefs.current.delete(key);
-                    }}
                   />
                 ))}
               </ul>
