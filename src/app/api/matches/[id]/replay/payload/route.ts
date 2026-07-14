@@ -3,10 +3,10 @@ import { getR2Object, replayKey } from '@/lib/r2';
 import { isGzip } from '@/lib/gzip';
 
 // Serves the full `replay.json` payload (frames + grenades + events) for the client
-// `<ReplayPlayer>`. The Events tab uses a stripped server-side projection
-// (`getReplayEventsView`); the 2D player needs the whole payload, which is multi-MB,
-// so it's fetched lazily from here only when the user opens the Replay sub-tab —
-// never bundled into the server-rendered match page. See `docs/replay.md`.
+// `<ReplayPlayer>`. The synced events panel next to it uses a stripped server-side
+// projection (`getReplayEventsView`); the 2D player needs the whole payload, which is
+// multi-MB, so it's fetched lazily from here only when the user opens the Replay
+// sub-tab — never bundled into the server-rendered match page. See `docs/replay.md`.
 //
 // Read-only and unauthenticated, consistent with the match page itself (which already
 // renders the events list publicly). Heavy compute stays in the GitHub Action; this

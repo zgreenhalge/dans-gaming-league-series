@@ -1,10 +1,10 @@
 # Match Replay & Events
 
 The 2D match replay and core-events list (issue #121). Every uploaded CS2 demo is turned into a
-**`replay.json`** payload that drives two products, both surfaced as sub-tabs under the match page's
-**Recap** tab (`MatchRecapTab.tsx`): an **Events** list (kills, plants, defuses, round ends) and a
-**2D Replay** rendered in-browser by **`<ReplayPlayer>`** on a canvas, plus a map-level **Heatmap**
-tab (see below) built from the same artifacts. This is a sibling pipeline to
+**`replay.json`** payload that drives the match page's **Recap** tab (`MatchRecapTab.tsx`): a
+**2D Replay** sub-tab rendered in-browser by **`<ReplayPlayer>`** on a canvas, with its core-events
+list (kills, plants, defuses, round ends) docked alongside it as a synced panel, plus a map-level
+**Heatmap** sub-tab (see below) built from the same artifacts. This is a sibling pipeline to
 [`demo-ingestion.md`](./demo-ingestion.md): that path parses **stats** (which need human review before
 they write scores); this path parses **positions/events** (which need no review, so it runs fully
 async in GitHub Actions). Both pipelines parse demos through the same library — see
@@ -20,8 +20,8 @@ deterministic key; Vercel only **dispatches** jobs and **reads** the finished pa
 
 ### Three actors
 
-- **App (Vercel)** — serves the Recap tab (Events list + replay player) and the map Heatmap tab, and
-  *dispatches* the GitHub jobs. No ffmpeg, no server canvas on the request path.
+- **App (Vercel)** — serves the Recap tab (2D Replay player + synced events panel, and the Heatmap
+  sub-tab), and *dispatches* the GitHub jobs. No ffmpeg, no server canvas on the request path.
 - **GitHub Actions** — all heavy compute (parse, render, radar extraction). See "Background jobs".
 - **Client `<ReplayPlayer>`** — a canvas component that loads `replay.json` and plays it back
   interactively. The renderer.
@@ -52,8 +52,8 @@ ReplayPayload {
 }
 ```
 
-`events[]` powers BOTH the Events tab and the in-player timeline — one file, two products. Wingman has
-few players, so payloads are small (a few MB worst case, gzipped).
+`events[]` powers the synced events panel alongside the in-player timeline — one file, two views onto
+the same data. Wingman has few players, so payloads are small (a few MB worst case, gzipped).
 
 ### Extract code
 
@@ -156,8 +156,8 @@ The 2D Replay sub-tab is `<ReplayPlayer>` (`src/components/ReplayPlayer.tsx`), a
 loaded lazily with `ssr: false` (its payload fetch + RAF loop are browser-only). It fetches the full
 payload from **`GET /api/matches/[id]/replay/payload`** — which streams the gzipped `replay.json`
 straight from R2 with `Content-Encoding: gzip` — only when the user opens the sub-tab, so the
-multi-MB payload never bloats the server-rendered match page (the Events tab keeps using the
-stripped `getReplayEventsView` projection).
+multi-MB payload never bloats the server-rendered match page. The synced events panel next to it is
+server-rendered up front from the much smaller, stripped `getReplayEventsView` projection instead.
 
 The render is split into **three pure, runtime-agnostic modules** so the browser player and any
 future headless renderer can share one code path with **no draw drift**:
@@ -177,13 +177,17 @@ exact tick within its round (the `n` nonce lets a repeat click on the same targe
 modules are unit-tested in `src/lib/replay/replay.test.ts` (`npm test`).
 
 **Synced events panel:** the 2D Replay sub-tab docks a `SyncedEventsPanel` (`MatchRecapTab.tsx`)
-beside the canvas on wide screens (below it on narrow ones) — the same core-events list as the
-Events tab, but auto-scrolling to and highlighting the event at the player's current tick, and
-seeking the player on click. `<ReplayPlayer>` reports its position via an `onPosition(round, tick)`
-callback fired once per drawn frame; `MatchRecapTab` derives the highlighted event from it and only
-calls `setState` when that derived event actually changes, so the panel doesn't re-render at
-playback rate. `EventRow` is shared between both surfaces — a plain read-only row in the Events tab,
-a clickable/highlightable one (via its `onClick`/`active`/`liRef` props) in the synced panel.
+beside the canvas on wide screens (below it on narrow ones) — the core-events list, grouped by round,
+auto-scrolling the active round's header to the top of the panel as playback enters it (not per
+event — moving between events already in view doesn't re-trigger a scroll) and highlighting the
+event at the player's current tick, and seeking the player to a round or an exact event on click.
+Auto-follow backs off while the user is actively scrolling the panel (wheel/touch/scrollbar drag) and
+resumes once they stop, so it doesn't fight someone reading back through the feed. `<ReplayPlayer>`
+reports its position via an `onPosition(round, tick)` callback fired once per drawn frame;
+`MatchRecapTab` derives the highlighted event from it and only calls `setState` when that derived
+event actually changes, so the panel doesn't re-render at playback rate — the per-row highlight is
+driven by that single value, so it always tracks exactly one row and clears off a clicked row the
+moment playback reaches the next event.
 
 ## Heatmap tab
 
@@ -270,7 +274,7 @@ the app reads server-side. Outputs live at deterministic R2 keys, so there are *
 
 | Column | Type | Purpose |
 |---|---|---|
-| `replay_status` | text | `none\|queued\|running\|ready\|failed` — gates the Recap tab's Events/Replay sub-tabs |
+| `replay_status` | text | `none\|queued\|running\|ready\|failed` — gates the Recap tab's 2D Replay/Heatmap sub-tabs |
 
 **`maps`** — calibration columns (workshop link already present):
 

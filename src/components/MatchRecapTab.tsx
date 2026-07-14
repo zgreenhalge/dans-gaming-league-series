@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { Skull, Bomb, Scissors, Clock, Crosshair, Play } from 'lucide-react';
+import { Skull, Bomb, Scissors, Clock, Crosshair } from 'lucide-react';
 import { tabCls } from '@/lib/util';
 import { mapSlug } from '@/lib/maps';
 import MapHeatmap from './MapHeatmap';
@@ -153,7 +153,7 @@ function PlayerName({ id, nameOf, sideOf }: { id: number | null; nameOf: (id: nu
   );
 }
 
-/** The icon + text for one event, shared by the read-only Events tab and the clickable synced panel. */
+/** The icon + text for one event, keyed by event type. */
 function eventContent(ev: ReplayEvent, name: (id: number | null) => React.ReactNode): React.ReactNode {
   if (ev.type === 'kill') {
     return (
@@ -218,78 +218,21 @@ function EventRow({
   ev: ReplayEvent;
   nameOf: (id: number | null) => string;
   sideOf: (id: number | null) => Side | null;
-  /** When provided, the row renders as a button that seeks the synced 2D replay to this event. */
-  onClick?: () => void;
+  /** Seeks the synced 2D replay to this event. */
+  onClick: () => void;
   /** Highlights the row as the one at the synced 2D replay's current tick. */
-  active?: boolean;
+  active: boolean;
 }) {
   const name = (id: number | null) => <PlayerName id={id} nameOf={nameOf} sideOf={sideOf} />;
   const tint = ev.type === 'round_end' ? rowTint(ev.winnerSide) : { className: '' };
   const activeCls = active ? 'bg-[var(--color-bg-tertiary)] border-l-2 border-l-[var(--color-site-accent)]' : '';
-  const content = eventContent(ev, name);
 
-  if (onClick) {
-    return (
-      <li className={`${tint.className} ${activeCls}`} style={tint.style}>
-        <button type="button" onClick={onClick} className={`${ROW_BASE} lift-row w-full text-left`}>
-          {content}
-        </button>
-      </li>
-    );
-  }
   return (
-    <li className={`${ROW_BASE} lift-row ${tint.className} ${activeCls}`} style={tint.style}>
-      {content}
+    <li className={`${tint.className} ${activeCls}`} style={tint.style}>
+      <button type="button" onClick={onClick} className={`${ROW_BASE} lift-row w-full text-left`}>
+        {eventContent(ev, name)}
+      </button>
     </li>
-  );
-}
-
-/** The core-events list, grouped by round. Round headers jump the 2D replay. */
-function EventsList({
-  events,
-  onSelectRound,
-}: {
-  events: ReplayEventsView;
-  onSelectRound: (round: number) => void;
-}) {
-  const playerById = new Map(events.players.map((p) => [p.id, p]));
-  const nameOf = (id: number | null): string =>
-    id === null ? 'world' : (playerById.get(id)?.name ?? `#${id}`);
-
-  return (
-    <div className="space-y-5">
-      {events.rounds.map((round) => {
-        // A player's side this round follows their faction's side assignment.
-        const sideOf = (id: number | null): Side | null => {
-          if (id === null) return null;
-          const faction = playerById.get(id)?.faction;
-          if (!faction) return null;
-          return round.sideByFaction[faction as Faction];
-        };
-        return (
-          <div key={round.round} className="border border-[var(--color-border-primary)]">
-            <button
-              type="button"
-              onClick={() => onSelectRound(round.round)}
-              className="lift-row w-full bg-[var(--color-bg-secondary)] px-3 py-2 border-b border-[var(--color-border-primary)] flex items-center gap-3 text-left"
-              title="Watch this round in the 2D replay"
-            >
-              <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)]">
-                {round.isKnifeRound ? 'Knife Round' : `Round ${round.round}`}
-              </span>
-              <span className="ml-auto flex items-center gap-1 text-[10px] font-mono text-[var(--color-text-secondary)]">
-                <Play size={11} /> Replay
-              </span>
-            </button>
-            <ul>
-              {round.events.map((ev, i) => (
-                <EventRow key={i} ev={ev} nameOf={nameOf} sideOf={sideOf} />
-              ))}
-            </ul>
-          </div>
-        );
-      })}
-    </div>
   );
 }
 
@@ -434,7 +377,7 @@ const ReplayPlayer = dynamic(() => import('./ReplayPlayer'), {
   ),
 });
 
-type RecapSubTab = 'events' | 'replay' | 'heatmap';
+type RecapSubTab = 'replay' | 'heatmap';
 
 export default function MatchRecapTab({
   job,
@@ -449,17 +392,13 @@ export default function MatchRecapTab({
   matchMap: string | null;
   canDispatch: boolean;
 }) {
-  const [sub, setSub] = useState<RecapSubTab>('events');
+  const [sub, setSub] = useState<RecapSubTab>('replay');
   // This match's own heatmap (#128) — scoped to the single match.
   const thisMatch = useMemo(() => [matchId], [matchId]);
   const visibleMatchIds = useMemo(() => new Set([matchId]), [matchId]);
-  // Clicking a round (Events timeline) or an event (synced panel) jumps/seeks the
-  // replay. The nonce makes a repeat click on the same target re-fire the jump.
+  // Clicking a round header or an event in the synced panel seeks the replay. The
+  // nonce makes a repeat click on the same target re-fire the jump.
   const [jump, setJump] = useState<{ round: number; n: number; tick?: number } | null>(null);
-  const jumpToRound = (round: number) => {
-    setJump((prev) => ({ round, n: (prev?.n ?? 0) + 1 }));
-    setSub('replay');
-  };
   const seek = useCallback((round: number, tick?: number) => {
     setJump((prev) => ({ round, tick, n: (prev?.n ?? 0) + 1 }));
   }, []);
@@ -482,11 +421,11 @@ export default function MatchRecapTab({
     [events],
   );
 
-  // Both sub-tabs are powered by the same replay payload. Gate on the payload itself
-  // (`events`), not `job.status`: if the payload exists we show it even when a later
-  // regenerate is queued/running/failed, so a transient dispatch error can't hide a
-  // good replay. Only when there's no payload do we fall back to the generate/progress
-  // panel (first generation, or genuinely failed before any payload was produced).
+  // Both sub-tabs are gated on the replay payload itself (`events`), not `job.status`:
+  // if the payload exists we show it even when a later regenerate is queued/running/
+  // failed, so a transient dispatch error can't hide a good replay. Only when there's
+  // no payload do we fall back to the generate/progress panel (first generation, or
+  // genuinely failed before any payload was produced).
   if (!events) {
     return <ReplayStatusPanel job={job} matchId={matchId} canDispatch={canDispatch} />;
   }
@@ -494,9 +433,6 @@ export default function MatchRecapTab({
   return (
     <div className="mt-4">
       <div className="flex items-center gap-2 mb-4">
-        <button type="button" className={tabCls(sub === 'events')} onClick={() => setSub('events')}>
-          Events
-        </button>
         <button type="button" className={tabCls(sub === 'replay')} onClick={() => setSub('replay')}>
           2D Replay
         </button>
@@ -509,7 +445,6 @@ export default function MatchRecapTab({
           <RegenerateLink matchId={matchId} />
         </DevGate>
       </div>
-      {sub === 'events' && <EventsList events={events} onSelectRound={jumpToRound} />}
       {sub === 'replay' && (
         <div className="lg:grid lg:grid-cols-[auto_1fr] lg:gap-4 lg:items-stretch">
           <ReplayPlayer matchId={matchId} jump={jump} onPosition={handlePosition} />
