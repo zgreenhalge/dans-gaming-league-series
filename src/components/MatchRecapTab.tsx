@@ -430,6 +430,9 @@ export default function MatchRecapTab({
   // The Recording sub-tab needs neither a demo nor a generated replay — it's shown
   // whenever there's already a recording to watch, or the viewer could add one.
   const showRecording = !!recordingURL || canEditRecording;
+  // Heatmap is built from the same replay-extract artifacts as the 2D Replay
+  // (`heatmap.json` alongside `replay.json`), so it isn't ready before `events` is.
+  const showHeatmap = !!matchMap && !!events;
 
   return (
     <div className="mt-4">
@@ -437,7 +440,7 @@ export default function MatchRecapTab({
         <button type="button" className={tabCls(sub === 'replay')} onClick={() => setSub('replay')}>
           2D Replay
         </button>
-        {matchMap && (
+        {showHeatmap && (
           <button type="button" className={tabCls(sub === 'heatmap')} onClick={() => setSub('heatmap')}>
             Heatmap
           </button>
@@ -469,7 +472,7 @@ export default function MatchRecapTab({
         ) : (
           <ReplayStatusPanel job={job} matchId={matchId} canDispatch={canDispatch} />
         ))}
-      {sub === 'heatmap' && matchMap && (
+      {sub === 'heatmap' && showHeatmap && matchMap && (
         <MapHeatmap slug={mapSlug(matchMap)} matchIds={thisMatch} visibleMatchIds={visibleMatchIds} />
       )}
       {sub === 'recording' && showRecording && (
