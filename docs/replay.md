@@ -169,12 +169,21 @@ future headless renderer can share one code path with **no draw drift**:
 | `src/lib/replay/draw.ts` | `drawScene()` — paints one moment onto a structural `Ctx2D` (the Canvas2D subset used), taking colors from a passed `ReplayTheme` — the player reads CSS vars, so a future non-DOM renderer would just pass its own theme. No DOM, no React. |
 
 `<ReplayPlayer>` is the thin shell: a DPR-aware canvas sized by `ResizeObserver`, a RAF clock that
-advances `tick` (auto-advancing across rounds), and the controls (play/pause, 0.5–4× speed, round
-jump, scrubber). The scrubber is uncontrolled and synced imperatively each frame to avoid a
-per-frame React re-render. It also accepts an optional `jump={{ round, n }}` prop: clicking a round
-header in the Recap tab's **Events** timeline (`MatchRecapTab`) switches to the 2D Replay sub-tab and
-jumps the player to that round (the `n` nonce lets a repeat click on the same round re-fire). The pure modules are unit-tested in `src/lib/replay/replay.test.ts`
-(`npm test`).
+advances `tick` (auto-advancing across rounds), and the controls (play/pause, rewind 10s, 0.5–4×
+speed, round jump, scrubber). The scrubber is uncontrolled and synced imperatively each frame to
+avoid a per-frame React re-render. It also accepts an optional `jump={{ round, n, tick? }}` prop:
+clicking a round header jumps to that round's start, and clicking an event seeks to that event's
+exact tick within its round (the `n` nonce lets a repeat click on the same target re-fire). The pure
+modules are unit-tested in `src/lib/replay/replay.test.ts` (`npm test`).
+
+**Synced events panel:** the 2D Replay sub-tab docks a `SyncedEventsPanel` (`MatchRecapTab.tsx`)
+beside the canvas on wide screens (below it on narrow ones) — the same core-events list as the
+Events tab, but auto-scrolling to and highlighting the event at the player's current tick, and
+seeking the player on click. `<ReplayPlayer>` reports its position via an `onPosition(round, tick)`
+callback fired once per drawn frame; `MatchRecapTab` derives the highlighted event from it and only
+calls `setState` when that derived event actually changes, so the panel doesn't re-render at
+playback rate. `EventRow` is shared between both surfaces — a plain read-only row in the Events tab,
+a clickable/highlightable one (via its `onClick`/`active`/`liRef` props) in the synced panel.
 
 ## Heatmap tab
 
