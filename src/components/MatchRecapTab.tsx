@@ -327,16 +327,54 @@ function SyncedEventsPanel({
   const nameOf = (id: number | null): string =>
     id === null ? 'world' : (playerById.get(id)?.name ?? `#${id}`);
   const itemRefs = useRef(new Map<string, HTMLLIElement>());
+  const containerRef = useRef<HTMLDivElement>(null);
+  // True while the user is mid-scroll (wheel/touch/scrollbar drag) — auto-follow backs
+  // off so it doesn't fight them while they're reading back through the feed, then
+  // resumes once they stop. Set by the container's own 'scroll' events, but ignored
+  // for the duration of our own scrollIntoView calls (flagged via `programmatic`).
+  const userScrollingRef = useRef(false);
+  const programmaticRef = useRef(false);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!active) return;
-    itemRefs.current
-      .get(`${active.round}-${active.index}`)
-      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const el = containerRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      if (programmaticRef.current) return;
+      userScrollingRef.current = true;
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = setTimeout(() => {
+        userScrollingRef.current = false;
+      }, 200);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!active || userScrollingRef.current) return;
+    const el = itemRefs.current.get(`${active.round}-${active.index}`);
+    if (!el) return;
+    programmaticRef.current = true;
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    // Smooth scrollIntoView fires its own 'scroll' events as it animates — hold off
+    // treating those as user input until it's had time to settle.
+    settleTimerRef.current = setTimeout(() => {
+      programmaticRef.current = false;
+    }, 500);
   }, [active]);
 
   return (
-    <div className="border border-[var(--color-border-primary)] max-h-64 lg:h-full lg:max-h-none overflow-y-auto">
+    <div
+      ref={containerRef}
+      className="border border-[var(--color-border-primary)] max-h-64 lg:h-full lg:max-h-none overflow-y-auto"
+    >
       <div className="space-y-5 p-2">
         {events.rounds.map((round) => {
           const sideOf = (id: number | null): Side | null => {
