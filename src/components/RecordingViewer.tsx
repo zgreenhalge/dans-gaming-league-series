@@ -51,7 +51,7 @@ export function RecordingViewer({ videoId }: { videoId: string | null }) {
 }
 
 // Admin/in-match control to set or clear a match's recording. Gated by the caller —
-// only rendered when the current user may edit results (see MatchTabView). When a recording
+// only rendered when the current user may edit results (see MatchRecapTab). When a recording
 // already exists this collapses to a "Replace Recording" link so it doesn't crowd the player.
 export function RecordingUrlForm({ matchId, videoId }: { matchId: number; videoId: string | null }) {
   const router = useRouter();

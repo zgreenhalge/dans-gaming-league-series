@@ -1,10 +1,10 @@
 # Match Replay & Events
 
 The 2D match replay and core-events list (issue #121). Every uploaded CS2 demo is turned into a
-**`replay.json`** payload that drives two products, both surfaced as sub-tabs under the match page's
-**Recap** tab (`MatchRecapTab.tsx`): an **Events** list (kills, plants, defuses, round ends) and a
-**2D Replay** rendered in-browser by **`<ReplayPlayer>`** on a canvas, plus a map-level **Heatmap**
-tab (see below) built from the same artifacts. This is a sibling pipeline to
+**`replay.json`** payload that drives the match page's **Recap** tab (`MatchRecapTab.tsx`): a
+**2D Replay** sub-tab rendered in-browser by **`<ReplayPlayer>`** on a canvas, with its core-events
+list (kills, plants, defuses, round ends) docked alongside it as a synced panel, plus a map-level
+**Heatmap** sub-tab (see below) built from the same artifacts. This is a sibling pipeline to
 [`demo-ingestion.md`](./demo-ingestion.md): that path parses **stats** (which need human review before
 they write scores); this path parses **positions/events** (which need no review, so it runs fully
 async in GitHub Actions). Both pipelines parse demos through the same library — see
@@ -20,8 +20,8 @@ deterministic key; Vercel only **dispatches** jobs and **reads** the finished pa
 
 ### Three actors
 
-- **App (Vercel)** — serves the Recap tab (Events list + replay player) and the map Heatmap tab, and
-  *dispatches* the GitHub jobs. No ffmpeg, no server canvas on the request path.
+- **App (Vercel)** — serves the Recap tab (2D Replay player + synced events panel, and the Heatmap
+  sub-tab), and *dispatches* the GitHub jobs. No ffmpeg, no server canvas on the request path.
 - **GitHub Actions** — all heavy compute (parse, render, radar extraction). See "Background jobs".
 - **Client `<ReplayPlayer>`** — a canvas component that loads `replay.json` and plays it back
   interactively. The renderer.
@@ -52,8 +52,8 @@ ReplayPayload {
 }
 ```
 
-`events[]` powers BOTH the Events tab and the in-player timeline — one file, two products. Wingman has
-few players, so payloads are small (a few MB worst case, gzipped).
+`events[]` powers the synced events panel alongside the in-player timeline — one file, two views onto
+the same data. Wingman has few players, so payloads are small (a few MB worst case, gzipped).
 
 ### Extract code
 
@@ -156,8 +156,8 @@ The 2D Replay sub-tab is `<ReplayPlayer>` (`src/components/ReplayPlayer.tsx`), a
 loaded lazily with `ssr: false` (its payload fetch + RAF loop are browser-only). It fetches the full
 payload from **`GET /api/matches/[id]/replay/payload`** — which streams the gzipped `replay.json`
 straight from R2 with `Content-Encoding: gzip` — only when the user opens the sub-tab, so the
-multi-MB payload never bloats the server-rendered match page (the Events tab keeps using the
-stripped `getReplayEventsView` projection).
+multi-MB payload never bloats the server-rendered match page. The synced events panel next to it is
+server-rendered up front from the much smaller, stripped `getReplayEventsView` projection instead.
 
 The render is split into **three pure, runtime-agnostic modules** so the browser player and any
 future headless renderer can share one code path with **no draw drift**:
@@ -169,12 +169,54 @@ future headless renderer can share one code path with **no draw drift**:
 | `src/lib/replay/draw.ts` | `drawScene()` — paints one moment onto a structural `Ctx2D` (the Canvas2D subset used), taking colors from a passed `ReplayTheme` — the player reads CSS vars, so a future non-DOM renderer would just pass its own theme. No DOM, no React. |
 
 `<ReplayPlayer>` is the thin shell: a DPR-aware canvas sized by `ResizeObserver`, a RAF clock that
-advances `tick` (auto-advancing across rounds), and the controls (play/pause, 0.5–4× speed, round
-jump, scrubber). The scrubber is uncontrolled and synced imperatively each frame to avoid a
-per-frame React re-render. It also accepts an optional `jump={{ round, n }}` prop: clicking a round
-header in the Recap tab's **Events** timeline (`MatchRecapTab`) switches to the 2D Replay sub-tab and
-jumps the player to that round (the `n` nonce lets a repeat click on the same round re-fire). The pure modules are unit-tested in `src/lib/replay/replay.test.ts`
-(`npm test`).
+advances `tick` (auto-advancing across rounds), and the controls (play/pause, rewind 10s, 0.5–4×
+speed, round jump, scrubber). The scrubber is uncontrolled and synced imperatively each frame to
+avoid a per-frame React re-render. It also accepts an optional `jump={{ round, n, tick? }}` prop:
+clicking a round header jumps to that round's start, and clicking an event seeks to that event's
+exact tick within its round (the `n` nonce lets a repeat click on the same target re-fire). The pure
+modules are unit-tested in `src/lib/replay/replay.test.ts` (`npm test`).
+
+**Synced events panel:** the 2D Replay sub-tab docks a `SyncedEventsPanel` (`MatchRecapTab.tsx`)
+beside the canvas on wide screens (below it on narrow ones) — the core-events list, grouped by round,
+auto-scrolling the active round's header to the top of the panel as playback enters it (not per
+event — moving between events already in view doesn't re-trigger a scroll) and highlighting the
+event at the player's current tick, and seeking the player to a round or an exact event on click.
+Auto-follow backs off while the user is actively scrolling the panel (wheel/touch/scrollbar drag) and
+resumes once they stop, so it doesn't fight someone reading back through the feed. `<ReplayPlayer>`
+reports its position via an `onPosition(round, tick)` callback fired once per drawn frame;
+`MatchRecapTab` derives the highlighted event from it and only calls `setState` when that derived
+event actually changes, so the panel doesn't re-render at playback rate — the per-row highlight is
+driven by that single value, so it always tracks exactly one row and clears off a clicked row the
+moment playback reaches the next event.
+
+**Pen tool:** a second, transparent `<canvas>` (`annotationCanvasRef`) sits absolutely positioned
+over the replay canvas for telestrator-style marks — pen, box (drag from a corner, unfilled), and
+eraser tools; three grenade "stickers" (smoke/molotov/HE, placed with one click, fixed to the
+effect's real AoE size — see below); a 5-color palette for pen/box; and Undo/Clear. All of it is
+local to the tab: nothing is written beyond the component's own `strokesRef`, there is no
+save/persist/share path, and marks are wiped whenever the round changes (they're drawn over that
+round's positions specifically) or the player unmounts.
+
+Marks are kept as vector data in `strokesRef`, not just canvas pixels, so a resize (which
+necessarily wipes the overlay's bitmap) repaints cleanly at the new size instead of losing the
+drawing. Pen points and box corners are normalized 0–1 against the board's side, like the rest of
+the annotation math. Grenade stickers store only their (also normalized) center — their radius is
+*not* stored, and is instead re-derived at every paint from `grenadeEffectRadius()`
+(`src/lib/replay/playback.ts`, the same lookup the live smoke/fire/HE effect rendering uses) run
+through the current `Projector.scaleLength()`, so a sticker reads as the grenade's true size under
+both auto-fit and calibrated-radar projections and stays correct across zoom/resize — the same
+reasoning that keeps `draw.ts`'s live effect AoE rings accurate. Sticker fill/ring colors reuse the
+exact hex values `readTheme()` assigns to the live smoke/fire/HE rendering (`STICKER_COLORS`), so a
+placed sticker looks like the real effect, not a lookalike.
+
+Undo keeps a stack of pre-mutation snapshots of `strokesRef` (`historyRef`, capped at
+`MAX_UNDO_HISTORY`) — every commit (a finished pen/box stroke, a placed sticker), erase, and Clear
+pushes one first, so Undo pops back to exactly the prior state regardless of which action ran. The
+overlay only captures pointer input (via the Pointer Events API, covering mouse/touch/pen uniformly)
+while a tool is selected — `pointer-events: none` otherwise — so it never blocks the scrubber/
+controls below it or the replay itself when annotating is off. The eraser removes whole strokes/
+stickers it touches (hit-tested against each one's geometry — a sticker's disc uses the same
+projector-derived radius as its paint) rather than compositing pixel-level erasure.
 
 ## Heatmap tab
 
@@ -261,7 +303,7 @@ the app reads server-side. Outputs live at deterministic R2 keys, so there are *
 
 | Column | Type | Purpose |
 |---|---|---|
-| `replay_status` | text | `none\|queued\|running\|ready\|failed` — gates the Recap tab's Events/Replay sub-tabs |
+| `replay_status` | text | `none\|queued\|running\|ready\|failed` — gates the Recap tab's 2D Replay/Heatmap sub-tabs |
 
 **`maps`** — calibration columns (workshop link already present):
 

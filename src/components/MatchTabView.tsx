@@ -14,10 +14,9 @@ import SabremetricsLeaderboardView, { type SabremetricStatRow, type TeamGroup } 
 import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView } from '@/lib/queries';
 import type { SabFields } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
-import { RecordingViewer, RecordingUrlForm } from '@/components/RecordingViewer';
 
 type Faction = 'CT' | 'T' | null;
-type Tab = 'leaderboard' | 'advanced' | 'scouting' | 'recap' | 'recording';
+type Tab = 'leaderboard' | 'advanced' | 'scouting' | 'recap';
 
 function factionClass(f: Faction): string {
   if (f === 'CT') return 'faction-ct';
@@ -351,7 +350,7 @@ export default function MatchTabView({
     matchIds: number[];
     pool: string[] | null;
   };
-  /** Demo/replay/recording state for the Recap and Recording tabs. */
+  /** Demo/replay/recording state for the Recap tab (2D Replay/Heatmap/Recording sub-tabs). */
   recap: {
     demoDownloadUrl: string | null;
     job: ReplayJobState;
@@ -367,22 +366,23 @@ export default function MatchTabView({
   const hasScoutingData = !!(scoutingData && scoutingH2H);
   const hasProjections = ratingProjections.length > 0;
   const hasSab = sabremetrics.length > 0;
-  // Show the Recap tab when a demo exists, OR when a replay payload is already loaded —
-  // so a transient R2 error on demoDownloadUrl (or a demo removed while replay.json
-  // remains) can't hide an existing replay/heatmap. Manual, demo-less matches have
-  // neither, so the tab stays hidden for them.
-  const hasRecap = !!demoDownloadUrl || !!replayEvents;
+  const canDispatchReplay =
+    isCurrentUserAdmin ||
+    (currentPlayerId !== null && matchPlayers.some((p) => p.player_id === currentPlayerId));
+  // Recording is editable by the same people who can enter results: admins and in-match players.
+  const canEditRecording = canDispatchReplay;
+  // Show the Recap tab when a demo exists, a replay payload is already loaded, a
+  // recording is already set, or the viewer could add one — so a transient R2 error on
+  // demoDownloadUrl (or a demo removed while replay.json remains) can't hide an
+  // existing replay/heatmap/recording, and a player/admin can still reach the tab to
+  // add a recording URL before any demo is ever uploaded.
+  const hasRecap = !!demoDownloadUrl || !!replayEvents || !!recordingURL || canEditRecording;
   const [tab, setTab] = useState<Tab>('leaderboard');
   const [includeCT, setIncludeCT] = useState(true);
   const [includeT, setIncludeT] = useState(true);
 
   const allStats = [...shirts, ...skins];
   const statsRecorded = allStats.length > 0;
-  const canDispatchReplay =
-    isCurrentUserAdmin ||
-    (currentPlayerId !== null && matchPlayers.some((p) => p.player_id === currentPlayerId));
-  // Recording is editable by the same people who can enter results: admins and in-match players.
-  const canEditRecording = canDispatchReplay;
 
   const sabMap = new Map<number, SabFields>(
     sabremetrics.map((s) => [s.player_id, s]),
@@ -493,12 +493,6 @@ export default function MatchTabView({
             Recap
           </button>
         )}
-
-        {played && (recordingURL || canEditRecording) && (
-          <button type="button" className={tabCls(tab === 'recording')} onClick={() => setTab('recording')}>
-            Recording
-          </button>
-        )}
       </TabBar>
 
       {tab === 'leaderboard' && (
@@ -570,16 +564,9 @@ export default function MatchTabView({
           matchId={matchId}
           matchMap={matchMap}
           canDispatch={canDispatchReplay}
+          recordingURL={recordingURL}
+          canEditRecording={canEditRecording}
         />
-      )}
-
-      {tab === 'recording' && (
-        <div className="mt-4 flex flex-col gap-6">
-          <RecordingViewer videoId={recordingURL} />
-          {canEditRecording && (
-            <RecordingUrlForm matchId={matchId} videoId={recordingURL} />
-          )}
-        </div>
       )}
     </>
   );

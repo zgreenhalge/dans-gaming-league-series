@@ -63,7 +63,7 @@ export interface ReplayRound {
   sideByFaction: Record<Faction, Side>;
   /** Positional snapshots, downsampled to `frameRate`. */
   frames: ReplayFrame[];
-  /** Core events — powers BOTH the Events tab and the in-player timeline. */
+  /** Core events — powers BOTH the synced events panel and the in-player timeline. */
   events: ReplayEvent[];
   grenades: ReplayGrenade[];
   /** Every bullet fired this round — drives the all-shots tracers. */
