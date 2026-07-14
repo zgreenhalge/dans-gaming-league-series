@@ -121,6 +121,12 @@ const GRENADE_EFFECT: Record<string, { linger: number; radius: number }> = {
 const DEFAULT_EFFECT = { linger: 1.2, radius: 0 };
 const effectFor = (type: string) => GRENADE_EFFECT[type] ?? DEFAULT_EFFECT;
 
+/** World-unit AoE radius for a grenade type — exposed so other surfaces (e.g. the 2D
+ *  Replay's pen-tool grenade stickers) can size themselves to match the real effect. */
+export function grenadeEffectRadius(type: 'smoke' | 'molotov' | 'incendiary' | 'he'): number {
+  return GRENADE_EFFECT[type].radius;
+}
+
 /** Decoy "fires" intermittently — period (s) and the bright fraction of each cycle. */
 const DECOY_PULSE_SECONDS = 0.9;
 const DECOY_PULSE_DUTY = 0.3;

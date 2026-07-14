@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, ChevronLeft, ChevronRight, Rewind, Pencil, Circle, Eraser, Trash2 } from 'lucide-react';
+import { Play, Pause, ChevronLeft, ChevronRight, Rewind, Pencil, Square, Eraser, Trash2, Undo2 } from 'lucide-react';
 import type { ReplayPayload, ReplayPlayerMeta } from '@/lib/replay/types';
 import type { Faction } from '@/lib/types';
 import { mapSlug } from '@/lib/maps';
 import { projectorFor, type Projector } from '@/lib/replay/project';
-import { viewStateAt, roundTickRange } from '@/lib/replay/playback';
+import { viewStateAt, roundTickRange, grenadeEffectRadius } from '@/lib/replay/playback';
 import { drawScene, type Ctx2D, type ReplayTheme, type BannerInfo } from '@/lib/replay/draw';
 import { useMapRadar } from './useMapRadar';
 
@@ -22,18 +22,30 @@ export const MAX_SIDE = 520;
 
 const PEN_COLORS = ['#ef4444', '#f97316', '#22c55e', '#3b82f6', '#ec4899'];
 const PEN_LINE_WIDTH = 3;
+const STICKER_RING_WIDTH = 2;
+const STICKER_FILL_ALPHA = 0.3;
+/** Same hex values `readTheme()` uses for the live smoke/fire/HE effect rendering, so
+ *  the pen tool's grenade stickers read as the same colors, not a lookalike palette. */
+const STICKER_COLORS = { smoke: '#9aa0ab', molotov: '#e5642d', he: '#d8d24b' } as const;
+type StickerKind = keyof typeof STICKER_COLORS;
 /** Fraction of the board's side a pointer must land within a stroke to erase it. */
 const ERASE_TOLERANCE = 0.03;
-/** Fraction of the board's side a dragged circle must reach to be kept. */
-const MIN_CIRCLE_RADIUS = 0.02;
+/** Fraction of the board's side a dragged box's diagonal must reach to be kept. */
+const MIN_BOX_DRAG = 0.02;
+/** Max stroke history kept for Undo. */
+const MAX_UNDO_HISTORY = 50;
 
 type Point = { x: number; y: number };
-/** Stroke points/centers/radii are normalized (0–1) against the board's side, so
- *  they redraw correctly at any board size without needing to be re-recorded. */
+/** Points/corners are normalized (0–1) against the board's side, so they redraw
+ *  correctly at any board size without needing to be re-recorded. Sticker radii are
+ *  NOT normalized this way — they're real AoE sizes, so they're re-derived from the
+ *  current `Projector` at paint time (see `paintStroke`), staying accurate under
+ *  auto-fit vs. calibrated-radar projections and across resizes. */
 type PenStroke = { tool: 'pen'; color: string; points: Point[] };
-type CircleStroke = { tool: 'circle'; color: string; center: Point; radius: number };
-type Stroke = PenStroke | CircleStroke;
-type AnnotationTool = 'pen' | 'circle' | 'eraser';
+type BoxStroke = { tool: 'box'; color: string; a: Point; b: Point };
+type StickerStroke = { tool: StickerKind; center: Point };
+type Stroke = PenStroke | BoxStroke | StickerStroke;
+type AnnotationTool = 'pen' | 'box' | 'eraser' | StickerKind;
 
 function distToSegment(p: Point, a: Point, b: Point): number {
   const dx = b.x - a.x;
@@ -44,10 +56,36 @@ function distToSegment(p: Point, a: Point, b: Point): number {
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
+/** The 4 edges of a box stroke's rectangle, corners in either order. */
+function boxEdges(stroke: BoxStroke): [Point, Point][] {
+  const x0 = Math.min(stroke.a.x, stroke.b.x);
+  const x1 = Math.max(stroke.a.x, stroke.b.x);
+  const y0 = Math.min(stroke.a.y, stroke.b.y);
+  const y1 = Math.max(stroke.a.y, stroke.b.y);
+  return [
+    [{ x: x0, y: y0 }, { x: x1, y: y0 }],
+    [{ x: x1, y: y0 }, { x: x1, y: y1 }],
+    [{ x: x1, y: y1 }, { x: x0, y: y1 }],
+    [{ x: x0, y: y1 }, { x: x0, y: y0 }],
+  ];
+}
+
+/** A sticker's true AoE radius, normalized against the board's side like everything
+ *  else `strokeHit`/`paintStroke` work in — derived from the current `Projector`
+ *  rather than stored, so it stays accurate across zoom/resize. */
+function stickerRadiusNorm(kind: StickerKind, side: number, projector: Projector | null): number {
+  if (!projector || side === 0) return 0;
+  return projector.scaleLength(grenadeEffectRadius(kind)) / side;
+}
+
 /** Whether an eraser hit at `p` (normalized) touches `stroke`, within `tolerance`. */
-function strokeHit(stroke: Stroke, p: Point, tolerance: number): boolean {
-  if (stroke.tool === 'circle') {
-    return Math.abs(Math.hypot(p.x - stroke.center.x, p.y - stroke.center.y) - stroke.radius) <= tolerance;
+function strokeHit(stroke: Stroke, p: Point, tolerance: number, side: number, projector: Projector | null): boolean {
+  if (stroke.tool === 'box') {
+    return boxEdges(stroke).some(([a, b]) => distToSegment(p, a, b) <= tolerance);
+  }
+  if (stroke.tool !== 'pen') {
+    // Sticker — a filled disc, so anywhere inside (plus a little margin) counts as a hit.
+    return Math.hypot(p.x - stroke.center.x, p.y - stroke.center.y) <= stickerRadiusNorm(stroke.tool, side, projector) + tolerance;
   }
   if (stroke.points.length === 1) {
     return Math.hypot(p.x - stroke.points[0].x, p.y - stroke.points[0].y) <= tolerance;
@@ -59,19 +97,41 @@ function strokeHit(stroke: Stroke, p: Point, tolerance: number): boolean {
 }
 
 /** Paints one stroke onto the annotation canvas; `side` de-normalizes its points. */
-function paintStroke(ctx: CanvasRenderingContext2D, side: number, stroke: Stroke) {
+function paintStroke(ctx: CanvasRenderingContext2D, side: number, stroke: Stroke, projector: Projector | null) {
+  if (stroke.tool === 'box') {
+    ctx.strokeStyle = stroke.color;
+    ctx.lineWidth = PEN_LINE_WIDTH;
+    const x = Math.min(stroke.a.x, stroke.b.x) * side;
+    const y = Math.min(stroke.a.y, stroke.b.y) * side;
+    ctx.strokeRect(x, y, Math.abs(stroke.b.x - stroke.a.x) * side, Math.abs(stroke.b.y - stroke.a.y) * side);
+    return;
+  }
+  if (stroke.tool !== 'pen') {
+    // Sticker — translucent fill (the AoE) with a crisp ring at the true radius.
+    const r = stickerRadiusNorm(stroke.tool, side, projector) * side;
+    if (r <= 0) return;
+    const cx = stroke.center.x * side;
+    const cy = stroke.center.y * side;
+    const color = STICKER_COLORS[stroke.tool];
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.globalAlpha = STICKER_FILL_ALPHA;
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = STICKER_RING_WIDTH;
+    ctx.stroke();
+    return;
+  }
+  if (stroke.points.length < 2) return;
   ctx.strokeStyle = stroke.color;
   ctx.lineWidth = PEN_LINE_WIDTH;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.beginPath();
-  if (stroke.tool === 'circle') {
-    ctx.arc(stroke.center.x * side, stroke.center.y * side, stroke.radius * side, 0, Math.PI * 2);
-  } else {
-    if (stroke.points.length < 2) return;
-    ctx.moveTo(stroke.points[0].x * side, stroke.points[0].y * side);
-    for (const pt of stroke.points.slice(1)) ctx.lineTo(pt.x * side, pt.y * side);
-  }
+  ctx.moveTo(stroke.points[0].x * side, stroke.points[0].y * side);
+  for (const pt of stroke.points.slice(1)) ctx.lineTo(pt.x * side, pt.y * side);
   ctx.stroke();
 }
 
@@ -91,10 +151,10 @@ function readTheme(el: Element): ReplayTheme {
     textDim: cssVar(el, '--color-text-secondary', '#8a8f98'),
     bomb: '#f59e0b',
     tracer: '#e5484d',
-    smoke: '#9aa0ab',
-    fire: '#e5642d',
+    smoke: STICKER_COLORS.smoke,
+    fire: STICKER_COLORS.molotov,
     flash: '#e8e6c8',
-    he: '#d8d24b',
+    he: STICKER_COLORS.he,
     decoy: '#6b8fd5',
   };
 }
@@ -175,6 +235,10 @@ export default function ReplayPlayer({
   const annCtxRef = useRef<CanvasRenderingContext2D | null>(null);
   const strokesRef = useRef<Stroke[]>([]);
   const drawingRef = useRef<Stroke | { tool: 'eraser' } | null>(null);
+  // Snapshots of `strokesRef.current` taken before each mutation, for Undo. Kept as a
+  // ref (not state) like the other annotation data — a click with nothing to undo is
+  // just a harmless no-op, so the button doesn't need reactive enabled/disabled state.
+  const historyRef = useRef<Stroke[][]>([]);
 
   // Roster lookup + score banner are constant within a round — build them once per
   // round change, not every animation frame.
@@ -200,6 +264,7 @@ export default function ReplayPlayer({
         setPayload(p);
         tickRef.current = p.rounds.length ? roundTickRange(p.rounds[0]).start : 0;
         strokesRef.current = [];
+        historyRef.current = [];
       })
       .catch((e) => !cancelled && setError(e.message));
     return () => {
@@ -250,30 +315,62 @@ export default function ReplayPlayer({
   }, [payload, roundIdx, draw]);
 
   // --- repaint the annotation overlay from `strokesRef` (+ an optional in-progress
-  //     preview, e.g. a circle still being dragged) — the source of truth is the
+  //     preview, e.g. a box still being dragged) — the source of truth is the
   //     stroke list, never the canvas bitmap, so a resize can safely wipe and redraw it ---
   const redrawAnnotations = useCallback((preview?: Stroke) => {
     const ctx = annCtxRef.current;
     const side = sizeRef.current.w;
     if (!ctx) return;
     ctx.clearRect(0, 0, side, side);
-    for (const s of strokesRef.current) paintStroke(ctx, side, s);
-    if (preview) paintStroke(ctx, side, preview);
+    for (const s of strokesRef.current) paintStroke(ctx, side, s, projectorRef.current);
+    if (preview) paintStroke(ctx, side, preview, projectorRef.current);
+  }, []);
+
+  // Snapshot the current strokes onto the undo stack before a mutation applies.
+  const pushHistory = useCallback(() => {
+    historyRef.current.push(strokesRef.current);
+    if (historyRef.current.length > MAX_UNDO_HISTORY) historyRef.current.shift();
   }, []);
 
   const clearAnnotations = useCallback(() => {
+    if (strokesRef.current.length === 0) return;
+    pushHistory();
     strokesRef.current = [];
+    drawingRef.current = null;
+    redrawAnnotations();
+  }, [pushHistory, redrawAnnotations]);
+
+  const undo = useCallback(() => {
+    const prev = historyRef.current.pop();
+    if (!prev) return;
+    strokesRef.current = prev;
     drawingRef.current = null;
     redrawAnnotations();
   }, [redrawAnnotations]);
 
+  // Commit a finished pen/box stroke or a placed sticker.
+  const commitStroke = useCallback(
+    (stroke: Stroke) => {
+      pushHistory();
+      strokesRef.current = [...strokesRef.current, stroke];
+      redrawAnnotations();
+    },
+    [pushHistory, redrawAnnotations],
+  );
+
   const eraseAt = useCallback(
     (p: Point) => {
+      const side = sizeRef.current.w;
+      const projector = projectorRef.current;
       const before = strokesRef.current.length;
-      strokesRef.current = strokesRef.current.filter((s) => !strokeHit(s, p, ERASE_TOLERANCE));
-      if (strokesRef.current.length !== before) redrawAnnotations();
+      const next = strokesRef.current.filter((s) => !strokeHit(s, p, ERASE_TOLERANCE, side, projector));
+      if (next.length !== before) {
+        pushHistory();
+        strokesRef.current = next;
+        redrawAnnotations();
+      }
     },
-    [redrawAnnotations],
+    [pushHistory, redrawAnnotations],
   );
 
   // --- size canvas to its container (DPR-aware) + (re)build the projector ---
@@ -342,6 +439,7 @@ export default function ReplayPlayer({
   useEffect(() => {
     strokesRef.current = [];
     drawingRef.current = null;
+    historyRef.current = [];
     redrawAnnotations();
   }, [roundIdx, redrawAnnotations]);
 
@@ -398,8 +496,11 @@ export default function ReplayPlayer({
       eraseAt(p);
     } else if (tool === 'pen') {
       drawingRef.current = { tool: 'pen', color: penColor, points: [p] };
+    } else if (tool === 'box') {
+      drawingRef.current = { tool: 'box', color: penColor, a: p, b: p };
     } else {
-      drawingRef.current = { tool: 'circle', color: penColor, center: p, radius: 0 };
+      // Grenade sticker — fixed size (matches the real AoE), placed immediately.
+      commitStroke({ tool, center: p });
     }
   };
 
@@ -414,11 +515,12 @@ export default function ReplayPlayer({
       const prev = active.points[active.points.length - 1];
       active.points.push(p);
       const ctx = annCtxRef.current;
-      if (ctx) paintStroke(ctx, sizeRef.current.w, { ...active, points: [prev, p] });
-    } else {
-      // Circle: the shape itself changes every move, so redraw the whole overlay
-      // with this stroke as a live preview on top.
-      active.radius = Math.hypot(p.x - active.center.x, p.y - active.center.y);
+      if (ctx) paintStroke(ctx, sizeRef.current.w, { ...active, points: [prev, p] }, projectorRef.current);
+    } else if (active.tool === 'box') {
+      // The shape itself changes every move, so redraw the whole overlay with this
+      // stroke as a live preview on top — dragged from `a` (the corner clicked) to
+      // `b` (the pointer's current position), not out from a center.
+      active.b = p;
       redrawAnnotations(active);
     }
   };
@@ -428,8 +530,8 @@ export default function ReplayPlayer({
     drawingRef.current = null;
     if (!active || active.tool === 'eraser') return;
     if (active.tool === 'pen' && active.points.length < 2) return;
-    if (active.tool === 'circle' && active.radius < MIN_CIRCLE_RADIUS) return;
-    strokesRef.current.push(active);
+    if (active.tool === 'box' && Math.hypot(active.b.x - active.a.x, active.b.y - active.a.y) < MIN_BOX_DRAG) return;
+    commitStroke(active);
   };
 
   // Apply an external jump/seek request during render (the React-blessed "adjust state
@@ -578,7 +680,7 @@ export default function ReplayPlayer({
             {(
               [
                 { tool: 'pen' as const, Icon: Pencil, label: 'Pen' },
-                { tool: 'circle' as const, Icon: Circle, label: 'Circle' },
+                { tool: 'box' as const, Icon: Square, label: 'Box' },
                 { tool: 'eraser' as const, Icon: Eraser, label: 'Eraser' },
               ]
             ).map(({ tool: t, Icon, label }) => (
@@ -600,6 +702,33 @@ export default function ReplayPlayer({
             ))}
           </div>
 
+          {/* Grenade stickers — fixed to the effect's real AoE radius, not resizable */}
+          <div className="flex items-center gap-1">
+            {(
+              [
+                { kind: 'smoke' as const, label: 'Smoke' },
+                { kind: 'molotov' as const, label: 'Molo' },
+                { kind: 'he' as const, label: 'HE' },
+              ]
+            ).map(({ kind, label }) => (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => setTool((cur) => (cur === kind ? null : kind))}
+                className="border px-1.5 py-1 font-mono"
+                style={{
+                  borderColor: tool === kind ? STICKER_COLORS[kind] : 'var(--color-border-primary)',
+                  color: tool === kind ? STICKER_COLORS[kind] : 'var(--color-text-secondary)',
+                }}
+                aria-pressed={tool === kind}
+                aria-label={`${label} sticker (true size)`}
+                title={`${label} sticker — true size`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex items-center gap-1">
             {PEN_COLORS.map((c) => (
               <button
@@ -614,14 +743,24 @@ export default function ReplayPlayer({
             ))}
           </div>
 
-          <button
-            type="button"
-            onClick={clearAnnotations}
-            className="ml-auto flex items-center gap-1 border border-[var(--color-border-primary)] px-2 py-1 text-[var(--color-text-secondary)]"
-            aria-label="Clear annotations"
-          >
-            <Trash2 size={12} /> Clear
-          </button>
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              onClick={undo}
+              className="flex items-center gap-1 border border-[var(--color-border-primary)] px-2 py-1 text-[var(--color-text-secondary)]"
+              aria-label="Undo last annotation"
+            >
+              <Undo2 size={12} /> Undo
+            </button>
+            <button
+              type="button"
+              onClick={clearAnnotations}
+              className="flex items-center gap-1 border border-[var(--color-border-primary)] px-2 py-1 text-[var(--color-text-secondary)]"
+              aria-label="Clear annotations"
+            >
+              <Trash2 size={12} /> Clear
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -190,17 +190,33 @@ driven by that single value, so it always tracks exactly one row and clears off 
 moment playback reaches the next event.
 
 **Pen tool:** a second, transparent `<canvas>` (`annotationCanvasRef`) sits absolutely positioned
-over the replay canvas for freehand telestrator-style marks — pen, circle, and eraser tools, a
-5-color palette, and a Clear button, all local to the tab: nothing is written to `strokesRef` beyond
-the component's own state, there is no save/persist/share path, and marks are wiped whenever the
-round changes (they're drawn over that round's positions specifically) or the player unmounts.
-Marks are kept as vector data in `strokesRef` (points/circle center+radius normalized 0–1 against
-the board's side) rather than only as canvas pixels, so a resize (which necessarily wipes the
-overlay's bitmap) repaints cleanly at the new size instead of losing the drawing. The overlay only
-captures pointer input (via the Pointer Events API, covering mouse/touch/pen uniformly) while a tool
-is selected — `pointer-events: none` otherwise — so it never blocks the scrubber/controls below it or
-the replay itself when annotating is off. The eraser removes whole strokes it touches (hit-tested
-against each stroke's geometry) rather than compositing pixel-level erasure.
+over the replay canvas for telestrator-style marks — pen, box (drag from a corner, unfilled), and
+eraser tools; three grenade "stickers" (smoke/molotov/HE, placed with one click, fixed to the
+effect's real AoE size — see below); a 5-color palette for pen/box; and Undo/Clear. All of it is
+local to the tab: nothing is written beyond the component's own `strokesRef`, there is no
+save/persist/share path, and marks are wiped whenever the round changes (they're drawn over that
+round's positions specifically) or the player unmounts.
+
+Marks are kept as vector data in `strokesRef`, not just canvas pixels, so a resize (which
+necessarily wipes the overlay's bitmap) repaints cleanly at the new size instead of losing the
+drawing. Pen points and box corners are normalized 0–1 against the board's side, like the rest of
+the annotation math. Grenade stickers store only their (also normalized) center — their radius is
+*not* stored, and is instead re-derived at every paint from `grenadeEffectRadius()`
+(`src/lib/replay/playback.ts`, the same lookup the live smoke/fire/HE effect rendering uses) run
+through the current `Projector.scaleLength()`, so a sticker reads as the grenade's true size under
+both auto-fit and calibrated-radar projections and stays correct across zoom/resize — the same
+reasoning that keeps `draw.ts`'s live effect AoE rings accurate. Sticker fill/ring colors reuse the
+exact hex values `readTheme()` assigns to the live smoke/fire/HE rendering (`STICKER_COLORS`), so a
+placed sticker looks like the real effect, not a lookalike.
+
+Undo keeps a stack of pre-mutation snapshots of `strokesRef` (`historyRef`, capped at
+`MAX_UNDO_HISTORY`) — every commit (a finished pen/box stroke, a placed sticker), erase, and Clear
+pushes one first, so Undo pops back to exactly the prior state regardless of which action ran. The
+overlay only captures pointer input (via the Pointer Events API, covering mouse/touch/pen uniformly)
+while a tool is selected — `pointer-events: none` otherwise — so it never blocks the scrubber/
+controls below it or the replay itself when annotating is off. The eraser removes whole strokes/
+stickers it touches (hit-tested against each one's geometry — a sticker's disc uses the same
+projector-derived radius as its paint) rather than compositing pixel-level erasure.
 
 ## Heatmap tab
 
