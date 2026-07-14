@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Pause, ChevronLeft, ChevronRight, Rewind } from 'lucide-react';
 import type { ReplayPayload, ReplayPlayerMeta } from '@/lib/replay/types';
 import type { Faction } from '@/lib/types';
 import { mapSlug } from '@/lib/maps';
@@ -11,6 +11,9 @@ import { drawScene, type Ctx2D, type ReplayTheme, type BannerInfo } from '@/lib/
 import { useMapRadar } from './useMapRadar';
 
 const SPEEDS = [0.5, 1, 2, 4];
+
+/** How far the rewind button steps back. */
+const REWIND_SECONDS = 10;
 
 /** Cap the square play-field so it never dominates a wide match page. */
 const MAX_SIDE = 520;
@@ -157,6 +160,16 @@ export default function ReplayPlayer({
     if (scrubRef.current) scrubRef.current.value = String(tickRef.current);
   }, [payload, roundIdx, calibration, radarImage, metaById, banner]);
 
+  // --- step the clock back without leaving the current round ---
+  const rewind = useCallback(() => {
+    if (!payload) return;
+    const round = payload.rounds[roundIdx];
+    if (!round) return;
+    const range = roundTickRange(round);
+    tickRef.current = Math.max(range.start, tickRef.current - REWIND_SECONDS * payload.tickRate);
+    draw();
+  }, [payload, roundIdx, draw]);
+
   // --- size canvas to its container (DPR-aware) + (re)build the projector ---
   useEffect(() => {
     const container = containerRef.current;
@@ -296,6 +309,16 @@ export default function ReplayPlayer({
             aria-label={playing ? 'Pause' : 'Play'}
           >
             {playing ? <Pause size={14} /> : <Play size={14} />}
+          </button>
+
+          <button
+            type="button"
+            onClick={rewind}
+            className="lift-card border border-[var(--color-border-primary)] p-1.5"
+            aria-label={`Rewind ${REWIND_SECONDS} seconds`}
+            title={`Rewind ${REWIND_SECONDS}s`}
+          >
+            <Rewind size={14} />
           </button>
 
           <div className="flex items-center gap-1">
