@@ -16,7 +16,7 @@ const SPEEDS = [0.5, 1, 2, 4];
 const REWIND_SECONDS = 10;
 
 /** Cap the square play-field so it never dominates a wide match page. */
-const MAX_SIDE = 520;
+export const MAX_SIDE = 520;
 
 /** Read a CSS custom property off an element, falling back to a literal. */
 function cssVar(el: Element, name: string, fallback: string): string {
@@ -70,10 +70,16 @@ function bannerFor(payload: ReplayPayload, roundIdx: number): BannerInfo {
 export default function ReplayPlayer({
   matchId,
   jump,
+  onPosition,
 }: {
   matchId: number;
-  /** External jump request: 1-based round number + a nonce that changes per click. */
-  jump?: { round: number; n: number } | null;
+  /** External jump request: round number + a nonce that changes per click, plus an
+   *  optional tick to land on (defaults to the round's start). */
+  jump?: { round: number; n: number; tick?: number } | null;
+  /** Fired once per drawn frame with the current round number + tick, so a sibling
+   *  component (e.g. a synced events panel) can track playback position without
+   *  this player re-rendering on every frame. */
+  onPosition?: (round: number, tick: number) => void;
 }) {
   const [payload, setPayload] = useState<ReplayPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +101,10 @@ export default function ReplayPlayer({
   const themeRef = useRef<ReplayTheme | null>(null);
   const sizeRef = useRef({ w: 0, h: 0 });
   const tickRef = useRef(0);
+  // A round + optional tick requested by the last jump, applied by the effect below
+  // once its target round is showing. Kept in state (not a ref) because it's set
+  // during render, alongside `roundIdx`/`playing` — see the jump-handling block.
+  const [pendingJump, setPendingJump] = useState<{ idx: number; tick?: number } | null>(null);
   // Last-applied jump nonce, kept in state so the "adjust state when a prop changes"
   // pattern can run during render (refs can't be read/written there).
   const [lastJumpN, setLastJumpN] = useState(0);
@@ -158,7 +168,8 @@ export default function ReplayPlayer({
     });
     // Reflect playback position on the (uncontrolled) scrubber without re-rendering.
     if (scrubRef.current) scrubRef.current.value = String(tickRef.current);
-  }, [payload, roundIdx, calibration, radarImage, metaById, banner]);
+    onPosition?.(round.round, tickRef.current);
+  }, [payload, roundIdx, calibration, radarImage, metaById, banner, onPosition]);
 
   // --- step the clock back without leaving the current round ---
   const rewind = useCallback(() => {
@@ -212,6 +223,14 @@ export default function ReplayPlayer({
     tickRef.current = roundTickRange(payload.rounds[roundIdx]).start;
   }, [payload, roundIdx]);
 
+  // --- apply a jump's explicit tick once its target round is showing (overrides the
+  //     round-reset effect's default "start of round" tick set just above) ---
+  useEffect(() => {
+    if (!pendingJump || pendingJump.tick === undefined) return;
+    if (!payload?.rounds[pendingJump.idx] || roundIdx !== pendingJump.idx) return;
+    tickRef.current = pendingJump.tick;
+  }, [pendingJump, payload, roundIdx]);
+
 
   // --- playback clock ---
   useEffect(() => {
@@ -242,12 +261,16 @@ export default function ReplayPlayer({
     return () => cancelAnimationFrame(raf);
   }, [payload, roundIdx, playing, speed, draw]);
 
-  // Apply an external jump request during render (the React-blessed "adjust state when
-  // a prop changes" pattern — guarded by the nonce so it can't loop).
+  // Apply an external jump/seek request during render (the React-blessed "adjust state
+  // when a prop changes" pattern — guarded by the nonce so it can't loop). Queues the
+  // requested round + tick as `pendingJump` for the effect above to apply once that
+  // round is showing (immediately, for a same-round jump; after the round-reset effect
+  // runs, for a cross-round one).
   if (jump && payload && jump.n !== lastJumpN) {
     setLastJumpN(jump.n);
     const idx = payload.rounds.findIndex((r) => r.round === jump.round);
     if (idx >= 0) {
+      setPendingJump({ idx, tick: jump.tick });
       setRoundIdx(idx);
       setPlaying(true);
     }
