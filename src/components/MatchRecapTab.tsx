@@ -8,6 +8,7 @@ import { tabCls } from '@/lib/util';
 import { mapSlug } from '@/lib/maps';
 import MapHeatmap from './MapHeatmap';
 import DevGate from './DevGate';
+import { RecordingViewer, RecordingUrlForm } from './RecordingViewer';
 import type { ReplayJobState, ReplayEventsView } from '@/lib/queries';
 import type { ReplayEvent } from '@/lib/replay/types';
 import type { Faction } from '@/lib/types';
@@ -377,7 +378,7 @@ const ReplayPlayer = dynamic(() => import('./ReplayPlayer'), {
   ),
 });
 
-type RecapSubTab = 'replay' | 'heatmap';
+type RecapSubTab = 'replay' | 'heatmap' | 'recording';
 
 export default function MatchRecapTab({
   job,
@@ -385,12 +386,17 @@ export default function MatchRecapTab({
   matchId,
   matchMap,
   canDispatch,
+  recordingURL,
+  canEditRecording,
 }: {
   job: ReplayJobState;
   events: ReplayEventsView | null;
   matchId: number;
   matchMap: string | null;
   canDispatch: boolean;
+  recordingURL: string | null;
+  /** Whether the current viewer may set/replace the recording URL (admins + in-match players). */
+  canEditRecording: boolean;
 }) {
   const [sub, setSub] = useState<RecapSubTab>('replay');
   // This match's own heatmap (#128) — scoped to the single match.
@@ -421,14 +427,9 @@ export default function MatchRecapTab({
     [events],
   );
 
-  // Both sub-tabs are gated on the replay payload itself (`events`), not `job.status`:
-  // if the payload exists we show it even when a later regenerate is queued/running/
-  // failed, so a transient dispatch error can't hide a good replay. Only when there's
-  // no payload do we fall back to the generate/progress panel (first generation, or
-  // genuinely failed before any payload was produced).
-  if (!events) {
-    return <ReplayStatusPanel job={job} matchId={matchId} canDispatch={canDispatch} />;
-  }
+  // The Recording sub-tab needs neither a demo nor a generated replay — it's shown
+  // whenever there's already a recording to watch, or the viewer could add one.
+  const showRecording = !!recordingURL || canEditRecording;
 
   return (
     <div className="mt-4">
@@ -441,20 +442,41 @@ export default function MatchRecapTab({
             Heatmap
           </button>
         )}
-        <DevGate className="ml-auto">
-          <RegenerateLink matchId={matchId} />
-        </DevGate>
+        {showRecording && (
+          <button type="button" className={tabCls(sub === 'recording')} onClick={() => setSub('recording')}>
+            Recording
+          </button>
+        )}
+        {sub !== 'recording' && (
+          <DevGate className="ml-auto">
+            <RegenerateLink matchId={matchId} />
+          </DevGate>
+        )}
       </div>
-      {sub === 'replay' && (
-        <div className="lg:grid lg:grid-cols-[auto_1fr] lg:gap-4 lg:items-stretch">
-          <ReplayPlayer matchId={matchId} jump={jump} onPosition={handlePosition} />
-          <div className="mt-4 lg:mt-0 lg:min-h-0">
-            <SyncedEventsPanel events={events} active={activeEvent} onSeek={seek} />
+      {sub === 'replay' &&
+        // Gate on the payload itself (`events`), not `job.status`: if the payload
+        // exists we show it even when a later regenerate is queued/running/failed, so
+        // a transient dispatch error can't hide a good replay. Only when there's no
+        // payload do we fall back to the generate/progress panel (first generation,
+        // or genuinely failed before any payload was produced).
+        (events ? (
+          <div className="lg:grid lg:grid-cols-[auto_1fr] lg:gap-4 lg:items-stretch">
+            <ReplayPlayer matchId={matchId} jump={jump} onPosition={handlePosition} />
+            <div className="mt-4 lg:mt-0 lg:min-h-0">
+              <SyncedEventsPanel events={events} active={activeEvent} onSeek={seek} />
+            </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <ReplayStatusPanel job={job} matchId={matchId} canDispatch={canDispatch} />
+        ))}
       {sub === 'heatmap' && matchMap && (
         <MapHeatmap slug={mapSlug(matchMap)} matchIds={thisMatch} visibleMatchIds={visibleMatchIds} />
+      )}
+      {sub === 'recording' && showRecording && (
+        <div className="mt-4 flex flex-col gap-6">
+          <RecordingViewer videoId={recordingURL} />
+          {canEditRecording && <RecordingUrlForm matchId={matchId} videoId={recordingURL} />}
+        </div>
       )}
     </div>
   );
