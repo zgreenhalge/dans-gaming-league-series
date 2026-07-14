@@ -189,6 +189,19 @@ event actually changes, so the panel doesn't re-render at playback rate — the 
 driven by that single value, so it always tracks exactly one row and clears off a clicked row the
 moment playback reaches the next event.
 
+**Pen tool:** a second, transparent `<canvas>` (`annotationCanvasRef`) sits absolutely positioned
+over the replay canvas for freehand telestrator-style marks — pen, circle, and eraser tools, a
+5-color palette, and a Clear button, all local to the tab: nothing is written to `strokesRef` beyond
+the component's own state, there is no save/persist/share path, and marks are wiped whenever the
+round changes (they're drawn over that round's positions specifically) or the player unmounts.
+Marks are kept as vector data in `strokesRef` (points/circle center+radius normalized 0–1 against
+the board's side) rather than only as canvas pixels, so a resize (which necessarily wipes the
+overlay's bitmap) repaints cleanly at the new size instead of losing the drawing. The overlay only
+captures pointer input (via the Pointer Events API, covering mouse/touch/pen uniformly) while a tool
+is selected — `pointer-events: none` otherwise — so it never blocks the scrubber/controls below it or
+the replay itself when annotating is off. The eraser removes whole strokes it touches (hit-tested
+against each stroke's geometry) rather than compositing pixel-level erasure.
+
 ## Heatmap tab
 
 Kill/death/grenade locations on `/maps/[slug]`, respecting the season filter (shared with the rest

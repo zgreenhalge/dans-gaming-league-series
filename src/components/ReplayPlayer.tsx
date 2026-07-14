@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, ChevronLeft, ChevronRight, Rewind } from 'lucide-react';
+import { Play, Pause, ChevronLeft, ChevronRight, Rewind, Pencil, Circle, Eraser, Trash2 } from 'lucide-react';
 import type { ReplayPayload, ReplayPlayerMeta } from '@/lib/replay/types';
 import type { Faction } from '@/lib/types';
 import { mapSlug } from '@/lib/maps';
@@ -17,6 +17,63 @@ const REWIND_SECONDS = 10;
 
 /** Cap the square play-field so it never dominates a wide match page. */
 export const MAX_SIDE = 520;
+
+// --- Pen tool (local-only annotation overlay; never persisted) ---
+
+const PEN_COLORS = ['#ef4444', '#f97316', '#22c55e', '#3b82f6', '#ec4899'];
+const PEN_LINE_WIDTH = 3;
+/** Fraction of the board's side a pointer must land within a stroke to erase it. */
+const ERASE_TOLERANCE = 0.03;
+/** Fraction of the board's side a dragged circle must reach to be kept. */
+const MIN_CIRCLE_RADIUS = 0.02;
+
+type Point = { x: number; y: number };
+/** Stroke points/centers/radii are normalized (0–1) against the board's side, so
+ *  they redraw correctly at any board size without needing to be re-recorded. */
+type PenStroke = { tool: 'pen'; color: string; points: Point[] };
+type CircleStroke = { tool: 'circle'; color: string; center: Point; radius: number };
+type Stroke = PenStroke | CircleStroke;
+type AnnotationTool = 'pen' | 'circle' | 'eraser';
+
+function distToSegment(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+/** Whether an eraser hit at `p` (normalized) touches `stroke`, within `tolerance`. */
+function strokeHit(stroke: Stroke, p: Point, tolerance: number): boolean {
+  if (stroke.tool === 'circle') {
+    return Math.abs(Math.hypot(p.x - stroke.center.x, p.y - stroke.center.y) - stroke.radius) <= tolerance;
+  }
+  if (stroke.points.length === 1) {
+    return Math.hypot(p.x - stroke.points[0].x, p.y - stroke.points[0].y) <= tolerance;
+  }
+  for (let i = 0; i < stroke.points.length - 1; i++) {
+    if (distToSegment(p, stroke.points[i], stroke.points[i + 1]) <= tolerance) return true;
+  }
+  return false;
+}
+
+/** Paints one stroke onto the annotation canvas; `side` de-normalizes its points. */
+function paintStroke(ctx: CanvasRenderingContext2D, side: number, stroke: Stroke) {
+  ctx.strokeStyle = stroke.color;
+  ctx.lineWidth = PEN_LINE_WIDTH;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  if (stroke.tool === 'circle') {
+    ctx.arc(stroke.center.x * side, stroke.center.y * side, stroke.radius * side, 0, Math.PI * 2);
+  } else {
+    if (stroke.points.length < 2) return;
+    ctx.moveTo(stroke.points[0].x * side, stroke.points[0].y * side);
+    for (const pt of stroke.points.slice(1)) ctx.lineTo(pt.x * side, pt.y * side);
+  }
+  ctx.stroke();
+}
 
 /** Read a CSS custom property off an element, falling back to a literal. */
 function cssVar(el: Element, name: string, fallback: string): string {
@@ -109,6 +166,16 @@ export default function ReplayPlayer({
   // pattern can run during render (refs can't be read/written there).
   const [lastJumpN, setLastJumpN] = useState(0);
 
+  // Pen tool: `tool` null means the overlay lets pointer input pass through to the
+  // page (no accidental doodles while scrubbing). Committed marks live in `strokesRef`
+  // (not React state — like `tickRef`, they're painted imperatively, never diffed).
+  const [tool, setTool] = useState<AnnotationTool | null>(null);
+  const [penColor, setPenColor] = useState(PEN_COLORS[0]);
+  const annotationCanvasRef = useRef<HTMLCanvasElement>(null);
+  const annCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const strokesRef = useRef<Stroke[]>([]);
+  const drawingRef = useRef<Stroke | { tool: 'eraser' } | null>(null);
+
   // Roster lookup + score banner are constant within a round — build them once per
   // round change, not every animation frame.
   const metaById = useMemo(
@@ -132,6 +199,7 @@ export default function ReplayPlayer({
         if (cancelled) return;
         setPayload(p);
         tickRef.current = p.rounds.length ? roundTickRange(p.rounds[0]).start : 0;
+        strokesRef.current = [];
       })
       .catch((e) => !cancelled && setError(e.message));
     return () => {
@@ -181,6 +249,33 @@ export default function ReplayPlayer({
     draw();
   }, [payload, roundIdx, draw]);
 
+  // --- repaint the annotation overlay from `strokesRef` (+ an optional in-progress
+  //     preview, e.g. a circle still being dragged) — the source of truth is the
+  //     stroke list, never the canvas bitmap, so a resize can safely wipe and redraw it ---
+  const redrawAnnotations = useCallback((preview?: Stroke) => {
+    const ctx = annCtxRef.current;
+    const side = sizeRef.current.w;
+    if (!ctx) return;
+    ctx.clearRect(0, 0, side, side);
+    for (const s of strokesRef.current) paintStroke(ctx, side, s);
+    if (preview) paintStroke(ctx, side, preview);
+  }, []);
+
+  const clearAnnotations = useCallback(() => {
+    strokesRef.current = [];
+    drawingRef.current = null;
+    redrawAnnotations();
+  }, [redrawAnnotations]);
+
+  const eraseAt = useCallback(
+    (p: Point) => {
+      const before = strokesRef.current.length;
+      strokesRef.current = strokesRef.current.filter((s) => !strokeHit(s, p, ERASE_TOLERANCE));
+      if (strokesRef.current.length !== before) redrawAnnotations();
+    },
+    [redrawAnnotations],
+  );
+
   // --- size canvas to its container (DPR-aware) + (re)build the projector ---
   useEffect(() => {
     const container = containerRef.current;
@@ -209,19 +304,46 @@ export default function ReplayPlayer({
       // Calibrated radar projection when the map has one, else auto-fit over the
       // whole payload's bounds.
       projectorRef.current = projectorFor(payload, side, side, calibration);
+
+      // The annotation overlay matches the main canvas's size exactly. Resizing wipes
+      // its bitmap, so repaint from `strokesRef` (the normalized points scale cleanly
+      // to the new side) rather than losing the drawing.
+      const annCanvas = annotationCanvasRef.current;
+      if (annCanvas) {
+        annCanvas.width = Math.round(side * dpr);
+        annCanvas.height = Math.round(side * dpr);
+        annCanvas.style.width = `${side}px`;
+        annCanvas.style.height = `${side}px`;
+        const annCtx = annCanvas.getContext('2d');
+        if (annCtx) {
+          annCtx.setTransform(1, 0, 0, 1, 0, 0);
+          annCtx.scale(dpr, dpr);
+          annCtxRef.current = annCtx;
+        }
+      }
+      redrawAnnotations();
+
       draw();
     };
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(container);
     return () => ro.disconnect();
-  }, [payload, draw, calibration]);
+  }, [payload, draw, calibration, redrawAnnotations]);
 
   // --- reset to round start whenever the round changes ---
   useEffect(() => {
     if (!payload?.rounds[roundIdx]) return;
     tickRef.current = roundTickRange(payload.rounds[roundIdx]).start;
   }, [payload, roundIdx]);
+
+  // --- annotations are per-round (drawn on top of that round's positions), so wipe
+  //     them when the round changes rather than let them linger over the wrong moment ---
+  useEffect(() => {
+    strokesRef.current = [];
+    drawingRef.current = null;
+    redrawAnnotations();
+  }, [roundIdx, redrawAnnotations]);
 
   // --- apply a jump's explicit tick once its target round is showing (overrides the
   //     round-reset effect's default "start of round" tick set just above) ---
@@ -260,6 +382,55 @@ export default function ReplayPlayer({
     else draw();
     return () => cancelAnimationFrame(raf);
   }, [payload, roundIdx, playing, speed, draw]);
+
+  // --- pen tool pointer handling (mouse/touch/pen, via the Pointer Events API) ---
+  const pointToNorm = (e: React.PointerEvent<HTMLCanvasElement>): Point => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height };
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!tool) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const p = pointToNorm(e);
+    if (tool === 'eraser') {
+      drawingRef.current = { tool: 'eraser' };
+      eraseAt(p);
+    } else if (tool === 'pen') {
+      drawingRef.current = { tool: 'pen', color: penColor, points: [p] };
+    } else {
+      drawingRef.current = { tool: 'circle', color: penColor, center: p, radius: 0 };
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const active = drawingRef.current;
+    if (!active) return;
+    const p = pointToNorm(e);
+    if (active.tool === 'eraser') {
+      eraseAt(p);
+    } else if (active.tool === 'pen') {
+      // Additive — just paint the new segment rather than repainting every stroke.
+      const prev = active.points[active.points.length - 1];
+      active.points.push(p);
+      const ctx = annCtxRef.current;
+      if (ctx) paintStroke(ctx, sizeRef.current.w, { ...active, points: [prev, p] });
+    } else {
+      // Circle: the shape itself changes every move, so redraw the whole overlay
+      // with this stroke as a live preview on top.
+      active.radius = Math.hypot(p.x - active.center.x, p.y - active.center.y);
+      redrawAnnotations(active);
+    }
+  };
+
+  const endStroke = () => {
+    const active = drawingRef.current;
+    drawingRef.current = null;
+    if (!active || active.tool === 'eraser') return;
+    if (active.tool === 'pen' && active.points.length < 2) return;
+    if (active.tool === 'circle' && active.radius < MIN_CIRCLE_RADIUS) return;
+    strokesRef.current.push(active);
+  };
 
   // Apply an external jump/seek request during render (the React-blessed "adjust state
   // when a prop changes" pattern — guarded by the nonce so it can't loop). Queues the
@@ -305,7 +476,22 @@ export default function ReplayPlayer({
     <div ref={containerRef} className="w-full">
       {/* Centered board: the scrubber + controls are constrained to the canvas width. */}
       <div className="mx-auto space-y-3" style={boardWidth ? { width: boardWidth } : undefined}>
-        <canvas ref={canvasRef} className="block border border-[var(--color-border-primary)]" />
+        <div className="relative">
+          <canvas ref={canvasRef} className="block border border-[var(--color-border-primary)]" />
+          {/* Pen tool overlay — transparent, sits above the replay canvas. Only
+              captures pointer input while a tool is selected, so it never blocks
+              anything when annotating is off. */}
+          <canvas
+            ref={annotationCanvasRef}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={endStroke}
+            onPointerCancel={endStroke}
+            className="absolute inset-0 block"
+            style={{ touchAction: 'none', pointerEvents: tool ? 'auto' : 'none', cursor: tool ? 'crosshair' : 'default' }}
+            aria-hidden="true"
+          />
+        </div>
 
         {/* Scrubber */}
         <input
@@ -384,6 +570,58 @@ export default function ReplayPlayer({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Pen tool — local to this browser tab, never saved */}
+        <div className="flex flex-wrap items-center gap-2 text-[12px]">
+          <div className="flex items-center gap-1">
+            {(
+              [
+                { tool: 'pen' as const, Icon: Pencil, label: 'Pen' },
+                { tool: 'circle' as const, Icon: Circle, label: 'Circle' },
+                { tool: 'eraser' as const, Icon: Eraser, label: 'Eraser' },
+              ]
+            ).map(({ tool: t, Icon, label }) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTool((cur) => (cur === t ? null : t))}
+                className={`border p-1.5 ${
+                  tool === t
+                    ? 'border-[var(--color-text-primary)] text-[var(--color-text-primary)]'
+                    : 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)]'
+                }`}
+                aria-pressed={tool === t}
+                aria-label={label}
+                title={label}
+              >
+                <Icon size={14} />
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1">
+            {PEN_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setPenColor(c)}
+                className="h-5 w-5 rounded-full border-2"
+                style={{ backgroundColor: c, borderColor: penColor === c ? 'var(--color-text-primary)' : 'transparent' }}
+                aria-pressed={penColor === c}
+                aria-label={`Pen color ${c}`}
+              />
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={clearAnnotations}
+            className="ml-auto flex items-center gap-1 border border-[var(--color-border-primary)] px-2 py-1 text-[var(--color-text-secondary)]"
+            aria-label="Clear annotations"
+          >
+            <Trash2 size={12} /> Clear
+          </button>
         </div>
       </div>
     </div>
