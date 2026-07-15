@@ -30,6 +30,7 @@ import {
   roundTickRange,
 } from './playback';
 import { buildHeatmapPoints } from './heatmap';
+import { extractPlayerTrace, traceStateAt, maxDurationTicks } from './aggregate';
 import { parseOverview, workshopIdFromUrl } from './radar';
 import type { ReplayRound, ReplayFrame, ReplayPayload, ReplayPlayerFrame } from './types';
 
@@ -417,14 +418,16 @@ test('heatmap: a kill yields a death point (victim) and a kill point (attacker),
   } as unknown as ReplayPayload;
 
   const art = buildHeatmapPoints(payload);
-  assert.equal(art.version, 1);
+  assert.equal(art.version, 2);
   const death = art.points.find((p) => p.kind === 'death')!;
   const kill = art.points.find((p) => p.kind === 'kill')!;
   approx(death.x, 30);
   approx(death.y, 40);
   assert.equal(death.side, 'T'); // victim is SKINS = T this round
+  assert.equal(death.playerId, 2);
   approx(kill.x, 10);
   assert.equal(kill.side, 'CT'); // attacker is SHIRTS = CT this round
+  assert.equal(kill.playerId, 1);
 });
 
 test('heatmap: grenade contributes a detonation point of its type; unknown is skipped', () => {
@@ -448,7 +451,48 @@ test('heatmap: grenade contributes a detonation point of its type; unknown is sk
   assert.equal(smoke.length, 1);
   approx(smoke[0].x, 55); // detonation = last trajectory point
   assert.equal(smoke[0].side, 'T');
+  assert.equal(smoke[0].playerId, 1);
   assert.equal(art.points.some((p) => (p.kind as string) === 'unknown'), false);
+});
+
+// --- aggregate: per-player trace extraction + time-zeroed interpolation ---
+test('aggregate: extractPlayerTrace zeroes ticks to the round start and carries side', () => {
+  const r = round({
+    round: 3,
+    sideByFaction: { SHIRTS: 'T', SKINS: 'CT' },
+    frames: [
+      frame(50, [pf(1, 0, 0), pf(2, 100, 100)]),
+      frame(60, [pf(1, 10, 0), pf(2, 100, 100)]),
+    ],
+  });
+  const trace = extractPlayerTrace(7, r, 1, 'SHIRTS');
+  assert.ok(trace);
+  assert.equal(trace!.matchId, 7);
+  assert.equal(trace!.round, 3);
+  assert.equal(trace!.side, 'T');
+  assert.equal(trace!.durationTicks, 10);
+  assert.equal(trace!.frames[0].t, 0);
+  assert.equal(trace!.frames[1].t, 10);
+});
+
+test('aggregate: extractPlayerTrace returns null when the player has no frames', () => {
+  const r = round({ frames: [frame(50, [pf(2, 0, 0)])] });
+  assert.equal(extractPlayerTrace(7, r, 1, 'SHIRTS'), null);
+});
+
+test('aggregate: traceStateAt interpolates between frames and is null past round end', () => {
+  const r = round({ frames: [frame(0, [pf(1, 0, 0, { yaw: 0, hp: 100 })]), frame(10, [pf(1, 10, 0, { yaw: 90, hp: 50 })])] });
+  const trace = extractPlayerTrace(1, r, 1, 'SHIRTS')!;
+  const mid = traceStateAt(trace, 5)!;
+  approx(mid.x, 5);
+  assert.equal(traceStateAt(trace, -1), null);
+  assert.equal(traceStateAt(trace, trace.durationTicks + 1), null);
+});
+
+test('aggregate: maxDurationTicks picks the longest trace', () => {
+  const short = extractPlayerTrace(1, round({ frames: [frame(0, [pf(1, 0, 0)]), frame(20, [pf(1, 0, 0)])] }), 1, 'SHIRTS')!;
+  const long = extractPlayerTrace(2, round({ frames: [frame(0, [pf(1, 0, 0)]), frame(80, [pf(1, 0, 0)])] }), 1, 'SHIRTS')!;
+  assert.equal(maxDurationTicks([short, long]), 80);
 });
 
 // --- radar: overview parsing + workshop id extraction ---
