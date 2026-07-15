@@ -260,10 +260,13 @@ function SyncedEventsPanel({
   events,
   active,
   onSeek,
+  height,
 }: {
   events: ReplayEventsView;
   active: ActiveEvent;
   onSeek: (round: number, tick?: number) => void;
+  /** Measured height (px) of the replay player it's docked beside — falls back to a fixed max-height until measured. */
+  height: number | null;
 }) {
   const playerById = new Map(events.players.map((p) => [p.id, p]));
   const nameOf = (id: number | null): string =>
@@ -300,10 +303,14 @@ function SyncedEventsPanel({
 
   useEffect(() => {
     if (active === null || userScrollingRef.current) return;
+    const container = containerRef.current;
     const el = roundRefs.current.get(active.round);
-    if (!el) return;
+    if (!container || !el) return;
     programmaticRef.current = true;
-    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    // Scroll the container itself (not `el.scrollIntoView`, which walks up and scrolls
+    // every scrollable ancestor — including the page — to bring `el` into view).
+    const delta = el.getBoundingClientRect().top - container.getBoundingClientRect().top;
+    container.scrollBy({ top: delta, behavior: 'smooth' });
     if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
     // Smooth scrollIntoView fires its own 'scroll' events as it animates — hold off
     // treating those as user input until it's had time to settle.
@@ -318,7 +325,8 @@ function SyncedEventsPanel({
   return (
     <div
       ref={containerRef}
-      className="border border-[var(--color-border-primary)] max-h-64 lg:h-full lg:max-h-none overflow-y-auto"
+      className={`border border-[var(--color-border-primary)] overflow-y-auto ${height ? '' : 'max-h-64'}`}
+      style={height ? { height } : undefined}
     >
       <div className="space-y-5 p-2">
         {events.rounds.map((round) => {
@@ -414,6 +422,22 @@ export default function MatchRecapTab({
   // actually changes (not per-frame) to avoid re-rendering the panel at playback rate.
   const [activeEvent, setActiveEvent] = useState<ActiveEvent>(null);
   const activeEventRef = useRef<ActiveEvent>(null);
+
+  // Measures the replay player's actual rendered height (canvas + controls) so the
+  // synced events panel beside it can match it exactly and scroll its own overflow,
+  // rather than the page growing past the fold to show every round.
+  const playerWrapRef = useRef<HTMLDivElement>(null);
+  const [playerHeight, setPlayerHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const el = playerWrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect.height;
+      if (h) setPlayerHeight(h);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const handlePosition = useCallback(
     (round: number, tick: number) => {
       if (!events) return;
@@ -463,10 +487,17 @@ export default function MatchRecapTab({
         // payload do we fall back to the generate/progress panel (first generation,
         // or genuinely failed before any payload was produced).
         (events ? (
-          <div className="lg:grid lg:grid-cols-[auto_1fr] lg:gap-4 lg:items-stretch">
-            <ReplayPlayer matchId={matchId} jump={jump} onPosition={handlePosition} />
-            <div className="mt-4 lg:mt-0 lg:min-h-0">
-              <SyncedEventsPanel events={events} active={activeEvent} onSeek={seek} />
+          <div className="lg:grid lg:grid-cols-[auto_1fr] lg:gap-4 lg:items-start">
+            <div ref={playerWrapRef}>
+              <ReplayPlayer matchId={matchId} jump={jump} onPosition={handlePosition} />
+            </div>
+            <div className="mt-4 lg:mt-0">
+              <SyncedEventsPanel
+                events={events}
+                active={activeEvent}
+                onSeek={seek}
+                height={playerHeight}
+              />
             </div>
           </div>
         ) : (
