@@ -155,7 +155,10 @@ export default function MatchServerPanel({
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <a
-              href={`steam://connect/${connect}`}
+              // `steam://connect/<host>` is unreliable when triggered from a browser click (Steam
+              // client bug, independent of host format). `steam://run/<appid>//+connect <ip:port>`
+              // (730 = Counter-Strike 2) is the documented workaround that still launches reliably.
+              href={`steam://run/730//+connect ${connect}`}
               className="rounded-md border border-green-500 bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-500"
             >
               Join server
