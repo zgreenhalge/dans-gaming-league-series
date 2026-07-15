@@ -425,18 +425,22 @@ export default function MatchRecapTab({
 
   // Measures the replay player's actual rendered height (canvas + controls) so the
   // synced events panel beside it can match it exactly and scroll its own overflow,
-  // rather than the page growing past the fold to show every round.
-  const playerWrapRef = useRef<HTMLDivElement>(null);
+  // rather than the page growing past the fold to show every round. A callback ref
+  // (re)creates the observer whenever the wrapper node itself changes — including
+  // when switching away from and back to the 2D Replay sub-tab remounts it — rather
+  // than attaching once at `MatchRecapTab`'s own mount, which would leave the
+  // observer watching a stale, detached node after the first tab switch.
+  const playerHeightObserverRef = useRef<ResizeObserver | null>(null);
   const [playerHeight, setPlayerHeight] = useState<number | null>(null);
-  useEffect(() => {
-    const el = playerWrapRef.current;
+  const playerWrapRef = useCallback((el: HTMLDivElement | null) => {
+    playerHeightObserverRef.current?.disconnect();
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       const h = entries[0]?.contentRect.height;
       if (h) setPlayerHeight(h);
     });
     ro.observe(el);
-    return () => ro.disconnect();
+    playerHeightObserverRef.current = ro;
   }, []);
   const handlePosition = useCallback(
     (round: number, tick: number) => {
