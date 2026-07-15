@@ -272,7 +272,15 @@ round.startTick`, `durationTicks` = the round's playback length), and `traceStat
 interpolates it at an arbitrary shared-clock tick, returning `null` once `t` is past that round's own
 end — so a short round's ghost simply vanishes while longer rounds keep playing. Both are
 runtime-agnostic (no DOM, no fetch), reusing `playback.ts`'s `lerp`/`lerpAngle`/`roundTickRange` so the
-interpolation matches the single-round player exactly. The shared renderer, `<PlayerRoundOverlay>`
+interpolation matches the single-round player exactly.
+
+**On death**, `extractPlayerTrace` stops reading that round's frames the moment it sees the player
+dead — it appends one final frame frozen at their *last known-alive* position (not whatever the
+engine reports for a dead player, which can drift back toward spawn) and reads no further, so the
+ghost reads as a corpse marker sitting where they actually died. `traceStateAt`'s end-of-frames clamp
+then holds that frozen position for the rest of the round.
+
+The shared renderer, `<PlayerRoundOverlay>`
 (`src/components/PlayerRoundOverlay.tsx`), takes a `PlayerTrace[]` + `tickRate` + map slug and owns the
 canvas, radar background (`useMapRadar`), CT/T side toggle, and a play/pause/speed/scrub transport
 driven by one clock shared across every trace — it doesn't care how the traces were sourced, so both

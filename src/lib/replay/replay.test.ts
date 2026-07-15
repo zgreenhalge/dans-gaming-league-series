@@ -489,6 +489,33 @@ test('aggregate: traceStateAt interpolates between frames and is null past round
   assert.equal(traceStateAt(trace, trace.durationTicks + 1), null);
 });
 
+test('aggregate: extractPlayerTrace freezes at the last alive position on death, ignoring post-death position drift', () => {
+  const r = round({
+    frames: [
+      frame(0, [pf(1, 10, 20, { alive: true, hp: 40 })]),
+      frame(10, [pf(1, 999, 999, { alive: false, hp: 0 })]), // engine reports a bogus/reset position once dead
+      frame(20, [pf(1, 0, 0, { alive: false, hp: 0 })]), // further drift — should never be read
+    ],
+  });
+  const trace = extractPlayerTrace(7, r, 1, 'SHIRTS')!;
+  assert.ok(trace);
+  // Only two frames captured: the last-alive one, and one frozen death frame — the
+  // third (post-death) frame is never read.
+  assert.equal(trace.frames.length, 2);
+  const death = trace.frames[1];
+  assert.equal(death.t, 10);
+  approx(death.x, 10); // frozen at the last-alive x, not the engine's reported 999
+  approx(death.y, 20);
+  assert.equal(death.alive, false);
+  assert.equal(death.hp, 0);
+
+  // The frozen state holds for the rest of the round (clamped to the last frame).
+  const later = traceStateAt(trace, 15)!;
+  approx(later.x, 10);
+  approx(later.y, 20);
+  assert.equal(later.alive, false);
+});
+
 test('aggregate: maxDurationTicks picks the longest trace', () => {
   const short = extractPlayerTrace(1, round({ frames: [frame(0, [pf(1, 0, 0)]), frame(20, [pf(1, 0, 0)])] }), 1, 'SHIRTS')!;
   const long = extractPlayerTrace(2, round({ frames: [frame(0, [pf(1, 0, 0)]), frame(80, [pf(1, 0, 0)])] }), 1, 'SHIRTS')!;

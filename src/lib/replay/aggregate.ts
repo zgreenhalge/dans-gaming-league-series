@@ -43,6 +43,13 @@ export interface TraceState {
 /**
  * Extract one player's positional trace from a round, or `null` if they have no
  * frames this round (didn't play, e.g. sat out a knife round on the other side).
+ *
+ * Stops at the player's death: once a frame reports them dead, one final frame is
+ * appended *frozen at their last known-alive position* (not whatever the engine
+ * reports for a dead player, which can drift back toward spawn) and no further frames
+ * are read. `traceStateAt`'s end-of-frames clamp then holds that frozen position for
+ * the rest of the round, so the dot reads as a corpse marker where they actually died
+ * instead of jumping partway back to spawn.
  */
 export function extractPlayerTrace(
   matchId: number,
@@ -55,7 +62,12 @@ export function extractPlayerTrace(
   for (const f of round.frames) {
     const p = f.players.find((pp) => pp.id === playerId);
     if (!p) continue;
-    frames.push({ t: f.tick - range.start, x: p.x, y: p.y, yaw: p.yaw, hp: p.hp, alive: p.alive });
+    if (!p.alive) {
+      const last = frames[frames.length - 1];
+      if (last) frames.push({ t: f.tick - range.start, x: last.x, y: last.y, yaw: last.yaw, hp: 0, alive: false });
+      break;
+    }
+    frames.push({ t: f.tick - range.start, x: p.x, y: p.y, yaw: p.yaw, hp: p.hp, alive: true });
   }
   if (frames.length === 0) return null;
   return {
