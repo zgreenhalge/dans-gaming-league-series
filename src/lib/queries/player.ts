@@ -27,6 +27,8 @@ export interface PlayerHistoryRow extends PlayerMatchStat {
   shirts_ban2: string | null;
   skins_ban1: string | null;
   skins_ban2: string | null;
+  /** `'ready'` once this match has a generated 2D replay — gates the Replay Trails tab. */
+  replay_status: string | null;
 }
 
 export interface PlayerDetail {
@@ -180,6 +182,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         shirts_ban2: m.shirts_ban2,
         skins_ban1: m.skins_ban1,
         skins_ban2: m.skins_ban2,
+        replay_status: m.replay_status ?? null,
       };
     })
     .filter((r): r is PlayerHistoryRow => r !== null)

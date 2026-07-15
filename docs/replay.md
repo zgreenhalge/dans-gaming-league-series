@@ -283,8 +283,12 @@ scopes below reuse it as-is:
   own copy of `replay.json` from the existing `GET /api/matches/[id]/replay/payload` (same endpoint the
   2D Replay sub-tab uses) rather than sharing state with it, matching the Heatmap sub-tab's
   independent-lazy-fetch pattern, and extracts traces client-side.
-- **Career-scoped** (the player page's *Replay Trails* tab, `PlayerTrailsTab.tsx`): picks one map from
-  the player's (season-filtered) history, then POSTs that map's match ids to
+- **Career-scoped** (the player page's *Replay Trails* tab, `PlayerTrailsTab.tsx`): the tab itself is
+  hidden unless `PlayerHistoryRow.replay_status === 'ready'` for at least one of the player's matches
+  (`PlayerView.tsx`, see `docs/patterns.md`'s tab-visibility rule) — a played match alone isn't enough,
+  since it may not have a generated replay yet. Once shown, it picks one map from the player's
+  (season-filtered) history, restricted the same way to matches with a ready replay, then POSTs that
+  map's match ids to
   `POST /api/players/[id]/replay-trails`, which calls `getPlayerRoundTraces()`
   (`src/lib/queries/replay.ts`) — a sibling to `getMapHeatmap()` that fans out one R2 GET of the full
   `replay.json` per match (not the compact `heatmap.json`, since a trace needs the actual per-tick

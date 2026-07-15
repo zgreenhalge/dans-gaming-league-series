@@ -26,11 +26,13 @@ export default function PlayerTrailsTab({
 }) {
   // Grouped by a case/whitespace-normalized key (map names are user-typed strings —
   // see CLAUDE.md), same normalization `aggregateByMap` uses elsewhere in `PlayerView`,
-  // but displayed with the first-seen casing.
+  // but displayed with the first-seen casing. Only matches with a generated replay are
+  // candidates — a played match with no replay yet has nothing to fetch, so it's
+  // excluded here rather than sent to the API just to come back empty.
   const mapOptions = useMemo(() => {
     const byMap = new Map<string, { display: string; matchIds: number[] }>();
     for (const r of history) {
-      if (!r.map || !isPlayedScore(r.final_score)) continue;
+      if (!r.map || !isPlayedScore(r.final_score) || r.replay_status !== 'ready') continue;
       const key = r.map.trim().toLowerCase();
       const entry = byMap.get(key) ?? { display: r.map.trim(), matchIds: [] };
       entry.matchIds.push(r.match_id);
@@ -82,7 +84,7 @@ export default function PlayerTrailsTab({
   if (mapOptions.length === 0) {
     return (
       <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-        No played matches for this selection.
+        No matches with a generated replay for this selection.
       </div>
     );
   }

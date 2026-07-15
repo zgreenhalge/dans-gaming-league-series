@@ -386,10 +386,12 @@ export default function PlayerView({
   ];
   // Gated on the full career history (not the season-filtered `filtered`), same as
   // Trophy Case below — a tab's mere existence shouldn't flicker as the season filter
-  // is toggled (docs/patterns.md "Gate a tab on data, not 'always render it'"). There's
-  // no admin action reachable from this page that would produce a first replay, so
-  // unlike MatchRecapTab's 2D Replay sub-tab this stays hidden rather than shown empty.
-  if (history.some((r) => r.map && isPlayedScore(r.final_score))) {
+  // is toggled (docs/patterns.md "Gate a tab on data, not 'always render it'"). Requires
+  // an actual generated replay (`replay_status === 'ready'`), not just a played match —
+  // a played match with no replay yet has nothing for this tab to show. There's no
+  // admin action reachable from this page that would produce a first replay, so unlike
+  // MatchRecapTab's 2D Replay sub-tab this stays hidden rather than shown empty.
+  if (history.some((r) => r.map && isPlayedScore(r.final_score) && r.replay_status === 'ready')) {
     playerTabs.push({ key: 'trails', label: 'Replay Trails' });
   }
   if (trophies.length > 0) {

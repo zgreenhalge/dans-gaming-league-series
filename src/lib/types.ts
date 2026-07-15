@@ -53,6 +53,9 @@ export interface Match {
   screenshot_url_back: string | null;
   round_history: RoundHistoryEntry[] | null;
   recording_url: string | null;
+  /** `none|queued|running|ready|failed` — gates the 2D replay/heatmap/trails UI. Optional
+   *  because older environments may predate the column (see `docs/replay.md`). */
+  replay_status?: string | null;
 }
 
 export interface Player {
