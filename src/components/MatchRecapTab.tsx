@@ -7,6 +7,7 @@ import { Skull, Bomb, Scissors, Clock, Crosshair } from 'lucide-react';
 import { tabCls } from '@/lib/util';
 import { mapSlug } from '@/lib/maps';
 import MapHeatmap from './MapHeatmap';
+import MatchPlayerTrails from './MatchPlayerTrails';
 import DevGate from './DevGate';
 import { RecordingViewer, RecordingUrlForm } from './RecordingViewer';
 import type { ReplayJobState, ReplayEventsView } from '@/lib/queries';
@@ -386,7 +387,7 @@ const ReplayPlayer = dynamic(() => import('./ReplayPlayer'), {
   ),
 });
 
-type RecapSubTab = 'replay' | 'heatmap' | 'recording';
+type RecapSubTab = 'replay' | 'heatmap' | 'trails' | 'recording';
 
 export default function MatchRecapTab({
   job,
@@ -461,6 +462,8 @@ export default function MatchRecapTab({
   // Heatmap is built from the same replay-extract artifacts as the 2D Replay
   // (`heatmap.json` alongside `replay.json`), so it isn't ready before `events` is.
   const showHeatmap = !!matchMap && !!events;
+  // Player Trails reads the full replay payload (frames), so it's gated the same way.
+  const showTrails = !!matchMap && !!events;
 
   return (
     <div className="mt-4">
@@ -471,6 +474,11 @@ export default function MatchRecapTab({
         {showHeatmap && (
           <button type="button" className={tabCls(sub === 'heatmap')} onClick={() => setSub('heatmap')}>
             Heatmap
+          </button>
+        )}
+        {showTrails && (
+          <button type="button" className={tabCls(sub === 'trails')} onClick={() => setSub('trails')}>
+            Player Trails
           </button>
         )}
         {showRecording && (
@@ -509,6 +517,9 @@ export default function MatchRecapTab({
         ))}
       {sub === 'heatmap' && showHeatmap && matchMap && (
         <MapHeatmap slug={mapSlug(matchMap)} matchIds={thisMatch} visibleMatchIds={visibleMatchIds} />
+      )}
+      {sub === 'trails' && showTrails && matchMap && events && (
+        <MatchPlayerTrails matchId={matchId} matchMap={matchMap} players={events.players} />
       )}
       {sub === 'recording' && showRecording && (
         <div className="mt-4 flex flex-col gap-6">

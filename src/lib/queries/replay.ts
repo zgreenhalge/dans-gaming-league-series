@@ -2,6 +2,7 @@ import { gunzipMaybe } from '../gzip';
 import { supabase } from '../supabase';
 import { getR2Object, replayKey } from '../r2';
 import type { ReplayPayload, ReplayPlayerMeta, ReplayEvent } from '../replay/types';
+import { extractPlayerTrace, type PlayerTrace } from '../replay/aggregate';
 import type { Faction } from '../types';
 
 
@@ -91,5 +92,49 @@ export async function getReplayEventsView(matchId: number): Promise<ReplayEvents
       sideByFaction: r.sideByFaction,
       events: r.events,
     })),
+  };
+}
+
+export interface PlayerRoundTraces {
+  traces: PlayerTrace[];
+  /** Ticks/sec shared by every trace (constant across the extract pipeline), or
+   *  `null` when none of `matchIds` had a ready replay to read it from. */
+  tickRate: number | null;
+}
+
+/**
+ * Aggregate one player's per-round position trace across several matches' `replay.json`
+ * artifacts — the source for the "replay all of a player's rounds" overlay (#128), both
+ * scoped to a single match (traces from one payload) and career-wide across every match
+ * a player has played on a map (this function, fanned out over `matchIds`). Matches
+ * without a ready replay, or where the player isn't on the roster, are silently
+ * skipped — same tolerance as `getMapHeatmap`. See `docs/replay.md` for the scaling
+ * caveat (one R2 GET of the full payload per match) this shares with that fan-out.
+ */
+export async function getPlayerRoundTraces(playerId: number, matchIds: number[]): Promise<PlayerRoundTraces> {
+  const perMatch = await Promise.all(
+    matchIds.map(async (matchId): Promise<{ traces: PlayerTrace[]; tickRate: number } | null> => {
+      const buf = await getR2Object(replayKey(matchId));
+      if (!buf) return null;
+      let payload: ReplayPayload;
+      try {
+        payload = JSON.parse(gunzipMaybe(buf).toString('utf8')) as ReplayPayload;
+      } catch {
+        return null;
+      }
+      const faction = payload.players.find((p) => p.id === playerId)?.faction ?? null;
+      if (faction === null) return null;
+      const traces: PlayerTrace[] = [];
+      for (const round of payload.rounds) {
+        const trace = extractPlayerTrace(matchId, round, playerId, faction);
+        if (trace) traces.push(trace);
+      }
+      return { traces, tickRate: payload.tickRate };
+    }),
+  );
+  const present = perMatch.filter((r): r is { traces: PlayerTrace[]; tickRate: number } => r !== null);
+  return {
+    traces: present.flatMap((r) => r.traces),
+    tickRate: present[0]?.tickRate ?? null,
   };
 }

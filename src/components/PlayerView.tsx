@@ -15,6 +15,7 @@ import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import Sparkline from './Sparkline';
 import { CountdownTimer } from './CountdownTimer';
 import MatchupsTab from './MatchupsTab';
+import PlayerTrailsTab from './PlayerTrailsTab';
 import EhogTimeline from './EhogTimeline';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import StatTileGrid from './StatTileGrid';
@@ -22,7 +23,7 @@ import TabBar from './TabBar';
 
 type Filter = 'career' | number;
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
-type PlayerTab = 'stats' | 'matches' | 'advanced' | 'trophies' | 'matchups';
+type PlayerTab = 'stats' | 'matches' | 'advanced' | 'trophies' | 'matchups' | 'trails';
 type MatchesSubTab = 'history' | 'upcoming';
 
 const MEDAL_COLORS: Record<1 | 2 | 3, string> = {
@@ -215,6 +216,14 @@ export default function PlayerView({
   const { data: session } = useSession();
   const loggedInPlayerId = session?.user?.playerId ?? null;
 
+  const playerName = useMemo(() => {
+    for (const r of history) {
+      const p = [...r.shirts, ...r.skins].find((pp) => pp.player_id === playerId);
+      if (p) return p.player_name;
+    }
+    return '';
+  }, [history, playerId]);
+
   const { regularSeasons, gauntletSeasons, regularToGauntlet } = useMemo(() => {
     const regMap = new Map<number, { id: number; name: string }>();
     const gntMap = new Map<number, { id: number; name: string }>();
@@ -374,6 +383,7 @@ export default function PlayerView({
     { key: 'matches', label: `Matches${playedHistory.length > 0 ? ` (${playedHistory.length})` : ''}` },
     { key: 'advanced', label: 'Advanced Stats' },
     { key: 'matchups', label: 'H2H' },
+    { key: 'trails', label: 'Replay Trails' },
   ];
   if (trophies.length > 0) {
     playerTabs.push({ key: 'trophies', label: `Trophy Case${filteredTrophies.length > 0 ? ` (${filteredTrophies.length})` : ''}` });
@@ -803,6 +813,11 @@ export default function PlayerView({
       {/* Matchups tab */}
       {tab === 'matchups' && (
         <MatchupsTab playerId={playerId} h2hData={h2hData} />
+      )}
+
+      {/* Replay Trails tab — replay every round the player's played on a map, at once */}
+      {tab === 'trails' && (
+        <PlayerTrailsTab playerId={playerId} playerName={playerName} history={filtered} />
       )}
 
       {/* Trophy Case tab */}

@@ -146,12 +146,12 @@ export function roundTickRange(round: ReplayRound): { start: number; end: number
 }
 
 /** Shortest-path angular lerp (degrees), so a player turning past 360° doesn't spin. */
-function lerpAngle(a: number, b: number, t: number): number {
+export function lerpAngle(a: number, b: number, t: number): number {
   const diff = ((b - a + 540) % 360) - 180;
   return a + diff * t;
 }
 
-function lerp(a: number, b: number, t: number): number {
+export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
