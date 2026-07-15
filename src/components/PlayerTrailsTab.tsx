@@ -8,12 +8,12 @@ import { mapSlug } from '@/lib/maps';
 import PlayerRoundOverlay from './PlayerRoundOverlay';
 
 /**
- * The player page's career-wide "replay all of a player's rounds" tab (#128): pick one
- * map the player has played, and overlay every round they've played on it across every
- * match with a ready replay (respecting the page's own season filter — `history` is
- * already filtered by the caller). Positions only make sense on one map at a time, so
- * unlike the match-level version (`MatchPlayerTrails`, scoped to a single match/map
- * already) this needs a map picker up front.
+ * The player page's "Pathing" tab (#128) — career-wide "replay all of a player's
+ * rounds" view: pick one map the player has played, and overlay every round they've
+ * played on it across every match with a ready replay (respecting the page's own
+ * season filter — `history` is already filtered by the caller). Positions only make
+ * sense on one map at a time, so unlike the match-level version (`MatchPlayerTrails`,
+ * scoped to a single match/map already) this needs a map picker up front.
  */
 export default function PlayerTrailsTab({
   playerId,

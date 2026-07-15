@@ -7,7 +7,7 @@ import { mapSlug } from '@/lib/maps';
 import PlayerRoundOverlay from './PlayerRoundOverlay';
 
 /**
- * The Recap tab's "Player Trails" sub-tab (#128): pick one of the match's 4 rostered
+ * The Recap tab's "Pathing" sub-tab (#128): pick one of the match's 4 rostered
  * players and overlay every round of *this match* for them. Fetches its own copy of
  * the replay payload (same endpoint `<ReplayPlayer>` uses) rather than sharing state
  * with the 2D Replay sub-tab, matching the Heatmap sub-tab's independent-lazy-fetch

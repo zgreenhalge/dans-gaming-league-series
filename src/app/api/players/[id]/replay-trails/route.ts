@@ -6,8 +6,8 @@ import { getPlayerRoundTraces } from '@/lib/queries';
 // sibling to `/api/maps/[slug]/heatmap`. POSTed for the same reason: the player page
 // already knows (from `history`, respecting its own season filter) which of the
 // player's matches were played on the map in question, so it hands that set straight
-// through instead of this route re-deriving it. Runs only when the Replay Trails tab
-// is opened for a chosen map.
+// through instead of this route re-deriving it. Runs only when the Pathing tab is
+// opened for a chosen map.
 
 export async function POST(
   req: NextRequest,

@@ -261,7 +261,7 @@ manual radar-calibration/correction UI — `radar-build`'s automated extraction 
 has proven accurate across the whole map pool (it calibrated the entire pool by running the Action
 from the Actions UI), so one wasn't needed.
 
-## Player Trails tab
+## Pathing tab
 
 Replays every round a chosen player played on one map **at once**, each round's clock zeroed to its
 own start so the same player's many rounds move simultaneously as translucent, additively-blended
@@ -286,12 +286,12 @@ canvas, radar background (`useMapRadar`), CT/T side toggle, and a play/pause/spe
 driven by one clock shared across every trace — it doesn't care how the traces were sourced, so both
 scopes below reuse it as-is:
 
-- **Match-scoped** (`MatchRecapTab`'s *Player Trails* sub-tab, `MatchPlayerTrails.tsx`): picks one of
+- **Match-scoped** (`MatchRecapTab`'s *Pathing* sub-tab, `MatchPlayerTrails.tsx`): picks one of
   the match's 4 rostered players and overlays every round of *that one match* they played. Fetches its
   own copy of `replay.json` from the existing `GET /api/matches/[id]/replay/payload` (same endpoint the
   2D Replay sub-tab uses) rather than sharing state with it, matching the Heatmap sub-tab's
   independent-lazy-fetch pattern, and extracts traces client-side.
-- **Career-scoped** (the player page's *Replay Trails* tab, `PlayerTrailsTab.tsx`): the tab itself is
+- **Career-scoped** (the player page's *Pathing* tab, `PlayerTrailsTab.tsx`): the tab itself is
   hidden unless `PlayerHistoryRow.replay_status === 'ready'` for at least one of the player's matches
   (`PlayerView.tsx`, see `docs/patterns.md`'s tab-visibility rule) — a played match alone isn't enough,
   since it may not have a generated replay yet. Once shown, it picks one map from the player's

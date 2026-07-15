@@ -462,7 +462,7 @@ export default function MatchRecapTab({
   // Heatmap is built from the same replay-extract artifacts as the 2D Replay
   // (`heatmap.json` alongside `replay.json`), so it isn't ready before `events` is.
   const showHeatmap = !!matchMap && !!events;
-  // Player Trails reads the full replay payload (frames), so it's gated the same way.
+  // Pathing reads the full replay payload (frames), so it's gated the same way.
   const showTrails = !!matchMap && !!events;
 
   return (
@@ -478,7 +478,7 @@ export default function MatchRecapTab({
         )}
         {showTrails && (
           <button type="button" className={tabCls(sub === 'trails')} onClick={() => setSub('trails')}>
-            Player Trails
+            Pathing
           </button>
         )}
         {showRecording && (

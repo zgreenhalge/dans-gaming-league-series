@@ -105,13 +105,13 @@ on this page* do something to produce it? Show the tab when either is true; hide
 - **Data exists** — gate on the same signal the tab's content depends on, computed unscoped by
   whatever transient filter (season, side, …) the page also applies, so the tab doesn't flicker in
   and out as the user toggles that filter. `PlayerView`'s Trophy Case tab (`trophies.length > 0`) and
-  Replay Trails tab (has a match with `replay_status === 'ready'`, from the full career `history`, not
+  Pathing tab (has a match with `replay_status === 'ready'`, from the full career `history`, not
   the season-filtered `filtered` — a played match alone isn't enough, since a replay may not exist for
   it yet) both follow this.
 - **The viewer can produce the data here** — if the tab itself carries a generate/upload/dispatch
   action (an admin or in-match player can trigger it from that exact tab), show it regardless of
   current data so that action is reachable. `MatchRecapTab`'s 2D Replay sub-tab is always shown
-  because its own empty state is a "Generate replay" button; its Heatmap and Player Trails sub-tabs
+  because its own empty state is a "Generate replay" button; its Heatmap and Pathing sub-tabs
   have no such action of their own (they only ever consume a replay generated from the 2D Replay
   tab), so they stay gated on the replay actually existing (`events`) instead.
 

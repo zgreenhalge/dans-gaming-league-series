@@ -392,7 +392,7 @@ export default function PlayerView({
   // admin action reachable from this page that would produce a first replay, so unlike
   // MatchRecapTab's 2D Replay sub-tab this stays hidden rather than shown empty.
   if (history.some((r) => r.map && isPlayedScore(r.final_score) && r.replay_status === 'ready')) {
-    playerTabs.push({ key: 'trails', label: 'Replay Trails' });
+    playerTabs.push({ key: 'trails', label: 'Pathing' });
   }
   if (trophies.length > 0) {
     playerTabs.push({ key: 'trophies', label: `Trophy Case${filteredTrophies.length > 0 ? ` (${filteredTrophies.length})` : ''}` });
@@ -824,7 +824,7 @@ export default function PlayerView({
         <MatchupsTab playerId={playerId} h2hData={h2hData} />
       )}
 
-      {/* Replay Trails tab — replay every round the player's played on a map, at once */}
+      {/* Pathing tab — replay every round the player's played on a map, at once */}
       {tab === 'trails' && (
         <PlayerTrailsTab playerId={playerId} playerName={playerName} history={filtered} />
       )}

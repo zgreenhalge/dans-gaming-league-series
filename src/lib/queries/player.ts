@@ -27,7 +27,7 @@ export interface PlayerHistoryRow extends PlayerMatchStat {
   shirts_ban2: string | null;
   skins_ban1: string | null;
   skins_ban2: string | null;
-  /** `'ready'` once this match has a generated 2D replay — gates the Replay Trails tab. */
+  /** `'ready'` once this match has a generated 2D replay — gates the Pathing tab. */
   replay_status: string | null;
 }
 
