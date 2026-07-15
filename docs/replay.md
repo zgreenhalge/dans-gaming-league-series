@@ -181,13 +181,19 @@ beside the canvas on wide screens (below it on narrow ones) — the core-events 
 auto-scrolling the active round's header to the top of the panel as playback enters it (not per
 event — moving between events already in view doesn't re-trigger a scroll) and highlighting the
 event at the player's current tick, and seeking the player to a round or an exact event on click.
-Auto-follow backs off while the user is actively scrolling the panel (wheel/touch/scrollbar drag) and
-resumes once they stop, so it doesn't fight someone reading back through the feed. `<ReplayPlayer>`
-reports its position via an `onPosition(round, tick)` callback fired once per drawn frame;
-`MatchRecapTab` derives the highlighted event from it and only calls `setState` when that derived
-event actually changes, so the panel doesn't re-render at playback rate — the per-row highlight is
-driven by that single value, so it always tracks exactly one row and clears off a clicked row the
-moment playback reaches the next event.
+`MatchRecapTab` measures `<ReplayPlayer>`'s rendered height with a `ResizeObserver` and passes it down
+as the panel's fixed height (falling back to a `max-h-64` cap until the first measurement lands), so
+the panel is always a box the same height as the player, scrolling its own overflow internally. The
+round auto-scroll drives the panel's own `scrollTop` directly (`container.scrollBy` against the
+round header's and container's `getBoundingClientRect()` delta) rather than `Element.scrollIntoView`,
+which would walk up and scroll every scrollable ancestor — including the page — to bring the round
+into view; only the panel's internal scroll position ever moves. Auto-follow backs off while the user
+is actively scrolling the panel (wheel/touch/scrollbar drag) and resumes once they stop, so it doesn't
+fight someone reading back through the feed. `<ReplayPlayer>` reports its position via an
+`onPosition(round, tick)` callback fired once per drawn frame; `MatchRecapTab` derives the highlighted
+event from it and only calls `setState` when that derived event actually changes, so the panel doesn't
+re-render at playback rate — the per-row highlight is driven by that single value, so it always tracks
+exactly one row and clears off a clicked row the moment playback reaches the next event.
 
 **Pen tool:** a second, transparent `<canvas>` (`annotationCanvasRef`) sits absolutely positioned
 over the replay canvas for telestrator-style marks — pen, box (drag from a corner, unfilled), and
