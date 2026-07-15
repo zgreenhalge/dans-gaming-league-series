@@ -216,14 +216,14 @@ export async function loadMatch(
 }
 
 /**
- * `connect <ip:port>` host (host only, no `connect ` prefix). Prefers `custom_domain` (a stable,
- * human-readable address, e.g. "dgls.pals.rip") over `raw_ip`/`ip`, since the raw IP can change across
- * a server restart/migration while the domain stays put. This is the single source of the connect
+ * `connect <ip:port>` host (host only, no `connect ` prefix). Prefers the numeric `raw_ip`/`ip` over
+ * `custom_domain` — Steam's `steam://` URI handler is unreliable at resolving a hostname, while the
+ * in-game `connect` console command resolves either fine. This is the single source of the connect
  * host — every consumer (per-match `connect_string`, the admin console) should go through this
  * function rather than reading `raw_ip`/`custom_domain` directly, so they can't drift apart again.
  */
 export function connectHost(server: DathostServer): string | null {
-  const host = server.custom_domain ?? server.raw_ip ?? server.ip;
+  const host = server.raw_ip ?? server.ip ?? server.custom_domain;
   const port = server.ports?.game;
   if (!host || !port) return null;
   return `${host}:${port}`;
