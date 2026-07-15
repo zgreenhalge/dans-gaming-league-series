@@ -204,7 +204,7 @@ export default function MapHeatmap({
           ctx.globalAlpha = 1;
           const r = 16;
           const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
-          g.addColorStop(0, hexAlpha(color, 0.22));
+          g.addColorStop(0, hexAlpha(color, 0.26));
           g.addColorStop(1, hexAlpha(color, 0));
           ctx.fillStyle = g;
           ctx.beginPath();
@@ -225,7 +225,7 @@ export default function MapHeatmap({
         if (GRENADE_KINDS.has(p.kind)) continue;
         const c = projector.project(p);
         const color = colorOfKind.get(p.kind) ?? '#ffffff';
-        ctx.globalAlpha = 0.32;
+        ctx.globalAlpha = 0.24;
         ctx.fillStyle = color;
         ctx.beginPath();
         ctx.arc(c.x, c.y, 2.5, 0, Math.PI * 2);
