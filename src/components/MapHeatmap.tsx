@@ -175,8 +175,16 @@ export default function MapHeatmap({
       }
       if (!projector) return;
 
-      // Points — additive so density reads as brightness.
-      ctx.globalCompositeOperation = 'lighter';
+      // Points — density still reads as brightness, but via 'screen' rather than
+      // 'lighter'. 'lighter' sums RGB channels with no ceiling until it clips at
+      // 255, so a busy chokepoint with mixed kill/death markers blows out to solid
+      // white within a few dozen overlapping points, erasing the map underneath.
+      // 'screen' (1 - (1-a)(1-b)) approaches white only asymptotically — it takes
+      // far more stacked points to wash out, so density keeps reading as a color
+      // gradient instead of a flat glare over most of the map. The per-point alpha
+      // is also lowered so a single point still reads as a soft dot rather than a
+      // near-opaque disc, giving more headroom before that asymptote matters.
+      ctx.globalCompositeOperation = 'screen';
       for (const p of visible) {
         const c = projector.project(p);
         const color = colorOfKind.get(p.kind) ?? '#ffffff';
@@ -184,7 +192,7 @@ export default function MapHeatmap({
           // Plot grenades as their effect area.
           const r = Math.max(4, projector.scaleLength(GRENADE_RADIUS[p.kind] ?? 100));
           ctx.fillStyle = color;
-          ctx.globalAlpha = 0.22;
+          ctx.globalAlpha = 0.14;
           ctx.beginPath();
           ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
           ctx.fill();
@@ -195,7 +203,7 @@ export default function MapHeatmap({
           ctx.globalAlpha = 1;
           const r = 16;
           const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
-          g.addColorStop(0, hexAlpha(color, 0.5));
+          g.addColorStop(0, hexAlpha(color, 0.18));
           g.addColorStop(1, hexAlpha(color, 0));
           ctx.fillStyle = g;
           ctx.beginPath();
