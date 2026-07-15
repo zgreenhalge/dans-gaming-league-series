@@ -383,8 +383,15 @@ export default function PlayerView({
     { key: 'matches', label: `Matches${playedHistory.length > 0 ? ` (${playedHistory.length})` : ''}` },
     { key: 'advanced', label: 'Advanced Stats' },
     { key: 'matchups', label: 'H2H' },
-    { key: 'trails', label: 'Replay Trails' },
   ];
+  // Gated on the full career history (not the season-filtered `filtered`), same as
+  // Trophy Case below — a tab's mere existence shouldn't flicker as the season filter
+  // is toggled (docs/patterns.md "Gate a tab on data, not 'always render it'"). There's
+  // no admin action reachable from this page that would produce a first replay, so
+  // unlike MatchRecapTab's 2D Replay sub-tab this stays hidden rather than shown empty.
+  if (history.some((r) => r.map && isPlayedScore(r.final_score))) {
+    playerTabs.push({ key: 'trails', label: 'Replay Trails' });
+  }
   if (trophies.length > 0) {
     playerTabs.push({ key: 'trophies', label: `Trophy Case${filteredTrophies.length > 0 ? ` (${filteredTrophies.length})` : ''}` });
   }

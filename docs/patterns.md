@@ -96,6 +96,27 @@ season filters, the hover/lift classes, the responsive-table treatment — preci
 for the visual primitives. When you genuinely need something new, ask whether it's a new *shape* or
 just a new *parameter* (color, count) of an existing primitive — usually it's the latter.
 
+## Gate a tab on data, not "always render it"
+
+A tab or sub-tab (`TabBar`/`tabCls` navigation) shouldn't render for a viewer who can only ever see
+it empty. Before adding a tab, ask: does the underlying data exist yet, and if not, can *this viewer,
+on this page* do something to produce it? Show the tab when either is true; hide it otherwise.
+
+- **Data exists** — gate on the same signal the tab's content depends on, computed unscoped by
+  whatever transient filter (season, side, …) the page also applies, so the tab doesn't flicker in
+  and out as the user toggles that filter. `PlayerView`'s Trophy Case tab (`trophies.length > 0`) and
+  Replay Trails tab (has any played match with a map, from the full career `history`, not the
+  season-filtered `filtered`) both follow this.
+- **The viewer can produce the data here** — if the tab itself carries a generate/upload/dispatch
+  action (an admin or in-match player can trigger it from that exact tab), show it regardless of
+  current data so that action is reachable. `MatchRecapTab`'s 2D Replay sub-tab is always shown
+  because its own empty state is a "Generate replay" button; its Heatmap and Player Trails sub-tabs
+  have no such action of their own (they only ever consume a replay generated from the 2D Replay
+  tab), so they stay gated on the replay actually existing (`events`) instead.
+
+Don't invent a third "show it anyway, it'll say 'no data'" tab — that's the case this rule exists to
+prevent: a normal viewer gets a dead-looking tab with nothing to do about it.
+
 ## Document what *is*, not how it changed
 
 **This applies to every committed artifact — docs, code comments, README / `note` / config fields,
