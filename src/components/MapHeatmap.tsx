@@ -66,11 +66,7 @@ export default function MapHeatmap({
   const [players, setPlayers] = useState<{ id: number; name: string }[]>([]);
   const [active, setActive] = useState<Set<string>>(new Set(['death']));
   const [side, setSide] = useState<SideFilter>('all');
-  // The user's explicit pick; falls back to "all players" (null) once the fetched
-  // roster no longer contains it (a slug/matchIds change) rather than resetting it via
-  // an effect — a derived value, not a second source of truth to keep in sync.
-  const [explicitPlayerId, setExplicitPlayerId] = useState<number | null>(null);
-  const playerId = explicitPlayerId !== null && players.some((p) => p.id === explicitPlayerId) ? explicitPlayerId : null;
+  const [playerId, setPlayerId] = useState<number | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -87,11 +83,13 @@ export default function MapHeatmap({
         if (cancelled) return;
         setPoints(body.points ?? []);
         setPlayers(body.players ?? []);
+        setPlayerId(null);
       })
       .catch(() => {
         if (cancelled) return;
         setPoints([]);
         setPlayers([]);
+        setPlayerId(null);
       });
     return () => {
       cancelled = true;
@@ -125,6 +123,20 @@ export default function MapHeatmap({
       ),
     [points, visibleMatchIds, activeKinds, side, playerId],
   );
+
+  // Only offer players who actually have a point within the current season filter —
+  // `players` (from the API) covers every match in `matchIds`, which is broader than
+  // `visibleMatchIds` once the season filter narrows it.
+  const availablePlayers = useMemo(() => {
+    const ids = new Set<number>();
+    for (const p of points ?? []) {
+      if (visibleMatchIds.has(p.matchId) && p.playerId !== null) ids.add(p.playerId);
+    }
+    const nameById = new Map(players.map((p) => [p.id, p.name]));
+    return [...ids]
+      .map((id) => ({ id, name: nameById.get(id) ?? `#${id}` }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [points, visibleMatchIds, players]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -243,14 +255,14 @@ export default function MapHeatmap({
           </button>
         ))}
         <div className="ml-auto flex items-center gap-2">
-          {players.length > 0 && (
+          {availablePlayers.length > 0 && (
             <select
               value={playerId ?? ''}
-              onChange={(e) => setExplicitPlayerId(e.target.value === '' ? null : Number(e.target.value))}
+              onChange={(e) => setPlayerId(e.target.value === '' ? null : Number(e.target.value))}
               className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-1.5 py-0.5 font-mono text-[var(--color-text-primary)]"
             >
               <option value="">All players</option>
-              {players.map((p) => (
+              {availablePlayers.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>

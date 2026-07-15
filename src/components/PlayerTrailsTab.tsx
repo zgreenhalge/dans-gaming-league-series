@@ -24,15 +24,19 @@ export default function PlayerTrailsTab({
   playerName: string;
   history: PlayerHistoryRow[];
 }) {
+  // Grouped by a case/whitespace-normalized key (map names are user-typed strings —
+  // see CLAUDE.md), same normalization `aggregateByMap` uses elsewhere in `PlayerView`,
+  // but displayed with the first-seen casing.
   const mapOptions = useMemo(() => {
-    const byMap = new Map<string, number[]>();
+    const byMap = new Map<string, { display: string; matchIds: number[] }>();
     for (const r of history) {
       if (!r.map || !isPlayedScore(r.final_score)) continue;
-      const arr = byMap.get(r.map) ?? [];
-      arr.push(r.match_id);
-      byMap.set(r.map, arr);
+      const key = r.map.trim().toLowerCase();
+      const entry = byMap.get(key) ?? { display: r.map.trim(), matchIds: [] };
+      entry.matchIds.push(r.match_id);
+      byMap.set(key, entry);
     }
-    return [...byMap.entries()].sort((a, b) => b[1].length - a[1].length);
+    return [...byMap.values()].sort((a, b) => b.matchIds.length - a.matchIds.length);
   }, [history]);
 
   // The user's explicit pick; falls back to the most-played map once it no longer
@@ -40,19 +44,20 @@ export default function PlayerTrailsTab({
   // via an effect — a derived value, not a second source of truth to keep in sync.
   const [explicitMap, setExplicitMap] = useState<string | null>(null);
   const selectedMap =
-    explicitMap !== null && mapOptions.some(([m]) => m === explicitMap) ? explicitMap : (mapOptions[0]?.[0] ?? null);
+    explicitMap !== null && mapOptions.some((o) => o.display === explicitMap)
+      ? explicitMap
+      : (mapOptions[0]?.display ?? null);
 
   const matchIds = useMemo(
-    () => mapOptions.find(([m]) => m === selectedMap)?.[1] ?? [],
+    () => mapOptions.find((o) => o.display === selectedMap)?.matchIds ?? [],
     [mapOptions, selectedMap],
   );
 
-  const [traces, setTraces] = useState<PlayerTrace[] | null>(null);
-  const [tickRate, setTickRate] = useState(64);
-  // Which map the current `traces` were fetched for — lets the render below hold off
-  // showing a previous map's rounds on the newly-selected map's radar while a fetch
-  // for the new selection is still in flight.
-  const [tracesFor, setTracesFor] = useState<string | null>(null);
+  // The fetched traces, the tick rate they share, and which map they were fetched
+  // for (so the render below can hold off showing a previous map's rounds on the
+  // newly-selected map's radar while a fetch for the new selection is still in
+  // flight) — kept as one object so the three always update atomically.
+  const [result, setResult] = useState<{ map: string | null; traces: PlayerTrace[]; tickRate: number } | null>(null);
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/players/${playerId}/replay-trails`, {
@@ -63,14 +68,11 @@ export default function PlayerTrailsTab({
       .then((res) => (res.ok ? res.json() : { traces: [], tickRate: null }))
       .then((body) => {
         if (cancelled) return;
-        setTraces(body.traces ?? []);
-        setTracesFor(selectedMap);
-        if (body.tickRate) setTickRate(body.tickRate);
+        setResult({ map: selectedMap, traces: body.traces ?? [], tickRate: body.tickRate ?? 64 });
       })
       .catch(() => {
         if (cancelled) return;
-        setTraces([]);
-        setTracesFor(selectedMap);
+        setResult({ map: selectedMap, traces: [], tickRate: 64 });
       });
     return () => {
       cancelled = true;
@@ -88,27 +90,27 @@ export default function PlayerTrailsTab({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-1">
-        {mapOptions.map(([m, ids]) => (
+        {mapOptions.map((o) => (
           <button
-            key={m}
+            key={o.display}
             type="button"
-            className={tabCls(selectedMap === m)}
-            onClick={() => setExplicitMap(m)}
+            className={tabCls(selectedMap === o.display)}
+            onClick={() => setExplicitMap(o.display)}
           >
-            {m}
+            {o.display}
             <span className="ml-1.5 font-mono text-[10px] text-[var(--color-text-secondary)]">
-              ({ids.length})
+              ({o.matchIds.length})
             </span>
           </button>
         ))}
       </div>
-      {traces === null || tracesFor !== selectedMap ? (
+      {result === null || result.map !== selectedMap ? (
         <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">Loading rounds…</div>
       ) : (
         <PlayerRoundOverlay
           slug={mapSlug(selectedMap ?? '')}
-          traces={traces}
-          tickRate={tickRate}
+          traces={result.traces}
+          tickRate={result.tickRate}
           playerName={playerName}
         />
       )}

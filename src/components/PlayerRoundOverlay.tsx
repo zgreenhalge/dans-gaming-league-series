@@ -63,6 +63,10 @@ export default function PlayerRoundOverlay({
     () => (side === 'all' ? traces : traces.filter((t) => t.side === side)),
     [traces, side],
   );
+  // Read by `draw()` instead of closing over `visible` directly, so toggling the side
+  // filter doesn't change `draw`'s identity and doesn't re-trigger the canvas-sizing
+  // effect below (which rebuilds the projector) — only an actual resize should do that.
+  const visibleRef = useRef(visible);
 
   // Restart the shared clock whenever the underlying trace set changes (a different
   // player/map picked upstream) rather than carrying over a stale scrub position.
@@ -74,17 +78,16 @@ export default function PlayerRoundOverlay({
 
   // Side colors are read from CSS custom properties once per mount (canvas fillStyle
   // can't take `var(...)` directly), matching the team-color convention used elsewhere.
-  const ctColorRef = useRef('#5b9bd5');
-  const tColorRef = useRef('#d5a04b');
-  const neutralColorRef = useRef('#e6e6e6');
+  const colorsRef = useRef({ CT: '#5b9bd5', T: '#d5a04b', neutral: '#e6e6e6' });
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const style = getComputedStyle(el);
-    ctColorRef.current = style.getPropertyValue('--color-ct').trim() || ctColorRef.current;
-    tColorRef.current = style.getPropertyValue('--color-t').trim() || tColorRef.current;
-    neutralColorRef.current = style.getPropertyValue('--color-text-primary').trim() || neutralColorRef.current;
+    const colors = colorsRef.current;
+    colors.CT = style.getPropertyValue('--color-ct').trim() || colors.CT;
+    colors.T = style.getPropertyValue('--color-t').trim() || colors.T;
+    colors.neutral = style.getPropertyValue('--color-text-primary').trim() || colors.neutral;
   }, []);
 
   const draw = useCallback(() => {
@@ -108,16 +111,17 @@ export default function PlayerRoundOverlay({
       ctx.globalAlpha = 1;
     }
 
+    const shown = visibleRef.current;
+    const colors = colorsRef.current;
     ctx.globalCompositeOperation = 'lighter';
     let active = 0;
-    for (const trace of visible) {
+    for (const trace of shown) {
       const state = traceStateAt(trace, tickRef.current);
       if (!state) continue;
       active++;
       const c = projector.project(state);
       ctx.globalAlpha = state.alive ? ALIVE_ALPHA : DEAD_ALPHA;
-      ctx.fillStyle =
-        trace.side === 'T' ? tColorRef.current : trace.side === 'CT' ? ctColorRef.current : neutralColorRef.current;
+      ctx.fillStyle = colors[trace.side ?? 'neutral'];
       ctx.beginPath();
       ctx.arc(c.x, c.y, DOT_RADIUS, 0, Math.PI * 2);
       ctx.fill();
@@ -125,8 +129,15 @@ export default function PlayerRoundOverlay({
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     if (scrubRef.current) scrubRef.current.value = String(tickRef.current);
-    if (activeCountRef.current) activeCountRef.current.textContent = `${active} / ${visible.length} rounds`;
-  }, [visible, calibration, radarImage]);
+    if (activeCountRef.current) activeCountRef.current.textContent = `${active} / ${shown.length} rounds`;
+  }, [calibration, radarImage]);
+
+  // Repaint (without resizing) whenever the visible trace set changes — e.g. the side
+  // filter — while the clock is stopped; a running clock already repaints every frame.
+  useEffect(() => {
+    visibleRef.current = visible;
+    if (!playing) draw();
+  }, [visible, playing, draw]);
 
   // --- size canvas to its container (DPR-aware) + (re)build the projector ---
   useEffect(() => {

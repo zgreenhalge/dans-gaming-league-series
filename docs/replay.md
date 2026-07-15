@@ -241,10 +241,9 @@ grenades drawn as their effect area. (Decoys are excluded from `heatmap.json` en
 layer.)
 
 Each point carries the DGLS `player_id` of its actor (attacker for `kill`, victim for `death`,
-thrower for a grenade) as `playerId`, bumping `HEATMAP_SCHEMA_VERSION` to 2 — points from an artifact
-extracted before the bump come back with `playerId: null` and are simply excluded once a player
-filter is applied, until that match's replay is re-extracted (`replay-extract-all`, see "Background
-jobs" below).
+thrower for a grenade) as `playerId` (`HEATMAP_SCHEMA_VERSION` 2). A point with `playerId: null` is
+simply excluded once a player filter is applied; re-extracting that match's replay
+(`replay-extract-all`, see "Background jobs" below) backfills it.
 
 `MapHeatmap` is reused in two more places (#128), both passing explicit match-id sets to the same
 component/route: the **Recap tab**'s *Heatmap* sub-tab scopes it to the single match
@@ -291,8 +290,9 @@ scopes below reuse it as-is:
   `replay.json` per match (not the compact `heatmap.json`, since a trace needs the actual per-tick
   `frames[]`), reads the player's `faction` straight off each payload's own roster, and flattens every
   match's `extractPlayerTrace()` results into one list. Matches without a ready replay, or where the
-  player isn't on the roster, are silently skipped — same tolerance as `getMapHeatmap`, and the same
-  linear-fan-out scaling caveat applies (see the Heatmap tab's scaling note above).
+  player isn't on the roster, are silently skipped — same tolerance as `getMapHeatmap`, but a heavier
+  per-match cost: it reads the full payload rather than the compact `heatmap.json`, so it inherits the
+  Heatmap tab's linear-fan-out scaling caveat (see above) sooner, at a lower match count.
 
 ## Background jobs (GitHub Actions)
 

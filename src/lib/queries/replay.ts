@@ -97,8 +97,9 @@ export async function getReplayEventsView(matchId: number): Promise<ReplayEvents
 
 export interface PlayerRoundTraces {
   traces: PlayerTrace[];
-  /** Ticks/sec shared by every trace (constant across the extract pipeline), or
-   *  `null` when none of `matchIds` had a ready replay to read it from. */
+  /** Taken from the first match with a ready replay and assumed constant across all of
+   *  them (every DGLS match server runs the same tick rate) — `null` when none of
+   *  `matchIds` had a ready replay to read it from. */
   tickRate: number | null;
 }
 

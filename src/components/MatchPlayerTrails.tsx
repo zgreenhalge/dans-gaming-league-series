@@ -24,7 +24,15 @@ export default function MatchPlayerTrails({
 }) {
   const [payload, setPayload] = useState<ReplayPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [playerId, setPlayerId] = useState<number | null>(players[0]?.id ?? null);
+  // The user's explicit pick; falls back to the first rostered player once it no
+  // longer appears in `players` (e.g. this instance is reused for a different match)
+  // rather than resetting it via an effect — a derived value, not a second source of
+  // truth to keep in sync.
+  const [explicitPlayerId, setExplicitPlayerId] = useState<number | null>(null);
+  const playerId =
+    explicitPlayerId !== null && players.some((p) => p.id === explicitPlayerId)
+      ? explicitPlayerId
+      : (players[0]?.id ?? null);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,7 +83,7 @@ export default function MatchPlayerTrails({
           <button
             key={p.id}
             type="button"
-            onClick={() => setPlayerId(p.id)}
+            onClick={() => setExplicitPlayerId(p.id)}
             className={`border px-2 py-1 font-mono ${
               playerId === p.id
                 ? 'border-[var(--color-text-primary)] text-[var(--color-text-primary)]'

@@ -17,11 +17,16 @@ export async function POST(req: NextRequest) {
   if (!Array.isArray(matchIds) || !matchIds.every((id) => typeof id === 'number')) {
     return NextResponse.json({ error: 'matchIds must be a number[]' }, { status: 400 });
   }
-  const points = await getMapHeatmap(matchIds);
+  // Independent reads — run together rather than serially.
+  const [points, playersById] = await Promise.all([
+    getMapHeatmap(matchIds),
+    // Defensive: a Supabase hiccup here shouldn't take down the whole heatmap response,
+    // just fall back to `#id` labels (getMapHeatmap already has its own fail-soft path).
+    getPlayersById().catch(() => new Map()),
+  ]);
   // Resolve names only for players who actually appear in the points, so the
   // per-player filter's dropdown doesn't need a second roster fetch.
   const presentIds = new Set(points.map((p) => p.playerId).filter((id): id is number => id !== null));
-  const playersById = await getPlayersById();
   const players = [...presentIds]
     .map((id) => ({ id, name: playersById.get(id)?.name ?? `#${id}` }))
     .sort((a, b) => a.name.localeCompare(b.name));

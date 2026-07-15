@@ -7,7 +7,7 @@
 
 import type { ReplayRound, Side } from './types';
 import type { Faction } from '../types';
-import { roundTickRange, sideOfPlayer, lerp, lerpAngle } from './playback';
+import { roundTickRange, sideOfPlayer, lerp, lerpAngle, bracketBy } from './playback';
 
 /** One player's interpolatable position/state at a moment, offset from round start. */
 export interface TraceFrame {
@@ -25,7 +25,6 @@ export interface TraceFrame {
 export interface PlayerTrace {
   matchId: number;
   round: number;
-  isKnifeRound?: boolean;
   side: Side | null;
   /** Ticks the round's playback window lasted; frames[].t ranges 0..durationTicks. */
   durationTicks: number;
@@ -62,36 +61,26 @@ export function extractPlayerTrace(
   return {
     matchId,
     round: round.round,
-    isKnifeRound: round.isKnifeRound,
     side: sideOfPlayer(round, faction),
     durationTicks: range.end - range.start,
     frames,
   };
 }
 
+const traceFrameT = (f: TraceFrame) => f.t;
+
 /** A trace's interpolated state at shared-clock time `t` (ticks since its round started). */
 export function traceStateAt(trace: PlayerTrace, t: number): TraceState | null {
-  const frames = trace.frames;
-  if (t < 0 || t > trace.durationTicks || frames.length === 0) return null;
-  if (t <= frames[0].t) return { ...frames[0] };
-  const last = frames[frames.length - 1];
-  if (t >= last.t) return { ...last };
-  for (let i = 1; i < frames.length; i++) {
-    if (frames[i].t >= t) {
-      const lo = frames[i - 1];
-      const hi = frames[i];
-      const span = hi.t - lo.t || 1;
-      const frac = (t - lo.t) / span;
-      return {
-        x: lerp(lo.x, hi.x, frac),
-        y: lerp(lo.y, hi.y, frac),
-        yaw: lerpAngle(lo.yaw, hi.yaw, frac),
-        hp: frac < 0.5 ? lo.hp : hi.hp,
-        alive: frac < 0.5 ? lo.alive : hi.alive,
-      };
-    }
-  }
-  return { ...last };
+  if (t < 0 || t > trace.durationTicks) return null;
+  const b = bracketBy(trace.frames, traceFrameT, t);
+  if (!b) return null;
+  return {
+    x: lerp(b.lo.x, b.hi.x, b.t),
+    y: lerp(b.lo.y, b.hi.y, b.t),
+    yaw: lerpAngle(b.lo.yaw, b.hi.yaw, b.t),
+    hp: b.t < 0.5 ? b.lo.hp : b.hi.hp,
+    alive: b.t < 0.5 ? b.lo.alive : b.hi.alive,
+  };
 }
 
 /** Longest round in the set, for the overlay's shared scrubber/clock range. */
