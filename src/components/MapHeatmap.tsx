@@ -175,15 +175,17 @@ export default function MapHeatmap({
       }
       if (!projector) return;
 
-      // Points — density still reads as brightness, but via 'screen' rather than
-      // 'lighter'. 'lighter' sums RGB channels with no ceiling until it clips at
-      // 255, so a busy chokepoint with mixed kill/death markers blows out to solid
-      // white within a few dozen overlapping points, erasing the map underneath.
-      // 'screen' (1 - (1-a)(1-b)) approaches white only asymptotically — it takes
-      // far more stacked points to wash out, so density keeps reading as a color
-      // gradient instead of a flat glare over most of the map. The per-point alpha
-      // is also lowered so a single point still reads as a soft dot rather than a
-      // near-opaque disc, giving more headroom before that asymptote matters.
+      // Points render in two passes so "one point is still clearly visible" and
+      // "many overlapping points don't blow out to white" are controlled
+      // independently instead of fighting over one alpha value.
+      //
+      // Pass 1 — a soft, wide halo (the density *field*): 'screen' rather than
+      // 'lighter', since 'lighter' sums RGB with no ceiling until it clips at 255,
+      // blowing a busy chokepoint out to solid white within a handful of overlapping
+      // points. 'screen' (1 - (1-a)(1-b)) approaches white only asymptotically, so it
+      // takes far more stacked points before an area reads as a flat glare instead of
+      // a color gradient. Its alpha is intentionally low — this pass's job is the
+      // gradient across a cluster, not making a lone point pop.
       ctx.globalCompositeOperation = 'screen';
       for (const p of visible) {
         const c = projector.project(p);
@@ -197,9 +199,8 @@ export default function MapHeatmap({
           ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          // Kills/deaths as soft heat blobs. Alpha is baked into the gradient, so
-          // reset globalAlpha — otherwise a grenade drawn earlier in the loop (0.1)
-          // leaks onto these and dims them.
+          // Alpha is baked into the gradient, so reset globalAlpha — otherwise a
+          // grenade drawn earlier in the loop leaks onto these and dims them.
           ctx.globalAlpha = 1;
           const r = 16;
           const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
@@ -211,6 +212,26 @@ export default function MapHeatmap({
           ctx.fill();
         }
       }
+
+      // Pass 2 — a small, brighter core pinpointing each kill/death exactly, so a
+      // single point (or a handful spread across a chokepoint, not stacked pixel for
+      // pixel) still reads clearly on top of pass 1's low-alpha field. Grenades don't
+      // get one — they're already an area marker, not a pinpoint event. This layer
+      // *can* still wash toward white, but only within its own tiny radius where many
+      // kills genuinely landed at virtually the same spot (e.g. a common angle) —
+      // a real signal worth showing brightly, not the map-wide blowout this replaces.
+      ctx.globalCompositeOperation = 'lighter';
+      for (const p of visible) {
+        if (GRENADE_KINDS.has(p.kind)) continue;
+        const c = projector.project(p);
+        const color = colorOfKind.get(p.kind) ?? '#ffffff';
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
     };
