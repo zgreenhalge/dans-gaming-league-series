@@ -13,7 +13,7 @@ import type { Faction } from '../types';
 import { sideOfPlayer } from './playback';
 
 /** Bump when the artifact shape changes incompatibly. */
-export const HEATMAP_SCHEMA_VERSION = 1;
+export const HEATMAP_SCHEMA_VERSION = 2;
 
 /**
  * Point kinds: where players died / shot from, and where grenades went off. Decoys are
@@ -39,6 +39,8 @@ export interface HeatmapPoint {
   /** Side of the actor this round (attacker for `kill`, victim for `death`, thrower for grenades). */
   side: Side | null;
   faction: Faction | null;
+  /** DGLS player_id of the actor (attacker/victim/thrower) — powers the per-player filter. */
+  playerId: number | null;
 }
 
 export interface HeatmapArtifact {
@@ -67,11 +69,11 @@ export function buildHeatmapPoints(payload: ReplayPayload): HeatmapArtifact {
       if (ev.type !== 'kill') continue;
       if (ev.victim) {
         const { side, faction } = sideFor(ev.victimId);
-        points.push({ kind: 'death', x: ev.victim.x, y: ev.victim.y, round: round.round, side, faction });
+        points.push({ kind: 'death', x: ev.victim.x, y: ev.victim.y, round: round.round, side, faction, playerId: ev.victimId });
       }
       if (ev.attacker && ev.attackerId !== null) {
         const { side, faction } = sideFor(ev.attackerId);
-        points.push({ kind: 'kill', x: ev.attacker.x, y: ev.attacker.y, round: round.round, side, faction });
+        points.push({ kind: 'kill', x: ev.attacker.x, y: ev.attacker.y, round: round.round, side, faction, playerId: ev.attackerId });
       }
     }
 
@@ -81,7 +83,7 @@ export function buildHeatmapPoints(payload: ReplayPayload): HeatmapArtifact {
       // Detonation ≈ the last located point of the flight path.
       const at = g.trajectory[g.trajectory.length - 1];
       const { side, faction } = sideFor(g.throwerId);
-      points.push({ kind: g.type as HeatmapKind, x: at.x, y: at.y, round: round.round, side, faction });
+      points.push({ kind: g.type as HeatmapKind, x: at.x, y: at.y, round: round.round, side, faction, playerId: g.throwerId });
     }
   }
 

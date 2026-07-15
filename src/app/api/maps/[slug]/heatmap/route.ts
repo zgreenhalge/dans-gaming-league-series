@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMapHeatmap } from '@/lib/queries';
+import { getMapHeatmap, getPlayersById } from '@/lib/queries';
 
 // Aggregates the per-match heatmap artifacts for a map's matches. POSTed (not GET) so
 // the caller can hand us the match-id set it already has, avoiding a second heavy map
@@ -18,5 +18,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'matchIds must be a number[]' }, { status: 400 });
   }
   const points = await getMapHeatmap(matchIds);
-  return NextResponse.json({ points }, { headers: { 'Cache-Control': 'private, max-age=60' } });
+  // Resolve names only for players who actually appear in the points, so the
+  // per-player filter's dropdown doesn't need a second roster fetch.
+  const presentIds = new Set(points.map((p) => p.playerId).filter((id): id is number => id !== null));
+  const playersById = await getPlayersById();
+  const players = [...presentIds]
+    .map((id) => ({ id, name: playersById.get(id)?.name ?? `#${id}` }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return NextResponse.json({ points, players }, { headers: { 'Cache-Control': 'private, max-age=60' } });
 }
