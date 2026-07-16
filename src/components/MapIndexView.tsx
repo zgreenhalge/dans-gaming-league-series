@@ -9,7 +9,7 @@ import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import TabBar from './TabBar';
 import type { MapIndexEntry } from '@/lib/types';
 
-type SortKey = 'name' | 'seasonsPlayed' | 'pickCount' | 'banCount' | 'noPickCount' | 'pickAndWon' | 'totalKills' | 'totalAssists';
+type SortKey = 'name' | 'seasonsPlayed' | 'pickCount' | 'banCount' | 'noPickCount' | 'pickAndWon' | 'totalKills' | 'totalAssists' | 'avgRounds';
 type SortDir = 'asc' | 'desc';
 
 function extractSeasonNums(seasons: { name: string }[]): string {
@@ -40,7 +40,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
 
   // Compute per-map filtered stats from statsBySeason
   const displayStats = useMemo(() => {
-    const result = new Map<string, { seasonsPlayed: number; pickCount: number; banCount: number; noPickCount: number; pickAndWon: number; totalKills: number; totalAssists: number }>();
+    const result = new Map<string, { seasonsPlayed: number; pickCount: number; banCount: number; noPickCount: number; pickAndWon: number; totalKills: number; totalAssists: number; avgRounds: number }>();
     for (const map of maps) {
       const relevant = map.statsBySeason.filter((s) => {
         if (!includeRegular && !s.isGauntlet) return false;
@@ -53,14 +53,17 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
           .filter((s) => !s.is_gauntlet)
           .map((s) => extractSeasonNumber(s.name) ?? s.id),
       );
+      const pickCount = relevant.reduce((sum, s) => sum + s.pickCount, 0);
+      const totalRounds = relevant.reduce((sum, s) => sum + s.totalRounds, 0);
       result.set(map.slug, {
         seasonsPlayed: regularPoolNums.size,
-        pickCount: relevant.reduce((sum, s) => sum + s.pickCount, 0),
+        pickCount,
         banCount: relevant.reduce((sum, s) => sum + s.banCount, 0),
         noPickCount: relevant.reduce((sum, s) => sum + s.noPickCount, 0),
         pickAndWon: relevant.reduce((sum, s) => sum + s.pickAndWon, 0),
         totalKills: relevant.reduce((sum, s) => sum + s.totalKills, 0),
         totalAssists: relevant.reduce((sum, s) => sum + s.totalAssists, 0),
+        avgRounds: pickCount > 0 ? totalRounds / pickCount : 0,
       });
     }
     return result;
@@ -191,6 +194,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
                 <th className={colCls('pickAndWon')} onClick={() => handleSort('pickAndWon')}>Pick &amp; won{arrow('pickAndWon')}</th>
                 <th className={colCls('totalKills')} onClick={() => handleSort('totalKills')}>Total kills{arrow('totalKills')}</th>
                 <th className={colCls('totalAssists')} onClick={() => handleSort('totalAssists')}>Total assists{arrow('totalAssists')}</th>
+                <th className={colCls('avgRounds')} onClick={() => handleSort('avgRounds')}>Avg rounds{arrow('avgRounds')}</th>
               </tr>
             </thead>
             <tbody>
@@ -209,7 +213,8 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
                     <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.noPickCount || '—'}</td>
                     <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.pickAndWon || '—'}</td>
                     <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.totalKills || '—'}</td>
-                    <td className="py-2 pl-4 text-right text-[var(--color-text-secondary)]">{stats?.totalAssists || '—'}</td>
+                    <td className="py-2 px-4 text-right text-[var(--color-text-secondary)]">{stats?.totalAssists || '—'}</td>
+                    <td className="py-2 pl-4 text-right text-[var(--color-text-secondary)]">{stats?.pickCount ? stats.avgRounds.toFixed(1) : '—'}</td>
                   </tr>
                 );
               })}

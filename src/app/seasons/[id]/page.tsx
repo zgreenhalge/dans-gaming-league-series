@@ -245,6 +245,7 @@ export default async function SeasonPage({
             schedule={schedule}
             seasonStartDate={season.start_date}
             seasonStatus={season.status}
+            mapPool={season.map_pool}
             gauntletRounds={gauntletRounds}
             gauntletBracketShape={gauntletBracketShape}
             gauntletLeaderboard={gauntletLeaderboard}
@@ -264,6 +265,7 @@ export default async function SeasonPage({
             schedule={schedule}
             seasonStartDate={season.start_date}
             seasonStatus={season.status}
+            mapPool={season.map_pool}
             currentPlayerId={currentPlayerId}
             h2hData={h2hData}
             ehogRatings={ehogRatings}

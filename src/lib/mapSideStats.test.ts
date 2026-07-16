@@ -12,7 +12,10 @@ import assert from 'node:assert/strict';
 import {
   aggregateMapPickBanStats,
   aggregateScoreDistribution,
+  classifyMatchVeto,
+  aggregatePlayerMapStats,
   type MatchPickBanInput,
+  type PlayerMatchInput,
 } from './mapSideStats';
 
 let passed = 0;
@@ -101,6 +104,106 @@ test('aggregateMapPickBanStats: results sort by picked count descending', () => 
   const out = aggregateMapPickBanStats(matches);
   assert.equal(out[0].map, 'B');
   assert.equal(out[0].picked, 2);
+});
+
+test('aggregateMapPickBanStats: avgRounds averages total match rounds (shirts + skins) across picks', () => {
+  const matches = [
+    match({ shirts_pick: 'Palais', final_score: '13-9' }), // 22 rounds
+    match({ shirts_pick: 'Palais', final_score: '16-14' }), // 30 rounds
+  ];
+  const out = aggregateMapPickBanStats(matches);
+  assert.equal(out[0].avgRounds, 26); // (22 + 30) / 2
+});
+
+test('aggregateMapPickBanStats: a map that is only ever banned (never picked) still gets a row', () => {
+  const matches = [match({ shirts_pick: 'Palais', shirts_ban: 'Vertigo' })];
+  const out = aggregateMapPickBanStats(matches);
+  const vertigo = out.find((m) => m.map === 'Vertigo');
+  assert.ok(vertigo);
+  assert.equal(vertigo!.picked, 0);
+  assert.equal(vertigo!.banned, 1);
+});
+
+test('aggregateMapPickBanStats: no-pick — a pool map untouched by veto in a played, non-playoff match', () => {
+  const matches = [
+    match({
+      shirts_pick: 'Palais',
+      shirts_ban: 'Vertigo',
+      map_pool: ['Palais', 'Vertigo', 'Nuke'],
+    }),
+  ];
+  const out = aggregateMapPickBanStats(matches);
+  const nuke = out.find((m) => m.map === 'Nuke');
+  assert.ok(nuke);
+  assert.equal(nuke!.noPicked, 1);
+  assert.equal(nuke!.picked, 0);
+  assert.equal(nuke!.banned, 0);
+});
+
+test('classifyMatchVeto: no-pick is suppressed for playoff matches and matches without a map_pool', () => {
+  const playoff = classifyMatchVeto({
+    final_score: '13-9', picked_map: 'Palais', shirts_pick: null,
+    is_playoff_game: true, map_pool: ['Palais', 'Nuke'],
+  });
+  assert.deepEqual(playoff.noPicked, []);
+
+  const noPool = classifyMatchVeto({
+    final_score: '13-9', picked_map: 'Palais', shirts_pick: null,
+    is_playoff_game: false, map_pool: null,
+  });
+  assert.deepEqual(noPool.noPicked, []);
+});
+
+test('classifyMatchVeto: an unplayed match classifies as empty even with bans/pool set', () => {
+  const out = classifyMatchVeto({
+    final_score: null, picked_map: 'Palais', shirts_pick: null,
+    shirts_ban: 'Vertigo', is_playoff_game: false, map_pool: ['Palais', 'Vertigo', 'Nuke'],
+  });
+  assert.deepEqual(out, { picked: [], banned: [], noPicked: [] });
+});
+
+function playerMatch(opts: Partial<PlayerMatchInput>): PlayerMatchInput {
+  return {
+    final_score: '13-9',
+    map: null,
+    faction: 'SHIRTS',
+    skins_starting_side: null,
+    shirts_pick: null,
+    picked_map: null,
+    is_win: false,
+    rounds_won: 0,
+    rounds_played: 0,
+    ...opts,
+  };
+}
+
+test('aggregatePlayerMapStats: banned/no-picked are counted from the match veto, independent of whether the player played that map', () => {
+  const matches = [
+    playerMatch({
+      map: 'Palais', shirts_pick: 'Palais', faction: 'SHIRTS',
+      shirts_ban2: 'Vertigo', map_pool: ['Palais', 'Vertigo', 'Nuke'],
+    }),
+  ];
+  const out = aggregatePlayerMapStats(matches);
+  const vertigo = out.find((m) => m.map === 'Vertigo');
+  const nuke = out.find((m) => m.map === 'Nuke');
+  assert.ok(vertigo);
+  assert.equal(vertigo!.banned, 1);
+  assert.equal(vertigo!.games, 0);
+  assert.ok(nuke);
+  assert.equal(nuke!.noPicked, 1);
+  assert.equal(nuke!.games, 0);
+});
+
+test('aggregatePlayerMapStats: avgRounds averages the player\'s own rounds_played across games on that map', () => {
+  const matches = [
+    playerMatch({ map: 'Palais', rounds_played: 22 }),
+    playerMatch({ map: 'Palais', rounds_played: 16 }),
+  ];
+  const out = aggregatePlayerMapStats(matches);
+  const palais = out.find((m) => m.map === 'Palais');
+  assert.ok(palais);
+  assert.equal(palais!.avgRounds, 19); // (22 + 16) / 2
 });
 
 test('aggregateScoreDistribution: loser-round buckets (crushed/convincing/competitive/close) and CRAZY', () => {

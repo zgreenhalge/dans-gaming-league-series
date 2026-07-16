@@ -594,10 +594,13 @@ export default function PlayerView({
                         <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Map</th>
                         <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Games</th>
                         <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Wins</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Picked</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Pick W</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Picks</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Bans</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">No-picks</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Pick &amp; won</th>
                         <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">CT</th>
                         <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">T</th>
+                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Avg rounds</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -607,9 +610,12 @@ export default function PlayerView({
                           <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.games}</td>
                           <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.wins}</td>
                           <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.picked}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.banned}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.noPicked}</td>
                           <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
                           <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.ctPlayed}</td>
-                          <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.tPlayed}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.tPlayed}</td>
+                          <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.games > 0 ? m.avgRounds.toFixed(1) : '—'}</td>
                         </tr>
                       ))}
                     </tbody>

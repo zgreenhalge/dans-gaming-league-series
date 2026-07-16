@@ -33,6 +33,7 @@ export default function CombinedSeasonTabView({
   schedule,
   seasonStartDate,
   seasonStatus,
+  mapPool,
   gauntletRounds,
   gauntletBracketShape,
   gauntletLeaderboard,
@@ -49,6 +50,8 @@ export default function CombinedSeasonTabView({
   schedule: WeekWithMatches[];
   seasonStartDate: string | null;
   seasonStatus: string;
+  /** The regular season's map pool — feeds the Bans/No-picks columns in the Maps & Sides tab. */
+  mapPool?: string[] | null;
   gauntletRounds: GauntletRound[];
   gauntletBracketShape: BracketPod[];
   gauntletLeaderboard: LeaderboardRowWithId[];
@@ -83,6 +86,7 @@ export default function CombinedSeasonTabView({
           schedule={schedule}
           seasonStartDate={seasonStartDate}
           seasonStatus={seasonStatus}
+          mapPool={mapPool}
           currentPlayerId={currentPlayerId}
           h2hData={h2hData}
           subStyle
