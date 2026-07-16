@@ -9,7 +9,7 @@
 // and MatchZy leaves the exact same kind of residue for those — but they have no `matches` row to
 // derive an age from, and we don't care about them at all, so they're deleted immediately rather
 // than aged. A file whose id *does* match a real `matches` row is only eligible once it's old
-// enough that nothing still needs it locally (7-day default), and — for the demo specifically —
+// enough that nothing still needs it locally (3-day default), and — for the demo specifically —
 // only once R2 has its own confirmed copy. A tracked match this script can't confidently place in
 // time (no resolved job, no scheduled_at) is left alone rather than guessed at.
 //
@@ -19,8 +19,9 @@
 //
 // Env: DATHOST_EMAIL, DATHOST_PASSWORD, DATHOST_SERVER_ID (or pass a server id as argv[2]),
 // NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CLOUDFLARE_R2_* (for the demo R2 check).
-// RETENTION_DAYS overrides the default 7-day minimum age (matches don't need same-week local
-// backups; the demo's own R2 presence check is a stronger, independent safety condition anyway).
+// RETENTION_DAYS overrides the default 3-day minimum age (auto-upload gets matches into R2 almost
+// immediately, so local copies don't need to sit around; the demo's own R2 presence check is a
+// stronger, independent safety condition anyway).
 //
 // The workflow itself always runs on a fixed daily cron — how *often* it actually does anything is
 // a separate, admin-adjustable knob (CLEANUP_INTERVAL_DAYS, a repo Actions variable set from
@@ -35,7 +36,7 @@ import { r2, R2_BUCKET, demoKey } from '../src/lib/r2';
 import { HeadObjectCommand } from '@aws-sdk/client-s3';
 
 const DRY_RUN = !/^(0|false)$/i.test(process.env.DRY_RUN ?? 'true');
-const RETENTION_DAYS = Number(process.env.RETENTION_DAYS ?? '7');
+const RETENTION_DAYS = Number(process.env.RETENTION_DAYS ?? '3');
 const CLEANUP_INTERVAL_DAYS = Number(process.env.CLEANUP_INTERVAL_DAYS ?? '1');
 const DEMO_INGEST_DONE = new Set(['confirmed', 'dismissed']);
 
