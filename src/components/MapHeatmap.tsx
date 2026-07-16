@@ -36,6 +36,23 @@ const GRENADE_RADIUS: Partial<Record<HeatmapKind, number>> = {
 
 const MAX_SIDE = 560;
 
+// Point rendering: two passes so "one point is still clearly visible" and "many
+// overlapping points don't blow out to white" are controlled independently instead of
+// fighting over one alpha value. Pass 1 is a soft, wide halo (the density *field*) —
+// 'screen' rather than 'lighter', since 'lighter' sums RGB with no ceiling until it
+// clips at 255; 'screen' (1 - (1-a)(1-b)) approaches white only asymptotically, so it
+// takes far more stacked points before an area reads as a flat glare instead of a
+// color gradient. Pass 2 is a small, brighter core pinpointing each kill/death exactly
+// (grenades don't get one — they're already an area marker), so a single point still
+// pops on top of pass 1's low-alpha field.
+const HALO_RADIUS = 16;
+const HALO_ALPHA = 0.26;
+const GRENADE_HALO_ALPHA = 0.14;
+const CORE_DOT_RADIUS = 2.5;
+const CORE_DOT_ALPHA = 0.24;
+/** Alpha the calibrated radar image is drawn at, so points read clearly through it. */
+const RADAR_ALPHA = 0.85;
+
 function boundsOf(points: MapHeatmapPoint[]): Bounds | null {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const p of points) {
@@ -62,8 +79,15 @@ export default function MapHeatmap({
   // null = still loading the per-match artifacts (fetched only when this tab mounts, so
   // the map page no longer pays the per-match R2 fan-out on every render).
   const [points, setPoints] = useState<MapHeatmapPoint[] | null>(null);
+  // Players present in the fetched points, for the per-player filter dropdown.
+  const [players, setPlayers] = useState<{ id: number; name: string }[]>([]);
   const [active, setActive] = useState<Set<string>>(new Set(['death']));
   const [side, setSide] = useState<SideFilter>('all');
+  // The user's explicit pick; falls back to "all players" (null) once it no longer
+  // appears in `availablePlayers` — e.g. the season filter narrows past it, or a
+  // slug/matchIds change fetches a new roster — rather than resetting it via an
+  // effect. A derived value, not a second source of truth to keep in sync.
+  const [explicitPlayerId, setExplicitPlayerId] = useState<number | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -75,9 +99,17 @@ export default function MapHeatmap({
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ matchIds }),
     })
-      .then((res) => (res.ok ? res.json() : { points: [] }))
-      .then((body) => !cancelled && setPoints(body.points ?? []))
-      .catch(() => !cancelled && setPoints([]));
+      .then((res) => (res.ok ? res.json() : { points: [], players: [] }))
+      .then((body) => {
+        if (cancelled) return;
+        setPoints(body.points ?? []);
+        setPlayers(body.players ?? []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPoints([]);
+        setPlayers([]);
+      });
     return () => {
       cancelled = true;
     };
@@ -99,15 +131,33 @@ export default function MapHeatmap({
     return m;
   }, []);
 
+  // Only offer players who actually have a point within the current season filter —
+  // `players` (from the API) covers every match in `matchIds`, which is broader than
+  // `visibleMatchIds` once the season filter narrows it.
+  const availablePlayers = useMemo(() => {
+    const ids = new Set<number>();
+    for (const p of points ?? []) {
+      if (visibleMatchIds.has(p.matchId) && p.playerId !== null) ids.add(p.playerId);
+    }
+    const nameById = new Map(players.map((p) => [p.id, p.name]));
+    return [...ids]
+      .map((id) => ({ id, name: nameById.get(id) ?? `#${id}` }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [points, visibleMatchIds, players]);
+
+  const playerId =
+    explicitPlayerId !== null && availablePlayers.some((p) => p.id === explicitPlayerId) ? explicitPlayerId : null;
+
   const visible = useMemo(
     () =>
       (points ?? []).filter(
         (p) =>
           visibleMatchIds.has(p.matchId) &&
           activeKinds.has(p.kind) &&
-          (side === 'all' || p.side === side),
+          (side === 'all' || p.side === side) &&
+          (playerId === null || p.playerId === playerId),
       ),
-    [points, visibleMatchIds, activeKinds, side],
+    [points, visibleMatchIds, activeKinds, side, playerId],
   );
 
   useEffect(() => {
@@ -141,40 +191,69 @@ export default function MapHeatmap({
           x: calibration.posX + calibration.imageWidth * calibration.scale,
           y: calibration.posY - calibration.imageHeight * calibration.scale,
         });
-        ctx.globalAlpha = 0.85;
+        ctx.globalAlpha = RADAR_ALPHA;
         ctx.drawImage(radarImage.current, tl.x, tl.y, br.x - tl.x, br.y - tl.y);
         ctx.globalAlpha = 1;
       }
       if (!projector) return;
 
-      // Points — additive so density reads as brightness.
-      ctx.globalCompositeOperation = 'lighter';
-      for (const p of visible) {
-        const c = projector.project(p);
-        const color = colorOfKind.get(p.kind) ?? '#ffffff';
-        if (GRENADE_KINDS.has(p.kind)) {
+      // Project + resolve color once per point, shared by both render passes below
+      // rather than recomputed in each.
+      const plotted = visible.map((p) => ({
+        p,
+        c: projector.project(p),
+        color: colorOfKind.get(p.kind) ?? '#ffffff',
+        isGrenade: GRENADE_KINDS.has(p.kind),
+      }));
+
+      // Pass 1 — a soft, wide halo (the density *field*): 'screen' rather than
+      // 'lighter', since 'lighter' sums RGB with no ceiling until it clips at 255,
+      // blowing a busy chokepoint out to solid white within a handful of overlapping
+      // points. 'screen' (1 - (1-a)(1-b)) approaches white only asymptotically, so it
+      // takes far more stacked points before an area reads as a flat glare instead of
+      // a color gradient. Its alpha is intentionally low — this pass's job is the
+      // gradient across a cluster, not making a lone point pop.
+      ctx.globalCompositeOperation = 'screen';
+      for (const { p, c, color, isGrenade } of plotted) {
+        if (isGrenade) {
           // Plot grenades as their effect area.
           const r = Math.max(4, projector.scaleLength(GRENADE_RADIUS[p.kind] ?? 100));
           ctx.fillStyle = color;
-          ctx.globalAlpha = 0.22;
+          ctx.globalAlpha = GRENADE_HALO_ALPHA;
           ctx.beginPath();
           ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          // Kills/deaths as soft heat blobs. Alpha is baked into the gradient, so
-          // reset globalAlpha — otherwise a grenade drawn earlier in the loop (0.1)
-          // leaks onto these and dims them.
+          // Alpha is baked into the gradient, so reset globalAlpha — otherwise a
+          // grenade drawn earlier in the loop leaks onto these and dims them.
           ctx.globalAlpha = 1;
-          const r = 16;
-          const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
-          g.addColorStop(0, hexAlpha(color, 0.5));
+          const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, HALO_RADIUS);
+          g.addColorStop(0, hexAlpha(color, HALO_ALPHA));
           g.addColorStop(1, hexAlpha(color, 0));
           ctx.fillStyle = g;
           ctx.beginPath();
-          ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+          ctx.arc(c.x, c.y, HALO_RADIUS, 0, Math.PI * 2);
           ctx.fill();
         }
       }
+
+      // Pass 2 — a small, brighter core pinpointing each kill/death exactly, so a
+      // single point (or a handful spread across a chokepoint, not stacked pixel for
+      // pixel) still reads clearly on top of pass 1's low-alpha field. Grenades don't
+      // get one — they're already an area marker, not a pinpoint event. This layer
+      // can still wash toward white, but only within its own tiny radius, where many
+      // kills genuinely landed at virtually the same spot (e.g. a common angle) — a
+      // real signal worth showing brightly.
+      ctx.globalCompositeOperation = 'lighter';
+      for (const { c, color, isGrenade } of plotted) {
+        if (isGrenade) continue;
+        ctx.globalAlpha = CORE_DOT_ALPHA;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, CORE_DOT_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
     };
@@ -226,21 +305,37 @@ export default function MapHeatmap({
             {l.label}
           </button>
         ))}
-        <div className="ml-auto flex items-center gap-1">
-          {(['all', 'CT', 'T'] as SideFilter[]).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSide(s)}
-              className={`border px-1.5 py-0.5 font-mono ${
-                side === s
-                  ? 'border-[var(--color-text-primary)] text-[var(--color-text-primary)]'
-                  : 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)]'
-              }`}
+        <div className="ml-auto flex items-center gap-2">
+          {availablePlayers.length > 0 && (
+            <select
+              value={playerId ?? ''}
+              onChange={(e) => setExplicitPlayerId(e.target.value === '' ? null : Number(e.target.value))}
+              className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-1.5 py-0.5 font-mono text-[var(--color-text-primary)]"
             >
-              {s === 'all' ? 'Both' : s}
-            </button>
-          ))}
+              <option value="">All players</option>
+              {availablePlayers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="flex items-center gap-1">
+            {(['all', 'CT', 'T'] as SideFilter[]).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSide(s)}
+                className={`border px-1.5 py-0.5 font-mono ${
+                  side === s
+                    ? 'border-[var(--color-text-primary)] text-[var(--color-text-primary)]'
+                    : 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)]'
+                }`}
+              >
+                {s === 'all' ? 'Both' : s}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { PlayerHistoryRow, TrophyEntry, H2HData, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { deriveRates, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
+import { deriveRates, extractSeasonNumber, groupByMap, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import DevGate from './DevGate';
@@ -15,6 +15,7 @@ import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import Sparkline from './Sparkline';
 import { CountdownTimer } from './CountdownTimer';
 import MatchupsTab from './MatchupsTab';
+import PlayerTrailsTab from './PlayerTrailsTab';
 import EhogTimeline from './EhogTimeline';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import StatTileGrid from './StatTileGrid';
@@ -22,7 +23,7 @@ import TabBar from './TabBar';
 
 type Filter = 'career' | number;
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
-type PlayerTab = 'stats' | 'matches' | 'advanced' | 'trophies' | 'matchups';
+type PlayerTab = 'stats' | 'matches' | 'advanced' | 'trophies' | 'matchups' | 'trails';
 type MatchesSubTab = 'history' | 'upcoming';
 
 const MEDAL_COLORS: Record<1 | 2 | 3, string> = {
@@ -125,14 +126,7 @@ interface MapAgg {
 }
 
 function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
-  const buckets = new Map<string, { display: string; rows: PlayerHistoryRow[] }>();
-  for (const r of rows) {
-    if (!r.map) continue;
-    const key = r.map.trim().toLowerCase();
-    const entry = buckets.get(key) ?? { display: r.map.trim(), rows: [] };
-    entry.rows.push(r);
-    buckets.set(key, entry);
-  }
+  const buckets = groupByMap(rows, (r) => r.map);
   const out: MapAgg[] = [];
   for (const { display, rows: list } of buckets.values()) {
     const a = aggregate(list);
@@ -214,6 +208,14 @@ export default function PlayerView({
 }) {
   const { data: session } = useSession();
   const loggedInPlayerId = session?.user?.playerId ?? null;
+
+  const playerName = useMemo(() => {
+    for (const r of history) {
+      const p = [...r.shirts, ...r.skins].find((pp) => pp.player_id === playerId);
+      if (p) return p.player_name;
+    }
+    return '';
+  }, [history, playerId]);
 
   const { regularSeasons, gauntletSeasons, regularToGauntlet } = useMemo(() => {
     const regMap = new Map<number, { id: number; name: string }>();
@@ -375,6 +377,16 @@ export default function PlayerView({
     { key: 'advanced', label: 'Advanced Stats' },
     { key: 'matchups', label: 'H2H' },
   ];
+  // Gated on the full career history (not the season-filtered `filtered`), same as
+  // Trophy Case below — a tab's mere existence shouldn't flicker as the season filter
+  // is toggled (docs/patterns.md "Gate a tab on data, not 'always render it'"). Requires
+  // an actual generated replay (`replay_status === 'ready'`), not just a played match —
+  // a played match with no replay yet has nothing for this tab to show. There's no
+  // admin action reachable from this page that would produce a first replay, so unlike
+  // MatchRecapTab's 2D Replay sub-tab this stays hidden rather than shown empty.
+  if (history.some((r) => r.map && isPlayedScore(r.final_score) && r.replay_status === 'ready')) {
+    playerTabs.push({ key: 'trails', label: 'Pathing' });
+  }
   if (trophies.length > 0) {
     playerTabs.push({ key: 'trophies', label: `Trophy Case${filteredTrophies.length > 0 ? ` (${filteredTrophies.length})` : ''}` });
   }
@@ -803,6 +815,11 @@ export default function PlayerView({
       {/* Matchups tab */}
       {tab === 'matchups' && (
         <MatchupsTab playerId={playerId} h2hData={h2hData} />
+      )}
+
+      {/* Pathing tab — replay every round the player's played on a map, at once */}
+      {tab === 'trails' && (
+        <PlayerTrailsTab playerId={playerId} playerName={playerName} history={filtered} />
       )}
 
       {/* Trophy Case tab */}

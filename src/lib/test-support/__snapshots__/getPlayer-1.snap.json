@@ -107,7 +107,8 @@
       "shirts_ban": null,
       "shirts_ban2": null,
       "skins_ban1": null,
-      "skins_ban2": null
+      "skins_ban2": null,
+      "replay_status": "none"
     },
     {
       "kills": 22,
@@ -205,7 +206,8 @@
       "shirts_ban": null,
       "shirts_ban2": null,
       "skins_ban1": null,
-      "skins_ban2": null
+      "skins_ban2": null,
+      "replay_status": "ready"
     },
     {
       "kills": 0,
@@ -303,7 +305,8 @@
       "shirts_ban": null,
       "shirts_ban2": null,
       "skins_ban1": null,
-      "skins_ban2": null
+      "skins_ban2": null,
+      "replay_status": "none"
     },
     {
       "kills": 20,
@@ -401,7 +404,8 @@
       "shirts_ban": "Vertigo",
       "shirts_ban2": "Nuke",
       "skins_ban1": "Inferno",
-      "skins_ban2": "Overpass"
+      "skins_ban2": "Overpass",
+      "replay_status": "ready"
     }
   ],
   "trophies": []
