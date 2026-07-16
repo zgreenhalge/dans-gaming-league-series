@@ -27,6 +27,9 @@ export interface PlayerHistoryRow extends PlayerMatchStat {
   shirts_ban2: string | null;
   skins_ban1: string | null;
   skins_ban2: string | null;
+  is_playoff_game: boolean;
+  /** This match's season's regular-season map pool. `null` for gauntlet seasons. */
+  map_pool: string[] | null;
 }
 
 export interface PlayerDetail {
@@ -180,6 +183,8 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         shirts_ban2: m.shirts_ban2,
         skins_ban1: m.skins_ban1,
         skins_ban2: m.skins_ban2,
+        is_playoff_game: m.is_playoff_game,
+        map_pool: se.is_gauntlet ? null : se.map_pool,
       };
     })
     .filter((r): r is PlayerHistoryRow => r !== null)

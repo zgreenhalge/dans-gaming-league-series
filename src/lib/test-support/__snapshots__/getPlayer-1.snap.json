@@ -107,7 +107,11 @@
       "shirts_ban": null,
       "shirts_ban2": null,
       "skins_ban1": null,
-      "skins_ban2": null
+      "skins_ban2": null,
+      "is_playoff_game": false,
+      "map_pool": [
+        "Foroglio"
+      ]
     },
     {
       "kills": 22,
@@ -205,7 +209,9 @@
       "shirts_ban": null,
       "shirts_ban2": null,
       "skins_ban1": null,
-      "skins_ban2": null
+      "skins_ban2": null,
+      "is_playoff_game": true,
+      "map_pool": null
     },
     {
       "kills": 0,
@@ -303,7 +309,13 @@
       "shirts_ban": null,
       "shirts_ban2": null,
       "skins_ban1": null,
-      "skins_ban2": null
+      "skins_ban2": null,
+      "is_playoff_game": false,
+      "map_pool": [
+        "Foroglio",
+        "Cobblestone",
+        "Vertigo"
+      ]
     },
     {
       "kills": 20,
@@ -401,7 +413,13 @@
       "shirts_ban": "Vertigo",
       "shirts_ban2": "Nuke",
       "skins_ban1": "Inferno",
-      "skins_ban2": "Overpass"
+      "skins_ban2": "Overpass",
+      "is_playoff_game": false,
+      "map_pool": [
+        "Foroglio",
+        "Cobblestone",
+        "Vertigo"
+      ]
     }
   ],
   "trophies": []

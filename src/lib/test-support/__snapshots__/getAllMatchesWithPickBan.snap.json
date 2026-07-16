@@ -67,7 +67,16 @@
     ],
     "picked_map": "Foroglio",
     "shirts_pick": "Foroglio",
-    "skins_starting_side": "CT"
+    "skins_starting_side": "CT",
+    "shirts_ban": "Vertigo",
+    "shirts_ban2": "Nuke",
+    "skins_ban1": "Inferno",
+    "skins_ban2": "Overpass",
+    "map_pool": [
+      "Foroglio",
+      "Cobblestone",
+      "Vertigo"
+    ]
   },
   {
     "match_id": 200,
@@ -137,7 +146,12 @@
     ],
     "picked_map": "Foroglio",
     "shirts_pick": "Foroglio",
-    "skins_starting_side": "T"
+    "skins_starting_side": "T",
+    "shirts_ban": null,
+    "shirts_ban2": null,
+    "skins_ban1": null,
+    "skins_ban2": null,
+    "map_pool": null
   },
   {
     "match_id": 300,
@@ -207,6 +221,11 @@
     ],
     "picked_map": "Vertigo",
     "shirts_pick": "Vertigo",
-    "skins_starting_side": "CT"
+    "skins_starting_side": "CT",
+    "shirts_ban": null,
+    "shirts_ban2": null,
+    "skins_ban1": null,
+    "skins_ban2": null,
+    "map_pool": null
   }
 ]
