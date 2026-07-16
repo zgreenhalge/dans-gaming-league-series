@@ -28,7 +28,13 @@ function playerInMatch(
   );
 }
 
-type RegularMode = { kind: 'regular'; schedule: WeekWithMatches[]; seasonStartDate: string | null };
+type RegularMode = {
+  kind: 'regular';
+  schedule: WeekWithMatches[];
+  seasonStartDate: string | null;
+  /** The season's regular-season map pool — feeds the Bans/No-picks columns in the Maps & Sides tab. */
+  mapPool?: string[] | null;
+};
 type GauntletMode = {
   kind: 'gauntlet';
   rounds: GauntletRound[];
@@ -70,6 +76,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const bracketShape = props.kind === 'gauntlet' ? props.bracketShape : EMPTY_BRACKET_SHAPE;
   const seasonStartDate = props.kind === 'regular' ? props.seasonStartDate : null;
   const seedNames = props.kind === 'gauntlet' ? props.seedNames : undefined;
+  const mapPool = props.kind === 'regular' ? (props.mapPool ?? null) : null;
 
   const gauntletRanking = useMemo(
     () => (isGauntlet ? canonicalGauntletRankMap(rounds) : undefined),
@@ -161,8 +168,14 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
       skins_starting_side: m.skins_starting_side,
       shirts_stats: m.shirts_stats,
       skins_stats: m.skins_stats,
+      shirts_ban: m.shirts_ban,
+      shirts_ban2: m.shirts_ban2,
+      skins_ban1: m.skins_ban1,
+      skins_ban2: m.skins_ban2,
+      is_playoff_game: m.is_playoff_game,
+      map_pool: mapPool,
     }));
-  }, [isGauntlet, rounds, schedule]);
+  }, [isGauntlet, rounds, schedule, mapPool]);
 
   const allOpen = isGauntlet
     ? displayRounds.length > 0 && displayRounds.every((r) => openItems.has(r.round_number))
