@@ -639,6 +639,8 @@ export interface MapHeatmapPoint {
   x: number;
   y: number;
   side: 'CT' | 'T' | null;
+  /** `null` for points from an artifact predating `HEATMAP_SCHEMA_VERSION` 2, or an unresolved actor. */
+  playerId: number | null;
 }
 
 /**
@@ -661,6 +663,7 @@ export async function getMapHeatmap(matchIds: number[]): Promise<MapHeatmapPoint
           x: p.x,
           y: p.y,
           side: p.side,
+          playerId: p.playerId ?? null,
         }));
       } catch {
         return [];

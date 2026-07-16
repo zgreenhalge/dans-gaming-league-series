@@ -227,15 +227,23 @@ projector-derived radius as its paint) rather than compositing pixel-level erasu
 ## Heatmap tab
 
 Kill/death/grenade locations on `/maps/[slug]`, respecting the season filter (shared with the rest
-of the page) plus a CT/T side toggle and per-layer toggles, plotted via the shared `project.ts`
+of the page) plus a CT/T side toggle, a per-player filter, and per-layer toggles, plotted via the shared `project.ts`
 (real radar when calibrated, else auto-fit) over the `heatmap.json` artifacts each match's
 `replay-extract` run produces — there is no separate Action for this. The aggregation is **lazy**:
 `MapHeatmap` (with the shared `useMapRadar` hook) fetches the points only when the Heatmap tab
 opens — it POSTs the map's match ids to `/api/maps/[slug]/heatmap`, which calls `getMapHeatmap()` to
-fan out one R2 GET per match, so the map page never pays that fan-out on every render. `MapHeatmap`
-then renders the density additively on a canvas, with grenades drawn as their effect area. (Decoys
-are excluded from `heatmap.json` entirely — `buildHeatmapPoints()` skips them; they carry no signal
-worth plotting and the tab has no decoy layer.)
+fan out one R2 GET per match, so the map page never pays that fan-out on every render. The route also
+resolves the display names of every `playerId` present in the returned points (`getPlayersById()`)
+and returns them alongside as `players`, so `MapHeatmap` can offer a per-player filter dropdown
+without a second roster fetch. `MapHeatmap` then renders the density additively on a canvas, with
+grenades drawn as their effect area. (Decoys are excluded from `heatmap.json` entirely —
+`buildHeatmapPoints()` skips them; they carry no signal worth plotting and the tab has no decoy
+layer.)
+
+Each point carries the DGLS `player_id` of its actor (attacker for `kill`, victim for `death`,
+thrower for a grenade) as `playerId` (`HEATMAP_SCHEMA_VERSION` 2). A point with `playerId: null` is
+simply excluded once a player filter is applied; re-extracting that match's replay
+(`replay-extract-all`, see "Background jobs" below) backfills it.
 
 `MapHeatmap` is reused in two more places (#128), both passing explicit match-id sets to the same
 component/route: the **Recap tab**'s *Heatmap* sub-tab scopes it to the single match
@@ -252,6 +260,54 @@ The player loads a map's calibration via `GET /api/maps/[slug]/calibration` + `�
 manual radar-calibration/correction UI — `radar-build`'s automated extraction from the workshop VPK
 has proven accurate across the whole map pool (it calibrated the entire pool by running the Action
 from the Actions UI), so one wasn't needed.
+
+## Pathing tab
+
+Replays every round a chosen player played on one map **at once**, each round's clock zeroed to its
+own start so the same player's many rounds move simultaneously as translucent, additively-blended
+ghosts — common paths/timings read as brighter density (issue #128). The pure extraction lives in
+`src/lib/replay/aggregate.ts`: `extractPlayerTrace(matchId, round, playerId, faction)` pulls one
+player's `frames[]` out of a `ReplayRound` into a `PlayerTrace` (positions re-timed to `t = tick -
+round.startTick`, `durationTicks` = the round's playback length), and `traceStateAt(trace, t)`
+interpolates it at an arbitrary shared-clock tick, returning `null` once `t` is past that round's own
+end — so a short round's ghost simply vanishes while longer rounds keep playing. Both are
+runtime-agnostic (no DOM, no fetch), reusing `playback.ts`'s `lerp`/`lerpAngle`/`roundTickRange` so the
+interpolation matches the single-round player exactly.
+
+**On death**, `extractPlayerTrace` stops reading that round's frames the moment it sees the player
+dead — it appends one final frame frozen at their *last known-alive* position (not whatever the
+engine reports for a dead player, which can drift back toward spawn) and reads no further, so the
+ghost reads as a corpse marker sitting where they actually died. `traceStateAt`'s end-of-frames clamp
+then holds that frozen position for the rest of the round. If the player is already dead on the very
+first frame they appear in (no prior alive position exists to freeze at), that frame's own position is
+used as a last resort instead — a possibly-imprecise corpse marker beats the round silently vanishing
+from the overlay and its round count.
+
+The shared renderer, `<PlayerRoundOverlay>`
+(`src/components/PlayerRoundOverlay.tsx`), takes a `PlayerTrace[]` + `tickRate` + map slug and owns the
+canvas, radar background (`useMapRadar`), CT/T side toggle, and a play/pause/speed/scrub transport
+driven by one clock shared across every trace — it doesn't care how the traces were sourced, so both
+scopes below reuse it as-is:
+
+- **Match-scoped** (`MatchRecapTab`'s *Pathing* sub-tab, `MatchPlayerTrails.tsx`): picks one of
+  the match's 4 rostered players and overlays every round of *that one match* they played. Fetches its
+  own copy of `replay.json` from the existing `GET /api/matches/[id]/replay/payload` (same endpoint the
+  2D Replay sub-tab uses) rather than sharing state with it, matching the Heatmap sub-tab's
+  independent-lazy-fetch pattern, and extracts traces client-side.
+- **Career-scoped** (the player page's *Pathing* tab, `PlayerTrailsTab.tsx`): the tab itself is
+  hidden unless `PlayerHistoryRow.replay_status === 'ready'` for at least one of the player's matches
+  (`PlayerView.tsx`, see `docs/patterns.md`'s tab-visibility rule) — a played match alone isn't enough,
+  since it may not have a generated replay yet. Once shown, it picks one map from the player's
+  (season-filtered) history, restricted the same way to matches with a ready replay, then POSTs that
+  map's match ids to
+  `POST /api/players/[id]/replay-trails`, which calls `getPlayerRoundTraces()`
+  (`src/lib/queries/replay.ts`) — a sibling to `getMapHeatmap()` that fans out one R2 GET of the full
+  `replay.json` per match (not the compact `heatmap.json`, since a trace needs the actual per-tick
+  `frames[]`), reads the player's `faction` straight off each payload's own roster, and flattens every
+  match's `extractPlayerTrace()` results into one list. Matches without a ready replay, or where the
+  player isn't on the roster, are silently skipped — same tolerance as `getMapHeatmap`, but a heavier
+  per-match cost: it reads the full payload rather than the compact `heatmap.json`, so it inherits the
+  Heatmap tab's linear-fan-out scaling caveat (see above) sooner, at a lower match count.
 
 ## Background jobs (GitHub Actions)
 

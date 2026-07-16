@@ -30,6 +30,7 @@ import {
   roundTickRange,
 } from './playback';
 import { buildHeatmapPoints } from './heatmap';
+import { extractPlayerTrace, traceStateAt, maxDurationTicks } from './aggregate';
 import { parseOverview, workshopIdFromUrl } from './radar';
 import type { ReplayRound, ReplayFrame, ReplayPayload, ReplayPlayerFrame } from './types';
 
@@ -417,14 +418,16 @@ test('heatmap: a kill yields a death point (victim) and a kill point (attacker),
   } as unknown as ReplayPayload;
 
   const art = buildHeatmapPoints(payload);
-  assert.equal(art.version, 1);
+  assert.equal(art.version, 2);
   const death = art.points.find((p) => p.kind === 'death')!;
   const kill = art.points.find((p) => p.kind === 'kill')!;
   approx(death.x, 30);
   approx(death.y, 40);
   assert.equal(death.side, 'T'); // victim is SKINS = T this round
+  assert.equal(death.playerId, 2);
   approx(kill.x, 10);
   assert.equal(kill.side, 'CT'); // attacker is SHIRTS = CT this round
+  assert.equal(kill.playerId, 1);
 });
 
 test('heatmap: grenade contributes a detonation point of its type; unknown is skipped', () => {
@@ -448,7 +451,85 @@ test('heatmap: grenade contributes a detonation point of its type; unknown is sk
   assert.equal(smoke.length, 1);
   approx(smoke[0].x, 55); // detonation = last trajectory point
   assert.equal(smoke[0].side, 'T');
+  assert.equal(smoke[0].playerId, 1);
   assert.equal(art.points.some((p) => (p.kind as string) === 'unknown'), false);
+});
+
+// --- aggregate: per-player trace extraction + time-zeroed interpolation ---
+test('aggregate: extractPlayerTrace zeroes ticks to the round start and carries side', () => {
+  const r = round({
+    round: 3,
+    sideByFaction: { SHIRTS: 'T', SKINS: 'CT' },
+    frames: [
+      frame(50, [pf(1, 0, 0), pf(2, 100, 100)]),
+      frame(60, [pf(1, 10, 0), pf(2, 100, 100)]),
+    ],
+  });
+  const trace = extractPlayerTrace(7, r, 1, 'SHIRTS');
+  assert.ok(trace);
+  assert.equal(trace!.matchId, 7);
+  assert.equal(trace!.round, 3);
+  assert.equal(trace!.side, 'T');
+  assert.equal(trace!.durationTicks, 10);
+  assert.equal(trace!.frames[0].t, 0);
+  assert.equal(trace!.frames[1].t, 10);
+});
+
+test('aggregate: extractPlayerTrace returns null when the player has no frames', () => {
+  const r = round({ frames: [frame(50, [pf(2, 0, 0)])] });
+  assert.equal(extractPlayerTrace(7, r, 1, 'SHIRTS'), null);
+});
+
+test('aggregate: extractPlayerTrace still produces a trace when the player is already dead on their first frame', () => {
+  const r = round({ frames: [frame(50, [pf(1, 30, 40, { alive: false, hp: 0 })])] });
+  const trace = extractPlayerTrace(7, r, 1, 'SHIRTS');
+  assert.ok(trace);
+  assert.equal(trace!.frames.length, 1);
+  approx(trace!.frames[0].x, 30);
+  approx(trace!.frames[0].y, 40);
+  assert.equal(trace!.frames[0].alive, false);
+});
+
+test('aggregate: traceStateAt interpolates between frames and is null past round end', () => {
+  const r = round({ frames: [frame(0, [pf(1, 0, 0, { yaw: 0, hp: 100 })]), frame(10, [pf(1, 10, 0, { yaw: 90, hp: 50 })])] });
+  const trace = extractPlayerTrace(1, r, 1, 'SHIRTS')!;
+  const mid = traceStateAt(trace, 5)!;
+  approx(mid.x, 5);
+  assert.equal(traceStateAt(trace, -1), null);
+  assert.equal(traceStateAt(trace, trace.durationTicks + 1), null);
+});
+
+test('aggregate: extractPlayerTrace freezes at the last alive position on death, ignoring post-death position drift', () => {
+  const r = round({
+    frames: [
+      frame(0, [pf(1, 10, 20, { alive: true, hp: 40 })]),
+      frame(10, [pf(1, 999, 999, { alive: false, hp: 0 })]), // engine reports a bogus/reset position once dead
+      frame(20, [pf(1, 0, 0, { alive: false, hp: 0 })]), // further drift — should never be read
+    ],
+  });
+  const trace = extractPlayerTrace(7, r, 1, 'SHIRTS')!;
+  assert.ok(trace);
+  // Only two frames captured: the last-alive one, and one frozen death frame — the
+  // third (post-death) frame is never read.
+  assert.equal(trace.frames.length, 2);
+  const death = trace.frames[1];
+  assert.equal(death.t, 10);
+  approx(death.x, 10); // frozen at the last-alive x, not the engine's reported 999
+  approx(death.y, 20);
+  assert.equal(death.alive, false);
+  assert.equal(death.hp, 0);
+
+  // The frozen state holds for the rest of the round (clamped to the last frame).
+  const later = traceStateAt(trace, 15)!;
+  approx(later.x, 10);
+  approx(later.y, 20);
+  assert.equal(later.alive, false);
+});
+
+test('aggregate: maxDurationTicks picks the longest trace', () => {
+  const short = extractPlayerTrace(1, round({ frames: [frame(0, [pf(1, 0, 0)]), frame(20, [pf(1, 0, 0)])] }), 1, 'SHIRTS')!;
+  const long = extractPlayerTrace(2, round({ frames: [frame(0, [pf(1, 0, 0)]), frame(80, [pf(1, 0, 0)])] }), 1, 'SHIRTS')!;
+  assert.equal(maxDurationTicks([short, long]), 80);
 });
 
 // --- radar: overview parsing + workshop id extraction ---

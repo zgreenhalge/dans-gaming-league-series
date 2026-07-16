@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import type { Player, Season, Week, Match, PlayerMatchStat } from '../types';
+import type { Player, Season, Week, Match, PlayerMatchStat, ReplayStatus } from '../types';
 import { extractSeasonNumber, compareMatchRefDesc } from '../util';
 import type { RosterStat } from './schedule';
 import { getAllSeasonMedalists, type TrophyEntry } from './trophies';
@@ -30,6 +30,8 @@ export interface PlayerHistoryRow extends PlayerMatchStat {
   is_playoff_game: boolean;
   /** This match's season's regular-season map pool. `null` for gauntlet seasons. */
   map_pool: string[] | null;
+  /** `'ready'` once this match has a generated 2D replay — gates the Pathing tab. */
+  replay_status: ReplayStatus | null;
 }
 
 export interface PlayerDetail {
@@ -185,6 +187,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
         skins_ban2: m.skins_ban2,
         is_playoff_game: m.is_playoff_game,
         map_pool: se.is_gauntlet ? null : se.map_pool,
+        replay_status: m.replay_status ?? null,
       };
     })
     .filter((r): r is PlayerHistoryRow => r !== null)

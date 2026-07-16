@@ -146,14 +146,45 @@ export function roundTickRange(round: ReplayRound): { start: number; end: number
 }
 
 /** Shortest-path angular lerp (degrees), so a player turning past 360° doesn't spin. */
-function lerpAngle(a: number, b: number, t: number): number {
+export function lerpAngle(a: number, b: number, t: number): number {
   const diff = ((b - a + 540) % 360) - 180;
   return a + diff * t;
 }
 
-function lerp(a: number, b: number, t: number): number {
+export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
+
+/**
+ * The two tick-ordered items bracketing `at` (by `key(item)`) plus the interpolation
+ * fraction between them. Clamps to the ends (fraction 0) when `at` falls outside the
+ * range. Generic over the item shape so both a round's downsampled `ReplayFrame[]`
+ * (keyed by `tick`) and a `PlayerTrace`'s `TraceFrame[]` (keyed by the round-relative
+ * `t`, see `aggregate.ts`) share this one bracketing/interpolation implementation
+ * rather than drifting apart.
+ */
+export function bracketBy<T>(
+  items: T[],
+  key: (item: T) => number,
+  at: number,
+): { lo: T; hi: T; t: number } | null {
+  if (items.length === 0) return null;
+  if (at <= key(items[0])) return { lo: items[0], hi: items[0], t: 0 };
+  const last = items[items.length - 1];
+  if (at >= key(last)) return { lo: last, hi: last, t: 0 };
+  // Linear scan is fine — a round has a few hundred frames at most.
+  for (let i = 1; i < items.length; i++) {
+    if (key(items[i]) >= at) {
+      const lo = items[i - 1];
+      const hi = items[i];
+      const span = key(hi) - key(lo) || 1;
+      return { lo, hi, t: (at - key(lo)) / span };
+    }
+  }
+  return { lo: last, hi: last, t: 0 };
+}
+
+const tickOf = (f: ReplayFrame) => f.tick;
 
 /**
  * The two frames bracketing `tick` plus the interpolation fraction between them.
@@ -163,20 +194,7 @@ function bracket(
   frames: ReplayFrame[],
   tick: number,
 ): { lo: ReplayFrame; hi: ReplayFrame; t: number } | null {
-  if (frames.length === 0) return null;
-  if (tick <= frames[0].tick) return { lo: frames[0], hi: frames[0], t: 0 };
-  const last = frames[frames.length - 1];
-  if (tick >= last.tick) return { lo: last, hi: last, t: 0 };
-  // Linear scan is fine — a round has a few hundred frames at most.
-  for (let i = 1; i < frames.length; i++) {
-    if (frames[i].tick >= tick) {
-      const lo = frames[i - 1];
-      const hi = frames[i];
-      const span = hi.tick - lo.tick || 1;
-      return { lo, hi, t: (tick - lo.tick) / span };
-    }
-  }
-  return { lo: last, hi: last, t: 0 };
+  return bracketBy(frames, tickOf, tick);
 }
 
 export function interpolatePlayers(round: ReplayRound, tick: number): ViewPlayer[] {
