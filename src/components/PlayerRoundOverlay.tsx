@@ -72,6 +72,12 @@ export default function PlayerRoundOverlay({
   // player/map picked upstream) rather than carrying over a stale scrub position.
   // `tickRef` is a ref, not React state, so this doesn't need to guard against
   // re-render loops the way a `setState` call in an effect would.
+  //
+  // Must run before the visible-sync effect below: `visible` is derived from `traces`,
+  // so a `traces` change fires both effects in the same commit — React runs effects in
+  // declaration order, so this reset lands before that effect's repaint reads
+  // `tickRef.current`, and the repaint shows tick 0 rather than one frame at the
+  // previous (now-stale) scrub position.
   useEffect(() => {
     tickRef.current = 0;
   }, [traces]);
@@ -170,12 +176,16 @@ export default function PlayerRoundOverlay({
 
   // --- playback clock — a shared clock all traces play against, each stopping once
   //     past its own round's duration (handled by traceStateAt returning null) ---
+  // `tickRate` is clamped away from <= 0 (a corrupt/missing value from the source
+  // payload) so the clock always advances — a non-advancing clock would never reach
+  // `duration` and Play would look permanently stuck.
+  const safeTickRate = tickRate > 0 ? tickRate : 64;
   useEffect(() => {
     let raf = 0;
     let last: number | null = null;
     const step = (ts: number) => {
       if (last !== null) {
-        tickRef.current = Math.min(duration, tickRef.current + ((ts - last) / 1000) * tickRate * speed);
+        tickRef.current = Math.min(duration, tickRef.current + ((ts - last) / 1000) * safeTickRate * speed);
       }
       last = ts;
       draw();
@@ -188,7 +198,7 @@ export default function PlayerRoundOverlay({
     if (playing) raf = requestAnimationFrame(step);
     else draw();
     return () => cancelAnimationFrame(raf);
-  }, [playing, speed, duration, tickRate, draw]);
+  }, [playing, speed, duration, safeTickRate, draw]);
 
   if (traces.length === 0) {
     return (

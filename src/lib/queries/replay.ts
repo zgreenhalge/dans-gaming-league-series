@@ -3,12 +3,11 @@ import { supabase } from '../supabase';
 import { getR2Object, replayKey } from '../r2';
 import type { ReplayPayload, ReplayPlayerMeta, ReplayEvent } from '../replay/types';
 import { extractPlayerTrace, type PlayerTrace } from '../replay/aggregate';
-import type { Faction } from '../types';
+import type { Faction, ReplayStatus } from '../types';
 
+export type { ReplayStatus };
 
 // --- Match replay / events (issue #121; see docs/replay.md) ---
-
-export type ReplayStatus = 'none' | 'queued' | 'running' | 'ready' | 'failed';
 
 export interface ReplayJobState {
   status: ReplayStatus;

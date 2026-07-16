@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import type { Player, Season, Week, Match, PlayerMatchStat } from '../types';
+import type { Player, Season, Week, Match, PlayerMatchStat, ReplayStatus } from '../types';
 import { extractSeasonNumber, compareMatchRefDesc } from '../util';
 import type { RosterStat } from './schedule';
 import { getAllSeasonMedalists, type TrophyEntry } from './trophies';
@@ -28,7 +28,7 @@ export interface PlayerHistoryRow extends PlayerMatchStat {
   skins_ban1: string | null;
   skins_ban2: string | null;
   /** `'ready'` once this match has a generated 2D replay — gates the Pathing tab. */
-  replay_status: string | null;
+  replay_status: ReplayStatus | null;
 }
 
 export interface PlayerDetail {

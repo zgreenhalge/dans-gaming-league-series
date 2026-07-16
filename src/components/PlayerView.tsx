@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { PlayerHistoryRow, TrophyEntry, H2HData, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { deriveRates, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
+import { deriveRates, extractSeasonNumber, groupByMap, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import DevGate from './DevGate';
@@ -126,14 +126,7 @@ interface MapAgg {
 }
 
 function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
-  const buckets = new Map<string, { display: string; rows: PlayerHistoryRow[] }>();
-  for (const r of rows) {
-    if (!r.map) continue;
-    const key = r.map.trim().toLowerCase();
-    const entry = buckets.get(key) ?? { display: r.map.trim(), rows: [] };
-    entry.rows.push(r);
-    buckets.set(key, entry);
-  }
+  const buckets = groupByMap(rows, (r) => r.map);
   const out: MapAgg[] = [];
   for (const { display, rows: list } of buckets.values()) {
     const a = aggregate(list);

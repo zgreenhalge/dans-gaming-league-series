@@ -36,6 +36,23 @@ const GRENADE_RADIUS: Partial<Record<HeatmapKind, number>> = {
 
 const MAX_SIDE = 560;
 
+// Point rendering: two passes so "one point is still clearly visible" and "many
+// overlapping points don't blow out to white" are controlled independently instead of
+// fighting over one alpha value. Pass 1 is a soft, wide halo (the density *field*) —
+// 'screen' rather than 'lighter', since 'lighter' sums RGB with no ceiling until it
+// clips at 255; 'screen' (1 - (1-a)(1-b)) approaches white only asymptotically, so it
+// takes far more stacked points before an area reads as a flat glare instead of a
+// color gradient. Pass 2 is a small, brighter core pinpointing each kill/death exactly
+// (grenades don't get one — they're already an area marker), so a single point still
+// pops on top of pass 1's low-alpha field.
+const HALO_RADIUS = 16;
+const HALO_ALPHA = 0.26;
+const GRENADE_HALO_ALPHA = 0.14;
+const CORE_DOT_RADIUS = 2.5;
+const CORE_DOT_ALPHA = 0.24;
+/** Alpha the calibrated radar image is drawn at, so points read clearly through it. */
+const RADAR_ALPHA = 0.85;
+
 function boundsOf(points: MapHeatmapPoint[]): Bounds | null {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const p of points) {
@@ -66,7 +83,11 @@ export default function MapHeatmap({
   const [players, setPlayers] = useState<{ id: number; name: string }[]>([]);
   const [active, setActive] = useState<Set<string>>(new Set(['death']));
   const [side, setSide] = useState<SideFilter>('all');
-  const [playerId, setPlayerId] = useState<number | null>(null);
+  // The user's explicit pick; falls back to "all players" (null) once it no longer
+  // appears in `availablePlayers` — e.g. the season filter narrows past it, or a
+  // slug/matchIds change fetches a new roster — rather than resetting it via an
+  // effect. A derived value, not a second source of truth to keep in sync.
+  const [explicitPlayerId, setExplicitPlayerId] = useState<number | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -83,13 +104,11 @@ export default function MapHeatmap({
         if (cancelled) return;
         setPoints(body.points ?? []);
         setPlayers(body.players ?? []);
-        setPlayerId(null);
       })
       .catch(() => {
         if (cancelled) return;
         setPoints([]);
         setPlayers([]);
-        setPlayerId(null);
       });
     return () => {
       cancelled = true;
@@ -112,18 +131,6 @@ export default function MapHeatmap({
     return m;
   }, []);
 
-  const visible = useMemo(
-    () =>
-      (points ?? []).filter(
-        (p) =>
-          visibleMatchIds.has(p.matchId) &&
-          activeKinds.has(p.kind) &&
-          (side === 'all' || p.side === side) &&
-          (playerId === null || p.playerId === playerId),
-      ),
-    [points, visibleMatchIds, activeKinds, side, playerId],
-  );
-
   // Only offer players who actually have a point within the current season filter —
   // `players` (from the API) covers every match in `matchIds`, which is broader than
   // `visibleMatchIds` once the season filter narrows it.
@@ -137,6 +144,21 @@ export default function MapHeatmap({
       .map((id) => ({ id, name: nameById.get(id) ?? `#${id}` }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [points, visibleMatchIds, players]);
+
+  const playerId =
+    explicitPlayerId !== null && availablePlayers.some((p) => p.id === explicitPlayerId) ? explicitPlayerId : null;
+
+  const visible = useMemo(
+    () =>
+      (points ?? []).filter(
+        (p) =>
+          visibleMatchIds.has(p.matchId) &&
+          activeKinds.has(p.kind) &&
+          (side === 'all' || p.side === side) &&
+          (playerId === null || p.playerId === playerId),
+      ),
+    [points, visibleMatchIds, activeKinds, side, playerId],
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -169,16 +191,21 @@ export default function MapHeatmap({
           x: calibration.posX + calibration.imageWidth * calibration.scale,
           y: calibration.posY - calibration.imageHeight * calibration.scale,
         });
-        ctx.globalAlpha = 0.85;
+        ctx.globalAlpha = RADAR_ALPHA;
         ctx.drawImage(radarImage.current, tl.x, tl.y, br.x - tl.x, br.y - tl.y);
         ctx.globalAlpha = 1;
       }
       if (!projector) return;
 
-      // Points render in two passes so "one point is still clearly visible" and
-      // "many overlapping points don't blow out to white" are controlled
-      // independently instead of fighting over one alpha value.
-      //
+      // Project + resolve color once per point, shared by both render passes below
+      // rather than recomputed in each.
+      const plotted = visible.map((p) => ({
+        p,
+        c: projector.project(p),
+        color: colorOfKind.get(p.kind) ?? '#ffffff',
+        isGrenade: GRENADE_KINDS.has(p.kind),
+      }));
+
       // Pass 1 — a soft, wide halo (the density *field*): 'screen' rather than
       // 'lighter', since 'lighter' sums RGB with no ceiling until it clips at 255,
       // blowing a busy chokepoint out to solid white within a handful of overlapping
@@ -187,14 +214,12 @@ export default function MapHeatmap({
       // a color gradient. Its alpha is intentionally low — this pass's job is the
       // gradient across a cluster, not making a lone point pop.
       ctx.globalCompositeOperation = 'screen';
-      for (const p of visible) {
-        const c = projector.project(p);
-        const color = colorOfKind.get(p.kind) ?? '#ffffff';
-        if (GRENADE_KINDS.has(p.kind)) {
+      for (const { p, c, color, isGrenade } of plotted) {
+        if (isGrenade) {
           // Plot grenades as their effect area.
           const r = Math.max(4, projector.scaleLength(GRENADE_RADIUS[p.kind] ?? 100));
           ctx.fillStyle = color;
-          ctx.globalAlpha = 0.14;
+          ctx.globalAlpha = GRENADE_HALO_ALPHA;
           ctx.beginPath();
           ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
           ctx.fill();
@@ -202,13 +227,12 @@ export default function MapHeatmap({
           // Alpha is baked into the gradient, so reset globalAlpha — otherwise a
           // grenade drawn earlier in the loop leaks onto these and dims them.
           ctx.globalAlpha = 1;
-          const r = 16;
-          const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
-          g.addColorStop(0, hexAlpha(color, 0.26));
+          const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, HALO_RADIUS);
+          g.addColorStop(0, hexAlpha(color, HALO_ALPHA));
           g.addColorStop(1, hexAlpha(color, 0));
           ctx.fillStyle = g;
           ctx.beginPath();
-          ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+          ctx.arc(c.x, c.y, HALO_RADIUS, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -217,18 +241,16 @@ export default function MapHeatmap({
       // single point (or a handful spread across a chokepoint, not stacked pixel for
       // pixel) still reads clearly on top of pass 1's low-alpha field. Grenades don't
       // get one — they're already an area marker, not a pinpoint event. This layer
-      // *can* still wash toward white, but only within its own tiny radius where many
-      // kills genuinely landed at virtually the same spot (e.g. a common angle) —
-      // a real signal worth showing brightly, not the map-wide blowout this replaces.
+      // can still wash toward white, but only within its own tiny radius, where many
+      // kills genuinely landed at virtually the same spot (e.g. a common angle) — a
+      // real signal worth showing brightly.
       ctx.globalCompositeOperation = 'lighter';
-      for (const p of visible) {
-        if (GRENADE_KINDS.has(p.kind)) continue;
-        const c = projector.project(p);
-        const color = colorOfKind.get(p.kind) ?? '#ffffff';
-        ctx.globalAlpha = 0.24;
+      for (const { c, color, isGrenade } of plotted) {
+        if (isGrenade) continue;
+        ctx.globalAlpha = CORE_DOT_ALPHA;
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(c.x, c.y, 2.5, 0, Math.PI * 2);
+        ctx.arc(c.x, c.y, CORE_DOT_RADIUS, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -287,7 +309,7 @@ export default function MapHeatmap({
           {availablePlayers.length > 0 && (
             <select
               value={playerId ?? ''}
-              onChange={(e) => setPlayerId(e.target.value === '' ? null : Number(e.target.value))}
+              onChange={(e) => setExplicitPlayerId(e.target.value === '' ? null : Number(e.target.value))}
               className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-1.5 py-0.5 font-mono text-[var(--color-text-primary)]"
             >
               <option value="">All players</option>

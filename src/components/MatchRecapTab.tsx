@@ -459,11 +459,12 @@ export default function MatchRecapTab({
   // The Recording sub-tab needs neither a demo nor a generated replay — it's shown
   // whenever there's already a recording to watch, or the viewer could add one.
   const showRecording = !!recordingURL || canEditRecording;
-  // Heatmap is built from the same replay-extract artifacts as the 2D Replay
-  // (`heatmap.json` alongside `replay.json`), so it isn't ready before `events` is.
-  const showHeatmap = !!matchMap && !!events;
-  // Pathing reads the full replay payload (frames), so it's gated the same way.
-  const showTrails = !!matchMap && !!events;
+  // Heatmap and Pathing are both built from the same replay-extract artifacts as the
+  // 2D Replay (`heatmap.json` alongside `replay.json`, or the payload's own `frames`),
+  // so neither is ready before `events` is — one shared gate for both.
+  const showReplayDerived = !!matchMap && !!events;
+  const showHeatmap = showReplayDerived;
+  const showTrails = showReplayDerived;
 
   return (
     <div className="mt-4">

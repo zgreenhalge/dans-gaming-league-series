@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { PlayerHistoryRow } from '@/lib/queries';
 import type { PlayerTrace } from '@/lib/replay/aggregate';
-import { isPlayedScore, tabCls } from '@/lib/util';
+import { groupByMap, isPlayedScore, tabCls } from '@/lib/util';
 import { mapSlug } from '@/lib/maps';
 import PlayerRoundOverlay from './PlayerRoundOverlay';
 
@@ -24,21 +24,16 @@ export default function PlayerTrailsTab({
   playerName: string;
   history: PlayerHistoryRow[];
 }) {
-  // Grouped by a case/whitespace-normalized key (map names are user-typed strings —
-  // see CLAUDE.md), same normalization `aggregateByMap` uses elsewhere in `PlayerView`,
-  // but displayed with the first-seen casing. Only matches with a generated replay are
-  // candidates — a played match with no replay yet has nothing to fetch, so it's
-  // excluded here rather than sent to the API just to come back empty.
+  // Only matches with a generated replay are candidates — a played match with no
+  // replay yet has nothing to fetch, so it's excluded here rather than sent to the API
+  // just to come back empty.
   const mapOptions = useMemo(() => {
-    const byMap = new Map<string, { display: string; matchIds: number[] }>();
-    for (const r of history) {
-      if (!r.map || !isPlayedScore(r.final_score) || r.replay_status !== 'ready') continue;
-      const key = r.map.trim().toLowerCase();
-      const entry = byMap.get(key) ?? { display: r.map.trim(), matchIds: [] };
-      entry.matchIds.push(r.match_id);
-      byMap.set(key, entry);
-    }
-    return [...byMap.values()].sort((a, b) => b.matchIds.length - a.matchIds.length);
+    const buckets = groupByMap(history, (r) =>
+      isPlayedScore(r.final_score) && r.replay_status === 'ready' ? r.map : null,
+    );
+    return [...buckets.values()]
+      .map(({ display, rows }) => ({ display, matchIds: rows.map((r) => r.match_id) }))
+      .sort((a, b) => b.matchIds.length - a.matchIds.length);
   }, [history]);
 
   // The user's explicit pick; falls back to the most-played map once it no longer
@@ -61,6 +56,9 @@ export default function PlayerTrailsTab({
   // flight) — kept as one object so the three always update atomically.
   const [result, setResult] = useState<{ map: string | null; traces: PlayerTrace[]; tickRate: number } | null>(null);
   useEffect(() => {
+    // No eligible map (mapOptions is empty) — skip the request; the render below
+    // shows "No matches..." from mapOptions directly, so there's nothing to fetch.
+    if (matchIds.length === 0) return;
     let cancelled = false;
     fetch(`/api/players/${playerId}/replay-trails`, {
       method: 'POST',

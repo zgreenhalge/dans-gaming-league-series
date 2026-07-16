@@ -9,6 +9,30 @@ export function isPlayedScore(finalScore: string | null | undefined): boolean {
 }
 
 /**
+ * Groups rows by a case/whitespace-normalized map name — map names are user-typed
+ * strings, so grouping on the raw value would split one map into several buckets on
+ * inconsistent casing. Keeps the first-seen casing for display. `mapOf` returning
+ * `null` excludes a row from grouping entirely (e.g. a caller's own eligibility
+ * filter), so this stays the one place the normalization lives while callers keep
+ * their own filtering/aggregation on top.
+ */
+export function groupByMap<T>(
+  rows: T[],
+  mapOf: (row: T) => string | null | undefined,
+): Map<string, { display: string; rows: T[] }> {
+  const buckets = new Map<string, { display: string; rows: T[] }>();
+  for (const r of rows) {
+    const map = mapOf(r);
+    if (!map) continue;
+    const key = map.trim().toLowerCase();
+    const entry = buckets.get(key) ?? { display: map.trim(), rows: [] };
+    entry.rows.push(r);
+    buckets.set(key, entry);
+  }
+  return buckets;
+}
+
+/**
  * Parse a route's `[id]` segment into a positive integer match id, or `null` if it isn't one.
  * Shared by every match-scoped API route so the param contract is identical everywhere.
  */

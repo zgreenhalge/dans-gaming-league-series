@@ -480,6 +480,16 @@ test('aggregate: extractPlayerTrace returns null when the player has no frames',
   assert.equal(extractPlayerTrace(7, r, 1, 'SHIRTS'), null);
 });
 
+test('aggregate: extractPlayerTrace still produces a trace when the player is already dead on their first frame', () => {
+  const r = round({ frames: [frame(50, [pf(1, 30, 40, { alive: false, hp: 0 })])] });
+  const trace = extractPlayerTrace(7, r, 1, 'SHIRTS');
+  assert.ok(trace);
+  assert.equal(trace!.frames.length, 1);
+  approx(trace!.frames[0].x, 30);
+  approx(trace!.frames[0].y, 40);
+  assert.equal(trace!.frames[0].alive, false);
+});
+
 test('aggregate: traceStateAt interpolates between frames and is null past round end', () => {
   const r = round({ frames: [frame(0, [pf(1, 0, 0, { yaw: 0, hp: 100 })]), frame(10, [pf(1, 10, 0, { yaw: 90, hp: 50 })])] });
   const trace = extractPlayerTrace(1, r, 1, 'SHIRTS')!;

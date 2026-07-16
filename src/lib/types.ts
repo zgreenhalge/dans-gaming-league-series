@@ -1,6 +1,9 @@
 export type SeasonStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED' | 'ARCHIVED';
 export type Faction = 'SHIRTS' | 'SKINS';
 
+/** A match's 2D-replay job status — gates the Recap tab's 2D Replay/Heatmap/Pathing UI. */
+export type ReplayStatus = 'none' | 'queued' | 'running' | 'ready' | 'failed';
+
 export interface Season {
   id: number;
   name: string;
@@ -53,9 +56,8 @@ export interface Match {
   screenshot_url_back: string | null;
   round_history: RoundHistoryEntry[] | null;
   recording_url: string | null;
-  /** `none|queued|running|ready|failed` — gates the 2D replay/heatmap/trails UI. Optional
-   *  because older environments may predate the column (see `docs/replay.md`). */
-  replay_status?: string | null;
+  /** Optional because older environments may predate the column (see `docs/replay.md`). */
+  replay_status?: ReplayStatus | null;
 }
 
 export interface Player {

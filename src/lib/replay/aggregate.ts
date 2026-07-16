@@ -63,8 +63,13 @@ export function extractPlayerTrace(
     const p = f.players.find((pp) => pp.id === playerId);
     if (!p) continue;
     if (!p.alive) {
-      const last = frames[frames.length - 1];
-      if (last) frames.push({ t: f.tick - range.start, x: last.x, y: last.y, yaw: last.yaw, hp: 0, alive: false });
+      // Freeze at the last alive position; if they were already dead on their very
+      // first appearing frame (no prior alive position to freeze at), fall back to
+      // this frame's own position rather than dropping the round's trace entirely —
+      // it may itself be reset toward spawn, but a rough corpse marker beats the
+      // round silently vanishing from the overlay and its round count.
+      const last = frames[frames.length - 1] ?? p;
+      frames.push({ t: f.tick - range.start, x: last.x, y: last.y, yaw: last.yaw, hp: 0, alive: false });
       break;
     }
     frames.push({ t: f.tick - range.start, x: p.x, y: p.y, yaw: p.yaw, hp: p.hp, alive: true });

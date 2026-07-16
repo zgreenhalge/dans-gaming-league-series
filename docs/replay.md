@@ -278,7 +278,10 @@ interpolation matches the single-round player exactly.
 dead — it appends one final frame frozen at their *last known-alive* position (not whatever the
 engine reports for a dead player, which can drift back toward spawn) and reads no further, so the
 ghost reads as a corpse marker sitting where they actually died. `traceStateAt`'s end-of-frames clamp
-then holds that frozen position for the rest of the round.
+then holds that frozen position for the rest of the round. If the player is already dead on the very
+first frame they appear in (no prior alive position exists to freeze at), that frame's own position is
+used as a last resort instead — a possibly-imprecise corpse marker beats the round silently vanishing
+from the overlay and its round count.
 
 The shared renderer, `<PlayerRoundOverlay>`
 (`src/components/PlayerRoundOverlay.tsx`), takes a `PlayerTrace[]` + `tickRate` + map slug and owns the
