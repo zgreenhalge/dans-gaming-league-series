@@ -111,7 +111,8 @@
       "is_playoff_game": false,
       "map_pool": [
         "Foroglio"
-      ]
+      ],
+      "replay_status": "none"
     },
     {
       "kills": 22,
@@ -211,7 +212,8 @@
       "skins_ban1": null,
       "skins_ban2": null,
       "is_playoff_game": true,
-      "map_pool": null
+      "map_pool": null,
+      "replay_status": "ready"
     },
     {
       "kills": 0,
@@ -315,7 +317,8 @@
         "Foroglio",
         "Cobblestone",
         "Vertigo"
-      ]
+      ],
+      "replay_status": "none"
     },
     {
       "kills": 20,
@@ -419,7 +422,8 @@
         "Foroglio",
         "Cobblestone",
         "Vertigo"
-      ]
+      ],
+      "replay_status": "ready"
     }
   ],
   "trophies": []
