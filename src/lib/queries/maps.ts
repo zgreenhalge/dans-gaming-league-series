@@ -2,7 +2,7 @@ import { gunzipMaybe } from '../gzip';
 import { supabase } from '../supabase';
 import { getR2Object, heatmapKey } from '../r2';
 import type { HeatmapArtifact, HeatmapKind } from '../replay/heatmap';
-import { isPlayedScore, extractSeasonNumber, canonicalSort, compareMatchRefDesc } from '../util';
+import { isPlayedScore, parseScore, extractSeasonNumber, canonicalSort, compareMatchRefDesc } from '../util';
 import { classifyMatchVeto } from '../mapSideStats';
 import { mapSlug } from '../maps';
 import { workshopIdFromUrl } from '../replay/radar';
@@ -260,7 +260,15 @@ export async function getMapIndex(): Promise<MapIndexEntry[]> {
 
   const totalKillsBySeason = new Map<string, Map<number, number>>();
   const totalAssistsBySeason = new Map<string, Map<number, number>>();
+  const totalRoundsBySeason = new Map<string, Map<number, number>>();
   const pickAndWonBySeason = new Map<string, Map<number, number>>();
+
+  const matchRounds = new Map<number, number>();
+  for (const m of matches) {
+    if (!matchMapKey.has(m.id)) continue;
+    const parsed = parseScore(m.final_score);
+    if (parsed) matchRounds.set(m.id, parsed.shirts + parsed.skins);
+  }
 
   if (playedMatchIds.length > 0) {
     const { data: statsData } = await supabase
@@ -293,6 +301,10 @@ export async function getMapIndex(): Promise<MapIndexEntry[]> {
       const aBySid = totalAssistsBySeason.get(mapKey) ?? new Map<number, number>();
       aBySid.set(sid, (aBySid.get(sid) ?? 0) + assists);
       totalAssistsBySeason.set(mapKey, aBySid);
+      const rounds = matchRounds.get(matchId) ?? 0;
+      const rBySid = totalRoundsBySeason.get(mapKey) ?? new Map<number, number>();
+      rBySid.set(sid, (rBySid.get(sid) ?? 0) + rounds);
+      totalRoundsBySeason.set(mapKey, rBySid);
       if (shirtsWon.get(matchId)) {
         const wBySid = pickAndWonBySeason.get(mapKey) ?? new Map<number, number>();
         wBySid.set(sid, (wBySid.get(sid) ?? 0) + 1);
@@ -320,6 +332,7 @@ export async function getMapIndex(): Promise<MapIndexEntry[]> {
       ...Array.from(noPicksBySeason.get(key)?.keys() ?? []),
       ...Array.from(totalKillsBySeason.get(key)?.keys() ?? []),
       ...Array.from(totalAssistsBySeason.get(key)?.keys() ?? []),
+      ...Array.from(totalRoundsBySeason.get(key)?.keys() ?? []),
     ]);
     const statsBySeason = Array.from(allSids).map((sid) => ({
       seasonId: sid,
@@ -329,6 +342,7 @@ export async function getMapIndex(): Promise<MapIndexEntry[]> {
       noPickCount: noPicksBySeason.get(key)?.get(sid) ?? 0,
       totalKills: totalKillsBySeason.get(key)?.get(sid) ?? 0,
       totalAssists: totalAssistsBySeason.get(key)?.get(sid) ?? 0,
+      totalRounds: totalRoundsBySeason.get(key)?.get(sid) ?? 0,
       pickAndWon: pickAndWonBySeason.get(key)?.get(sid) ?? 0,
     })).sort((a, b) => a.seasonId - b.seasonId);
 

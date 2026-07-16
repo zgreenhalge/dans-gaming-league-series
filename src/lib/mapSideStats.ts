@@ -64,6 +64,7 @@ export interface MapPickBanStat {
   ctPicked: number;
   tPicked: number;
   pickedAndWon: number;
+  avgRounds: number;
 }
 
 export interface PerSideStat {
@@ -89,10 +90,11 @@ interface MapPickBanBucket {
   ctPicked: number;
   tPicked: number;
   pickedAndWon: number;
+  totalRounds: number;
 }
 
 function emptyBucket(display: string): MapPickBanBucket {
-  return { display, picked: 0, banned: 0, noPicked: 0, ctPicked: 0, tPicked: 0, pickedAndWon: 0 };
+  return { display, picked: 0, banned: 0, noPicked: 0, ctPicked: 0, tPicked: 0, pickedAndWon: 0, totalRounds: 0 };
 }
 
 export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickBanStat[] {
@@ -121,6 +123,9 @@ export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickB
       const shirtsPicked = m.shirts_pick != null;
       const teamThatPicked = shirtsPicked ? 'SHIRTS' : 'SKINS';
       if (getWinningFaction(m) === teamThatPicked) b.pickedAndWon++;
+
+      const parsed = parseScore(m.final_score);
+      if (parsed) b.totalRounds += parsed.shirts + parsed.skins;
     }
 
     for (const name of banned) getBucket(name).banned++;
@@ -128,7 +133,7 @@ export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickB
   }
 
   return Array.from(buckets.values())
-    .map(({ display, picked, banned, noPicked, ctPicked, tPicked, pickedAndWon }) => ({
+    .map(({ display, picked, banned, noPicked, ctPicked, tPicked, pickedAndWon, totalRounds }) => ({
       map: display,
       picked,
       banned,
@@ -136,6 +141,7 @@ export function aggregateMapPickBanStats(matches: MatchPickBanInput[]): MapPickB
       ctPicked,
       tPicked,
       pickedAndWon,
+      avgRounds: picked > 0 ? totalRounds / picked : 0,
     }))
     .sort((a, b) => b.picked - a.picked);
 }
@@ -221,6 +227,7 @@ export interface PlayerMapStat {
   ctPlayed: number;
   tPlayed: number;
   pickedAndWon: number;
+  avgRounds: number;
 }
 
 export interface PlayerSideStat {
@@ -243,6 +250,7 @@ interface PlayerMapBucket {
   ctPlayed: number;
   tPlayed: number;
   pickedAndWon: number;
+  totalRounds: number;
 }
 
 /**
@@ -257,7 +265,7 @@ export function aggregatePlayerMapStats(matches: PlayerMatchInput[]): PlayerMapS
     const key = name.toLowerCase();
     let b = buckets.get(key);
     if (!b) {
-      b = { display: name, games: 0, wins: 0, picked: 0, banned: 0, noPicked: 0, ctPlayed: 0, tPlayed: 0, pickedAndWon: 0 };
+      b = { display: name, games: 0, wins: 0, picked: 0, banned: 0, noPicked: 0, ctPlayed: 0, tPlayed: 0, pickedAndWon: 0, totalRounds: 0 };
       buckets.set(key, b);
     }
     return b;
@@ -269,6 +277,7 @@ export function aggregatePlayerMapStats(matches: PlayerMatchInput[]): PlayerMapS
 
       b.games++;
       if (m.is_win) b.wins++;
+      b.totalRounds += m.rounds_played;
 
       const playerPicked = m.faction === 'SHIRTS' ? m.shirts_pick != null : m.picked_map != null;
       if (playerPicked) b.picked++;
@@ -288,7 +297,7 @@ export function aggregatePlayerMapStats(matches: PlayerMatchInput[]): PlayerMapS
   }
 
   return Array.from(buckets.values())
-    .map(({ display, games, wins, picked, banned, noPicked, ctPlayed, tPlayed, pickedAndWon }) => ({
+    .map(({ display, games, wins, picked, banned, noPicked, ctPlayed, tPlayed, pickedAndWon, totalRounds }) => ({
       map: display,
       games,
       wins,
@@ -298,6 +307,7 @@ export function aggregatePlayerMapStats(matches: PlayerMatchInput[]): PlayerMapS
       ctPlayed,
       tPlayed,
       pickedAndWon,
+      avgRounds: games > 0 ? totalRounds / games : 0,
     }))
     .sort((a, b) => b.games - a.games);
 }

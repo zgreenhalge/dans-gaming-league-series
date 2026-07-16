@@ -552,6 +552,7 @@ function MapsAndSidesSection({
                   <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">CT</th>
                   <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">T</th>
                   <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Pick &amp; won</th>
+                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Avg rounds</th>
                 </tr>
               </thead>
               <tbody>
@@ -565,7 +566,8 @@ function MapsAndSidesSection({
                     <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.noPicked}</td>
                     <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.ctPicked}</td>
                     <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.tPicked}</td>
-                    <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{m.pickedAndWon}</td>
+                    <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">{m.picked > 0 ? m.avgRounds.toFixed(1) : '—'}</td>
                   </tr>
                 ))}
               </tbody>

@@ -106,6 +106,15 @@ test('aggregateMapPickBanStats: results sort by picked count descending', () => 
   assert.equal(out[0].picked, 2);
 });
 
+test('aggregateMapPickBanStats: avgRounds averages total match rounds (shirts + skins) across picks', () => {
+  const matches = [
+    match({ shirts_pick: 'Palais', final_score: '13-9' }), // 22 rounds
+    match({ shirts_pick: 'Palais', final_score: '16-14' }), // 30 rounds
+  ];
+  const out = aggregateMapPickBanStats(matches);
+  assert.equal(out[0].avgRounds, 26); // (22 + 30) / 2
+});
+
 test('aggregateMapPickBanStats: a map that is only ever banned (never picked) still gets a row', () => {
   const matches = [match({ shirts_pick: 'Palais', shirts_ban: 'Vertigo' })];
   const out = aggregateMapPickBanStats(matches);
@@ -184,6 +193,17 @@ test('aggregatePlayerMapStats: banned/no-picked are counted from the match veto,
   assert.ok(nuke);
   assert.equal(nuke!.noPicked, 1);
   assert.equal(nuke!.games, 0);
+});
+
+test('aggregatePlayerMapStats: avgRounds averages the player\'s own rounds_played across games on that map', () => {
+  const matches = [
+    playerMatch({ map: 'Palais', rounds_played: 22 }),
+    playerMatch({ map: 'Palais', rounds_played: 16 }),
+  ];
+  const out = aggregatePlayerMapStats(matches);
+  const palais = out.find((m) => m.map === 'Palais');
+  assert.ok(palais);
+  assert.equal(palais!.avgRounds, 19); // (22 + 16) / 2
 });
 
 test('aggregateScoreDistribution: loser-round buckets (crushed/convincing/competitive/close) and CRAZY', () => {

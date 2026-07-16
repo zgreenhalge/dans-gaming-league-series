@@ -117,6 +117,7 @@ export interface MapSeasonStat {
   noPickCount: number;
   totalKills: number;
   totalAssists: number;
+  totalRounds: number;
   pickAndWon: number;
 }
 
