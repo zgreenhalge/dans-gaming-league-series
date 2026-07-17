@@ -18,9 +18,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Copy, Check } from 'lucide-react';
 import { getBrowserClient } from '@/lib/supabase-browser';
 import { ServerSpinner } from '@/components/ServerSpinner';
+import { StatePill, CopyConnectButton } from '@/components/ServerStatusBits';
 import { fmtUtcShort } from '@/lib/util';
 import { toSentenceCase } from '@/lib/maps';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
@@ -40,62 +40,6 @@ const CUSTOM_MAP_CHOICE = '__custom__';
 const ACTION_CAP_MS = 90_000;
 
 type PendingAction = { kind: 'start' | 'stop' | 'apply'; message: string };
-
-function StatePill({ configured, server }: { configured: boolean; server: AdminServerStatus['server'] }) {
-  if (!configured) {
-    return (
-      <span className="inline-block font-mono text-[11px] px-2 py-[2px] rounded border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)]">
-        hosting not configured
-      </span>
-    );
-  }
-  if (!server) {
-    return (
-      <span
-        className="inline-block font-mono text-[11px] px-2 py-[2px] rounded border"
-        style={{
-          backgroundColor: 'var(--color-accent-red-bg)',
-          color: 'var(--color-accent-red-fg)',
-          borderColor: 'var(--color-accent-red-border)',
-        }}
-      >
-        unreachable
-      </span>
-    );
-  }
-  const label = server.booting ? 'booting' : server.on ? 'on' : 'off';
-  const style =
-    label === 'on'
-      ? { bg: 'var(--color-accent-green-bg)', fg: 'var(--color-accent-green-fg)', border: 'var(--color-accent-green-border)' }
-      : label === 'booting'
-        ? { bg: 'var(--color-accent-amber-bg)', fg: 'var(--color-accent-amber-fg)', border: 'var(--color-accent-amber-border)' }
-        : { bg: 'transparent', fg: 'var(--color-text-secondary)', border: 'var(--color-border-secondary)' };
-  return (
-    <span
-      className="inline-block font-mono text-[11px] px-2 py-[2px] rounded border"
-      style={{ backgroundColor: style.bg, color: style.fg, borderColor: style.border }}
-    >
-      {label}
-    </span>
-  );
-}
-
-function CopyConnectButton({ connect }: { connect: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      onClick={async () => {
-        await navigator.clipboard.writeText(`connect ${connect}`);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }}
-      title={`Copy "connect ${connect}"`}
-      className="inline-flex items-center text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-    >
-      {copied ? <Check size={12} /> : <Copy size={12} />}
-    </button>
-  );
-}
 
 // Read-only render of the golden-config diff — only rows that differ (drift/missing), so a clean
 // server shows nothing but the "matches golden" line. `drift` (a real value mismatch) is red;
