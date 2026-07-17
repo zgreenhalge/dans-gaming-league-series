@@ -105,6 +105,7 @@ export function SideNav({ seasons }: Props) {
 
       <NavLink href="/statistics">Statistics</NavLink>
       <NavLink href="/maps">Maps</NavLink>
+      <NavLink href="/scrims">Scrims</NavLink>
     </nav>
   );
 
