@@ -145,6 +145,29 @@ Schema-free by design — status lives in the existing table, detail lives in th
 Auto-commit takes the `running → confirmed` edge directly (no `parsed` stop) — the D5 predicate check
 and the write both happen inside the `running` stage.
 
+## Scrims
+
+**`/scrims`** — any signed-in player can pick a map and start the shared server for a casual, free-
+form game outside the DGLS match model entirely: no roster, no veto, no `matches` row, no stats. It
+reuses the same primitives the admin console's "Apply config set" + "Start" use
+(`applyConfigSet`/`pushCfgFiles`/`startServer` in `dathost.ts`/`dathost-config.ts`) via
+`POST /api/scrims/start`, minus the admin-only override — starting is refused outright (409, no
+override) if `getServerOccupancy` reports the server occupied, or if
+`findNearbyUnscoredMatch` (`dathost-lifecycle.ts`) finds a league match scheduled within
+`SCHEDULE_COLLISION_WINDOW_MS` of right now that hasn't been scored yet (`isPlayedScore`) — a scrim
+never bumps a real match, even one whose scheduled time has already passed. `POST /api/scrims/stop`
+is stoppable any time no DGLS match holds the server (`getActiveServerMatch`); there's no per-scrim
+ownership to check beyond that.
+
+Since a scrim has no data model, "who's connected" can't come from a DB row — `players_online` on the
+DatHost server object is a bare count with no roster, and there's no dedicated player-list endpoint.
+Instead `GET /api/scrims/status` reads the server's raw console log (`getConsoleLines`, a rolling
+~1000-line window) and derives the current roster from the connect/disconnect/round events already in
+it — every one carries `"name<userid><steamid><team>"` — via `parseConnectedPlayers`
+(`server-players.ts`). This is best-effort: a player whose connect line has scrolled out of the
+1000-line window before any later event re-mentions them (e.g. a very long session with heavy chatter)
+won't appear even though they're still connected.
+
 ## Admin surfaces
 
 - **`/admin`** — hub, linked from the Topbar (visible only when `session.user.isAdmin`). Add a tool
@@ -207,6 +230,9 @@ overwritten on the next provision.
 | GET·DELETE | `/api/matches/[id]/demo/result` | session | read / dispose the staged `DemoIngestResult` |
 | POST | `/api/matches/[id]/demo/dispatch` | session | re-parse the demo in R2 (manual counterpart to notify) |
 | POST | `/api/matches/[id]/replay/dispatch` | session | (re)trigger the replay Action |
+| GET | `/api/scrims/status` | session | raw server state + active match + connected roster + blocking-match check |
+| POST | `/api/scrims/start` | session | apply golden config at a picked map + start (409 if occupied or a nearby match is unscored) |
+| POST | `/api/scrims/stop` | session | stop (409 only if a DGLS match holds the server) |
 
 ## Environment
 
@@ -227,14 +253,17 @@ logged, still staged for manual confirm); `true` goes live.
 
 ## Key files
 
-`src/lib/dathost.ts` · `src/lib/dathost-lifecycle.ts` (lifecycle + `getReconciledServerState` +
-`getActiveServerMatch` + `findServerOccupant`) · `src/lib/matchzy.ts` · `src/lib/schedule.ts` ·
+`src/lib/dathost.ts` (incl. `getConsoleLines`) · `src/lib/dathost-lifecycle.ts` (lifecycle +
+`getReconciledServerState` + `getActiveServerMatch` + `findServerOccupant` + `findNearbyUnscoredMatch`)
+· `src/lib/server-players.ts` (`parseConnectedPlayers` — derives the connected roster from the raw
+console log, no stored state) · `src/lib/matchzy.ts` · `src/lib/schedule.ts` ·
 `src/lib/matchScore.ts` (`writeMatchScore()` — shared score-write + hooks, #138) ·
 `src/lib/demo/mapResult.ts` (`map_result` parse/R2 read-write) ·
 `src/components/MatchServerPanel.tsx` · `src/components/MatchDemoReviewBlock.tsx` ·
 `src/components/useDemoIngestActions.ts` (shared confirm/dismiss/re-parse) ·
 `src/components/IngestJobActions.tsx` · `src/components/JobActions.tsx` (generic retry + live refresh) ·
-`src/components/ServerConsolePanel.tsx` ·
+`src/components/ServerConsolePanel.tsx` · `src/components/ServerStatusBits.tsx` (shared status pill +
+copy-connect button) · `src/components/ScrimPanel.tsx` · `src/app/scrims/page.tsx` ·
 `src/components/SchedulingOverlapBanner.tsx` · `src/app/admin/jobs/page.tsx` ·
 `src/app/admin/servers/page.tsx` · `scripts/demo-ingest.ts` · `scripts/gen-matchzy-config.ts` ·
 `scripts/inspect-demo.ts` · `scripts/dathost-golden-diff.ts` · `scripts/dathost-golden-apply.ts`
