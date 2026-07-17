@@ -11,7 +11,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
-import { matchLabel } from './util';
+import { matchLabel, isPlayedScore } from './util';
+import { SCHEDULE_COLLISION_WINDOW_MS } from './schedule';
 import {
   dathostServerId,
   applyGoldenSettings,
@@ -59,6 +60,59 @@ export async function findServerOccupant(
     .limit(1);
   const rows = (data ?? []) as { id: number }[];
   return rows.length ? rows[0].id : null;
+}
+
+export interface NearbyUnscoredMatch {
+  matchId: number;
+  label: string;
+  scheduledAt: string;
+}
+
+/**
+ * A league match scheduled within `windowMs` of right now that hasn't been scored yet, or `null`.
+ * Scrims share the one physical server with league matches (D2) — a match's scheduled time passing
+ * doesn't mean the server is free, since it may still be mid-veto or mid-play. Nearest match wins if
+ * more than one falls in the window.
+ */
+export async function findNearbyUnscoredMatch(
+  supabaseAdmin: SupabaseClient,
+  windowMs: number = SCHEDULE_COLLISION_WINDOW_MS,
+): Promise<NearbyUnscoredMatch | null> {
+  const now = Date.now();
+  const { data } = await supabaseAdmin
+    .from('matches')
+    .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
+    .not('scheduled_at', 'is', null)
+    .gte('scheduled_at', new Date(now - windowMs).toISOString())
+    .lte('scheduled_at', new Date(now + windowMs).toISOString());
+  const rows = (data ?? []) as unknown as {
+    id: number;
+    match_number: number | null;
+    scheduled_at: string;
+    final_score: string | null;
+    weeks: { week_number: number | null; seasons: { name: string | null } | null } | null;
+  }[];
+
+  let best: NearbyUnscoredMatch | null = null;
+  let bestDelta = Infinity;
+  for (const row of rows) {
+    if (isPlayedScore(row.final_score)) continue;
+    const delta = Math.abs(new Date(row.scheduled_at).getTime() - now);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = {
+        matchId: row.id,
+        label: matchLabel({
+          matchId: row.id,
+          seasonName: row.weeks?.seasons?.name,
+          weekNumber: row.weeks?.week_number,
+          matchNumber: row.match_number,
+        }),
+        scheduledAt: row.scheduled_at,
+      };
+    }
+  }
+  return best;
 }
 
 async function setServerState(

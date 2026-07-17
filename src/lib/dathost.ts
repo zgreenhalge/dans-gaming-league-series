@@ -201,6 +201,18 @@ export async function runConsole(id: string, line: string): Promise<void> {
 }
 
 /**
+ * Recent raw console/log lines (a rolling ~1000-line window), oldest first. The `/console` POST
+ * above doesn't return a command's output — DatHost's console endpoints are fire-and-forget for
+ * commands and read-only for the log — so this is the server's own stdout log, not an RCON response.
+ * It's what `server-players.ts` derives the currently-connected roster from, since every connect/
+ * disconnect/round event is already in here as `"name<userid><steamid><team>"`.
+ */
+export async function getConsoleLines(id: string): Promise<string[]> {
+  const data = (await call('GET', `/game-servers/${id}/console`)) as { lines?: string[] } | null;
+  return data?.lines ?? [];
+}
+
+/**
  * Load a per-match MatchZy config. `urlOrCommand` is either an authenticated config URL (→
  * `matchzy_loadmatch_url <url>`) or, if it contains a space, a full `matchzy_*` console line.
  */
