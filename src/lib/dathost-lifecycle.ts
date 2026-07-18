@@ -11,7 +11,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
-import { matchLabel } from './util';
+import { matchLabel, isPlayedScore } from './util';
 import {
   dathostServerId,
   applyGoldenSettings,
@@ -25,6 +25,8 @@ import {
   type DathostServer,
 } from './dathost';
 import { pushCfgFiles } from './dathost-config';
+import { recordOpsError, clearOpsError } from './ops-errors';
+import { DEMO_INGEST_JOB_TYPE } from './demo/ingestResult';
 
 export type ServerState = 'idle' | 'provisioning' | 'live' | 'tearing_down' | 'done' | 'failed';
 
@@ -186,6 +188,10 @@ export async function provisionMatchServer(
  * auto-teardown) to no-op unless THIS match is the current occupant — i.e. its `server_state` is
  * still active (`provisioning`/`live`/`tearing_down`) and its `dathost_server_id` matches. The
  * explicit teardown route omits the flag, since that's a deliberate operator stop.
+ *
+ * Every real teardown (this function reaching the `stop` call, not the no-op returns above) also
+ * checks for a missing `demo_ingest` job (`flagMissingDemoIngest`, #228) — the one signal available
+ * that the Worker → notify → Action pipeline never started for this match.
  */
 export async function teardownMatchServer(
   supabaseAdmin: SupabaseClient,
@@ -194,13 +200,19 @@ export async function teardownMatchServer(
 ): Promise<void> {
   const serverId = dathostServerId();
 
+  const { data } = await supabaseAdmin
+    .from('matches')
+    .select('server_state, dathost_server_id, server_started_at, final_score')
+    .eq('id', matchId)
+    .maybeSingle();
+  const row = data as {
+    server_state?: string | null;
+    dathost_server_id?: string | null;
+    server_started_at?: string | null;
+    final_score?: string | null;
+  } | null;
+
   if (opts.onlyIfOwnsServer) {
-    const { data } = await supabaseAdmin
-      .from('matches')
-      .select('server_state, dathost_server_id')
-      .eq('id', matchId)
-      .maybeSingle();
-    const row = data as { server_state?: string | null; dathost_server_id?: string | null } | null;
     const active =
       row?.server_state === 'provisioning' ||
       row?.server_state === 'live' ||
@@ -215,6 +227,58 @@ export async function teardownMatchServer(
     server_state: 'done',
     connect_string: null,
   });
+
+  await flagMissingDemoIngest(supabaseAdmin, matchId, row?.server_started_at ?? null, row?.final_score ?? null);
+}
+
+/** Grace period after the server started before a missing demo-ingest job is worth flagging — well
+ * under a real match's playtime, so it never fires on a match that's still in progress. */
+const MISSING_DEMO_INGEST_GRACE_MS = 5 * 60 * 1000;
+const MISSING_DEMO_INGEST_OP = 'demo_ingest_missing';
+
+/**
+ * Flags a match whose server just tore down with no `demo_ingest` background job ever recorded and
+ * no score yet written (#228) — the auto-ingestion pipeline (Worker → notify → Action) never started,
+ * and unlike a dispatch failure inside that pipeline, nothing else records this silently-broken case.
+ * Best-effort and non-fatal: teardown already happened by the time this runs. Resolves (clears) the
+ * flag once a score lands, however it got there (auto-commit, staged confirm, or manual entry).
+ */
+async function flagMissingDemoIngest(
+  supabaseAdmin: SupabaseClient,
+  matchId: number,
+  serverStartedAt: string | null,
+  finalScore: string | null,
+): Promise<void> {
+  try {
+    if (isPlayedScore(finalScore)) {
+      await clearOpsError(supabaseAdmin, 'match', matchId, MISSING_DEMO_INGEST_OP);
+      return;
+    }
+    if (!serverStartedAt || Date.now() - new Date(serverStartedAt).getTime() < MISSING_DEMO_INGEST_GRACE_MS) {
+      return; // too soon since the server started to conclude the demo is actually missing
+    }
+
+    const { data: job } = await supabaseAdmin
+      .from('background_jobs')
+      .select('status')
+      .eq('job_type', DEMO_INGEST_JOB_TYPE)
+      .eq('match_id', matchId)
+      .maybeSingle();
+    if (job) {
+      await clearOpsError(supabaseAdmin, 'match', matchId, MISSING_DEMO_INGEST_OP);
+      return;
+    }
+
+    await recordOpsError(
+      supabaseAdmin,
+      'match',
+      matchId,
+      MISSING_DEMO_INGEST_OP,
+      'Server torn down with no automated demo ingestion and no score recorded — pull the demo from the server manually before it is cleaned up.',
+    );
+  } catch (err) {
+    console.error(`flagMissingDemoIngest(${matchId}) failed:`, err);
+  }
 }
 
 export interface ServerStatusView {

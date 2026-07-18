@@ -46,7 +46,8 @@ Orchestration lives in **`src/lib/dathost-lifecycle.ts`** over the typed client 
   + `connect_string`. Marks `failed` and rethrows on any error. A per-file cfg-push failure is logged,
   not fatal.
 - **`teardownMatchServer`** — `stop` (never delete) → `done`. `onlyIfOwnsServer` no-ops unless this
-  match is the current occupant, so tearing down one match never stops another's server.
+  match is the current occupant, so tearing down one match never stops another's server. Every real
+  teardown also flags a missing demo (#228, below).
 - **`getReconciledServerState`** — reconciles a stale `live` against reality (see below).
 
 ### Reconciliation (#135)
@@ -144,6 +145,21 @@ Schema-free by design — status lives in the existing table, detail lives in th
 
 Auto-commit takes the `running → confirmed` edge directly (no `parsed` stop) — the D5 predicate check
 and the write both happen inside the `running` stage.
+
+### Missing-demo detection (#228)
+
+The Worker → notify → Action chain has no built-in alarm if MatchZy never POSTs the demo in the first
+place (a config-set clobbering the demo-upload cvars, a MatchZy-side upload failure, a dead Worker) —
+`/api/ingest/notify` records `received` as its first side effect, so a missing `demo_ingest` row means
+the chain never started, and nothing else observes that silently. `teardownMatchServer` (any real
+teardown — eager-on-notify, score-write, or the explicit operator stop) checks for exactly this: no
+`demo_ingest` background job for the match, no score yet written, and the server has been up more than
+five minutes (comfortably longer than any real match takes to reach this point, so it never fires
+mid-match). It records an `ops_errors` row (`entity_type: 'match'`, `operation:
+'demo_ingest_missing'`, surfaced on `/admin/ops-errors`) so an admin can pull the demo off the server
+manually before the next match (or `dathost-cleanup`) overwrites it. The flag clears itself once a
+score lands for the match, regardless of how it got there (auto-commit, staged confirm, or manual
+entry).
 
 ## Admin surfaces
 
