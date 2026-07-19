@@ -370,7 +370,8 @@ export default function ReplayPlayer({
       const annCanvas = annotationCanvasRef.current;
       if (annCanvas) {
         applyCanvasSize(annCanvas, side);
-        annCtxRef.current = annCanvas.getContext('2d');
+        const annCtx = annCanvas.getContext('2d');
+        if (annCtx) annCtxRef.current = annCtx;
       }
       redrawAnnotations();
 
