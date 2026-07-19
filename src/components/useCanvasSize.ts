@@ -3,6 +3,27 @@
 import { useEffect, type RefObject } from 'react';
 
 /**
+ * Applies DPR-aware pixel sizing to a canvas: its backing-store `width`/`height` scaled
+ * by `devicePixelRatio`, its CSS `width`/`height` to `side`, and its 2D context scaled
+ * to match. The sizing half of what `useCanvasSize` automates for one canvas, exported
+ * separately so a second canvas that must track the same size (e.g. `ReplayPlayer`'s
+ * annotation overlay, sized alongside its main canvas) can apply it without a second
+ * hook/effect.
+ */
+export function applyCanvasSize(canvas: HTMLCanvasElement, side: number): void {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(side * dpr);
+  canvas.height = Math.round(side * dpr);
+  canvas.style.width = `${side}px`;
+  canvas.style.height = `${side}px`;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
+  }
+}
+
+/**
  * Sizes a (square) canvas to its container, DPR-aware: capped at `maxSide` and ~60% of
  * viewport height, floor 240px, re-running on container resize via `ResizeObserver`.
  * Shared by every canvas that fits itself to a bordered container this way (the 2D
@@ -24,16 +45,7 @@ export function useCanvasSize(
     const resize = () => {
       const maxByHeight = Math.round((window.innerHeight || 800) * 0.6);
       const side = Math.max(240, Math.min(container.clientWidth, maxSide, maxByHeight));
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.round(side * dpr);
-      canvas.height = Math.round(side * dpr);
-      canvas.style.width = `${side}px`;
-      canvas.style.height = `${side}px`;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(dpr, dpr);
-      }
+      applyCanvasSize(canvas, side);
       onResize(side);
     };
     resize();

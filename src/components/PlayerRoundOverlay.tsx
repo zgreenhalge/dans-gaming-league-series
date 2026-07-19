@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause } from 'lucide-react';
-import { autoFitProjector, boundsOfPoints, calibratedProjector, drawRadarBackground, type Projector } from '@/lib/replay/project';
+import {
+  autoFitProjector,
+  boundsOfPoints,
+  calibratedProjector,
+  countDistinctMatches,
+  drawRadarBackground,
+  type Projector,
+} from '@/lib/replay/project';
 import { traceStateAt, maxDurationTicks, type PlayerTrace } from '@/lib/replay/aggregate';
 import { readTheme } from './replayTheme';
 import { useMapRadar } from './useMapRadar';
@@ -51,7 +58,7 @@ export default function PlayerRoundOverlay({
     () => (side === 'all' ? traces : traces.filter((t) => t.side === side)),
     [traces, side],
   );
-  const gameCount = useMemo(() => new Set(visible.map((t) => t.matchId)).size, [visible]);
+  const gameCount = useMemo(() => countDistinctMatches(visible), [visible]);
 
   // Restart the shared clock whenever the underlying trace set changes (a different
   // player/map picked upstream) rather than carrying over a stale scrub position.
@@ -67,25 +74,19 @@ export default function PlayerRoundOverlay({
     tickRef.current = 0;
   }, [traces]);
 
-  // Read by `draw()`/`rebuildColored()` instead of closing over `visible` directly, so
-  // toggling the side filter doesn't change those callbacks' identity and doesn't
-  // re-trigger the canvas-sizing effect below (which rebuilds the projector) — only an
-  // actual resize should do that.
-  const visibleRef = useRef(visible);
-
   // Side colors read from CSS custom properties, refreshed each canvas resize (see
   // `onResize` below) so a live light/dark toggle is picked up the same way
   // `ReplayPlayer` incidentally does, instead of only once on mount.
   const colorsRef = useRef({ CT: '#5b9bd5', T: '#d5a04b', neutral: '#e6e6e6' });
 
-  // Each visible trace's color resolved once (not per animation frame — issue #224),
-  // rebuilt whenever the visible set or the theme colors change. A stable callback
-  // (reads both inputs from refs) so it can be called from the resize effect without
-  // making that effect re-fire on every side-filter toggle.
+  // Each visible trace's color resolved once (not per animation frame — issue #224).
+  // The source of truth for which traces `draw()` shows; rebuilt from `visible`
+  // whenever the trace set changes (below), and re-colored in place from its own
+  // tracked traces on a resize/theme refresh — no separate ref of `visible` needed.
   const coloredRef = useRef<{ trace: PlayerTrace; color: string }[]>([]);
-  const rebuildColored = useCallback(() => {
+  const recolor = useCallback(() => {
     const colors = colorsRef.current;
-    coloredRef.current = visibleRef.current.map((trace) => ({ trace, color: colors[trace.side ?? 'neutral'] }));
+    coloredRef.current = coloredRef.current.map(({ trace }) => ({ trace, color: colors[trace.side ?? 'neutral'] }));
   }, []);
 
   const draw = useCallback(() => {
@@ -118,13 +119,18 @@ export default function PlayerRoundOverlay({
     if (scrubRef.current) scrubRef.current.value = String(tickRef.current);
   }, [calibration, radarImage]);
 
-  // Repaint (without resizing) whenever the visible trace set changes — e.g. the side
-  // filter — while the clock is stopped; a running clock already repaints every frame.
+  // Rebuild the tracked/colored trace set whenever the visible set actually changes —
+  // e.g. the side filter — not on every play/pause toggle.
   useEffect(() => {
-    visibleRef.current = visible;
-    rebuildColored();
+    const colors = colorsRef.current;
+    coloredRef.current = visible.map((trace) => ({ trace, color: colors[trace.side ?? 'neutral'] }));
+  }, [visible]);
+
+  // Repaint (without resizing) whenever the visible trace set changes, while the clock
+  // is stopped; a running clock already repaints every frame.
+  useEffect(() => {
     if (!playing) draw();
-  }, [visible, rebuildColored, playing, draw]);
+  }, [visible, playing, draw]);
 
   // --- size canvas to its container (DPR-aware) + (re)build the projector ---
   const onResize = useCallback(
@@ -137,10 +143,10 @@ export default function PlayerRoundOverlay({
         const theme = readTheme(container);
         colorsRef.current = { CT: theme.ct, T: theme.t, neutral: theme.text };
       }
-      rebuildColored();
+      recolor();
       draw();
     },
-    [calibration, bounds, rebuildColored, draw],
+    [calibration, bounds, recolor, draw],
   );
   useCanvasSize(containerRef, canvasRef, MAX_SIDE, onResize);
 

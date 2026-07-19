@@ -5,6 +5,7 @@ import {
   autoFitProjector,
   boundsOfPoints,
   calibratedProjector,
+  countDistinctMatches,
   drawRadarBackground,
   type Projector,
 } from '@/lib/replay/project';
@@ -148,87 +149,106 @@ export default function MapHeatmap({
       ),
     [points, visibleMatchIds, activeKinds, side, playerId],
   );
-  const gameCount = useMemo(() => new Set(visible.map((p) => p.matchId)).size, [visible]);
+  const gameCount = useMemo(() => countDistinctMatches(visible), [visible]);
+
+  // Read by `draw()` instead of closing over `visible` directly, so toggling a layer/
+  // side/player filter doesn't change `onResize`'s identity and doesn't re-trigger the
+  // canvas-sizing effect below (which tears down and recreates the ResizeObserver) —
+  // only an actual resize or a real bounds change (new data) should do that.
+  const visibleRef = useRef(visible);
+  const sizeRef = useRef({ w: 0, h: 0 });
+  const projectorRef = useRef<Projector | null>(null);
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    const projector = projectorRef.current;
+    if (!ctx || !projector) return;
+    const { w: sidePx } = sizeRef.current;
+
+    // Background
+    ctx.fillStyle = '#0b0e14';
+    ctx.fillRect(0, 0, sidePx, sidePx);
+    if (calibration && radarImage.current) {
+      drawRadarBackground(ctx, projector, radarImage.current, calibration, RADAR_ALPHA);
+    }
+
+    // Project + resolve color once per point, shared by both render passes below
+    // rather than recomputed in each.
+    const plotted = visibleRef.current.map((p) => ({
+      p,
+      c: projector.project(p),
+      color: colorOfKind.get(p.kind) ?? '#ffffff',
+      isGrenade: GRENADE_KINDS.has(p.kind),
+    }));
+
+    // Pass 1 — a soft, wide halo (the density *field*): 'screen' rather than
+    // 'lighter', since 'lighter' sums RGB with no ceiling until it clips at 255,
+    // blowing a busy chokepoint out to solid white within a handful of overlapping
+    // points. 'screen' (1 - (1-a)(1-b)) approaches white only asymptotically, so it
+    // takes far more stacked points before an area reads as a flat glare instead of
+    // a color gradient. Its alpha is intentionally low — this pass's job is the
+    // gradient across a cluster, not making a lone point pop.
+    ctx.globalCompositeOperation = 'screen';
+    for (const { p, c, color, isGrenade } of plotted) {
+      if (isGrenade) {
+        // Plot grenades as their effect area.
+        const r = Math.max(4, projector.scaleLength(GRENADE_RADIUS[p.kind] ?? 100));
+        ctx.fillStyle = color;
+        ctx.globalAlpha = GRENADE_HALO_ALPHA;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Alpha is baked into the gradient, so reset globalAlpha — otherwise a
+        // grenade drawn earlier in the loop leaks onto these and dims them.
+        ctx.globalAlpha = 1;
+        const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, HALO_RADIUS);
+        g.addColorStop(0, hexAlpha(color, HALO_ALPHA));
+        g.addColorStop(1, hexAlpha(color, 0));
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, HALO_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Pass 2 — a small, brighter core pinpointing each kill/death exactly, so a
+    // single point (or a handful spread across a chokepoint, not stacked pixel for
+    // pixel) still reads clearly on top of pass 1's low-alpha field. Grenades don't
+    // get one — they're already an area marker, not a pinpoint event. This layer
+    // can still wash toward white, but only within its own tiny radius, where many
+    // kills genuinely landed at virtually the same spot (e.g. a common angle) — a
+    // real signal worth showing brightly.
+    ctx.globalCompositeOperation = 'lighter';
+    for (const { c, color, isGrenade } of plotted) {
+      if (isGrenade) continue;
+      ctx.globalAlpha = CORE_DOT_ALPHA;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, CORE_DOT_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }, [calibration, colorOfKind, radarImage]);
+
+  // Repaint (without resizing) whenever the visible point set changes — e.g. a layer/
+  // side/player filter toggle.
+  useEffect(() => {
+    visibleRef.current = visible;
+    draw();
+  }, [visible, draw]);
 
   const onResize = useCallback(
     (sidePx: number) => {
-      const canvas = canvasRef.current;
-      const ctx = canvas?.getContext('2d');
-      if (!ctx) return;
-
-      let projector: Projector | null = null;
-      if (calibration) projector = calibratedProjector(calibration, sidePx, sidePx);
-      else if (allBounds) projector = autoFitProjector(allBounds, sidePx, sidePx);
-
-      // Background
-      ctx.fillStyle = '#0b0e14';
-      ctx.fillRect(0, 0, sidePx, sidePx);
-      if (calibration && radarImage.current && projector) {
-        drawRadarBackground(ctx, projector, radarImage.current, calibration, RADAR_ALPHA);
-      }
-      if (!projector) return;
-
-      // Project + resolve color once per point, shared by both render passes below
-      // rather than recomputed in each.
-      const plotted = visible.map((p) => ({
-        p,
-        c: projector.project(p),
-        color: colorOfKind.get(p.kind) ?? '#ffffff',
-        isGrenade: GRENADE_KINDS.has(p.kind),
-      }));
-
-      // Pass 1 — a soft, wide halo (the density *field*): 'screen' rather than
-      // 'lighter', since 'lighter' sums RGB with no ceiling until it clips at 255,
-      // blowing a busy chokepoint out to solid white within a handful of overlapping
-      // points. 'screen' (1 - (1-a)(1-b)) approaches white only asymptotically, so it
-      // takes far more stacked points before an area reads as a flat glare instead of
-      // a color gradient. Its alpha is intentionally low — this pass's job is the
-      // gradient across a cluster, not making a lone point pop.
-      ctx.globalCompositeOperation = 'screen';
-      for (const { p, c, color, isGrenade } of plotted) {
-        if (isGrenade) {
-          // Plot grenades as their effect area.
-          const r = Math.max(4, projector.scaleLength(GRENADE_RADIUS[p.kind] ?? 100));
-          ctx.fillStyle = color;
-          ctx.globalAlpha = GRENADE_HALO_ALPHA;
-          ctx.beginPath();
-          ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          // Alpha is baked into the gradient, so reset globalAlpha — otherwise a
-          // grenade drawn earlier in the loop leaks onto these and dims them.
-          ctx.globalAlpha = 1;
-          const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, HALO_RADIUS);
-          g.addColorStop(0, hexAlpha(color, HALO_ALPHA));
-          g.addColorStop(1, hexAlpha(color, 0));
-          ctx.fillStyle = g;
-          ctx.beginPath();
-          ctx.arc(c.x, c.y, HALO_RADIUS, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-
-      // Pass 2 — a small, brighter core pinpointing each kill/death exactly, so a
-      // single point (or a handful spread across a chokepoint, not stacked pixel for
-      // pixel) still reads clearly on top of pass 1's low-alpha field. Grenades don't
-      // get one — they're already an area marker, not a pinpoint event. This layer
-      // can still wash toward white, but only within its own tiny radius, where many
-      // kills genuinely landed at virtually the same spot (e.g. a common angle) — a
-      // real signal worth showing brightly.
-      ctx.globalCompositeOperation = 'lighter';
-      for (const { c, color, isGrenade } of plotted) {
-        if (isGrenade) continue;
-        ctx.globalAlpha = CORE_DOT_ALPHA;
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, CORE_DOT_RADIUS, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
+      sizeRef.current = { w: sidePx, h: sidePx };
+      if (calibration) projectorRef.current = calibratedProjector(calibration, sidePx, sidePx);
+      else if (allBounds) projectorRef.current = autoFitProjector(allBounds, sidePx, sidePx);
+      draw();
     },
-    [visible, calibration, allBounds, colorOfKind, radarImage],
+    [calibration, allBounds, draw],
   );
 
   useCanvasSize(containerRef, canvasRef, MAX_SIDE, onResize);

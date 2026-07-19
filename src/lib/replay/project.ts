@@ -147,6 +147,15 @@ export function projectorFor(
 }
 
 /**
+ * Count of distinct matches represented in a list of match-scoped items (heatmap
+ * points, player-trace rounds) — shared by the Heatmap and Pathing tabs' "N games"
+ * caption alongside their raw point/round count.
+ */
+export function countDistinctMatches(items: { matchId: number }[]): number {
+  return new Set(items.map((i) => i.matchId)).size;
+}
+
+/**
  * The bounding box of a flat list of world-space points, or `null` if empty. Shared
  * point-cloud variant of `payloadBounds()` above, for callers that already have their
  * own `{x, y}` list (the map heatmap's points, the aggregate replay overlay's trace

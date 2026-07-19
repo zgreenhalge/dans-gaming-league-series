@@ -10,7 +10,7 @@ import { viewStateAt, roundTickRange, grenadeEffectRadius } from '@/lib/replay/p
 import { drawScene, type Ctx2D, type ReplayTheme, type BannerInfo } from '@/lib/replay/draw';
 import { readTheme, STICKER_COLORS } from './replayTheme';
 import { useMapRadar } from './useMapRadar';
-import { useCanvasSize } from './useCanvasSize';
+import { applyCanvasSize, useCanvasSize } from './useCanvasSize';
 
 const SPEEDS = [0.5, 1, 2, 4];
 
@@ -369,17 +369,8 @@ export default function ReplayPlayer({
       // scale cleanly to the new side) rather than losing the drawing.
       const annCanvas = annotationCanvasRef.current;
       if (annCanvas) {
-        const dpr = window.devicePixelRatio || 1;
-        annCanvas.width = Math.round(side * dpr);
-        annCanvas.height = Math.round(side * dpr);
-        annCanvas.style.width = `${side}px`;
-        annCanvas.style.height = `${side}px`;
-        const annCtx = annCanvas.getContext('2d');
-        if (annCtx) {
-          annCtx.setTransform(1, 0, 0, 1, 0, 0);
-          annCtx.scale(dpr, dpr);
-          annCtxRef.current = annCtx;
-        }
+        applyCanvasSize(annCanvas, side);
+        annCtxRef.current = annCanvas.getContext('2d');
       }
       redrawAnnotations();
 
