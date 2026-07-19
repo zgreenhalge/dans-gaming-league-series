@@ -42,6 +42,12 @@ Actions.
      fails, so a transient error never wedges the match in `queued` (which the guard would otherwise
      treat as in-flight forever). This claim→dispatch→record shape is identical across every dispatch
      route, so it lives once in `src/lib/background-jobs.ts` rather than hand-rolled per route.
+   - **Pick the write order by whether a failed dispatch needs a rollback.** If the row is claimed to
+     `queued` *before* dispatching (both replay routes), a failed dispatch leaves a stale `queued` row
+     behind unless something unwinds it — use `dispatchAndRecordFailure` for that. If nothing is
+     written until the dispatch itself succeeds (`demo/dispatch`, which returns an error straight to
+     the caller on a failed dispatch and never wrote a row to unwind), there's no rollback to do — call
+     `dispatchWorkflow` directly and `recordJobStatus` only in the success branch.
 
 2. **Workflow — `.github/workflows/<job>.yml`.** `workflow_dispatch` (and optionally
    `repository_dispatch`) inputs; `concurrency` backstop with **`cancel-in-progress: false`** (a
