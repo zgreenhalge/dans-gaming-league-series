@@ -47,7 +47,14 @@ Actions.
      behind unless something unwinds it — use `dispatchAndRecordFailure` for that. If nothing is
      written until the dispatch itself succeeds (`demo/dispatch`, which returns an error straight to
      the caller on a failed dispatch and never wrote a row to unwind), there's no rollback to do — call
-     `dispatchWorkflow` directly and `recordJobStatus` only in the success branch.
+     `dispatchWorkflow` directly and `recordJobStatus` only in the success branch. A third shape covers
+     a claimed row where failure needs neither a rollback nor to reach the caller: `ingest/notify`'s
+     `demo_ingest` path claims `received` before dispatching, and on a failed dispatch just logs and
+     leaves the row at `received` — the demo is already durably staged in R2, so a stale `received` row
+     is a correct "not parsed yet" state, not a wedge, and the manual `demo/dispatch` route is the
+     retry path. On success it calls `advanceJobStatus` (not `recordJobStatus`) to move `received` →
+     `queued` only if the row is still `received`, so a concurrent Action run that already advanced it
+     isn't clobbered back.
 
 2. **Workflow — `.github/workflows/<job>.yml`.** `workflow_dispatch` (and optionally
    `repository_dispatch`) inputs; `concurrency` backstop with **`cancel-in-progress: false`** (a
