@@ -72,11 +72,13 @@ export async function dispatchAndRecordFailure(
 ): Promise<{ ok: boolean; error?: string }> {
   const dispatch = await dispatchWorkflow(params.workflowFile, params.inputs);
   if (!dispatch.ok) {
-    await recordJobStatus(admin, params.jobType, params.matchId, {
-      status: 'failed',
-      error_message: `dispatch failed: ${dispatch.error}`,
-    });
-    if (params.subject) await mirrorSubjectStatus(admin, params.subject, 'failed');
+    await Promise.all([
+      recordJobStatus(admin, params.jobType, params.matchId, {
+        status: 'failed',
+        error_message: `dispatch failed: ${dispatch.error}`,
+      }),
+      params.subject ? mirrorSubjectStatus(admin, params.subject, 'failed') : Promise.resolve(),
+    ]);
   }
   return dispatch;
 }
