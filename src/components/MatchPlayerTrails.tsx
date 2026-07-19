@@ -35,17 +35,17 @@ export default function MatchPlayerTrails({
       : (players[0]?.id ?? null);
 
   useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/matches/${matchId}/replay/payload`)
+    const ac = new AbortController();
+    fetch(`/api/matches/${matchId}/replay/payload`, { signal: ac.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error(`Failed to load replay (${res.status})`);
         return (await res.json()) as ReplayPayload;
       })
-      .then((p) => !cancelled && setPayload(p))
-      .catch((e) => !cancelled && setError(e.message));
-    return () => {
-      cancelled = true;
-    };
+      .then((p) => setPayload(p))
+      .catch((e) => {
+        if (e.name !== 'AbortError') setError(e.message);
+      });
+    return () => ac.abort();
   }, [matchId]);
 
   const traces = useMemo<PlayerTrace[]>(() => {

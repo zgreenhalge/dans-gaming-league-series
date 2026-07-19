@@ -59,24 +59,22 @@ export default function PlayerTrailsTab({
     // No eligible map (mapOptions is empty) — skip the request; the render below
     // shows "No matches..." from mapOptions directly, so there's nothing to fetch.
     if (matchIds.length === 0) return;
-    let cancelled = false;
+    const ac = new AbortController();
     fetch(`/api/players/${playerId}/replay-trails`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ matchIds }),
+      signal: ac.signal,
     })
       .then((res) => (res.ok ? res.json() : { traces: [], tickRate: null }))
       .then((body) => {
-        if (cancelled) return;
         setResult({ map: selectedMap, traces: body.traces ?? [], tickRate: body.tickRate ?? 64 });
       })
-      .catch(() => {
-        if (cancelled) return;
+      .catch((e) => {
+        if (e.name === 'AbortError') return;
         setResult({ map: selectedMap, traces: [], tickRate: 64 });
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => ac.abort();
   }, [playerId, matchIds, selectedMap]);
 
   if (mapOptions.length === 0) {
