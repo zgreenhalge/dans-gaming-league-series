@@ -283,6 +283,13 @@ first frame they appear in (no prior alive position exists to freeze at), that f
 used as a last resort instead — a possibly-imprecise corpse marker beats the round silently vanishing
 from the overlay and its round count.
 
+**Survivors** stop at `round.endTick` for the same reason: `round.frames` (`extract.ts`) deliberately
+keeps a few seconds *after* `round_end` so the single-round 2D Replay can show the post-round window,
+but CS2 resets players toward their next-round spawn during that window — movement that isn't part of
+the round itself. Reading past `endTick` would make a surviving player's ghost snap back toward spawn
+instead of staying put where the round actually ended; `traceStateAt`'s end-of-frames clamp freezes
+them there the same way it freezes a death.
+
 The shared renderer, `<PlayerRoundOverlay>`
 (`src/components/PlayerRoundOverlay.tsx`), takes a `PlayerTrace[]` + `tickRate` + map slug and owns the
 canvas, radar background (`useMapRadar`), CT/T side toggle, and a play/pause/speed/scrub transport
