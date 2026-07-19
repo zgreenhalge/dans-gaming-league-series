@@ -145,3 +145,54 @@ export function projectorFor(
   if (!bounds) return null;
   return autoFitProjector(bounds, canvasWidth, canvasHeight);
 }
+
+/**
+ * The bounding box of a flat list of world-space points, or `null` if empty. Shared
+ * point-cloud variant of `payloadBounds()` above, for callers that already have their
+ * own `{x, y}` list (the map heatmap's points, the aggregate replay overlay's trace
+ * frames) rather than a whole `ReplayPayload`.
+ */
+export function boundsOfPoints(points: Point[]): Bounds | null {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+}
+
+/** The slice of Canvas2D `drawRadarBackground` needs — a DOM `CanvasRenderingContext2D`
+ *  or a napi-rs canvas context both satisfy this structurally, no cast required. */
+export interface RadarDrawContext {
+  globalAlpha: number;
+  drawImage(image: unknown, x: number, y: number, w: number, h: number): void;
+}
+
+/**
+ * Draws a map's calibrated radar image onto `ctx`, positioned via `projector`. Shared
+ * by every radar-backed canvas (2D Replay, Map Heatmap, Player Trails overlay) so the
+ * corner projection math lives in one place. `alpha` defaults to the point-overlay
+ * convention (points/dots read clearly through a slightly translucent radar); the full
+ * 2D Replay draws its radar opaque by passing `1`.
+ */
+export function drawRadarBackground(
+  ctx: RadarDrawContext,
+  projector: Projector,
+  image: unknown,
+  cal: RadarCalibration,
+  alpha = 0.85,
+): void {
+  const tl = projector.project({ x: cal.posX, y: cal.posY });
+  const br = projector.project({
+    x: cal.posX + cal.imageWidth * cal.scale,
+    y: cal.posY - cal.imageHeight * cal.scale,
+  });
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(image, tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+  ctx.globalAlpha = 1;
+}

@@ -1,15 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   autoFitProjector,
+  boundsOfPoints,
   calibratedProjector,
+  drawRadarBackground,
   type Projector,
-  type Bounds,
 } from '@/lib/replay/project';
 import type { HeatmapKind } from '@/lib/replay/heatmap';
 import type { MapHeatmapPoint } from '@/lib/queries';
 import { useMapRadar } from './useMapRadar';
+import { useCanvasSize } from './useCanvasSize';
 
 type SideFilter = 'all' | 'CT' | 'T';
 
@@ -53,17 +55,6 @@ const CORE_DOT_ALPHA = 0.24;
 /** Alpha the calibrated radar image is drawn at, so points read clearly through it. */
 const RADAR_ALPHA = 0.85;
 
-function boundsOf(points: MapHeatmapPoint[]): Bounds | null {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const p of points) {
-    if (p.x < minX) minX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y > maxY) maxY = p.y;
-  }
-  return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
-}
-
 export default function MapHeatmap({
   slug,
   matchIds,
@@ -93,31 +84,29 @@ export default function MapHeatmap({
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    const ac = new AbortController();
     fetch(`/api/maps/${slug}/heatmap`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ matchIds }),
+      signal: ac.signal,
     })
       .then((res) => (res.ok ? res.json() : { points: [], players: [] }))
       .then((body) => {
-        if (cancelled) return;
         setPoints(body.points ?? []);
         setPlayers(body.players ?? []);
       })
-      .catch(() => {
-        if (cancelled) return;
+      .catch((e) => {
+        if (e.name === 'AbortError') return;
         setPoints([]);
         setPlayers([]);
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => ac.abort();
   }, [slug, matchIds]);
 
   // Auto-fit bounds use ALL points (stable view across filter changes); calibration
   // ignores them entirely.
-  const allBounds = useMemo(() => boundsOf(points ?? []), [points]);
+  const allBounds = useMemo(() => boundsOfPoints(points ?? []), [points]);
 
   const activeKinds = useMemo(() => {
     const set = new Set<HeatmapKind>();
@@ -160,23 +149,11 @@ export default function MapHeatmap({
     [points, visibleMatchIds, activeKinds, side, playerId],
   );
 
-  useEffect(() => {
-    const container = containerRef.current;
-    const canvas = canvasRef.current;
-    if (!container || !canvas) return;
-
-    const render = () => {
-      const maxByHeight = Math.round((window.innerHeight || 800) * 0.6);
-      const sidePx = Math.max(240, Math.min(container.clientWidth, MAX_SIDE, maxByHeight));
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.round(sidePx * dpr);
-      canvas.height = Math.round(sidePx * dpr);
-      canvas.style.width = `${sidePx}px`;
-      canvas.style.height = `${sidePx}px`;
-      const ctx = canvas.getContext('2d');
+  const onResize = useCallback(
+    (sidePx: number) => {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext('2d');
       if (!ctx) return;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.scale(dpr, dpr);
 
       let projector: Projector | null = null;
       if (calibration) projector = calibratedProjector(calibration, sidePx, sidePx);
@@ -185,15 +162,8 @@ export default function MapHeatmap({
       // Background
       ctx.fillStyle = '#0b0e14';
       ctx.fillRect(0, 0, sidePx, sidePx);
-      if (calibration && radarImage.current) {
-        const tl = projector!.project({ x: calibration.posX, y: calibration.posY });
-        const br = projector!.project({
-          x: calibration.posX + calibration.imageWidth * calibration.scale,
-          y: calibration.posY - calibration.imageHeight * calibration.scale,
-        });
-        ctx.globalAlpha = RADAR_ALPHA;
-        ctx.drawImage(radarImage.current, tl.x, tl.y, br.x - tl.x, br.y - tl.y);
-        ctx.globalAlpha = 1;
+      if (calibration && radarImage.current && projector) {
+        drawRadarBackground(ctx, projector, radarImage.current, calibration, RADAR_ALPHA);
       }
       if (!projector) return;
 
@@ -256,13 +226,11 @@ export default function MapHeatmap({
 
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
-    };
+    },
+    [visible, calibration, allBounds, colorOfKind, radarImage],
+  );
 
-    render();
-    const ro = new ResizeObserver(render);
-    ro.observe(container);
-    return () => ro.disconnect();
-  }, [visible, calibration, allBounds, colorOfKind, radarImage]);
+  useCanvasSize(containerRef, canvasRef, MAX_SIDE, onResize);
 
   const toggle = (key: string) =>
     setActive((prev) => {

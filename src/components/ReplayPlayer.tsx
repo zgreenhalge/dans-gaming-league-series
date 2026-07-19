@@ -8,7 +8,9 @@ import { mapSlug } from '@/lib/maps';
 import { projectorFor, type Projector } from '@/lib/replay/project';
 import { viewStateAt, roundTickRange, grenadeEffectRadius } from '@/lib/replay/playback';
 import { drawScene, type Ctx2D, type ReplayTheme, type BannerInfo } from '@/lib/replay/draw';
+import { readTheme, STICKER_COLORS } from './replayTheme';
 import { useMapRadar } from './useMapRadar';
+import { useCanvasSize } from './useCanvasSize';
 
 const SPEEDS = [0.5, 1, 2, 4];
 
@@ -24,9 +26,6 @@ const PEN_COLORS = ['#ef4444', '#f97316', '#22c55e', '#3b82f6', '#ec4899'];
 const PEN_LINE_WIDTH = 3;
 const STICKER_RING_WIDTH = 2;
 const STICKER_FILL_ALPHA = 0.3;
-/** Same hex values `readTheme()` uses for the live smoke/fire/HE effect rendering, so
- *  the pen tool's grenade stickers read as the same colors, not a lookalike palette. */
-const STICKER_COLORS = { smoke: '#9aa0ab', molotov: '#e5642d', he: '#d8d24b' } as const;
 type StickerKind = keyof typeof STICKER_COLORS;
 /** Fraction of the board's side a pointer must land within a stroke to erase it. */
 const ERASE_TOLERANCE = 0.03;
@@ -135,30 +134,6 @@ function paintStroke(ctx: CanvasRenderingContext2D, side: number, stroke: Stroke
   ctx.stroke();
 }
 
-/** Read a CSS custom property off an element, falling back to a literal. */
-function cssVar(el: Element, name: string, fallback: string): string {
-  const v = getComputedStyle(el).getPropertyValue(name).trim();
-  return v || fallback;
-}
-
-function readTheme(el: Element): ReplayTheme {
-  return {
-    bg: cssVar(el, '--color-bg-secondary', '#0b0e14'),
-    grid: cssVar(el, '--color-border-tertiary', '#1c2230'),
-    ct: cssVar(el, '--color-ct', '#5b9bd5'),
-    t: cssVar(el, '--color-t', '#d5a04b'),
-    text: cssVar(el, '--color-text-primary', '#e6e6e6'),
-    textDim: cssVar(el, '--color-text-secondary', '#8a8f98'),
-    bomb: '#f59e0b',
-    tracer: '#e5484d',
-    smoke: STICKER_COLORS.smoke,
-    fire: STICKER_COLORS.molotov,
-    flash: '#e8e6c8',
-    he: STICKER_COLORS.he,
-    decoy: '#6b8fd5',
-  };
-}
-
 /** Cumulative score going into `roundIdx`, plotted by the round's current sides. */
 function bannerFor(payload: ReplayPayload, roundIdx: number): BannerInfo {
   const round = payload.rounds[roundIdx];
@@ -253,23 +228,22 @@ export default function ReplayPlayer({
 
   // --- lazy payload fetch (only mounts when the Replay sub-tab is open) ---
   useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/matches/${matchId}/replay/payload`)
+    const ac = new AbortController();
+    fetch(`/api/matches/${matchId}/replay/payload`, { signal: ac.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error(`Failed to load replay (${res.status})`);
         return (await res.json()) as ReplayPayload;
       })
       .then((p) => {
-        if (cancelled) return;
         setPayload(p);
         tickRef.current = p.rounds.length ? roundTickRange(p.rounds[0]).start : 0;
         strokesRef.current = [];
         historyRef.current = [];
       })
-      .catch((e) => !cancelled && setError(e.message));
-    return () => {
-      cancelled = true;
-    };
+      .catch((e) => {
+        if (e.name !== 'AbortError') setError(e.message);
+      });
+    return () => ac.abort();
   }, [matchId]);
 
   // --- draw one frame at the current tick ---
@@ -374,39 +348,28 @@ export default function ReplayPlayer({
   );
 
   // --- size canvas to its container (DPR-aware) + (re)build the projector ---
-  useEffect(() => {
-    const container = containerRef.current;
-    const canvas = canvasRef.current;
-    if (!container || !canvas || !payload) return;
-    const resize = () => {
-      // Square play-field, but capped so it doesn't dominate the page on wide
-      // viewports — fit within the container width and ~60% of the viewport height.
-      const maxByHeight = Math.round((window.innerHeight || 800) * 0.6);
-      const side = Math.max(240, Math.min(container.clientWidth, MAX_SIDE, maxByHeight));
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.round(side * dpr);
-      canvas.height = Math.round(side * dpr);
-      canvas.style.width = `${side}px`;
-      canvas.style.height = `${side}px`;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(dpr, dpr);
-        // Cache the context so the per-frame draw loop doesn't re-fetch it.
-        ctxRef.current = ctx as unknown as Ctx2D;
-      }
+  const onResize = useCallback(
+    (side: number) => {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      // Cache the context so the per-frame draw loop doesn't re-fetch it.
+      if (ctx) ctxRef.current = ctx as unknown as Ctx2D;
       sizeRef.current = { w: side, h: side };
       setBoardWidth(side);
-      themeRef.current = readTheme(container);
+      const container = containerRef.current;
+      if (container) themeRef.current = readTheme(container);
+      if (!payload) return;
       // Calibrated radar projection when the map has one, else auto-fit over the
       // whole payload's bounds.
       projectorRef.current = projectorFor(payload, side, side, calibration);
 
-      // The annotation overlay matches the main canvas's size exactly. Resizing wipes
-      // its bitmap, so repaint from `strokesRef` (the normalized points scale cleanly
-      // to the new side) rather than losing the drawing.
+      // The annotation overlay matches the main canvas's size exactly (sized here
+      // rather than via `useCanvasSize`, which only manages the one primary canvas).
+      // Resizing wipes its bitmap, so repaint from `strokesRef` (the normalized points
+      // scale cleanly to the new side) rather than losing the drawing.
       const annCanvas = annotationCanvasRef.current;
       if (annCanvas) {
+        const dpr = window.devicePixelRatio || 1;
         annCanvas.width = Math.round(side * dpr);
         annCanvas.height = Math.round(side * dpr);
         annCanvas.style.width = `${side}px`;
@@ -421,12 +384,10 @@ export default function ReplayPlayer({
       redrawAnnotations();
 
       draw();
-    };
-    resize();
-    const ro = new ResizeObserver(resize);
-    ro.observe(container);
-    return () => ro.disconnect();
-  }, [payload, draw, calibration, redrawAnnotations]);
+    },
+    [payload, draw, calibration, redrawAnnotations],
+  );
+  useCanvasSize(containerRef, canvasRef, MAX_SIDE, onResize);
 
   // --- reset to round start whenever the round changes ---
   useEffect(() => {
