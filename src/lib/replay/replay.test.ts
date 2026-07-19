@@ -528,7 +528,7 @@ test('aggregate: extractPlayerTrace freezes at the last alive position on death,
 
 test('aggregate: extractPlayerTrace freezes survivors at round_end, ignoring post-round position drift', () => {
   const r = round({
-    events: [{ type: 'round_end', tick: 10, winnerSide: 'CT', winnerFaction: 'SHIRTS', condition: 'time' }],
+    endTick: 10,
     frames: [
       frame(0, [pf(1, 10, 20, { alive: true, hp: 80 })]),
       frame(10, [pf(1, 15, 25, { alive: true, hp: 80 })]), // at round_end — last frame that counts
