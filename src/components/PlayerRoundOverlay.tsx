@@ -41,7 +41,6 @@ export default function PlayerRoundOverlay({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrubRef = useRef<HTMLInputElement>(null);
-  const activeCountRef = useRef<HTMLSpanElement>(null);
   const tickRef = useRef(0);
   const projectorRef = useRef<Projector | null>(null);
   const sizeRef = useRef({ w: 0, h: 0 });
@@ -52,6 +51,7 @@ export default function PlayerRoundOverlay({
     () => (side === 'all' ? traces : traces.filter((t) => t.side === side)),
     [traces, side],
   );
+  const gameCount = useMemo(() => new Set(visible.map((t) => t.matchId)).size, [visible]);
 
   // Restart the shared clock whenever the underlying trace set changes (a different
   // player/map picked upstream) rather than carrying over a stale scrub position.
@@ -102,13 +102,10 @@ export default function PlayerRoundOverlay({
       drawRadarBackground(ctx, projector, radarImage.current, calibration);
     }
 
-    const shown = coloredRef.current;
     ctx.globalCompositeOperation = 'lighter';
-    let active = 0;
-    for (const { trace, color } of shown) {
+    for (const { trace, color } of coloredRef.current) {
       const state = traceStateAt(trace, tickRef.current);
       if (!state) continue;
-      active++;
       const c = projector.project(state);
       ctx.globalAlpha = state.alive ? ALIVE_ALPHA : DEAD_ALPHA;
       ctx.fillStyle = color;
@@ -119,7 +116,6 @@ export default function PlayerRoundOverlay({
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     if (scrubRef.current) scrubRef.current.value = String(tickRef.current);
-    if (activeCountRef.current) activeCountRef.current.textContent = `${active} / ${shown.length} rounds`;
   }, [calibration, radarImage]);
 
   // Repaint (without resizing) whenever the visible trace set changes — e.g. the side
@@ -184,26 +180,21 @@ export default function PlayerRoundOverlay({
 
   return (
     <div ref={containerRef} className="w-full space-y-3">
-      <div className="flex flex-wrap items-center gap-2 text-[12px]">
-        <span className="font-mono text-[var(--color-text-secondary)]">
-          {playerName} — <span ref={activeCountRef}>0 / {visible.length} rounds</span>
-        </span>
-        <div className="ml-auto flex items-center gap-1">
-          {(['all', 'CT', 'T'] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSide(s)}
-              className={`border px-1.5 py-0.5 font-mono ${
-                side === s
-                  ? 'border-[var(--color-text-primary)] text-[var(--color-text-primary)]'
-                  : 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)]'
-              }`}
-            >
-              {s === 'all' ? 'Both' : s}
-            </button>
-          ))}
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-1 text-[12px]">
+        {(['all', 'CT', 'T'] as const).map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setSide(s)}
+            className={`border px-1.5 py-0.5 font-mono ${
+              side === s
+                ? 'border-[var(--color-text-primary)] text-[var(--color-text-primary)]'
+                : 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)]'
+            }`}
+          >
+            {s === 'all' ? 'Both' : s}
+          </button>
+        ))}
       </div>
 
       <canvas ref={canvasRef} className="block mx-auto border border-[var(--color-border-primary)]" />
@@ -253,7 +244,7 @@ export default function PlayerRoundOverlay({
         </div>
       </div>
       <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-        {visible.length} round{visible.length === 1 ? '' : 's'} overlaid
+        {gameCount} game{gameCount === 1 ? '' : 's'} · {visible.length} round{visible.length === 1 ? '' : 's'} overlaid
         {!calibration && ' · auto-fit (map not calibrated)'}
       </div>
     </div>

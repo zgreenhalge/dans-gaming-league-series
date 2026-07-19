@@ -148,6 +148,7 @@ export default function MapHeatmap({
       ),
     [points, visibleMatchIds, activeKinds, side, playerId],
   );
+  const gameCount = useMemo(() => new Set(visible.map((p) => p.matchId)).size, [visible]);
 
   const onResize = useCallback(
     (sidePx: number) => {
@@ -311,7 +312,7 @@ export default function MapHeatmap({
         <canvas ref={canvasRef} className="block mx-auto border border-[var(--color-border-primary)]" />
       </div>
       <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-        {visible.length} point{visible.length === 1 ? '' : 's'}
+        {gameCount} game{gameCount === 1 ? '' : 's'} · {visible.length} point{visible.length === 1 ? '' : 's'}
         {!calibration && ' · auto-fit (map not calibrated)'}
       </div>
     </div>
