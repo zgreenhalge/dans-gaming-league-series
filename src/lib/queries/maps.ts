@@ -1,6 +1,7 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { gunzipMaybe } from '../gzip';
 import { supabase } from '../supabase';
-import { getR2Object, heatmapKey } from '../r2';
+import { getR2Object, heatmapKey, mapHeatmapKey } from '../r2';
 import type { HeatmapArtifact, HeatmapKind } from '../replay/heatmap';
 import { isPlayedScore, parseScore, extractSeasonNumber, canonicalSort, compareMatchRefDesc } from '../util';
 import { classifyMatchVeto } from '../mapSideStats';
@@ -644,6 +645,19 @@ export interface MapHeatmapPoint {
 }
 
 /**
+ * A map's merged heatmap rollup (issue #127) — every `MapHeatmapPoint` across every
+ * match played on the map, precomputed by the `replay-extract` Action instead of
+ * fanned out live on each tab open. `matchIds` records which matches are currently
+ * folded in, so a reader can tell "covered, no points" apart from "not ingested yet".
+ */
+export interface MapHeatmapRollup {
+  version: number; // === MAP_HEATMAP_ROLLUP_VERSION
+  slug: string;
+  matchIds: number[];
+  points: MapHeatmapPoint[];
+}
+
+/**
  * Aggregate the compact `heatmap.json` artifacts (kill/death/grenade points) for a
  * set of matches into a flat, match-tagged list for the map Heatmap tab. Matches
  * without a replay yet are silently skipped (no artifact in R2). Reads are small
@@ -674,17 +688,38 @@ export async function getMapHeatmap(matchIds: number[]): Promise<MapHeatmapPoint
 }
 
 /**
+ * Read a map's precomputed heatmap rollup (issue #127), or `null` if none has been
+ * built yet (a brand-new map, or before the first post-rollout Action run). Callers
+ * treat a miss the same as an empty/stale rollup — fetch whatever matches it doesn't
+ * cover via `getMapHeatmap()` instead of failing.
+ */
+export async function getMapHeatmapRollup(slug: string): Promise<MapHeatmapRollup | null> {
+  const buf = await getR2Object(mapHeatmapKey(slug));
+  if (!buf) return null;
+  try {
+    const json = gunzipMaybe(buf);
+    return JSON.parse(json.toString('utf8')) as MapHeatmapRollup;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Match ids played on a given map (case-insensitive), for the match-page scouting
  * report's Map Intel heatmap. The played map is the pick (`shirts_pick`) falling back
  * to `picked_map` — the same rule `getMapDetail` uses. Only played matches qualify;
  * matches without a replay artifact are silently dropped later by `getMapHeatmap`.
+ *
+ * Takes an optional client (defaulting to the app's own) so the `replay-extract`
+ * Action — which has no anon key, only a service-role admin client — can reuse this
+ * same lookup when rebuilding a map's rollup, mirroring `getReplayInputs`.
  */
-export async function getMatchIdsForMap(mapName: string): Promise<number[]> {
+export async function getMatchIdsForMap(mapName: string, client: SupabaseClient = supabase): Promise<number[]> {
   const nameLower = mapName.trim().toLowerCase();
   if (!nameLower) return [];
   type Row = { id: number; shirts_pick: string | null; picked_map: string | null; final_score: string | null };
   const rows = await fetchAllPages<Row>((from, to) =>
-    supabase.from('matches').select('id, shirts_pick, picked_map, final_score').range(from, to),
+    client.from('matches').select('id, shirts_pick, picked_map, final_score').range(from, to),
   );
   return rows
     .filter(
