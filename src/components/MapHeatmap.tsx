@@ -1,15 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  autoFitProjector,
-  calibratedProjector,
+  boundsOfPoints,
+  countDistinctMatches,
+  drawRadarBackground,
+  projectorForBounds,
   type Projector,
-  type Bounds,
 } from '@/lib/replay/project';
 import type { HeatmapKind } from '@/lib/replay/heatmap';
 import type { MapHeatmapPoint } from '@/lib/queries';
+import { isAbortError } from '@/lib/util';
+import { readTheme } from './replayTheme';
 import { useMapRadar } from './useMapRadar';
+import { useCanvasSize } from './useCanvasSize';
 
 type SideFilter = 'all' | 'CT' | 'T';
 
@@ -53,17 +57,6 @@ const CORE_DOT_ALPHA = 0.24;
 /** Alpha the calibrated radar image is drawn at, so points read clearly through it. */
 const RADAR_ALPHA = 0.85;
 
-function boundsOf(points: MapHeatmapPoint[]): Bounds | null {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const p of points) {
-    if (p.x < minX) minX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y > maxY) maxY = p.y;
-  }
-  return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
-}
-
 export default function MapHeatmap({
   slug,
   matchIds,
@@ -91,33 +84,32 @@ export default function MapHeatmap({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sizeRef = useRef(0);
 
   useEffect(() => {
-    let cancelled = false;
+    const ac = new AbortController();
     fetch(`/api/maps/${slug}/heatmap`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ matchIds }),
+      signal: ac.signal,
     })
       .then((res) => (res.ok ? res.json() : { points: [], players: [] }))
       .then((body) => {
-        if (cancelled) return;
         setPoints(body.points ?? []);
         setPlayers(body.players ?? []);
       })
-      .catch(() => {
-        if (cancelled) return;
+      .catch((e) => {
+        if (isAbortError(e)) return;
         setPoints([]);
         setPlayers([]);
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => ac.abort();
   }, [slug, matchIds]);
 
   // Auto-fit bounds use ALL points (stable view across filter changes); calibration
   // ignores them entirely.
-  const allBounds = useMemo(() => boundsOf(points ?? []), [points]);
+  const allBounds = useMemo(() => boundsOfPoints(points ?? []), [points]);
 
   const activeKinds = useMemo(() => {
     const set = new Set<HeatmapKind>();
@@ -159,110 +151,112 @@ export default function MapHeatmap({
       ),
     [points, visibleMatchIds, activeKinds, side, playerId],
   );
+  const gameCount = useMemo(() => countDistinctMatches(visible), [visible]);
 
-  useEffect(() => {
-    const container = containerRef.current;
+  // Read by `draw()` instead of closing over `visible` directly, so toggling a layer/
+  // side/player filter doesn't change `onResize`'s identity and doesn't re-trigger the
+  // canvas-sizing effect below (which tears down and recreates the ResizeObserver) —
+  // only an actual resize or a real bounds change (new data) should do that.
+  const visibleRef = useRef(visible);
+  const projectorRef = useRef<Projector | null>(null);
+  // Read from CSS custom properties on each resize (see `onResize` below), so the
+  // background tracks a live light/dark toggle like `readTheme()`'s other consumers.
+  const bgRef = useRef('#0b0e14');
+
+  const draw = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!container || !canvas) return;
+    const ctx = canvas?.getContext('2d');
+    const projector = projectorRef.current;
+    if (!ctx || !projector) return;
+    const sidePx = sizeRef.current;
 
-    const render = () => {
-      const maxByHeight = Math.round((window.innerHeight || 800) * 0.6);
-      const sidePx = Math.max(240, Math.min(container.clientWidth, MAX_SIDE, maxByHeight));
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.round(sidePx * dpr);
-      canvas.height = Math.round(sidePx * dpr);
-      canvas.style.width = `${sidePx}px`;
-      canvas.style.height = `${sidePx}px`;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.scale(dpr, dpr);
+    // Background
+    ctx.fillStyle = bgRef.current;
+    ctx.fillRect(0, 0, sidePx, sidePx);
+    if (calibration && radarImage.current) {
+      drawRadarBackground(ctx, projector, radarImage.current, calibration, RADAR_ALPHA);
+    }
 
-      let projector: Projector | null = null;
-      if (calibration) projector = calibratedProjector(calibration, sidePx, sidePx);
-      else if (allBounds) projector = autoFitProjector(allBounds, sidePx, sidePx);
+    // Project + resolve color once per point, shared by both render passes below
+    // rather than recomputed in each.
+    const plotted = visibleRef.current.map((p) => ({
+      p,
+      c: projector.project(p),
+      color: colorOfKind.get(p.kind) ?? '#ffffff',
+      isGrenade: GRENADE_KINDS.has(p.kind),
+    }));
 
-      // Background
-      ctx.fillStyle = '#0b0e14';
-      ctx.fillRect(0, 0, sidePx, sidePx);
-      if (calibration && radarImage.current) {
-        const tl = projector!.project({ x: calibration.posX, y: calibration.posY });
-        const br = projector!.project({
-          x: calibration.posX + calibration.imageWidth * calibration.scale,
-          y: calibration.posY - calibration.imageHeight * calibration.scale,
-        });
-        ctx.globalAlpha = RADAR_ALPHA;
-        ctx.drawImage(radarImage.current, tl.x, tl.y, br.x - tl.x, br.y - tl.y);
-        ctx.globalAlpha = 1;
-      }
-      if (!projector) return;
-
-      // Project + resolve color once per point, shared by both render passes below
-      // rather than recomputed in each.
-      const plotted = visible.map((p) => ({
-        p,
-        c: projector.project(p),
-        color: colorOfKind.get(p.kind) ?? '#ffffff',
-        isGrenade: GRENADE_KINDS.has(p.kind),
-      }));
-
-      // Pass 1 — a soft, wide halo (the density *field*): 'screen' rather than
-      // 'lighter', since 'lighter' sums RGB with no ceiling until it clips at 255,
-      // blowing a busy chokepoint out to solid white within a handful of overlapping
-      // points. 'screen' (1 - (1-a)(1-b)) approaches white only asymptotically, so it
-      // takes far more stacked points before an area reads as a flat glare instead of
-      // a color gradient. Its alpha is intentionally low — this pass's job is the
-      // gradient across a cluster, not making a lone point pop.
-      ctx.globalCompositeOperation = 'screen';
-      for (const { p, c, color, isGrenade } of plotted) {
-        if (isGrenade) {
-          // Plot grenades as their effect area.
-          const r = Math.max(4, projector.scaleLength(GRENADE_RADIUS[p.kind] ?? 100));
-          ctx.fillStyle = color;
-          ctx.globalAlpha = GRENADE_HALO_ALPHA;
-          ctx.beginPath();
-          ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          // Alpha is baked into the gradient, so reset globalAlpha — otherwise a
-          // grenade drawn earlier in the loop leaks onto these and dims them.
-          ctx.globalAlpha = 1;
-          const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, HALO_RADIUS);
-          g.addColorStop(0, hexAlpha(color, HALO_ALPHA));
-          g.addColorStop(1, hexAlpha(color, 0));
-          ctx.fillStyle = g;
-          ctx.beginPath();
-          ctx.arc(c.x, c.y, HALO_RADIUS, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-
-      // Pass 2 — a small, brighter core pinpointing each kill/death exactly, so a
-      // single point (or a handful spread across a chokepoint, not stacked pixel for
-      // pixel) still reads clearly on top of pass 1's low-alpha field. Grenades don't
-      // get one — they're already an area marker, not a pinpoint event. This layer
-      // can still wash toward white, but only within its own tiny radius, where many
-      // kills genuinely landed at virtually the same spot (e.g. a common angle) — a
-      // real signal worth showing brightly.
-      ctx.globalCompositeOperation = 'lighter';
-      for (const { c, color, isGrenade } of plotted) {
-        if (isGrenade) continue;
-        ctx.globalAlpha = CORE_DOT_ALPHA;
+    // Pass 1 — a soft, wide halo (the density *field*): 'screen' rather than
+    // 'lighter', since 'lighter' sums RGB with no ceiling until it clips at 255,
+    // blowing a busy chokepoint out to solid white within a handful of overlapping
+    // points. 'screen' (1 - (1-a)(1-b)) approaches white only asymptotically, so it
+    // takes far more stacked points before an area reads as a flat glare instead of
+    // a color gradient. Its alpha is intentionally low — this pass's job is the
+    // gradient across a cluster, not making a lone point pop.
+    ctx.globalCompositeOperation = 'screen';
+    for (const { p, c, color, isGrenade } of plotted) {
+      if (isGrenade) {
+        // Plot grenades as their effect area.
+        const r = Math.max(4, projector.scaleLength(GRENADE_RADIUS[p.kind] ?? 100));
         ctx.fillStyle = color;
+        ctx.globalAlpha = GRENADE_HALO_ALPHA;
         ctx.beginPath();
-        ctx.arc(c.x, c.y, CORE_DOT_RADIUS, 0, Math.PI * 2);
+        ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Alpha is baked into the gradient, so reset globalAlpha — otherwise a
+        // grenade drawn earlier in the loop leaks onto these and dims them.
+        ctx.globalAlpha = 1;
+        const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, HALO_RADIUS);
+        g.addColorStop(0, hexAlpha(color, HALO_ALPHA));
+        g.addColorStop(1, hexAlpha(color, 0));
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, HALO_RADIUS, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
 
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
-    };
+    // Pass 2 — a small, brighter core pinpointing each kill/death exactly, so a
+    // single point (or a handful spread across a chokepoint, not stacked pixel for
+    // pixel) still reads clearly on top of pass 1's low-alpha field. Grenades don't
+    // get one — they're already an area marker, not a pinpoint event. This layer
+    // can still wash toward white, but only within its own tiny radius, where many
+    // kills genuinely landed at virtually the same spot (e.g. a common angle) — a
+    // real signal worth showing brightly.
+    ctx.globalCompositeOperation = 'lighter';
+    for (const { c, color, isGrenade } of plotted) {
+      if (isGrenade) continue;
+      ctx.globalAlpha = CORE_DOT_ALPHA;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, CORE_DOT_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
-    render();
-    const ro = new ResizeObserver(render);
-    ro.observe(container);
-    return () => ro.disconnect();
-  }, [visible, calibration, allBounds, colorOfKind, radarImage]);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }, [calibration, colorOfKind, radarImage]);
+
+  // Repaint (without resizing) whenever the visible point set changes — e.g. a layer/
+  // side/player filter toggle.
+  useEffect(() => {
+    visibleRef.current = visible;
+    draw();
+  }, [visible, draw]);
+
+  const onResize = useCallback(
+    (sidePx: number) => {
+      sizeRef.current = sidePx;
+      projectorRef.current = projectorForBounds(allBounds, calibration, sidePx, sidePx);
+      const container = containerRef.current;
+      if (container) bgRef.current = readTheme(container).bg;
+      draw();
+    },
+    [calibration, allBounds, draw],
+  );
+
+  useCanvasSize(containerRef, canvasRef, MAX_SIDE, onResize);
 
   const toggle = (key: string) =>
     setActive((prev) => {
@@ -343,7 +337,7 @@ export default function MapHeatmap({
         <canvas ref={canvasRef} className="block mx-auto border border-[var(--color-border-primary)]" />
       </div>
       <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-        {visible.length} point{visible.length === 1 ? '' : 's'}
+        {gameCount} game{gameCount === 1 ? '' : 's'} · {visible.length} point{visible.length === 1 ? '' : 's'}
         {!calibration && ' · auto-fit (map not calibrated)'}
       </div>
     </div>

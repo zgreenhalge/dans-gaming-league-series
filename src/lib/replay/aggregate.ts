@@ -50,6 +50,13 @@ export interface TraceState {
  * are read. `traceStateAt`'s end-of-frames clamp then holds that frozen position for
  * the rest of the round, so the dot reads as a corpse marker where they actually died
  * instead of jumping partway back to spawn.
+ *
+ * Survivors stop at the round's `endTick` (the `round_end` tick) for the same reason:
+ * `round.frames` (`extract.ts`) deliberately keeps a few seconds *after* `round_end` so
+ * the single-round 2D Replay can show the post-round window, but during that window CS2
+ * resets players toward their next-round spawn — movement that isn't part of the round
+ * itself. Reading past `endTick` would make a survivor's ghost snap back toward spawn
+ * instead of staying put where the round actually ended.
  */
 export function extractPlayerTrace(
   matchId: number,
@@ -60,6 +67,7 @@ export function extractPlayerTrace(
   const range = roundTickRange(round);
   const frames: TraceFrame[] = [];
   for (const f of round.frames) {
+    if (f.tick > round.endTick) break;
     const p = f.players.find((pp) => pp.id === playerId);
     if (!p) continue;
     if (!p.alive) {
