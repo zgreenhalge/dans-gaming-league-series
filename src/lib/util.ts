@@ -9,6 +9,15 @@ export function isPlayedScore(finalScore: string | null | undefined): boolean {
 }
 
 /**
+ * True when `e` is the `AbortError` a `fetch` rejects with once its `AbortSignal`
+ * fires — the "this request was intentionally superseded, not a real failure" case
+ * every lazy fetch effect needs to distinguish before surfacing an error to the user.
+ */
+export function isAbortError(e: unknown): boolean {
+  return e instanceof Error && e.name === 'AbortError';
+}
+
+/**
  * Groups rows by a case/whitespace-normalized map name — map names are user-typed
  * strings, so grouping on the raw value would split one map into several buckets on
  * inconsistent casing. Keeps the first-seen casing for display. `mapOf` returning
