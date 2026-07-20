@@ -13,6 +13,29 @@ export interface ConnectedPlayer {
 
 const PLAYER_TOKEN_RE = /"([^"<]+)<(\d+)><([^>]*)><[^>]*>"/g;
 
+/**
+ * Echoed to the console right after boot (see `/api/scrim/start`) so `linesSinceMarker` can discard
+ * everything before it. The server is reused (never deleted, see `dathost.ts`), and stopping/starting
+ * it doesn't clear its console log — so without this, a stale "connected" line from whatever last used
+ * the box (a previous scrim, a real match, a leftover test) with no matching "disconnected" line after
+ * it reads as a currently-connected phantom player until a real connection happens to reuse the same
+ * `userid` slot and overwrite it.
+ */
+export const SCRIM_BOOT_MARKER = 'DGLS-SCRIM-BOOT';
+
+/**
+ * `lines` (oldest first, as `getConsoleLines` returns them) from the last occurrence of `marker`
+ * onward, discarding everything before it — or all of `lines` if `marker` isn't present in the
+ * window at all (it scrolled out of the ~1000-line window, which can only happen once everything
+ * before it has *also* scrolled out, so falling back to "trust everything" is still safe then).
+ */
+export function linesSinceMarker(lines: string[], marker: string): string[] {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].includes(marker)) return lines.slice(i + 1);
+  }
+  return lines;
+}
+
 /** Best-effort currently-connected roster from a window of raw console lines (oldest first). */
 export function parseConnectedPlayers(lines: string[]): ConnectedPlayer[] {
   const byUserId = new Map<string, { name: string; steamId: string | null; connected: boolean }>();

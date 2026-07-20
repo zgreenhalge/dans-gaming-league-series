@@ -7,7 +7,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { parseConnectedPlayers } from './server-players';
+import { parseConnectedPlayers, linesSinceMarker } from './server-players';
 
 let passed = 0;
 const failures: string[] = [];
@@ -65,6 +65,31 @@ test('parseConnectedPlayers: userid reused after reconnect resolves to the lates
 
 test('parseConnectedPlayers: empty log yields no players', () => {
   assert.deepEqual(parseConnectedPlayers([]), []);
+});
+
+test('linesSinceMarker: drops everything at or before the last marker occurrence', () => {
+  const lines = ['a', 'b', 'MARKER', 'c', 'd'];
+  assert.deepEqual(linesSinceMarker(lines, 'MARKER'), ['c', 'd']);
+});
+
+test('linesSinceMarker: uses the LAST occurrence when the marker appears more than once', () => {
+  const lines = ['MARKER', 'a', 'MARKER', 'b'];
+  assert.deepEqual(linesSinceMarker(lines, 'MARKER'), ['b']);
+});
+
+test('linesSinceMarker: returns everything unchanged when the marker is not present', () => {
+  const lines = ['a', 'b', 'c'];
+  assert.deepEqual(linesSinceMarker(lines, 'MARKER'), lines);
+});
+
+test('linesSinceMarker + parseConnectedPlayers: a stale connect from a previous boot, with no', () => {
+  // ...matching disconnect, is dropped once this boot's marker line is in the window — reproducing
+  // the reused-server staleness bug (a phantom "connected" player from a prior session/boot).
+  const lines = [
+    'Jul 16 00:10:00:  "GhostFromLastSession<3><[U:1:999]><CT>" purchased "ak47"',
+    'DGLS-SCRIM-BOOT',
+  ];
+  assert.deepEqual(parseConnectedPlayers(linesSinceMarker(lines, 'DGLS-SCRIM-BOOT')), []);
 });
 
 if (failures.length) {
