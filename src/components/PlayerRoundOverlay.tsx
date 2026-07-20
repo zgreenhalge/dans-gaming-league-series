@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause } from 'lucide-react';
 import {
-  autoFitProjector,
   boundsOfPoints,
-  calibratedProjector,
   countDistinctMatches,
   drawRadarBackground,
+  projectorForBounds,
   type Projector,
 } from '@/lib/replay/project';
 import { traceStateAt, maxDurationTicks, type PlayerTrace } from '@/lib/replay/aggregate';
@@ -21,6 +20,15 @@ const MAX_SIDE = 520;
 const DOT_RADIUS = 4;
 const DEAD_ALPHA = 0.3;
 const ALIVE_ALPHA = 0.85;
+
+/** A trace's resolved dot color from its side — shared by the "visible set changed"
+ *  rebuild and the "theme refreshed" recolor, so they can't drift apart. */
+function colorTrace(
+  trace: PlayerTrace,
+  colors: { CT: string; T: string; neutral: string },
+): { trace: PlayerTrace; color: string } {
+  return { trace, color: colors[trace.side ?? 'neutral'] };
+}
 
 /**
  * Plays every round in `traces` at once, each round's clock zeroed to its own start —
@@ -50,7 +58,7 @@ export default function PlayerRoundOverlay({
   const scrubRef = useRef<HTMLInputElement>(null);
   const tickRef = useRef(0);
   const projectorRef = useRef<Projector | null>(null);
-  const sizeRef = useRef({ w: 0, h: 0 });
+  const sizeRef = useRef(0);
 
   const bounds = useMemo(() => boundsOfPoints(traces.flatMap((t) => t.frames)), [traces]);
   const duration = useMemo(() => maxDurationTicks(traces), [traces]);
@@ -74,10 +82,10 @@ export default function PlayerRoundOverlay({
     tickRef.current = 0;
   }, [traces]);
 
-  // Side colors read from CSS custom properties, refreshed each canvas resize (see
+  // Colors read from CSS custom properties, refreshed each canvas resize (see
   // `onResize` below) so a live light/dark toggle is picked up the same way
   // `ReplayPlayer` incidentally does, instead of only once on mount.
-  const colorsRef = useRef({ CT: '#5b9bd5', T: '#d5a04b', neutral: '#e6e6e6' });
+  const colorsRef = useRef({ CT: '#5b9bd5', T: '#d5a04b', neutral: '#e6e6e6', bg: '#0b0e14' });
 
   // Each visible trace's color resolved once (not per animation frame — issue #224).
   // The source of truth for which traces `draw()` shows; rebuilt from `visible`
@@ -86,7 +94,7 @@ export default function PlayerRoundOverlay({
   const coloredRef = useRef<{ trace: PlayerTrace; color: string }[]>([]);
   const recolor = useCallback(() => {
     const colors = colorsRef.current;
-    coloredRef.current = coloredRef.current.map(({ trace }) => ({ trace, color: colors[trace.side ?? 'neutral'] }));
+    coloredRef.current = coloredRef.current.map(({ trace }) => colorTrace(trace, colors));
   }, []);
 
   const draw = useCallback(() => {
@@ -94,11 +102,11 @@ export default function PlayerRoundOverlay({
     const ctx = canvas?.getContext('2d');
     const projector = projectorRef.current;
     if (!ctx || !projector) return;
-    const { w, h } = sizeRef.current;
+    const side = sizeRef.current;
 
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = '#0b0e14';
-    ctx.fillRect(0, 0, w, h);
+    ctx.clearRect(0, 0, side, side);
+    ctx.fillStyle = colorsRef.current.bg;
+    ctx.fillRect(0, 0, side, side);
     if (calibration && radarImage.current) {
       drawRadarBackground(ctx, projector, radarImage.current, calibration);
     }
@@ -123,7 +131,7 @@ export default function PlayerRoundOverlay({
   // e.g. the side filter — not on every play/pause toggle.
   useEffect(() => {
     const colors = colorsRef.current;
-    coloredRef.current = visible.map((trace) => ({ trace, color: colors[trace.side ?? 'neutral'] }));
+    coloredRef.current = visible.map((trace) => colorTrace(trace, colors));
   }, [visible]);
 
   // Repaint (without resizing) whenever the visible trace set changes, while the clock
@@ -135,13 +143,12 @@ export default function PlayerRoundOverlay({
   // --- size canvas to its container (DPR-aware) + (re)build the projector ---
   const onResize = useCallback(
     (sidePx: number) => {
-      sizeRef.current = { w: sidePx, h: sidePx };
-      if (calibration) projectorRef.current = calibratedProjector(calibration, sidePx, sidePx);
-      else if (bounds) projectorRef.current = autoFitProjector(bounds, sidePx, sidePx);
+      sizeRef.current = sidePx;
+      projectorRef.current = projectorForBounds(bounds, calibration, sidePx, sidePx);
       const container = containerRef.current;
       if (container) {
         const theme = readTheme(container);
-        colorsRef.current = { CT: theme.ct, T: theme.t, neutral: theme.text };
+        colorsRef.current = { CT: theme.ct, T: theme.t, neutral: theme.text, bg: theme.bg };
       }
       recolor();
       draw();

@@ -5,6 +5,7 @@ import { Play, Pause, ChevronLeft, ChevronRight, Rewind, Pencil, Square, Eraser,
 import type { ReplayPayload, ReplayPlayerMeta } from '@/lib/replay/types';
 import type { Faction } from '@/lib/types';
 import { mapSlug } from '@/lib/maps';
+import { isAbortError } from '@/lib/util';
 import { projectorFor, type Projector } from '@/lib/replay/project';
 import { viewStateAt, roundTickRange, grenadeEffectRadius } from '@/lib/replay/playback';
 import { drawScene, type Ctx2D, type ReplayTheme, type BannerInfo } from '@/lib/replay/draw';
@@ -191,7 +192,7 @@ export default function ReplayPlayer({
   const projectorRef = useRef<Projector | null>(null);
   const ctxRef = useRef<Ctx2D | null>(null);
   const themeRef = useRef<ReplayTheme | null>(null);
-  const sizeRef = useRef({ w: 0, h: 0 });
+  const sizeRef = useRef(0);
   const tickRef = useRef(0);
   // A round + optional tick requested by the last jump, applied by the effect below
   // once its target round is showing. Kept in state (not a ref) because it's set
@@ -241,7 +242,7 @@ export default function ReplayPlayer({
         historyRef.current = [];
       })
       .catch((e) => {
-        if (e.name !== 'AbortError') setError(e.message);
+        if (!isAbortError(e)) setError(e.message);
       });
     return () => ac.abort();
   }, [matchId]);
@@ -254,7 +255,7 @@ export default function ReplayPlayer({
     if (!ctx || !proj || !theme || !payload || !banner) return;
     const round = payload.rounds[roundIdx];
     if (!round) return;
-    const { w, h } = sizeRef.current;
+    const side = sizeRef.current;
     const state = viewStateAt(round, tickRef.current, payload.tickRate);
     const radar =
       calibration && radarImage.current
@@ -262,8 +263,8 @@ export default function ReplayPlayer({
         : null;
     drawScene({
       ctx,
-      width: w,
-      height: h,
+      width: side,
+      height: side,
       projector: proj,
       state,
       round,
@@ -293,7 +294,7 @@ export default function ReplayPlayer({
   //     stroke list, never the canvas bitmap, so a resize can safely wipe and redraw it ---
   const redrawAnnotations = useCallback((preview?: Stroke) => {
     const ctx = annCtxRef.current;
-    const side = sizeRef.current.w;
+    const side = sizeRef.current;
     if (!ctx) return;
     ctx.clearRect(0, 0, side, side);
     for (const s of strokesRef.current) paintStroke(ctx, side, s, projectorRef.current);
@@ -334,7 +335,7 @@ export default function ReplayPlayer({
 
   const eraseAt = useCallback(
     (p: Point) => {
-      const side = sizeRef.current.w;
+      const side = sizeRef.current;
       const projector = projectorRef.current;
       const before = strokesRef.current.length;
       const next = strokesRef.current.filter((s) => !strokeHit(s, p, ERASE_TOLERANCE, side, projector));
@@ -354,7 +355,7 @@ export default function ReplayPlayer({
       const ctx = canvas?.getContext('2d');
       // Cache the context so the per-frame draw loop doesn't re-fetch it.
       if (ctx) ctxRef.current = ctx as unknown as Ctx2D;
-      sizeRef.current = { w: side, h: side };
+      sizeRef.current = side;
       setBoardWidth(side);
       const container = containerRef.current;
       if (container) themeRef.current = readTheme(container);
@@ -369,8 +370,7 @@ export default function ReplayPlayer({
       // scale cleanly to the new side) rather than losing the drawing.
       const annCanvas = annotationCanvasRef.current;
       if (annCanvas) {
-        applyCanvasSize(annCanvas, side);
-        const annCtx = annCanvas.getContext('2d');
+        const annCtx = applyCanvasSize(annCanvas, side);
         if (annCtx) annCtxRef.current = annCtx;
       }
       redrawAnnotations();
@@ -468,7 +468,7 @@ export default function ReplayPlayer({
       const prev = active.points[active.points.length - 1];
       active.points.push(p);
       const ctx = annCtxRef.current;
-      if (ctx) paintStroke(ctx, sizeRef.current.w, { ...active, points: [prev, p] }, projectorRef.current);
+      if (ctx) paintStroke(ctx, sizeRef.current, { ...active, points: [prev, p] }, projectorRef.current);
     } else if (active.tool === 'box') {
       // The shape itself changes every move, so redraw the whole overlay with this
       // stroke as a live preview on top — dragged from `a` (the corner clicked) to

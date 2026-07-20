@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReplayPayload, ReplayPlayerMeta } from '@/lib/replay/types';
 import { extractPlayerTrace, type PlayerTrace } from '@/lib/replay/aggregate';
 import { mapSlug } from '@/lib/maps';
+import { isAbortError } from '@/lib/util';
 import PlayerRoundOverlay from './PlayerRoundOverlay';
 
 /**
@@ -43,7 +44,7 @@ export default function MatchPlayerTrails({
       })
       .then((p) => setPayload(p))
       .catch((e) => {
-        if (e.name !== 'AbortError') setError(e.message);
+        if (!isAbortError(e)) setError(e.message);
       });
     return () => ac.abort();
   }, [matchId]);

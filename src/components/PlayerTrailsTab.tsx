@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { PlayerHistoryRow } from '@/lib/queries';
 import type { PlayerTrace } from '@/lib/replay/aggregate';
-import { groupByMap, isPlayedScore, tabCls } from '@/lib/util';
+import { groupByMap, isAbortError, isPlayedScore, tabCls } from '@/lib/util';
 import { mapSlug } from '@/lib/maps';
 import PlayerRoundOverlay from './PlayerRoundOverlay';
 
@@ -71,7 +71,7 @@ export default function PlayerTrailsTab({
         setResult({ map: selectedMap, traces: body.traces ?? [], tickRate: body.tickRate ?? 64 });
       })
       .catch((e) => {
-        if (e.name === 'AbortError') return;
+        if (isAbortError(e)) return;
         setResult({ map: selectedMap, traces: [], tickRate: 64 });
       });
     return () => ac.abort();

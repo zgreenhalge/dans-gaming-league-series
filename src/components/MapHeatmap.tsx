@@ -2,15 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  autoFitProjector,
   boundsOfPoints,
-  calibratedProjector,
   countDistinctMatches,
   drawRadarBackground,
+  projectorForBounds,
   type Projector,
 } from '@/lib/replay/project';
 import type { HeatmapKind } from '@/lib/replay/heatmap';
 import type { MapHeatmapPoint } from '@/lib/queries';
+import { isAbortError } from '@/lib/util';
+import { readTheme } from './replayTheme';
 import { useMapRadar } from './useMapRadar';
 import { useCanvasSize } from './useCanvasSize';
 
@@ -83,6 +84,7 @@ export default function MapHeatmap({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sizeRef = useRef(0);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -98,7 +100,7 @@ export default function MapHeatmap({
         setPlayers(body.players ?? []);
       })
       .catch((e) => {
-        if (e.name === 'AbortError') return;
+        if (isAbortError(e)) return;
         setPoints([]);
         setPlayers([]);
       });
@@ -156,18 +158,20 @@ export default function MapHeatmap({
   // canvas-sizing effect below (which tears down and recreates the ResizeObserver) —
   // only an actual resize or a real bounds change (new data) should do that.
   const visibleRef = useRef(visible);
-  const sizeRef = useRef({ w: 0, h: 0 });
   const projectorRef = useRef<Projector | null>(null);
+  // Read from CSS custom properties on each resize (see `onResize` below), so the
+  // background tracks a live light/dark toggle like `readTheme()`'s other consumers.
+  const bgRef = useRef('#0b0e14');
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     const projector = projectorRef.current;
     if (!ctx || !projector) return;
-    const { w: sidePx } = sizeRef.current;
+    const sidePx = sizeRef.current;
 
     // Background
-    ctx.fillStyle = '#0b0e14';
+    ctx.fillStyle = bgRef.current;
     ctx.fillRect(0, 0, sidePx, sidePx);
     if (calibration && radarImage.current) {
       drawRadarBackground(ctx, projector, radarImage.current, calibration, RADAR_ALPHA);
@@ -243,9 +247,10 @@ export default function MapHeatmap({
 
   const onResize = useCallback(
     (sidePx: number) => {
-      sizeRef.current = { w: sidePx, h: sidePx };
-      if (calibration) projectorRef.current = calibratedProjector(calibration, sidePx, sidePx);
-      else if (allBounds) projectorRef.current = autoFitProjector(allBounds, sidePx, sidePx);
+      sizeRef.current = sidePx;
+      projectorRef.current = projectorForBounds(allBounds, calibration, sidePx, sidePx);
+      const container = containerRef.current;
+      if (container) bgRef.current = readTheme(container).bg;
       draw();
     },
     [calibration, allBounds, draw],
