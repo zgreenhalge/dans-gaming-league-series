@@ -16,6 +16,13 @@ export interface JobSubject {
   id: number;
 }
 
+/** The row-key column identifying a `background_jobs` row alongside `job_type` — `match_id` for the
+ *  match-keyed dispatch routes (replay/demo/ingest), `map_id` for the map-keyed radar dispatch. */
+export interface JobKey {
+  column: 'match_id' | 'map_id';
+  id: number;
+}
+
 async function mirrorSubjectStatus(
   admin: SupabaseClient,
   subject: JobSubject,
@@ -25,17 +32,17 @@ async function mirrorSubjectStatus(
   return error ? { error: error.message } : {};
 }
 
-/** Upsert a `background_jobs` row for `(jobType, matchId)`, stamping `updated_at`. `onConflict` is
- *  always `job_type,match_id` — the unique index that is this pipeline's dedup guard. */
+/** Upsert a `background_jobs` row for `(jobType, key)`, stamping `updated_at`. `onConflict` is
+ *  always `job_type,<key.column>` — the unique index that is this pipeline's dedup guard. */
 export async function recordJobStatus(
   admin: SupabaseClient,
   jobType: string,
-  matchId: number,
+  key: JobKey,
   fields: Record<string, unknown>,
 ): Promise<{ error?: string }> {
   const { error } = await admin.from('background_jobs').upsert(
-    { job_type: jobType, match_id: matchId, updated_at: new Date().toISOString(), ...fields },
-    { onConflict: 'job_type,match_id' },
+    { job_type: jobType, [key.column]: key.id, updated_at: new Date().toISOString(), ...fields },
+    { onConflict: `job_type,${key.column}` },
   );
   return error ? { error: error.message } : {};
 }
@@ -46,7 +53,7 @@ export async function recordJobStatus(
 export async function advanceJobStatus(
   admin: SupabaseClient,
   jobType: string,
-  matchId: number,
+  key: JobKey,
   fields: Record<string, unknown>,
   onlyIfStatus: string,
 ): Promise<{ error?: string }> {
@@ -54,7 +61,7 @@ export async function advanceJobStatus(
     .from('background_jobs')
     .update({ updated_at: new Date().toISOString(), ...fields })
     .eq('job_type', jobType)
-    .eq('match_id', matchId)
+    .eq(key.column, key.id)
     .eq('status', onlyIfStatus);
   return error ? { error: error.message } : {};
 }
@@ -70,7 +77,7 @@ export async function dispatchAndRecordFailure(
   admin: SupabaseClient,
   params: {
     jobType: string;
-    matchId: number;
+    key: JobKey;
     workflowFile: string;
     inputs: Record<string, string>;
     subject?: JobSubject;
@@ -79,18 +86,18 @@ export async function dispatchAndRecordFailure(
   const dispatch = await dispatchWorkflow(params.workflowFile, params.inputs);
   if (!dispatch.ok) {
     const [jobResult, subjectResult] = await Promise.all([
-      recordJobStatus(admin, params.jobType, params.matchId, {
+      recordJobStatus(admin, params.jobType, params.key, {
         status: 'failed',
         error_message: `dispatch failed: ${dispatch.error}`,
       }),
       params.subject ? mirrorSubjectStatus(admin, params.subject, 'failed') : Promise.resolve<{ error?: string }>({}),
     ]);
     if (jobResult.error) {
-      console.error(`Could not roll back ${params.jobType}/${params.matchId} to failed: ${jobResult.error}`);
+      console.error(`Could not roll back ${params.jobType}/${params.key.id} to failed: ${jobResult.error}`);
     }
     if (subjectResult.error) {
       console.error(
-        `Could not mirror failed status onto ${params.subject?.table}.${params.subject?.column} for ${params.matchId}: ${subjectResult.error}`,
+        `Could not mirror failed status onto ${params.subject?.table}.${params.subject?.column} for ${params.key.id}: ${subjectResult.error}`,
       );
     }
   }

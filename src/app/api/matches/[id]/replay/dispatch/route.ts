@@ -63,7 +63,7 @@ export async function POST(
   }
 
   const now = new Date().toISOString();
-  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, matchId, {
+  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, { column: 'match_id', id: matchId }, {
     status: 'queued',
     stage: 'validate',
     error_message: null,
@@ -84,7 +84,7 @@ export async function POST(
 
   const dispatch = await dispatchAndRecordFailure(supabaseAdmin, {
     jobType: JOB_TYPE,
-    matchId,
+    key: { column: 'match_id', id: matchId },
     workflowFile: 'replay-extract.yml',
     inputs: { match_id: String(matchId) },
     subject: { table: 'matches', column: 'replay_status', id: matchId },

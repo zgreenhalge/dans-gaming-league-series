@@ -49,7 +49,7 @@ export async function POST(
   // The Action is already dispatched at this point, so a failure here is logged rather than
   // returned as an error — telling the caller the re-parse failed would be wrong, and the
   // in-flight guard above will miss this run until the row exists.
-  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, matchId, {
+  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, { column: 'match_id', id: matchId }, {
     status: 'queued',
     stage: 'queued',
     error_message: null,

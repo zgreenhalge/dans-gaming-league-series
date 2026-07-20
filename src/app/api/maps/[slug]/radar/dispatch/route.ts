@@ -9,6 +9,7 @@ import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { isPlayerAdmin } from '@/lib/queries';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
+import { recordJobStatus } from '@/lib/background-jobs';
 
 const JOB_TYPE = 'radar_build';
 const IN_PROGRESS: ReadonlySet<string> = new Set(['queued', 'running']);
@@ -56,11 +57,14 @@ export async function POST(
     );
   }
 
-  const now = new Date().toISOString();
-  await supabaseAdmin.from('background_jobs').upsert(
-    { job_type: JOB_TYPE, map_id: mapId, status: 'queued', stage: 'queued', error_message: null, updated_at: now },
-    { onConflict: 'job_type,map_id' },
-  );
+  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, { column: 'map_id', id: mapId }, {
+    status: 'queued',
+    stage: 'queued',
+    error_message: null,
+  });
+  if (recordErr) {
+    console.error(`radar-build dispatch for map ${mapId} succeeded but recording it failed: ${recordErr}`);
+  }
 
   return NextResponse.json({ ok: true, status: 'queued' });
 }
