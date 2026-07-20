@@ -241,10 +241,12 @@ them; they carry no signal worth plotting and the tab has no decoy layer.)
 **Precomputed rollup (issue #127).** `replay-extract`'s `map-rollup` stage maintains a single merged
 `maps/<slug>/heatmap.json` (`MapHeatmapRollup`, read via `getMapHeatmapRollup()`) covering every match
 currently known for the map, rebuilt each time any one of those matches is (re-)extracted. The route
-reads that rollup first, then falls back to the per-match fan-out (`getMapHeatmap()`, one R2 GET per
-match) for only the requested match ids the rollup doesn't cover — a map with no rollup yet, or a
-match extracted before this artifact existed — so the response is always correct, and a single R2
-read once the rollup covers a map, regardless of match count.
+calls `getMapHeatmapPoints(slug, matchIds)`, which reads that rollup first and falls back to the
+per-match fan-out (`getMapHeatmap()`, one R2 GET per match) for only the requested match ids the
+rollup doesn't cover — a map with no rollup yet, or a match extracted before this artifact existed —
+so the response is always correct, and a single R2 read once the rollup covers a map, regardless of
+match count. The route itself does no merging; that lives in the query layer alongside the rollup
+reader, the same shape as `getPlayerRoundTraces()` below.
 
 The rebuild is always a **full** recompute from the per-match `heatmap.json` artifacts (via
 `getMatchIdsForMap()` + `getMapHeatmap()`), never an incremental patch onto the previous rollup. That
