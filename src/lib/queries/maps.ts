@@ -9,7 +9,7 @@ import { mapSlug } from '../maps';
 import { workshopIdFromUrl } from '../replay/radar';
 import type { MapIndexEntry, LeaderboardRowWithId, Faction, PlayerMatchStat } from '../types';
 import { getPlayersById } from './player';
-import { fetchAllPages, missingIds } from './_shared';
+import { fetchAllPages, missingIds, getVersionedR2Json } from './_shared';
 
 
 export interface MapPlayerStat {
@@ -699,18 +699,7 @@ export async function getMapHeatmap(matchIds: number[]): Promise<MapHeatmapPoint
  * `getMapHeatmap()` instead of failing.
  */
 export async function getMapHeatmapRollup(slug: string): Promise<MapHeatmapRollup | null> {
-  const buf = await getR2Object(mapHeatmapKey(slug));
-  if (!buf) return null;
-  try {
-    const json = gunzipMaybe(buf);
-    const rollup = JSON.parse(json.toString('utf8')) as MapHeatmapRollup;
-    // A version mismatch means the artifact predates a shape change — treat it the
-    // same as no rollup at all rather than handing callers a stale/foreign shape;
-    // `replay-extract-all` repopulates it on the next backfill.
-    return rollup.version === MAP_HEATMAP_ROLLUP_VERSION ? rollup : null;
-  } catch {
-    return null;
-  }
+  return getVersionedR2Json<MapHeatmapRollup>(mapHeatmapKey(slug), MAP_HEATMAP_ROLLUP_VERSION);
 }
 
 /**
