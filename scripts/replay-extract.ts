@@ -27,8 +27,8 @@ import {
 } from '../src/lib/r2';
 import { gunzipMaybe } from '../src/lib/gzip';
 import { getAdminClient } from '../src/lib/supabase-admin';
-import { getMatchIdsForMap, getMapHeatmap } from '../src/lib/queries/maps';
-import { getMapTraces } from '../src/lib/queries/replay';
+import { getMatchIdsForMap, getMapHeatmap, heatmapArtifactToPoints } from '../src/lib/queries/maps';
+import { getMapTraces, matchTraceArtifactToEntries } from '../src/lib/queries/replay';
 import { mapSlug } from '../src/lib/maps';
 
 const JOB_TYPE = 'replay_extract';
@@ -97,6 +97,13 @@ async function setStage(stage: string) {
     .eq('job_type', JOB_TYPE)
     .eq('match_id', matchId)
     .throwOnError();
+}
+
+/** Gzip a JSON-serializable value and upload it, returning the gzipped byte length for logging. */
+async function uploadGzippedJson(key: string, data: unknown): Promise<number> {
+  const gz = gzipSync(Buffer.from(JSON.stringify(data)));
+  await putR2Object(key, gz, { contentType: 'application/json', contentEncoding: 'gzip' });
+  return gz.length;
 }
 
 /** Run a named stage inside a collapsible GH log group, reporting it to the DB. */
@@ -177,27 +184,21 @@ async function main() {
 
   // Compact heatmap points artifact (kills/deaths/grenades) for the map's Heatmap
   // tab — derived from the same payload, so there's no second source of truth.
-  await stage('heatmap', async () => {
-    const points = buildHeatmapPoints(payload);
-    const gzPoints = gzipSync(Buffer.from(JSON.stringify(points)));
-    notice(`heatmap.json: ${points.points.length} points, ${gzPoints.length} bytes gzipped`);
-    await putR2Object(heatmapKey(matchId), gzPoints, {
-      contentType: 'application/json',
-      contentEncoding: 'gzip',
-    });
+  const heatmapArtifact = await stage('heatmap', async () => {
+    const artifact = buildHeatmapPoints(payload);
+    const bytes = await uploadGzippedJson(heatmapKey(matchId), artifact);
+    notice(`heatmap.json: ${artifact.points.length} points, ${bytes} bytes gzipped`);
+    return artifact;
   });
 
   // Compact per-player trace artifact (issue #127) for the player page's Pathing tab —
   // same reasoning as heatmap.json: derived from the same payload, no second source
   // of truth, and much smaller than replay.json since it carries positions only.
-  await stage('traces', async () => {
-    const traces = buildMatchTraces(payload);
-    const gzTraces = gzipSync(Buffer.from(JSON.stringify(traces)));
-    notice(`traces.json: ${traces.players.length} players, ${gzTraces.length} bytes gzipped`);
-    await putR2Object(traceKey(matchId), gzTraces, {
-      contentType: 'application/json',
-      contentEncoding: 'gzip',
-    });
+  const traceArtifact = await stage('traces', async () => {
+    const artifact = buildMatchTraces(payload);
+    const bytes = await uploadGzippedJson(traceKey(matchId), artifact);
+    notice(`traces.json: ${artifact.players.length} players, ${bytes} bytes gzipped`);
+    return artifact;
   });
 
   // Rebuild this map's heatmap + trace rollups (issue #127) — precomputed merges of
@@ -210,7 +211,7 @@ async function main() {
   // moment, and every match's own extract rebuilds again on its way to `ready` — so
   // the map converges to complete without any locking. Fail-soft: a hiccup here must
   // never fail this match's own (already-successful) replay, so it's a warning, not
-  // a thrown error.
+  // a thrown error — matching `radar-build`'s own best-effort/isolated sub-steps.
   await stage('map-rollup', async () => {
     const slug = payload.map ? mapSlug(payload.map) : null;
     if (!slug) {
@@ -219,35 +220,35 @@ async function main() {
     }
     try {
       const mapMatchIds = await getMatchIdsForMap(payload.map, supabase);
+      // This match's own points/entries are already in memory from the stages above —
+      // no need to re-read what was just written. Only fan out over the rest.
+      const otherMatchIds = mapMatchIds.filter((id) => id !== matchId);
 
-      const points = await getMapHeatmap(mapMatchIds);
-      const heatmapRollup = {
-        version: MAP_HEATMAP_ROLLUP_VERSION,
-        slug,
-        matchIds: mapMatchIds,
-        points,
-      };
-      const gzHeatmapRollup = gzipSync(Buffer.from(JSON.stringify(heatmapRollup)));
-      await putR2Object(mapHeatmapKey(slug), gzHeatmapRollup, {
-        contentType: 'application/json',
-        contentEncoding: 'gzip',
-      });
+      const [otherPoints, otherEntries] = await Promise.all([
+        getMapHeatmap(otherMatchIds),
+        getMapTraces(otherMatchIds),
+      ]);
+      const points = [...heatmapArtifactToPoints(matchId, heatmapArtifact), ...otherPoints];
+      const entries = [...matchTraceArtifactToEntries(traceArtifact), ...otherEntries];
 
-      const entries = await getMapTraces(mapMatchIds);
-      const traceRollup = {
-        version: MAP_TRACE_ROLLUP_VERSION,
-        slug,
-        matchIds: mapMatchIds,
-        entries,
-      };
-      const gzTraceRollup = gzipSync(Buffer.from(JSON.stringify(traceRollup)));
-      await putR2Object(mapTraceKey(slug), gzTraceRollup, {
-        contentType: 'application/json',
-        contentEncoding: 'gzip',
-      });
+      const [heatmapBytes, traceBytes] = await Promise.all([
+        uploadGzippedJson(mapHeatmapKey(slug), {
+          version: MAP_HEATMAP_ROLLUP_VERSION,
+          slug,
+          matchIds: mapMatchIds,
+          points,
+        }),
+        uploadGzippedJson(mapTraceKey(slug), {
+          version: MAP_TRACE_ROLLUP_VERSION,
+          slug,
+          matchIds: mapMatchIds,
+          entries,
+        }),
+      ]);
 
       notice(
-        `map rollups for "${slug}": ${mapMatchIds.length} matches, ${points.length} heatmap points, ${entries.length} trace entries`,
+        `map rollups for "${slug}": ${mapMatchIds.length} matches, ${points.length} heatmap points ` +
+          `(${heatmapBytes}B), ${entries.length} trace entries (${traceBytes}B)`,
       );
     } catch (err) {
       warning(`map rollup rebuild failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
