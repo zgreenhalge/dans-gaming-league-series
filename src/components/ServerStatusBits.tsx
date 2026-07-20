@@ -46,6 +46,21 @@ export function StatePill({ configured, server }: { configured: boolean; server:
   );
 }
 
+export function LiveDot() {
+  return (
+    <span className="relative inline-flex h-[7px] w-[7px]" aria-hidden>
+      <span
+        className="absolute inline-flex h-full w-full rounded-full animate-ping opacity-75"
+        style={{ backgroundColor: 'var(--color-accent-green-fg)' }}
+      />
+      <span
+        className="relative inline-flex h-[7px] w-[7px] rounded-full"
+        style={{ backgroundColor: 'var(--color-accent-green-fg)' }}
+      />
+    </span>
+  );
+}
+
 export function CopyConnectButton({ connect }: { connect: string }) {
   const [copied, setCopied] = useState(false);
   return (
