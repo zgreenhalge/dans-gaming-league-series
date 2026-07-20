@@ -10,6 +10,7 @@ import { getR2Object, deleteR2Object, demoResultKey, mapResultKey } from '@/lib/
 import { gunzipMaybe } from '@/lib/gzip';
 import { parseMatchId } from '@/lib/util';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '@/lib/demo/ingestResult';
+import { recordJobStatus, matchJobKey } from '@/lib/background-jobs';
 
 async function jobStatus(matchId: number): Promise<string | null> {
   const { data } = await getAdminClient()
@@ -72,11 +73,10 @@ export async function DELETE(
       ? [deleteR2Object(demoResultKey(matchId)), deleteR2Object(mapResultKey(matchId))]
       : [deleteR2Object(demoResultKey(matchId))];
   await Promise.all(cleanup);
-  await getAdminClient()
-    .from('background_jobs')
-    .update({ status: disposition, stage: disposition, updated_at: new Date().toISOString() })
-    .eq('job_type', JOB_TYPE)
-    .eq('match_id', matchId);
+  await recordJobStatus(getAdminClient(), JOB_TYPE, matchJobKey(matchId), {
+    status: disposition,
+    stage: disposition,
+  });
 
   return NextResponse.json({ ok: true, status: disposition });
 }
