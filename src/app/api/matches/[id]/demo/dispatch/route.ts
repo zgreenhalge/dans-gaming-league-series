@@ -46,11 +46,17 @@ export async function POST(
     );
   }
 
-  await recordJobStatus(supabaseAdmin, JOB_TYPE, matchId, {
+  // The Action is already dispatched at this point, so a failure here is logged rather than
+  // returned as an error — telling the caller the re-parse failed would be wrong, and the
+  // in-flight guard above will miss this run until the row exists.
+  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, matchId, {
     status: 'queued',
     stage: 'queued',
     error_message: null,
   });
+  if (recordErr) {
+    console.error(`demo-ingest re-dispatch for match ${matchId} succeeded but recording it failed: ${recordErr}`);
+  }
 
   return NextResponse.json({ ok: true, status: 'queued' });
 }
