@@ -23,3 +23,14 @@ export async function fetchAllPages<T>(
   }
   return results;
 }
+
+/**
+ * Which of `matchIds` a map-level rollup (issue #127) doesn't cover yet, given the
+ * rollup's own `matchIds` list — shared by `getMapHeatmapPoints()` and
+ * `getPlayerRoundTraces()`, both of which fetch only this delta directly when a
+ * rollup is missing or partial.
+ */
+export function missingFromRollup(matchIds: number[], rollupMatchIds: number[] | undefined): number[] {
+  const covered = new Set(rollupMatchIds ?? []);
+  return matchIds.filter((id) => !covered.has(id));
+}

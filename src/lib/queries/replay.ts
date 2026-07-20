@@ -4,6 +4,7 @@ import { getR2Object, replayKey, traceKey, mapTraceKey } from '../r2';
 import type { ReplayPayload, ReplayPlayerMeta, ReplayEvent } from '../replay/types';
 import { extractPlayerTrace, type PlayerTrace, type MatchTraceArtifact } from '../replay/aggregate';
 import type { Faction, ReplayStatus } from '../types';
+import { missingFromRollup } from './_shared';
 
 export type { ReplayStatus };
 
@@ -161,10 +162,18 @@ export interface MapTraceRollup {
   entries: MapTraceRollupEntry[];
 }
 
+/** Project one match's compact trace artifact into the rollup-entry shape used everywhere else. */
+export function matchTraceArtifactToEntries(art: MatchTraceArtifact): MapTraceRollupEntry[] {
+  return art.players.flatMap((p) =>
+    p.traces.map((trace) => ({ playerId: p.playerId, faction: p.faction, tickRate: art.tickRate, trace })),
+  );
+}
+
 /**
  * Aggregate the compact per-match `traces.json` artifacts for a set of matches into a
- * flat, player-tagged list — the Action's own merge step when (re)building a map's
- * trace rollup. Matches without a generated trace artifact are silently skipped.
+ * flat, player-tagged list. Matches without a generated trace artifact are silently
+ * skipped. Used both as the map-rollup's own read-and-merge (the Action) and as
+ * `getPlayerRoundTraces()`'s fallback for whatever a rollup doesn't cover.
  */
 export async function getMapTraces(matchIds: number[]): Promise<MapTraceRollupEntry[]> {
   const perMatch = await Promise.all(
@@ -173,9 +182,7 @@ export async function getMapTraces(matchIds: number[]): Promise<MapTraceRollupEn
       if (!buf) return [];
       try {
         const art = JSON.parse(gunzipMaybe(buf).toString('utf8')) as MatchTraceArtifact;
-        return art.players.flatMap((p) =>
-          p.traces.map((trace) => ({ playerId: p.playerId, faction: p.faction, tickRate: art.tickRate, trace })),
-        );
+        return matchTraceArtifactToEntries(art);
       } catch {
         return [];
       }
@@ -213,25 +220,17 @@ export async function getPlayerRoundTraces(
   slug?: string | null,
 ): Promise<PlayerRoundTraces> {
   const rollup = slug ? await getMapTraceRollup(slug) : null;
-  const covered = new Set(rollup?.matchIds ?? []);
   const requested = new Set(matchIds);
+  const matched = (rollup?.entries ?? []).filter(
+    (e) => e.playerId === playerId && requested.has(e.trace.matchId),
+  );
 
-  const traces: PlayerTrace[] = [];
-  let tickRate: number | null = null;
-  if (rollup) {
-    for (const entry of rollup.entries) {
-      if (entry.playerId !== playerId || !requested.has(entry.trace.matchId)) continue;
-      traces.push(entry.trace);
-      tickRate ??= entry.tickRate;
-    }
-  }
+  const missing = missingFromRollup(matchIds, rollup?.matchIds);
+  const fallback: { traces: PlayerTrace[]; tickRate: number | null } =
+    missing.length > 0 ? await fetchPlayerTracesFromReplay(playerId, missing) : { traces: [], tickRate: null };
 
-  const missing = matchIds.filter((id) => !covered.has(id));
-  if (missing.length > 0) {
-    const fallback = await fetchPlayerTracesFromReplay(playerId, missing);
-    traces.push(...fallback.traces);
-    tickRate ??= fallback.tickRate;
-  }
-
-  return { traces, tickRate };
+  return {
+    traces: [...matched.map((e) => e.trace), ...fallback.traces],
+    tickRate: matched[0]?.tickRate ?? fallback.tickRate,
+  };
 }

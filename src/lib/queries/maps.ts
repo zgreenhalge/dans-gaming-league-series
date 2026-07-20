@@ -9,7 +9,7 @@ import { mapSlug } from '../maps';
 import { workshopIdFromUrl } from '../replay/radar';
 import type { MapIndexEntry, LeaderboardRowWithId, Faction, PlayerMatchStat } from '../types';
 import { getPlayersById } from './player';
-import { fetchAllPages } from './_shared';
+import { fetchAllPages, missingFromRollup } from './_shared';
 
 
 export interface MapPlayerStat {
@@ -657,11 +657,24 @@ export interface MapHeatmapRollup {
   points: MapHeatmapPoint[];
 }
 
+/** Project one match's compact heatmap artifact into the match-tagged point shape used everywhere else. */
+export function heatmapArtifactToPoints(matchId: number, art: HeatmapArtifact): MapHeatmapPoint[] {
+  return art.points.map((p) => ({
+    matchId,
+    kind: p.kind,
+    x: p.x,
+    y: p.y,
+    side: p.side,
+    playerId: p.playerId ?? null,
+  }));
+}
+
 /**
  * Aggregate the compact `heatmap.json` artifacts (kill/death/grenade points) for a
- * set of matches into a flat, match-tagged list for the map Heatmap tab. Matches
- * without a replay yet are silently skipped (no artifact in R2). Reads are small
- * gzipped files; we fan out with Promise.all and let the page's revalidate cache it.
+ * set of matches into a flat, match-tagged list. Matches without a replay yet are
+ * silently skipped (no artifact in R2). Reads are small gzipped files; we fan out
+ * with Promise.all. Used both as the map-rollup's own read-and-merge (the Action)
+ * and as `getMapHeatmapPoints()`'s fallback for whatever a rollup doesn't cover.
  */
 export async function getMapHeatmap(matchIds: number[]): Promise<MapHeatmapPoint[]> {
   const perMatch = await Promise.all(
@@ -669,16 +682,8 @@ export async function getMapHeatmap(matchIds: number[]): Promise<MapHeatmapPoint
       const buf = await getR2Object(heatmapKey(matchId));
       if (!buf) return [];
       try {
-        const json = gunzipMaybe(buf);
-        const art = JSON.parse(json.toString('utf8')) as HeatmapArtifact;
-        return art.points.map((p) => ({
-          matchId,
-          kind: p.kind,
-          x: p.x,
-          y: p.y,
-          side: p.side,
-          playerId: p.playerId ?? null,
-        }));
+        const art = JSON.parse(gunzipMaybe(buf).toString('utf8')) as HeatmapArtifact;
+        return heatmapArtifactToPoints(matchId, art);
       } catch {
         return [];
       }
@@ -705,14 +710,30 @@ export async function getMapHeatmapRollup(slug: string): Promise<MapHeatmapRollu
 }
 
 /**
+ * Resolve heatmap points for a specific set of match ids on a map — the map's rollup
+ * first, falling back to a direct per-match fetch only for whatever it doesn't (yet)
+ * cover (see `missingFromRollup()`). This is what `/api/maps/[slug]/heatmap` calls;
+ * the route itself does no merging.
+ */
+export async function getMapHeatmapPoints(slug: string, matchIds: number[]): Promise<MapHeatmapPoint[]> {
+  const rollup = await getMapHeatmapRollup(slug);
+  const requested = new Set(matchIds);
+  const fromRollup = (rollup?.points ?? []).filter((p) => requested.has(p.matchId));
+  const missing = missingFromRollup(matchIds, rollup?.matchIds);
+  const fromFallback = missing.length > 0 ? await getMapHeatmap(missing) : [];
+  return [...fromRollup, ...fromFallback];
+}
+
+/**
  * Match ids played on a given map (case-insensitive), for the match-page scouting
  * report's Map Intel heatmap. The played map is the pick (`shirts_pick`) falling back
  * to `picked_map` — the same rule `getMapDetail` uses. Only played matches qualify;
  * matches without a replay artifact are silently dropped later by `getMapHeatmap`.
  *
- * Takes an optional client (defaulting to the app's own) so the `replay-extract`
- * Action — which has no anon key, only a service-role admin client — can reuse this
- * same lookup when rebuilding a map's rollup, mirroring `getReplayInputs`.
+ * Takes an optional client, defaulting to the app's own singleton so existing (page
+ * component) callers are unaffected — the `replay-extract` Action, which has no anon
+ * key and only a service-role admin client, passes that explicitly when rebuilding a
+ * map's rollup.
  */
 export async function getMatchIdsForMap(mapName: string, client: SupabaseClient = supabase): Promise<number[]> {
   const nameLower = mapName.trim().toLowerCase();
