@@ -239,6 +239,11 @@ export async function getPlayerRoundTraces(
       ? (await getMapTraces(missingFromRollupIds)).filter((e) => e.playerId === playerId)
       : [];
 
+  // "Covered by the artifact tier" is derived from `viaArtifact`, which is already
+  // filtered to `playerId` — a match whose `traces.json` exists but where this
+  // player genuinely has zero trace rounds is indistinguishable here from one with
+  // no artifact at all, so it falls through to the heavy tier unnecessarily. Harmless
+  // (that tier also correctly yields zero traces for them), just an extra R2 read.
   const stillMissingIds = missingIds(missingFromRollupIds, [...new Set(viaArtifact.map((e) => e.trace.matchId))]);
   const fallback: { traces: PlayerTrace[]; tickRate: number | null } =
     stillMissingIds.length > 0
