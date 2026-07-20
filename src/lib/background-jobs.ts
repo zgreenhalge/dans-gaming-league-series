@@ -23,6 +23,9 @@ export interface JobKey {
   id: number;
 }
 
+export const matchJobKey = (id: number): JobKey => ({ column: 'match_id', id });
+export const mapJobKey = (id: number): JobKey => ({ column: 'map_id', id });
+
 async function mirrorSubjectStatus(
   admin: SupabaseClient,
   subject: JobSubject,
@@ -45,6 +48,20 @@ export async function recordJobStatus(
     { onConflict: `job_type,${key.column}` },
   );
   return error ? { error: error.message } : {};
+}
+
+/** Bind `recordJobStatus` to a fixed `(jobType, key)`, throwing if the write fails — for a GitHub
+ *  Actions job script's per-stage writes, where a corrupted status row should abort the run (via the
+ *  script's own top-level `catch`) rather than continue past it silently. */
+export function jobStatusWriter(
+  admin: SupabaseClient,
+  jobType: string,
+  key: JobKey,
+): (fields: Record<string, unknown>) => Promise<void> {
+  return async (fields) => {
+    const { error } = await recordJobStatus(admin, jobType, key, fields);
+    if (error) throw new Error(error);
+  };
 }
 
 /** Advance a `background_jobs` row only if it's still in `onlyIfStatus` — so a dispatch response

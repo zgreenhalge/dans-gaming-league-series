@@ -42,9 +42,9 @@ Actions.
      fails, so a transient error never wedges the match in `queued` (which the guard would otherwise
      treat as in-flight forever). This claim→dispatch→record shape is identical across every dispatch
      route, so it lives once in `src/lib/background-jobs.ts` rather than hand-rolled per route. Each
-     helper takes a `JobKey` — `{ column: 'match_id', id }` for the match-keyed routes (replay, demo,
-     ingest) or `{ column: 'map_id', id }` for the map-keyed radar route — instead of a bare match ID,
-     so the same helpers cover both.
+     helper takes a `JobKey` — built with the `matchJobKey(id)` / `mapJobKey(id)` factories — so the
+     same helpers cover both the match-keyed routes (replay, demo, ingest) and the map-keyed radar
+     route.
    - **Pick the write order by whether a failed dispatch needs a rollback.** If the row is claimed to
      `queued` *before* dispatching (both replay routes), a failed dispatch leaves a stale `queued` row
      behind unless something unwinds it — use `dispatchAndRecordFailure` for that. If nothing is

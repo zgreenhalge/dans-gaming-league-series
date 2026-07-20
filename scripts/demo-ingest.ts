@@ -44,7 +44,7 @@ import { isPlayedScore, parseScore } from '../src/lib/util';
 import { persistSabremetrics } from '../src/lib/demo/sabremetrics';
 import { writeMatchScore } from '../src/lib/matchScore';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '../src/lib/demo/ingestResult';
-import { recordJobStatus } from '../src/lib/background-jobs';
+import { recordJobStatus, matchJobKey } from '../src/lib/background-jobs';
 
 const matchId = Number(process.env.MATCH_ID);
 const ghRunId = process.env.GH_RUN_ID ? Number(process.env.GH_RUN_ID) : null;
@@ -57,7 +57,7 @@ function notice(msg: string) {
 
 /** Upsert the job row (it normally exists from the notify route; upsert covers manual runs too). */
 async function setJob(fields: Record<string, unknown>) {
-  await recordJobStatus(supabase, JOB_TYPE, { column: 'match_id', id: matchId }, fields);
+  await recordJobStatus(supabase, JOB_TYPE, matchJobKey(matchId), fields);
 }
 
 async function fail(err: unknown) {

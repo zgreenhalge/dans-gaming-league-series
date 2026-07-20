@@ -9,7 +9,7 @@ import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { isPlayerAdmin } from '@/lib/queries';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
-import { recordJobStatus } from '@/lib/background-jobs';
+import { recordJobStatus, mapJobKey } from '@/lib/background-jobs';
 
 const JOB_TYPE = 'radar_build';
 const IN_PROGRESS: ReadonlySet<string> = new Set(['queued', 'running']);
@@ -57,7 +57,7 @@ export async function POST(
     );
   }
 
-  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, { column: 'map_id', id: mapId }, {
+  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, mapJobKey(mapId), {
     status: 'queued',
     stage: 'queued',
     error_message: null,

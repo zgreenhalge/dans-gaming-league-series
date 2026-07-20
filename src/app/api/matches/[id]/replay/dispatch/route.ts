@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { recordJobStatus, dispatchAndRecordFailure } from '@/lib/background-jobs';
+import { recordJobStatus, dispatchAndRecordFailure, matchJobKey } from '@/lib/background-jobs';
 import { REPLAY_EXTRACT_JOB_TYPE as JOB_TYPE } from '@/lib/jobs';
 import { parseMatchId } from '@/lib/util';
 
@@ -63,7 +63,7 @@ export async function POST(
   }
 
   const now = new Date().toISOString();
-  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, { column: 'match_id', id: matchId }, {
+  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, matchJobKey(matchId), {
     status: 'queued',
     stage: 'validate',
     error_message: null,
@@ -84,7 +84,7 @@ export async function POST(
 
   const dispatch = await dispatchAndRecordFailure(supabaseAdmin, {
     jobType: JOB_TYPE,
-    key: { column: 'match_id', id: matchId },
+    key: matchJobKey(matchId),
     workflowFile: 'replay-extract.yml',
     inputs: { match_id: String(matchId) },
     subject: { table: 'matches', column: 'replay_status', id: matchId },

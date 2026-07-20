@@ -21,7 +21,7 @@ import { homedir } from 'node:os';
 import { parseOverview, workshopIdFromUrl } from '../src/lib/replay/radar';
 import { putR2Object, radarKey } from '../src/lib/r2';
 import { getAdminClient } from '../src/lib/supabase-admin';
-import { recordJobStatus } from '../src/lib/background-jobs';
+import { recordJobStatus, mapJobKey, jobStatusWriter } from '../src/lib/background-jobs';
 
 const JOB_TYPE = 'radar_build';
 
@@ -57,8 +57,12 @@ function summary(md: string) {
   if (file) appendFileSync(file, md + '\n');
 }
 
+/** Every non-terminal write in this script (running/stage/succeeded) goes through this one choke
+ *  point; `fail()` below writes directly instead, since it must not throw while already unwinding. */
+const setJob = jobStatusWriter(supabase, JOB_TYPE, mapJobKey(mapId));
+
 async function markRunning() {
-  const { error } = await recordJobStatus(supabase, JOB_TYPE, { column: 'map_id', id: mapId }, {
+  await setJob({
     status: 'running',
     stage: STAGES[0],
     error_message: null,
@@ -66,17 +70,11 @@ async function markRunning() {
     gh_run_url: ghRunUrl,
     started_at: new Date().toISOString(),
   });
-  if (error) throw new Error(error);
 }
 
 async function setStage(stage: string) {
   currentStage = stage;
-  await supabase
-    .from('background_jobs')
-    .update({ stage, updated_at: new Date().toISOString() })
-    .eq('job_type', JOB_TYPE)
-    .eq('map_id', mapId)
-    .throwOnError();
+  await setJob({ stage });
 }
 
 async function stage<T>(name: string, fn: () => Promise<T> | T): Promise<T> {
@@ -94,17 +92,12 @@ async function fail(err: unknown) {
   const msg = err instanceof Error ? err.message : String(err);
   console.log(`::error::${mapLabel} failed at stage ${currentStage}: ${msg}`);
   summary(`\n❌ **${mapLabel}** failed at \`${currentStage}\`: ${msg}`);
-  await supabase
-    .from('background_jobs')
-    .update({
-      status: 'failed',
-      stage: currentStage,
-      error_message: msg,
-      finished_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('job_type', JOB_TYPE)
-    .eq('map_id', mapId);
+  await recordJobStatus(supabase, JOB_TYPE, mapJobKey(mapId), {
+    status: 'failed',
+    stage: currentStage,
+    error_message: msg,
+    finished_at: new Date().toISOString(),
+  });
   process.exit(1);
 }
 
@@ -271,18 +264,12 @@ async function main() {
   });
 
   await stage('done', async () => {
-    await supabase
-      .from('background_jobs')
-      .update({
-        status: 'succeeded',
-        stage: 'done',
-        error_message: null,
-        finished_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('job_type', JOB_TYPE)
-      .eq('map_id', mapId)
-      .throwOnError();
+    await setJob({
+      status: 'succeeded',
+      stage: 'done',
+      error_message: null,
+      finished_at: new Date().toISOString(),
+    });
   });
 
   summary(

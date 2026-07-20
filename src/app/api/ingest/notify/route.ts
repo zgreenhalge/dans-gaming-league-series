@@ -20,7 +20,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { r2, R2_BUCKET, demoKey } from '@/lib/r2';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
-import { recordJobStatus, advanceJobStatus, dispatchAndRecordFailure } from '@/lib/background-jobs';
+import { recordJobStatus, advanceJobStatus, dispatchAndRecordFailure, matchJobKey } from '@/lib/background-jobs';
 import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { machineSecretGuard } from '@/lib/machine-auth';
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
 
   // Record `received` in the shared job state machine (reused from the replay pipeline).
   const now = new Date().toISOString();
-  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, { column: 'match_id', id: matchId }, {
+  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, matchJobKey(matchId), {
     status: 'received',
     stage: 'received',
     error_message: null,
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
     const { error: advanceErr } = await advanceJobStatus(
       supabaseAdmin,
       JOB_TYPE,
-      { column: 'match_id', id: matchId },
+      matchJobKey(matchId),
       { status: 'queued', stage: 'queued' },
       'received',
     );
@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
       await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
       const replayDispatch = await dispatchAndRecordFailure(supabaseAdmin, {
         jobType: REPLAY_JOB_TYPE,
-        key: { column: 'match_id', id: matchId },
+        key: matchJobKey(matchId),
         workflowFile: 'replay-extract.yml',
         inputs: { match_id: String(matchId) },
         subject: { table: 'matches', column: 'replay_status', id: matchId },
