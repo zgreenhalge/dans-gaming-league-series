@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMapHeatmap, getPlayersById } from '@/lib/queries';
+import { getMapHeatmapPoints, getPlayersById } from '@/lib/queries';
 
 // Aggregates the per-match heatmap artifacts for a map's matches. POSTed (not GET) so
 // the caller can hand us the match-id set it already has, avoiding a second heavy map
 // query — the map page knows every match id and passes them straight through. This runs
-// only when the Heatmap tab opens, so the per-match R2 fan-out is no longer paid on
-// every map-page render. See `docs/replay.md` and issue #121 for a scalable rollup.
+// only when the Heatmap tab opens.
+//
+// Precomputed rollup first (issue #127): `getMapHeatmapPoints()` reads the map's
+// merged rollup and falls back to a direct per-match fetch only for whatever match
+// ids it doesn't (yet) cover, so the route itself does no merging.
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+
   let matchIds: unknown;
   try {
     ({ matchIds } = await req.json());
@@ -17,13 +22,15 @@ export async function POST(req: NextRequest) {
   if (!Array.isArray(matchIds) || !matchIds.every((id) => typeof id === 'number')) {
     return NextResponse.json({ error: 'matchIds must be a number[]' }, { status: 400 });
   }
+
   // Independent reads — run together rather than serially.
   const [points, playersById] = await Promise.all([
-    getMapHeatmap(matchIds),
+    getMapHeatmapPoints(slug, matchIds),
     // Defensive: a Supabase hiccup here shouldn't take down the whole heatmap response,
-    // just fall back to `#id` labels (getMapHeatmap already has its own fail-soft path).
+    // just fall back to `#id` labels.
     getPlayersById().catch(() => new Map()),
   ]);
+
   // Resolve names only for players who actually appear in the points, so the
   // per-player filter's dropdown doesn't need a second roster fetch.
   const presentIds = new Set(points.map((p) => p.playerId).filter((id): id is number => id !== null));
