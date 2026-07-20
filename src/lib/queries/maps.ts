@@ -2,14 +2,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { gunzipMaybe } from '../gzip';
 import { supabase } from '../supabase';
 import { getR2Object, heatmapKey, mapHeatmapKey } from '../r2';
-import type { HeatmapArtifact, HeatmapKind } from '../replay/heatmap';
+import { MAP_HEATMAP_ROLLUP_VERSION, type HeatmapArtifact, type HeatmapKind } from '../replay/heatmap';
 import { isPlayedScore, parseScore, extractSeasonNumber, canonicalSort, compareMatchRefDesc } from '../util';
 import { classifyMatchVeto } from '../mapSideStats';
 import { mapSlug } from '../maps';
 import { workshopIdFromUrl } from '../replay/radar';
 import type { MapIndexEntry, LeaderboardRowWithId, Faction, PlayerMatchStat } from '../types';
 import { getPlayersById } from './player';
-import { fetchAllPages, missingFromRollup } from './_shared';
+import { fetchAllPages, missingIds } from './_shared';
 
 
 export interface MapPlayerStat {
@@ -693,17 +693,21 @@ export async function getMapHeatmap(matchIds: number[]): Promise<MapHeatmapPoint
 }
 
 /**
- * Read a map's precomputed heatmap rollup (issue #127), or `null` if none has been
- * built yet (a brand-new map, or before the first post-rollout Action run). Callers
- * treat a miss the same as an empty/stale rollup — fetch whatever matches it doesn't
- * cover via `getMapHeatmap()` instead of failing.
+ * Read a map's precomputed heatmap rollup (issue #127), or `null` if none exists for
+ * this map yet, or its version doesn't match the current shape. Callers treat a miss
+ * the same as an empty/stale rollup — fetch whatever matches it doesn't cover via
+ * `getMapHeatmap()` instead of failing.
  */
 export async function getMapHeatmapRollup(slug: string): Promise<MapHeatmapRollup | null> {
   const buf = await getR2Object(mapHeatmapKey(slug));
   if (!buf) return null;
   try {
     const json = gunzipMaybe(buf);
-    return JSON.parse(json.toString('utf8')) as MapHeatmapRollup;
+    const rollup = JSON.parse(json.toString('utf8')) as MapHeatmapRollup;
+    // A version mismatch means the artifact predates a shape change — treat it the
+    // same as no rollup at all rather than handing callers a stale/foreign shape;
+    // `replay-extract-all` repopulates it on the next backfill.
+    return rollup.version === MAP_HEATMAP_ROLLUP_VERSION ? rollup : null;
   } catch {
     return null;
   }
@@ -712,14 +716,14 @@ export async function getMapHeatmapRollup(slug: string): Promise<MapHeatmapRollu
 /**
  * Resolve heatmap points for a specific set of match ids on a map — the map's rollup
  * first, falling back to a direct per-match fetch only for whatever it doesn't (yet)
- * cover (see `missingFromRollup()`). This is what `/api/maps/[slug]/heatmap` calls;
- * the route itself does no merging.
+ * cover (see `missingIds()`). This is what `/api/maps/[slug]/heatmap` calls; the
+ * route itself does no merging.
  */
 export async function getMapHeatmapPoints(slug: string, matchIds: number[]): Promise<MapHeatmapPoint[]> {
   const rollup = await getMapHeatmapRollup(slug);
   const requested = new Set(matchIds);
   const fromRollup = (rollup?.points ?? []).filter((p) => requested.has(p.matchId));
-  const missing = missingFromRollup(matchIds, rollup?.matchIds);
+  const missing = missingIds(matchIds, rollup?.matchIds);
   const fromFallback = missing.length > 0 ? await getMapHeatmap(missing) : [];
   return [...fromRollup, ...fromFallback];
 }
