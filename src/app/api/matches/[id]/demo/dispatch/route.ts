@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireMatchAccess } from '@/lib/match-access';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
+import { recordJobStatus } from '@/lib/background-jobs';
 import { parseMatchId } from '@/lib/util';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '@/lib/demo/ingestResult';
 
@@ -45,11 +46,17 @@ export async function POST(
     );
   }
 
-  const now = new Date().toISOString();
-  await supabaseAdmin.from('background_jobs').upsert(
-    { job_type: JOB_TYPE, match_id: matchId, status: 'queued', stage: 'queued', error_message: null, updated_at: now },
-    { onConflict: 'job_type,match_id' },
-  );
+  // The Action is already dispatched at this point, so a failure here is logged rather than
+  // returned as an error — telling the caller the re-parse failed would be wrong, and the
+  // in-flight guard above will miss this run until the row exists.
+  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, matchId, {
+    status: 'queued',
+    stage: 'queued',
+    error_message: null,
+  });
+  if (recordErr) {
+    console.error(`demo-ingest re-dispatch for match ${matchId} succeeded but recording it failed: ${recordErr}`);
+  }
 
   return NextResponse.json({ ok: true, status: 'queued' });
 }

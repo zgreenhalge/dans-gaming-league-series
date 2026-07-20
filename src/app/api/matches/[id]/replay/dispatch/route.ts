@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { recordJobStatus, dispatchAndRecordFailure } from '@/lib/background-jobs';
+import { REPLAY_EXTRACT_JOB_TYPE as JOB_TYPE } from '@/lib/jobs';
+import { parseMatchId } from '@/lib/util';
 
 // Dispatches Action A (`replay-extract`) for a match. The app only *triggers* the
 // GitHub job — all heavy parsing runs there (see docs/replay.md). This endpoint is
 // the primary guard against duplicate in-flight jobs.
-
-const JOB_TYPE = 'replay_extract';
 
 export async function POST(
   req: NextRequest,
@@ -19,8 +20,8 @@ export async function POST(
   }
 
   const { id } = await params;
-  const matchId = Number(id);
-  if (!Number.isFinite(matchId)) {
+  const matchId = parseMatchId(id);
+  if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
   }
 
@@ -62,80 +63,35 @@ export async function POST(
   }
 
   const now = new Date().toISOString();
-  const { error: upsertErr } = await supabaseAdmin.from('background_jobs').upsert(
-    {
-      job_type: JOB_TYPE,
-      match_id: matchId,
-      status: 'queued',
-      stage: 'validate',
-      error_message: null,
-      gh_run_id: null,
-      gh_run_url: null,
-      requested_by: playerId,
-      created_at: now,
-      started_at: null,
-      finished_at: null,
-      updated_at: now,
-    },
-    { onConflict: 'job_type,match_id' },
-  );
-  if (upsertErr) {
+  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, matchId, {
+    status: 'queued',
+    stage: 'validate',
+    error_message: null,
+    gh_run_id: null,
+    gh_run_url: null,
+    requested_by: playerId,
+    created_at: now,
+    started_at: null,
+    finished_at: null,
+  });
+  if (recordErr) {
     return NextResponse.json(
-      { error: `Could not record the job: ${upsertErr.message}` },
+      { error: `Could not record the job: ${recordErr}` },
       { status: 500 },
     );
   }
   await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
 
-  // Roll the just-queued job back to `failed` so a transient dispatch error never
-  // leaves the match wedged in `queued` (the in-flight guard above would otherwise
-  // block every retry — see docs/replay.md).
-  async function markFailed(message: string) {
-    await supabaseAdmin
-      .from('background_jobs')
-      .update({ status: 'failed', error_message: message, updated_at: new Date().toISOString() })
-      .eq('job_type', JOB_TYPE)
-      .eq('match_id', matchId);
-    await supabaseAdmin.from('matches').update({ replay_status: 'failed' }).eq('id', matchId);
-  }
-
-  // Fire the workflow via workflow_dispatch (gated by Actions: write, unlike
-  // repository_dispatch which needs Contents: write). The workflow must exist on
-  // the dispatched ref's default branch to be triggerable.
-  const ref = process.env.GITHUB_DISPATCH_REF || 'main';
-  let ghRes: Response;
-  try {
-    ghRes = await fetch(
-      `https://api.github.com/repos/${repo}/actions/workflows/replay-extract.yml/dispatches`,
-      {
-        method: 'POST',
-        headers: {
-          Accept: 'application/vnd.github+json',
-          Authorization: `Bearer ${token}`,
-          'X-GitHub-Api-Version': '2022-11-28',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ref,
-          inputs: { match_id: String(matchId) },
-        }),
-      },
-    );
-  } catch (err) {
-    // Network-level rejection (DNS, timeout, connection reset) — fetch never resolved.
-    const detail = err instanceof Error ? err.message : String(err);
-    await markFailed(`dispatch request failed: ${detail}`);
+  const dispatch = await dispatchAndRecordFailure(supabaseAdmin, {
+    jobType: JOB_TYPE,
+    matchId,
+    workflowFile: 'replay-extract.yml',
+    inputs: { match_id: String(matchId) },
+    subject: { table: 'matches', column: 'replay_status', id: matchId },
+  });
+  if (!dispatch.ok) {
     return NextResponse.json(
-      { error: 'Failed to reach GitHub to dispatch replay job', detail },
-      { status: 502 },
-    );
-  }
-
-  if (!ghRes.ok) {
-    const detail = await ghRes.text();
-    await markFailed(`dispatch failed: ${ghRes.status}`);
-    return NextResponse.json(
-      { error: `Failed to dispatch replay job (${ghRes.status})`, detail },
+      { error: 'Failed to dispatch replay job', detail: dispatch.error },
       { status: 502 },
     );
   }
