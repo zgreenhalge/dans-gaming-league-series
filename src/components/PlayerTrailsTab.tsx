@@ -63,7 +63,7 @@ export default function PlayerTrailsTab({
     fetch(`/api/players/${playerId}/replay-trails`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ matchIds }),
+      body: JSON.stringify({ matchIds, slug: mapSlug(selectedMap ?? '') }),
       signal: ac.signal,
     })
       .then((res) => (res.ok ? res.json() : { traces: [], tickRate: null }))

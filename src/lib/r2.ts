@@ -35,6 +35,21 @@ export function heatmapKey(matchId: number): string {
   return `${matchId}/heatmap.json`;
 }
 
+/** Deterministic key for a match's compact per-player trace artifact (gzipped JSON). */
+export function traceKey(matchId: number): string {
+  return `${matchId}/traces.json`;
+}
+
+/** Deterministic key for a map's merged heatmap rollup across every match on it (gzipped JSON). */
+export function mapHeatmapKey(slug: string): string {
+  return `maps/${slug}/heatmap.json`;
+}
+
+/** Deterministic key for a map's merged player-trace rollup across every match on it (gzipped JSON). */
+export function mapTraceKey(slug: string): string {
+  return `maps/${slug}/traces.json`;
+}
+
 /** Deterministic key for a map's extracted top-down radar PNG. */
 export function radarKey(mapId: number): string {
   return `maps/${mapId}/radar.png`;

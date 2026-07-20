@@ -16,7 +16,8 @@ import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import { matchesSnapshot } from './test-support/snapshot';
 
-__setTestClient(createFakeSupabaseClient(buildFakeDb()));
+const fakeDb = buildFakeDb();
+__setTestClient(createFakeSupabaseClient(fakeDb));
 
 import {
   getAllMatchesWithPickBan,
@@ -97,6 +98,12 @@ async function main() {
     const ids = await getMatchIdsForMap('Filler Map');
     // 1250 filler matches, half with a real score (final_score alternates '13-9'/null) => 625 played.
     assert.equal(ids.length, 625);
+  });
+
+  await test('getMatchIdsForMap("foroglio", explicitClient) — an explicitly passed client (the shape the replay-extract Action uses) gives the same result as the default', async () => {
+    const explicitClient = createFakeSupabaseClient(fakeDb);
+    const ids = await getMatchIdsForMap('foroglio', explicitClient);
+    assert.deepEqual(ids.sort(), (await getMatchIdsForMap('foroglio')).sort());
   });
 
   await test('getAllPlayedMatchIds() — includes real played matches (100, 200, 300) and filler', async () => {
