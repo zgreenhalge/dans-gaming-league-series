@@ -50,6 +50,9 @@ export interface HeatmapArtifact {
   points: HeatmapPoint[];
 }
 
+/** Bump when the map-level rollup artifact shape changes incompatibly (see `queries/maps.ts`). */
+export const MAP_HEATMAP_ROLLUP_VERSION = 1;
+
 /**
  * Extract every located kill/death/grenade point from a payload. Season isn't stored
  * here — the heatmap tab knows each match's season and filters on it; this artifact

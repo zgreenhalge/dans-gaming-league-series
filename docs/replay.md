@@ -229,16 +229,35 @@ projector-derived radius as its paint) rather than compositing pixel-level erasu
 Kill/death/grenade locations on `/maps/[slug]`, respecting the season filter (shared with the rest
 of the page) plus a CT/T side toggle, a per-player filter, and per-layer toggles, plotted via the shared `project.ts`
 (real radar when calibrated, else auto-fit) over the `heatmap.json` artifacts each match's
-`replay-extract` run produces — there is no separate Action for this. The aggregation is **lazy**:
+`replay-extract` run produces — there is no separate Action for this. The client fetch is **lazy**:
 `MapHeatmap` (with the shared `useMapRadar` hook) fetches the points only when the Heatmap tab
-opens — it POSTs the map's match ids to `/api/maps/[slug]/heatmap`, which calls `getMapHeatmap()` to
-fan out one R2 GET per match, so the map page never pays that fan-out on every render. The route also
-resolves the display names of every `playerId` present in the returned points (`getPlayersById()`)
-and returns them alongside as `players`, so `MapHeatmap` can offer a per-player filter dropdown
-without a second roster fetch. `MapHeatmap` then renders the density additively on a canvas, with
-grenades drawn as their effect area. (Decoys are excluded from `heatmap.json` entirely —
-`buildHeatmapPoints()` skips them; they carry no signal worth plotting and the tab has no decoy
-layer.)
+opens — it POSTs the map's match ids to `/api/maps/[slug]/heatmap`. The route also resolves the
+display names of every `playerId` present in the returned points (`getPlayersById()`) and returns
+them alongside as `players`, so `MapHeatmap` can offer a per-player filter dropdown without a second
+roster fetch. `MapHeatmap` then renders the density additively on a canvas, with grenades drawn as
+their effect area. (Decoys are excluded from `heatmap.json` entirely — `buildHeatmapPoints()` skips
+them; they carry no signal worth plotting and the tab has no decoy layer.)
+
+**Precomputed rollup (issue #127).** `replay-extract`'s `map-rollup` stage maintains a single merged
+`maps/<slug>/heatmap.json` (`MapHeatmapRollup`, read via `getMapHeatmapRollup()`) covering every match
+`getMatchIdsForMap()` resolves for the map, rebuilt each time any one of those matches is
+(re-)extracted. The route calls `getMapHeatmapPoints(slug, matchIds)`, which reads that rollup first
+and falls back to the per-match fan-out (`getMapHeatmap()`, one R2 GET per match) for only the
+requested match ids the rollup's own `matchIds` list doesn't include — a map with no rollup yet, or a
+match `getMatchIdsForMap()` doesn't (yet) resolve for the map (e.g. a played match whose score isn't
+recorded when this stage runs) — so the response is always correct, and a single R2 read once the
+rollup covers a map, regardless of match count. The route itself does no merging; that lives in the
+query layer alongside the rollup reader, the same shape as `getPlayerRoundTraces()` below.
+
+The rebuild is always a **full** recompute from the per-match `heatmap.json` artifacts (via
+`getMatchIdsForMap()` + `getMapHeatmap()`, both driven by the *same* resolved match-id list so the
+rollup's `matchIds` and its `points` can never disagree on which matches are included), never an
+incremental patch onto the previous rollup. That makes it idempotent and self-healing: concurrent
+extracts on the same map (e.g. a `replay-extract-all` backfill matrix) may race and overwrite each
+other's rollup write, but each writer computes a fully-correct snapshot from whatever's already in R2,
+and every match's own extract rebuilds again on its way to `ready` — so the map converges without any
+locking. The rebuild is fail-soft (a `::warning::`, not a thrown error) so a rollup hiccup never fails
+the match's own, already-successful replay.
 
 Each point carries the DGLS `player_id` of its actor (attacker for `kill`, victim for `death`,
 thrower for a grenade) as `playerId` (`HEATMAP_SCHEMA_VERSION` 2). A point with `playerId: null` is
@@ -249,11 +268,8 @@ simply excluded once a player filter is applied; re-extracting that match's repl
 component/route: the **Recap tab**'s *Heatmap* sub-tab scopes it to the single match
 (`matchIds={[matchId]}`), and the **Scouting Report**'s *Map Intel* sub-tab plots the picked map's
 full history (`getMatchIdsForMap()` resolves the ids server-side, passed down through
-`MatchTabView` → `ScoutingReport`). No new aggregation path — same lazy POST to
+`MatchTabView` → `ScoutingReport`). No new aggregation path — same rollup-first POST to
 `/api/maps/[slug]/heatmap`.
-
-> **Scaling note:** the per-match R2 fan-out is fine for current match counts but grows linearly. A
-> precomputed per-map rollup (or a streamed response) is tracked in issue #127 for when it matters.
 
 The player loads a map's calibration via `GET /api/maps/[slug]/calibration` + `…/radar` and switches
 `projectorFor()` to the calibrated branch (auto-fit fallback when uncalibrated). There is no in-site
@@ -283,6 +299,13 @@ first frame they appear in (no prior alive position exists to freeze at), that f
 used as a last resort instead — a possibly-imprecise corpse marker beats the round silently vanishing
 from the overlay and its round count.
 
+**Survivors** stop at `round.endTick` for the same reason: `round.frames` (`extract.ts`) deliberately
+keeps a few seconds *after* `round_end` so the single-round 2D Replay can show the post-round window,
+but CS2 resets players toward their next-round spawn during that window — movement that isn't part of
+the round itself. Reading past `endTick` would make a surviving player's ghost snap back toward spawn
+instead of staying put where the round actually ended; `traceStateAt`'s end-of-frames clamp freezes
+them there the same way it freezes a death.
+
 The shared renderer, `<PlayerRoundOverlay>`
 (`src/components/PlayerRoundOverlay.tsx`), takes a `PlayerTrace[]` + `tickRate` + map slug and owns the
 canvas, radar background (`useMapRadar`), CT/T side toggle, and a play/pause/speed/scrub transport
@@ -299,15 +322,30 @@ scopes below reuse it as-is:
   (`PlayerView.tsx`, see `docs/patterns.md`'s tab-visibility rule) — a played match alone isn't enough,
   since it may not have a generated replay yet. Once shown, it picks one map from the player's
   (season-filtered) history, restricted the same way to matches with a ready replay, then POSTs that
-  map's match ids to
-  `POST /api/players/[id]/replay-trails`, which calls `getPlayerRoundTraces()`
-  (`src/lib/queries/replay.ts`) — a sibling to `getMapHeatmap()` that fans out one R2 GET of the full
-  `replay.json` per match (not the compact `heatmap.json`, since a trace needs the actual per-tick
-  `frames[]`), reads the player's `faction` straight off each payload's own roster, and flattens every
-  match's `extractPlayerTrace()` results into one list. Matches without a ready replay, or where the
-  player isn't on the roster, are silently skipped — same tolerance as `getMapHeatmap`, but a heavier
-  per-match cost: it reads the full payload rather than the compact `heatmap.json`, so it inherits the
-  Heatmap tab's linear-fan-out scaling caveat (see above) sooner, at a lower match count.
+  map's match ids **and slug** to `POST /api/players/[id]/replay-trails`, which calls
+  `getPlayerRoundTraces()` (`src/lib/queries/replay.ts`).
+
+**Precomputed rollup (issue #127).** `getPlayerRoundTraces()` reads the map's trace rollup
+(`maps/<slug>/traces.json`, a `MapTraceRollup` read via `getMapTraceRollup()`) first, filtering it to
+the requested player and match ids — one R2 GET total once the rollup covers the map. Three tiers,
+cheapest first: the rollup; `getMapTraces()` reading each remaining match's own compact
+`<matchId>/traces.json` directly (`missingIds()`, `src/lib/queries/_shared.ts`, computes the delta at
+each tier); and `fetchPlayerTracesFromReplay()`'s full `replay.json` fan-out (one R2 GET of the whole
+payload per match, reading the player's `faction` straight off each payload's own roster and
+flattening every match's `extractPlayerTrace()` results) for whatever match has no `traces.json` in
+R2 at all. Matches without a ready replay, or where the player isn't on the roster, are silently
+skipped at every tier.
+
+The rollup itself is built from a smaller intermediate: `replay-extract`'s `traces` stage writes a
+compact per-match `<matchId>/traces.json` (`MatchTraceArtifact`, via `buildMatchTraces()`) holding
+every rostered player's `PlayerTrace[]` — positions only, none of `replay.json`'s events/grenades/
+shots/blinds/hurts — derived from the same payload the 2D Replay player reads, so there's no second
+source of truth. The `map-rollup` stage then merges these compact per-match artifacts (via
+`getMapTraces()`) across every match on the map into the single rollup, exactly mirroring the
+Heatmap tab's rollup: a full recompute from source on every affected match's extract, never an
+incremental patch, so it's idempotent, self-healing under concurrent extracts on the same map, and
+fail-soft (never fails the match's own replay). See the Heatmap tab section above for the full
+reasoning — both rollups are rebuilt together in the same `map-rollup` stage.
 
 ## Background jobs (GitHub Actions)
 
@@ -325,13 +363,14 @@ exists for the match, so a retried webhook call can't double-fire it.
 
 | Action | Trigger | Output |
 |---|---|---|
-| **A — `replay-extract`** | auto, on first demo landing (`/api/ingest/notify`, opt-in via `REPLAY_AUTO_DISPATCH`) or manual (Recap tab / admin `POST /api/matches/[id]/replay/dispatch`) | `replay.json` **and** compact `heatmap.json` → R2 `<matchId>/…` (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
+| **A — `replay-extract`** | auto, on first demo landing (`/api/ingest/notify`, opt-in via `REPLAY_AUTO_DISPATCH`) or manual (Recap tab / admin `POST /api/matches/[id]/replay/dispatch`) | `replay.json`, compact `heatmap.json` **and** `traces.json`, plus a rebuild of the map's `heatmap.json`/`traces.json` rollups → R2 (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
 | **A′ — `replay-extract-all`** | manual (Actions UI / dispatch) | re-runs A for **every** match with a demo, as a matrix (`replay-extract-all.yml` + `scripts/list-demo-matches.ts`) |
 | **B — `radar-build`** | per map (Actions UI, or admin `POST /api/maps/[slug]/radar/dispatch`) | radar PNG → R2 `maps/<id>/radar.png` + `maps` row calibration (`radar-build.yml` + `scripts/radar-build.ts`) |
 
-> **Backfilling a logic/schema change:** when the extract or heatmap output shape changes
-> (e.g. the post-round-kill fix, or a future `HEATMAP_SCHEMA_VERSION` bump for per-player
-> filtering), run **`replay-extract-all`** to re-extract existing artifacts. It enumerates
+> **Backfilling a logic/schema change:** when the extract, heatmap, or trace output shape changes
+> (e.g. the post-round-kill fix, or a future `HEATMAP_SCHEMA_VERSION`/`TRACE_SCHEMA_VERSION` bump),
+> run **`replay-extract-all`** to re-extract existing artifacts — this also (re)populates every
+> affected map's rollups, since `map-rollup` runs as part of each match's own extract. It enumerates
 > matches with a `<id>/game.dem` in R2 (`list-demo-matches.ts`; `only_missing` skips ones
 > that already have a `replay.json`) and fans out Action A as a `max-parallel: 3` matrix.
 > The Action runs the dispatched ref's code, so dispatch it on the branch/`main` that has
@@ -343,9 +382,13 @@ Each job's ordered `stage()` list (see [`github-actions.md`](./github-actions.md
 for what stages are and how they're surfaced):
 
 `replay-extract`: `validate → download-demo → decompress → parse-ticks → parse-events →
-parse-grenades → assemble → gzip → upload → heatmap → done`. (`buildReplay()` does the three parse
-stages plus `assemble` in one library pass; they're surfaced as ordered stages around that call for
-progress. `heatmap` builds + uploads the `heatmap.json` points artifact.)
+parse-grenades → assemble → gzip → upload → heatmap → traces → map-rollup → done`.
+(`buildReplay()` does the three parse stages plus `assemble` in one library pass; they're surfaced as
+ordered stages around that call for progress. `heatmap` builds + uploads the `heatmap.json` points
+artifact; `traces` builds + uploads the `traces.json` per-player trace artifact; `map-rollup`
+rebuilds the map's merged `heatmap.json`/`traces.json` rollups from every match on the map — see the
+Heatmap/Pathing tab sections above. `map-rollup` is fail-soft: a hiccup there logs a `::warning::` and
+leaves this match's own already-`ready` replay untouched.)
 
 `radar-build`: `validate-workshop-id → steamcmd-download → extract-vpk → decode-vtex →
 compute-calibration → upload-radar → upsert-map → done`. The deterministic parsing
@@ -405,9 +448,15 @@ the dedup guard. GitHub retains full run history/logs (~90d) as the audit trail.
 | `<matchId>/game.dem` | uploaded demo (`demoKey()`) |
 | `<matchId>/replay.json` | gzipped replay payload (`replayKey()`) |
 | `<matchId>/heatmap.json` | gzipped compact heatmap points (`heatmapKey()`) |
+| `<matchId>/traces.json` | gzipped compact per-player trace artifact (`traceKey()`) |
+| `maps/<slug>/heatmap.json` | gzipped merged heatmap rollup for the map (`mapHeatmapKey()`) |
+| `maps/<slug>/traces.json` | gzipped merged trace rollup for the map (`mapTraceKey()`) |
 | `maps/<mapId>/radar.png` | extracted top-down radar (`radarKey()`) |
 
-Both `getR2Object()`/`putR2Object()` helpers live in `src/lib/r2.ts`.
+Both `getR2Object()`/`putR2Object()` helpers live in `src/lib/r2.ts`. The two `maps/...` key families
+use different identifiers: the heatmap/trace rollups are keyed by **slug** (`mapSlug()` of the map's
+recorded name), since not every map has a `maps` table row — only calibrated ones do — while the
+radar PNG is keyed by the `maps` table's numeric id, which calibration always creates.
 
 ## Required secrets / env
 

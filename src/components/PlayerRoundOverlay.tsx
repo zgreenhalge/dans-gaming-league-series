@@ -2,9 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause } from 'lucide-react';
-import { autoFitProjector, calibratedProjector, type Projector, type Bounds } from '@/lib/replay/project';
+import {
+  boundsOfPoints,
+  countDistinctMatches,
+  drawRadarBackground,
+  projectorForBounds,
+  type Projector,
+} from '@/lib/replay/project';
 import { traceStateAt, maxDurationTicks, type PlayerTrace } from '@/lib/replay/aggregate';
+import { readTheme } from './replayTheme';
 import { useMapRadar } from './useMapRadar';
+import { useCanvasSize } from './useCanvasSize';
 
 const SPEEDS = [0.5, 1, 2, 4];
 const MAX_SIDE = 520;
@@ -13,17 +21,13 @@ const DOT_RADIUS = 4;
 const DEAD_ALPHA = 0.3;
 const ALIVE_ALPHA = 0.85;
 
-function boundsOf(traces: PlayerTrace[]): Bounds | null {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const trace of traces) {
-    for (const f of trace.frames) {
-      if (f.x < minX) minX = f.x;
-      if (f.y < minY) minY = f.y;
-      if (f.x > maxX) maxX = f.x;
-      if (f.y > maxY) maxY = f.y;
-    }
-  }
-  return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+/** A trace's resolved dot color from its side — shared by the "visible set changed"
+ *  rebuild and the "theme refreshed" recolor, so they can't drift apart. */
+function colorTrace(
+  trace: PlayerTrace,
+  colors: { CT: string; T: string; neutral: string },
+): { trace: PlayerTrace; color: string } {
+  return { trace, color: colors[trace.side ?? 'neutral'] };
 }
 
 /**
@@ -52,21 +56,17 @@ export default function PlayerRoundOverlay({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrubRef = useRef<HTMLInputElement>(null);
-  const activeCountRef = useRef<HTMLSpanElement>(null);
   const tickRef = useRef(0);
   const projectorRef = useRef<Projector | null>(null);
-  const sizeRef = useRef({ w: 0, h: 0 });
+  const sizeRef = useRef(0);
 
-  const bounds = useMemo(() => boundsOf(traces), [traces]);
+  const bounds = useMemo(() => boundsOfPoints(traces.flatMap((t) => t.frames)), [traces]);
   const duration = useMemo(() => maxDurationTicks(traces), [traces]);
   const visible = useMemo(
     () => (side === 'all' ? traces : traces.filter((t) => t.side === side)),
     [traces, side],
   );
-  // Read by `draw()` instead of closing over `visible` directly, so toggling the side
-  // filter doesn't change `draw`'s identity and doesn't re-trigger the canvas-sizing
-  // effect below (which rebuilds the projector) — only an actual resize should do that.
-  const visibleRef = useRef(visible);
+  const gameCount = useMemo(() => countDistinctMatches(visible), [visible]);
 
   // Restart the shared clock whenever the underlying trace set changes (a different
   // player/map picked upstream) rather than carrying over a stale scrub position.
@@ -82,18 +82,19 @@ export default function PlayerRoundOverlay({
     tickRef.current = 0;
   }, [traces]);
 
-  // Side colors are read from CSS custom properties once per mount (canvas fillStyle
-  // can't take `var(...)` directly), matching the team-color convention used elsewhere.
-  const colorsRef = useRef({ CT: '#5b9bd5', T: '#d5a04b', neutral: '#e6e6e6' });
+  // Colors read from CSS custom properties, refreshed each canvas resize (see
+  // `onResize` below) so a live light/dark toggle is picked up the same way
+  // `ReplayPlayer` incidentally does, instead of only once on mount.
+  const colorsRef = useRef({ CT: '#5b9bd5', T: '#d5a04b', neutral: '#e6e6e6', bg: '#0b0e14' });
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const style = getComputedStyle(el);
+  // Each visible trace's color resolved once (not per animation frame — issue #224).
+  // The source of truth for which traces `draw()` shows; rebuilt from `visible`
+  // whenever the trace set changes (below), and re-colored in place from its own
+  // tracked traces on a resize/theme refresh — no separate ref of `visible` needed.
+  const coloredRef = useRef<{ trace: PlayerTrace; color: string }[]>([]);
+  const recolor = useCallback(() => {
     const colors = colorsRef.current;
-    colors.CT = style.getPropertyValue('--color-ct').trim() || colors.CT;
-    colors.T = style.getPropertyValue('--color-t').trim() || colors.T;
-    colors.neutral = style.getPropertyValue('--color-text-primary').trim() || colors.neutral;
+    coloredRef.current = coloredRef.current.map(({ trace }) => colorTrace(trace, colors));
   }, []);
 
   const draw = useCallback(() => {
@@ -101,33 +102,22 @@ export default function PlayerRoundOverlay({
     const ctx = canvas?.getContext('2d');
     const projector = projectorRef.current;
     if (!ctx || !projector) return;
-    const { w, h } = sizeRef.current;
+    const side = sizeRef.current;
 
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = '#0b0e14';
-    ctx.fillRect(0, 0, w, h);
+    ctx.clearRect(0, 0, side, side);
+    ctx.fillStyle = colorsRef.current.bg;
+    ctx.fillRect(0, 0, side, side);
     if (calibration && radarImage.current) {
-      const tl = projector.project({ x: calibration.posX, y: calibration.posY });
-      const br = projector.project({
-        x: calibration.posX + calibration.imageWidth * calibration.scale,
-        y: calibration.posY - calibration.imageHeight * calibration.scale,
-      });
-      ctx.globalAlpha = 0.85;
-      ctx.drawImage(radarImage.current, tl.x, tl.y, br.x - tl.x, br.y - tl.y);
-      ctx.globalAlpha = 1;
+      drawRadarBackground(ctx, projector, radarImage.current, calibration);
     }
 
-    const shown = visibleRef.current;
-    const colors = colorsRef.current;
     ctx.globalCompositeOperation = 'lighter';
-    let active = 0;
-    for (const trace of shown) {
+    for (const { trace, color } of coloredRef.current) {
       const state = traceStateAt(trace, tickRef.current);
       if (!state) continue;
-      active++;
       const c = projector.project(state);
       ctx.globalAlpha = state.alive ? ALIVE_ALPHA : DEAD_ALPHA;
-      ctx.fillStyle = colors[trace.side ?? 'neutral'];
+      ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(c.x, c.y, DOT_RADIUS, 0, Math.PI * 2);
       ctx.fill();
@@ -135,44 +125,37 @@ export default function PlayerRoundOverlay({
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     if (scrubRef.current) scrubRef.current.value = String(tickRef.current);
-    if (activeCountRef.current) activeCountRef.current.textContent = `${active} / ${shown.length} rounds`;
   }, [calibration, radarImage]);
 
-  // Repaint (without resizing) whenever the visible trace set changes — e.g. the side
-  // filter — while the clock is stopped; a running clock already repaints every frame.
+  // Rebuild the tracked/colored trace set whenever the visible set actually changes —
+  // e.g. the side filter — not on every play/pause toggle.
   useEffect(() => {
-    visibleRef.current = visible;
+    const colors = colorsRef.current;
+    coloredRef.current = visible.map((trace) => colorTrace(trace, colors));
+  }, [visible]);
+
+  // Repaint (without resizing) whenever the visible trace set changes, while the clock
+  // is stopped; a running clock already repaints every frame.
+  useEffect(() => {
     if (!playing) draw();
   }, [visible, playing, draw]);
 
   // --- size canvas to its container (DPR-aware) + (re)build the projector ---
-  useEffect(() => {
-    const container = containerRef.current;
-    const canvas = canvasRef.current;
-    if (!container || !canvas) return;
-    const resize = () => {
-      const maxByHeight = Math.round((window.innerHeight || 800) * 0.6);
-      const side = Math.max(240, Math.min(container.clientWidth, MAX_SIDE, maxByHeight));
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.round(side * dpr);
-      canvas.height = Math.round(side * dpr);
-      canvas.style.width = `${side}px`;
-      canvas.style.height = `${side}px`;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(dpr, dpr);
+  const onResize = useCallback(
+    (sidePx: number) => {
+      sizeRef.current = sidePx;
+      projectorRef.current = projectorForBounds(bounds, calibration, sidePx, sidePx);
+      const container = containerRef.current;
+      if (container) {
+        const theme = readTheme(container);
+        colorsRef.current = { CT: theme.ct, T: theme.t, neutral: theme.text, bg: theme.bg };
       }
-      sizeRef.current = { w: side, h: side };
-      if (calibration) projectorRef.current = calibratedProjector(calibration, side, side);
-      else if (bounds) projectorRef.current = autoFitProjector(bounds, side, side);
+      recolor();
       draw();
-    };
-    resize();
-    const ro = new ResizeObserver(resize);
-    ro.observe(container);
-    return () => ro.disconnect();
-  }, [calibration, bounds, draw]);
+    },
+    [calibration, bounds, recolor, draw],
+  );
+  useCanvasSize(containerRef, canvasRef, MAX_SIDE, onResize);
 
   // --- playback clock — a shared clock all traces play against, each stopping once
   //     past its own round's duration (handled by traceStateAt returning null) ---
@@ -210,26 +193,21 @@ export default function PlayerRoundOverlay({
 
   return (
     <div ref={containerRef} className="w-full space-y-3">
-      <div className="flex flex-wrap items-center gap-2 text-[12px]">
-        <span className="font-mono text-[var(--color-text-secondary)]">
-          {playerName} — <span ref={activeCountRef}>0 / {visible.length} rounds</span>
-        </span>
-        <div className="ml-auto flex items-center gap-1">
-          {(['all', 'CT', 'T'] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSide(s)}
-              className={`border px-1.5 py-0.5 font-mono ${
-                side === s
-                  ? 'border-[var(--color-text-primary)] text-[var(--color-text-primary)]'
-                  : 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)]'
-              }`}
-            >
-              {s === 'all' ? 'Both' : s}
-            </button>
-          ))}
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-1 text-[12px]">
+        {(['all', 'CT', 'T'] as const).map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setSide(s)}
+            className={`border px-1.5 py-0.5 font-mono ${
+              side === s
+                ? 'border-[var(--color-text-primary)] text-[var(--color-text-primary)]'
+                : 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)]'
+            }`}
+          >
+            {s === 'all' ? 'Both' : s}
+          </button>
+        ))}
       </div>
 
       <canvas ref={canvasRef} className="block mx-auto border border-[var(--color-border-primary)]" />
@@ -279,7 +257,7 @@ export default function PlayerRoundOverlay({
         </div>
       </div>
       <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-        {visible.length} round{visible.length === 1 ? '' : 's'} overlaid
+        {gameCount} game{gameCount === 1 ? '' : 's'} · {visible.length} round{visible.length === 1 ? '' : 's'} overlaid
         {!calibration && ' · auto-fit (map not calibrated)'}
       </div>
     </div>

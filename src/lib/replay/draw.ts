@@ -9,7 +9,7 @@
 
 import type { ReplayPlayerMeta, ReplayRound } from './types';
 import type { Faction } from '../types';
-import type { Projector, RadarCalibration } from './project';
+import { drawRadarBackground, type Projector, type RadarCalibration } from './project';
 import type { ViewState, ViewPlayer } from './playback';
 import { sideOfPlayer } from './playback';
 
@@ -316,7 +316,7 @@ export function drawScene(args: DrawSceneArgs): void {
   ctx.fillStyle = theme.bg;
   ctx.fillRect(0, 0, width, height);
   if (radar) {
-    drawRadar(ctx, projector, radar.image, radar.calibration);
+    drawRadarBackground(ctx, projector, radar.image, radar.calibration, 1);
   } else {
     drawGrid(ctx, width, height, theme.grid);
   }
@@ -431,21 +431,6 @@ function drawGrid(ctx: Ctx2D, width: number, height: number, color: string): voi
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
-}
-
-function drawRadar(
-  ctx: Ctx2D,
-  projector: Projector,
-  image: DrawableImage,
-  cal: RadarCalibration,
-): void {
-  // Project the radar's world-space corners; the calibrated projector places them.
-  const tl = projector.project({ x: cal.posX, y: cal.posY });
-  const br = projector.project({
-    x: cal.posX + cal.imageWidth * cal.scale,
-    y: cal.posY - cal.imageHeight * cal.scale,
-  });
-  ctx.drawImage(image, tl.x, tl.y, br.x - tl.x, br.y - tl.y);
 }
 
 function drawPlayer(

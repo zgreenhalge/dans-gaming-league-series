@@ -1,9 +1,16 @@
 import { gunzipMaybe } from '../gzip';
 import { supabase } from '../supabase';
-import { getR2Object, replayKey } from '../r2';
+import { getR2Object, replayKey, traceKey, mapTraceKey } from '../r2';
 import type { ReplayPayload, ReplayPlayerMeta, ReplayEvent } from '../replay/types';
-import { extractPlayerTrace, type PlayerTrace } from '../replay/aggregate';
+import {
+  extractPlayerTrace,
+  TRACE_SCHEMA_VERSION,
+  MAP_TRACE_ROLLUP_VERSION,
+  type PlayerTrace,
+  type MatchTraceArtifact,
+} from '../replay/aggregate';
 import type { Faction, ReplayStatus } from '../types';
+import { missingIds, getVersionedR2Json } from './_shared';
 
 export type { ReplayStatus };
 
@@ -103,15 +110,15 @@ export interface PlayerRoundTraces {
 }
 
 /**
- * Aggregate one player's per-round position trace across several matches' `replay.json`
- * artifacts — the source for the "replay all of a player's rounds" overlay (#128), both
- * scoped to a single match (traces from one payload) and career-wide across every match
- * a player has played on a map (this function, fanned out over `matchIds`). Matches
- * without a ready replay, or where the player isn't on the roster, are silently
- * skipped — same tolerance as `getMapHeatmap`. See `docs/replay.md` for the scaling
- * caveat (one R2 GET of the full payload per match) this shares with that fan-out.
+ * Read every rostered player's traces straight off each match's own full `replay.json`
+ * — the heaviest tier, used only for a match with no usable compact `traces.json`
+ * artifact in R2. Matches without a ready replay, or where the player isn't on the
+ * roster, are silently skipped, same tolerance as `getMapHeatmap`.
  */
-export async function getPlayerRoundTraces(playerId: number, matchIds: number[]): Promise<PlayerRoundTraces> {
+async function fetchPlayerTracesFromReplay(
+  playerId: number,
+  matchIds: number[],
+): Promise<{ traces: PlayerTrace[]; tickRate: number | null }> {
   const perMatch = await Promise.all(
     matchIds.map(async (matchId): Promise<{ traces: PlayerTrace[]; tickRate: number } | null> => {
       const buf = await getR2Object(replayKey(matchId));
@@ -136,5 +143,106 @@ export async function getPlayerRoundTraces(playerId: number, matchIds: number[])
   return {
     traces: present.flatMap((r) => r.traces),
     tickRate: present[0]?.tickRate ?? null,
+  };
+}
+
+/** One player's trace tagged with match context, as merged into a map's trace rollup. */
+export interface MapTraceRollupEntry {
+  playerId: number;
+  faction: Faction;
+  tickRate: number;
+  trace: PlayerTrace;
+}
+
+/**
+ * A map's merged player-trace rollup (issue #127) — every rostered player's traces
+ * across every match played on the map, precomputed by the `replay-extract` Action
+ * from each match's compact `MatchTraceArtifact` instead of fanning out live over full
+ * `replay.json` payloads. `matchIds` records which matches are currently folded in.
+ */
+export interface MapTraceRollup {
+  version: number; // === MAP_TRACE_ROLLUP_VERSION (see replay/aggregate.ts)
+  slug: string;
+  matchIds: number[];
+  entries: MapTraceRollupEntry[];
+}
+
+/** Project one match's compact trace artifact into the rollup-entry shape used everywhere else. */
+export function matchTraceArtifactToEntries(art: MatchTraceArtifact): MapTraceRollupEntry[] {
+  return art.players.flatMap((p) =>
+    p.traces.map((trace) => ({ playerId: p.playerId, faction: p.faction, tickRate: art.tickRate, trace })),
+  );
+}
+
+/**
+ * Aggregate the compact per-match `traces.json` artifacts for a set of matches into a
+ * flat, player-tagged list. Matches without a generated trace artifact are silently
+ * skipped. Used both as the map-rollup's own read-and-merge (the Action) and as
+ * `getPlayerRoundTraces()`'s fallback for whatever a rollup doesn't cover.
+ */
+export async function getMapTraces(matchIds: number[]): Promise<MapTraceRollupEntry[]> {
+  const perMatch = await Promise.all(
+    matchIds.map(async (matchId): Promise<MapTraceRollupEntry[]> => {
+      const art = await getVersionedR2Json<MatchTraceArtifact>(traceKey(matchId), TRACE_SCHEMA_VERSION);
+      return art ? matchTraceArtifactToEntries(art) : [];
+    }),
+  );
+  return perMatch.flat();
+}
+
+/**
+ * Read a map's precomputed trace rollup (issue #127), or `null` if none exists for
+ * this map yet, or its version doesn't match the current shape.
+ */
+export async function getMapTraceRollup(slug: string): Promise<MapTraceRollup | null> {
+  return getVersionedR2Json<MapTraceRollup>(mapTraceKey(slug), MAP_TRACE_ROLLUP_VERSION);
+}
+
+/**
+ * Aggregate one player's per-round position trace across several matches — the source
+ * for the "replay all of a player's rounds" overlay (#128), both scoped to a single
+ * match (traces from one payload) and career-wide across every match a player has
+ * played on a map (this function, fanned out over `matchIds`). Three tiers, cheapest
+ * first: the map's trace rollup (one R2 GET total, when `slug` is given and the
+ * rollup covers the match); a direct per-match `traces.json` fetch (`getMapTraces()`)
+ * for whatever the rollup doesn't cover; and `fetchPlayerTracesFromReplay()`'s full
+ * `replay.json` read for whatever has no `traces.json` either. Each tier only pays for
+ * what the tier before it couldn't answer.
+ */
+export async function getPlayerRoundTraces(
+  playerId: number,
+  matchIds: number[],
+  slug?: string | null,
+): Promise<PlayerRoundTraces> {
+  const rollup = slug ? await getMapTraceRollup(slug) : null;
+  const requested = new Set(matchIds);
+  // Coverage is tracked off the *unfiltered* entries/artifact reads (any player, not
+  // just `playerId`) — a match is "answered" once we know it has a ready replay,
+  // regardless of whether this particular player has any trace rounds in it. Filtering
+  // by `playerId` only happens when building the actual trace list, so a player with
+  // zero rounds in an otherwise-covered match still gets that match's real tickRate
+  // (matching this function's contract below) instead of falling through to a heavier
+  // tier that would find nothing new.
+  const rollupForRequested = (rollup?.entries ?? []).filter((e) => requested.has(e.trace.matchId));
+  const matched = rollupForRequested.filter((e) => e.playerId === playerId);
+
+  const missingFromRollupIds = missingIds(matchIds, rollup?.matchIds);
+  const viaArtifactAll = missingFromRollupIds.length > 0 ? await getMapTraces(missingFromRollupIds) : [];
+  const viaArtifact = viaArtifactAll.filter((e) => e.playerId === playerId);
+
+  const stillMissingIds = missingIds(missingFromRollupIds, viaArtifactAll.map((e) => e.trace.matchId));
+  const fallback: { traces: PlayerTrace[]; tickRate: number | null } =
+    stillMissingIds.length > 0
+      ? await fetchPlayerTracesFromReplay(playerId, stillMissingIds)
+      : { traces: [], tickRate: null };
+
+  return {
+    traces: [...matched.map((e) => e.trace), ...viaArtifact.map((e) => e.trace), ...fallback.traces],
+    tickRate:
+      matched[0]?.tickRate ??
+      rollupForRequested[0]?.tickRate ??
+      viaArtifact[0]?.tickRate ??
+      viaArtifactAll[0]?.tickRate ??
+      fallback.tickRate,
   };
 }

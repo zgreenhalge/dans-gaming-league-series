@@ -30,7 +30,7 @@ import {
   roundTickRange,
 } from './playback';
 import { buildHeatmapPoints } from './heatmap';
-import { extractPlayerTrace, traceStateAt, maxDurationTicks } from './aggregate';
+import { extractPlayerTrace, traceStateAt, maxDurationTicks, buildMatchTraces } from './aggregate';
 import { parseOverview, workshopIdFromUrl } from './radar';
 import type { ReplayRound, ReplayFrame, ReplayPayload, ReplayPlayerFrame } from './types';
 
@@ -526,10 +526,94 @@ test('aggregate: extractPlayerTrace freezes at the last alive position on death,
   assert.equal(later.alive, false);
 });
 
+test('aggregate: extractPlayerTrace freezes survivors at round_end, ignoring post-round position drift', () => {
+  const r = round({
+    endTick: 10,
+    frames: [
+      frame(0, [pf(1, 10, 20, { alive: true, hp: 80 })]),
+      frame(10, [pf(1, 15, 25, { alive: true, hp: 80 })]), // at round_end — last frame that counts
+      frame(17, [pf(1, 0, 0, { alive: true, hp: 80 })]), // post-round window — CS2 resets them toward spawn
+    ],
+  });
+  const trace = extractPlayerTrace(7, r, 1, 'SHIRTS')!;
+  assert.ok(trace);
+  // Only the two in-round frames are captured — the post-round drift frame is never read.
+  assert.equal(trace.frames.length, 2);
+  const last = trace.frames[1];
+  assert.equal(last.t, 10);
+  approx(last.x, 15);
+  approx(last.y, 25);
+
+  // The frozen state holds past round_end (clamped to the last in-round frame).
+  const later = traceStateAt(trace, 17)!;
+  approx(later.x, 15);
+  approx(later.y, 25);
+});
+
 test('aggregate: maxDurationTicks picks the longest trace', () => {
   const short = extractPlayerTrace(1, round({ frames: [frame(0, [pf(1, 0, 0)]), frame(20, [pf(1, 0, 0)])] }), 1, 'SHIRTS')!;
   const long = extractPlayerTrace(2, round({ frames: [frame(0, [pf(1, 0, 0)]), frame(80, [pf(1, 0, 0)])] }), 1, 'SHIRTS')!;
   assert.equal(maxDurationTicks([short, long]), 80);
+});
+
+// --- buildMatchTraces: the compact per-match trace artifact (issue #127) ---
+test('buildMatchTraces: every rostered player gets their own traces, tagged with faction', () => {
+  const payload = {
+    version: 2,
+    matchId: 7,
+    map: 'de_test',
+    tickRate: 64,
+    frameRate: 16,
+    players: [
+      { id: 1, name: 'A', faction: 'SHIRTS', steamId: null },
+      { id: 2, name: 'B', faction: 'SKINS', steamId: null },
+    ],
+    rounds: [
+      round({
+        round: 1,
+        sideByFaction: { SHIRTS: 'CT', SKINS: 'T' },
+        frames: [frame(0, [pf(1, 0, 0), pf(2, 50, 50)]), frame(10, [pf(1, 10, 0), pf(2, 50, 50)])],
+      }),
+    ],
+  } as unknown as ReplayPayload;
+
+  const art = buildMatchTraces(payload);
+  assert.equal(art.version, 1);
+  assert.equal(art.matchId, 7);
+  assert.equal(art.map, 'de_test');
+  assert.equal(art.tickRate, 64);
+  assert.equal(art.players.length, 2);
+
+  const a = art.players.find((p) => p.playerId === 1)!;
+  assert.equal(a.faction, 'SHIRTS');
+  assert.equal(a.traces.length, 1);
+  assert.equal(a.traces[0].matchId, 7);
+  assert.equal(a.traces[0].side, 'CT');
+
+  const b = art.players.find((p) => p.playerId === 2)!;
+  assert.equal(b.faction, 'SKINS');
+  assert.equal(b.traces.length, 1);
+  assert.equal(b.traces[0].side, 'T');
+});
+
+test('buildMatchTraces: a player absent from a round contributes no trace for it, not a crash', () => {
+  const payload = {
+    matchId: 7,
+    map: 'de_test',
+    tickRate: 64,
+    frameRate: 16,
+    players: [
+      { id: 1, name: 'A', faction: 'SHIRTS', steamId: null },
+      { id: 2, name: 'B', faction: 'SKINS', steamId: null },
+    ],
+    rounds: [
+      round({ round: 1, frames: [frame(0, [pf(1, 0, 0)])] }), // player 2 sat this round out
+    ],
+  } as unknown as ReplayPayload;
+
+  const art = buildMatchTraces(payload);
+  const b = art.players.find((p) => p.playerId === 2)!;
+  assert.equal(b.traces.length, 0);
 });
 
 // --- radar: overview parsing + workshop id extraction ---
