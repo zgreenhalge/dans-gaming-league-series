@@ -33,7 +33,7 @@ Actions.
    `POST /api/ingest/notify`). The route only **triggers** the job and records intent; it does **no**
    heavy work. It:
    - authorizes (session admin/in-match, or a constant-time shared secret),
-   - **guards against duplicates** — no-op if a `background_jobs` row for this `(job_type, match_id)`
+   - **guards against duplicates** — no-op if a `background_jobs` row for this `(job_type, key)`
      is already `queued`/`running`. This guard is the one part that's genuinely per-route (an in-flight
      `SELECT`, an atomic first-landing upsert, an auth check) and stays hand-written at the call site.
    - claims the row (`recordJobStatus` in `src/lib/background-jobs.ts`) to `queued`, then dispatches
@@ -41,7 +41,10 @@ Actions.
      (`matches.replay_status`, etc.), when given one — back to `failed` if the dispatch call itself
      fails, so a transient error never wedges the match in `queued` (which the guard would otherwise
      treat as in-flight forever). This claim→dispatch→record shape is identical across every dispatch
-     route, so it lives once in `src/lib/background-jobs.ts` rather than hand-rolled per route.
+     route, so it lives once in `src/lib/background-jobs.ts` rather than hand-rolled per route. Each
+     helper takes a `JobKey` — built with the `matchJobKey(id)` / `mapJobKey(id)` factories — so the
+     same helpers cover both the match-keyed routes (replay, demo, ingest) and the map-keyed radar
+     route.
    - **Pick the write order by whether a failed dispatch needs a rollback.** If the row is claimed to
      `queued` *before* dispatching (both replay routes), a failed dispatch leaves a stale `queued` row
      behind unless something unwinds it — use `dispatchAndRecordFailure` for that. If nothing is
@@ -63,16 +66,17 @@ Actions.
    `npm ci`; secrets passed as `env`; one line: `npx tsx scripts/<job>.ts`.
 
 3. **Job script — `scripts/<job>.ts`, run via `tsx`.** Reuses the **same `src/lib/*` code as the
-   app** (no logic drift — e.g. `getReplayInputs`, the demo parsers, the R2 helpers). Drives the
-   `background_jobs` state machine and prints GitHub log annotations. See the template below.
+   app** (no logic drift — e.g. `getReplayInputs`, the demo parsers, the R2 helpers, and
+   `recordJobStatus` from `src/lib/background-jobs.ts` for its own `markRunning`/`setJob`-style upsert).
+   Drives the `background_jobs` state machine and prints GitHub log annotations. See the template below.
 
 ## Conventions every job follows
 
-- **State machine in `background_jobs`** — one row per `(job_type, match_id)` (unique;
-  `onConflict: 'job_type,match_id'`). Lifecycle: `queued` (route) → `running` (`markRunning`) →
-  `succeeded` | `failed`. Columns: `status, stage, error_message, gh_run_id, gh_run_url,
-  requested_by, created_at, started_at, finished_at, updated_at`. Pick a distinct `job_type` string
-  (`'replay_extract'`, `'demo_ingest'`, …).
+- **State machine in `background_jobs`** — one row per `(job_type, key)`, `key` being `match_id` for
+  match-keyed jobs or `map_id` for map-keyed ones (unique; `onConflict: 'job_type,<key column>'`).
+  Lifecycle: `queued` (route) → `running` (`markRunning`) → `succeeded` | `failed`. Columns: `status,
+  stage, error_message, gh_run_id, gh_run_url, requested_by, created_at, started_at, finished_at,
+  updated_at`. Pick a distinct `job_type` string (`'replay_extract'`, `'demo_ingest'`, `'radar_build'`, …).
 - **Mirror a coarse status onto the domain row** when the UI needs it cheaply (replay mirrors to
   `matches.replay_status`). Read it back defensively (`getReplayJobState` returns `'none'` if the
   table/column isn't there yet — these are added in the Supabase dashboard, not via migrations).
