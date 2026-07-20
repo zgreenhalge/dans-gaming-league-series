@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { useNav } from './NavContext';
 import { usePersistedToggle } from './usePersistedToggle';
 import { extractSeasonNumber } from '@/lib/util';
+import { ScrimNavStatus } from './ScrimNavStatus';
 
 interface NavSeason {
   id: number;
@@ -31,12 +32,21 @@ function ChevronDown({ open }: { open: boolean }) {
   );
 }
 
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+function NavLink({
+  href,
+  prefetch,
+  children,
+}: {
+  href: string;
+  prefetch?: boolean;
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const active = pathname === href || (href !== '/' && pathname.startsWith(href));
   return (
     <Link
       href={href}
+      prefetch={prefetch}
       className={[
         'block px-3 py-1.5 tracked text-[11px] font-semibold transition-colors',
         active
@@ -105,6 +115,12 @@ export function SideNav({ seasons }: Props) {
 
       <NavLink href="/statistics">Statistics</NavLink>
       <NavLink href="/maps">Maps</NavLink>
+      <NavLink href="/scrim" prefetch={false}>
+        <span className="inline-flex items-center gap-1.5">
+          Scrim
+          <ScrimNavStatus />
+        </span>
+      </NavLink>
     </nav>
   );
 

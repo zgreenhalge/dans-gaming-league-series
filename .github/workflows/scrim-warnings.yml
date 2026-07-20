@@ -1,0 +1,46 @@
+# scrim-warnings
+#
+# Warns players in-game when a scheduled league match is getting close while a scrim is still on the
+# shared server (see `scripts/scrim-warnings.ts` for the full mechanism). Runs on GitHub Actions
+# rather than a Vercel cron — this project's Vercel plan only allows daily crons, far too coarse for a
+# 5-minute check — and no-ops immediately unless a scrim is actually active, so most runs do nothing.
+
+name: scrim-warnings
+
+on:
+  schedule:
+    - cron: '*/5 * * * *' # every 5 minutes — matches the 15/10/5-minute warning bands
+  workflow_dispatch: {}
+
+concurrency:
+  group: scrim-warnings
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  warn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DATHOST_EMAIL: ${{ secrets.DATHOST_EMAIL }}
+      DATHOST_PASSWORD: ${{ secrets.DATHOST_PASSWORD }}
+      DATHOST_SERVER_ID: ${{ secrets.DATHOST_SERVER_ID }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check for a scrim nearing a scheduled match
+        run: npx tsx scripts/scrim-warnings.ts

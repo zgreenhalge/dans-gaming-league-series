@@ -11,7 +11,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
-import { matchLabel } from './util';
+import { matchLabel, isPlayedScore } from './util';
+import { SCHEDULE_COLLISION_WINDOW_MS } from './schedule';
 import {
   dathostServerId,
   applyGoldenSettings,
@@ -24,7 +25,22 @@ import {
   getServer,
   type DathostServer,
 } from './dathost';
+import { releaseScrimSession } from './scrim-session';
 import { pushCfgFiles } from './dathost-config';
+
+/**
+ * Stops the shared server and releases any active scrim session in one call — the single choke point
+ * every "stop the server" path (`/api/scrim/stop`, the raw admin console stop, real-match teardown
+ * below) should go through, so a scrim session can never outlive a stop this app itself initiated.
+ * Lives here rather than in `scrim-session.ts` since "what it takes to stop the one shared, reused
+ * server" is this module's concern (it already tracks who else occupies it) — scrim-session.ts stays
+ * scoped to the session row itself. Doesn't cover a stop DatHost initiates on its own (an idle
+ * timeout) — that's what `reconcileScrimSession` is for.
+ */
+export async function stopSharedServer(supabaseAdmin: SupabaseClient, serverId: string): Promise<void> {
+  await stopServer(serverId);
+  await releaseScrimSession(supabaseAdmin);
+}
 
 export type ServerState = 'idle' | 'provisioning' | 'live' | 'tearing_down' | 'done' | 'failed';
 
@@ -59,6 +75,59 @@ export async function findServerOccupant(
     .limit(1);
   const rows = (data ?? []) as { id: number }[];
   return rows.length ? rows[0].id : null;
+}
+
+export interface NearbyUnscoredMatch {
+  matchId: number;
+  label: string;
+  scheduledAt: string;
+}
+
+/**
+ * A league match scheduled within `windowMs` of right now that hasn't been scored yet, or `null`.
+ * Scrims share the one physical server with league matches (D2) — a match's scheduled time passing
+ * doesn't mean the server is free, since it may still be mid-veto or mid-play. Nearest match wins if
+ * more than one falls in the window.
+ */
+export async function findNearbyUnscoredMatch(
+  supabaseAdmin: SupabaseClient,
+  windowMs: number = SCHEDULE_COLLISION_WINDOW_MS,
+): Promise<NearbyUnscoredMatch | null> {
+  const now = Date.now();
+  const { data } = await supabaseAdmin
+    .from('matches')
+    .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
+    .not('scheduled_at', 'is', null)
+    .gte('scheduled_at', new Date(now - windowMs).toISOString())
+    .lte('scheduled_at', new Date(now + windowMs).toISOString());
+  const rows = (data ?? []) as unknown as {
+    id: number;
+    match_number: number | null;
+    scheduled_at: string;
+    final_score: string | null;
+    weeks: { week_number: number | null; seasons: { name: string | null } | null } | null;
+  }[];
+
+  let best: NearbyUnscoredMatch | null = null;
+  let bestDelta = Infinity;
+  for (const row of rows) {
+    if (isPlayedScore(row.final_score)) continue;
+    const delta = Math.abs(new Date(row.scheduled_at).getTime() - now);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = {
+        matchId: row.id,
+        label: matchLabel({
+          matchId: row.id,
+          seasonName: row.weeks?.seasons?.name,
+          weekNumber: row.weeks?.week_number,
+          matchNumber: row.match_number,
+        }),
+        scheduledAt: row.scheduled_at,
+      };
+    }
+  }
+  return best;
 }
 
 async function setServerState(
@@ -186,6 +255,9 @@ export async function provisionMatchServer(
  * auto-teardown) to no-op unless THIS match is the current occupant — i.e. its `server_state` is
  * still active (`provisioning`/`live`/`tearing_down`) and its `dathost_server_id` matches. The
  * explicit teardown route omits the flag, since that's a deliberate operator stop.
+ *
+ * Goes through `stopSharedServer` — a scrim should never be active while a real match owns the
+ * server, but this clears any `scrim_sessions` row defensively regardless.
  */
 export async function teardownMatchServer(
   supabaseAdmin: SupabaseClient,
@@ -210,7 +282,7 @@ export async function teardownMatchServer(
   }
 
   await setServerState(supabaseAdmin, matchId, { server_state: 'tearing_down' }).catch(() => {});
-  await stopServer(serverId);
+  await stopSharedServer(supabaseAdmin, serverId);
   await setServerState(supabaseAdmin, matchId, {
     server_state: 'done',
     connect_string: null,
