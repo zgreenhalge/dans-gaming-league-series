@@ -240,22 +240,24 @@ them; they carry no signal worth plotting and the tab has no decoy layer.)
 
 **Precomputed rollup (issue #127).** `replay-extract`'s `map-rollup` stage maintains a single merged
 `maps/<slug>/heatmap.json` (`MapHeatmapRollup`, read via `getMapHeatmapRollup()`) covering every match
-currently known for the map, rebuilt each time any one of those matches is (re-)extracted. The route
-calls `getMapHeatmapPoints(slug, matchIds)`, which reads that rollup first and falls back to the
-per-match fan-out (`getMapHeatmap()`, one R2 GET per match) for only the requested match ids the
-rollup doesn't cover — a map with no rollup yet, or a match extracted before this artifact existed —
-so the response is always correct, and a single R2 read once the rollup covers a map, regardless of
-match count. The route itself does no merging; that lives in the query layer alongside the rollup
-reader, the same shape as `getPlayerRoundTraces()` below.
+`getMatchIdsForMap()` resolves for the map, rebuilt each time any one of those matches is
+(re-)extracted. The route calls `getMapHeatmapPoints(slug, matchIds)`, which reads that rollup first
+and falls back to the per-match fan-out (`getMapHeatmap()`, one R2 GET per match) for only the
+requested match ids the rollup's own `matchIds` list doesn't include — a map with no rollup yet, or a
+match `getMatchIdsForMap()` doesn't (yet) resolve for the map (e.g. a played match whose score isn't
+recorded when this stage runs) — so the response is always correct, and a single R2 read once the
+rollup covers a map, regardless of match count. The route itself does no merging; that lives in the
+query layer alongside the rollup reader, the same shape as `getPlayerRoundTraces()` below.
 
 The rebuild is always a **full** recompute from the per-match `heatmap.json` artifacts (via
-`getMatchIdsForMap()` + `getMapHeatmap()`), never an incremental patch onto the previous rollup. That
-makes it idempotent and self-healing: concurrent extracts on the same map (e.g. a
-`replay-extract-all` backfill matrix) may race and overwrite each other's rollup write, but each
-writer computes a fully-correct snapshot from whatever's already in R2, and every match's own extract
-rebuilds again on its way to `ready` — so the map converges without any locking. The rebuild is
-fail-soft (a `::warning::`, not a thrown error) so a rollup hiccup never fails the match's own,
-already-successful replay.
+`getMatchIdsForMap()` + `getMapHeatmap()`, both driven by the *same* resolved match-id list so the
+rollup's `matchIds` and its `points` can never disagree on which matches are included), never an
+incremental patch onto the previous rollup. That makes it idempotent and self-healing: concurrent
+extracts on the same map (e.g. a `replay-extract-all` backfill matrix) may race and overwrite each
+other's rollup write, but each writer computes a fully-correct snapshot from whatever's already in R2,
+and every match's own extract rebuilds again on its way to `ready` — so the map converges without any
+locking. The rebuild is fail-soft (a `::warning::`, not a thrown error) so a rollup hiccup never fails
+the match's own, already-successful replay.
 
 Each point carries the DGLS `player_id` of its actor (attacker for `kill`, victim for `death`,
 thrower for a grenade) as `playerId` (`HEATMAP_SCHEMA_VERSION` 2). A point with `playerId: null` is
@@ -318,12 +320,14 @@ scopes below reuse it as-is:
 
 **Precomputed rollup (issue #127).** `getPlayerRoundTraces()` reads the map's trace rollup
 (`maps/<slug>/traces.json`, a `MapTraceRollup` read via `getMapTraceRollup()`) first, filtering it to
-the requested player and match ids — one R2 GET total once the rollup covers the map. Any requested
-match id the rollup doesn't cover falls back to `fetchPlayerTracesFromReplay()`, the original
-fan-out: one R2 GET of the full `replay.json` per match (not a compact artifact, since a trace needs
-the actual per-tick `frames[]`), reading the player's `faction` straight off each payload's own roster
-and flattening every match's `extractPlayerTrace()` results into one list. Matches without a ready
-replay, or where the player isn't on the roster, are silently skipped either way.
+the requested player and match ids — one R2 GET total once the rollup covers the map. Three tiers,
+cheapest first: the rollup; `getMapTraces()` reading each remaining match's own compact
+`<matchId>/traces.json` directly (`missingIds()`, `src/lib/queries/_shared.ts`, computes the delta at
+each tier); and `fetchPlayerTracesFromReplay()`'s full `replay.json` fan-out (one R2 GET of the whole
+payload per match, reading the player's `faction` straight off each payload's own roster and
+flattening every match's `extractPlayerTrace()` results) for whatever match has no `traces.json` in
+R2 at all. Matches without a ready replay, or where the player isn't on the roster, are silently
+skipped at every tier.
 
 The rollup itself is built from a smaller intermediate: `replay-extract`'s `traces` stage writes a
 compact per-match `<matchId>/traces.json` (`MatchTraceArtifact`, via `buildMatchTraces()`) holding
