@@ -25,12 +25,15 @@ export async function fetchAllPages<T>(
 }
 
 /**
- * Which of `matchIds` a map-level rollup (issue #127) doesn't cover yet, given the
- * rollup's own `matchIds` list — shared by `getMapHeatmapPoints()` and
- * `getPlayerRoundTraces()`, both of which fetch only this delta directly when a
- * rollup is missing or partial.
+ * Which of `requested` aren't present in `covered` — a plain set difference, used
+ * wherever a precomputed artifact (issue #127) only partially answers a request:
+ * `getMapHeatmapPoints()` and `getPlayerRoundTraces()` both use this to find which
+ * match ids a map-level rollup doesn't cover yet (`covered` = the rollup's own
+ * `matchIds`), and `getPlayerRoundTraces()` reuses it again to find which of those
+ * still aren't answered by a compact per-match artifact fetch, before falling back
+ * further. Each caller fetches only this delta directly.
  */
-export function missingFromRollup(matchIds: number[], rollupMatchIds: number[] | undefined): number[] {
-  const covered = new Set(rollupMatchIds ?? []);
-  return matchIds.filter((id) => !covered.has(id));
+export function missingIds(requested: number[], covered: number[] | undefined): number[] {
+  const coveredSet = new Set(covered ?? []);
+  return requested.filter((id) => !coveredSet.has(id));
 }

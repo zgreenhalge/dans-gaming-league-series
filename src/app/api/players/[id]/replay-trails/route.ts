@@ -10,9 +10,10 @@ import { getPlayerRoundTraces } from '@/lib/queries';
 // opened for a chosen map.
 //
 // `slug` (issue #127) lets `getPlayerRoundTraces` check the map's precomputed trace
-// rollup first, falling back to the original per-match `replay.json` fan-out only for
-// whatever matches it doesn't cover — optional so a caller without a map in hand
-// (there is none today) still gets correct, just unaccelerated, results.
+// rollup first, falling back progressively (a direct per-match artifact fetch, then
+// the full `replay.json` fan-out) only for whatever matches it doesn't cover —
+// optional so a caller without a map in hand (there is none today) still gets
+// correct, just unaccelerated, results.
 
 export async function POST(
   req: NextRequest,
