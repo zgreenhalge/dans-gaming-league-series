@@ -27,8 +27,8 @@ import {
 } from '../src/lib/r2';
 import { gunzipMaybe } from '../src/lib/gzip';
 import { getAdminClient } from '../src/lib/supabase-admin';
-import { getMatchIdsForMap, getMapHeatmap, heatmapArtifactToPoints } from '../src/lib/queries/maps';
-import { getMapTraces, matchTraceArtifactToEntries } from '../src/lib/queries/replay';
+import { getMatchIdsForMap, getMapHeatmap } from '../src/lib/queries/maps';
+import { getMapTraces } from '../src/lib/queries/replay';
 import { mapSlug } from '../src/lib/maps';
 
 const JOB_TYPE = 'replay_extract';
@@ -184,21 +184,19 @@ async function main() {
 
   // Compact heatmap points artifact (kills/deaths/grenades) for the map's Heatmap
   // tab — derived from the same payload, so there's no second source of truth.
-  const heatmapArtifact = await stage('heatmap', async () => {
+  await stage('heatmap', async () => {
     const artifact = buildHeatmapPoints(payload);
     const bytes = await uploadGzippedJson(heatmapKey(matchId), artifact);
     notice(`heatmap.json: ${artifact.points.length} points, ${bytes} bytes gzipped`);
-    return artifact;
   });
 
   // Compact per-player trace artifact (issue #127) for the player page's Pathing tab —
   // same reasoning as heatmap.json: derived from the same payload, no second source
   // of truth, and much smaller than replay.json since it carries positions only.
-  const traceArtifact = await stage('traces', async () => {
+  await stage('traces', async () => {
     const artifact = buildMatchTraces(payload);
     const bytes = await uploadGzippedJson(traceKey(matchId), artifact);
     notice(`traces.json: ${artifact.players.length} players, ${bytes} bytes gzipped`);
-    return artifact;
   });
 
   // Rebuild this map's heatmap + trace rollups (issue #127) — precomputed merges of
@@ -212,6 +210,13 @@ async function main() {
   // the map converges to complete without any locking. Fail-soft: a hiccup here must
   // never fail this match's own (already-successful) replay, so it's a warning, not
   // a thrown error — matching `radar-build`'s own best-effort/isolated sub-steps.
+  //
+  // Deliberately re-reads every match's per-match artifact (including this one's,
+  // just uploaded above) via getMapHeatmap()/getMapTraces() rather than splicing in
+  // an in-memory copy: `mapMatchIds` is the single source of truth for which matches
+  // belong on the map (it requires a played score — this match may not have one yet
+  // if its demo landed before the score was entered), so `points`/`entries` must be
+  // derived from exactly that same list, never from this match unconditionally.
   await stage('map-rollup', async () => {
     const slug = payload.map ? mapSlug(payload.map) : null;
     if (!slug) {
@@ -220,16 +225,8 @@ async function main() {
     }
     try {
       const mapMatchIds = await getMatchIdsForMap(payload.map, supabase);
-      // This match's own points/entries are already in memory from the stages above —
-      // no need to re-read what was just written. Only fan out over the rest.
-      const otherMatchIds = mapMatchIds.filter((id) => id !== matchId);
 
-      const [otherPoints, otherEntries] = await Promise.all([
-        getMapHeatmap(otherMatchIds),
-        getMapTraces(otherMatchIds),
-      ]);
-      const points = [...heatmapArtifactToPoints(matchId, heatmapArtifact), ...otherPoints];
-      const entries = [...matchTraceArtifactToEntries(traceArtifact), ...otherEntries];
+      const [points, entries] = await Promise.all([getMapHeatmap(mapMatchIds), getMapTraces(mapMatchIds)]);
 
       const [heatmapBytes, traceBytes] = await Promise.all([
         uploadGzippedJson(mapHeatmapKey(slug), {
