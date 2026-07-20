@@ -20,6 +20,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { r2, R2_BUCKET, demoKey } from '@/lib/r2';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
+import { recordJobStatus, advanceJobStatus, dispatchAndRecordFailure } from '@/lib/background-jobs';
 import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { machineSecretGuard } from '@/lib/machine-auth';
@@ -91,21 +92,15 @@ export async function POST(req: NextRequest) {
 
   // Record `received` in the shared job state machine (reused from the replay pipeline).
   const now = new Date().toISOString();
-  const { error: upsertErr } = await supabaseAdmin.from('background_jobs').upsert(
-    {
-      job_type: JOB_TYPE,
-      match_id: matchId,
-      status: 'received',
-      stage: 'received',
-      error_message: null,
-      created_at: now,
-      updated_at: now,
-    },
-    { onConflict: 'job_type,match_id' },
-  );
-  if (upsertErr) {
+  const { error: recordErr } = await recordJobStatus(supabaseAdmin, JOB_TYPE, matchId, {
+    status: 'received',
+    stage: 'received',
+    error_message: null,
+    created_at: now,
+  });
+  if (recordErr) {
     return NextResponse.json(
-      { error: `Could not record ingestion: ${upsertErr.message}` },
+      { error: `Could not record ingestion: ${recordErr}` },
       { status: 500 },
     );
   }
@@ -115,14 +110,18 @@ export async function POST(req: NextRequest) {
   // covers it. On success, advance the job to `queued` (the Action moves it to running→parsed).
   const dispatch = await dispatchWorkflow('demo-ingest.yml', { match_id: String(matchId) });
   if (dispatch.ok) {
-    // Only advance the row we just wrote — `.eq('status','received')` so a concurrent Action that
-    // already moved it to running/parsed isn't clobbered back to queued.
-    await supabaseAdmin
-      .from('background_jobs')
-      .update({ status: 'queued', stage: 'queued', updated_at: new Date().toISOString() })
-      .eq('job_type', JOB_TYPE)
-      .eq('match_id', matchId)
-      .eq('status', 'received');
+    // Only advance the row we just wrote — a concurrent Action that already moved it to
+    // running/parsed isn't clobbered back to queued.
+    const { error: advanceErr } = await advanceJobStatus(
+      supabaseAdmin,
+      JOB_TYPE,
+      matchId,
+      { status: 'queued', stage: 'queued' },
+      'received',
+    );
+    if (advanceErr) {
+      console.error(`Could not advance demo-ingest job for match ${matchId} to queued: ${advanceErr}`);
+    }
   } else {
     console.error(`demo-ingest dispatch failed for match ${matchId}: ${dispatch.error}`);
   }
@@ -151,27 +150,19 @@ export async function POST(req: NextRequest) {
       )
       .select('match_id');
     if (claimed && claimed.length > 0) {
-      const [, replayDispatch] = await Promise.all([
-        supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId),
-        dispatchWorkflow('replay-extract.yml', { match_id: String(matchId) }),
-      ]);
+      // Write `queued` and let it fully land *before* dispatching — dispatchAndRecordFailure's own
+      // rollback write targets this same column, so racing the two in a Promise.all would leave the
+      // final value nondeterministic if the dispatch fails fast (e.g. missing token/repo).
+      await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
+      const replayDispatch = await dispatchAndRecordFailure(supabaseAdmin, {
+        jobType: REPLAY_JOB_TYPE,
+        matchId,
+        workflowFile: 'replay-extract.yml',
+        inputs: { match_id: String(matchId) },
+        subject: { table: 'matches', column: 'replay_status', id: matchId },
+      });
       if (!replayDispatch.ok) {
-        // Roll the just-claimed row back to `failed` so a transient dispatch error is visible in
-        // the background_jobs dashboard instead of silently vanishing (mirrors the manual
-        // `/api/matches/[id]/replay/dispatch` route's markFailed).
         console.error(`replay-extract auto-dispatch failed for match ${matchId}: ${replayDispatch.error}`);
-        await Promise.all([
-          supabaseAdmin
-            .from('background_jobs')
-            .update({
-              status: 'failed',
-              error_message: `dispatch failed: ${replayDispatch.error}`,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('job_type', REPLAY_JOB_TYPE)
-            .eq('match_id', matchId),
-          supabaseAdmin.from('matches').update({ replay_status: 'failed' }).eq('id', matchId),
-        ]);
       }
     }
   }

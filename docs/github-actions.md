@@ -34,12 +34,27 @@ Actions.
    heavy work. It:
    - authorizes (session admin/in-match, or a constant-time shared secret),
    - **guards against duplicates** — no-op if a `background_jobs` row for this `(job_type, match_id)`
-     is already `queued`/`running`,
-   - upserts the row to `queued`, then fires the workflow via the GitHub REST API
-     (`POST /repos/{repo}/actions/workflows/<file>.yml/dispatches`, needs `GITHUB_DISPATCH_TOKEN` /
-     `GITHUB_REPO`),
-   - **rolls the row back to `failed`** if the dispatch call itself fails, so a transient error never
-     wedges the match in `queued` (which the guard would otherwise treat as in-flight forever).
+     is already `queued`/`running`. This guard is the one part that's genuinely per-route (an in-flight
+     `SELECT`, an atomic first-landing upsert, an auth check) and stays hand-written at the call site.
+   - claims the row (`recordJobStatus` in `src/lib/background-jobs.ts`) to `queued`, then dispatches
+     the workflow via `dispatchAndRecordFailure`, which rolls the row — and a subject column
+     (`matches.replay_status`, etc.), when given one — back to `failed` if the dispatch call itself
+     fails, so a transient error never wedges the match in `queued` (which the guard would otherwise
+     treat as in-flight forever). This claim→dispatch→record shape is identical across every dispatch
+     route, so it lives once in `src/lib/background-jobs.ts` rather than hand-rolled per route.
+   - **Pick the write order by whether a failed dispatch needs a rollback.** If the row is claimed to
+     `queued` *before* dispatching (both replay routes), a failed dispatch leaves a stale `queued` row
+     behind unless something unwinds it — use `dispatchAndRecordFailure` for that. If nothing is
+     written until the dispatch itself succeeds (`demo/dispatch`, which returns an error straight to
+     the caller on a failed dispatch and never wrote a row to unwind), there's no rollback to do — call
+     `dispatchWorkflow` directly and `recordJobStatus` only in the success branch. A third shape covers
+     a claimed row where failure needs neither a rollback nor to reach the caller: `ingest/notify`'s
+     `demo_ingest` path claims `received` before dispatching, and on a failed dispatch just logs and
+     leaves the row at `received` — the demo is already durably staged in R2, so a stale `received` row
+     is a correct "not parsed yet" state, not a wedge, and the manual `demo/dispatch` route is the
+     retry path. On success it calls `advanceJobStatus` (not `recordJobStatus`) to move `received` →
+     `queued` only if the row is still `received`, so a concurrent Action run that already advanced it
+     isn't clobbered back.
 
 2. **Workflow — `.github/workflows/<job>.yml`.** `workflow_dispatch` (and optionally
    `repository_dispatch`) inputs; `concurrency` backstop with **`cancel-in-progress: false`** (a
@@ -112,7 +127,9 @@ These are GitHub's official hardening practices ([security-hardening for GitHub 
 2. **`.github/workflows/<job>.yml`** — copy `replay-extract.yml`. Rename, set the `concurrency.group`,
    keep `cancel-in-progress: false`, pass the same secrets, end with `npx tsx scripts/<job>.ts`.
 3. **Trigger** — a session-gated dispatch route (mirror `replay/dispatch`) or a machine-auth notify
-   route (mirror `ingest/notify`). Keep the duplicate-guard and the dispatch-failure rollback.
+   route (mirror `ingest/notify`). Keep the route's own duplicate-guard, and claim/dispatch/rollback
+   through `src/lib/background-jobs.ts` (`recordJobStatus`, `advanceJobStatus`,
+   `dispatchAndRecordFailure`) rather than re-upserting `background_jobs` by hand.
 4. **Status surface** — read via a new additive getter mirroring `getReplayJobState`; add a domain
    mirror column only if a hot page needs it.
 5. **Local dry-run** — `set -a; . ./.env.local; set +a` then `MATCH_ID=<id> npx tsx scripts/<job>.ts`.
