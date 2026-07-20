@@ -9,13 +9,15 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { dathostServerId, getServer, getConsoleLines, connectHost, type DathostServer } from '@/lib/dathost';
+import { isServerLive } from '@/lib/util';
 import {
   getActiveServerMatch,
   findNearbyUnscoredMatch,
   type ActiveServerMatch,
   type NearbyUnscoredMatch,
 } from '@/lib/dathost-lifecycle';
-import { parseConnectedPlayers, type ConnectedPlayer } from '@/lib/server-players';
+import { parseConnectedPlayers, linesSinceMarker, SCRIM_BOOT_MARKER, type ConnectedPlayer } from '@/lib/server-players';
+import { reconcileScrimSession } from '@/lib/scrim-session';
 
 export interface ScrimStatus {
   configured: boolean;
@@ -24,12 +26,19 @@ export interface ScrimStatus {
   active: ActiveServerMatch | null;
   connectedPlayers: ConnectedPlayer[];
   blockingMatch: NearbyUnscoredMatch | null;
+  /** `playerId` of whoever started the current scrim, or `null` if none is running. */
+  startedBy: number | null;
+  /** Display name of whoever started the current scrim, or `null` if none is running. */
+  startedByName: string | null;
+  /** Whether the requesting session may stop the current scrim (owner or admin). */
+  canStop: boolean;
   error: string | null;
 }
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.playerId) {
+  const playerId = session?.user?.playerId;
+  if (!playerId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -44,6 +53,9 @@ export async function GET() {
       active: null,
       connectedPlayers: [],
       blockingMatch: null,
+      startedBy: null,
+      startedByName: null,
+      canStop: false,
       error: null,
     } satisfies ScrimStatus);
   }
@@ -59,13 +71,19 @@ export async function GET() {
 
   const { server, error } = serverResult;
   const connect = server ? connectHost(server) : null;
-  // Only worth reading the console log while the box is actually up.
-  const connectedPlayers =
-    server?.on && !server.booting
-      ? await getConsoleLines(serverId)
-          .then(parseConnectedPlayers)
+  // `reconcileScrimSession` and the console-log read are independent — both only depend on `server`,
+  // already resolved above — so they run together rather than one paying for the other's round trip.
+  // Only worth reading the console log while the box is actually up. Discard everything before this
+  // boot's marker line — the server is reused, so its log otherwise still carries stale "connected"
+  // residue from whatever last used it (see `SCRIM_BOOT_MARKER`).
+  const [scrimSession, connectedPlayers] = await Promise.all([
+    reconcileScrimSession(supabaseAdmin, server),
+    isServerLive(server)
+      ? getConsoleLines(serverId)
+          .then((lines) => parseConnectedPlayers(linesSinceMarker(lines, SCRIM_BOOT_MARKER)))
           .catch(() => [])
-      : [];
+      : Promise.resolve([]),
+  ]);
 
   return NextResponse.json({
     configured: true,
@@ -74,6 +92,9 @@ export async function GET() {
     active,
     connectedPlayers,
     blockingMatch,
+    startedBy: scrimSession?.startedBy ?? null,
+    startedByName: scrimSession?.startedByName ?? null,
+    canStop: !scrimSession || scrimSession.startedBy === playerId || !!session.user.isAdmin,
     error,
   } satisfies ScrimStatus);
 }

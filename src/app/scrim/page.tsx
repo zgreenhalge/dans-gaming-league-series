@@ -13,7 +13,7 @@ export const metadata = {
 // Live operational view — don't cache.
 export const dynamic = 'force-dynamic';
 
-export default async function ScrimsPage() {
+export default async function ScrimPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.playerId) redirect('/');
 
@@ -25,10 +25,6 @@ export default async function ScrimsPage() {
       <main className="max-w-[760px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-2">
           <div className="font-display text-[28px] font-semibold leading-tight">Scrims</div>
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1">
-            Pick a map and start the shared server for a casual game — no roster, no stats, first come
-            first served.
-          </div>
         </div>
         <div className="mt-6">
           <ScrimPanel maps={maps} />

@@ -1,4 +1,14 @@
 /**
+ * Whether a DatHost server is actually up and reachable — the shared "on and done booting" check
+ * every caller that treats a server as live (vs. mid-boot or off) should use, on both the server
+ * (`dathost.ts`'s `DathostServer` is a structural match, so no import needed) and the client (this
+ * file, unlike `dathost.ts`, is safe to import from a `'use client'` component).
+ */
+export function isServerLive(server: { on: boolean; booting: boolean } | null | undefined): boolean {
+  return !!server?.on && !server.booting;
+}
+
+/**
  * Returns true if a `final_score` string represents a real played result.
  * Treats null and "0-0" / "0 - 0" as not yet played (S3 matches are pre-staged
  * with "0-0" placeholders before stats are entered).

@@ -4,13 +4,16 @@
 // raw stop self-corrects on next view via getReconciledServerState — read-only, downgrade-only.
 // Refuses (409) if the server is occupied (a DGLS match holds it, or live players are on it outside
 // any match) unless `override: true` — this is the raw counterpart to `/matches/[id]/server/teardown`,
-// which the admin console's "Tear down" button already uses for the match-aware case.
+// which the admin console's "Tear down" button already uses for the match-aware case. Goes through
+// `stopSharedServer` (not the raw `stopServer`) so an admin stopping the server also clears any
+// active `scrim_sessions` row — otherwise a scrim stopped this way (instead of via
+// `/api/scrim/stop`) would leave the singleton stuck.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { dathostServerId, stopServer, getServer } from '@/lib/dathost';
-import { getServerOccupancy, occupancyMessage } from '@/lib/dathost-lifecycle';
+import { dathostServerId, getServer } from '@/lib/dathost';
+import { getServerOccupancy, occupancyMessage, stopSharedServer } from '@/lib/dathost-lifecycle';
 
 export async function POST(req: NextRequest) {
   const access = await requireAdminAccess();
@@ -20,8 +23,9 @@ export async function POST(req: NextRequest) {
   const override = body?.override === true;
 
   const serverId = dathostServerId();
+  const supabaseAdmin = getAdminClient();
   const server = await getServer(serverId).catch(() => null);
-  const occupancy = await getServerOccupancy(getAdminClient(), server);
+  const occupancy = await getServerOccupancy(supabaseAdmin, server);
   if (occupancy.occupied && !override) {
     return NextResponse.json(
       { error: occupancyMessage(occupancy), code: 'server_occupied', ...occupancy },
@@ -30,7 +34,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await stopServer(serverId);
+    await stopSharedServer(supabaseAdmin, serverId);
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Stop failed' }, { status: 502 });
   }

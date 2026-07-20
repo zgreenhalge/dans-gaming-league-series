@@ -6,7 +6,11 @@
 // state, a map picker, start/stop — plus the currently-connected roster (`ScrimStatus.connectedPlayers`,
 // derived from the console log, since `players_online` alone is a bare count). A league match holding
 // the server is shown read-only with no controls; starting is refused outright (no override) if the
-// server is occupied or a nearby league match hasn't been scored yet — see `/api/scrims/start`.
+// server is occupied, a scrim is already running, or a nearby league match hasn't been scored yet —
+// see `/api/scrim/start`. "Play out all rounds" toggles `matchzy_playout_enabled_default`; "Friendly"
+// toggles `FRIENDLY_CVARS` (no auto-kick, drop-knife pickup, no forced spectator camera, shoot
+// dropped grenades) — both for the session only. Stop is only shown to whoever started the scrim (or
+// an admin) — `status.canStop`.
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -14,8 +18,9 @@ import { ServerSpinner } from '@/components/ServerSpinner';
 import { StatePill, CopyConnectButton } from '@/components/ServerStatusBits';
 import { toSentenceCase } from '@/lib/maps';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
+import { isServerLive } from '@/lib/util';
 import type { WorkshopMapOption } from '@/lib/queries';
-import type { ScrimStatus } from '@/app/api/scrims/status/route';
+import type { ScrimStatus } from '@/app/api/scrim/status/route';
 
 const CUSTOM_MAP_CHOICE = '__custom__';
 const ACTION_CAP_MS = 90_000;
@@ -26,6 +31,8 @@ export function ScrimPanel({ maps }: { maps: WorkshopMapOption[] }) {
 
   const [mapChoice, setMapChoice] = useState('');
   const [customMapId, setCustomMapId] = useState('');
+  const [playout, setPlayout] = useState(false);
+  const [friendly, setFriendly] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
@@ -33,7 +40,7 @@ export function ScrimPanel({ maps }: { maps: WorkshopMapOption[] }) {
 
   const refreshStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/scrims/status');
+      const res = await fetch('/api/scrim/status');
       if (!res.ok) {
         setStatusError('Could not load server status');
         return;
@@ -69,10 +76,10 @@ export function ScrimPanel({ maps }: { maps: WorkshopMapOption[] }) {
     setStartError(null);
     const startedAt = Date.now();
     try {
-      const res = await fetch('/api/scrims/start', {
+      const res = await fetch('/api/scrim/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mapWorkshopId: resolvedMapId }),
+        body: JSON.stringify({ mapWorkshopId: resolvedMapId, playout, friendly }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -95,7 +102,7 @@ export function ScrimPanel({ maps }: { maps: WorkshopMapOption[] }) {
     setStopping(true);
     setStopError(null);
     try {
-      const res = await fetch('/api/scrims/stop', { method: 'POST' });
+      const res = await fetch('/api/scrim/stop', { method: 'POST' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setStopError(body.error ?? 'Could not stop the server');
@@ -138,7 +145,7 @@ export function ScrimPanel({ maps }: { maps: WorkshopMapOption[] }) {
     );
   }
 
-  const serverOn = !!server?.on && !server.booting;
+  const serverOn = isServerLive(server);
 
   return (
     <div className="flex flex-col gap-4">
@@ -157,12 +164,24 @@ export function ScrimPanel({ maps }: { maps: WorkshopMapOption[] }) {
             </div>
             {server && (
               <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-2 flex flex-col gap-y-1">
+                {serverOn && status.connect && (
+                  <a
+                    // `steam://connect/<host>` is unreliable from a browser click (a Steam client bug,
+                    // independent of host format) — `steam://run/730//+connect <ip:port>` (730 = CS2)
+                    // is the documented workaround that still launches reliably.
+                    href={`steam://run/730//+connect ${status.connect}`}
+                    className="self-start px-2 py-1 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)]"
+                  >
+                    Join server
+                  </a>
+                )}
                 {status.connect && (
                   <span className="inline-flex items-center gap-1.5">
                     connect {status.connect}
                     <CopyConnectButton connect={status.connect} />
                   </span>
                 )}
+                {serverOn && !status.canStop && status.startedByName && <span>Scrim started by {status.startedByName}</span>}
               </div>
             )}
           </div>
@@ -175,7 +194,7 @@ export function ScrimPanel({ maps }: { maps: WorkshopMapOption[] }) {
               <div className="w-40">
                 <ServerSpinner label="Stopping server…" tone="stop" />
               </div>
-            ) : serverOn ? (
+            ) : serverOn && status.canStop ? (
               <button
                 onClick={stopScrim}
                 className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)] hover:bg-[var(--color-accent-red-bg)]"
@@ -223,6 +242,14 @@ export function ScrimPanel({ maps }: { maps: WorkshopMapOption[] }) {
                 )}
               </>
             )}
+            <label className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)]">
+              <input type="checkbox" checked={playout} onChange={(e) => setPlayout(e.target.checked)} />
+              Play out all rounds
+            </label>
+            <label className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)]">
+              <input type="checkbox" checked={friendly} onChange={(e) => setFriendly(e.target.checked)} />
+              Friendly
+            </label>
             <button
               onClick={startScrim}
               disabled={!resolvedMapId || !!blockingMatch}

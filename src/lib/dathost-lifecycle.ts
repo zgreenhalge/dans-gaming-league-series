@@ -25,7 +25,22 @@ import {
   getServer,
   type DathostServer,
 } from './dathost';
+import { releaseScrimSession } from './scrim-session';
 import { pushCfgFiles } from './dathost-config';
+
+/**
+ * Stops the shared server and releases any active scrim session in one call — the single choke point
+ * every "stop the server" path (`/api/scrim/stop`, the raw admin console stop, real-match teardown
+ * below) should go through, so a scrim session can never outlive a stop this app itself initiated.
+ * Lives here rather than in `scrim-session.ts` since "what it takes to stop the one shared, reused
+ * server" is this module's concern (it already tracks who else occupies it) — scrim-session.ts stays
+ * scoped to the session row itself. Doesn't cover a stop DatHost initiates on its own (an idle
+ * timeout) — that's what `reconcileScrimSession` is for.
+ */
+export async function stopSharedServer(supabaseAdmin: SupabaseClient, serverId: string): Promise<void> {
+  await stopServer(serverId);
+  await releaseScrimSession(supabaseAdmin);
+}
 
 export type ServerState = 'idle' | 'provisioning' | 'live' | 'tearing_down' | 'done' | 'failed';
 
@@ -240,6 +255,9 @@ export async function provisionMatchServer(
  * auto-teardown) to no-op unless THIS match is the current occupant — i.e. its `server_state` is
  * still active (`provisioning`/`live`/`tearing_down`) and its `dathost_server_id` matches. The
  * explicit teardown route omits the flag, since that's a deliberate operator stop.
+ *
+ * Goes through `stopSharedServer` — a scrim should never be active while a real match owns the
+ * server, but this clears any `scrim_sessions` row defensively regardless.
  */
 export async function teardownMatchServer(
   supabaseAdmin: SupabaseClient,
@@ -264,7 +282,7 @@ export async function teardownMatchServer(
   }
 
   await setServerState(supabaseAdmin, matchId, { server_state: 'tearing_down' }).catch(() => {});
-  await stopServer(serverId);
+  await stopSharedServer(supabaseAdmin, serverId);
   await setServerState(supabaseAdmin, matchId, {
     server_state: 'done',
     connect_string: null,
