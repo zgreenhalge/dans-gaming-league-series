@@ -16,8 +16,13 @@ export interface JobSubject {
   id: number;
 }
 
-async function mirrorSubjectStatus(admin: SupabaseClient, subject: JobSubject, value: string) {
-  await admin.from(subject.table).update({ [subject.column]: value }).eq('id', subject.id);
+async function mirrorSubjectStatus(
+  admin: SupabaseClient,
+  subject: JobSubject,
+  value: string,
+): Promise<{ error?: string }> {
+  const { error } = await admin.from(subject.table).update({ [subject.column]: value }).eq('id', subject.id);
+  return error ? { error: error.message } : {};
 }
 
 /** Upsert a `background_jobs` row for `(jobType, matchId)`, stamping `updated_at`. `onConflict` is
@@ -44,13 +49,14 @@ export async function advanceJobStatus(
   matchId: number,
   fields: Record<string, unknown>,
   onlyIfStatus: string,
-): Promise<void> {
-  await admin
+): Promise<{ error?: string }> {
+  const { error } = await admin
     .from('background_jobs')
     .update({ updated_at: new Date().toISOString(), ...fields })
     .eq('job_type', jobType)
     .eq('match_id', matchId)
     .eq('status', onlyIfStatus);
+  return error ? { error: error.message } : {};
 }
 
 /**
@@ -72,13 +78,21 @@ export async function dispatchAndRecordFailure(
 ): Promise<{ ok: boolean; error?: string }> {
   const dispatch = await dispatchWorkflow(params.workflowFile, params.inputs);
   if (!dispatch.ok) {
-    await Promise.all([
+    const [jobResult, subjectResult] = await Promise.all([
       recordJobStatus(admin, params.jobType, params.matchId, {
         status: 'failed',
         error_message: `dispatch failed: ${dispatch.error}`,
       }),
-      params.subject ? mirrorSubjectStatus(admin, params.subject, 'failed') : Promise.resolve(),
+      params.subject ? mirrorSubjectStatus(admin, params.subject, 'failed') : Promise.resolve<{ error?: string }>({}),
     ]);
+    if (jobResult.error) {
+      console.error(`Could not roll back ${params.jobType}/${params.matchId} to failed: ${jobResult.error}`);
+    }
+    if (subjectResult.error) {
+      console.error(
+        `Could not mirror failed status onto ${params.subject?.table}.${params.subject?.column} for ${params.matchId}: ${subjectResult.error}`,
+      );
+    }
   }
   return dispatch;
 }
