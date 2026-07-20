@@ -21,6 +21,7 @@ import { homedir } from 'node:os';
 import { parseOverview, workshopIdFromUrl } from '../src/lib/replay/radar';
 import { putR2Object, radarKey } from '../src/lib/r2';
 import { getAdminClient } from '../src/lib/supabase-admin';
+import { recordJobStatus } from '../src/lib/background-jobs';
 
 const JOB_TYPE = 'radar_build';
 
@@ -57,24 +58,15 @@ function summary(md: string) {
 }
 
 async function markRunning() {
-  const now = new Date().toISOString();
-  await supabase
-    .from('background_jobs')
-    .upsert(
-      {
-        job_type: JOB_TYPE,
-        map_id: mapId,
-        status: 'running',
-        stage: STAGES[0],
-        error_message: null,
-        gh_run_id: ghRunId,
-        gh_run_url: ghRunUrl,
-        started_at: now,
-        updated_at: now,
-      },
-      { onConflict: 'job_type,map_id' },
-    )
-    .throwOnError();
+  const { error } = await recordJobStatus(supabase, JOB_TYPE, { column: 'map_id', id: mapId }, {
+    status: 'running',
+    stage: STAGES[0],
+    error_message: null,
+    gh_run_id: ghRunId,
+    gh_run_url: ghRunUrl,
+    started_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(error);
 }
 
 async function setStage(stage: string) {

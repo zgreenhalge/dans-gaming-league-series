@@ -17,6 +17,7 @@ import { buildHeatmapPoints } from '../src/lib/replay/heatmap';
 import { getR2Object, putR2Object, demoKey, replayKey, heatmapKey } from '../src/lib/r2';
 import { gunzipMaybe } from '../src/lib/gzip';
 import { getAdminClient } from '../src/lib/supabase-admin';
+import { recordJobStatus } from '../src/lib/background-jobs';
 
 const JOB_TYPE = 'replay_extract';
 
@@ -50,23 +51,15 @@ function warning(msg: string) {
 
 /** Mark the row queued→running (idempotent), recording the GH run link. */
 async function markRunning() {
-  await supabase
-    .from('background_jobs')
-    .upsert(
-      {
-        job_type: JOB_TYPE,
-        match_id: matchId,
-        status: 'running',
-        stage: STAGES[0],
-        error_message: null,
-        gh_run_id: ghRunId,
-        gh_run_url: ghRunUrl,
-        started_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'job_type,match_id' },
-    )
-    .throwOnError();
+  const { error } = await recordJobStatus(supabase, JOB_TYPE, { column: 'match_id', id: matchId }, {
+    status: 'running',
+    stage: STAGES[0],
+    error_message: null,
+    gh_run_id: ghRunId,
+    gh_run_url: ghRunUrl,
+    started_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(error);
   await supabase
     .from('matches')
     .update({ replay_status: 'running' })

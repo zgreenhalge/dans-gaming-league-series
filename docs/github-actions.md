@@ -66,8 +66,9 @@ Actions.
    `npm ci`; secrets passed as `env`; one line: `npx tsx scripts/<job>.ts`.
 
 3. **Job script — `scripts/<job>.ts`, run via `tsx`.** Reuses the **same `src/lib/*` code as the
-   app** (no logic drift — e.g. `getReplayInputs`, the demo parsers, the R2 helpers). Drives the
-   `background_jobs` state machine and prints GitHub log annotations. See the template below.
+   app** (no logic drift — e.g. `getReplayInputs`, the demo parsers, the R2 helpers, and
+   `recordJobStatus` from `src/lib/background-jobs.ts` for its own `markRunning`/`setJob`-style upsert).
+   Drives the `background_jobs` state machine and prints GitHub log annotations. See the template below.
 
 ## Conventions every job follows
 
