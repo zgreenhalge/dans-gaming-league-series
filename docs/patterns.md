@@ -62,6 +62,14 @@ directions on purpose; the skill is knowing which one applies.
   recipe links one). A reviewer should predict your code's behavior from its neighbors. Boring-but-
   obvious beats surprising-but-clever here, every time.
 
+## Don't caption a page instead of designing it
+
+A page never gets a subheading whose only job is to narrate what the UI below it already shows
+("Pick a map and start the shared server — no roster, no stats, first come first served."). If a
+page's purpose or controls aren't legible from their own layout, labels, and affordances, that's a
+design gap — fix the design, don't paper over it with explanatory prose. A heading names the page; it
+doesn't summarize the page.
+
 ## Cite code by symbol, not by line number
 
 Reference code by the **name** of the thing — `getGauntletStats()` in `src/lib/queries/gauntlet.ts`, the
