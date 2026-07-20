@@ -112,7 +112,16 @@ export async function POST(req: NextRequest) {
   if (dispatch.ok) {
     // Only advance the row we just wrote — a concurrent Action that already moved it to
     // running/parsed isn't clobbered back to queued.
-    await advanceJobStatus(supabaseAdmin, JOB_TYPE, matchId, { status: 'queued', stage: 'queued' }, 'received');
+    const { error: advanceErr } = await advanceJobStatus(
+      supabaseAdmin,
+      JOB_TYPE,
+      matchId,
+      { status: 'queued', stage: 'queued' },
+      'received',
+    );
+    if (advanceErr) {
+      console.error(`Could not advance demo-ingest job for match ${matchId} to queued: ${advanceErr}`);
+    }
   } else {
     console.error(`demo-ingest dispatch failed for match ${matchId}: ${dispatch.error}`);
   }
@@ -141,16 +150,17 @@ export async function POST(req: NextRequest) {
       )
       .select('match_id');
     if (claimed && claimed.length > 0) {
-      const [, replayDispatch] = await Promise.all([
-        supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId),
-        dispatchAndRecordFailure(supabaseAdmin, {
-          jobType: REPLAY_JOB_TYPE,
-          matchId,
-          workflowFile: 'replay-extract.yml',
-          inputs: { match_id: String(matchId) },
-          subject: { table: 'matches', column: 'replay_status', id: matchId },
-        }),
-      ]);
+      // Write `queued` and let it fully land *before* dispatching — dispatchAndRecordFailure's own
+      // rollback write targets this same column, so racing the two in a Promise.all would leave the
+      // final value nondeterministic if the dispatch fails fast (e.g. missing token/repo).
+      await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
+      const replayDispatch = await dispatchAndRecordFailure(supabaseAdmin, {
+        jobType: REPLAY_JOB_TYPE,
+        matchId,
+        workflowFile: 'replay-extract.yml',
+        inputs: { match_id: String(matchId) },
+        subject: { table: 'matches', column: 'replay_status', id: matchId },
+      });
       if (!replayDispatch.ok) {
         console.error(`replay-extract auto-dispatch failed for match ${matchId}: ${replayDispatch.error}`);
       }
