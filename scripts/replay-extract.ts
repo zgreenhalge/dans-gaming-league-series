@@ -13,10 +13,23 @@
 import { gzipSync } from 'node:zlib';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { buildReplay } from '../src/lib/replay/extract';
-import { buildHeatmapPoints } from '../src/lib/replay/heatmap';
-import { getR2Object, putR2Object, demoKey, replayKey, heatmapKey } from '../src/lib/r2';
+import { buildHeatmapPoints, MAP_HEATMAP_ROLLUP_VERSION } from '../src/lib/replay/heatmap';
+import { buildMatchTraces, MAP_TRACE_ROLLUP_VERSION } from '../src/lib/replay/aggregate';
+import {
+  getR2Object,
+  putR2Object,
+  demoKey,
+  replayKey,
+  heatmapKey,
+  traceKey,
+  mapHeatmapKey,
+  mapTraceKey,
+} from '../src/lib/r2';
 import { gunzipMaybe } from '../src/lib/gzip';
 import { getAdminClient } from '../src/lib/supabase-admin';
+import { getMatchIdsForMap, getMapHeatmap } from '../src/lib/queries/maps';
+import { getMapTraces } from '../src/lib/queries/replay';
+import { mapSlug } from '../src/lib/maps';
 
 const JOB_TYPE = 'replay_extract';
 
@@ -31,6 +44,8 @@ const STAGES = [
   'gzip',
   'upload',
   'heatmap',
+  'traces',
+  'map-rollup',
   'done',
 ] as const;
 
@@ -170,6 +185,73 @@ async function main() {
       contentType: 'application/json',
       contentEncoding: 'gzip',
     });
+  });
+
+  // Compact per-player trace artifact (issue #127) for the player page's Pathing tab —
+  // same reasoning as heatmap.json: derived from the same payload, no second source
+  // of truth, and much smaller than replay.json since it carries positions only.
+  await stage('traces', async () => {
+    const traces = buildMatchTraces(payload);
+    const gzTraces = gzipSync(Buffer.from(JSON.stringify(traces)));
+    notice(`traces.json: ${traces.players.length} players, ${gzTraces.length} bytes gzipped`);
+    await putR2Object(traceKey(matchId), gzTraces, {
+      contentType: 'application/json',
+      contentEncoding: 'gzip',
+    });
+  });
+
+  // Rebuild this map's heatmap + trace rollups (issue #127) — precomputed merges of
+  // every match on the map, read by the map page / Scouting Report / player Pathing
+  // tab instead of fanning out one R2 GET per match on every open. Always a *full*
+  // rebuild from the per-match artifacts (never an incremental patch), so it's
+  // idempotent and self-healing: concurrent extracts for other matches on the same
+  // map (e.g. a `replay-extract-all` backfill) may race and overwrite each other, but
+  // each writer computes a fully-correct rollup for whatever's already in R2 at that
+  // moment, and every match's own extract rebuilds again on its way to `ready` — so
+  // the map converges to complete without any locking. Fail-soft: a hiccup here must
+  // never fail this match's own (already-successful) replay, so it's a warning, not
+  // a thrown error.
+  await stage('map-rollup', async () => {
+    const slug = payload.map ? mapSlug(payload.map) : null;
+    if (!slug) {
+      warning('Match has no map name — skipping map rollup rebuild.');
+      return;
+    }
+    try {
+      const mapMatchIds = await getMatchIdsForMap(payload.map, supabase);
+
+      const points = await getMapHeatmap(mapMatchIds);
+      const heatmapRollup = {
+        version: MAP_HEATMAP_ROLLUP_VERSION,
+        slug,
+        matchIds: mapMatchIds,
+        points,
+      };
+      const gzHeatmapRollup = gzipSync(Buffer.from(JSON.stringify(heatmapRollup)));
+      await putR2Object(mapHeatmapKey(slug), gzHeatmapRollup, {
+        contentType: 'application/json',
+        contentEncoding: 'gzip',
+      });
+
+      const entries = await getMapTraces(mapMatchIds);
+      const traceRollup = {
+        version: MAP_TRACE_ROLLUP_VERSION,
+        slug,
+        matchIds: mapMatchIds,
+        entries,
+      };
+      const gzTraceRollup = gzipSync(Buffer.from(JSON.stringify(traceRollup)));
+      await putR2Object(mapTraceKey(slug), gzTraceRollup, {
+        contentType: 'application/json',
+        contentEncoding: 'gzip',
+      });
+
+      notice(
+        `map rollups for "${slug}": ${mapMatchIds.length} matches, ${points.length} heatmap points, ${entries.length} trace entries`,
+      );
+    } catch (err) {
+      warning(`map rollup rebuild failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
+    }
   });
 
   await stage('done', async () => {
