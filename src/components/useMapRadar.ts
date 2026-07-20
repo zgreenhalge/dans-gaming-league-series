@@ -19,15 +19,17 @@ export function useMapRadar(slug: string | null): {
 
   useEffect(() => {
     if (!slug) return;
-    let cancelled = false;
-    fetch(`/api/maps/${slug}/calibration`)
+    const ac = new AbortController();
+    fetch(`/api/maps/${slug}/calibration`, { signal: ac.signal })
       .then((res) => (res.ok ? res.json() : null))
       .then((body) => {
-        if (cancelled || !body?.calibration || !body.radarUrl) return;
+        if (ac.signal.aborted || !body?.calibration || !body.radarUrl) return;
         const { posX, posY, scale } = body.calibration;
         const img = new Image();
+        // <img> has no AbortSignal support, so the load callback still needs its own
+        // guard — reusing `ac.signal.aborted` rather than a second cancellation idiom.
         img.onload = () => {
-          if (cancelled) return;
+          if (ac.signal.aborted) return;
           radarImage.current = img;
           setCalibration({
             posX,
@@ -40,11 +42,9 @@ export function useMapRadar(slug: string | null): {
         img.src = body.radarUrl;
       })
       .catch(() => {
-        /* uncalibrated — caller falls back to auto-fit */
+        /* uncalibrated (or aborted) — caller falls back to auto-fit */
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => ac.abort();
   }, [slug]);
 
   return { calibration, radarImage };

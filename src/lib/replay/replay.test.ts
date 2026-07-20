@@ -526,6 +526,30 @@ test('aggregate: extractPlayerTrace freezes at the last alive position on death,
   assert.equal(later.alive, false);
 });
 
+test('aggregate: extractPlayerTrace freezes survivors at round_end, ignoring post-round position drift', () => {
+  const r = round({
+    endTick: 10,
+    frames: [
+      frame(0, [pf(1, 10, 20, { alive: true, hp: 80 })]),
+      frame(10, [pf(1, 15, 25, { alive: true, hp: 80 })]), // at round_end — last frame that counts
+      frame(17, [pf(1, 0, 0, { alive: true, hp: 80 })]), // post-round window — CS2 resets them toward spawn
+    ],
+  });
+  const trace = extractPlayerTrace(7, r, 1, 'SHIRTS')!;
+  assert.ok(trace);
+  // Only the two in-round frames are captured — the post-round drift frame is never read.
+  assert.equal(trace.frames.length, 2);
+  const last = trace.frames[1];
+  assert.equal(last.t, 10);
+  approx(last.x, 15);
+  approx(last.y, 25);
+
+  // The frozen state holds past round_end (clamped to the last in-round frame).
+  const later = traceStateAt(trace, 17)!;
+  approx(later.x, 15);
+  approx(later.y, 25);
+});
+
 test('aggregate: maxDurationTicks picks the longest trace', () => {
   const short = extractPlayerTrace(1, round({ frames: [frame(0, [pf(1, 0, 0)]), frame(20, [pf(1, 0, 0)])] }), 1, 'SHIRTS')!;
   const long = extractPlayerTrace(2, round({ frames: [frame(0, [pf(1, 0, 0)]), frame(80, [pf(1, 0, 0)])] }), 1, 'SHIRTS')!;

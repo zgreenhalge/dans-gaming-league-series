@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { PlayerHistoryRow } from '@/lib/queries';
 import type { PlayerTrace } from '@/lib/replay/aggregate';
-import { groupByMap, isPlayedScore, tabCls } from '@/lib/util';
+import { groupByMap, isAbortError, isPlayedScore, tabCls } from '@/lib/util';
 import { mapSlug } from '@/lib/maps';
 import PlayerRoundOverlay from './PlayerRoundOverlay';
 
@@ -59,24 +59,22 @@ export default function PlayerTrailsTab({
     // No eligible map (mapOptions is empty) — skip the request; the render below
     // shows "No matches..." from mapOptions directly, so there's nothing to fetch.
     if (matchIds.length === 0) return;
-    let cancelled = false;
+    const ac = new AbortController();
     fetch(`/api/players/${playerId}/replay-trails`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ matchIds, slug: mapSlug(selectedMap ?? '') }),
+      signal: ac.signal,
     })
       .then((res) => (res.ok ? res.json() : { traces: [], tickRate: null }))
       .then((body) => {
-        if (cancelled) return;
         setResult({ map: selectedMap, traces: body.traces ?? [], tickRate: body.tickRate ?? 64 });
       })
-      .catch(() => {
-        if (cancelled) return;
+      .catch((e) => {
+        if (isAbortError(e)) return;
         setResult({ map: selectedMap, traces: [], tickRate: 64 });
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => ac.abort();
   }, [playerId, matchIds, selectedMap]);
 
   if (mapOptions.length === 0) {
