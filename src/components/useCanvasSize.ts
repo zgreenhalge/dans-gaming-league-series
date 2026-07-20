@@ -5,12 +5,13 @@ import { useEffect, type RefObject } from 'react';
 /**
  * Applies DPR-aware pixel sizing to a canvas: its backing-store `width`/`height` scaled
  * by `devicePixelRatio`, its CSS `width`/`height` to `side`, and its 2D context scaled
- * to match. The sizing half of what `useCanvasSize` automates for one canvas, exported
+ * to match — returning that context so the caller doesn't need a second `getContext`
+ * call. The sizing half of what `useCanvasSize` automates for one canvas, exported
  * separately so a second canvas that must track the same size (e.g. `ReplayPlayer`'s
  * annotation overlay, sized alongside its main canvas) can apply it without a second
  * hook/effect.
  */
-export function applyCanvasSize(canvas: HTMLCanvasElement, side: number): void {
+export function applyCanvasSize(canvas: HTMLCanvasElement, side: number): CanvasRenderingContext2D | null {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = Math.round(side * dpr);
   canvas.height = Math.round(side * dpr);
@@ -21,6 +22,7 @@ export function applyCanvasSize(canvas: HTMLCanvasElement, side: number): void {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
   }
+  return ctx;
 }
 
 /**

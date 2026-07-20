@@ -147,6 +147,24 @@ export function projectorFor(
 }
 
 /**
+ * Pick the right projector for a `Bounds`-shaped payload: calibrated when the map has a
+ * radar triplet, else auto-fit over `bounds`. Companion to `projectorFor()` above, for
+ * callers that already have a flat point-cloud bounding box (the map heatmap's points,
+ * the aggregate replay overlay's traces) rather than a whole `ReplayPayload`. Returns
+ * `null` only when there's nothing to fit and no calibration.
+ */
+export function projectorForBounds(
+  bounds: Bounds | null,
+  calibration: RadarCalibration | null,
+  canvasWidth: number,
+  canvasHeight: number,
+): Projector | null {
+  if (calibration) return calibratedProjector(calibration, canvasWidth, canvasHeight);
+  if (!bounds) return null;
+  return autoFitProjector(bounds, canvasWidth, canvasHeight);
+}
+
+/**
  * Count of distinct matches represented in a list of match-scoped items (heatmap
  * points, player-trace rounds) — shared by the Heatmap and Pathing tabs' "N games"
  * caption alongside their raw point/round count.

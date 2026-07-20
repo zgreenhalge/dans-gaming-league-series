@@ -15,7 +15,7 @@ export const STICKER_COLORS = { smoke: '#9aa0ab', molotov: '#e5642d', he: '#d8d2
 
 /**
  * The shared canvas color theme, read from the page's CSS custom properties so every
- * theme-driven replay canvas (2D Replay, the Player Trails overlay) tracks the live
+ * replay-family canvas (2D Replay, Map Heatmap, Player Trails overlay) tracks the live
  * light/dark toggle identically instead of each reading its own subset once.
  */
 export function readTheme(el: Element): ReplayTheme {
