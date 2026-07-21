@@ -106,15 +106,18 @@ export async function deleteR2Object(key: string): Promise<void> {
   await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
 }
 
-/** HEAD a match's demo (`<id>/game.dem`) — its size, or `null` if it doesn't exist (or the request
- *  otherwise fails). Shared by `demoExists()` and the ingest-notify route, which also needs the byte
- *  count. */
+/** HEAD a match's demo (`<id>/game.dem`) — its size, or `null` if it doesn't exist. Shared by
+ *  `demoExists()` and the ingest-notify route, which also needs the byte count. A non-404 failure
+ *  (auth, transient network) is rethrown rather than treated as "missing" — that distinction matters
+ *  to both callers: notify reports it as a real error instead of a misleading "no demo", and
+ *  `demoExists()` doesn't silently hide the manual-retry UI it's meant to expose. */
 export async function headDemoObject(matchId: number): Promise<{ contentLength: number | null } | null> {
   try {
     const head = await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: demoKey(matchId) }));
     return { contentLength: head.ContentLength ?? null };
-  } catch {
-    return null;
+  } catch (err) {
+    if ((err as { name?: string }).name === 'NotFound') return null;
+    throw err;
   }
 }
 
