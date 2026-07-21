@@ -22,12 +22,9 @@ import { getServer, runConsole } from '../src/lib/dathost';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { findNearbyUnscoredMatch } from '../src/lib/dathost-lifecycle';
 import { reconcileScrimSession, markScrimWarned, isScrimWarned, type ScrimSession } from '../src/lib/scrim-session';
+import { notice, error } from './gh-actions-log';
 
 const THRESHOLDS = [5, 10, 15] as const;
-
-function notice(msg: string) {
-  console.log(`::notice::${msg}`);
-}
 
 function warningSayCommand(minutesUntil: number): string {
   const label = minutesUntil <= 1 ? 'starting now' : `starting in about ${Math.round(minutesUntil)} minutes`;
@@ -74,6 +71,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.log(`::error::scrim-warnings failed: ${err instanceof Error ? err.message : String(err)}`);
+  error(`scrim-warnings failed: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 });

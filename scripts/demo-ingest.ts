@@ -45,15 +45,12 @@ import { persistSabremetrics } from '../src/lib/demo/sabremetrics';
 import { writeMatchScore } from '../src/lib/matchScore';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '../src/lib/demo/ingestResult';
 import { recordJobStatus, matchJobKey } from '../src/lib/background-jobs';
+import { notice, error } from './gh-actions-log';
 
 const matchId = Number(process.env.MATCH_ID);
 const ghRunId = process.env.GH_RUN_ID ? Number(process.env.GH_RUN_ID) : null;
 const ghRunUrl = process.env.GH_RUN_URL ?? null;
 const supabase = getAdminClient();
-
-function notice(msg: string) {
-  console.log(`::notice::${msg}`);
-}
 
 /** Upsert the job row (it normally exists from the notify route; upsert covers manual runs too). */
 async function setJob(fields: Record<string, unknown>) {
@@ -62,7 +59,7 @@ async function setJob(fields: Record<string, unknown>) {
 
 async function fail(err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
-  console.log(`::error::demo-ingest failed: ${message}`);
+  error(`demo-ingest failed: ${message}`);
   await setJob({ status: 'failed', stage: 'error', error_message: message, finished_at: new Date().toISOString() });
   process.exit(1);
 }
