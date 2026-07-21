@@ -1,3 +1,5 @@
+import { mapSlug } from './maps';
+
 /**
  * Whether a DatHost server is actually up and reachable — the shared "on and done booting" check
  * every caller that treats a server as live (vs. mid-boot or off) should use, on both the server
@@ -28,12 +30,16 @@ export function isAbortError(e: unknown): boolean {
 }
 
 /**
- * Groups rows by a case/whitespace-normalized map name — map names are user-typed
- * strings, so grouping on the raw value would split one map into several buckets on
- * inconsistent casing. Keeps the first-seen casing for display. `mapOf` returning
- * `null` excludes a row from grouping entirely (e.g. a caller's own eligibility
- * filter), so this stays the one place the normalization lives while callers keep
- * their own filtering/aggregation on top.
+ * Groups rows by map — map names are user-typed strings, so grouping on the raw value
+ * would split one map into several buckets on inconsistent casing/punctuation/spacing.
+ * Keeps the first-seen casing for display. Buckets by `mapSlug()` (not a looser
+ * case/whitespace normalization) so this always agrees with the map-rollup key the
+ * `replay-extract` Action derives the same way from a match's own recorded map name —
+ * two differently-punctuated names for the same map can never land in different
+ * buckets here while still sharing one rollup. `mapOf` returning `null` excludes a row
+ * from grouping entirely (e.g. a caller's own eligibility filter), so this stays the
+ * one place the normalization lives while callers keep their own filtering/aggregation
+ * on top.
  */
 export function groupByMap<T>(
   rows: T[],
@@ -43,7 +49,7 @@ export function groupByMap<T>(
   for (const r of rows) {
     const map = mapOf(r);
     if (!map) continue;
-    const key = map.trim().toLowerCase();
+    const key = mapSlug(map);
     const entry = buckets.get(key) ?? { display: map.trim(), rows: [] };
     entry.rows.push(r);
     buckets.set(key, entry);

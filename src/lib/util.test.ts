@@ -30,6 +30,7 @@ import {
   formatEhogDelta,
   fmtUtcShort,
   canonicalGauntletRankMap,
+  groupByMap,
 } from './util';
 import { mapSlug } from './maps';
 
@@ -344,6 +345,25 @@ test('canonicalGauntletRankMap: final-round wins rank above ties, RWR% breaks ti
 test('mapSlug: lowercases, trims, and dashes non-alphanumerics', () => {
   assert.equal(mapSlug('  Palais  '), 'palais');
   assert.equal(mapSlug('Train Yard'), 'train-yard');
+});
+
+// --- groupByMap: buckets by mapSlug(), so it always agrees with the replay-extract
+//     Action's own mapSlug()-derived rollup key (issue #245) ---
+test('groupByMap: names differing only in punctuation/spacing land in the same bucket', () => {
+  const rows = [{ map: 'de dust 2' }, { map: 'de-dust-2' }];
+  const buckets = groupByMap(rows, (r) => r.map);
+  assert.equal(buckets.size, 1);
+  assert.equal([...buckets.values()][0].rows.length, 2);
+});
+test('groupByMap: keeps the first-seen casing/spacing for display', () => {
+  const rows = [{ map: 'De Dust 2' }, { map: 'de-dust-2' }];
+  const buckets = groupByMap(rows, (r) => r.map);
+  assert.equal([...buckets.values()][0].display, 'De Dust 2');
+});
+test('groupByMap: a null mapOf result excludes the row', () => {
+  const rows = [{ map: 'Palais' }, { map: null }];
+  const buckets = groupByMap(rows, (r) => r.map);
+  assert.equal([...buckets.values()].reduce((n, b) => n + b.rows.length, 0), 1);
 });
 
 if (failures.length > 0) {
