@@ -77,6 +77,12 @@ Actions.
   Lifecycle: `queued` (route) → `running` (`markRunning`) → `succeeded` | `failed`. Columns: `status,
   stage, error_message, gh_run_id, gh_run_url, requested_by, created_at, started_at, finished_at,
   updated_at`. Pick a distinct `job_type` string (`'replay_extract'`, `'demo_ingest'`, `'radar_build'`, …).
+  `fail()` writes via the same upsert as every other write, so a run whose very first write
+  (`markRunning`) never lands still leaves a `failed` row behind — partial (missing `gh_run_id`,
+  `gh_run_url`, `started_at`, `created_at`, `requested_by`) but present. This is intentional: a
+  partial `failed` row surfaces in `/admin/jobs` that something was attempted, which beats total
+  silence, and the unique index still caps it at one row for that key — a later successful run
+  overwrites it in full.
 - **Mirror a coarse status onto the domain row** when the UI needs it cheaply (replay mirrors to
   `matches.replay_status`). Read it back defensively (`getReplayJobState` returns `'none'` if the
   table/column isn't there yet — these are added in the Supabase dashboard, not via migrations).
