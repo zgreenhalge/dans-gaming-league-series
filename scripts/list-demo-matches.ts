@@ -9,6 +9,7 @@
 import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import { appendFileSync } from 'node:fs';
 import { r2, R2_BUCKET, replayKey, listDemoMatchIds } from '../src/lib/r2';
+import { error } from './gh-actions-log';
 
 const ONLY_MISSING = /^(1|true)$/i.test(process.env.ONLY_MISSING ?? '');
 
@@ -40,8 +41,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(
-    `::error::Failed to enumerate demo matches: ${err instanceof Error ? err.message : String(err)}`,
-  );
+  error(`Failed to enumerate demo matches: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 });
