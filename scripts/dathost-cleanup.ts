@@ -34,6 +34,7 @@ import { api } from './dathost-golden-shared';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { r2, R2_BUCKET, demoKey } from '../src/lib/r2';
 import { HeadObjectCommand } from '@aws-sdk/client-s3';
+import { notice, warning, error } from './gh-actions-log';
 
 const DRY_RUN = !/^(0|false)$/i.test(process.env.DRY_RUN ?? 'true');
 const RETENTION_DAYS = Number(process.env.RETENTION_DAYS ?? '3');
@@ -69,13 +70,6 @@ async function scheduleShouldRun(): Promise<boolean> {
   } catch {
     return true;
   }
-}
-
-function notice(msg: string) {
-  console.log(`::notice::${msg}`);
-}
-function warning(msg: string) {
-  console.log(`::warning::${msg}`);
 }
 
 interface RemoteFile {
@@ -240,6 +234,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.log(`::error::dathost-cleanup failed: ${err instanceof Error ? err.message : String(err)}`);
+  error(`dathost-cleanup failed: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 });

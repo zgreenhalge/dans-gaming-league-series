@@ -22,6 +22,7 @@ import { parseOverview, workshopIdFromUrl } from '../src/lib/replay/radar';
 import { putR2Object, radarKey } from '../src/lib/r2';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { recordJobStatus, mapJobKey, jobStatusWriter } from '../src/lib/background-jobs';
+import { notice, warning, error } from './gh-actions-log';
 
 const JOB_TYPE = 'radar_build';
 
@@ -47,9 +48,6 @@ let currentStage: string = STAGES[0];
 // Human-facing label for this run — replaced with the map name as soon as we resolve
 // it (map ids aren't used forward-facing, so every log/summary line leads with name).
 let mapLabel = `map #${mapId}`;
-
-const notice = (m: string) => console.log(`::notice::${m}`);
-const warning = (m: string) => console.log(`::warning::${m}`);
 
 /** Append markdown to the GitHub run summary (the panel at the top of the run page). */
 function summary(md: string) {
@@ -90,7 +88,7 @@ async function stage<T>(name: string, fn: () => Promise<T> | T): Promise<T> {
 
 async function fail(err: unknown) {
   const msg = err instanceof Error ? err.message : String(err);
-  console.log(`::error::${mapLabel} failed at stage ${currentStage}: ${msg}`);
+  error(`${mapLabel} failed at stage ${currentStage}: ${msg}`);
   summary(`\n❌ **${mapLabel}** failed at \`${currentStage}\`: ${msg}`);
   await recordJobStatus(supabase, JOB_TYPE, mapJobKey(mapId), {
     status: 'failed',

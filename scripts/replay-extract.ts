@@ -31,6 +31,7 @@ import { getMatchIdsForMap, getMapHeatmap } from '../src/lib/queries/maps';
 import { getMapTraces } from '../src/lib/queries/replay';
 import { mapSlug } from '../src/lib/maps';
 import { recordJobStatus, matchJobKey, jobStatusWriter } from '../src/lib/background-jobs';
+import { notice, warning, error } from './gh-actions-log';
 
 const JOB_TYPE = 'replay_extract';
 
@@ -56,13 +57,6 @@ const ghRunUrl = process.env.GH_RUN_URL ?? null;
 const supabase = getAdminClient();
 
 let currentStage: string = STAGES[0];
-
-function notice(msg: string) {
-  console.log(`::notice::${msg}`);
-}
-function warning(msg: string) {
-  console.log(`::warning::${msg}`);
-}
 
 /** Every non-terminal write in this script (running/stage/succeeded) goes through this one choke
  *  point; `fail()` below writes directly instead, since it must not throw while already unwinding. */
@@ -111,7 +105,7 @@ async function stage<T>(name: string, fn: () => Promise<T> | T): Promise<T> {
 
 async function fail(err: unknown) {
   const msg = err instanceof Error ? err.message : String(err);
-  console.log(`::error::failed at stage ${currentStage}: ${msg}`);
+  error(`failed at stage ${currentStage}: ${msg}`);
   await recordJobStatus(supabase, JOB_TYPE, matchJobKey(matchId), {
     status: 'failed',
     stage: currentStage,
