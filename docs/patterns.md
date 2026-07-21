@@ -62,6 +62,31 @@ directions on purpose; the skill is knowing which one applies.
   recipe links one). A reviewer should predict your code's behavior from its neighbors. Boring-but-
   obvious beats surprising-but-clever here, every time.
 
+## A caught failure must always surface
+
+A `catch` block that neither throws, nor logs, nor records anything is invisible — the operation
+looks stuck or successful instead of failed, and nobody investigates until a player notices missing
+data. Every catch site picks one of:
+
+- **Throw** — abort so the caller's own handling takes over. The default for a background-job
+  script's own state-machine writes: `jobStatusWriter` (`src/lib/background-jobs.ts`) throws on a
+  failed write, aborting the run via the script's top-level `main().catch(fail)` rather than leaving
+  the row stuck at its last-written stage looking like a hang. All three job scripts
+  (`demo-ingest.ts`, `replay-extract.ts`, `radar-build.ts`) build their `setJob` from this factory; a
+  script's own `fail()` is the one exception, writing directly via `recordJobStatus` since it must not
+  throw while already unwinding.
+- **Record to the DB** — for a best-effort operation riding along with a primary action that must not
+  roll back on this failure (a gauntlet auto-seed, an EHOG recompute), use `recordOpsError()`
+  (`src/lib/ops-errors.ts`); read back via `getOpsErrors()` on the admin ops-errors surface. Both this
+  and the `background_jobs` failure state read through an admin dashboard rather than only
+  `console.error`, since app logs aren't visible to an admin deciding what to do next.
+- **Log** — the last resort, for a failure that's genuinely inconsequential (already covered by a
+  retry elsewhere, or redundant with a warning surfaced some other way).
+
+Pick one policy per call site and apply it for the same reason across every script/route that shares
+the shape — don't let equivalent call sites disagree on whether a write failure aborts, gets recorded,
+or vanishes.
+
 ## Don't caption a page instead of designing it
 
 A page never gets a subheading whose only job is to narrate what the UI below it already shows
