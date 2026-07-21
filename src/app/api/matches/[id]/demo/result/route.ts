@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireMatchAccess } from '@/lib/match-access';
-import { getR2Object, deleteR2Object, demoResultKey, mapResultKey } from '@/lib/r2';
+import { getR2Object, deleteR2Object, demoExists, demoResultKey, mapResultKey } from '@/lib/r2';
 import { gunzipMaybe } from '@/lib/gzip';
 import { parseMatchId } from '@/lib/util';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '@/lib/demo/ingestResult';
@@ -36,8 +36,11 @@ export async function GET(
 
   const [status, buf] = await Promise.all([jobStatus(matchId), getR2Object(demoResultKey(matchId))]);
   if (!buf) {
-    // No staged artifact — return the job status alone so the UI can show "parsing…" vs nothing.
-    return NextResponse.json({ status, result: null });
+    // No staged artifact. If there's also no job at all (status null — the ingest notify never
+    // fired, or its dispatch was lost), check whether the demo itself is already in R2 so the UI
+    // can offer a manual trigger instead of asking for a re-upload.
+    const hasDemo = status ? false : await demoExists(matchId);
+    return NextResponse.json({ status, result: null, hasDemo });
   }
   // A truncated/corrupt artifact (partial write, aborted Action) must not 500 into a silently
   // swallowed error — surface it so the UI can show a failure and let the user dismiss it.

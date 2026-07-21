@@ -4,6 +4,7 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   ListObjectsV2Command,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 
 export const r2 = new S3Client({
@@ -103,6 +104,18 @@ export async function putR2Object(
 /** Delete an R2 object. No-op-safe: deleting a missing key does not throw. */
 export async function deleteR2Object(key: string): Promise<void> {
   await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+}
+
+/** Whether a match's demo (`<id>/game.dem`) is present in R2, regardless of whether anything has
+ *  ever parsed it — the signal that lets a stalled/never-dispatched ingest be manually retried
+ *  without re-uploading. */
+export async function demoExists(matchId: number): Promise<boolean> {
+  try {
+    await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: demoKey(matchId) }));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Every match id with an uploaded demo (`<id>/game.dem`), ascending. Paginates the whole bucket. */

@@ -18,12 +18,13 @@ interface ResultResponse {
   status: string | null; // background_jobs status
   result: DemoIngestResult | null;
   resultError?: string; // set when the staged artifact exists but couldn't be read
+  hasDemo?: boolean; // set when there's no job/result but the demo is already sitting in R2
 }
 
 export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
   const router = useRouter();
   const [data, setData] = useState<ResultResponse | null>(null);
-  const { confirm, dismiss, busy, error } = useDemoIngestActions(matchId, {
+  const { confirm, dismiss, retry, busy, error } = useDemoIngestActions(matchId, {
     onSuccess: () => {
       setData(null);
       router.refresh();
@@ -66,7 +67,7 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
   }, [matchId, refresh]);
 
   if (!data) return null;
-  const { status, result } = data;
+  const { status, result, hasDemo } = data;
 
   // Parsing in flight.
   if (!result && status && DEMO_INGEST_IN_PROGRESS.has(status)) {
@@ -90,6 +91,27 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
           {data.resultError ?? 'Demo parsing failed — enter the result manually.'}
         </div>
         <DismissLink onClick={dismiss} busy={busy} />
+      </Card>
+    );
+  }
+
+  // A demo is sitting in R2 but nothing ever dispatched the ingest Action for it (the auto-notify
+  // never fired, or its dispatch was lost) — offer a manual trigger instead of a re-upload.
+  if (!result && !status && hasDemo) {
+    return (
+      <Card>
+        <Header />
+        <div className="text-sm text-[var(--color-text-secondary)]">
+          A demo is already in storage for this match, but it hasn’t been processed yet.
+        </div>
+        <button
+          onClick={retry}
+          disabled={busy}
+          className="mt-3 rounded-md border border-[var(--color-border-primary)] px-3 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)] disabled:opacity-50"
+        >
+          {busy ? 'Starting…' : 'Process demo'}
+        </button>
+        {error && <div className="mt-2 text-xs text-red-300">{error}</div>}
       </Card>
     );
   }
