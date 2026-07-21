@@ -97,7 +97,9 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
 
   // A demo is sitting in R2 but nothing ever dispatched the ingest Action for it (the auto-notify
   // never fired, or its dispatch was lost) — offer a manual trigger instead of a re-upload.
-  if (!result && !status && hasDemo) {
+  // `hasDemo` is only ever set (server-side) when there's no result and no job, so it alone implies
+  // both.
+  if (hasDemo) {
     return (
       <Card>
         <Header />

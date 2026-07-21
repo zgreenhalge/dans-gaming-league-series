@@ -106,16 +106,22 @@ export async function deleteR2Object(key: string): Promise<void> {
   await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
 }
 
-/** Whether a match's demo (`<id>/game.dem`) is present in R2, regardless of whether anything has
- *  ever parsed it — the signal that lets a stalled/never-dispatched ingest be manually retried
- *  without re-uploading. */
-export async function demoExists(matchId: number): Promise<boolean> {
+/** HEAD a match's demo (`<id>/game.dem`) — its size, or `null` if it doesn't exist (or the request
+ *  otherwise fails). Shared by `demoExists()` and the ingest-notify route, which also needs the byte
+ *  count. */
+export async function headDemoObject(matchId: number): Promise<{ contentLength: number | null } | null> {
   try {
-    await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: demoKey(matchId) }));
-    return true;
+    const head = await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: demoKey(matchId) }));
+    return { contentLength: head.ContentLength ?? null };
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** Whether a match's demo is present in R2, regardless of whether anything has ever parsed it — the
+ *  signal that lets a stalled/never-dispatched ingest be manually retried without re-uploading. */
+export async function demoExists(matchId: number): Promise<boolean> {
+  return (await headDemoObject(matchId)) !== null;
 }
 
 /** Every match id with an uploaded demo (`<id>/game.dem`), ascending. Paginates the whole bucket. */
