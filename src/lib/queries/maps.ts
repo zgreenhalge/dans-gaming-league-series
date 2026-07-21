@@ -1,8 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { gunzipMaybe } from '../gzip';
 import { supabase } from '../supabase';
-import { getR2Object, heatmapKey, mapHeatmapKey } from '../r2';
-import { MAP_HEATMAP_ROLLUP_VERSION, type HeatmapArtifact, type HeatmapKind } from '../replay/heatmap';
+import { heatmapKey, mapHeatmapKey } from '../r2';
+import { HEATMAP_SCHEMA_VERSION, MAP_HEATMAP_ROLLUP_VERSION, type HeatmapArtifact, type HeatmapKind } from '../replay/heatmap';
 import { isPlayedScore, parseScore, extractSeasonNumber, canonicalSort, compareMatchRefDesc } from '../util';
 import { classifyMatchVeto } from '../mapSideStats';
 import { mapSlug } from '../maps';
@@ -679,14 +678,8 @@ export function heatmapArtifactToPoints(matchId: number, art: HeatmapArtifact): 
 export async function getMapHeatmap(matchIds: number[]): Promise<MapHeatmapPoint[]> {
   const perMatch = await Promise.all(
     matchIds.map(async (matchId): Promise<MapHeatmapPoint[]> => {
-      const buf = await getR2Object(heatmapKey(matchId));
-      if (!buf) return [];
-      try {
-        const art = JSON.parse(gunzipMaybe(buf).toString('utf8')) as HeatmapArtifact;
-        return heatmapArtifactToPoints(matchId, art);
-      } catch {
-        return [];
-      }
+      const art = await getVersionedR2Json<HeatmapArtifact>(heatmapKey(matchId), HEATMAP_SCHEMA_VERSION);
+      return art ? heatmapArtifactToPoints(matchId, art) : [];
     }),
   );
   return perMatch.flat();
