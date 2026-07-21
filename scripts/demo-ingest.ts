@@ -44,7 +44,7 @@ import { isPlayedScore, parseScore } from '../src/lib/util';
 import { persistSabremetrics } from '../src/lib/demo/sabremetrics';
 import { writeMatchScore } from '../src/lib/matchScore';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '../src/lib/demo/ingestResult';
-import { recordJobStatus, matchJobKey } from '../src/lib/background-jobs';
+import { recordJobStatus, matchJobKey, jobStatusWriter } from '../src/lib/background-jobs';
 import { notice, error } from './gh-actions-log';
 
 const matchId = Number(process.env.MATCH_ID);
@@ -52,15 +52,21 @@ const ghRunId = process.env.GH_RUN_ID ? Number(process.env.GH_RUN_ID) : null;
 const ghRunUrl = process.env.GH_RUN_URL ?? null;
 const supabase = getAdminClient();
 
-/** Upsert the job row (it normally exists from the notify route; upsert covers manual runs too). */
-async function setJob(fields: Record<string, unknown>) {
-  await recordJobStatus(supabase, JOB_TYPE, matchJobKey(matchId), fields);
-}
+/** Upsert the job row (it normally exists from the notify route; upsert covers manual runs too).
+ *  Throws if the write fails, so a corrupted status row aborts the run via `main().catch(fail)`
+ *  rather than leaving the row stuck at its last-written status looking like a hang; `fail()` below
+ *  writes directly instead, since it must not throw while already unwinding. */
+const setJob = jobStatusWriter(supabase, JOB_TYPE, matchJobKey(matchId));
 
 async function fail(err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
   error(`demo-ingest failed: ${message}`);
-  await setJob({ status: 'failed', stage: 'error', error_message: message, finished_at: new Date().toISOString() });
+  await recordJobStatus(supabase, JOB_TYPE, matchJobKey(matchId), {
+    status: 'failed',
+    stage: 'error',
+    error_message: message,
+    finished_at: new Date().toISOString(),
+  });
   process.exit(1);
 }
 
