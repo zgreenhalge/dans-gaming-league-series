@@ -68,6 +68,13 @@ export function mapResultKey(matchId: number): string {
   return `${matchId}/map-result.json`;
 }
 
+/** Deterministic key for a match's last-seen MatchZy remote-log event (gzipped JSON) — overwritten on
+ *  every `POST /api/ingest/matchzy-log` hit, regardless of event type. The signal that answers "did
+ *  the server ever talk to us for this match" without live RCON. */
+export function matchzyContactKey(matchId: number): string {
+  return `${matchId}/matchzy-contact.json`;
+}
+
 /** Download an R2 object into a Buffer, or `null` if it doesn't exist. */
 export async function getR2Object(key: string): Promise<Buffer | null> {
   try {
