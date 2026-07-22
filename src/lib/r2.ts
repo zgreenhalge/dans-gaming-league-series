@@ -113,25 +113,21 @@ export async function deleteR2Object(key: string): Promise<void> {
   await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
 }
 
-/** HEAD a match's demo (`<id>/game.dem`) — its size, or `null` if it doesn't exist. Shared by
- *  `demoExists()` and the ingest-notify route, which also needs the byte count. A non-404 failure
- *  (auth, transient network) is rethrown rather than treated as "missing" — that distinction matters
- *  to both callers: notify reports it as a real error instead of a misleading "no demo", and
- *  `demoExists()` doesn't silently hide the manual-retry UI it's meant to expose. */
-export async function headDemoObject(matchId: number): Promise<{ contentLength: number | null } | null> {
+/** HEAD a match's demo (`<id>/game.dem`) — its size and upload time, or `null` if it doesn't exist.
+ *  Shared by the ingest-notify route (needs the byte count) and the orphaned-demo check on the match
+ *  page (needs the upload time, to avoid mistaking the Worker's own in-flight notify retry for an
+ *  abandoned demo). A non-404 failure (auth, transient network) is rethrown rather than treated as
+ *  "missing" — collapsing it into "no demo" would misreport a real error either way. */
+export async function headDemoObject(
+  matchId: number,
+): Promise<{ contentLength: number | null; lastModified: Date | null } | null> {
   try {
     const head = await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: demoKey(matchId) }));
-    return { contentLength: head.ContentLength ?? null };
+    return { contentLength: head.ContentLength ?? null, lastModified: head.LastModified ?? null };
   } catch (err) {
     if ((err as { name?: string }).name === 'NotFound') return null;
     throw err;
   }
-}
-
-/** Whether a match's demo is present in R2, regardless of whether anything has ever parsed it — the
- *  signal that lets a stalled/never-dispatched ingest be manually retried without re-uploading. */
-export async function demoExists(matchId: number): Promise<boolean> {
-  return (await headDemoObject(matchId)) !== null;
 }
 
 /** Every match id with an uploaded demo (`<id>/game.dem`), ascending. Paginates the whole bucket. */

@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireMatchAccess } from '@/lib/match-access';
-import { getR2Object, deleteR2Object, demoExists, demoResultKey, mapResultKey } from '@/lib/r2';
+import { getR2Object, deleteR2Object, headDemoObject, demoResultKey, mapResultKey } from '@/lib/r2';
 import { gunzipMaybe } from '@/lib/gzip';
 import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { isVetoComplete, type VetoFields } from '@/lib/veto';
@@ -50,6 +50,21 @@ async function isAwaitingScoreAfterVeto(matchId: number): Promise<boolean> {
   return isVetoComplete(m, isGauntlet || m.is_playoff_game);
 }
 
+// The Worker retries its notify call for up to ~2.5s after the demo lands in R2 (`notifyWithRetry` in
+// `infra/worker/src/index.ts`) before giving up. Without a grace period, a page load landing in that
+// window would read "demo in R2, no job yet" and flash the manual-trigger button during a routine,
+// still-in-progress upload — not an actual failure. Comfortably longer than the retry span itself.
+const ORPHANED_DEMO_GRACE_MS = 15_000;
+
+/** Whether an unprocessed demo has been sitting in R2 long enough to be considered abandoned rather
+ *  than mid-upload, for a match where that would actually be suspicious (see above). */
+async function findOrphanedDemo(matchId: number): Promise<boolean> {
+  if (!(await isAwaitingScoreAfterVeto(matchId))) return false;
+  const head = await headDemoObject(matchId);
+  if (!head?.lastModified) return false;
+  return Date.now() - head.lastModified.getTime() >= ORPHANED_DEMO_GRACE_MS;
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -66,10 +81,10 @@ export async function GET(
   if (!buf) {
     // No staged artifact. If there's also no job at all (status null — the ingest notify never
     // fired, or its dispatch was lost) *and* this match is actually in the window where a demo could
-    // legitimately exist already (veto done, not yet scored), check R2 for it so the UI can offer a
-    // manual trigger instead of asking for a re-upload. Both conditions short-circuit before the R2
-    // call — this never fires for a match that hasn't started or is already scored.
-    const hasDemo = status ? false : (await isAwaitingScoreAfterVeto(matchId)) && (await demoExists(matchId));
+    // legitimately exist already (veto done, not yet scored), check R2 for one old enough to be
+    // considered abandoned rather than still uploading, and offer a manual trigger instead of asking
+    // for a re-upload. This never fires for a match that hasn't started or is already scored.
+    const hasDemo = status ? false : await findOrphanedDemo(matchId);
     return NextResponse.json({ status, result: null, hasDemo });
   }
   // A truncated/corrupt artifact (partial write, aborted Action) must not 500 into a silently
