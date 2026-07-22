@@ -6,6 +6,7 @@
 
 import { useRouter } from 'next/navigation';
 import { DEMO_INGEST_IN_PROGRESS } from '@/lib/demo/ingestResult';
+import { DEMO_INGEST_ORPHANED_STATUS } from '@/lib/jobs';
 import { useDemoIngestActions } from './useDemoIngestActions';
 
 export function IngestJobActions({
@@ -49,7 +50,7 @@ export function IngestJobActions({
           disabled={busy}
           className="font-mono text-[10px] px-2 py-[3px] rounded border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors disabled:opacity-50"
         >
-          Re-parse
+          {status === DEMO_INGEST_ORPHANED_STATUS ? 'Process' : 'Re-parse'}
         </button>
         {canDismiss && (
           <button

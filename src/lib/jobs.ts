@@ -16,6 +16,11 @@ export type BackgroundJobType = (typeof BACKGROUND_JOB_TYPES)[number];
 /** `replay_extract`'s job-type literal, shared so dispatch routes don't each redeclare their own copy. */
 export const REPLAY_EXTRACT_JOB_TYPE: BackgroundJobType = 'replay_extract';
 
+/** Synthetic `demo_ingest` status for a match whose demo is already in R2 but that never got a
+ *  `background_jobs` row at all (the auto-notify silently failed or was never reached) — not a real
+ *  `background_jobs.status` value, only ever produced by `getBackgroundJobs()`. */
+export const DEMO_INGEST_ORPHANED_STATUS = 'orphaned';
+
 /** Short badge per pipeline, for a scannable mixed list. */
 export const JOB_TYPE_LABEL: Record<BackgroundJobType, string> = {
   demo_ingest: 'demo',
@@ -67,8 +72,14 @@ export interface BackgroundJobRow {
   hasPayload: boolean;
 }
 
-/** Demo statuses that still need a human (review or a failure); replay/radar only flag on failure. */
-const DEMO_ATTENTION_STATUSES: ReadonlySet<string> = new Set(['parsed', 'quarantined', 'failed']);
+/** Demo statuses that still need a human (review, a failure, or an orphaned demo); replay/radar only
+ *  flag on failure. */
+const DEMO_ATTENTION_STATUSES: ReadonlySet<string> = new Set([
+  'parsed',
+  'quarantined',
+  'failed',
+  DEMO_INGEST_ORPHANED_STATUS,
+]);
 
 /**
  * Whether a job needs an operator's attention right now — drives the Needs Attention tab and its

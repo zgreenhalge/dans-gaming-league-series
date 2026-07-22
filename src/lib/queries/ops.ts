@@ -1,16 +1,18 @@
 import { gunzipMaybe } from '../gzip';
 import { supabase } from '../supabase';
-import { getR2Object, demoResultKey } from '../r2';
+import { getR2Object, demoResultKey, listDemoMatchIds } from '../r2';
 import { DEMO_INGEST_JOB_TYPE, type DemoIngestResult } from '../demo/ingestResult';
+import { getMatchzyContact } from '../demo/matchzyContact';
 import {
   BACKGROUND_JOB_TYPES,
+  DEMO_INGEST_ORPHANED_STATUS,
   type BackgroundJobType,
   type BackgroundJobSubject,
   type BackgroundJobRow,
 } from '../jobs';
 import type { OpsErrorEntityType } from '../ops-errors';
 import type { Match, Week, Season } from '../types';
-import { matchLabel, extractSeasonNumber } from '../util';
+import { matchLabel, extractSeasonNumber, fmtUtcShort } from '../util';
 
 
 /** Job statuses that still have a staged `demo-result.json` artifact in R2 to read detail from. */
@@ -122,13 +124,18 @@ function buildJobSubject(
  */
 export async function getBackgroundJobs(): Promise<BackgroundJobRow[]> {
   try {
-    const { data: jobs, error } = await supabase
-      .from('background_jobs')
-      .select(
-        'job_type, match_id, map_id, status, stage, error_message, gh_run_url, created_at, updated_at, started_at, finished_at',
-      )
-      .in('job_type', [...BACKGROUND_JOB_TYPES])
-      .order('updated_at', { ascending: false });
+    // The R2 listing (for orphan detection below) is best-effort: an R2 hiccup shouldn't blank the
+    // whole dashboard, just skip flagging orphans for this load.
+    const [{ data: jobs, error }, demoMatchIdsInR2] = await Promise.all([
+      supabase
+        .from('background_jobs')
+        .select(
+          'job_type, match_id, map_id, status, stage, error_message, gh_run_url, created_at, updated_at, started_at, finished_at',
+        )
+        .in('job_type', [...BACKGROUND_JOB_TYPES])
+        .order('updated_at', { ascending: false }),
+      listDemoMatchIds().catch(() => [] as number[]),
+    ]);
     if (error || !jobs) return [];
 
     type JobRow = {
@@ -146,9 +153,23 @@ export async function getBackgroundJobs(): Promise<BackgroundJobRow[]> {
     };
     const jobRows = jobs as JobRow[];
 
-    // Batch subject context: match → week → season for match-keyed jobs, and maps for radar.
+    // Matches with a demo already in R2 but no demo_ingest row at all — the Worker's notify call
+    // silently failed (or was never reached), so nothing ever recorded that ingestion should happen.
+    // Invisible otherwise: this dashboard only ever showed rows that exist in `background_jobs`.
+    const demoIngestMatchIds = new Set(
+      jobRows
+        .filter((j) => j.job_type === DEMO_INGEST_JOB_TYPE && j.match_id != null)
+        .map((j) => j.match_id as number),
+    );
+    const orphanedMatchIds = demoMatchIdsInR2.filter((id) => !demoIngestMatchIds.has(id));
+
+    // Batch subject context: match → week → season for match-keyed jobs (incl. orphans), and maps
+    // for radar.
     const matchIds = Array.from(
-      new Set(jobRows.filter((j) => j.match_id != null).map((j) => j.match_id as number)),
+      new Set([
+        ...jobRows.filter((j) => j.match_id != null).map((j) => j.match_id as number),
+        ...orphanedMatchIds,
+      ]),
     );
     const mapIds = Array.from(
       new Set(jobRows.filter((j) => j.map_id != null).map((j) => j.map_id as number)),
@@ -190,7 +211,7 @@ export async function getBackgroundJobs(): Promise<BackgroundJobRow[]> {
       }),
     );
 
-    return jobRows.map((j): BackgroundJobRow => {
+    const rows = jobRows.map((j): BackgroundJobRow => {
       const detail = j.match_id != null ? detailByMatch.get(j.match_id) : undefined;
       return {
         jobType: j.job_type,
@@ -212,6 +233,35 @@ export async function getBackgroundJobs(): Promise<BackgroundJobRow[]> {
         hasPayload: detail?.hasPayload ?? false,
       };
     });
+
+    // Distinguish "MatchZy never reached us at all for this match" from "it reached us for other
+    // events, just not the demo notify" — the former points at the remote-log webhook/cvars
+    // themselves, the latter narrows it to the demo-upload leg specifically.
+    const orphanedRows = await Promise.all(
+      orphanedMatchIds.map(async (matchId): Promise<BackgroundJobRow> => {
+        const contact = await getMatchzyContact(matchId).catch(() => null);
+        const errorMessage = contact
+          ? `MatchZy last reached us for a "${contact.event}" event at ${fmtUtcShort(contact.receivedAt) ?? contact.receivedAt} — the demo-upload notify specifically never arrived.`
+          : 'MatchZy has never reached us at all for this match — check matchzy_remote_log_url / matchzy_demo_upload_url on the server.';
+        return {
+          jobType: DEMO_INGEST_JOB_TYPE,
+          status: DEMO_INGEST_ORPHANED_STATUS,
+          stage: null,
+          errorMessage,
+          ghRunUrl: null,
+          createdAt: null,
+          updatedAt: null,
+          startedAt: null,
+          finishedAt: null,
+          subject: buildJobSubject({ jobType: DEMO_INGEST_JOB_TYPE, matchId, mapId: null }, matchCtx, mapById),
+          warnings: [],
+          quarantineFlags: [],
+          hasPayload: false,
+        };
+      }),
+    );
+
+    return [...rows, ...orphanedRows];
   } catch {
     return [];
   }

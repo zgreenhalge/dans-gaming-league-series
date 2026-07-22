@@ -103,8 +103,9 @@ MatchZy (map_result event)   ──POST /api/ingest/matchzy-log──▶ R2 (map
   `received`, dispatches the Action, and **tears down the server** (demo landed = match over) — the
   Action never touches DatHost regardless of auto-commit or manual confirm.
 - `/api/ingest/matchzy-log` (machine-auth `x-matchzy-token`) is the `matchzy_remote_log_url` target.
-  MatchZy POSTs every match event here; only `map_result` is kept (at `mapResultKey`), everything else
-  is acknowledged and dropped.
+  MatchZy POSTs every match event here; only `map_result`'s full payload is kept (at `mapResultKey`).
+  Every event, kept or not, first updates a last-contact marker (`matchzyContactKey` — see "Job state"
+  below) before being otherwise acknowledged and dropped.
 - The Action mirrors the replay pipeline (`scripts/replay-extract.ts`): heavy parsing runs in CI, not
   in a Vercel request.
 
@@ -150,6 +151,16 @@ Schema-free by design — status lives in the existing table, detail lives in th
 
 Auto-commit takes the `running → confirmed` edge directly (no `parsed` stop) — the D5 predicate check
 and the write both happen inside the `running` stage.
+
+**`orphaned`** is a synthetic status — never written to `background_jobs`, only synthesized by
+`getBackgroundJobs()` for a match whose demo is already in R2 but that never got a row here at all
+(the Worker's notify call was lost). It surfaces on `/admin/jobs` labeled "demo in storage, never
+processed," with a **Process** action (the same dispatch as Re-parse) instead of re-uploading. Its
+detail line distinguishes two failure shapes using `matchzyContact.ts` (the last MatchZy remote-log
+event recorded for the match, of any type, written by `/api/ingest/matchzy-log` on every hit): if
+MatchZy reached that endpoint for some other event, the demo-upload leg specifically is the broken
+one; if it never reached it at all, the server's remote-log/demo-upload cvars themselves are the
+thing to check.
 
 ## Scrims
 
@@ -228,12 +239,15 @@ purely advisory, since a scrim never blocks a match from actually starting.
   `replay_extract`, `radar_build`; #145), newest first, each row badged by type with a color-coded
   status pill, stage/error, the Action log link, and — for staged demo jobs — parse warnings +
   quarantine flags (read from R2). This is the notification channel: the surface for anything that
-  would otherwise fail silently (Discord is deprioritized). Demo rows carry inline actions —
-  **Confirm** (a cleanly parsed, score-derived result only), **Re-parse**, **Dismiss** — driven by
-  the shared `useDemoIngestActions` hook (the same one the in-match `MatchDemoReviewBlock` uses, so
-  they can't drift); replay/radar rows carry a **Retry** that re-dispatches their Action
+  would otherwise fail silently (Discord is deprioritized), including a match whose demo is in R2 but
+  never got a `background_jobs` row at all — `getBackgroundJobs()` synthesizes an `orphaned` row for
+  those (see "Job state" above) rather than leaving them invisible. Demo rows carry inline actions —
+  **Confirm** (a cleanly parsed, score-derived result only), **Re-parse**/**Process**, **Dismiss** —
+  driven by the shared `useDemoIngestActions` hook (the same one the in-match `MatchDemoReviewBlock`
+  uses, so they can't drift); replay/radar rows carry a **Retry** that re-dispatches their Action
   (`JobRetryButton`). Data comes from `getBackgroundJobs()`; the list stays live via Realtime on
-  `background_jobs`.
+  `background_jobs` — dispatching an orphaned row's `Process` action inserts a real row, which the
+  same subscription picks up and the orphan synthesis naturally stops reproducing.
 - **`/admin/servers`** — server console: the single shared server's current occupant (reconciled via
   `getActiveServerMatch`), connect string, and — on the occupying match — two controls: **Apply match
   settings** (re-push that match's MatchZy config via `matchzy_loadmatch_url`, restoring forced
@@ -311,6 +325,7 @@ logged, still staged for manual confirm); `true` goes live.
 console log, no stored state) · `src/lib/matchzy.ts` · `src/lib/schedule.ts` ·
 `src/lib/matchScore.ts` (`writeMatchScore()` — shared score-write + hooks, #138) ·
 `src/lib/demo/mapResult.ts` (`map_result` parse/R2 read-write) ·
+`src/lib/demo/matchzyContact.ts` (last-remote-log-event marker, any event type) ·
 `src/components/MatchServerPanel.tsx` · `src/components/MatchDemoReviewBlock.tsx` ·
 `src/components/useDemoIngestActions.ts` (shared confirm/dismiss/re-parse) ·
 `src/components/IngestJobActions.tsx` · `src/components/JobActions.tsx` (generic retry + live refresh) ·
