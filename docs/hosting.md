@@ -93,6 +93,12 @@ MatchZy (map_result event)   ──POST /api/ingest/matchzy-log──▶ R2 (map
 
 - The Worker writes the **same** deterministic `demoKey(matchId)` a browser upload would, so the two
   paths are last-write-wins with no collision.
+- The Worker's notify POST (`infra/worker/src/index.ts`) retries a few times with backoff and logs
+  every failed attempt — it runs in the background (`ctx.waitUntil`) so it never delays the response
+  to MatchZy. If every retry fails (the R2 write already succeeded regardless), the demo sits in R2
+  with no `background_jobs` row; the match page's `MatchDemoReviewBlock` detects that state (a demo
+  in R2, no job) and offers a **Process demo** button that dispatches the same Action manually,
+  without re-uploading.
 - `/api/ingest/notify` (machine-auth `x-ingest-secret`) validates the match + roster + demo, records
   `received`, dispatches the Action, and **tears down the server** (demo landed = match over) — the
   Action never touches DatHost regardless of auto-commit or manual confirm.

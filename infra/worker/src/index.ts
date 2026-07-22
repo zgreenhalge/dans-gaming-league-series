@@ -8,9 +8,12 @@
 //   1. verifies the shared secret header (constant time) BEFORE reading the body,
 //   2. reads MatchZy-MatchId → matchId, rejects MatchZy-MapNumber > 0 (BO1 only),
 //   3. streams the body to R2 at `${matchId}/game.dem` (mirrors demoKey() in src/lib/r2.ts),
-//   4. fire-and-forgets a notify POST to the Vercel route so parsing can proceed.
+//   4. notifies the Vercel route (with retries) so parsing can proceed, in the background — the
+//      response to MatchZy isn't held up waiting on it.
 //
-// The Worker only ever WRITES the demo to R2; the Vercel side only ever READS it.
+// The Worker only ever WRITES the demo to R2; the Vercel side only ever READS it. A demo that lands
+// in R2 without a successful notify is still recoverable — the app's match page offers a manual
+// "Process demo" trigger for exactly that case — but retrying here means it's rarely needed.
 
 export interface Env {
   // R2 bucket binding (the existing DGLS demos bucket). Configured in wrangler.toml.
@@ -35,6 +38,46 @@ function constantTimeEqual(a: string, b: string): boolean {
 
 function demoKey(matchId: number): string {
   return `${matchId}/game.dem`;
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Retry delays between attempts (immediate, then backoff) — bounded to a few seconds total so a
+// persistently broken notify (bad secret, wrong URL) still fails fast, while a transient blip
+// (cold start, momentary network error) gets a real chance to succeed.
+const NOTIFY_RETRY_DELAYS_MS = [0, 500, 2000];
+
+// Tell Vercel a demo landed, retrying transient failures. Every attempt is logged on failure —
+// previously this was a bare fire-and-forget `.catch(() => {})`, so a broken notify (wrong secret,
+// Vercel outage, anything) was invisible: the demo would sit in R2 forever with no trace anywhere
+// that ingestion was ever supposed to run. Still doesn't hold up the response to MatchZy — the
+// caller wraps this in `ctx.waitUntil`.
+async function notifyWithRetry(env: Env, matchId: number): Promise<void> {
+  for (let attempt = 0; attempt < NOTIFY_RETRY_DELAYS_MS.length; attempt++) {
+    if (NOTIFY_RETRY_DELAYS_MS[attempt] > 0) await sleep(NOTIFY_RETRY_DELAYS_MS[attempt]);
+    try {
+      const res = await fetch(env.NOTIFY_URL, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-ingest-secret': env.NOTIFY_SECRET,
+        },
+        body: JSON.stringify({ matchId }),
+      });
+      if (res.ok) return;
+      console.error(
+        `notify(match ${matchId}) attempt ${attempt + 1}/${NOTIFY_RETRY_DELAYS_MS.length} got ${res.status}`,
+      );
+    } catch (err) {
+      console.error(
+        `notify(match ${matchId}) attempt ${attempt + 1}/${NOTIFY_RETRY_DELAYS_MS.length} threw: ${(err as Error).message}`,
+      );
+    }
+  }
+  console.error(
+    `notify(match ${matchId}) exhausted all retries — demo is at ${demoKey(matchId)} in R2 but ` +
+      `ingestion was never triggered automatically; needs the match page's "Process demo" trigger.`,
+  );
 }
 
 const worker: ExportedHandler<Env> = {
@@ -68,19 +111,10 @@ const worker: ExportedHandler<Env> = {
       httpMetadata: { contentType: 'application/octet-stream' },
     });
 
-    // 4. Fire-and-forget: tell Vercel a demo landed. Don't fail the upload if notify is flaky —
-    //    the demo is safely in R2 and the manual flow can still pick it up.
+    // 4. Tell Vercel a demo landed, with retries — in the background, so a slow/flaky notify never
+    //    delays the response to MatchZy. The demo itself is already safely in R2 regardless.
     if (env.NOTIFY_URL && env.NOTIFY_SECRET) {
-      ctx.waitUntil(
-        fetch(env.NOTIFY_URL, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            'x-ingest-secret': env.NOTIFY_SECRET,
-          },
-          body: JSON.stringify({ matchId }),
-        }).catch(() => {}),
-      );
+      ctx.waitUntil(notifyWithRetry(env, matchId));
     }
 
     return new Response(JSON.stringify({ ok: true, matchId, key }), {
