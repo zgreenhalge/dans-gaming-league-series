@@ -67,6 +67,7 @@ interface AggregatedSab {
   plants: number;
   defuses: number;
   two_k_rounds: number;
+  teamkills: number;
   trade_kill_opportunities: number;
   trade_kill_attempts: number;
   trade_kill_successes: number;
@@ -112,7 +113,7 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
         clutch_2v1_wins: 0, clutch_2v1_attempts: 0,
         flash_assists: 0, flashes_leading_to_kill: 0, utility_damage: 0, teamflash_duration: 0,
         enemies_flashed: 0, flashes_thrown: 0,
-        plants: 0, defuses: 0, two_k_rounds: 0,
+        plants: 0, defuses: 0, two_k_rounds: 0, teamkills: 0,
         trade_kill_opportunities: 0, trade_kill_attempts: 0, trade_kill_successes: 0,
         traded_death_opportunities: 0, traded_death_attempts: 0, traded_death_successes: 0,
         he_thrown: 0, he_damage: 0,
@@ -159,6 +160,7 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
     agg.plants += s.plants;
     agg.defuses += s.defuses;
     agg.two_k_rounds += s.two_k_rounds;
+    agg.teamkills += s.teamkills;
     agg.trade_kill_opportunities += s.trade_kill_opportunities;
     agg.trade_kill_attempts += s.trade_kill_attempts;
     agg.trade_kill_successes += s.trade_kill_successes;
@@ -415,6 +417,7 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
       switch (sort.col) {
         case 'kast': aVal = a.kast_rounds / arp; bVal = b.kast_rounds / brp; break;
         case '2k': aVal = a.two_k_rounds; bVal = b.two_k_rounds; break;
+        case 'tk': aVal = a.teamkills; bVal = b.teamkills; break;
         case '1v1': aVal = a.clutch_1v1_wins; bVal = b.clutch_1v1_wins; break;
         case '1v2': aVal = a.clutch_1v2_wins; bVal = b.clutch_1v2_wins; break;
         case '2v1_losses':
@@ -445,6 +448,7 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
               {!singlePlayer && <th className={playerThCls}>Player</th>}
               <SortableTh label="KAST" title="Percentage of rounds with a Kill, Assist, Survived, or Traded" sortKey="kast" state={sort} onClick={toggleSort} />
               <SortableTh label="Double Kills" title="Rounds where both opponents were eliminated" sortKey="2k" state={sort} onClick={toggleSort} />
+              <SortableTh label="Teamkills" title="Teammates killed" sortKey="tk" state={sort} onClick={toggleSort} />
               <SortableTh label="1v1" title="1v1 clutch wins / attempts" sortKey="1v1" state={sort} onClick={toggleSort} />
               <SortableTh label="1v2" title="1v2 clutch wins / attempts" sortKey="1v2" state={sort} onClick={toggleSort} />
               <SortableTh label="2v1 Losses" title="Rounds this player's side had a 2-vs-1 numbers advantage and still lost, out of all 2v1 advantages (the natural stat behind Choke Score)" sortKey="2v1_losses" state={sort} onClick={toggleSort} />
@@ -460,6 +464,7 @@ function ImpactTable({ aggregated, singlePlayer, showHeading = true }: { aggrega
                   {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
                   <td className={tdRight}>{pct(a.kast_rounds, a.rounds_played)}</td>
                   <td className={tdRight}>{a.two_k_rounds}</td>
+                  <td className={tdRight}>{a.teamkills}</td>
                   <td className={tdRight}>{a.clutch_1v1_wins}/{a.clutch_1v1_attempts}</td>
                   <td className={tdRight}>{a.clutch_1v2_wins}/{a.clutch_1v2_attempts}</td>
                   <td className={tdRight}>{a.clutch_2v1_attempts - a.clutch_2v1_wins}/{a.clutch_2v1_attempts}</td>
@@ -886,6 +891,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   const impact: StatTile[] = [
     { label: 'KAST', title: 'Percentage of rounds with a Kill, Assist, Survived, or Traded', value: pct(agg.kast_rounds, agg.rounds_played) },
     { label: 'Double Kills', title: 'Rounds where both opponents were eliminated', value: agg.two_k_rounds },
+    { label: 'Teamkills', title: 'Teammates killed', value: agg.teamkills },
     { label: '1v1 Clutches', title: '1v1 clutch wins / attempts', value: `${agg.clutch_1v1_wins}/${agg.clutch_1v1_attempts}` },
     { label: '1v2 Clutches', title: '1v2 clutch wins / attempts', value: `${agg.clutch_1v2_wins}/${agg.clutch_1v2_attempts}` },
     { label: '2v1 Losses', title: 'Rounds this player\'s side had a 2-vs-1 numbers advantage and still lost, out of all 2v1 advantages (the natural stat behind Choke Score)', value: `${agg.clutch_2v1_attempts - agg.clutch_2v1_wins}/${agg.clutch_2v1_attempts}` },

@@ -172,6 +172,10 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     isn't attributable to a single "clutcher" — **both** players on the advantaged side are
     credited the attempt (and the win, if the round is won), since blowing a full-team numbers
     advantage is a shared failure, not one player's alone.
+- `Teamkills` — a raw counter, not folded into any `+` formula: deaths where the attacker and
+  victim share a side that round, credited to the attacker. Uses the same side check that
+  excludes a teamkill from `Entry+`'s opening kills and `KAST+`'s kill qualifier, just counted here
+  instead of discarded.
 - `Aim+` = `0.35 * Accuracy+` + `0.40 * Head Accuracy+` + `0.25 * Counter-Strafe+` (each itself
   `Player X` / `League Avg X`, computed on `Accuracy`/`Head Accuracy`/`Counter-Strafe %` from the
   Mechanics section below). A weighted blend rather than a sum on a shared point-scale like
