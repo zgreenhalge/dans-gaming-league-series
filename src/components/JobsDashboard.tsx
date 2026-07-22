@@ -11,7 +11,6 @@ import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { fmtUtcShort, tabCls } from '@/lib/util';
 import {
-  DEMO_INGEST_ORPHANED_STATUS,
   JOB_TYPE_LABEL,
   type BackgroundJobRow,
   type BackgroundJobType,
@@ -37,7 +36,6 @@ const STATUS_STYLE: Record<string, { label: string; bg: string; fg: string; bord
   ready: { label: 'ready', bg: 'var(--color-accent-green-bg)', fg: 'var(--color-accent-green-fg)', border: 'var(--color-accent-green-border)' },
   dismissed: { label: 'dismissed', bg: 'transparent', fg: 'var(--color-text-secondary)', border: 'var(--color-border-secondary)' },
   failed: { label: 'failed', bg: 'var(--color-accent-red-bg)', fg: 'var(--color-accent-red-fg)', border: 'var(--color-accent-red-border)' },
-  [DEMO_INGEST_ORPHANED_STATUS]: { label: 'demo in storage, never processed', bg: 'var(--color-accent-red-bg)', fg: 'var(--color-accent-red-fg)', border: 'var(--color-accent-red-border)' },
 };
 
 function StatusPill({ status }: { status: string }) {
@@ -178,9 +176,7 @@ const PIPELINES: PipelineDoc[] = [
     purpose:
       "Parses a match's demo into its final score and player stats. A clean parse corroborated by " +
       "MatchZy's own map_result auto-commits the score directly (skipping straight to confirmed); " +
-      'otherwise the result is staged for human review. A demo that lands in storage without ever ' +
-      'getting a job row (a silently failed auto-notify) shows here as "demo in storage, never ' +
-      'processed" instead of staying invisible.',
+      'otherwise the result is staged for human review.',
     lifecycle: [
       { label: 'received', tone: 'neutral' },
       { label: 'queued', tone: 'neutral' },
@@ -190,8 +186,7 @@ const PIPELINES: PipelineDoc[] = [
     ],
     admin: (
       <>
-        <b>Confirm</b> the staged score, <b>Re-parse</b>/<b>Process</b> the demo, or <b>Dismiss</b> the
-        result.
+        <b>Confirm</b> the staged score, <b>Re-parse</b> the demo, or <b>Dismiss</b> the result.
       </>
     ),
   },
