@@ -71,6 +71,7 @@ recorded score.
 | `entry.ts` | Opening kills/deaths (`Entry+`) |
 | `kast.ts` | KAST rounds + trade tracking (`KAST+`) |
 | `multikill.ts` | Multikill rounds |
+| `teamkill.ts` | Teamkills committed |
 | `clutch.ts` | 1vN attempts/wins and 2v1 numbers-advantage attempts/wins (`Clutch+`, `Choke+`) |
 | `utility.ts` | Flash assists, utility damage, teamflash/self-flash (`Utility+`) |
 | `objectives.ts` | Bomb plants/defuses (`Objective+`) |
