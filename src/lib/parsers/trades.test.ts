@@ -35,7 +35,7 @@ const tickRate = 64;
 const WINDOW = 5 * tickRate; // TRADE_WINDOW_SECONDS
 
 // Every non-distance-gate test below places the victim and teammate on top of each other (both
-// at the death tick) so the new 800-unit distance gate never interferes with what they're
+// at the death tick) so the 180-unit distance gate never interferes with what they're
 // actually testing.
 function nearbyPositions(tick: number, victim: string, teammate: string): PlayerPositionRow[] {
   return [
@@ -118,7 +118,7 @@ test('collectTrades: killing the killer one tick past the window does not count 
   assert.equal(out.get('a')?.traded_death_successes ?? 0, 0);
 });
 
-test('collectTrades: a teammate beyond 800 units gets no opportunity, even if alive and on the same side', () => {
+test('collectTrades: a teammate beyond 180 units gets no opportunity, even if alive and on the same side', () => {
   const deaths = [death({ round: 1, tick: 100, victim: 'a', attacker: 'c' })];
   const positions = [
     pos({ tick: 100, steamid: 'a', x: 0, y: 0 }),
@@ -130,11 +130,11 @@ test('collectTrades: a teammate beyond 800 units gets no opportunity, even if al
   assert.equal(out.get('a')?.traded_death_opportunities ?? 0, 0);
 });
 
-test('collectTrades: a teammate exactly at 800 units still counts', () => {
+test('collectTrades: a teammate exactly at 180 units still counts', () => {
   const deaths = [death({ round: 1, tick: 100, victim: 'a', attacker: 'c' })];
   const positions = [
     pos({ tick: 100, steamid: 'a', x: 0, y: 0 }),
-    pos({ tick: 100, steamid: 'b', x: 800, y: 0 }),
+    pos({ tick: 100, steamid: 'b', x: 180, y: 0 }),
   ];
   const ctx = makeContext({ rounds, sides, deaths, tickRate });
   const out = collectTrades(deaths, [], positions, ctx, ids);
