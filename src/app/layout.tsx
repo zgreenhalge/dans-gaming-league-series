@@ -6,6 +6,7 @@ import AuthProvider from "@/components/AuthProvider";
 import { SideNav } from "@/components/SideNav";
 import { NavProvider } from "@/components/NavContext";
 import { MapProvider } from "@/components/MapContext";
+import { ScrimStatusProvider } from "@/components/ScrimStatusContext";
 import { getSeasons, getMapLookup } from "@/lib/queries";
 import { SITE_URL } from "@/lib/site";
 import Script from "next/script";
@@ -75,6 +76,7 @@ export default async function RootLayout({
           strategy="beforeInteractive"
         />
         <AuthProvider>
+          <ScrimStatusProvider>
           <MapProvider maps={mapLookup}>
           <NavProvider>
             <div className="flex min-h-screen" style={{ paddingTop: 'var(--topbar-h)' }}>
@@ -85,6 +87,7 @@ export default async function RootLayout({
             </div>
           </NavProvider>
           </MapProvider>
+          </ScrimStatusProvider>
           <Analytics />
           <SpeedInsights />
         </AuthProvider>

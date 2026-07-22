@@ -320,7 +320,9 @@ console log, no stored state) · `src/lib/matchzy.ts` · `src/lib/schedule.ts` �
 `src/components/useDemoIngestActions.ts` (shared confirm/dismiss/re-parse) ·
 `src/components/IngestJobActions.tsx` · `src/components/JobActions.tsx` (generic retry + live refresh) ·
 `src/components/ServerConsolePanel.tsx` · `src/components/ServerStatusBits.tsx` (shared status pill +
-copy-connect button) · `src/components/ScrimPanel.tsx` · `src/app/scrim/page.tsx` ·
+copy-connect button) · `src/components/ScrimStatusContext.tsx` (single shared poll of `GET /api/
+scrim/status`, consumed by both `ScrimPanel` and `ScrimNavStatus`) · `src/components/ScrimPanel.tsx` ·
+`src/components/ScrimNavStatus.tsx` · `src/app/scrim/page.tsx` ·
 `src/lib/scrim-session.ts` (the singleton `scrim_sessions` claim/release/reconcile) ·
 `scripts/scrim-warnings.ts` + `.github/workflows/scrim-warnings.yml` (pre-match warning cron) ·
 `src/components/SchedulingOverlapBanner.tsx` · `src/app/admin/jobs/page.tsx` ·
