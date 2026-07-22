@@ -158,6 +158,7 @@ export interface PlayerMatchSabremetrics {
   clutch_1v2_wins: number;
   clutch_2v1_attempts: number;
   clutch_2v1_wins: number;
+  teamkills: number;
   flash_assists: number;
   flashes_leading_to_kill: number;
   utility_damage: number;
