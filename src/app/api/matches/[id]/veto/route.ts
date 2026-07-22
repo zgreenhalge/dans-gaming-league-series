@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { isVetoComplete, type VetoFields } from '@/lib/veto';
+import { isVetoComplete, computeGauntletOrPlayoff, type VetoFields } from '@/lib/veto';
 import { provisionMatchServer, matchzyConfigContext, ServerBusyError } from '@/lib/dathost-lifecycle';
 
 const supabaseAdmin = getAdminClient();
@@ -220,7 +220,7 @@ export async function PATCH(
   const update: Record<string, string | null> = { [field]: value };
 
   // For playoff/gauntlet: once all 4 bans are set, auto-pick the remaining map
-  if (isGauntlet || isPlayoff) {
+  if (computeGauntletOrPlayoff(isGauntlet, m.is_playoff_game)) {
     const bansAfter = [
       field === 'shirts_ban'  ? value : m.shirts_ban,
       field === 'shirts_ban2' ? value : m.shirts_ban2,
@@ -242,9 +242,8 @@ export async function PATCH(
   // completing edit — so a post-completion map correction re-provisions with the new map. But never
   // disrupt a server that's already booting/live: an admin stops it first to change the map. (The
   // `server_state` gate also keeps a redundant edit from re-provisioning an already-running server.)
-  const isGauntletOrPlayoff = isGauntlet || isPlayoff;
   const merged = { ...m, ...update } as VetoFields;
-  if (isVetoComplete(merged, isGauntletOrPlayoff)) {
+  if (isVetoComplete(merged, computeGauntletOrPlayoff(isGauntlet, m.is_playoff_game))) {
     const { data: srv } = await supabaseAdmin
       .from('matches')
       .select('server_state')

@@ -41,32 +41,72 @@ const RETENTION_DAYS = Number(process.env.RETENTION_DAYS ?? '3');
 const CLEANUP_INTERVAL_DAYS = Number(process.env.CLEANUP_INTERVAL_DAYS ?? '1');
 const DEMO_INGEST_DONE = new Set(['confirmed', 'dismissed']);
 
+const SKIP_MARKER = 'scheduled run skipped';
+// Substring of this script's own `dathost-cleanup: server ..., dry_run=${DRY_RUN}` notice — present
+// verbatim in a run's log whenever that run was a dry run (a manual dispatch with the dry_run input
+// left at its default `true`; a `schedule` run's DRY_RUN is always `false`, so this never matches
+// one of those). A dry run only lists what it would delete, so it must not count as "did real work"
+// either — otherwise previewing a cleanup would itself delay the next real one.
+const DRY_RUN_MARKER = 'dry_run=true';
+// How many recent completed runs to walk back through looking for one that did real work. Bounds
+// the search so a long streak of skips (e.g. CLEANUP_INTERVAL_DAYS raised well above the daily cron)
+// doesn't make this scan unbounded; comfortably covers a couple of throttle intervals.
+const LOOKBACK_RUNS = 14;
+
+/** Whether workflow run `runId` actually deleted files, rather than hitting its own interval
+ *  throttle (a `schedule` run) or being a preview-only dry run (a `workflow_dispatch` run) — read
+ *  from its job log for the same `::notice::` text this script itself emits (the skip notice in
+ *  `scheduleShouldRun`, and the `dry_run=` value logged at the top of `main`), since the run's
+ *  `conclusion` is `success` in every case and there's no separate persisted state to check instead:
+ *  writing a repo variable from inside the run would need the "Variables" PAT scope (see
+ *  `src/lib/gh-dispatch.ts`), which isn't wired into this workflow's `GITHUB_TOKEN`. Treats an
+ *  unreadable log the same as "didn't do work" — the caller only needs a yes/no to keep walking
+ *  back, not a reason. */
+async function runDidRealCleanup(repo: string, runId: number, headers: Record<string, string>): Promise<boolean> {
+  const jobsRes = await fetch(`https://api.github.com/repos/${repo}/actions/runs/${runId}/jobs`, { headers });
+  if (!jobsRes.ok) return false;
+  const jobId = ((await jobsRes.json()) as { jobs?: Array<{ id: number }> }).jobs?.[0]?.id;
+  if (!jobId) return false;
+  const logsRes = await fetch(`https://api.github.com/repos/${repo}/actions/jobs/${jobId}/logs`, { headers });
+  if (!logsRes.ok) return false;
+  const text = await logsRes.text();
+  return !text.includes(SKIP_MARKER) && !text.includes(DRY_RUN_MARKER);
+}
+
 /** Whether a `schedule`-triggered run should actually do anything, based on how long it's been
- *  since the last completed run vs. CLEANUP_INTERVAL_DAYS. Any other trigger (workflow_dispatch)
- *  always runs. Fails open (runs) if the check itself can't be made — a missing/misconfigured
+ *  since the last run that actually deleted files vs. CLEANUP_INTERVAL_DAYS. Any other trigger
+ *  (workflow_dispatch) always runs itself, but a *dry-run* dispatch still doesn't count as the
+ *  reference point for this check (see `runDidRealCleanup`) — otherwise merely previewing a cleanup
+ *  would push back the next real one. A run that itself skipped likewise doesn't count as that
+ *  reference point — otherwise every skip would reset the clock and the throttle could never recover
+ *  once tripped, since the next scheduled run would always see "last completed run" as ~1
+ *  cron-interval ago. Fails open (runs) if the check itself can't be made — a missing/misconfigured
  *  throttle should never be the reason cleanup silently stops happening. */
 async function scheduleShouldRun(): Promise<boolean> {
   if (process.env.GITHUB_EVENT_NAME !== 'schedule') return true;
   const token = process.env.GITHUB_TOKEN;
   const repo = process.env.GITHUB_REPOSITORY;
   if (!token || !repo) return true;
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    Authorization: `Bearer ${token}`,
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
   try {
     const res = await fetch(
-      `https://api.github.com/repos/${repo}/actions/workflows/dathost-cleanup.yml/runs?status=completed&per_page=1`,
-      {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          Authorization: `Bearer ${token}`,
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
-      },
+      `https://api.github.com/repos/${repo}/actions/workflows/dathost-cleanup.yml/runs?status=completed&per_page=${LOOKBACK_RUNS}`,
+      { headers },
     );
     if (!res.ok) return true;
-    const data = (await res.json()) as { workflow_runs?: Array<{ created_at?: string }> };
-    const lastCreatedAt = data.workflow_runs?.[0]?.created_at;
-    if (!lastCreatedAt) return true;
-    const elapsedDays = (Date.now() - new Date(lastCreatedAt).getTime()) / (1000 * 60 * 60 * 24);
-    return elapsedDays >= CLEANUP_INTERVAL_DAYS;
+    const data = (await res.json()) as {
+      workflow_runs?: Array<{ id: number; created_at: string }>;
+    };
+    for (const run of data.workflow_runs ?? []) {
+      if (await runDidRealCleanup(repo, run.id, headers)) {
+        return (daysAgo(run.created_at) ?? Infinity) >= CLEANUP_INTERVAL_DAYS;
+      }
+    }
+    return true; // nothing but skips/dry-runs (or unreadable logs) in the lookback window — err toward running
   } catch {
     return true;
   }

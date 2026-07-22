@@ -19,3 +19,9 @@ export function isVetoComplete(m: VetoFields, isGauntletOrPlayoff: boolean): boo
     ? !!(m.shirts_ban && m.shirts_ban2 && m.skins_ban1 && m.skins_ban2)
     : !!(m.shirts_ban && m.skins_ban1 && m.skins_ban2 && m.shirts_pick && m.skins_starting_side);
 }
+
+/** Whether a match resolves through the 4-ban gauntlet/playoff veto (auto-picked final map) rather
+ *  than the regular 5-step veto — the flag `isVetoComplete` needs, derived the same way everywhere. */
+export function computeGauntletOrPlayoff(isGauntlet: boolean, isPlayoffGame: boolean): boolean {
+  return isGauntlet || isPlayoffGame;
+}
