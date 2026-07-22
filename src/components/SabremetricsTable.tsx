@@ -32,6 +32,7 @@ export default function SabremetricsTable({ players }: SabremetricsTableProps) {
     { header: 'Entry', key: 'entry', title: 'Opening duel wins-losses' },
     { header: 'KAST', key: 'kast', title: 'Rounds with a Kill, Assist, Survived, or Traded' },
     { header: '2K', key: 'two_k', title: 'Rounds where both opponents were eliminated' },
+    { header: 'TK', key: 'tk', title: 'Teamkills' },
     { header: 'Clutch', key: 'clutch', title: 'Clutch wins / attempts (1v1 + 1v2)' },
     { header: 'EF', key: 'ef', title: 'Enemy players blinded by flashbangs' },
     { header: 'UD', key: 'ud', title: 'Damage dealt with grenades' },
@@ -60,6 +61,8 @@ export default function SabremetricsTable({ players }: SabremetricsTableProps) {
         return pct(s.kast_rounds, p.rounds_played);
       case 'two_k':
         return s.two_k_rounds;
+      case 'tk':
+        return s.teamkills;
       case 'clutch':
         return `${s.clutch_1v1_wins + s.clutch_1v2_wins}/${s.clutch_1v1_attempts + s.clutch_1v2_attempts}`;
       case 'ef':
