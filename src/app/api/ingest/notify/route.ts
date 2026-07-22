@@ -15,10 +15,9 @@
 // Auth: shared secret in the `x-ingest-secret` header, compared in constant time against
 // `INGEST_NOTIFY_SECRET`. No session — this is called by the Worker, not a browser.
 
-import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import { NextRequest, NextResponse, after } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { r2, R2_BUCKET, demoKey } from '@/lib/r2';
+import { demoKey, headDemoObject } from '@/lib/r2';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
 import { recordJobStatus, advanceJobStatus, dispatchAndRecordFailure, matchJobKey } from '@/lib/background-jobs';
 import { teardownMatchServer } from '@/lib/dathost-lifecycle';
@@ -66,16 +65,14 @@ export async function POST(req: NextRequest) {
   }
 
   // Confirm the demo bytes actually landed in R2 (the Worker writes before notifying).
-  let demoBytes: number | null = null;
-  try {
-    const head = await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: demoKey(matchId) }));
-    demoBytes = head.ContentLength ?? null;
-  } catch {
+  const head = await headDemoObject(matchId);
+  if (!head) {
     return NextResponse.json(
       { error: `No demo found in R2 at ${demoKey(matchId)}` },
       { status: 404 },
     );
   }
+  const demoBytes = head.contentLength;
 
   // Duplicate guard: if a job for this match is already in flight (Worker/MatchZy retry, or a
   // double-POST), don't reset its status or fire a second redundant Action.

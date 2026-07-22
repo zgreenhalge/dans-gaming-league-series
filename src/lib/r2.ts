@@ -4,6 +4,7 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   ListObjectsV2Command,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 
 export const r2 = new S3Client({
@@ -67,6 +68,13 @@ export function mapResultKey(matchId: number): string {
   return `${matchId}/map-result.json`;
 }
 
+/** Deterministic key for a match's last-seen MatchZy remote-log event (gzipped JSON) — overwritten on
+ *  every `POST /api/ingest/matchzy-log` hit, regardless of event type. The signal that answers "did
+ *  the server ever talk to us for this match" without live RCON. */
+export function matchzyContactKey(matchId: number): string {
+  return `${matchId}/matchzy-contact.json`;
+}
+
 /** Download an R2 object into a Buffer, or `null` if it doesn't exist. */
 export async function getR2Object(key: string): Promise<Buffer | null> {
   try {
@@ -103,6 +111,23 @@ export async function putR2Object(
 /** Delete an R2 object. No-op-safe: deleting a missing key does not throw. */
 export async function deleteR2Object(key: string): Promise<void> {
   await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+}
+
+/** HEAD a match's demo (`<id>/game.dem`) — its size and upload time, or `null` if it doesn't exist.
+ *  Shared by the ingest-notify route (needs the byte count) and the orphaned-demo check on the match
+ *  page (needs the upload time, to avoid mistaking the Worker's own in-flight notify retry for an
+ *  abandoned demo). A non-404 failure (auth, transient network) is rethrown rather than treated as
+ *  "missing" — collapsing it into "no demo" would misreport a real error either way. */
+export async function headDemoObject(
+  matchId: number,
+): Promise<{ contentLength: number | null; lastModified: Date | null } | null> {
+  try {
+    const head = await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: demoKey(matchId) }));
+    return { contentLength: head.ContentLength ?? null, lastModified: head.LastModified ?? null };
+  } catch (err) {
+    if ((err as { name?: string }).name === 'NotFound') return null;
+    throw err;
+  }
 }
 
 /** Every match id with an uploaded demo (`<id>/game.dem`), ascending. Paginates the whole bucket. */
