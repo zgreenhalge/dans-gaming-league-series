@@ -55,6 +55,7 @@ const NOTIFY_RETRY_DELAYS_MS = [0, 500, 2000];
 async function notifyWithRetry(env: Env, matchId: number): Promise<void> {
   for (let attempt = 0; attempt < NOTIFY_RETRY_DELAYS_MS.length; attempt++) {
     if (NOTIFY_RETRY_DELAYS_MS[attempt] > 0) await sleep(NOTIFY_RETRY_DELAYS_MS[attempt]);
+    let failure: string;
     try {
       const res = await fetch(env.NOTIFY_URL, {
         method: 'POST',
@@ -65,14 +66,13 @@ async function notifyWithRetry(env: Env, matchId: number): Promise<void> {
         body: JSON.stringify({ matchId }),
       });
       if (res.ok) return;
-      console.error(
-        `notify(match ${matchId}) attempt ${attempt + 1}/${NOTIFY_RETRY_DELAYS_MS.length} got ${res.status}`,
-      );
+      failure = `got ${res.status}`;
     } catch (err) {
-      console.error(
-        `notify(match ${matchId}) attempt ${attempt + 1}/${NOTIFY_RETRY_DELAYS_MS.length} threw: ${(err as Error).message}`,
-      );
+      failure = `threw: ${(err as Error).message}`;
     }
+    console.error(
+      `notify(match ${matchId}) attempt ${attempt + 1}/${NOTIFY_RETRY_DELAYS_MS.length} ${failure}`,
+    );
   }
   console.error(
     `notify(match ${matchId}) exhausted all retries — demo is at ${demoKey(matchId)} in R2 but ` +

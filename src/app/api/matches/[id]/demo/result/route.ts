@@ -47,7 +47,7 @@ async function isAwaitingScoreAfterVeto(matchId: number): Promise<boolean> {
   const m = data as unknown as OrphanGateRow;
   if (isPlayedScore(m.final_score)) return false;
   const isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
-  return isVetoComplete(m, isGauntlet || (m.is_playoff_game && !isGauntlet));
+  return isVetoComplete(m, isGauntlet || m.is_playoff_game);
 }
 
 export async function GET(
