@@ -41,32 +41,66 @@ const RETENTION_DAYS = Number(process.env.RETENTION_DAYS ?? '3');
 const CLEANUP_INTERVAL_DAYS = Number(process.env.CLEANUP_INTERVAL_DAYS ?? '1');
 const DEMO_INGEST_DONE = new Set(['confirmed', 'dismissed']);
 
+const SKIP_MARKER = 'scheduled run skipped';
+// How many recent completed runs to walk back through looking for one that did real work. Bounds
+// the search so a long streak of skips (e.g. CLEANUP_INTERVAL_DAYS raised well above the daily cron)
+// doesn't make this scan unbounded; comfortably covers a couple of throttle intervals.
+const LOOKBACK_RUNS = 14;
+
+function elapsedDaysSince(iso: string): number {
+  return (Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24);
+}
+
+/** Whether workflow run `runId` actually performed cleanup rather than hitting its own interval
+ *  throttle — read from its job log, since the run's `conclusion` is `success` either way. `null`
+ *  means it couldn't be determined (log unavailable), not that it skipped. */
+async function scheduledRunDidWork(
+  repo: string,
+  runId: number,
+  headers: Record<string, string>,
+): Promise<boolean | null> {
+  const jobsRes = await fetch(`https://api.github.com/repos/${repo}/actions/runs/${runId}/jobs`, { headers });
+  if (!jobsRes.ok) return null;
+  const jobId = ((await jobsRes.json()) as { jobs?: Array<{ id: number }> }).jobs?.[0]?.id;
+  if (!jobId) return null;
+  const logsRes = await fetch(`https://api.github.com/repos/${repo}/actions/jobs/${jobId}/logs`, { headers });
+  if (!logsRes.ok) return null;
+  return !(await logsRes.text()).includes(SKIP_MARKER);
+}
+
 /** Whether a `schedule`-triggered run should actually do anything, based on how long it's been
- *  since the last completed run vs. CLEANUP_INTERVAL_DAYS. Any other trigger (workflow_dispatch)
- *  always runs. Fails open (runs) if the check itself can't be made — a missing/misconfigured
- *  throttle should never be the reason cleanup silently stops happening. */
+ *  since the last run that actually performed cleanup vs. CLEANUP_INTERVAL_DAYS. Any other trigger
+ *  (workflow_dispatch) always runs. A run that itself skipped doesn't count as that reference point
+ *  — otherwise every skip would reset the clock and the throttle could never recover once tripped,
+ *  since the next scheduled run would always see "last completed run" as ~1 cron-interval ago. Fails
+ *  open (runs) if the check itself can't be made — a missing/misconfigured throttle should never be
+ *  the reason cleanup silently stops happening. */
 async function scheduleShouldRun(): Promise<boolean> {
   if (process.env.GITHUB_EVENT_NAME !== 'schedule') return true;
   const token = process.env.GITHUB_TOKEN;
   const repo = process.env.GITHUB_REPOSITORY;
   if (!token || !repo) return true;
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    Authorization: `Bearer ${token}`,
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
   try {
     const res = await fetch(
-      `https://api.github.com/repos/${repo}/actions/workflows/dathost-cleanup.yml/runs?status=completed&per_page=1`,
-      {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          Authorization: `Bearer ${token}`,
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
-      },
+      `https://api.github.com/repos/${repo}/actions/workflows/dathost-cleanup.yml/runs?status=completed&per_page=${LOOKBACK_RUNS}`,
+      { headers },
     );
     if (!res.ok) return true;
-    const data = (await res.json()) as { workflow_runs?: Array<{ created_at?: string }> };
-    const lastCreatedAt = data.workflow_runs?.[0]?.created_at;
-    if (!lastCreatedAt) return true;
-    const elapsedDays = (Date.now() - new Date(lastCreatedAt).getTime()) / (1000 * 60 * 60 * 24);
-    return elapsedDays >= CLEANUP_INTERVAL_DAYS;
+    const data = (await res.json()) as {
+      workflow_runs?: Array<{ id: number; event: string; created_at: string }>;
+    };
+    for (const run of data.workflow_runs ?? []) {
+      // A manual dispatch always runs for real (never throttled), so it's a valid reference point
+      // without inspecting its logs. A scheduled run needs its log checked for the skip marker.
+      const didWork = run.event !== 'schedule' || (await scheduledRunDidWork(repo, run.id, headers));
+      if (didWork) return elapsedDaysSince(run.created_at) >= CLEANUP_INTERVAL_DAYS;
+    }
+    return true; // nothing but skips (or unreadable logs) in the lookback window — err toward running
   } catch {
     return true;
   }
