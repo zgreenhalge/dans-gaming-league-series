@@ -103,6 +103,15 @@ rot the instant anything above them changes, and a wrong line number is worse th
 reader to unrelated code. Symbol names survive refactors and stay greppable. This applies to docs,
 comments, commit messages, and PR descriptions alike.
 
+## Reference issues in a PR body with a closing keyword
+
+A PR that addresses a tracked issue must reference it with a GitHub closing keyword — `Closes #123`,
+`Fixes #123`, or `Resolves #123` — not a bare `#123`. Only the closing keywords auto-close the issue
+when the PR merges; a bare reference just links it, leaving it open indefinitely with no signal that
+it shipped. Use one line per issue if a PR addresses several. If a PR only partially addresses an
+issue (follow-up work remains), don't use a closing keyword — reference it plainly instead and leave
+the issue open.
+
 ## Centralize derivations; components only render
 
 Any join, aggregation, or derivation belongs in the data/util layer (`src/lib/queries/`,
