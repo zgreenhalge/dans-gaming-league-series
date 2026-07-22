@@ -96,9 +96,12 @@ MatchZy (map_result event)   ──POST /api/ingest/matchzy-log──▶ R2 (map
 - The Worker's notify POST (`infra/worker/src/index.ts`) retries a few times with backoff and logs
   every failed attempt — it runs in the background (`ctx.waitUntil`) so it never delays the response
   to MatchZy. If every retry fails (the R2 write already succeeded regardless), the demo sits in R2
-  with no `background_jobs` row; the match page's `MatchDemoReviewBlock` detects that state (a demo
-  in R2, no job) and offers a **Process demo** button that dispatches the same Action manually,
-  without re-uploading.
+  with no `background_jobs` row. `GET /api/matches/[id]/demo/result` checks for exactly that on a
+  single match, on demand, when its own page is viewed — gated to matches with veto complete but no
+  score yet (`isAwaitingScoreAfterVeto`, mirroring `isVetoComplete` from `src/lib/veto.ts`), the only
+  window a demo could legitimately exist unprocessed; there's no bucket-wide scan anywhere in this
+  pipeline. When it finds one, `MatchDemoReviewBlock` offers a **Process demo** button that dispatches
+  the same Action manually, without re-uploading.
 - `/api/ingest/notify` (machine-auth `x-ingest-secret`) validates the match + roster + demo, records
   `received`, dispatches the Action, and **tears down the server** (demo landed = match over) — the
   Action never touches DatHost regardless of auto-commit or manual confirm.

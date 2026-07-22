@@ -8,7 +8,8 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { requireMatchAccess } from '@/lib/match-access';
 import { getR2Object, deleteR2Object, demoExists, demoResultKey, mapResultKey } from '@/lib/r2';
 import { gunzipMaybe } from '@/lib/gzip';
-import { parseMatchId } from '@/lib/util';
+import { isPlayedScore, parseMatchId } from '@/lib/util';
+import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '@/lib/demo/ingestResult';
 import { recordJobStatus, matchJobKey } from '@/lib/background-jobs';
 
@@ -20,6 +21,33 @@ async function jobStatus(matchId: number): Promise<string | null> {
     .eq('match_id', matchId)
     .maybeSingle();
   return (data as { status?: string } | null)?.status ?? null;
+}
+
+type OrphanGateRow = VetoFields & {
+  final_score: string | null;
+  is_playoff_game: boolean;
+  weeks: { seasons: { is_gauntlet: boolean } | null } | null;
+};
+
+/**
+ * Whether this match is in the one state an unprocessed-but-present demo would actually be
+ * suspicious: pick/ban finished (so a server could have been provisioned and the match played) but
+ * no score recorded yet. Gates the R2 existence check below to that single match, on demand, when its
+ * own page is viewed — never a bucket-wide scan across every match.
+ */
+async function isAwaitingScoreAfterVeto(matchId: number): Promise<boolean> {
+  const { data } = await getAdminClient()
+    .from('matches')
+    .select(
+      'final_score, is_playoff_game, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(seasons(is_gauntlet))',
+    )
+    .eq('id', matchId)
+    .maybeSingle();
+  if (!data) return false;
+  const m = data as unknown as OrphanGateRow;
+  if (isPlayedScore(m.final_score)) return false;
+  const isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
+  return isVetoComplete(m, isGauntlet || (m.is_playoff_game && !isGauntlet));
 }
 
 export async function GET(
@@ -37,9 +65,11 @@ export async function GET(
   const [status, buf] = await Promise.all([jobStatus(matchId), getR2Object(demoResultKey(matchId))]);
   if (!buf) {
     // No staged artifact. If there's also no job at all (status null — the ingest notify never
-    // fired, or its dispatch was lost), check whether the demo itself is already in R2 so the UI
-    // can offer a manual trigger instead of asking for a re-upload.
-    const hasDemo = status ? false : await demoExists(matchId);
+    // fired, or its dispatch was lost) *and* this match is actually in the window where a demo could
+    // legitimately exist already (veto done, not yet scored), check R2 for it so the UI can offer a
+    // manual trigger instead of asking for a re-upload. Both conditions short-circuit before the R2
+    // call — this never fires for a match that hasn't started or is already scored.
+    const hasDemo = status ? false : (await isAwaitingScoreAfterVeto(matchId)) && (await demoExists(matchId));
     return NextResponse.json({ status, result: null, hasDemo });
   }
   // A truncated/corrupt artifact (partial write, aborted Action) must not 500 into a silently
