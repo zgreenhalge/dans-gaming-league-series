@@ -12,7 +12,7 @@
 // dropped grenades) — both for the session only. Stop is only shown to whoever started the scrim (or
 // an admin) — `status.canStop`.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ServerSpinner } from '@/components/ServerSpinner';
 import { StatePill, CopyConnectButton } from '@/components/ServerStatusBits';
@@ -20,14 +20,13 @@ import { toSentenceCase } from '@/lib/maps';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
 import { isServerLive } from '@/lib/util';
 import type { WorkshopMapOption } from '@/lib/queries';
-import type { ScrimStatus } from '@/app/api/scrim/status/route';
+import { useScrimStatus } from '@/components/ScrimStatusContext';
 
 const CUSTOM_MAP_CHOICE = '__custom__';
 const ACTION_CAP_MS = 90_000;
 
 export function ScrimPanel({ maps }: { maps: WorkshopMapOption[] }) {
-  const [status, setStatus] = useState<ScrimStatus | null>(null);
-  const [statusError, setStatusError] = useState<string | null>(null);
+  const { status, error: statusError, refresh: refreshStatus, requestFastPoll } = useScrimStatus();
 
   const [mapChoice, setMapChoice] = useState('');
   const [customMapId, setCustomMapId] = useState('');
@@ -38,34 +37,10 @@ export function ScrimPanel({ maps }: { maps: WorkshopMapOption[] }) {
   const [stopping, setStopping] = useState(false);
   const [stopError, setStopError] = useState<string | null>(null);
 
-  const refreshStatus = useCallback(async () => {
-    try {
-      const res = await fetch('/api/scrim/status');
-      if (!res.ok) {
-        setStatusError('Could not load server status');
-        return;
-      }
-      setStatus((await res.json()) as ScrimStatus);
-      setStatusError(null);
-    } catch {
-      setStatusError('Could not load server status');
-    }
-  }, []);
-
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!cancelled) await refreshStatus();
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshStatus]);
-
-  useEffect(() => {
-    const interval = setInterval(refreshStatus, 3_000);
-    return () => clearInterval(interval);
-  }, [refreshStatus]);
+    requestFastPoll(true);
+    return () => requestFastPoll(false);
+  }, [requestFastPoll]);
 
   const resolvedMapId = mapChoice === CUSTOM_MAP_CHOICE ? workshopIdFromUrl(customMapId.trim()) : mapChoice || null;
   const customMapInvalid = mapChoice === CUSTOM_MAP_CHOICE && customMapId.trim() !== '' && !resolvedMapId;
