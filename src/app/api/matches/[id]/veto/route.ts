@@ -220,7 +220,7 @@ export async function PATCH(
   const update: Record<string, string | null> = { [field]: value };
 
   // For playoff/gauntlet: once all 4 bans are set, auto-pick the remaining map
-  if (isGauntlet || isPlayoff) {
+  if (computeGauntletOrPlayoff(isGauntlet, m.is_playoff_game)) {
     const bansAfter = [
       field === 'shirts_ban'  ? value : m.shirts_ban,
       field === 'shirts_ban2' ? value : m.shirts_ban2,

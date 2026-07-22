@@ -47,24 +47,21 @@ const SKIP_MARKER = 'scheduled run skipped';
 // doesn't make this scan unbounded; comfortably covers a couple of throttle intervals.
 const LOOKBACK_RUNS = 14;
 
-function elapsedDaysSince(iso: string): number {
-  return (Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24);
-}
-
 /** Whether workflow run `runId` actually performed cleanup rather than hitting its own interval
- *  throttle — read from its job log, since the run's `conclusion` is `success` either way. `null`
- *  means it couldn't be determined (log unavailable), not that it skipped. */
-async function scheduledRunDidWork(
-  repo: string,
-  runId: number,
-  headers: Record<string, string>,
-): Promise<boolean | null> {
+ *  throttle — read from its job log for the same `::notice::` text this script itself emits below
+ *  (`scheduleShouldRun`'s skip branch), since the run's `conclusion` is `success` either way and
+ *  there's no separate persisted state to check instead: writing a repo variable from inside the
+ *  run would need the "Variables" PAT scope (see `src/lib/gh-dispatch.ts`), which isn't wired into
+ *  this workflow's `GITHUB_TOKEN`. Treats an unreadable log the same as "didn't do work" — the
+ *  caller only needs a yes/no to keep walking back, not a reason.
+ */
+async function scheduledRunDidWork(repo: string, runId: number, headers: Record<string, string>): Promise<boolean> {
   const jobsRes = await fetch(`https://api.github.com/repos/${repo}/actions/runs/${runId}/jobs`, { headers });
-  if (!jobsRes.ok) return null;
+  if (!jobsRes.ok) return false;
   const jobId = ((await jobsRes.json()) as { jobs?: Array<{ id: number }> }).jobs?.[0]?.id;
-  if (!jobId) return null;
+  if (!jobId) return false;
   const logsRes = await fetch(`https://api.github.com/repos/${repo}/actions/jobs/${jobId}/logs`, { headers });
-  if (!logsRes.ok) return null;
+  if (!logsRes.ok) return false;
   return !(await logsRes.text()).includes(SKIP_MARKER);
 }
 
@@ -98,7 +95,7 @@ async function scheduleShouldRun(): Promise<boolean> {
       // A manual dispatch always runs for real (never throttled), so it's a valid reference point
       // without inspecting its logs. A scheduled run needs its log checked for the skip marker.
       const didWork = run.event !== 'schedule' || (await scheduledRunDidWork(repo, run.id, headers));
-      if (didWork) return elapsedDaysSince(run.created_at) >= CLEANUP_INTERVAL_DAYS;
+      if (didWork) return (daysAgo(run.created_at) ?? Infinity) >= CLEANUP_INTERVAL_DAYS;
     }
     return true; // nothing but skips (or unreadable logs) in the lookback window — err toward running
   } catch {
