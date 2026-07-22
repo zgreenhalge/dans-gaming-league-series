@@ -7,7 +7,7 @@
 // interval up for as long as it's on screen, and reverts it once unmounted. Only polls for signed-in
 // players, since the endpoint is session-gated.
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSession } from 'next-auth/react';
 import type { ScrimStatus } from '@/app/api/scrim/status/route';
 
@@ -28,7 +28,7 @@ export function ScrimStatusProvider({ children }: { children: ReactNode }) {
   const signedIn = !!session?.user?.playerId;
   const [status, setStatus] = useState<ScrimStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [fastPollers, setFastPollers] = useState(0);
+  const [fastPoll, setFastPoll] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -44,9 +44,7 @@ export function ScrimStatusProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const requestFastPoll = useCallback((fast: boolean) => {
-    setFastPollers((n) => n + (fast ? 1 : -1));
-  }, []);
+  const requestFastPoll = useCallback((fast: boolean) => setFastPoll(fast), []);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -54,22 +52,19 @@ export function ScrimStatusProvider({ children }: { children: ReactNode }) {
     (async () => {
       if (!cancelled) await refresh();
     })();
+    const interval = setInterval(refresh, fastPoll ? FAST_POLL_MS : NAV_POLL_MS);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
-  }, [signedIn, refresh]);
+  }, [signedIn, fastPoll, refresh]);
 
-  useEffect(() => {
-    if (!signedIn) return;
-    const interval = setInterval(refresh, fastPollers > 0 ? FAST_POLL_MS : NAV_POLL_MS);
-    return () => clearInterval(interval);
-  }, [signedIn, fastPollers, refresh]);
-
-  return (
-    <ScrimStatusContext.Provider value={{ status, error, refresh, requestFastPoll }}>
-      {children}
-    </ScrimStatusContext.Provider>
+  const value = useMemo(
+    () => ({ status, error, refresh, requestFastPoll }),
+    [status, error, refresh, requestFastPoll],
   );
+
+  return <ScrimStatusContext.Provider value={value}>{children}</ScrimStatusContext.Provider>;
 }
 
 export function useScrimStatus(): ScrimStatusContextValue {
