@@ -8,7 +8,7 @@ type CollectorOut = Map<string, Partial<SabFields>>;
 // How close a teammate must be to a death, in game units, to count as a real trade
 // opportunity — otherwise "alive and on the same side" alone credits opportunities from
 // anywhere on the map. Same radius as Smokes Blocking Push's own distance gate.
-const TRADE_DISTANCE = 800;
+const TRADE_DISTANCE = 180;
 
 // Same permissive convention as kast.ts's KAST qualifiers: an unknown side never disqualifies —
 // it only excludes when both sides are known and actually differ.
