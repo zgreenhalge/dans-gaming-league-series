@@ -7,6 +7,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { writeMatchScore } from '@/lib/matchScore';
+import { isVetoComplete, computeGauntletOrPlayoff, type VetoFields } from '@/lib/veto';
 import type { DemoSabremetricStat } from '@/lib/types';
 
 const supabaseAdmin = getAdminClient();
@@ -28,24 +29,6 @@ type MatchRow = {
     };
   };
 };
-
-function isVetoComplete(match: MatchRow): boolean {
-  const isGauntlet = match.weeks?.seasons?.is_gauntlet ?? false;
-  const isPlayoff = match.is_playoff_game && !isGauntlet;
-
-  if (isGauntlet || isPlayoff) {
-    // 4 bans required; map is auto-picked
-    return !!(match.shirts_ban && match.shirts_ban2 && match.skins_ban1 && match.skins_ban2);
-  }
-  // Regular: 5 steps
-  return !!(
-    match.shirts_ban &&
-    match.skins_ban1 &&
-    match.skins_ban2 &&
-    match.shirts_pick &&
-    match.skins_starting_side
-  );
-}
 
 export async function PATCH(
   req: NextRequest,
@@ -99,7 +82,8 @@ export async function PATCH(
     return NextResponse.json({ error: 'Only admins can edit a submitted result' }, { status: 403 });
   }
 
-  if (!isVetoComplete(m)) {
+  const isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
+  if (!isVetoComplete(m as VetoFields, computeGauntletOrPlayoff(isGauntlet, m.is_playoff_game))) {
     return NextResponse.json({ error: 'Pick/ban phase not complete' }, { status: 403 });
   }
 

@@ -9,7 +9,7 @@ import { requireMatchAccess } from '@/lib/match-access';
 import { getR2Object, deleteR2Object, headDemoObject, demoResultKey, mapResultKey } from '@/lib/r2';
 import { gunzipMaybe } from '@/lib/gzip';
 import { isPlayedScore, parseMatchId } from '@/lib/util';
-import { isVetoComplete, type VetoFields } from '@/lib/veto';
+import { isVetoComplete, computeGauntletOrPlayoff, type VetoFields } from '@/lib/veto';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '@/lib/demo/ingestResult';
 import { recordJobStatus, matchJobKey } from '@/lib/background-jobs';
 
@@ -47,7 +47,7 @@ async function isAwaitingScoreAfterVeto(matchId: number): Promise<boolean> {
   const m = data as unknown as OrphanGateRow;
   if (isPlayedScore(m.final_score)) return false;
   const isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
-  return isVetoComplete(m, isGauntlet || m.is_playoff_game);
+  return isVetoComplete(m, computeGauntletOrPlayoff(isGauntlet, m.is_playoff_game));
 }
 
 // The Worker retries its notify call for up to ~2.5s after the demo lands in R2 (`notifyWithRetry` in
