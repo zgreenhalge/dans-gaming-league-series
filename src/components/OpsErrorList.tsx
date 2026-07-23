@@ -6,7 +6,7 @@ import { LocalTime } from './LocalTime';
 
 export interface OpsErrorItem {
   id: number;
-  entityType: 'season' | 'match' | 'system';
+  entityType: 'season' | 'match' | 'player' | 'system';
   label: string;
   operation: string;
   message: string;
@@ -20,6 +20,7 @@ const OPERATION_LABELS: Record<string, string> = {
   steam_id_learn: 'Steam ID Learning',
   server_teardown: 'Server Teardown',
   sabremetrics_persist: 'Sabremetrics',
+  name_history_log: 'Name History Log',
   ehog_recompute: 'EHOG Recompute',
 };
 
@@ -76,7 +77,8 @@ function OpsErrorRow({ item }: { item: OpsErrorItem }) {
 }
 
 /** Surfaces live `ops_errors` rows — best-effort operations (gauntlet build/seed/archive, steam-id
- * learning, server teardown, sabremetrics, EHOG recompute) that failed or need admin attention.
+ * learning, server teardown, sabremetrics, name history logging, EHOG recompute) that failed or
+ * need admin attention.
  * Each row can be dismissed once the admin has seen it, or resolves itself the next time that same
  * operation succeeds. Used both filtered to one entity type (the gauntlet admin page) and
  * unfiltered (the site-wide `/admin/ops-errors` console). */

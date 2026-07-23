@@ -302,7 +302,7 @@ learning and its server teardown, for instance) — without `operation` in the k
 success would clear an unrelated operation's still-live failure. `entity_id` is `0` for the one
 operation with no single entity (the site-wide EHOG recompute), using `entity_type = 'system'`.
 
-Wired into eight operations today:
+Wired into nine operations today:
 
 | Operation | Entity | Recorded from |
 |---|---|---|
@@ -313,6 +313,7 @@ Wired into eight operations today:
 | `steam_id_learn` | `match` | `applyEliminationSteamIds()`'s hook in the score route |
 | `server_teardown` | `match` | `teardownMatchServer()`'s hooks in the score route and `/api/ingest/notify` |
 | `sabremetrics_persist` | `match` | `persistSabremetrics()`/`clearSabremetrics()`'s hook in the score route |
+| `name_history_log` | `player` | `recordNameChange()` (`src/lib/player-name-history.ts`), from both `PATCH /api/players/[id]` and `PATCH /api/players/me/name` — also recorded directly if the admin route can't even read the player's prior name to log a "from" |
 | `ehog_recompute` | `system` (id `0`) | `triggerRatingRecompute()` |
 
 Each is cleared automatically the next time that same (entity, operation) succeeds —

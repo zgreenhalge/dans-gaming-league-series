@@ -13,7 +13,7 @@ import { normalizePlayerName, isValidPlayerName, PLAYER_NAME_MIN_LENGTH, PLAYER_
 
 const supabaseAdmin = getAdminClient();
 
-const RENAME_COOLDOWN_DAYS = 7;
+const RENAME_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -49,12 +49,13 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, player: { id: playerId, name: previousName } });
   }
 
-  // Once every RENAME_COOLDOWN_DAYS, based on this player's most recent recorded change — a player
-  // who has never renamed has no history row, so no cooldown applies.
+  // Once every 7 days, based on this player's most recent recorded change — a player who has never
+  // renamed has no history row, so no cooldown applies. Pure duration math (ms), not calendar
+  // `setDate()`, since a "week" cooldown has no calendar semantics to get right or wrong across a
+  // DST boundary.
   const last = history[0];
   if (last) {
-    const nextEligibleAt = new Date(last.changed_at);
-    nextEligibleAt.setDate(nextEligibleAt.getDate() + RENAME_COOLDOWN_DAYS);
+    const nextEligibleAt = new Date(new Date(last.changed_at).getTime() + RENAME_COOLDOWN_MS);
     if (nextEligibleAt.getTime() > Date.now()) {
       return NextResponse.json(
         { error: 'You can only change your name once a week.', nextEligibleAt: nextEligibleAt.toISOString() },

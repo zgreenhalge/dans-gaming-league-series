@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { recordNameChange } from '@/lib/player-name-history';
+import { recordNameChange, NAME_HISTORY_LOG_OPERATION } from '@/lib/player-name-history';
+import { recordOpsError } from '@/lib/ops-errors';
 
 // Admin player management (#144): edit a player's display name, toggle their `is_admin` flag, or
 // change their Steam link (unlink, or set a SteamID64 by hand). Admin-only. All three edits go
@@ -54,11 +55,22 @@ export async function PATCH(
     }
     update.name = body.name.trim();
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: existingError } = await supabaseAdmin
       .from('players')
       .select('name')
       .eq('id', targetId)
       .maybeSingle();
+    if (existingError) {
+      // Can't determine the "from" name, so the rename below will proceed unlogged — surface that
+      // rather than let it pass silently.
+      await recordOpsError(
+        supabaseAdmin,
+        'player',
+        targetId,
+        NAME_HISTORY_LOG_OPERATION,
+        `Could not read prior name before rename: ${existingError.message}`,
+      );
+    }
     const existingName = (existing as { name?: string } | null)?.name;
     if (existingName && existingName !== update.name) renamedFrom = existingName;
   }
