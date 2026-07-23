@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { recordNameChange, recordNameHistoryLogError, renameFields } from '@/lib/player-name-history';
 
 // Admin player management (#144): edit a player's display name, toggle their `is_admin` flag, or
 // change their Steam link (unlink, or set a SteamID64 by hand). Admin-only. All three edits go
@@ -44,13 +45,39 @@ export async function PATCH(
   }
 
   const update: Record<string, unknown> = {};
+  let renamedFrom: string | null = null;
 
   // Display name
   if ('name' in body) {
     if (typeof body.name !== 'string' || body.name.trim() === '') {
       return NextResponse.json({ error: 'Name must be a non-empty string' }, { status: 400 });
     }
-    update.name = body.name.trim();
+    const trimmed = body.name.trim();
+
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from('players')
+      .select('name')
+      .eq('id', targetId)
+      .maybeSingle();
+    if (existingError) {
+      // Can't determine the "from" name, so the rename below will proceed unlogged — surface that
+      // rather than let it pass silently.
+      await recordNameHistoryLogError(
+        supabaseAdmin,
+        targetId,
+        `Could not read prior name before rename: ${existingError.message}`,
+      );
+    }
+    const existingName = (existing as { name?: string } | null)?.name;
+    if (existingName && existingName !== trimmed) {
+      renamedFrom = existingName;
+      // renameFields() also resets the self-service cooldown's clock — an admin rename counts as
+      // "this player's name changed" the same as a self-service one, for the once-a-week gate on
+      // their next one.
+      Object.assign(update, renameFields(trimmed));
+    } else {
+      update.name = trimmed;
+    }
   }
 
   // Admin flag — you can't demote yourself (prevents locking every admin out).
@@ -121,6 +148,10 @@ export async function PATCH(
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
+
+  if (renamedFrom) {
+    await recordNameChange(supabaseAdmin, targetId, renamedFrom, (data as { name: string }).name);
+  }
 
   return NextResponse.json({ ok: true, player: data });
 }

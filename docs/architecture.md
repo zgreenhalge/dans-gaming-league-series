@@ -22,7 +22,7 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/seasons/[id]` | Season hub — leaderboard + weekly schedule (or gauntlet bracket) |
 | `/matches/[id]` | Match detail — veto banner, scoreboards, score entry, demo upload |
 | `/players` | Player index |
-| `/players/[id]` | Player profile — career stats + per-season breakdown + match log |
+| `/players/[id]` | Player profile — career stats + per-season breakdown + match log. Shows a "Formerly …" line if the player has past names. The viewer can rename themself in place here (`PlayerNameEditor`) if it's their own profile |
 | `/statistics` | Cross-season career leaderboard + gauntlet stats |
 | `/maps` | Map index — pick/ban/skip counts per map |
 | `/maps/[slug]` | Map detail — match history + per-player stats on that map |
@@ -79,6 +79,7 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `DELETE` | `/api/seasons/[id]/gauntlet` | Reset a gauntlet — deletes it and everything materialized under it; refuses if any match has a score unless `{ force: true }` is passed (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet/pods` | Save the manual pod editor's current draft — creates the paired gauntlet season if needed, then inserts/updates/deletes pods to match (admin only) |
 | `PATCH` | `/api/players/[id]` | Edit a player — display name, `is_admin` (can't demote yourself), or Steam link (unlink / set SteamID64) (admin only) |
+| `PATCH` | `/api/players/me/name` | Self-service rename — the caller's own display name only, letters/spaces only, once every 7 days |
 | `POST` | `/api/ehog/recompute/trigger` | Admin-gated "recompute EHOG ratings now" — fires the full rating walk in the background (admin only) |
 | `GET/POST` | `/api/players/register` | List unlinked players / link a Steam account to a player record |
 | `GET` | `/api/cron/refresh-steam` | Refresh Steam avatars/nicknames for all linked players (Vercel cron; see below) |
@@ -96,7 +97,8 @@ Supabase (`public` schema). RLS is **off** on all tables — do not enable it wi
 | `seasons` | One row per season. Key fields: `name`, `status` (`UPCOMING`/`ACTIVE`/`COMPLETED`/`ARCHIVED`), `is_gauntlet` (bool), `start_date`, `map_pool` (text[]), `target_win_rounds`, `buy_in_amount` |
 | `weeks` | Linked to `seasons`. Has `week_number` and `bye_player_id` (who sits out that week) |
 | `matches` | Linked to `weeks`. Veto fields: `shirts_ban`, `shirts_ban2`, `skins_ban1`, `skins_ban2`, `shirts_pick`, `picked_map`, `skins_starting_side`. Also: `final_score`, `is_playoff_game`, `scheduled_at`, `screenshot_url_front/back`, `notes`. `pre_match_win_prob` (nullable) — frozen SHIRTS-win probability from the EHOG recompute, paired with `pre_match_win_prob_formula_version`; see [`ehog.md`](./ehog.md). Hosting (see [`hosting.md`](./hosting.md)): `server_state`, `dathost_server_id`, `connect_string`, `server_started_at` |
-| `players` | Global player registry. Unique `name`. Steam fields: `steam_id`, `steam_nickname`, `steam_avatar_url`, `steam_refreshed_at`. Admin flag: `is_admin`. `seed_ehog` (nullable) — admin-configured starting EHOG rating for a known new player; see [`ehog.md`](./ehog.md) |
+| `players` | Global player registry. `name` is unique two ways: a plain (case-sensitive) unique index and `players_name_lower_unique` on `lower(name)`, so "Bob" and "bob" can't coexist. Steam fields: `steam_id`, `steam_nickname`, `steam_avatar_url`, `steam_refreshed_at`. Admin flag: `is_admin`. `seed_ehog` (nullable) — admin-configured starting EHOG rating for a known new player; see [`ehog.md`](./ehog.md). `name_changed_at` (nullable) — when `name` last changed, by either rename route; the self-service cooldown's atomic-update gate (below), not just an audit field |
+| `player_name_history` | One row per rename: `player_id`, `old_name`, `new_name`, `changed_at`. Written by both `PATCH /api/players/[id]` (admin) and `PATCH /api/players/me/name` (self-service) via `recordNameChange()`; purely an audit trail — read via `getPlayerNameHistory()` for the "Formerly …" line on a player's public profile. The once-a-week self-service cooldown is enforced separately, off `players.name_changed_at` |
 | `player_match_stats` | Per-player per-match basics: `faction` (`SHIRTS`/`SKINS`), K/A/D, `damage`, `adr`, `rounds_played`, `rounds_won`, `is_win` |
 | `player_match_sabremetrics` | Demo-derived advanced stats, one row per `player_match_stats` row (FK `player_match_stats_id`): CT/T side splits, opening duels, KAST, clutches, utility, objectives. Written only when a demo is parsed. See [`demo-ingestion.md`](./demo-ingestion.md). |
 | `player_rating_history` / `player_current_ratings` | EHOG skill-rating storage (μ/σ history + current standings). Written by the EHOG recompute. See [`ehog.md`](./ehog.md). |
@@ -300,7 +302,7 @@ learning and its server teardown, for instance) — without `operation` in the k
 success would clear an unrelated operation's still-live failure. `entity_id` is `0` for the one
 operation with no single entity (the site-wide EHOG recompute), using `entity_type = 'system'`.
 
-Wired into eight operations today:
+Wired into nine operations today:
 
 | Operation | Entity | Recorded from |
 |---|---|---|
@@ -311,6 +313,7 @@ Wired into eight operations today:
 | `steam_id_learn` | `match` | `applyEliminationSteamIds()`'s hook in the score route |
 | `server_teardown` | `match` | `teardownMatchServer()`'s hooks in the score route and `/api/ingest/notify` |
 | `sabremetrics_persist` | `match` | `persistSabremetrics()`/`clearSabremetrics()`'s hook in the score route |
+| `name_history_log` | `player` | `recordNameChange()` (`src/lib/player-name-history.ts`), from both `PATCH /api/players/[id]` and `PATCH /api/players/me/name` — also recorded directly if the admin route can't even read the player's prior name to log a "from" |
 | `ehog_recompute` | `system` (id `0`) | `triggerRatingRecompute()` |
 
 Each is cleared automatically the next time that same (entity, operation) succeeds —

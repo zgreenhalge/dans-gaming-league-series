@@ -70,6 +70,9 @@ export interface Player {
   steam_refreshed_at: string | null;
   is_admin: boolean;
   seed_ehog: number | null;
+  /** When `name` last changed (either route) — the atomic-conditional-update gate for the
+   * self-service rename cooldown; `null` for a player who's never been renamed. */
+  name_changed_at: string | null;
 }
 
 export interface PlayerMatchStat {

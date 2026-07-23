@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals } from '@/lib/queries';
+import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory } from '@/lib/queries';
 import { getPlayerMeta } from '@/lib/og';
 import { isPlayedScore } from '@/lib/util';
 import { buildPlayerJsonLd } from '@/lib/structured-data';
@@ -11,6 +13,7 @@ import { maybeRefreshSteamProfile } from '@/lib/steam';
 import PlayerView from '@/components/PlayerView';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import EhogBadge from '@/components/EhogBadge';
+import PlayerNameEditor from '@/components/PlayerNameEditor';
 
 export const revalidate = 60;
 
@@ -46,7 +49,8 @@ export default async function PlayerPage({
   const { id } = await params;
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
-  const [detail, careerLeaderboard, h2hData, ehog, leagueSabremetrics, playerMeta] = await Promise.all([
+  const [session, detail, careerLeaderboard, h2hData, ehog, leagueSabremetrics, nameHistory, playerMeta] = await Promise.all([
+    getServerSession(authOptions),
     getPlayer(playerId),
     getCareerLeaderboard(),
     getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
@@ -54,8 +58,10 @@ export default async function PlayerPage({
     // League-wide, per-season totals so the Advanced tab can compute Plus stats (player vs.
     // league avg) without shipping every match row to the client.
     getSabremetricSeasonTotals(),
+    getPlayerNameHistory(playerId),
     getPlayerMeta(playerId),
   ]);
+  const isSelf = session?.user?.playerId === playerId;
   if (!detail) notFound();
 
   const playedMatchIds = detail.history
@@ -95,9 +101,18 @@ export default async function PlayerPage({
         <div className="mt-8 mb-6 flex items-center gap-5">
           <PlayerAvatar name={detail.player.name} imageUrl={detail.player.steam_avatar_url} size="lg" />
           <div className="flex-1 min-w-0">
-            <div className="font-display text-[42px] font-semibold leading-tight">
-              {detail.player.name}
-            </div>
+            {isSelf ? (
+              <PlayerNameEditor playerId={detail.player.id} name={detail.player.name} />
+            ) : (
+              <div className="font-display text-[42px] font-semibold leading-tight">
+                {detail.player.name}
+              </div>
+            )}
+            {nameHistory.length > 0 && (
+              <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+                Formerly {[...nameHistory].reverse().map((h) => h.old_name).join(', ')}
+              </div>
+            )}
             {detail.player.steam_id && detail.player.steam_nickname && (
               <Link
                 href={`https://steamcommunity.com/profiles/${detail.player.steam_id}`}

@@ -20,6 +20,27 @@ export function isPlayedScore(finalScore: string | null | undefined): boolean {
   return !/^\s*0\s*[-–]\s*0\s*$/.test(finalScore);
 }
 
+export const PLAYER_NAME_MIN_LENGTH = 2;
+export const PLAYER_NAME_MAX_LENGTH = 32;
+const PLAYER_NAME_RE = /^[A-Za-z]+(?: [A-Za-z]+)*$/;
+
+/** Trims and collapses internal whitespace to single spaces — the shared normalization a rename
+ * candidate goes through before length/character validation, so the server route (source of
+ * truth) and the client editor (early Save-disable) can't drift on what counts as valid. */
+export function normalizePlayerName(raw: string): string {
+  return raw.trim().replace(/\s+/g, ' ');
+}
+
+/** Letters only, spaces allowed between words, within PLAYER_NAME_{MIN,MAX}_LENGTH. Expects an
+ * already-`normalizePlayerName()`-d string. */
+export function isValidPlayerName(name: string): boolean {
+  return (
+    name.length >= PLAYER_NAME_MIN_LENGTH &&
+    name.length <= PLAYER_NAME_MAX_LENGTH &&
+    PLAYER_NAME_RE.test(name)
+  );
+}
+
 /**
  * True when `e` is the `AbortError` a `fetch` rejects with once its `AbortSignal`
  * fires — the "this request was intentionally superseded, not a real failure" case

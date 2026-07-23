@@ -44,14 +44,14 @@ export const WEEKS: Row[] = [
 // 7-8: brand new — neither history nor seed_ehog, exercises the global-default fallback.
 
 export const PLAYERS: Row[] = [
-  { id: 1, name: 'Alice', discord_id: null, steam_id: '76500000000000001', steam_nickname: 'alice_cs', steam_avatar_url: null, steam_refreshed_at: null, is_admin: true, seed_ehog: null },
-  { id: 2, name: 'Bob', discord_id: null, steam_id: '76500000000000002', steam_nickname: null, steam_avatar_url: null, steam_refreshed_at: null, is_admin: false, seed_ehog: null },
-  { id: 3, name: 'Carol', discord_id: null, steam_id: null, steam_nickname: null, steam_avatar_url: null, steam_refreshed_at: null, is_admin: false, seed_ehog: null },
-  { id: 4, name: 'Dave', discord_id: null, steam_id: null, steam_nickname: null, steam_avatar_url: null, steam_refreshed_at: null, is_admin: false, seed_ehog: null },
-  { id: 5, name: 'Erin', discord_id: null, steam_id: null, steam_nickname: null, steam_avatar_url: null, steam_refreshed_at: null, is_admin: false, seed_ehog: null },
-  { id: 6, name: 'Frank', discord_id: null, steam_id: null, steam_nickname: null, steam_avatar_url: null, steam_refreshed_at: null, is_admin: false, seed_ehog: 1250 },
-  { id: 7, name: 'Grace', discord_id: null, steam_id: null, steam_nickname: null, steam_avatar_url: null, steam_refreshed_at: null, is_admin: false, seed_ehog: null },
-  { id: 8, name: 'Heidi', discord_id: null, steam_id: null, steam_nickname: null, steam_avatar_url: null, steam_refreshed_at: null, is_admin: false, seed_ehog: null },
+  { id: 1, name: 'Alice', discord_id: null, steam_id: '76500000000000001', steam_nickname: 'alice_cs', steam_avatar_url: null, steam_refreshed_at: null, is_admin: true, seed_ehog: null, name_changed_at: null },
+  { id: 2, name: 'Bob', discord_id: null, steam_id: '76500000000000002', steam_nickname: null, steam_avatar_url: null, steam_refreshed_at: null, is_admin: false, seed_ehog: null, name_changed_at: '2026-02-01T00:00:00.000Z' },
+  { id: 3, name: 'Carol', discord_id: null, steam_id: null, steam_nickname: null, steam_avatar_url: null, steam_refreshed_at: null, is_admin: false, seed_ehog: null, name_changed_at: null },
+  { id: 4, name: 'Dave', discord_id: null, steam_id: null, steam_nickname: null, steam_avatar_url: null, steam_refreshed_at: null, is_admin: false, seed_ehog: null, name_changed_at: null },
+  { id: 5, name: 'Erin', discord_id: null, steam_id: null, steam_nickname: null, steam_avatar_url: null, steam_refreshed_at: null, is_admin: false, seed_ehog: null, name_changed_at: null },
+  { id: 6, name: 'Frank', discord_id: null, steam_id: null, steam_nickname: null, steam_avatar_url: null, steam_refreshed_at: null, is_admin: false, seed_ehog: 1250, name_changed_at: null },
+  { id: 7, name: 'Grace', discord_id: null, steam_id: null, steam_nickname: null, steam_avatar_url: null, steam_refreshed_at: null, is_admin: false, seed_ehog: null, name_changed_at: null },
+  { id: 8, name: 'Heidi', discord_id: null, steam_id: null, steam_nickname: null, steam_avatar_url: null, steam_refreshed_at: null, is_admin: false, seed_ehog: null, name_changed_at: null },
 ];
 
 // ─── Matches ───────────────────────────────────────────────────────────────
@@ -280,6 +280,13 @@ export const PLAYER_RATING_HISTORY: Row[] = [
   { player_id: 5, match_id: 200, sequence_index: 1, ehog_rating: 1200, rating_delta: -25, formula_version: 'ehog_v1', mu: 22.5, sigma: 7.8 },
 ];
 
+// ─── player_name_history ─────────────────────────────────────────────────────
+// Bob (id 2) renamed once. Every other player has no rows — the common case.
+
+export const PLAYER_NAME_HISTORY: Row[] = [
+  { id: 1, player_id: 2, old_name: 'Robert', new_name: 'Bob', changed_at: '2026-02-01T00:00:00.000Z' },
+];
+
 // ─── Pagination-boundary filler ─────────────────────────────────────────────
 // >1000 matches with a week_id that resolves to no fixture season, so every season/career
 // aggregation silently (and correctly) skips them — they exist purely to push fetchAllPages()
@@ -317,5 +324,6 @@ export function buildFakeDb(): FakeDb {
     ops_errors: OPS_ERRORS,
     player_current_ratings: PLAYER_CURRENT_RATINGS,
     player_rating_history: PLAYER_RATING_HISTORY,
+    player_name_history: PLAYER_NAME_HISTORY,
   };
 }

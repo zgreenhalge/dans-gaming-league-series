@@ -40,6 +40,23 @@ export interface PlayerDetail {
   trophies: TrophyEntry[];
 }
 
+export interface PlayerNameChange {
+  old_name: string;
+  new_name: string;
+  changed_at: string;
+}
+
+/** A player's past renames, most recent first. Empty for a player who has never renamed. */
+export async function getPlayerNameHistory(playerId: number): Promise<PlayerNameChange[]> {
+  const { data, error } = await supabase
+    .from('player_name_history')
+    .select('old_name, new_name, changed_at')
+    .eq('player_id', playerId)
+    .order('changed_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as PlayerNameChange[];
+}
+
 export async function getPlayersById(): Promise<Map<number, Player>> {
   const { data, error } = await supabase.from('players').select('*');
   if (error) throw error;

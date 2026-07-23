@@ -8,7 +8,8 @@
     "steam_avatar_url": null,
     "steam_refreshed_at": null,
     "is_admin": true,
-    "seed_ehog": null
+    "seed_ehog": null,
+    "name_changed_at": null
   },
   {
     "id": 2,
@@ -19,7 +20,8 @@
     "steam_avatar_url": null,
     "steam_refreshed_at": null,
     "is_admin": false,
-    "seed_ehog": null
+    "seed_ehog": null,
+    "name_changed_at": "2026-02-01T00:00:00.000Z"
   },
   {
     "id": 3,
@@ -30,7 +32,8 @@
     "steam_avatar_url": null,
     "steam_refreshed_at": null,
     "is_admin": false,
-    "seed_ehog": null
+    "seed_ehog": null,
+    "name_changed_at": null
   },
   {
     "id": 4,
@@ -41,7 +44,8 @@
     "steam_avatar_url": null,
     "steam_refreshed_at": null,
     "is_admin": false,
-    "seed_ehog": null
+    "seed_ehog": null,
+    "name_changed_at": null
   },
   {
     "id": 5,
@@ -52,7 +56,8 @@
     "steam_avatar_url": null,
     "steam_refreshed_at": null,
     "is_admin": false,
-    "seed_ehog": null
+    "seed_ehog": null,
+    "name_changed_at": null
   },
   {
     "id": 6,
@@ -63,7 +68,8 @@
     "steam_avatar_url": null,
     "steam_refreshed_at": null,
     "is_admin": false,
-    "seed_ehog": 1250
+    "seed_ehog": 1250,
+    "name_changed_at": null
   },
   {
     "id": 7,
@@ -74,7 +80,8 @@
     "steam_avatar_url": null,
     "steam_refreshed_at": null,
     "is_admin": false,
-    "seed_ehog": null
+    "seed_ehog": null,
+    "name_changed_at": null
   },
   {
     "id": 8,
@@ -85,6 +92,7 @@
     "steam_avatar_url": null,
     "steam_refreshed_at": null,
     "is_admin": false,
-    "seed_ehog": null
+    "seed_ehog": null,
+    "name_changed_at": null
   }
 ]
