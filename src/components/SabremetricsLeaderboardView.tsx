@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { SabFields } from '@/lib/types';
+import { sumSabFields } from '@/lib/queries';
 import { tabCls } from '@/lib/util';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
 
@@ -63,46 +64,53 @@ interface AggregatedSab extends Omit<SabFields, DerivedRawSabFields> {
   damage: number;
 }
 
+interface PlayerMeta {
+  player_name: string;
+  matches: number;
+  rounds_played: number;
+}
+
+/** Accumulates raw per-match `sab` totals via the existing generic `sumSabFields()` (same helper
+ *  `getSabremetricSeasonTotals()` uses for season totals), then flattens to `AggregatedSab`'s
+ *  shape once per player at the end — so the accumulation step needs no field-shape knowledge at
+ *  all, and only the final flatten touches `DerivedRawSabFields`. */
 function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
-  const byPlayer = new Map<number, AggregatedSab>();
+  const rawByPlayer = new Map<number, SabFields>();
+  const meta = new Map<number, PlayerMeta>();
   const matchesSeen = new Map<number, Set<number>>();
 
   for (const r of rows) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { kills_ct, kills_t, deaths_ct, deaths_t, assists_ct, assists_t, damage_ct, damage_t, headshot_kills_ct, headshot_kills_t, blind_duration_dealt, ...shared } = r.sab;
+    const prevRaw = rawByPlayer.get(r.player_id);
+    rawByPlayer.set(r.player_id, prevRaw ? sumSabFields(prevRaw, r.sab) : { ...r.sab });
 
-    let agg = byPlayer.get(r.player_id);
-    if (!agg) {
-      agg = {
-        player_id: r.player_id,
-        player_name: r.player_name,
-        matches: 0,
-        rounds_played: 0,
-        kills: 0, deaths: 0, assists: 0, damage: 0,
-        ...shared,
-      };
-      byPlayer.set(r.player_id, agg);
+    let m = meta.get(r.player_id);
+    if (!m) {
+      m = { player_name: r.player_name, matches: 0, rounds_played: 0 };
+      meta.set(r.player_id, m);
       matchesSeen.set(r.player_id, new Set());
-    } else {
-      for (const key of Object.keys(shared) as (keyof typeof shared)[]) {
-        agg[key] += shared[key];
-      }
     }
 
     const seen = matchesSeen.get(r.player_id)!;
     if (!seen.has(r.match_id)) {
       seen.add(r.match_id);
-      agg.matches++;
+      m.matches++;
     }
-
-    agg.rounds_played += r.rounds_played;
-    agg.kills += kills_ct + kills_t;
-    agg.deaths += deaths_ct + deaths_t;
-    agg.assists += assists_ct + assists_t;
-    agg.damage += damage_ct + damage_t;
+    m.rounds_played += r.rounds_played;
   }
 
-  return Array.from(byPlayer.values());
+  return Array.from(rawByPlayer, ([player_id, raw]): AggregatedSab => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { kills_ct, kills_t, deaths_ct, deaths_t, assists_ct, assists_t, damage_ct, damage_t, headshot_kills_ct, headshot_kills_t, blind_duration_dealt, ...shared } = raw;
+    return {
+      player_id,
+      ...meta.get(player_id)!,
+      kills: kills_ct + kills_t,
+      deaths: deaths_ct + deaths_t,
+      assists: assists_ct + assists_t,
+      damage: damage_ct + damage_t,
+      ...shared,
+    };
+  });
 }
 
 // --- Plus stats (1-scaled: 1.00 = league average) ---

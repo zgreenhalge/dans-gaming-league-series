@@ -80,7 +80,11 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
   return result;
 }
 
-function sumSabFields(a: SabFields, b: SabFields): SabFields {
+/** Sums every field of `b` into `a` (returning a new object) via `Object.keys()` rather than
+ *  per-field enumeration — the shared accumulation step behind every sabremetric total in this
+ *  codebase, career/season aggregation here and per-player aggregation in
+ *  `SabremetricsLeaderboardView`'s `aggregateRows()` alike. */
+export function sumSabFields(a: SabFields, b: SabFields): SabFields {
   const result = { ...a };
   for (const key of Object.keys(b) as (keyof SabFields)[]) {
     result[key] = result[key] + b[key];
