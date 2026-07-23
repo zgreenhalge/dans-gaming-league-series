@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import type { Week, Match, PlayerMatchStat, Faction } from '../types';
+import { isPlayedScore } from '../util';
 import { getPlayersById } from './player';
 
 
@@ -124,4 +125,29 @@ export async function getSeasonSchedule(
       : null,
     matches: matchesByWeek.get(w.id) ?? [],
   }));
+}
+
+/** True if the given week exists, has at least one match, and every match in it has a final,
+ * played score. */
+export async function isWeekComplete(
+  seasonId: number,
+  weekNumber: number,
+): Promise<boolean> {
+  const { data: week, error: wErr } = await supabase
+    .from('weeks')
+    .select('id')
+    .eq('season_id', seasonId)
+    .eq('week_number', weekNumber)
+    .maybeSingle();
+  if (wErr) throw wErr;
+  if (!week) return false;
+
+  const { data: matches, error: mErr } = await supabase
+    .from('matches')
+    .select('final_score')
+    .eq('week_id', week.id);
+  if (mErr) throw mErr;
+  const rows = (matches ?? []) as { final_score: string | null }[];
+  if (rows.length === 0) return false;
+  return rows.every((m) => isPlayedScore(m.final_score));
 }

@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, isWeekComplete } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/og';
 import { buildMatchJsonLd } from '@/lib/structured-data';
 import { JsonLd } from '@/components/JsonLd';
@@ -158,13 +158,22 @@ export default async function MatchPage({
   const replayEvents =
     played && replayJob.status !== 'none' ? await getReplayEventsView(matchId) : null;
 
-  // Compute rating projections for unplayed matches in the current week
+  // Compute rating projections for unplayed matches in the current week — or, if this week's date
+  // window hasn't opened yet, for the week right after one that's already fully scored (a league
+  // can wrap up a week early, and predictions shouldn't wait on the calendar to catch up).
   const matchWindow = matchWeekWindow(season.start_date, week.week_number);
-  const isCurrentWeek = matchWindow != null && new Date().toISOString().slice(0, 10) >= matchWindow.weekStart && new Date().toISOString().slice(0, 10) <= matchWindow.weekEnd;
+  const today = new Date().toISOString().slice(0, 10);
+  const isCurrentWeek = matchWindow != null && today >= matchWindow.weekStart && today <= matchWindow.weekEnd;
+  const isBeforeWindow = matchWindow != null && today < matchWindow.weekStart;
+  const previousWeekComplete =
+    !played && isBeforeWindow && week.week_number > 1
+      ? await isWeekComplete(season.id, week.week_number - 1)
+      : false;
+  const showPrediction = isCurrentWeek || previousWeekComplete;
   let ratingProjections: RatingProjection[] = [];
   const ratingCurrent: Record<number, number> = {};
   let winProbability: { pShirtsWin: number; provisional: boolean } | null = null;
-  if (!played && isCurrentWeek && shirts.length === 2 && skins.length === 2) {
+  if (!played && showPrediction && shirts.length === 2 && skins.length === 2) {
     const allPlayerIds = [...shirts, ...skins].map((s) => s.player_id);
     const playerRatings = await getPlayerRatings(allPlayerIds);
     const byId = new Map(playerRatings.map((r) => [r.playerId, r]));
