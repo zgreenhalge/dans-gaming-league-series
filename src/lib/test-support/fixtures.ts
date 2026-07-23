@@ -280,6 +280,13 @@ export const PLAYER_RATING_HISTORY: Row[] = [
   { player_id: 5, match_id: 200, sequence_index: 1, ehog_rating: 1200, rating_delta: -25, formula_version: 'ehog_v1', mu: 22.5, sigma: 7.8 },
 ];
 
+// ─── player_name_history ─────────────────────────────────────────────────────
+// Bob (id 2) renamed once. Every other player has no rows — the common case.
+
+export const PLAYER_NAME_HISTORY: Row[] = [
+  { id: 1, player_id: 2, old_name: 'Robert', new_name: 'Bob', changed_at: '2026-02-01T00:00:00.000Z' },
+];
+
 // ─── Pagination-boundary filler ─────────────────────────────────────────────
 // >1000 matches with a week_id that resolves to no fixture season, so every season/career
 // aggregation silently (and correctly) skips them — they exist purely to push fetchAllPages()
@@ -317,5 +324,6 @@ export function buildFakeDb(): FakeDb {
     ops_errors: OPS_ERRORS,
     player_current_ratings: PLAYER_CURRENT_RATINGS,
     player_rating_history: PLAYER_RATING_HISTORY,
+    player_name_history: PLAYER_NAME_HISTORY,
   };
 }

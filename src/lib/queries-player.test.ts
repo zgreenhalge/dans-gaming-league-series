@@ -15,7 +15,7 @@ import { matchesSnapshot } from './test-support/snapshot';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getPlayer, getPlayersById } from './queries';
+import { getPlayer, getPlayersById, getPlayerNameHistory } from './queries';
 
 let passed = 0;
 const failures: string[] = [];
@@ -54,6 +54,18 @@ async function main() {
 
   await test('getPlayer(9999) — nonexistent player returns null', async () => {
     assert.equal(await getPlayer(9999), null);
+  });
+
+  await test('getPlayerNameHistory(2) — Bob has one prior rename', async () => {
+    const history = await getPlayerNameHistory(2);
+    assert.equal(history.length, 1);
+    assert.equal(history[0].old_name, 'Robert');
+    assert.equal(history[0].new_name, 'Bob');
+    matchesSnapshot('getPlayerNameHistory-2', history);
+  });
+
+  await test('getPlayerNameHistory(1) — Alice has never renamed', async () => {
+    assert.deepEqual(await getPlayerNameHistory(1), []);
   });
 
   console.log(`\n${passed} passed, ${failures.length} failed`);
