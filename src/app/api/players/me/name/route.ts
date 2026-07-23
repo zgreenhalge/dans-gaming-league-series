@@ -64,13 +64,13 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, player: { id: playerId, name: previousName } });
   }
 
-  const cutoffIso = new Date(Date.now() - RENAME_COOLDOWN_MS).toISOString();
+  const cutoffMs = Date.now() - RENAME_COOLDOWN_MS;
 
   const { data: updated, error: updateError } = await supabaseAdmin
     .from('players')
     .update(renameFields(next))
     .eq('id', playerId)
-    .or(`name_changed_at.is.null,name_changed_at.lte.${cutoffIso}`)
+    .or(`name_changed_at.is.null,name_changed_at.lte.${new Date(cutoffMs).toISOString()}`)
     .select('name')
     .maybeSingle();
 
@@ -82,14 +82,16 @@ export async function PATCH(req: NextRequest) {
   }
 
   if (!updated) {
-    // The conditional UPDATE matched no row — the cooldown is active. In the overwhelming common
-    // case the name_changed_at already read above is exactly why it failed to match, so it's reused
-    // directly rather than re-fetched. Only if a concurrent request won the race in between (so the
-    // pre-read value looked eligible but no longer is) is a re-read actually needed for an accurate
-    // date — a narrow enough window that a slightly-stale date in that case is an acceptable
-    // trade-off against a guaranteed extra round-trip on every rejected rename.
+    // The conditional UPDATE matched no row — the cooldown is active. If the name_changed_at read
+    // above already looked ineligible (non-null and newer than the cutoff), that's exactly why the
+    // update failed to match, and it's reused directly rather than re-fetched. But if that read
+    // looked *eligible* (null, or older than the cutoff) and the update still failed to match, a
+    // concurrent request must have renamed this player in between — that stale read would report an
+    // incorrect (often already-past) date, so only that case is worth the extra round-trip to re-read
+    // the real, current value.
+    const readLookedEligible = lastKnownChangedAt == null || new Date(lastKnownChangedAt).getTime() <= cutoffMs;
     let lastChangedAt = lastKnownChangedAt;
-    if (!lastChangedAt) {
+    if (readLookedEligible) {
       const { data: recheck } = await supabaseAdmin
         .from('players')
         .select('name_changed_at')
