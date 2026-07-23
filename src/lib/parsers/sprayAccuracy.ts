@@ -1,5 +1,5 @@
 import type { SabFields } from '../types';
-import type { MatchContext, PlayerHurtRow } from './matchContext';
+import { isTeamKill, type MatchContext, type PlayerHurtRow } from './matchContext';
 import type { WeaponFireRow } from './utility';
 import { RIFLE_WEAPONS } from './counterStrafe';
 
@@ -61,10 +61,7 @@ export function collectSprayAccuracy(
     if (!attacker || !steamSet.has(attacker)) continue;
     if (!victim || !steamSet.has(victim)) continue;
     if (attacker === victim) continue;
-    const attackerSide = context.playerSides.get(attacker)?.get(round);
-    const victimSide = context.playerSides.get(victim)?.get(round);
-    const isEnemy = attackerSide != null && victimSide != null && attackerSide !== victimSide;
-    if (!isEnemy) continue;
+    if (isTeamKill(attacker, victim, context)) continue;
     const key = `${attacker}::${round}`;
     if (!hurtTicksByKey.has(key)) hurtTicksByKey.set(key, []);
     hurtTicksByKey.get(key)!.push(h.tick);

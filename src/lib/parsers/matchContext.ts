@@ -66,8 +66,12 @@ export interface MatchContext {
   liveRounds: Set<number>;
   roundEndTicks: Int32Array;
   tickRate: number;
+  /** Per-round CT/T side, only populated when the starting side resolves (see `hasSides`). Needed
+   *  for CT/T-specific splits; prefer `factionOf`/`isTeamKill()` for "are these two teammates". */
   playerSides: Map<string, Map<number, 'CT' | 'T'>>;
   roundDeaths: Map<string, Set<number>>;
+  /** Fixed roster faction (SHIRTS/SKINS), populated unconditionally regardless of `hasSides`. Use
+   *  with `isTeamKill()` for same-team checks — robust even when the starting side is unresolved. */
   factionOf: Map<string, 'SHIRTS' | 'SKINS'>;
   warnings: string[];
   hasSides: boolean;
@@ -92,6 +96,18 @@ export function buildRoundDeaths(
     roundDeaths.get(victim)!.add(roundNumber);
   }
   return roundDeaths;
+}
+
+/**
+ * True when `a` and `b` are on the same roster faction (SHIRTS/SKINS). Compares
+ * `context.factionOf` — a fixed roster fact populated unconditionally in `buildMatchContext()` —
+ * rather than `context.playerSides`, which is only populated when the starting side resolves
+ * (`context.hasSides`). Teammates always share a side whenever sides *are* known, so this stays
+ * correct even when the starting side can't be resolved.
+ */
+export function isTeamKill(a: string, b: string, context: MatchContext): boolean {
+  const factionA = context.factionOf.get(a);
+  return factionA != null && factionA === context.factionOf.get(b);
 }
 
 export function buildMatchContext(

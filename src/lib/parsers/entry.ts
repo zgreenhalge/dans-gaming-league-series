@@ -1,5 +1,5 @@
 import type { SabFields } from '../types';
-import type { MatchContext, PlayerDeathRow } from './matchContext';
+import { isTeamKill, type MatchContext, type PlayerDeathRow } from './matchContext';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -34,16 +34,9 @@ export function collectEntry(
     vp.opening_deaths = ((vp.opening_deaths as number) ?? 0) + 1;
 
     // Credit opening kill to attacker if not a team kill
-    if (attacker && steamSet.has(attacker)) {
-      const round = first.total_rounds_played + 1;
-      const attackerSide = context.playerSides.get(attacker)?.get(round);
-      const victimSide = context.playerSides.get(victim)?.get(round);
-      const isTeamKill = attackerSide != null && attackerSide === victimSide;
-
-      if (!isTeamKill) {
-        const ap = out.get(attacker)!;
-        ap.opening_kills = ((ap.opening_kills as number) ?? 0) + 1;
-      }
+    if (attacker && steamSet.has(attacker) && !isTeamKill(attacker, victim, context)) {
+      const ap = out.get(attacker)!;
+      ap.opening_kills = ((ap.opening_kills as number) ?? 0) + 1;
     }
   }
 

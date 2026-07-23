@@ -1,5 +1,5 @@
 import type { SabFields } from '../types';
-import type { MatchContext, PlayerDeathRow } from './matchContext';
+import { isTeamKill, type MatchContext, type PlayerDeathRow } from './matchContext';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -20,17 +20,15 @@ export function collectMultikill(
     deathsByRound.get(round)!.push(d);
   }
 
-  for (const [round, deaths] of deathsByRound) {
+  // Faction (and so who's an enemy) is fixed for the whole match — compute it once per player
+  // rather than re-deriving it every round.
+  const enemiesOf = new Map<string, string[]>(
+    steamIds.map((sid) => [sid, steamIds.filter((other) => other !== sid && !isTeamKill(sid, other, context))]),
+  );
+
+  for (const [, deaths] of deathsByRound) {
     for (const sid of steamIds) {
-      const mySide = context.playerSides.get(sid)?.get(round);
-
-      // Find the two enemy players this round
-      const enemies = steamIds.filter((other) => {
-        if (other === sid) return false;
-        const otherSide = context.playerSides.get(other)?.get(round);
-        return mySide == null || otherSide == null || mySide !== otherSide;
-      });
-
+      const enemies = enemiesOf.get(sid)!;
       if (enemies.length !== 2) continue;
 
       // 2K = player killed both enemies (non-teamkill, attacker on both enemy deaths)
