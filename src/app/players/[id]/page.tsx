@@ -75,8 +75,6 @@ export default async function PlayerPage({
   const playerJsonLd = buildPlayerJsonLd({
     playerId: detail.player.id,
     name: detail.player.name,
-    steamId: detail.player.steam_id,
-    steamNickname: detail.player.steam_nickname,
     kd: playerMeta?.stats.kd ?? null,
     adr: playerMeta?.stats.adr ?? null,
     ehog: playerMeta?.stats.ehogRaw ?? null,

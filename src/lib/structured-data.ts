@@ -74,8 +74,6 @@ export function buildMatchJsonLd(params: {
 export function buildPlayerJsonLd(params: {
   playerId: number;
   name: string;
-  steamId: string | null;
-  steamNickname: string | null;
   kd: string | null;
   adr: string | null;
   ehog: number | null;
@@ -90,9 +88,6 @@ export function buildPlayerJsonLd(params: {
     '@type': 'Person',
     name: params.name,
     url: `${SITE_URL}/players/${params.playerId}`,
-    ...(params.steamId && params.steamNickname
-      ? { sameAs: `https://steamcommunity.com/profiles/${params.steamId}` }
-      : {}),
     ...(additionalProperty.length > 0 ? { additionalProperty } : {}),
   };
 }
