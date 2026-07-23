@@ -138,9 +138,12 @@ side's current faction (`--color-ct`/`--color-t`). It sits near the top of the m
 (`src/app/matches/[id]/page.tsx`, just below the score), not buried in a tab, and covers two
 mutually exclusive cases gated on `played`:
 
-- **Pre-match** (unplayed, current week, full 2v2 roster): computed live via `predictWinProbability()`
-  from the same current ratings `RatingProjectionTable` already fetches — there's no persisted value
-  yet, since `on_before_match` only ever fires for played matches.
+- **Pre-match** (unplayed, full 2v2 roster, and either the match's week is the current date window or
+  the *previous* week is fully scored — `isWeekComplete()` in `src/lib/queries/schedule.ts`, so a
+  league that wraps a week up early doesn't have to wait on the calendar for next week's predictions
+  to unlock): computed live via `predictWinProbability()` from the same current ratings
+  `RatingProjectionTable` already fetches — there's no persisted value yet, since `on_before_match`
+  only ever fires for played matches.
 - **Post-match**: reads the frozen `matches.pre_match_win_prob` directly, marks whichever side
   actually won with a ✓, and fades the loser's fill toward the background (still tinted with their
   own color) so the result reads at a glance. Renders nothing if the column is still null (e.g. the
