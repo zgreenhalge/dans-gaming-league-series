@@ -44,6 +44,7 @@ export async function PATCH(
   }
 
   const update: Record<string, unknown> = {};
+  let renamedFrom: string | null = null;
 
   // Display name
   if ('name' in body) {
@@ -51,6 +52,14 @@ export async function PATCH(
       return NextResponse.json({ error: 'Name must be a non-empty string' }, { status: 400 });
     }
     update.name = body.name.trim();
+
+    const { data: existing } = await supabaseAdmin
+      .from('players')
+      .select('name')
+      .eq('id', targetId)
+      .maybeSingle();
+    const existingName = (existing as { name?: string } | null)?.name;
+    if (existingName && existingName !== update.name) renamedFrom = existingName;
   }
 
   // Admin flag — you can't demote yourself (prevents locking every admin out).
@@ -121,6 +130,15 @@ export async function PATCH(
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
+
+  // Best-effort — the rename itself already committed and must not be rolled back over a logging
+  // failure; this only risks a gap in the audit trail this same log backs on the self-service route.
+  if (renamedFrom) {
+    const { error: historyError } = await supabaseAdmin
+      .from('player_name_history')
+      .insert({ player_id: targetId, old_name: renamedFrom, new_name: (data as { name: string }).name });
+    if (historyError) console.error(`player_name_history insert failed for player ${targetId}:`, historyError);
+  }
 
   return NextResponse.json({ ok: true, player: data });
 }
