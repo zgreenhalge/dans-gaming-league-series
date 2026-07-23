@@ -24,8 +24,9 @@ import SeasonStartDateButton from '@/components/SeasonStartDateButton';
 import MarkSeasonActiveButton from '@/components/MarkSeasonActiveButton';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
-import { seasonTitle, weekWindow } from '@/lib/util';
-import { buildSeasonJsonLd, jsonLdScript } from '@/lib/structured-data';
+import { seasonTitle, weekWindow, matchTitle } from '@/lib/util';
+import { buildSeasonJsonLd } from '@/lib/structured-data';
+import { JsonLd } from '@/components/JsonLd';
 
 export const revalidate = 60;
 
@@ -160,7 +161,7 @@ export default async function SeasonPage({
       matches: rounds.flatMap((r) =>
         r.matches.map((m) => ({
           id: m.id,
-          name: `${season.name} · Round ${r.round_number} · Match ${m.match_number}`,
+          name: matchTitle({ seasonName: season.name, weekNumber: r.round_number, matchNumber: m.match_number, isGauntlet: true }),
           startDate: null,
         })),
       ),
@@ -168,12 +169,7 @@ export default async function SeasonPage({
 
     return (
       <div className="min-h-screen">
-        {seasonJsonLd && (
-          <script
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: jsonLdScript(seasonJsonLd) }}
-          />
-        )}
+        <JsonLd data={seasonJsonLd} />
         <Topbar season={season} />
         <main className="max-w-[1080px] mx-auto px-6 pb-16">
           <div className="mt-8 mb-6">
@@ -239,7 +235,7 @@ export default async function SeasonPage({
     matches: schedule.flatMap((w) =>
       w.matches.map((m) => ({
         id: m.id,
-        name: `${season.name} · Week ${w.week_number} · Match ${m.match_number}`,
+        name: matchTitle({ seasonName: season.name, weekNumber: w.week_number, matchNumber: m.match_number, isGauntlet: false }),
         startDate: m.scheduled_at,
       })),
     ),
@@ -247,12 +243,7 @@ export default async function SeasonPage({
 
   return (
     <div className="min-h-screen">
-      {seasonJsonLd && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: jsonLdScript(seasonJsonLd) }}
-        />
-      )}
+      <JsonLd data={seasonJsonLd} />
       <Topbar season={season} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">

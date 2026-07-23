@@ -5,7 +5,8 @@ import { TopbarShell } from '@/components/TopbarShell';
 import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals } from '@/lib/queries';
 import { getPlayerMeta } from '@/lib/og';
 import { isPlayedScore } from '@/lib/util';
-import { buildPlayerJsonLd, jsonLdScript } from '@/lib/structured-data';
+import { buildPlayerJsonLd } from '@/lib/structured-data';
+import { JsonLd } from '@/components/JsonLd';
 import { maybeRefreshSteamProfile } from '@/lib/steam';
 import PlayerView from '@/components/PlayerView';
 import PlayerAvatar from '@/components/PlayerAvatar';
@@ -82,10 +83,7 @@ export default async function PlayerPage({
 
   return (
     <div className="min-h-screen">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: jsonLdScript(playerJsonLd) }}
-      />
+      <JsonLd data={playerJsonLd} />
       <TopbarShell
         crumbs={[
           { label: 'DGLS', href: '/' },

@@ -1,4 +1,5 @@
 import { SITE_URL } from './site';
+import { matchTitle } from './util';
 
 /**
  * Serializes a JSON-LD object for a `<script type="application/ld+json">` tag. Escapes `<` so a
@@ -34,8 +35,12 @@ export function buildMatchJsonLd(params: {
   const { shirts, skins } = params;
   if (shirts.length !== 2 || skins.length !== 2) return null;
 
-  const weekLabel = params.isGauntlet ? `Round ${params.weekNumber}` : `Week ${params.weekNumber}`;
-  const name = `${params.seasonName} · ${weekLabel} · Match ${params.matchNumber}`;
+  const name = matchTitle({
+    seasonName: params.seasonName,
+    weekNumber: params.weekNumber,
+    matchNumber: params.matchNumber,
+    isGauntlet: params.isGauntlet,
+  });
   const asPerson = (p: MatchRosterPlayer) => ({
     '@type': 'Person',
     name: p.player_name,
@@ -55,7 +60,7 @@ export function buildMatchJsonLd(params: {
     description,
     url: `${SITE_URL}/matches/${params.matchId}`,
     ...(params.scheduledAt ? { startDate: params.scheduledAt } : {}),
-    ...(params.played ? {} : { eventStatus: 'https://schema.org/EventScheduled' }),
+    ...(!params.played ? { eventStatus: 'https://schema.org/EventScheduled' } : {}),
     ...(params.recordingUrl
       ? { location: { '@type': 'VirtualLocation', url: params.recordingUrl } }
       : {}),

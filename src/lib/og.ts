@@ -1,5 +1,6 @@
+import { cache } from 'react';
 import { supabase } from '@/lib/supabase';
-import { isPlayedScore, parseScore, canonicalSort } from '@/lib/util';
+import { isPlayedScore, parseScore, canonicalSort, matchTitle } from '@/lib/util';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { getMapLookup } from './queries';
 import type { Player, Match, Week, Season, PlayerMatchStat } from '@/lib/types';
@@ -13,7 +14,11 @@ type LeaderboardAgg = {
   total_rounds_played: number;
 };
 
-export async function getPlayerMeta(playerId: number) {
+/**
+ * `cache()`-wrapped so the identical call from `generateMetadata` and the page component
+ * collapses into a single set of Supabase round trips per request.
+ */
+export const getPlayerMeta = cache(async (playerId: number) => {
   const [{ data: player }, { data: rows }, { data: gauntletRows }, { data: ratingRow }] = await Promise.all([
     supabase
       .from('players')
@@ -79,7 +84,7 @@ export async function getPlayerMeta(playerId: number) {
     image: p.steam_avatar_url ?? null,
     stats: { wr, kd, adr, record, ehog: ehogStr, ehogRaw: ehog },
   };
-}
+});
 
 export async function getMatchMeta(matchId: number) {
   const { data: match } = await supabase
@@ -105,8 +110,12 @@ export async function getMatchMeta(matchId: number) {
   if (!season) return null;
   const s = season as Pick<Season, 'id' | 'name' | 'is_gauntlet'>;
 
-  const weekLabel = s.is_gauntlet ? `Round ${w.week_number}` : `Week ${w.week_number}`;
-  const title = `${s.name} · ${weekLabel} · Match ${m.match_number}`;
+  const title = matchTitle({
+    seasonName: s.name,
+    weekNumber: w.week_number,
+    matchNumber: m.match_number,
+    isGauntlet: s.is_gauntlet,
+  });
 
   const map = m.shirts_pick ?? m.picked_map;
   const mapName = map ? toSentenceCase(map) : null;
