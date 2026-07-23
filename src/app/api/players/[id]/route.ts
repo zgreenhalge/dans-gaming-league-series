@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { recordNameChange, NAME_HISTORY_LOG_OPERATION } from '@/lib/player-name-history';
-import { recordOpsError } from '@/lib/ops-errors';
+import { recordNameChange, recordNameHistoryLogError, renameFields } from '@/lib/player-name-history';
 
 // Admin player management (#144): edit a player's display name, toggle their `is_admin` flag, or
 // change their Steam link (unlink, or set a SteamID64 by hand). Admin-only. All three edits go
@@ -53,7 +52,7 @@ export async function PATCH(
     if (typeof body.name !== 'string' || body.name.trim() === '') {
       return NextResponse.json({ error: 'Name must be a non-empty string' }, { status: 400 });
     }
-    update.name = body.name.trim();
+    const trimmed = body.name.trim();
 
     const { data: existing, error: existingError } = await supabaseAdmin
       .from('players')
@@ -63,20 +62,21 @@ export async function PATCH(
     if (existingError) {
       // Can't determine the "from" name, so the rename below will proceed unlogged — surface that
       // rather than let it pass silently.
-      await recordOpsError(
+      await recordNameHistoryLogError(
         supabaseAdmin,
-        'player',
         targetId,
-        NAME_HISTORY_LOG_OPERATION,
         `Could not read prior name before rename: ${existingError.message}`,
       );
     }
     const existingName = (existing as { name?: string } | null)?.name;
-    if (existingName && existingName !== update.name) {
+    if (existingName && existingName !== trimmed) {
       renamedFrom = existingName;
-      // Resets the self-service cooldown's clock too — an admin rename counts as "this player's
-      // name changed" the same as a self-service one, for the once-a-week gate on their next one.
-      update.name_changed_at = new Date().toISOString();
+      // renameFields() also resets the self-service cooldown's clock — an admin rename counts as
+      // "this player's name changed" the same as a self-service one, for the once-a-week gate on
+      // their next one.
+      Object.assign(update, renameFields(trimmed));
+    } else {
+      update.name = trimmed;
     }
   }
 

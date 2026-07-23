@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { recordNameChange } from '@/lib/player-name-history';
+import { recordNameChange, renameFields } from '@/lib/player-name-history';
 import { normalizePlayerName, isValidPlayerName, PLAYER_NAME_MIN_LENGTH, PLAYER_NAME_MAX_LENGTH } from '@/lib/util';
 
 // Self-service rename (issue #268): a player changes their own display name, in place on their
@@ -17,6 +17,12 @@ import { normalizePlayerName, isValidPlayerName, PLAYER_NAME_MIN_LENGTH, PLAYER_
 // just-committed `name_changed_at` and finds the cooldown now active. A read-before-write cooldown
 // check can't close that race; a conditional write can. `player_name_history` (via
 // `recordNameChange()`) remains a pure audit trail, not the rate-limit's source of truth.
+//
+// The name-collision check similarly relies on the DB's case-insensitive unique index on
+// `lower(name)` (a `23505` on the write below) rather than a separate pre-check SELECT — the plain
+// `players.name` unique index is case-sensitive and wouldn't by itself catch a "bob" vs. existing
+// "Bob", but the write already has to handle a same-case collision this way regardless, so a
+// pre-check only adds a round-trip without letting that handling be dropped.
 
 const supabaseAdmin = getAdminClient();
 
@@ -44,36 +50,25 @@ export async function PATCH(req: NextRequest) {
 
   const { data: current, error: fetchError } = await supabaseAdmin
     .from('players')
-    .select('name')
+    .select('name, name_changed_at')
     .eq('id', playerId)
     .maybeSingle();
   if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
   if (!current) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
 
-  const previousName = (current as { name: string }).name;
+  const { name: previousName, name_changed_at: lastKnownChangedAt } = current as {
+    name: string;
+    name_changed_at: string | null;
+  };
   if (next === previousName) {
     return NextResponse.json({ ok: true, player: { id: playerId, name: previousName } });
   }
 
-  // Case-insensitive pre-check for a friendly message on the common (non-racing) path — the DB's
-  // case-insensitive unique index on `lower(name)` is the real backstop, since `players.name`'s
-  // plain unique index is case-sensitive and wouldn't by itself catch a "bob" vs. existing "Bob".
-  const { data: clash } = await supabaseAdmin
-    .from('players')
-    .select('id')
-    .ilike('name', next)
-    .neq('id', playerId)
-    .maybeSingle();
-  if (clash) {
-    return NextResponse.json({ error: 'That name is already taken.' }, { status: 409 });
-  }
-
   const cutoffIso = new Date(Date.now() - RENAME_COOLDOWN_MS).toISOString();
-  const nowIso = new Date().toISOString();
 
   const { data: updated, error: updateError } = await supabaseAdmin
     .from('players')
-    .update({ name: next, name_changed_at: nowIso })
+    .update(renameFields(next))
     .eq('id', playerId)
     .or(`name_changed_at.is.null,name_changed_at.lte.${cutoffIso}`)
     .select('name')
@@ -87,14 +82,21 @@ export async function PATCH(req: NextRequest) {
   }
 
   if (!updated) {
-    // The conditional UPDATE matched no row — the cooldown is active (either it always was, or a
-    // concurrent request just won the race and reset it). Re-read to report an accurate date.
-    const { data: recheck } = await supabaseAdmin
-      .from('players')
-      .select('name_changed_at')
-      .eq('id', playerId)
-      .maybeSingle();
-    const lastChangedAt = (recheck as { name_changed_at?: string | null } | null)?.name_changed_at;
+    // The conditional UPDATE matched no row — the cooldown is active. In the overwhelming common
+    // case the name_changed_at already read above is exactly why it failed to match, so it's reused
+    // directly rather than re-fetched. Only if a concurrent request won the race in between (so the
+    // pre-read value looked eligible but no longer is) is a re-read actually needed for an accurate
+    // date — a narrow enough window that a slightly-stale date in that case is an acceptable
+    // trade-off against a guaranteed extra round-trip on every rejected rename.
+    let lastChangedAt = lastKnownChangedAt;
+    if (!lastChangedAt) {
+      const { data: recheck } = await supabaseAdmin
+        .from('players')
+        .select('name_changed_at')
+        .eq('id', playerId)
+        .maybeSingle();
+      lastChangedAt = (recheck as { name_changed_at?: string | null } | null)?.name_changed_at ?? null;
+    }
     if (!lastChangedAt) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
     const nextEligibleAt = new Date(new Date(lastChangedAt).getTime() + RENAME_COOLDOWN_MS);
     return NextResponse.json(
