@@ -39,7 +39,17 @@ export interface TeamGroup {
   header?: React.ReactNode;
 }
 
-interface AggregatedSab {
+// Every sabremetric field `AggregatedSab` needs beyond the ct/t split is identical in name and
+// type to its `SabFields` counterpart, so the bulk of the shape is inherited from `SabFields`
+// itself (`Omit`ing the ct/t-split raw fields aggregateRows() unions into `kills`/`deaths`/etc.,
+// plus the two fields this view never reads) rather than re-listing every stat by hand — the
+// single source of truth for "what sabremetrics exist" stays `SabFields` in src/lib/types.ts.
+type DerivedRawSabFields =
+  | 'kills_ct' | 'kills_t' | 'deaths_ct' | 'deaths_t'
+  | 'assists_ct' | 'assists_t' | 'damage_ct' | 'damage_t'
+  | 'headshot_kills_ct' | 'headshot_kills_t' | 'blind_duration_dealt';
+
+interface AggregatedSab extends Omit<SabFields, DerivedRawSabFields> {
   player_id: number;
   player_name: string;
   matches: number;
@@ -48,48 +58,6 @@ interface AggregatedSab {
   deaths: number;
   assists: number;
   damage: number;
-  headshot_kills: number;
-  opening_kills: number;
-  opening_deaths: number;
-  kast_rounds: number;
-  clutch_1v1_wins: number;
-  clutch_1v1_attempts: number;
-  clutch_1v2_wins: number;
-  clutch_1v2_attempts: number;
-  clutch_2v1_wins: number;
-  clutch_2v1_attempts: number;
-  flash_assists: number;
-  flashes_leading_to_kill: number;
-  utility_damage: number;
-  teamflash_duration: number;
-  enemies_flashed: number;
-  flashes_thrown: number;
-  plants: number;
-  defuses: number;
-  two_k_rounds: number;
-  teamkills: number;
-  trade_kill_opportunities: number;
-  trade_kill_attempts: number;
-  trade_kill_successes: number;
-  traded_death_opportunities: number;
-  traded_death_attempts: number;
-  traded_death_successes: number;
-  he_thrown: number;
-  he_damage: number;
-  blind_duration_max_sum: number;
-  effective_flashes: number;
-  shots_fired: number;
-  shots_hit: number;
-  headshot_hits: number;
-  shots_hit_no_awp: number;
-  headshot_hits_no_awp: number;
-  counter_strafe_shots: number;
-  counter_strafe_good_shots: number;
-  spray_shots_fired: number;
-  spray_shots_hit: number;
-  smokes_blocking_push: number;
-  ct_smokes_thrown: number;
-  unused_util_value_on_death_total: number;
 }
 
 function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
@@ -97,6 +65,9 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
   const matchesSeen = new Map<number, Set<number>>();
 
   for (const r of rows) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { kills_ct, kills_t, deaths_ct, deaths_t, assists_ct, assists_t, damage_ct, damage_t, headshot_kills_ct, headshot_kills_t, blind_duration_dealt, ...shared } = r.sab;
+
     let agg = byPlayer.get(r.player_id);
     if (!agg) {
       agg = {
@@ -105,28 +76,14 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
         matches: 0,
         rounds_played: 0,
         kills: 0, deaths: 0, assists: 0, damage: 0,
-        headshot_kills: 0,
-        opening_kills: 0, opening_deaths: 0,
-        kast_rounds: 0,
-        clutch_1v1_wins: 0, clutch_1v1_attempts: 0,
-        clutch_1v2_wins: 0, clutch_1v2_attempts: 0,
-        clutch_2v1_wins: 0, clutch_2v1_attempts: 0,
-        flash_assists: 0, flashes_leading_to_kill: 0, utility_damage: 0, teamflash_duration: 0,
-        enemies_flashed: 0, flashes_thrown: 0,
-        plants: 0, defuses: 0, two_k_rounds: 0, teamkills: 0,
-        trade_kill_opportunities: 0, trade_kill_attempts: 0, trade_kill_successes: 0,
-        traded_death_opportunities: 0, traded_death_attempts: 0, traded_death_successes: 0,
-        he_thrown: 0, he_damage: 0,
-        blind_duration_max_sum: 0, effective_flashes: 0,
-        shots_fired: 0, shots_hit: 0, headshot_hits: 0,
-        shots_hit_no_awp: 0, headshot_hits_no_awp: 0,
-        counter_strafe_shots: 0, counter_strafe_good_shots: 0,
-        spray_shots_fired: 0, spray_shots_hit: 0,
-        smokes_blocking_push: 0, ct_smokes_thrown: 0,
-        unused_util_value_on_death_total: 0,
+        ...shared,
       };
       byPlayer.set(r.player_id, agg);
       matchesSeen.set(r.player_id, new Set());
+    } else {
+      for (const key of Object.keys(shared) as (keyof typeof shared)[]) {
+        agg[key] += shared[key];
+      }
     }
 
     const seen = matchesSeen.get(r.player_id)!;
@@ -136,53 +93,10 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
     }
 
     agg.rounds_played += r.rounds_played;
-    const s = r.sab;
-    agg.kills += s.kills_ct + s.kills_t;
-    agg.deaths += s.deaths_ct + s.deaths_t;
-    agg.assists += s.assists_ct + s.assists_t;
-    agg.damage += s.damage_ct + s.damage_t;
-    agg.headshot_kills += s.headshot_kills;
-    agg.opening_kills += s.opening_kills;
-    agg.opening_deaths += s.opening_deaths;
-    agg.kast_rounds += s.kast_rounds;
-    agg.clutch_1v1_wins += s.clutch_1v1_wins;
-    agg.clutch_1v1_attempts += s.clutch_1v1_attempts;
-    agg.clutch_1v2_wins += s.clutch_1v2_wins;
-    agg.clutch_1v2_attempts += s.clutch_1v2_attempts;
-    agg.clutch_2v1_wins += s.clutch_2v1_wins;
-    agg.clutch_2v1_attempts += s.clutch_2v1_attempts;
-    agg.flash_assists += s.flash_assists;
-    agg.flashes_leading_to_kill += s.flashes_leading_to_kill;
-    agg.utility_damage += s.utility_damage;
-    agg.teamflash_duration += s.teamflash_duration;
-    agg.enemies_flashed += s.enemies_flashed;
-    agg.flashes_thrown += s.flashes_thrown;
-    agg.plants += s.plants;
-    agg.defuses += s.defuses;
-    agg.two_k_rounds += s.two_k_rounds;
-    agg.teamkills += s.teamkills;
-    agg.trade_kill_opportunities += s.trade_kill_opportunities;
-    agg.trade_kill_attempts += s.trade_kill_attempts;
-    agg.trade_kill_successes += s.trade_kill_successes;
-    agg.traded_death_opportunities += s.traded_death_opportunities;
-    agg.traded_death_attempts += s.traded_death_attempts;
-    agg.traded_death_successes += s.traded_death_successes;
-    agg.he_thrown += s.he_thrown;
-    agg.he_damage += s.he_damage;
-    agg.blind_duration_max_sum += s.blind_duration_max_sum;
-    agg.effective_flashes += s.effective_flashes;
-    agg.shots_fired += s.shots_fired;
-    agg.shots_hit += s.shots_hit;
-    agg.headshot_hits += s.headshot_hits;
-    agg.shots_hit_no_awp += s.shots_hit_no_awp;
-    agg.headshot_hits_no_awp += s.headshot_hits_no_awp;
-    agg.counter_strafe_shots += s.counter_strafe_shots;
-    agg.counter_strafe_good_shots += s.counter_strafe_good_shots;
-    agg.spray_shots_fired += s.spray_shots_fired;
-    agg.spray_shots_hit += s.spray_shots_hit;
-    agg.smokes_blocking_push += s.smokes_blocking_push;
-    agg.ct_smokes_thrown += s.ct_smokes_thrown;
-    agg.unused_util_value_on_death_total += s.unused_util_value_on_death_total;
+    agg.kills += kills_ct + kills_t;
+    agg.deaths += deaths_ct + deaths_t;
+    agg.assists += assists_ct + assists_t;
+    agg.damage += damage_ct + damage_t;
   }
 
   return Array.from(byPlayer.values());
