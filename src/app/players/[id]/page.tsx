@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals } from '@/lib/queries';
 import { getPlayerMeta } from '@/lib/og';
@@ -9,6 +11,7 @@ import { maybeRefreshSteamProfile } from '@/lib/steam';
 import PlayerView from '@/components/PlayerView';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import EhogBadge from '@/components/EhogBadge';
+import PlayerNameEditor from '@/components/PlayerNameEditor';
 
 export const revalidate = 60;
 
@@ -44,6 +47,8 @@ export default async function PlayerPage({
   const { id } = await params;
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
+  const session = await getServerSession(authOptions);
+  const isSelf = session?.user?.playerId === playerId;
   const [detail, careerLeaderboard, h2hData, ehog, leagueSabremetrics] = await Promise.all([
     getPlayer(playerId),
     getCareerLeaderboard(),
@@ -83,9 +88,13 @@ export default async function PlayerPage({
         <div className="mt-8 mb-6 flex items-center gap-5">
           <PlayerAvatar name={detail.player.name} imageUrl={detail.player.steam_avatar_url} size="lg" />
           <div className="flex-1 min-w-0">
-            <div className="font-display text-[42px] font-semibold leading-tight">
-              {detail.player.name}
-            </div>
+            {isSelf ? (
+              <PlayerNameEditor playerId={detail.player.id} name={detail.player.name} />
+            ) : (
+              <div className="font-display text-[42px] font-semibold leading-tight">
+                {detail.player.name}
+              </div>
+            )}
             {detail.player.steam_id && detail.player.steam_nickname && (
               <Link
                 href={`https://steamcommunity.com/profiles/${detail.player.steam_id}`}
