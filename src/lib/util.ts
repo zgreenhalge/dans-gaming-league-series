@@ -338,7 +338,7 @@ export function canonicalGauntletRankMap(rounds: _GauntletRound[]): Map<number, 
 
   const maxRound = Math.max(...rounds.map((r) => r.round_number));
   const finalRound = rounds.find((r) => r.round_number === maxRound);
-  if (!finalRound || !finalRound.matches.every((m) => isPlayedScore(m.final_score))) {
+  if (!finalRound || !allMatchesPlayed(finalRound.matches)) {
     return new Map();
   }
 

@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import type { LeaderboardRowWithId } from '../types';
-import { canonicalSort, isPlayedScore } from '../util';
+import { allMatchesPlayed, canonicalSort } from '../util';
 import { getSeasons } from './seasons';
 import { getAllLeaderboards } from './leaderboard';
 import { getGauntletSeasonLeaderboard } from './gauntlet';
@@ -123,7 +123,7 @@ export async function getAllSeasonMedalists(): Promise<Map<number, TrophyEntry[]
         if (seasonWeeks.length === 0) continue;
         const finalWeek = seasonWeeks.reduce((best, w) => (w.week_number > best.week_number ? w : best));
         const finalMatches = matchesByWeek.get(finalWeek.id) ?? [];
-        if (finalMatches.length === 0 || !finalMatches.every((m) => isPlayedScore(m.final_score))) continue;
+        if (!allMatchesPlayed(finalMatches)) continue;
 
         const records = new Map<number, { player_id: number; wins: number }>();
         for (const m of finalMatches) {

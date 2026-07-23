@@ -445,8 +445,8 @@ export async function getGauntletBracketShape(gauntletSeasonId: number): Promise
   ]);
   if (slotErr) throw slotErr;
 
-  const finalScoreByMatch = new Map(
-    ((matchRows ?? []) as { id: number; final_score: string | null }[]).map((m) => [m.id, m.final_score]),
+  const playedMatch = new Map(
+    ((matchRows ?? []) as { id: number; final_score: string | null }[]).map((m) => [m.id, isPlayedScore(m.final_score)]),
   );
 
   type SlotRow = {
@@ -479,7 +479,7 @@ export async function getGauntletBracketShape(gauntletSeasonId: number): Promise
       pod_index: p.pod_index,
       advance_rule: p.advance_rule,
       is_final: p.is_final,
-      played: allMatchesPlayed(podMatchIds.map((id) => ({ final_score: finalScoreByMatch.get(id) ?? null }))),
+      played: podMatchIds.length > 0 && podMatchIds.every((id) => playedMatch.get(id) === true),
       materialized: p.match1_id != null,
       slots: (slotsByPod.get(p.id) ?? []).sort((a, b) => a.slot_index - b.slot_index),
     };
