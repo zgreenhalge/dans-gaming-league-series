@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { SabFields } from '@/lib/types';
-import { sumSabFields } from '@/lib/queries';
+import { addSabFields } from '@/lib/queries';
 import { tabCls } from '@/lib/util';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
 
@@ -68,31 +68,33 @@ interface PlayerMeta {
   player_name: string;
   matches: number;
   rounds_played: number;
+  seenMatchIds: Set<number>;
 }
 
-/** Accumulates raw per-match `sab` totals via the existing generic `sumSabFields()` (same helper
- *  `getSabremetricSeasonTotals()` uses for season totals), then flattens to `AggregatedSab`'s
- *  shape once per player at the end — so the accumulation step needs no field-shape knowledge at
- *  all, and only the final flatten touches `DerivedRawSabFields`. */
+/** Accumulates raw per-match `sab` totals via the generic `addSabFields()` (one accumulator per
+ *  player, mutated in place per row — same primitive `getSabremetricSeasonTotals()` builds its
+ *  own `sumSabFields()` on), then flattens to `AggregatedSab`'s shape once per player at the end —
+ *  so the accumulation step needs no field-shape knowledge at all, and only the final flatten
+ *  touches `DerivedRawSabFields`. */
 function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
   const rawByPlayer = new Map<number, SabFields>();
   const meta = new Map<number, PlayerMeta>();
-  const matchesSeen = new Map<number, Set<number>>();
 
   for (const r of rows) {
     const prevRaw = rawByPlayer.get(r.player_id);
-    rawByPlayer.set(r.player_id, prevRaw ? sumSabFields(prevRaw, r.sab) : { ...r.sab });
+    if (prevRaw) {
+      addSabFields(prevRaw, r.sab);
+    } else {
+      rawByPlayer.set(r.player_id, { ...r.sab });
+    }
 
     let m = meta.get(r.player_id);
     if (!m) {
-      m = { player_name: r.player_name, matches: 0, rounds_played: 0 };
+      m = { player_name: r.player_name, matches: 0, rounds_played: 0, seenMatchIds: new Set() };
       meta.set(r.player_id, m);
-      matchesSeen.set(r.player_id, new Set());
     }
-
-    const seen = matchesSeen.get(r.player_id)!;
-    if (!seen.has(r.match_id)) {
-      seen.add(r.match_id);
+    if (!m.seenMatchIds.has(r.match_id)) {
+      m.seenMatchIds.add(r.match_id);
       m.matches++;
     }
     m.rounds_played += r.rounds_played;
@@ -101,9 +103,12 @@ function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
   return Array.from(rawByPlayer, ([player_id, raw]): AggregatedSab => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { kills_ct, kills_t, deaths_ct, deaths_t, assists_ct, assists_t, damage_ct, damage_t, headshot_kills_ct, headshot_kills_t, blind_duration_dealt, ...shared } = raw;
+    const { player_name, matches, rounds_played } = meta.get(player_id)!;
     return {
       player_id,
-      ...meta.get(player_id)!,
+      player_name,
+      matches,
+      rounds_played,
       kills: kills_ct + kills_t,
       deaths: deaths_ct + deaths_t,
       assists: assists_ct + assists_t,
