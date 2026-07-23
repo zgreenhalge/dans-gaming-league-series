@@ -8,7 +8,8 @@
     "steam_avatar_url": null,
     "steam_refreshed_at": null,
     "is_admin": false,
-    "seed_ehog": null
+    "seed_ehog": null,
+    "name_changed_at": null
   },
   "history": [
     {

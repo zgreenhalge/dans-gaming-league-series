@@ -72,7 +72,12 @@ export async function PATCH(
       );
     }
     const existingName = (existing as { name?: string } | null)?.name;
-    if (existingName && existingName !== update.name) renamedFrom = existingName;
+    if (existingName && existingName !== update.name) {
+      renamedFrom = existingName;
+      // Resets the self-service cooldown's clock too — an admin rename counts as "this player's
+      // name changed" the same as a self-service one, for the once-a-week gate on their next one.
+      update.name_changed_at = new Date().toISOString();
+    }
   }
 
   // Admin flag — you can't demote yourself (prevents locking every admin out).
