@@ -94,6 +94,18 @@ export function buildRoundDeaths(
   return roundDeaths;
 }
 
+/**
+ * True when `a` and `b` are on the same roster faction (SHIRTS/SKINS). Compares
+ * `context.factionOf` — a fixed roster fact populated unconditionally in `buildMatchContext()` —
+ * rather than `context.playerSides`, which is only populated when the starting side resolves
+ * (`context.hasSides`). Teammates always share a side whenever sides *are* known, so this stays
+ * correct even when the starting side can't be resolved.
+ */
+export function isTeamKill(a: string, b: string, context: MatchContext): boolean {
+  const factionA = context.factionOf.get(a);
+  return factionA != null && factionA === context.factionOf.get(b);
+}
+
 export function buildMatchContext(
   demoBuffer: Buffer,
   roundEndEvents: RoundEndRow[],

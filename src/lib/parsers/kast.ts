@@ -1,5 +1,5 @@
 import type { SabFields } from '../types';
-import type { MatchContext, PlayerDeathRow } from './matchContext';
+import { isTeamKill, type MatchContext, type PlayerDeathRow } from './matchContext';
 import { TRADE_WINDOW_SECONDS } from './constants';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
@@ -32,22 +32,16 @@ export function collectKast(
       let qualifies = false;
 
       // K: got a non-teamkill kill this round
-      const gotKill = deaths.some((d) => {
-        if (d.attacker_steamid !== sid) return false;
-        const attackerSide = context.playerSides.get(sid)?.get(round);
-        const victimSide = context.playerSides.get(d.user_steamid ?? '')?.get(round);
-        return attackerSide == null || victimSide == null || attackerSide !== victimSide;
-      });
+      const gotKill = deaths.some(
+        (d) => d.attacker_steamid === sid && !isTeamKill(sid, d.user_steamid ?? '', context),
+      );
       if (gotKill) qualifies = true;
 
       // A: got an assist (non-teamkill)
       if (!qualifies) {
-        const gotAssist = deaths.some((d) => {
-          if (d.assister_steamid !== sid) return false;
-          const assisterSide = context.playerSides.get(sid)?.get(round);
-          const victimSide = context.playerSides.get(d.user_steamid ?? '')?.get(round);
-          return assisterSide == null || victimSide == null || assisterSide !== victimSide;
-        });
+        const gotAssist = deaths.some(
+          (d) => d.assister_steamid === sid && !isTeamKill(sid, d.user_steamid ?? '', context),
+        );
         if (gotAssist) qualifies = true;
       }
 
@@ -69,9 +63,7 @@ export function collectKast(
             const trader = d.attacker_steamid;
             if (!trader || !steamSet.has(trader)) return false;
             // Trader must be on the same side as the dead player
-            const traderSide = context.playerSides.get(trader)?.get(round);
-            const mySide = context.playerSides.get(sid)?.get(round);
-            return traderSide == null || mySide == null || traderSide === mySide;
+            return isTeamKill(trader, sid, context);
           });
           if (traded) qualifies = true;
         }
