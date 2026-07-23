@@ -1,5 +1,5 @@
 import type { SabFields } from '../types';
-import type { MatchContext, PlayerHurtRow } from './matchContext';
+import { isTeamKill, type MatchContext, type PlayerHurtRow } from './matchContext';
 import type { WeaponFireRow } from './utility';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
@@ -45,10 +45,7 @@ export function collectHeGrenades(
     if (!victim || !steamSet.has(victim)) continue;
     if (attacker === victim) continue; // self-damage isn't credited
 
-    const attackerSide = context.playerSides.get(attacker)?.get(round);
-    const victimSide = context.playerSides.get(victim)?.get(round);
-    const isEnemy = attackerSide != null && victimSide != null && attackerSide !== victimSide;
-    if (!isEnemy) continue; // teamdamage isn't credited
+    if (isTeamKill(attacker, victim, context)) continue; // teamdamage isn't credited
 
     const p = out.get(attacker)!;
     p.he_damage = ((p.he_damage as number) ?? 0) + (h.dmg_health ?? 0);

@@ -41,6 +41,13 @@ export function makeContext(opts: {
 
   const roundDeaths = buildRoundDeaths(opts.deaths ?? [], liveRounds, (sid) => sid in opts.sides);
 
+  // Faction is a fixed roster fact, independent of per-round side. Fixtures don't model side
+  // switches across a match, so a player's opts.sides entry maps 1:1 to a faction here.
+  const factionOf = new Map<string, 'SHIRTS' | 'SKINS'>();
+  for (const [sid, side] of Object.entries(opts.sides)) {
+    factionOf.set(sid, side === 'CT' ? 'SHIRTS' : 'SKINS');
+  }
+
   return {
     rounds,
     liveRounds,
@@ -48,7 +55,7 @@ export function makeContext(opts: {
     tickRate: opts.tickRate ?? 64,
     playerSides,
     roundDeaths,
-    factionOf: new Map(),
+    factionOf,
     warnings: opts.warnings ?? [],
     hasSides,
   };

@@ -1,5 +1,5 @@
 import type { SabFields } from '../types';
-import type { MatchContext, PlayerDeathRow } from './matchContext';
+import { isTeamKill, type MatchContext, type PlayerDeathRow } from './matchContext';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -23,11 +23,7 @@ export function collectTeamkill(
     if (!attacker || !victim || attacker === victim) continue;
     if (!steamSet.has(attacker) || !steamSet.has(victim)) continue;
 
-    const attackerSide = context.playerSides.get(attacker)?.get(round);
-    const victimSide = context.playerSides.get(victim)?.get(round);
-    const isTeamKill = attackerSide != null && attackerSide === victimSide;
-
-    if (isTeamKill) {
+    if (isTeamKill(attacker, victim, context)) {
       const ap = out.get(attacker)!;
       ap.teamkills = ((ap.teamkills as number) ?? 0) + 1;
     }
