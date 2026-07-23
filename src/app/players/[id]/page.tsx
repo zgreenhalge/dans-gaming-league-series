@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals } from '@/lib/queries';
+import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory } from '@/lib/queries';
 import { getPlayerMeta } from '@/lib/og';
 import { isPlayedScore } from '@/lib/util';
 import { maybeRefreshSteamProfile } from '@/lib/steam';
@@ -49,7 +49,7 @@ export default async function PlayerPage({
   if (!Number.isFinite(playerId)) notFound();
   const session = await getServerSession(authOptions);
   const isSelf = session?.user?.playerId === playerId;
-  const [detail, careerLeaderboard, h2hData, ehog, leagueSabremetrics] = await Promise.all([
+  const [detail, careerLeaderboard, h2hData, ehog, leagueSabremetrics, nameHistory] = await Promise.all([
     getPlayer(playerId),
     getCareerLeaderboard(),
     getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
@@ -57,6 +57,7 @@ export default async function PlayerPage({
     // League-wide, per-season totals so the Advanced tab can compute Plus stats (player vs.
     // league avg) without shipping every match row to the client.
     getSabremetricSeasonTotals(),
+    getPlayerNameHistory(playerId),
   ]);
   if (!detail) notFound();
 
@@ -93,6 +94,11 @@ export default async function PlayerPage({
             ) : (
               <div className="font-display text-[42px] font-semibold leading-tight">
                 {detail.player.name}
+              </div>
+            )}
+            {nameHistory.length > 0 && (
+              <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+                Formerly {[...nameHistory].reverse().map((h) => h.old_name).join(', ')}
               </div>
             )}
             {detail.player.steam_id && detail.player.steam_nickname && (

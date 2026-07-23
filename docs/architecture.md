@@ -22,7 +22,7 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/seasons/[id]` | Season hub — leaderboard + weekly schedule (or gauntlet bracket) |
 | `/matches/[id]` | Match detail — veto banner, scoreboards, score entry, demo upload |
 | `/players` | Player index |
-| `/players/[id]` | Player profile — career stats + per-season breakdown + match log. The viewer can rename themself in place here (`PlayerNameEditor`) if it's their own profile |
+| `/players/[id]` | Player profile — career stats + per-season breakdown + match log. Shows a "Formerly …" line if the player has past names. The viewer can rename themself in place here (`PlayerNameEditor`) if it's their own profile |
 | `/statistics` | Cross-season career leaderboard + gauntlet stats |
 | `/maps` | Map index — pick/ban/skip counts per map |
 | `/maps/[slug]` | Map detail — match history + per-player stats on that map |
@@ -30,7 +30,7 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/admin/jobs` | Admin background-jobs dashboard — every `background_jobs` row across all three pipelines (`demo_ingest`, `replay_extract`, `radar_build`) with warnings/quarantine flags and per-type actions: confirm/re-parse/dismiss for demo, retry for replay/radar (see [`hosting.md`](./hosting.md)) |
 | `/admin/servers` | Admin server console — shared DatHost server status + teardown (see [`hosting.md`](./hosting.md)) |
 | `/admin/matches` | Admin match console — search a match to reschedule, clear/redo its pick-ban, or toggle the feature flag (reuses the match-page editors; score/stats editing stays on the match page) |
-| `/admin/players` | Admin player console — search a player to rename, view their rename history, toggle `is_admin`, or manage their Steam link (unlink / set SteamID64 by hand); also a manual EHOG rating recompute |
+| `/admin/players` | Admin player console — search a player to rename, toggle `is_admin`, or manage their Steam link (unlink / set SteamID64 by hand); also a manual EHOG rating recompute |
 | `/admin/seasons/new` | Create a new season (admin only) |
 | `/auth/steam` | Steam auth landing — completes `signIn()` after the OpenID bounce |
 
@@ -79,7 +79,6 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `DELETE` | `/api/seasons/[id]/gauntlet` | Reset a gauntlet — deletes it and everything materialized under it; refuses if any match has a score unless `{ force: true }` is passed (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet/pods` | Save the manual pod editor's current draft — creates the paired gauntlet season if needed, then inserts/updates/deletes pods to match (admin only) |
 | `PATCH` | `/api/players/[id]` | Edit a player — display name, `is_admin` (can't demote yourself), or Steam link (unlink / set SteamID64) (admin only) |
-| `GET` | `/api/players/[id]/name-history` | Read a player's past renames from `player_name_history` (admin only) |
 | `PATCH` | `/api/players/me/name` | Self-service rename — the caller's own display name only, letters/spaces only, once every 7 days |
 | `POST` | `/api/ehog/recompute/trigger` | Admin-gated "recompute EHOG ratings now" — fires the full rating walk in the background (admin only) |
 | `GET/POST` | `/api/players/register` | List unlinked players / link a Steam account to a player record |
@@ -99,7 +98,7 @@ Supabase (`public` schema). RLS is **off** on all tables — do not enable it wi
 | `weeks` | Linked to `seasons`. Has `week_number` and `bye_player_id` (who sits out that week) |
 | `matches` | Linked to `weeks`. Veto fields: `shirts_ban`, `shirts_ban2`, `skins_ban1`, `skins_ban2`, `shirts_pick`, `picked_map`, `skins_starting_side`. Also: `final_score`, `is_playoff_game`, `scheduled_at`, `screenshot_url_front/back`, `notes`. `pre_match_win_prob` (nullable) — frozen SHIRTS-win probability from the EHOG recompute, paired with `pre_match_win_prob_formula_version`; see [`ehog.md`](./ehog.md). Hosting (see [`hosting.md`](./hosting.md)): `server_state`, `dathost_server_id`, `connect_string`, `server_started_at` |
 | `players` | Global player registry. Unique `name`. Steam fields: `steam_id`, `steam_nickname`, `steam_avatar_url`, `steam_refreshed_at`. Admin flag: `is_admin`. `seed_ehog` (nullable) — admin-configured starting EHOG rating for a known new player; see [`ehog.md`](./ehog.md) |
-| `player_name_history` | One row per rename: `player_id`, `old_name`, `new_name`, `changed_at`. Written by both `PATCH /api/players/[id]` (admin) and `PATCH /api/players/me/name` (self-service); read via `getPlayerNameHistory()` for the once-a-week self-service cooldown and the admin console's history view |
+| `player_name_history` | One row per rename: `player_id`, `old_name`, `new_name`, `changed_at`. Written by both `PATCH /api/players/[id]` (admin) and `PATCH /api/players/me/name` (self-service); read via `getPlayerNameHistory()` for the once-a-week self-service cooldown and the "Formerly …" line on a player's public profile |
 | `player_match_stats` | Per-player per-match basics: `faction` (`SHIRTS`/`SKINS`), K/A/D, `damage`, `adr`, `rounds_played`, `rounds_won`, `is_win` |
 | `player_match_sabremetrics` | Demo-derived advanced stats, one row per `player_match_stats` row (FK `player_match_stats_id`): CT/T side splits, opening duels, KAST, clutches, utility, objectives. Written only when a demo is parsed. See [`demo-ingestion.md`](./demo-ingestion.md). |
 | `player_rating_history` / `player_current_ratings` | EHOG skill-rating storage (μ/σ history + current standings). Written by the EHOG recompute. See [`ehog.md`](./ehog.md). |

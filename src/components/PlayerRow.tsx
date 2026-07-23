@@ -8,9 +8,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { History } from 'lucide-react';
 import type { Player } from '@/lib/types';
-import type { PlayerNameChange } from '@/lib/queries';
 
 const cellBtn =
   'font-mono text-[11px] px-2 py-0.5 rounded border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-40';
@@ -27,26 +25,6 @@ export function PlayerRow({ player, isSelf }: { player: Player; isSelf: boolean 
   const [error, setError] = useState<string | null>(null);
   const [editingSeed, setEditingSeed] = useState(false);
   const [seedVal, setSeedVal] = useState(player.seed_ehog != null ? String(player.seed_ehog) : '');
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [history, setHistory] = useState<PlayerNameChange[] | null>(null);
-  const [historyLoading, setHistoryLoading] = useState(false);
-
-  async function toggleHistory() {
-    if (historyOpen) {
-      setHistoryOpen(false);
-      return;
-    }
-    setHistoryOpen(true);
-    if (history != null) return;
-    setHistoryLoading(true);
-    try {
-      const res = await fetch(`/api/players/${player.id}/name-history`);
-      const body = (await res.json().catch(() => ({}))) as { history?: PlayerNameChange[] };
-      setHistory(body.history ?? []);
-    } finally {
-      setHistoryLoading(false);
-    }
-  }
 
   // Send one field-set to the player route; `key` labels the in-flight control. On success refresh
   // the server data and drop back to the read-only view.
@@ -147,14 +125,6 @@ export function PlayerRow({ player, isSelf }: { player: Player; isSelf: boolean 
               </button>
               <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">#{player.id}</span>
               {isSelf && <span className="font-mono text-[10px] text-[var(--color-accent-blue-fg)]">you</span>}
-              <button
-                onClick={toggleHistory}
-                aria-label="View name history"
-                aria-expanded={historyOpen}
-                className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-              >
-                <History size={12} />
-              </button>
             </div>
           )}
         </td>
@@ -260,26 +230,6 @@ export function PlayerRow({ player, isSelf }: { player: Player; isSelf: boolean 
           )}
         </td>
       </tr>
-
-      {historyOpen && (
-        <tr>
-          <td colSpan={6} className="px-3 pb-2">
-            {historyLoading ? (
-              <span className={muted}>Loading…</span>
-            ) : history && history.length > 0 ? (
-              <ul className="flex flex-col gap-0.5">
-                {history.map((h, i) => (
-                  <li key={i} className={muted}>
-                    {h.old_name} → {h.new_name} · {new Date(h.changed_at).toLocaleDateString()}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <span className={muted}>No renames on record.</span>
-            )}
-          </td>
-        </tr>
-      )}
 
       {error && (
         <tr>
