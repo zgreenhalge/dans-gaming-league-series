@@ -7,6 +7,8 @@ import { TopbarShell } from '@/components/TopbarShell';
 import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory } from '@/lib/queries';
 import { getPlayerMeta } from '@/lib/og';
 import { isPlayedScore } from '@/lib/util';
+import { buildPlayerJsonLd } from '@/lib/structured-data';
+import { JsonLd } from '@/components/JsonLd';
 import { maybeRefreshSteamProfile } from '@/lib/steam';
 import PlayerView from '@/components/PlayerView';
 import PlayerAvatar from '@/components/PlayerAvatar';
@@ -47,7 +49,7 @@ export default async function PlayerPage({
   const { id } = await params;
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
-  const [session, detail, careerLeaderboard, h2hData, ehog, leagueSabremetrics, nameHistory] = await Promise.all([
+  const [session, detail, careerLeaderboard, h2hData, ehog, leagueSabremetrics, nameHistory, playerMeta] = await Promise.all([
     getServerSession(authOptions),
     getPlayer(playerId),
     getCareerLeaderboard(),
@@ -57,6 +59,7 @@ export default async function PlayerPage({
     // league avg) without shipping every match row to the client.
     getSabremetricSeasonTotals(),
     getPlayerNameHistory(playerId),
+    getPlayerMeta(playerId),
   ]);
   const isSelf = session?.user?.playerId === playerId;
   if (!detail) notFound();
@@ -76,8 +79,17 @@ export default async function PlayerPage({
     detail.player.steam_avatar_url = freshSteam.steam_avatar_url;
   }
 
+  const playerJsonLd = buildPlayerJsonLd({
+    playerId: detail.player.id,
+    name: detail.player.name,
+    kd: playerMeta?.stats.kd ?? null,
+    adr: playerMeta?.stats.adr ?? null,
+    ehog: playerMeta?.stats.ehogRaw ?? null,
+  });
+
   return (
     <div className="min-h-screen">
+      <JsonLd data={playerJsonLd} />
       <TopbarShell
         crumbs={[
           { label: 'DGLS', href: '/' },

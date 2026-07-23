@@ -24,7 +24,9 @@ import SeasonStartDateButton from '@/components/SeasonStartDateButton';
 import MarkSeasonActiveButton from '@/components/MarkSeasonActiveButton';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
-import { seasonTitle } from '@/lib/util';
+import { seasonTitle, weekWindow, matchTitle } from '@/lib/util';
+import { buildSeasonJsonLd } from '@/lib/structured-data';
+import { JsonLd } from '@/components/JsonLd';
 
 export const revalidate = 60;
 
@@ -64,6 +66,13 @@ function countMatches(schedule: WeekWithMatches[]) {
 
 function countGauntletMatches(rounds: GauntletRound[]) {
   return rounds.reduce((sum, r) => sum + r.matches.length, 0);
+}
+
+/** The last calendar day of a season's final week/round, derived from its week-numbering scheme. */
+function seasonEndDate(startDate: string | null, finalWeekNumber: number | null): string | null {
+  if (finalWeekNumber == null) return null;
+  const window = weekWindow(startDate, finalWeekNumber);
+  return window ? window.end.toISOString().slice(0, 10) : null;
 }
 
 function Topbar({ season }: { season: Season }) {
@@ -143,9 +152,24 @@ export default async function SeasonPage({
       getAllSabremetrics(seasonId),
     ]);
     const matchCount = countGauntletMatches(rounds);
+    const finalRound = rounds.length > 0 ? rounds[rounds.length - 1].round_number : null;
+    const seasonJsonLd = buildSeasonJsonLd({
+      seasonId: season.id,
+      seasonTitle: seasonTitle(season.name),
+      startDate: season.start_date,
+      endDate: seasonEndDate(season.start_date, finalRound),
+      matches: rounds.flatMap((r) =>
+        r.matches.map((m) => ({
+          id: m.id,
+          name: matchTitle({ seasonName: season.name, weekNumber: r.round_number, matchNumber: m.match_number, isGauntlet: true }),
+          startDate: null,
+        })),
+      ),
+    });
 
     return (
       <div className="min-h-screen">
+        <JsonLd data={seasonJsonLd} />
         <Topbar season={season} />
         <main className="max-w-[1080px] mx-auto px-6 pb-16">
           <div className="mt-8 mb-6">
@@ -202,9 +226,24 @@ export default async function SeasonPage({
     linkedGauntlet ? getAllSabremetrics(linkedGauntlet.id) : Promise.resolve([]),
   ]);
   const matchCount = countMatches(schedule);
+  const finalWeek = schedule.length > 0 ? schedule[schedule.length - 1].week_number : null;
+  const seasonJsonLd = buildSeasonJsonLd({
+    seasonId: season.id,
+    seasonTitle: seasonTitle(season.name),
+    startDate: season.start_date,
+    endDate: seasonEndDate(season.start_date, finalWeek),
+    matches: schedule.flatMap((w) =>
+      w.matches.map((m) => ({
+        id: m.id,
+        name: matchTitle({ seasonName: season.name, weekNumber: w.week_number, matchNumber: m.match_number, isGauntlet: false }),
+        startDate: m.scheduled_at,
+      })),
+    ),
+  });
 
   return (
     <div className="min-h-screen">
+      <JsonLd data={seasonJsonLd} />
       <Topbar season={season} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">
