@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getPlayerNameHistory } from '@/lib/queries';
+import { recordNameChange } from '@/lib/player-name-history';
+import { normalizePlayerName, isValidPlayerName, PLAYER_NAME_MIN_LENGTH, PLAYER_NAME_MAX_LENGTH } from '@/lib/util';
 
 // Self-service rename (issue #268): a player changes their own display name, in place on their
 // profile page. Distinct from the admin-only `PATCH /api/players/[id]` — that route can rename any
@@ -11,9 +13,6 @@ import { getPlayerNameHistory } from '@/lib/queries';
 
 const supabaseAdmin = getAdminClient();
 
-const NAME_RE = /^[A-Za-z]+(?: [A-Za-z]+)*$/;
-const MIN_NAME_LENGTH = 2;
-const MAX_NAME_LENGTH = 32;
 const RENAME_COOLDOWN_DAYS = 7;
 
 export async function PATCH(req: NextRequest) {
@@ -26,21 +25,22 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 });
   }
 
-  const next = body.name.trim().replace(/\s+/g, ' ');
-  if (next.length < MIN_NAME_LENGTH || next.length > MAX_NAME_LENGTH || !NAME_RE.test(next)) {
+  const next = normalizePlayerName(body.name);
+  if (!isValidPlayerName(next)) {
     return NextResponse.json(
       {
-        error: `Name must be ${MIN_NAME_LENGTH}-${MAX_NAME_LENGTH} letters — spaces allowed between words, no numbers or symbols.`,
+        error: `Name must be ${PLAYER_NAME_MIN_LENGTH}-${PLAYER_NAME_MAX_LENGTH} letters — spaces allowed between words, no numbers or symbols.`,
       },
       { status: 400 },
     );
   }
 
-  const { data: current, error: fetchError } = await supabaseAdmin
-    .from('players')
-    .select('name')
-    .eq('id', playerId)
-    .maybeSingle();
+  // Independent reads — the current name (to detect a no-op and log the "from") and this player's
+  // rename history (for the cooldown check below) — batched since neither depends on the other.
+  const [{ data: current, error: fetchError }, history] = await Promise.all([
+    supabaseAdmin.from('players').select('name').eq('id', playerId).maybeSingle(),
+    getPlayerNameHistory(playerId),
+  ]);
   if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
   if (!current) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
 
@@ -51,7 +51,6 @@ export async function PATCH(req: NextRequest) {
 
   // Once every RENAME_COOLDOWN_DAYS, based on this player's most recent recorded change — a player
   // who has never renamed has no history row, so no cooldown applies.
-  const history = await getPlayerNameHistory(playerId);
   const last = history[0];
   if (last) {
     const nextEligibleAt = new Date(last.changed_at);
@@ -64,8 +63,10 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  // Case-insensitive pre-check for a friendly message; the DB's unique constraint (caught below) is
-  // the real backstop against a race between this check and the update.
+  // Case-insensitive pre-check for a friendly message. This is *not* redundant with the unique-
+  // constraint catch below: `players.name`'s unique index is case-sensitive, so without this check
+  // a rename to "bob" would slip through even with an existing "Bob" — the constraint only catches
+  // an exact-case clash. The catch below remains the backstop against a race with this check.
   const { data: clash } = await supabaseAdmin
     .from('players')
     .select('id')
@@ -87,12 +88,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
-  // Best-effort — the rename itself already committed and must not be rolled back over a logging
-  // failure; this only risks a gap in the audit trail an admin could otherwise consult.
-  const { error: historyError } = await supabaseAdmin
-    .from('player_name_history')
-    .insert({ player_id: playerId, old_name: previousName, new_name: next });
-  if (historyError) console.error(`player_name_history insert failed for player ${playerId}:`, historyError);
+  await recordNameChange(supabaseAdmin, playerId, previousName, next);
 
   return NextResponse.json({ ok: true, player: { id: playerId, name: next } });
 }

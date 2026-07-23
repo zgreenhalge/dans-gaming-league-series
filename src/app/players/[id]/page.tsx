@@ -47,9 +47,8 @@ export default async function PlayerPage({
   const { id } = await params;
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
-  const session = await getServerSession(authOptions);
-  const isSelf = session?.user?.playerId === playerId;
-  const [detail, careerLeaderboard, h2hData, ehog, leagueSabremetrics, nameHistory] = await Promise.all([
+  const [session, detail, careerLeaderboard, h2hData, ehog, leagueSabremetrics, nameHistory] = await Promise.all([
+    getServerSession(authOptions),
     getPlayer(playerId),
     getCareerLeaderboard(),
     getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
@@ -59,6 +58,7 @@ export default async function PlayerPage({
     getSabremetricSeasonTotals(),
     getPlayerNameHistory(playerId),
   ]);
+  const isSelf = session?.user?.playerId === playerId;
   if (!detail) notFound();
 
   const playedMatchIds = detail.history

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { recordNameChange } from '@/lib/player-name-history';
 
 // Admin player management (#144): edit a player's display name, toggle their `is_admin` flag, or
 // change their Steam link (unlink, or set a SteamID64 by hand). Admin-only. All three edits go
@@ -131,13 +132,8 @@ export async function PATCH(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
 
-  // Best-effort — the rename itself already committed and must not be rolled back over a logging
-  // failure; this only risks a gap in the audit trail this same log backs on the self-service route.
   if (renamedFrom) {
-    const { error: historyError } = await supabaseAdmin
-      .from('player_name_history')
-      .insert({ player_id: targetId, old_name: renamedFrom, new_name: (data as { name: string }).name });
-    if (historyError) console.error(`player_name_history insert failed for player ${targetId}:`, historyError);
+    await recordNameChange(supabaseAdmin, targetId, renamedFrom, (data as { name: string }).name);
   }
 
   return NextResponse.json({ ok: true, player: data });

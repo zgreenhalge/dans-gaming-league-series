@@ -9,10 +9,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-
-const NAME_RE = /^[A-Za-z]+(?: [A-Za-z]+)*$/;
-const MIN_NAME_LENGTH = 2;
-const MAX_NAME_LENGTH = 32;
+import { normalizePlayerName, isValidPlayerName, PLAYER_NAME_MIN_LENGTH, PLAYER_NAME_MAX_LENGTH } from '@/lib/util';
 
 export default function PlayerNameEditor({ playerId, name }: { playerId: number; name: string }) {
   const router = useRouter();
@@ -22,9 +19,8 @@ export default function PlayerNameEditor({ playerId, name }: { playerId: number;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const trimmed = value.trim().replace(/\s+/g, ' ');
-  const valid =
-    trimmed.length >= MIN_NAME_LENGTH && trimmed.length <= MAX_NAME_LENGTH && NAME_RE.test(trimmed);
+  const trimmed = normalizePlayerName(value);
+  const valid = isValidPlayerName(trimmed);
 
   function cancel() {
     setValue(name);
@@ -86,7 +82,7 @@ export default function PlayerNameEditor({ playerId, name }: { playerId: number;
           type="text"
           value={value}
           autoFocus
-          maxLength={MAX_NAME_LENGTH}
+          maxLength={PLAYER_NAME_MAX_LENGTH}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') save();
@@ -111,7 +107,7 @@ export default function PlayerNameEditor({ playerId, name }: { playerId: number;
       </div>
       {value.trim() && !valid && (
         <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-          {MIN_NAME_LENGTH}-{MAX_NAME_LENGTH} letters — spaces allowed between words, no numbers or symbols.
+          {PLAYER_NAME_MIN_LENGTH}-{PLAYER_NAME_MAX_LENGTH} letters — spaces allowed between words, no numbers or symbols.
         </div>
       )}
       {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg,#f87171)]">{error}</div>}
