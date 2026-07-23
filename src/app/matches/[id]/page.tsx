@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
 import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/og';
+import { buildMatchJsonLd } from '@/lib/structured-data';
+import { JsonLd } from '@/components/JsonLd';
 import { projectRatingDeltas, predictWinProbability, isProvisional, type RatingProjection } from '@/lib/ehog';
 import { isPlayedScore, parseScore, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
@@ -254,8 +256,23 @@ export default async function MatchPage({
     !played && !season.is_gauntlet ? await getOtherScheduledMatches(match.id) : [];
   const scheduleCollision = findScheduleCollision(match.scheduled_at, otherScheduled);
 
+  const matchJsonLd = buildMatchJsonLd({
+    matchId: match.id,
+    seasonName: season.name,
+    weekNumber: week.week_number,
+    isGauntlet: season.is_gauntlet,
+    matchNumber: match.match_number,
+    scheduledAt: match.scheduled_at,
+    played,
+    score,
+    recordingUrl: match.recording_url,
+    shirts,
+    skins,
+  });
+
   return (
     <div className="min-h-screen">
+      <JsonLd data={matchJsonLd} />
       <div className="centering">
         {match.is_feature_match && <FeatureMatchBanner />}
         {scheduleCollision && <SchedulingOverlapBanner conflict={scheduleCollision} />}
