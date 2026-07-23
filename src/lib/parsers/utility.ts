@@ -1,5 +1,5 @@
 import type { SabFields } from '../types';
-import type { MatchContext, PlayerDeathRow } from './matchContext';
+import { isTeamKill, type MatchContext, type PlayerDeathRow } from './matchContext';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -64,10 +64,8 @@ export function collectUtility(
     if (!blinded || !steamSet.has(blinded)) continue;
     if (flasher === blinded) continue; // self-flash ignored for all stats
 
-    const flasherSide = context.playerSides.get(flasher)?.get(round);
-    const blindedSide = context.playerSides.get(blinded)?.get(round);
-    const isTeammate = flasherSide != null && blindedSide != null && flasherSide === blindedSide;
-    const isEnemy = flasherSide != null && blindedSide != null && flasherSide !== blindedSide;
+    const isTeammate = isTeamKill(flasher, blinded, context);
+    const isEnemy = !isTeammate;
     const duration = b.blind_duration ?? 0;
 
     const p = out.get(flasher)!;
@@ -109,8 +107,7 @@ export function collectUtility(
           if (d.tick > windowEnd || d.tick < b.tick) return false;
           // Killed by a teammate of the flasher (not the flasher themselves)
           if (!d.attacker || d.attacker === flasher) return false;
-          const killerSide = context.playerSides.get(d.attacker)?.get(round);
-          return killerSide != null && killerSide === flasherSide;
+          return isTeamKill(d.attacker, flasher, context);
         });
         if (assisted) {
           p.flash_assists = ((p.flash_assists as number) ?? 0) + 1;

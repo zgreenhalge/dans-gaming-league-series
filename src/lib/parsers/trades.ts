@@ -1,5 +1,5 @@
 import type { SabFields } from '../types';
-import type { MatchContext, PlayerDeathRow, PlayerHurtRow } from './matchContext';
+import { isTeamKill, type MatchContext, type PlayerDeathRow, type PlayerHurtRow } from './matchContext';
 import { TRADE_WINDOW_SECONDS } from './constants';
 import type { PlayerPositionRow } from './smokes';
 
@@ -9,14 +9,6 @@ type CollectorOut = Map<string, Partial<SabFields>>;
 // opportunity — otherwise "alive and on the same side" alone credits opportunities from
 // anywhere on the map. Same radius as Smokes Blocking Push's own distance gate.
 const TRADE_DISTANCE = 180;
-
-// Same permissive convention as kast.ts's KAST qualifiers: an unknown side never disqualifies —
-// it only excludes when both sides are known and actually differ.
-function sameSide(context: MatchContext, round: number, a: string, b: string): boolean {
-  const sideA = context.playerSides.get(a)?.get(round);
-  const sideB = context.playerSides.get(b)?.get(round);
-  return sideA == null || sideB == null || sideA === sideB;
-}
 
 /** Tick list demoOrchestrator.ts needs to fetch (via parseTicks, all players): one per death, to
  *  check whether a teammate was close enough to plausibly trade. */
@@ -94,7 +86,7 @@ export function collectTrades(
       // Teammates still alive at the moment of death — the pool who could possibly trade.
       const aliveTeammates = steamIds.filter((sid) => {
         if (sid === victim) return false;
-        if (!sameSide(context, round, sid, victim)) return false;
+        if (!isTeamKill(sid, victim, context)) return false;
         const teammateDeath = deaths.find((d) => d.user_steamid === sid);
         return !teammateDeath || teammateDeath.tick > victimDeath.tick;
       });

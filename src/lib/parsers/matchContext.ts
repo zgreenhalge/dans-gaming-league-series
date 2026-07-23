@@ -66,8 +66,12 @@ export interface MatchContext {
   liveRounds: Set<number>;
   roundEndTicks: Int32Array;
   tickRate: number;
+  /** Per-round CT/T side, only populated when the starting side resolves (see `hasSides`). Needed
+   *  for CT/T-specific splits; prefer `factionOf`/`isTeamKill()` for "are these two teammates". */
   playerSides: Map<string, Map<number, 'CT' | 'T'>>;
   roundDeaths: Map<string, Set<number>>;
+  /** Fixed roster faction (SHIRTS/SKINS), populated unconditionally regardless of `hasSides`. Use
+   *  with `isTeamKill()` for same-team checks — robust even when the starting side is unresolved. */
   factionOf: Map<string, 'SHIRTS' | 'SKINS'>;
   warnings: string[];
   hasSides: boolean;
