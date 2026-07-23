@@ -126,7 +126,17 @@ export default async function MatchPage({
 
   const showScouting = shirts.length === 2 && skins.length === 2;
   const key = makeDemoKey(matchId);
-  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod] = await Promise.all([
+
+  // Rating projections/win-probability render for an unplayed match either in its own week's date
+  // window, or — if that window hasn't opened yet — once the previous week is fully scored (a
+  // league that wraps a week up early shouldn't have to wait on the calendar for predictions).
+  const matchWindow = matchWeekWindow(season.start_date, week.week_number);
+  const today = new Date().toISOString().slice(0, 10);
+  const isCurrentWeek = matchWindow != null && today >= matchWindow.weekStart && today <= matchWindow.weekEnd;
+  const needsPreviousWeekCheck =
+    !played && showScouting && week.week_number > 1 && matchWindow != null && today < matchWindow.weekStart;
+
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, previousWeekComplete] = await Promise.all([
     showScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     showScouting
       ? getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true })
@@ -143,6 +153,7 @@ export default async function MatchPage({
     // Match ids on this map — feeds the scouting report's Map Intel heatmap (#128).
     showScouting && map ? getMatchIdsForMap(map) : Promise.resolve<number[]>([]),
     season.is_gauntlet ? getGauntletPodForMatch(matchId) : Promise.resolve(null),
+    needsPreviousWeekCheck ? isWeekComplete(season.id, week.week_number - 1) : Promise.resolve(false),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
 
@@ -158,22 +169,10 @@ export default async function MatchPage({
   const replayEvents =
     played && replayJob.status !== 'none' ? await getReplayEventsView(matchId) : null;
 
-  // Compute rating projections for unplayed matches in the current week — or, if this week's date
-  // window hasn't opened yet, for the week right after one that's already fully scored (a league
-  // can wrap up a week early, and predictions shouldn't wait on the calendar to catch up).
-  const matchWindow = matchWeekWindow(season.start_date, week.week_number);
-  const today = new Date().toISOString().slice(0, 10);
-  const isCurrentWeek = matchWindow != null && today >= matchWindow.weekStart && today <= matchWindow.weekEnd;
-  const isBeforeWindow = matchWindow != null && today < matchWindow.weekStart;
-  const previousWeekComplete =
-    !played && isBeforeWindow && week.week_number > 1
-      ? await isWeekComplete(season.id, week.week_number - 1)
-      : false;
-  const showPrediction = isCurrentWeek || previousWeekComplete;
   let ratingProjections: RatingProjection[] = [];
   const ratingCurrent: Record<number, number> = {};
   let winProbability: { pShirtsWin: number; provisional: boolean } | null = null;
-  if (!played && showPrediction && shirts.length === 2 && skins.length === 2) {
+  if (!played && showScouting && (isCurrentWeek || previousWeekComplete)) {
     const allPlayerIds = [...shirts, ...skins].map((s) => s.player_id);
     const playerRatings = await getPlayerRatings(allPlayerIds);
     const byId = new Map(playerRatings.map((r) => [r.playerId, r]));

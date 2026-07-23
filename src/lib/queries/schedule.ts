@@ -133,21 +133,13 @@ export async function isWeekComplete(
   seasonId: number,
   weekNumber: number,
 ): Promise<boolean> {
-  const { data: week, error: wErr } = await supabase
-    .from('weeks')
-    .select('id')
-    .eq('season_id', seasonId)
-    .eq('week_number', weekNumber)
-    .maybeSingle();
-  if (wErr) throw wErr;
-  if (!week) return false;
-
-  const { data: matches, error: mErr } = await supabase
+  const { data, error } = await supabase
     .from('matches')
-    .select('final_score')
-    .eq('week_id', week.id);
-  if (mErr) throw mErr;
-  const rows = (matches ?? []) as { final_score: string | null }[];
+    .select('final_score, weeks!inner(season_id, week_number)')
+    .eq('weeks.season_id', seasonId)
+    .eq('weeks.week_number', weekNumber);
+  if (error) throw error;
+  const rows = (data ?? []) as { final_score: string | null }[];
   if (rows.length === 0) return false;
   return rows.every((m) => isPlayedScore(m.final_score));
 }
