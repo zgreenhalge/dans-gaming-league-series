@@ -43,7 +43,10 @@ export interface TeamGroup {
 // type to its `SabFields` counterpart, so the bulk of the shape is inherited from `SabFields`
 // itself (`Omit`ing the ct/t-split raw fields aggregateRows() unions into `kills`/`deaths`/etc.,
 // plus the two fields this view never reads) rather than re-listing every stat by hand — the
-// single source of truth for "what sabremetrics exist" stays `SabFields` in src/lib/types.ts.
+// single source of truth for "what sabremetrics exist" stays `SabFields` in src/lib/types.ts. A
+// new flat field needs no changes here; a new ct/t-split field needs adding to this list AND to
+// the matching destructure in aggregateRows() below, or it silently lands as two unsummed raw
+// columns instead of a unioned total.
 type DerivedRawSabFields =
   | 'kills_ct' | 'kills_t' | 'deaths_ct' | 'deaths_t'
   | 'assists_ct' | 'assists_t' | 'damage_ct' | 'damage_t'
