@@ -1,6 +1,7 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { Week, Match, PlayerMatchStat, Faction } from '../types';
-import { isPlayedScore } from '../util';
+import { allMatchesPlayed } from '../util';
 import { getPlayersById } from './player';
 
 
@@ -127,19 +128,36 @@ export async function getSeasonSchedule(
   }));
 }
 
+/** Fetches `final_score` for every match in the given weeks — the shared fetch shape behind
+ * `isWeekComplete()` and `isSeasonFullyPlayed()` (`season-lifecycle.ts`), which differ only in how
+ * they resolve `weekIds` (a single week vs. every week in a season) and which client they read with
+ * (the shared `supabase` client here vs. an admin `SupabaseClient` passed by season-lifecycle's
+ * callers). */
+export async function getMatchScoresForWeeks(
+  client: SupabaseClient,
+  weekIds: number[],
+): Promise<{ final_score: string | null }[]> {
+  if (weekIds.length === 0) return [];
+  const { data, error } = await client
+    .from('matches')
+    .select('final_score')
+    .in('week_id', weekIds);
+  if (error) throw error;
+  return (data ?? []) as { final_score: string | null }[];
+}
+
 /** True if the given week exists, has at least one match, and every match in it has a final,
  * played score. */
 export async function isWeekComplete(
   seasonId: number,
   weekNumber: number,
 ): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('matches')
-    .select('final_score, weeks!inner(season_id, week_number)')
-    .eq('weeks.season_id', seasonId)
-    .eq('weeks.week_number', weekNumber);
-  if (error) throw error;
-  const rows = (data ?? []) as { final_score: string | null }[];
-  if (rows.length === 0) return false;
-  return rows.every((m) => isPlayedScore(m.final_score));
+  const { data: weeks, error: wErr } = await supabase
+    .from('weeks')
+    .select('id')
+    .eq('season_id', seasonId)
+    .eq('week_number', weekNumber);
+  if (wErr) throw wErr;
+  const weekIds = ((weeks ?? []) as { id: number }[]).map((w) => w.id);
+  return allMatchesPlayed(await getMatchScoresForWeeks(supabase, weekIds));
 }

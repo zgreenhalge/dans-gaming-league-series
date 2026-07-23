@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import type { LeaderboardRowWithId, PlayerMatchStat, Match } from '../types';
-import { canonicalSort, isPlayedScore } from '../util';
+import { allMatchesPlayed, canonicalSort, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
 
 
@@ -445,8 +445,8 @@ export async function getGauntletBracketShape(gauntletSeasonId: number): Promise
   ]);
   if (slotErr) throw slotErr;
 
-  const playedMatch = new Map(
-    ((matchRows ?? []) as { id: number; final_score: string | null }[]).map((m) => [m.id, isPlayedScore(m.final_score)]),
+  const finalScoreByMatch = new Map(
+    ((matchRows ?? []) as { id: number; final_score: string | null }[]).map((m) => [m.id, m.final_score]),
   );
 
   type SlotRow = {
@@ -479,7 +479,7 @@ export async function getGauntletBracketShape(gauntletSeasonId: number): Promise
       pod_index: p.pod_index,
       advance_rule: p.advance_rule,
       is_final: p.is_final,
-      played: podMatchIds.length > 0 && podMatchIds.every((id) => playedMatch.get(id) === true),
+      played: allMatchesPlayed(podMatchIds.map((id) => ({ final_score: finalScoreByMatch.get(id) ?? null }))),
       materialized: p.match1_id != null,
       slots: (slotsByPod.get(p.id) ?? []).sort((a, b) => a.slot_index - b.slot_index),
     };
@@ -671,7 +671,7 @@ export async function getAllGauntletSummaries(): Promise<Map<number, GauntletSum
         w.week_number > best.week_number ? w : best,
       );
       const finalMatches = matchesByWeek.get(finalWeek.id) ?? [];
-      const allPlayed = finalMatches.length > 0 && finalMatches.every((m) => isPlayedScore(m.final_score));
+      const allPlayed = allMatchesPlayed(finalMatches);
       if (allPlayed) {
         const wins = new Map<number, number>();
         for (const m of finalMatches) {

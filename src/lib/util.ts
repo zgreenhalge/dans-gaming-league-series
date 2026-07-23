@@ -20,6 +20,17 @@ export function isPlayedScore(finalScore: string | null | undefined): boolean {
   return !/^\s*0\s*[-–]\s*0\s*$/.test(finalScore);
 }
 
+/**
+ * True if `rows` is non-empty and every row's `final_score` is a played result — the shared "is
+ * this scope of matches fully played" predicate behind `isWeekComplete()` (`queries/schedule.ts`),
+ * `isSeasonFullyPlayed()` (`season-lifecycle.ts`), and gauntlet pod/season completion
+ * (`queries/gauntlet.ts`, `gauntlet-engine.ts`). An empty scope (no matches at all) is never
+ * "fully played".
+ */
+export function allMatchesPlayed(rows: { final_score: string | null }[]): boolean {
+  return rows.length > 0 && rows.every((m) => isPlayedScore(m.final_score));
+}
+
 export const PLAYER_NAME_MIN_LENGTH = 2;
 export const PLAYER_NAME_MAX_LENGTH = 32;
 const PLAYER_NAME_RE = /^[A-Za-z]+(?: [A-Za-z]+)*$/;
