@@ -268,9 +268,16 @@ Player Rating = 1.00
   + 0.10(Utility+ - 1)
   + 0.10(APR+ - 1)
   + 0.10(DPR+ - 1)
+  + 0.10(Aim+ - 1)
+  + 0.05(Spray+ - 1)
 ```
 
 #### Role ratings
+
+Entry and Anchor Rating deliberately exclude `ADR+`, `K/D+`, and `DPR+` — a whiffing entry or
+anchor who still racks up damage/kills before dying, or survives by playing passively, shouldn't
+score well on those roles just for raw stat-padding; each role rating stays scoped to the stats
+that actually describe doing that role's job well.
 
 A player's best-fit playstyle is whichever Role Rating sits furthest above league average
 (`bestFitRole()`) — not necessarily the highest raw rating across roles. Surfaced as a badge on the
@@ -280,19 +287,15 @@ FIFA-style player card (`PlayerRatingCard.tsx`).
 Entry Rating = 1.00
   + 0.35(Entry+ - 1)
   + 0.20(KPR+ - 1)
-  + 0.20(ADR+ - 1)
   + 0.15(Trade+ - 1)
-  + 0.10(K/D+ - 1)
 ```
 
 ```
 Anchor Rating = 1.00
   + 0.50(KPR+ - 1)
   + 0.40(Clutch+ - 1)
-  + 0.15(ADR+ - 1)
   + 0.15(Trade+ - 1)
   + 0.10(Objective+ - 1)
-  + 0.50(DPR+ - 1)
   + 0.20(Choke+ - 1)
 ```
 

@@ -293,26 +293,29 @@ export function computePlayerRating(p: PlusStat): number {
     + 0.10 * (p.objective - 1)
     + 0.10 * (p.utility - 1)
     + 0.10 * (p.apr - 1)
-    + 0.10 * (p.dpr - 1);
+    + 0.10 * (p.dpr - 1)
+    + 0.10 * (p.aim - 1)
+    + 0.05 * (p.spray - 1);
 }
+
+// Entry/Anchor Rating deliberately exclude ADR+, K/D+, and DPR+ — a whiffing entry or anchor who
+// still racks up damage/kills before dying (or survives by playing passively) shouldn't score well
+// on those roles just for raw stat-padding; each role rating stays scoped to the stats that
+// actually describe doing that role's job well.
 
 export function computeEntryRating(p: PlusStat): number {
   return 1
     + 0.35 * (p.entry - 1)
     + 0.20 * (p.kpr - 1)
-    + 0.20 * (p.adr - 1)
-    + 0.15 * (p.trade - 1)
-    + 0.10 * (p.kdr - 1);
+    + 0.15 * (p.trade - 1);
 }
 
 export function computeAnchorRating(p: PlusStat): number {
   return 1
     + 0.50 * (p.kpr - 1)
     + 0.40 * (p.clutch - 1)
-    + 0.15 * (p.adr - 1)
     + 0.15 * (p.trade - 1)
     + 0.10 * (p.objective - 1)
-    + 0.50 * (p.dpr - 1)
     + 0.20 * (p.choke - 1);
 }
 
