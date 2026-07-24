@@ -55,6 +55,12 @@ ReplayPayload {
 `events[]` powers the synced events panel alongside the in-player timeline — one file, two views onto
 the same data. Wingman has few players, so payloads are small (a few MB worst case, gzipped).
 
+A dead player's `x`/`y`/`yaw` are frozen at their last known-alive tick rather than whatever the
+engine reports once they're down (which drifts toward their next-round spawn) — `buildReplay()` does
+this once per round while assembling `frames`, so every consumer (`interpolatePlayers` in
+`playback.ts`, `extractPlayerTrace` in `aggregate.ts`) inherits a corpse that stays put with no
+per-consumer special-casing.
+
 ### Extract code
 
 **`src/lib/replay/extract.ts`** → `buildReplay()`. Runtime-agnostic: the **same** module runs in-app
@@ -297,7 +303,8 @@ ghost reads as a corpse marker sitting where they actually died. `traceStateAt`'
 then holds that frozen position for the rest of the round. If the player is already dead on the very
 first frame they appear in (no prior alive position exists to freeze at), that frame's own position is
 used as a last resort instead — a possibly-imprecise corpse marker beats the round silently vanishing
-from the overlay and its round count.
+from the overlay and its round count. `extract.ts` already applies this same freeze at the source (see
+above), so this is defense-in-depth rather than the only place it happens.
 
 **Survivors** stop at `round.endTick` for the same reason: `round.frames` (`extract.ts`) deliberately
 keeps a few seconds *after* `round_end` so the single-round 2D Replay can show the post-round window,
