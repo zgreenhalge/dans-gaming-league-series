@@ -6,6 +6,7 @@ import type { SabFields } from '@/lib/types';
 import { addSabFields } from '@/lib/queries';
 import { tabCls } from '@/lib/util';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
+import PlayerRatingCard, { type RatingSubStat, type RoleBadge } from './PlayerRatingCard';
 
 /**
  * The fields this view actually reads off a per-match sabremetric row — a structural subset of
@@ -898,7 +899,7 @@ interface SinglePlayerTiles {
   utility: StatTile[];
   plus: StatTile[];
   /** FIFA-card inputs — null when there's no league baseline to rate against. */
-  card: { rating: number; subStats: { label: string; value: number; title?: string }[]; role: { label: string; rating: number } | null } | null;
+  card: { rating: number; subStats: RatingSubStat[]; role: RoleBadge | null } | null;
 }
 
 function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: AggregatedSab[]): SinglePlayerTiles {
@@ -1064,6 +1065,7 @@ export default function SabremetricsLeaderboardView({
   singlePlayer = false,
   teamGroups,
   showPlusStats = true,
+  avatarUrl,
 }: {
   rows: SabremetricStatRow[];
   /** League-wide rows used as the Plus-stat baseline in single-player mode. Defaults to `rows`. */
@@ -1075,6 +1077,8 @@ export default function SabremetricsLeaderboardView({
   /** Plus stats compare a player to a league-wide baseline — not meaningful over just the
    *  handful of players in one match, so match-page callers should pass `false`. */
   showPlusStats?: boolean;
+  /** Player avatar for the singlePlayer FIFA-style rating card. Ignored otherwise. */
+  avatarUrl?: string | null;
 }) {
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);
   const leagueAggregated = useMemo(() => aggregateRows(leagueRows ?? rows), [leagueRows, rows]);
@@ -1109,6 +1113,15 @@ export default function SabremetricsLeaderboardView({
         {sub === 'mechanics' && <StatTileGrid heading="Mechanics" tiles={tiles.mechanics} />}
         {sub === 'trades' && <StatTileGrid heading="Trades" tiles={tiles.trades} />}
         {sub === 'utility' && <StatTileGrid heading="Utility" tiles={tiles.utility} />}
+        {sub === 'plus' && tiles.card && (
+          <PlayerRatingCard
+            name={aggregated[0].player_name}
+            avatarUrl={avatarUrl}
+            rating={tiles.card.rating}
+            subStats={tiles.card.subStats}
+            role={tiles.card.role}
+          />
+        )}
         {sub === 'plus' && tiles.plus.length > 0 && (
           <StatTileGrid heading="Stats Plus" hint="50 = this league's average, not a global percentile. Values above 50 are better than average, below 50 are worse." tiles={tiles.plus} />
         )}

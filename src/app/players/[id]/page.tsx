@@ -137,6 +137,7 @@ export default async function PlayerPage({
           ehogHistory={ehog.history}
           matchDeltas={matchDeltas}
           sabremetrics={leagueSabremetrics}
+          avatarUrl={detail.player.steam_avatar_url}
         />
       </main>
     </div>

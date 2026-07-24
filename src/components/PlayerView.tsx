@@ -194,6 +194,7 @@ export default function PlayerView({
   ehogHistory,
   matchDeltas,
   sabremetrics = [],
+  avatarUrl,
 }: {
   playerId: number;
   history: PlayerHistoryRow[];
@@ -205,6 +206,8 @@ export default function PlayerView({
   /** League-wide sabremetric rows (all players) — the player's own rows and the
    *  Plus-stat baseline are both derived from these under the active season filter. */
   sabremetrics?: SabremetricMatchRow[];
+  /** Player avatar for the Advanced Stats tab's FIFA-style rating card. */
+  avatarUrl?: string | null;
 }) {
   const { data: session } = useSession();
   const loggedInPlayerId = session?.user?.playerId ?? null;
@@ -815,7 +818,7 @@ export default function PlayerView({
 
       {/* Advanced Stats tab */}
       {tab === 'advanced' && (
-        <SabremetricsLeaderboardView rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} singlePlayer />
+        <SabremetricsLeaderboardView rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} singlePlayer avatarUrl={avatarUrl} />
       )}
 
       {/* Matchups tab */}
