@@ -294,28 +294,30 @@ export function computePlayerRating(p: PlusStat): number {
   return 1
     + 0.30 * (p.kpr - 1)
     + 0.20 * (p.adr - 1)
-    + 0.10 * (p.entry - 1)
     + 0.10 * (p.clutch - 1)
     + 0.10 * (p.trade - 1)
     + 0.10 * (p.objective - 1)
     + 0.10 * (p.utility - 1)
-    + 0.10 * (p.apr - 1)
     + 0.10 * (p.dpr - 1)
     // Aim+ already blends in Spray+ (see computePlusStats()), so no separate Spray+ term here —
     // that would double-count it.
-    + 0.10 * (p.aim - 1);
+    + 0.10 * (p.aim - 1)
+    + 0.10 * (p.kast - 1)
+    + 0.10 * (p.choke - 1);
 }
 
-// Entry/Anchor Rating deliberately exclude ADR+, K/D+, and DPR+ — a whiffing entry or anchor who
-// still racks up damage/kills before dying (or survives by playing passively) shouldn't score well
-// on those roles just for raw stat-padding; each role rating stays scoped to the stats that
-// actually describe doing that role's job well.
+// Entry Rating includes ADR+/APR+ — a good entry also deals damage and sets up teammates, not
+// just wins the opening duel — but excludes K/D+ and DPR+, since dying is often the accepted cost
+// of taking the opening duel aggressively. Anchor Rating excludes ADR+/APR+/K/D+ for the mirror
+// stat-padding reason, but keeps DPR+ (surviving to hold the site is part of the job).
 
 export function computeEntryRating(p: PlusStat): number {
   return 1
     + 0.35 * (p.entry - 1)
     + 0.20 * (p.kpr - 1)
-    + 0.15 * (p.trade - 1);
+    + 0.15 * (p.trade - 1)
+    + 0.20 * (p.adr - 1)
+    + 0.10 * (p.apr - 1);
 }
 
 export function computeAnchorRating(p: PlusStat): number {
@@ -323,7 +325,7 @@ export function computeAnchorRating(p: PlusStat): number {
     + 0.50 * (p.kpr - 1)
     + 0.40 * (p.clutch - 1)
     + 0.15 * (p.trade - 1)
-    + 0.10 * (p.objective - 1)
+    + 0.50 * (p.dpr - 1)
     + 0.20 * (p.choke - 1);
 }
 

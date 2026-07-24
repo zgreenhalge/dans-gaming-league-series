@@ -265,14 +265,14 @@ as 0 rather than silently dropped from the label — every place the composite i
 Player Rating = 1.00
   + 0.30(KPR+ - 1)
   + 0.20(ADR+ - 1)
-  + 0.10(Entry+ - 1)
   + 0.10(Clutch+ - 1)
   + 0.10(Trade+ - 1)
   + 0.10(Objective+ - 1)
   + 0.10(Utility+ - 1)
-  + 0.10(APR+ - 1)
   + 0.10(DPR+ - 1)
   + 0.10(Aim+ - 1)
+  + 0.10(KAST+ - 1)
+  + 0.10(Choke+ - 1)
 ```
 
 `Aim+` already blends in `Spray+` (see above), so there's no separate `Spray+` term here —
@@ -280,10 +280,10 @@ that would double-count it.
 
 #### Role ratings
 
-Entry and Anchor Rating deliberately exclude `ADR+`, `K/D+`, and `DPR+` — a whiffing entry or
-anchor who still racks up damage/kills before dying, or survives by playing passively, shouldn't
-score well on those roles just for raw stat-padding; each role rating stays scoped to the stats
-that actually describe doing that role's job well.
+`Entry Rating` includes `ADR+`/`APR+` — a good entry also deals damage and sets up teammates, not
+just wins the opening duel — but excludes `K/D+` and `DPR+`, since dying is often the accepted cost
+of taking the opening duel aggressively. `Anchor Rating` excludes `ADR+`/`APR+`/`K/D+` for the
+mirror stat-padding reason, but keeps `DPR+` (surviving to hold the site is part of the job).
 
 A player's best-fit playstyle is whichever Role Rating sits furthest above league average
 (`bestFitRole()`) — not necessarily the highest raw rating across roles. Surfaced as a badge on the
@@ -294,6 +294,8 @@ Entry Rating = 1.00
   + 0.35(Entry+ - 1)
   + 0.20(KPR+ - 1)
   + 0.15(Trade+ - 1)
+  + 0.20(ADR+ - 1)
+  + 0.10(APR+ - 1)
 ```
 
 ```
@@ -301,7 +303,7 @@ Anchor Rating = 1.00
   + 0.50(KPR+ - 1)
   + 0.40(Clutch+ - 1)
   + 0.15(Trade+ - 1)
-  + 0.10(Objective+ - 1)
+  + 0.50(DPR+ - 1)
   + 0.20(Choke+ - 1)
 ```
 
