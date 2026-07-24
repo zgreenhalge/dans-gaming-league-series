@@ -292,7 +292,7 @@ function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusStat {
 
 export function computePlayerRating(p: PlusStat): number {
   return 1
-    + 0.30 * (p.kpr - 1)
+    + 0.10 * (p.kpr - 1)
     + 0.20 * (p.adr - 1)
     + 0.10 * (p.clutch - 1)
     + 0.10 * (p.trade - 1)
@@ -302,7 +302,7 @@ export function computePlayerRating(p: PlusStat): number {
     // Aim+ already blends in Spray+ (see computePlusStats()), so no separate Spray+ term here —
     // that would double-count it.
     + 0.10 * (p.aim - 1)
-    + 0.10 * (p.kast - 1)
+    + 0.30 * (p.kast - 1)
     + 0.10 * (p.choke - 1);
 }
 
@@ -314,10 +314,10 @@ export function computePlayerRating(p: PlusStat): number {
 export function computeEntryRating(p: PlusStat): number {
   return 1
     + 0.35 * (p.entry - 1)
-    + 0.20 * (p.kpr - 1)
-    + 0.15 * (p.trade - 1)
-    + 0.20 * (p.adr - 1)
-    + 0.10 * (p.apr - 1);
+    + 0.15 * (p.kpr - 1)
+    + 0.20 * (p.trade - 1)
+    + 0.10 * (p.adr - 1)
+    + 0.20 * (p.apr - 1);
 }
 
 export function computeAnchorRating(p: PlusStat): number {

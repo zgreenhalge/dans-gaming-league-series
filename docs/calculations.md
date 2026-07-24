@@ -263,7 +263,7 @@ as 0 rather than silently dropped from the label — every place the composite i
 
 ```
 Player Rating = 1.00
-  + 0.30(KPR+ - 1)
+  + 0.10(KPR+ - 1)
   + 0.20(ADR+ - 1)
   + 0.10(Clutch+ - 1)
   + 0.10(Trade+ - 1)
@@ -271,7 +271,7 @@ Player Rating = 1.00
   + 0.10(Utility+ - 1)
   + 0.10(DPR+ - 1)
   + 0.10(Aim+ - 1)
-  + 0.10(KAST+ - 1)
+  + 0.30(KAST+ - 1)
   + 0.10(Choke+ - 1)
 ```
 
@@ -292,10 +292,10 @@ FIFA-style player card (`PlayerRatingCard.tsx`).
 ```
 Entry Rating = 1.00
   + 0.35(Entry+ - 1)
-  + 0.20(KPR+ - 1)
-  + 0.15(Trade+ - 1)
-  + 0.20(ADR+ - 1)
-  + 0.10(APR+ - 1)
+  + 0.15(KPR+ - 1)
+  + 0.20(Trade+ - 1)
+  + 0.10(ADR+ - 1)
+  + 0.20(APR+ - 1)
 ```
 
 ```
