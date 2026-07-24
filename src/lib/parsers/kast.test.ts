@@ -9,6 +9,7 @@
 
 import assert from 'node:assert/strict';
 import { collectKast } from './kast';
+import { computeTradeOpportunities } from './trades';
 import { makeContext, death } from './matchContextFixture';
 import type { PlayerPositionRow } from './smokes';
 
@@ -33,8 +34,9 @@ const IDS = Object.keys(SIDES);
 const rounds = [{ roundNumber: 1, winnerSide: 'CT' as const }];
 
 // Trade-path tests below place the dying player, the killer, and the trader on top of each
-// other (all at the trade-window death's tick) so the isTradeOpportunity() distance gate never
-// interferes with what they're actually testing — the boundary test at the bottom overrides this.
+// other (all at the trade-window death's tick) so computeTradeOpportunities()'s distance gate
+// never interferes with what they're actually testing — the boundary test at the bottom overrides
+// this.
 function tradePositions(tick: number, victim: string, killer: string, trader: string): PlayerPositionRow[] {
   return [
     pos({ tick, steamid: victim, x: 0, y: 0 }),
@@ -46,7 +48,7 @@ function tradePositions(tick: number, victim: string, killer: string, trader: st
 test('collectKast: a non-teamkill kill qualifies the attacker', () => {
   const deaths = [death({ round: 1, tick: 100, victim: 'c', attacker: 'a' })];
   const ctx = makeContext({ rounds, sides: SIDES, deaths });
-  const out = collectKast(deaths, ctx, IDS, []);
+  const out = collectKast(deaths, ctx, IDS, computeTradeOpportunities(deaths, [], ctx, IDS));
   assert.equal(out.get('a')?.kast_rounds, 1);
 });
 
@@ -57,7 +59,7 @@ test('collectKast: a teamkill does NOT qualify the attacker via the kill path', 
     death({ round: 1, tick: 200, victim: 'a', attacker: 'c' }),
   ];
   const ctx = makeContext({ rounds, sides: SIDES, deaths });
-  const out = collectKast(deaths, ctx, IDS, []);
+  const out = collectKast(deaths, ctx, IDS, computeTradeOpportunities(deaths, [], ctx, IDS));
   assert.equal(out.get('a')?.kast_rounds ?? 0, 0);
 });
 
@@ -68,21 +70,21 @@ test('collectKast: an assist (no kill) qualifies via the assist path', () => {
     death({ round: 1, tick: 200, victim: 'a', attacker: 'c' }),
   ];
   const ctx = makeContext({ rounds, sides: SIDES, deaths });
-  const out = collectKast(deaths, ctx, IDS, []);
+  const out = collectKast(deaths, ctx, IDS, computeTradeOpportunities(deaths, [], ctx, IDS));
   assert.equal(out.get('a')?.kast_rounds, 1);
 });
 
 test('collectKast: a player with no death and no kill/assist qualifies via survive', () => {
   const deaths = [death({ round: 1, tick: 100, victim: 'c', attacker: 'a' })];
   const ctx = makeContext({ rounds, sides: SIDES, deaths });
-  const out = collectKast(deaths, ctx, IDS, []);
+  const out = collectKast(deaths, ctx, IDS, computeTradeOpportunities(deaths, [], ctx, IDS));
   assert.equal(out.get('b')?.kast_rounds, 1); // b didn't die, didn't kill/assist -> survived
 });
 
 test('collectKast: died with no kill/assist/trade does NOT qualify', () => {
   const deaths = [death({ round: 1, tick: 100, victim: 'd', attacker: 'a' })]; // d dies, nobody trades
   const ctx = makeContext({ rounds, sides: SIDES, deaths });
-  const out = collectKast(deaths, ctx, IDS, []);
+  const out = collectKast(deaths, ctx, IDS, computeTradeOpportunities(deaths, [], ctx, IDS));
   assert.equal(out.get('d')?.kast_rounds ?? 0, 0);
 });
 
@@ -94,7 +96,7 @@ test('collectKast: traded — teammate with a real trade opportunity kills the k
   ];
   const positions = tradePositions(100, 'd', 'a', 'c');
   const ctx = makeContext({ rounds, sides: SIDES, deaths, tickRate: 64 });
-  const out = collectKast(deaths, ctx, IDS, positions);
+  const out = collectKast(deaths, ctx, IDS, computeTradeOpportunities(deaths, positions, ctx, IDS));
   assert.equal(out.get('d')?.kast_rounds, 1); // trade is inclusive of the exact window edge
 });
 
@@ -106,7 +108,7 @@ test('collectKast: one tick past the trade window does NOT count as traded', () 
   ];
   const positions = tradePositions(100, 'd', 'a', 'c');
   const ctx = makeContext({ rounds, sides: SIDES, deaths, tickRate: 64 });
-  const out = collectKast(deaths, ctx, IDS, positions);
+  const out = collectKast(deaths, ctx, IDS, computeTradeOpportunities(deaths, positions, ctx, IDS));
   assert.equal(out.get('d')?.kast_rounds ?? 0, 0);
 });
 
@@ -117,14 +119,14 @@ test('collectKast: an avenger who is not the victim\'s teammate does not count a
   ];
   const positions = tradePositions(100, 'd', 'a', 'b');
   const ctx = makeContext({ rounds, sides: SIDES, deaths });
-  const out = collectKast(deaths, ctx, IDS, positions);
+  const out = collectKast(deaths, ctx, IDS, computeTradeOpportunities(deaths, positions, ctx, IDS));
   assert.equal(out.get('d')?.kast_rounds ?? 0, 0);
 });
 
 test('collectKast: rounds outside liveRounds are ignored entirely', () => {
   const deaths = [death({ round: 2, tick: 100, victim: 'd', attacker: 'a' })]; // round 2 not live
   const ctx = makeContext({ rounds, sides: SIDES, deaths });
-  const out = collectKast(deaths, ctx, IDS, []);
+  const out = collectKast(deaths, ctx, IDS, computeTradeOpportunities(deaths, [], ctx, IDS));
   // Round 1 is live with no deaths at all -> everyone survives round 1.
   assert.equal(out.get('a')?.kast_rounds, 1);
   assert.equal(out.get('d')?.kast_rounds, 1);
@@ -142,7 +144,7 @@ test('collectKast: a trader beyond the trade-opportunity distance does NOT count
     pos({ tick: 100, steamid: 'c', x: 5000, y: 0 }), // c was nowhere near the fight
   ];
   const ctx = makeContext({ rounds, sides: SIDES, deaths, tickRate: 64 });
-  const out = collectKast(deaths, ctx, IDS, positions);
+  const out = collectKast(deaths, ctx, IDS, computeTradeOpportunities(deaths, positions, ctx, IDS));
   assert.equal(out.get('d')?.kast_rounds ?? 0, 0);
 });
 

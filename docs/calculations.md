@@ -115,7 +115,7 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   - In wingman there's exactly one teammate, so `Opportunities` degenerates to a single
     yes/no check per death rather than a count across a full side.
   - The trade window (currently 5s, `TRADE_WINDOW_SECONDS` in `src/lib/parsers/constants.ts`) and
-    the distance gate above (`isTradeOpportunity()` in `src/lib/parsers/trades.ts`) are both shared
+    the distance gate above (`computeTradeOpportunities()` in `src/lib/parsers/trades.ts`) are both shared
     between KAST's `Traded` qualifier and the trade-kill/traded-death collector, so a round can
     never count as `Traded` for KAST without also being a real `Trade Kill`/`Traded Death` success.
 - `Objective+` = `Player Objective Score` / `League Avg Objective Score`
