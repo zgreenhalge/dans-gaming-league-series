@@ -1,12 +1,9 @@
-type Size = 'sm' | 'md' | 'lg' | 'xl';
+type Size = 'sm' | 'md' | 'lg';
 
 const sizeClasses: Record<Size, { wrapper: string; text: string }> = {
   sm: { wrapper: 'w-7 h-7 text-[11px]', text: 'text-[11px]' },
   md: { wrapper: 'w-10 h-10 text-[13px]', text: 'text-[13px]' },
   lg: { wrapper: 'w-16 h-16 text-[22px]', text: 'text-[22px]' },
-  // Fills its parent's box rather than a fixed px size — for callers (PlayerRatingCard) that size
-  // the avatar responsively via a percentage-width wrapper.
-  xl: { wrapper: 'w-full h-full text-[56px]', text: 'text-[56px]' },
 };
 
 export default function PlayerAvatar({
