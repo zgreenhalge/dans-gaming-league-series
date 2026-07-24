@@ -1,6 +1,7 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { Week, Match, PlayerMatchStat, Faction } from '../types';
-import { isPlayedScore } from '../util';
+import { allMatchesPlayed } from '../util';
 import { getPlayersById } from './player';
 
 
@@ -127,6 +128,24 @@ export async function getSeasonSchedule(
   }));
 }
 
+/** Fetches `final_score` for every match in the given weeks — the shared fetch shape behind
+ * `isSeasonFullyPlayed()` (`season-lifecycle.ts`), used wherever a caller already has week ids in
+ * hand (`isWeekComplete()` below fetches by season+week number in a single joined query instead,
+ * since it doesn't have a week id yet). Accepts a client so callers with an admin `SupabaseClient`
+ * (season-lifecycle's) can pass it through. */
+export async function getMatchScoresForWeeks(
+  client: SupabaseClient,
+  weekIds: number[],
+): Promise<{ final_score: string | null }[]> {
+  if (weekIds.length === 0) return [];
+  const { data, error } = await client
+    .from('matches')
+    .select('final_score')
+    .in('week_id', weekIds);
+  if (error) throw error;
+  return (data ?? []) as { final_score: string | null }[];
+}
+
 /** True if the given week exists, has at least one match, and every match in it has a final,
  * played score. */
 export async function isWeekComplete(
@@ -139,7 +158,5 @@ export async function isWeekComplete(
     .eq('weeks.season_id', seasonId)
     .eq('weeks.week_number', weekNumber);
   if (error) throw error;
-  const rows = (data ?? []) as { final_score: string | null }[];
-  if (rows.length === 0) return false;
-  return rows.every((m) => isPlayedScore(m.final_score));
+  return allMatchesPlayed((data ?? []) as { final_score: string | null }[]);
 }

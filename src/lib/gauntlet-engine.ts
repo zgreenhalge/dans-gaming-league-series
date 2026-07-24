@@ -9,7 +9,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { isPlayedScore, extractSeasonNumber } from './util';
+import { allMatchesPlayed, extractSeasonNumber } from './util';
 import { buildGauntletBracket, type AdvanceRule, type BracketPlan } from './gauntlet-bracket';
 import {
   getSeason,
@@ -447,7 +447,7 @@ export async function resolveAndPropagate(supabaseAdmin: SupabaseClient, matchId
     .in('id', [pod.match1_id, pod.match2_id]);
   if (matchesErr) throw matchesErr;
   const matchRows = (matches ?? []) as { id: number; final_score: string | null }[];
-  if (matchRows.length !== 2 || !matchRows.every((m) => isPlayedScore(m.final_score))) return;
+  if (matchRows.length !== 2 || !allMatchesPlayed(matchRows)) return;
 
   const { data: stats, error: statsErr } = await supabaseAdmin
     .from('player_match_stats')

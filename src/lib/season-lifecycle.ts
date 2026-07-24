@@ -19,9 +19,9 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { isPlayedScore } from './util';
+import { allMatchesPlayed } from './util';
 import { tryBuildGauntletShape, trySeedGauntlet } from './gauntlet-engine';
-import { getLinkedRegularSeason } from './queries';
+import { getLinkedRegularSeason, getMatchScoresForWeeks } from './queries';
 import { recordOpsError, clearOpsError } from './ops-errors';
 
 export interface ActivateSeasonResult {
@@ -61,17 +61,7 @@ async function isSeasonFullyPlayed(supabaseAdmin: SupabaseClient, seasonId: numb
   const { data: weeks, error: weekErr } = await supabaseAdmin.from('weeks').select('id').eq('season_id', seasonId);
   if (weekErr) throw weekErr;
   const weekIds = ((weeks ?? []) as { id: number }[]).map((w) => w.id);
-  if (weekIds.length === 0) return false;
-
-  const { data: matches, error: matchErr } = await supabaseAdmin
-    .from('matches')
-    .select('final_score')
-    .in('week_id', weekIds);
-  if (matchErr) throw matchErr;
-  const rows = (matches ?? []) as { final_score: string | null }[];
-  if (rows.length === 0) return false;
-
-  return rows.every((m) => isPlayedScore(m.final_score));
+  return allMatchesPlayed(await getMatchScoresForWeeks(supabaseAdmin, weekIds));
 }
 
 /** Called from the score route's post-commit hook for every regular-season match. If this score
