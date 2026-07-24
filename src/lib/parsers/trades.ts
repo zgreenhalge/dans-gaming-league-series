@@ -14,6 +14,14 @@ type CollectorOut = Map<string, Partial<SabFields>>;
 const TRADE_VICTIM_DISTANCE = 360;
 const TRADE_KILLER_DISTANCE = 540;
 
+// Squared-distance comparison — same result as Math.sqrt(dx*dx+dy*dy) <= radius without paying
+// for the sqrt, since every call site here only ever compares against a threshold.
+function withinDistance(a: { x: number; y: number }, b: { x: number; y: number }, radius: number): boolean {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return dx * dx + dy * dy <= radius * radius;
+}
+
 /** Tick list demoOrchestrator.ts needs to fetch (via parseTicks, all players): one per death, to
  *  check whether a teammate was close enough to plausibly trade. */
 export function neededTradeTicks(deathEvents: PlayerDeathRow[], context: MatchContext): number[] {
@@ -106,12 +114,8 @@ export function collectTrades(
         if (!victimPos || !killerPos) return false;
         const teammatePos = positionByTickAndPlayer.get(`${victimDeath.tick}::${sid}`);
         if (!teammatePos) return false;
-        const dxVictim = teammatePos.x - victimPos.x;
-        const dyVictim = teammatePos.y - victimPos.y;
-        if (Math.sqrt(dxVictim * dxVictim + dyVictim * dyVictim) > TRADE_VICTIM_DISTANCE) return false;
-        const dxKiller = teammatePos.x - killerPos.x;
-        const dyKiller = teammatePos.y - killerPos.y;
-        return Math.sqrt(dxKiller * dxKiller + dyKiller * dyKiller) <= TRADE_KILLER_DISTANCE;
+        return withinDistance(teammatePos, victimPos, TRADE_VICTIM_DISTANCE) &&
+          withinDistance(teammatePos, killerPos, TRADE_KILLER_DISTANCE);
       });
 
       const victimOut = out.get(victim)!;
