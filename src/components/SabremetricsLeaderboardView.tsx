@@ -6,7 +6,7 @@ import type { SabFields } from '@/lib/types';
 import { addSabFields } from '@/lib/queries';
 import { tabCls, plusStyle } from '@/lib/util';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
-import PlayerRatingCard, { type RoleBadge } from './PlayerRatingCard';
+import PlayerRatingCard, { type RoleRatingLine } from './PlayerRatingCard';
 
 /**
  * The fields this view actually reads off a per-match sabremetric row — a structural subset of
@@ -891,7 +891,7 @@ interface SinglePlayerTiles {
   utility: StatTile[];
   plus: StatTile[];
   /** FIFA-card inputs — null when there's no league baseline to rate against. */
-  card: { rating: number; subStats: StatTile[]; role: RoleBadge | null } | null;
+  card: { rating: number; subStats: StatTile[]; roles: RoleRatingLine[] } | null;
 }
 
 function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: AggregatedSab[]): SinglePlayerTiles {
@@ -976,10 +976,10 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Spray+', title: 'Spray Accuracy vs league avg (50 = avg)', value: toRatingScale(plus.spray), valueStyle: plusStyle(plus.spray) },
   ] : [];
 
-  // FIFA-card inputs: OVR (Player Rating) + a 6-attribute spread + the best-fit Role Rating as a
-  // playstyle badge (furthest above league average among Entry/Anchor/Setup). Sub-stat tiles are
-  // pulled straight out of `plusTiles` by label (not rebuilt) so the card's numbers, colors, and
-  // tooltip text can never drift from the Plus Stats grid they're also shown in.
+  // FIFA-card inputs: OVR (Player Rating) + a 6-attribute spread + all three Role Ratings, with
+  // whichever sits furthest above league average flagged as the best-fit playstyle. Sub-stat
+  // tiles are pulled straight out of `plusTiles` by label (not rebuilt) so the card's numbers,
+  // colors, and tooltip text can never drift from the Plus Stats grid they're also shown in.
   let card: SinglePlayerTiles['card'] = null;
   if (plus && rating != null) {
     const roleRatings: RoleRatings = {
@@ -993,7 +993,11 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     card = {
       rating: toRatingScale(rating),
       subStats: cardSubStatLabels.map((label) => tileByLabel.get(label)!),
-      role: badge ? { label: badge.label, rating: toRatingScale(badge.rating) } : null,
+      roles: (Object.keys(roleRatings) as (keyof RoleRatings)[]).map((key) => ({
+        label: ROLE_LABELS[key],
+        rating: toRatingScale(roleRatings[key]),
+        isBestFit: badge?.role === key,
+      })),
     };
   }
 
@@ -1108,7 +1112,7 @@ export default function SabremetricsLeaderboardView({
             avatarUrl={avatarUrl}
             rating={tiles.card.rating}
             subStats={tiles.card.subStats}
-            role={tiles.card.role}
+            roles={tiles.card.roles}
           />
         )}
         {sub === 'plus' && tiles.plus.length > 0 && (
