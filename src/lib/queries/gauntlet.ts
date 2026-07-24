@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import type { LeaderboardRowWithId, PlayerMatchStat, Match } from '../types';
-import { canonicalSort, isPlayedScore } from '../util';
+import { allMatchesPlayed, canonicalSort, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
 
 
@@ -671,7 +671,7 @@ export async function getAllGauntletSummaries(): Promise<Map<number, GauntletSum
         w.week_number > best.week_number ? w : best,
       );
       const finalMatches = matchesByWeek.get(finalWeek.id) ?? [];
-      const allPlayed = finalMatches.length > 0 && finalMatches.every((m) => isPlayedScore(m.final_score));
+      const allPlayed = allMatchesPlayed(finalMatches);
       if (allPlayed) {
         const wins = new Map<number, number>();
         for (const m of finalMatches) {

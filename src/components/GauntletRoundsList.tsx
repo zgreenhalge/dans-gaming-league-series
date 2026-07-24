@@ -2,7 +2,7 @@
 
 import { MatchCard } from './MatchCard';
 import { PlayerName } from './PlayerName';
-import { isPlayedScore, canonicalGauntletRankMap, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
+import { allMatchesPlayed, isPlayedScore, canonicalGauntletRankMap, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
 import type { GauntletRound, GauntletMatch } from '@/lib/queries';
 
 function computeGauntletRecords(matches: GauntletMatch[]) {
@@ -70,8 +70,7 @@ function GauntletRoundCard({
     ? [...unsortedRecords].sort((a, b) =>
         (rankMap.get(a.player_id) ?? Infinity) - (rankMap.get(b.player_id) ?? Infinity))
     : unsortedRecords;
-  const allPlayed =
-    round.matches.length > 0 && round.matches.every((m) => isPlayedScore(m.final_score));
+  const allPlayed = allMatchesPlayed(round.matches);
   const maxRoundNumber = Math.max(...allRounds.map((r) => r.round_number));
   const isFinalRound = round.round_number === maxRoundNumber;
 
