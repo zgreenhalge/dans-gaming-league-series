@@ -90,22 +90,19 @@ function isBulletWeapon(weapon: string | null): boolean {
 }
 
 /**
- * Freeze each dead player's position/facing at their last known-alive tick, in place.
- * The engine keeps reporting X/Y/yaw for dead players — often drifting back toward
- * spawn as the game moves them toward their next-round position — which every
- * consumer of a round's `frames` (`interpolatePlayers` in `playback.ts`,
- * `extractPlayerTrace` in `aggregate.ts`) would otherwise render as a corpse sliding
- * across the map (#232). `roundTickWindows` are each round's own tick list in
- * ascending order — rounds don't share ticks, so walking one at a time is enough to
- * track "last alive" per player without cross-round bleed.
+ * Freeze each dead player's position/facing at their last known-alive tick, in place —
+ * see docs/replay.md for why every consumer of `frames` needs this done at the source.
+ * `roundBounds[].wanted` is each round's own tick list in ascending order; rounds don't
+ * share ticks, so walking one round at a time is enough to track "last alive" per
+ * player without cross-round bleed.
  */
 export function freezeDeadPositions(
   framesByTick: Map<number, ReplayPlayerFrame[]>,
-  roundTickWindows: number[][],
+  roundBounds: { wanted: number[] }[],
 ): void {
-  for (const ticks of roundTickWindows) {
+  for (const { wanted } of roundBounds) {
     const lastAlive = new Map<number, { x: number; y: number; yaw: number }>();
-    for (const tick of ticks) {
+    for (const tick of wanted) {
       for (const p of framesByTick.get(tick) ?? []) {
         if (p.alive) {
           lastAlive.set(p.id, { x: p.x, y: p.y, yaw: p.yaw });
@@ -339,10 +336,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     framesByTick.get(tick)!.push(frame);
   }
 
-  freezeDeadPositions(
-    framesByTick,
-    roundBounds.map((b) => b.wanted),
-  );
+  freezeDeadPositions(framesByTick, roundBounds);
 
   // --- Events + grenades + shots, bucketed per round ---
   const eventsByRound = collectEvents(demoBuffer, deathRows, contextForEvents, playerIdOf, reasonByRound, roundBounds);

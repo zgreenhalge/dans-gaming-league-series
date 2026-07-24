@@ -538,10 +538,7 @@ test('extract: freezeDeadPositions freezes a dead player at their last-alive tic
     [100, [pf(1, 500, 500, { alive: false })]],
     [110, [pf(1, 600, 600, { alive: false })]],
   ]);
-  freezeDeadPositions(framesByTick, [
-    [0, 10, 20],
-    [100, 110],
-  ]);
+  freezeDeadPositions(framesByTick, [{ wanted: [0, 10, 20] }, { wanted: [100, 110] }]);
 
   approx(framesByTick.get(10)![0].x, 10);
   approx(framesByTick.get(10)![0].y, 20);
@@ -559,7 +556,7 @@ test('extract: freezeDeadPositions leaves alive players untouched', () => {
     [0, [pf(1, 10, 20, { alive: true })]],
     [10, [pf(1, 15, 25, { alive: true })]],
   ]);
-  freezeDeadPositions(framesByTick, [[0, 10]]);
+  freezeDeadPositions(framesByTick, [{ wanted: [0, 10] }]);
   approx(framesByTick.get(10)![0].x, 15);
   approx(framesByTick.get(10)![0].y, 25);
 });
