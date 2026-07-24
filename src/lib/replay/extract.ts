@@ -89,6 +89,39 @@ function isBulletWeapon(weapon: string | null): boolean {
   );
 }
 
+/**
+ * Freeze each dead player's position/facing at their last known-alive tick, in place.
+ * The engine keeps reporting X/Y/yaw for dead players — often drifting back toward
+ * spawn as the game moves them toward their next-round position — which every
+ * consumer of a round's `frames` (`interpolatePlayers` in `playback.ts`,
+ * `extractPlayerTrace` in `aggregate.ts`) would otherwise render as a corpse sliding
+ * across the map (#232). `roundTickWindows` are each round's own tick list in
+ * ascending order — rounds don't share ticks, so walking one at a time is enough to
+ * track "last alive" per player without cross-round bleed.
+ */
+export function freezeDeadPositions(
+  framesByTick: Map<number, ReplayPlayerFrame[]>,
+  roundTickWindows: number[][],
+): void {
+  for (const ticks of roundTickWindows) {
+    const lastAlive = new Map<number, { x: number; y: number; yaw: number }>();
+    for (const tick of ticks) {
+      for (const p of framesByTick.get(tick) ?? []) {
+        if (p.alive) {
+          lastAlive.set(p.id, { x: p.x, y: p.y, yaw: p.yaw });
+          continue;
+        }
+        const last = lastAlive.get(p.id);
+        if (last) {
+          p.x = last.x;
+          p.y = last.y;
+          p.yaw = last.yaw;
+        }
+      }
+    }
+  }
+}
+
 export interface BuildReplayInput {
   demoBuffer: Buffer;
   matchId: number;
@@ -305,6 +338,11 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     if (!framesByTick.has(tick)) framesByTick.set(tick, []);
     framesByTick.get(tick)!.push(frame);
   }
+
+  freezeDeadPositions(
+    framesByTick,
+    roundBounds.map((b) => b.wanted),
+  );
 
   // --- Events + grenades + shots, bucketed per round ---
   const eventsByRound = collectEvents(demoBuffer, deathRows, contextForEvents, playerIdOf, reasonByRound, roundBounds);

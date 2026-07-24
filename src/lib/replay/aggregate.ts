@@ -46,10 +46,12 @@ export interface TraceState {
  *
  * Stops at the player's death: once a frame reports them dead, one final frame is
  * appended *frozen at their last known-alive position* (not whatever the engine
- * reports for a dead player, which can drift back toward spawn) and no further frames
- * are read. `traceStateAt`'s end-of-frames clamp then holds that frozen position for
- * the rest of the round, so the dot reads as a corpse marker where they actually died
- * instead of jumping partway back to spawn.
+ * reports for a dead player, which can drift back toward spawn — `extract.ts`
+ * already freezes this at the source, but this is the same freeze applied
+ * defensively here too) and no further frames are read. `traceStateAt`'s
+ * end-of-frames clamp then holds that frozen position for the rest of the round, so
+ * the dot reads as a corpse marker where they actually died instead of jumping
+ * partway back to spawn.
  *
  * Survivors stop at the round's `endTick` (the `round_end` tick) for the same reason:
  * `round.frames` (`extract.ts`) deliberately keeps a few seconds *after* `round_end` so
