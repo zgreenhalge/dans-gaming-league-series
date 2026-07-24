@@ -5,10 +5,14 @@ import type { PlayerPositionRow } from './smokes';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
-// How close a teammate must be to a death, in game units, to count as a real trade
-// opportunity — otherwise "alive and on the same side" alone credits opportunities from
-// anywhere on the map. Same radius as Smokes Blocking Push's own distance gate.
-const TRADE_DISTANCE = 180;
+// How close a teammate must be, in game units, to count as a real trade opportunity — otherwise
+// "alive and on the same side" alone credits opportunities from anywhere on the map. Two separate
+// legs: close enough to the death itself, AND close enough to the killer to have realistically
+// fought them (a teammate can be near the body without a shot at whoever's still standing).
+// Deliberately looser than Smokes Blocking Push's SMOKE_BLOCK_RADIUS (180) — that gate approximates
+// a smoke cloud's physical size, a much smaller thing than a realistic gunfight distance.
+const TRADE_VICTIM_DISTANCE = 360;
+const TRADE_KILLER_DISTANCE = 540;
 
 /** Tick list demoOrchestrator.ts needs to fetch (via parseTicks, all players): one per death, to
  *  check whether a teammate was close enough to plausibly trade. */
@@ -25,9 +29,10 @@ export function neededTradeTicks(deathEvents: PlayerDeathRow[], context: MatchCo
 /**
  * Trade kill / traded death opportunity-attempt-success counts (#173 phase 1.1).
  *
- * - Opportunity: a teammate (of the dying player) was still alive when the death happened, and
- *   within TRADE_DISTANCE of it — i.e. had a realistic chance to trade, not just a theoretical
- *   one from anywhere on the map.
+ * - Opportunity: a teammate (of the dying player) was still alive when the death happened, within
+ *   TRADE_VICTIM_DISTANCE of the death, and within TRADE_KILLER_DISTANCE of the killer — i.e. had
+ *   a realistic chance to see and fight the killer, not just a theoretical one from anywhere on
+ *   the map (being near the body alone doesn't mean there was a shot at whoever's still standing).
  * - Attempt: an opportunity where the teammate dealt damage to the killer within the trade
  *   window.
  * - Success: an opportunity where the teammate killed the killer within the trade window — the
@@ -92,16 +97,21 @@ export function collectTrades(
       });
 
       // Being alive and on the same side isn't enough — a teammate across the map never had a
-      // realistic chance to trade. Missing position data (for either side of the check) fails
-      // closed, same convention as smokes.ts's block-radius check.
+      // realistic chance to trade. Two legs: close enough to the victim, AND close enough to the
+      // killer to have actually been able to fight them. Missing position data (for any side of
+      // either check) fails closed, same convention as smokes.ts's block-radius check.
       const victimPos = positionByTickAndPlayer.get(`${victimDeath.tick}::${victim}`);
+      const killerPos = positionByTickAndPlayer.get(`${victimDeath.tick}::${killer}`);
       const nearbyTeammates = aliveTeammates.filter((sid) => {
-        if (!victimPos) return false;
+        if (!victimPos || !killerPos) return false;
         const teammatePos = positionByTickAndPlayer.get(`${victimDeath.tick}::${sid}`);
         if (!teammatePos) return false;
-        const dx = teammatePos.x - victimPos.x;
-        const dy = teammatePos.y - victimPos.y;
-        return Math.sqrt(dx * dx + dy * dy) <= TRADE_DISTANCE;
+        const dxVictim = teammatePos.x - victimPos.x;
+        const dyVictim = teammatePos.y - victimPos.y;
+        if (Math.sqrt(dxVictim * dxVictim + dyVictim * dyVictim) > TRADE_VICTIM_DISTANCE) return false;
+        const dxKiller = teammatePos.x - killerPos.x;
+        const dyKiller = teammatePos.y - killerPos.y;
+        return Math.sqrt(dxKiller * dxKiller + dyKiller * dyKiller) <= TRADE_KILLER_DISTANCE;
       });
 
       const victimOut = out.get(victim)!;
