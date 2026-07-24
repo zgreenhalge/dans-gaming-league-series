@@ -151,3 +151,6 @@ if the element carries a semantic color (win/loss) that should survive hover.
   [`glossary.md`](./glossary.md)
 - Cite code by **symbol name** (`getGauntletStats()` in `src/lib/queries/gauntlet.ts`), never by line number —
   line numbers rot the moment the file changes. See [`patterns.md`](./patterns.md).
+- Re-read every caption, tooltip, disclaimer, or inline note you added this session and ask whether a
+  better label, default, or layout would have made it unnecessary — see AGENTS.md's "UI text earns
+  its place." Delete what doesn't survive that question.

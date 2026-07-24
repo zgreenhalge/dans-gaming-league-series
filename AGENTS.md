@@ -24,6 +24,38 @@ decision log kept to stop the team regressing to a known-bad configuration (e.g.
 hit and how they were resolved" table in `docs/cs2-stack-reference.md`): it lives in **one designated
 place**, framed as forward guidance — not license to scatter history into other files.
 
+# UI text earns its place — don't caption, hedge, or explain around a design gap
+
+Agents default to adding words: a disclaimer under a number, a tooltip that restates its own label, a
+"Note:" aside, a defensive sentence covering a state the code can't reach. Each one reads as
+reasonable in isolation and adds up to noise that makes the product read as AI-generated instead of
+designed. **Explanatory text is the fallback for the rare control that genuinely can't be made
+self-evident — never the default reflex.** Before adding any caption, tooltip, help text, or inline
+note, the question is not "is this accurate" (it usually is) but **why doesn't the UI already make
+this clear** — a better label, a sensible default, or a clearer layout is almost always the real fix.
+
+**Litmus test:** if a first-time viewer would still use the feature correctly without the sentence,
+delete it. If removing it would only lose context about *why a design decision was made* (why the
+scale is 0–100, why one input is excluded), that belongs in a doc or code comment for the next
+developer — not in something the viewer reads.
+
+**Cut on sight:**
+- A caption/subheading whose only job is to narrate the UI below it — see `docs/patterns.md`'s "Don't
+  caption a page instead of designing it."
+- A tooltip, footnote, or paragraph that repeats what a well-chosen label already says.
+- "Note:" / "Important:" / "Keep in mind" throat-clearing — if it's worth saying, say it plainly.
+- A disclaimer for an edge case the surrounding code already prevents (validated input, a type that
+  can't be null, a state the UI can't reach).
+
+**When explanatory text is genuinely warranted** — a non-obvious scale, a stated limitation users
+would otherwise misread as a bug — it goes in the smallest, quietest surface that does the job (a
+`title` tooltip on the specific number), not a permanent paragraph. Match the weight of the caveat to
+how surprising the thing actually is, not to how thorough writing it out feels.
+
+This is a hard rule, not a style preference, and it is part of the pre-PR checklist
+(`docs/recipes.md`): before opening a PR, re-read every caption, tooltip, and inline note you added
+this session and ask whether the UI could have made it unnecessary instead.
+
 # Tools and scripts should be task-agnostic
 
 When you build something reusable — anything in `scripts/`, a CLI, a shared helper — keep it general
