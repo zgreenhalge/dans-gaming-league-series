@@ -103,8 +103,7 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     - `Trade Kill Successes` = opportunities where this player killed the killer within the
       trade window — the same condition that qualifies a round as "Traded" for KAST
     - `Trade Kill %` = `Trade Kill Successes` / `Trade Kill Attempts`
-  - **Traded Deaths** — the mirror, from the perspective of the player who died (tracked as its
-    own raw stat; not currently folded into `Trade+`):
+  - **Traded Deaths** — the mirror, from the perspective of the player who died:
     - `Traded Death Opportunities` = times this player died while at least one teammate was
       still alive, within 360 game units of the death, and within 540 game units of the killer
       (someone had a realistic chance to reach and engage the killer)
@@ -113,6 +112,8 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     - `Traded Death Successes` = opportunities where a teammate killed the killer within the
       trade window
     - `Traded Death %` = `Traded Death Successes` / `Traded Death Attempts`
+- `Traded+` = `Player Traded Death %` / `League Avg Traded Death %` — how often a teammate
+  avenged this player's own death, the mirror of `Trade+` from the victim's side.
   - In wingman there's exactly one teammate, so `Opportunities` degenerates to a single
     yes/no check per death rather than a count across a full side.
   - The trade window (currently 5s, `TRADE_WINDOW_SECONDS` in `src/lib/parsers/constants.ts`) and
@@ -269,7 +270,7 @@ Player Rating = 1.00
   + 0.10(Trade+ - 1)
   + 0.10(Objective+ - 1)
   + 0.10(Utility+ - 1)
-  + 0.10(DPR+ - 1)
+  + 0.10(K/D+ - 1)
   + 0.10(Aim+ - 1)
   + 0.30(KAST+ - 1)
   + 0.10(Choke+ - 1)
@@ -280,10 +281,12 @@ that would double-count it.
 
 #### Role ratings
 
-`Entry Rating` includes `ADR+`/`APR+` — a good entry also deals damage and sets up teammates, not
-just wins the opening duel — but excludes `K/D+` and `DPR+`, since dying is often the accepted cost
-of taking the opening duel aggressively. `Anchor Rating` excludes `ADR+`/`APR+`/`K/D+` for the
-mirror stat-padding reason, but keeps `DPR+` (surviving to hold the site is part of the job).
+`Entry Rating` includes `APR+` (a good entry also sets up teammates, not just wins the opening
+duel) and `Traded+` (getting traded back when the entry dies is still a good outcome for the
+team), but excludes `ADR+`, `K/D+`, and `DPR+` — dying is often the accepted cost of taking the
+opening duel aggressively, so raw damage/kills/survival shouldn't inflate the score. `Anchor
+Rating` excludes `ADR+`/`APR+`/`K/D+` for the mirror stat-padding reason, but keeps `DPR+`
+(surviving to hold the site is part of the job).
 
 A player's best-fit playstyle is whichever Role Rating sits furthest above league average
 (`bestFitRole()`) — not necessarily the highest raw rating across roles. Surfaced as a badge on the
@@ -294,7 +297,7 @@ Entry Rating = 1.00
   + 0.35(Entry+ - 1)
   + 0.15(KPR+ - 1)
   + 0.20(Trade+ - 1)
-  + 0.10(ADR+ - 1)
+  + 0.10(Traded+ - 1)
   + 0.20(APR+ - 1)
 ```
 

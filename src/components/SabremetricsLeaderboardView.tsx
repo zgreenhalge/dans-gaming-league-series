@@ -154,6 +154,7 @@ export interface PlusStat {
   entry: number;
   kast: number;
   trade: number;
+  tradedDeath: number;
   objective: number;
   utility: number;
   clutch: number;
@@ -173,7 +174,7 @@ function chokeScore(a: AggregatedSab): number {
 
 interface LeagueAverages {
   kpr: number; apr: number; dpr: number; adr: number; kdr: number;
-  entry: number; kast: number; trade: number;
+  entry: number; kast: number; trade: number; tradedDeath: number;
   objective: number; clutch: number; choke: number;
   accuracy: number; headAccuracy: number; counterStrafe: number; spray: number;
   flashAssists: number; utilDamage: number; blockingSmoke: number; teamflash: number;
@@ -193,6 +194,7 @@ function computeLeagueAverages(all: AggregatedSab[]): LeagueAverages {
     entry: leagueAvgRatio(all, (a) => a.opening_kills, (a) => a.opening_kills + a.opening_deaths, 0.5),
     kast: leagueAvgRatio(all, (a) => a.kast_rounds, rounds),
     trade: leagueAvgRatio(all, (a) => a.trade_kill_successes, (a) => a.trade_kill_attempts),
+    tradedDeath: leagueAvgRatio(all, (a) => a.traded_death_successes, (a) => a.traded_death_attempts),
     objective: leagueAvgRatio(all, (a) => 2 * a.plants + 3 * a.defuses, rounds),
     clutch: leagueAvgRatio(all, (a) => a.clutch_1v1_wins + 3 * a.clutch_1v2_wins, rounds),
     choke: leagueAvgRatio(all, chokeScore, rounds),
@@ -258,6 +260,10 @@ function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusStat {
       agg.trade_kill_attempts > 0 ? agg.trade_kill_successes / agg.trade_kill_attempts : 0,
       la.trade,
     ),
+    tradedDeath: plusStat(
+      agg.traded_death_attempts > 0 ? agg.traded_death_successes / agg.traded_death_attempts : 0,
+      la.tradedDeath,
+    ),
     objective: plusStat((2 * agg.plants + 3 * agg.defuses) / rp, la.objective),
     utility: 0.30 * flashAssistsPlus + 0.30 * utilDamagePlus + 0.20 * blockingSmokePlus
       + 0.20 * (2 - teamflashPlus),
@@ -298,7 +304,7 @@ export function computePlayerRating(p: PlusStat): number {
     + 0.10 * (p.trade - 1)
     + 0.10 * (p.objective - 1)
     + 0.10 * (p.utility - 1)
-    + 0.10 * (p.dpr - 1)
+    + 0.10 * (p.kdr - 1)
     // Aim+ already blends in Spray+ (see computePlusStats()), so no separate Spray+ term here —
     // that would double-count it.
     + 0.10 * (p.aim - 1)
@@ -316,7 +322,7 @@ export function computeEntryRating(p: PlusStat): number {
     + 0.35 * (p.entry - 1)
     + 0.15 * (p.kpr - 1)
     + 0.20 * (p.trade - 1)
-    + 0.10 * (p.adr - 1)
+    + 0.10 * (p.tradedDeath - 1)
     + 0.20 * (p.apr - 1);
 }
 
@@ -830,6 +836,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
         case 'entry': aVal = a.plus.entry; bVal = b.plus.entry; break;
         case 'kast': aVal = a.plus.kast; bVal = b.plus.kast; break;
         case 'trade': aVal = a.plus.trade; bVal = b.plus.trade; break;
+        case 'tradedDeath': aVal = a.plus.tradedDeath; bVal = b.plus.tradedDeath; break;
         case 'objective': aVal = a.plus.objective; bVal = b.plus.objective; break;
         case 'utility': aVal = a.plus.utility; bVal = b.plus.utility; break;
         case 'clutch': aVal = a.plus.clutch; bVal = b.plus.clutch; break;
@@ -861,6 +868,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
               <SortableTh label="Entry+" title="Opening duel success rate (OK / total duels) vs league avg (50 = avg)" sortKey="entry" state={sort} onClick={toggleSort} />
               <SortableTh label="KAST+" title="KAST per round vs league avg (50 = avg)" sortKey="kast" state={sort} onClick={toggleSort} />
               <SortableTh label="Trade+" title="Trade Kill % (trade kill successes / attempts) vs league avg (50 = avg)" sortKey="trade" state={sort} onClick={toggleSort} />
+              <SortableTh label="Traded+" title="Traded Death % (traded death successes / attempts — how often a teammate avenged this player's death) vs league avg (50 = avg)" sortKey="tradedDeath" state={sort} onClick={toggleSort} />
               <SortableTh label="Objective+" title="Objective score (2×plants + 3×defuses) per round vs league avg (50 = avg)" sortKey="objective" state={sort} onClick={toggleSort} />
               <SortableTh label="Utility+" title="Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (50 = avg)" sortKey="utility" state={sort} onClick={toggleSort} />
               <SortableTh label="Clutch+" title="Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (50 = avg)" sortKey="clutch" state={sort} onClick={toggleSort} />
@@ -883,6 +891,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
                 <td className={tdRight} style={plusStyle(plus.entry)}>{toRatingScale(plus.entry)}</td>
                 <td className={tdRight} style={plusStyle(plus.kast)}>{toRatingScale(plus.kast)}</td>
                 <td className={tdRight} style={plusStyle(plus.trade)}>{toRatingScale(plus.trade)}</td>
+                <td className={tdRight} style={plusStyle(plus.tradedDeath)}>{toRatingScale(plus.tradedDeath)}</td>
                 <td className={tdRight} style={plusStyle(plus.objective)}>{toRatingScale(plus.objective)}</td>
                 <td className={tdRight} style={plusStyle(plus.utility)}>{toRatingScale(plus.utility)}</td>
                 <td className={tdRight} style={plusStyle(plus.clutch)}>{toRatingScale(plus.clutch)}</td>
@@ -991,6 +1000,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Entry+', title: 'Opening duel success rate (OK / total duels) vs league avg (50 = avg)', value: toRatingScale(plus.entry), valueStyle: plusStyle(plus.entry) },
     { label: 'KAST+', title: 'KAST per round vs league avg (50 = avg)', value: toRatingScale(plus.kast), valueStyle: plusStyle(plus.kast) },
     { label: 'Trade+', title: 'Trade Kill % (trade kill successes / attempts) vs league avg (50 = avg)', value: toRatingScale(plus.trade), valueStyle: plusStyle(plus.trade) },
+    { label: 'Traded+', title: "Traded Death % (traded death successes / attempts — how often a teammate avenged this player's death) vs league avg (50 = avg)", value: toRatingScale(plus.tradedDeath), valueStyle: plusStyle(plus.tradedDeath) },
     { label: 'Objective+', title: 'Objective score (2×plants + 3×defuses) per round vs league avg (50 = avg)', value: toRatingScale(plus.objective), valueStyle: plusStyle(plus.objective) },
     { label: 'Utility+', title: 'Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (50 = avg)', value: toRatingScale(plus.utility), valueStyle: plusStyle(plus.utility) },
     { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (50 = avg)', value: toRatingScale(plus.clutch), valueStyle: plusStyle(plus.clutch) },
