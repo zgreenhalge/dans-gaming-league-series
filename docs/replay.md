@@ -57,9 +57,9 @@ the same data. Wingman has few players, so payloads are small (a few MB worst ca
 
 A dead player's `x`/`y`/`yaw` are frozen at their last known-alive tick rather than whatever the
 engine reports once they're down (which drifts toward their next-round spawn) — `buildReplay()` does
-this once per round while assembling `frames`, so every consumer (`interpolatePlayers` in
-`playback.ts`, `extractPlayerTrace` in `aggregate.ts`) inherits a corpse that stays put with no
-per-consumer special-casing.
+this once per round while assembling `frames`, at the source, so `interpolatePlayers` (`playback.ts`)
+draws a corpse that stays put with no special-casing of its own. `extractPlayerTrace`
+(`aggregate.ts`) applies this same freeze itself too, as described in the Pathing tab section below.
 
 ### Extract code
 
@@ -300,11 +300,12 @@ interpolation matches the single-round player exactly.
 dead — it appends one final frame frozen at their last known-alive position and reads no further, so
 the ghost reads as a corpse marker sitting where they actually died. `traceStateAt`'s end-of-frames
 clamp then holds that frozen position for the rest of the round. This re-applies the same freeze
-`extract.ts` does at the source (see above) — a backstop for `replay.json` payloads extracted before
-that fix and not yet re-run through `replay-extract-all`. If the player is already dead on the very
-first frame they appear in (no prior alive position exists to freeze at), that frame's own position is
-used as a last resort instead — a possibly-imprecise corpse marker beats the round silently vanishing
-from the overlay and its round count.
+`extract.ts` does at the source (see above): a stored `replay.json` reflects whatever `extract.ts`
+produced it at extraction time, not the current code, so `extractPlayerTrace` freezes independently
+rather than assuming every payload it's handed is already frozen. If the player is already dead on
+the very first frame they appear in (no prior alive position exists to freeze at), that frame's own
+position is used as a last resort instead — a possibly-imprecise corpse marker beats the round
+silently vanishing from the overlay and its round count.
 
 **Survivors** stop at `round.endTick` for the same reason: `round.frames` (`extract.ts`) deliberately
 keeps a few seconds *after* `round_end` so the single-round 2D Replay can show the post-round window,
