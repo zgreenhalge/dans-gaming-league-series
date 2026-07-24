@@ -239,7 +239,9 @@ function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusStat {
   return {
     kpr: plusStat(agg.kills / rp, la.kpr),
     apr: plusStat(agg.assists / rp, la.apr),
-    dpr: plusStat(agg.deaths / rp, la.dpr),
+    // Inverted (league avg / player, not player / league avg) so DPR+ reads on the same
+    // "bigger number = better" scale as every other + stat — same treatment as Choke+ below.
+    dpr: plusStat(la.dpr, agg.deaths / rp),
     adr: plusStat(agg.damage / rp, la.adr),
     kdr: plusStat(agg.deaths > 0 ? agg.kills / agg.deaths : agg.kills, la.kdr),
     entry: plusStat(
@@ -291,7 +293,7 @@ export function computePlayerRating(p: PlusStat): number {
     + 0.10 * (p.objective - 1)
     + 0.10 * (p.utility - 1)
     + 0.10 * (p.apr - 1)
-    - 0.10 * (p.dpr - 1);
+    + 0.10 * (p.dpr - 1);
 }
 
 export function computeEntryRating(p: PlusStat): number {
@@ -310,7 +312,7 @@ export function computeAnchorRating(p: PlusStat): number {
     + 0.15 * (p.adr - 1)
     + 0.15 * (p.trade - 1)
     + 0.10 * (p.objective - 1)
-    - 0.50 * (p.dpr - 1)
+    + 0.50 * (p.dpr - 1)
     + 0.20 * (p.choke - 1);
 }
 
@@ -839,7 +841,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
               <SortableTh label="Rating" title="Player Rating composite (calculations.md) — 50 = this league's average. Omits Beer Tax (not yet computed)." sortKey="rating" state={sort} onClick={toggleSort} />
               <SortableTh label="Kills/Round+" title="Kills per round vs league avg (50 = avg)" sortKey="kpr" state={sort} onClick={toggleSort} />
               <SortableTh label="Assists/Round+" title="Assists per round vs league avg (50 = avg)" sortKey="apr" state={sort} onClick={toggleSort} />
-              <SortableTh label="Deaths/Round+" title="Deaths per round vs league avg (50 = avg, lower is better)" sortKey="dpr" state={sort} onClick={toggleSort} />
+              <SortableTh label="Deaths/Round+" title="Inverted deaths per round vs league avg — fewer deaths score higher, like every other + stat (50 = avg)" sortKey="dpr" state={sort} onClick={toggleSort} />
               <SortableTh label="ADR+" title="Damage per round vs league avg (50 = avg)" sortKey="adr" state={sort} onClick={toggleSort} />
               <SortableTh label="K/D+" title="K/D ratio vs league avg (50 = avg)" sortKey="kdr" state={sort} onClick={toggleSort} />
               <SortableTh label="Entry+" title="Opening duel success rate (OK / total duels) vs league avg (50 = avg)" sortKey="entry" state={sort} onClick={toggleSort} />
@@ -860,7 +862,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
                 <td className={tdRight} style={plusStyle(rating)}>{toRatingScale(rating)}</td>
                 <td className={tdRight} style={plusStyle(plus.kpr)}>{toRatingScale(plus.kpr)}</td>
                 <td className={tdRight} style={plusStyle(plus.apr)}>{toRatingScale(plus.apr)}</td>
-                <td className={tdRight} style={plusStyle(2 - plus.dpr)}>{toRatingScale(plus.dpr)}</td>
+                <td className={tdRight} style={plusStyle(plus.dpr)}>{toRatingScale(plus.dpr)}</td>
                 <td className={tdRight} style={plusStyle(plus.adr)}>{toRatingScale(plus.adr)}</td>
                 <td className={tdRight} style={plusStyle(plus.kdr)}>{toRatingScale(plus.kdr)}</td>
                 <td className={tdRight} style={plusStyle(plus.entry)}>{toRatingScale(plus.entry)}</td>
@@ -967,7 +969,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Player Rating', title: "Composite rating (calculations.md) — 50 = this league's average. Omits Beer Tax (not yet computed).", value: toRatingScale(rating), valueStyle: plusStyle(rating) },
     { label: 'Kills/Round+', title: 'Kills per round vs league avg (50 = avg)', value: toRatingScale(plus.kpr), valueStyle: plusStyle(plus.kpr) },
     { label: 'Assists/Round+', title: 'Assists per round vs league avg (50 = avg)', value: toRatingScale(plus.apr), valueStyle: plusStyle(plus.apr) },
-    { label: 'Deaths/Round+', title: 'Deaths per round vs league avg (50 = avg, lower is better)', value: toRatingScale(plus.dpr), valueStyle: plusStyle(2 - plus.dpr) },
+    { label: 'Deaths/Round+', title: 'Inverted deaths per round vs league avg — fewer deaths score higher, like every other + stat (50 = avg)', value: toRatingScale(plus.dpr), valueStyle: plusStyle(plus.dpr) },
     { label: 'ADR+', title: 'Damage per round vs league avg (50 = avg)', value: toRatingScale(plus.adr), valueStyle: plusStyle(plus.adr) },
     { label: 'K/D+', title: 'K/D ratio vs league avg (50 = avg)', value: toRatingScale(plus.kdr), valueStyle: plusStyle(plus.kdr) },
     { label: 'Entry+', title: 'Opening duel success rate (OK / total duels) vs league avg (50 = avg)', value: toRatingScale(plus.entry), valueStyle: plusStyle(plus.entry) },

@@ -82,7 +82,8 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 
 - `KPR+` = `Player K/R` / `League Avg K/R`
 - `APR+` = `Player A/R` / `League Avg A/R`
-- `DPR+` = `Player D/R` / `League Avg D/R`
+- `DPR+` = `League Avg D/R` / `Player D/R` — inverted (league average over player, not the usual
+  player-over-average), so like every other `+` stat, higher is better: fewer deaths score higher.
 - `KDR+` = `Player K/D` / `League Avg K/D`
 - `ADR+` = `Player ADR` / `League Avg ADR`
 - `Entry+` = `Player Opening Success Rate` / `League Avg Opening Success Rate`
@@ -266,7 +267,7 @@ Player Rating = 1.00
   + 0.10(Objective+ - 1)
   + 0.10(Utility+ - 1)
   + 0.10(APR+ - 1)
-  - 0.10(DPR+ - 1)
+  + 0.10(DPR+ - 1)
 ```
 
 #### Role ratings
@@ -291,7 +292,7 @@ Anchor Rating = 1.00
   + 0.15(ADR+ - 1)
   + 0.15(Trade+ - 1)
   + 0.10(Objective+ - 1)
-  - 0.50(DPR+ - 1)
+  + 0.50(DPR+ - 1)
   + 0.20(Choke+ - 1)
 ```
 
