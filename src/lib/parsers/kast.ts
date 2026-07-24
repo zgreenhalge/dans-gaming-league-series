@@ -1,6 +1,8 @@
 import type { SabFields } from '../types';
 import { isTeamKill, type MatchContext, type PlayerDeathRow } from './matchContext';
 import { TRADE_WINDOW_SECONDS } from './constants';
+import { buildPositionIndex, isTradeOpportunity } from './trades';
+import type { PlayerPositionRow } from './smokes';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -8,12 +10,14 @@ export function collectKast(
   deathEvents: PlayerDeathRow[],
   context: MatchContext,
   steamIds: string[],
+  positionRows: PlayerPositionRow[],
 ): CollectorOut {
   const out: CollectorOut = new Map();
   const steamSet = new Set(steamIds);
   for (const sid of steamIds) out.set(sid, {});
 
   const tradeWindow = Math.round(TRADE_WINDOW_SECONDS * context.tickRate);
+  const positionByTickAndPlayer = buildPositionIndex(positionRows);
 
   // Group deaths by round
   const deathsByRound = new Map<number, PlayerDeathRow[]>();
@@ -51,11 +55,14 @@ export function collectKast(
         if (!died) qualifies = true;
       }
 
-      // T: traded — died but a teammate killed their killer within trade window
+      // T: traded — died but a teammate who had a real trade opportunity (same distance gate as
+      // trades.ts's collectTrades()) killed their killer within the trade window
       if (!qualifies) {
         const myDeath = deaths.find((d) => d.user_steamid === sid);
         if (myDeath && myDeath.attacker_steamid) {
           const killer = myDeath.attacker_steamid;
+          const victimPos = positionByTickAndPlayer.get(`${myDeath.tick}::${sid}`);
+          const killerPos = positionByTickAndPlayer.get(`${myDeath.tick}::${killer}`);
           const traded = deaths.some((d) => {
             if (d.user_steamid !== killer) return false;
             if (d.tick <= myDeath.tick) return false;
@@ -63,7 +70,9 @@ export function collectKast(
             const trader = d.attacker_steamid;
             if (!trader || !steamSet.has(trader)) return false;
             // Trader must be on the same side as the dead player
-            return isTeamKill(trader, sid, context);
+            if (!isTeamKill(trader, sid, context)) return false;
+            const traderPos = positionByTickAndPlayer.get(`${myDeath.tick}::${trader}`);
+            return isTradeOpportunity(traderPos, victimPos, killerPos);
           });
           if (traded) qualifies = true;
         }

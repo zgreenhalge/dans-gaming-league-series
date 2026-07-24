@@ -149,9 +149,24 @@ export function parseDemoSabremetrics(
   // 4. Accumulator-based stats (split basic + headshots + unsplit utility/flashed)
   const accStats = collectAccumulators(demoBuffer, context, steamIds);
 
+  // Trade opportunities need each teammate's position at the moment of a death, to gate out
+  // "alive and on the same side, but across the map" — fetched early since both collectKast's
+  // "Traded" qualifier and collectTrades() below need the same position data to stay in lockstep.
+  const tradeTicks = neededTradeTicks(deathEvents, context);
+  let tradePositionRows: PlayerPositionRow[] = [];
+  if (tradeTicks.length > 0) {
+    const rawTradeRows = parseTicks(demoBuffer, ['X', 'Y'], tradeTicks) as Record<string, unknown>[];
+    tradePositionRows = rawTradeRows.map((r) => ({
+      tick: Number(r.tick),
+      steamid: String(r.steamid ?? ''),
+      x: Number(r.X ?? 0),
+      y: Number(r.Y ?? 0),
+    }));
+  }
+
   // 5. Event-based collectors
   const entryStats = collectEntry(deathEvents, context, steamIds);
-  const kastStats = collectKast(deathEvents, context, steamIds);
+  const kastStats = collectKast(deathEvents, context, steamIds, tradePositionRows);
   const multikillStats = collectMultikill(deathEvents, context, steamIds);
   const teamkillStats = collectTeamkill(deathEvents, context, steamIds);
   const clutchStats = collectClutch(deathEvents, context, steamIds);
@@ -204,19 +219,6 @@ export function parseDemoSabremetrics(
     smokeDetonateEvents, smokeExpireEvents, smokePositionRows, context, steamIds,
   );
 
-  // Trade opportunities need each teammate's position at the moment of a death, to gate out
-  // "alive and on the same side, but across the map" — same per-tick-fetch shape as smokes above.
-  const tradeTicks = neededTradeTicks(deathEvents, context);
-  let tradePositionRows: PlayerPositionRow[] = [];
-  if (tradeTicks.length > 0) {
-    const rawTradeRows = parseTicks(demoBuffer, ['X', 'Y'], tradeTicks) as Record<string, unknown>[];
-    tradePositionRows = rawTradeRows.map((r) => ({
-      tick: Number(r.tick),
-      steamid: String(r.steamid ?? ''),
-      x: Number(r.X ?? 0),
-      y: Number(r.Y ?? 0),
-    }));
-  }
   const tradeStats = collectTrades(deathEvents, hurtEvents, tradePositionRows, context, steamIds);
 
   // Unused Utility on Death reads demoparser2's "inventory" tick field (see unusedUtility.ts) —

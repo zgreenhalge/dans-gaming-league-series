@@ -22,6 +22,29 @@ function withinDistance(a: { x: number; y: number }, b: { x: number; y: number }
   return dx * dx + dy * dy <= radius * radius;
 }
 
+/** `{tick}::{steamid}` → position, built once per collector run from a flat position-tick fetch. */
+export function buildPositionIndex(positionRows: PlayerPositionRow[]): Map<string, { x: number; y: number }> {
+  const index = new Map<string, { x: number; y: number }>();
+  for (const p of positionRows) index.set(`${p.tick}::${p.steamid}`, { x: p.x, y: p.y });
+  return index;
+}
+
+/**
+ * The distance side of a real trade opportunity: a teammate within TRADE_VICTIM_DISTANCE of the
+ * death and within TRADE_KILLER_DISTANCE of the killer. Shared by collectTrades() and kast.ts's
+ * "Traded" qualifier so the two conditions can never drift apart. Missing position data for any
+ * party fails closed.
+ */
+export function isTradeOpportunity(
+  teammatePos: { x: number; y: number } | undefined,
+  victimPos: { x: number; y: number } | undefined,
+  killerPos: { x: number; y: number } | undefined,
+): boolean {
+  if (!teammatePos || !victimPos || !killerPos) return false;
+  return withinDistance(teammatePos, victimPos, TRADE_VICTIM_DISTANCE) &&
+    withinDistance(teammatePos, killerPos, TRADE_KILLER_DISTANCE);
+}
+
 /** Tick list demoOrchestrator.ts needs to fetch (via parseTicks, all players): one per death, to
  *  check whether a teammate was close enough to plausibly trade. */
 export function neededTradeTicks(deathEvents: PlayerDeathRow[], context: MatchContext): number[] {
@@ -44,8 +67,8 @@ export function neededTradeTicks(deathEvents: PlayerDeathRow[], context: MatchCo
  * - Attempt: an opportunity where the teammate dealt damage to the killer within the trade
  *   window.
  * - Success: an opportunity where the teammate killed the killer within the trade window — the
- *   same condition kast.ts's KAST "Traded" qualifier already checks, kept in lockstep here so the
- *   two never disagree.
+ *   same distance-gated opportunity plus trade-window condition kast.ts's KAST "Traded" qualifier
+ *   checks via isTradeOpportunity(), so the two can never disagree.
  *
  * In wingman there's exactly one teammate, so "opportunity" degenerates to a single yes/no check
  * per death rather than a count across a full 5-person side.
@@ -63,10 +86,7 @@ export function collectTrades(
 
   const tradeWindow = Math.round(TRADE_WINDOW_SECONDS * context.tickRate);
 
-  const positionByTickAndPlayer = new Map<string, { x: number; y: number }>();
-  for (const p of positionRows) {
-    positionByTickAndPlayer.set(`${p.tick}::${p.steamid}`, { x: p.x, y: p.y });
-  }
+  const positionByTickAndPlayer = buildPositionIndex(positionRows);
 
   const deathsByRound = new Map<number, PlayerDeathRow[]>();
   for (const d of deathEvents) {
@@ -111,11 +131,8 @@ export function collectTrades(
       const victimPos = positionByTickAndPlayer.get(`${victimDeath.tick}::${victim}`);
       const killerPos = positionByTickAndPlayer.get(`${victimDeath.tick}::${killer}`);
       const nearbyTeammates = aliveTeammates.filter((sid) => {
-        if (!victimPos || !killerPos) return false;
         const teammatePos = positionByTickAndPlayer.get(`${victimDeath.tick}::${sid}`);
-        if (!teammatePos) return false;
-        return withinDistance(teammatePos, victimPos, TRADE_VICTIM_DISTANCE) &&
-          withinDistance(teammatePos, killerPos, TRADE_KILLER_DISTANCE);
+        return isTradeOpportunity(teammatePos, victimPos, killerPos);
       });
 
       const victimOut = out.get(victim)!;
