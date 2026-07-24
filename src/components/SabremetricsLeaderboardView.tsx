@@ -1023,7 +1023,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     };
     const badge = bestFitRole(roleRatings);
     const tileByLabel = new Map(plusTiles.map((t) => [t.label, t]));
-    const cardSubStatLabels = ['KAST+', 'Trade+', 'Utility+', 'Aim+', 'Clutch+', 'Choke+'];
+    const cardSubStatLabels = ['K/D+', 'ADR+', 'Clutch+', 'Choke+', 'Aim+', 'Utility+', 'Trade+', 'Traded+'];
     card = {
       rating: toRatingScale(rating),
       subStats: cardSubStatLabels.map((label) => tileByLabel.get(label)!),

@@ -1,12 +1,16 @@
 // FIFA-style player card: a header row (avatar, name, best-fit playstyle line, big OVR) over the
 // site's standard bordered-rectangle panel — matching the shape and theming of every other card
-// on the site (StatTileGrid, MatchCard, …) rather than a standalone shape of its own — plus the
-// six sub-attributes paired into FIFA's two-column layout (first three left, last three right,
-// divided by a vertical rule per row) instead of a plain tile grid. Sub-stat values/colors arrive
-// pre-computed (the caller already builds this exact StatTile shape for the Plus Stats tile grid)
-// — this component is presentational only, it does no rating math itself. See
-// docs/calculations.md "Player Rating" / "Role ratings" for how the caller derives these numbers.
+// on the site (StatTileGrid, MatchCard, …) rather than a standalone shape of its own — plus eight
+// sub-attributes in a two-column layout, paired row-by-row (index 2i and 2i+1 share a row) rather
+// than FIFA's own front-half/back-half split, so thematically related pairs (Trade+/Traded+,
+// Clutch+/Choke+) sit side by side. Sub-stat values/colors arrive pre-computed (the caller already
+// builds this exact StatTile shape for the Plus Stats tile grid) — this component is
+// presentational only, it does no rating math itself. See docs/calculations.md "Player Rating" /
+// "Role ratings" for how the caller derives these numbers.
+//
+// Role Ratings are dev-gated: the weights need more tuning before they ship (see DevGate).
 
+import DevGate from './DevGate';
 import PlayerAvatar from './PlayerAvatar';
 import type { StatTile } from './StatTileGrid';
 import { plusStyle } from '@/lib/util';
@@ -53,15 +57,15 @@ export default function PlayerRatingCard({
   /** Player Rating, 0-100 (50 = league average). */
   rating: number;
   /** Already-shaped Plus-stat tiles (same StatTile objects the Plus Stats grid renders) — value
-   *  0-100 with valueStyle set via plusStyle(). Exactly 6, split into a left column (first 3) and
-   *  right column (last 3), the same pairing convention FIFA cards use. */
+   *  0-100 with valueStyle set via plusStyle(). Exactly 8; rendered as 4 rows, each row pairing
+   *  subStats[2i] (left) with subStats[2i+1] (right). */
   subStats: StatTile[];
   /** Entry/Anchor/Setup Role Ratings — always three lines; the best-fit one (furthest above
-   *  league average) is highlighted, the rest render plain. */
+   *  league average) is highlighted, the rest render plain. Dev-gated (see DevGate) until the
+   *  weights are finalized. */
   roles: RoleRatingLine[];
 }) {
-  const leftStats = subStats.slice(0, 3);
-  const rightStats = subStats.slice(3, 6);
+  const rowCount = Math.ceil(subStats.length / 2);
 
   return (
     <div className="lift-card border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] p-5 max-w-sm">
@@ -69,7 +73,7 @@ export default function PlayerRatingCard({
         <PlayerAvatar name={name} imageUrl={avatarUrl} size="lg" round />
         <div className="flex-1 min-w-0">
           <div className="font-display text-lg font-semibold truncate">{name}</div>
-          <div className="mt-1 space-y-0.5">
+          <DevGate className="mt-1 space-y-0.5">
             {roles.map((r) => (
               <div
                 key={r.label}
@@ -80,7 +84,7 @@ export default function PlayerRatingCard({
                 {r.label} · {r.rating}
               </div>
             ))}
-          </div>
+          </DevGate>
         </div>
         <div
           className="text-right shrink-0"
@@ -94,8 +98,8 @@ export default function PlayerRatingCard({
       </div>
 
       <div className="border border-[var(--color-border-primary)]">
-        {[0, 1, 2].map((i) => (
-          <StatRow key={i} left={leftStats[i]} right={rightStats[i]} first={i === 0} />
+        {Array.from({ length: rowCount }, (_, i) => (
+          <StatRow key={i} left={subStats[2 * i]} right={subStats[2 * i + 1]} first={i === 0} />
         ))}
       </div>
     </div>
