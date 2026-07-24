@@ -257,7 +257,12 @@ function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusStat {
     utility: 0.30 * flashAssistsPlus + 0.30 * utilDamagePlus + 0.20 * blockingSmokePlus
       + 0.20 * (2 - teamflashPlus),
     clutch: plusStat((agg.clutch_1v1_wins + 3 * agg.clutch_1v2_wins) / rp, la.clutch),
-    choke: plusStat(chokeScore(agg) / rp, la.choke),
+    // Inverted (league avg / player, not player / league avg) so Choke+ reads on the same
+    // "bigger number = better" scale as every other + stat — a lower Choke Score (fewer/smaller
+    // blown advantages) now produces a higher Choke+, instead of being the one stat where lower
+    // is better. Reuses plusStat()'s existing zero-denominator fallback (now guarding the
+    // player's own rate instead of the league's) rather than inventing new edge-case handling.
+    choke: plusStat(la.choke, chokeScore(agg) / rp),
     aim: 0.35 * accuracyPlus + 0.40 * headAccuracyPlus + 0.25 * counterStrafePlus,
     spray: plusStat(agg.spray_shots_fired > 0 ? agg.spray_shots_hit / agg.spray_shots_fired : 0, la.spray),
   };
@@ -306,7 +311,7 @@ export function computeAnchorRating(p: PlusStat): number {
     + 0.15 * (p.trade - 1)
     + 0.10 * (p.objective - 1)
     - 0.50 * (p.dpr - 1)
-    - 0.20 * (p.choke - 1);
+    + 0.20 * (p.choke - 1);
 }
 
 /** `teamflashPerRound` = seconds spent blinding teammates, averaged per round played
@@ -843,7 +848,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
               <SortableTh label="Objective+" title="Objective score (2×plants + 3×defuses) per round vs league avg (50 = avg)" sortKey="objective" state={sort} onClick={toggleSort} />
               <SortableTh label="Utility+" title="Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (50 = avg)" sortKey="utility" state={sort} onClick={toggleSort} />
               <SortableTh label="Clutch+" title="Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (50 = avg)" sortKey="clutch" state={sort} onClick={toggleSort} />
-              <SortableTh label="Choke+" title="Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (50 = avg, lower is better)" sortKey="choke" state={sort} onClick={toggleSort} />
+              <SortableTh label="Choke+" title="Inverted choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses per round) vs league avg — fewer/smaller blown clutch advantages score higher, like every other + stat (50 = avg)" sortKey="choke" state={sort} onClick={toggleSort} />
               <SortableTh label="Aim+" title="Weighted blend of Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (50 = avg)" sortKey="aim" state={sort} onClick={toggleSort} />
               <SortableTh label="Spray+" title="Spray Accuracy vs league avg (50 = avg)" sortKey="spray" state={sort} onClick={toggleSort} />
             </tr>
@@ -864,7 +869,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
                 <td className={tdRight} style={plusStyle(plus.objective)}>{toRatingScale(plus.objective)}</td>
                 <td className={tdRight} style={plusStyle(plus.utility)}>{toRatingScale(plus.utility)}</td>
                 <td className={tdRight} style={plusStyle(plus.clutch)}>{toRatingScale(plus.clutch)}</td>
-                <td className={tdRight} style={plusStyle(2 - plus.choke)}>{toRatingScale(plus.choke)}</td>
+                <td className={tdRight} style={plusStyle(plus.choke)}>{toRatingScale(plus.choke)}</td>
                 <td className={tdRight} style={plusStyle(plus.aim)}>{toRatingScale(plus.aim)}</td>
                 <td className={tdRight} style={plusStyle(plus.spray)}>{toRatingScale(plus.spray)}</td>
               </tr>
@@ -971,7 +976,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Objective+', title: 'Objective score (2×plants + 3×defuses) per round vs league avg (50 = avg)', value: toRatingScale(plus.objective), valueStyle: plusStyle(plus.objective) },
     { label: 'Utility+', title: 'Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (50 = avg)', value: toRatingScale(plus.utility), valueStyle: plusStyle(plus.utility) },
     { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (50 = avg)', value: toRatingScale(plus.clutch), valueStyle: plusStyle(plus.clutch) },
-    { label: 'Choke+', title: 'Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (50 = avg, lower is better)', value: toRatingScale(plus.choke), valueStyle: plusStyle(2 - plus.choke) },
+    { label: 'Choke+', title: 'Inverted choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses per round) vs league avg — fewer/smaller blown clutch advantages score higher, like every other + stat (50 = avg)', value: toRatingScale(plus.choke), valueStyle: plusStyle(plus.choke) },
     { label: 'Aim+', title: 'Weighted blend of Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (50 = avg)', value: toRatingScale(plus.aim), valueStyle: plusStyle(plus.aim) },
     { label: 'Spray+', title: 'Spray Accuracy vs league avg (50 = avg)', value: toRatingScale(plus.spray), valueStyle: plusStyle(plus.spray) },
   ] : [];

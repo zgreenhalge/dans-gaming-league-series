@@ -165,8 +165,9 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
     explicit flash-entity id on the underlying event.
 - `Clutch+` = `Player Clutch Score` / `League Avg Clutch Score`
   - `Clutch Score` = `1v1 wins` + 3 * `1v2 wins`
-- `Choke+` = `Player Choke Score` / `League Avg Choke Score` — lower is better (fewer/smaller
-  blown advantages)
+- `Choke+` = `League Avg Choke Score` / `Player Choke Score` — inverted (league average over
+  player, not the usual player-over-average), so like every other `+` stat, higher is better:
+  fewer/smaller blown advantages score higher.
   - `Choke Score` = `1v1 losses` + 2 * `1v2 losses` + 5 * `2v1 losses`
   - `1v1/1v2 losses` = the mirror of `Clutch Score`'s wins: `Clutch Attempts - Clutch Wins` for
     each bucket.
@@ -291,7 +292,7 @@ Anchor Rating = 1.00
   + 0.15(Trade+ - 1)
   + 0.10(Objective+ - 1)
   - 0.50(DPR+ - 1)
-  - 0.20(Choke+ - 1)
+  + 0.20(Choke+ - 1)
 ```
 
 ```
