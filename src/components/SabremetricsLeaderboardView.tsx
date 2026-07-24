@@ -144,7 +144,7 @@ function plusStat(playerVal: number, avgVal: number): number {
   return avgVal > 0 ? playerVal / avgVal : 1;
 }
 
-interface PlusStat {
+export interface PlusStat {
   kpr: number;
   apr: number;
   dpr: number;
@@ -262,6 +262,85 @@ function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusStat {
   };
 }
 
+// --- Player Rating + Role Ratings (calculations.md "Player Rating" / "Role ratings") ---
+//
+// All four composites start at a 1.00 baseline (league average) and add weighted deltas from
+// each underlying `+` stat, so the result lands on the same "1.00 = average" scale as every
+// input feeding it — `toRatingScale()` below then maps that scale to 0-100 for display, exactly
+// like any other `+` stat. Beer Tax (calculations.md) can't be computed yet, so these formulas
+// simply omit its term (equivalent to treating it as 0) rather than pretending it's covered —
+// callers that display Player Rating must caption that omission.
+//
+// Trade+ (trade kill success rate vs. league avg) stands in for KAST+ in every formula below —
+// a more specific signal of "did this player capitalize on a teammate's death" than KAST's
+// broader kill/assist/survive/traded rate.
+
+export function computePlayerRating(p: PlusStat): number {
+  return 1
+    + 0.30 * (p.kpr - 1)
+    + 0.20 * (p.adr - 1)
+    + 0.10 * (p.entry - 1)
+    + 0.10 * (p.clutch - 1)
+    + 0.10 * (p.trade - 1)
+    + 0.10 * (p.objective - 1)
+    + 0.10 * (p.utility - 1)
+    + 0.10 * (p.apr - 1)
+    - 0.10 * (p.dpr - 1);
+}
+
+export function computeEntryRating(p: PlusStat): number {
+  return 1
+    + 0.35 * (p.entry - 1)
+    + 0.20 * (p.kpr - 1)
+    + 0.20 * (p.adr - 1)
+    + 0.15 * (p.trade - 1)
+    + 0.10 * (p.kdr - 1);
+}
+
+export function computeAnchorRating(p: PlusStat): number {
+  return 1
+    + 0.50 * (p.kpr - 1)
+    + 0.40 * (p.clutch - 1)
+    + 0.15 * (p.adr - 1)
+    + 0.15 * (p.trade - 1)
+    + 0.10 * (p.objective - 1)
+    - 0.50 * (p.dpr - 1)
+    - 0.20 * (p.choke - 1);
+}
+
+/** `teamflashPerRound` = seconds spent blinding teammates, averaged per round played
+ *  (`teamflash_duration / rounds_played`) — the one Role Rating input that isn't a `+` ratio,
+ *  per calculations.md's `Setup Rating`. */
+export function computeSetupRating(p: PlusStat, teamflashPerRound: number): number {
+  return 1
+    + 0.50 * (p.apr - 1)
+    + 0.40 * (p.utility - 1)
+    + 0.10 * (p.objective - 1)
+    - 10 * teamflashPerRound;
+}
+
+export interface RoleRatings {
+  entry: number;
+  anchor: number;
+  setup: number;
+}
+
+export const ROLE_LABELS: Record<keyof RoleRatings, string> = {
+  entry: 'Entry Fragger',
+  anchor: 'Anchor',
+  setup: 'Support',
+};
+
+/** The role whose rating sits furthest above league average (1.00) — a player's best-fit
+ *  playstyle, not necessarily their highest raw rating across roles. `null` when no role rating
+ *  clears average (nothing distinctive to badge). */
+export function bestFitRole(roles: RoleRatings): { role: keyof RoleRatings; label: string; rating: number } | null {
+  const entries = (Object.keys(roles) as (keyof RoleRatings)[]).map((role) => ({ role, rating: roles[role] }));
+  const best = entries.reduce((a, b) => (b.rating > a.rating ? b : a));
+  if (best.rating <= 1) return null;
+  return { role: best.role, label: ROLE_LABELS[best.role], rating: best.rating };
+}
+
 // --- Sorting ---
 
 type SortKey = string;
@@ -302,6 +381,14 @@ function pct(num: number, den: number): string {
 function fmtNum(v: number, d: number = 0): string {
   if (!Number.isFinite(v)) return '—';
   return v.toFixed(d);
+}
+
+/** Plain linear rescale from the 1.00-centered `+` ratio scale to 0-100 (50 = league average) —
+ *  calculations.md's display convention for every `+` stat and rating composite. Not a
+ *  probability/percentile model: `statPlus = 2.00` clamps to the 100 ceiling rather than letting
+ *  a small league's outliers exceed the display range. */
+export function toRatingScale(statPlus: number): number {
+  return Math.max(0, Math.min(100, Math.round(50 * statPlus)));
 }
 
 function plusStyle(val: number): React.CSSProperties {
@@ -703,14 +790,17 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
   );
 }
 
-// --- Plus Stats (1-scaled: 1.00 = league average) ---
+// --- Plus Stats (0-100 scale: 50 = league average) ---
 
 function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
-  const [sort, toggleSort] = useSortState('kast');
+  const [sort, toggleSort] = useSortState('rating');
 
   const withPlus = useMemo(() => {
     const leagueAverages = computeLeagueAverages(aggregated);
-    return aggregated.map((a) => ({ agg: a, plus: computePlusStats(a, leagueAverages) }));
+    return aggregated.map((a) => {
+      const plus = computePlusStats(a, leagueAverages);
+      return { agg: a, plus, rating: computePlayerRating(plus) };
+    });
   }, [aggregated]);
 
   const sorted = useMemo(() => {
@@ -718,6 +808,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
     copy.sort((a, b) => {
       let aVal: number, bVal: number;
       switch (sort.col) {
+        case 'rating': aVal = a.rating; bVal = b.rating; break;
         case 'kpr': aVal = a.plus.kpr; bVal = b.plus.kpr; break;
         case 'apr': aVal = a.plus.apr; bVal = b.plus.apr; break;
         case 'dpr': aVal = a.plus.dpr; bVal = b.plus.dpr; break;
@@ -741,46 +832,48 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
 
   return (
     <div className="my-6">
-      <h3 className="text-sm font-semibold mb-3" title="1.00 = league average. Values above 1 are better than average, below 1 are worse.">Stats Plus</h3>
+      <h3 className="text-sm font-semibold mb-3" title="50 = this league's average, not a global percentile. Values above 50 are better than average, below 50 are worse. Player Rating omits Beer Tax (not yet computed).">Stats Plus</h3>
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-xs">
           <thead>
             <tr className="bg-[var(--color-bg-secondary)]">
               <th className={playerThCls}>Player</th>
-              <SortableTh label="Kills/Round+" title="Kills per round vs league avg (1.00 = avg)" sortKey="kpr" state={sort} onClick={toggleSort} />
-              <SortableTh label="Assists/Round+" title="Assists per round vs league avg (1.00 = avg)" sortKey="apr" state={sort} onClick={toggleSort} />
-              <SortableTh label="Deaths/Round+" title="Deaths per round vs league avg (1.00 = avg, lower is better)" sortKey="dpr" state={sort} onClick={toggleSort} />
-              <SortableTh label="ADR+" title="Damage per round vs league avg (1.00 = avg)" sortKey="adr" state={sort} onClick={toggleSort} />
-              <SortableTh label="K/D+" title="K/D ratio vs league avg (1.00 = avg)" sortKey="kdr" state={sort} onClick={toggleSort} />
-              <SortableTh label="Entry+" title="Opening duel success rate (OK / total duels) vs league avg (1.00 = avg)" sortKey="entry" state={sort} onClick={toggleSort} />
-              <SortableTh label="KAST+" title="KAST per round vs league avg (1.00 = avg)" sortKey="kast" state={sort} onClick={toggleSort} />
-              <SortableTh label="Trade+" title="Trade Kill % (trade kill successes / attempts) vs league avg (1.00 = avg)" sortKey="trade" state={sort} onClick={toggleSort} />
-              <SortableTh label="Objective+" title="Objective score (2×plants + 3×defuses) per round vs league avg (1.00 = avg)" sortKey="objective" state={sort} onClick={toggleSort} />
-              <SortableTh label="Utility+" title="Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (1.00 = avg)" sortKey="utility" state={sort} onClick={toggleSort} />
-              <SortableTh label="Clutch+" title="Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)" sortKey="clutch" state={sort} onClick={toggleSort} />
-              <SortableTh label="Choke+" title="Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (1.00 = avg, lower is better)" sortKey="choke" state={sort} onClick={toggleSort} />
-              <SortableTh label="Aim+" title="Weighted blend of Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (1.00 = avg)" sortKey="aim" state={sort} onClick={toggleSort} />
-              <SortableTh label="Spray+" title="Spray Accuracy vs league avg (1.00 = avg)" sortKey="spray" state={sort} onClick={toggleSort} />
+              <SortableTh label="Rating" title="Player Rating composite (calculations.md) — 50 = this league's average. Omits Beer Tax (not yet computed)." sortKey="rating" state={sort} onClick={toggleSort} />
+              <SortableTh label="Kills/Round+" title="Kills per round vs league avg (50 = avg)" sortKey="kpr" state={sort} onClick={toggleSort} />
+              <SortableTh label="Assists/Round+" title="Assists per round vs league avg (50 = avg)" sortKey="apr" state={sort} onClick={toggleSort} />
+              <SortableTh label="Deaths/Round+" title="Deaths per round vs league avg (50 = avg, lower is better)" sortKey="dpr" state={sort} onClick={toggleSort} />
+              <SortableTh label="ADR+" title="Damage per round vs league avg (50 = avg)" sortKey="adr" state={sort} onClick={toggleSort} />
+              <SortableTh label="K/D+" title="K/D ratio vs league avg (50 = avg)" sortKey="kdr" state={sort} onClick={toggleSort} />
+              <SortableTh label="Entry+" title="Opening duel success rate (OK / total duels) vs league avg (50 = avg)" sortKey="entry" state={sort} onClick={toggleSort} />
+              <SortableTh label="KAST+" title="KAST per round vs league avg (50 = avg)" sortKey="kast" state={sort} onClick={toggleSort} />
+              <SortableTh label="Trade+" title="Trade Kill % (trade kill successes / attempts) vs league avg (50 = avg)" sortKey="trade" state={sort} onClick={toggleSort} />
+              <SortableTh label="Objective+" title="Objective score (2×plants + 3×defuses) per round vs league avg (50 = avg)" sortKey="objective" state={sort} onClick={toggleSort} />
+              <SortableTh label="Utility+" title="Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (50 = avg)" sortKey="utility" state={sort} onClick={toggleSort} />
+              <SortableTh label="Clutch+" title="Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (50 = avg)" sortKey="clutch" state={sort} onClick={toggleSort} />
+              <SortableTh label="Choke+" title="Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (50 = avg, lower is better)" sortKey="choke" state={sort} onClick={toggleSort} />
+              <SortableTh label="Aim+" title="Weighted blend of Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (50 = avg)" sortKey="aim" state={sort} onClick={toggleSort} />
+              <SortableTh label="Spray+" title="Spray Accuracy vs league avg (50 = avg)" sortKey="spray" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
-            {sorted.map(({ agg, plus }) => (
+            {sorted.map(({ agg, plus, rating }) => (
               <tr key={agg.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                 <PlayerCell id={agg.player_id} name={agg.player_name} />
-                <td className={tdRight} style={plusStyle(plus.kpr)}>{fmtNum(plus.kpr, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.apr)}>{fmtNum(plus.apr, 2)}</td>
-                <td className={tdRight} style={plusStyle(2 - plus.dpr)}>{fmtNum(plus.dpr, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.adr)}>{fmtNum(plus.adr, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.kdr)}>{fmtNum(plus.kdr, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.entry)}>{fmtNum(plus.entry, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.kast)}>{fmtNum(plus.kast, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.trade)}>{fmtNum(plus.trade, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.objective)}>{fmtNum(plus.objective, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.utility)}>{fmtNum(plus.utility, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.clutch)}>{fmtNum(plus.clutch, 2)}</td>
-                <td className={tdRight} style={plusStyle(2 - plus.choke)}>{fmtNum(plus.choke, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.aim)}>{fmtNum(plus.aim, 2)}</td>
-                <td className={tdRight} style={plusStyle(plus.spray)}>{fmtNum(plus.spray, 2)}</td>
+                <td className={tdRight} style={plusStyle(rating)}>{toRatingScale(rating)}</td>
+                <td className={tdRight} style={plusStyle(plus.kpr)}>{toRatingScale(plus.kpr)}</td>
+                <td className={tdRight} style={plusStyle(plus.apr)}>{toRatingScale(plus.apr)}</td>
+                <td className={tdRight} style={plusStyle(2 - plus.dpr)}>{toRatingScale(plus.dpr)}</td>
+                <td className={tdRight} style={plusStyle(plus.adr)}>{toRatingScale(plus.adr)}</td>
+                <td className={tdRight} style={plusStyle(plus.kdr)}>{toRatingScale(plus.kdr)}</td>
+                <td className={tdRight} style={plusStyle(plus.entry)}>{toRatingScale(plus.entry)}</td>
+                <td className={tdRight} style={plusStyle(plus.kast)}>{toRatingScale(plus.kast)}</td>
+                <td className={tdRight} style={plusStyle(plus.trade)}>{toRatingScale(plus.trade)}</td>
+                <td className={tdRight} style={plusStyle(plus.objective)}>{toRatingScale(plus.objective)}</td>
+                <td className={tdRight} style={plusStyle(plus.utility)}>{toRatingScale(plus.utility)}</td>
+                <td className={tdRight} style={plusStyle(plus.clutch)}>{toRatingScale(plus.clutch)}</td>
+                <td className={tdRight} style={plusStyle(2 - plus.choke)}>{toRatingScale(plus.choke)}</td>
+                <td className={tdRight} style={plusStyle(plus.aim)}>{toRatingScale(plus.aim)}</td>
+                <td className={tdRight} style={plusStyle(plus.spray)}>{toRatingScale(plus.spray)}</td>
               </tr>
             ))}
           </tbody>
@@ -804,6 +897,8 @@ interface SinglePlayerTiles {
   trades: StatTile[];
   utility: StatTile[];
   plus: StatTile[];
+  /** FIFA-card inputs — null when there's no league baseline to rate against. */
+  card: { rating: number; subStats: { label: string; value: number; title?: string }[]; role: { label: string; rating: number } | null } | null;
 }
 
 function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: AggregatedSab[]): SinglePlayerTiles {
@@ -869,24 +964,50 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   // themselves yields all 1.00, so only render when we have other players.
   const hasLeagueBaseline = leagueAggregated.length > 1;
   const plus = hasLeagueBaseline ? computePlusStats(agg, computeLeagueAverages(leagueAggregated)) : null;
-  const plusTiles: StatTile[] = plus ? [
-    { label: 'Kills/Round+', title: 'Kills per round vs league avg (1.00 = avg)', value: fmtNum(plus.kpr, 2), valueStyle: plusStyle(plus.kpr) },
-    { label: 'Assists/Round+', title: 'Assists per round vs league avg (1.00 = avg)', value: fmtNum(plus.apr, 2), valueStyle: plusStyle(plus.apr) },
-    { label: 'Deaths/Round+', title: 'Deaths per round vs league avg (1.00 = avg, lower is better)', value: fmtNum(plus.dpr, 2), valueStyle: plusStyle(2 - plus.dpr) },
-    { label: 'ADR+', title: 'Damage per round vs league avg (1.00 = avg)', value: fmtNum(plus.adr, 2), valueStyle: plusStyle(plus.adr) },
-    { label: 'K/D+', title: 'K/D ratio vs league avg (1.00 = avg)', value: fmtNum(plus.kdr, 2), valueStyle: plusStyle(plus.kdr) },
-    { label: 'Entry+', title: 'Opening duel success rate (OK / total duels) vs league avg (1.00 = avg)', value: fmtNum(plus.entry, 2), valueStyle: plusStyle(plus.entry) },
-    { label: 'KAST+', title: 'KAST per round vs league avg (1.00 = avg)', value: fmtNum(plus.kast, 2), valueStyle: plusStyle(plus.kast) },
-    { label: 'Trade+', title: 'Trade Kill % (trade kill successes / attempts) vs league avg (1.00 = avg)', value: fmtNum(plus.trade, 2), valueStyle: plusStyle(plus.trade) },
-    { label: 'Objective+', title: 'Objective score (2×plants + 3×defuses) per round vs league avg (1.00 = avg)', value: fmtNum(plus.objective, 2), valueStyle: plusStyle(plus.objective) },
-    { label: 'Utility+', title: 'Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (1.00 = avg)', value: fmtNum(plus.utility, 2), valueStyle: plusStyle(plus.utility) },
-    { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (1.00 = avg)', value: fmtNum(plus.clutch, 2), valueStyle: plusStyle(plus.clutch) },
-    { label: 'Choke+', title: 'Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (1.00 = avg, lower is better)', value: fmtNum(plus.choke, 2), valueStyle: plusStyle(2 - plus.choke) },
-    { label: 'Aim+', title: 'Weighted blend of Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (1.00 = avg)', value: fmtNum(plus.aim, 2), valueStyle: plusStyle(plus.aim) },
-    { label: 'Spray+', title: 'Spray Accuracy vs league avg (1.00 = avg)', value: fmtNum(plus.spray, 2), valueStyle: plusStyle(plus.spray) },
+  const rating = plus ? computePlayerRating(plus) : null;
+  const plusTiles: StatTile[] = plus && rating != null ? [
+    { label: 'Player Rating', title: "Composite rating (calculations.md) — 50 = this league's average. Omits Beer Tax (not yet computed).", value: toRatingScale(rating), valueStyle: plusStyle(rating) },
+    { label: 'Kills/Round+', title: 'Kills per round vs league avg (50 = avg)', value: toRatingScale(plus.kpr), valueStyle: plusStyle(plus.kpr) },
+    { label: 'Assists/Round+', title: 'Assists per round vs league avg (50 = avg)', value: toRatingScale(plus.apr), valueStyle: plusStyle(plus.apr) },
+    { label: 'Deaths/Round+', title: 'Deaths per round vs league avg (50 = avg, lower is better)', value: toRatingScale(plus.dpr), valueStyle: plusStyle(2 - plus.dpr) },
+    { label: 'ADR+', title: 'Damage per round vs league avg (50 = avg)', value: toRatingScale(plus.adr), valueStyle: plusStyle(plus.adr) },
+    { label: 'K/D+', title: 'K/D ratio vs league avg (50 = avg)', value: toRatingScale(plus.kdr), valueStyle: plusStyle(plus.kdr) },
+    { label: 'Entry+', title: 'Opening duel success rate (OK / total duels) vs league avg (50 = avg)', value: toRatingScale(plus.entry), valueStyle: plusStyle(plus.entry) },
+    { label: 'KAST+', title: 'KAST per round vs league avg (50 = avg)', value: toRatingScale(plus.kast), valueStyle: plusStyle(plus.kast) },
+    { label: 'Trade+', title: 'Trade Kill % (trade kill successes / attempts) vs league avg (50 = avg)', value: toRatingScale(plus.trade), valueStyle: plusStyle(plus.trade) },
+    { label: 'Objective+', title: 'Objective score (2×plants + 3×defuses) per round vs league avg (50 = avg)', value: toRatingScale(plus.objective), valueStyle: plusStyle(plus.objective) },
+    { label: 'Utility+', title: 'Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (50 = avg)', value: toRatingScale(plus.utility), valueStyle: plusStyle(plus.utility) },
+    { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (50 = avg)', value: toRatingScale(plus.clutch), valueStyle: plusStyle(plus.clutch) },
+    { label: 'Choke+', title: 'Choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses) per round vs league avg (50 = avg, lower is better)', value: toRatingScale(plus.choke), valueStyle: plusStyle(2 - plus.choke) },
+    { label: 'Aim+', title: 'Weighted blend of Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (50 = avg)', value: toRatingScale(plus.aim), valueStyle: plusStyle(plus.aim) },
+    { label: 'Spray+', title: 'Spray Accuracy vs league avg (50 = avg)', value: toRatingScale(plus.spray), valueStyle: plusStyle(plus.spray) },
   ] : [];
 
-  return { impact, duels, mechanics, trades, utility, plus: plusTiles };
+  // FIFA-card inputs: OVR (Player Rating) + a 6-attribute spread + the best-fit Role Rating as a
+  // playstyle badge (furthest above league average among Entry/Anchor/Setup).
+  let card: SinglePlayerTiles['card'] = null;
+  if (plus && rating != null) {
+    const roleRatings: RoleRatings = {
+      entry: computeEntryRating(plus),
+      anchor: computeAnchorRating(plus),
+      setup: computeSetupRating(plus, agg.teamflash_duration / rp),
+    };
+    const badge = bestFitRole(roleRatings);
+    card = {
+      rating: toRatingScale(rating),
+      subStats: [
+        { label: 'Entry+', value: toRatingScale(plus.entry), title: 'Opening duel success rate vs league avg (50 = avg)' },
+        { label: 'KAST+', value: toRatingScale(plus.kast), title: 'KAST per round vs league avg (50 = avg)' },
+        { label: 'Utility+', value: toRatingScale(plus.utility), title: 'Weighted utility contribution vs league avg (50 = avg)' },
+        { label: 'Clutch+', value: toRatingScale(plus.clutch), title: 'Clutch score per round vs league avg (50 = avg)' },
+        { label: 'Objective+', value: toRatingScale(plus.objective), title: 'Objective score per round vs league avg (50 = avg)' },
+        { label: 'Trade+', value: toRatingScale(plus.trade), title: 'Trade kill % vs league avg (50 = avg)' },
+      ],
+      role: badge ? { label: badge.label, rating: toRatingScale(badge.rating) } : null,
+    };
+  }
+
+  return { impact, duels, mechanics, trades, utility, plus: plusTiles, card };
 }
 
 // --- Sub-tabs ---
@@ -989,7 +1110,7 @@ export default function SabremetricsLeaderboardView({
         {sub === 'trades' && <StatTileGrid heading="Trades" tiles={tiles.trades} />}
         {sub === 'utility' && <StatTileGrid heading="Utility" tiles={tiles.utility} />}
         {sub === 'plus' && tiles.plus.length > 0 && (
-          <StatTileGrid heading="Stats Plus" hint="1.00 = league average. Values above 1 are better than average, below 1 are worse." tiles={tiles.plus} />
+          <StatTileGrid heading="Stats Plus" hint="50 = this league's average, not a global percentile. Values above 50 are better than average, below 50 are worse." tiles={tiles.plus} />
         )}
       </div>
     );

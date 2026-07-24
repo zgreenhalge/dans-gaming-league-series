@@ -238,14 +238,22 @@ Spotted)"); CS2's spotted mask (`m_bSpotted`) is known-flaky, so these ship unga
   `docs/demo-parsing-reference.md` for why that's out of scope. The raw `Smokes Blocking Push`
   count (not the `%`) also feeds `Utility+` — see above.
 
-### Player Rating (not yet implemented)
+### Player Rating
 
-A weighted sabremetric composite for individual performance. Independent from the
-[EHOG skill rating](ehog.md), which is match-outcome-based (OpenSkill). Every underlying `+` stat
-this formula references (`KPR+`, `ADR+`, `Entry+`, `Clutch+`, `Choke+`, `KAST+`, `Trade+`,
-`Objective+`, `Utility+`, `APR+`, `DPR+`, `K/D+`) is already computed by demo ingestion and shown
-live in `SabremetricsLeaderboardView.tsx`. The composite itself, combining these into one number,
-hasn't been implemented yet.
+A weighted sabremetric composite for individual performance, on the same 0–100 display scale as
+every `+` stat (see "Display scale" below). Independent from the [EHOG skill rating](ehog.md),
+which is match-outcome-based (OpenSkill). Implemented by `computePlayerRating()` in
+`SabremetricsLeaderboardView.tsx`, alongside the `+` stats it's built from, and shown as the
+`Rating` column in the Stats Plus table and the `Player Rating` tile / card OVR in single-player
+views.
+
+Uses `Trade+` (trade kill success rate vs. league average) rather than `KAST+` throughout — a more
+specific signal of "did this player capitalize on a teammate's death" than KAST's broader
+kill/assist/survive/traded rate.
+
+`Player Rating` (and the Role Ratings below) omit a **Beer Tax** term: its inputs (forgot to buy
+util/armor, died with bomb in spawn) aren't tracked by demo ingestion yet, so the term is treated
+as 0 rather than silently dropped from the label — every place the composite is displayed says so.
 
 ```
 Player Rating = 1.00
@@ -253,7 +261,7 @@ Player Rating = 1.00
   + 0.20(ADR+ - 1)
   + 0.10(Entry+ - 1)
   + 0.10(Clutch+ - 1)
-  + 0.10(KAST+ - 1)
+  + 0.10(Trade+ - 1)
   + 0.10(Objective+ - 1)
   + 0.10(Utility+ - 1)
   + 0.10(APR+ - 1)
@@ -262,12 +270,16 @@ Player Rating = 1.00
 
 #### Role ratings
 
+A player's best-fit playstyle is whichever Role Rating sits furthest above league average
+(`bestFitRole()`) — not necessarily the highest raw rating across roles. Surfaced as a badge on the
+FIFA-style player card (`PlayerRatingCard.tsx`).
+
 ```
 Entry Rating = 1.00
   + 0.35(Entry+ - 1)
   + 0.20(KPR+ - 1)
   + 0.20(ADR+ - 1)
-  + 0.15(KAST+ - 1)
+  + 0.15(Trade+ - 1)
   + 0.10(K/D+ - 1)
 ```
 
@@ -276,7 +288,7 @@ Anchor Rating = 1.00
   + 0.50(KPR+ - 1)
   + 0.40(Clutch+ - 1)
   + 0.15(ADR+ - 1)
-  + 0.15(KAST+ - 1)
+  + 0.15(Trade+ - 1)
   + 0.10(Objective+ - 1)
   - 0.50(DPR+ - 1)
   - 0.20(Choke+ - 1)
@@ -289,6 +301,23 @@ Setup Rating = 1.00
   + 0.10(Objective+ - 1)
   - 10 * Teamflash seconds
 ```
+
+### Display scale
+
+Every `+` stat, `Player Rating`, and the Role Ratings are shown on a 0–100 scale (50 = this
+league's average) rather than the raw 1.00-centered ratio — a plain linear transform, not a
+probability or percentile model:
+
+```
+toRatingScale(statPlus) = clamp(round(50 * statPlus), 0, 100)
+```
+
+`statPlus = 1.00` (league average) maps to `50`; `statPlus = 2.00` maps to the `100` ceiling
+(clamped — a small league's skill spread can produce outliers well above 2x average). The
+underlying ratios stay 1.00-centered internally (used for sorting and the existing red/green
+`plusStyle()` color shading); `toRatingScale()` is applied only at render time. This scale is
+**league-relative, not a global percentile** — it reflects DGLS's own average, not a
+FIFA-/Leetify-style global player base, and every place it's shown captions that.
 
 ## Canonical Regular Season Ranking
 
