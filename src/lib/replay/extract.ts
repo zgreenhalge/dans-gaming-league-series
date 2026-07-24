@@ -89,6 +89,36 @@ function isBulletWeapon(weapon: string | null): boolean {
   );
 }
 
+/**
+ * Freeze each dead player's position/facing at their last known-alive tick, in place —
+ * see docs/replay.md for why every consumer of `frames` needs this done at the source.
+ * `roundBounds[].wanted` is each round's own tick list in ascending order; rounds don't
+ * share ticks, so walking one round at a time is enough to track "last alive" per
+ * player without cross-round bleed.
+ */
+export function freezeDeadPositions(
+  framesByTick: Map<number, ReplayPlayerFrame[]>,
+  roundBounds: { wanted: number[] }[],
+): void {
+  for (const { wanted } of roundBounds) {
+    const lastAlive = new Map<number, { x: number; y: number; yaw: number }>();
+    for (const tick of wanted) {
+      for (const p of framesByTick.get(tick) ?? []) {
+        if (p.alive) {
+          lastAlive.set(p.id, { x: p.x, y: p.y, yaw: p.yaw });
+          continue;
+        }
+        const last = lastAlive.get(p.id);
+        if (last) {
+          p.x = last.x;
+          p.y = last.y;
+          p.yaw = last.yaw;
+        }
+      }
+    }
+  }
+}
+
 export interface BuildReplayInput {
   demoBuffer: Buffer;
   matchId: number;
@@ -305,6 +335,8 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     if (!framesByTick.has(tick)) framesByTick.set(tick, []);
     framesByTick.get(tick)!.push(frame);
   }
+
+  freezeDeadPositions(framesByTick, roundBounds);
 
   // --- Events + grenades + shots, bucketed per round ---
   const eventsByRound = collectEvents(demoBuffer, deathRows, contextForEvents, playerIdOf, reasonByRound, roundBounds);

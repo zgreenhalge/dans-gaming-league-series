@@ -31,6 +31,7 @@ import {
 } from './playback';
 import { buildHeatmapPoints } from './heatmap';
 import { extractPlayerTrace, traceStateAt, maxDurationTicks, buildMatchTraces } from './aggregate';
+import { freezeDeadPositions } from './extract';
 import { parseOverview, workshopIdFromUrl } from './radar';
 import type { ReplayRound, ReplayFrame, ReplayPayload, ReplayPlayerFrame } from './types';
 
@@ -524,6 +525,40 @@ test('aggregate: extractPlayerTrace freezes at the last alive position on death,
   approx(later.x, 10);
   approx(later.y, 20);
   assert.equal(later.alive, false);
+});
+
+test('extract: freezeDeadPositions freezes a dead player at their last-alive tick within their round, per player, without cross-round bleed', () => {
+  const framesByTick = new Map<number, ReplayPlayerFrame[]>([
+    // Round A: player 1 dies at tick 10 and drifts on later ticks (engine noise).
+    [0, [pf(1, 10, 20, { alive: true })]],
+    [10, [pf(1, 999, 999, { alive: false })]],
+    [20, [pf(1, 0, 0, { alive: false })]],
+    // Round B: a different round's ticks — player 1 is dead on their very first
+    // appearance (no prior alive position in this round to freeze at).
+    [100, [pf(1, 500, 500, { alive: false })]],
+    [110, [pf(1, 600, 600, { alive: false })]],
+  ]);
+  freezeDeadPositions(framesByTick, [{ wanted: [0, 10, 20] }, { wanted: [100, 110] }]);
+
+  approx(framesByTick.get(10)![0].x, 10);
+  approx(framesByTick.get(10)![0].y, 20);
+  approx(framesByTick.get(20)![0].x, 10); // still frozen at the round's last-alive spot
+  approx(framesByTick.get(20)![0].y, 20);
+
+  // No prior alive position in round B's own window → left as reported, and round A's
+  // last-alive position never leaks across the round boundary.
+  approx(framesByTick.get(100)![0].x, 500);
+  approx(framesByTick.get(110)![0].x, 600);
+});
+
+test('extract: freezeDeadPositions leaves alive players untouched', () => {
+  const framesByTick = new Map<number, ReplayPlayerFrame[]>([
+    [0, [pf(1, 10, 20, { alive: true })]],
+    [10, [pf(1, 15, 25, { alive: true })]],
+  ]);
+  freezeDeadPositions(framesByTick, [{ wanted: [0, 10] }]);
+  approx(framesByTick.get(10)![0].x, 15);
+  approx(framesByTick.get(10)![0].y, 25);
 });
 
 test('aggregate: extractPlayerTrace freezes survivors at round_end, ignoring post-round position drift', () => {
