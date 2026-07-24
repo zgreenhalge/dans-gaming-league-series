@@ -91,10 +91,12 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   - `KAST` = `Rounds with Kill, Assist, Survived, or Traded` / `Rounds played`
 - `Trade+` = `Player Trade Kill %` / `League Avg Trade Kill %`
   - **Trade Kills** — from the perspective of the player who could avenge a teammate:
-    - `Trade Kill Opportunities` = times a teammate died while this player was still alive and
-      within 180 game units of the death (the chance to trade realistically existed — matching
-      `Smokes Blocking Push`'s `SMOKE_BLOCK_RADIUS` distance gate; adjust if a reparse run shows
-      it needs tuning)
+    - `Trade Kill Opportunities` = times a teammate died while this player was still alive,
+      within 360 game units of the death, and within 540 game units of the killer (the chance to
+      both reach the fight and realistically engage the killer existed — two separate legs, since
+      being near the body alone doesn't mean there was a shot at whoever's still standing; looser
+      than `Smokes Blocking Push`'s `SMOKE_BLOCK_RADIUS`, which approximates a smoke cloud's much
+      smaller physical size, not a gunfight distance)
     - `Trade Kill Attempts` = opportunities where this player damaged the killer within the
       trade window
     - `Trade Kill Successes` = opportunities where this player killed the killer within the
@@ -103,7 +105,8 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   - **Traded Deaths** — the mirror, from the perspective of the player who died (tracked as its
     own raw stat; not currently folded into `Trade+`):
     - `Traded Death Opportunities` = times this player died while at least one teammate was
-      still alive and within 180 game units (someone had a realistic chance to trade them)
+      still alive, within 360 game units of the death, and within 540 game units of the killer
+      (someone had a realistic chance to reach and engage the killer)
     - `Traded Death Attempts` = opportunities where a teammate damaged the killer within the
       trade window
     - `Traded Death Successes` = opportunities where a teammate killed the killer within the
