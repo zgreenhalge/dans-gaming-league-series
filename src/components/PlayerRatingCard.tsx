@@ -54,7 +54,10 @@ export default function PlayerRatingCard({
             </div>
           )}
         </div>
-        <div className="text-right shrink-0">
+        <div
+          className="text-right shrink-0"
+          title="50 = this league's average, not a global skill percentile. Omits Beer Tax (not yet computed)."
+        >
           <div className="tracked text-[9px] text-[var(--color-text-secondary)]">OVR</div>
           <div className="font-display text-[40px] font-bold leading-none tnum" style={ratingStyle(rating)}>
             {rating}
@@ -63,10 +66,6 @@ export default function PlayerRatingCard({
       </div>
 
       <StatTileGrid columns="grid-cols-3" variant="value-label" tiles={subStats} />
-
-      <div className="mt-3 text-[10px] text-[var(--color-text-secondary)] leading-snug">
-        50 = this league&apos;s average, not a global skill percentile. Omits Beer Tax (not yet computed).
-      </div>
     </div>
   );
 }
