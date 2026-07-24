@@ -124,7 +124,7 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 - `Utility+` = `0.30 * Flash Assists+` + `0.30 * Utility Damage+` + `0.20 * Blocking Smokes+` +
   `0.20 * (2 - Teamflash+)` — a weighted average of four already-normalized `+` ratios (each vs.
   its own league-average rate per round, or per CT smoke thrown for `Blocking Smokes+`), the same
-  way `Aim+` averages `Accuracy+`/`Head Accuracy+`/`Counter-Strafe+`, rather than a raw point score
+  way `Accuracy+` averages raw `Accuracy+`/`Head Accuracy+`/`Counter-Strafe+`, rather than a raw point score
   whose league average could land near zero and blow up the ratio. `Teamflash+` is "lower is
   better," so it's folded in inverted (`2 - Teamflash+`) to land on the same "1.00 = average" scale
   as the other three before weighting.
@@ -182,17 +182,20 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   victim share a side that round, credited to the attacker. Uses the same side check that
   excludes a teamkill from `Entry+`'s opening kills and `KAST+`'s kill qualifier, just counted here
   instead of discarded.
-- `Aim+` = `0.35 * Accuracy+` + `0.40 * Head Accuracy+` + `0.25 * Counter-Strafe+` (each itself
-  `Player X` / `League Avg X`, computed on `Accuracy`/`Head Accuracy`/`Counter-Strafe %` from the
-  Mechanics section below). A weighted blend rather than a sum on a shared point-scale like
-  `Utility Score` — these three are fairly orthogonal skills on different denominators (a great
-  spray-controller isn't necessarily a good counter-strafer), so there's no principled single
-  scale to weight them on directly. Once each is its own `1.00 = league average` ratio, blending
-  them is apples-to-apples; the weights themselves reflect that landing headshots matters most,
-  followed by raw accuracy, with counter-strafing weighted lowest of the three.
-- `Spray+` = `Player Spray Accuracy` / `League Avg Spray Accuracy` — a standalone ratio, not folded
-  into `Aim+`, since spraying and single-tapping are different enough mechanical skills to track
-  separately.
+- `Accuracy+` = `0.35 * raw Accuracy+` + `0.40 * Head Accuracy+` + `0.25 * Counter-Strafe+` (each
+  itself `Player X` / `League Avg X`, computed on `Accuracy`/`Head Accuracy`/`Counter-Strafe %`
+  from the Mechanics section below). A weighted blend rather than a sum on a shared point-scale
+  like `Utility Score` — these three are fairly orthogonal skills on different denominators, so
+  there's no principled single scale to weight them on directly. Once each is its own
+  `1.00 = league average` ratio, blending them is apples-to-apples; the weights themselves reflect
+  that landing headshots matters most, followed by raw accuracy, with counter-strafing weighted
+  lowest of the three.
+- `Spray+` = `Player Spray Accuracy` / `League Avg Spray Accuracy` — its own standalone ratio
+  (spraying and single-tapping are different enough mechanical skills to track independently), and
+  also one of `Aim+`'s two inputs below.
+- `Aim+` = `0.65 * Accuracy+` + `0.35 * Spray+` — the overall mechanical-skill composite, weighted
+  toward `Accuracy+` since it's the broader signal (itself already a three-way blend) with
+  `Spray+` as a secondary contributor.
 
 ### Mechanics (raw, ungated)
 
@@ -200,7 +203,8 @@ Raw accuracy stats derived straight from `weapon_fire`/`player_hurt` events. "Ra
 aren't gated on whether the enemy was actually spotted/visible (Leetify's "Accuracy (Enemy
 Spotted)"); CS2's spotted mask (`m_bSpotted`) is known-flaky, so these ship ungated first per
 `docs/demo-parsing-reference.md`'s guidance on that tradeoff. `Accuracy`, `Head Accuracy`, and
-`Counter-Strafe %` feed `Aim+`; `Spray Accuracy` feeds `Spray+` — see below.
+`Counter-Strafe %` feed `Accuracy+`; `Spray Accuracy` feeds `Spray+` — see below. `Accuracy+` and
+`Spray+` both also feed `Aim+` above.
 
 - `Shots Fired` = count of gun shots fired (guns only; grenade throws, knife, and C4 don't count).
 - `Accuracy` = `Shots Hit` / `Shots Fired` — guns only; grenade throws, knife, and C4 don't count
@@ -269,8 +273,10 @@ Player Rating = 1.00
   + 0.10(APR+ - 1)
   + 0.10(DPR+ - 1)
   + 0.10(Aim+ - 1)
-  + 0.05(Spray+ - 1)
 ```
+
+`Aim+` already blends in `Spray+` (see above), so there's no separate `Spray+` term here —
+that would double-count it.
 
 #### Role ratings
 

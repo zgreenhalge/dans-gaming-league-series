@@ -158,6 +158,7 @@ export interface PlusStat {
   utility: number;
   clutch: number;
   choke: number;
+  accuracy: number;
   aim: number;
   spray: number;
 }
@@ -209,11 +210,11 @@ function computeLeagueAverages(all: AggregatedSab[]): LeagueAverages {
 function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusStat {
   const rp = agg.rounds_played || 1;
 
-  // Aim+ averages three already-normalized ratios (Accuracy+, Head Accuracy+, Counter-Strafe+)
-  // rather than summing raw percentages — they're fairly orthogonal skills on different
-  // denominators, so there's no principled point-scale to weight them on directly, but each is
-  // already "1.00 = league average" once ratio'd, so averaging those is apples-to-apples.
-  const accuracyPlus = plusStat(agg.shots_fired > 0 ? agg.shots_hit / agg.shots_fired : 0, la.accuracy);
+  // Accuracy+ averages three already-normalized ratios (raw Accuracy+, Head Accuracy+,
+  // Counter-Strafe+) rather than summing raw percentages — they're fairly orthogonal skills on
+  // different denominators, so there's no principled point-scale to weight them on directly, but
+  // each is already "1.00 = league average" once ratio'd, so averaging those is apples-to-apples.
+  const rawAccuracyPlus = plusStat(agg.shots_fired > 0 ? agg.shots_hit / agg.shots_fired : 0, la.accuracy);
   const headAccuracyPlus = plusStat(
     agg.shots_hit_no_awp > 0 ? agg.headshot_hits_no_awp / agg.shots_hit_no_awp : 0,
     la.headAccuracy,
@@ -222,6 +223,8 @@ function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusStat {
     agg.counter_strafe_shots > 0 ? agg.counter_strafe_good_shots / agg.counter_strafe_shots : 0,
     la.counterStrafe,
   );
+  const accuracyPlus = 0.35 * rawAccuracyPlus + 0.40 * headAccuracyPlus + 0.25 * counterStrafePlus;
+  const sprayPlus = plusStat(agg.spray_shots_fired > 0 ? agg.spray_shots_hit / agg.spray_shots_fired : 0, la.spray);
 
   // Utility+ averages four already-normalized ratios the same way Aim+ does, rather than a
   // contrived raw-point score (flash assists + util damage/50 + smokes blocking - teamflash) whose
@@ -265,8 +268,12 @@ function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusStat {
     // is better. Reuses plusStat()'s existing zero-denominator fallback (now guarding the
     // player's own rate instead of the league's) rather than inventing new edge-case handling.
     choke: plusStat(la.choke, chokeScore(agg) / rp),
-    aim: 0.35 * accuracyPlus + 0.40 * headAccuracyPlus + 0.25 * counterStrafePlus,
-    spray: plusStat(agg.spray_shots_fired > 0 ? agg.spray_shots_hit / agg.spray_shots_fired : 0, la.spray),
+    accuracy: accuracyPlus,
+    spray: sprayPlus,
+    // Aim+ is itself a blend of two already-normalized + ratios (Accuracy+, Spray+) — same
+    // apples-to-apples averaging as Accuracy+ and Utility+ above, weighted toward Accuracy+ since
+    // it's the broader signal (itself a 3-way blend) with Spray+ as a secondary contributor.
+    aim: 0.65 * accuracyPlus + 0.35 * sprayPlus,
   };
 }
 
@@ -294,8 +301,9 @@ export function computePlayerRating(p: PlusStat): number {
     + 0.10 * (p.utility - 1)
     + 0.10 * (p.apr - 1)
     + 0.10 * (p.dpr - 1)
-    + 0.10 * (p.aim - 1)
-    + 0.05 * (p.spray - 1);
+    // Aim+ already blends in Spray+ (see computePlusStats()), so no separate Spray+ term here —
+    // that would double-count it.
+    + 0.10 * (p.aim - 1);
 }
 
 // Entry/Anchor Rating deliberately exclude ADR+, K/D+, and DPR+ — a whiffing entry or anchor who
@@ -824,6 +832,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
         case 'utility': aVal = a.plus.utility; bVal = b.plus.utility; break;
         case 'clutch': aVal = a.plus.clutch; bVal = b.plus.clutch; break;
         case 'choke': aVal = a.plus.choke; bVal = b.plus.choke; break;
+        case 'accuracy': aVal = a.plus.accuracy; bVal = b.plus.accuracy; break;
         case 'aim': aVal = a.plus.aim; bVal = b.plus.aim; break;
         case 'spray': aVal = a.plus.spray; bVal = b.plus.spray; break;
         default: return 0;
@@ -854,8 +863,9 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
               <SortableTh label="Utility+" title="Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (50 = avg)" sortKey="utility" state={sort} onClick={toggleSort} />
               <SortableTh label="Clutch+" title="Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (50 = avg)" sortKey="clutch" state={sort} onClick={toggleSort} />
               <SortableTh label="Choke+" title="Inverted choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses per round) vs league avg — fewer/smaller blown clutch advantages score higher, like every other + stat (50 = avg)" sortKey="choke" state={sort} onClick={toggleSort} />
-              <SortableTh label="Aim+" title="Weighted blend of Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (50 = avg)" sortKey="aim" state={sort} onClick={toggleSort} />
+              <SortableTh label="Accuracy+" title="Weighted blend of raw Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (50 = avg)" sortKey="accuracy" state={sort} onClick={toggleSort} />
               <SortableTh label="Spray+" title="Spray Accuracy vs league avg (50 = avg)" sortKey="spray" state={sort} onClick={toggleSort} />
+              <SortableTh label="Aim+" title="Weighted blend of Accuracy+ (65%) and Spray+ (35%) vs league avg (50 = avg)" sortKey="aim" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -875,8 +885,9 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
                 <td className={tdRight} style={plusStyle(plus.utility)}>{toRatingScale(plus.utility)}</td>
                 <td className={tdRight} style={plusStyle(plus.clutch)}>{toRatingScale(plus.clutch)}</td>
                 <td className={tdRight} style={plusStyle(plus.choke)}>{toRatingScale(plus.choke)}</td>
-                <td className={tdRight} style={plusStyle(plus.aim)}>{toRatingScale(plus.aim)}</td>
+                <td className={tdRight} style={plusStyle(plus.accuracy)}>{toRatingScale(plus.accuracy)}</td>
                 <td className={tdRight} style={plusStyle(plus.spray)}>{toRatingScale(plus.spray)}</td>
+                <td className={tdRight} style={plusStyle(plus.aim)}>{toRatingScale(plus.aim)}</td>
               </tr>
             ))}
           </tbody>
@@ -982,8 +993,9 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Utility+', title: 'Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (50 = avg)', value: toRatingScale(plus.utility), valueStyle: plusStyle(plus.utility) },
     { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (50 = avg)', value: toRatingScale(plus.clutch), valueStyle: plusStyle(plus.clutch) },
     { label: 'Choke+', title: 'Inverted choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses per round) vs league avg — fewer/smaller blown clutch advantages score higher, like every other + stat (50 = avg)', value: toRatingScale(plus.choke), valueStyle: plusStyle(plus.choke) },
-    { label: 'Aim+', title: 'Weighted blend of Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (50 = avg)', value: toRatingScale(plus.aim), valueStyle: plusStyle(plus.aim) },
+    { label: 'Accuracy+', title: 'Weighted blend of raw Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (50 = avg)', value: toRatingScale(plus.accuracy), valueStyle: plusStyle(plus.accuracy) },
     { label: 'Spray+', title: 'Spray Accuracy vs league avg (50 = avg)', value: toRatingScale(plus.spray), valueStyle: plusStyle(plus.spray) },
+    { label: 'Aim+', title: 'Weighted blend of Accuracy+ (65%) and Spray+ (35%) vs league avg (50 = avg)', value: toRatingScale(plus.aim), valueStyle: plusStyle(plus.aim) },
   ] : [];
 
   // FIFA-card inputs: OVR (Player Rating) + a 6-attribute spread + all three Role Ratings, with
@@ -999,7 +1011,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     };
     const badge = bestFitRole(roleRatings);
     const tileByLabel = new Map(plusTiles.map((t) => [t.label, t]));
-    const cardSubStatLabels = ['Entry+', 'KAST+', 'Utility+', 'Clutch+', 'Objective+', 'Trade+'];
+    const cardSubStatLabels = ['KAST+', 'Trade+', 'Utility+', 'Aim+', 'Clutch+', 'Choke+'];
     card = {
       rating: toRatingScale(rating),
       subStats: cardSubStatLabels.map((label) => tileByLabel.get(label)!),
