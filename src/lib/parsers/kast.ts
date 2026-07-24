@@ -1,6 +1,7 @@
 import type { SabFields } from '../types';
 import { isTeamKill, type MatchContext, type PlayerDeathRow } from './matchContext';
 import { TRADE_WINDOW_SECONDS } from './constants';
+import { tradeOpportunityKey, type TradeOpportunities } from './trades';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -8,9 +9,9 @@ export function collectKast(
   deathEvents: PlayerDeathRow[],
   context: MatchContext,
   steamIds: string[],
+  tradeOpportunities: TradeOpportunities,
 ): CollectorOut {
   const out: CollectorOut = new Map();
-  const steamSet = new Set(steamIds);
   for (const sid of steamIds) out.set(sid, {});
 
   const tradeWindow = Math.round(TRADE_WINDOW_SECONDS * context.tickRate);
@@ -51,19 +52,19 @@ export function collectKast(
         if (!died) qualifies = true;
       }
 
-      // T: traded — died but a teammate killed their killer within trade window
+      // T: traded — died but a teammate with a real trade opportunity for this death (computed
+      // once by trades.ts's computeTradeOpportunities() and shared with collectTrades(), so the
+      // two can never disagree on who counted) killed their killer within the trade window
       if (!qualifies) {
         const myDeath = deaths.find((d) => d.user_steamid === sid);
         if (myDeath && myDeath.attacker_steamid) {
           const killer = myDeath.attacker_steamid;
+          const opportunityTraders = tradeOpportunities.get(tradeOpportunityKey(myDeath.tick, sid)) ?? [];
           const traded = deaths.some((d) => {
             if (d.user_steamid !== killer) return false;
             if (d.tick <= myDeath.tick) return false;
             if (d.tick - myDeath.tick > tradeWindow) return false;
-            const trader = d.attacker_steamid;
-            if (!trader || !steamSet.has(trader)) return false;
-            // Trader must be on the same side as the dead player
-            return isTeamKill(trader, sid, context);
+            return !!d.attacker_steamid && opportunityTraders.includes(d.attacker_steamid);
           });
           if (traded) qualifies = true;
         }
