@@ -1,16 +1,12 @@
 // FIFA-style player card: one big OVR (Player Rating), a handful of sub-attribute tiles, and a
-// best-fit playstyle badge. All values arrive already on the 0-100 display scale (50 = league
-// average) — this component is presentational only, it does no rating math itself. See
-// docs/calculations.md "Player Rating" / "Role ratings" for how the caller derives these numbers.
+// best-fit playstyle badge. Sub-stat values/colors arrive pre-computed (the caller already builds
+// this exact StatTile shape for the Plus Stats tile grid) — this component is presentational
+// only, it does no rating math itself. See docs/calculations.md "Player Rating" / "Role ratings"
+// for how the caller derives these numbers.
 
 import PlayerAvatar from './PlayerAvatar';
-
-export interface RatingSubStat {
-  label: string;
-  /** 0-100, already run through toRatingScale(). */
-  value: number;
-  title?: string;
-}
+import StatTileGrid, { type StatTile } from './StatTileGrid';
+import { plusStyle } from '@/lib/util';
 
 export interface RoleBadge {
   label: string;
@@ -18,14 +14,10 @@ export interface RoleBadge {
   rating: number;
 }
 
-/** Same color-mix formula as the Plus Stats table's plusStyle(), just re-centered on the 0-100
- *  scale (50 = neutral) instead of the underlying 1.00-centered ratio. */
+/** OVR color via the shared plusStyle(), converting the 0-100 display value back to the
+ *  underlying 1.00-centered ratio it was rescaled from. */
 function ratingStyle(rating: number): React.CSSProperties {
-  const delta = Math.max(-1, Math.min(1, (rating - 50) / 50));
-  const pct = Math.round(Math.abs(delta) * 100);
-  if (pct === 0) return {};
-  const accent = delta > 0 ? 'var(--color-accent-green-fg)' : 'var(--color-accent-red-fg)';
-  return { color: `color-mix(in srgb, ${accent} ${pct}%, var(--color-text-primary))` };
+  return plusStyle(rating / 50);
 }
 
 export default function PlayerRatingCard({
@@ -39,7 +31,9 @@ export default function PlayerRatingCard({
   avatarUrl?: string | null;
   /** Player Rating, 0-100 (50 = league average). */
   rating: number;
-  subStats: RatingSubStat[];
+  /** Already-shaped Plus-stat tiles (same StatTile objects the Plus Stats grid renders) — value
+   *  0-100 with valueStyle set via plusStyle(). */
+  subStats: StatTile[];
   /** Best-fit playstyle (whichever Role Rating sits furthest above league average), or null if
    *  none clears average. */
   role?: RoleBadge | null;
@@ -68,18 +62,7 @@ export default function PlayerRatingCard({
         </div>
       </div>
 
-      <div className="border border-[var(--color-border-primary)]">
-        <div className="grid grid-cols-3 gap-px bg-[var(--color-border-tertiary)]">
-          {subStats.map((s) => (
-            <div key={s.label} title={s.title} className="bg-[var(--color-bg-primary)] px-2 py-2.5 text-center">
-              <div className="font-display text-lg font-semibold tnum leading-none" style={ratingStyle(s.value)}>
-                {s.value}
-              </div>
-              <div className="tracked text-[8px] text-[var(--color-text-secondary)] mt-1">{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <StatTileGrid columns="grid-cols-3" variant="value-label" tiles={subStats} />
 
       <div className="mt-3 text-[10px] text-[var(--color-text-secondary)] leading-snug">
         50 = this league&apos;s average, not a global skill percentile. Omits Beer Tax (not yet computed).

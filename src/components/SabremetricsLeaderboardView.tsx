@@ -4,9 +4,9 @@ import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { SabFields } from '@/lib/types';
 import { addSabFields } from '@/lib/queries';
-import { tabCls } from '@/lib/util';
+import { tabCls, plusStyle } from '@/lib/util';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
-import PlayerRatingCard, { type RatingSubStat, type RoleBadge } from './PlayerRatingCard';
+import PlayerRatingCard, { type RoleBadge } from './PlayerRatingCard';
 
 /**
  * The fields this view actually reads off a per-match sabremetric row — a structural subset of
@@ -390,14 +390,6 @@ function fmtNum(v: number, d: number = 0): string {
  *  a small league's outliers exceed the display range. */
 export function toRatingScale(statPlus: number): number {
   return Math.max(0, Math.min(100, Math.round(50 * statPlus)));
-}
-
-function plusStyle(val: number): React.CSSProperties {
-  const delta = Math.max(-1, Math.min(1, val - 1));
-  const pct = Math.round(Math.abs(delta) * 100);
-  if (pct === 0) return {};
-  const accent = delta > 0 ? 'var(--color-accent-green-fg)' : 'var(--color-accent-red-fg)';
-  return { color: `color-mix(in srgb, ${accent} ${pct}%, var(--color-text-primary))` };
 }
 
 function OpeningDuels({ wins, losses }: { wins: number; losses: number }) {
@@ -899,7 +891,7 @@ interface SinglePlayerTiles {
   utility: StatTile[];
   plus: StatTile[];
   /** FIFA-card inputs — null when there's no league baseline to rate against. */
-  card: { rating: number; subStats: RatingSubStat[]; role: RoleBadge | null } | null;
+  card: { rating: number; subStats: StatTile[]; role: RoleBadge | null } | null;
 }
 
 function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: AggregatedSab[]): SinglePlayerTiles {
@@ -985,7 +977,9 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   ] : [];
 
   // FIFA-card inputs: OVR (Player Rating) + a 6-attribute spread + the best-fit Role Rating as a
-  // playstyle badge (furthest above league average among Entry/Anchor/Setup).
+  // playstyle badge (furthest above league average among Entry/Anchor/Setup). Sub-stat tiles are
+  // pulled straight out of `plusTiles` by label (not rebuilt) so the card's numbers, colors, and
+  // tooltip text can never drift from the Plus Stats grid they're also shown in.
   let card: SinglePlayerTiles['card'] = null;
   if (plus && rating != null) {
     const roleRatings: RoleRatings = {
@@ -994,16 +988,11 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
       setup: computeSetupRating(plus, agg.teamflash_duration / rp),
     };
     const badge = bestFitRole(roleRatings);
+    const tileByLabel = new Map(plusTiles.map((t) => [t.label, t]));
+    const cardSubStatLabels = ['Entry+', 'KAST+', 'Utility+', 'Clutch+', 'Objective+', 'Trade+'];
     card = {
       rating: toRatingScale(rating),
-      subStats: [
-        { label: 'Entry+', value: toRatingScale(plus.entry), title: 'Opening duel success rate vs league avg (50 = avg)' },
-        { label: 'KAST+', value: toRatingScale(plus.kast), title: 'KAST per round vs league avg (50 = avg)' },
-        { label: 'Utility+', value: toRatingScale(plus.utility), title: 'Weighted utility contribution vs league avg (50 = avg)' },
-        { label: 'Clutch+', value: toRatingScale(plus.clutch), title: 'Clutch score per round vs league avg (50 = avg)' },
-        { label: 'Objective+', value: toRatingScale(plus.objective), title: 'Objective score per round vs league avg (50 = avg)' },
-        { label: 'Trade+', value: toRatingScale(plus.trade), title: 'Trade kill % vs league avg (50 = avg)' },
-      ],
+      subStats: cardSubStatLabels.map((label) => tileByLabel.get(label)!),
       role: badge ? { label: badge.label, rating: toRatingScale(badge.rating) } : null,
     };
   }

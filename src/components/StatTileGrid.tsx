@@ -18,6 +18,7 @@ export default function StatTileGrid({
   columns = 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4',
   heading,
   hint,
+  variant = 'label-value',
 }: {
   tiles: StatTile[];
   /** Responsive grid-template-columns classes. */
@@ -26,7 +27,12 @@ export default function StatTileGrid({
   heading?: string;
   /** Tooltip for the heading. */
   hint?: string;
+  /** `'label-value'` (default): small label above a big left-aligned value — the standard stat
+   *  panel look. `'value-label'`: big centered value above a small label — used by compact
+   *  FIFA-card-style attribute tiles (see `PlayerRatingCard`). */
+  variant?: 'label-value' | 'value-label';
 }) {
+  const centered = variant === 'value-label';
   return (
     <div>
       {heading && (
@@ -37,11 +43,18 @@ export default function StatTileGrid({
       <div className="border border-[var(--color-border-primary)]">
         <div className={`grid gap-px bg-[var(--color-border-tertiary)] ${columns}`}>
           {tiles.map((t) => (
-            <div key={t.label} title={t.title} className="bg-[var(--color-bg-primary)] px-3 py-3">
-              <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-1">{t.label}</div>
-              <div className="font-display text-[20px] font-semibold tnum leading-none" style={t.valueStyle}>
-                {t.value}
-              </div>
+            <div key={t.label} title={t.title} className={`bg-[var(--color-bg-primary)] ${centered ? 'px-2 py-2.5 text-center' : 'px-3 py-3'}`}>
+              {centered ? (
+                <>
+                  <div className="font-display text-lg font-semibold tnum leading-none" style={t.valueStyle}>{t.value}</div>
+                  <div className="tracked text-[8px] text-[var(--color-text-secondary)] mt-1">{t.label}</div>
+                </>
+              ) : (
+                <>
+                  <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-1">{t.label}</div>
+                  <div className="font-display text-[20px] font-semibold tnum leading-none" style={t.valueStyle}>{t.value}</div>
+                </>
+              )}
             </div>
           ))}
         </div>

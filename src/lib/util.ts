@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { mapSlug } from './maps';
 
 /**
@@ -240,6 +241,18 @@ export function rateGradientColor(rate: number): string {
 export function winRateColor(winRate: number): string {
   const t = Math.max(0, Math.min(100, winRate));
   return `color-mix(in srgb, var(--color-accent-green-fill) ${Math.round(t)}%, var(--color-bg-secondary))`;
+}
+
+/** Red/green text color for a 1.00-centered "+" ratio (sabremetric Plus stats, Player Rating,
+ *  Role Ratings) — the further from 1.00, the more saturated. Shared by the Stats Plus table/tile
+ *  grid and the FIFA-style PlayerRatingCard (which converts its 0-100 display value back to this
+ *  ratio via `rating / 50` before calling in). */
+export function plusStyle(val: number): CSSProperties {
+  const delta = Math.max(-1, Math.min(1, val - 1));
+  const pct = Math.round(Math.abs(delta) * 100);
+  if (pct === 0) return {};
+  const accent = delta > 0 ? 'var(--color-accent-green-fg)' : 'var(--color-accent-red-fg)';
+  return { color: `color-mix(in srgb, ${accent} ${pct}%, var(--color-text-primary))` };
 }
 
 /**
