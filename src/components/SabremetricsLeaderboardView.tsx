@@ -853,29 +853,29 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
 
   return (
     <div className="my-6">
-      <h3 className="text-sm font-semibold mb-3" title="50 = this league's average, not a global percentile. Values above 50 are better than average, below 50 are worse. Player Rating omits Beer Tax (not yet computed).">Ratings</h3>
+      <h3 className="text-sm font-semibold mb-3" title="50 = this league's average, not a global percentile. Values above 50 are better, below 50 are worse.">Ratings</h3>
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-xs">
           <thead>
             <tr className="bg-[var(--color-bg-secondary)]">
               <th className={playerThCls}>Player</th>
-              <SortableTh label="Rating" title="Player Rating composite (calculations.md) — 50 = this league's average. Omits Beer Tax (not yet computed)." sortKey="rating" state={sort} onClick={toggleSort} />
-              <SortableTh label="Kills/Round+" title="Kills per round vs league avg (50 = avg)" sortKey="kpr" state={sort} onClick={toggleSort} />
-              <SortableTh label="Assists/Round+" title="Assists per round vs league avg (50 = avg)" sortKey="apr" state={sort} onClick={toggleSort} />
-              <SortableTh label="Deaths/Round+" title="Inverted deaths per round vs league avg — fewer deaths score higher, like every other + stat (50 = avg)" sortKey="dpr" state={sort} onClick={toggleSort} />
-              <SortableTh label="ADR+" title="Damage per round vs league avg (50 = avg)" sortKey="adr" state={sort} onClick={toggleSort} />
-              <SortableTh label="K/D+" title="K/D ratio vs league avg (50 = avg)" sortKey="kdr" state={sort} onClick={toggleSort} />
-              <SortableTh label="Entry+" title="Opening duel success rate (OK / total duels) vs league avg (50 = avg)" sortKey="entry" state={sort} onClick={toggleSort} />
-              <SortableTh label="KAST+" title="KAST per round vs league avg (50 = avg)" sortKey="kast" state={sort} onClick={toggleSort} />
-              <SortableTh label="Trade+" title="Trade Kill % (trade kill successes / attempts) vs league avg (50 = avg)" sortKey="trade" state={sort} onClick={toggleSort} />
-              <SortableTh label="Traded+" title="Traded Death % (traded death successes / attempts — how often a teammate avenged this player's death) vs league avg (50 = avg)" sortKey="tradedDeath" state={sort} onClick={toggleSort} />
-              <SortableTh label="Objective+" title="Objective score (2×plants + 3×defuses) per round vs league avg (50 = avg)" sortKey="objective" state={sort} onClick={toggleSort} />
-              <SortableTh label="Utility+" title="Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (50 = avg)" sortKey="utility" state={sort} onClick={toggleSort} />
-              <SortableTh label="Clutch+" title="Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (50 = avg)" sortKey="clutch" state={sort} onClick={toggleSort} />
-              <SortableTh label="Choke+" title="Inverted choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses per round) vs league avg — fewer/smaller blown clutch advantages score higher, like every other + stat (50 = avg)" sortKey="choke" state={sort} onClick={toggleSort} />
-              <SortableTh label="Accuracy+" title="Weighted blend of raw Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (50 = avg)" sortKey="accuracy" state={sort} onClick={toggleSort} />
-              <SortableTh label="Spray+" title="Spray Accuracy vs league avg (50 = avg)" sortKey="spray" state={sort} onClick={toggleSort} />
-              <SortableTh label="Aim+" title="Weighted blend of Accuracy+ (65%) and Spray+ (35%) vs league avg (50 = avg)" sortKey="aim" state={sort} onClick={toggleSort} />
+              <SortableTh label="Rating" title="Composite performance rating. Omits Beer Tax (not yet computed)." sortKey="rating" state={sort} onClick={toggleSort} />
+              <SortableTh label="Kills/Round+" title="Kills per round vs. league average" sortKey="kpr" state={sort} onClick={toggleSort} />
+              <SortableTh label="Assists/Round+" title="Assists per round vs. league average" sortKey="apr" state={sort} onClick={toggleSort} />
+              <SortableTh label="Deaths/Round+" title="Deaths per round vs. league average — fewer deaths is better" sortKey="dpr" state={sort} onClick={toggleSort} />
+              <SortableTh label="ADR+" title="Damage per round vs. league average" sortKey="adr" state={sort} onClick={toggleSort} />
+              <SortableTh label="K/D+" title="K/D ratio vs. league average" sortKey="kdr" state={sort} onClick={toggleSort} />
+              <SortableTh label="Entry+" title="Opening duel success rate vs. league average" sortKey="entry" state={sort} onClick={toggleSort} />
+              <SortableTh label="KAST+" title="KAST per round vs. league average" sortKey="kast" state={sort} onClick={toggleSort} />
+              <SortableTh label="Trade+" title="Trade kill percentage vs. league average" sortKey="trade" state={sort} onClick={toggleSort} />
+              <SortableTh label="Traded+" title="How often a teammate avenged this player's death, vs. league average" sortKey="tradedDeath" state={sort} onClick={toggleSort} />
+              <SortableTh label="Objective+" title="Objective score per round vs. league average" sortKey="objective" state={sort} onClick={toggleSort} />
+              <SortableTh label="Utility+" title="Utility contribution vs. league average" sortKey="utility" state={sort} onClick={toggleSort} />
+              <SortableTh label="Clutch+" title="Clutch score per round vs. league average" sortKey="clutch" state={sort} onClick={toggleSort} />
+              <SortableTh label="Choke+" title="Blown clutch advantages per round vs. league average — fewer is better" sortKey="choke" state={sort} onClick={toggleSort} />
+              <SortableTh label="Accuracy+" title="Blend of accuracy, headshot accuracy, and counter-strafing vs. league average" sortKey="accuracy" state={sort} onClick={toggleSort} />
+              <SortableTh label="Spray+" title="Spray accuracy vs. league average" sortKey="spray" state={sort} onClick={toggleSort} />
+              <SortableTh label="Aim+" title="Blend of accuracy and spray control vs. league average" sortKey="aim" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -991,23 +991,23 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   const plus = hasLeagueBaseline ? computePlusStats(agg, computeLeagueAverages(leagueAggregated)) : null;
   const rating = plus ? computePlayerRating(plus) : null;
   const plusTiles: StatTile[] = plus && rating != null ? [
-    { label: 'Player Rating', title: "Composite rating (calculations.md) — 50 = this league's average. Omits Beer Tax (not yet computed).", value: toRatingScale(rating), valueStyle: plusStyle(rating) },
-    { label: 'Kills/Round+', title: 'Kills per round vs league avg (50 = avg)', value: toRatingScale(plus.kpr), valueStyle: plusStyle(plus.kpr) },
-    { label: 'Assists/Round+', title: 'Assists per round vs league avg (50 = avg)', value: toRatingScale(plus.apr), valueStyle: plusStyle(plus.apr) },
-    { label: 'Deaths/Round+', title: 'Inverted deaths per round vs league avg — fewer deaths score higher, like every other + stat (50 = avg)', value: toRatingScale(plus.dpr), valueStyle: plusStyle(plus.dpr) },
-    { label: 'ADR+', title: 'Damage per round vs league avg (50 = avg)', value: toRatingScale(plus.adr), valueStyle: plusStyle(plus.adr) },
-    { label: 'K/D+', title: 'K/D ratio vs league avg (50 = avg)', value: toRatingScale(plus.kdr), valueStyle: plusStyle(plus.kdr) },
-    { label: 'Entry+', title: 'Opening duel success rate (OK / total duels) vs league avg (50 = avg)', value: toRatingScale(plus.entry), valueStyle: plusStyle(plus.entry) },
-    { label: 'KAST+', title: 'KAST per round vs league avg (50 = avg)', value: toRatingScale(plus.kast), valueStyle: plusStyle(plus.kast) },
-    { label: 'Trade+', title: 'Trade Kill % (trade kill successes / attempts) vs league avg (50 = avg)', value: toRatingScale(plus.trade), valueStyle: plusStyle(plus.trade) },
-    { label: 'Traded+', title: "Traded Death % (traded death successes / attempts — how often a teammate avenged this player's death) vs league avg (50 = avg)", value: toRatingScale(plus.tradedDeath), valueStyle: plusStyle(plus.tradedDeath) },
-    { label: 'Objective+', title: 'Objective score (2×plants + 3×defuses) per round vs league avg (50 = avg)', value: toRatingScale(plus.objective), valueStyle: plusStyle(plus.objective) },
-    { label: 'Utility+', title: 'Weighted average of Flash Assists+, Utility Damage+, Blocking Smokes+, and inverted Teamflash+ vs league avg (50 = avg)', value: toRatingScale(plus.utility), valueStyle: plusStyle(plus.utility) },
-    { label: 'Clutch+', title: 'Clutch score (1v1 wins + 3×1v2 wins) per round vs league avg (50 = avg)', value: toRatingScale(plus.clutch), valueStyle: plusStyle(plus.clutch) },
-    { label: 'Choke+', title: 'Inverted choke score (1v1 losses + 2×1v2 losses + 5×2v1 losses per round) vs league avg — fewer/smaller blown clutch advantages score higher, like every other + stat (50 = avg)', value: toRatingScale(plus.choke), valueStyle: plusStyle(plus.choke) },
-    { label: 'Accuracy+', title: 'Weighted blend of raw Accuracy+ (35%), Head Accuracy+ (40%), and Counter-Strafe+ (25%) vs league avg (50 = avg)', value: toRatingScale(plus.accuracy), valueStyle: plusStyle(plus.accuracy) },
-    { label: 'Spray+', title: 'Spray Accuracy vs league avg (50 = avg)', value: toRatingScale(plus.spray), valueStyle: plusStyle(plus.spray) },
-    { label: 'Aim+', title: 'Weighted blend of Accuracy+ (65%) and Spray+ (35%) vs league avg (50 = avg)', value: toRatingScale(plus.aim), valueStyle: plusStyle(plus.aim) },
+    { label: 'Player Rating', title: 'Composite performance rating. Omits Beer Tax (not yet computed).', value: toRatingScale(rating), valueStyle: plusStyle(rating) },
+    { label: 'Kills/Round+', title: 'Kills per round vs. league average', value: toRatingScale(plus.kpr), valueStyle: plusStyle(plus.kpr) },
+    { label: 'Assists/Round+', title: 'Assists per round vs. league average', value: toRatingScale(plus.apr), valueStyle: plusStyle(plus.apr) },
+    { label: 'Deaths/Round+', title: 'Deaths per round vs. league average — fewer deaths is better', value: toRatingScale(plus.dpr), valueStyle: plusStyle(plus.dpr) },
+    { label: 'ADR+', title: 'Damage per round vs. league average', value: toRatingScale(plus.adr), valueStyle: plusStyle(plus.adr) },
+    { label: 'K/D+', title: 'K/D ratio vs. league average', value: toRatingScale(plus.kdr), valueStyle: plusStyle(plus.kdr) },
+    { label: 'Entry+', title: 'Opening duel success rate vs. league average', value: toRatingScale(plus.entry), valueStyle: plusStyle(plus.entry) },
+    { label: 'KAST+', title: 'KAST per round vs. league average', value: toRatingScale(plus.kast), valueStyle: plusStyle(plus.kast) },
+    { label: 'Trade+', title: 'Trade kill percentage vs. league average', value: toRatingScale(plus.trade), valueStyle: plusStyle(plus.trade) },
+    { label: 'Traded+', title: "How often a teammate avenged this player's death, vs. league average", value: toRatingScale(plus.tradedDeath), valueStyle: plusStyle(plus.tradedDeath) },
+    { label: 'Objective+', title: 'Objective score per round vs. league average', value: toRatingScale(plus.objective), valueStyle: plusStyle(plus.objective) },
+    { label: 'Utility+', title: 'Utility contribution vs. league average', value: toRatingScale(plus.utility), valueStyle: plusStyle(plus.utility) },
+    { label: 'Clutch+', title: 'Clutch score per round vs. league average', value: toRatingScale(plus.clutch), valueStyle: plusStyle(plus.clutch) },
+    { label: 'Choke+', title: 'Blown clutch advantages per round vs. league average — fewer is better', value: toRatingScale(plus.choke), valueStyle: plusStyle(plus.choke) },
+    { label: 'Accuracy+', title: 'Blend of accuracy, headshot accuracy, and counter-strafing vs. league average', value: toRatingScale(plus.accuracy), valueStyle: plusStyle(plus.accuracy) },
+    { label: 'Spray+', title: 'Spray accuracy vs. league average', value: toRatingScale(plus.spray), valueStyle: plusStyle(plus.spray) },
+    { label: 'Aim+', title: 'Blend of accuracy and spray control vs. league average', value: toRatingScale(plus.aim), valueStyle: plusStyle(plus.aim) },
   ] : [];
 
   // FIFA-card inputs: OVR (Player Rating) + a 6-attribute spread + all three Role Ratings, with
@@ -1150,7 +1150,7 @@ export default function SabremetricsLeaderboardView({
           />
         )}
         {sub === 'plus' && tiles.plus.length > 0 && (
-          <StatTileGrid heading="Ratings" hint="50 = this league's average, not a global percentile. Values above 50 are better than average, below 50 are worse." tiles={tiles.plus} />
+          <StatTileGrid heading="Ratings" hint="50 = this league's average, not a global percentile. Values above 50 are better, below 50 are worse." tiles={tiles.plus} />
         )}
       </div>
     );
