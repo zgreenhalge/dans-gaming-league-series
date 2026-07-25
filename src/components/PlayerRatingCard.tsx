@@ -33,8 +33,8 @@ function StatRow({ left, right, first }: { left?: StatTile; right?: StatTile; fi
   return (
     <div className={`grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-3 py-2 ${first ? '' : 'border-t border-[var(--color-border-tertiary)]'}`}>
       <div className="flex items-baseline justify-end gap-1.5" title={left?.title}>
-        <span className="font-display text-[15px] font-bold leading-none tnum" style={left?.valueStyle}>{left?.value}</span>
         <span className="tracked text-[9px] text-[var(--color-text-secondary)]">{left?.label.replace('+', '')}</span>
+        <span className="font-display text-[15px] font-bold leading-none tnum w-[3ch] text-right" style={left?.valueStyle}>{left?.value}</span>
       </div>
       <div className="h-full w-px bg-[var(--color-border-tertiary)]" />
       <div className="flex items-baseline gap-1.5" title={right?.title}>

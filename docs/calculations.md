@@ -251,7 +251,7 @@ A weighted sabremetric composite for individual performance, on the same 0–100
 every `+` stat (see "Display scale" below). Independent from the [EHOG skill rating](ehog.md),
 which is match-outcome-based (OpenSkill). Implemented by `computePlayerRating()` in
 `SabremetricsLeaderboardView.tsx`, alongside the `+` stats it's built from, and shown as the
-`Rating` column in the Stats Plus table and the `Player Rating` tile / card OVR in single-player
+`Rating` column in the Ratings table and the `Player Rating` tile / card OVR in single-player
 views.
 
 Uses `Trade+` (trade kill success rate vs. league average) rather than `KAST+` throughout — a more

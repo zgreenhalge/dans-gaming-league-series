@@ -853,7 +853,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
 
   return (
     <div className="my-6">
-      <h3 className="text-sm font-semibold mb-3" title="50 = this league's average, not a global percentile. Values above 50 are better than average, below 50 are worse. Player Rating omits Beer Tax (not yet computed).">Stats Plus</h3>
+      <h3 className="text-sm font-semibold mb-3" title="50 = this league's average, not a global percentile. Values above 50 are better than average, below 50 are worse. Player Rating omits Beer Tax (not yet computed).">Ratings</h3>
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-xs">
           <thead>
@@ -1047,7 +1047,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
 type SubTab = 'impact' | 'duels' | 'mechanics' | 'trades' | 'utility' | 'plus';
 
 // Ordered to roughly match Leetify's match-page grouping (Aim, then situational Duels/Trades,
-// then Impact, then Utility) — see #173's Leetify-parity discussion. Stats Plus has no Leetify
+// then Impact, then Utility) — see #173's Leetify-parity discussion. Ratings has no Leetify
 // analog (it's DGLS's own league-relative composite), so it stays last.
 const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'mechanics', label: 'Aim' },
@@ -1055,7 +1055,7 @@ const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'trades', label: 'Trades' },
   { key: 'impact', label: 'Impact' },
   { key: 'utility', label: 'Utility' },
-  { key: 'plus', label: 'Stats Plus' },
+  { key: 'plus', label: 'Ratings' },
 ];
 
 /** Renders `render(agg)` once per `groups`, filtered to that group's `playerIds` and wrapped in
@@ -1150,7 +1150,7 @@ export default function SabremetricsLeaderboardView({
           />
         )}
         {sub === 'plus' && tiles.plus.length > 0 && (
-          <StatTileGrid heading="Stats Plus" hint="50 = this league's average, not a global percentile. Values above 50 are better than average, below 50 are worse." tiles={tiles.plus} />
+          <StatTileGrid heading="Ratings" hint="50 = this league's average, not a global percentile. Values above 50 are better than average, below 50 are worse." tiles={tiles.plus} />
         )}
       </div>
     );

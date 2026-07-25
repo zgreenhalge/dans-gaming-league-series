@@ -244,7 +244,7 @@ export function winRateColor(winRate: number): string {
 }
 
 /** Red/green text color for a 1.00-centered "+" ratio (sabremetric Plus stats, Player Rating,
- *  Role Ratings) — the further from 1.00, the more saturated. Shared by the Stats Plus table/tile
+ *  Role Ratings) — the further from 1.00, the more saturated. Shared by the Ratings table/tile
  *  grid and the FIFA-style PlayerRatingCard (which converts its 0-100 display value back to this
  *  ratio via `rating / 50` before calling in). */
 export function plusStyle(val: number): CSSProperties {
