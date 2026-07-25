@@ -288,9 +288,7 @@ function computePlusStats(agg: AggregatedSab, la: LeagueAverages): PlusStat {
 // All four composites start at a 1.00 baseline (league average) and add weighted deltas from
 // each underlying `+` stat, so the result lands on the same "1.00 = average" scale as every
 // input feeding it — `toRatingScale()` below then maps that scale to 0-100 for display, exactly
-// like any other `+` stat. Beer Tax (calculations.md) can't be computed yet, so these formulas
-// simply omit its term (equivalent to treating it as 0) rather than pretending it's covered —
-// callers that display Player Rating must caption that omission.
+// like any other `+` stat.
 //
 // Trade+ (trade kill success rate vs. league avg) stands in for KAST+ in every formula below —
 // a more specific signal of "did this player capitalize on a teammate's death" than KAST's
@@ -859,7 +857,7 @@ function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
           <thead>
             <tr className="bg-[var(--color-bg-secondary)]">
               <th className={playerThCls}>Player</th>
-              <SortableTh label="Rating" title="Composite performance rating. Omits Beer Tax (not yet computed)." sortKey="rating" state={sort} onClick={toggleSort} />
+              <SortableTh label="Rating" title="Composite performance rating" sortKey="rating" state={sort} onClick={toggleSort} />
               <SortableTh label="Kills/Round+" title="Kills per round vs. league average" sortKey="kpr" state={sort} onClick={toggleSort} />
               <SortableTh label="Assists/Round+" title="Assists per round vs. league average" sortKey="apr" state={sort} onClick={toggleSort} />
               <SortableTh label="Deaths/Round+" title="Deaths per round vs. league average — fewer deaths is better" sortKey="dpr" state={sort} onClick={toggleSort} />
@@ -991,7 +989,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   const plus = hasLeagueBaseline ? computePlusStats(agg, computeLeagueAverages(leagueAggregated)) : null;
   const rating = plus ? computePlayerRating(plus) : null;
   const plusTiles: StatTile[] = plus && rating != null ? [
-    { label: 'Player Rating', title: 'Composite performance rating. Omits Beer Tax (not yet computed).', value: toRatingScale(rating), valueStyle: plusStyle(rating) },
+    { label: 'Player Rating', title: 'Composite performance rating', value: toRatingScale(rating), valueStyle: plusStyle(rating) },
     { label: 'Kills/Round+', title: 'Kills per round vs. league average', value: toRatingScale(plus.kpr), valueStyle: plusStyle(plus.kpr) },
     { label: 'Assists/Round+', title: 'Assists per round vs. league average', value: toRatingScale(plus.apr), valueStyle: plusStyle(plus.apr) },
     { label: 'Deaths/Round+', title: 'Deaths per round vs. league average — fewer deaths is better', value: toRatingScale(plus.dpr), valueStyle: plusStyle(plus.dpr) },

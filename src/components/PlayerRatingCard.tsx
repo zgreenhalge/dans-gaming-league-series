@@ -88,7 +88,7 @@ export default function PlayerRatingCard({
         </div>
         <div
           className="text-right shrink-0"
-          title="50 = this league's average, not a global skill percentile. Omits Beer Tax (not yet computed)."
+          title="50 = this league's average, not a global skill percentile"
         >
           <div className="tracked text-[9px] text-[var(--color-text-secondary)]">OVR</div>
           <div className="font-display text-[40px] font-bold leading-none tnum" style={ratingStyle(rating)}>

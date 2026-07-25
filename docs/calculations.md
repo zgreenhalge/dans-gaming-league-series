@@ -258,10 +258,6 @@ Uses `Trade+` (trade kill success rate vs. league average) rather than `KAST+` t
 specific signal of "did this player capitalize on a teammate's death" than KAST's broader
 kill/assist/survive/traded rate.
 
-`Player Rating` (and the Role Ratings below) omit a **Beer Tax** term: its inputs (forgot to buy
-util/armor, died with bomb in spawn) aren't tracked by demo ingestion yet, so the term is treated
-as 0 rather than silently dropped from the label — every place the composite is displayed says so.
-
 ```
 Player Rating = 1.00
   + 0.10(KPR+ - 1)
