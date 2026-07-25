@@ -1036,6 +1036,37 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   return { impact, duels, mechanics, trades, utility, plus: plusTiles, card };
 }
 
+/** Standalone FIFA-style rating card for a single player, independent of the Advanced Stats tab —
+ *  used on the player profile's Overview tab (above career stats). Reuses buildSinglePlayerTiles()
+ *  for its `card` field rather than recomputing anything, so this can never drift from the
+ *  Ratings tab's own numbers. */
+export function SinglePlayerRatingCard({
+  rows,
+  leagueRows,
+  avatarUrl,
+}: {
+  rows: SabremetricStatRow[];
+  leagueRows: SabremetricStatRow[];
+  avatarUrl?: string | null;
+}) {
+  const aggregated = useMemo(() => aggregateRows(rows), [rows]);
+  const leagueAggregated = useMemo(() => aggregateRows(leagueRows), [leagueRows]);
+  if (aggregated.length === 0) return null;
+
+  const tiles = buildSinglePlayerTiles(aggregated[0], leagueAggregated);
+  if (!tiles.card) return null;
+
+  return (
+    <PlayerRatingCard
+      name={aggregated[0].player_name}
+      avatarUrl={avatarUrl}
+      rating={tiles.card.rating}
+      subStats={tiles.card.subStats}
+      roles={tiles.card.roles}
+    />
+  );
+}
+
 // --- Sub-tabs ---
 //
 // Five sections is too much to stack on one page (both the wide multi-player tables and the
@@ -1090,7 +1121,6 @@ export default function SabremetricsLeaderboardView({
   singlePlayer = false,
   teamGroups,
   showPlusStats = true,
-  avatarUrl,
 }: {
   rows: SabremetricStatRow[];
   /** League-wide rows used as the Plus-stat baseline in single-player mode. Defaults to `rows`. */
@@ -1102,8 +1132,6 @@ export default function SabremetricsLeaderboardView({
   /** Plus stats compare a player to a league-wide baseline — not meaningful over just the
    *  handful of players in one match, so match-page callers should pass `false`. */
   showPlusStats?: boolean;
-  /** Player avatar for the singlePlayer FIFA-style rating card. Ignored otherwise. */
-  avatarUrl?: string | null;
 }) {
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);
   const leagueAggregated = useMemo(() => aggregateRows(leagueRows ?? rows), [leagueRows, rows]);
@@ -1138,15 +1166,6 @@ export default function SabremetricsLeaderboardView({
         {sub === 'mechanics' && <StatTileGrid heading="Mechanics" tiles={tiles.mechanics} />}
         {sub === 'trades' && <StatTileGrid heading="Trades" tiles={tiles.trades} />}
         {sub === 'utility' && <StatTileGrid heading="Utility" tiles={tiles.utility} />}
-        {sub === 'plus' && tiles.card && (
-          <PlayerRatingCard
-            name={aggregated[0].player_name}
-            avatarUrl={avatarUrl}
-            rating={tiles.card.rating}
-            subStats={tiles.card.subStats}
-            roles={tiles.card.roles}
-          />
-        )}
         {sub === 'plus' && tiles.plus.length > 0 && (
           <StatTileGrid heading="Ratings" hint="50 = this league's average, not a global percentile. Values above 50 are better, below 50 are worse." tiles={tiles.plus} />
         )}

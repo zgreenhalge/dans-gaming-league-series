@@ -17,7 +17,7 @@ import { CountdownTimer } from './CountdownTimer';
 import MatchupsTab from './MatchupsTab';
 import PlayerTrailsTab from './PlayerTrailsTab';
 import EhogTimeline from './EhogTimeline';
-import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
+import SabremetricsLeaderboardView, { SinglePlayerRatingCard } from './SabremetricsLeaderboardView';
 import StatTileGrid from './StatTileGrid';
 import TabBar from './TabBar';
 
@@ -499,6 +499,10 @@ export default function PlayerView({
       {/* Stats tab */}
       {tab === 'stats' && (
         <>
+          <div className="mb-6">
+            <SinglePlayerRatingCard rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} avatarUrl={avatarUrl} />
+          </div>
+
           <div className="flex items-baseline justify-between mb-3">
             <span className="tracked text-[10px] text-[var(--color-text-secondary)]">
               {isCareer ? 'Career' : 'Season'} stats
@@ -818,7 +822,7 @@ export default function PlayerView({
 
       {/* Advanced Stats tab */}
       {tab === 'advanced' && (
-        <SabremetricsLeaderboardView rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} singlePlayer avatarUrl={avatarUrl} />
+        <SabremetricsLeaderboardView rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} singlePlayer />
       )}
 
       {/* Matchups tab */}
