@@ -1,12 +1,14 @@
 ## Summary
 
 - What changed and why. Cite code by symbol name (`getGauntletStats()` in `src/lib/queries/gauntlet.ts`), never by line number.
-- Note any doc updated alongside the code it describes (`docs/`).
 
 ## Test plan
 
-- [ ] `npm run build` (or the relevant `npx tsx src/lib/**/*.test.ts`)
+<!-- Strike through (~~like this~~) any item that doesn't apply to this PR. -->
+
+- [ ] `npm run build` (or the relevant `npx tsx src/lib/**/*.test.ts`) passes
 - [ ] Manual check on the deployed preview, for UI changes
+- [ ] Updated the doc that owns this area (`docs/README.md`'s index) if behavior changed
 
 ## Related issues
 
