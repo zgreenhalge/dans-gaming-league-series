@@ -1,0 +1,54 @@
+# pr-checks (part of #273) — PR hygiene gates: Conventional Commits for the PR title and every
+# commit, plus a completed PR-template checklist. Re-runs on every edit/push so a fix pushed after
+# a failure re-evaluates automatically.
+#
+# Third-party actions here track floating major-version tags (not pinned SHAs, unlike the rest of
+# .github/workflows/) so releases within a major version pick up automatically with no manual bump.
+
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, reopened, edited, synchronize]
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  title:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Validate PR title follows Conventional Commits
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  commits:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Validate commit messages follow Conventional Commits
+        uses: wagoid/commitlint-github-action@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  checklist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Require the PR template checklist to be completed
+        uses: mheap/require-checklist-action@v2
+        with:
+          requireChecklist: true
