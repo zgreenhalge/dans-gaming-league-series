@@ -89,11 +89,18 @@ or vanishes.
 
 ## Don't caption a page instead of designing it
 
+**AGENTS.md's "UI text earns its place" is the hard-rule statement; this is the working detail for
+page-level captions specifically.**
+
 A page never gets a subheading whose only job is to narrate what the UI below it already shows
 ("Pick a map and start the shared server — no roster, no stats, first come first served."). If a
 page's purpose or controls aren't legible from their own layout, labels, and affordances, that's a
 design gap — fix the design, don't paper over it with explanatory prose. A heading names the page; it
 doesn't summarize the page.
+
+The same instinct shows up smaller: a disclaimer paragraph under a stat, a tooltip that restates its
+own label, a hedge for a state the code can't reach. Cut it the same way — see AGENTS.md for the
+general rule, the litmus test, and the cut-on-sight list.
 
 ## Cite code by symbol, not by line number
 

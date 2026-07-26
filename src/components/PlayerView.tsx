@@ -17,7 +17,7 @@ import { CountdownTimer } from './CountdownTimer';
 import MatchupsTab from './MatchupsTab';
 import PlayerTrailsTab from './PlayerTrailsTab';
 import EhogTimeline from './EhogTimeline';
-import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
+import SabremetricsLeaderboardView, { SinglePlayerRatingCard } from './SabremetricsLeaderboardView';
 import StatTileGrid from './StatTileGrid';
 import TabBar from './TabBar';
 
@@ -194,6 +194,7 @@ export default function PlayerView({
   ehogHistory,
   matchDeltas,
   sabremetrics = [],
+  avatarUrl,
 }: {
   playerId: number;
   history: PlayerHistoryRow[];
@@ -205,6 +206,8 @@ export default function PlayerView({
   /** League-wide sabremetric rows (all players) — the player's own rows and the
    *  Plus-stat baseline are both derived from these under the active season filter. */
   sabremetrics?: SabremetricMatchRow[];
+  /** Player avatar for the Advanced Stats tab's FIFA-style rating card. */
+  avatarUrl?: string | null;
 }) {
   const { data: session } = useSession();
   const loggedInPlayerId = session?.user?.playerId ?? null;
@@ -496,6 +499,10 @@ export default function PlayerView({
       {/* Stats tab */}
       {tab === 'stats' && (
         <>
+          <div className="mb-6">
+            <SinglePlayerRatingCard rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} avatarUrl={avatarUrl} />
+          </div>
+
           <div className="flex items-baseline justify-between mb-3">
             <span className="tracked text-[10px] text-[var(--color-text-secondary)]">
               {isCareer ? 'Career' : 'Season'} stats
