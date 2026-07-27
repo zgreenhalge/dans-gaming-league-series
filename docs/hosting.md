@@ -75,13 +75,18 @@ conflicting match and never blocks scheduling.
 
 ## Auto-ingestion pipeline
 
+The demo is **pulled** from the DatHost game server's own file storage by the demo-ingest Action, not
+pushed by MatchZy — MatchZy's push has no compression option and a large (~200MB+) demo can exceed
+Cloudflare's inbound request-body cap, a platform limit outside our control. `map_result` (from
+MatchZy's `matchzy_remote_log_url`) is a small JSON event with no such ceiling, so it drives the whole
+pipeline instead:
+
 ```
-MatchZy (map ends) ──POST .dem──▶ Cloudflare Worker ──▶ R2 (demoKey)  +  POST /api/ingest/notify
-MatchZy (map_result event)   ──POST /api/ingest/matchzy-log──▶ R2 (mapResultKey)  [independent oracle]
+MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapResultKey)  [independent oracle]
                                                                               │
    background_jobs(demo_ingest): received → queued ──dispatch──▶ demo-ingest.yml (GitHub Action)
                                                                               │
-              scripts/demo-ingest.ts: parse + quarantine + D5 predicate check
+       scripts/demo-ingest.ts: pull demo from DatHost (R2) + parse + quarantine + D5 predicate check
                                           │                              │
                             predicate passes, AUTO_COMMIT_ENABLED  predicate fails / shadow mode
                             writeMatchScore()  status: confirmed        R2 (demoResultKey)  status: parsed | quarantined
@@ -91,27 +96,24 @@ MatchZy (map_result event)   ──POST /api/ingest/matchzy-log──▶ R2 (map
    admin /admin/jobs              ── dashboard of every background job + warnings/quarantine flags ─┘
 ```
 
-- The Worker writes the **same** deterministic `demoKey(matchId)` a browser upload would, so the two
-  paths are last-write-wins with no collision.
-- The Worker's notify POST (`infra/worker/src/index.ts`) retries a few times with backoff (~2.5s span)
-  and logs every failed attempt — it runs in the background (`ctx.waitUntil`) so it never delays the
-  response to MatchZy. If every retry fails (the R2 write already succeeded regardless), the demo sits
-  in R2 with no `background_jobs` row. `GET /api/matches/[id]/demo/result` checks for exactly that on a
-  single match, on demand, when its own page is viewed — gated to matches with veto complete but no
-  score yet (`isAwaitingScoreAfterVeto`, mirroring `isVetoComplete` from `src/lib/veto.ts`), the only
-  window a demo could legitimately exist unprocessed; there's no bucket-wide scan anywhere in this
-  pipeline. A demo has to be at least `ORPHANED_DEMO_GRACE_MS` (15s, comfortably past the Worker's own
-  retry span) old before it counts, so a page load landing mid-retry doesn't mistake a routine in-flight
-  upload for an abandoned one. When it finds a genuinely orphaned one, `MatchDemoReviewBlock` offers a
-  **Process demo** button that dispatches the same Action manually, without re-uploading.
-- `/api/ingest/notify` (machine-auth `x-ingest-secret`) validates the match + roster + demo, records
-  `received`, dispatches the Action, and **tears down the server** (demo landed = match over) — the
-  Action never touches DatHost regardless of auto-commit or manual confirm.
 - `/api/ingest/matchzy-log` (machine-auth `x-matchzy-token`) is the `matchzy_remote_log_url` target.
-  MatchZy POSTs every match event here; only `map_result` is kept (at `mapResultKey`), everything else
+  MatchZy POSTs every match event here. `map_result`'s payload is kept (at `mapResultKey`, the
+  auto-commit cross-check) and it's also the pipeline's trigger: it validates no job is already in
+  flight, records `received`, dispatches the Action, and **tears down the server** (the map ending
+  means the match is over) — the Action never touches DatHost regardless of auto-commit or manual
+  confirm. `going_live` and `round_end` feed the live in-match score (`liveScore.ts`,
+  `LiveScoreTicker`) shown on the match page while the demo doesn't exist yet. Every other event type
   is acknowledged and dropped.
-- The Action mirrors the replay pipeline (`scripts/replay-extract.ts`): heavy parsing runs in CI, not
-  in a Vercel request.
+- The demo's remote path is deterministic: `infra/matchzy/cfg/MatchZy/config.cfg` sets
+  `matchzy_demo_path MatchZy/` and `matchzy_demo_name_format "{MATCH_ID}"`, so it always lands at
+  `MatchZy/{matchId}.dem` on the game server — no directory listing/discovery needed.
+  `fetchDemoFromDathost` (`src/lib/demo/fetchFromDathost.ts`) polls that path for up to 5 minutes (GOTV
+  holds the file back for ~120s after `map_result` while it flushes the recording), gzips it, and
+  writes it to R2 at the same deterministic `demoKey(matchId)` a browser upload would use — both
+  `demo-ingest.ts` and `replay-extract.ts` call it themselves, at the top of their own run, only if the
+  demo isn't already in R2, so either one can be dispatched (or re-dispatched) independently.
+- The Action mirrors the replay pipeline (`scripts/replay-extract.ts`): heavy parsing (and the demo
+  pull itself) runs in CI, not in a Vercel request.
 
 ### Trusted auto-commit (#138)
 
@@ -153,8 +155,10 @@ Schema-free by design — status lives in the existing table, detail lives in th
 
 `received → queued → running → parsed | quarantined → confirmed | dismissed | failed`
 
-Auto-commit takes the `running → confirmed` edge directly (no `parsed` stop) — the D5 predicate check
-and the write both happen inside the `running` stage.
+`stage` moves through `received → queued → fetch → parse → confirmed` within that — `fetch` covers the
+DatHost pull, `parse` the rest — for progress detail without a separate status. Auto-commit takes the
+`running → confirmed` status edge directly (no `parsed` stop) — the D5 predicate check and the write
+both happen inside the `running` status, after the `parse` stage.
 
 ## Scrims
 
@@ -260,10 +264,11 @@ re-checks `isPlayerAdmin` server-side — the Topbar link is visibility only, no
 ## Config generation
 
 **`src/lib/matchzy.ts#buildMatchzyConfig`** emits the per-match MatchZy config (teams by steamid64,
-`players_per_team: 2`, conditional `map_sides`, demo-upload + remote-log cvars). It's the target of
-the machine-auth `GET /api/matches/[id]/matchzy-config` route (the `matchzy_loadmatch_url`) and is
-reused by the `scripts/gen-matchzy-config.ts` CLI. Versioned golden settings + captured cfgs live in
-`infra/matchzy/`; the Worker lives in `infra/worker/`.
+`players_per_team: 2`, conditional `map_sides`, remote-log cvars). It's the target of the machine-auth
+`GET /api/matches/[id]/matchzy-config` route (the `matchzy_loadmatch_url`) and is reused by the
+`scripts/gen-matchzy-config.ts` CLI. Versioned golden settings + captured cfgs — including the
+deterministic `matchzy_demo_path`/`matchzy_demo_name_format` the demo pull relies on — live in
+`infra/matchzy/`.
 
 **`src/lib/dathost-config.ts`** is the single source for the cfg-file dimension: the tracked
 `CFG_FILES` list, `pushCfgFiles` (reasserts them to the server — called at provision and by
@@ -282,10 +287,9 @@ overwritten on the next provision.
 | POST | `/api/matches/[id]/server/teardown` | session | stop the server |
 | GET | `/api/admin/server/config-diff` | admin | read-only golden-config drift (`diffGoldenConfig`) |
 | GET | `/api/matches/[id]/matchzy-config` | machine (`X-MatchZy-Token`) | the `matchzy_loadmatch_url` target |
-| POST | `/api/ingest/notify` | machine (`x-ingest-secret`) | demo landed → record + dispatch + teardown |
-| POST | `/api/ingest/matchzy-log` | machine (`x-matchzy-token`) | remote-log event → keep `map_result` (auto-commit oracle), ignore the rest |
+| POST | `/api/ingest/matchzy-log` | machine (`x-matchzy-token`) | remote-log event → `map_result` keeps the payload (auto-commit oracle) + record/dispatch/teardown; `going_live`/`round_end` update the live score; the rest is ignored |
 | GET·DELETE | `/api/matches/[id]/demo/result` | session | read / dispose the staged `DemoIngestResult` |
-| POST | `/api/matches/[id]/demo/dispatch` | session | re-parse the demo in R2 (manual counterpart to notify) |
+| POST | `/api/matches/[id]/demo/dispatch` | session | re-parse the demo (manual counterpart to `matchzy-log`'s auto-dispatch) |
 | POST | `/api/matches/[id]/replay/dispatch` | session | (re)trigger the replay Action |
 | GET | `/api/scrim/status` | session | raw server state + active match + connected roster + blocking-match check + scrim ownership |
 | POST | `/api/scrim/start` | session | claim the singleton scrim session + apply golden config at a picked map + start in Pug Mode (409 if occupied, a scrim's already running, or a nearby match is unscored) |
@@ -294,17 +298,18 @@ overwritten on the next provision.
 ## Environment
 
 `DATHOST_EMAIL`, `DATHOST_PASSWORD`, `DATHOST_SERVER_ID`, `MATCHZY_CONFIG_SECRET`, `APP_BASE_URL`
-(the origin the DatHost server fetches the config from, and — on the demo-ingest Action — the origin
-`writeMatchScore()`'s recompute trigger calls), `INGEST_WORKER_URL`, `INGEST_UPLOAD_SECRET`,
-`INGEST_NOTIFY_SECRET`, `INGEST_REMOTE_LOG_SECRET` (the `matchzy_remote_log_url` cvars are only
-emitted once this is set). Hosting auto-triggers are env-gated on `DATHOST_SERVER_ID`, so with it
-unset everything degrades to the manual flow. The disk-cleanup admin controls additionally need
-`GITHUB_DISPATCH_TOKEN`/`GITHUB_REPO` (shared with every other Action dispatch) with the token's
+(the origin the DatHost server fetches the config from, and — on the demo-ingest/replay-extract
+Actions — the origin `writeMatchScore()`'s recompute trigger calls), `INGEST_REMOTE_LOG_SECRET` (the
+`matchzy_remote_log_url` cvars are only emitted once this is set — this is what everything in this
+doc, including the demo pull, hangs off). Hosting auto-triggers are env-gated on `DATHOST_SERVER_ID`,
+so with it unset everything degrades to the manual flow. The disk-cleanup admin controls additionally
+need `GITHUB_DISPATCH_TOKEN`/`GITHUB_REPO` (shared with every other Action dispatch) with the token's
 "Variables" repository permission also granted, for the interval control.
 
-The demo-ingest Action needs its own copies of `APP_BASE_URL` (repo Actions **variable** — it's
-public, unlike the rest of this list) and `RECOMPUTE_SECRET` (repo **secret**), since it runs outside
-Vercel and has no other way to reach the app's recompute endpoint. `AUTO_COMMIT_ENABLED` (repo
+The demo-ingest and replay-extract Actions need their own copies of `DATHOST_EMAIL`/
+`DATHOST_PASSWORD`/`DATHOST_SERVER_ID` (to pull the demo), `APP_BASE_URL` (repo Actions **variable** —
+it's public, unlike the rest of this list), and `RECOMPUTE_SECRET` (repo **secret**), since they run
+outside Vercel and have no other way to reach the app's recompute endpoint. `AUTO_COMMIT_ENABLED` (repo
 variable) gates trusted auto-commit (#138) — unset runs the predicate in shadow mode (evaluated +
 logged, still staged for manual confirm); `true` goes live.
 
@@ -330,7 +335,9 @@ scrim/status`, consumed by both `ScrimPanel` and `ScrimNavStatus`) · `src/compo
 `scripts/inspect-demo.ts` · `scripts/dathost-golden-diff.ts` · `scripts/dathost-golden-apply.ts`
 (golden-config diff/capture/reassert — see [`infra/matchzy/README.md`](../infra/matchzy/README.md))
 · `scripts/dathost-cleanup.ts` (disk cleanup, issue #132) · `src/lib/gh-dispatch.ts` (workflow
-dispatch + enable/disable/runs/variables helpers) · `infra/matchzy/` · `infra/worker/`.
+dispatch + enable/disable/runs/variables helpers) · `infra/matchzy/` ·
+`src/lib/demo/fetchFromDathost.ts` (the demo pull) · `src/lib/demo/liveScore.ts` +
+`src/components/LiveScoreTicker.tsx` (live in-match score).
 
 ## Known limitations / friction
 

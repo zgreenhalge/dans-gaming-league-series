@@ -363,15 +363,17 @@ scoped to `Actions: write`) or manually (Actions UI). They follow the generic jo
 `timeout-minutes`, the `stage()`/`background_jobs` state machine); this section covers what's
 replay-specific.
 
-Action A's auto-dispatch fires only on a demo's first landing — a manual re-parse of either the
-stats (`demo_ingest`) or replay pipeline goes through its own dedicated dispatch route
-(`/api/matches/[id]/demo/dispatch` or the Recap tab's Generate/Retry button) and never re-triggers
-the other. `/api/ingest/notify` skips the auto-dispatch entirely if a `replay_extract` row already
-exists for the match, so a retried webhook call can't double-fire it.
+Action A's auto-dispatch fires only once, alongside `demo_ingest`'s own auto-dispatch, off the same
+`map_result` remote-log event — a manual re-parse of either the stats (`demo_ingest`) or replay
+pipeline goes through its own dedicated dispatch route (`/api/matches/[id]/demo/dispatch` or the
+Recap tab's Generate/Retry button) and never re-triggers the other. `/api/ingest/matchzy-log` skips
+the auto-dispatch entirely if a `replay_extract` row already exists for the match, so a retried event
+can't double-fire it. Both Actions pull the demo directly from DatHost themselves if it isn't already
+in R2 (`fetchFromDathost.ts`) rather than waiting for it to be pushed.
 
 | Action | Trigger | Output |
 |---|---|---|
-| **A — `replay-extract`** | auto, on first demo landing (`/api/ingest/notify`, opt-in via `REPLAY_AUTO_DISPATCH`) or manual (Recap tab / admin `POST /api/matches/[id]/replay/dispatch`) | `replay.json`, compact `heatmap.json` **and** `traces.json`, plus a rebuild of the map's `heatmap.json`/`traces.json` rollups → R2 (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
+| **A — `replay-extract`** | auto, on match end (`/api/ingest/matchzy-log`'s `map_result` handler, opt-in via `REPLAY_AUTO_DISPATCH`) or manual (Recap tab / admin `POST /api/matches/[id]/replay/dispatch`) | `replay.json`, compact `heatmap.json` **and** `traces.json`, plus a rebuild of the map's `heatmap.json`/`traces.json` rollups → R2 (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
 | **A′ — `replay-extract-all`** | manual (Actions UI / dispatch) | re-runs A for **every** match with a demo, as a matrix (`replay-extract-all.yml` + `scripts/list-demo-matches.ts`) |
 | **B — `radar-build`** | per map (Actions UI, or admin `POST /api/maps/[slug]/radar/dispatch`) | radar PNG → R2 `maps/<id>/radar.png` + `maps` row calibration (`radar-build.yml` + `scripts/radar-build.ts`) |
 

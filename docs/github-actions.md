@@ -18,8 +18,8 @@ Vercel functions. This doc is the general pattern and the decision rule. The rep
 **The litmus test:** if the work reads a whole demo from R2 and parses it, it belongs in an Action.
 A Vercel function caps out on memory and the 300 s `maxDuration`, and **cannot** run native addons or
 stream-process a large file safely. A Cloudflare Worker is *also* wrong for parsing — Workers can't
-run native node addons; they're only for *receiving* bytes (see `infra/worker/`). Parsing lives in
-Actions.
+run native node addons; they're only ever suited to relaying bytes, never processing them. Parsing
+lives in Actions.
 
 > This is exactly why demo **score** parsing moves into an Action in the demo-ingestion Phase 3 (see
 > `dathost_handoff/DATHOST_PHASE0_PLAN.md`): the in-request parse route has a self-imposed
@@ -29,9 +29,9 @@ Actions.
 ## Anatomy of a job (three actors)
 
 1. **Trigger — a route in the app.** Either a session-gated dispatch route (browser action, e.g.
-   `POST /api/matches/[id]/replay/dispatch`) or a machine-auth notify route (Worker/automation, e.g.
-   `POST /api/ingest/notify`). The route only **triggers** the job and records intent; it does **no**
-   heavy work. It:
+   `POST /api/matches/[id]/replay/dispatch`) or a machine-auth route reacting to a game-server event
+   (e.g. `POST /api/ingest/matchzy-log` dispatching on `map_result`). The route only **triggers** the
+   job and records intent; it does **no** heavy work. It:
    - authorizes (session admin/in-match, or a constant-time shared secret),
    - **guards against duplicates** — no-op if a `background_jobs` row for this `(job_type, key)`
      is already `queued`/`running`. This guard is the one part that's genuinely per-route (an in-flight
@@ -51,10 +51,11 @@ Actions.
      written until the dispatch itself succeeds (`demo/dispatch`, which returns an error straight to
      the caller on a failed dispatch and never wrote a row to unwind), there's no rollback to do — call
      `dispatchWorkflow` directly and `recordJobStatus` only in the success branch. A third shape covers
-     a claimed row where failure needs neither a rollback nor to reach the caller: `ingest/notify`'s
+     a claimed row where failure needs neither a rollback nor to reach the caller: `ingest/matchzy-log`'s
      `demo_ingest` path claims `received` before dispatching, and on a failed dispatch just logs and
-     leaves the row at `received` — the demo is already durably staged in R2, so a stale `received` row
-     is a correct "not parsed yet" state, not a wedge, and the manual `demo/dispatch` route is the
+     leaves the row at `received` — the Action's own pull from DatHost hasn't even started yet at that
+     point, so a stale `received` row is a correct "not started" state, not a wedge, and the manual
+     `demo/dispatch` route is the
      retry path. On success it calls `advanceJobStatus` (not `recordJobStatus`) to move `received` →
      `queued` only if the row is still `received`, so a concurrent Action run that already advanced it
      isn't clobbered back.
@@ -136,8 +137,9 @@ These are GitHub's official hardening practices ([security-hardening for GitHub 
    keep `markRunning` / `stage` / `fail` / `done` intact.
 2. **`.github/workflows/<job>.yml`** — copy `replay-extract.yml`. Rename, set the `concurrency.group`,
    keep `cancel-in-progress: false`, pass the same secrets, end with `npx tsx scripts/<job>.ts`.
-3. **Trigger** — a session-gated dispatch route (mirror `replay/dispatch`) or a machine-auth notify
-   route (mirror `ingest/notify`). Keep the route's own duplicate-guard, and claim/dispatch/rollback
+3. **Trigger** — a session-gated dispatch route (mirror `replay/dispatch`) or a machine-auth route
+   reacting to a game-server event (mirror `ingest/matchzy-log`). Keep the route's own duplicate-guard,
+   and claim/dispatch/rollback
    through `src/lib/background-jobs.ts` (`recordJobStatus`, `advanceJobStatus`,
    `dispatchAndRecordFailure`) rather than re-upserting `background_jobs` by hand.
 4. **Status surface** — read via a new additive getter mirroring `getReplayJobState`; add a domain

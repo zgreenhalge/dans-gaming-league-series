@@ -54,7 +54,7 @@ File Manager / FTP as a fallback)
 - `cfg/gamemode_competitive2v2_server.cfg` — the 2v2 hybrid-mode overrides mentioned above.
 
 Once captured, match-critical cvars (e.g. `matchzy_demo_recording_enabled`, ready threshold,
-`matchzy_demo_upload_url`) are best **folded into the per-match loadmatch `cvars`** so the match config
+`matchzy_remote_log_url`) are best **folded into the per-match loadmatch `cvars`** so the match config
 is self-contained and independent of whatever cfg files happen to be on the server. The rest stays
 here as the versioned baseline / disaster-recovery copy.
 
