@@ -12,7 +12,7 @@
 //
 // Auth: shared secret in `x-matchzy-token`, constant-time compared against `INGEST_REMOTE_LOG_SECRET`.
 
-import { NextRequest, NextResponse, after } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { machineSecretGuard } from '@/lib/machine-auth';
 import { getAdminClient } from '@/lib/supabase-admin';
@@ -25,18 +25,7 @@ import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { DEMO_INGEST_JOB_TYPE } from '@/lib/demo/ingestResult';
 import { REPLAY_EXTRACT_JOB_TYPE } from '@/lib/jobs';
-
-/** Run `fn` in `after()`, logging (not throwing) on failure — every post-response side effect in this
- *  route is best-effort, so this is the one place that shape is written. */
-function afterBestEffort(label: string, fn: () => Promise<void>): void {
-  after(async () => {
-    try {
-      await fn();
-    } catch (err) {
-      console.error(`matchzy-log: ${label} failed:`, err);
-    }
-  });
-}
+import { afterBestEffort } from '@/lib/after';
 
 /** Claims the demo-ingest job atomically before dispatching — a plain check-then-act (SELECT to see
  *  if a job's already in flight, then upsert) can't tell two concurrent map_result deliveries for the
@@ -171,7 +160,7 @@ export async function POST(req: NextRequest) {
   // rather than paying for two separate registrations on this route's highest-frequency path.
   const identity = parseMatchzyEventIdentity(body);
   if (identity) {
-    afterBestEffort(`per-event side effects for match ${identity.matchid}`, async () => {
+    afterBestEffort(`matchzy-log: per-event side effects for match ${identity.matchid}`, async () => {
       const [contact, liveScore] = await Promise.allSettled([
         putMatchzyContact(identity.matchid, identity.event),
         putLiveScoreEvent(supabaseAdmin, body),
@@ -191,6 +180,6 @@ export async function POST(req: NextRequest) {
   }
 
   await putMapResult(result.matchid, result);
-  afterBestEffort(`triggerDemoPipeline(${result.matchid})`, () => triggerDemoPipeline(supabaseAdmin, result.matchid));
+  afterBestEffort(`matchzy-log: triggerDemoPipeline(${result.matchid})`, () => triggerDemoPipeline(supabaseAdmin, result.matchid));
   return NextResponse.json({ ok: true, matchId: result.matchid });
 }

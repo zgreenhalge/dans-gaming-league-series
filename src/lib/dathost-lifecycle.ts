@@ -247,6 +247,20 @@ export async function provisionMatchServer(
   }
 }
 
+/** `afterBestEffort`'s `onError` for a deferred `provisionMatchServer` call: a `ServerBusyError` is
+ *  the expected race-loser (another match claimed the server between the check and now) and just
+ *  warns; anything else is a real provisioning failure. `context` distinguishes the caller in the log
+ *  line (e.g. `'provision'` vs `'auto-provision'`). */
+export function provisionErrorHandler(context: string, matchId: number): (err: unknown) => void {
+  return (err) => {
+    if (err instanceof ServerBusyError) {
+      console.warn(`${context}(${matchId}) skipped: ${err.message}`);
+    } else {
+      console.error(`provisionMatchServer(${matchId}) failed:`, err);
+    }
+  };
+}
+
 /**
  * Tear down the match server (reuse model → stop, never delete). Idempotent-safe.
  *
