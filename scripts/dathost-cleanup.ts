@@ -5,13 +5,17 @@
 // in R2. None of this self-cleans — MatchZy writes it per match and never removes it, so it
 // accumulates forever on a disk with a fixed size cap.
 //
+// Age is read directly off each file's own `modified_at` from the DatHost file listing — the most
+// recently touched file in a match's group stands in for the whole group, so a match isn't
+// partially cleaned while any of its files are still being written. This needs no DB record to
+// work, so it's never blocked by a match missing a `scheduled_at` or a demo_ingest job.
+//
 // The server also hosts non-DGLS games between matches (recreational-mode drift, ad-hoc testing),
-// and MatchZy leaves the exact same kind of residue for those — but they have no `matches` row to
-// derive an age from, and we don't care about them at all, so they're deleted immediately rather
-// than aged. A file whose id *does* match a real `matches` row is only eligible once it's old
-// enough that nothing still needs it locally (3-day default), and — for the demo specifically —
-// only once R2 has its own confirmed copy. A tracked match this script can't confidently place in
-// time (no resolved job, no scheduled_at) is left alone rather than guessed at.
+// and MatchZy leaves the exact same kind of residue for those — but they have no `matches` row at
+// all, and we don't care about them, so they're deleted immediately rather than aged. A file whose
+// id *does* match a real `matches` row is only eligible once it's old enough that nothing still
+// needs it locally (3-day default), and — for the demo specifically — only once R2 has its own
+// confirmed copy.
 //
 //   set -a; . ./.env.local; set +a
 //   DRY_RUN=false npx tsx scripts/dathost-cleanup.ts        # actually delete
@@ -39,7 +43,6 @@ import { notice, warning, error } from './gh-actions-log';
 const DRY_RUN = !/^(0|false)$/i.test(process.env.DRY_RUN ?? 'true');
 const RETENTION_DAYS = Number(process.env.RETENTION_DAYS ?? '3');
 const CLEANUP_INTERVAL_DAYS = Number(process.env.CLEANUP_INTERVAL_DAYS ?? '1');
-const DEMO_INGEST_DONE = new Set(['confirmed', 'dismissed']);
 
 const SKIP_MARKER = 'scheduled run skipped';
 // Substring of this script's own `dathost-cleanup: server ..., dry_run=${DRY_RUN}` notice — present
@@ -115,6 +118,21 @@ async function scheduleShouldRun(): Promise<boolean> {
 interface RemoteFile {
   path: string;
   size: number;
+  modifiedAt: Date | null;
+}
+
+// DatHost's file-listing API doesn't document whether `modified_at` is Unix seconds or
+// milliseconds, so it's detected by magnitude instead of assumed: seconds values are ~10 digits
+// today, milliseconds ~13 — three orders of magnitude apart, unambiguous either way. Anything
+// resolving before this floor is treated as unusable rather than trusted — a stray 0 or otherwise
+// bad value would otherwise misread as an ancient timestamp and mark residue as maximally old,
+// the one direction of error that's unsafe here (it triggers deletion instead of preventing it).
+const MODIFIED_AT_FLOOR_MS = Date.UTC(2020, 0, 1);
+
+function parseModifiedAt(raw: number | undefined): Date | null {
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) return null;
+  const ms = raw > 1e12 ? raw : raw * 1000;
+  return ms >= MODIFIED_AT_FLOOR_MS ? new Date(ms) : null;
 }
 
 async function listAllFiles(serverId: string): Promise<RemoteFile[]> {
@@ -122,9 +140,10 @@ async function listAllFiles(serverId: string): Promise<RemoteFile[]> {
   if (status !== 200 || !Array.isArray(json)) {
     throw new Error(`Could not list server files (status ${status})`);
   }
-  return (json as Array<{ path: string; size?: number }>).map((f) => ({
+  return (json as Array<{ path: string; size?: number; modified_at?: number }>).map((f) => ({
     path: f.path,
     size: f.size ?? 0,
+    modifiedAt: parseModifiedAt(f.modified_at),
   }));
 }
 
@@ -156,37 +175,28 @@ function daysAgo(iso: string | null): number | null {
   return (Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24);
 }
 
-/** Whether `matchId` is a real DGLS match, and if so, the date to measure its age from: the
- *  demo-ingest job's resolution time if it reached a terminal state, else the match's scheduled
- *  time (covers matches scored without a demo, e.g. a recording failure), else null — unknown
- *  age, never eligible. `tracked: false` means no `matches` row exists at all — not a DGLS match
- *  (a non-DGLS game or ad-hoc test reusing MatchZy on the shared server), so nothing here is worth
- *  retaining regardless of age. */
-async function ageInfoFor(
-  supabase: ReturnType<typeof getAdminClient>,
-  matchId: number,
-): Promise<{ tracked: boolean; days: number | null; jobStatus: string | null }> {
-  const [{ data: job }, { data: match }] = await Promise.all([
-    supabase
-      .from('background_jobs')
-      .select('status, updated_at')
-      .eq('job_type', 'demo_ingest')
-      .eq('match_id', matchId)
-      .maybeSingle(),
-    supabase.from('matches').select('scheduled_at').eq('id', matchId).maybeSingle(),
-  ]);
-  const jobStatus = (job as { status?: string } | null)?.status ?? null;
-  if (!match) {
-    return { tracked: false, days: null, jobStatus };
-  }
-  if (jobStatus && DEMO_INGEST_DONE.has(jobStatus)) {
-    return { tracked: true, days: daysAgo((job as { updated_at?: string }).updated_at ?? null), jobStatus };
-  }
-  return {
-    tracked: true,
-    days: daysAgo((match as { scheduled_at?: string }).scheduled_at ?? null),
-    jobStatus,
-  };
+/** How long ago the most recently touched file in a match's group was written, in days — `null`
+ *  if DatHost returned no timestamp for any of them. Using the newest file (not the oldest) means
+ *  a match isn't treated as stale while any of its files are still being actively written. */
+function residueAgeDays(files: RemoteFile[]): number | null {
+  const timestamps = files.map((f) => f.modifiedAt).filter((d): d is Date => d !== null);
+  if (timestamps.length === 0) return null;
+  const mostRecentMs = Math.max(...timestamps.map((d) => d.getTime()));
+  return (Date.now() - mostRecentMs) / (1000 * 60 * 60 * 24);
+}
+
+/** The subset of `matchIds` that are real DGLS matches (have a `matches` row) — one round-trip for
+ *  every match on disk, rather than one per match. A match not in the returned set isn't a DGLS
+ *  match at all (a non-DGLS game or ad-hoc test reusing MatchZy on the shared server), so nothing
+ *  for it is worth retaining regardless of age. */
+async function trackedMatchIds(supabase: ReturnType<typeof getAdminClient>, matchIds: number[]): Promise<Set<number>> {
+  if (matchIds.length === 0) return new Set();
+  const { data, error } = await supabase.from('matches').select('id').in('id', matchIds);
+  // A failed query here must not be read as "nothing is tracked" — that would make every match's
+  // residue look like untracked non-DGLS junk, deleting it immediately with no retention check and,
+  // for demos, no R2-confirmation check either. Fail the whole run instead.
+  if (error) throw new Error(`Could not check tracked matches: ${error.message}`);
+  return new Set((data ?? []).map((row) => (row as { id: number }).id));
 }
 
 async function demoIsSafeInR2(matchId: number): Promise<boolean> {
@@ -230,21 +240,26 @@ async function main() {
   let freedBytes = 0;
   let skippedMatches = 0;
 
+  const tracked = await trackedMatchIds(supabase, [...byMatch.keys()]);
+
   for (const [matchId, matchFiles] of [...byMatch.entries()].sort((a, b) => a[0] - b[0])) {
     console.log(`::group::match ${matchId} (${matchFiles.length} file(s))`);
-    const { tracked, days, jobStatus } = await ageInfoFor(supabase, matchId);
-    if (!tracked) {
+    const isTracked = tracked.has(matchId);
+    if (!isTracked) {
       console.log(`match ${matchId}: no matches row — not a DGLS match, deleting immediately (no retention)`);
-    } else if (days === null) {
-      warning(`match ${matchId}: no resolved demo_ingest job and no scheduled_at — skipping (unknown age)`);
-      skippedMatches++;
-      console.log('::endgroup::');
-      continue;
-    } else if (days < RETENTION_DAYS) {
-      console.log(`match ${matchId}: ${days.toFixed(1)}d old (job=${jobStatus ?? 'none'}), under ${RETENTION_DAYS}d retention — skipping`);
-      skippedMatches++;
-      console.log('::endgroup::');
-      continue;
+    } else {
+      const days = residueAgeDays(matchFiles);
+      if (days === null) {
+        warning(`match ${matchId}: DatHost returned no file timestamp — skipping (unknown age)`);
+        skippedMatches++;
+        console.log('::endgroup::');
+        continue;
+      } else if (days < RETENTION_DAYS) {
+        console.log(`match ${matchId}: ${days.toFixed(1)}d old, under ${RETENTION_DAYS}d retention — skipping`);
+        skippedMatches++;
+        console.log('::endgroup::');
+        continue;
+      }
     }
 
     for (const file of matchFiles) {
@@ -252,7 +267,7 @@ async function main() {
       // Only a tracked DGLS match's demo goes through our own upload pipeline — an untracked
       // match's demo will never be in R2, and we don't want it there, so don't gate its deletion
       // on a check that can only ever fail.
-      if (isDemo && tracked) {
+      if (isDemo && isTracked) {
         const safe = await demoIsSafeInR2(matchId);
         if (!safe) {
           warning(`match ${matchId}: demo not confirmed in R2 (${demoKey(matchId)}) — leaving ${file.path} on disk`);
