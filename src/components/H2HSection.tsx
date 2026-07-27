@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import H2HMatrix, { type H2HPair } from './H2HMatrix';
 import { DuoDetail, RivalDetail } from './MatchupDetail';
-import { winRatePct } from '@/lib/util';
+import { winRatePct, findDuo, findRival } from '@/lib/util';
 import type { H2HData } from '@/lib/queries';
 import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
 import PlayerAvatar from './PlayerAvatar';
@@ -74,18 +74,13 @@ export default function H2HSection({ data, initialPair }: { data: H2HData; initi
     );
   }
 
-  const findDuo = (a: number, b: number) =>
-    duos.find((d) => (d.playerA === a && d.playerB === b) || (d.playerA === b && d.playerB === a));
-  const findRival = (a: number, b: number) =>
-    rivals.find((r) => (r.playerA === a && r.playerB === b) || (r.playerA === b && r.playerB === a));
+  const activeDuo = active?.type === 'partner' ? findDuo(duos, active.a, active.b) : undefined;
+  const activeRival = active?.type === 'opponent' ? findRival(rivals, active.a, active.b) : undefined;
 
-  const activeDuo = active?.type === 'partner' ? findDuo(active.a, active.b) : undefined;
-  const activeRival = active?.type === 'opponent' ? findRival(active.a, active.b) : undefined;
-
-  const flipToOpponent = activeDuo && active && findRival(active.a, active.b)
+  const flipToOpponent = activeDuo && active && findRival(rivals, active.a, active.b)
     ? () => setSel({ a: active.a, b: active.b, type: 'opponent' })
     : undefined;
-  const flipToPartner = activeRival && active && findDuo(active.a, active.b)
+  const flipToPartner = activeRival && active && findDuo(duos, active.a, active.b)
     ? () => setSel({ a: active.a, b: active.b, type: 'partner' })
     : undefined;
 

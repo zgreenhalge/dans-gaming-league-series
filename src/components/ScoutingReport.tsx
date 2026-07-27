@@ -5,21 +5,13 @@ import type { DuoStats, H2HStats, MapLeagueAvg, MapStat, ScoutingPlayer } from '
 import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
-import { avgOf, tabCls } from '@/lib/util';
+import { avgOf, tabCls, findDuo, findRival } from '@/lib/util';
 import Link from 'next/link';
 import { DuoDetail, RivalDetail } from './MatchupDetail';
 import MapHeatmap from './MapHeatmap';
 
 function h2hHref(nameA: string, nameB: string, type: 'partner' | 'opponent'): string {
   return `/statistics?tab=h2h&a=${encodeURIComponent(nameA)}&b=${encodeURIComponent(nameB)}&type=${type}`;
-}
-
-function findDuo(duos: DuoStats[], a: number, b: number): DuoStats | undefined {
-  return duos.find((d) => (d.playerA === a && d.playerB === b) || (d.playerA === b && d.playerB === a));
-}
-
-function findRival(rivals: H2HStats[], a: number, b: number): H2HStats | undefined {
-  return rivals.find((r) => (r.playerA === a && r.playerB === b) || (r.playerA === b && r.playerB === a));
 }
 
 /** Return a copy of `rival` with A/B flipped so that `desiredA` is always playerA. */
