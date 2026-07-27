@@ -10,8 +10,8 @@ import MatchRecapTab from '@/components/MatchRecapTab';
 import ScoutingReport from '@/components/ScoutingReport';
 import { Checkbox } from '@/components/SeasonFilter';
 import TabBar from '@/components/TabBar';
-import SabremetricsLeaderboardView, { type SabremetricStatRow, type TeamGroup } from '@/components/SabremetricsLeaderboardView';
-import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView } from '@/lib/queries';
+import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
+import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow } from '@/lib/queries';
 import type { SabFields } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
 
