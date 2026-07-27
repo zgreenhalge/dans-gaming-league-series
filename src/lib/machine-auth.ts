@@ -1,5 +1,5 @@
-// Shared-secret gate for machine-authenticated routes (called by the Worker / game server, not a
-// browser). Centralizes the constant-time compare + the "missing secret = fail closed" handling so
+// Shared-secret gate for machine-authenticated routes (called by the game server, not a browser).
+// Centralizes the constant-time compare + the "missing secret = fail closed" handling so
 // every machine endpoint behaves identically. The session-based equivalent is `requireMatchAccess`.
 
 import { timingSafeEqual } from 'node:crypto';

@@ -53,7 +53,7 @@ Once linked, `session.user.playerId` is set. Admin players (`players.is_admin = 
 
 Most mutation routes require a valid session (caller in the match or an admin). The DatHost/MatchZy
 hosting + ingestion routes are their own subsystem — see [`hosting.md`](./hosting.md); the machine-auth
-ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a browser.
+ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not a browser.
 
 | Method | Path | Description |
 |---|---|---|
@@ -64,10 +64,10 @@ ones (`matchzy-config`, `ingest/notify`) are called by the server/Worker, not a 
 | `POST` | `/api/matches/[id]/demo/upload-url` | Mint a presigned Cloudflare R2 URL to upload a `.dem` file |
 | `POST` | `/api/matches/[id]/demo/parse` | Parse the uploaded demo into match + sabremetric stats (see [`demo-ingestion.md`](./demo-ingestion.md)) |
 | `GET/DELETE` | `/api/matches/[id]/demo/result` | Read / dispose the staged auto-ingest result ([`hosting.md`](./hosting.md)) |
-| `POST` | `/api/matches/[id]/demo/dispatch` | Re-parse the demo already in R2 (manual counterpart to `ingest/notify`) |
+| `POST` | `/api/matches/[id]/demo/dispatch` | Re-parse the demo already in R2 (manual counterpart to `ingest/matchzy-log`'s auto-dispatch) |
 | `GET/POST` | `/api/matches/[id]/server/{status,provision,teardown}` | Per-match DatHost server lifecycle ([`hosting.md`](./hosting.md)) |
 | `GET` | `/api/matches/[id]/matchzy-config` | Machine-auth MatchZy config (`matchzy_loadmatch_url` target) |
-| `POST` | `/api/ingest/notify` | Machine-auth: demo landed → record job, dispatch parse, tear down |
+| `POST` | `/api/ingest/matchzy-log` | Machine-auth: MatchZy remote-log events — `map_result` records the job, dispatches parse, tears down the server; `going_live`/`round_end` feed the live score |
 | `POST` | `/api/matches/[id]/replay/dispatch` | (Re)trigger the replay Action ([`replay.md`](./replay.md)) |
 | `POST` | `/api/maps/[slug]/radar/dispatch` | (Re)trigger the radar-build Action for a map (admin only; [`replay.md`](./replay.md)) |
 | `PATCH` | `/api/seasons/[id]/start-date` | Set season start date (admin only) |
@@ -107,6 +107,7 @@ Supabase (`public` schema). RLS is **off** on all tables — do not enable it wi
 | `gauntlet_pod_slots` | The 4 slots (`slot_index` 0-3) feeding each pod: `source_kind` (`seed`/`pod`), `source_seed` (for seed slots) or `source_pod_id` (the advancement edge, for pod slots), and the resolved `player_id`. |
 | `ops_errors` | Generic best-effort-operation-failure surface: `entity_type` (`season`/`match`/`system`), `entity_id` (`0` for the `system` singleton), `operation`, `message`, `occurred_at`. Unique on `(entity_type, entity_id, operation)`. See "Surfacing best-effort failures". |
 | `scrim_sessions` | Singleton table (`id` pinned to `1`) tracking the one active scrim, if any: `started_by` (owner, for the stop-authorization check), `warned_15`/`warned_10`/`warned_5` (pre-match warning one-shots). See [`hosting.md`](./hosting.md)'s Scrims section. |
+| `live_match_score` | One row per in-progress match (`match_id` PK): `shirts_score`, `skins_score`, `round` (nullable). Written by `going_live`/`round_end`/`map_result` events, read live via Supabase Realtime by `LiveScoreTicker`. Deleted by `writeMatchScore()` once the match has an actual score (not at `map_result`, and not wherever the demo happens to finish parsing — a quarantined/staged-for-review result has nothing else to show a spectator in the meantime) — see [`hosting.md`](./hosting.md). |
 
 ### View: `player_season_leaderboard`
 
@@ -311,7 +312,7 @@ Wired into nine operations today:
 | `gauntlet_seed` | `season` (regular) | `checkSeasonCompletion()` (including a `trySeedGauntlet()` roster-`drift` result, which needs the same admin attention as a thrown error even though it isn't one) |
 | `gauntlet_archive` | `season` (gauntlet) | `checkGauntletCompletion()` |
 | `steam_id_learn` | `match` | `applyEliminationSteamIds()`'s hook in the score route |
-| `server_teardown` | `match` | `teardownMatchServer()`'s hooks in the score route and `/api/ingest/notify` |
+| `server_teardown` | `match` | `teardownMatchServer()`'s hooks in the score route and `/api/ingest/matchzy-log` |
 | `sabremetrics_persist` | `match` | `persistSabremetrics()`/`clearSabremetrics()`'s hook in the score route |
 | `name_history_log` | `player` | `recordNameChange()` (`src/lib/player-name-history.ts`), from both `PATCH /api/players/[id]` and `PATCH /api/players/me/name` — also recorded directly if the admin route can't even read the player's prior name to log a "from" |
 | `ehog_recompute` | `system` (id `0`) | `triggerRatingRecompute()` |

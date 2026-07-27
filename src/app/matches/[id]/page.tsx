@@ -14,6 +14,7 @@ import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
 import MatchServerPanel from '@/components/MatchServerPanel';
 import MatchDemoReviewBlock from '@/components/MatchDemoReviewBlock';
+import LiveScoreTicker from '@/components/LiveScoreTicker';
 import MatchTabView from '@/components/MatchTabView';
 import RoundHistoryStrip from '@/components/RoundHistoryStrip';
 import { WinProbabilityBar } from '@/components/WinProbabilityBar';
@@ -378,6 +379,16 @@ export default async function MatchPage({
             <div className="pb-6 flex justify-center">
               <div className="w-full max-w-md">
                 <MatchServerPanel matchId={match.id} canManage={canManageServer} autoProvisioning={vetoComplete} />
+              </div>
+            </div>
+          )}
+
+          {/* Live score — self-hides until MatchZy reports `going_live`, and again once the match is
+              scored. Shown to anyone viewing the page, not just the manager. */}
+          {!played && vetoComplete && (
+            <div className="pb-6 flex justify-center">
+              <div className="w-full max-w-md">
+                <LiveScoreTicker matchId={match.id} />
               </div>
             </div>
           )}

@@ -26,17 +26,23 @@
 // check excludes — it always falls through to the staged-result review instead, regardless of how
 // cleanly the new parse corroborates against `map_result`.
 //
+// The demo itself is pulled directly from the DatHost game server's file storage (not pushed by
+// MatchZy — see `fetchFromDathost.ts` for why) at the very start of the run, if it isn't already in R2.
+//
 // Env (from the workflow): MATCH_ID, GH_RUN_ID, GH_RUN_URL, R2 creds, SUPABASE_SERVICE_ROLE_KEY /
 // NEXT_PUBLIC_SUPABASE_URL, AUTO_COMMIT_ENABLED, APP_BASE_URL + RECOMPUTE_SECRET (for the EHOG
-// recompute an auto-commit triggers). Storage is schema-free: background_jobs.status + R2 artifacts.
+// recompute an auto-commit triggers), DATHOST_EMAIL/DATHOST_PASSWORD/DATHOST_SERVER_ID (for the demo
+// pull). Storage is schema-free: background_jobs.status + R2 artifacts.
 
 import { gzipSync } from 'node:zlib';
 import { parseDemoFile } from '../src/lib/demoParser';
 import { parseDemoSabremetrics } from '../src/lib/demoOrchestrator';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { quarantineDemo } from '../src/lib/demo/quarantine';
-import { getR2Object, putR2Object, deleteR2Object, demoKey, demoResultKey, mapResultKey } from '../src/lib/r2';
+import { putR2Object, deleteR2Object, demoResultKey, mapResultKey } from '../src/lib/r2';
 import { getMapResult } from '../src/lib/demo/mapResult';
+import { ensureDemoInR2 } from '../src/lib/demo/fetchFromDathost';
+import { dathostServerId } from '../src/lib/dathost';
 import { evaluateAutoCommit } from '../src/lib/demo/autoCommit';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { gunzipMaybe } from '../src/lib/gzip';
@@ -52,7 +58,7 @@ const ghRunId = process.env.GH_RUN_ID ? Number(process.env.GH_RUN_ID) : null;
 const ghRunUrl = process.env.GH_RUN_URL ?? null;
 const supabase = getAdminClient();
 
-/** Upsert the job row (it normally exists from the notify route; upsert covers manual runs too).
+/** Upsert the job row (it normally exists from the matchzy-log route; upsert covers manual runs too).
  *  Throws if the write fails, so a corrupted status row aborts the run via `main().catch(fail)`
  *  rather than leaving the row stuck at its last-written status looking like a hang; `fail()` below
  *  writes directly instead, since it must not throw while already unwinding. */
@@ -75,17 +81,20 @@ async function main() {
 
   await setJob({
     status: 'running',
-    stage: 'parse',
+    stage: 'fetch',
     error_message: null,
     gh_run_id: ghRunId,
     gh_run_url: ghRunUrl,
     started_at: new Date().toISOString(),
   });
 
-  const inputs = await getReplayInputs(supabase, matchId);
+  // Pulls the demo from DatHost if it isn't already in R2 (a manual reparse of an already-staged/
+  // confirmed match has it already).
+  const raw = await ensureDemoInR2(dathostServerId(), matchId);
 
-  const raw = await getR2Object(demoKey(matchId));
-  if (!raw) throw new Error(`No demo in R2 at ${demoKey(matchId)}`);
+  await setJob({ status: 'running', stage: 'parse', error_message: null });
+
+  const inputs = await getReplayInputs(supabase, matchId);
   const demo = gunzipMaybe(raw);
 
   const parsed = parseDemoFile(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);

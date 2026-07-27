@@ -184,6 +184,7 @@ const PIPELINES: PipelineDoc[] = [
       { label: 'parsed / quarantined', tone: 'review' },
       { label: 'confirmed', tone: 'done' },
     ],
+    running: ['fetch', 'parse'],
     admin: (
       <>
         <b>Confirm</b> the staged score, <b>Re-parse</b> the demo, or <b>Dismiss</b> the result.

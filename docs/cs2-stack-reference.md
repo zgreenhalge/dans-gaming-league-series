@@ -109,10 +109,10 @@ on team1/team2, so any league member can spectate without being explicitly invit
 only covers *known* accounts — a spectator outside your player table still needs to be added
 explicitly if you want them in.
 
-### Demo upload contract
+### Demo upload contract (not what DGLS uses — see below)
 
-After a map ends (post GOTV-flush), MatchZy `POST`s the raw `.dem` bytes
-(`application/octet-stream`, no multipart wrapper) to `matchzy_demo_upload_url` with headers:
+MatchZy can `POST` the raw `.dem` bytes (`application/octet-stream`, no multipart wrapper) to
+`matchzy_demo_upload_url` after a map ends (post GOTV-flush), with headers:
 
 - `MatchZy-FileName`
 - `MatchZy-MatchId` — whatever `matchid` was in the loaded config
@@ -122,12 +122,15 @@ After a map ends (post GOTV-flush), MatchZy `POST`s the raw `.dem` bytes
 
 Optional shared-secret auth via `matchzy_demo_upload_header_key` /
 `matchzy_demo_upload_header_value` — MatchZy sends it as a plain header on the POST, so verify it
-constant-time before buffering/streaming the body, not after.
+constant-time before buffering/streaming the body, not after. **Size matters for the receiver**: a
+Wingman GOTV demo can exceed typical serverless request-body caps (e.g. Vercel Functions' hard 4.5 MB
+limit), and MatchZy has no upload-compression option — a large-enough demo (~200MB+) can exceed even a
+platform's own inbound request-body cap, which no receiving endpoint can raise its way out of.
 
-**Size matters for the receiver.** A Wingman GOTV demo can exceed typical serverless request-body
-caps (e.g. Vercel Functions' hard 4.5 MB limit) — plan the receiving endpoint around a platform that
-accepts large streamed bodies (DGLS uses a Cloudflare Worker in front of R2 for exactly this
-reason; see [`hosting.md`](./hosting.md)).
+**DGLS doesn't set `matchzy_demo_upload_url` at all**, for exactly that reason — see
+[`hosting.md`](./hosting.md)'s auto-ingestion pipeline for the pull-based alternative it uses instead
+(the demo-ingest Action fetches the file itself from DatHost's file storage, at a deterministic path
+set via `matchzy_demo_name_format`).
 
 MatchZy also POSTs match events (including final `map_result`) to `matchzy_remote_log_url`, and
 exposes `matchzy_get_match_stats <matchId>` as a console command — a useful independent
@@ -276,6 +279,7 @@ for the DGLS-specific layout.
 | cfg-file cvars silently didn't apply (round/eco settings, comms, `sv_tags`) — regardless of which file or mechanism set them | CS2's **workshop command filter** (active whenever a workshop map is loaded — i.e. always, for this league) discards cvars set via any cfg `exec` or plugin `Server.ExecuteCommand`; only cvars typed into an authenticated RCON/console session get through (`DISALLOWED WORKSHOP CONVAR` in the server console log) | Set `disable_workshop_command_filtering: true` in the golden `cs2_settings` — the precondition for any cfg-based cvar (below) to take effect at all |
 | `live_override.cfg` cvars never took effect in real matches | DGLS engine-detects as Wingman (`game_mode` 2) at go-live, so MatchZy's `ExecLiveCFG()` execs `live_wingman.cfg` → `live_wingman_override.cfg`, **not** `live_override.cfg`; that override file was empty (confirmed via `mp_freezetime` live-check reading `10`, the wingman default, not the `15` in `live_override.cfg`) | Point `live_wingman_override.cfg` at `exec MatchZy/live_override.cfg` so both mode paths share one baseline instead of drifting |
 | In-server spectators couldn't see players' all-chat | In CS2, spectator chat visibility is gated by the `sv_spec_hear` voice-scope cvar; at its match default spectators receive neither voice nor text | `sv_spec_hear 2` in `live_override.cfg` — spectators see text chat with no voice bleed (`sv_spec_hear 1` also passes player voice through; spectators are never *heard* by players either way, so match integrity holds regardless) |
+| A long, close match's demo never auto-ingested | The GOTV demo (~226MB for a 24-round match) exceeded Cloudflare's inbound request-body cap when MatchZy pushed it via `matchzy_demo_upload_url` — MatchZy has no upload-compression option, and the cap is a platform limit, not something the receiving Worker could raise | Stopped relying on the push entirely: the demo-ingest/replay-extract Actions now *pull* the file from DatHost's own file storage (`fetchDemoFromDathost`) at a deterministic path (`matchzy_demo_name_format "{MATCH_ID}"`), triggered by the small `map_result` webhook event instead of the demo's arrival |
 
 ## External references
 

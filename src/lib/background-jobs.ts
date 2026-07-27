@@ -64,22 +64,26 @@ export function jobStatusWriter(
   };
 }
 
-/** Advance a `background_jobs` row only if it's still in `onlyIfStatus` — so a dispatch response
- *  that lands after the Action has already moved the row on (running/parsed/...) doesn't clobber it
- *  back to an earlier state. */
+/** Update an existing `background_jobs` row — a no-op if none exists, never creating one (unlike
+ *  `recordJobStatus`'s upsert). Pass `onlyIfStatus` when a dispatch response might land after the
+ *  Action has already moved the row on (running/parsed/...) and shouldn't clobber it back to an
+ *  earlier state; omit it when the caller means to overwrite whatever state the row is in — e.g.
+ *  reconciling a job row to `confirmed` once a real score lands, regardless of whether that row was
+ *  stuck at `failed` from a since-superseded run. */
 export async function advanceJobStatus(
   admin: SupabaseClient,
   jobType: string,
   key: JobKey,
   fields: Record<string, unknown>,
-  onlyIfStatus: string,
+  onlyIfStatus?: string,
 ): Promise<{ error?: string }> {
-  const { error } = await admin
+  let query = admin
     .from('background_jobs')
     .update({ updated_at: new Date().toISOString(), ...fields })
     .eq('job_type', jobType)
-    .eq(key.column, key.id)
-    .eq('status', onlyIfStatus);
+    .eq(key.column, key.id);
+  if (onlyIfStatus !== undefined) query = query.eq('status', onlyIfStatus);
+  const { error } = await query;
   return error ? { error: error.message } : {};
 }
 
