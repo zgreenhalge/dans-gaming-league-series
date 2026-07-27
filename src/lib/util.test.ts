@@ -33,21 +33,10 @@ import {
   groupByMap,
 } from './util';
 import { mapSlug } from './maps';
-
-let passed = 0;
-const failures: string[] = [];
+import { test, report } from './test-support/miniTest';
 
 function approx(actual: number, expected: number, msg?: string) {
   assert.ok(Math.abs(actual - expected) < 1e-9, msg ?? `expected ~${expected}, got ${actual}`);
-}
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
 }
 
 // --- isPlayedScore: null and "0-0" placeholders are NOT played (S3 pre-staged rows) ---
@@ -366,9 +355,4 @@ test('groupByMap: a null mapOf result excludes the row', () => {
   assert.equal([...buckets.values()].reduce((n, b) => n + b.rows.length, 0), 1);
 });
 
-if (failures.length > 0) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

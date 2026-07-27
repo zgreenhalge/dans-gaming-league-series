@@ -12,18 +12,7 @@ import { collectKast } from './kast';
 import { computeTradeOpportunities } from './trades';
 import { makeContext, death } from './matchContextFixture';
 import type { PlayerPositionRow } from './smokes';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from '../test-support/miniTest';
 
 function pos(opts: { tick: number; steamid: string; x: number; y: number }): PlayerPositionRow {
   return opts;
@@ -148,9 +137,4 @@ test('collectKast: a trader beyond the trade-opportunity distance does NOT count
   assert.equal(out.get('d')?.kast_rounds ?? 0, 0);
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

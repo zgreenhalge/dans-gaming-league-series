@@ -27,20 +27,7 @@ import {
   type SabremetricStatRow,
 } from './queries';
 import type { SabFields } from './types';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void | Promise<void>) {
-  return (async () => {
-    try {
-      await fn();
-      passed++;
-    } catch (err) {
-      failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-    }
-  })();
-}
+import { test, report } from './test-support/miniTest';
 
 /** A zeroed `SabFields`, overridable per test — mirrors the "override-style" fixture builder
  *  pattern already used throughout this test suite (e.g. h2h.test.ts's `stat()`). */
@@ -207,12 +194,7 @@ async function main() {
     matchesSnapshot('getSabremetricSeasonTotals', rows);
   });
 
-  console.log(`\n${passed} passed, ${failures.length} failed`);
-  if (failures.length > 0) {
-    console.error('\nFailures:\n');
-    for (const f of failures) console.error(`✗ ${f}\n`);
-    process.exit(1);
-  }
+  report();
 }
 
 main();

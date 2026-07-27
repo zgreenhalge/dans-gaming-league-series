@@ -9,18 +9,7 @@ import assert from 'node:assert/strict';
 import { collectSprayAccuracy } from './sprayAccuracy';
 import { makeContext, hurt } from './matchContextFixture';
 import type { WeaponFireRow } from './utility';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from '../test-support/miniTest';
 
 function fire(opts: { round: number; tick: number; user: string | null; weapon: string }): WeaponFireRow {
   return { tick: opts.tick, total_rounds_played: opts.round - 1, user_steamid: opts.user, weapon: opts.weapon };
@@ -91,9 +80,4 @@ test('collectSprayAccuracy: switching weapons mid-burst does not merge into one 
   assert.equal(out.get('a')?.spray_shots_fired ?? 0, 0); // 2 lone ak47 shots + 1 lone m4a1 shot
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

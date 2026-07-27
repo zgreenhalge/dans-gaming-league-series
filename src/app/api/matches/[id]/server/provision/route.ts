@@ -2,16 +2,17 @@
 // when the 5-stage veto completes. Returns immediately with `provisioning`; the boot + loadmatch
 // (~15–20s) runs in `after()` and the client polls `…/server/status` for the connect string.
 
-import { NextRequest, NextResponse, after } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireMatchAccess } from '@/lib/match-access';
 import {
   provisionMatchServer,
   matchzyConfigContext,
   findServerOccupant,
-  ServerBusyError,
+  provisionErrorHandler,
 } from '@/lib/dathost-lifecycle';
 import { parseMatchId } from '@/lib/util';
+import { afterBestEffort } from '@/lib/after';
 
 export async function POST(
   req: NextRequest,
@@ -44,19 +45,11 @@ export async function POST(
   }
 
   // Boot is slow (~15–20s) — run it after the response and let the client subscribe for updates.
-  after(async () => {
-    try {
-      await provisionMatchServer(getAdminClient(), matchId, ctx.configUrl, ctx.configAuth);
-    } catch (err) {
-      // A ServerBusyError here is the race-loser (another match claimed between the check and now) —
-      // expected, not a failure. Anything else is a real provisioning error.
-      if (err instanceof ServerBusyError) {
-        console.warn(`provision(${matchId}) skipped: ${err.message}`);
-      } else {
-        console.error(`provisionMatchServer(${matchId}) failed:`, err);
-      }
-    }
-  });
+  afterBestEffort(
+    `provisionMatchServer(${matchId})`,
+    () => provisionMatchServer(getAdminClient(), matchId, ctx.configUrl, ctx.configAuth),
+    provisionErrorHandler('provision', matchId),
+  );
 
   return NextResponse.json({ ok: true, status: 'provisioning' }, { status: 202 });
 }

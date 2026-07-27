@@ -15,6 +15,7 @@ import { __setTestClient } from './supabase';
 import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import { matchesSnapshot } from './test-support/snapshot';
+import { test, report } from './test-support/miniTest';
 
 const fakeDb = buildFakeDb();
 __setTestClient(createFakeSupabaseClient(fakeDb));
@@ -29,20 +30,6 @@ import {
   getMatchIdsForMap,
   getAllPlayedMatchIds,
 } from './queries';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void | Promise<void>) {
-  return (async () => {
-    try {
-      await fn();
-      passed++;
-    } catch (err) {
-      failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-    }
-  })();
-}
 
 async function main() {
   await test('getAllMatchesWithPickBan() — only real, played matches with a pick, snapshot', async () => {
@@ -116,12 +103,7 @@ async function main() {
     assert.equal(ids.length, 3 + 625);
   });
 
-  console.log(`\n${passed} passed, ${failures.length} failed`);
-  if (failures.length > 0) {
-    console.error('\nFailures:\n');
-    for (const f of failures) console.error(`✗ ${f}\n`);
-    process.exit(1);
-  }
+  report();
 }
 
 main();

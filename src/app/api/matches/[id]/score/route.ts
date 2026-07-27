@@ -9,6 +9,7 @@ import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { writeMatchScore } from '@/lib/matchScore';
 import { isVetoComplete, computeGauntletOrPlayoff, type VetoFields } from '@/lib/veto';
 import type { DemoSabremetricStat } from '@/lib/types';
+import { afterBestEffort } from '@/lib/after';
 
 const supabaseAdmin = getAdminClient();
 
@@ -122,15 +123,17 @@ export async function PATCH(
   // skipped when hosting isn't configured. `onlyIfOwnsServer` ensures editing one match's score
   // never stops another match's live server on the shared host.
   if (process.env.DATHOST_SERVER_ID) {
-    after(async () => {
-      try {
+    afterBestEffort(
+      `teardownMatchServer(${matchId})`,
+      async () => {
         await teardownMatchServer(supabaseAdmin, matchId, { onlyIfOwnsServer: true });
         await clearOpsError(supabaseAdmin, 'match', matchId, 'server_teardown');
-      } catch (err) {
+      },
+      async (err) => {
         console.error(`auto-teardown(${matchId}) failed:`, err);
         await recordOpsError(supabaseAdmin, 'match', matchId, 'server_teardown', `Server teardown failed: ${(err as Error).message}`);
-      }
-    });
+      },
+    );
   }
 
   return NextResponse.json({ ok: true });

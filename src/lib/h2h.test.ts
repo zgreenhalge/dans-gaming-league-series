@@ -11,18 +11,7 @@
 
 import assert from 'node:assert/strict';
 import { computeH2H, findDuo, findRival, mapMatchRowsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './util';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from './test-support/miniTest';
 
 const players = new Map<number, { name: string; steam_avatar_url: string | null }>([
   [1, { name: 'Alice', steam_avatar_url: null }],
@@ -384,9 +373,4 @@ test('findDuo/findRival return undefined for a pair that never played together',
   assert.equal(findRival(result.rivals, 1, 999), undefined);
 });
 
-console.log(`\n${passed} passed, ${failures.length} failed`);
-if (failures.length > 0) {
-  console.error('\nFailures:\n');
-  for (const f of failures) console.error(`✗ ${f}\n`);
-  process.exit(1);
-}
+report();
