@@ -2,8 +2,8 @@
  * Unit tests for collectClutch — 1v1/1v2 clutch detection, and the 2v1 numbers-advantage
  * detection that drives Choke Score's "2v1 losses" term. Exercises the "one side down to a lone
  * survivor while the enemy still has bodies" state machine: the 1v1 vs 1v2 branch, win detection off
- * the round's winnerSide, the >2-enemies-ignored cutoff, and the once-per-round "don't double count"
- * guard — plus the 2v1 branch, where both alive teammates share the attempt/win credit.
+ * the round's winnerSide, the >2-enemies-ignored cutoff, the 1v2->1v1 upgrade when the enemy count
+ * later drops to 1, and the 2v1 branch, where both alive teammates share the attempt/win credit.
  *
  * Run:  npx tsx src/lib/parsers/clutch.test.ts
  */
@@ -13,9 +13,11 @@ import { collectClutch } from './clutch';
 import { makeContext, death } from './matchContextFixture';
 import { test, report } from '../test-support/miniTest';
 
-test('collectClutch: 1v1 attempt + win is credited to the lone survivor on the winning side', () => {
+test('collectClutch: a genuine 1v1 credits both survivors as 1v1, even though one entered facing 2', () => {
   // 2v2: a,b CT vs c,d T. c dies (T down to 1v2 vs CT's 2) then b dies (CT down to 1v1: a vs d).
-  // Round won by CT -> a's 1v1 is a win; d's 1v2 attempt (recorded when c died) is a loss.
+  // By the second death the round has narrowed to a real 1v1 between a and d, so d's earlier 1v2
+  // attempt (recorded when c died) upgrades to 1v1 instead of staying stuck as a 1v2.
+  // Round won by CT -> a's 1v1 is a win; d's (upgraded) 1v1 is a loss.
   const sides = { a: 'CT', b: 'CT', c: 'T', d: 'T' } as const;
   const ids = Object.keys(sides);
   const rounds = [{ roundNumber: 1, winnerSide: 'CT' as const }];
@@ -26,8 +28,9 @@ test('collectClutch: 1v1 attempt + win is credited to the lone survivor on the w
   const ctx = makeContext({ rounds, sides, deaths });
   const out = collectClutch(deaths, ctx, ids);
 
-  assert.equal(out.get('d')?.clutch_1v2_attempts, 1);
-  assert.equal(out.get('d')?.clutch_1v2_wins ?? 0, 0); // CT won, not T
+  assert.equal(out.get('d')?.clutch_1v2_attempts ?? 0, 0);
+  assert.equal(out.get('d')?.clutch_1v1_attempts, 1);
+  assert.equal(out.get('d')?.clutch_1v1_wins ?? 0, 0); // CT won, not T
   assert.equal(out.get('a')?.clutch_1v1_attempts, 1);
   assert.equal(out.get('a')?.clutch_1v1_wins, 1);
 });
@@ -49,21 +52,22 @@ test('collectClutch: enemy count > 2 is not tracked at all', () => {
   assert.equal(out.get('e')?.clutch_1v2_attempts ?? 0, 0);
 });
 
-test('collectClutch: a clutch is only recorded once even if more enemies die afterward', () => {
-  // a alone vs c,d (1v2). Then c also dies -> a is now 1v1, but should NOT get a second (1v1) entry
-  // credited on top of the 1v2 — the player was already marked as "in a clutch" this round.
+test('collectClutch: a 1v2 that narrows to a 1v1 upgrades in place rather than adding a second entry', () => {
+  // a alone vs c,d (1v2). Then c also dies -> a is now 1v1. This replaces the 1v2 attempt with a
+  // 1v1 one (a genuine 1-on-1 duel against d) rather than crediting both a 1v2 and a separate 1v1.
   const sides = { a: 'CT', b: 'CT', c: 'T', d: 'T' } as const;
   const ids = Object.keys(sides);
   const rounds = [{ roundNumber: 1, winnerSide: 'CT' as const }];
   const deaths = [
     death({ round: 1, tick: 100, victim: 'b', attacker: 'c' }), // a now alone vs c,d (1v2)
-    death({ round: 1, tick: 200, victim: 'c', attacker: 'a' }), // down to 1v1, but already recorded
+    death({ round: 1, tick: 200, victim: 'c', attacker: 'a' }), // down to 1v1 vs d -> upgrade
   ];
   const ctx = makeContext({ rounds, sides, deaths });
   const out = collectClutch(deaths, ctx, ids);
 
-  assert.equal(out.get('a')?.clutch_1v2_attempts, 1);
-  assert.equal(out.get('a')?.clutch_1v1_attempts ?? 0, 0);
+  assert.equal(out.get('a')?.clutch_1v2_attempts ?? 0, 0);
+  assert.equal(out.get('a')?.clutch_1v1_attempts, 1);
+  assert.equal(out.get('a')?.clutch_1v1_wins, 1);
 });
 
 test('collectClutch: nobody down to a lone survivor yet means no clutch at all', () => {

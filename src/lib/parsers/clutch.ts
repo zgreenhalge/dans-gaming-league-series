@@ -2,15 +2,17 @@ import type { SabFields } from '../types';
 import type { MatchContext, PlayerDeathRow } from './matchContext';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
+type ClutchCategory = '1v1' | '1v2';
 
 function bumpClutch(
   p: Partial<SabFields>,
   attemptsKey: 'clutch_1v1_attempts' | 'clutch_1v2_attempts' | 'clutch_2v1_attempts',
   winsKey: 'clutch_1v1_wins' | 'clutch_1v2_wins' | 'clutch_2v1_wins',
   won: boolean,
+  delta = 1,
 ): void {
-  p[attemptsKey] = ((p[attemptsKey] as number) ?? 0) + 1;
-  if (won) p[winsKey] = ((p[winsKey] as number) ?? 0) + 1;
+  p[attemptsKey] = ((p[attemptsKey] as number) ?? 0) + delta;
+  if (won) p[winsKey] = ((p[winsKey] as number) ?? 0) + delta;
 }
 
 export function collectClutch(
@@ -49,10 +51,11 @@ export function collectClutch(
     // `round` is fixed for this whole iteration, so look it up once rather than per death/side.
     const roundInfo = context.rounds.find((r) => r.roundNumber === round);
 
-    // Track which player entered a clutch situation, and which side entered a 2v1 advantage —
-    // both first-occurrence-only per round, same reasoning: once true it stays true until the
-    // next death changes the alive counts, so only the first check matters.
-    const clutchRecorded = new Set<string>();
+    // Track which player entered a clutch situation this round, and under which category, plus
+    // which side entered a 2v1 advantage (first-occurrence-only, same reasoning: once true it
+    // stays true until the next death changes the alive counts). The clutch category can still
+    // change after it's first recorded — see the 1v2->1v1 upgrade below.
+    const clutchState = new Map<'CT' | 'T', { steamId: string; category: ClutchCategory }>();
     const advantageRecorded = new Set<string>();
 
     for (const death of deaths) {
@@ -74,19 +77,34 @@ export function collectClutch(
 
         if (myAlive.size === 1) {
           const clutcher = [...myAlive][0];
-          if (clutchRecorded.has(clutcher)) continue;
-
           const enemyCount = enemyAlive.size;
+          const existing = clutchState.get(side);
+
+          if (existing?.steamId === clutcher) {
+            // Already recorded this round. If they entered facing 2 enemies and that count has
+            // since dropped to 1, the round has narrowed to a genuine 1v1 between the two
+            // survivors — upgrade the earlier 1v2 attempt to 1v1 instead of leaving one side
+            // stuck under a category the round outgrew.
+            if (existing.category === '1v2' && enemyCount === 1) {
+              const p = out.get(clutcher)!;
+              bumpClutch(p, 'clutch_1v2_attempts', 'clutch_1v2_wins', won, -1);
+              bumpClutch(p, 'clutch_1v1_attempts', 'clutch_1v1_wins', won);
+              clutchState.set(side, { steamId: clutcher, category: '1v1' });
+            }
+            continue;
+          }
+
           // Only track 1v1/1v2. Checked before recording, not after: a player currently
           // outnumbered 3+ shouldn't be locked out of a real 1v1/1v2 later this round once
           // teammates cut the enemy count down.
           if (enemyCount > 2) continue;
 
-          clutchRecorded.add(clutcher);
+          const category: ClutchCategory = enemyCount === 1 ? '1v1' : '1v2';
+          clutchState.set(side, { steamId: clutcher, category });
           const p = out.get(clutcher)!;
-          if (enemyCount === 1) {
+          if (category === '1v1') {
             bumpClutch(p, 'clutch_1v1_attempts', 'clutch_1v1_wins', won);
-          } else if (enemyCount === 2) {
+          } else {
             bumpClutch(p, 'clutch_1v2_attempts', 'clutch_1v2_wins', won);
           }
         } else if (myAlive.size === 2 && enemyAlive.size === 1) {
