@@ -116,7 +116,7 @@ export interface GoldenDiff {
 
 /** Compare a flat golden object against the live one, one scalar key at a time. Arrays are reported
  *  as `skipped` (DatHost preserves them; their PUT encoding isn't re-asserted — see dathost.ts). */
-function compareFlat(label: string, local: Record<string, unknown>, live: Record<string, unknown> | undefined): DiffRow[] {
+export function compareFlat(label: string, local: Record<string, unknown>, live: Record<string, unknown> | undefined): DiffRow[] {
   const rows: DiffRow[] = [];
   for (const [key, localVal] of Object.entries(local)) {
     const fullKey = `${label}.${key}`;

@@ -913,6 +913,20 @@ export function computeH2H(
   return { duos, rivals, players: playerList };
 }
 
+/** Look up a pair's duo record regardless of which side is `playerA`/`playerB` in the stored row —
+ *  the single lookup every H2H-consuming view needs, reusing the same order-agnostic identity
+ *  `computeH2H` itself groups pairs by. */
+export function findDuo(duos: DuoStats[], a: number, b: number): DuoStats | undefined {
+  const key = h2hPairKey(a, b);
+  return duos.find((d) => h2hPairKey(d.playerA, d.playerB) === key);
+}
+
+/** The rival-record counterpart of `findDuo`. */
+export function findRival(rivals: H2HStats[], a: number, b: number): H2HStats | undefined {
+  const key = h2hPairKey(a, b);
+  return rivals.find((r) => h2hPairKey(r.playerA, r.playerB) === key);
+}
+
 // Minimal shape for `mapMatchRowsToH2HInput` — mirrors `MapMatchRow`/`MapPlayerStat`
 // from queries.ts without importing them, so this file stays supabase-free.
 interface _H2HSourceStat {
