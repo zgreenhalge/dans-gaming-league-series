@@ -9,9 +9,10 @@ function bumpClutch(
   attemptsKey: 'clutch_1v1_attempts' | 'clutch_1v2_attempts' | 'clutch_2v1_attempts',
   winsKey: 'clutch_1v1_wins' | 'clutch_1v2_wins' | 'clutch_2v1_wins',
   won: boolean,
+  delta = 1,
 ): void {
-  p[attemptsKey] = ((p[attemptsKey] as number) ?? 0) + 1;
-  if (won) p[winsKey] = ((p[winsKey] as number) ?? 0) + 1;
+  p[attemptsKey] = ((p[attemptsKey] as number) ?? 0) + delta;
+  if (won) p[winsKey] = ((p[winsKey] as number) ?? 0) + delta;
 }
 
 export function collectClutch(
@@ -86,8 +87,7 @@ export function collectClutch(
             // stuck under a category the round outgrew.
             if (existing.category === '1v2' && enemyCount === 1) {
               const p = out.get(clutcher)!;
-              p.clutch_1v2_attempts = (p.clutch_1v2_attempts as number) - 1;
-              if (won) p.clutch_1v2_wins = (p.clutch_1v2_wins as number) - 1;
+              bumpClutch(p, 'clutch_1v2_attempts', 'clutch_1v2_wins', won, -1);
               bumpClutch(p, 'clutch_1v1_attempts', 'clutch_1v1_wins', won);
               clutchState.set(side, { steamId: clutcher, category: '1v1' });
             }
