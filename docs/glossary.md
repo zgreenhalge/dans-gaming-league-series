@@ -75,9 +75,9 @@ so you don't have to reverse-engineer them from scratch each time.
   [`architecture.md`](./architecture.md#gauntlet-bracket-scheduling).
 - **Gauntlet seeding projection** — a live "if the season ended today" preview shown on an *ACTIVE*
   regular season's own leaderboard: gold row tint for a seed that would get a bye, red for a seed
-  that wouldn't fit the bracket at all (`buildGauntletBracket`'s `drops`), plus a text column
-  spelling out the projected round/pod. Recomputed from current standings on every render — no
-  gauntlet season needs to exist yet. Implemented by `projectGauntletSeeding()` in
+  that wouldn't fit the bracket at all (`buildGauntletBracket`'s `drops`). Recomputed from current
+  standings on every render — no gauntlet season needs to exist yet. Implemented by
+  `projectGauntletSeeding()` in
   `src/lib/gauntlet-bracket.ts`, called from `SeasonTabView.tsx` and passed as `gauntletSeeding` to
   `LeaderboardTable`. Distinct from the canonical gauntlet ranking below, which only ever describes
   a gauntlet that actually exists.

@@ -347,9 +347,8 @@ Seed 1 is the canonical-sort leader, seed N the canonical-sort last place, same 
 | Playing round 1 | Everyone else — placed straight into a round-1 pod |
 
 Every seed's projected round and pod are fully determined by `N` alone (no player-vs-player
-uncertainty), so the leaderboard shows a text label (e.g. "R1 · Pod 2", "Final (Bye)") alongside the
-row tint. Returns no projection for a qualifier count `buildGauntletBracket` doesn't support
-(outside 4-20).
+uncertainty); the leaderboard reflects the projection as a row tint only, no separate text column.
+Returns no projection for a qualifier count `buildGauntletBracket` doesn't support (outside 4-20).
 
 Implemented by `projectGauntletSeeding(qualifierCount)` in `src/lib/gauntlet-bracket.ts`, which maps
 seeds to placements; `SeasonTabView.tsx` zips that against the current standings (already in
