@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireMatchAccess } from '@/lib/match-access';
 import { getR2Object, deleteR2Object, headDemoObject, demoResultKey, mapResultKey } from '@/lib/r2';
+import { deleteLiveScore } from '@/lib/demo/liveScore';
 import { gunzipMaybe } from '@/lib/gzip';
 import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { isVetoComplete, computeGauntletOrPlayoff, type VetoFields } from '@/lib/veto';
@@ -50,10 +51,10 @@ async function isAwaitingScoreAfterVeto(matchId: number): Promise<boolean> {
   return isVetoComplete(m, computeGauntletOrPlayoff(isGauntlet, m.is_playoff_game));
 }
 
-// The Worker retries its notify call for up to ~2.5s after the demo lands in R2 (`notifyWithRetry` in
-// `infra/worker/src/index.ts`) before giving up. Without a grace period, a page load landing in that
-// window would read "demo in R2, no job yet" and flash the manual-trigger button during a routine,
-// still-in-progress upload — not an actual failure. Comfortably longer than the retry span itself.
+// A demo can land in R2 (e.g. a manual browser upload) slightly ahead of its background_jobs row
+// being written. Without a grace period, a page load landing in that narrow window would read "demo
+// in R2, no job yet" and flash the manual-trigger button during a routine, still-in-progress upload —
+// not an actual failure.
 const ORPHANED_DEMO_GRACE_MS = 15_000;
 
 /** Whether an unprocessed demo has been sitting in R2 long enough to be considered abandoned rather
@@ -115,11 +116,12 @@ export async function DELETE(
 
   const disposition = req.nextUrl.searchParams.get('disposition') === 'confirmed' ? 'confirmed' : 'dismissed';
   // The map_result oracle's job is done once a score is confirmed; a dismiss leaves it in place in
-  // case the demo is reparsed and re-staged.
+  // case the demo is reparsed and re-staged. The live score is stale either way once there's a result
+  // to review, so it's cleared regardless of disposition.
   const cleanup =
     disposition === 'confirmed'
-      ? [deleteR2Object(demoResultKey(matchId)), deleteR2Object(mapResultKey(matchId))]
-      : [deleteR2Object(demoResultKey(matchId))];
+      ? [deleteR2Object(demoResultKey(matchId)), deleteR2Object(mapResultKey(matchId)), deleteLiveScore(matchId)]
+      : [deleteR2Object(demoResultKey(matchId)), deleteLiveScore(matchId)];
   await Promise.all(cleanup);
   await recordJobStatus(getAdminClient(), JOB_TYPE, matchJobKey(matchId), {
     status: disposition,
