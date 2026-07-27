@@ -2,9 +2,18 @@
 // `map_result`) and shown on the match page while a match is actually being played — well before the
 // demo lands. `live_match_score` is a one-row-per-match table (Postgres, in the `supabase_realtime`
 // publication) rather than an R2 artifact, so the match page can subscribe to it directly the same way
-// `MatchServerPanel` subscribes to `matches` — no polling. The row is deleted once demo-ingest.ts has
-// something to show in its place (a confirmed score or a staged review), not at `map_result` — that
-// keeps the display up without a gap through the ~2-5 minutes GOTV/parsing takes after the match ends.
+// `MatchServerPanel` subscribes to `matches` — no polling. `match_id` is this table's primary key, so
+// Postgres's default replica identity (which always includes the primary key) is enough for Realtime
+// to deliver DELETE events matching a `match_id=eq.` filter — no `REPLICA IDENTITY FULL` needed; if
+// this table's key ever changes, re-verify that.
+//
+// The row is deleted by `writeMatchScore()` (`matchScore.ts`) once the match has an actual score —
+// not at `map_result`, and not wherever `demo-ingest.ts` happens to finish parsing. Those are both too
+// early: a quarantined or shadow-mode-staged result has nothing else to show in the ticker's place for
+// a spectator (the review card is admin/in-match-only), so clearing there would blank the page for
+// everyone else until someone confirms. `writeMatchScore` is the one place every path that produces a
+// real score — auto-commit or a human confirm — already converges, so it's the only point that's both
+// early enough (no unnecessary lingering) and late enough (never blank before a replacement exists).
 //
 // Field names for `round_end`'s payload are inferred from `map_result`'s confirmed shape (`matchid`,
 // `team1.score`/`team2.score` — `buildMatchzyConfig` fixes team1 = SHIRTS, team2 = SKINS) since
@@ -23,6 +32,10 @@ export interface LiveScoreRow {
   /** Rounds completed so far, or `null` when not reported (`going_live`, or `map_result`, which
    *  doesn't carry a round number). */
   round: number | null;
+  /** When this row was last written — lets a consumer that reads from more than one source (an
+   *  initial GET racing a Realtime subscription, e.g. `LiveScoreTicker`) tell which one is newer
+   *  instead of trusting arrival order. */
+  updatedAt: string;
 }
 
 /** Raw `live_match_score` columns, as both a Postgres `select()` and a Realtime `payload.new` return
@@ -32,15 +45,25 @@ export interface LiveScoreDbRow {
   shirts_score: number;
   skins_score: number;
   round: number | null;
+  updated_at: string;
 }
 
 export function rowToLiveScore(matchId: number, row: LiveScoreDbRow): LiveScoreRow {
-  return { matchId, shirts: row.shirts_score, skins: row.skins_score, round: row.round };
+  return { matchId, shirts: row.shirts_score, skins: row.skins_score, round: row.round, updatedAt: row.updated_at };
+}
+
+/** What's parsed out of an incoming remote-log body — no `updatedAt`, since that's stamped at write
+ *  time, not carried by the event itself. */
+interface ParsedLiveScoreEvent {
+  matchId: number;
+  shirts: number;
+  skins: number;
+  round: number | null;
 }
 
 /** `going_live` seeds the display at 0-0; `round_end`/`map_result` carry the running/final score.
  *  Anything else returns `null`. */
-function parseLiveScoreEvent(body: unknown): LiveScoreRow | null {
+function parseLiveScoreEvent(body: unknown): ParsedLiveScoreEvent | null {
   if (!body || typeof body !== 'object') return null;
   const b = body as Record<string, unknown>;
   const matchId = Number(b.matchid);
@@ -84,15 +107,15 @@ export async function putLiveScoreEvent(admin: SupabaseClient, body: unknown): P
 export async function getLiveScore(admin: SupabaseClient, matchId: number): Promise<LiveScoreRow | null> {
   const { data } = await admin
     .from('live_match_score')
-    .select('shirts_score, skins_score, round')
+    .select('shirts_score, skins_score, round, updated_at')
     .eq('match_id', matchId)
     .maybeSingle();
   if (!data) return null;
   return rowToLiveScore(matchId, data as LiveScoreDbRow);
 }
 
-/** Deleted once `demo-ingest.ts` has something to show in its place — see the header comment for why
- *  that's a better trigger than `map_result`. */
+/** Deleted by `writeMatchScore()` once the match has an actual score — see the header comment for why
+ *  that's the right trigger, instead of `map_result` or wherever `demo-ingest.ts` finishes parsing. */
 export async function clearLiveScore(admin: SupabaseClient, matchId: number): Promise<void> {
   await admin.from('live_match_score').delete().eq('match_id', matchId);
 }

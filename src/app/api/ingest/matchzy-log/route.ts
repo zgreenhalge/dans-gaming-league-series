@@ -20,10 +20,10 @@ import { parseMapResultEvent, putMapResult } from '@/lib/demo/mapResult';
 import { parseMatchzyEventIdentity, putMatchzyContact } from '@/lib/demo/matchzyContact';
 import { putLiveScoreEvent } from '@/lib/demo/liveScore';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
-import { recordJobStatus, advanceJobStatus, dispatchAndRecordFailure, matchJobKey } from '@/lib/background-jobs';
+import { advanceJobStatus, dispatchAndRecordFailure, matchJobKey } from '@/lib/background-jobs';
 import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
-import { DEMO_INGEST_JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '@/lib/demo/ingestResult';
+import { DEMO_INGEST_JOB_TYPE } from '@/lib/demo/ingestResult';
 import { REPLAY_EXTRACT_JOB_TYPE } from '@/lib/jobs';
 
 /** Run `fn` in `after()`, logging (not throwing) on failure — every post-response side effect in this
@@ -38,28 +38,31 @@ function afterBestEffort(label: string, fn: () => Promise<void>): void {
   });
 }
 
+/** Claims the demo-ingest job atomically before dispatching — a plain check-then-act (SELECT to see
+ *  if a job's already in flight, then upsert) can't tell two concurrent map_result deliveries for the
+ *  same match (e.g. a MatchZy retry racing the original) apart: both would pass the check and both
+ *  dispatch. `ignoreDuplicates` makes the claim itself the check — the INSERT only lands if no row
+ *  exists yet for `(job_type, match_id)`, so exactly one caller ever sees a non-empty `claimed`. */
 async function dispatchDemoIngest(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
-  const { data: existing } = await supabaseAdmin
+  const { data: claimed, error: claimErr } = await supabaseAdmin
     .from('background_jobs')
-    .select('status')
-    .eq('job_type', DEMO_INGEST_JOB_TYPE)
-    .eq('match_id', matchId)
-    .maybeSingle();
-  const existingStatus = (existing as { status?: string } | null)?.status;
-  if (existingStatus && DEMO_INGEST_IN_PROGRESS.has(existingStatus)) {
-    return; // already in flight — a MatchZy retry or a duplicate event, not a second match end
-  }
-
-  const { error: recordErr } = await recordJobStatus(supabaseAdmin, DEMO_INGEST_JOB_TYPE, matchJobKey(matchId), {
-    status: 'received',
-    stage: 'received',
-    error_message: null,
-    created_at: new Date().toISOString(),
-  });
-  if (recordErr) {
-    console.error(`matchzy-log: could not record demo-ingest job for match ${matchId}: ${recordErr}`);
+    .upsert(
+      {
+        job_type: DEMO_INGEST_JOB_TYPE,
+        match_id: matchId,
+        status: 'received',
+        stage: 'received',
+        error_message: null,
+        created_at: new Date().toISOString(),
+      },
+      { onConflict: 'job_type,match_id', ignoreDuplicates: true },
+    )
+    .select('match_id');
+  if (claimErr) {
+    console.error(`matchzy-log: could not claim demo-ingest job for match ${matchId}: ${claimErr.message}`);
     return;
   }
+  if (!claimed || claimed.length === 0) return; // already claimed — in flight, or already ran once
 
   const dispatch = await dispatchWorkflow('demo-ingest.yml', { match_id: String(matchId) });
   if (dispatch.ok) {

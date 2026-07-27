@@ -13,6 +13,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { triggerRatingRecompute } from './ehog-recompute';
 import { parseEliminationWarning } from './parsers/rosterResolver';
 import { persistSabremetrics, clearSabremetrics } from './demo/sabremetrics';
+import { clearLiveScore } from './demo/liveScore';
 import { resolveAndPropagate } from './gauntlet-engine';
 import { checkSeasonCompletion, checkGauntletCompletion } from './season-lifecycle';
 import { recordOpsError, clearOpsError } from './ops-errors';
@@ -230,6 +231,18 @@ export async function writeMatchScore(
     .update({ final_score: finalScore, round_history: roundHistory })
     .eq('id', matchId);
   if (matchErr) return { ok: false, error: matchErr.message, status: 500 };
+
+  // The match now has a real score — the live-score ticker's job is done. This is the single choke
+  // point for that (not map_result, and not wherever the demo happens to finish parsing): every path
+  // that ends in an actual score, whether auto-committed or a human confirm, runs through here, so a
+  // quarantined/staged-for-review match keeps showing its last live score to spectators (who can't see
+  // the admin-only review card) instead of going blank until someone confirms it. Best-effort — a
+  // transient failure here must not fail an otherwise-successful score write.
+  try {
+    await clearLiveScore(supabaseAdmin, matchId);
+  } catch (e) {
+    console.error(`clearLiveScore(${matchId}) failed (non-fatal):`, e);
+  }
 
   for (const u of updates) {
     const { error: statErr } = await supabaseAdmin
