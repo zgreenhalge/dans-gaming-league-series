@@ -121,6 +121,20 @@ interface RemoteFile {
   modifiedAt: Date | null;
 }
 
+// DatHost's file-listing API doesn't document whether `modified_at` is Unix seconds or
+// milliseconds, so it's detected by magnitude instead of assumed: seconds values are ~10 digits
+// today, milliseconds ~13 — three orders of magnitude apart, unambiguous either way. Anything
+// resolving before this floor is treated as unusable rather than trusted — a stray 0 or otherwise
+// bad value would otherwise misread as an ancient timestamp and mark residue as maximally old,
+// the one direction of error that's unsafe here (it triggers deletion instead of preventing it).
+const MODIFIED_AT_FLOOR_MS = Date.UTC(2020, 0, 1);
+
+function parseModifiedAt(raw: number | undefined): Date | null {
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) return null;
+  const ms = raw > 1e12 ? raw : raw * 1000;
+  return ms >= MODIFIED_AT_FLOOR_MS ? new Date(ms) : null;
+}
+
 async function listAllFiles(serverId: string): Promise<RemoteFile[]> {
   const { status, json } = await api('GET', `/game-servers/${serverId}/files?path=`);
   if (status !== 200 || !Array.isArray(json)) {
@@ -129,7 +143,7 @@ async function listAllFiles(serverId: string): Promise<RemoteFile[]> {
   return (json as Array<{ path: string; size?: number; modified_at?: number }>).map((f) => ({
     path: f.path,
     size: f.size ?? 0,
-    modifiedAt: typeof f.modified_at === 'number' ? new Date(f.modified_at * 1000) : null,
+    modifiedAt: parseModifiedAt(f.modified_at),
   }));
 }
 
@@ -177,7 +191,11 @@ function residueAgeDays(files: RemoteFile[]): number | null {
  *  for it is worth retaining regardless of age. */
 async function trackedMatchIds(supabase: ReturnType<typeof getAdminClient>, matchIds: number[]): Promise<Set<number>> {
   if (matchIds.length === 0) return new Set();
-  const { data } = await supabase.from('matches').select('id').in('id', matchIds);
+  const { data, error } = await supabase.from('matches').select('id').in('id', matchIds);
+  // A failed query here must not be read as "nothing is tracked" — that would make every match's
+  // residue look like untracked non-DGLS junk, deleting it immediately with no retention check and,
+  // for demos, no R2-confirmation check either. Fail the whole run instead.
+  if (error) throw new Error(`Could not check tracked matches: ${error.message}`);
   return new Set((data ?? []).map((row) => (row as { id: number }).id));
 }
 
