@@ -35,11 +35,8 @@ export interface BuiltMatchzyConfig {
 }
 
 export interface MatchzyConfigOptions {
-  /** Where MatchZy POSTs the finished demo (the Cloudflare Worker). */
-  demoUploadUrl?: string;
-  /** Shared secret sent as `X-MatchZy-Token` with the demo upload. */
-  demoUploadSecret?: string;
-  /** Where MatchZy POSTs match events, including the final `map_result` (#138's auto-commit oracle). */
+  /** Where MatchZy POSTs match events, including the final `map_result` (#138's auto-commit oracle,
+   *  and this pipeline's trigger — see `matchzy-log/route.ts`). */
   remoteLogUrl?: string;
   /** Shared secret sent as `X-MatchZy-Token` with each remote-log event. */
   remoteLogSecret?: string;
@@ -96,11 +93,6 @@ export async function buildMatchzyConfig(
   }
 
   const cvars: Record<string, string> = {};
-  if (opts.demoUploadUrl) {
-    cvars.matchzy_demo_upload_url = opts.demoUploadUrl;
-    cvars.matchzy_demo_upload_header_key = 'X-MatchZy-Token';
-    if (opts.demoUploadSecret) cvars.matchzy_demo_upload_header_value = opts.demoUploadSecret;
-  }
   if (opts.remoteLogUrl) {
     cvars.matchzy_remote_log_url = opts.remoteLogUrl;
     cvars.matchzy_remote_log_header_key = 'X-MatchZy-Token';

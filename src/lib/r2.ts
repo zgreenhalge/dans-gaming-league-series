@@ -114,10 +114,10 @@ export async function deleteR2Object(key: string): Promise<void> {
 }
 
 /** HEAD a match's demo (`<id>/game.dem`) — its size and upload time, or `null` if it doesn't exist.
- *  Shared by the ingest-notify route (needs the byte count) and the orphaned-demo check on the match
- *  page (needs the upload time, to avoid mistaking the Worker's own in-flight notify retry for an
- *  abandoned demo). A non-404 failure (auth, transient network) is rethrown rather than treated as
- *  "missing" — collapsing it into "no demo" would misreport a real error either way. */
+ *  Used by the orphaned-demo check on the match page (needs the upload time, to avoid mistaking a
+ *  routine in-flight write for an abandoned demo). A non-404 failure (auth, transient network) is
+ *  rethrown rather than treated as "missing" — collapsing it into "no demo" would misreport a real
+ *  error either way. */
 export async function headDemoObject(
   matchId: number,
 ): Promise<{ contentLength: number | null; lastModified: Date | null } | null> {

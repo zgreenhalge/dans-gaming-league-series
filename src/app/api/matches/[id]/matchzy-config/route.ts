@@ -35,8 +35,6 @@ export async function GET(
   // The DatHost server POSTs remote-log events here, so the URL must be the public deployment origin.
   const base = process.env.APP_BASE_URL ?? req.nextUrl.origin;
   const { config } = await buildMatchzyConfig(supabaseAdmin, matchId, {
-    demoUploadUrl: process.env.INGEST_WORKER_URL,
-    demoUploadSecret: process.env.INGEST_UPLOAD_SECRET,
     maplistOverride: mapWorkshopId ?? undefined,
     remoteLogUrl: process.env.INGEST_REMOTE_LOG_SECRET ? `${base}/api/ingest/matchzy-log` : undefined,
     remoteLogSecret: process.env.INGEST_REMOTE_LOG_SECRET,

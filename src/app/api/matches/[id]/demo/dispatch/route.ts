@@ -1,7 +1,8 @@
 // Re-dispatch the demo-ingest Action for a match (#136 console / #135 / #137). Session-gated (admin
-// or in-match). Parses the demo already in R2 again — the manual counterpart to the machine-auth
-// `/api/ingest/notify` auto-dispatch. Mirrors `replay/dispatch`: guards against an in-flight job,
-// records `queued`, and fires the GitHub Action (heavy parsing runs there, not in this request).
+// or in-match) — the manual counterpart to `/api/ingest/matchzy-log`'s auto-dispatch on `map_result`.
+// Mirrors `replay/dispatch`: guards against an in-flight job, records `queued`, and fires the GitHub
+// Action (heavy parsing, including the demo pull if it isn't already in R2, runs there, not in this
+// request).
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';

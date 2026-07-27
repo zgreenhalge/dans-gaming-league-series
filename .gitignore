@@ -26,7 +26,6 @@ __pycache__/
 
 # Next.js / Node
 /node_modules
-infra/worker/node_modules
 /.pnp
 .pnp.*
 .yarn/*
