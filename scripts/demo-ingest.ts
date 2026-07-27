@@ -112,12 +112,14 @@ async function main() {
   // The live-score ticker's job is done as of here — every path below has *something* to show in its
   // place (a reparse-confirmed score, an auto-commit, or a staged review), so there's no gap between
   // this clearing and a replacement appearing. A throw earlier than this point (e.g. an unresolved
-  // roster player) leaves the row in place instead of the page going blank.
-  await clearLiveScore(supabase, matchId);
-
-  // The match's existing confirmed score, if any — shared by the reparse shortcut below and the D5
-  // predicate's `alreadyPlayed` check (auto-commit never overwrites a played match).
-  const { data: matchRow } = await supabase.from('matches').select('final_score').eq('id', matchId).maybeSingle();
+  // roster player) leaves the row in place instead of the page going blank. Independent of the
+  // matches select below (different table, neither result feeds the other), so they run concurrently.
+  const [, { data: matchRow }] = await Promise.all([
+    clearLiveScore(supabase, matchId),
+    // The match's existing confirmed score, if any — shared by the reparse shortcut below and the D5
+    // predicate's `alreadyPlayed` check (auto-commit never overwrites a played match).
+    supabase.from('matches').select('final_score').eq('id', matchId).maybeSingle(),
+  ]);
   const existingScore = (matchRow as { final_score: string | null } | null)?.final_score ?? null;
   const existing = isPlayedScore(existingScore) ? parseScore(existingScore) : null;
 

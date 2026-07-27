@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { getBrowserClient } from '@/lib/supabase-browser';
-import type { LiveScoreRow } from '@/lib/demo/liveScore';
+import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '@/lib/demo/liveScore';
 
 export default function LiveScoreTicker({ matchId }: { matchId: number }) {
   const [score, setScore] = useState<LiveScoreRow | null>(null);
@@ -43,8 +43,7 @@ export default function LiveScoreTicker({ matchId }: { matchId: number }) {
             setScore(null);
             return;
           }
-          const row = payload.new as { shirts_score: number; skins_score: number; round: number | null };
-          setScore({ matchId, shirts: row.shirts_score, skins: row.skins_score, round: row.round });
+          setScore(rowToLiveScore(matchId, payload.new as LiveScoreDbRow));
         },
       )
       .subscribe();

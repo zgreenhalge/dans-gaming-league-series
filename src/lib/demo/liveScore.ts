@@ -25,6 +25,19 @@ export interface LiveScoreRow {
   round: number | null;
 }
 
+/** Raw `live_match_score` columns, as both a Postgres `select()` and a Realtime `payload.new` return
+ *  them. Shared by `getLiveScore` below and `LiveScoreTicker`'s Realtime handler so the snake_case →
+ *  camelCase mapping lives in exactly one place. */
+export interface LiveScoreDbRow {
+  shirts_score: number;
+  skins_score: number;
+  round: number | null;
+}
+
+export function rowToLiveScore(matchId: number, row: LiveScoreDbRow): LiveScoreRow {
+  return { matchId, shirts: row.shirts_score, skins: row.skins_score, round: row.round };
+}
+
 /** `going_live` seeds the display at 0-0; `round_end`/`map_result` carry the running/final score.
  *  Anything else returns `null`. */
 function parseLiveScoreEvent(body: unknown): LiveScoreRow | null {
@@ -75,8 +88,7 @@ export async function getLiveScore(admin: SupabaseClient, matchId: number): Prom
     .eq('match_id', matchId)
     .maybeSingle();
   if (!data) return null;
-  const row = data as { shirts_score: number; skins_score: number; round: number | null };
-  return { matchId, shirts: row.shirts_score, skins: row.skins_score, round: row.round };
+  return rowToLiveScore(matchId, data as LiveScoreDbRow);
 }
 
 /** Deleted once `demo-ingest.ts` has something to show in its place — see the header comment for why

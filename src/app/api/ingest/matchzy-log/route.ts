@@ -136,8 +136,7 @@ async function teardownAfterMatchEnd(supabaseAdmin: SupabaseClient, matchId: num
  * The three concerns are independent of each other (different job rows / different DatHost resource,
  * each guards its own dedup), so they run concurrently rather than one waiting behind the others.
  */
-async function triggerDemoPipeline(matchId: number): Promise<void> {
-  const supabaseAdmin = getAdminClient();
+async function triggerDemoPipeline(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
   await Promise.allSettled([
     dispatchDemoIngest(supabaseAdmin, matchId),
     dispatchReplayExtractIfEnabled(supabaseAdmin, matchId),
@@ -165,15 +164,22 @@ export async function POST(req: NextRequest) {
   // Best-effort and deferred: this fires on every event MatchZy sends, including high-frequency ones
   // like round_end, so none of this adds latency to the ack MatchZy is waiting on. Covers map_result
   // too (parseMatchzyEventIdentity/putLiveScoreEvent both recognize it), so there's no separate path
-  // needed for the final score.
+  // needed for the final score. Both writes are independent, so one `after()` runs them concurrently
+  // rather than paying for two separate registrations on this route's highest-frequency path.
   const identity = parseMatchzyEventIdentity(body);
   if (identity) {
-    afterBestEffort(`record contact for match ${identity.matchid}`, () =>
-      putMatchzyContact(identity.matchid, identity.event),
-    );
-    afterBestEffort(`record live score for match ${identity.matchid}`, () =>
-      putLiveScoreEvent(supabaseAdmin, body),
-    );
+    afterBestEffort(`per-event side effects for match ${identity.matchid}`, async () => {
+      const [contact, liveScore] = await Promise.allSettled([
+        putMatchzyContact(identity.matchid, identity.event),
+        putLiveScoreEvent(supabaseAdmin, body),
+      ]);
+      if (contact.status === 'rejected') {
+        console.error(`matchzy-log: record contact for match ${identity.matchid} failed:`, contact.reason);
+      }
+      if (liveScore.status === 'rejected') {
+        console.error(`matchzy-log: record live score for match ${identity.matchid} failed:`, liveScore.reason);
+      }
+    });
   }
 
   const result = parseMapResultEvent(body);
@@ -182,6 +188,6 @@ export async function POST(req: NextRequest) {
   }
 
   await putMapResult(result.matchid, result);
-  afterBestEffort(`triggerDemoPipeline(${result.matchid})`, () => triggerDemoPipeline(result.matchid));
+  afterBestEffort(`triggerDemoPipeline(${result.matchid})`, () => triggerDemoPipeline(supabaseAdmin, result.matchid));
   return NextResponse.json({ ok: true, matchId: result.matchid });
 }

@@ -18,23 +18,26 @@ const FETCH_TIMEOUT_MS = 5 * 60_000;
 const FETCH_INTERVAL_MS = 10_000;
 
 /** The deterministic remote path a match's demo is saved at, given the golden cfg above. */
-export function demoRemotePath(matchId: number): string {
+function demoRemotePath(matchId: number): string {
   return `MatchZy/${matchId}.dem`;
 }
 
-/** Poll DatHost for a match's demo until it appears and gzip-write it to R2 at `demoKey(matchId)`.
+/** Poll DatHost for a match's demo until it appears, gzip-write it to R2 at `demoKey(matchId)`, and
+ *  return those same gzipped bytes (so `ensureDemoInR2` doesn't have to read them straight back).
  *  Throws if it never shows up within `FETCH_TIMEOUT_MS`. */
-export async function fetchDemoFromDathost(serverId: string, matchId: number): Promise<void> {
+async function fetchDemoFromDathost(serverId: string, matchId: number): Promise<Buffer> {
   const remote = demoRemotePath(matchId);
   const bytes = await pollUntil(() => getFileBytes(serverId, remote), {
     timeoutMs: FETCH_TIMEOUT_MS,
     intervalMs: FETCH_INTERVAL_MS,
     timeoutMessage: `Demo never appeared at ${remote} on server ${serverId} after ${Math.round(FETCH_TIMEOUT_MS / 1000)}s`,
   });
-  await putR2Object(demoKey(matchId), gzipSync(bytes), {
+  const gzipped = gzipSync(bytes);
+  await putR2Object(demoKey(matchId), gzipped, {
     contentType: 'application/octet-stream',
     contentEncoding: 'gzip',
   });
+  return gzipped;
 }
 
 /** The match's demo bytes (still gzipped, as stored), pulling it from DatHost first if it isn't
@@ -43,8 +46,5 @@ export async function fetchDemoFromDathost(serverId: string, matchId: number): P
 export async function ensureDemoInR2(serverId: string, matchId: number): Promise<Buffer> {
   const existing = await getR2Object(demoKey(matchId));
   if (existing) return existing;
-  await fetchDemoFromDathost(serverId, matchId);
-  const raw = await getR2Object(demoKey(matchId));
-  if (!raw) throw new Error(`Demo still missing from R2 at ${demoKey(matchId)} after pulling from DatHost`);
-  return raw;
+  return fetchDemoFromDathost(serverId, matchId);
 }

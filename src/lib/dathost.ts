@@ -264,7 +264,6 @@ export function connectHost(server: DathostServer): string | null {
   return `${host}:${port}`;
 }
 
-/** Poll until the server reports running (`on && !booting`) with a connectable host, or time out. */
 /**
  * Poll `fn` until it returns a truthy result, or throw a `DathostError` after `timeoutMs`. Shared by
  * `waitUntilReady` below and `fetchDemoFromDathost` (`src/lib/demo/fetchFromDathost.ts`) — both are
@@ -286,6 +285,7 @@ export async function pollUntil<T>(
   }
 }
 
+/** Poll until the server reports running (`on && !booting`) with a connectable host, or time out. */
 export async function waitUntilReady(
   id: string,
   opts: { timeoutMs?: number; intervalMs?: number } = {},
