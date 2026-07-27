@@ -10,7 +10,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { computeH2H, mapMatchRowsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './util';
+import { computeH2H, findDuo, findRival, mapMatchRowsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './util';
 
 let passed = 0;
 const failures: string[] = [];
@@ -351,6 +351,37 @@ test('duo match team/opponents carry both rosters, with their own stats', () => 
   assert.equal(opponentFour.assists, 4);
   assert.equal(opponentFour.deaths, 16);
   assert.equal(opponentFour.adr, 65);
+});
+
+// --- findDuo / findRival: order-agnostic lookup on computeH2H's own output ---
+test('findDuo/findRival find a pair regardless of which side is playerA/playerB', () => {
+  const roster = [
+    stat({ player_id: 1, faction: 'SHIRTS' }),
+    stat({ player_id: 2, faction: 'SHIRTS' }),
+    stat({ player_id: 3, faction: 'SKINS', is_win: false }),
+    stat({ player_id: 4, faction: 'SKINS', is_win: false }),
+  ];
+  const result = computeH2H([match({ matchId: 1, roster })], players);
+  const [storedA, storedB] = [result.duos[0].playerA, result.duos[0].playerB];
+
+  assert.equal(findDuo(result.duos, storedA, storedB), result.duos[0]);
+  assert.equal(findDuo(result.duos, storedB, storedA), result.duos[0], 'order-agnostic');
+
+  const [rivalA, rivalB] = [result.rivals[0].playerA, result.rivals[0].playerB];
+  assert.equal(findRival(result.rivals, rivalA, rivalB), result.rivals[0]);
+  assert.equal(findRival(result.rivals, rivalB, rivalA), result.rivals[0], 'order-agnostic');
+});
+
+test('findDuo/findRival return undefined for a pair that never played together', () => {
+  const roster = [
+    stat({ player_id: 1, faction: 'SHIRTS' }),
+    stat({ player_id: 2, faction: 'SHIRTS' }),
+    stat({ player_id: 3, faction: 'SKINS', is_win: false }),
+    stat({ player_id: 4, faction: 'SKINS', is_win: false }),
+  ];
+  const result = computeH2H([match({ matchId: 1, roster })], players);
+  assert.equal(findDuo(result.duos, 1, 999), undefined);
+  assert.equal(findRival(result.rivals, 1, 999), undefined);
 });
 
 console.log(`\n${passed} passed, ${failures.length} failed`);

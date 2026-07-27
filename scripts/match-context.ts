@@ -9,7 +9,7 @@
 import { supabase } from '../src/lib/supabase';
 import { getAllSabremetrics, getPlayerRatings, getH2HData, getAllSeasonMedalists, type SabremetricMatchRow, type TrophyEntry } from '../src/lib/queries';
 import { projectRatingDeltas, type PlayerRating, type RatingProjection } from '../src/lib/ehog';
-import type { DuoStats, H2HStats } from '../src/lib/util';
+import { findDuo, findRival } from '../src/lib/util';
 
 interface MatchRow {
   id: number;
@@ -27,10 +27,6 @@ interface PmsRow {
   deaths: number;
   adr: number;
   is_win: boolean;
-}
-
-function samePair(aId: number, bId: number, x: number, y: number): boolean {
-  return (aId === x && bId === y) || (aId === y && bId === x);
 }
 
 /** Sum of sums, not average of per-match ratios — matches how `overall_adr` etc. are aggregated
@@ -235,11 +231,9 @@ async function buildContext(matchId: number, trophiesByPlayer: Map<number, Troph
   }
   const h2hForMatch = pairs.map((p) => {
     if (p.relation === 'duo') {
-      const found = h2h.duos.find((d: DuoStats) => samePair(d.playerA, d.playerB, p.a, p.b));
-      return { ...p, stats: found ?? null };
+      return { ...p, stats: findDuo(h2h.duos, p.a, p.b) ?? null };
     }
-    const found = h2h.rivals.find((r: H2HStats) => samePair(r.playerA, r.playerB, p.a, p.b));
-    return { ...p, stats: found ?? null };
+    return { ...p, stats: findRival(h2h.rivals, p.a, p.b) ?? null };
   });
 
   return {
