@@ -8,18 +8,7 @@
 
 import assert from 'node:assert/strict';
 import { groupByMatchId, daysAgo, parseModifiedAt, residueAgeDays, type RemoteFile } from './dathost-retention';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from './test-support/miniTest';
 
 function file(path: string, size = 0, modifiedAt: Date | null = null): RemoteFile {
   return { path, size, modifiedAt };
@@ -130,9 +119,4 @@ test('residueAgeDays: ignores files with no timestamp when others in the group h
   assert.ok(days !== null && Math.abs(days - 2) < 0.01, `expected ~2, got ${days}`);
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

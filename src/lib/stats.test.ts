@@ -10,18 +10,7 @@
 import assert from 'node:assert/strict';
 import { computeAdvancedStats } from './stats';
 import type { LeaderboardRowWithId } from './types';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from './test-support/miniTest';
 
 function row(overrides: Partial<LeaderboardRowWithId>): LeaderboardRowWithId {
   return {
@@ -105,9 +94,4 @@ test('computeAdvancedStats: matches played but zero wins does not NaN the loss-s
   assert.equal(s.roundDiff, -10); // 10 won - 20 lost
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

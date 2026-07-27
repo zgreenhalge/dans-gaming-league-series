@@ -10,18 +10,7 @@
 import assert from 'node:assert/strict';
 import { quarantineDemo } from './quarantine';
 import type { RoundHistoryEntry } from '../types';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from '../test-support/miniTest';
 
 /** Build a clean N-round history that ends 13–8 (SHIRTS win), as a stand-in for a real one. */
 function cleanHistory(n: number): RoundHistoryEntry[] {
@@ -129,9 +118,4 @@ test('unknown-side parse (null scores) is not quarantined on counts alone', () =
   assert.equal(r.ok, true, `expected ok, got flags: ${r.flags.join('; ')}`);
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

@@ -10,18 +10,7 @@
 import assert from 'node:assert/strict';
 import { collectSmokes, type SmokeEventRow, type PlayerPositionRow } from './smokes';
 import { makeContext } from './matchContextFixture';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from '../test-support/miniTest';
 
 function detonate(opts: { round: number; tick: number; entityid: number; user: string | null; x: number; y: number }): SmokeEventRow {
   return { tick: opts.tick, total_rounds_played: opts.round - 1, entityid: opts.entityid, user_steamid: opts.user, x: opts.x, y: opts.y };
@@ -106,9 +95,4 @@ test('collectSmokes: detonate/expire pairing does not cross entity ids', () => {
   assert.equal(out.get('a')?.smokes_blocking_push, 1); // falls back to round end, so tick 1128 is still in-life
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

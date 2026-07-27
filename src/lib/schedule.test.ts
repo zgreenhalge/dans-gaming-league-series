@@ -8,18 +8,7 @@
 
 import assert from 'node:assert/strict';
 import { findScheduleCollision, SCHEDULE_COLLISION_WINDOW_MS, type ScheduledMatchRef } from './schedule';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from './test-support/miniTest';
 
 function ref(id: number, iso: string): ScheduledMatchRef {
   return { id, scheduledAt: iso, label: `Match ${id}` };
@@ -68,9 +57,4 @@ test('SCHEDULE_COLLISION_WINDOW_MS is exactly 1 hour', () => {
   assert.equal(SCHEDULE_COLLISION_WINDOW_MS, 60 * 60 * 1000);
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

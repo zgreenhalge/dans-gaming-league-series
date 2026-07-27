@@ -12,20 +12,7 @@ import assert from 'node:assert/strict';
 import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import type { FakeDb } from './test-support/fakeSupabase';
 import { buildMatchzyConfig } from './matchzy';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void | Promise<void>) {
-  return (async () => {
-    try {
-      await fn();
-      passed++;
-    } catch (err) {
-      failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-    }
-  })();
-}
+import { test, report } from './test-support/miniTest';
 
 /** A minimal, valid one-match DB: match 500, shirts/skins each with one rostered player, plus one
  *  known league player who isn't in the roster (a spectator candidate). Overridable per test via
@@ -171,12 +158,7 @@ async function main() {
     assert.equal(config.team2.name, 'SKINS');
   });
 
-  console.log(`\n${passed} passed, ${failures.length} failed`);
-  if (failures.length > 0) {
-    console.error('\nFailures:\n');
-    for (const f of failures) console.error(`✗ ${f}\n`);
-    process.exit(1);
-  }
+  report();
 }
 
 main();

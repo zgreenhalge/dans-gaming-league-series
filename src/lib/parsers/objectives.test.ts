@@ -9,18 +9,7 @@
 import assert from 'node:assert/strict';
 import { collectObjectives, type BombEventRow } from './objectives';
 import { makeContext } from './matchContextFixture';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from '../test-support/miniTest';
 
 function bombEvent(round: number, tick: number, user: string | null): BombEventRow {
   return { tick, total_rounds_played: round - 1, user_steamid: user };
@@ -58,9 +47,4 @@ test('collectObjectives: a null/unknown user is ignored, not attributed', () => 
   assert.equal(out.get('b')?.plants ?? 0, 0);
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

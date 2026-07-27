@@ -10,18 +10,7 @@ import assert from 'node:assert/strict';
 import { collectHeGrenades } from './heGrenade';
 import { makeContext, hurt } from './matchContextFixture';
 import type { WeaponFireRow } from './utility';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from '../test-support/miniTest';
 
 function fire(opts: { round: number; tick: number; user: string | null; weapon: string }): WeaponFireRow {
   return { tick: opts.tick, total_rounds_played: opts.round - 1, user_steamid: opts.user, weapon: opts.weapon };
@@ -70,9 +59,4 @@ test('collectHeGrenades: non-HE damage is ignored', () => {
   assert.equal(out.get('a')?.he_damage ?? 0, 0);
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

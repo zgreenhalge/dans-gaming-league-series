@@ -15,20 +15,7 @@ import { canonicalSort } from './util';
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
 import { getSeasonLeaderboard, getCareerLeaderboard, getAllLeaderboards } from './queries';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void | Promise<void>) {
-  return (async () => {
-    try {
-      await fn();
-      passed++;
-    } catch (err) {
-      failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-    }
-  })();
-}
+import { test, report } from './test-support/miniTest';
 
 function assertCanonicallySorted(
   rows: { player_name: string; win_rate_percentage: number; rwr_percentage: number; overall_adr: number }[],
@@ -76,12 +63,7 @@ async function main() {
     matchesSnapshot('getAllLeaderboards', map);
   });
 
-  console.log(`\n${passed} passed, ${failures.length} failed`);
-  if (failures.length > 0) {
-    console.error('\nFailures:\n');
-    for (const f of failures) console.error(`✗ ${f}\n`);
-    process.exit(1);
-  }
+  report();
 }
 
 main();

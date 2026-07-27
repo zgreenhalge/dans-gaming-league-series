@@ -12,6 +12,7 @@ import { __setTestClient } from './supabase';
 import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import { matchesSnapshot } from './test-support/snapshot';
+import { test, report } from './test-support/miniTest';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
@@ -23,20 +24,6 @@ import {
   getMatchRatingDeltas,
   getPlayerRatings,
 } from './queries';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void | Promise<void>) {
-  return (async () => {
-    try {
-      await fn();
-      passed++;
-    } catch (err) {
-      failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-    }
-  })();
-}
 
 async function main() {
   await test('getPlayerEhogRating(1) — full history across 2 matches, snapshot', async () => {
@@ -81,12 +68,7 @@ async function main() {
     matchesSnapshot('getPlayerRatings-1-6-7', ratings);
   });
 
-  console.log(`\n${passed} passed, ${failures.length} failed`);
-  if (failures.length > 0) {
-    console.error('\nFailures:\n');
-    for (const f of failures) console.error(`✗ ${f}\n`);
-    process.exit(1);
-  }
+  report();
 }
 
 main();

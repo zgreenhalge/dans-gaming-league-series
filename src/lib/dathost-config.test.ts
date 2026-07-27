@@ -11,18 +11,7 @@
 
 import assert from 'node:assert/strict';
 import { parseCfg, compareCfg, compareFlat } from './dathost-config';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from './test-support/miniTest';
 
 // --- parseCfg ---
 
@@ -126,9 +115,4 @@ test('compareFlat skips array/object values as "not comparable" instead of diffi
   ]);
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

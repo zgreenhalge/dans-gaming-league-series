@@ -9,18 +9,7 @@
 
 import assert from 'node:assert/strict';
 import { decideSkinsSide, resolveEffectiveSide } from './sideInference';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from '../test-support/miniTest';
 
 const CT = 3;
 const T = 2;
@@ -81,9 +70,4 @@ test('neither stored nor inferred → null', () => {
   assert.deepEqual(resolveEffectiveSide(null, null), { side: null, disagreed: false });
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();
