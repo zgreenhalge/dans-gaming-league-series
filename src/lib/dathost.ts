@@ -213,6 +213,24 @@ export async function getConsoleLines(id: string): Promise<string[]> {
 }
 
 /**
+ * Download a file's raw bytes from the server's file manager (same root `dathost-config.ts`'s cfg
+ * push/diff uses, e.g. `cfg/server.cfg`). Binary-safe, unlike `dathost-config.ts`'s `getText` (which
+ * reads the response as text — fine for cfg files, not for a `.dem`). Returns `null` on a 404 rather
+ * than throwing, since "not there yet" is an expected, pollable state for a demo still being flushed
+ * by GOTV — not a genuine failure the way any other non-2xx is.
+ */
+export async function getFileBytes(id: string, remote: string): Promise<Buffer | null> {
+  const res = await fetch(`${BASE}/game-servers/${id}/files/${remote}`, {
+    headers: { Authorization: authHeader() },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new DathostError(`DatHost GET /game-servers/${id}/files/${remote} → ${res.status}`, res.status, null);
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
+/**
  * Load a per-match MatchZy config. `urlOrCommand` is either an authenticated config URL (→
  * `matchzy_loadmatch_url <url>`) or, if it contains a space, a full `matchzy_*` console line.
  */
