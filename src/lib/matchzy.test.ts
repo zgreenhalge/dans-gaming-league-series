@@ -132,38 +132,28 @@ async function main() {
     assert.deepEqual(config.maplist, ['workshop/123/de_override']);
   });
 
-  await test('cvars are empty when no demo-upload/remote-log options are passed', async () => {
+  await test('cvars are empty when no remote-log option is passed', async () => {
     const client = createFakeSupabaseClient(buildDb());
     const { config } = await buildMatchzyConfig(client, 500);
     assert.deepEqual(config.cvars, {});
   });
 
-  await test('a URL without its secret sets the header key but not the header value', async () => {
+  await test('a remoteLogUrl without its secret sets the header key but not the header value', async () => {
     const client = createFakeSupabaseClient(buildDb());
-    const { config } = await buildMatchzyConfig(client, 500, {
-      demoUploadUrl: 'https://worker.example/upload',
-      remoteLogUrl: 'https://worker.example/log',
-    });
+    const { config } = await buildMatchzyConfig(client, 500, { remoteLogUrl: 'https://worker.example/log' });
     assert.deepEqual(config.cvars, {
-      matchzy_demo_upload_url: 'https://worker.example/upload',
-      matchzy_demo_upload_header_key: 'X-MatchZy-Token',
       matchzy_remote_log_url: 'https://worker.example/log',
       matchzy_remote_log_header_key: 'X-MatchZy-Token',
     });
   });
 
-  await test('demo-upload and remote-log options populate matching cvar pairs', async () => {
+  await test('remoteLogUrl + remoteLogSecret populate the full cvar pair', async () => {
     const client = createFakeSupabaseClient(buildDb());
     const { config } = await buildMatchzyConfig(client, 500, {
-      demoUploadUrl: 'https://worker.example/upload',
-      demoUploadSecret: 'demo-secret',
       remoteLogUrl: 'https://worker.example/log',
       remoteLogSecret: 'log-secret',
     });
     assert.deepEqual(config.cvars, {
-      matchzy_demo_upload_url: 'https://worker.example/upload',
-      matchzy_demo_upload_header_key: 'X-MatchZy-Token',
-      matchzy_demo_upload_header_value: 'demo-secret',
       matchzy_remote_log_url: 'https://worker.example/log',
       matchzy_remote_log_header_key: 'X-MatchZy-Token',
       matchzy_remote_log_header_value: 'log-secret',
