@@ -1,8 +1,8 @@
 /**
- * Unit tests for dathost-config.ts's pure cfg-parsing and diff logic (#163) — parseCfg and
- * compareCfg. diffGoldenConfig/pushCfgFiles hit the live DatHost API and local cfg files directly;
- * they're left as integration-only (exercised for real by scripts/dathost-golden-diff.ts and
- * scripts/dathost-golden-apply.ts against an actual server), the same "extract and test the pure
+ * Unit tests for dathost-config.ts's pure cfg-parsing and diff logic (#163) — parseCfg, compareCfg,
+ * and compareFlat. diffGoldenConfig/pushCfgFiles hit the live DatHost API and local cfg files
+ * directly; they're left as integration-only (exercised for real by scripts/dathost-golden-diff.ts
+ * and scripts/dathost-golden-apply.ts against an actual server), the same "extract and test the pure
  * logic, leave IO-bound orchestration untested" split used elsewhere in this repo (e.g.
  * src/lib/demo/quarantine.test.ts).
  *
@@ -10,7 +10,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { parseCfg, compareCfg } from './dathost-config';
+import { parseCfg, compareCfg, compareFlat } from './dathost-config';
 
 let passed = 0;
 const failures: string[] = [];
@@ -78,14 +78,12 @@ test('compareCfg reports "drift" when values differ', () => {
   assert.deepEqual(rows, [{ key: 'mp_roundtime', local: '1.92', live: '1.5', status: 'drift' }]);
 });
 
-test('compareCfg reports "missing" for a key only on the local (golden) side', () => {
-  const rows = compareCfg(new Map([['mp_roundtime', '1.92']]), new Map());
-  assert.deepEqual(rows, [{ key: 'mp_roundtime', local: '1.92', live: '(absent)', status: 'missing' }]);
-});
+test('compareCfg reports "missing" for a key present on only one side', () => {
+  const localOnly = compareCfg(new Map([['mp_roundtime', '1.92']]), new Map());
+  assert.deepEqual(localOnly, [{ key: 'mp_roundtime', local: '1.92', live: '(absent)', status: 'missing' }]);
 
-test('compareCfg reports "missing" for a key only on the live side', () => {
-  const rows = compareCfg(new Map(), new Map([['mp_roundtime', '1.92']]));
-  assert.deepEqual(rows, [{ key: 'mp_roundtime', local: '(absent)', live: '1.92', status: 'missing' }]);
+  const liveOnly = compareCfg(new Map(), new Map([['mp_roundtime', '1.92']]));
+  assert.deepEqual(liveOnly, [{ key: 'mp_roundtime', local: '(absent)', live: '1.92', status: 'missing' }]);
 });
 
 test('compareCfg sorts rows by key regardless of input order', () => {
@@ -94,6 +92,38 @@ test('compareCfg sorts rows by key regardless of input order', () => {
     new Map([['zeta', '1'], ['alpha', '2']]),
   );
   assert.deepEqual(rows.map((r) => r.key), ['alpha', 'zeta']);
+});
+
+// --- compareFlat ---
+
+test('compareFlat prefixes each key with the label and reports "match"/"drift"', () => {
+  const rows = compareFlat('server', { name: 'DGLS' }, { name: 'DGLS' });
+  assert.deepEqual(rows, [{ key: 'server.name', local: 'DGLS', live: 'DGLS', status: 'match' }]);
+
+  const drifted = compareFlat('server', { name: 'DGLS' }, { name: 'Other' });
+  assert.deepEqual(drifted, [{ key: 'server.name', local: 'DGLS', live: 'Other', status: 'drift' }]);
+});
+
+test('compareFlat compares scalars by string value, not type', () => {
+  const rows = compareFlat('cs2_settings', { max_players: 4 }, { max_players: '4' });
+  assert.equal(rows[0].status, 'match');
+});
+
+test('compareFlat reports "missing" when the live side lacks the key entirely', () => {
+  const rows = compareFlat('server', { name: 'DGLS' }, {});
+  assert.deepEqual(rows, [{ key: 'server.name', local: 'DGLS', live: '(absent)', status: 'missing' }]);
+});
+
+test('compareFlat reports "missing" for every key when the whole live object is undefined', () => {
+  const rows = compareFlat('server', { name: 'DGLS' }, undefined);
+  assert.deepEqual(rows, [{ key: 'server.name', local: 'DGLS', live: '(absent)', status: 'missing' }]);
+});
+
+test('compareFlat skips array/object values as "not comparable" instead of diffing them', () => {
+  const rows = compareFlat('cs2_settings', { tags: ['a', 'b'] }, { tags: ['a', 'c'] });
+  assert.deepEqual(rows, [
+    { key: 'cs2_settings.tags', local: JSON.stringify(['a', 'b']), live: '(not comparable)', status: 'skipped' },
+  ]);
 });
 
 if (failures.length) {

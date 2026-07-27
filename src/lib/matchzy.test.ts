@@ -82,16 +82,16 @@ async function main() {
     assert.ok(warnings.some((w) => /without a steam_id.*SHIRTS:Player A/.test(w)), warnings.join('; '));
   });
 
-  await test('map_sides: skins starting CT -> team2_ct', async () => {
-    const client = createFakeSupabaseClient(buildDb({ match: { skins_starting_side: 'CT' } }));
-    const { config } = await buildMatchzyConfig(client, 500);
-    assert.deepEqual(config.map_sides, ['team2_ct']);
-  });
-
-  await test('map_sides: skins starting T -> team1_ct (shirts CT)', async () => {
-    const client = createFakeSupabaseClient(buildDb({ match: { skins_starting_side: 'T' } }));
-    const { config } = await buildMatchzyConfig(client, 500);
-    assert.deepEqual(config.map_sides, ['team1_ct']);
+  await test('map_sides: skins starting side determines which team is forced CT', async () => {
+    const cases: Array<['CT' | 'T', string]> = [
+      ['CT', 'team2_ct'], // skins start CT
+      ['T', 'team1_ct'], // skins start T -> shirts CT
+    ];
+    for (const [skinsSide, expected] of cases) {
+      const client = createFakeSupabaseClient(buildDb({ match: { skins_starting_side: skinsSide } }));
+      const { config } = await buildMatchzyConfig(client, 500);
+      assert.deepEqual(config.map_sides, [expected], `skins_starting_side=${skinsSide}`);
+    }
   });
 
   await test('map_sides: side not yet set -> ["knife"] and a warning', async () => {
@@ -101,18 +101,18 @@ async function main() {
     assert.ok(warnings.some((w) => /skins_starting_side not set/.test(w)), warnings.join('; '));
   });
 
-  await test('maplist prefers shirts_pick over picked_map', async () => {
-    const client = createFakeSupabaseClient(
-      buildDb({ match: { shirts_pick: 'de_picked_by_shirts', picked_map: 'de_such' } }),
-    );
-    const { config } = await buildMatchzyConfig(client, 500);
-    assert.deepEqual(config.maplist, ['de_picked_by_shirts']);
-  });
-
-  await test('maplist falls back to picked_map when there is no shirts_pick', async () => {
-    const client = createFakeSupabaseClient(buildDb({ match: { shirts_pick: null, picked_map: 'de_such' } }));
-    const { config } = await buildMatchzyConfig(client, 500);
-    assert.deepEqual(config.maplist, ['de_such']);
+  await test('maplist prefers shirts_pick over picked_map, falling back when unset', async () => {
+    const cases: Array<[string | null, string | null, string]> = [
+      ['de_picked_by_shirts', 'de_such', 'de_picked_by_shirts'], // shirts_pick wins
+      [null, 'de_such', 'de_such'], // falls back to picked_map
+    ];
+    for (const [shirtsPick, pickedMap, expected] of cases) {
+      const client = createFakeSupabaseClient(
+        buildDb({ match: { shirts_pick: shirtsPick, picked_map: pickedMap } }),
+      );
+      const { config } = await buildMatchzyConfig(client, 500);
+      assert.deepEqual(config.maplist, [expected], `shirts_pick=${shirtsPick}, picked_map=${pickedMap}`);
+    }
   });
 
   await test('no picked map at all -> empty maplist and a warning', async () => {
