@@ -254,16 +254,19 @@ export async function getSeedBands(
     return { round1: [], byes: [], dropped: Array.from({ length: qualifierCount }, (_, i) => i + 1) };
   }
 
-  // `source_seed IS NOT NULL` matters here: a manually-placed slot (`GauntletPodEditor`) is also
-  // `source_kind: 'seed'`, but carries a real `player_id` and no abstract seed number at all — only
-  // a generator-built shape's seed slots (numbered, resolved later by `seedBracket()`) belong in
-  // this accounting. Without this filter, a manual gauntlet's slots would push `null` into
-  // `source_seed` below and corrupt the round1/byes/dropped bands.
+  // `player_id IS NULL` matters here, not `source_seed IS NOT NULL`: a manually-placed slot
+  // (`GauntletPodEditor`) is also `source_kind: 'seed'` and, like a generated shape's seed slots,
+  // now carries a real `source_seed` too (backfilled from current standings — see
+  // `saveManualDraft()`) — but unlike an unseeded generated slot, it already has its `player_id` set
+  // the moment it's placed. Only a generator-built shape's *unseeded* seed slots (numbered, awaiting
+  // `seedBracket()`) belong in this accounting; a manual gauntlet's slots are excluded because
+  // they're never player-less, regardless of whether they happen to carry a seed number.
   const { data: seedSlots, error: slotsErr } = await supabaseAdmin
     .from('gauntlet_pod_slots')
     .select('pod_id, source_seed')
     .eq('source_kind', 'seed')
     .not('source_seed', 'is', null)
+    .is('player_id', null)
     .in('pod_id', podIds);
   if (slotsErr) throw slotsErr;
 
@@ -626,6 +629,14 @@ export async function saveManualDraft(
     gauntletSeasonId = created.gauntletSeasonId;
   }
 
+  // A directly-picked player still gets a real `source_seed`, from the regular season's *current*
+  // standings — same convention `GauntletPodEditor` already labels players with ("Seed 3 — Name").
+  // Without this, `getSeedByPlayer()` treats every hand-placed occupant as unseeded, and
+  // `materializePod()`'s seed-based SHIRTS/SKINS pairing silently degrades to arbitrary order.
+  const leaderboard = await getSeasonLeaderboard(regularSeasonId);
+  const seedByPlayer = new Map<number, number>();
+  leaderboard.forEach((row, i) => seedByPlayer.set(row.player_id, i + 1));
+
   const currentPods = await getGauntletBracketShape(gauntletSeasonId);
   const currentById = new Map(currentPods.map((p) => [p.id, p]));
   const submittedIds = new Set(draftPods.map((p) => p.persistedId).filter((id): id is number => id != null));
@@ -699,7 +710,7 @@ export async function saveManualDraft(
             pod_id: podId,
             slot_index,
             source_kind: 'seed',
-            source_seed: null,
+            source_seed: seedByPlayer.get(slot.playerId) ?? null,
             source_pod_id: null,
             player_id: slot.playerId,
           };

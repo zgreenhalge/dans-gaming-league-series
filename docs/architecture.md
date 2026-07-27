@@ -217,17 +217,21 @@ a generated one are indistinguishable to `resolveAndPropagate()`, `materializeIf
 `getGauntletRounds()`, or `canonicalGauntletRankMap()`. Two conventions make this work without any
 schema addition:
 
-- A **directly-placed slot** is `source_kind: 'seed'` with `source_seed: null` and `player_id`
-  already set — skipping the generator's separate numeric-seed indirection entirely, since the admin
-  already knows the real player. An **advancement-sourced slot** is `source_kind: 'pod'` with
-  `source_pod_id` set and `player_id: null`, identical to a generated pod's "winner of an earlier
-  pod" slot — `resolveAndPropagate()` fills it in with zero pod-editor-specific code once that
-  source pod's 2 games finish, so a hand-built pod referencing "Round 1 Group 1's winner" resolves
-  automatically just like a generated one would.
+- A **directly-placed slot** is `source_kind: 'seed'` with `player_id` already set — skipping the
+  generator's build-time numeric-seed indirection entirely, since the admin already knows the real
+  player. It still carries a real `source_seed`, backfilled from the regular season's *current*
+  standings at save time (`saveManualDraft()`), so `materializePod()`'s seed-based SHIRTS/SKINS
+  pairing works identically whether a pod's occupants arrived via the generator or the editor. An
+  **advancement-sourced slot** is `source_kind: 'pod'` with `source_pod_id` set and `player_id:
+  null`, identical to a generated pod's "winner of an earlier pod" slot — `resolveAndPropagate()`
+  fills it in with zero pod-editor-specific code once that source pod's 2 games finish, so a
+  hand-built pod referencing "Round 1 Group 1's winner" resolves automatically just like a generated
+  one would.
 - `getSeedBands()` (used by `trySeedGauntlet()`) filters its `source_kind: 'seed'` query to
-  `source_seed IS NOT NULL` — otherwise a manual gauntlet's directly-placed slots (also
-  `source_kind: 'seed'`, but with no seed number) would corrupt the round1/byes/dropped accounting
-  that only makes sense for a generator-built shape.
+  `source_seed IS NOT NULL AND player_id IS NULL` — a manual gauntlet's directly-placed slots also
+  carry a `source_seed` now, but are never player-less, so the `player_id IS NULL` half of the filter
+  is what actually excludes them from the round1/byes/dropped accounting that only makes sense for a
+  generator-built shape awaiting `seedBracket()`.
 
 The editor is a **batch draft** with an edit/preview split, mirroring the generator's own
 preview/confirm/cancel flow: the "editing" stage (`GauntletPodEditor.tsx`) is plain tables — a
