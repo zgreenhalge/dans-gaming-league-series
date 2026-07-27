@@ -41,7 +41,7 @@ import { getReplayInputs } from '../src/lib/replay/inputs';
 import { quarantineDemo } from '../src/lib/demo/quarantine';
 import { putR2Object, deleteR2Object, demoResultKey, mapResultKey } from '../src/lib/r2';
 import { getMapResult } from '../src/lib/demo/mapResult';
-import { deleteLiveScore } from '../src/lib/demo/liveScore';
+import { clearLiveScore } from '../src/lib/demo/liveScore';
 import { ensureDemoInR2 } from '../src/lib/demo/fetchFromDathost';
 import { dathostServerId } from '../src/lib/dathost';
 import { evaluateAutoCommit } from '../src/lib/demo/autoCommit';
@@ -108,6 +108,12 @@ async function main() {
     skinsScore: parsed.skins_score,
     targetWinRounds: inputs.targetWinRounds,
   });
+
+  // The live-score ticker's job is done as of here — every path below has *something* to show in its
+  // place (a reparse-confirmed score, an auto-commit, or a staged review), so there's no gap between
+  // this clearing and a replacement appearing. A throw earlier than this point (e.g. an unresolved
+  // roster player) leaves the row in place instead of the page going blank.
+  await clearLiveScore(supabase, matchId);
 
   // The match's existing confirmed score, if any — shared by the reparse shortcut below and the D5
   // predicate's `alreadyPlayed` check (auto-commit never overwrites a played match).
@@ -182,11 +188,7 @@ async function main() {
         round_history: payload.round_history,
       });
       if (written.ok) {
-        await Promise.all([
-          deleteR2Object(demoResultKey(matchId)),
-          deleteR2Object(mapResultKey(matchId)),
-          deleteLiveScore(matchId),
-        ]);
+        await Promise.all([deleteR2Object(demoResultKey(matchId)), deleteR2Object(mapResultKey(matchId))]);
         await setJob({
           status: 'confirmed',
           stage: 'confirmed',

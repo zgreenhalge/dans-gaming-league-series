@@ -1,47 +1,57 @@
 'use client';
 
 // Live in-match score — appears once MatchZy reports `going_live` (seeded 0-0) and updates on every
-// `round_end`, well before the demo exists. Polling-based rather than Supabase Realtime: the data
-// lives in R2 (`liveScore.ts`), not a Postgres row, so there's nothing to subscribe to — same
-// reasoning as `ScrimStatusContext`'s shared poll. Self-hides when there's nothing live yet, or once
-// the match has a confirmed score (the ticker's job is done — `RoundHistoryStrip` takes over).
+// `round_end`, well before the demo exists. Updates via Supabase Realtime on the `live_match_score`
+// table (no polling) — the same pattern `MatchServerPanel` uses for the `matches` row. Self-hides once
+// its row is deleted, which `demo-ingest.ts` does as soon as it has something to show in its place (an
+// auto-committed score or a staged review), not at `map_result` — so there's no gap where neither this
+// nor the replacement is visible.
 
 import { useCallback, useEffect, useState } from 'react';
-
-const POLL_MS = 10_000;
-
-interface LiveScore {
-  event: string;
-  shirts: number;
-  skins: number;
-  round: number | null;
-}
+import { getBrowserClient } from '@/lib/supabase-browser';
+import type { LiveScoreRow } from '@/lib/demo/liveScore';
 
 export default function LiveScoreTicker({ matchId }: { matchId: number }) {
-  const [score, setScore] = useState<LiveScore | null>(null);
+  const [score, setScore] = useState<LiveScoreRow | null>(null);
 
+  // Initial read (Realtime only delivers subsequent changes).
   const refresh = useCallback(async () => {
     try {
       const res = await fetch(`/api/matches/${matchId}/live-score`);
       if (!res.ok) return;
-      const data = (await res.json()) as { liveScore: LiveScore | null };
+      const data = (await res.json()) as { liveScore: LiveScoreRow | null };
       setScore(data.liveScore);
     } catch {
-      /* transient — next poll will retry */
+      /* transient — Realtime will still deliver updates */
     }
   }, [matchId]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!cancelled) await refresh();
-    })();
-    const interval = setInterval(refresh, POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refresh();
   }, [refresh]);
+
+  // Live updates straight off the live_match_score row — no polling.
+  useEffect(() => {
+    const channel = getBrowserClient()
+      .channel(`live-score-${matchId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'live_match_score', filter: `match_id=eq.${matchId}` },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            setScore(null);
+            return;
+          }
+          const row = payload.new as { shirts_score: number; skins_score: number; round: number | null };
+          setScore({ matchId, shirts: row.shirts_score, skins: row.skins_score, round: row.round });
+        },
+      )
+      .subscribe();
+    return () => {
+      getBrowserClient().removeChannel(channel);
+    };
+  }, [matchId]);
 
   if (!score) return null;
 

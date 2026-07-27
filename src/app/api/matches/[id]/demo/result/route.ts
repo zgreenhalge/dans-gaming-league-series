@@ -7,7 +7,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireMatchAccess } from '@/lib/match-access';
 import { getR2Object, deleteR2Object, headDemoObject, demoResultKey, mapResultKey } from '@/lib/r2';
-import { deleteLiveScore } from '@/lib/demo/liveScore';
 import { gunzipMaybe } from '@/lib/gzip';
 import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { isVetoComplete, computeGauntletOrPlayoff, type VetoFields } from '@/lib/veto';
@@ -116,12 +115,12 @@ export async function DELETE(
 
   const disposition = req.nextUrl.searchParams.get('disposition') === 'confirmed' ? 'confirmed' : 'dismissed';
   // The map_result oracle's job is done once a score is confirmed; a dismiss leaves it in place in
-  // case the demo is reparsed and re-staged. The live score is stale either way once there's a result
-  // to review, so it's cleared regardless of disposition.
+  // case the demo is reparsed and re-staged. (The live score itself was already cleared by
+  // demo-ingest.ts before this result was ever staged — nothing left to do for it here.)
   const cleanup =
     disposition === 'confirmed'
-      ? [deleteR2Object(demoResultKey(matchId)), deleteR2Object(mapResultKey(matchId)), deleteLiveScore(matchId)]
-      : [deleteR2Object(demoResultKey(matchId)), deleteLiveScore(matchId)];
+      ? [deleteR2Object(demoResultKey(matchId)), deleteR2Object(mapResultKey(matchId))]
+      : [deleteR2Object(demoResultKey(matchId))];
   await Promise.all(cleanup);
   await recordJobStatus(getAdminClient(), JOB_TYPE, matchJobKey(matchId), {
     status: disposition,

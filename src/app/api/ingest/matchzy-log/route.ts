@@ -6,9 +6,9 @@
 // map-end and match-end handling in the same call when `NumMaps: 1`. There is no separate "the match
 // is truly over" signal to wait for. Every event still updates the last-contact marker
 // (`matchzyContact.ts`) before being otherwise dropped, so "did the server ever talk to us for this
-// match" stays answerable after the fact. `going_live`/`round_end` feed the live-score display
-// (`liveScore.ts`). Small JSON body — no Worker needed (unlike the demo, which is pulled rather than
-// pushed — see `fetchFromDathost.ts`).
+// match" stays answerable after the fact. `going_live`/`round_end`/`map_result` all feed the live-score
+// table (`liveScore.ts`) through the same generic path. Small JSON body — no Worker needed (unlike the
+// demo, which is pulled rather than pushed — see `fetchFromDathost.ts`).
 //
 // Auth: shared secret in `x-matchzy-token`, constant-time compared against `INGEST_REMOTE_LOG_SECRET`.
 
@@ -18,7 +18,7 @@ import { machineSecretGuard } from '@/lib/machine-auth';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { parseMapResultEvent, putMapResult } from '@/lib/demo/mapResult';
 import { parseMatchzyEventIdentity, putMatchzyContact } from '@/lib/demo/matchzyContact';
-import { putLiveScoreEvent, putLiveScore, liveScoreFromMapResult } from '@/lib/demo/liveScore';
+import { putLiveScoreEvent } from '@/lib/demo/liveScore';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
 import { recordJobStatus, advanceJobStatus, dispatchAndRecordFailure, matchJobKey } from '@/lib/background-jobs';
 import { teardownMatchServer } from '@/lib/dathost-lifecycle';
@@ -160,15 +160,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
+  const supabaseAdmin = getAdminClient();
+
   // Best-effort and deferred: this fires on every event MatchZy sends, including high-frequency ones
-  // like round_end, so none of this adds latency to the ack MatchZy is waiting on.
+  // like round_end, so none of this adds latency to the ack MatchZy is waiting on. Covers map_result
+  // too (parseMatchzyEventIdentity/putLiveScoreEvent both recognize it), so there's no separate path
+  // needed for the final score.
   const identity = parseMatchzyEventIdentity(body);
   if (identity) {
     afterBestEffort(`record contact for match ${identity.matchid}`, () =>
       putMatchzyContact(identity.matchid, identity.event),
     );
     afterBestEffort(`record live score for match ${identity.matchid}`, () =>
-      putLiveScoreEvent(identity.matchid, body),
+      putLiveScoreEvent(supabaseAdmin, body),
     );
   }
 
@@ -178,9 +182,6 @@ export async function POST(req: NextRequest) {
   }
 
   await putMapResult(result.matchid, result);
-  afterBestEffort(`record final live score for match ${result.matchid}`, () =>
-    putLiveScore(result.matchid, liveScoreFromMapResult(result)),
-  );
   afterBestEffort(`triggerDemoPipeline(${result.matchid})`, () => triggerDemoPipeline(result.matchid));
   return NextResponse.json({ ok: true, matchId: result.matchid });
 }
