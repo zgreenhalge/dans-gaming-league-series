@@ -4,7 +4,10 @@
 
 ## Test plan
 
-<!-- Strike through (~~like this~~) any item that doesn't apply to this PR. -->
+<!-- Strike through (~~like this~~) any item that doesn't apply to this PR.
+     Every remaining line MUST use GitHub checkbox syntax — "- [ ]" or "- [x]" — never a plain "- " bullet.
+     CI's checklist gate only sees real checkboxes; a plain-bullet line silently skips verification instead
+     of failing the check. Only mark "- [x]" for something you actually ran/verified for this PR. -->
 
 - [ ] `npm run build` (or the relevant `npx tsx src/lib/**/*.test.ts`) passes
 - [ ] Manual check on the deployed preview, for UI changes
