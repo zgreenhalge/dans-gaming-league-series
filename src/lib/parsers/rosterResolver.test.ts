@@ -9,18 +9,7 @@
 import assert from 'node:assert/strict';
 import { eliminationWarning, parseEliminationWarning, resolveRoster } from './rosterResolver';
 import type { RosterEntry } from '../demoParser';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from '../test-support/miniTest';
 
 test('build → parse round-trips the parts', () => {
   const w = eliminationWarning('RedLetter', '76561198028252465', 'Tim');
@@ -127,9 +116,4 @@ test('resolveRoster: duplicate steam ids on the roster do not double-assign the 
   assert.equal(resolved.get('222')?.player_id, 2);
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

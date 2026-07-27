@@ -11,18 +11,7 @@
 import assert from 'node:assert/strict';
 import { collectClutch } from './clutch';
 import { makeContext, death } from './matchContextFixture';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from '../test-support/miniTest';
 
 test('collectClutch: a genuine 1v1 credits both survivors as 1v1, even though one entered facing 2', () => {
   // 2v2: a,b CT vs c,d T. c dies (T down to 1v2 vs CT's 2) then b dies (CT down to 1v1: a vs d).
@@ -159,9 +148,4 @@ test('collectClutch: a player outnumbered 3+ is not locked out of a real 1v2 onc
   assert.equal(out.get('a')?.clutch_1v2_wins, 1);
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

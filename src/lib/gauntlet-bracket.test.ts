@@ -8,18 +8,7 @@
 
 import assert from 'node:assert/strict';
 import { buildGauntletBracket, projectGauntletSeeding, type PodPlan } from './gauntlet-bracket';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}: ${(err as Error).message}`);
-  }
-}
+import { test, report } from './test-support/miniTest';
 
 /** Sum of (round_number - 1) over every seed-sourced slot — a seed slot in round R implies the
  * seed rested through rounds 1..R-1. */
@@ -186,9 +175,4 @@ test('projectGauntletSeeding: out-of-range qualifier count returns null instead 
   assert.equal(projectGauntletSeeding(21), null);
 });
 
-console.log(`${passed}/${passed + failures.length} passed`);
-if (failures.length > 0) {
-  console.error('Failures:');
-  for (const f of failures) console.error(`  - ${f}`);
-  process.exit(1);
-}
+report();

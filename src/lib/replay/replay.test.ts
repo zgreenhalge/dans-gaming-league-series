@@ -34,21 +34,10 @@ import { extractPlayerTrace, traceStateAt, maxDurationTicks, buildMatchTraces } 
 import { freezeDeadPositions } from './extract';
 import { parseOverview, workshopIdFromUrl } from './radar';
 import type { ReplayRound, ReplayFrame, ReplayPayload, ReplayPlayerFrame } from './types';
-
-let passed = 0;
-const failures: string[] = [];
+import { test, report } from '../test-support/miniTest';
 
 function approx(actual: number, expected: number, msg?: string) {
   assert.ok(Math.abs(actual - expected) < 1e-6, msg ?? `expected ~${expected}, got ${actual}`);
-}
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
 }
 
 // --- helpers to build minimal fixtures ---
@@ -697,11 +686,4 @@ test('workshopIdFromUrl: pulls the id from ?id= and from a bare digit run', () =
 });
 
 // --- report ---
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} replay test(s) failed:\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  console.error(`(${passed} passed)`);
-  process.exit(1);
-} else {
-  console.log(`✓ all ${passed} replay tests passed`);
-}
+report();

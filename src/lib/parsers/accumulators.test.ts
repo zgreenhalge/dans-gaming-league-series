@@ -9,18 +9,7 @@
 
 import assert from 'node:assert/strict';
 import { SPLIT_PROPS, SPLIT_FIELDS, UNSPLIT_PROPS, UNSPLIT_FIELDS } from './accumulators';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from '../test-support/miniTest';
 
 test('accumulators: enemies_flashed is not read from the engine accumulator', () => {
   // enemies_flashed must come from utility.ts's half-blind-gated count (0.1), not the engine's
@@ -42,9 +31,4 @@ test('accumulators: every SPLIT_PROPS entry has a ct/t field mapping', () => {
   }
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

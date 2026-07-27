@@ -12,18 +12,7 @@
 import assert from 'node:assert/strict';
 import { collectUnusedUtility, type PlayerInventoryRow } from './unusedUtility';
 import { makeContext, death } from './matchContextFixture';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from '../test-support/miniTest';
 
 function inv(opts: { tick: number; steamid: string; inventory: string[] }): PlayerInventoryRow {
   return opts;
@@ -87,9 +76,4 @@ test('collectUnusedUtility: an inventory row at the death tick itself (already s
   assert.equal(out.get('c')?.unused_util_value_on_death_total ?? 0, 0);
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

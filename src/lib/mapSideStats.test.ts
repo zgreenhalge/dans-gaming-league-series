@@ -9,6 +9,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { test, report } from './test-support/miniTest';
 import {
   aggregateMapPickBanStats,
   aggregateScoreDistribution,
@@ -17,18 +18,6 @@ import {
   type MatchPickBanInput,
   type PlayerMatchInput,
 } from './mapSideStats';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
 
 function match(opts: Partial<MatchPickBanInput>): MatchPickBanInput {
   return {
@@ -239,9 +228,4 @@ test('aggregateScoreDistribution: loser-round bucket boundaries', () => {
   assert.equal(out.close, 1);
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

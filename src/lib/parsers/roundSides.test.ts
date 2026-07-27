@@ -9,18 +9,7 @@
 
 import assert from 'node:assert/strict';
 import { buildRoundSides, sideForFaction, type RoundEndRow } from './roundSides';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-  }
-}
+import { test, report } from '../test-support/miniTest';
 
 function round(n: number, winner: 'CT' | 'T' | null = 'CT', warmup = false): RoundEndRow {
   return { tick: n * 1000, total_rounds_played: n, winner, is_warmup_period: warmup };
@@ -119,9 +108,4 @@ test('sideForFaction: SHIRTS returns the round shirts side, SKINS returns the op
   assert.equal(sideForFaction(info, 'SKINS'), 'CT');
 });
 
-if (failures.length) {
-  console.error(`\n✗ ${failures.length} failing, ${passed} passing\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`✓ ${passed} passing`);
+report();

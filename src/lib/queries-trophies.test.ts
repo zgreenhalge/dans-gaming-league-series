@@ -15,32 +15,14 @@ import { matchesSnapshot } from './test-support/snapshot';
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
 import { getAllSeasonMedalists } from './queries';
-
-let passed = 0;
-const failures: string[] = [];
-
-function test(name: string, fn: () => void | Promise<void>) {
-  return (async () => {
-    try {
-      await fn();
-      passed++;
-    } catch (err) {
-      failures.push(`${name}\n    ${(err as Error).message.replace(/\n/g, '\n    ')}`);
-    }
-  })();
-}
+import { test, report } from './test-support/miniTest';
 
 async function main() {
   await test('getAllSeasonMedalists() — snapshot', async () => {
     matchesSnapshot('getAllSeasonMedalists', await getAllSeasonMedalists());
   });
 
-  console.log(`\n${passed} passed, ${failures.length} failed`);
-  if (failures.length > 0) {
-    console.error('\nFailures:\n');
-    for (const f of failures) console.error(`✗ ${f}\n`);
-    process.exit(1);
-  }
+  report();
 }
 
 main();
