@@ -138,6 +138,20 @@ async function main() {
     assert.deepEqual(config.cvars, {});
   });
 
+  await test('a URL without its secret sets the header key but not the header value', async () => {
+    const client = createFakeSupabaseClient(buildDb());
+    const { config } = await buildMatchzyConfig(client, 500, {
+      demoUploadUrl: 'https://worker.example/upload',
+      remoteLogUrl: 'https://worker.example/log',
+    });
+    assert.deepEqual(config.cvars, {
+      matchzy_demo_upload_url: 'https://worker.example/upload',
+      matchzy_demo_upload_header_key: 'X-MatchZy-Token',
+      matchzy_remote_log_url: 'https://worker.example/log',
+      matchzy_remote_log_header_key: 'X-MatchZy-Token',
+    });
+  });
+
   await test('demo-upload and remote-log options populate matching cvar pairs', async () => {
     const client = createFakeSupabaseClient(buildDb());
     const { config } = await buildMatchzyConfig(client, 500, {
