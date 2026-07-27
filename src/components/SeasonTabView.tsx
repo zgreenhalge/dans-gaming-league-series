@@ -34,6 +34,10 @@ type RegularMode = {
   seasonStartDate: string | null;
   /** The season's regular-season map pool — feeds the Bans/No-picks columns in the Maps & Sides tab. */
   mapPool?: string[] | null;
+  /** The paired gauntlet's real, materialized bracket shape, once one exists — lets this season's
+   *  own leaderboard prefer real seed-placement data over the theoretical live projection. See the
+   *  `gauntletSeeding` memo below. */
+  gauntletBracketShape?: BracketPod[];
 };
 type GauntletMode = {
   kind: 'gauntlet';
@@ -77,30 +81,37 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const seasonStartDate = props.kind === 'regular' ? props.seasonStartDate : null;
   const seedNames = props.kind === 'gauntlet' ? props.seedNames : undefined;
   const mapPool = props.kind === 'regular' ? (props.mapPool ?? null) : null;
+  const gauntletBracketShape = props.kind === 'regular' ? (props.gauntletBracketShape ?? EMPTY_BRACKET_SHAPE) : EMPTY_BRACKET_SHAPE;
 
   const gauntletRanking = useMemo(
     () => (isGauntlet ? canonicalGauntletRankMap(rounds) : undefined),
     [isGauntlet, rounds],
   );
 
-  // Seed-placement row tinting for the leaderboard — same gold-bye/red-drop convention in both
-  // cases, only ever while the relevant season is ACTIVE (once archived, medal/podium tinting takes
-  // over instead — see `showMedals`/`medalRank` and `GauntletStandings` in `LeaderboardTable.tsx`):
-  //   - Regular season: a live "if the season ended today" projection from the *current standings*,
-  //     since no gauntlet exists yet (`projectGauntletSeeding`). `leaderboard` is already in
-  //     canonical-sort order (`getSeasonLeaderboard` sorts it), which is the seeding order itself:
-  //     index 0 = seed 1.
-  //   - Gauntlet season: read straight off the *real, materialized* bracket (`bracketShape`) instead
-  //     of projecting — a seed's slot in a round after round 1 is a real bye, exactly like the
-  //     projection's `isBye`, just sourced from `gauntlet_pod_slots` rather than computed.
+  // Seed-placement row tinting for a regular season's own leaderboard — gold for a bye, red for a
+  // seed that wouldn't fit the bracket. Never shown on a gauntlet's own leaderboard: that view gets
+  // a podium once the gauntlet completes (`GauntletStandings`) and has nothing worth tinting rows
+  // for before then.
+  //
+  // Two sources, in preference order:
+  //   1. A real, materialized bracket for the paired gauntlet, once one exists
+  //      (`gauntletBracketShape`) — read directly off `gauntlet_pod_slots` rather than computed, so
+  //      it reflects reality even if the bracket was hand-edited away from the shape
+  //      `buildGauntletBracket()` would have produced. A seed-sourced slot in a round after round 1
+  //      is a real bye. Preferred unconditionally whenever it has real data, regardless of season
+  //      status — a real bracket is never wrong to prefer over a guess.
+  //   2. Otherwise, while this season is ACTIVE, a live "if the season ended today" projection from
+  //      the *current standings*, since no gauntlet exists yet (`projectGauntletSeeding`).
+  //      `leaderboard` is already in canonical-sort order (`getSeasonLeaderboard` sorts it), which
+  //      is the seeding order itself: index 0 = seed 1.
   const gauntletSeeding = useMemo<Map<number, SeedPlacement> | undefined>(() => {
-    if (seasonStatus !== 'ACTIVE') return undefined;
-    if (isGauntlet) {
-      if (bracketShape.length === 0) return undefined;
+    if (isGauntlet) return undefined;
+
+    if (gauntletBracketShape.length > 0) {
       const byPlayer = new Map<number, SeedPlacement>();
-      for (const pod of bracketShape) {
+      for (const pod of gauntletBracketShape) {
         for (const slot of pod.slots) {
-          if (slot.source_kind !== 'seed' || slot.source_seed == null || slot.player_id == null) continue;
+          if (slot.source_kind !== 'seed' || slot.player_id == null) continue;
           byPlayer.set(slot.player_id, {
             qualifies: true,
             round: pod.round_number,
@@ -110,8 +121,10 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
           });
         }
       }
-      return byPlayer;
+      if (byPlayer.size > 0) return byPlayer;
     }
+
+    if (seasonStatus !== 'ACTIVE') return undefined;
     const placementBySeed = projectGauntletSeeding(leaderboard.length);
     if (!placementBySeed) return undefined;
     const byPlayer = new Map<number, SeedPlacement>();
@@ -120,7 +133,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
       if (placement) byPlayer.set(row.player_id, placement);
     });
     return byPlayer;
-  }, [isGauntlet, seasonStatus, leaderboard, bracketShape]);
+  }, [isGauntlet, seasonStatus, leaderboard, gauntletBracketShape]);
 
   const defaultOpenSet = useMemo<Set<number>>(() => {
     if (isGauntlet) {

@@ -73,15 +73,18 @@ so you don't have to reverse-engineer them from scratch each time.
   stored as a real FK graph in `gauntlet_pods`/`gauntlet_pod_slots`; materialized into playable
   `matches` rows by `src/lib/gauntlet-engine.ts` as the bracket progresses. See
   [`architecture.md`](./architecture.md#gauntlet-bracket-scheduling).
-- **Gauntlet seeding projection** — the same gold-bye/red-drop row tint on `LeaderboardTable`,
-  sourced two different ways depending on which leaderboard it's shown on. On an *ACTIVE* regular
-  season's own leaderboard it's a live "if the season ended today" preview computed from the current
-  standings, since no gauntlet season exists yet — recomputed from current standings on every
-  render. On an *ACTIVE* gauntlet season's own leaderboard it's read straight off that gauntlet's
-  real, materialized bracket (`getGauntletBracketShape()`) instead of projected — a seed's slot in a
-  round after round 1 is a real bye. Both cases are computed by `SeasonTabView.tsx` and passed as the
-  same `gauntletSeeding` prop to `LeaderboardTable`; the regular-season case is implemented by
-  `projectGauntletSeeding()` in `src/lib/gauntlet-bracket.ts`. Distinct from the canonical gauntlet
+- **Gauntlet seeding projection** — the gold-bye/red-drop row tint on a regular season's own
+  `LeaderboardTable`, never shown on a gauntlet season's own leaderboard (which gets a podium once
+  complete instead — `GauntletStandings`). Sourced two different ways, in preference order: if the
+  paired gauntlet already has a real, materialized bracket (`getGauntletBracketShape()`), the tint is
+  read straight off it regardless of season status — a seed's slot in a round after round 1 is a real
+  bye — so it reflects reality even if the bracket was hand-edited away from the shape
+  `buildGauntletBracket()` would have produced. Otherwise, while the regular season is still *ACTIVE*
+  and no real bracket exists yet, it falls back to a live "if the season ended today" preview computed
+  from the current standings, recomputed on every render. Both cases are computed by
+  `SeasonTabView.tsx` and passed as the `gauntletSeeding` prop to `LeaderboardTable`; the projection
+  fallback is implemented by `projectGauntletSeeding()` in `src/lib/gauntlet-bracket.ts`. Distinct
+  from the canonical gauntlet
   ranking below, which only ever describes a *completed* gauntlet.
 - **H2H (Head-to-Head)** — cross-player comparison surfaced in `getH2HData()`. Two distinct shapes
   live inside `H2HData` (`src/lib/queries/h2h.ts`):

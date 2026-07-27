@@ -333,15 +333,27 @@ Implemented by `canonicalGauntletRankMap(rounds)` in `src/lib/util.ts`. Pass the
 
 ## Gauntlet Seeding Projection
 
-The gold-bye/red-drop row tint on an *ACTIVE* season's own leaderboard, sourced one of two ways
-depending on which season it's shown on — both feed the same `gauntletSeeding` prop on
-`LeaderboardTable`, so the tint reads identically either way:
+The gold-bye/red-drop row tint on a regular season's own leaderboard — never shown on a gauntlet
+season's own leaderboard, which gets a podium once complete instead (`GauntletStandings`) and has
+nothing worth tinting rows for before then. Sourced one of two ways, in preference order, both
+feeding the same `gauntletSeeding` prop on `LeaderboardTable`:
 
-- **Regular season, no gauntlet yet.** A live preview of what the gauntlet bracket would look like
-  if built from the current standings today. Seed 1 is the canonical-sort leader, seed N the
-  canonical-sort last place, same convention `buildGauntletBracket(N)` itself uses. For a qualifier
-  count `N` = the current leaderboard's length (matching exactly what `tryBuildGauntletShape()` uses
-  when it later builds the real bracket):
+- **Real bracket, if the paired gauntlet has one.** Once the paired gauntlet season has a real,
+  materialized bracket (`getGauntletBracketShape()`), the tint is read straight off it, regardless of
+  either season's status — a player whose only seed-sourced pod slot lands in a round after round 1
+  has a real bye (gold). This reflects reality even if the bracket was hand-edited away from the
+  shape `buildGauntletBracket()` would have produced (see the Gauntlet Bracket Generation section
+  below for what "hand-edited" can mean here) — a real bracket is never wrong to prefer over a guess.
+  There's no "won't qualify" case in this source, since a gauntlet's own bracket only ever contains
+  players who already qualified into it. `SeasonTabView.tsx` reads this directly off
+  `gauntletBracketShape`.
+
+- **Live projection, otherwise.** While the regular season is still *ACTIVE* and no real bracket
+  exists yet, a live preview of what the gauntlet bracket would look like if built from the current
+  standings today. Seed 1 is the canonical-sort leader, seed N the canonical-sort last place, same
+  convention `buildGauntletBracket(N)` itself uses. For a qualifier count `N` = the current
+  leaderboard's length (matching exactly what `tryBuildGauntletShape()` uses when it later builds the
+  real bracket):
 
   | Outcome | Condition |
   |---------|-----------|
@@ -355,15 +367,9 @@ depending on which season it's shown on — both feed the same `gauntletSeeding`
   `src/lib/gauntlet-bracket.ts`, which maps seeds to placements; `SeasonTabView.tsx` zips that
   against the current standings (already in canonical-sort order) to key it by `player_id`.
 
-- **Gauntlet season, in progress.** Read straight off that gauntlet's real, materialized bracket
-  (`getGauntletBracketShape()`) instead of projected — a player whose only seed-sourced pod slot
-  lands in a round after round 1 has a real bye (gold). There's no "won't qualify" case here, since
-  a gauntlet's own leaderboard only ever lists players who already qualified into the bracket.
-  `SeasonTabView.tsx` reads this directly off `bracketShape`.
-
-The tint disappears once the season is archived, when medal/podium tinting (`showMedals` /
-`GauntletStandings`) takes over instead — a bye or a live seed slot stops being the interesting fact
-once the bracket is decided.
+Once the regular season itself is archived, medal tinting (`showMedals`) still only takes over when
+neither source above has data — matching the general LeaderboardTable rule that seed tinting always
+wins over medal tinting when both are available.
 
 ## Narrative Metrics
 
