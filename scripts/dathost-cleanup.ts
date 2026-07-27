@@ -167,16 +167,18 @@ function daysAgo(iso: string | null): number | null {
 function residueAgeDays(files: RemoteFile[]): number | null {
   const timestamps = files.map((f) => f.modifiedAt).filter((d): d is Date => d !== null);
   if (timestamps.length === 0) return null;
-  const mostRecent = new Date(Math.max(...timestamps.map((d) => d.getTime())));
-  return daysAgo(mostRecent.toISOString());
+  const mostRecentMs = Math.max(...timestamps.map((d) => d.getTime()));
+  return (Date.now() - mostRecentMs) / (1000 * 60 * 60 * 24);
 }
 
-/** Whether `matchId` is a real DGLS match. `false` means no `matches` row exists at all — not a
- *  DGLS match (a non-DGLS game or ad-hoc test reusing MatchZy on the shared server), so nothing
- *  here is worth retaining regardless of age. */
-async function isTrackedMatch(supabase: ReturnType<typeof getAdminClient>, matchId: number): Promise<boolean> {
-  const { data } = await supabase.from('matches').select('id').eq('id', matchId).maybeSingle();
-  return data !== null;
+/** The subset of `matchIds` that are real DGLS matches (have a `matches` row) — one round-trip for
+ *  every match on disk, rather than one per match. A match not in the returned set isn't a DGLS
+ *  match at all (a non-DGLS game or ad-hoc test reusing MatchZy on the shared server), so nothing
+ *  for it is worth retaining regardless of age. */
+async function trackedMatchIds(supabase: ReturnType<typeof getAdminClient>, matchIds: number[]): Promise<Set<number>> {
+  if (matchIds.length === 0) return new Set();
+  const { data } = await supabase.from('matches').select('id').in('id', matchIds);
+  return new Set((data ?? []).map((row) => (row as { id: number }).id));
 }
 
 async function demoIsSafeInR2(matchId: number): Promise<boolean> {
@@ -220,10 +222,12 @@ async function main() {
   let freedBytes = 0;
   let skippedMatches = 0;
 
+  const tracked = await trackedMatchIds(supabase, [...byMatch.keys()]);
+
   for (const [matchId, matchFiles] of [...byMatch.entries()].sort((a, b) => a[0] - b[0])) {
     console.log(`::group::match ${matchId} (${matchFiles.length} file(s))`);
-    const tracked = await isTrackedMatch(supabase, matchId);
-    if (!tracked) {
+    const isTracked = tracked.has(matchId);
+    if (!isTracked) {
       console.log(`match ${matchId}: no matches row — not a DGLS match, deleting immediately (no retention)`);
     } else {
       const days = residueAgeDays(matchFiles);
@@ -245,7 +249,7 @@ async function main() {
       // Only a tracked DGLS match's demo goes through our own upload pipeline — an untracked
       // match's demo will never be in R2, and we don't want it there, so don't gate its deletion
       // on a check that can only ever fail.
-      if (isDemo && tracked) {
+      if (isDemo && isTracked) {
         const safe = await demoIsSafeInR2(matchId);
         if (!safe) {
           warning(`match ${matchId}: demo not confirmed in R2 (${demoKey(matchId)}) — leaving ${file.path} on disk`);
