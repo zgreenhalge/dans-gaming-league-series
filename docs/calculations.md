@@ -333,27 +333,37 @@ Implemented by `canonicalGauntletRankMap(rounds)` in `src/lib/util.ts`. Pass the
 
 ## Gauntlet Seeding Projection
 
-A live preview, shown on an *ACTIVE* regular season's own leaderboard, of what the gauntlet bracket
-would look like if built from the current standings today — before any gauntlet season exists.
+The gold-bye/red-drop row tint on an *ACTIVE* season's own leaderboard, sourced one of two ways
+depending on which season it's shown on — both feed the same `gauntletSeeding` prop on
+`LeaderboardTable`, so the tint reads identically either way:
 
-Seed 1 is the canonical-sort leader, seed N the canonical-sort last place, same convention
-`buildGauntletBracket(N)` itself uses. For a qualifier count `N` = the current leaderboard's length
-(matching exactly what `tryBuildGauntletShape()` uses when it later builds the real bracket):
+- **Regular season, no gauntlet yet.** A live preview of what the gauntlet bracket would look like
+  if built from the current standings today. Seed 1 is the canonical-sort leader, seed N the
+  canonical-sort last place, same convention `buildGauntletBracket(N)` itself uses. For a qualifier
+  count `N` = the current leaderboard's length (matching exactly what `tryBuildGauntletShape()` uses
+  when it later builds the real bracket):
 
-| Outcome | Condition |
-|---------|-----------|
-| Bye (gold) | The seed's bracket-entry slot is in a round after round 1 |
-| Won't qualify (red) | The seed is in `buildGauntletBracket(N)`'s `drops` — too many qualifiers for this bracket size, so the bottom seeds don't fit |
-| Playing round 1 | Everyone else — placed straight into a round-1 pod |
+  | Outcome | Condition |
+  |---------|-----------|
+  | Bye (gold) | The seed's bracket-entry slot is in a round after round 1 |
+  | Won't qualify (red) | The seed is in `buildGauntletBracket(N)`'s `drops` — too many qualifiers for this bracket size, so the bottom seeds don't fit |
+  | Playing round 1 | Everyone else — placed straight into a round-1 pod |
 
-Every seed's projected round and pod are fully determined by `N` alone (no player-vs-player
-uncertainty); the leaderboard reflects the projection as a row tint only, no separate text column.
-Returns no projection for a qualifier count `buildGauntletBracket` doesn't support (outside 4-20).
+  Every seed's projected round and pod are fully determined by `N` alone (no player-vs-player
+  uncertainty). Returns no projection for a qualifier count `buildGauntletBracket` doesn't support
+  (outside 4-20). Implemented by `projectGauntletSeeding(qualifierCount)` in
+  `src/lib/gauntlet-bracket.ts`, which maps seeds to placements; `SeasonTabView.tsx` zips that
+  against the current standings (already in canonical-sort order) to key it by `player_id`.
 
-Implemented by `projectGauntletSeeding(qualifierCount)` in `src/lib/gauntlet-bracket.ts`, which maps
-seeds to placements; `SeasonTabView.tsx` zips that against the current standings (already in
-canonical-sort order) to key it by `player_id`, and passes the result as the `gauntletSeeding` prop
-to `LeaderboardTable`.
+- **Gauntlet season, in progress.** Read straight off that gauntlet's real, materialized bracket
+  (`getGauntletBracketShape()`) instead of projected — a player whose only seed-sourced pod slot
+  lands in a round after round 1 has a real bye (gold). There's no "won't qualify" case here, since
+  a gauntlet's own leaderboard only ever lists players who already qualified into the bracket.
+  `SeasonTabView.tsx` reads this directly off `bracketShape`.
+
+The tint disappears once the season is archived, when medal/podium tinting (`showMedals` /
+`GauntletStandings`) takes over instead — a bye or a live seed slot stops being the interesting fact
+once the bracket is decided.
 
 ## Narrative Metrics
 

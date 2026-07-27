@@ -73,14 +73,16 @@ so you don't have to reverse-engineer them from scratch each time.
   stored as a real FK graph in `gauntlet_pods`/`gauntlet_pod_slots`; materialized into playable
   `matches` rows by `src/lib/gauntlet-engine.ts` as the bracket progresses. See
   [`architecture.md`](./architecture.md#gauntlet-bracket-scheduling).
-- **Gauntlet seeding projection** — a live "if the season ended today" preview shown on an *ACTIVE*
-  regular season's own leaderboard: gold row tint for a seed that would get a bye, red for a seed
-  that wouldn't fit the bracket at all (`buildGauntletBracket`'s `drops`). Recomputed from current
-  standings on every render — no gauntlet season needs to exist yet. Implemented by
-  `projectGauntletSeeding()` in
-  `src/lib/gauntlet-bracket.ts`, called from `SeasonTabView.tsx` and passed as `gauntletSeeding` to
-  `LeaderboardTable`. Distinct from the canonical gauntlet ranking below, which only ever describes
-  a gauntlet that actually exists.
+- **Gauntlet seeding projection** — the same gold-bye/red-drop row tint on `LeaderboardTable`,
+  sourced two different ways depending on which leaderboard it's shown on. On an *ACTIVE* regular
+  season's own leaderboard it's a live "if the season ended today" preview computed from the current
+  standings, since no gauntlet season exists yet — recomputed from current standings on every
+  render. On an *ACTIVE* gauntlet season's own leaderboard it's read straight off that gauntlet's
+  real, materialized bracket (`getGauntletBracketShape()`) instead of projected — a seed's slot in a
+  round after round 1 is a real bye. Both cases are computed by `SeasonTabView.tsx` and passed as the
+  same `gauntletSeeding` prop to `LeaderboardTable`; the regular-season case is implemented by
+  `projectGauntletSeeding()` in `src/lib/gauntlet-bracket.ts`. Distinct from the canonical gauntlet
+  ranking below, which only ever describes a *completed* gauntlet.
 - **H2H (Head-to-Head)** — cross-player comparison surfaced in `getH2HData()`. Two distinct shapes
   live inside `H2HData` (`src/lib/queries/h2h.ts`):
   - **Duos** (`DuoStats`) — performance when two players are *teammates* (same faction)

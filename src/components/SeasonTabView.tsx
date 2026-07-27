@@ -83,13 +83,35 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     [isGauntlet, rounds],
   );
 
-  // Live "if the season ended today" gauntlet seeding preview for an in-progress regular season —
-  // only meaningful before a real gauntlet exists, which is exactly while status is ACTIVE (the
-  // real one is only ever built once this season is archived and the next activates). `leaderboard`
-  // is already in canonical-sort order (getSeasonLeaderboard sorts it), which is the seeding order
-  // itself: index 0 = seed 1.
+  // Seed-placement row tinting for the leaderboard — same gold-bye/red-drop convention in both
+  // cases, only ever while the relevant season is ACTIVE (once archived, medal/podium tinting takes
+  // over instead — see `showMedals`/`medalRank` and `GauntletStandings` in `LeaderboardTable.tsx`):
+  //   - Regular season: a live "if the season ended today" projection from the *current standings*,
+  //     since no gauntlet exists yet (`projectGauntletSeeding`). `leaderboard` is already in
+  //     canonical-sort order (`getSeasonLeaderboard` sorts it), which is the seeding order itself:
+  //     index 0 = seed 1.
+  //   - Gauntlet season: read straight off the *real, materialized* bracket (`bracketShape`) instead
+  //     of projecting — a seed's slot in a round after round 1 is a real bye, exactly like the
+  //     projection's `isBye`, just sourced from `gauntlet_pod_slots` rather than computed.
   const gauntletSeeding = useMemo<Map<number, SeedPlacement> | undefined>(() => {
-    if (isGauntlet || seasonStatus !== 'ACTIVE') return undefined;
+    if (seasonStatus !== 'ACTIVE') return undefined;
+    if (isGauntlet) {
+      if (bracketShape.length === 0) return undefined;
+      const byPlayer = new Map<number, SeedPlacement>();
+      for (const pod of bracketShape) {
+        for (const slot of pod.slots) {
+          if (slot.source_kind !== 'seed' || slot.source_seed == null || slot.player_id == null) continue;
+          byPlayer.set(slot.player_id, {
+            qualifies: true,
+            round: pod.round_number,
+            podIndex: pod.pod_index,
+            isFinal: pod.is_final,
+            isBye: pod.round_number > 1,
+          });
+        }
+      }
+      return byPlayer;
+    }
     const placementBySeed = projectGauntletSeeding(leaderboard.length);
     if (!placementBySeed) return undefined;
     const byPlayer = new Map<number, SeedPlacement>();
@@ -98,7 +120,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
       if (placement) byPlayer.set(row.player_id, placement);
     });
     return byPlayer;
-  }, [isGauntlet, seasonStatus, leaderboard]);
+  }, [isGauntlet, seasonStatus, leaderboard, bracketShape]);
 
   const defaultOpenSet = useMemo<Set<number>>(() => {
     if (isGauntlet) {
