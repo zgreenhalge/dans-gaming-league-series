@@ -39,10 +39,10 @@ import { parseDemoFile } from '../src/lib/demoParser';
 import { parseDemoSabremetrics } from '../src/lib/demoOrchestrator';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { quarantineDemo } from '../src/lib/demo/quarantine';
-import { getR2Object, putR2Object, deleteR2Object, demoKey, demoResultKey, mapResultKey } from '../src/lib/r2';
+import { putR2Object, deleteR2Object, demoResultKey, mapResultKey } from '../src/lib/r2';
 import { getMapResult } from '../src/lib/demo/mapResult';
 import { deleteLiveScore } from '../src/lib/demo/liveScore';
-import { fetchDemoFromDathost } from '../src/lib/demo/fetchFromDathost';
+import { ensureDemoInR2 } from '../src/lib/demo/fetchFromDathost';
 import { dathostServerId } from '../src/lib/dathost';
 import { evaluateAutoCommit } from '../src/lib/demo/autoCommit';
 import { getAdminClient } from '../src/lib/supabase-admin';
@@ -89,19 +89,13 @@ async function main() {
     started_at: new Date().toISOString(),
   });
 
-  // Pull the demo from DatHost if it isn't already in R2 (a manual reparse of an already-staged/
-  // confirmed match has it already; the notice below only prints for the fresh pull).
-  if (!(await getR2Object(demoKey(matchId)))) {
-    await fetchDemoFromDathost(dathostServerId(), matchId);
-    notice(`demo-ingest match ${matchId}: pulled demo from DatHost`);
-  }
+  // Pulls the demo from DatHost if it isn't already in R2 (a manual reparse of an already-staged/
+  // confirmed match has it already).
+  const raw = await ensureDemoInR2(dathostServerId(), matchId);
 
   await setJob({ status: 'running', stage: 'parse', error_message: null });
 
   const inputs = await getReplayInputs(supabase, matchId);
-
-  const raw = await getR2Object(demoKey(matchId));
-  if (!raw) throw new Error(`No demo in R2 at ${demoKey(matchId)}`);
   const demo = gunzipMaybe(raw);
 
   const parsed = parseDemoFile(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);

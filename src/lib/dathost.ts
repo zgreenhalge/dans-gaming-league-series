@@ -103,14 +103,12 @@ export function authHeader(): string {
   return 'Basic ' + Buffer.from(`${email}:${password}`).toString('base64');
 }
 
-/** One DatHost call. Throws `DathostError` on any non-2xx (with the parsed body for diagnostics). */
-async function call(
-  method: string,
-  path: string,
-  form?: Record<string, string>,
-): Promise<unknown> {
+/** One authenticated DatHost request, returning the raw `Response` — shared by `call()` (JSON/text
+ *  body) and `getFileBytes` (binary body), which otherwise duplicate the same URL/auth-header
+ *  construction. Body consumption is left to the caller since JSON and binary reads can't share one. */
+async function request(method: string, path: string, form?: Record<string, string>): Promise<Response> {
   const body = form ? new URLSearchParams(form) : undefined;
-  const res = await fetch(`${BASE}${path}`, {
+  return fetch(`${BASE}${path}`, {
     method,
     headers: {
       Authorization: authHeader(),
@@ -118,6 +116,15 @@ async function call(
     },
     body,
   });
+}
+
+/** One DatHost call. Throws `DathostError` on any non-2xx (with the parsed body for diagnostics). */
+async function call(
+  method: string,
+  path: string,
+  form?: Record<string, string>,
+): Promise<unknown> {
+  const res = await request(method, path, form);
   const text = await res.text();
   let data: unknown = text;
   try {
@@ -220,9 +227,7 @@ export async function getConsoleLines(id: string): Promise<string[]> {
  * by GOTV — not a genuine failure the way any other non-2xx is.
  */
 export async function getFileBytes(id: string, remote: string): Promise<Buffer | null> {
-  const res = await fetch(`${BASE}/game-servers/${id}/files/${remote}`, {
-    headers: { Authorization: authHeader() },
-  });
+  const res = await request('GET', `/game-servers/${id}/files/${remote}`);
   if (res.status === 404) return null;
   if (!res.ok) {
     throw new DathostError(`DatHost GET /game-servers/${id}/files/${remote} → ${res.status}`, res.status, null);
@@ -260,21 +265,39 @@ export function connectHost(server: DathostServer): string | null {
 }
 
 /** Poll until the server reports running (`on && !booting`) with a connectable host, or time out. */
+/**
+ * Poll `fn` until it returns a truthy result, or throw a `DathostError` after `timeoutMs`. Shared by
+ * `waitUntilReady` below and `fetchDemoFromDathost` (`src/lib/demo/fetchFromDathost.ts`) — both are
+ * "keep checking an external DatHost resource until it's ready" loops that would otherwise duplicate
+ * the same timeout/backoff shape.
+ */
+export async function pollUntil<T>(
+  fn: () => Promise<T | null>,
+  opts: { timeoutMs: number; intervalMs: number; timeoutMessage: string },
+): Promise<T> {
+  const start = Date.now();
+  for (;;) {
+    const result = await fn();
+    if (result) return result;
+    if (Date.now() - start > opts.timeoutMs) {
+      throw new DathostError(opts.timeoutMessage, 504, null);
+    }
+    await new Promise((r) => setTimeout(r, opts.intervalMs));
+  }
+}
+
 export async function waitUntilReady(
   id: string,
   opts: { timeoutMs?: number; intervalMs?: number } = {},
 ): Promise<DathostServer> {
   const timeoutMs = opts.timeoutMs ?? 90_000;
-  const intervalMs = opts.intervalMs ?? 3_000;
-  const start = Date.now();
-  for (;;) {
-    const server = await getServer(id);
-    if (server.on && !server.booting && connectHost(server)) return server;
-    if (Date.now() - start > timeoutMs) {
-      throw new DathostError(`Server ${id} not ready after ${Math.round(timeoutMs / 1000)}s`, 504, server);
-    }
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
+  return pollUntil(
+    async () => {
+      const server = await getServer(id);
+      return server.on && !server.booting && connectHost(server) ? server : null;
+    },
+    { timeoutMs, intervalMs: opts.intervalMs ?? 3_000, timeoutMessage: `Server ${id} not ready after ${Math.round(timeoutMs / 1000)}s` },
+  );
 }
 
 // --- Fallback only (concurrency overflow / golden-image rebuild) — NOT the per-match path. ---

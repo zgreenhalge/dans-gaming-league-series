@@ -9,40 +9,42 @@
 // at `MatchZy/{matchId}.dem` with no directory listing/discovery needed.
 
 import { gzipSync } from 'node:zlib';
-import { getFileBytes } from '../dathost';
-import { putR2Object, demoKey } from '../r2';
+import { getFileBytes, pollUntil } from '../dathost';
+import { getR2Object, putR2Object, demoKey } from '../r2';
+
+// GOTV's flush delay holds the demo back for ~120s after `map_result`
+// (`tvFlushDelay`/`mp_match_restart_delay` in MatchZy's own match-end handling); comfortably longer.
+const FETCH_TIMEOUT_MS = 5 * 60_000;
+const FETCH_INTERVAL_MS = 10_000;
 
 /** The deterministic remote path a match's demo is saved at, given the golden cfg above. */
 export function demoRemotePath(matchId: number): string {
   return `MatchZy/${matchId}.dem`;
 }
 
-/**
- * Poll DatHost for a match's demo until it appears (GOTV's flush delay holds it back for ~120s after
- * `map_result`, per `tvFlushDelay`/`mp_match_restart_delay` in MatchZy's own match-end handling) and
- * gzip-write it to R2 at `demoKey(matchId)`. Throws if it never shows up within `timeoutMs`.
- */
-export async function fetchDemoFromDathost(
-  serverId: string,
-  matchId: number,
-  opts: { timeoutMs?: number; intervalMs?: number } = {},
-): Promise<void> {
-  const timeoutMs = opts.timeoutMs ?? 5 * 60_000;
-  const intervalMs = opts.intervalMs ?? 10_000;
+/** Poll DatHost for a match's demo until it appears and gzip-write it to R2 at `demoKey(matchId)`.
+ *  Throws if it never shows up within `FETCH_TIMEOUT_MS`. */
+export async function fetchDemoFromDathost(serverId: string, matchId: number): Promise<void> {
   const remote = demoRemotePath(matchId);
-  const start = Date.now();
-  for (;;) {
-    const bytes = await getFileBytes(serverId, remote);
-    if (bytes) {
-      await putR2Object(demoKey(matchId), gzipSync(bytes), {
-        contentType: 'application/octet-stream',
-        contentEncoding: 'gzip',
-      });
-      return;
-    }
-    if (Date.now() - start > timeoutMs) {
-      throw new Error(`Demo never appeared at ${remote} on server ${serverId} after ${Math.round(timeoutMs / 1000)}s`);
-    }
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
+  const bytes = await pollUntil(() => getFileBytes(serverId, remote), {
+    timeoutMs: FETCH_TIMEOUT_MS,
+    intervalMs: FETCH_INTERVAL_MS,
+    timeoutMessage: `Demo never appeared at ${remote} on server ${serverId} after ${Math.round(FETCH_TIMEOUT_MS / 1000)}s`,
+  });
+  await putR2Object(demoKey(matchId), gzipSync(bytes), {
+    contentType: 'application/octet-stream',
+    contentEncoding: 'gzip',
+  });
+}
+
+/** The match's demo bytes (still gzipped, as stored), pulling it from DatHost first if it isn't
+ *  already in R2. Shared by `demo-ingest.ts` and `replay-extract.ts` so neither re-derives the same
+ *  check-then-pull sequence. */
+export async function ensureDemoInR2(serverId: string, matchId: number): Promise<Buffer> {
+  const existing = await getR2Object(demoKey(matchId));
+  if (existing) return existing;
+  await fetchDemoFromDathost(serverId, matchId);
+  const raw = await getR2Object(demoKey(matchId));
+  if (!raw) throw new Error(`Demo still missing from R2 at ${demoKey(matchId)} after pulling from DatHost`);
+  return raw;
 }

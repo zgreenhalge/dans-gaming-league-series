@@ -16,9 +16,7 @@ import { buildReplay } from '../src/lib/replay/extract';
 import { buildHeatmapPoints, MAP_HEATMAP_ROLLUP_VERSION } from '../src/lib/replay/heatmap';
 import { buildMatchTraces, MAP_TRACE_ROLLUP_VERSION } from '../src/lib/replay/aggregate';
 import {
-  getR2Object,
   putR2Object,
-  demoKey,
   replayKey,
   heatmapKey,
   traceKey,
@@ -31,7 +29,7 @@ import { getMatchIdsForMap, getMapHeatmap } from '../src/lib/queries/maps';
 import { getMapTraces } from '../src/lib/queries/replay';
 import { mapSlug } from '../src/lib/maps';
 import { recordJobStatus, matchJobKey, jobStatusWriter } from '../src/lib/background-jobs';
-import { fetchDemoFromDathost } from '../src/lib/demo/fetchFromDathost';
+import { ensureDemoInR2 } from '../src/lib/demo/fetchFromDathost';
 import { dathostServerId } from '../src/lib/dathost';
 import { notice, warning, error } from './gh-actions-log';
 
@@ -130,14 +128,10 @@ async function main() {
 
   let demoBuffer = await stage('download-demo', async () => {
     // Pulled from DatHost directly (not pushed by MatchZy — see fetchFromDathost.ts) — this Action can
-    // be dispatched as soon as the match ends, before the demo has actually landed in R2 yet, so pull
-    // it here if it isn't already present (e.g. demo-ingest.ts's own pull already landed it first).
-    if (!(await getR2Object(demoKey(matchId)))) {
-      await fetchDemoFromDathost(dathostServerId(), matchId);
-    }
-    const buf = await getR2Object(demoKey(matchId));
-    if (!buf) throw new Error('Demo not found in R2 — upload a demo first.');
-    return buf;
+    // be dispatched as soon as the match ends, before the demo has actually landed in R2 yet, so
+    // ensureDemoInR2 pulls it if it isn't already present (e.g. demo-ingest.ts's own pull landed it
+    // first).
+    return ensureDemoInR2(dathostServerId(), matchId);
   });
 
   demoBuffer = await stage('decompress', () => gunzipMaybe(demoBuffer));

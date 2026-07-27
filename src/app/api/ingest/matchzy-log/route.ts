@@ -13,6 +13,7 @@
 // Auth: shared secret in `x-matchzy-token`, constant-time compared against `INGEST_REMOTE_LOG_SECRET`.
 
 import { NextRequest, NextResponse, after } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { machineSecretGuard } from '@/lib/machine-auth';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { parseMapResultEvent, putMapResult } from '@/lib/demo/mapResult';
@@ -25,14 +26,19 @@ import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { DEMO_INGEST_JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '@/lib/demo/ingestResult';
 import { REPLAY_EXTRACT_JOB_TYPE } from '@/lib/jobs';
 
-/**
- * Kick off the demo-ingest (and, opt-in, replay-extract) pipeline for a match that just ended, and
- * tear down its server. `map_result` is the trigger rather than the demo's arrival in R2 — the demo is
- * pulled by the Action itself (`fetchFromDathost.ts`), not pushed, so its arrival can't gate this.
- */
-async function triggerDemoPipeline(matchId: number): Promise<void> {
-  const supabaseAdmin = getAdminClient();
+/** Run `fn` in `after()`, logging (not throwing) on failure — every post-response side effect in this
+ *  route is best-effort, so this is the one place that shape is written. */
+function afterBestEffort(label: string, fn: () => Promise<void>): void {
+  after(async () => {
+    try {
+      await fn();
+    } catch (err) {
+      console.error(`matchzy-log: ${label} failed:`, err);
+    }
+  });
+}
 
+async function dispatchDemoIngest(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
   const { data: existing } = await supabaseAdmin
     .from('background_jobs')
     .select('status')
@@ -44,12 +50,11 @@ async function triggerDemoPipeline(matchId: number): Promise<void> {
     return; // already in flight — a MatchZy retry or a duplicate event, not a second match end
   }
 
-  const now = new Date().toISOString();
   const { error: recordErr } = await recordJobStatus(supabaseAdmin, DEMO_INGEST_JOB_TYPE, matchJobKey(matchId), {
     status: 'received',
     stage: 'received',
     error_message: null,
-    created_at: now,
+    created_at: new Date().toISOString(),
   });
   if (recordErr) {
     console.error(`matchzy-log: could not record demo-ingest job for match ${matchId}: ${recordErr}`);
@@ -71,52 +76,73 @@ async function triggerDemoPipeline(matchId: number): Promise<void> {
   } else {
     console.error(`matchzy-log: demo-ingest dispatch failed for match ${matchId}: ${dispatch.error}`);
   }
+}
 
-  // Same shadow-first opt-in as demo-ingest's AUTO_COMMIT_ENABLED — watched before going live.
-  if (process.env.REPLAY_AUTO_DISPATCH === 'true') {
-    const { data: claimed } = await supabaseAdmin
-      .from('background_jobs')
-      .upsert(
-        {
-          job_type: REPLAY_EXTRACT_JOB_TYPE,
-          match_id: matchId,
-          status: 'queued',
-          stage: 'validate',
-          error_message: null,
-          created_at: now,
-          updated_at: now,
-        },
-        { onConflict: 'job_type,match_id', ignoreDuplicates: true },
-      )
-      .select('match_id');
-    if (claimed && claimed.length > 0) {
-      await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
-      const replayDispatch = await dispatchAndRecordFailure(supabaseAdmin, {
-        jobType: REPLAY_EXTRACT_JOB_TYPE,
-        key: matchJobKey(matchId),
-        workflowFile: 'replay-extract.yml',
-        inputs: { match_id: String(matchId) },
-        subject: { table: 'matches', column: 'replay_status', id: matchId },
-      });
-      if (!replayDispatch.ok) {
-        console.error(`matchzy-log: replay-extract auto-dispatch failed for match ${matchId}: ${replayDispatch.error}`);
-      }
-    }
-  }
+/** Same shadow-first opt-in as demo-ingest's AUTO_COMMIT_ENABLED — watched before going live. Guards
+ *  itself (the claim upsert), independent of whether demo-ingest's own dispatch above ran. */
+async function dispatchReplayExtractIfEnabled(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
+  if (process.env.REPLAY_AUTO_DISPATCH !== 'true') return;
 
-  // The map ending means the match is over → tear down the shared server now, without waiting for the
-  // score write (#135). Best-effort, skipped when hosting isn't configured; `onlyIfOwnsServer` so a
-  // map_result for one match never stops another match's live server. Score-write teardown remains the
-  // fallback.
-  if (process.env.DATHOST_SERVER_ID) {
-    try {
-      await teardownMatchServer(supabaseAdmin, matchId, { onlyIfOwnsServer: true });
-      await clearOpsError(supabaseAdmin, 'match', matchId, 'server_teardown');
-    } catch (err) {
-      console.error(`matchzy-log: auto-teardown(${matchId}) failed:`, err);
-      await recordOpsError(supabaseAdmin, 'match', matchId, 'server_teardown', `Server teardown failed: ${(err as Error).message}`);
-    }
+  const now = new Date().toISOString();
+  const { data: claimed } = await supabaseAdmin
+    .from('background_jobs')
+    .upsert(
+      {
+        job_type: REPLAY_EXTRACT_JOB_TYPE,
+        match_id: matchId,
+        status: 'queued',
+        stage: 'validate',
+        error_message: null,
+        created_at: now,
+        updated_at: now,
+      },
+      { onConflict: 'job_type,match_id', ignoreDuplicates: true },
+    )
+    .select('match_id');
+  if (!claimed || claimed.length === 0) return;
+
+  await supabaseAdmin.from('matches').update({ replay_status: 'queued' }).eq('id', matchId);
+  const replayDispatch = await dispatchAndRecordFailure(supabaseAdmin, {
+    jobType: REPLAY_EXTRACT_JOB_TYPE,
+    key: matchJobKey(matchId),
+    workflowFile: 'replay-extract.yml',
+    inputs: { match_id: String(matchId) },
+    subject: { table: 'matches', column: 'replay_status', id: matchId },
+  });
+  if (!replayDispatch.ok) {
+    console.error(`matchzy-log: replay-extract auto-dispatch failed for match ${matchId}: ${replayDispatch.error}`);
   }
+}
+
+/** The map ending means the match is over → tear down the shared server now, without waiting for the
+ *  score write (#135). Best-effort, skipped when hosting isn't configured; `onlyIfOwnsServer` so a
+ *  map_result for one match never stops another match's live server. Score-write teardown remains the
+ *  fallback. */
+async function teardownAfterMatchEnd(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
+  if (!process.env.DATHOST_SERVER_ID) return;
+  try {
+    await teardownMatchServer(supabaseAdmin, matchId, { onlyIfOwnsServer: true });
+    await clearOpsError(supabaseAdmin, 'match', matchId, 'server_teardown');
+  } catch (err) {
+    console.error(`matchzy-log: auto-teardown(${matchId}) failed:`, err);
+    await recordOpsError(supabaseAdmin, 'match', matchId, 'server_teardown', `Server teardown failed: ${(err as Error).message}`);
+  }
+}
+
+/**
+ * Kick off the demo-ingest (and, opt-in, replay-extract) pipeline for a match that just ended, and
+ * tear down its server. `map_result` is the trigger rather than the demo's arrival in R2 — the demo is
+ * pulled by the Action itself (`fetchFromDathost.ts`), not pushed, so its arrival can't gate this.
+ * The three concerns are independent of each other (different job rows / different DatHost resource,
+ * each guards its own dedup), so they run concurrently rather than one waiting behind the others.
+ */
+async function triggerDemoPipeline(matchId: number): Promise<void> {
+  const supabaseAdmin = getAdminClient();
+  await Promise.allSettled([
+    dispatchDemoIngest(supabaseAdmin, matchId),
+    dispatchReplayExtractIfEnabled(supabaseAdmin, matchId),
+    teardownAfterMatchEnd(supabaseAdmin, matchId),
+  ]);
 }
 
 export async function POST(req: NextRequest) {
@@ -138,20 +164,12 @@ export async function POST(req: NextRequest) {
   // like round_end, so none of this adds latency to the ack MatchZy is waiting on.
   const identity = parseMatchzyEventIdentity(body);
   if (identity) {
-    after(async () => {
-      try {
-        await putMatchzyContact(identity.matchid, identity.event);
-      } catch (err) {
-        console.error(`matchzy-log: could not record contact for match ${identity.matchid}:`, err);
-      }
-    });
-    after(async () => {
-      try {
-        await putLiveScoreEvent(identity.matchid, body);
-      } catch (err) {
-        console.error(`matchzy-log: could not record live score for match ${identity.matchid}:`, err);
-      }
-    });
+    afterBestEffort(`record contact for match ${identity.matchid}`, () =>
+      putMatchzyContact(identity.matchid, identity.event),
+    );
+    afterBestEffort(`record live score for match ${identity.matchid}`, () =>
+      putLiveScoreEvent(identity.matchid, body),
+    );
   }
 
   const result = parseMapResultEvent(body);
@@ -160,19 +178,9 @@ export async function POST(req: NextRequest) {
   }
 
   await putMapResult(result.matchid, result);
-  after(async () => {
-    try {
-      await putLiveScore(result.matchid, liveScoreFromMapResult(result));
-    } catch (err) {
-      console.error(`matchzy-log: could not record final live score for match ${result.matchid}:`, err);
-    }
-  });
-  after(async () => {
-    try {
-      await triggerDemoPipeline(result.matchid);
-    } catch (err) {
-      console.error(`matchzy-log: triggerDemoPipeline(${result.matchid}) failed:`, err);
-    }
-  });
+  afterBestEffort(`record final live score for match ${result.matchid}`, () =>
+    putLiveScore(result.matchid, liveScoreFromMapResult(result)),
+  );
+  afterBestEffort(`triggerDemoPipeline(${result.matchid})`, () => triggerDemoPipeline(result.matchid));
   return NextResponse.json({ ok: true, matchId: result.matchid });
 }
