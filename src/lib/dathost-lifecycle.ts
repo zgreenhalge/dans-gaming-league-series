@@ -12,7 +12,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
-import { matchLabel, isPlayedScore } from './util';
+import { matchLabel, isPlayedScore, isServerLive } from './util';
 import { SCHEDULE_COLLISION_WINDOW_MS } from './schedule';
 import {
   dathostServerId,
@@ -332,17 +332,54 @@ export interface ServerStatusView {
   serverStartedAt: string | null;
 }
 
+/** Downgrade a match's server row to `done` (connect cleared) — the shared tail of both branches in
+ *  `getReconciledServerState` below. */
+async function downgradeToDone(
+  supabaseAdmin: SupabaseClient,
+  matchId: number,
+  fields: { teardown_at?: null } = {},
+): Promise<void> {
+  await setServerState(supabaseAdmin, matchId, { server_state: 'done', connect_string: null, ...fields });
+}
+
+/**
+ * Execute a `tearing_down` row's scheduled stop once its `teardown_at` has passed — the actual `stop`
+ * call for the delayed-teardown paths (map_result, score-write; see `teardownMatchServer`'s
+ * `delayMs`). A no-op, DatHost-untouched read when the delay hasn't elapsed yet: this fires on every
+ * read of `getReconciledServerState`, including the admin console's 2s poll for the whole grace
+ * period, and `teardown_at` already answers "nothing to do yet" without a round-trip. That means a
+ * manual admin stop or DatHost's own autostop racing ahead during the grace window isn't detected
+ * until `teardown_at` passes — accepted, since both `stopServer` and `teardownMatchServer` are
+ * idempotent, so the deferred attempt below still lands cleanly against an already-stopped server once
+ * due. Returns whether it downgraded the row to `done`.
+ */
+async function runDueTeardown(
+  supabaseAdmin: SupabaseClient,
+  matchId: number,
+  serverId: string,
+  teardownAt: string | null,
+): Promise<boolean> {
+  if (teardownAt == null || Date.parse(teardownAt) > Date.now()) return false;
+  try {
+    await stopSharedServer(supabaseAdmin, serverId);
+    await downgradeToDone(supabaseAdmin, matchId, { teardown_at: null });
+    await clearOpsError(supabaseAdmin, 'match', matchId, 'server_teardown');
+    return true;
+  } catch (err) {
+    await recordOpsError(supabaseAdmin, 'match', matchId, 'server_teardown', `Server teardown failed: ${(err as Error).message}`);
+    return false;
+  }
+}
+
 /**
  * Read a match's server-state, reconciling it against real DatHost state (#135). Two cases:
  *
- * - `tearing_down` past its `teardown_at`: the automatic teardown paths (map_result, score-write)
- *   only *schedule* the stop (`teardownMatchServer(..., { delayMs })`) — the actual `stop` call runs
- *   here, the next time this is read (match page, admin server console, or its 2s poll) once the
- *   delay has elapsed. This is what actually executes a due teardown, not just a status check.
+ * - `tearing_down`: `runDueTeardown` above executes the scheduled stop once `teardown_at` has passed
+ *   — see its own doc comment for what "due" means and why this stays cheap while it isn't.
  * - `live` but DatHost reports the server already stopped (`autostop`, 3 min idle): the shared server
- *   auto-stops while the row can stay `live` — so the panel keeps offering a dead connect link until
- *   the score is entered. Flip it to `done` (connect cleared) so the panel stops presenting it as
- *   joinable.
+ *   auto-stops while the row can stay `live` if nothing scheduled a teardown — so the panel keeps
+ *   offering a dead connect link. Flip it to `done` (connect cleared) so the panel stops presenting it
+ *   as joinable.
  *
  * `provisioning` is never reconciled here — it's legitimately `on:false/booting` mid-boot — and this
  * only ever *downgrades* toward `done`, never the reverse (concurrent-occupancy is #134's problem, not
@@ -371,40 +408,17 @@ export async function getReconciledServerState(
 
   const serverId = process.env.DATHOST_SERVER_ID;
   const ownsServer = !row.dathost_server_id || row.dathost_server_id === serverId;
-  const teardownDue = row.teardown_at != null && Date.parse(row.teardown_at) <= Date.now();
 
   if (serverState === 'tearing_down' && serverId && ownsServer) {
-    let stopped = false;
-    if (teardownDue) {
-      try {
-        await stopSharedServer(supabaseAdmin, serverId);
-        stopped = true;
-        await clearOpsError(supabaseAdmin, 'match', matchId, 'server_teardown');
-      } catch (err) {
-        await recordOpsError(supabaseAdmin, 'match', matchId, 'server_teardown', `Server teardown failed: ${(err as Error).message}`);
-      }
-    }
-    if (!stopped) {
-      // Not due yet, or our own stop attempt just failed — check whether the server is already off
-      // by other means (a manual admin stop, or DatHost's own autostop racing ahead of our delay) so
-      // the row isn't stuck waiting out (or retrying) a teardown that already happened.
-      try {
-        const server = await getServer(serverId);
-        stopped = !server.on && !server.booting;
-      } catch {
-        /* DatHost unreachable — leave as-is, retried on next read */
-      }
-    }
-    if (stopped) {
-      await setServerState(supabaseAdmin, matchId, { server_state: 'done', connect_string: null, teardown_at: null });
+    if (await runDueTeardown(supabaseAdmin, matchId, serverId, row.teardown_at ?? null)) {
       serverState = 'done';
       connectString = null;
     }
   } else if (serverState === 'live' && serverId && ownsServer) {
     try {
       const server = await getServer(serverId);
-      if (!server.on && !server.booting) {
-        await setServerState(supabaseAdmin, matchId, { server_state: 'done', connect_string: null });
+      if (!isServerLive(server)) {
+        await downgradeToDone(supabaseAdmin, matchId);
         serverState = 'done';
         connectString = null;
       }

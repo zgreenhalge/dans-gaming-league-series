@@ -57,12 +57,15 @@ Orchestration lives in **`src/lib/dathost-lifecycle.ts`** over the typed client 
 `getReconciledServerState` (used by the match page's status route and the admin server console's
 `getActiveServerMatch`) does two things on every read, not just a status check:
 
-- **Executes a due scheduled teardown.** The automatic paths (`map_result`, score write) call
-  `teardownMatchServer(..., { delayMs: AUTO_TEARDOWN_DELAY_MS })`, which only moves the row to
-  `tearing_down` with `teardown_at` set — a grace period so players see the post-match scoreboard
-  instead of an instant disconnect. The actual `stop` call runs here, the next time the state is read,
-  once `teardown_at` has passed. Both the match page and the admin server console (which also polls
-  every 2s) read this, so a due teardown fires on the next view of either — no separate cron needed.
+- **Executes a due scheduled teardown (`runDueTeardown`).** The automatic paths (`map_result`, score
+  write) call `teardownMatchServer(..., { delayMs: AUTO_TEARDOWN_DELAY_MS })`, which only moves the
+  row to `tearing_down` with `teardown_at` set — a grace period so players see the post-match
+  scoreboard instead of an instant disconnect. The actual `stop` call runs here, the next time the
+  state is read, once `teardown_at` has passed — a plain timestamp check with no DatHost round-trip
+  until then, since this fires on every read (including the admin console's 2s poll for the whole
+  grace period). Both the match page and the admin server console read this, so a due teardown fires
+  on the next view of either — no separate cron needed, but also no guarantee either gets viewed; see
+  Known limitations below.
 - **Downgrades a stale `live`.** After a match ends the shared server auto-stops (`autostop`, 3-min
   idle) while the row can stay `live` if nothing scheduled a teardown — the panel would keep offering a
   dead connect link. When DatHost reports the server stopped, this flips `live → done`.
@@ -362,12 +365,18 @@ subscription).
 
 ## Known limitations / friction
 
-- **Reconcile is opportunistic, not scheduled.** A due teardown only actually stops the server the
-  next time `getReconciledServerState` is read (a match page or admin server console view, or the
-  latter's 2s poll) — there's no cron forcing it. If neither is ever viewed after a match ends, the row
-  stays `tearing_down` (still occupying the shared server) until DatHost's own `autostop` (3-min idle)
-  stops it independently; the *next* `live`-reconcile pass then downgrades the row to `done`. A
-  periodic background reconcile was intentionally skipped.
+- **The teardown delay has no timer of its own — it's opportunistic, not scheduled.** A due teardown
+  only actually stops the server the next time `getReconciledServerState` is read (a match page or
+  admin server console view, or the latter's 2s poll); there's no cron forcing it. For a match nobody
+  actively watches after it ends — plausibly the common case, not an edge case — nothing ever reads a
+  due `teardown_at`, so in practice the server keeps running (still occupying the shared server, still
+  `tearing_down`) until DatHost's own `autostop` (3-min idle) stops it independently; the *next*
+  `live`-reconcile pass (triggered the same opportunistic way) then downgrades the row to `done`. So
+  "teardown after `AUTO_TEARDOWN_DELAY_MS`" is really "teardown after whichever of two independent
+  clocks — a viewer showing up, or DatHost's own autostop — fires first," which is why `autostop_minutes`
+  was tightened from 10 to 3: it's the real backstop for the unwatched case, not just a billing safety
+  net. A periodic background reconcile (a real timer, not view-triggered) was considered and
+  intentionally skipped as more machinery than this warranted.
 - **Concurrency guard has a tiny check-then-claim window** (above) — a fully atomic claim would need a
   Postgres advisory-lock RPC, judged not worth it for the rarity.
 - **Nightly reset (#132)** is DatHost-panel config, not code: a daily `css_endmatch` scheduled command

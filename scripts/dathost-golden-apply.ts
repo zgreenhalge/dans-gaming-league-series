@@ -20,6 +20,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO_ROOT, GOLDEN_JSON_PATH, CFG_FILES, api } from './dathost-golden-shared';
 import { pushCfgFiles } from '../src/lib/dathost-config';
+import { buildScalarFields, MAP_SELECTION_KEYS } from '../src/lib/dathost';
 
 function loadGoldenRaw(): Record<string, unknown> {
   return JSON.parse(readFileSync(GOLDEN_JSON_PATH, 'utf8'));
@@ -77,22 +78,18 @@ async function reassert(serverId: string) {
   const localServer = (golden.server ?? {}) as Record<string, unknown>;
   const localCs2 = (golden.cs2_settings ?? {}) as Record<string, unknown>;
 
-  const fields: Record<string, string> = {};
-  for (const [key, val] of Object.entries(localServer)) {
-    // `typeof null === 'object'`, so this also catches null/absent fields — String()-ing those would
-    // silently PUT the literal "null"/"[object Object]" to the live server instead of being rejected.
-    if (typeof val === 'object') {
-      console.error(`  ~ skipping server.${key} (array/null/object — not re-asserted, see script header)`);
-      continue;
-    }
-    fields[key] = String(val);
+  // Same scalar-field builder the app uses (applyConfigSet in src/lib/dathost.ts) — see its doc
+  // comment for why non-scalar values (arrays like metamod_plugins, null, nested objects) are skipped
+  // rather than guessed at.
+  const fields: Record<string, string> = {
+    ...buildScalarFields(localServer),
+    ...buildScalarFields(localCs2, { prefix: 'cs2_settings.', exclude: MAP_SELECTION_KEYS }),
+  };
+  for (const key of Object.keys(localServer)) {
+    if (typeof localServer[key] === 'object') console.error(`  ~ skipping server.${key} (array/null/object — not re-asserted, see script header)`);
   }
-  for (const [key, val] of Object.entries(localCs2)) {
-    if (typeof val === 'object') {
-      console.error(`  ~ skipping cs2_settings.${key} (array/null/object — not re-asserted, see script header)`);
-      continue;
-    }
-    fields[`cs2_settings.${key}`] = String(val);
+  for (const key of Object.keys(localCs2)) {
+    if (typeof localCs2[key] === 'object') console.error(`  ~ skipping cs2_settings.${key} (array/null/object — not re-asserted, see script header)`);
   }
 
   console.error(`— PUT /game-servers/${serverId} (golden settings) —`);
