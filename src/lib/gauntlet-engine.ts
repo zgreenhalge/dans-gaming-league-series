@@ -19,8 +19,8 @@ import {
   getGauntletRounds,
   getGauntletBracketShape,
 } from './queries';
-import { clearOpsError } from './ops-errors';
-import { validateIntegrity, type DraftPod } from './gauntlet-draft';
+import { clearOpsError, recordOpsError } from './ops-errors';
+import { validateIntegrity, groupLabel, type DraftPod } from './gauntlet-draft';
 
 export interface GauntletPodRow {
   id: number;
@@ -222,6 +222,33 @@ async function getPodIds(supabaseAdmin: SupabaseClient, seasonId: number): Promi
   const { data, error } = await supabaseAdmin.from('gauntlet_pods').select('id').eq('season_id', seasonId);
   if (error) throw error;
   return ((data ?? []) as { id: number }[]).map((p) => p.id);
+}
+
+/** True only once this gauntlet's actual Final pod both exists and has been played — not merely
+ * once every currently-persisted match is played. A generator-built shape always persists its whole
+ * plan (including the Final) up front, so for it the two are equivalent; a manually-built one
+ * (`saveManualDraft`) can have later rounds not designed yet at all, and "every match that exists so
+ * far is finished" is then true well before the bracket is actually decided. Callers deciding
+ * whether to archive a gauntlet should treat this as a precondition alongside "no match anywhere in
+ * the season is still outstanding", not a replacement for it — a gauntlet can have its Final decided
+ * while an unrelated earlier-round game is still unplayed. */
+export async function isGauntletBracketDecided(supabaseAdmin: SupabaseClient, gauntletSeasonId: number): Promise<boolean> {
+  const { data: finalPod, error: finalErr } = await supabaseAdmin
+    .from('gauntlet_pods')
+    .select('match1_id, match2_id')
+    .eq('season_id', gauntletSeasonId)
+    .eq('is_final', true)
+    .maybeSingle();
+  if (finalErr) throw finalErr;
+  const pod = finalPod as { match1_id: number | null; match2_id: number | null } | null;
+  if (!pod || pod.match1_id == null || pod.match2_id == null) return false;
+
+  const { data: matches, error: matchesErr } = await supabaseAdmin
+    .from('matches')
+    .select('id, final_score')
+    .in('id', [pod.match1_id, pod.match2_id]);
+  if (matchesErr) throw matchesErr;
+  return allMatchesPlayed((matches ?? []) as { id: number; final_score: string | null }[]);
 }
 
 export interface SeedBands {
@@ -587,7 +614,7 @@ export async function tryBuildGauntletShape(
 }
 
 export type SaveDraftResult =
-  | { status: 'saved'; gauntletSeasonId: number }
+  | { status: 'saved'; gauntletSeasonId: number; warnings?: string[] }
   | { status: 'invalid'; errors: string[] }
   | { status: 'not-eligible'; reason: string };
 
@@ -647,102 +674,151 @@ export async function saveManualDraft(
     }
   }
 
-  const toDelete = currentPods.filter((p) => !p.materialized && !submittedIds.has(p.id)).map((p) => p.id);
-  if (toDelete.length > 0) {
-    const { error: slotsDelErr } = await supabaseAdmin.from('gauntlet_pod_slots').delete().in('pod_id', toDelete);
-    if (slotsDelErr) throw slotsDelErr;
-    const { error: podsDelErr } = await supabaseAdmin.from('gauntlet_pods').delete().in('id', toDelete);
-    if (podsDelErr) throw podsDelErr;
-  }
-
-  const keyToId = new Map<string, number>();
-  for (const pod of draftPods) {
-    if (pod.persistedId != null) keyToId.set(pod.key, pod.persistedId);
-  }
-
-  const newPods = draftPods.filter((p) => p.persistedId == null);
-  for (const pod of newPods) {
-    const { data, error } = await supabaseAdmin
-      .from('gauntlet_pods')
-      .insert({
-        season_id: gauntletSeasonId,
-        round_number: pod.round_number,
-        pod_index: pod.pod_index,
-        advance_rule: pod.advance_rule,
-        is_final: pod.is_final,
-      })
-      .select('id')
-      .single();
-    if (error) throw error;
-    keyToId.set(pod.key, (data as { id: number }).id);
-  }
-
-  const updatedExisting = draftPods.filter((p) => {
+  let toDelete = currentPods.filter((p) => !p.materialized && !submittedIds.has(p.id)).map((p) => p.id);
+  let updatedExisting = draftPods.filter((p) => {
     if (p.persistedId == null) return false;
     const current = currentById.get(p.persistedId);
     return !!current && !current.materialized;
   });
-  for (const pod of updatedExisting) {
-    const current = currentById.get(pod.persistedId!)!;
-    if (current.advance_rule !== pod.advance_rule || current.is_final !== pod.is_final) {
-      const { error } = await supabaseAdmin
+
+  // Guard against a live match resolving into one of these not-yet-materialized pods between the
+  // read above and now — `resolveAndPropagate()` runs from the score route's post-commit hook, so a
+  // concurrent match score can materialize a pod (or fill one of its slots) while this save is in
+  // flight. Re-check exactly the pods about to be deleted or have their slots overwritten, and
+  // protect any that turned out to have materialized in the interim instead of clobbering real match
+  // data — the rest of the save proceeds normally, with a warning surfaced for whatever was skipped.
+  const warnings: string[] = [];
+  const aboutToTouch = [...new Set([...toDelete, ...updatedExisting.map((p) => p.persistedId!)])];
+  if (aboutToTouch.length > 0) {
+    const { data: recheckRows, error: recheckErr } = await supabaseAdmin
+      .from('gauntlet_pods')
+      .select('id, match1_id')
+      .in('id', aboutToTouch);
+    if (recheckErr) throw recheckErr;
+    const nowMaterialized = new Set(
+      ((recheckRows ?? []) as { id: number; match1_id: number | null }[])
+        .filter((p) => p.match1_id != null)
+        .map((p) => p.id),
+    );
+    if (nowMaterialized.size > 0) {
+      for (const id of nowMaterialized) {
+        warnings.push(`${groupLabel(currentById.get(id)!)} started playing while you were editing — your changes to it were skipped. Reload to see its current state.`);
+      }
+      toDelete = toDelete.filter((id) => !nowMaterialized.has(id));
+      updatedExisting = updatedExisting.filter((p) => !nowMaterialized.has(p.persistedId!));
+    }
+  }
+
+  try {
+    if (toDelete.length > 0) {
+      const { error: slotsDelErr } = await supabaseAdmin.from('gauntlet_pod_slots').delete().in('pod_id', toDelete);
+      if (slotsDelErr) throw slotsDelErr;
+      const { error: podsDelErr } = await supabaseAdmin.from('gauntlet_pods').delete().in('id', toDelete);
+      if (podsDelErr) throw podsDelErr;
+    }
+
+    const keyToId = new Map<string, number>();
+    for (const pod of draftPods) {
+      if (pod.persistedId != null) keyToId.set(pod.key, pod.persistedId);
+    }
+
+    const newPods = draftPods.filter((p) => p.persistedId == null);
+    for (const pod of newPods) {
+      const { data, error } = await supabaseAdmin
         .from('gauntlet_pods')
-        .update({ advance_rule: pod.advance_rule, is_final: pod.is_final })
-        .eq('id', pod.persistedId!);
+        .insert({
+          season_id: gauntletSeasonId,
+          round_number: pod.round_number,
+          pod_index: pod.pod_index,
+          advance_rule: pod.advance_rule,
+          is_final: pod.is_final,
+        })
+        .select('id')
+        .single();
       if (error) throw error;
+      keyToId.set(pod.key, (data as { id: number }).id);
     }
-  }
 
-  // Not-yet-materialized pods have no matches depending on their slots yet, so a changed pod's
-  // slots are simply replaced wholesale rather than diffed row-by-row.
-  const podsNeedingSlotWrite = [...newPods, ...updatedExisting];
-  if (podsNeedingSlotWrite.length > 0) {
-    const rewrittenIds = updatedExisting.map((p) => p.persistedId!);
-    if (rewrittenIds.length > 0) {
-      const { error } = await supabaseAdmin.from('gauntlet_pod_slots').delete().in('pod_id', rewrittenIds);
-      if (error) throw error;
+    for (const pod of updatedExisting) {
+      const current = currentById.get(pod.persistedId!)!;
+      if (current.advance_rule !== pod.advance_rule || current.is_final !== pod.is_final) {
+        const { error } = await supabaseAdmin
+          .from('gauntlet_pods')
+          .update({ advance_rule: pod.advance_rule, is_final: pod.is_final })
+          .eq('id', pod.persistedId!);
+        if (error) throw error;
+      }
     }
-    const rows = podsNeedingSlotWrite.flatMap((pod) => {
-      const podId = keyToId.get(pod.key)!;
-      return pod.slots.map((slot, slot_index) => {
-        if (slot.kind === 'player') {
-          return {
-            pod_id: podId,
-            slot_index,
-            source_kind: 'seed',
-            source_seed: seedByPlayer.get(slot.playerId) ?? null,
-            source_pod_id: null,
-            player_id: slot.playerId,
-          };
-        }
-        if (slot.kind === 'advance') {
-          return {
-            pod_id: podId,
-            slot_index,
-            source_kind: 'pod',
-            source_seed: null,
-            source_pod_id: keyToId.get(slot.sourcePodKey) ?? null,
-            player_id: null,
-          };
-        }
-        return { pod_id: podId, slot_index, source_kind: 'seed', source_seed: null, source_pod_id: null, player_id: null };
+
+    // Not-yet-materialized pods have no matches depending on their slots yet, so a changed pod's
+    // slots are simply replaced wholesale rather than diffed row-by-row.
+    const podsNeedingSlotWrite = [...newPods, ...updatedExisting];
+    if (podsNeedingSlotWrite.length > 0) {
+      const rewrittenIds = updatedExisting.map((p) => p.persistedId!);
+      if (rewrittenIds.length > 0) {
+        const { error } = await supabaseAdmin.from('gauntlet_pod_slots').delete().in('pod_id', rewrittenIds);
+        if (error) throw error;
+      }
+      const rows = podsNeedingSlotWrite.flatMap((pod) => {
+        const podId = keyToId.get(pod.key)!;
+        return pod.slots.map((slot, slot_index) => {
+          if (slot.kind === 'player') {
+            return {
+              pod_id: podId,
+              slot_index,
+              source_kind: 'seed',
+              source_seed: seedByPlayer.get(slot.playerId) ?? null,
+              source_pod_id: null,
+              player_id: slot.playerId,
+            };
+          }
+          if (slot.kind === 'advance') {
+            return {
+              pod_id: podId,
+              slot_index,
+              source_kind: 'pod',
+              source_seed: null,
+              source_pod_id: keyToId.get(slot.sourcePodKey) ?? null,
+              player_id: null,
+            };
+          }
+          return { pod_id: podId, slot_index, source_kind: 'seed', source_seed: null, source_pod_id: null, player_id: null };
+        });
       });
-    });
-    const { error } = await supabaseAdmin.from('gauntlet_pod_slots').insert(rows);
-    if (error) throw error;
+      const { error } = await supabaseAdmin.from('gauntlet_pod_slots').insert(rows);
+      if (error) throw error;
+    }
+
+    // Round order matters here in principle (an earlier round's pod should materialize before a
+    // later one references it), though in practice each pod's readiness only depends on its own 4
+    // slots' already-persisted `player_id` state, not on materialization order within this save.
+    const touched = podsNeedingSlotWrite
+      .map((pod) => ({ id: keyToId.get(pod.key)!, round_number: pod.round_number }))
+      .sort((a, b) => a.round_number - b.round_number);
+    for (const { id } of touched) {
+      await materializeIfReady(supabaseAdmin, id);
+    }
+  } catch (err) {
+    // This reconciliation is several sequential writes, not one transaction — a failure partway
+    // through (network blip, an unexpected constraint violation) can leave gauntlet_pods/
+    // gauntlet_pod_slots partially migrated toward the submitted draft. There's no generic way to
+    // roll that back from here, so at minimum leave a persistent, admin-visible trace instead of the
+    // failure only reaching the browser as a dropped request — reload-and-inspect is the recovery
+    // path until this reconciliation moves to a single DB-side transaction.
+    const message = (err as Error).message;
+    await recordOpsError(
+      supabaseAdmin,
+      'season',
+      regularSeasonId,
+      'gauntlet_manual_save',
+      `Manual bracket save failed partway through: ${message}. Reload and check the bracket before editing further.`,
+    );
+    throw err;
   }
 
-  // Round order matters here in principle (an earlier round's pod should materialize before a
-  // later one references it), though in practice each pod's readiness only depends on its own 4
-  // slots' already-persisted `player_id` state, not on materialization order within this save.
-  const touched = podsNeedingSlotWrite
-    .map((pod) => ({ id: keyToId.get(pod.key)!, round_number: pod.round_number }))
-    .sort((a, b) => a.round_number - b.round_number);
-  for (const { id } of touched) {
-    await materializeIfReady(supabaseAdmin, id);
-  }
+  await clearOpsError(supabaseAdmin, 'season', regularSeasonId, 'gauntlet_manual_save');
 
-  return { status: 'saved', gauntletSeasonId };
+  return { status: 'saved', gauntletSeasonId, warnings: warnings.length > 0 ? warnings : undefined };
 }
 
 export type SeedBandNames = { byes: string[]; playing: string[]; relegated: string[] };

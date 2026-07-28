@@ -96,6 +96,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     case 'invalid':
       return NextResponse.json({ error: result.errors.join(' ') }, { status: 400 });
     case 'saved':
-      return NextResponse.json({ gauntletSeasonId: result.gauntletSeasonId });
+      return NextResponse.json({ gauntletSeasonId: result.gauntletSeasonId, warnings: result.warnings });
   }
 }

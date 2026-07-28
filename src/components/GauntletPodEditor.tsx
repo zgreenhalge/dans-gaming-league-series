@@ -59,6 +59,9 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
   const [stage, setStage] = useState<'edit' | 'preview'>('edit');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Non-fatal notices from the last successful save — e.g. a pod that started playing while this
+   *  draft was open, whose changes got skipped rather than clobbering the live match. */
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   const seedByPlayerId = useMemo(() => new Map(players.map((p, i) => [p.id, i + 1])), [players]);
   const playerNameById = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
@@ -141,6 +144,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
         setError(body.error ?? 'Failed to save the bracket.');
         return;
       }
+      setWarnings(Array.isArray(body.warnings) ? body.warnings : []);
       router.refresh();
     } finally {
       setSaving(false);
@@ -179,6 +183,13 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
           )}
         </div>
 
+        {warnings.length > 0 && (
+          <div className="font-mono text-[12px] text-[var(--color-accent-amber-fg)]">
+            {warnings.map((w) => (
+              <div key={w}>{w}</div>
+            ))}
+          </div>
+        )}
         {error && <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">{error}</div>}
 
         <div className="flex gap-3">
@@ -291,6 +302,13 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
         <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">
           {integrity.errors.map((e) => (
             <div key={e}>{e}</div>
+          ))}
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div className="font-mono text-[12px] text-[var(--color-accent-amber-fg)]">
+          {warnings.map((w) => (
+            <div key={w}>{w}</div>
           ))}
         </div>
       )}
