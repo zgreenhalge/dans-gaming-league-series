@@ -10,10 +10,10 @@ function parseSlot(value: unknown): DraftSlot | null {
   if (!value || typeof value !== 'object') return null;
   const kind = (value as { kind?: unknown }).kind;
   if (kind === 'empty') return { kind: 'empty' };
-  if (kind === 'player') {
-    const playerId = (value as { playerId?: unknown }).playerId;
-    if (typeof playerId !== 'number' || !Number.isInteger(playerId)) return null;
-    return { kind: 'player', playerId };
+  if (kind === 'seed') {
+    const seed = (value as { seed?: unknown }).seed;
+    if (typeof seed !== 'number' || !Number.isInteger(seed) || seed < 1) return null;
+    return { kind: 'seed', seed };
   }
   if (kind === 'advance') {
     const sourcePodKey = (value as { sourcePodKey?: unknown }).sourcePodKey;
@@ -96,6 +96,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     case 'invalid':
       return NextResponse.json({ error: result.errors.join(' ') }, { status: 400 });
     case 'saved':
-      return NextResponse.json({ gauntletSeasonId: result.gauntletSeasonId });
+      return NextResponse.json({ gauntletSeasonId: result.gauntletSeasonId, warnings: result.warnings });
   }
 }

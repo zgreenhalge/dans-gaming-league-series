@@ -265,6 +265,31 @@ export function projectGauntletSeeding(qualifierCount: number): Map<number, Seed
   return placements;
 }
 
+/**
+ * Reads seed placement straight off a real, materialized bracket shape instead of projecting one —
+ * a seed-sourced slot's round/pod tells you everything `projectGauntletSeeding()` would otherwise
+ * compute, just sourced from `gauntlet_pod_slots` rather than `buildGauntletBracket()`. Keyed by
+ * `player_id` (not seed number, unlike `projectGauntletSeeding()`) since a real slot already carries
+ * one — no separate seed-to-player lookup needed. There's no "won't qualify" case here: a real
+ * bracket's pods only ever contain players who already qualified into it.
+ */
+export function seedPlacementsByPlayer(pods: { round_number: number; pod_index: number; is_final: boolean; slots: { source_kind: 'seed' | 'pod'; player_id: number | null }[] }[]): Map<number, SeedPlacement> {
+  const placements = new Map<number, SeedPlacement>();
+  for (const pod of pods) {
+    for (const slot of pod.slots) {
+      if (slot.source_kind !== 'seed' || slot.player_id == null) continue;
+      placements.set(slot.player_id, {
+        qualifies: true,
+        round: pod.round_number,
+        podIndex: pod.pod_index,
+        isFinal: pod.is_final,
+        isBye: pod.round_number > 1,
+      });
+    }
+  }
+  return placements;
+}
+
 export interface PreviewSlot {
   slot_index: number;
   source_kind: 'seed' | 'pod';

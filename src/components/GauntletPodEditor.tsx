@@ -10,7 +10,7 @@ import {
   capacityFor,
   emptyDraftPod,
   groupLabel,
-  availablePlayers,
+  availableSeeds,
   availableAdvancements,
   pruneInvalidReferences,
   validateIntegrity,
@@ -44,12 +44,26 @@ function optionsExcludingSlot(pods: DraftPod[], podKey: string, slotIndex: numbe
   );
 }
 
-/** "Seed 3 — PlayerName" — `players` is passed in canonical-sort (seed) order from the page, so a
- * player's seed is just their 1-based position in that array. Shown everywhere the editor
- * references a player, so hand-building stays anchored to the same seed numbers the generator
- * would have used. */
-function playerLabel(seedByPlayerId: Map<number, number>, player: Player): string {
-  return `Seed ${seedByPlayerId.get(player.id) ?? '?'} — ${player.name}`;
+/** "Seed 3 — PlayerName" — the shared label format everywhere a seed number and player name are
+ * shown together, whether starting from a player (the roster panel, where "who's sitting out" is
+ * the driving fact) or from a seed (the slot pickers, where *today's* holder of that seed — from
+ * `players`, passed in canonical-sort order — is only a reference). Falls back to "?" for a missing
+ * seed or name rather than hiding the option entirely. */
+function formatSeedLabel(seed: number | undefined, name: string | undefined): string {
+  return `Seed ${seed ?? '?'} — ${name ?? '?'}`;
+}
+
+/** Non-fatal notices from the last successful save, shown identically in both the edit and preview
+ * stages. */
+function WarningsBanner({ warnings }: { warnings: string[] }) {
+  if (warnings.length === 0) return null;
+  return (
+    <div className="font-mono text-[12px] text-[var(--color-accent-amber-fg)]">
+      {warnings.map((w) => (
+        <div key={w}>{w}</div>
+      ))}
+    </div>
+  );
 }
 
 export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Props) {
@@ -59,12 +73,15 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
   const [stage, setStage] = useState<'edit' | 'preview'>('edit');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Non-fatal notices from the last successful save — e.g. a pod that started playing while this
+   *  draft was open, whose changes got skipped rather than clobbering the live match. */
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   const seedByPlayerId = useMemo(() => new Map(players.map((p, i) => [p.id, i + 1])), [players]);
-  const playerNameById = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
+  const playerBySeed = useMemo(() => new Map(players.map((p, i) => [i + 1, p])), [players]);
   const integrity = useMemo(() => validateIntegrity(pods), [pods]);
   const complete = useMemo(() => validateComplete(pods), [pods]);
-  const previewPods = useMemo(() => draftToPreviewPods(pods, playerNameById), [pods, playerNameById]);
+  const previewPods = useMemo(() => draftToPreviewPods(pods, playerBySeed), [pods, playerBySeed]);
 
   const maxRound = pods.length > 0 ? Math.max(...pods.map((p) => p.round_number)) : 0;
 
@@ -107,12 +124,26 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
   }
 
   function toggleDropped(playerId: number) {
+    const dropping = !droppedIds.has(playerId);
     setDroppedIds((prev) => {
       const next = new Set(prev);
       if (next.has(playerId)) next.delete(playerId);
       else next.add(playerId);
       return next;
     });
+    // Dropping someone who's already placed in a slot (by their current seed) must clear that
+    // placement too — otherwise the slot keeps showing them with no indication the pick is now
+    // invalid, and Save would place them anyway despite the roster marking them as sitting out.
+    const seed = dropping ? seedByPlayerId.get(playerId) : undefined;
+    if (seed != null) {
+      apply(
+        pods.map((p) =>
+          p.materialized
+            ? p
+            : { ...p, slots: p.slots.map((s): DraftSlot => (s.kind === 'seed' && s.seed === seed ? { kind: 'empty' } : s)) },
+        ),
+      );
+    }
   }
 
   function reviewBracket() {
@@ -141,6 +172,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
         setError(body.error ?? 'Failed to save the bracket.');
         return;
       }
+      setWarnings(Array.isArray(body.warnings) ? body.warnings : []);
       router.refresh();
     } finally {
       setSaving(false);
@@ -179,6 +211,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
           )}
         </div>
 
+        <WarningsBanner warnings={warnings} />
         {error && <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">{error}</div>}
 
         <div className="flex gap-3">
@@ -211,8 +244,6 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
     );
   }
 
-  const availableRosterPlayers = players.filter((p) => !droppedIds.has(p.id));
-
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -242,7 +273,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
                       }
                 }
               >
-                {playerLabel(seedByPlayerId, p)}
+                {formatSeedLabel(seedByPlayerId.get(p.id), p.name)}
               </button>
             );
           })}
@@ -259,9 +290,9 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
             key={pod.key}
             pod={pod}
             pods={pods}
-            players={availableRosterPlayers}
+            players={players}
             droppedIds={droppedIds}
-            seedByPlayerId={seedByPlayerId}
+            playerBySeed={playerBySeed}
             onDelete={() => deletePod(pod.key)}
             onSetAdvanceRule={(rule) => setAdvanceRule(pod.key, rule)}
             onSetFinal={(v) => setFinal(pod.key, v)}
@@ -294,6 +325,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
           ))}
         </div>
       )}
+      <WarningsBanner warnings={warnings} />
       {error && <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">{error}</div>}
 
       <div className="flex items-center gap-4">
@@ -322,7 +354,7 @@ function PodCard({
   pods,
   players,
   droppedIds,
-  seedByPlayerId,
+  playerBySeed,
   onDelete,
   onSetAdvanceRule,
   onSetFinal,
@@ -332,7 +364,7 @@ function PodCard({
   pods: DraftPod[];
   players: Player[];
   droppedIds: Set<number>;
-  seedByPlayerId: Map<number, number>;
+  playerBySeed: Map<number, Player>;
   onDelete: () => void;
   onSetAdvanceRule: (rule: AdvanceRule) => void;
   onSetFinal: (v: boolean) => void;
@@ -347,10 +379,11 @@ function PodCard({
           {groupLabel(pod)} — locked (matches already exist)
         </div>
         <div className="font-mono text-[12px] flex flex-col gap-0.5">
-          {pod.slots.map((slot, i) => {
-            const player = slot.kind === 'player' ? players.find((p) => p.id === slot.playerId) : undefined;
-            return <div key={i}>{player ? playerLabel(seedByPlayerId, player) : '—'}</div>;
-          })}
+          {/* The real, frozen occupant of a locked pod — never the current seed holder, since the
+              real match already has real, fixed participants regardless of standings since. */}
+          {(pod.materializedOccupants ?? pod.slots.map(() => null)).map((occupant, i) => (
+            <div key={i}>{occupant ? occupant.playerName : '—'}</div>
+          ))}
         </div>
       </div>
     );
@@ -407,7 +440,7 @@ function PodCard({
             slot={slot}
             players={players}
             droppedIds={droppedIds}
-            seedByPlayerId={seedByPlayerId}
+            playerBySeed={playerBySeed}
             onChange={(s) => onUpdateSlot(i, s)}
           />
         ))}
@@ -422,7 +455,7 @@ function PodCard({
 }
 
 function slotValueKey(slot: DraftSlot): string {
-  if (slot.kind === 'player') return `player:${slot.playerId}`;
+  if (slot.kind === 'seed') return `seed:${slot.seed}`;
   if (slot.kind === 'advance') return `advance:${slot.sourcePodKey}:${slot.ordinal}`;
   return '';
 }
@@ -434,7 +467,7 @@ function SlotPicker({
   slot,
   players,
   droppedIds,
-  seedByPlayerId,
+  playerBySeed,
   onChange,
 }: {
   pods: DraftPod[];
@@ -443,11 +476,11 @@ function SlotPicker({
   slot: DraftSlot;
   players: Player[];
   droppedIds: Set<number>;
-  seedByPlayerId: Map<number, number>;
+  playerBySeed: Map<number, Player>;
   onChange: (slot: DraftSlot) => void;
 }) {
   const stripped = optionsExcludingSlot(pods, podKey, slotIndex);
-  const playerOptions = availablePlayers(stripped, players, droppedIds);
+  const seedOptions = availableSeeds(stripped, players, droppedIds);
   const advanceOptions = availableAdvancements(stripped);
 
   return (
@@ -456,7 +489,7 @@ function SlotPicker({
       onChange={(e) => {
         const v = e.target.value;
         if (!v) return onChange({ kind: 'empty' });
-        if (v.startsWith('player:')) return onChange({ kind: 'player', playerId: Number(v.slice('player:'.length)) });
+        if (v.startsWith('seed:')) return onChange({ kind: 'seed', seed: Number(v.slice('seed:'.length)) });
         const rest = v.slice('advance:'.length);
         const lastColon = rest.lastIndexOf(':');
         return onChange({ kind: 'advance', sourcePodKey: rest.slice(0, lastColon), ordinal: Number(rest.slice(lastColon + 1)) });
@@ -464,11 +497,11 @@ function SlotPicker({
       className="font-mono text-[12px] px-2 py-1.5 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
     >
       <option value="">— empty —</option>
-      {playerOptions.length > 0 && (
-        <optgroup label="Players">
-          {playerOptions.map((p) => (
-            <option key={p.id} value={`player:${p.id}`}>
-              {playerLabel(seedByPlayerId, p)}
+      {seedOptions.length > 0 && (
+        <optgroup label="Seeds">
+          {seedOptions.map((seed) => (
+            <option key={seed} value={`seed:${seed}`}>
+              {formatSeedLabel(seed, playerBySeed.get(seed)?.name)}
             </option>
           ))}
         </optgroup>
