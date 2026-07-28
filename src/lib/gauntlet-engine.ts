@@ -317,17 +317,43 @@ export async function getSeedBands(
   };
 }
 
+/** True once the gauntlet's paired regular season is COMPLETED or ARCHIVED — or once there's no
+ * paired regular season to check at all (an orphan gauntlet has no still-moving standings to protect
+ * against). Gates every materialization path uniformly (`materializeIfReady()`, below) so a pod can
+ * never go live with real matches while the regular season its seed numbers are resolved from could
+ * still change who holds which seed. The generator's own auto-seed path (`trySeedGauntlet()`,
+ * triggered by `checkSeasonCompletion()`) only ever runs after the regular season's COMPLETED write
+ * has already landed, so this never blocks it in practice — it exists to stop the *manual* editor
+ * from materializing a fully-seeded pod while the season backing its seeds is still live. */
+async function regularSeasonIsDone(supabaseAdmin: SupabaseClient, gauntletSeasonId: number): Promise<boolean> {
+  const { data: gauntletRow, error } = await supabaseAdmin
+    .from('seasons')
+    .select('name')
+    .eq('id', gauntletSeasonId)
+    .maybeSingle();
+  if (error) throw error;
+  const name = (gauntletRow as { name: string } | null)?.name ?? null;
+  if (!name) return true;
+  const regularSeason = await getLinkedRegularSeason(name);
+  if (!regularSeason) return true;
+  return regularSeason.status === 'COMPLETED' || regularSeason.status === 'ARCHIVED';
+}
+
+export type MaterializeOutcome = 'materialized' | 'not-ready' | 'already-materialized' | 'regular-season-not-done';
+
 /** Materializes a pod if all four of its slots are now filled and it hasn't been materialized
  * already — shared by the seeding step (which can immediately ready round 1, or any all-bye pod)
- * and the propagation hook (which readies later pods as their feeders resolve). */
-async function materializeIfReady(supabaseAdmin: SupabaseClient, podId: number): Promise<void> {
+ * and the propagation hook (which readies later pods as their feeders resolve). Also shared by the
+ * manual editor's save path, which is the one caller that actually needs to know *why* nothing
+ * happened (see `regularSeasonIsDone()`) well enough to tell the admin. */
+async function materializeIfReady(supabaseAdmin: SupabaseClient, podId: number): Promise<MaterializeOutcome> {
   const { data: allSlots, error: allSlotsErr } = await supabaseAdmin
     .from('gauntlet_pod_slots')
     .select('player_id')
     .eq('pod_id', podId);
   if (allSlotsErr) throw allSlotsErr;
   const occupants = (allSlots ?? []) as { player_id: number | null }[];
-  if (occupants.length !== 4 || occupants.some((o) => o.player_id == null)) return;
+  if (occupants.length !== 4 || occupants.some((o) => o.player_id == null)) return 'not-ready';
 
   const { data: podRow, error: podErr } = await supabaseAdmin
     .from('gauntlet_pods')
@@ -336,7 +362,9 @@ async function materializeIfReady(supabaseAdmin: SupabaseClient, podId: number):
     .single();
   if (podErr) throw podErr;
   const pod = podRow as { id: number; season_id: number; round_number: number; match1_id: number | null };
-  if (pod.match1_id != null) return; // already materialized
+  if (pod.match1_id != null) return 'already-materialized';
+
+  if (!(await regularSeasonIsDone(supabaseAdmin, pod.season_id))) return 'regular-season-not-done';
 
   const seedByPlayer = await getSeedByPlayer(supabaseAdmin, pod.season_id);
   await materializePod(
@@ -345,6 +373,7 @@ async function materializeIfReady(supabaseAdmin: SupabaseClient, podId: number):
     occupants.map((o) => ({ player_id: o.player_id! })),
     seedByPlayer,
   );
+  return 'materialized';
 }
 
 /** Fills in every 'seed'-sourced slot of an already-built bracket shape from the given seed →
@@ -626,7 +655,14 @@ export type SaveDraftResult =
  * self-consistent by construction — this only re-validates defensively (`validateIntegrity()`)
  * rather than repeating cascade-clearing logic server-side. The pod/slot shape diff itself is
  * applied atomically via the `reconcile_gauntlet_draft()` DB function (one Postgres transaction) —
- * see the comment above that RPC call below for why materialization afterward is a separate step. */
+ * see the comment above that RPC call below for why materialization afterward is a separate step.
+ * A pod that becomes fully seeded while the paired regular season is still ACTIVE/UPCOMING is saved
+ * but deliberately *not* materialized into real matches yet (`regularSeasonIsDone()`) — the standings
+ * its seed numbers resolve against could still change who holds which seed, so nothing should go
+ * live until they're final. Note this needs a *manual* re-save once the regular season completes:
+ * `checkSeasonCompletion()`'s own auto-seed trigger only ever drives the generator's path
+ * (`trySeedGauntlet()`), which no-ops for a manual gauntlet — there's no seed-slot-with-no-player to
+ * fill in, by construction, so it never has a reason to touch materialization here. */
 export async function saveManualDraft(
   supabaseAdmin: SupabaseClient,
   regularSeasonId: number,
@@ -808,8 +844,15 @@ export async function saveManualDraft(
     const touched = podsNeedingSlotWrite
       .map((pod) => ({ id: keyToId.get(pod.key)!, round_number: pod.round_number }))
       .sort((a, b) => a.round_number - b.round_number);
+    let blockedByRegularSeason = false;
     for (const { id } of touched) {
-      await materializeIfReady(supabaseAdmin, id);
+      const outcome = await materializeIfReady(supabaseAdmin, id);
+      if (outcome === 'regular-season-not-done') blockedByRegularSeason = true;
+    }
+    if (blockedByRegularSeason) {
+      warnings.push(
+        `${regularSeason.name} isn't complete yet, so fully-seeded pods are saved but not yet turned into real matches — they'll go live automatically once it is.`,
+      );
     }
   } catch (err) {
     // The shape diff above is now one transaction, but materialization afterward is still a

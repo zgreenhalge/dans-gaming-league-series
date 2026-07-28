@@ -240,6 +240,14 @@ schema addition:
   `source_seed`, so the `player_id IS NULL` half of the filter is what actually isolates a
   generator-built shape's *unseeded* slots (awaiting `seedBracket()`) from everything else, manual or
   already-seeded.
+- `materializeIfReady()` never turns a fully-seeded pod into real matches while the paired regular
+  season is still ACTIVE or UPCOMING (`regularSeasonIsDone()`) — a manually-built gauntlet can be
+  seeded and structured well before the regular season it draws standings from is actually over, and
+  nothing should go live while the standings behind those seed numbers could still move. The pod
+  stays saved (fully seeded, visibly so in the editor) but not materialized; a later save — there's
+  no automatic retry, since `checkSeasonCompletion()`'s own trigger only ever drives the generator's
+  path — turns it into real matches once the season completes. `saveManualDraft()` surfaces this as a
+  warning rather than silence, so the admin isn't left wondering why nothing happened.
 
 The editor is a **batch draft** with an edit/preview split, mirroring the generator's own
 preview/confirm/cancel flow: the "editing" stage (`GauntletPodEditor.tsx`) is plain tables — a
