@@ -15,9 +15,9 @@
 // score always has a payload, but never a stored side — always manual review), and the demo-derived
 // score matches MatchZy's own `map_result` remote-log event (the independent cross-check;
 // `buildMatchzyConfig` fixes team1 = SHIRTS, team2 = SKINS, so it's direct equality).
-// `AUTO_COMMIT_ENABLED=true` gates the actual write; unset runs the predicate in shadow mode —
-// evaluated and logged, still staged for manual confirm — so it can be watched on real matches
-// before it's trusted to write.
+// The write itself is gated on `AUTO_COMMIT_ENABLED !== 'false'` — auto-commit is on by default;
+// setting the repo Actions variable to `false` is the manual override, forcing every eligible match
+// through the staged-result review instead (e.g. while investigating a parser issue).
 //
 // Reparsing an already-confirmed match (e.g. to backfill fields from a newly added collector) skips
 // both auto-commit and the staged-review step: when the freshly derived score matches the match's
@@ -179,7 +179,7 @@ async function main() {
       mapResult: mapResult ? { shirts: mapResult.team1.score, skins: mapResult.team2.score } : null,
     });
 
-    if (decision.eligible && process.env.AUTO_COMMIT_ENABLED === 'true') {
+    if (decision.eligible && process.env.AUTO_COMMIT_ENABLED !== 'false') {
       const written = await writeMatchScore(supabase, matchId, {
         shirts: payload.shirts,
         skins: payload.skins,
@@ -205,7 +205,7 @@ async function main() {
       );
     } else if (decision.eligible) {
       notice(
-        `demo-ingest match ${matchId}: would auto-commit ${payload.shirts}-${payload.skins} (shadow mode — set AUTO_COMMIT_ENABLED=true to go live) — staging for manual confirm`,
+        `demo-ingest match ${matchId}: would auto-commit ${payload.shirts}-${payload.skins} (AUTO_COMMIT_ENABLED=false — manual override active) — staging for manual confirm`,
       );
     } else {
       notice(`demo-ingest match ${matchId}: not auto-committing (${decision.reason}) — staging for manual confirm`);

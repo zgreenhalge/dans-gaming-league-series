@@ -70,10 +70,12 @@ async function dispatchDemoIngest(supabaseAdmin: SupabaseClient, matchId: number
   }
 }
 
-/** Same shadow-first opt-in as demo-ingest's AUTO_COMMIT_ENABLED — watched before going live. Guards
- *  itself (the claim upsert), independent of whether demo-ingest's own dispatch above ran. */
+/** replay-extract is auto-dispatched by default, alongside demo-ingest, on every match end.
+ *  `REPLAY_AUTO_DISPATCH=false` is the manual override — falls back to the Recap tab / admin
+ *  dispatch button. Guards itself (the claim upsert), independent of whether demo-ingest's own
+ *  dispatch above ran. */
 async function dispatchReplayExtractIfEnabled(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
-  if (process.env.REPLAY_AUTO_DISPATCH !== 'true') return;
+  if (process.env.REPLAY_AUTO_DISPATCH === 'false') return;
 
   const now = new Date().toISOString();
   const { data: claimed } = await supabaseAdmin

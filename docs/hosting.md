@@ -104,7 +104,7 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
                                                                               │
        scripts/demo-ingest.ts: pull demo from DatHost (R2) + parse + quarantine + D5 predicate check
                                           │                              │
-                            predicate passes, AUTO_COMMIT_ENABLED  predicate fails / shadow mode
+                       predicate passes, no manual override      predicate fails / manual override active
                             writeMatchScore()  status: confirmed        R2 (demoResultKey)  status: parsed | quarantined
                                                                               │
                                           in-match MatchDemoReviewBlock  ──admin Confirm──▶ PATCH /score  (confirmed)
@@ -151,12 +151,14 @@ matches MatchZy's own `map_result` event read from `mapResultKey` (`buildMatchzy
 team1 = SHIRTS / team2 = SKINS, so it's a direct equality, no side remapping). `scripts/demo-ingest.ts`
 gathers the inputs, calls it after quarantine, and logs the verdict either way.
 
-`AUTO_COMMIT_ENABLED` (a repo Actions variable) gates the write on an eligible verdict: unset runs in
-**shadow mode** — the predicate is evaluated and logged (`::notice::`) but the result is always staged
-for manual confirm; `true` calls the shared `writeMatchScore()` (`src/lib/matchScore.ts`) directly,
-marks the job `confirmed`, and deletes the staged `demoResultKey` and `mapResultKey` artifacts. An
-ineligible verdict — including a disagreement between the demo score and `map_result`, or an
-already-confirmed match — always falls back to the staged-result review, regardless of the flag.
+`AUTO_COMMIT_ENABLED` (a repo Actions variable) gates the write on an eligible verdict: unset (or
+anything but `false`) calls the shared `writeMatchScore()` (`src/lib/matchScore.ts`) directly, marks
+the job `confirmed`, and deletes the staged `demoResultKey` and `mapResultKey` artifacts — this is the
+default. `false` is the **manual override**: the predicate is still evaluated and logged (`::notice::`)
+but the result is always staged for manual confirm instead of written, for incident response (e.g.
+investigating a parser issue) without needing a code change. An ineligible verdict — including a
+disagreement between the demo score and `map_result`, or an already-confirmed match — always falls
+back to the staged-result review, regardless of the flag.
 
 `writeMatchScore()` is the single write path for a match score (validation, `matches.final_score` +
 `player_match_stats`, sabremetrics, rating recompute, gauntlet-propagate-or-season-completion, and
@@ -337,8 +339,9 @@ The demo-ingest and replay-extract Actions need their own copies of `DATHOST_EMA
 `DATHOST_PASSWORD`/`DATHOST_SERVER_ID` (to pull the demo), `APP_BASE_URL` (repo Actions **variable** —
 it's public, unlike the rest of this list), and `RECOMPUTE_SECRET` (repo **secret**), since they run
 outside Vercel and have no other way to reach the app's recompute endpoint. `AUTO_COMMIT_ENABLED` (repo
-variable) gates trusted auto-commit (#138) — unset runs the predicate in shadow mode (evaluated +
-logged, still staged for manual confirm); `true` goes live.
+variable) gates trusted auto-commit (#138) — unset (or anything but `false`) writes an eligible
+verdict directly; `false` is the manual override (evaluated + logged, still staged for manual
+confirm).
 
 ## Key files
 

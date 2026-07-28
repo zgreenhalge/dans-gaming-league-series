@@ -57,6 +57,6 @@ Create `.env.local` at the repo root:
 | `CLOUDFLARE_R2_BUCKET_NAME` | Cloudflare R2 bucket for uploaded `.dem` files |
 | `GITHUB_DISPATCH_TOKEN` | Fine-grained PAT (Actions: write) to dispatch the replay GitHub Actions jobs — see [`docs/replay.md`](./docs/replay.md) |
 | `GITHUB_REPO` | `owner/name` of the repo whose Actions to dispatch (e.g. `zgreenhalge/dans-gaming-league-series`) |
-| `REPLAY_AUTO_DISPATCH` | Set to `true` to auto-dispatch `replay-extract` alongside `demo_ingest` on match end (`/api/ingest/matchzy-log`'s `map_result` handler) — see [`docs/replay.md`](./docs/replay.md) |
+| `REPLAY_AUTO_DISPATCH` | `replay-extract` is auto-dispatched alongside `demo_ingest` on match end (`/api/ingest/matchzy-log`'s `map_result` handler) by default; set to `false` for the manual override (Recap tab / admin dispatch button only) — see [`docs/replay.md`](./docs/replay.md) |
 
 For the route table, schema, API endpoints, and deployment details, see [`docs/architecture.md`](./docs/architecture.md). For the Python ingestion pipeline, see [`ingestion/README.md`](./ingestion/README.md).
