@@ -10,7 +10,7 @@ import {
   capacityFor,
   emptyDraftPod,
   groupLabel,
-  availablePlayers,
+  availableSeeds,
   availableAdvancements,
   pruneInvalidReferences,
   validateIntegrity,
@@ -45,11 +45,18 @@ function optionsExcludingSlot(pods: DraftPod[], podKey: string, slotIndex: numbe
 }
 
 /** "Seed 3 — PlayerName" — `players` is passed in canonical-sort (seed) order from the page, so a
- * player's seed is just their 1-based position in that array. Shown everywhere the editor
- * references a player, so hand-building stays anchored to the same seed numbers the generator
- * would have used. */
+ * player's seed is just their 1-based position in that array. Used for the roster panel, where the
+ * player (who's sitting out) is the driving fact and the seed is the reference. */
 function playerLabel(seedByPlayerId: Map<number, number>, player: Player): string {
   return `Seed ${seedByPlayerId.get(player.id) ?? '?'} — ${player.name}`;
+}
+
+/** "Seed 3 — PlayerName", from the seed number outward — used everywhere a slot is picked or
+ * displayed, where the seed is the driving fact and *today's* holder of that seed is the reference.
+ * `playerBySeed` is the season's current standings; a seed with no current holder (roster shrunk
+ * since it was picked) falls back to "?" rather than hiding the option entirely. */
+function seedLabel(seed: number, playerBySeed: Map<number, Player>): string {
+  return `Seed ${seed} — ${playerBySeed.get(seed)?.name ?? '?'}`;
 }
 
 export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Props) {
@@ -64,10 +71,10 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
   const [warnings, setWarnings] = useState<string[]>([]);
 
   const seedByPlayerId = useMemo(() => new Map(players.map((p, i) => [p.id, i + 1])), [players]);
-  const playerNameById = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
+  const playerBySeed = useMemo(() => new Map(players.map((p, i) => [i + 1, p])), [players]);
   const integrity = useMemo(() => validateIntegrity(pods), [pods]);
   const complete = useMemo(() => validateComplete(pods), [pods]);
-  const previewPods = useMemo(() => draftToPreviewPods(pods, playerNameById), [pods, playerNameById]);
+  const previewPods = useMemo(() => draftToPreviewPods(pods, playerBySeed), [pods, playerBySeed]);
 
   const maxRound = pods.length > 0 ? Math.max(...pods.map((p) => p.round_number)) : 0;
 
@@ -222,8 +229,6 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
     );
   }
 
-  const availableRosterPlayers = players.filter((p) => !droppedIds.has(p.id));
-
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -270,9 +275,9 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
             key={pod.key}
             pod={pod}
             pods={pods}
-            players={availableRosterPlayers}
+            players={players}
             droppedIds={droppedIds}
-            seedByPlayerId={seedByPlayerId}
+            playerBySeed={playerBySeed}
             onDelete={() => deletePod(pod.key)}
             onSetAdvanceRule={(rule) => setAdvanceRule(pod.key, rule)}
             onSetFinal={(v) => setFinal(pod.key, v)}
@@ -340,7 +345,7 @@ function PodCard({
   pods,
   players,
   droppedIds,
-  seedByPlayerId,
+  playerBySeed,
   onDelete,
   onSetAdvanceRule,
   onSetFinal,
@@ -350,7 +355,7 @@ function PodCard({
   pods: DraftPod[];
   players: Player[];
   droppedIds: Set<number>;
-  seedByPlayerId: Map<number, number>;
+  playerBySeed: Map<number, Player>;
   onDelete: () => void;
   onSetAdvanceRule: (rule: AdvanceRule) => void;
   onSetFinal: (v: boolean) => void;
@@ -365,10 +370,11 @@ function PodCard({
           {groupLabel(pod)} — locked (matches already exist)
         </div>
         <div className="font-mono text-[12px] flex flex-col gap-0.5">
-          {pod.slots.map((slot, i) => {
-            const player = slot.kind === 'player' ? players.find((p) => p.id === slot.playerId) : undefined;
-            return <div key={i}>{player ? playerLabel(seedByPlayerId, player) : '—'}</div>;
-          })}
+          {/* The real, frozen occupant of a locked pod — never the current seed holder, since the
+              real match already has real, fixed participants regardless of standings since. */}
+          {(pod.materializedOccupants ?? pod.slots.map(() => null)).map((occupant, i) => (
+            <div key={i}>{occupant ? occupant.playerName : '—'}</div>
+          ))}
         </div>
       </div>
     );
@@ -425,7 +431,7 @@ function PodCard({
             slot={slot}
             players={players}
             droppedIds={droppedIds}
-            seedByPlayerId={seedByPlayerId}
+            playerBySeed={playerBySeed}
             onChange={(s) => onUpdateSlot(i, s)}
           />
         ))}
@@ -440,7 +446,7 @@ function PodCard({
 }
 
 function slotValueKey(slot: DraftSlot): string {
-  if (slot.kind === 'player') return `player:${slot.playerId}`;
+  if (slot.kind === 'seed') return `seed:${slot.seed}`;
   if (slot.kind === 'advance') return `advance:${slot.sourcePodKey}:${slot.ordinal}`;
   return '';
 }
@@ -452,7 +458,7 @@ function SlotPicker({
   slot,
   players,
   droppedIds,
-  seedByPlayerId,
+  playerBySeed,
   onChange,
 }: {
   pods: DraftPod[];
@@ -461,11 +467,11 @@ function SlotPicker({
   slot: DraftSlot;
   players: Player[];
   droppedIds: Set<number>;
-  seedByPlayerId: Map<number, number>;
+  playerBySeed: Map<number, Player>;
   onChange: (slot: DraftSlot) => void;
 }) {
   const stripped = optionsExcludingSlot(pods, podKey, slotIndex);
-  const playerOptions = availablePlayers(stripped, players, droppedIds);
+  const seedOptions = availableSeeds(stripped, players, droppedIds);
   const advanceOptions = availableAdvancements(stripped);
 
   return (
@@ -474,7 +480,7 @@ function SlotPicker({
       onChange={(e) => {
         const v = e.target.value;
         if (!v) return onChange({ kind: 'empty' });
-        if (v.startsWith('player:')) return onChange({ kind: 'player', playerId: Number(v.slice('player:'.length)) });
+        if (v.startsWith('seed:')) return onChange({ kind: 'seed', seed: Number(v.slice('seed:'.length)) });
         const rest = v.slice('advance:'.length);
         const lastColon = rest.lastIndexOf(':');
         return onChange({ kind: 'advance', sourcePodKey: rest.slice(0, lastColon), ordinal: Number(rest.slice(lastColon + 1)) });
@@ -482,11 +488,11 @@ function SlotPicker({
       className="font-mono text-[12px] px-2 py-1.5 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
     >
       <option value="">— empty —</option>
-      {playerOptions.length > 0 && (
-        <optgroup label="Players">
-          {playerOptions.map((p) => (
-            <option key={p.id} value={`player:${p.id}`}>
-              {playerLabel(seedByPlayerId, p)}
+      {seedOptions.length > 0 && (
+        <optgroup label="Seeds">
+          {seedOptions.map((seed) => (
+            <option key={seed} value={`seed:${seed}`}>
+              {seedLabel(seed, playerBySeed)}
             </option>
           ))}
         </optgroup>

@@ -10,10 +10,10 @@ function parseSlot(value: unknown): DraftSlot | null {
   if (!value || typeof value !== 'object') return null;
   const kind = (value as { kind?: unknown }).kind;
   if (kind === 'empty') return { kind: 'empty' };
-  if (kind === 'player') {
-    const playerId = (value as { playerId?: unknown }).playerId;
-    if (typeof playerId !== 'number' || !Number.isInteger(playerId)) return null;
-    return { kind: 'player', playerId };
+  if (kind === 'seed') {
+    const seed = (value as { seed?: unknown }).seed;
+    if (typeof seed !== 'number' || !Number.isInteger(seed)) return null;
+    return { kind: 'seed', seed };
   }
   if (kind === 'advance') {
     const sourcePodKey = (value as { sourcePodKey?: unknown }).sourcePodKey;

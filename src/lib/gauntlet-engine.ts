@@ -658,13 +658,13 @@ export async function saveManualDraft(
     gauntletSeasonId = created.gauntletSeasonId;
   }
 
-  // A directly-picked player still gets a real `source_seed`, from the regular season's *current*
-  // standings — same convention `GauntletPodEditor` already labels players with ("Seed 3 — Name").
-  // Without this, `getSeedByPlayer()` treats every hand-placed occupant as unseeded, and
-  // `materializePod()`'s seed-based SHIRTS/SKINS pairing silently degrades to arbitrary order.
+  // A `seed`-kind slot's driving data is the seed number the admin picked, not a player — resolved
+  // to a real player from the regular season's *current* standings every save, the same mapping
+  // `trySeedGauntlet()` uses at real seed time. This is what makes a not-yet-materialized slot track
+  // whoever currently holds that seed rather than freezing in whoever held it at pick time.
   const leaderboard = await getSeasonLeaderboard(regularSeasonId);
-  const seedByPlayer = new Map<number, number>();
-  leaderboard.forEach((row, i) => seedByPlayer.set(row.player_id, i + 1));
+  const playerBySeed = new Map<number, number>();
+  leaderboard.forEach((row, i) => playerBySeed.set(i + 1, row.player_id));
 
   const currentPods = await getGauntletBracketShape(gauntletSeasonId);
   const currentById = new Map(currentPods.map((p) => [p.id, p]));
@@ -736,14 +736,14 @@ export async function saveManualDraft(
       });
       const slots = podsNeedingSlotWrite.flatMap((pod) =>
         pod.slots.map((slot, slot_index) => {
-          if (slot.kind === 'player') {
+          if (slot.kind === 'seed') {
             return {
               pod_ref: podRef(pod.key),
               slot_index,
               source_kind: 'seed',
-              source_seed: seedByPlayer.get(slot.playerId) ?? null,
+              source_seed: slot.seed,
               source_pod_ref: null,
-              player_id: slot.playerId,
+              player_id: playerBySeed.get(slot.seed) ?? null,
             };
           }
           if (slot.kind === 'advance') {

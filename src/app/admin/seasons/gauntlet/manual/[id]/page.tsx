@@ -40,7 +40,7 @@ export default async function ManualGauntletPage({ params }: { params: Promise<{
     initialDraft = fromPersistedShape(await getGauntletBracketShape(gauntletSeason.id));
   } else {
     try {
-      initialDraft = fromGeneratedPlan(buildGauntletBracket(players.length), leaderboard);
+      initialDraft = fromGeneratedPlan(buildGauntletBracket(players.length));
     } catch {
       initialDraft = [emptyDraftPod('1:0', 1, 0)];
     }

@@ -3,9 +3,16 @@
  * copy the admin edits — round/pod/slot structure mirrors `gauntlet_pods`/`gauntlet_pod_slots`
  * exactly (see `getGauntletBracketShape()` in `queries.ts`), but every pod carries a stable `key`
  * (not yet a real id for a brand-new pod) and every slot is either still empty, a directly-picked
- * player, or an as-yet-unresolved reference to an earlier pod's Nth survivor. Nothing here talks to
- * the database — `saveManualDraft()` in `gauntlet-engine.ts` is the only place a `DraftPod[]` gets
- * reconciled into real rows.
+ * *seed number*, or an as-yet-unresolved reference to an earlier pod's Nth survivor. Nothing here
+ * talks to the database — `saveManualDraft()` in `gauntlet-engine.ts` is the only place a
+ * `DraftPod[]` gets reconciled into real rows.
+ *
+ * A seed slot's driving data is the seed *number*, not a player id — the admin picks "Seed 3", not
+ * a specific person, and the current name shown next to it is a reference guide only. Which real
+ * player that resolves to is recomputed from the regular season's *current* standings every time the
+ * draft is saved (`saveManualDraft()`), the same way the generator's own `seedBracket()` resolves
+ * seeds to players — so an unmaterialized slot always tracks whoever the standings currently say
+ * holds that seed, without the admin having to notice a standings shuffle and manually re-pick.
  */
 
 import type { BracketPlan, AdvanceRule } from './gauntlet-bracket';
@@ -15,7 +22,7 @@ export type { AdvanceRule };
 
 export type DraftSlot =
   | { kind: 'empty' }
-  | { kind: 'player'; playerId: number }
+  | { kind: 'seed'; seed: number }
   | { kind: 'advance'; sourcePodKey: string; ordinal: number };
 
 export interface DraftPod {
@@ -32,6 +39,13 @@ export interface DraftPod {
   is_final: boolean;
   /** Always length 4. */
   slots: DraftSlot[];
+  /** Materialized pods only: the actual player occupying each slot index, frozen at the real match's
+   *  creation time — never re-resolved against current standings, since the real match already has
+   *  real, fixed participants regardless of how the standings move afterward. `null` for a
+   *  'pod'-sourced slot (nothing to show beyond the advancement itself). `undefined` (rather than
+   *  this array) for an unmaterialized pod, whose occupants are always derived live from `slots`
+   *  instead. */
+  materializedOccupants?: ({ playerId: number; playerName: string } | null)[];
 }
 
 /** How many survivors a pod sends downstream — the "elimination scale" the editor exposes per pod. */
@@ -89,38 +103,48 @@ export function computeAdvanceOrdinals(pods: BracketPod[]): Map<string, number> 
 }
 
 /** Loads an already-persisted bracket shape (a manual gauntlet already in progress, or one built by
- * the generator that the admin now wants to keep hand-editing) into the editor's draft form. */
+ * the generator that the admin now wants to keep hand-editing) into the editor's draft form. A
+ * slot's driving data is always its seed number (`source_seed`) once it has an occupant — the CHECK
+ * constraint on `gauntlet_pod_slots` guarantees any `player_id`-carrying seed slot has one. For a
+ * materialized pod specifically, the real occupant is *also* captured into `materializedOccupants`
+ * so the (read-only) editor shows who's actually in the real match, not whoever the seed number
+ * currently resolves to. */
 export function fromPersistedShape(pods: BracketPod[]): DraftPod[] {
   const ordinals = computeAdvanceOrdinals(pods);
-  return pods.map((pod) => ({
-    key: String(pod.id),
-    persistedId: pod.id,
-    materialized: pod.materialized,
-    round_number: pod.round_number,
-    pod_index: pod.pod_index,
-    advance_rule: pod.advance_rule,
-    is_final: pod.is_final,
-    slots: [...pod.slots]
-      .sort((a, b) => a.slot_index - b.slot_index)
-      .map((slot): DraftSlot => {
-        if (slot.player_id != null) return { kind: 'player', playerId: slot.player_id };
+  return pods.map((pod) => {
+    const sortedSlots = [...pod.slots].sort((a, b) => a.slot_index - b.slot_index);
+    return {
+      key: String(pod.id),
+      persistedId: pod.id,
+      materialized: pod.materialized,
+      round_number: pod.round_number,
+      pod_index: pod.pod_index,
+      advance_rule: pod.advance_rule,
+      is_final: pod.is_final,
+      slots: sortedSlots.map((slot): DraftSlot => {
+        if (slot.player_id != null) {
+          return slot.source_seed != null ? { kind: 'seed', seed: slot.source_seed } : { kind: 'empty' };
+        }
         if (slot.source_kind === 'pod' && slot.source_pod_id != null) {
           const ordinal = ordinals.get(`${pod.id}:${slot.slot_index}`) ?? 0;
           return { kind: 'advance', sourcePodKey: String(slot.source_pod_id), ordinal };
         }
         return { kind: 'empty' };
       }),
-  }));
+      materializedOccupants: pod.materialized
+        ? sortedSlots.map((slot) =>
+            slot.player_id != null ? { playerId: slot.player_id, playerName: slot.player_name ?? '' } : null,
+          )
+        : undefined,
+    };
+  });
 }
 
-/** Loads a fresh (not yet persisted) generated plan into the editor's draft form, resolving its
- * abstract seed numbers to real player ids via the season's current leaderboard order — the same
- * mapping `trySeedGauntlet()` uses at real seed time. This is the "switching from generated to
- * manual loads it as-is" path; the manual page calls this with the same `buildGauntletBracket(N)`
- * the generator's preview stage already computed, so the two are identical by construction. */
-export function fromGeneratedPlan(plan: BracketPlan, leaderboard: { player_id: number }[]): DraftPod[] {
-  const playerBySeed = new Map<number, number>();
-  leaderboard.forEach((row, i) => playerBySeed.set(i + 1, row.player_id));
+/** Loads a fresh (not yet persisted) generated plan into the editor's draft form. Its abstract seed
+ * numbers carry straight over as-is — this is the "switching from generated to manual loads it as-is"
+ * path; the manual page calls this with the same `buildGauntletBracket(N)` the generator's preview
+ * stage already computed, so the two are identical by construction. */
+export function fromGeneratedPlan(plan: BracketPlan): DraftPod[] {
   const keyFor = (round: number, index: number) => `${round}:${index}`;
 
   const ordinalsBySource = new Map<string, number>();
@@ -154,8 +178,7 @@ export function fromGeneratedPlan(plan: BracketPlan, leaderboard: { player_id: n
       .sort((a, b) => a.slot_index - b.slot_index)
       .map((slot): DraftSlot => {
         if (slot.source_kind === 'seed' && slot.source_seed != null) {
-          const playerId = playerBySeed.get(slot.source_seed);
-          return playerId != null ? { kind: 'player', playerId } : { kind: 'empty' };
+          return { kind: 'seed', seed: slot.source_seed };
         }
         if (slot.source_kind === 'pod' && slot.source_round != null && slot.source_pod_index != null) {
           const sourceKey = keyFor(slot.source_round, slot.source_pod_index);
@@ -194,15 +217,23 @@ export function pruneInvalidReferences(pods: DraftPod[]): DraftPod[] {
   }));
 }
 
-/** Roster players not already placed in some `player` slot and not explicitly marked dropped. */
-export function availablePlayers<P extends { id: number }>(pods: DraftPod[], roster: P[], droppedIds: Set<number>): P[] {
+/** Seed numbers (1-based position in `roster`, the season's current canonical-sort standings) not
+ * already placed in some `seed` slot and whose current holder isn't marked dropped. `roster` must be
+ * the *full*, unfiltered standings order — a seed's number is its position in the real standings,
+ * which dropping a player must not renumber. */
+export function availableSeeds<P extends { id: number }>(pods: DraftPod[], roster: P[], droppedIds: Set<number>): number[] {
   const used = new Set<number>();
   for (const pod of pods) {
     for (const slot of pod.slots) {
-      if (slot.kind === 'player') used.add(slot.playerId);
+      if (slot.kind === 'seed') used.add(slot.seed);
     }
   }
-  return roster.filter((p) => !used.has(p.id) && !droppedIds.has(p.id));
+  const seeds: number[] = [];
+  roster.forEach((p, i) => {
+    const seed = i + 1;
+    if (!used.has(seed) && !droppedIds.has(p.id)) seeds.push(seed);
+  });
+  return seeds;
 }
 
 export interface AdvancementOption {
@@ -248,14 +279,14 @@ export function validateIntegrity(pods: DraftPod[]): IntegrityResult {
   const finals = pods.filter((p) => p.is_final);
   if (finals.length > 1) errors.add('Only one pod can be marked Final.');
 
-  const playerUseCount = new Map<number, number>();
+  const seedUseCount = new Map<number, number>();
   for (const pod of pods) {
     for (const slot of pod.slots) {
-      if (slot.kind === 'player') playerUseCount.set(slot.playerId, (playerUseCount.get(slot.playerId) ?? 0) + 1);
+      if (slot.kind === 'seed') seedUseCount.set(slot.seed, (seedUseCount.get(slot.seed) ?? 0) + 1);
     }
   }
-  if ([...playerUseCount.values()].some((n) => n > 1)) {
-    errors.add('A player cannot be placed in more than one slot.');
+  if ([...seedUseCount.values()].some((n) => n > 1)) {
+    errors.add('A seed cannot be placed in more than one slot.');
   }
 
   const byKey = new Map(pods.map((p) => [p.key, p]));
@@ -319,8 +350,14 @@ export function validateComplete(pods: DraftPod[]): CompleteResult {
 
 /** Renders the current draft into the same shape `GauntletBracketDiagram` already knows how to
  * draw, so the editor gets a live preview for free. Unsaved pods get negative synthetic ids
- * (persisted ones already have real positive ids), kept unique within one draft only. */
-export function draftToPreviewPods(pods: DraftPod[], playerNameById: Map<number, string>): BracketPod[] {
+ * (persisted ones already have real positive ids), kept unique within one draft only.
+ *
+ * `playerBySeed` is the season's *current* standings (seed number -> player) — used to label a
+ * `seed` slot in an unmaterialized pod, since that's a live reference, not fixed data. A
+ * materialized pod's occupants come from its own frozen `materializedOccupants` instead, never from
+ * `playerBySeed`, so the preview never shows a materialized pod's real match as if it currently held
+ * different players than it actually does. */
+export function draftToPreviewPods(pods: DraftPod[], playerBySeed: Map<number, { id: number; name: string }>): BracketPod[] {
   const idByKey = new Map(pods.map((pod, i) => [pod.key, pod.persistedId ?? -(i + 1)]));
   return pods.map((pod) => ({
     id: idByKey.get(pod.key)!,
@@ -331,14 +368,16 @@ export function draftToPreviewPods(pods: DraftPod[], playerNameById: Map<number,
     played: false,
     materialized: pod.materialized,
     slots: pod.slots.map((slot, slot_index) => {
-      if (slot.kind === 'player') {
+      if (slot.kind === 'seed') {
+        const occupant = pod.materializedOccupants?.[slot_index];
+        const live = playerBySeed.get(slot.seed);
         return {
           slot_index,
           source_kind: 'seed' as const,
-          source_seed: null,
+          source_seed: slot.seed,
           source_pod_id: null,
-          player_id: slot.playerId,
-          player_name: playerNameById.get(slot.playerId) ?? null,
+          player_id: occupant ? occupant.playerId : (live?.id ?? null),
+          player_name: occupant ? occupant.playerName : (live?.name ?? null),
         };
       }
       if (slot.kind === 'advance') {

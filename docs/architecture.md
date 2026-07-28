@@ -217,51 +217,67 @@ a generated one are indistinguishable to `resolveAndPropagate()`, `materializeIf
 `getGauntletRounds()`, or `canonicalGauntletRankMap()`. Two conventions make this work without any
 schema addition:
 
-- A **directly-placed slot** is `source_kind: 'seed'` with `player_id` already set — skipping the
-  generator's build-time numeric-seed indirection entirely, since the admin already knows the real
-  player. It still carries a real `source_seed`, backfilled from the regular season's *current*
-  standings at save time (`saveManualDraft()`), so `materializePod()`'s seed-based SHIRTS/SKINS
-  pairing works identically whether a pod's occupants arrived via the generator or the editor. An
-  **advancement-sourced slot** is `source_kind: 'pod'` with `source_pod_id` set and `player_id:
-  null`, identical to a generated pod's "winner of an earlier pod" slot — `resolveAndPropagate()`
-  fills it in with zero pod-editor-specific code once that source pod's 2 games finish, so a
-  hand-built pod referencing "Round 1 Group 1's winner" resolves automatically just like a generated
-  one would.
+- A **seed-driven slot** is `source_kind: 'seed'`. The admin picks a *seed number*, not a specific
+  player — the same numeric-seed indirection the generator uses, not a shortcut around it. The seed
+  number is `source_seed`; `player_id` is resolved from it against the regular season's *current*
+  standings every time the draft is saved (`saveManualDraft()`), the same mapping `seedBracket()`
+  uses at real seed time. This is what lets an unmaterialized slot always track whoever the standings
+  currently say holds that seed — a mid-season standings shuffle doesn't quietly strand a stale pick
+  the admin has to notice and fix by hand, and it's what makes `materializePod()`'s seed-based
+  SHIRTS/SKINS pairing work identically whether a pod's occupants arrived via the generator or the
+  editor. An **advancement-sourced slot** is `source_kind: 'pod'` with `source_pod_id` set and
+  `player_id: null`, identical to a generated pod's "winner of an earlier pod" slot —
+  `resolveAndPropagate()` fills it in with zero pod-editor-specific code once that source pod's 2
+  games finish, so a hand-built pod referencing "Round 1 Group 1's winner" resolves automatically
+  just like a generated one would.
+- Once a pod **materializes** (its real matches exist), its occupants are frozen — a real match
+  already has real, fixed participants, so they must never be re-resolved against standings that
+  keep moving after the fact. The editor captures this at load time into each `DraftPod`'s
+  `materializedOccupants` (`gauntlet-draft.ts`), read from the persisted `BracketSlot.player_name`
+  rather than derived live, and locks the pod from further editing entirely (see below).
 - `getSeedBands()` (used by `trySeedGauntlet()`) filters its `source_kind: 'seed'` query to
-  `source_seed IS NOT NULL AND player_id IS NULL` — a manual gauntlet's directly-placed slots also
-  carry a `source_seed` now, but are never player-less, so the `player_id IS NULL` half of the filter
-  is what actually excludes them from the round1/byes/dropped accounting that only makes sense for a
-  generator-built shape awaiting `seedBracket()`.
+  `source_seed IS NOT NULL AND player_id IS NULL` — every seed slot (generator or manual) carries a
+  `source_seed`, so the `player_id IS NULL` half of the filter is what actually isolates a
+  generator-built shape's *unseeded* slots (awaiting `seedBracket()`) from everything else, manual or
+  already-seeded.
 
 The editor is a **batch draft** with an edit/preview split, mirroring the generator's own
 preview/confirm/cancel flow: the "editing" stage (`GauntletPodEditor.tsx`) is plain tables — a
 roster panel to mark players sitting out, and one card per pod with its elimination-scale toggle,
-Final checkbox, and 4 slot pickers — no diagram. Every player reference here is labeled by seed
-number ("Seed 3 — PlayerName"), since `players` is passed in canonical-sort order and a player's seed
-is just their 1-based position in that array; this keeps hand-building anchored to the same seed
-numbers the generator would have used. Clicking "Review Bracket" only switches to a "preview" stage —
-the same `GauntletBracketDiagram` the season page uses, plus the completeness status banner — behind
+Final checkbox, and 4 slot pickers — no diagram. Every slot picker offers seed numbers ("Seed 3 —
+PlayerName"), not players, labeled against the season's current canonical-sort standings (a player's
+seed is their 1-based position in that order) — the roster panel (marking someone as sitting out)
+is the one place still keyed by player, since "who's out" is inherently about a person, not a seed
+position. Clicking "Review Bracket" only switches to a "preview" stage — the same
+`GauntletBracketDiagram` the season page uses, plus the completeness status banner — behind
 Confirm/Back, exactly like the generator's own preview stage; nothing is written until Confirm calls
 `POST /api/seasons/[id]/gauntlet/pods` (`saveManualDraft()` in `gauntlet-engine.ts`). That route
 diffs the submitted draft against whatever's currently persisted: new pods are inserted,
 changed-but-not-yet-materialized pods are updated, and not-yet-materialized pods missing from the
 submission are deleted — a pod with real matches (`materialized: true` in `BracketPod`) is always
-left alone and can't be edited or deleted from this UI. `gauntlet-draft.ts`'s
+left alone and can't be edited or deleted from this UI, and every seed slot's `player_id` is
+re-resolved against fresh standings regardless of whatever the submitted draft happened to carry, so
+a stale client payload can't freeze in an out-of-date pick. `gauntlet-draft.ts`'s
 `pruneInvalidReferences()` runs after every local edit or deletion, so by the time a draft is
 submitted it's already internally self-consistent (no slot references a pod that no longer exists,
 or an advancement beyond its source's capacity) — the save route only re-validates this defensively
-(`validateIntegrity()`), it doesn't repeat the cascade-clearing logic.
+(`validateIntegrity()`), it doesn't repeat the cascade-clearing logic. The whole pod/slot diff is
+applied atomically via the `reconcile_gauntlet_draft()` DB function (one Postgres transaction), and
+`saveManualDraft()` re-checks materialization for the specific pods it's about to touch immediately
+before writing, protecting any that a live match resolved into concurrently instead of overwriting
+them — with a warning surfaced back to the editor for whatever got skipped.
 
 Loading the editor's initial draft: an already-persisted shape always wins
 (`fromPersistedShape()`); otherwise it defaults to the same plan the generator's own preview stage
-would compute (`fromGeneratedPlan(buildGauntletBracket(N), leaderboard)` — identical by
-construction, so the "build by hand instead" link on that preview needs no data transfer, just a
-plain link to this page); or, for a qualifier count outside `buildGauntletBracket`'s range, a single
-empty round with one empty pod.
+would compute (`fromGeneratedPlan(buildGauntletBracket(N))` — identical by construction, so the
+"build by hand instead" link on that preview needs no data transfer, just a plain link to this page);
+or, for a qualifier count outside `buildGauntletBracket`'s range, a single empty round with one empty
+pod.
 
 Dropped players (sitting out this gauntlet entirely) are never persisted — same as the generator's
 own `BracketPlan.drops`, which `persistBracketShape()` also never writes anywhere. The editor just
-tracks a `droppedPlayerIds` set as ephemeral UI state so the slot pickers stop offering them.
+tracks a `droppedPlayerIds` set as ephemeral UI state, and a dropped player's seed is excluded from
+`availableSeeds()` so the slot pickers stop offering it.
 
 ### Season status lifecycle
 
