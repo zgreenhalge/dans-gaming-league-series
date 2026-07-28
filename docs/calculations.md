@@ -341,28 +341,43 @@ Implemented by `canonicalGauntletRankMap(rounds)` in `src/lib/util.ts`. Pass the
 
 ## Gauntlet Seeding Projection
 
-A live preview, shown on an *ACTIVE* regular season's own leaderboard, of what the gauntlet bracket
-would look like if built from the current standings today — before any gauntlet season exists.
+The gold-bye/red-drop row tint on a regular season's own leaderboard — never shown on a gauntlet
+season's own leaderboard, which gets a podium once complete instead (`GauntletStandings`) and has
+nothing worth tinting rows for before then. Sourced one of two ways, in preference order, both
+feeding the same `gauntletSeeding` prop on `LeaderboardTable`:
 
-Seed 1 is the canonical-sort leader, seed N the canonical-sort last place, same convention
-`buildGauntletBracket(N)` itself uses. For a qualifier count `N` = the current leaderboard's length
-(matching exactly what `tryBuildGauntletShape()` uses when it later builds the real bracket):
+- **Real bracket, if the paired gauntlet has one.** Once the paired gauntlet season has a real,
+  materialized bracket (`getGauntletBracketShape()`), the tint is read straight off it, regardless of
+  either season's status — a player whose only seed-sourced pod slot lands in a round after round 1
+  has a real bye (gold). This reflects reality even if the bracket was hand-edited away from the
+  shape `buildGauntletBracket()` would have produced (see the Gauntlet Bracket Generation section
+  below for what "hand-edited" can mean here) — a real bracket is never wrong to prefer over a guess.
+  There's no "won't qualify" case in this source, since a gauntlet's own bracket only ever contains
+  players who already qualified into it. `SeasonTabView.tsx` reads this directly off
+  `gauntletBracketShape`.
 
-| Outcome | Condition |
-|---------|-----------|
-| Bye (gold) | The seed's bracket-entry slot is in a round after round 1 |
-| Won't qualify (red) | The seed is in `buildGauntletBracket(N)`'s `drops` — too many qualifiers for this bracket size, so the bottom seeds don't fit |
-| Playing round 1 | Everyone else — placed straight into a round-1 pod |
+- **Live projection, otherwise.** While the regular season is still *ACTIVE* and no real bracket
+  exists yet, a live preview of what the gauntlet bracket would look like if built from the current
+  standings today. Seed 1 is the canonical-sort leader, seed N the canonical-sort last place, same
+  convention `buildGauntletBracket(N)` itself uses. For a qualifier count `N` = the current
+  leaderboard's length (matching exactly what `tryBuildGauntletShape()` uses when it later builds the
+  real bracket):
 
-Every seed's projected round and pod are fully determined by `N` alone (no player-vs-player
-uncertainty), so the leaderboard shows a text label (e.g. "R1 · Pod 2", "Final (Bye)") alongside the
-row tint. Returns no projection for a qualifier count `buildGauntletBracket` doesn't support
-(outside 4-20).
+  | Outcome | Condition |
+  |---------|-----------|
+  | Bye (gold) | The seed's bracket-entry slot is in a round after round 1 |
+  | Won't qualify (red) | The seed is in `buildGauntletBracket(N)`'s `drops` — too many qualifiers for this bracket size, so the bottom seeds don't fit |
+  | Playing round 1 | Everyone else — placed straight into a round-1 pod |
 
-Implemented by `projectGauntletSeeding(qualifierCount)` in `src/lib/gauntlet-bracket.ts`, which maps
-seeds to placements; `SeasonTabView.tsx` zips that against the current standings (already in
-canonical-sort order) to key it by `player_id`, and passes the result as the `gauntletSeeding` prop
-to `LeaderboardTable`.
+  Every seed's projected round and pod are fully determined by `N` alone (no player-vs-player
+  uncertainty). Returns no projection for a qualifier count `buildGauntletBracket` doesn't support
+  (outside 4-20). Implemented by `projectGauntletSeeding(qualifierCount)` in
+  `src/lib/gauntlet-bracket.ts`, which maps seeds to placements; `SeasonTabView.tsx` zips that
+  against the current standings (already in canonical-sort order) to key it by `player_id`.
+
+Once the regular season itself is archived, medal tinting (`showMedals`) still only takes over when
+neither source above has data — matching the general LeaderboardTable rule that seed tinting always
+wins over medal tinting when both are available.
 
 ## Narrative Metrics
 
