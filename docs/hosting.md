@@ -35,6 +35,7 @@ Persisted on the `matches` row:
 | `dathost_server_id` | the DatHost server this match claimed (always the one shared id today) |
 | `connect_string` | `ip:port` for the join/`connect` link, set when `live`, cleared on teardown |
 | `server_started_at` | when provisioning began (drives the panel's progress estimate) |
+| `teardown_at` | when a scheduled (non-immediate) teardown's grace period ends — set on entering `tearing_down`, cleared once the stop actually runs |
 
 Orchestration lives in **`src/lib/dathost-lifecycle.ts`** over the typed client in
 **`src/lib/dathost.ts`** (DatHost REST `/api/0.1`, HTTP Basic auth):
@@ -45,18 +46,30 @@ Orchestration lives in **`src/lib/dathost-lifecycle.ts`** over the typed client 
   → `waitUntilReady` (`on && !booting` + connectable) → `loadMatch` (`matchzy_loadmatch_url`) → `live`
   + `connect_string`. Marks `failed` and rethrows on any error. A per-file cfg-push failure is logged,
   not fatal.
-- **`teardownMatchServer`** — `stop` (never delete) → `done`. `onlyIfOwnsServer` no-ops unless this
-  match is the current occupant, so tearing down one match never stops another's server.
-- **`getReconciledServerState`** — reconciles a stale `live` against reality (see below).
+- **`teardownMatchServer`** — `stop` (never delete) → `done`, or, given `delayMs`, schedules the stop
+  instead of running it inline (`tearing_down` + `teardown_at`, see Reconciliation below).
+  `onlyIfOwnsServer` no-ops unless this match is the current occupant, so tearing down one match never
+  stops another's server.
+- **`getReconciledServerState`** — reconciles `tearing_down`/`live` against reality (see below).
 
 ### Reconciliation (#135)
 
-After a match ends the shared server auto-stops (`autostop`, 10-min idle) while the row can stay
-`live` — the panel would keep offering a dead connect link. `getReconciledServerState` (used by the
-status route) downgrades `live → done` when DatHost reports the server stopped. It is **read-only
-reconcile** (fires when the match page is viewed), **downgrade-only** (a running server is left
-alone), and best-effort (a DatHost/DB error returns the DB value). The common path doesn't rely on
-it: teardown fires eagerly on demo receipt and on score write.
+`getReconciledServerState` (used by the match page's status route and the admin server console's
+`getActiveServerMatch`) does two things on every read, not just a status check:
+
+- **Executes a due scheduled teardown.** The automatic paths (`map_result`, score write) call
+  `teardownMatchServer(..., { delayMs: AUTO_TEARDOWN_DELAY_MS })`, which only moves the row to
+  `tearing_down` with `teardown_at` set — a grace period so players see the post-match scoreboard
+  instead of an instant disconnect. The actual `stop` call runs here, the next time the state is read,
+  once `teardown_at` has passed. Both the match page and the admin server console (which also polls
+  every 2s) read this, so a due teardown fires on the next view of either — no separate cron needed.
+- **Downgrades a stale `live`.** After a match ends the shared server auto-stops (`autostop`, 3-min
+  idle) while the row can stay `live` if nothing scheduled a teardown — the panel would keep offering a
+  dead connect link. When DatHost reports the server stopped, this flips `live → done`.
+
+Both are **downgrade-only** (a running server is left alone — concurrent-occupancy is #134's problem,
+not this one) and best-effort (a DatHost/DB error leaves the row at `tearing_down`/`live` for the next
+read to retry; DatHost's own autostop is the ultimate backstop either way).
 
 ### Concurrency guard (#134)
 
@@ -99,11 +112,14 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
 - `/api/ingest/matchzy-log` (machine-auth `x-matchzy-token`) is the `matchzy_remote_log_url` target.
   MatchZy POSTs every match event here. `map_result`'s payload is kept (at `mapResultKey`, the
   auto-commit cross-check) and it's also the pipeline's trigger: it validates no job is already in
-  flight, records `received`, dispatches the Action, and **tears down the server** (the map ending
-  means the match is over) — the Action never touches DatHost regardless of auto-commit or manual
-  confirm. `going_live`, `round_end`, and `map_result` all upsert `live_match_score` (`liveScore.ts`)
-  through the same generic path, shown on the match page as `LiveScoreTicker` while the demo doesn't
-  exist yet. Every other event type is acknowledged and dropped.
+  flight, records `received`, dispatches the Action, and **schedules the server's teardown** (the map
+  ending means the match is over) — a grace period (`AUTO_TEARDOWN_DELAY_MS`), not an instant stop, so
+  players see the post-match scoreboard rather than getting disconnected mid-celebration; see
+  Reconciliation below for how the delayed stop actually runs. The Action never touches DatHost
+  regardless of auto-commit or manual confirm. `going_live`, `round_end`, and `map_result` all upsert
+  `live_match_score` (`liveScore.ts`) through the same generic path, shown on the match page as
+  `LiveScoreTicker` while the demo doesn't exist yet. Every other event type is acknowledged and
+  dropped.
 - The demo's remote path is deterministic: `infra/matchzy/cfg/MatchZy/config.cfg` sets
   `matchzy_demo_path MatchZy/` and `matchzy_demo_name_format "{MATCH_ID}"`, so it always lands at
   `MatchZy/{matchId}.dem` on the game server — no directory listing/discovery needed.
@@ -343,13 +359,16 @@ subscription).
 
 ## Known limitations / friction
 
-- **Reconcile is read-only.** If a match page is never viewed and no demo/score arrives, the row can
-  stay `live` after autostop. Teardown-on-receipt + score-write teardown cover the real paths; a
-  periodic reconcile was intentionally skipped.
+- **Reconcile is opportunistic, not scheduled.** A due teardown only actually stops the server the
+  next time `getReconciledServerState` is read (a match page or admin server console view, or the
+  latter's 2s poll) — there's no cron forcing it. If neither is ever viewed after a match ends, the row
+  stays `tearing_down` (still occupying the shared server) until DatHost's own `autostop` (3-min idle)
+  stops it independently; the *next* `live`-reconcile pass then downgrades the row to `done`. A
+  periodic background reconcile was intentionally skipped.
 - **Concurrency guard has a tiny check-then-claim window** (above) — a fully atomic claim would need a
   Postgres advisory-lock RPC, judged not worth it for the rarity.
 - **Nightly reset (#132)** is DatHost-panel config, not code: a daily `css_endmatch` scheduled command
-  + `autostop_minutes: 10` as the idle/billing backstop. Disk cleanup is a separate, code-side piece
+  + `autostop_minutes: 3` as the idle/billing backstop. Disk cleanup is a separate, code-side piece
   of the same issue — see [`infra/matchzy/README.md`](../infra/matchzy/README.md) for
   `scripts/dathost-cleanup.ts`, which the DatHost panel's command scheduler can't do since it only
   reaches in-game RCON, not the file manager.

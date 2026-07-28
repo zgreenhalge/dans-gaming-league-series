@@ -67,7 +67,9 @@ here as the versioned baseline / disaster-recovery copy.
 3. **`POST /game-servers/{id}/start`** → boot (~20s).
 4. **`matchzy_loadmatch[_url]`** via `POST /game-servers/{id}/console` — per-match teams / matchid /
    map_sides / cvars (from `scripts/gen-matchzy-config.ts`).
-5. (teardown) **`POST /game-servers/{id}/stop`** on confirmed score/demo. Never `delete` (reuse model).
+5. (teardown) **`POST /game-servers/{id}/stop`**, `AUTO_TEARDOWN_DELAY_MS` (2.5 min) after `map_result`
+   or a score write — a grace period so players see the post-match scoreboard rather than an instant
+   disconnect (see `getReconciledServerState` in `docs/hosting.md`). Never `delete` (reuse model).
 
 **Disk cleanup (issue #132):** MatchZy never removes its own per-match artifacts (round-resume
 backups, stat CSVs, player-name caches, recorded demos) — they accumulate on the server's disk

@@ -5,7 +5,8 @@
 //   teardown:  stop → idle
 //
 // Server-side only. Requires these columns on `matches` (see dathost_handoff schema proposal):
-//   server_state text, dathost_server_id text, connect_string text, server_started_at timestamptz
+//   server_state text, dathost_server_id text, connect_string text, server_started_at timestamptz,
+//   teardown_at timestamptz
 //
 // Reuse model (D2): teardown stops the persistent server; it never deletes it.
 
@@ -27,6 +28,12 @@ import {
 } from './dathost';
 import { releaseScrimSession } from './scrim-session';
 import { pushCfgFiles } from './dathost-config';
+import { recordOpsError, clearOpsError } from './ops-errors';
+
+/** Automatic teardown (map_result, score-write) waits this long before actually stopping the shared
+ *  server, so players get to see the post-match scoreboard instead of an instant disconnect. Manual
+ *  teardown (admin console "Tear down") is unaffected — that's a deliberate operator stop-now. */
+export const AUTO_TEARDOWN_DELAY_MS = 2.5 * 60 * 1000;
 
 /**
  * Stops the shared server and releases any active scrim session in one call — the single choke point
@@ -138,6 +145,7 @@ async function setServerState(
     dathost_server_id?: string | null;
     connect_string?: string | null;
     server_started_at?: string | null;
+    teardown_at?: string | null;
   },
 ): Promise<void> {
   const { error } = await supabaseAdmin.from('matches').update(fields).eq('id', matchId);
@@ -265,10 +273,16 @@ export function provisionErrorHandler(context: string, matchId: number): (err: u
  * Tear down the match server (reuse model → stop, never delete). Idempotent-safe.
  *
  * Because every match shares ONE persistent server (D2), an unconditional stop here would let one
- * match kill another match's live server. Pass `onlyIfOwnsServer` (used by the score-report
- * auto-teardown) to no-op unless THIS match is the current occupant — i.e. its `server_state` is
- * still active (`provisioning`/`live`/`tearing_down`) and its `dathost_server_id` matches. The
- * explicit teardown route omits the flag, since that's a deliberate operator stop.
+ * match kill another match's live server. Pass `onlyIfOwnsServer` (used by the score-report and
+ * map_result auto-teardown) to no-op unless THIS match is the current occupant — i.e. its
+ * `server_state` is still active (`provisioning`/`live`/`tearing_down`) and its `dathost_server_id`
+ * matches. The explicit teardown route omits the flag, since that's a deliberate operator stop.
+ *
+ * Pass `delayMs` to schedule the stop instead of running it inline: the row moves to `tearing_down`
+ * with `teardown_at` set, and the actual `stop` call happens the next time `getReconciledServerState`
+ * is read (match page, admin server console, or its 2s poll) once `teardown_at` has passed — the
+ * automatic paths use this so players see the post-match scoreboard instead of an instant disconnect.
+ * Omit it (the explicit teardown route does) for an immediate stop.
  *
  * Goes through `stopSharedServer` — a scrim should never be active while a real match owns the
  * server, but this clears any `scrim_sessions` row defensively regardless.
@@ -276,7 +290,7 @@ export function provisionErrorHandler(context: string, matchId: number): (err: u
 export async function teardownMatchServer(
   supabaseAdmin: SupabaseClient,
   matchId: number,
-  opts: { onlyIfOwnsServer?: boolean } = {},
+  opts: { onlyIfOwnsServer?: boolean; delayMs?: number } = {},
 ): Promise<void> {
   const serverId = dathostServerId();
 
@@ -295,11 +309,20 @@ export async function teardownMatchServer(
     if (!active || !ownsServer) return; // this match isn't the live occupant — leave the server alone
   }
 
+  if (opts.delayMs) {
+    await setServerState(supabaseAdmin, matchId, {
+      server_state: 'tearing_down',
+      teardown_at: new Date(Date.now() + opts.delayMs).toISOString(),
+    }).catch(() => {});
+    return;
+  }
+
   await setServerState(supabaseAdmin, matchId, { server_state: 'tearing_down' }).catch(() => {});
   await stopSharedServer(supabaseAdmin, serverId);
   await setServerState(supabaseAdmin, matchId, {
     server_state: 'done',
     connect_string: null,
+    teardown_at: null,
   });
 }
 
@@ -310,16 +333,22 @@ export interface ServerStatusView {
 }
 
 /**
- * Read a match's server-state, reconciling a stale `live` against real DatHost state (#135). After a
- * match ends the shared server auto-stops (`autostop`, 10 min idle) while the row can stay `live` —
- * so the panel keeps offering a dead connect link until the score is entered. Here, when the DB says
- * `live` but DatHost reports the server stopped, flip it to `done` (connect cleared) so the panel
- * stops presenting it as joinable.
+ * Read a match's server-state, reconciling it against real DatHost state (#135). Two cases:
  *
- * Only `live` is reconciled: `provisioning` is legitimately `on:false/booting` mid-boot, and we only
- * ever *downgrade* on a confirmed stop — a running server is left alone (concurrent-occupancy is
- * #134's problem, not this one). Best-effort: hosting-unconfigured or a DatHost error returns the DB
- * value unchanged so the panel never breaks.
+ * - `tearing_down` past its `teardown_at`: the automatic teardown paths (map_result, score-write)
+ *   only *schedule* the stop (`teardownMatchServer(..., { delayMs })`) — the actual `stop` call runs
+ *   here, the next time this is read (match page, admin server console, or its 2s poll) once the
+ *   delay has elapsed. This is what actually executes a due teardown, not just a status check.
+ * - `live` but DatHost reports the server already stopped (`autostop`, 3 min idle): the shared server
+ *   auto-stops while the row can stay `live` — so the panel keeps offering a dead connect link until
+ *   the score is entered. Flip it to `done` (connect cleared) so the panel stops presenting it as
+ *   joinable.
+ *
+ * `provisioning` is never reconciled here — it's legitimately `on:false/booting` mid-boot — and this
+ * only ever *downgrades* toward `done`, never the reverse (concurrent-occupancy is #134's problem, not
+ * this one). Best-effort throughout: hosting-unconfigured or a DatHost error returns the DB value
+ * unchanged so the panel never breaks, and a due teardown that fails to actually stop stays
+ * `tearing_down` for the next read to retry (DatHost's own autostop is the ultimate backstop).
  */
 export async function getReconciledServerState(
   supabaseAdmin: SupabaseClient,
@@ -327,7 +356,7 @@ export async function getReconciledServerState(
 ): Promise<ServerStatusView> {
   const { data } = await supabaseAdmin
     .from('matches')
-    .select('server_state, connect_string, server_started_at, dathost_server_id')
+    .select('server_state, connect_string, server_started_at, dathost_server_id, teardown_at')
     .eq('id', matchId)
     .maybeSingle();
   const row = (data ?? {}) as {
@@ -335,13 +364,43 @@ export async function getReconciledServerState(
     connect_string?: string | null;
     server_started_at?: string | null;
     dathost_server_id?: string | null;
+    teardown_at?: string | null;
   };
   let serverState = (row.server_state ?? 'idle') as ServerState;
   let connectString = row.connect_string ?? null;
 
   const serverId = process.env.DATHOST_SERVER_ID;
   const ownsServer = !row.dathost_server_id || row.dathost_server_id === serverId;
-  if (serverState === 'live' && serverId && ownsServer) {
+  const teardownDue = row.teardown_at != null && Date.parse(row.teardown_at) <= Date.now();
+
+  if (serverState === 'tearing_down' && serverId && ownsServer) {
+    let stopped = false;
+    if (teardownDue) {
+      try {
+        await stopSharedServer(supabaseAdmin, serverId);
+        stopped = true;
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'server_teardown');
+      } catch (err) {
+        await recordOpsError(supabaseAdmin, 'match', matchId, 'server_teardown', `Server teardown failed: ${(err as Error).message}`);
+      }
+    }
+    if (!stopped) {
+      // Not due yet, or our own stop attempt just failed — check whether the server is already off
+      // by other means (a manual admin stop, or DatHost's own autostop racing ahead of our delay) so
+      // the row isn't stuck waiting out (or retrying) a teardown that already happened.
+      try {
+        const server = await getServer(serverId);
+        stopped = !server.on && !server.booting;
+      } catch {
+        /* DatHost unreachable — leave as-is, retried on next read */
+      }
+    }
+    if (stopped) {
+      await setServerState(supabaseAdmin, matchId, { server_state: 'done', connect_string: null, teardown_at: null });
+      serverState = 'done';
+      connectString = null;
+    }
+  } else if (serverState === 'live' && serverId && ownsServer) {
     try {
       const server = await getServer(serverId);
       if (!server.on && !server.booting) {

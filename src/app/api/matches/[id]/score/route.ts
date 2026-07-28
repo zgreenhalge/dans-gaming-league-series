@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { teardownMatchServer } from '@/lib/dathost-lifecycle';
+import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { writeMatchScore } from '@/lib/matchScore';
 import { isVetoComplete, computeGauntletOrPlayoff, type VetoFields } from '@/lib/veto';
@@ -119,14 +119,15 @@ export async function PATCH(
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  // Score reported → tear down the match server (reuse model = stop, never delete). Best-effort;
-  // skipped when hosting isn't configured. `onlyIfOwnsServer` ensures editing one match's score
-  // never stops another match's live server on the shared host.
+  // Score reported → schedule the match server's teardown (reuse model = stop, never delete), same
+  // AUTO_TEARDOWN_DELAY_MS grace period as the map_result path. Best-effort; skipped when hosting
+  // isn't configured. `onlyIfOwnsServer` ensures editing one match's score never stops another
+  // match's live server on the shared host.
   if (process.env.DATHOST_SERVER_ID) {
     afterBestEffort(
       `teardownMatchServer(${matchId})`,
       async () => {
-        await teardownMatchServer(supabaseAdmin, matchId, { onlyIfOwnsServer: true });
+        await teardownMatchServer(supabaseAdmin, matchId, { onlyIfOwnsServer: true, delayMs: AUTO_TEARDOWN_DELAY_MS });
         await clearOpsError(supabaseAdmin, 'match', matchId, 'server_teardown');
       },
       async (err) => {

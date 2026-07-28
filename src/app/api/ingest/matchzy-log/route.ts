@@ -21,7 +21,7 @@ import { parseMatchzyEventIdentity, putMatchzyContact } from '@/lib/demo/matchzy
 import { putLiveScoreEvent } from '@/lib/demo/liveScore';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
 import { advanceJobStatus, dispatchAndRecordFailure, matchJobKey } from '@/lib/background-jobs';
-import { teardownMatchServer } from '@/lib/dathost-lifecycle';
+import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { DEMO_INGEST_JOB_TYPE } from '@/lib/demo/ingestResult';
 import { REPLAY_EXTRACT_JOB_TYPE } from '@/lib/jobs';
@@ -106,14 +106,16 @@ async function dispatchReplayExtractIfEnabled(supabaseAdmin: SupabaseClient, mat
   }
 }
 
-/** The map ending means the match is over → tear down the shared server now, without waiting for the
- *  score write (#135). Best-effort, skipped when hosting isn't configured; `onlyIfOwnsServer` so a
+/** The map ending means the match is over → schedule the shared server's teardown, without waiting
+ *  for the score write (#135). The actual `stop` runs `AUTO_TEARDOWN_DELAY_MS` later (see
+ *  `getReconciledServerState`), not immediately, so players see the post-match scoreboard instead of
+ *  an instant disconnect. Best-effort, skipped when hosting isn't configured; `onlyIfOwnsServer` so a
  *  map_result for one match never stops another match's live server. Score-write teardown remains the
  *  fallback. */
 async function teardownAfterMatchEnd(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
   if (!process.env.DATHOST_SERVER_ID) return;
   try {
-    await teardownMatchServer(supabaseAdmin, matchId, { onlyIfOwnsServer: true });
+    await teardownMatchServer(supabaseAdmin, matchId, { onlyIfOwnsServer: true, delayMs: AUTO_TEARDOWN_DELAY_MS });
     await clearOpsError(supabaseAdmin, 'match', matchId, 'server_teardown');
   } catch (err) {
     console.error(`matchzy-log: auto-teardown(${matchId}) failed:`, err);
