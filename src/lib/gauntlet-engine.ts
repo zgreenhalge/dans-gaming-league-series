@@ -757,8 +757,17 @@ export async function saveManualDraft(
         const current = currentById.get(pod.persistedId!)!;
         return current.advance_rule !== pod.advance_rule || current.is_final !== pod.is_final;
       });
-      const slots = podsNeedingSlotWrite.flatMap((pod) =>
-        pod.slots.map((slot, slot_index) => {
+      const slots = podsNeedingSlotWrite.flatMap((pod) => {
+        // Not-yet-materialized pods have no matches depending on their slots yet, so a changed pod's
+        // slots are simply replaced wholesale rather than diffed row-by-row — but "replaced" must
+        // not mean "reset": resolveAndPropagate() can already have written a real survivor into one
+        // of this pod's 'advance' slots (independent of whether the pod's *other* slots are filled
+        // yet), and that slot is getting rewritten here too since every submitted unmaterialized pod
+        // does, not just the ones that actually changed. Look up what's currently persisted at each
+        // slot so an advance slot whose source pod reference didn't change keeps its resolved
+        // player_id instead of losing it back to "not yet decided" on every unrelated save.
+        const currentSlots = pod.persistedId != null ? currentById.get(pod.persistedId)?.slots : undefined;
+        return pod.slots.map((slot, slot_index) => {
           const base = {
             pod_ref: podRef(pod.key),
             slot_index,
@@ -771,11 +780,22 @@ export async function saveManualDraft(
             return { ...base, source_seed: slot.seed, player_id: playerBySeed.get(slot.seed) ?? null };
           }
           if (slot.kind === 'advance') {
-            return { ...base, source_kind: 'pod' as const, source_pod_ref: podRef(slot.sourcePodKey) };
+            const sourcePodRef = podRef(slot.sourcePodKey);
+            const currentSlot = currentSlots?.find((s) => s.slot_index === slot_index);
+            const resolvedFromSameSource =
+              currentSlot?.source_kind === 'pod' &&
+              sourcePodRef.kind === 'id' &&
+              currentSlot.source_pod_id === sourcePodRef.value;
+            return {
+              ...base,
+              source_kind: 'pod' as const,
+              source_pod_ref: sourcePodRef,
+              player_id: resolvedFromSameSource ? (currentSlot!.player_id ?? null) : null,
+            };
           }
           return base;
-        }),
-      );
+        });
+      });
 
       // A single DB-side transaction (`reconcile_gauntlet_draft()`) for the whole pod/slot shape
       // diff — delete removed pods, insert new ones, update changed ones, and rewrite touched

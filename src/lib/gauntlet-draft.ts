@@ -122,12 +122,18 @@ export function fromPersistedShape(pods: BracketPod[]): DraftPod[] {
       advance_rule: pod.advance_rule,
       is_final: pod.is_final,
       slots: sortedSlots.map((slot): DraftSlot => {
-        if (slot.player_id != null) {
-          return slot.source_seed != null ? { kind: 'seed', seed: slot.source_seed } : { kind: 'empty' };
-        }
+        // Check 'pod'-sourced before player_id: resolveAndPropagate() fills in a downstream slot's
+        // player_id the moment its feeder pod resolves, independent of whether the rest of *this*
+        // pod is filled yet — so an advancement slot can have a real player_id long before this pod
+        // materializes. Checking player_id first would misread that as an (unrepresentable, since it
+        // has no source_seed) direct pick and drop it to 'empty', losing a real, already-decided
+        // survivor the instant the admin reopens the editor.
         if (slot.source_kind === 'pod' && slot.source_pod_id != null) {
           const ordinal = ordinals.get(`${pod.id}:${slot.slot_index}`) ?? 0;
           return { kind: 'advance', sourcePodKey: String(slot.source_pod_id), ordinal };
+        }
+        if (slot.player_id != null && slot.source_seed != null) {
+          return { kind: 'seed', seed: slot.source_seed };
         }
         return { kind: 'empty' };
       }),

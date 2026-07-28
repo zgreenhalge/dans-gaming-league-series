@@ -124,12 +124,26 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
   }
 
   function toggleDropped(playerId: number) {
+    const dropping = !droppedIds.has(playerId);
     setDroppedIds((prev) => {
       const next = new Set(prev);
       if (next.has(playerId)) next.delete(playerId);
       else next.add(playerId);
       return next;
     });
+    // Dropping someone who's already placed in a slot (by their current seed) must clear that
+    // placement too — otherwise the slot keeps showing them with no indication the pick is now
+    // invalid, and Save would place them anyway despite the roster marking them as sitting out.
+    const seed = dropping ? seedByPlayerId.get(playerId) : undefined;
+    if (seed != null) {
+      apply(
+        pods.map((p) =>
+          p.materialized
+            ? p
+            : { ...p, slots: p.slots.map((s): DraftSlot => (s.kind === 'seed' && s.seed === seed ? { kind: 'empty' } : s)) },
+        ),
+      );
+    }
   }
 
   function reviewBracket() {
