@@ -277,6 +277,8 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     endTick: number;
     /** Last tick of playback, including the post-round window (≥ `endTick`). */
     frameEndTick: number;
+    /** `round_freeze_end` tick — the round clock's zero point (`ReplayRound.freezeEndTick`). */
+    freezeEndTick: number;
     wanted: number[];
   }[] = [];
   const allWantedTicks: number[] = [];
@@ -306,7 +308,14 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     for (let t = startTick; t < r.endTick; t += interval) wanted.push(t);
     wanted.push(r.endTick);
     for (let t = r.endTick + interval; t <= frameEndTick; t += interval) wanted.push(t);
-    roundBounds.push({ round: r.roundNumber, startTick, endTick: r.endTick, frameEndTick, wanted });
+    roundBounds.push({
+      round: r.roundNumber,
+      startTick,
+      endTick: r.endTick,
+      frameEndTick,
+      freezeEndTick: freezeEnd ?? roundStart,
+      wanted,
+    });
     allWantedTicks.push(...wanted);
   }
 
@@ -401,6 +410,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
       round: b.round,
       startTick: b.startTick,
       endTick: b.endTick,
+      freezeEndTick: b.freezeEndTick,
       ...(knifeRoundNumbers.has(b.round) ? { isKnifeRound: true } : {}),
       sideByFaction: {
         SHIRTS: sideForFaction(sideInfo, 'SHIRTS'),

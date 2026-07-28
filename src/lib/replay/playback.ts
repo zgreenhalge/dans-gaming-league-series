@@ -145,6 +145,42 @@ export function roundTickRange(round: ReplayRound): { start: number; end: number
   };
 }
 
+/**
+ * Ticks elapsed since `referenceTick`, clamped to 0 (never negative). The one "zero a
+ * tick to a reference point" primitive — used both to time-zero a Pathing ghost trace
+ * to its round's playback start (`aggregate.ts`'s `extractPlayerTrace`) and to zero the
+ * round clock to the round's live-start tick (`roundClockSeconds` below), so the two
+ * can't compute "ticks since X" differently.
+ */
+export function ticksSince(tick: number, referenceTick: number): number {
+  return Math.max(0, tick - referenceTick);
+}
+
+/** `seconds` as a `m:ss` clock string, e.g. `95` → `"1:35"`. */
+export function formatClock(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(whole / 60);
+  const s = whole % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/**
+ * Seconds into the live round at `tick` — elapsed time since `round.freezeEndTick`
+ * (when the in-game round timer starts counting down), clamped to 0 during the short
+ * pre-live lead-in the extract keeps before freeze-end (see `docs/replay.md`'s
+ * "Freeze-time trim"). Counts up rather than down: the server's actual round-time
+ * limit isn't recorded in the replay payload, so an elapsed clock is the value that's
+ * always correct regardless of the server's configured round time.
+ *
+ * Falls back to `round.startTick` when `freezeEndTick` is missing — a `replay.json`
+ * stored before that field existed, not yet backfilled by `replay-extract-all` (see
+ * `docs/replay.md`'s "Backfilling a logic/schema change") — so an old payload still
+ * shows a running clock instead of `NaN`.
+ */
+export function roundClockSeconds(round: ReplayRound, tick: number, tickRate: number): number {
+  return ticksSince(tick, round.freezeEndTick ?? round.startTick) / tickRate;
+}
+
 /** Shortest-path angular lerp (degrees), so a player turning past 360° doesn't spin. */
 export function lerpAngle(a: number, b: number, t: number): number {
   const diff = ((b - a + 540) % 360) - 180;

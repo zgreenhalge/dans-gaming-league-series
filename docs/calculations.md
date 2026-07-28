@@ -76,6 +76,14 @@ Each delta is attributed to the player's side that round.
 Implemented in `src/lib/parsers/roundSides.ts` (side map) and `src/lib/parsers/accumulators.ts`
 (delta splitter).
 
+**ADR by side** divides the side-filtered damage (`damage_ct`/`damage_t`) by the rounds *played on
+that side*, not the player's total rounds played — `roundsPlayedBySide()` in `roundSides.ts` derives
+that count from the same starting-side/half/OT schedule as the side map above, given only a rounds-played
+total and `target_win_rounds` (no per-round breakdown is stored per player). The match scoreboard
+(`MatchTabView.tsx`'s `Scoreboard`) is the one place stats are side-filterable; every other ADR/damage-
+per-round figure on the site (season/career/gauntlet aggregates, sabremetrics `ADR+`, per-match rows)
+always divides total damage by total rounds, with no side filter to narrow the denominator.
+
 ## Sabremetrics
 
 Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.

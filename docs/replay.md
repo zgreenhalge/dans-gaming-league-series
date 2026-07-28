@@ -39,7 +39,7 @@ ReplayPayload {
   version, matchId, map, tickRate, frameRate,
   players: [{ id, name, faction, steamId }],
   rounds: [{
-    round, startTick, endTick, isKnifeRound?,
+    round, startTick, endTick, freezeEndTick, isKnifeRound?,
     sideByFaction: { SHIRTS: 'CT'|'T', SKINS: 'CT'|'T' },
     frames:   [{ tick, players: [{ id, x, y, yaw, hp, alive, weapon }], bomb }],  // ~16 fps
     events:   [{ tick, type: 'kill'|'plant'|'defuse'|'round_end', … }],
@@ -95,12 +95,15 @@ number.
 **Freeze-time trim + post-round:** each round opens with ~15s of freeze/buy time where everyone
 stands in spawn — dead air for a replay. The extract begins each round's frames only
 `PRE_LIVE_SECONDS` (≈1s) before `round_freeze_end`, skipping the rest. This both tightens playback and
-shrinks the payload. If a demo has no `round_freeze_end` events the full freeze time is kept (with a
-warning). At the other end, frames continue `POST_ROUND_SECONDS` (≈7s) **past** `round_end` to show
-the post-round, capped at the next `round_start` so they never bleed into the following round's
-(trimmed) freeze. `ReplayRound.endTick` stays the `round_end` tick — events reference it — while
-`frames`/`roundTickRange()` cover the extended window; grenades are bucketed over the extended range
-too, so a smoke thrown at round end still blooms into the post-round.
+shrinks the payload. `round_freeze_end`'s own tick is kept as `ReplayRound.freezeEndTick` — the round
+clock's zero point (see "Client renderer" below) — separately from the trimmed `frames[]` window. If a
+demo has no `round_freeze_end` events the full freeze time is kept (with a warning) and `freezeEndTick`
+falls back to `startTick`, so the clock still runs, just from the top of freeze time instead of live. At
+the other end, frames continue `POST_ROUND_SECONDS` (≈7s) **past** `round_end` to show the post-round,
+capped at the next `round_start` so they never bleed into the following round's (trimmed) freeze.
+`ReplayRound.endTick` stays the `round_end` tick — events reference it — while `frames`/`roundTickRange()`
+cover the extended window; grenades are bucketed over the extended range too, so a smoke thrown at round
+end still blooms into the post-round.
 
 **Tracers & grenade effects:** `shots[]` (one per `weapon_fire`, just `tick` + `shooterId`) drives a
 faint tracer ray for **every bullet**. The event carries no impact point *and* its position/yaw props
@@ -171,16 +174,23 @@ future headless renderer can share one code path with **no draw drift**:
 | Module | Responsibility |
 |---|---|
 | `src/lib/replay/project.ts` | world (x,y) → canvas px. `autoFitProjector` (fit the payload's bounding box; default) and `calibratedProjector` (a map's radar triplet) behind one `Projector` interface. `projectorFor()` picks. |
-| `src/lib/replay/playback.ts` | `viewStateAt(round, tick, tickRate)` — interpolates positions between downsampled frames (shortest-path yaw lerp), reconstructs planted-bomb state from plant/defuse events, and resolves active grenades / tracers / kill-feed by tick window. No clock. |
+| `src/lib/replay/playback.ts` | `viewStateAt(round, tick, tickRate)` — interpolates positions between downsampled frames (shortest-path yaw lerp), reconstructs planted-bomb state from plant/defuse events, and resolves active grenades / tracers / kill-feed by tick window. Also the round clock: `roundClockSeconds(round, tick, tickRate)` counts up elapsed seconds since `freezeEndTick` (the server's configured round-time limit isn't in the payload, so counting up is the value that's always correct regardless of server config) and `formatClock()` renders it `m:ss`; both build on the shared `ticksSince(tick, referenceTick)` primitive that also zeroes a Pathing ghost trace to its round's start (`aggregate.ts`), so the two "ticks since a reference point" computations can't drift apart. |
 | `src/lib/replay/draw.ts` | `drawScene()` — paints one moment onto a structural `Ctx2D` (the Canvas2D subset used), taking colors from a passed `ReplayTheme` — the player reads CSS vars, so a future non-DOM renderer would just pass its own theme. No DOM, no React. |
 
 `<ReplayPlayer>` is the thin shell: a DPR-aware canvas sized by `ResizeObserver`, a RAF clock that
 advances `tick` (auto-advancing across rounds), and the controls (play/pause, rewind 10s, 0.5–4×
-speed, round jump, scrubber). The scrubber is uncontrolled and synced imperatively each frame to
-avoid a per-frame React re-render. It also accepts an optional `jump={{ round, n, tick? }}` prop:
-clicking a round header jumps to that round's start, and clicking an event seeks to that event's
-exact tick within its round (the `n` nonce lets a repeat click on the same target re-fire). The pure
-modules are unit-tested in `src/lib/replay/replay.test.ts` (`npm test`).
+speed, round jump, scrubber, and a live round clock). The scrubber and the round clock are both
+uncontrolled and synced imperatively each frame (`scrubRef`/`clockRef`) to avoid a per-frame React
+re-render. It also accepts an optional `jump={{ round, n, tick? }}` prop: clicking a round header
+jumps to that round's start, and clicking an event seeks to that event's exact tick within its round
+(the `n` nonce lets a repeat click on the same target re-fire). The pure modules are unit-tested in
+`src/lib/replay/replay.test.ts` (`npm test`).
+
+The RAF tick-advance itself — advance `tickRef` by `tickRate * speed` ticks/sec, clamped to a max,
+redraw every frame, fire a callback on reaching the max — is shared as `useReplayClock`
+(`src/components/useReplayClock.ts`) so `<ReplayPlayer>` and the Pathing tab's `<PlayerRoundOverlay>`
+(below) can't diverge on the advance math; only what happens at the max differs (advance to the next
+round vs. stop the aggregate clock).
 
 **Synced events panel:** the 2D Replay sub-tab docks a `SyncedEventsPanel` (`MatchRecapTab.tsx`)
 beside the canvas on wide screens (below it on narrow ones) — the core-events list, grouped by round,
@@ -289,12 +299,13 @@ Replays every round a chosen player played on one map **at once**, each round's 
 own start so the same player's many rounds move simultaneously as translucent, additively-blended
 ghosts — common paths/timings read as brighter density (issue #128). The pure extraction lives in
 `src/lib/replay/aggregate.ts`: `extractPlayerTrace(matchId, round, playerId, faction)` pulls one
-player's `frames[]` out of a `ReplayRound` into a `PlayerTrace` (positions re-timed to `t = tick -
-round.startTick`, `durationTicks` = the round's playback length), and `traceStateAt(trace, t)`
-interpolates it at an arbitrary shared-clock tick, returning `null` once `t` is past that round's own
-end — so a short round's ghost simply vanishes while longer rounds keep playing. Both are
-runtime-agnostic (no DOM, no fetch), reusing `playback.ts`'s `lerp`/`lerpAngle`/`roundTickRange` so the
-interpolation matches the single-round player exactly.
+player's `frames[]` out of a `ReplayRound` into a `PlayerTrace` (positions re-timed via `playback.ts`'s
+`ticksSince(tick, round.startTick)`, `durationTicks` = the round's playback length), and
+`traceStateAt(trace, t)` interpolates it at an arbitrary shared-clock tick, returning `null` once `t`
+is past that round's own end — so a short round's ghost simply vanishes while longer rounds keep
+playing. Both are runtime-agnostic (no DOM, no fetch), reusing `playback.ts`'s
+`lerp`/`lerpAngle`/`roundTickRange`/`ticksSince` so the interpolation matches the single-round player
+exactly.
 
 **On death**, `extractPlayerTrace` stops reading that round's frames the moment it sees the player
 dead — it appends one final frame frozen at their last known-alive position and reads no further, so
@@ -317,8 +328,9 @@ them there the same way it freezes a death.
 The shared renderer, `<PlayerRoundOverlay>`
 (`src/components/PlayerRoundOverlay.tsx`), takes a `PlayerTrace[]` + `tickRate` + map slug and owns the
 canvas, radar background (`useMapRadar`), CT/T side toggle, and a play/pause/speed/scrub transport
-driven by one clock shared across every trace — it doesn't care how the traces were sourced, so both
-scopes below reuse it as-is:
+driven by one clock shared across every trace (via `useReplayClock`, same hook `<ReplayPlayer>` uses —
+see "Client renderer" above) — it doesn't care how the traces were sourced, so both scopes below reuse
+it as-is:
 
 - **Match-scoped** (`MatchRecapTab`'s *Pathing* sub-tab, `MatchPlayerTrails.tsx`): picks one of
   the match's 4 rostered players and overlays every round of *that one match* they played. Fetches its

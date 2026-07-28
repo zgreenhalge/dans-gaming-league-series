@@ -16,7 +16,7 @@ export type Side = 'CT' | 'T';
  * Bump when the shape changes incompatibly. The player reads this and refuses
  * payloads it doesn't understand instead of mis-rendering.
  */
-export const REPLAY_SCHEMA_VERSION = 2;
+export const REPLAY_SCHEMA_VERSION = 3;
 
 /** A 2D world position, in CS2 world units (not yet projected to a radar). */
 export interface Point {
@@ -51,6 +51,14 @@ export interface ReplayRound {
   round: number;
   startTick: number;
   endTick: number;
+  /**
+   * The `round_freeze_end` tick — when the in-round timer actually starts counting
+   * down, i.e. the round clock's zero point. Falls back to `startTick` (the round's
+   * `round_start` tick) when the demo has no `round_freeze_end` events (see
+   * `docs/replay.md`'s "Freeze-time trim"), so the clock still runs, just from the
+   * top of freeze time instead of live.
+   */
+  freezeEndTick: number;
   /**
    * True for the pre-match knife round, present only for gauntlet/knife matches that
    * include it (see `docs/replay.md`). It's excluded entirely for regular-season matches,

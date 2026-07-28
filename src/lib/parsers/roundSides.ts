@@ -24,6 +24,31 @@ export interface RoundSideInfo {
  *   `regRoundsPerHalf` would move the swap boundary earlier by that same shift and mislabel the
  *   round straddling it. Defaults to 0 (no tick filtering).
  */
+const OT_ROUNDS_PER_HALF = 3;
+
+/**
+ * Which side a team starting on `startingSide` plays in 1-based *real* round number
+ * `realRoundNumber` (post-knife-round renumbering), applying the regulation-half swap at
+ * `targetWinRounds - 1` rounds and the every-`OT_ROUNDS_PER_HALF` OT swap beyond it. The
+ * canonical side-assignment rule (see `docs/calculations.md`'s "Side Splits") — both
+ * `buildRoundSides` (per recorded round) and `roundsPlayedBySide` (a rounds-played total,
+ * with no per-round event data) derive from this one function so they can't drift apart.
+ */
+function sideForRealRound(
+  realRoundNumber: number,
+  startingSide: 'CT' | 'T',
+  targetWinRounds: number,
+): 'CT' | 'T' {
+  const otherSide: 'CT' | 'T' = startingSide === 'CT' ? 'T' : 'CT';
+  const regRoundsPerHalf = targetWinRounds - 1;
+
+  if (realRoundNumber <= regRoundsPerHalf) return startingSide;
+  if (realRoundNumber <= regRoundsPerHalf * 2) return otherSide;
+  const otRound = realRoundNumber - regRoundsPerHalf * 2;
+  const otHalf = Math.ceil(otRound / OT_ROUNDS_PER_HALF);
+  return otHalf % 2 === 1 ? otherSide : startingSide;
+}
+
 export function buildRoundSides(
   roundEndEvents: RoundEndRow[],
   skinsStartingSide: 'CT' | 'T' | null,
@@ -33,9 +58,6 @@ export function buildRoundSides(
   if (skinsStartingSide === null) return [];
 
   const shirtsStartSide: 'CT' | 'T' = skinsStartingSide === 'CT' ? 'T' : 'CT';
-  const shirtsOtherSide: 'CT' | 'T' = shirtsStartSide === 'CT' ? 'T' : 'CT';
-  const regRoundsPerHalf = targetWinRounds - 1;
-  const OT_ROUNDS_PER_HALF = 3;
 
   const liveRounds = roundEndEvents.filter(
     (e) =>
@@ -50,25 +72,36 @@ export function buildRoundSides(
   return liveRounds.map((e) => {
     const roundNumber = e.total_rounds_played;
     const realRoundNumber = roundNumber - firstRoundNumber + 1;
-    let shirtsSide: 'CT' | 'T';
-
-    if (realRoundNumber <= regRoundsPerHalf) {
-      shirtsSide = shirtsStartSide;
-    } else if (realRoundNumber <= regRoundsPerHalf * 2) {
-      shirtsSide = shirtsOtherSide;
-    } else {
-      const otRound = realRoundNumber - regRoundsPerHalf * 2;
-      const otHalf = Math.ceil(otRound / OT_ROUNDS_PER_HALF);
-      shirtsSide = otHalf % 2 === 1 ? shirtsOtherSide : shirtsStartSide;
-    }
 
     return {
       roundNumber,
       endTick: e.tick,
       winnerSide: e.winner as 'CT' | 'T' | null,
-      shirtsSide,
+      shirtsSide: sideForRealRound(realRoundNumber, shirtsStartSide, targetWinRounds),
     };
   });
+}
+
+/**
+ * How many of a team's `roundsPlayed` rounds (1-based real round order) were played on CT
+ * vs T, derived from the same half/OT swap schedule as `buildRoundSides` — no per-round
+ * event data needed, just the team's starting side and the season's `target_win_rounds`.
+ * Used to side-scope per-round rate stats (e.g. ADR by side) where only a rounds-played
+ * total, not a side-by-round breakdown, is stored per player.
+ */
+export function roundsPlayedBySide(
+  startingSide: 'CT' | 'T' | null,
+  roundsPlayed: number,
+  targetWinRounds: number,
+): { ct: number; t: number } {
+  if (startingSide === null || roundsPlayed <= 0) return { ct: 0, t: 0 };
+  let ct = 0;
+  let t = 0;
+  for (let n = 1; n <= roundsPlayed; n++) {
+    if (sideForRealRound(n, startingSide, targetWinRounds) === 'CT') ct++;
+    else t++;
+  }
+  return { ct, t };
 }
 
 export function sideForFaction(

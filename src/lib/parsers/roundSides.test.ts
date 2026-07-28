@@ -8,7 +8,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { buildRoundSides, sideForFaction, type RoundEndRow } from './roundSides';
+import { buildRoundSides, sideForFaction, roundsPlayedBySide, type RoundEndRow } from './roundSides';
 import { test, report } from '../test-support/miniTest';
 
 function round(n: number, winner: 'CT' | 'T' | null = 'CT', warmup = false): RoundEndRow {
@@ -106,6 +106,34 @@ test('sideForFaction: SHIRTS returns the round shirts side, SKINS returns the op
   const info = { roundNumber: 1, endTick: 0, winnerSide: 'CT' as const, shirtsSide: 'T' as const };
   assert.equal(sideForFaction(info, 'SHIRTS'), 'T');
   assert.equal(sideForFaction(info, 'SKINS'), 'CT');
+});
+
+test('roundsPlayedBySide: null starting side or no rounds played returns zero both sides', () => {
+  assert.deepEqual(roundsPlayedBySide(null, 20, 13), { ct: 0, t: 0 });
+  assert.deepEqual(roundsPlayedBySide('CT', 0, 13), { ct: 0, t: 0 });
+});
+
+test('roundsPlayedBySide: a regulation-only match splits evenly at the half boundary', () => {
+  // MR12 (targetWinRounds 13): 12 rounds/half. A team starting CT that played all 24
+  // rounds spent 12 on CT (first half) and 12 on T (second half, post-swap).
+  assert.deepEqual(roundsPlayedBySide('CT', 24, 13), { ct: 12, t: 12 });
+});
+
+test('roundsPlayedBySide: partway through the first half stays entirely on the starting side', () => {
+  assert.deepEqual(roundsPlayedBySide('T', 5, 13), { ct: 0, t: 5 });
+});
+
+test('roundsPlayedBySide: matches buildRoundSides round-by-round for the same schedule', () => {
+  // Cross-check against buildRoundSides (event-driven) for a match that runs into OT, to
+  // confirm both entry points agree on the same per-round side assignment.
+  const events = Array.from({ length: 30 }, (_, i) => round(i + 1));
+  const sides = buildRoundSides(events, 'CT', 13); // skins start CT -> shirts start T
+  const expected = { ct: 0, t: 0 };
+  for (const s of sides) {
+    if (s.shirtsSide === 'CT') expected.ct++;
+    else expected.t++;
+  }
+  assert.deepEqual(roundsPlayedBySide('T', 30, 13), expected);
 });
 
 report();
