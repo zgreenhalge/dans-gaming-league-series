@@ -14,7 +14,21 @@ import { recordOpsError, clearOpsError } from './ops-errors';
  * site-wide history walk — so it's recorded against the `system` entity type's singleton id. */
 export async function triggerRatingRecompute(supabaseAdmin: SupabaseClient): Promise<void> {
   const secret = process.env.RECOMPUTE_SECRET;
-  if (!secret) return;
+  if (!secret) {
+    // A silent no-op here is indistinguishable from a healthy system with nothing to do — this
+    // config gap can otherwise go unnoticed across every score write in an environment (e.g. the
+    // demo-ingest Action) that never had RECOMPUTE_SECRET set, surfacing only as a leaderboard that
+    // silently stops updating. Recorded, not thrown, since a missing secret shouldn't fail the score
+    // write that triggered this call.
+    await recordOpsError(
+      supabaseAdmin,
+      'system',
+      0,
+      'ehog_recompute',
+      'EHOG recompute skipped: RECOMPUTE_SECRET is not set in this environment',
+    );
+    return;
+  }
   // APP_BASE_URL covers the demo-ingest Action, which runs outside Vercel and has no VERCEL_URL.
   const base =
     process.env.APP_BASE_URL ??
