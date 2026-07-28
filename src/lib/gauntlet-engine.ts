@@ -721,6 +721,27 @@ export async function saveManualDraft(
   const currentById = new Map(currentPods.map((p) => [p.id, p]));
   const submittedIds = new Set(draftPods.map((p) => p.persistedId).filter((id): id is number => id != null));
 
+  // A seed the current standings can't resolve (out of range, or — defensively — non-positive,
+  // though the API route already rejects that) would otherwise write a slot with no player_id and
+  // no way to ever materialize, silently: it doesn't count as "unassigned" for validateComplete()'s
+  // purposes, so nothing would flag the pod as stuck. Only checked against not-yet-materialized
+  // pods — a materialized pod's slots are frozen and never touched, so a historical seed number
+  // outside today's roster size there is expected, not an error.
+  const unresolvedSeeds = new Set<number>();
+  for (const pod of draftPods) {
+    if (pod.persistedId != null && currentById.get(pod.persistedId)?.materialized) continue;
+    for (const slot of pod.slots) {
+      if (slot.kind === 'seed' && !playerBySeed.has(slot.seed)) unresolvedSeeds.add(slot.seed);
+    }
+  }
+  if (unresolvedSeeds.size > 0) {
+    const seeds = [...unresolvedSeeds].sort((a, b) => a - b).join(', ');
+    return {
+      status: 'invalid',
+      errors: [`Seed${unresolvedSeeds.size === 1 ? '' : 's'} ${seeds} — the season currently only has ${leaderboard.length} players.`],
+    };
+  }
+
   for (const current of currentPods) {
     if (current.materialized && !submittedIds.has(current.id)) {
       return { status: 'invalid', errors: ['A materialized pod is missing from this save — reload and try again.'] };

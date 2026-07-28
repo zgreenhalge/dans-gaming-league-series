@@ -12,7 +12,7 @@ function parseSlot(value: unknown): DraftSlot | null {
   if (kind === 'empty') return { kind: 'empty' };
   if (kind === 'seed') {
     const seed = (value as { seed?: unknown }).seed;
-    if (typeof seed !== 'number' || !Number.isInteger(seed)) return null;
+    if (typeof seed !== 'number' || !Number.isInteger(seed) || seed < 1) return null;
     return { kind: 'seed', seed };
   }
   if (kind === 'advance') {
