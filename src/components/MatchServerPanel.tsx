@@ -159,13 +159,13 @@ export default function MatchServerPanel({
               // client bug, independent of host format). `steam://run/<appid>//+connect <ip:port>`
               // (730 = Counter-Strike 2) is the documented workaround that still launches reliably.
               href={`steam://run/730//+connect ${connect}`}
-              className="rounded-md border border-green-500 bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-500"
+              className="rounded-md border border-green-500 bg-green-600 px-5 py-2.5 text-base font-semibold text-white hover:bg-green-500"
             >
               Join server
             </a>
             <button
               onClick={copyConnect}
-              className="rounded-md border border-[var(--color-border-primary)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)]"
+              className="rounded-md border border-[var(--color-border-primary)] px-2 py-1 text-xs text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)]"
             >
               {copied ? 'Copied!' : `Copy “connect ${connect}”`}
             </button>
