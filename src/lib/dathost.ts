@@ -61,13 +61,16 @@ export const CONFIG_SET_OPTIONS: ConfigSetOption[] = Object.entries(CONFIG_SETS)
  */
 export function buildScalarFields(
   settings: Record<string, unknown>,
-  opts: { prefix?: string; exclude?: ReadonlySet<string> } = {},
+  opts: { prefix?: string; exclude?: ReadonlySet<string>; onSkip?: (key: string) => void } = {},
 ): Record<string, string> {
-  const { prefix = '', exclude } = opts;
+  const { prefix = '', exclude, onSkip } = opts;
   const fields: Record<string, string> = {};
   for (const [key, value] of Object.entries(settings)) {
     if (exclude?.has(key)) continue;
-    if (typeof value === 'object') continue;
+    if (typeof value === 'object') {
+      onSkip?.(key);
+      continue;
+    }
     fields[`${prefix}${key}`] = String(value);
   }
   return fields;

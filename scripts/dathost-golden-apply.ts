@@ -10,11 +10,12 @@
 //                                   whatever recreational-mode drift happened in the panel)
 //
 // Both mutate real state (repo files on disk, or the live match server) and require --yes.
-// --reassert only PUTs scalar cs2_settings/server fields (mirrors buildCs2Fields() in
-// src/lib/dathost.ts) — array fields like metamod_plugins are skipped, matching that file's
-// documented reasoning: DatHost preserves them across changes, so guessing form-encoding for an
-// array isn't worth the risk. --reassert also does not touch per_match_overrides (those are
-// per-match, not part of the static baseline) or cfg file uploads if the files endpoint 404s.
+// --reassert only PUTs scalar cs2_settings/server fields (via buildScalarFields() in
+// src/lib/dathost.ts, the same builder applyConfigSet() uses) — array fields like metamod_plugins are
+// skipped, matching that function's documented reasoning: DatHost preserves them across changes, so
+// guessing form-encoding for an array isn't worth the risk. --reassert also does not touch
+// per_match_overrides (those are per-match, not part of the static baseline) or cfg file uploads if
+// the files endpoint 404s.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -80,17 +81,14 @@ async function reassert(serverId: string) {
 
   // Same scalar-field builder the app uses (applyConfigSet in src/lib/dathost.ts) — see its doc
   // comment for why non-scalar values (arrays like metamod_plugins, null, nested objects) are skipped
-  // rather than guessed at.
+  // rather than guessed at. `onSkip` reports exactly what buildScalarFields itself excluded, so the
+  // logged message can never drift from the actual PUT.
+  const skipMsg = (label: string) => (key: string) =>
+    console.error(`  ~ skipping ${label}.${key} (array/null/object — not re-asserted, see script header)`);
   const fields: Record<string, string> = {
-    ...buildScalarFields(localServer),
-    ...buildScalarFields(localCs2, { prefix: 'cs2_settings.', exclude: MAP_SELECTION_KEYS }),
+    ...buildScalarFields(localServer, { onSkip: skipMsg('server') }),
+    ...buildScalarFields(localCs2, { prefix: 'cs2_settings.', exclude: MAP_SELECTION_KEYS, onSkip: skipMsg('cs2_settings') }),
   };
-  for (const key of Object.keys(localServer)) {
-    if (typeof localServer[key] === 'object') console.error(`  ~ skipping server.${key} (array/null/object — not re-asserted, see script header)`);
-  }
-  for (const key of Object.keys(localCs2)) {
-    if (typeof localCs2[key] === 'object') console.error(`  ~ skipping cs2_settings.${key} (array/null/object — not re-asserted, see script header)`);
-  }
 
   console.error(`— PUT /game-servers/${serverId} (golden settings) —`);
   const put = await api('PUT', `/game-servers/${serverId}`, new URLSearchParams(fields));

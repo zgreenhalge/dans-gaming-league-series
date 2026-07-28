@@ -373,9 +373,9 @@ subscription).
   `tearing_down`) until DatHost's own `autostop` (3-min idle) stops it independently; the *next*
   `live`-reconcile pass (triggered the same opportunistic way) then downgrades the row to `done`. So
   "teardown after `AUTO_TEARDOWN_DELAY_MS`" is really "teardown after whichever of two independent
-  clocks — a viewer showing up, or DatHost's own autostop — fires first," which is why `autostop_minutes`
-  was tightened from 10 to 3: it's the real backstop for the unwatched case, not just a billing safety
-  net. A periodic background reconcile (a real timer, not view-triggered) was considered and
+  clocks — a viewer showing up, or DatHost's own autostop — fires first," which is why
+  `autostop_minutes: 3` matters as more than a billing safety net: it's the real backstop for the
+  unwatched case. A periodic background reconcile (a real timer, not view-triggered) was considered and
   intentionally skipped as more machinery than this warranted.
 - **Concurrency guard has a tiny check-then-claim window** (above) — a fully atomic claim would need a
   Postgres advisory-lock RPC, judged not worth it for the rarity.

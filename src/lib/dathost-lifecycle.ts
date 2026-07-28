@@ -12,7 +12,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
-import { matchLabel, isPlayedScore, isServerLive } from './util';
+import { matchLabel, isPlayedScore } from './util';
 import { SCHEDULE_COLLISION_WINDOW_MS } from './schedule';
 import {
   dathostServerId,
@@ -310,10 +310,13 @@ export async function teardownMatchServer(
   }
 
   if (opts.delayMs) {
+    // Unlike the marker write below, this IS the whole action for the delayed path (no immediate
+    // stopSharedServer follows it) — a failure here must propagate to the caller so its own
+    // recordOpsError sees it, not get silently swallowed.
     await setServerState(supabaseAdmin, matchId, {
       server_state: 'tearing_down',
       teardown_at: new Date(Date.now() + opts.delayMs).toISOString(),
-    }).catch(() => {});
+    });
     return;
   }
 
@@ -351,7 +354,10 @@ async function downgradeToDone(
  * manual admin stop or DatHost's own autostop racing ahead during the grace window isn't detected
  * until `teardown_at` passes — accepted, since both `stopServer` and `teardownMatchServer` are
  * idempotent, so the deferred attempt below still lands cleanly against an already-stopped server once
- * due. Returns whether it downgraded the row to `done`.
+ * due. A null `teardown_at` (the explicit, non-delayed teardown route entering `tearing_down` without
+ * ever setting one) counts as due immediately — it means an immediate stop was requested and its own
+ * `stopSharedServer` call failed, so this is the retry path for that stuck case, not "nothing
+ * scheduled". Returns whether it downgraded the row to `done`.
  */
 async function runDueTeardown(
   supabaseAdmin: SupabaseClient,
@@ -359,7 +365,7 @@ async function runDueTeardown(
   serverId: string,
   teardownAt: string | null,
 ): Promise<boolean> {
-  if (teardownAt == null || Date.parse(teardownAt) > Date.now()) return false;
+  if (teardownAt != null && Date.parse(teardownAt) > Date.now()) return false;
   try {
     await stopSharedServer(supabaseAdmin, serverId);
     await downgradeToDone(supabaseAdmin, matchId, { teardown_at: null });
@@ -417,7 +423,10 @@ export async function getReconciledServerState(
   } else if (serverState === 'live' && serverId && ownsServer) {
     try {
       const server = await getServer(serverId);
-      if (!isServerLive(server)) {
+      // Confirmed stopped only — NOT `!isServerLive(server)` (`!on || booting`), which would also
+      // fire mid-boot (`on: true, booting: true`, e.g. another process restarting the shared server)
+      // and wrongly downgrade a match that's still actually up.
+      if (!server.on && !server.booting) {
         await downgradeToDone(supabaseAdmin, matchId);
         serverState = 'done';
         connectString = null;
