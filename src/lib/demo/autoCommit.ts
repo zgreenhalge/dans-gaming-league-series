@@ -22,7 +22,8 @@ export interface AutoCommitInput {
 export type AutoCommitDecision = { eligible: true } | { eligible: false; reason: string };
 
 /** Evaluate the D5 predicate. `eligible` means every check passed — the caller still gates the
- *  actual write on `AUTO_COMMIT_ENABLED` (shadow mode evaluates + logs without writing). */
+ *  actual write on `AUTO_COMMIT_ENABLED` (the manual override: `false` evaluates + logs without
+ *  writing). */
 export function evaluateAutoCommit(input: AutoCommitInput): AutoCommitDecision {
   if (input.alreadyPlayed) {
     return { eligible: false, reason: 'match already has a confirmed score — auto-commit never overwrites a played match' };

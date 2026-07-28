@@ -15,9 +15,9 @@
 // score always has a payload, but never a stored side — always manual review), and the demo-derived
 // score matches MatchZy's own `map_result` remote-log event (the independent cross-check;
 // `buildMatchzyConfig` fixes team1 = SHIRTS, team2 = SKINS, so it's direct equality).
-// `AUTO_COMMIT_ENABLED=true` gates the actual write; unset runs the predicate in shadow mode —
-// evaluated and logged, still staged for manual confirm — so it can be watched on real matches
-// before it's trusted to write.
+// The write itself is gated on `AUTO_COMMIT_ENABLED !== 'false'` — auto-commit is on by default;
+// setting the repo Actions variable to `false` is the manual override, forcing every eligible match
+// through the staged-result review instead (e.g. while investigating a parser issue).
 //
 // Reparsing an already-confirmed match (e.g. to backfill fields from a newly added collector) skips
 // both auto-commit and the staged-review step: when the freshly derived score matches the match's
@@ -52,6 +52,9 @@ import { writeMatchScore } from '../src/lib/matchScore';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '../src/lib/demo/ingestResult';
 import { recordJobStatus, matchJobKey, jobStatusWriter } from '../src/lib/background-jobs';
 import { notice, error } from './gh-actions-log';
+import { createStageRunner } from './job-stage';
+
+const STAGES = ['fetch', 'parse'] as const;
 
 const matchId = Number(process.env.MATCH_ID);
 const ghRunId = process.env.GH_RUN_ID ? Number(process.env.GH_RUN_ID) : null;
@@ -64,12 +67,15 @@ const supabase = getAdminClient();
  *  writes directly instead, since it must not throw while already unwinding. */
 const setJob = jobStatusWriter(supabase, JOB_TYPE, matchJobKey(matchId));
 
+const stageRunner = createStageRunner(STAGES[0], setJob);
+const { stage } = stageRunner;
+
 async function fail(err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
-  error(`demo-ingest failed: ${message}`);
+  error(`demo-ingest failed at stage ${stageRunner.currentStage}: ${message}`);
   await recordJobStatus(supabase, JOB_TYPE, matchJobKey(matchId), {
     status: 'failed',
-    stage: 'error',
+    stage: stageRunner.currentStage,
     error_message: message,
     finished_at: new Date().toISOString(),
   });
@@ -81,7 +87,7 @@ async function main() {
 
   await setJob({
     status: 'running',
-    stage: 'fetch',
+    stage: STAGES[0],
     error_message: null,
     gh_run_id: ghRunId,
     gh_run_url: ghRunUrl,
@@ -90,16 +96,17 @@ async function main() {
 
   // Pulls the demo from DatHost if it isn't already in R2 (a manual reparse of an already-staged/
   // confirmed match has it already).
-  const raw = await ensureDemoInR2(dathostServerId(), matchId);
+  const raw = await stage('fetch', () => ensureDemoInR2(dathostServerId(), matchId));
 
-  await setJob({ status: 'running', stage: 'parse', error_message: null });
+  const { inputs, parsed, sab, warnings } = await stage('parse', async () => {
+    const inputs = await getReplayInputs(supabase, matchId);
+    const demo = gunzipMaybe(raw);
 
-  const inputs = await getReplayInputs(supabase, matchId);
-  const demo = gunzipMaybe(raw);
-
-  const parsed = parseDemoFile(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
-  const sab = parseDemoSabremetrics(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
-  const warnings = [...new Set([...parsed.warnings, ...sab.warnings])];
+    const parsed = parseDemoFile(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
+    const sab = parseDemoSabremetrics(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
+    const warnings = [...new Set([...parsed.warnings, ...sab.warnings])];
+    return { inputs, parsed, sab, warnings };
+  });
 
   const q = quarantineDemo({
     roundHistory: parsed.round_history,
@@ -172,7 +179,7 @@ async function main() {
       mapResult: mapResult ? { shirts: mapResult.team1.score, skins: mapResult.team2.score } : null,
     });
 
-    if (decision.eligible && process.env.AUTO_COMMIT_ENABLED === 'true') {
+    if (decision.eligible && process.env.AUTO_COMMIT_ENABLED !== 'false') {
       const written = await writeMatchScore(supabase, matchId, {
         shirts: payload.shirts,
         skins: payload.skins,
@@ -198,7 +205,7 @@ async function main() {
       );
     } else if (decision.eligible) {
       notice(
-        `demo-ingest match ${matchId}: would auto-commit ${payload.shirts}-${payload.skins} (shadow mode — set AUTO_COMMIT_ENABLED=true to go live) — staging for manual confirm`,
+        `demo-ingest match ${matchId}: would auto-commit ${payload.shirts}-${payload.skins} (AUTO_COMMIT_ENABLED=false — manual override active) — staging for manual confirm`,
       );
     } else {
       notice(`demo-ingest match ${matchId}: not auto-committing (${decision.reason}) — staging for manual confirm`);

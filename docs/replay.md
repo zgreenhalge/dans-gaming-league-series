@@ -381,11 +381,14 @@ pipeline goes through its own dedicated dispatch route (`/api/matches/[id]/demo/
 Recap tab's Generate/Retry button) and never re-triggers the other. `/api/ingest/matchzy-log` skips
 the auto-dispatch entirely if a `replay_extract` row already exists for the match, so a retried event
 can't double-fire it. Both Actions pull the demo directly from DatHost themselves if it isn't already
-in R2 (`fetchFromDathost.ts`) rather than waiting for it to be pushed.
+in R2 (`fetchFromDathost.ts`) rather than waiting for it to be pushed — when a `demo_ingest` row is
+actually claimed for the match, `replay-extract.ts` treats it as the pull's owner, polling R2 for its
+pull to land (much cheaper than DatHost) before falling back to pulling independently, so the two
+Actions don't both download and re-upload the same demo.
 
 | Action | Trigger | Output |
 |---|---|---|
-| **A — `replay-extract`** | auto, on match end (`/api/ingest/matchzy-log`'s `map_result` handler, opt-in via `REPLAY_AUTO_DISPATCH`) or manual (Recap tab / admin `POST /api/matches/[id]/replay/dispatch`) | `replay.json`, compact `heatmap.json` **and** `traces.json`, plus a rebuild of the map's `heatmap.json`/`traces.json` rollups → R2 (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
+| **A — `replay-extract`** | auto, on match end (`/api/ingest/matchzy-log`'s `map_result` handler — `REPLAY_AUTO_DISPATCH=false` is the manual override) or manual (Recap tab / admin `POST /api/matches/[id]/replay/dispatch`) | `replay.json`, compact `heatmap.json` **and** `traces.json`, plus a rebuild of the map's `heatmap.json`/`traces.json` rollups → R2 (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
 | **A′ — `replay-extract-all`** | manual (Actions UI / dispatch) | re-runs A for **every** match with a demo, as a matrix (`replay-extract-all.yml` + `scripts/list-demo-matches.ts`) |
 | **B — `radar-build`** | per map (Actions UI, or admin `POST /api/maps/[slug]/radar/dispatch`) | radar PNG → R2 `maps/<id>/radar.png` + `maps` row calibration (`radar-build.yml` + `scripts/radar-build.ts`) |
 

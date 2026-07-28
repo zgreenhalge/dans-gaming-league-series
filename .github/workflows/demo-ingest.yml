@@ -1,15 +1,15 @@
 # Action — demo-ingest (Phase 3 + trusted auto-commit, Phase 5 / #138, of #131)
 #
-# demo pulled from DatHost (R2) → parse + quarantine → auto-commit (AUTO_COMMIT_ENABLED, D5 predicate)
-# or a staged confirm-ready result (R2 `<matchId>/demo-result.json`). Heavy parsing runs here, NOT on
-# Vercel (kills the parse route's MAX_DEMO_BYTES ceiling). Triggered by the app via workflow_dispatch
-# (from `/api/ingest/matchzy-log` on a `map_result` event), or manually.
+# demo pulled from DatHost (R2) → parse + quarantine → auto-commit (D5 predicate, AUTO_COMMIT_ENABLED
+# manual override) or a staged confirm-ready result (R2 `<matchId>/demo-result.json`). Heavy parsing
+# runs here, NOT on Vercel (kills the parse route's MAX_DEMO_BYTES ceiling). Triggered by the app via
+# workflow_dispatch (from `/api/ingest/matchzy-log` on a `map_result` event), or manually.
 #
 # Idempotent: deterministic R2 key, re-dispatch overwrites. The script updates background_jobs.status
 # (received → queued → running → parsed|quarantined|confirmed|failed) so the app shows state without
-# Actions. AUTO_COMMIT_ENABLED is a repo Actions variable (shadow mode when unset — the predicate is
-# evaluated and logged, but the score is always staged for manual confirm), adjustable without
-# editing this file.
+# Actions. AUTO_COMMIT_ENABLED is a repo Actions variable, adjustable without editing this file: unset
+# (or anything but "false") auto-commits an eligible verdict; "false" is the manual override, staging
+# every match for manual confirm regardless of how cleanly it parses.
 
 name: demo-ingest
 

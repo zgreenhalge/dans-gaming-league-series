@@ -104,7 +104,7 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
                                                                               │
        scripts/demo-ingest.ts: pull demo from DatHost (R2) + parse + quarantine + D5 predicate check
                                           │                              │
-                            predicate passes, AUTO_COMMIT_ENABLED  predicate fails / shadow mode
+                       predicate passes, no manual override      predicate fails / manual override active
                             writeMatchScore()  status: confirmed        R2 (demoResultKey)  status: parsed | quarantined
                                                                               │
                                           in-match MatchDemoReviewBlock  ──admin Confirm──▶ PATCH /score  (confirmed)
@@ -130,7 +130,13 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
   holds the file back for ~120s after `map_result` while it flushes the recording), gzips it, and
   writes it to R2 at the same deterministic `demoKey(matchId)` a browser upload would use — both
   `demo-ingest.ts` and `replay-extract.ts` call it themselves, at the top of their own run, only if the
-  demo isn't already in R2, so either one can be dispatched (or re-dispatched) independently.
+  demo isn't already in R2, so either one can be dispatched (or re-dispatched) independently. Since both
+  are auto-dispatched together off the same `map_result` event and tend to detect the demo on the same
+  DatHost poll cycle, `replay-extract.ts` checks `background_jobs` for a claimed `demo_ingest` row
+  on a miss, only then (`demoIngestInFlight()`): if one exists, it treats `demo-ingest.ts` as the
+  pull's owner and waits out the same grace window `demo-ingest.ts`'s own DatHost poll gets — polling
+  R2 instead, much cheaper — before falling back to pulling independently. A manual "Regenerate"
+  dispatch has no such row and pulls immediately, with no wasted wait.
 - The Action mirrors the replay pipeline (`scripts/replay-extract.ts`): heavy parsing (and the demo
   pull itself) runs in CI, not in a Vercel request.
 
@@ -147,12 +153,14 @@ matches MatchZy's own `map_result` event read from `mapResultKey` (`buildMatchzy
 team1 = SHIRTS / team2 = SKINS, so it's a direct equality, no side remapping). `scripts/demo-ingest.ts`
 gathers the inputs, calls it after quarantine, and logs the verdict either way.
 
-`AUTO_COMMIT_ENABLED` (a repo Actions variable) gates the write on an eligible verdict: unset runs in
-**shadow mode** — the predicate is evaluated and logged (`::notice::`) but the result is always staged
-for manual confirm; `true` calls the shared `writeMatchScore()` (`src/lib/matchScore.ts`) directly,
-marks the job `confirmed`, and deletes the staged `demoResultKey` and `mapResultKey` artifacts. An
-ineligible verdict — including a disagreement between the demo score and `map_result`, or an
-already-confirmed match — always falls back to the staged-result review, regardless of the flag.
+`AUTO_COMMIT_ENABLED` (a repo Actions variable) gates the write on an eligible verdict: unset (or
+anything but `false`) calls the shared `writeMatchScore()` (`src/lib/matchScore.ts`) directly, marks
+the job `confirmed`, and deletes the staged `demoResultKey` and `mapResultKey` artifacts — this is the
+default. `false` is the **manual override**: the predicate is still evaluated and logged (`::notice::`)
+but the result is always staged for manual confirm instead of written, for incident response (e.g.
+investigating a parser issue) without needing a code change. An ineligible verdict — including a
+disagreement between the demo score and `map_result`, or an already-confirmed match — always falls
+back to the staged-result review, regardless of the flag.
 
 `writeMatchScore()` is the single write path for a match score (validation, `matches.final_score` +
 `player_match_stats`, sabremetrics, rating recompute, gauntlet-propagate-or-season-completion, and
@@ -333,8 +341,9 @@ The demo-ingest and replay-extract Actions need their own copies of `DATHOST_EMA
 `DATHOST_PASSWORD`/`DATHOST_SERVER_ID` (to pull the demo), `APP_BASE_URL` (repo Actions **variable** —
 it's public, unlike the rest of this list), and `RECOMPUTE_SECRET` (repo **secret**), since they run
 outside Vercel and have no other way to reach the app's recompute endpoint. `AUTO_COMMIT_ENABLED` (repo
-variable) gates trusted auto-commit (#138) — unset runs the predicate in shadow mode (evaluated +
-logged, still staged for manual confirm); `true` goes live.
+variable) gates trusted auto-commit (#138) — unset (or anything but `false`) writes an eligible
+verdict directly; `false` is the manual override (evaluated + logged, still staged for manual
+confirm).
 
 ## Key files
 
