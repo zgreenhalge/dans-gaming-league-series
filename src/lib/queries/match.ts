@@ -137,6 +137,9 @@ export interface LiveTickerMatch extends MatchTeamNames {
   matchId: number;
   shirts: number;
   skins: number;
+  /** When this score was last written — lets `LiveMatchTicker` (via `createLiveScoreGuard`) tell a
+   *  stale GET response apart from a newer Realtime update instead of trusting arrival order. */
+  updatedAt: string;
 }
 
 /** The site-wide live-match ticker's data — whichever match is currently live (there's at most one,
@@ -148,7 +151,27 @@ export async function getLiveTickerMatch(): Promise<LiveTickerMatch | null> {
   if (!live) return null;
   const teams = await getMatchTeamNames(live.matchId);
   if (!teams) return null;
-  return { matchId: live.matchId, shirts: live.shirts, skins: live.skins, ...teams };
+  return { matchId: live.matchId, shirts: live.shirts, skins: live.skins, updatedAt: live.updatedAt, ...teams };
+}
+
+/**
+ * Whether THIS specific match currently has a live score — a cheap presence check by primary key,
+ * distinct from `getCurrentLiveMatch` above (which has to find the live match with no id to filter
+ * on). The match page uses this to render an inline style override that zeroes `--ticker-h` for
+ * itself: the root layout can't know which page is being requested (it has no route params, and
+ * reading them via `headers()` would force the whole site out of static rendering just for this),
+ * so it always reserves ticker space based on "is anything live" alone. On the live match's own
+ * page — where `LiveMatchTicker` suppresses itself since `MatchScoreHero` already shows the score —
+ * that guess is wrong, and without this override the page would render with a phantom gap under the
+ * topbar until the client corrects it after hydration.
+ */
+export async function isMatchCurrentlyLive(matchId: number): Promise<boolean> {
+  const { data } = await supabase
+    .from('live_match_score')
+    .select('match_id')
+    .eq('match_id', matchId)
+    .maybeSingle();
+  return data != null;
 }
 
 /**

@@ -52,6 +52,35 @@ export function rowToLiveScore(matchId: number, row: LiveScoreDbRow): LiveScoreR
   return { matchId, shirts: row.shirts_score, skins: row.skins_score, round: row.round, updatedAt: row.updated_at };
 }
 
+/** A live-score update's position in time for a given match — its `updated_at`, or `'deleted'` once
+ *  the row's gone (a delete carries no timestamp to compare, and is always the last word for that
+ *  match). */
+export type LiveScoreVersion = string | 'deleted';
+
+/**
+ * Guards a live-score display fed by more than one out-of-order source — an initial GET racing a
+ * Realtime subscription, both `MatchScoreHero` (one fixed match for its whole mount) and
+ * `LiveMatchTicker` (the match it's tracking can change over time, as different matches go live) hit
+ * this same race. Returns an `accept(matchId, version)` function: call it with each update as it
+ * arrives, and only apply the accompanying value when it returns `true`.
+ *
+ * An update for a *different* match than the last-accepted one is always accepted — that's
+ * unambiguously fresh, not a race. An update for the *same* match is accepted only if it's newer than
+ * what's already landed; once that match's version is `'deleted'`, nothing else for it is accepted
+ * (a live score never comes back for a scored match) — but a later update naming a different match
+ * still is, so the guard itself isn't a one-shot: it keeps working for whatever match comes next. */
+export function createLiveScoreGuard() {
+  let state: { matchId: number; version: LiveScoreVersion } | null = null;
+  return function accept(matchId: number, version: LiveScoreVersion): boolean {
+    if (state && state.matchId === matchId) {
+      if (state.version === 'deleted') return false;
+      if (version !== 'deleted' && version <= state.version) return false;
+    }
+    state = { matchId, version };
+    return true;
+  };
+}
+
 /** What's parsed out of an incoming remote-log body — no `updatedAt`, since that's stamped at write
  *  time, not carried by the event itself. */
 interface ParsedLiveScoreEvent {

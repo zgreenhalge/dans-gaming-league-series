@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, isWeekComplete } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, isWeekComplete, isMatchCurrentlyLive } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/og';
 import { buildMatchJsonLd } from '@/lib/structured-data';
 import { JsonLd } from '@/components/JsonLd';
@@ -130,7 +130,7 @@ export default async function MatchPage({
   const needsPreviousWeekCheck =
     !played && showScouting && week.week_number > 1 && matchWindow != null && today < matchWindow.weekStart;
 
-  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, previousWeekComplete] = await Promise.all([
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, previousWeekComplete, isLiveNow] = await Promise.all([
     showScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     showScouting
       ? getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true })
@@ -148,6 +148,8 @@ export default async function MatchPage({
     showScouting && map ? getMatchIdsForMap(map) : Promise.resolve<number[]>([]),
     season.is_gauntlet ? getGauntletPodForMatch(matchId) : Promise.resolve(null),
     needsPreviousWeekCheck ? isWeekComplete(season.id, week.week_number - 1) : Promise.resolve(false),
+    // Drives the `--ticker-h` override below — only an unplayed match can ever be the live one.
+    played ? Promise.resolve(false) : isMatchCurrentlyLive(matchId),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
 
@@ -274,6 +276,13 @@ export default async function MatchPage({
 
   return (
     <div className="min-h-screen">
+      {/* `LiveMatchTicker` suppresses itself here (it already knows this is its own match's page via
+          `usePathname`), but the root layout can't know that server-side — it has no route params to
+          check without opting the whole site out of static rendering — so it always reserves ticker
+          space based on "is anything live" alone. `!important` corrects that guess before first paint
+          instead of leaving it to the client to fix after hydration, which would show a phantom gap
+          under the topbar on exactly the page most likely to be watched live. */}
+      {isLiveNow && <style>{':root{--ticker-h:0px !important}'}</style>}
       <JsonLd data={matchJsonLd} />
       <div className="centering">
         {match.is_feature_match && <FeatureMatchBanner />}
@@ -313,6 +322,7 @@ export default async function MatchPage({
             <MatchScoreHero
               matchId={match.id}
               played={played}
+              vetoComplete={vetoComplete}
               finalScore={score}
               shirtsF={shirtsF}
               skinsF={skinsF}

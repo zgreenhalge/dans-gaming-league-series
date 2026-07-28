@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getBrowserClient } from '@/lib/supabase-browser';
-import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '@/lib/demo/liveScore';
+import { rowToLiveScore, createLiveScoreGuard, type LiveScoreRow, type LiveScoreDbRow } from '@/lib/demo/liveScore';
 import { LiveDot } from '@/components/ServerStatusBits';
 
 type Faction = 'CT' | 'T' | null;
@@ -44,31 +44,33 @@ function ScoreDisplay({ shirts, skins, shirtsF, skinsF }: { shirts: number; skin
 export default function MatchScoreHero({
   matchId,
   played,
+  vetoComplete,
   finalScore,
   shirtsF,
   skinsF,
 }: {
   matchId: number;
   played: boolean;
+  /** A live score can only ever exist once veto resolves and a server can go live — before that,
+   *  skip mounting the fetch/subscription entirely rather than opening a Realtime channel that can
+   *  never receive anything (e.g. a match still weeks from its veto window). */
+  vetoComplete: boolean;
   finalScore: { shirts: number; skins: number } | null;
   shirtsF: Faction;
   skinsF: Faction;
 }) {
+  const liveEligible = !played && vetoComplete;
   const [liveScore, setLiveScore] = useState<LiveScoreRow | null>(null);
-  // Lets the initial GET and the Realtime subscription (which start concurrently and race) tell a
-  // stale result apart from a newer one instead of trusting arrival order. 'deleted' is terminal.
-  const latestRef = useRef<string | 'deleted' | null>(null);
+  // Guards the initial GET and the Realtime subscription (which start concurrently and race) against
+  // a stale result landing after a newer one already has.
+  const guardRef = useRef(createLiveScoreGuard());
 
   const refresh = useCallback(async () => {
     try {
       const res = await fetch(`/api/matches/${matchId}/live-score`);
       if (!res.ok) return;
       const data = (await res.json()) as { liveScore: LiveScoreRow | null };
-      if (latestRef.current === 'deleted') return;
-      if (data.liveScore) {
-        if (latestRef.current && data.liveScore.updatedAt <= latestRef.current) return;
-        latestRef.current = data.liveScore.updatedAt;
-      }
+      if (data.liveScore && !guardRef.current(matchId, data.liveScore.updatedAt)) return;
       setLiveScore(data.liveScore);
     } catch {
       /* transient — Realtime will still deliver updates */
@@ -76,13 +78,13 @@ export default function MatchScoreHero({
   }, [matchId]);
 
   useEffect(() => {
-    if (played) return;
+    if (!liveEligible) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
-  }, [played, refresh]);
+  }, [liveEligible, refresh]);
 
   useEffect(() => {
-    if (played) return;
+    if (!liveEligible) return;
     const channel = getBrowserClient()
       .channel(`live-score-${matchId}`)
       .on(
@@ -90,12 +92,12 @@ export default function MatchScoreHero({
         { event: '*', schema: 'public', table: 'live_match_score', filter: `match_id=eq.${matchId}` },
         (payload) => {
           if (payload.eventType === 'DELETE') {
-            latestRef.current = 'deleted';
+            guardRef.current(matchId, 'deleted');
             setLiveScore(null);
             return;
           }
           const row = payload.new as LiveScoreDbRow;
-          latestRef.current = row.updated_at;
+          if (!guardRef.current(matchId, row.updated_at)) return;
           setLiveScore(rowToLiveScore(matchId, row));
         },
       )
@@ -103,7 +105,7 @@ export default function MatchScoreHero({
     return () => {
       getBrowserClient().removeChannel(channel);
     };
-  }, [played, matchId]);
+  }, [liveEligible, matchId]);
 
   if (played) {
     if (!finalScore) return null;

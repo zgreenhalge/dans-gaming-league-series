@@ -22,7 +22,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase-browser';
 import { LiveDot } from '@/components/ServerStatusBits';
-import type { LiveScoreDbRow } from '@/lib/demo/liveScore';
+import { createLiveScoreGuard, type LiveScoreDbRow } from '@/lib/demo/liveScore';
 import type { LiveTickerMatch } from '@/lib/queries';
 
 export const TICKER_HEIGHT_PX = 34;
@@ -34,12 +34,17 @@ export function LiveMatchTicker({ initial }: { initial: LiveTickerMatch | null }
   useEffect(() => {
     tickerRef.current = ticker;
   }, [ticker]);
+  // Guards against a slow GET landing after a Realtime event already applied a newer (or terminal)
+  // update — for whichever match is currently being tracked, which can change over time as different
+  // matches go live (unlike MatchScoreHero, which only ever tracks one fixed match).
+  const guardRef = useRef(createLiveScoreGuard());
 
   const refresh = useCallback(async () => {
     try {
       const res = await fetch('/api/live-match');
       if (!res.ok) return;
       const data = (await res.json()) as { ticker: LiveTickerMatch | null };
+      if (data.ticker && !guardRef.current(data.ticker.matchId, data.ticker.updatedAt)) return;
       setTicker(data.ticker);
     } catch {
       /* transient — Realtime will still deliver updates */
@@ -62,10 +67,12 @@ export function LiveMatchTicker({ initial }: { initial: LiveTickerMatch | null }
         (payload) => {
           if (payload.eventType === 'DELETE') {
             const old = payload.old as { match_id?: number };
-            if (!tickerRef.current || old.match_id === tickerRef.current.matchId) setTicker(null);
+            if (old.match_id != null) guardRef.current(old.match_id, 'deleted');
+            if (tickerRef.current && old.match_id === tickerRef.current.matchId) setTicker(null);
             return;
           }
           const row = payload.new as LiveScoreDbRow & { match_id: number };
+          if (!guardRef.current(row.match_id, row.updated_at)) return;
           if (tickerRef.current && tickerRef.current.matchId === row.match_id) {
             setTicker({ ...tickerRef.current, shirts: row.shirts_score, skins: row.skins_score });
           } else {
