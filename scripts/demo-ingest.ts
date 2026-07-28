@@ -52,6 +52,9 @@ import { writeMatchScore } from '../src/lib/matchScore';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '../src/lib/demo/ingestResult';
 import { recordJobStatus, matchJobKey, jobStatusWriter } from '../src/lib/background-jobs';
 import { notice, error } from './gh-actions-log';
+import { createStageRunner } from './job-stage';
+
+const STAGES = ['fetch', 'parse'] as const;
 
 const matchId = Number(process.env.MATCH_ID);
 const ghRunId = process.env.GH_RUN_ID ? Number(process.env.GH_RUN_ID) : null;
@@ -64,12 +67,15 @@ const supabase = getAdminClient();
  *  writes directly instead, since it must not throw while already unwinding. */
 const setJob = jobStatusWriter(supabase, JOB_TYPE, matchJobKey(matchId));
 
+const stageRunner = createStageRunner(STAGES[0], setJob);
+const { stage } = stageRunner;
+
 async function fail(err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
-  error(`demo-ingest failed: ${message}`);
+  error(`demo-ingest failed at stage ${stageRunner.currentStage}: ${message}`);
   await recordJobStatus(supabase, JOB_TYPE, matchJobKey(matchId), {
     status: 'failed',
-    stage: 'error',
+    stage: stageRunner.currentStage,
     error_message: message,
     finished_at: new Date().toISOString(),
   });
@@ -81,7 +87,7 @@ async function main() {
 
   await setJob({
     status: 'running',
-    stage: 'fetch',
+    stage: STAGES[0],
     error_message: null,
     gh_run_id: ghRunId,
     gh_run_url: ghRunUrl,
@@ -90,16 +96,17 @@ async function main() {
 
   // Pulls the demo from DatHost if it isn't already in R2 (a manual reparse of an already-staged/
   // confirmed match has it already).
-  const raw = await ensureDemoInR2(dathostServerId(), matchId);
+  const raw = await stage('fetch', () => ensureDemoInR2(dathostServerId(), matchId));
 
-  await setJob({ status: 'running', stage: 'parse', error_message: null });
+  const { inputs, parsed, sab, warnings } = await stage('parse', async () => {
+    const inputs = await getReplayInputs(supabase, matchId);
+    const demo = gunzipMaybe(raw);
 
-  const inputs = await getReplayInputs(supabase, matchId);
-  const demo = gunzipMaybe(raw);
-
-  const parsed = parseDemoFile(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
-  const sab = parseDemoSabremetrics(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
-  const warnings = [...new Set([...parsed.warnings, ...sab.warnings])];
+    const parsed = parseDemoFile(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
+    const sab = parseDemoSabremetrics(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
+    const warnings = [...new Set([...parsed.warnings, ...sab.warnings])];
+    return { inputs, parsed, sab, warnings };
+  });
 
   const q = quarantineDemo({
     roundHistory: parsed.round_history,
