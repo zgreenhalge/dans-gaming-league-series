@@ -14,6 +14,7 @@ import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/Sabrem
 import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow } from '@/lib/queries';
 import type { SabFields } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
+import { roundsPlayedBySide } from '@/lib/parsers/roundSides';
 
 type Faction = 'CT' | 'T' | null;
 type Tab = 'leaderboard' | 'advanced' | 'scouting' | 'recap';
@@ -46,6 +47,7 @@ function Scoreboard({
   sabMap,
   includeCT,
   includeT,
+  targetWinRounds,
 }: {
   players: MatchStatRow[];
   mvpPlayerId: number | null;
@@ -55,6 +57,9 @@ function Scoreboard({
   sabMap?: Map<number, SabFields>;
   includeCT: boolean;
   includeT: boolean;
+  /** The team's starting side (`faction`) plus this determine which rounds were played
+   *  on which side, for the ADR-by-side denominator below. */
+  targetWinRounds: number;
 }) {
   const cls = factionClass(faction);
   const hasSab = sabMap && sabMap.size > 0;
@@ -94,7 +99,15 @@ function Scoreboard({
             const a = sab && !bothSides ? splitStat(sab, 'assists_ct', 'assists_t', includeCT, includeT) : p.assists;
             const d = sab && !bothSides ? splitStat(sab, 'deaths_ct', 'deaths_t', includeCT, includeT) : p.deaths;
             const dmg = sab && !bothSides ? splitStat(sab, 'damage_ct', 'damage_t', includeCT, includeT) : p.damage;
-            const adr = p.rounds_played > 0 ? Math.round(dmg / p.rounds_played) : 0;
+            // A side filter narrows the numerator to that side's damage, so the
+            // denominator must narrow to that side's rounds too — not the player's
+            // total rounds played, which would understate ADR for the filtered side.
+            let adrRounds = p.rounds_played;
+            if (sab && !bothSides) {
+              const bySide = roundsPlayedBySide(faction, p.rounds_played, targetWinRounds);
+              adrRounds = (includeCT ? bySide.ct : 0) + (includeT ? bySide.t : 0);
+            }
+            const adr = adrRounds > 0 ? Math.round(dmg / adrRounds) : 0;
 
             let hsPct = '—';
             let ef = 0;
@@ -510,7 +523,7 @@ export default function MatchTabView({
                   score={score?.shirts ?? null}
                   outcome={score ? (shirtsWon ? 'WON' : 'LOST') : null}
                 />
-                <Scoreboard players={shirts} mvpPlayerId={mvpPlayerId} faction={shirtsF} currentPlayerId={currentPlayerId} ratingDeltas={ratingDeltas} sabMap={hasSab ? sabMap : undefined} includeCT={includeCT} includeT={includeT} />
+                <Scoreboard players={shirts} mvpPlayerId={mvpPlayerId} faction={shirtsF} currentPlayerId={currentPlayerId} ratingDeltas={ratingDeltas} sabMap={hasSab ? sabMap : undefined} includeCT={includeCT} includeT={includeT} targetWinRounds={targetWinRounds} />
               </div>
               <div className="mt-6">
                 <TeamHeader
@@ -519,7 +532,7 @@ export default function MatchTabView({
                   score={score?.skins ?? null}
                   outcome={score ? (!shirtsWon ? 'WON' : 'LOST') : null}
                 />
-                <Scoreboard players={skins} mvpPlayerId={mvpPlayerId} faction={skinsF} currentPlayerId={currentPlayerId} ratingDeltas={ratingDeltas} sabMap={hasSab ? sabMap : undefined} includeCT={includeCT} includeT={includeT} />
+                <Scoreboard players={skins} mvpPlayerId={mvpPlayerId} faction={skinsF} currentPlayerId={currentPlayerId} ratingDeltas={ratingDeltas} sabMap={hasSab ? sabMap : undefined} includeCT={includeCT} includeT={includeT} targetWinRounds={targetWinRounds} />
               </div>
             </>
           )}
