@@ -624,7 +624,9 @@ export type SaveDraftResult =
  * or were removed, and leaving materialized pods untouched. The client already ran
  * `pruneInvalidReferences()` (`gauntlet-draft.ts`) so the submitted draft is internally
  * self-consistent by construction — this only re-validates defensively (`validateIntegrity()`)
- * rather than repeating cascade-clearing logic server-side. */
+ * rather than repeating cascade-clearing logic server-side. The pod/slot shape diff itself is
+ * applied atomically via the `reconcile_gauntlet_draft()` DB function (one Postgres transaction) —
+ * see the comment above that RPC call below for why materialization afterward is a separate step. */
 export async function saveManualDraft(
   supabaseAdmin: SupabaseClient,
   regularSeasonId: number,
@@ -709,89 +711,100 @@ export async function saveManualDraft(
     }
   }
 
+  const newPods = draftPods.filter((p) => p.persistedId == null);
+  const newPodKeys = new Set(newPods.map((p) => p.key));
+  // A persisted pod's `key` is always `String(persistedId)` (see `fromPersistedShape()` in
+  // gauntlet-draft.ts) and a new pod's is a locally-minted temp key — this tells the DB function
+  // which one it's looking at without needing a separate lookup round-trip.
+  const podRef = (key: string): { kind: 'id' | 'temp'; value: number | string } =>
+    newPodKeys.has(key) ? { kind: 'temp', value: key } : { kind: 'id', value: Number(key) };
+
+  // Not-yet-materialized pods have no matches depending on their slots yet, so a changed pod's
+  // slots are simply replaced wholesale rather than diffed row-by-row.
+  const podsNeedingSlotWrite = [...newPods, ...updatedExisting];
+  const keyToId = new Map<string, number>();
+  for (const pod of draftPods) {
+    if (pod.persistedId != null) keyToId.set(pod.key, pod.persistedId);
+  }
+
   try {
-    if (toDelete.length > 0) {
-      const { error: slotsDelErr } = await supabaseAdmin.from('gauntlet_pod_slots').delete().in('pod_id', toDelete);
-      if (slotsDelErr) throw slotsDelErr;
-      const { error: podsDelErr } = await supabaseAdmin.from('gauntlet_pods').delete().in('id', toDelete);
-      if (podsDelErr) throw podsDelErr;
-    }
-
-    const keyToId = new Map<string, number>();
-    for (const pod of draftPods) {
-      if (pod.persistedId != null) keyToId.set(pod.key, pod.persistedId);
-    }
-
-    const newPods = draftPods.filter((p) => p.persistedId == null);
-    for (const pod of newPods) {
-      const { data, error } = await supabaseAdmin
-        .from('gauntlet_pods')
-        .insert({
-          season_id: gauntletSeasonId,
-          round_number: pod.round_number,
-          pod_index: pod.pod_index,
-          advance_rule: pod.advance_rule,
-          is_final: pod.is_final,
-        })
-        .select('id')
-        .single();
-      if (error) throw error;
-      keyToId.set(pod.key, (data as { id: number }).id);
-    }
-
-    for (const pod of updatedExisting) {
-      const current = currentById.get(pod.persistedId!)!;
-      if (current.advance_rule !== pod.advance_rule || current.is_final !== pod.is_final) {
-        const { error } = await supabaseAdmin
-          .from('gauntlet_pods')
-          .update({ advance_rule: pod.advance_rule, is_final: pod.is_final })
-          .eq('id', pod.persistedId!);
-        if (error) throw error;
-      }
-    }
-
-    // Not-yet-materialized pods have no matches depending on their slots yet, so a changed pod's
-    // slots are simply replaced wholesale rather than diffed row-by-row.
-    const podsNeedingSlotWrite = [...newPods, ...updatedExisting];
-    if (podsNeedingSlotWrite.length > 0) {
-      const rewrittenIds = updatedExisting.map((p) => p.persistedId!);
-      if (rewrittenIds.length > 0) {
-        const { error } = await supabaseAdmin.from('gauntlet_pod_slots').delete().in('pod_id', rewrittenIds);
-        if (error) throw error;
-      }
-      const rows = podsNeedingSlotWrite.flatMap((pod) => {
-        const podId = keyToId.get(pod.key)!;
-        return pod.slots.map((slot, slot_index) => {
+    const hasWrites = toDelete.length > 0 || newPods.length > 0 || updatedExisting.length > 0;
+    if (hasWrites) {
+      const changedExisting = updatedExisting.filter((pod) => {
+        const current = currentById.get(pod.persistedId!)!;
+        return current.advance_rule !== pod.advance_rule || current.is_final !== pod.is_final;
+      });
+      const slots = podsNeedingSlotWrite.flatMap((pod) =>
+        pod.slots.map((slot, slot_index) => {
           if (slot.kind === 'player') {
             return {
-              pod_id: podId,
+              pod_ref: podRef(pod.key),
               slot_index,
               source_kind: 'seed',
               source_seed: seedByPlayer.get(slot.playerId) ?? null,
-              source_pod_id: null,
+              source_pod_ref: null,
               player_id: slot.playerId,
             };
           }
           if (slot.kind === 'advance') {
             return {
-              pod_id: podId,
+              pod_ref: podRef(pod.key),
               slot_index,
               source_kind: 'pod',
               source_seed: null,
-              source_pod_id: keyToId.get(slot.sourcePodKey) ?? null,
+              source_pod_ref: podRef(slot.sourcePodKey),
               player_id: null,
             };
           }
-          return { pod_id: podId, slot_index, source_kind: 'seed', source_seed: null, source_pod_id: null, player_id: null };
-        });
+          return {
+            pod_ref: podRef(pod.key),
+            slot_index,
+            source_kind: 'seed',
+            source_seed: null,
+            source_pod_ref: null,
+            player_id: null,
+          };
+        }),
+      );
+
+      // A single DB-side transaction (`reconcile_gauntlet_draft()`) for the whole pod/slot shape
+      // diff — delete removed pods, insert new ones, update changed ones, and rewrite touched
+      // slots — so a failure partway through can't leave gauntlet_pods/gauntlet_pod_slots in a
+      // state that matches neither the old shape nor the submitted draft. Returns the new pods'
+      // temp-key -> real-id mapping, since slot rows referencing a brand-new pod (as either the
+      // owning pod or an advancement source) had to be resolved against ids that didn't exist yet
+      // when this request was built.
+      const { data: keyMap, error: rpcErr } = await supabaseAdmin.rpc('reconcile_gauntlet_draft', {
+        p_delete_pod_ids: toDelete,
+        p_new_pods: newPods.map((pod) => ({
+          temp_key: pod.key,
+          season_id: gauntletSeasonId,
+          round_number: pod.round_number,
+          pod_index: pod.pod_index,
+          advance_rule: pod.advance_rule,
+          is_final: pod.is_final,
+        })),
+        p_updated_pods: changedExisting.map((pod) => ({
+          id: pod.persistedId,
+          advance_rule: pod.advance_rule,
+          is_final: pod.is_final,
+        })),
+        p_slot_rewrite_pod_ids: updatedExisting.map((p) => p.persistedId!),
+        p_slots: slots,
       });
-      const { error } = await supabaseAdmin.from('gauntlet_pod_slots').insert(rows);
-      if (error) throw error;
+      if (rpcErr) throw rpcErr;
+      for (const [key, id] of Object.entries((keyMap ?? {}) as Record<string, number>)) {
+        keyToId.set(key, id);
+      }
     }
 
-    // Round order matters here in principle (an earlier round's pod should materialize before a
-    // later one references it), though in practice each pod's readiness only depends on its own 4
-    // slots' already-persisted `player_id` state, not on materialization order within this save.
+    // Materializing a now-ready pod is a separate step outside the transaction above, deliberately:
+    // each call is already safe under partial failure or concurrency on its own (see
+    // `materializePod()`'s optimistic-locking claim on `match1_id`), unlike the shape diff, which
+    // has no such per-statement safety and needed the real transaction instead. Round order matters
+    // here in principle (an earlier round's pod should materialize before a later one references
+    // it), though in practice each pod's readiness only depends on its own 4 slots' already-persisted
+    // `player_id` state, not on materialization order within this save.
     const touched = podsNeedingSlotWrite
       .map((pod) => ({ id: keyToId.get(pod.key)!, round_number: pod.round_number }))
       .sort((a, b) => a.round_number - b.round_number);
@@ -799,19 +812,17 @@ export async function saveManualDraft(
       await materializeIfReady(supabaseAdmin, id);
     }
   } catch (err) {
-    // This reconciliation is several sequential writes, not one transaction — a failure partway
-    // through (network blip, an unexpected constraint violation) can leave gauntlet_pods/
-    // gauntlet_pod_slots partially migrated toward the submitted draft. There's no generic way to
-    // roll that back from here, so at minimum leave a persistent, admin-visible trace instead of the
-    // failure only reaching the browser as a dropped request — reload-and-inspect is the recovery
-    // path until this reconciliation moves to a single DB-side transaction.
+    // The shape diff above is now one transaction, but materialization afterward is still a
+    // separate step (see the comment above `touched`) — a failure there leaves a pod fully seeded
+    // but not yet materialized, recoverable by re-saving or waiting for the next trigger to touch
+    // it, but worth a persistent trace rather than only reaching the browser as a dropped request.
     const message = (err as Error).message;
     await recordOpsError(
       supabaseAdmin,
       'season',
       regularSeasonId,
       'gauntlet_manual_save',
-      `Manual bracket save failed partway through: ${message}. Reload and check the bracket before editing further.`,
+      `Manual bracket save failed: ${message}. Reload and check the bracket before editing further.`,
     );
     throw err;
   }
