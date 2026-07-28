@@ -87,6 +87,7 @@ export default function CombinedSeasonTabView({
           seasonStartDate={seasonStartDate}
           seasonStatus={seasonStatus}
           mapPool={mapPool}
+          gauntletBracketShape={gauntletBracketShape}
           currentPlayerId={currentPlayerId}
           h2hData={h2hData}
           subStyle

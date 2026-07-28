@@ -9,13 +9,6 @@ import { canonicalSort } from '@/lib/util';
 import { ehogColorFor } from './EhogBadge';
 import type { SeedPlacement } from '@/lib/gauntlet-bracket';
 
-/** Text label for a projected gauntlet seed placement — pairs with the row tint below. */
-function seedPlacementLabel(placement: SeedPlacement): string {
-  if (!placement.qualifies) return "Won't qualify";
-  const where = placement.isFinal ? 'Final' : `R${placement.round} · Pod ${placement.podIndex + 1}`;
-  return placement.isBye ? `${where} (Bye)` : where;
-}
-
 type SortCol =
   | 'name'
   | 'gold'
@@ -23,7 +16,9 @@ type SortCol =
   | 'bronze'
   | 'rank'
   | 'gp'
+  | 'record'
   | 'wr'
+  | 'roundsRecord'
   | 'rwr'
   | 'adr'
   | 'ehog';
@@ -56,8 +51,15 @@ function compare(
         b.win_rate_percentage - a.win_rate_percentage ||
         b.rwr_percentage - a.rwr_percentage
       );
+    case 'record':
+      return b.matches_won - a.matches_won || a.matches_lost - b.matches_lost;
     case 'rwr':
       return b.rwr_percentage - a.rwr_percentage;
+    case 'roundsRecord':
+      return (
+        b.total_rounds_won - a.total_rounds_won ||
+        (a.total_rounds_played - a.total_rounds_won) - (b.total_rounds_played - b.total_rounds_won)
+      );
     case 'gp':
       return b.matches_played - a.matches_played;
     case 'adr':
@@ -120,7 +122,7 @@ export default function LeaderboardTable({
   stickyNameCol?: boolean;
   /** Live "if the season ended today" gauntlet seed projection — see `projectGauntletSeeding()`
    *  in `src/lib/gauntlet-bracket.ts`. Gold row tint for a bye, red for a seed that wouldn't
-   *  qualify for the bracket at all; a text column spells out the projected round/pod. */
+   *  qualify for the bracket at all. Drives row tinting only — always current, no separate column. */
   gauntletSeeding?: Map<number, SeedPlacement>;
   trophyCounts?: Map<number, Record<1 | 2 | 3, number>>;
   canonicalRanking?: Map<number, number>;
@@ -203,13 +205,14 @@ export default function LeaderboardTable({
   ];
 
   const hasEhog = ehogRatings && Object.keys(ehogRatings).length > 0;
-  const hasGauntletSeeding = gauntletSeeding && gauntletSeeding.size > 0;
 
   const STAT_COLS: { key: SortCol; label: string; title: string }[] = [
-    { key: 'gp',  label: 'GP',   title: 'Games Played' },
-    { key: 'wr',  label: 'WR%',  title: 'Win Rate' },
-    { key: 'rwr', label: 'RWR%', title: 'Round Win Rate' },
-    { key: 'adr', label: 'ADR',  title: 'Average Damage per Round' },
+    { key: 'gp',           label: 'GP',   title: 'Games Played' },
+    { key: 'record',       label: 'W-L',  title: 'Match Record (Wins–Losses)' },
+    { key: 'wr',           label: 'WR%',  title: 'Win Rate' },
+    { key: 'roundsRecord', label: 'RW-L', title: 'Round Record (Wins–Losses)' },
+    { key: 'rwr',          label: 'RWR%', title: 'Round Win Rate' },
+    { key: 'adr',          label: 'ADR',  title: 'Average Damage per Round' },
   ];
 
   return (
@@ -235,16 +238,8 @@ export default function LeaderboardTable({
               {sortCol === 'name' && <span className="ml-1">{asc ? '↑' : '↓'}</span>}
             </th>
             {trophyCounts && firstColMode === 'player' && TROPHY_COLS.map((c) => <SortableTh key={c.key} col={c} active={sortCol === c.key} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />)}
-            {STAT_COLS.map((c) => <SortableTh key={c.key} col={c} active={sortCol === c.key} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />)}
             {hasEhog && <SortableTh col={{ key: 'ehog', label: 'EHOG', title: 'EHOG rating as of most recent match in this view' }} active={sortCol === 'ehog'} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />}
-            {hasGauntletSeeding && (
-              <th
-                title="Where each player would land in the gauntlet bracket if the season ended today — updates as standings change"
-                className="tracked text-[10px] font-semibold py-2.5 px-2 border-b border-[var(--color-border-primary)] whitespace-nowrap text-right text-[var(--color-text-secondary)]"
-              >
-                Gauntlet
-              </th>
-            )}
+            {STAT_COLS.map((c) => <SortableTh key={c.key} col={c} active={sortCol === c.key} asc={asc} onClickHeader={clickHeader} onKeyDown={headerKey} />)}
           </tr>
         </thead>
         <tbody>
@@ -289,21 +284,9 @@ export default function LeaderboardTable({
                     <Link href={href} className="block w-full h-full">{trophyCounts.get(p.player_id)?.[c.rank] ?? 0}</Link>
                   </td>
                 ))}
-                <td className="py-2.5 px-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
-                  <Link href={href} className="block w-full h-full">{p.matches_played}</Link>
-                </td>
-                <td className="py-2.5 px-2 text-right font-mono tnum">
-                  <Link href={href} className="block w-full h-full">{dash(played, `${p.win_rate_percentage.toFixed(1)}%`)}</Link>
-                </td>
-                <td className="py-2.5 px-2 text-right font-mono tnum">
-                  <Link href={href} className="block w-full h-full">{dash(played, `${p.rwr_percentage.toFixed(1)}%`)}</Link>
-                </td>
-                <td className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold">
-                  <Link href={href} className="block w-full h-full">{dash(played, p.overall_adr.toFixed(2))}</Link>
-                </td>
                 {hasEhog && (
                   <td
-                    className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold"
+                    className="py-2.5 px-2 text-right font-mono tnum font-semibold"
                     title={ehogRatings[p.player_id] != null ? 'EHOG rating as of most recent match in this view' : undefined}
                     style={ehogRatings[p.player_id] != null ? { color: ehogColorFor(ehogRatings[p.player_id]) } : undefined}
                   >
@@ -314,15 +297,24 @@ export default function LeaderboardTable({
                     </Link>
                   </td>
                 )}
-                {hasGauntletSeeding && (
-                  <td className="py-2.5 pr-4 pl-2 text-right font-mono text-[11px] whitespace-nowrap">
-                    <Link href={href} className="block w-full h-full">
-                      {gauntletSeeding.get(p.player_id) != null
-                        ? <span style={{ color: zoneColor.get(p.player_id) }}>{seedPlacementLabel(gauntletSeeding.get(p.player_id)!)}</span>
-                        : <span className="text-[var(--color-text-secondary)]">—</span>}
-                    </Link>
-                  </td>
-                )}
+                <td className="py-2.5 px-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
+                  <Link href={href} className="block w-full h-full">{p.matches_played}</Link>
+                </td>
+                <td className="py-2.5 px-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
+                  <Link href={href} className="block w-full h-full">{dash(played, `${p.matches_won}-${p.matches_lost}`)}</Link>
+                </td>
+                <td className="py-2.5 px-2 text-right font-mono tnum">
+                  <Link href={href} className="block w-full h-full">{dash(played, `${p.win_rate_percentage.toFixed(1)}%`)}</Link>
+                </td>
+                <td className="py-2.5 px-2 text-right font-mono tnum text-[var(--color-text-secondary)]">
+                  <Link href={href} className="block w-full h-full">{dash(played, `${p.total_rounds_won}-${p.total_rounds_played - p.total_rounds_won}`)}</Link>
+                </td>
+                <td className="py-2.5 px-2 text-right font-mono tnum">
+                  <Link href={href} className="block w-full h-full">{dash(played, `${p.rwr_percentage.toFixed(1)}%`)}</Link>
+                </td>
+                <td className="py-2.5 pr-4 pl-2 text-right font-mono tnum font-semibold">
+                  <Link href={href} className="block w-full h-full">{dash(played, p.overall_adr.toFixed(2))}</Link>
+                </td>
               </tr>
             );
           })}

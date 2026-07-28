@@ -4,10 +4,9 @@
  * is automatic, detected from the score route:
  *   - ACTIVE -> COMPLETED once every match in a regular season has been played
  *     (`checkSeasonCompletion`), which also best-effort seeds its linked gauntlet.
- *   - -> ARCHIVED once every match in a gauntlet has been played (`checkGauntletCompletion`,
- *     sharing the same "fully played" check as `checkSeasonCompletion`) — archives the gauntlet
- *     *and* its paired regular season together, since a season isn't fully "in the books" until
- *     its playoffs conclude.
+ *   - -> ARCHIVED once every match in a gauntlet has been played *and* its Final pod is specifically
+ *     decided (`checkGauntletCompletion`) — archives the gauntlet *and* its paired regular season
+ *     together, since a season isn't fully "in the books" until its playoffs conclude.
  * All side effects are best-effort: a failure here never blocks the status transition that
  * triggered it. Every failure (or roster-drift outcome that needs admin attention) is recorded via
  * `recordOpsError()` (`src/lib/ops-errors.ts`, entity type `season`, operation
@@ -20,7 +19,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { allMatchesPlayed } from './util';
-import { tryBuildGauntletShape, trySeedGauntlet } from './gauntlet-engine';
+import { tryBuildGauntletShape, trySeedGauntlet, isGauntletBracketDecided } from './gauntlet-engine';
 import { getLinkedRegularSeason, getMatchScoresForWeeks } from './queries';
 import { recordOpsError, clearOpsError } from './ops-errors';
 
@@ -104,15 +103,18 @@ export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seaso
 }
 
 /** Called from the score route's post-commit hook for every gauntlet match. Once every match in
- * the gauntlet has been played — not just the final round — archives the gauntlet season and, if a
- * paired regular season exists, archives it too, regardless of its current status. Shares
- * `isSeasonFullyPlayed()` with `checkSeasonCompletion()` rather than checking only the max
- * `round_number`'s matches: for an automated (pod-based) bracket the final round structurally can't
- * materialize until every earlier pod has resolved, so the two checks are equivalent there — but a
- * manually-built gauntlet (see gauntlet-engine.ts's `saveManualDraft`) has no such
- * guarantee, since nothing stops an admin from adding a later round before an earlier one is
- * finished. Idempotent: no-ops once the gauntlet is already ARCHIVED, or if any match is still
- * unplayed. */
+ * the gauntlet has been played *and* its actual Final pod has been decided, archives the gauntlet
+ * season and, if a paired regular season exists, archives it too, regardless of its current status.
+ * Both conditions matter, not just one: `isSeasonFullyPlayed()` alone (shared with
+ * `checkSeasonCompletion()`) is correct for an automated (pod-based) bracket, whose Final
+ * structurally can't materialize until every earlier pod has resolved — but a manually-built
+ * gauntlet (see gauntlet-engine.ts's `saveManualDraft`) can have later rounds not designed yet at
+ * all, so "every match that currently exists is played" can be true well before the bracket is
+ * actually decided; `isGauntletBracketDecided()` (gauntlet-engine.ts) closes that gap by requiring
+ * the Final pod specifically to exist and be played. Conversely the Final being decided doesn't
+ * alone imply nothing else is outstanding (an earlier-round game unrelated to the Final's path could
+ * still be unplayed), hence still checking both. Idempotent: no-ops once the gauntlet is already
+ * ARCHIVED, or if either condition isn't met yet. */
 export async function checkGauntletCompletion(supabaseAdmin: SupabaseClient, gauntletSeasonId: number): Promise<void> {
   const { data: seasonRow, error: seasonErr } = await supabaseAdmin
     .from('seasons')
@@ -124,6 +126,7 @@ export async function checkGauntletCompletion(supabaseAdmin: SupabaseClient, gau
   if (!season || !season.is_gauntlet) return;
 
   if (!(await isSeasonFullyPlayed(supabaseAdmin, gauntletSeasonId))) return;
+  if (!(await isGauntletBracketDecided(supabaseAdmin, gauntletSeasonId))) return;
 
   // Checked separately from the gauntlet's own status so a run that archived the gauntlet but then
   // failed to archive its paired regular season retries just the outstanding half next time,
