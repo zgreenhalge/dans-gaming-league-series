@@ -34,13 +34,15 @@ function demoRemotePath(matchId: number): string {
  *  is about to land the demo. Returns `null` on timeout rather than throwing — that's the caller's
  *  cue to fall back to pulling it itself, not a failure. */
 async function waitForConcurrentPull(matchId: number): Promise<Buffer | null> {
-  const deadline = Date.now() + CONCURRENT_PULL_GRACE_MS;
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, CONCURRENT_PULL_INTERVAL_MS));
-    const existing = await getR2Object(demoKey(matchId));
-    if (existing) return existing;
+  try {
+    return await pollUntil(() => getR2Object(demoKey(matchId)), {
+      timeoutMs: CONCURRENT_PULL_GRACE_MS,
+      intervalMs: CONCURRENT_PULL_INTERVAL_MS,
+      timeoutMessage: `${demoKey(matchId)} not in R2 after waiting on a concurrent pull`,
+    });
+  } catch {
+    return null;
   }
-  return null;
 }
 
 /** Poll DatHost for a match's demo until it appears, gzip-write it to R2 at `demoKey(matchId)`, and
