@@ -60,6 +60,7 @@ function round(partial: Partial<ReplayRound>): ReplayRound {
     round: 1,
     startTick: 0,
     endTick: 1000,
+    freezeEndTick: 0,
     sideByFaction: { SHIRTS: 'CT', SKINS: 'T' },
     frames: [],
     events: [],

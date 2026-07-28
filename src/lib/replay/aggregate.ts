@@ -7,7 +7,7 @@
 
 import type { ReplayPayload, ReplayRound, Side } from './types';
 import type { Faction } from '../types';
-import { roundTickRange, sideOfPlayer, lerp, lerpAngle, bracketBy } from './playback';
+import { roundTickRange, sideOfPlayer, lerp, lerpAngle, bracketBy, ticksSince } from './playback';
 
 /** One player's interpolatable position/state at a moment, offset from round start. */
 export interface TraceFrame {
@@ -81,10 +81,10 @@ export function extractPlayerTrace(
       // it may itself be reset toward spawn, but a rough corpse marker beats the
       // round silently vanishing from the overlay and its round count.
       const last = frames[frames.length - 1] ?? p;
-      frames.push({ t: f.tick - range.start, x: last.x, y: last.y, yaw: last.yaw, hp: 0, alive: false });
+      frames.push({ t: ticksSince(f.tick, range.start), x: last.x, y: last.y, yaw: last.yaw, hp: 0, alive: false });
       break;
     }
-    frames.push({ t: f.tick - range.start, x: p.x, y: p.y, yaw: p.yaw, hp: p.hp, alive: true });
+    frames.push({ t: ticksSince(f.tick, range.start), x: p.x, y: p.y, yaw: p.yaw, hp: p.hp, alive: true });
   }
   if (frames.length === 0) return null;
   return {

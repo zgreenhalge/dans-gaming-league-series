@@ -7,11 +7,12 @@ import type { Faction } from '@/lib/types';
 import { mapSlug } from '@/lib/maps';
 import { isAbortError } from '@/lib/util';
 import { projectorFor, type Projector } from '@/lib/replay/project';
-import { viewStateAt, roundTickRange, grenadeEffectRadius } from '@/lib/replay/playback';
+import { viewStateAt, roundTickRange, grenadeEffectRadius, roundClockSeconds, formatClock } from '@/lib/replay/playback';
 import { drawScene, type Ctx2D, type ReplayTheme, type BannerInfo } from '@/lib/replay/draw';
 import { readTheme, STICKER_COLORS } from './replayTheme';
 import { useMapRadar } from './useMapRadar';
 import { applyCanvasSize, useCanvasSize } from './useCanvasSize';
+import { useReplayClock } from './useReplayClock';
 
 const SPEEDS = [0.5, 1, 2, 4];
 
@@ -189,6 +190,7 @@ export default function ReplayPlayer({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrubRef = useRef<HTMLInputElement>(null);
+  const clockRef = useRef<HTMLSpanElement>(null);
   const projectorRef = useRef<Projector | null>(null);
   const ctxRef = useRef<Ctx2D | null>(null);
   const themeRef = useRef<ReplayTheme | null>(null);
@@ -274,8 +276,11 @@ export default function ReplayPlayer({
       banner,
       radar,
     });
-    // Reflect playback position on the (uncontrolled) scrubber without re-rendering.
+    // Reflect playback position on the (uncontrolled) scrubber/clock without re-rendering.
     if (scrubRef.current) scrubRef.current.value = String(tickRef.current);
+    if (clockRef.current) {
+      clockRef.current.textContent = formatClock(roundClockSeconds(round, tickRef.current, payload.tickRate));
+    }
     onPosition?.(round.round, tickRef.current);
   }, [payload, roundIdx, calibration, radarImage, metaById, banner, onPosition]);
 
@@ -406,33 +411,21 @@ export default function ReplayPlayer({
 
 
   // --- playback clock ---
-  useEffect(() => {
-    if (!payload?.rounds[roundIdx]) return;
-    const round = payload.rounds[roundIdx];
-    const range = roundTickRange(round);
-    let raf = 0;
-    let last: number | null = null;
-    const step = (ts: number) => {
-      if (last !== null) {
-        tickRef.current = Math.min(
-          range.end,
-          tickRef.current + ((ts - last) / 1000) * payload.tickRate * speed,
-        );
-      }
-      last = ts;
-      draw();
-      if (tickRef.current >= range.end) {
-        // Advance to the next round, or stop at the end of the match.
-        if (roundIdx < payload.rounds.length - 1) setRoundIdx(roundIdx + 1);
-        else setPlaying(false);
-        return;
-      }
-      raf = requestAnimationFrame(step);
-    };
-    if (playing) raf = requestAnimationFrame(step);
-    else draw();
-    return () => cancelAnimationFrame(raf);
-  }, [payload, roundIdx, playing, speed, draw]);
+  const onClockEnd = useCallback(() => {
+    if (!payload) return;
+    // Advance to the next round, or stop at the end of the match.
+    if (roundIdx < payload.rounds.length - 1) setRoundIdx(roundIdx + 1);
+    else setPlaying(false);
+  }, [payload, roundIdx]);
+  useReplayClock({
+    tickRef,
+    playing,
+    speed,
+    tickRate: payload?.tickRate ?? 0,
+    max: payload?.rounds[roundIdx] ? roundTickRange(payload.rounds[roundIdx]).end : null,
+    draw,
+    onEnd: onClockEnd,
+  });
 
   // --- pen tool pointer handling (mouse/touch/pen, via the Pointer Events API) ---
   const pointToNorm = (e: React.PointerEvent<HTMLCanvasElement>): Point => {
@@ -608,6 +601,14 @@ export default function ReplayPlayer({
               <ChevronRight size={14} />
             </button>
           </div>
+
+          <span
+            ref={clockRef}
+            className="font-mono tabular-nums text-[var(--color-text-secondary)]"
+            aria-label="Round clock"
+          >
+            0:00
+          </span>
 
           <div className="ml-auto flex items-center gap-1">
             {SPEEDS.map((s) => (

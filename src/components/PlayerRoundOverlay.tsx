@@ -13,6 +13,7 @@ import { traceStateAt, maxDurationTicks, type PlayerTrace } from '@/lib/replay/a
 import { readTheme } from './replayTheme';
 import { useMapRadar } from './useMapRadar';
 import { useCanvasSize } from './useCanvasSize';
+import { useReplayClock } from './useReplayClock';
 
 const SPEEDS = [0.5, 1, 2, 4];
 const MAX_SIDE = 520;
@@ -163,25 +164,16 @@ export default function PlayerRoundOverlay({
   // payload) so the clock always advances — a non-advancing clock would never reach
   // `duration` and Play would look permanently stuck.
   const safeTickRate = tickRate > 0 ? tickRate : 64;
-  useEffect(() => {
-    let raf = 0;
-    let last: number | null = null;
-    const step = (ts: number) => {
-      if (last !== null) {
-        tickRef.current = Math.min(duration, tickRef.current + ((ts - last) / 1000) * safeTickRate * speed);
-      }
-      last = ts;
-      draw();
-      if (tickRef.current >= duration) {
-        setPlaying(false);
-        return;
-      }
-      raf = requestAnimationFrame(step);
-    };
-    if (playing) raf = requestAnimationFrame(step);
-    else draw();
-    return () => cancelAnimationFrame(raf);
-  }, [playing, speed, duration, safeTickRate, draw]);
+  const onClockEnd = useCallback(() => setPlaying(false), []);
+  useReplayClock({
+    tickRef,
+    playing,
+    speed,
+    tickRate: safeTickRate,
+    max: duration,
+    draw,
+    onEnd: onClockEnd,
+  });
 
   if (traces.length === 0) {
     return (
