@@ -120,9 +120,6 @@ export default function MatchScoreHero({
       <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--color-accent-green-fg)]">
         <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
         Live
-        {liveScore.round !== null && (
-          <span className="font-normal normal-case text-[var(--color-text-secondary)]">· round {liveScore.round}</span>
-        )}
       </div>
       <ScoreDisplay shirts={liveScore.shirts} skins={liveScore.skins} shirtsF={shirtsF} skinsF={skinsF} />
     </div>
