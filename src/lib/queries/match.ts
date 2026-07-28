@@ -1,10 +1,11 @@
 import { supabase } from '../supabase';
-import type { Match, Week, Season, PlayerMatchStat, PlayerMatchSabremetrics, Faction } from '../types';
-import { isPlayedScore, avgOf, compareMatchRefDesc, extractSeasonNumber, matchLabel } from '../util';
+import type { Match, Week, Season, Player, PlayerMatchStat, PlayerMatchSabremetrics, Faction } from '../types';
+import { isPlayedScore, avgOf, compareMatchRefDesc, extractSeasonNumber, matchLabel, matchTitle } from '../util';
 import { mapSlug } from '../maps';
 import type { ScheduledMatchRef } from '../schedule';
 import { getPlayersById } from './player';
 import { fetchAllPages } from './_shared';
+import { getCurrentLiveMatch } from '../demo/liveScore';
 
 
 export interface MatchStatRow extends PlayerMatchStat {
@@ -60,6 +61,81 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   );
 
   return { match: m, week: w, season: season as Season, stats: statRows };
+}
+
+export interface MatchTeamNames {
+  title: string;
+  shirtNames: string;
+  skinNames: string;
+}
+
+/** A match's display title ("Season · Week N · Match M") and its rostered players joined per side
+ *  ("Player A & Player B") — shared by `getMatchMeta` (OG/meta tags) and `getLiveTickerMatch` (the
+ *  site-wide live ticker) so the season/week/roster lookup lives in exactly one place. */
+export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames | null> {
+  const { data: match } = await supabase
+    .from('matches')
+    .select('id, week_id, match_number')
+    .eq('id', matchId)
+    .maybeSingle();
+  if (!match) return null;
+  const m = match as Pick<Match, 'id' | 'week_id' | 'match_number'>;
+
+  const { data: week } = await supabase
+    .from('weeks')
+    .select('id, season_id, week_number')
+    .eq('id', m.week_id)
+    .maybeSingle();
+  if (!week) return null;
+  const w = week as Pick<Week, 'id' | 'season_id' | 'week_number'>;
+
+  const [{ data: season }, { data: stats }] = await Promise.all([
+    supabase.from('seasons').select('id, name, is_gauntlet').eq('id', w.season_id).maybeSingle(),
+    supabase.from('player_match_stats').select('player_id, faction').eq('match_id', matchId),
+  ]);
+  if (!season) return null;
+  const s = season as Pick<Season, 'id' | 'name' | 'is_gauntlet'>;
+
+  const title = matchTitle({
+    seasonName: s.name,
+    weekNumber: w.week_number,
+    matchNumber: m.match_number,
+    isGauntlet: s.is_gauntlet,
+  });
+
+  const playerRows = (stats ?? []) as Pick<PlayerMatchStat, 'player_id' | 'faction'>[];
+  const shirtIds = playerRows.filter((p) => p.faction === 'SHIRTS').map((p) => p.player_id);
+  const skinIds = playerRows.filter((p) => p.faction === 'SKINS').map((p) => p.player_id);
+
+  const names: Map<number, string> = new Map();
+  const allIds = [...shirtIds, ...skinIds];
+  if (allIds.length > 0) {
+    const { data: players } = await supabase.from('players').select('id, name').in('id', allIds);
+    for (const p of (players ?? []) as Pick<Player, 'id' | 'name'>[]) names.set(p.id, p.name);
+  }
+
+  const shirtNames = shirtIds.map((id) => names.get(id) ?? '?').join(' & ');
+  const skinNames = skinIds.map((id) => names.get(id) ?? '?').join(' & ');
+
+  return { title, shirtNames, skinNames };
+}
+
+export interface LiveTickerMatch extends MatchTeamNames {
+  matchId: number;
+  shirts: number;
+  skins: number;
+}
+
+/** The site-wide live-match ticker's data — whichever match is currently live (there's at most one,
+ *  since the league runs one shared match server), or `null` when nothing's live. Backs both the
+ *  root layout's initial server render and `GET /api/live-match`, which `LiveMatchTicker` calls to
+ *  refresh itself off Realtime changes on `live_match_score`. */
+export async function getLiveTickerMatch(): Promise<LiveTickerMatch | null> {
+  const live = await getCurrentLiveMatch(supabase);
+  if (!live) return null;
+  const teams = await getMatchTeamNames(live.matchId);
+  if (!teams) return null;
+  return { matchId: live.matchId, shirts: live.shirts, skins: live.skins, ...teams };
 }
 
 /**

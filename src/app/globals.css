@@ -41,6 +41,10 @@
   --color-site-accent: var(--color-t);
 
   --topbar-h: 64px;
+  /* Height reserved below the topbar for `LiveMatchTicker` — 0 when nothing's live. Set on <html>
+     (server-rendered initial value, then kept live by the ticker component itself) rather than here,
+     so this is just the no-JS/no-ticker fallback. */
+  --ticker-h: 0px;
 
   /* Theme-aware overlays for map images and dim backgrounds — tuned for image vibrancy */
   /* Light: slightly transparent warm overlays, image filter increases color/contrast */
