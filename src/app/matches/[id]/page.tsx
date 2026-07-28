@@ -14,7 +14,7 @@ import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
 import MatchServerPanel from '@/components/MatchServerPanel';
 import MatchDemoReviewBlock from '@/components/MatchDemoReviewBlock';
-import LiveScoreTicker from '@/components/LiveScoreTicker';
+import MatchScoreHero from '@/components/MatchScoreHero';
 import MatchTabView from '@/components/MatchTabView';
 import RoundHistoryStrip from '@/components/RoundHistoryStrip';
 import { WinProbabilityBar } from '@/components/WinProbabilityBar';
@@ -60,13 +60,6 @@ function shirtsFaction(skinsSide: 'CT' | 'T' | null): Faction {
   if (skinsSide === 'T') return 'CT';
   return null;
 }
-
-function factionClass(f: Faction): string {
-  if (f === 'CT') return 'faction-ct';
-  if (f === 'T') return 'faction-t';
-  return '';
-}
-
 
 function Topbar({
   seasonId,
@@ -317,29 +310,13 @@ export default async function MatchPage({
               otherScheduled={otherScheduled}
             />
 
-            {score && (
-              <div className="mt-5 flex items-baseline justify-center gap-5 flex-wrap">
-                <div className={`${factionClass(shirtsF)} flex items-baseline gap-3`}>
-                  <span className="font-display text-[24px] font-bold faction-fg">
-                    Shirts
-                  </span>
-                  <span className="display-numeral text-[64px] text-[var(--color-text-primary)] tnum [text-shadow:-1px_-1px_0_black,1px_-1px_0_black,-1px_1px_0_black,1px_1px_0_black]">
-                    {score.shirts}
-                  </span>
-                </div>
-                <span className="font-mono text-[24px] text-[var(--color-text-secondary)]">
-                  —
-                </span>
-                <div className={`${factionClass(skinsF)} flex items-baseline gap-3`}>
-                  <span className="display-numeral text-[64px] text-[var(--color-text-primary)] tnum [text-shadow:-1px_-1px_0_black,1px_-1px_0_black,-1px_1px_0_black,1px_1px_0_black]">
-                    {score.skins}
-                  </span>
-                  <span className="font-display text-[24px] font-bold faction-fg">
-                    Skins
-                  </span>
-                </div>
-              </div>
-            )}
+            <MatchScoreHero
+              matchId={match.id}
+              played={played}
+              finalScore={score}
+              shirtsF={shirtsF}
+              skinsF={skinsF}
+            />
 
             {(winProbability || postMatchWinProb != null) && (
               <WinProbabilityBar
@@ -379,16 +356,6 @@ export default async function MatchPage({
             <div className="pb-6 flex justify-center">
               <div className="w-full max-w-md">
                 <MatchServerPanel matchId={match.id} canManage={canManageServer} autoProvisioning={vetoComplete} />
-              </div>
-            </div>
-          )}
-
-          {/* Live score — self-hides until MatchZy reports `going_live`, and again once the match is
-              scored. Shown to anyone viewing the page, not just the manager. */}
-          {!played && vetoComplete && (
-            <div className="pb-6 flex justify-center">
-              <div className="w-full max-w-md">
-                <LiveScoreTicker matchId={match.id} />
               </div>
             </div>
           )}
