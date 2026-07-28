@@ -130,7 +130,11 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
   holds the file back for ~120s after `map_result` while it flushes the recording), gzips it, and
   writes it to R2 at the same deterministic `demoKey(matchId)` a browser upload would use — both
   `demo-ingest.ts` and `replay-extract.ts` call it themselves, at the top of their own run, only if the
-  demo isn't already in R2, so either one can be dispatched (or re-dispatched) independently.
+  demo isn't already in R2, so either one can be dispatched (or re-dispatched) independently. Since both
+  are auto-dispatched together off the same `map_result` event and tend to detect the demo on the same
+  DatHost poll cycle, `replay-extract.ts` treats `demo-ingest.ts` as the pull's owner
+  (`ensureDemoInR2(..., { waitForConcurrentPull: true })`): a miss there waits briefly on R2 for
+  demo-ingest's pull to land the object before falling back to pulling it independently.
 - The Action mirrors the replay pipeline (`scripts/replay-extract.ts`): heavy parsing (and the demo
   pull itself) runs in CI, not in a Vercel request.
 
