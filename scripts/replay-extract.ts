@@ -30,7 +30,7 @@ import { getMapTraces } from '../src/lib/queries/replay';
 import { mapSlug } from '../src/lib/maps';
 import { recordJobStatus, matchJobKey, jobStatusWriter } from '../src/lib/background-jobs';
 import { ensureDemoInR2 } from '../src/lib/demo/fetchFromDathost';
-import { DEMO_INGEST_JOB_TYPE } from '../src/lib/demo/ingestResult';
+import { DEMO_INGEST_JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '../src/lib/demo/ingestResult';
 import { dathostServerId } from '../src/lib/dathost';
 import { notice, warning, error } from './gh-actions-log';
 import { createStageRunner } from './job-stage';
@@ -94,7 +94,7 @@ async function demoIngestInFlight(): Promise<boolean> {
     .eq('job_type', DEMO_INGEST_JOB_TYPE)
     .eq('match_id', matchId)
     .maybeSingle();
-  return data ? ['received', 'queued', 'running'].includes(data.status as string) : false;
+  return data ? DEMO_INGEST_IN_PROGRESS.has(data.status as string) : false;
 }
 
 /** Gzip a JSON-serializable value and upload it, returning the gzipped byte length for logging. */
@@ -130,12 +130,13 @@ async function main() {
   let demoBuffer = await stage('download-demo', async () => {
     // Pulled from DatHost directly (not pushed by MatchZy — see fetchFromDathost.ts) — this Action can
     // be dispatched as soon as the match ends, before the demo has actually landed in R2 yet, so
-    // ensureDemoInR2 pulls it if it isn't already present. When a demo_ingest run is actually claimed
-    // for this match (the auto-dispatch path always has one), it owns the pull: a miss here waits
-    // briefly for its pull to land the object in R2 instead of redundantly re-pulling the same demo
-    // from DatHost. A manual "Regenerate" dispatch has no such row and pulls immediately.
-    const waitForConcurrentPull = await demoIngestInFlight();
-    return ensureDemoInR2(dathostServerId(), matchId, { waitForConcurrentPull });
+    // ensureDemoInR2 pulls it if it isn't already present. demoIngestInFlight is only checked on a
+    // miss (never on the common already-cached path, to skip the DB round-trip): when a demo_ingest
+    // run is actually claimed for this match (the auto-dispatch path always has one), it owns the
+    // pull, and a miss here waits briefly for its pull to land the object in R2 instead of
+    // redundantly re-pulling the same demo from DatHost. A manual "Regenerate" dispatch has no such
+    // row and pulls immediately.
+    return ensureDemoInR2(dathostServerId(), matchId, { shouldWaitForConcurrentPull: demoIngestInFlight });
   });
 
   demoBuffer = await stage('decompress', () => gunzipMaybe(demoBuffer));

@@ -382,9 +382,9 @@ Recap tab's Generate/Retry button) and never re-triggers the other. `/api/ingest
 the auto-dispatch entirely if a `replay_extract` row already exists for the match, so a retried event
 can't double-fire it. Both Actions pull the demo directly from DatHost themselves if it isn't already
 in R2 (`fetchFromDathost.ts`) rather than waiting for it to be pushed — when a `demo_ingest` row is
-actually claimed for the match, `replay-extract.ts` treats it as the pull's owner, waiting briefly on
-R2 for its pull to land before falling back to pulling independently, so the two Actions don't both
-download and re-upload the same demo.
+actually claimed for the match, `replay-extract.ts` treats it as the pull's owner, polling R2 for its
+pull to land (much cheaper than DatHost) before falling back to pulling independently, so the two
+Actions don't both download and re-upload the same demo.
 
 | Action | Trigger | Output |
 |---|---|---|

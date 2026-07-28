@@ -133,10 +133,10 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
   demo isn't already in R2, so either one can be dispatched (or re-dispatched) independently. Since both
   are auto-dispatched together off the same `map_result` event and tend to detect the demo on the same
   DatHost poll cycle, `replay-extract.ts` checks `background_jobs` for a claimed `demo_ingest` row
-  before it pulls (`demoIngestInFlight()`): if one exists, it treats `demo-ingest.ts` as the pull's
-  owner and a miss on `ensureDemoInR2(..., { waitForConcurrentPull: true })` waits briefly on R2 for
-  its pull to land before falling back to pulling independently. A manual "Regenerate" dispatch has no
-  such row and pulls immediately, with no wasted wait.
+  on a miss, only then (`demoIngestInFlight()`): if one exists, it treats `demo-ingest.ts` as the
+  pull's owner and waits out the same grace window `demo-ingest.ts`'s own DatHost poll gets — polling
+  R2 instead, much cheaper — before falling back to pulling independently. A manual "Regenerate"
+  dispatch has no such row and pulls immediately, with no wasted wait.
 - The Action mirrors the replay pipeline (`scripts/replay-extract.ts`): heavy parsing (and the demo
   pull itself) runs in CI, not in a Vercel request.
 
