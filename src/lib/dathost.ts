@@ -26,15 +26,15 @@ export const BASE = 'https://dathost.com/api/0.1';
 const MAP_SELECTION_KEYS = new Set(['maps_source', 'workshop_collection_id', 'workshop_single_map_id']);
 
 /**
- * Named, selectable `cs2_settings` baselines. `golden` (read from `infra/matchzy/golden-server-
- * settings.json`, the canonical version-controlled snapshot) is the only one today — the DGLS match
- * server has never needed a second. Adding one: version a new settings JSON next to
+ * Named, selectable `server` + `cs2_settings` baselines. `golden` (read from `infra/matchzy/golden-
+ * server-settings.json`, the canonical version-controlled snapshot) is the only one today — the DGLS
+ * match server has never needed a second. Adding one: version a new settings JSON next to
  * golden-server-settings.json the same way, `import` it here, and add one entry below. Everything
  * that applies a config set (auto per-match provisioning, the admin console) goes through this
  * registry, so a new set is immediately available everywhere without further wiring.
  */
-const CONFIG_SETS: Record<string, { label: string; cs2Settings: Record<string, unknown> }> = {
-  golden: { label: 'DGLS Season 3 Default', cs2Settings: goldenServerSettings.cs2_settings },
+const CONFIG_SETS: Record<string, { label: string; server: Record<string, unknown>; cs2Settings: Record<string, unknown> }> = {
+  golden: { label: 'DGLS Season 3 Default', server: goldenServerSettings.server, cs2Settings: goldenServerSettings.cs2_settings },
 };
 
 export interface ConfigSetOption {
@@ -64,6 +64,18 @@ function buildCs2Fields(cs2Settings: Record<string, unknown>): Record<string, st
     // `typeof null === 'object'`, so this one check covers null, arrays, and nested objects together.
     if (typeof value === 'object') continue;
     fields[`cs2_settings.${key}`] = String(value);
+  }
+  return fields;
+}
+
+/** The scalar top-level `server` PUT fields (`autostop`, `autostop_minutes`, …) for one config set —
+ *  bare-keyed, not `cs2_settings.`-prefixed, per DatHost's PUT shape. Same scalar-only reasoning as
+ *  `buildCs2Fields`: no map-selection keys live at this level, so nothing else to exclude. */
+function buildServerFields(server: Record<string, unknown>): Record<string, string> {
+  const fields: Record<string, string> = {};
+  for (const [key, value] of Object.entries(server)) {
+    if (typeof value === 'object') continue;
+    fields[key] = String(value);
   }
   return fields;
 }
@@ -167,7 +179,10 @@ export async function stopServer(id: string): Promise<void> {
 }
 
 /**
- * PUT a named config set's `cs2_settings` (+ a pinned map) to overwrite any recreational-mode drift.
+ * PUT a named config set's full `server` + `cs2_settings` baseline (+ a pinned map) to overwrite any
+ * recreational-mode drift — the same fields `dathost-golden-apply.ts --reassert` pushes, but through
+ * the shared registry so auto per-match provisioning and the admin console's "Apply config set" can
+ * never fall out of sync with each other on which fields get re-asserted.
  *
  * `workshop_collection` mode does not behave reliably on the DGLS server (confirmed live) — every
  * apply must pin a single workshop map instead, so a resolved `mapWorkshopId` is required; this
@@ -190,6 +205,7 @@ export async function applyConfigSet(
     );
   }
   const fields: Record<string, string> = {
+    ...buildServerFields(set.server),
     ...buildCs2Fields(set.cs2Settings),
     'cs2_settings.maps_source': 'workshop_single_map',
     'cs2_settings.workshop_single_map_id': opts.mapWorkshopId,

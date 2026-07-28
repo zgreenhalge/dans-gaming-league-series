@@ -35,6 +35,12 @@ cvar-by-cvar, cfg files cvar-by-cvar) — read-only. `scripts/dathost-golden-app
 (`.claude/skills/dathost-golden-config/`) wraps this diff → ask → apply flow. See usage in each
 script's header comment.
 
+Both scripts need `DATHOST_EMAIL`/`DATHOST_PASSWORD` in the environment they run from, so they're CLI-
+only (no admin-console button). For just the `server`/`cs2_settings` scalar-field half of a reassert —
+without needing local DatHost credentials — the admin server console's **Apply config set** button
+(`applyConfigSet` in `src/lib/dathost.ts`) pushes the same fields live; cfg files still need the CLI
+(`--reassert`) or a real match provision (`pushCfgFiles` runs automatically then).
+
 ## What goes in `cfg/` (capture via `dathost-golden-diff.ts`/`dathost-golden-apply.ts`, or DatHost
 File Manager / FTP as a fallback)
 

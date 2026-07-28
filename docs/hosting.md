@@ -266,8 +266,11 @@ purely advisory, since a scrim never blocks a match from actually starting.
   server back to warmup/knife-select) and **Teardown** (stop a server left live — the autostop-failed
   safety valve). The **Config vs golden** block runs `diffGoldenConfig` read-only (settings + every
   cfg file, cvar-by-cvar), the same comparison the `dathost-golden-diff` CLI renders. **Apply config
-  set** pushes a server-level `cs2_settings` baseline (map picker + config-set dropdown) — it does
-  *not* load a match config, so run **Apply match settings** after it if a match is mid-setup. Live via
+  set** pushes the full `server` + `cs2_settings` baseline (`applyConfigSet`, map picker + config-set
+  dropdown) — the same fields `dathost-golden-apply.ts --reassert` pushes, and the same call
+  per-match provisioning makes (`applyGoldenSettings`), so a manual apply here and an automatic one at
+  the next match provision can never disagree on which fields get re-asserted. It does *not* load a
+  match config, so run **Apply match settings** after it if a match is mid-setup. Live via
   Realtime on `matches`. Also hosts the **disk cleanup** controls (issue #132, see
   `infra/matchzy/README.md`) — enable/disable the `dathost-cleanup` workflow, set its interval, and a
   **Run now** button, all through `src/lib/gh-dispatch.ts`'s GitHub Actions helpers rather than
