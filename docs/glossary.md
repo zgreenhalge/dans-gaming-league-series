@@ -75,17 +75,12 @@ so you don't have to reverse-engineer them from scratch each time.
   [`architecture.md`](./architecture.md#gauntlet-bracket-scheduling).
 - **Gauntlet seeding projection** — the gold-bye/red-drop row tint on a regular season's own
   `LeaderboardTable`, never shown on a gauntlet season's own leaderboard (which gets a podium once
-  complete instead — `GauntletStandings`). Sourced two different ways, in preference order: if the
-  paired gauntlet already has a real, materialized bracket (`getGauntletBracketShape()`), the tint is
-  read straight off it regardless of season status — a seed's slot in a round after round 1 is a real
-  bye — so it reflects reality even if the bracket was hand-edited away from the shape
-  `buildGauntletBracket()` would have produced. Otherwise, while the regular season is still *ACTIVE*
-  and no real bracket exists yet, it falls back to a live "if the season ended today" preview computed
-  from the current standings, recomputed on every render. Both cases are computed by
-  `SeasonTabView.tsx` and passed as the `gauntletSeeding` prop to `LeaderboardTable`; the projection
-  fallback is implemented by `projectGauntletSeeding()` in `src/lib/gauntlet-bracket.ts`. Distinct
-  from the canonical gauntlet
-  ranking below, which only ever describes a *completed* gauntlet.
+  complete instead — `GauntletStandings`). Computed by `SeasonTabView.tsx` and passed as the
+  `gauntletSeeding` prop to `LeaderboardTable`; see
+  [`calculations.md`](./calculations.md#gauntlet-seeding-projection) for the two sources it prefers
+  between (a real materialized bracket vs. a live "if the season ended today" preview) and why.
+  Distinct from the canonical gauntlet ranking below, which only ever describes a *completed*
+  gauntlet.
 - **H2H (Head-to-Head)** — cross-player comparison surfaced in `getH2HData()`. Two distinct shapes
   live inside `H2HData` (`src/lib/queries/h2h.ts`):
   - **Duos** (`DuoStats`) — performance when two players are *teammates* (same faction)

@@ -44,19 +44,26 @@ function optionsExcludingSlot(pods: DraftPod[], podKey: string, slotIndex: numbe
   );
 }
 
-/** "Seed 3 — PlayerName" — `players` is passed in canonical-sort (seed) order from the page, so a
- * player's seed is just their 1-based position in that array. Used for the roster panel, where the
- * player (who's sitting out) is the driving fact and the seed is the reference. */
-function playerLabel(seedByPlayerId: Map<number, number>, player: Player): string {
-  return `Seed ${seedByPlayerId.get(player.id) ?? '?'} — ${player.name}`;
+/** "Seed 3 — PlayerName" — the shared label format everywhere a seed number and player name are
+ * shown together, whether starting from a player (the roster panel, where "who's sitting out" is
+ * the driving fact) or from a seed (the slot pickers, where *today's* holder of that seed — from
+ * `players`, passed in canonical-sort order — is only a reference). Falls back to "?" for a missing
+ * seed or name rather than hiding the option entirely. */
+function formatSeedLabel(seed: number | undefined, name: string | undefined): string {
+  return `Seed ${seed ?? '?'} — ${name ?? '?'}`;
 }
 
-/** "Seed 3 — PlayerName", from the seed number outward — used everywhere a slot is picked or
- * displayed, where the seed is the driving fact and *today's* holder of that seed is the reference.
- * `playerBySeed` is the season's current standings; a seed with no current holder (roster shrunk
- * since it was picked) falls back to "?" rather than hiding the option entirely. */
-function seedLabel(seed: number, playerBySeed: Map<number, Player>): string {
-  return `Seed ${seed} — ${playerBySeed.get(seed)?.name ?? '?'}`;
+/** Non-fatal notices from the last successful save, shown identically in both the edit and preview
+ * stages. */
+function WarningsBanner({ warnings }: { warnings: string[] }) {
+  if (warnings.length === 0) return null;
+  return (
+    <div className="font-mono text-[12px] text-[var(--color-accent-amber-fg)]">
+      {warnings.map((w) => (
+        <div key={w}>{w}</div>
+      ))}
+    </div>
+  );
 }
 
 export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Props) {
@@ -190,13 +197,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
           )}
         </div>
 
-        {warnings.length > 0 && (
-          <div className="font-mono text-[12px] text-[var(--color-accent-amber-fg)]">
-            {warnings.map((w) => (
-              <div key={w}>{w}</div>
-            ))}
-          </div>
-        )}
+        <WarningsBanner warnings={warnings} />
         {error && <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">{error}</div>}
 
         <div className="flex gap-3">
@@ -258,7 +259,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
                       }
                 }
               >
-                {playerLabel(seedByPlayerId, p)}
+                {formatSeedLabel(seedByPlayerId.get(p.id), p.name)}
               </button>
             );
           })}
@@ -310,13 +311,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
           ))}
         </div>
       )}
-      {warnings.length > 0 && (
-        <div className="font-mono text-[12px] text-[var(--color-accent-amber-fg)]">
-          {warnings.map((w) => (
-            <div key={w}>{w}</div>
-          ))}
-        </div>
-      )}
+      <WarningsBanner warnings={warnings} />
       {error && <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">{error}</div>}
 
       <div className="flex items-center gap-4">
@@ -492,7 +487,7 @@ function SlotPicker({
         <optgroup label="Seeds">
           {seedOptions.map((seed) => (
             <option key={seed} value={`seed:${seed}`}>
-              {seedLabel(seed, playerBySeed)}
+              {formatSeedLabel(seed, playerBySeed.get(seed)?.name)}
             </option>
           ))}
         </optgroup>

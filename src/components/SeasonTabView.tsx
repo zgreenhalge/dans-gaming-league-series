@@ -14,7 +14,7 @@ import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMa
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { MatchPickBanInput } from '@/lib/mapSideStats';
 import { isPlayedScore, tabCls, canonicalGauntletRankMap } from '@/lib/util';
-import { projectGauntletSeeding, type SeedPlacement } from '@/lib/gauntlet-bracket';
+import { projectGauntletSeeding, seedPlacementsByPlayer, type SeedPlacement } from '@/lib/gauntlet-bracket';
 
 type Tab = 'leaderboard' | 'schedule' | 'h2h' | 'stats' | 'advanced';
 
@@ -108,19 +108,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     if (isGauntlet) return undefined;
 
     if (gauntletBracketShape.length > 0) {
-      const byPlayer = new Map<number, SeedPlacement>();
-      for (const pod of gauntletBracketShape) {
-        for (const slot of pod.slots) {
-          if (slot.source_kind !== 'seed' || slot.player_id == null) continue;
-          byPlayer.set(slot.player_id, {
-            qualifies: true,
-            round: pod.round_number,
-            podIndex: pod.pod_index,
-            isFinal: pod.is_final,
-            isBye: pod.round_number > 1,
-          });
-        }
-      }
+      const byPlayer = seedPlacementsByPlayer(gauntletBracketShape);
       if (byPlayer.size > 0) return byPlayer;
     }
 

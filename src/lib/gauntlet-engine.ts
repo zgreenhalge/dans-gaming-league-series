@@ -36,6 +36,16 @@ export interface GauntletPodRow {
 
 type PlayerStatWin = { player_id: number; is_win: boolean };
 
+/** Seed number -> player_id, from a leaderboard already in canonical-sort order (seed 1 = index 0) —
+ * the standard "current standings define the seeding" mapping shared by every path that resolves a
+ * seed to a real player (`saveManualDraft()`'s live re-resolution, `trySeedGauntlet()`'s real seed
+ * time). */
+function playerBySeedFromLeaderboard(leaderboard: { player_id: number }[]): Map<number, number> {
+  const playerBySeed = new Map<number, number>();
+  leaderboard.forEach((row, i) => playerBySeed.set(i + 1, row.player_id));
+  return playerBySeed;
+}
+
 /** Every player's original tournament seed, keyed by player_id — every occupant traces back to
  * exactly one 'seed'-sourced slot (their entry point, whether round 1 or a later bye). */
 async function getSeedByPlayer(supabaseAdmin: SupabaseClient, seasonId: number): Promise<Map<number, number>> {
@@ -326,15 +336,9 @@ export async function getSeedBands(
  * has already landed, so this never blocks it in practice — it exists to stop the *manual* editor
  * from materializing a fully-seeded pod while the season backing its seeds is still live. */
 async function regularSeasonIsDone(supabaseAdmin: SupabaseClient, gauntletSeasonId: number): Promise<boolean> {
-  const { data: gauntletRow, error } = await supabaseAdmin
-    .from('seasons')
-    .select('name')
-    .eq('id', gauntletSeasonId)
-    .maybeSingle();
-  if (error) throw error;
-  const name = (gauntletRow as { name: string } | null)?.name ?? null;
-  if (!name) return true;
-  const regularSeason = await getLinkedRegularSeason(name);
+  const gauntletSeason = await getSeason(gauntletSeasonId);
+  if (!gauntletSeason) return true;
+  const regularSeason = await getLinkedRegularSeason(gauntletSeason.name);
   if (!regularSeason) return true;
   return regularSeason.status === 'COMPLETED' || regularSeason.status === 'ARCHIVED';
 }
@@ -345,8 +349,13 @@ export type MaterializeOutcome = 'materialized' | 'not-ready' | 'already-materia
  * already — shared by the seeding step (which can immediately ready round 1, or any all-bye pod)
  * and the propagation hook (which readies later pods as their feeders resolve). Also shared by the
  * manual editor's save path, which is the one caller that actually needs to know *why* nothing
- * happened (see `regularSeasonIsDone()`) well enough to tell the admin. */
-async function materializeIfReady(supabaseAdmin: SupabaseClient, podId: number): Promise<MaterializeOutcome> {
+ * happened (see `regularSeasonIsDone()`) well enough to tell the admin.
+ *
+ * `seasonDone`, if passed, skips the `regularSeasonIsDone()` lookup — every current caller loops
+ * over multiple pods from the *same* gauntlet season in one call, so the answer doesn't change
+ * pod-to-pod and each loop computes it once up front instead of re-querying per pod. Omit it (the
+ * default) for a one-off call, which still gets the same guard, just computed fresh. */
+async function materializeIfReady(supabaseAdmin: SupabaseClient, podId: number, seasonDone?: boolean): Promise<MaterializeOutcome> {
   const { data: allSlots, error: allSlotsErr } = await supabaseAdmin
     .from('gauntlet_pod_slots')
     .select('player_id')
@@ -364,7 +373,7 @@ async function materializeIfReady(supabaseAdmin: SupabaseClient, podId: number):
   const pod = podRow as { id: number; season_id: number; round_number: number; match1_id: number | null };
   if (pod.match1_id != null) return 'already-materialized';
 
-  if (!(await regularSeasonIsDone(supabaseAdmin, pod.season_id))) return 'regular-season-not-done';
+  if (!(seasonDone ?? (await regularSeasonIsDone(supabaseAdmin, pod.season_id)))) return 'regular-season-not-done';
 
   const seedByPlayer = await getSeedByPlayer(supabaseAdmin, pod.season_id);
   await materializePod(
@@ -405,8 +414,11 @@ export async function seedBracket(
   }
 
   const affectedPodIds = [...new Set(slots.map((s) => s.pod_id))];
-  for (const podId of affectedPodIds) {
-    await materializeIfReady(supabaseAdmin, podId);
+  if (affectedPodIds.length > 0) {
+    const seasonDone = await regularSeasonIsDone(supabaseAdmin, seasonId);
+    for (const podId of affectedPodIds) {
+      await materializeIfReady(supabaseAdmin, podId, seasonDone);
+    }
   }
 }
 
@@ -543,8 +555,11 @@ export async function resolveAndPropagate(supabaseAdmin: SupabaseClient, matchId
   }
 
   const downstreamPodIds = [...new Set(slots.map((s) => s.pod_id))];
-  for (const downstreamPodId of downstreamPodIds) {
-    await materializeIfReady(supabaseAdmin, downstreamPodId);
+  if (downstreamPodIds.length > 0) {
+    const seasonDone = await regularSeasonIsDone(supabaseAdmin, pod.season_id);
+    for (const downstreamPodId of downstreamPodIds) {
+      await materializeIfReady(supabaseAdmin, downstreamPodId, seasonDone);
+    }
   }
 }
 
@@ -698,11 +713,11 @@ export async function saveManualDraft(
   // to a real player from the regular season's *current* standings every save, the same mapping
   // `trySeedGauntlet()` uses at real seed time. This is what makes a not-yet-materialized slot track
   // whoever currently holds that seed rather than freezing in whoever held it at pick time.
-  const leaderboard = await getSeasonLeaderboard(regularSeasonId);
-  const playerBySeed = new Map<number, number>();
-  leaderboard.forEach((row, i) => playerBySeed.set(i + 1, row.player_id));
-
-  const currentPods = await getGauntletBracketShape(gauntletSeasonId);
+  const [leaderboard, currentPods] = await Promise.all([
+    getSeasonLeaderboard(regularSeasonId),
+    getGauntletBracketShape(gauntletSeasonId),
+  ]);
+  const playerBySeed = playerBySeedFromLeaderboard(leaderboard);
   const currentById = new Map(currentPods.map((p) => [p.id, p]));
   const submittedIds = new Set(draftPods.map((p) => p.persistedId).filter((id): id is number => id != null));
 
@@ -712,40 +727,13 @@ export async function saveManualDraft(
     }
   }
 
-  let toDelete = currentPods.filter((p) => !p.materialized && !submittedIds.has(p.id)).map((p) => p.id);
-  let updatedExisting = draftPods.filter((p) => {
+  const toDelete = currentPods.filter((p) => !p.materialized && !submittedIds.has(p.id)).map((p) => p.id);
+  const updatedExisting = draftPods.filter((p) => {
     if (p.persistedId == null) return false;
     const current = currentById.get(p.persistedId);
     return !!current && !current.materialized;
   });
-
-  // Guard against a live match resolving into one of these not-yet-materialized pods between the
-  // read above and now — `resolveAndPropagate()` runs from the score route's post-commit hook, so a
-  // concurrent match score can materialize a pod (or fill one of its slots) while this save is in
-  // flight. Re-check exactly the pods about to be deleted or have their slots overwritten, and
-  // protect any that turned out to have materialized in the interim instead of clobbering real match
-  // data — the rest of the save proceeds normally, with a warning surfaced for whatever was skipped.
   const warnings: string[] = [];
-  const aboutToTouch = [...new Set([...toDelete, ...updatedExisting.map((p) => p.persistedId!)])];
-  if (aboutToTouch.length > 0) {
-    const { data: recheckRows, error: recheckErr } = await supabaseAdmin
-      .from('gauntlet_pods')
-      .select('id, match1_id')
-      .in('id', aboutToTouch);
-    if (recheckErr) throw recheckErr;
-    const nowMaterialized = new Set(
-      ((recheckRows ?? []) as { id: number; match1_id: number | null }[])
-        .filter((p) => p.match1_id != null)
-        .map((p) => p.id),
-    );
-    if (nowMaterialized.size > 0) {
-      for (const id of nowMaterialized) {
-        warnings.push(`${groupLabel(currentById.get(id)!)} started playing while you were editing — your changes to it were skipped. Reload to see its current state.`);
-      }
-      toDelete = toDelete.filter((id) => !nowMaterialized.has(id));
-      updatedExisting = updatedExisting.filter((p) => !nowMaterialized.has(p.persistedId!));
-    }
-  }
 
   const newPods = draftPods.filter((p) => p.persistedId == null);
   const newPodKeys = new Set(newPods.map((p) => p.key));
@@ -764,53 +752,44 @@ export async function saveManualDraft(
   }
 
   try {
-    const hasWrites = toDelete.length > 0 || newPods.length > 0 || updatedExisting.length > 0;
-    if (hasWrites) {
+    if (toDelete.length > 0 || podsNeedingSlotWrite.length > 0) {
       const changedExisting = updatedExisting.filter((pod) => {
         const current = currentById.get(pod.persistedId!)!;
         return current.advance_rule !== pod.advance_rule || current.is_final !== pod.is_final;
       });
       const slots = podsNeedingSlotWrite.flatMap((pod) =>
         pod.slots.map((slot, slot_index) => {
-          if (slot.kind === 'seed') {
-            return {
-              pod_ref: podRef(pod.key),
-              slot_index,
-              source_kind: 'seed',
-              source_seed: slot.seed,
-              source_pod_ref: null,
-              player_id: playerBySeed.get(slot.seed) ?? null,
-            };
-          }
-          if (slot.kind === 'advance') {
-            return {
-              pod_ref: podRef(pod.key),
-              slot_index,
-              source_kind: 'pod',
-              source_seed: null,
-              source_pod_ref: podRef(slot.sourcePodKey),
-              player_id: null,
-            };
-          }
-          return {
+          const base = {
             pod_ref: podRef(pod.key),
             slot_index,
-            source_kind: 'seed',
-            source_seed: null,
-            source_pod_ref: null,
-            player_id: null,
+            source_kind: 'seed' as const,
+            source_seed: null as number | null,
+            source_pod_ref: null as ReturnType<typeof podRef> | null,
+            player_id: null as number | null,
           };
+          if (slot.kind === 'seed') {
+            return { ...base, source_seed: slot.seed, player_id: playerBySeed.get(slot.seed) ?? null };
+          }
+          if (slot.kind === 'advance') {
+            return { ...base, source_kind: 'pod' as const, source_pod_ref: podRef(slot.sourcePodKey) };
+          }
+          return base;
         }),
       );
 
       // A single DB-side transaction (`reconcile_gauntlet_draft()`) for the whole pod/slot shape
       // diff — delete removed pods, insert new ones, update changed ones, and rewrite touched
       // slots — so a failure partway through can't leave gauntlet_pods/gauntlet_pod_slots in a
-      // state that matches neither the old shape nor the submitted draft. Returns the new pods'
-      // temp-key -> real-id mapping, since slot rows referencing a brand-new pod (as either the
-      // owning pod or an advancement source) had to be resolved against ids that didn't exist yet
-      // when this request was built.
-      const { data: keyMap, error: rpcErr } = await supabaseAdmin.rpc('reconcile_gauntlet_draft', {
+      // state that matches neither the old shape nor the submitted draft. It also re-checks, in the
+      // same transaction, whether any of the touched already-persisted pods materialized since this
+      // function's initial read above (a concurrent match score landing via
+      // `resolveAndPropagate()`) and skips deleting/rewriting those instead of clobbering real match
+      // data — a check done in a separate query before this call couldn't fully close that race, since
+      // materialization could still land in the gap between the check and the write. Returns the new
+      // pods' temp-key -> real-id mapping (slot rows referencing a brand-new pod, as either the
+      // owning pod or an advancement source, had to be resolved against ids that didn't exist yet
+      // when this request was built) and which persisted pod ids it ended up skipping.
+      const { data: rpcResult, error: rpcErr } = await supabaseAdmin.rpc('reconcile_gauntlet_draft', {
         p_delete_pod_ids: toDelete,
         p_new_pods: newPods.map((pod) => ({
           temp_key: pod.key,
@@ -829,8 +808,15 @@ export async function saveManualDraft(
         p_slots: slots,
       });
       if (rpcErr) throw rpcErr;
-      for (const [key, id] of Object.entries((keyMap ?? {}) as Record<string, number>)) {
+      const result = rpcResult as { key_map: Record<string, number>; skipped_pod_ids: number[] };
+      for (const [key, id] of Object.entries(result.key_map ?? {})) {
         keyToId.set(key, id);
+      }
+      for (const id of result.skipped_pod_ids ?? []) {
+        const current = currentById.get(id);
+        if (current) {
+          warnings.push(`${groupLabel(current)} started playing while you were editing — your changes to it were skipped. Reload to see its current state.`);
+        }
       }
     }
 
@@ -844,9 +830,12 @@ export async function saveManualDraft(
     const touched = podsNeedingSlotWrite
       .map((pod) => ({ id: keyToId.get(pod.key)!, round_number: pod.round_number }))
       .sort((a, b) => a.round_number - b.round_number);
+    // regularSeason (fetched above) already answers this — no need for materializeIfReady() to
+    // re-derive it via regularSeasonIsDone() on every pod in the loop.
+    const seasonDone = regularSeason.status === 'COMPLETED' || regularSeason.status === 'ARCHIVED';
     let blockedByRegularSeason = false;
     for (const { id } of touched) {
-      const outcome = await materializeIfReady(supabaseAdmin, id);
+      const outcome = await materializeIfReady(supabaseAdmin, id, seasonDone);
       if (outcome === 'regular-season-not-done') blockedByRegularSeason = true;
     }
     if (blockedByRegularSeason) {
@@ -906,9 +895,7 @@ export async function trySeedGauntlet(supabaseAdmin: SupabaseClient, regularSeas
   if (shapeSeedCount === 0) return { status: 'no-shape' };
   if (shapeSeedCount !== N) return { status: 'drift', shapeSeedCount, currentCount: N };
 
-  const playerBySeed = new Map<number, number>();
-  leaderboard.forEach((row, i) => playerBySeed.set(i + 1, row.player_id));
-  await seedBracket(supabaseAdmin, gauntletSeason.id, playerBySeed);
+  await seedBracket(supabaseAdmin, gauntletSeason.id, playerBySeedFromLeaderboard(leaderboard));
 
   const nameBySeed = new Map(leaderboard.map((row, i) => [i + 1, row.player_name]));
   const toNames = (seeds: number[]) => seeds.map((seed) => nameBySeed.get(seed)!);
