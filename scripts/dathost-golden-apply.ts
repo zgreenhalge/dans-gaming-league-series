@@ -10,16 +10,18 @@
 //                                   whatever recreational-mode drift happened in the panel)
 //
 // Both mutate real state (repo files on disk, or the live match server) and require --yes.
-// --reassert only PUTs scalar cs2_settings/server fields (mirrors buildCs2Fields() in
-// src/lib/dathost.ts) — array fields like metamod_plugins are skipped, matching that file's
-// documented reasoning: DatHost preserves them across changes, so guessing form-encoding for an
-// array isn't worth the risk. --reassert also does not touch per_match_overrides (those are
-// per-match, not part of the static baseline) or cfg file uploads if the files endpoint 404s.
+// --reassert only PUTs scalar cs2_settings/server fields (via buildScalarFields() in
+// src/lib/dathost.ts, the same builder applyConfigSet() uses) — array fields like metamod_plugins are
+// skipped, matching that function's documented reasoning: DatHost preserves them across changes, so
+// guessing form-encoding for an array isn't worth the risk. --reassert also does not touch
+// per_match_overrides (those are per-match, not part of the static baseline) or cfg file uploads if
+// the files endpoint 404s.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO_ROOT, GOLDEN_JSON_PATH, CFG_FILES, api } from './dathost-golden-shared';
 import { pushCfgFiles } from '../src/lib/dathost-config';
+import { buildScalarFields, MAP_SELECTION_KEYS } from '../src/lib/dathost';
 
 function loadGoldenRaw(): Record<string, unknown> {
   return JSON.parse(readFileSync(GOLDEN_JSON_PATH, 'utf8'));
@@ -77,23 +79,16 @@ async function reassert(serverId: string) {
   const localServer = (golden.server ?? {}) as Record<string, unknown>;
   const localCs2 = (golden.cs2_settings ?? {}) as Record<string, unknown>;
 
-  const fields: Record<string, string> = {};
-  for (const [key, val] of Object.entries(localServer)) {
-    // `typeof null === 'object'`, so this also catches null/absent fields — String()-ing those would
-    // silently PUT the literal "null"/"[object Object]" to the live server instead of being rejected.
-    if (typeof val === 'object') {
-      console.error(`  ~ skipping server.${key} (array/null/object — not re-asserted, see script header)`);
-      continue;
-    }
-    fields[key] = String(val);
-  }
-  for (const [key, val] of Object.entries(localCs2)) {
-    if (typeof val === 'object') {
-      console.error(`  ~ skipping cs2_settings.${key} (array/null/object — not re-asserted, see script header)`);
-      continue;
-    }
-    fields[`cs2_settings.${key}`] = String(val);
-  }
+  // Same scalar-field builder the app uses (applyConfigSet in src/lib/dathost.ts) — see its doc
+  // comment for why non-scalar values (arrays like metamod_plugins, null, nested objects) are skipped
+  // rather than guessed at. `onSkip` reports exactly what buildScalarFields itself excluded, so the
+  // logged message can never drift from the actual PUT.
+  const skipMsg = (label: string) => (key: string) =>
+    console.error(`  ~ skipping ${label}.${key} (array/null/object — not re-asserted, see script header)`);
+  const fields: Record<string, string> = {
+    ...buildScalarFields(localServer, { onSkip: skipMsg('server') }),
+    ...buildScalarFields(localCs2, { prefix: 'cs2_settings.', exclude: MAP_SELECTION_KEYS, onSkip: skipMsg('cs2_settings') }),
+  };
 
   console.error(`— PUT /game-servers/${serverId} (golden settings) —`);
   const put = await api('PUT', `/game-servers/${serverId}`, new URLSearchParams(fields));

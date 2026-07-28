@@ -23,18 +23,18 @@ export const BASE = 'https://dathost.com/api/0.1';
  * cs2_settings keys that are set per-match/per-apply (the picked workshop map), not part of any
  * static config set's baseline — see `per_match_overrides` in golden-server-settings.json.
  */
-const MAP_SELECTION_KEYS = new Set(['maps_source', 'workshop_collection_id', 'workshop_single_map_id']);
+export const MAP_SELECTION_KEYS = new Set(['maps_source', 'workshop_collection_id', 'workshop_single_map_id']);
 
 /**
- * Named, selectable `cs2_settings` baselines. `golden` (read from `infra/matchzy/golden-server-
- * settings.json`, the canonical version-controlled snapshot) is the only one today — the DGLS match
- * server has never needed a second. Adding one: version a new settings JSON next to
+ * Named, selectable `server` + `cs2_settings` baselines. `golden` (read from `infra/matchzy/golden-
+ * server-settings.json`, the canonical version-controlled snapshot) is the only one today — the DGLS
+ * match server has never needed a second. Adding one: version a new settings JSON next to
  * golden-server-settings.json the same way, `import` it here, and add one entry below. Everything
  * that applies a config set (auto per-match provisioning, the admin console) goes through this
  * registry, so a new set is immediately available everywhere without further wiring.
  */
-const CONFIG_SETS: Record<string, { label: string; cs2Settings: Record<string, unknown> }> = {
-  golden: { label: 'DGLS Season 3 Default', cs2Settings: goldenServerSettings.cs2_settings },
+const CONFIG_SETS: Record<string, { label: string; server: Record<string, unknown>; cs2Settings: Record<string, unknown> }> = {
+  golden: { label: 'DGLS Season 3 Default', server: goldenServerSettings.server, cs2Settings: goldenServerSettings.cs2_settings },
 };
 
 export interface ConfigSetOption {
@@ -49,21 +49,29 @@ export const CONFIG_SET_OPTIONS: ConfigSetOption[] = Object.entries(CONFIG_SETS)
 }));
 
 /**
- * The scalar `cs2_settings` PUT fields for one config set. We intentionally only include scalar
- * fields — `metamod_plugins` (an array) is preserved by DatHost across game-mode changes, so
- * re-asserting it would mean guessing array form-encoding for no benefit. Map-selection keys are
- * excluded here and set per-apply instead, see `applyConfigSet`.
+ * The scalar PUT fields for one settings object — optionally `prefix`ed (`cs2_settings.` for that
+ * block, bare for the top-level `server` block) and excluding any keys in `exclude` (map-selection
+ * keys, set per-apply instead — see `applyConfigSet`). We intentionally only include scalar fields:
+ * arrays (e.g. `metamod_plugins`) are preserved by DatHost across changes, so re-asserting them would
+ * mean guessing array form-encoding for no benefit; `null` and any other non-primitive (a nested
+ * object) have no defined PUT encoding here, and String()-ing them would silently send
+ * "null"/"[object Object]" to the live server. `typeof null === 'object'`, so one check covers null,
+ * arrays, and nested objects together. Exported for `scripts/dathost-golden-apply.ts`'s `--reassert`,
+ * which pushes the same fields outside the app's own request path.
  */
-function buildCs2Fields(cs2Settings: Record<string, unknown>): Record<string, string> {
+export function buildScalarFields(
+  settings: Record<string, unknown>,
+  opts: { prefix?: string; exclude?: ReadonlySet<string>; onSkip?: (key: string) => void } = {},
+): Record<string, string> {
+  const { prefix = '', exclude, onSkip } = opts;
   const fields: Record<string, string> = {};
-  for (const [key, value] of Object.entries(cs2Settings)) {
-    if (MAP_SELECTION_KEYS.has(key)) continue;
-    // Arrays (e.g. metamod_plugins) are DatHost-preserved, not re-asserted — see above. `null` and any
-    // other non-primitive (a nested object) have no defined PUT encoding here; String()-ing them would
-    // silently send "null"/"[object Object]" to the live server, so skip rather than guess.
-    // `typeof null === 'object'`, so this one check covers null, arrays, and nested objects together.
-    if (typeof value === 'object') continue;
-    fields[`cs2_settings.${key}`] = String(value);
+  for (const [key, value] of Object.entries(settings)) {
+    if (exclude?.has(key)) continue;
+    if (typeof value === 'object') {
+      onSkip?.(key);
+      continue;
+    }
+    fields[`${prefix}${key}`] = String(value);
   }
   return fields;
 }
@@ -167,7 +175,13 @@ export async function stopServer(id: string): Promise<void> {
 }
 
 /**
- * PUT a named config set's `cs2_settings` (+ a pinned map) to overwrite any recreational-mode drift.
+ * PUT a named config set's full `server` + `cs2_settings` baseline (+ a pinned map) to overwrite any
+ * recreational-mode drift — the same fields `dathost-golden-apply.ts --reassert` pushes, but through
+ * the shared registry so auto per-match provisioning, the admin console's "Apply config set", and
+ * `/scrim/start` can never fall out of sync with each other on which fields get re-asserted. The
+ * `server`-level fields (`autostop`, `autostop_minutes`, …) apply to every caller intentionally,
+ * scrim included — they're a shared-server idle/billing policy, not something that should vary by
+ * how the current boot was started.
  *
  * `workshop_collection` mode does not behave reliably on the DGLS server (confirmed live) — every
  * apply must pin a single workshop map instead, so a resolved `mapWorkshopId` is required; this
@@ -190,7 +204,8 @@ export async function applyConfigSet(
     );
   }
   const fields: Record<string, string> = {
-    ...buildCs2Fields(set.cs2Settings),
+    ...buildScalarFields(set.server),
+    ...buildScalarFields(set.cs2Settings, { prefix: 'cs2_settings.', exclude: MAP_SELECTION_KEYS }),
     'cs2_settings.maps_source': 'workshop_single_map',
     'cs2_settings.workshop_single_map_id': opts.mapWorkshopId,
   };

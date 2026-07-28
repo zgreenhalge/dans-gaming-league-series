@@ -3,7 +3,7 @@
   "server": {
     "location": "chicago",
     "autostop": true,
-    "autostop_minutes": 10,
+    "autostop_minutes": 3,
     "reboot_on_crash": false,
     "max_disk_usage_gb": 30
   },
