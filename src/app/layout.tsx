@@ -83,7 +83,7 @@ export default async function RootLayout({
           <MapProvider maps={mapLookup}>
           <NavProvider>
             <LiveMatchTicker initial={liveTicker} />
-            <div className="flex min-h-screen" style={{ paddingTop: 'calc(var(--topbar-h) + var(--ticker-h))' }}>
+            <div className="flex min-h-screen" style={{ paddingTop: 'var(--content-top)' }}>
               <SideNav seasons={seasons.map((s) => ({ id: s.id, name: s.name }))} />
               <div className="flex-1 min-w-0">
                 {children}

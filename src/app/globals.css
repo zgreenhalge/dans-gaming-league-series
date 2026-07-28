@@ -45,6 +45,10 @@
      (server-rendered initial value, then kept live by the ticker component itself) rather than here,
      so this is just the no-JS/no-ticker fallback. */
   --ticker-h: 0px;
+  /* Combined offset every fixed-below-the-topbar element (page content, `SideNav`) reserves at its
+     top — the one place `--topbar-h` and `--ticker-h` combine, so a third stacked banner only ever
+     needs to change this line, not every consumer. */
+  --content-top: calc(var(--topbar-h) + var(--ticker-h));
 
   /* Theme-aware overlays for map images and dim backgrounds — tuned for image vibrancy */
   /* Light: slightly transparent warm overlays, image filter increases color/contrast */

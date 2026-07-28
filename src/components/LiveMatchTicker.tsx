@@ -21,6 +21,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase-browser';
+import { LiveDot } from '@/components/ServerStatusBits';
+import type { LiveScoreDbRow } from '@/lib/demo/liveScore';
 import type { LiveTickerMatch } from '@/lib/queries';
 
 export const TICKER_HEIGHT_PX = 34;
@@ -63,7 +65,7 @@ export function LiveMatchTicker({ initial }: { initial: LiveTickerMatch | null }
             if (!tickerRef.current || old.match_id === tickerRef.current.matchId) setTicker(null);
             return;
           }
-          const row = payload.new as { match_id: number; shirts_score: number; skins_score: number };
+          const row = payload.new as LiveScoreDbRow & { match_id: number };
           if (tickerRef.current && tickerRef.current.matchId === row.match_id) {
             setTicker({ ...tickerRef.current, shirts: row.shirts_score, skins: row.skins_score });
           } else {
@@ -88,11 +90,11 @@ export function LiveMatchTicker({ initial }: { initial: LiveTickerMatch | null }
   return (
     <Link
       href={`/matches/${ticker.matchId}`}
-      className="fixed left-0 right-0 z-10 flex items-center justify-center gap-2 border-b border-[var(--color-border-secondary)] bg-[var(--color-bg-secondary)] px-3 text-[12px] hover:bg-[var(--color-bg-tertiary)] transition-colors overflow-hidden"
+      className="lift-row fixed left-0 right-0 z-10 flex items-center justify-center gap-2 border-b border-[var(--color-border-secondary)] bg-[var(--color-bg-secondary)] px-3 text-[12px] overflow-hidden"
       style={{ top: 'var(--topbar-h)', height: `${TICKER_HEIGHT_PX}px` }}
     >
       <span className="flex shrink-0 items-center gap-1.5 font-semibold uppercase tracking-wide text-[var(--color-accent-green-fg)]">
-        <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+        <LiveDot />
         Live
       </span>
       <span className="hidden truncate text-[var(--color-text-secondary)] sm:inline">{ticker.title}</span>

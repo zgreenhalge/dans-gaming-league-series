@@ -5,7 +5,7 @@ import { mapSlug } from '../maps';
 import type { ScheduledMatchRef } from '../schedule';
 import { getPlayersById } from './player';
 import { fetchAllPages } from './_shared';
-import { getCurrentLiveMatch } from '../demo/liveScore';
+import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '../demo/liveScore';
 
 
 export interface MatchStatRow extends PlayerMatchStat {
@@ -73,34 +73,30 @@ export interface MatchTeamNames {
  *  ("Player A & Player B") — shared by `getMatchMeta` (OG/meta tags) and `getLiveTickerMatch` (the
  *  site-wide live ticker) so the season/week/roster lookup lives in exactly one place. */
 export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames | null> {
-  const { data: match } = await supabase
-    .from('matches')
-    .select('id, week_id, match_number')
-    .eq('id', matchId)
-    .maybeSingle();
-  if (!match) return null;
-  const m = match as Pick<Match, 'id' | 'week_id' | 'match_number'>;
-
-  const { data: week } = await supabase
-    .from('weeks')
-    .select('id, season_id, week_number')
-    .eq('id', m.week_id)
-    .maybeSingle();
-  if (!week) return null;
-  const w = week as Pick<Week, 'id' | 'season_id' | 'week_number'>;
-
-  const [{ data: season }, { data: stats }] = await Promise.all([
-    supabase.from('seasons').select('id, name, is_gauntlet').eq('id', w.season_id).maybeSingle(),
+  // Match/week/season collapse into one embedded select (same pattern as `getOtherScheduledMatches`
+  // below), run in parallel with the roster fetch rather than chained after it — the roster only
+  // depends on `matchId`, which is already known.
+  const [{ data: match }, { data: stats }] = await Promise.all([
+    supabase
+      .from('matches')
+      .select('match_number, weeks(week_number, seasons(name, is_gauntlet))')
+      .eq('id', matchId)
+      .maybeSingle(),
     supabase.from('player_match_stats').select('player_id, faction').eq('match_id', matchId),
   ]);
-  if (!season) return null;
-  const s = season as Pick<Season, 'id' | 'name' | 'is_gauntlet'>;
+  if (!match) return null;
+  // Supabase types embedded to-one relations as arrays, but returns objects at runtime — cast through
+  // unknown (same pattern as `getOtherScheduledMatches` below).
+  const m = match as unknown as Pick<Match, 'match_number'> & {
+    weeks: (Pick<Week, 'week_number'> & { seasons: Pick<Season, 'name' | 'is_gauntlet'> | null }) | null;
+  };
+  if (!m.weeks || !m.weeks.seasons) return null;
 
   const title = matchTitle({
-    seasonName: s.name,
-    weekNumber: w.week_number,
+    seasonName: m.weeks.seasons.name,
+    weekNumber: m.weeks.week_number,
     matchNumber: m.match_number,
-    isGauntlet: s.is_gauntlet,
+    isGauntlet: m.weeks.seasons.is_gauntlet,
   });
 
   const playerRows = (stats ?? []) as Pick<PlayerMatchStat, 'player_id' | 'faction'>[];
@@ -120,6 +116,23 @@ export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames
   return { title, shirtNames, skinNames };
 }
 
+/** Whichever match is currently live, with no `matchId` known ahead of time — the first step of
+ *  `getLiveTickerMatch` below. The league runs one shared match server (#134), so this table holds at
+ *  most one row in practice; `order`+`limit(1)` is just a defensive tie-break, not evidence more than
+ *  one is expected. Reads through the anon `supabase` client (RLS is off, so it can see everything),
+ *  matching every other query in this file. */
+async function getCurrentLiveMatch(): Promise<LiveScoreRow | null> {
+  const { data } = await supabase
+    .from('live_match_score')
+    .select('match_id, shirts_score, skins_score, round, updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  const row = data as LiveScoreDbRow & { match_id: number };
+  return rowToLiveScore(row.match_id, row);
+}
+
 export interface LiveTickerMatch extends MatchTeamNames {
   matchId: number;
   shirts: number;
@@ -131,7 +144,7 @@ export interface LiveTickerMatch extends MatchTeamNames {
  *  root layout's initial server render and `GET /api/live-match`, which `LiveMatchTicker` calls to
  *  refresh itself off Realtime changes on `live_match_score`. */
 export async function getLiveTickerMatch(): Promise<LiveTickerMatch | null> {
-  const live = await getCurrentLiveMatch(supabase);
+  const live = await getCurrentLiveMatch();
   if (!live) return null;
   const teams = await getMatchTeamNames(live.matchId);
   if (!teams) return null;

@@ -131,7 +131,7 @@ export function SideNav({ seasons }: Props) {
         className={`hidden md:flex flex-col shrink-0 border-r border-[var(--color-border-secondary)] sticky self-start overflow-y-auto bg-[var(--color-bg-primary)] transition-[width] duration-200 overflow-x-hidden ${
           desktopOpen ? 'w-[180px]' : 'w-0'
         }`}
-        style={{ top: 'calc(var(--topbar-h) + var(--ticker-h))', height: 'calc(100vh - var(--topbar-h) - var(--ticker-h))' }}
+        style={{ top: 'var(--content-top)', height: 'calc(100vh - var(--content-top))' }}
       >
         {desktopOpen && navContent}
       </aside>
@@ -146,7 +146,7 @@ export function SideNav({ seasons }: Props) {
           />
           <aside
             className="md:hidden fixed left-0 z-50 w-64 bg-[var(--color-bg-primary)] border-r border-[var(--color-border-primary)] overflow-y-auto"
-            style={{ top: 'calc(var(--topbar-h) + var(--ticker-h))', height: 'calc(100vh - var(--topbar-h) - var(--ticker-h))' }}
+            style={{ top: 'var(--content-top)', height: 'calc(100vh - var(--content-top))' }}
           >
             {navContent}
           </aside>

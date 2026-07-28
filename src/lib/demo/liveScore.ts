@@ -114,23 +114,6 @@ export async function getLiveScore(admin: SupabaseClient, matchId: number): Prom
   return rowToLiveScore(matchId, data as LiveScoreDbRow);
 }
 
-/** Whichever match is currently live, with no `matchId` known ahead of time — for the site-wide
- *  ticker (`LiveMatchTicker`). The league runs one shared match server (#134), so this table holds
- *  at most one row in practice; `order`+`limit(1)` is just a defensive tie-break, not evidence more
- *  than one is expected. `client` takes either the anon or admin client — RLS is off, so both can
- *  read this table, and the anon client is what SSR query helpers (`queries/match.ts`) use. */
-export async function getCurrentLiveMatch(client: SupabaseClient): Promise<LiveScoreRow | null> {
-  const { data } = await client
-    .from('live_match_score')
-    .select('match_id, shirts_score, skins_score, round, updated_at')
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!data) return null;
-  const row = data as LiveScoreDbRow & { match_id: number };
-  return rowToLiveScore(row.match_id, row);
-}
-
 /** Deleted by `writeMatchScore()` once the match has an actual score — see the header comment for why
  *  that's the right trigger, instead of `map_result` or wherever `demo-ingest.ts` finishes parsing. */
 export async function clearLiveScore(admin: SupabaseClient, matchId: number): Promise<void> {

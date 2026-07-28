@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getBrowserClient } from '@/lib/supabase-browser';
 import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '@/lib/demo/liveScore';
+import { LiveDot } from '@/components/ServerStatusBits';
 
 type Faction = 'CT' | 'T' | null;
 
@@ -118,7 +119,7 @@ export default function MatchScoreHero({
   return (
     <div className="mt-5 flex flex-col items-center gap-2">
       <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--color-accent-green-fg)]">
-        <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+        <LiveDot />
         Live
       </div>
       <ScoreDisplay shirts={liveScore.shirts} skins={liveScore.skins} shirtsF={shirtsF} skinsF={skinsF} />
