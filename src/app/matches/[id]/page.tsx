@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, isWeekComplete } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, isWeekComplete, isMatchCurrentlyLive } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/og';
 import { buildMatchJsonLd } from '@/lib/structured-data';
 import { JsonLd } from '@/components/JsonLd';
@@ -14,7 +14,7 @@ import MatchHeaderSection from '@/components/MatchHeaderSection';
 import VetoSequence from '@/components/VetoSequence';
 import MatchServerPanel from '@/components/MatchServerPanel';
 import MatchDemoReviewBlock from '@/components/MatchDemoReviewBlock';
-import LiveScoreTicker from '@/components/LiveScoreTicker';
+import MatchScoreHero from '@/components/MatchScoreHero';
 import MatchTabView from '@/components/MatchTabView';
 import RoundHistoryStrip from '@/components/RoundHistoryStrip';
 import { WinProbabilityBar } from '@/components/WinProbabilityBar';
@@ -60,13 +60,6 @@ function shirtsFaction(skinsSide: 'CT' | 'T' | null): Faction {
   if (skinsSide === 'T') return 'CT';
   return null;
 }
-
-function factionClass(f: Faction): string {
-  if (f === 'CT') return 'faction-ct';
-  if (f === 'T') return 'faction-t';
-  return '';
-}
-
 
 function Topbar({
   seasonId,
@@ -137,7 +130,7 @@ export default async function MatchPage({
   const needsPreviousWeekCheck =
     !played && showScouting && week.week_number > 1 && matchWindow != null && today < matchWindow.weekStart;
 
-  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, previousWeekComplete] = await Promise.all([
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, previousWeekComplete, isLiveNow] = await Promise.all([
     showScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     showScouting
       ? getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true })
@@ -155,6 +148,8 @@ export default async function MatchPage({
     showScouting && map ? getMatchIdsForMap(map) : Promise.resolve<number[]>([]),
     season.is_gauntlet ? getGauntletPodForMatch(matchId) : Promise.resolve(null),
     needsPreviousWeekCheck ? isWeekComplete(season.id, week.week_number - 1) : Promise.resolve(false),
+    // Drives the `--ticker-h` override below — only an unplayed match can ever be the live one.
+    played ? Promise.resolve(false) : isMatchCurrentlyLive(matchId),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
 
@@ -281,6 +276,13 @@ export default async function MatchPage({
 
   return (
     <div className="min-h-screen">
+      {/* `LiveMatchTicker` suppresses itself here (it already knows this is its own match's page via
+          `usePathname`), but the root layout can't know that server-side — it has no route params to
+          check without opting the whole site out of static rendering — so it always reserves ticker
+          space based on "is anything live" alone. `!important` corrects that guess before first paint
+          instead of leaving it to the client to fix after hydration, which would show a phantom gap
+          under the topbar on exactly the page most likely to be watched live. */}
+      {isLiveNow && <style>{':root{--ticker-h:0px !important}'}</style>}
       <JsonLd data={matchJsonLd} />
       <div className="centering">
         {match.is_feature_match && <FeatureMatchBanner />}
@@ -317,29 +319,14 @@ export default async function MatchPage({
               otherScheduled={otherScheduled}
             />
 
-            {score && (
-              <div className="mt-5 flex items-baseline justify-center gap-5 flex-wrap">
-                <div className={`${factionClass(shirtsF)} flex items-baseline gap-3`}>
-                  <span className="font-display text-[24px] font-bold faction-fg">
-                    Shirts
-                  </span>
-                  <span className="display-numeral text-[64px] text-[var(--color-text-primary)] tnum [text-shadow:-1px_-1px_0_black,1px_-1px_0_black,-1px_1px_0_black,1px_1px_0_black]">
-                    {score.shirts}
-                  </span>
-                </div>
-                <span className="font-mono text-[24px] text-[var(--color-text-secondary)]">
-                  —
-                </span>
-                <div className={`${factionClass(skinsF)} flex items-baseline gap-3`}>
-                  <span className="display-numeral text-[64px] text-[var(--color-text-primary)] tnum [text-shadow:-1px_-1px_0_black,1px_-1px_0_black,-1px_1px_0_black,1px_1px_0_black]">
-                    {score.skins}
-                  </span>
-                  <span className="font-display text-[24px] font-bold faction-fg">
-                    Skins
-                  </span>
-                </div>
-              </div>
-            )}
+            <MatchScoreHero
+              matchId={match.id}
+              played={played}
+              vetoComplete={vetoComplete}
+              finalScore={score}
+              shirtsF={shirtsF}
+              skinsF={skinsF}
+            />
 
             {(winProbability || postMatchWinProb != null) && (
               <WinProbabilityBar
@@ -379,16 +366,6 @@ export default async function MatchPage({
             <div className="pb-6 flex justify-center">
               <div className="w-full max-w-md">
                 <MatchServerPanel matchId={match.id} canManage={canManageServer} autoProvisioning={vetoComplete} />
-              </div>
-            </div>
-          )}
-
-          {/* Live score — self-hides until MatchZy reports `going_live`, and again once the match is
-              scored. Shown to anyone viewing the page, not just the manager. */}
-          {!played && vetoComplete && (
-            <div className="pb-6 flex justify-center">
-              <div className="w-full max-w-md">
-                <LiveScoreTicker matchId={match.id} />
               </div>
             </div>
           )}

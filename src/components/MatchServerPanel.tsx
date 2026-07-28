@@ -1,11 +1,13 @@
 'use client';
 
 // In-match server panel (Phase 4). Once the 5-stage veto completes, this drives the hosting UX:
-//   idle → (provision) → "Starting server…" spinner → Join + copy-`connect` → hidden on teardown.
+//   idle → (provision) → "Starting server…" spinner → Join + copy-`connect` → hidden once played.
 //
 // Updates via Supabase Realtime on the `matches` row (no polling) — the same channel pattern as
 // VetoSequence; the table is already in the realtime publication. The moment the row flips to `live`
-// we swap the spinner for the Join button.
+// we swap the spinner for the Join button. Teardown itself isn't a control here — it happens
+// automatically once the match is scored (`teardownMatchServer` in the score route / MatchZy log
+// ingest), with a manual "Tear down" safety valve on the admin server console for a server left live.
 
 import { useCallback, useEffect, useState } from 'react';
 import { getBrowserClient } from '@/lib/supabase-browser';
@@ -97,23 +99,6 @@ export default function MatchServerPanel({
     }
   };
 
-  const teardown = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/matches/${matchId}/server/teardown`, { method: 'POST' });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? 'Could not stop the server');
-      } else {
-        setState('done');
-        setConnect(null);
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const copyConnect = async () => {
     if (!connect) return;
     await navigator.clipboard.writeText(`connect ${connect}`);
@@ -152,33 +137,22 @@ export default function MatchServerPanel({
       )}
 
       {state === 'live' && connect && (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <a
-              // `steam://connect/<host>` is unreliable when triggered from a browser click (Steam
-              // client bug, independent of host format). `steam://run/<appid>//+connect <ip:port>`
-              // (730 = Counter-Strike 2) is the documented workaround that still launches reliably.
-              href={`steam://run/730//+connect ${connect}`}
-              className="rounded-md border border-green-500 bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-500"
-            >
-              Join server
-            </a>
-            <button
-              onClick={copyConnect}
-              className="rounded-md border border-[var(--color-border-primary)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)]"
-            >
-              {copied ? 'Copied!' : `Copy “connect ${connect}”`}
-            </button>
-          </div>
-          {canManage && (
-            <button
-              onClick={teardown}
-              disabled={busy}
-              className="self-start text-xs text-[var(--color-text-secondary)] underline hover:text-[var(--color-text-primary)] disabled:opacity-50"
-            >
-              {busy ? 'Stopping…' : 'Stop server'}
-            </button>
-          )}
+        <div className="flex flex-col gap-2">
+          <a
+            // `steam://connect/<host>` is unreliable when triggered from a browser click (Steam
+            // client bug, independent of host format). `steam://run/<appid>//+connect <ip:port>`
+            // (730 = Counter-Strike 2) is the documented workaround that still launches reliably.
+            href={`steam://run/730//+connect ${connect}`}
+            className="w-full rounded-md border border-green-500 bg-green-600 px-5 py-2.5 text-center text-base font-semibold text-white hover:bg-green-500"
+          >
+            Join server
+          </a>
+          <button
+            onClick={copyConnect}
+            className="self-start rounded-md border border-[var(--color-border-primary)] px-2 py-1 text-xs text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)]"
+          >
+            {copied ? 'Copied!' : `Copy “connect ${connect}”`}
+          </button>
         </div>
       )}
 

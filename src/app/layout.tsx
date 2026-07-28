@@ -7,7 +7,8 @@ import { SideNav } from "@/components/SideNav";
 import { NavProvider } from "@/components/NavContext";
 import { MapProvider } from "@/components/MapContext";
 import { ScrimStatusProvider } from "@/components/ScrimStatusContext";
-import { getSeasons, getMapLookup } from "@/lib/queries";
+import { LiveMatchTicker, TICKER_HEIGHT_PX } from "@/components/LiveMatchTicker";
+import { getSeasons, getMapLookup, getLiveTickerMatch } from "@/lib/queries";
 import { SITE_URL } from "@/lib/site";
 import Script from "next/script";
 import "./globals.css";
@@ -58,15 +59,17 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [seasons, mapLookup] = await Promise.all([
+  const [seasons, mapLookup, liveTicker] = await Promise.all([
     getSeasons().catch(() => []),
     getMapLookup().catch(() => ({})),
+    getLiveTickerMatch().catch(() => null),
   ]);
 
   return (
     <html
       lang="en"
       className={`h-full antialiased ${display.variable} ${sans.variable} ${mono.variable}`}
+      style={{ ['--ticker-h' as string]: liveTicker ? `${TICKER_HEIGHT_PX}px` : '0px' } as React.CSSProperties}
       suppressHydrationWarning
     >
       <body className="min-h-full dgls-atmosphere">
@@ -79,7 +82,8 @@ export default async function RootLayout({
           <ScrimStatusProvider>
           <MapProvider maps={mapLookup}>
           <NavProvider>
-            <div className="flex min-h-screen" style={{ paddingTop: 'var(--topbar-h)' }}>
+            <LiveMatchTicker initial={liveTicker} />
+            <div className="flex min-h-screen" style={{ paddingTop: 'var(--content-top)' }}>
               <SideNav seasons={seasons.map((s) => ({ id: s.id, name: s.name }))} />
               <div className="flex-1 min-w-0">
                 {children}

@@ -1,10 +1,11 @@
 import { supabase } from '../supabase';
-import type { Match, Week, Season, PlayerMatchStat, PlayerMatchSabremetrics, Faction } from '../types';
-import { isPlayedScore, avgOf, compareMatchRefDesc, extractSeasonNumber, matchLabel } from '../util';
+import type { Match, Week, Season, Player, PlayerMatchStat, PlayerMatchSabremetrics, Faction } from '../types';
+import { isPlayedScore, avgOf, compareMatchRefDesc, extractSeasonNumber, matchLabel, matchTitle } from '../util';
 import { mapSlug } from '../maps';
 import type { ScheduledMatchRef } from '../schedule';
 import { getPlayersById } from './player';
 import { fetchAllPages } from './_shared';
+import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '../demo/liveScore';
 
 
 export interface MatchStatRow extends PlayerMatchStat {
@@ -60,6 +61,117 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   );
 
   return { match: m, week: w, season: season as Season, stats: statRows };
+}
+
+export interface MatchTeamNames {
+  title: string;
+  shirtNames: string;
+  skinNames: string;
+}
+
+/** A match's display title ("Season · Week N · Match M") and its rostered players joined per side
+ *  ("Player A & Player B") — shared by `getMatchMeta` (OG/meta tags) and `getLiveTickerMatch` (the
+ *  site-wide live ticker) so the season/week/roster lookup lives in exactly one place. */
+export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames | null> {
+  // Match/week/season collapse into one embedded select (same pattern as `getOtherScheduledMatches`
+  // below), run in parallel with the roster fetch rather than chained after it — the roster only
+  // depends on `matchId`, which is already known.
+  const [{ data: match }, { data: stats }] = await Promise.all([
+    supabase
+      .from('matches')
+      .select('match_number, weeks(week_number, seasons(name, is_gauntlet))')
+      .eq('id', matchId)
+      .maybeSingle(),
+    supabase.from('player_match_stats').select('player_id, faction').eq('match_id', matchId),
+  ]);
+  if (!match) return null;
+  // Supabase types embedded to-one relations as arrays, but returns objects at runtime — cast through
+  // unknown (same pattern as `getOtherScheduledMatches` below).
+  const m = match as unknown as Pick<Match, 'match_number'> & {
+    weeks: (Pick<Week, 'week_number'> & { seasons: Pick<Season, 'name' | 'is_gauntlet'> | null }) | null;
+  };
+  if (!m.weeks || !m.weeks.seasons) return null;
+
+  const title = matchTitle({
+    seasonName: m.weeks.seasons.name,
+    weekNumber: m.weeks.week_number,
+    matchNumber: m.match_number,
+    isGauntlet: m.weeks.seasons.is_gauntlet,
+  });
+
+  const playerRows = (stats ?? []) as Pick<PlayerMatchStat, 'player_id' | 'faction'>[];
+  const shirtIds = playerRows.filter((p) => p.faction === 'SHIRTS').map((p) => p.player_id);
+  const skinIds = playerRows.filter((p) => p.faction === 'SKINS').map((p) => p.player_id);
+
+  const names: Map<number, string> = new Map();
+  const allIds = [...shirtIds, ...skinIds];
+  if (allIds.length > 0) {
+    const { data: players } = await supabase.from('players').select('id, name').in('id', allIds);
+    for (const p of (players ?? []) as Pick<Player, 'id' | 'name'>[]) names.set(p.id, p.name);
+  }
+
+  const shirtNames = shirtIds.map((id) => names.get(id) ?? '?').join(' & ');
+  const skinNames = skinIds.map((id) => names.get(id) ?? '?').join(' & ');
+
+  return { title, shirtNames, skinNames };
+}
+
+/** Whichever match is currently live, with no `matchId` known ahead of time — the first step of
+ *  `getLiveTickerMatch` below. The league runs one shared match server (#134), so this table holds at
+ *  most one row in practice; `order`+`limit(1)` is just a defensive tie-break, not evidence more than
+ *  one is expected. Reads through the anon `supabase` client (RLS is off, so it can see everything),
+ *  matching every other query in this file. */
+async function getCurrentLiveMatch(): Promise<LiveScoreRow | null> {
+  const { data } = await supabase
+    .from('live_match_score')
+    .select('match_id, shirts_score, skins_score, round, updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  const row = data as LiveScoreDbRow & { match_id: number };
+  return rowToLiveScore(row.match_id, row);
+}
+
+export interface LiveTickerMatch extends MatchTeamNames {
+  matchId: number;
+  shirts: number;
+  skins: number;
+  /** When this score was last written — lets `LiveMatchTicker` (via `createLiveScoreGuard`) tell a
+   *  stale GET response apart from a newer Realtime update instead of trusting arrival order. */
+  updatedAt: string;
+}
+
+/** The site-wide live-match ticker's data — whichever match is currently live (there's at most one,
+ *  since the league runs one shared match server), or `null` when nothing's live. Backs both the
+ *  root layout's initial server render and `GET /api/live-match`, which `LiveMatchTicker` calls to
+ *  refresh itself off Realtime changes on `live_match_score`. */
+export async function getLiveTickerMatch(): Promise<LiveTickerMatch | null> {
+  const live = await getCurrentLiveMatch();
+  if (!live) return null;
+  const teams = await getMatchTeamNames(live.matchId);
+  if (!teams) return null;
+  return { matchId: live.matchId, shirts: live.shirts, skins: live.skins, updatedAt: live.updatedAt, ...teams };
+}
+
+/**
+ * Whether THIS specific match currently has a live score — a cheap presence check by primary key,
+ * distinct from `getCurrentLiveMatch` above (which has to find the live match with no id to filter
+ * on). The match page uses this to render an inline style override that zeroes `--ticker-h` for
+ * itself: the root layout can't know which page is being requested (it has no route params, and
+ * reading them via `headers()` would force the whole site out of static rendering just for this),
+ * so it always reserves ticker space based on "is anything live" alone. On the live match's own
+ * page — where `LiveMatchTicker` suppresses itself since `MatchScoreHero` already shows the score —
+ * that guess is wrong, and without this override the page would render with a phantom gap under the
+ * topbar until the client corrects it after hydration.
+ */
+export async function isMatchCurrentlyLive(matchId: number): Promise<boolean> {
+  const { data } = await supabase
+    .from('live_match_score')
+    .select('match_id')
+    .eq('match_id', matchId)
+    .maybeSingle();
+  return data != null;
 }
 
 /**
