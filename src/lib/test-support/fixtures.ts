@@ -178,6 +178,7 @@ function sab(overrides: Partial<Row> & { player_match_stats_id: number }): Row {
     counter_strafe_shots: 0, counter_strafe_good_shots: 0,
     spray_shots_fired: 0, spray_shots_hit: 0, smokes_blocking_push: 0, ct_smokes_thrown: 0,
     unused_util_value_on_death_total: 0,
+    rounds_dropped_on_reload_total: 0, reloads_total: 0,
     ...overrides,
   };
 }

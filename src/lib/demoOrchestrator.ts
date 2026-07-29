@@ -26,6 +26,9 @@ import {
 import {
   collectUnusedUtility, neededInventoryTicks, type PlayerInventoryRow,
 } from './parsers/unusedUtility';
+import {
+  collectRoundsDropped, neededReloadTicks, type WeaponReloadRow, type PlayerReloadStateRow,
+} from './parsers/reload';
 
 const ZERO: SabFields = {
   kills_ct: 0, kills_t: 0,
@@ -71,6 +74,8 @@ const ZERO: SabFields = {
   smokes_blocking_push: 0,
   ct_smokes_thrown: 0,
   unused_util_value_on_death_total: 0,
+  rounds_dropped_on_reload_total: 0,
+  reloads_total: 0,
 };
 
 export function parseDemoSabremetrics(
@@ -244,6 +249,36 @@ export function parseDemoSabremetrics(
   }
   const unusedUtilStats = collectUnusedUtility(deathEvents, inventoryRows, context, steamIds);
 
+  // Rounds dropped on reload (#212): weapon_reload is a discrete game event (confirmed against a
+  // real DGLS demo, unlike most CS2 actions), so this reads Weapon.m_iClip1/Weapon.m_bInReload at
+  // each event's own tick instead of periodic sampling — the pre-reload clip count is frozen for
+  // the whole reload window (can't fire mid-reload), so the event tick itself always lands inside
+  // it. Wrapped defensively like unusedUtility.ts's "inventory" field so a future parser/game
+  // change degrades this stat to zero instead of failing ingestion.
+  const reloadEvents = parseEvent(
+    demoBuffer, 'weapon_reload', [], ['total_rounds_played'],
+  ) as WeaponReloadRow[];
+  const reloadTicks = neededReloadTicks(reloadEvents, context.liveRounds);
+  let reloadStateRows: PlayerReloadStateRow[] = [];
+  if (reloadTicks.length > 0) {
+    try {
+      const rawReloadRows = parseTicks(
+        demoBuffer, ['Weapon.m_iClip1', 'Weapon.m_bInReload'], reloadTicks,
+      ) as Record<string, unknown>[];
+      reloadStateRows = rawReloadRows.map((r) => ({
+        tick: Number(r.tick),
+        steamid: String(r.steamid ?? ''),
+        inReload: Boolean(r['Weapon.m_bInReload']),
+        clip1: Number(r['Weapon.m_iClip1'] ?? 0),
+      }));
+    } catch (err) {
+      warnings.push(
+        `Rounds Dropped on Reload not computed: demoparser2's "Weapon.m_iClip1"/"Weapon.m_bInReload" tick fields failed (${(err as Error).message}).`,
+      );
+    }
+  }
+  const reloadStats = collectRoundsDropped(reloadEvents, reloadStateRows, context, steamIds);
+
   // 6. Merge with zero defaults
   const sabremetrics: DemoSabremetricStat[] = steamIds.map((steamId) => ({
     player_id: steamToPlayer.get(steamId)!.player_id,
@@ -264,6 +299,7 @@ export function parseDemoSabremetrics(
       ...sprayStats.get(steamId),
       ...smokeStats.get(steamId),
       ...unusedUtilStats.get(steamId),
+      ...reloadStats.get(steamId),
     },
   }));
 

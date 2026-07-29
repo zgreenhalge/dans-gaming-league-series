@@ -194,6 +194,8 @@ export interface PlayerMatchSabremetrics {
   smokes_blocking_push: number;
   ct_smokes_thrown: number;
   unused_util_value_on_death_total: number;
+  rounds_dropped_on_reload_total: number;
+  reloads_total: number;
 }
 
 export type SabFields = Omit<PlayerMatchSabremetrics, 'player_match_stats_id'>;
