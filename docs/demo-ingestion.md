@@ -82,6 +82,7 @@ recorded score.
 | `sprayAccuracy.ts` | Spray accuracy within sequences of 3+ consecutive rifle shots |
 | `smokes.ts` | CT-side smokes interfering with pushes, from `smokegrenade_detonate`/`_expired` + sampled enemy positions |
 | `unusedUtility.ts` | Buy-menu value of grenades held at death (`Unused Util/Death`) |
+| `reload.ts` | Rounds dropped on reload, read from the discrete `weapon_reload` event (`Rounds Dropped/Reload`) |
 
 ## Match start (skipping warmup and stray knife rounds)
 

@@ -194,6 +194,15 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   victim share a side that round, credited to the attacker. Uses the same side check that
   excludes a teamkill from `Entry+`'s opening kills and `KAST+`'s kill qualifier, just counted here
   instead of discarded.
+- `Rounds Dropped on Reload` — a raw counter, not folded into any `+` formula: bullets still in the
+  magazine — and therefore wasted — when a player reloads before it's empty, summed across every
+  `weapon_reload` event in a match (an empty-mag reload contributes 0). `Rounds Dropped/Reload` =
+  `Rounds Dropped on Reload` / `Reloads` averages that wastefulness per reload, with the
+  denominator counting every reload including clean ones. `weapon_reload` is a discrete game event
+  (confirmed against a real DGLS demo, unlike most CS2 actions this codebase tracks), so the
+  collector reads `Weapon.m_iClip1`/`Weapon.m_bInReload` at each event's own tick rather than
+  periodic sampling — the pre-reload clip count is frozen for the whole reload window (can't fire
+  mid-reload), so the event tick itself always lands inside it. See `src/lib/parsers/reload.ts`.
 - `Aim+` = `0.35 * Accuracy+` + `0.40 * Head Accuracy+` + `0.25 * Counter-Strafe+` (each itself
   `Player X` / `League Avg X`, computed on `Accuracy`/`Head Accuracy`/`Counter-Strafe %` from the
   Mechanics section below). A weighted blend rather than a sum on a shared point-scale like
