@@ -15,3 +15,4 @@ export * from './ehog';
 export * from './sabremetrics';
 export * from './replay';
 export * from './ops';
+export * from './weaponStats';

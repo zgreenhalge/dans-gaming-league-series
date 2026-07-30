@@ -200,6 +200,25 @@ export const PLAYER_MATCH_SABREMETRICS: Row[] = [
   sab({ player_match_stats_id: 1019, kills_ct: 3, kills_t: 4, deaths_ct: 9, deaths_t: 8, assists_ct: 1, assists_t: 0, damage_ct: 350, damage_t: 370, headshot_kills: 2, opening_kills: 0, opening_deaths: 1, kast_rounds: 5, trade_kill_opportunities: 2, trade_kill_attempts: 1, trade_kill_successes: 0, shots_fired: 75, shots_hit: 18, headshot_hits: 4 }),
 ];
 
+// ─── player_match_weapon_stats / player_match_economy_stats ────────────────────────────────
+// Match 100 only (player_match_stats_id 1000-1003) — enough to exercise the season join and the
+// per-category/per-tier aggregation without duplicating every played-match id above.
+
+export const PLAYER_MATCH_WEAPON_STATS: Row[] = [
+  { player_match_stats_id: 1000, weapon_category: 'rifle', shots_fired: 90, shots_hit: 40, headshot_hits: 18, damage_dealt: 3200, rounds_played: 20 },
+  { player_match_stats_id: 1000, weapon_category: 'pistol', shots_fired: 20, shots_hit: 8, headshot_hits: 3, damage_dealt: 400, rounds_played: 4 },
+  { player_match_stats_id: 1001, weapon_category: 'rifle', shots_fired: 85, shots_hit: 32, headshot_hits: 12, damage_dealt: 2600, rounds_played: 19 },
+  { player_match_stats_id: 1002, weapon_category: 'sniper', shots_fired: 40, shots_hit: 15, headshot_hits: 9, damage_dealt: 1800, rounds_played: 18 },
+  { player_match_stats_id: 1003, weapon_category: 'smg', shots_fired: 60, shots_hit: 20, headshot_hits: 5, damage_dealt: 1300, rounds_played: 16 },
+];
+
+export const PLAYER_MATCH_ECONOMY_STATS: Row[] = [
+  { player_match_stats_id: 1000, economy_type: 'full_buy', shots_fired: 95, shots_hit: 42, headshot_hits: 19, damage_dealt: 3400, rounds_played: 18 },
+  { player_match_stats_id: 1000, economy_type: 'eco', shots_fired: 15, shots_hit: 6, headshot_hits: 2, damage_dealt: 200, rounds_played: 4 },
+  { player_match_stats_id: 1001, economy_type: 'full_buy', shots_fired: 80, shots_hit: 30, headshot_hits: 11, damage_dealt: 2500, rounds_played: 17 },
+  { player_match_stats_id: 1001, economy_type: 'force_buy', shots_fired: 5, shots_hit: 2, headshot_hits: 1, damage_dealt: 100, rounds_played: 5 },
+];
+
 // ─── player_season_leaderboard (a materialized VIEW — hand-authored, consistent with the
 //     underlying non-playoff played matches above, i.e. match 100 only; gauntlet matches (200, 300)
 //     are excluded, matching the real view's `is_playoff_game=true` filter) ──────────────────────
@@ -317,6 +336,8 @@ export function buildFakeDb(): FakeDb {
     players: PLAYERS,
     player_match_stats: PLAYER_MATCH_STATS,
     player_match_sabremetrics: PLAYER_MATCH_SABREMETRICS,
+    player_match_weapon_stats: PLAYER_MATCH_WEAPON_STATS,
+    player_match_economy_stats: PLAYER_MATCH_ECONOMY_STATS,
     player_season_leaderboard: PLAYER_SEASON_LEADERBOARD,
     maps: MAPS,
     gauntlet_pods: GAUNTLET_PODS,
