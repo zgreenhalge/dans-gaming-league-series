@@ -261,6 +261,27 @@ Spotted)"); CS2's spotted mask (`m_bSpotted`) is known-flaky, so these ship unga
   `docs/demo-parsing-reference.md` for why that's out of scope. The raw `Smokes Blocking Push`
   count (not the `%`) also feeds `Utility+` — see above.
 
+### Weapon-Class and Round-Economy Breakdowns
+
+Per-player shot/accuracy/damage/rounds breakdowns bucketed along two independent dimensions,
+neither folded into any `+` formula — raw splits of the same underlying counts as the Mechanics
+section, sliced a different way. Stored in their own tables (`player_match_weapon_stats`,
+`player_match_economy_stats`), not `player_match_sabremetrics`, since each player has several rows
+(one per bucket) rather than one. See `src/lib/parsers/weaponStats.ts`.
+
+- **Weapon class** — `pistol`/`smg`/`rifle`/`sniper`/`shotgun` (`WEAPON_CATEGORY` in
+  `src/lib/parsers/weaponClasses.ts`, the full CS2 gun roster). `Shots Fired`/`Shots Hit`/`Headshot
+  Hits`/`Damage Dealt` are the same guns-only counts as the Mechanics section, split by which
+  category fired or landed the shot. `Rounds Played` for a category is the count of distinct live
+  rounds the player fired that category in at least once — shot-triggered, like the other counts.
+- **Round economy** — `eco` (equipment value under $2000), `force_buy` ($2000-3499), or `full_buy`
+  ($3500+), classified per player per round from their own
+  `CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` at that round's freeze-time-end — an individual
+  read, not a team average (Wingman's 2-player sides make the two nearly equivalent anyway).
+  `Rounds Played` for a tier is seeded directly from this classification, independent of whether the
+  player fired a shot that round, unlike the weapon-class breakdown above — an eco round with zero
+  shots fired still counts as an eco round played.
+
 ### Player Rating (not yet implemented)
 
 A weighted sabremetric composite for individual performance. Independent from the

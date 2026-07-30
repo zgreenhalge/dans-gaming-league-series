@@ -83,6 +83,26 @@ recorded score.
 | `smokes.ts` | CT-side smokes interfering with pushes, from `smokegrenade_detonate`/`_expired` + sampled enemy positions |
 | `unusedUtility.ts` | Buy-menu value of grenades held at death (`Unused Util/Death`) |
 | `reload.ts` | Rounds dropped on reload, read from the discrete `weapon_reload` event (`Rounds Dropped/Reload`) |
+| `weaponClasses.ts` | CS2 weapon → category (pistol/smg/rifle/sniper/shotgun) allowlist, shared by `weaponStats.ts` |
+| `economy.ts` | Per-round eco/force-buy/full-buy classification from `CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` at each round's freeze-time-end |
+| `weaponStats.ts` | Per-weapon-category and per-round-economy shot/accuracy/damage/rounds breakdowns |
+
+## Weapon-class and round-economy breakdowns
+
+Unlike every other collector above, `weaponStats.ts`'s two collectors — `collectWeaponClassStats()`
+and `collectEconomyStats()` — don't feed a single per-player row in `SabFields`. Each produces
+several bucketed rows per player (one per weapon category, or one per economy tier), persisted into
+their own tables — `player_match_weapon_stats` and `player_match_economy_stats` — rather than
+`player_match_sabremetrics`. `demoOrchestrator.ts` returns them as `ParsedDemoSabremetricsResult`'s
+`weaponStats` field, alongside (not merged into) `sabremetrics`; `src/lib/demo/weaponStats.ts`
+mirrors `demo/sabremetrics.ts`'s upsert-or-clear persistence shape, keyed the same way off
+`player_match_stats_id` plus the bucket column (`weapon_category`/`economy_type`).
+
+`rounds_played` means something different for the two breakdowns. For weapon class, it's the count
+of distinct live rounds in which the player fired that category at least once — shot-triggered, same
+as `shots_fired`/`shots_hit`. For economy, it's seeded directly from the round's own eco/force/full
+classification, independent of whether the player fired a shot that round — an eco round the player
+never fired in still counts as an eco round played.
 
 ## Match start (skipping warmup and stray knife rounds)
 
