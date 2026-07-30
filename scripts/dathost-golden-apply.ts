@@ -19,7 +19,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { REPO_ROOT, GOLDEN_JSON_PATH, CFG_FILES, api } from './dathost-golden-shared';
+import { REPO_ROOT, GOLDEN_JSON_PATH, CFG_FILES, api, flagValue } from './dathost-golden-shared';
 import { pushCfgFiles } from '../src/lib/dathost-config';
 import { buildScalarFields, MAP_SELECTION_KEYS } from '../src/lib/dathost';
 
@@ -106,13 +106,6 @@ async function reassert(serverId: string) {
   }
 
   console.error('\nSettings apply on next provision (or next PUT). cfg files apply on next server boot.');
-}
-
-function flagValue(args: string[], flag: string): string | undefined {
-  const i = args.indexOf(flag);
-  if (i === -1) return undefined;
-  const v = args[i + 1];
-  return v && !v.startsWith('--') ? v : undefined;
 }
 
 async function main() {

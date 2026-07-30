@@ -23,17 +23,7 @@
 //
 // Nothing here touches Supabase or DGLS state. It only talks to DatHost.
 
-const BASE = 'https://dathost.com/api/0.1';
-
-function authHeader(): string {
-  const email = process.env.DATHOST_EMAIL;
-  const password = process.env.DATHOST_PASSWORD;
-  if (!email || !password) {
-    console.error('✖ set DATHOST_EMAIL and DATHOST_PASSWORD (run: set -a; . ./.env.local; set +a)');
-    process.exit(1);
-  }
-  return 'Basic ' + Buffer.from(`${email}:${password}`).toString('base64');
-}
+import { BASE, authHeader, flagValue } from './dathost-golden-shared';
 
 /** One DatHost call. Logs method/path/status; returns parsed JSON (or text) and the raw status. */
 async function api(
@@ -197,13 +187,6 @@ async function lifecycle(goldenId: string, loadmatchUrl?: string) {
       console.error('✓ clone torn down (verify it is gone in the panel — it bills while it exists).');
     }
   }
-}
-
-function flagValue(args: string[], flag: string): string | undefined {
-  const i = args.indexOf(flag);
-  if (i === -1) return undefined;
-  const v = args[i + 1];
-  return v && !v.startsWith('--') ? v : undefined;
 }
 
 async function main() {

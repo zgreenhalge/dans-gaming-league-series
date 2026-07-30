@@ -1,8 +1,13 @@
 /**
  * Weapon class lookup for #279's per-category stats, keyed by demoparser2's unprefixed weapon
- * name (the same short form `player_hurt`'s `weapon` field already reports — see accuracy.ts's
- * NON_GUN_HURT_WEAPONS comment). `weapon_fire`'s `weapon` field carries the `weapon_` prefix, so
- * callers strip it via `stripWeaponPrefix()` before looking a fire event up here.
+ * name (the same short form `player_hurt`'s `weapon` field already reports). `weapon_fire`'s
+ * `weapon` field carries the `weapon_` prefix, so callers strip it via `stripWeaponPrefix()`
+ * before looking a fire event up here.
+ *
+ * This is also the single source of truth for "is this weapon a gun" used by accuracy.ts to
+ * decide whether a fire/hurt event counts toward Shots Fired/Hit — as an allowlist, anything not
+ * in the roster (knife skins, grenades, C4) falls through automatically with no exclusion list to
+ * maintain.
  *
  * Covers the full CS2 gun roster, not just weapons seen in a single Wingman demo — a league can
  * change its restricted buy list without this map needing to change.

@@ -23,6 +23,7 @@ import { putR2Object, radarKey } from '../src/lib/r2';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { recordJobStatus, mapJobKey, jobStatusWriter } from '../src/lib/background-jobs';
 import { notice, warning, error } from './gh-actions-log';
+import { createStageRunner } from './job-stage';
 
 const JOB_TYPE = 'radar_build';
 
@@ -44,7 +45,6 @@ const STEAMCMD = process.env.STEAMCMD || 'steamcmd';
 const DECOMPILER = process.env.DECOMPILER || 'Source2Viewer-CLI';
 const supabase = getAdminClient();
 
-let currentStage: string = STAGES[0];
 // Human-facing label for this run — replaced with the map name as soon as we resolve
 // it (map ids aren't used forward-facing, so every log/summary line leads with name).
 let mapLabel = `map #${mapId}`;
@@ -59,6 +59,9 @@ function summary(md: string) {
  *  point; `fail()` below writes directly instead, since it must not throw while already unwinding. */
 const setJob = jobStatusWriter(supabase, JOB_TYPE, mapJobKey(mapId));
 
+const stageRunner = createStageRunner(STAGES[0], setJob);
+const { stage } = stageRunner;
+
 async function markRunning() {
   await setJob({
     status: 'running',
@@ -70,29 +73,13 @@ async function markRunning() {
   });
 }
 
-async function setStage(stage: string) {
-  currentStage = stage;
-  await setJob({ stage });
-}
-
-async function stage<T>(name: string, fn: () => Promise<T> | T): Promise<T> {
-  console.log(`::group::${name}`);
-  notice(`stage ${name}`);
-  await setStage(name);
-  try {
-    return await fn();
-  } finally {
-    console.log('::endgroup::');
-  }
-}
-
 async function fail(err: unknown) {
   const msg = err instanceof Error ? err.message : String(err);
-  error(`${mapLabel} failed at stage ${currentStage}: ${msg}`);
-  summary(`\n❌ **${mapLabel}** failed at \`${currentStage}\`: ${msg}`);
+  error(`${mapLabel} failed at stage ${stageRunner.currentStage}: ${msg}`);
+  summary(`\n❌ **${mapLabel}** failed at \`${stageRunner.currentStage}\`: ${msg}`);
   await recordJobStatus(supabase, JOB_TYPE, mapJobKey(mapId), {
     status: 'failed',
-    stage: currentStage,
+    stage: stageRunner.currentStage,
     error_message: msg,
     finished_at: new Date().toISOString(),
   });
