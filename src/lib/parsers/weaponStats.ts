@@ -14,16 +14,61 @@ export interface WeaponBreakdownRow {
   rounds_played: number;
 }
 
-function getOrCreate(
-  buckets: Map<string, WeaponBreakdownRow>,
-  key: string,
-): WeaponBreakdownRow {
+type PerPlayerBuckets = Map<string, Map<string, WeaponBreakdownRow>>;
+
+function getOrCreate(buckets: Map<string, WeaponBreakdownRow>, key: string): WeaponBreakdownRow {
   let b = buckets.get(key);
   if (!b) {
     b = { bucket: key, shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0 };
     buckets.set(key, b);
   }
   return b;
+}
+
+function makePerPlayerBuckets(steamIds: string[]): PerPlayerBuckets {
+  const perPlayer: PerPlayerBuckets = new Map();
+  for (const sid of steamIds) perPlayer.set(sid, new Map());
+  return perPlayer;
+}
+
+function flattenBuckets(perPlayer: PerPlayerBuckets): Map<string, WeaponBreakdownRow[]> {
+  const out = new Map<string, WeaponBreakdownRow[]>();
+  for (const [sid, buckets] of perPlayer) out.set(sid, [...buckets.values()]);
+  return out;
+}
+
+/**
+ * Shared by both collectors below — accumulates `shots_hit`/`damage_dealt`/`headshot_hits` from
+ * `hurtEvents` into whichever bucket `getBucket` resolves for that hit, applying the same
+ * self-damage/teamdamage/steamid-membership guards both breakdowns need. `getBucket` returning
+ * `undefined` (an uncategorized weapon, or a round with no economy classification) drops the hit.
+ */
+function accumulateHurtDamage(
+  hurtEvents: PlayerHurtRow[],
+  context: MatchContext,
+  steamSet: Set<string>,
+  perPlayer: PerPlayerBuckets,
+  getBucket: (h: PlayerHurtRow, round: number) => string | undefined,
+): void {
+  for (const h of hurtEvents) {
+    const round = h.total_rounds_played + 1;
+    if (!context.liveRounds.has(round)) continue;
+
+    const attacker = h.attacker_steamid;
+    const victim = h.user_steamid;
+    if (!attacker || !steamSet.has(attacker)) continue;
+    if (!victim || !steamSet.has(victim)) continue;
+    if (attacker === victim) continue;
+    if (isTeamKill(attacker, victim, context)) continue;
+
+    const bucket = getBucket(h, round);
+    if (!bucket) continue;
+
+    const b = getOrCreate(perPlayer.get(attacker)!, bucket);
+    b.shots_hit += 1;
+    b.damage_dealt += h.dmg_health;
+    if (h.hitgroup === HITGROUP_HEAD) b.headshot_hits += 1;
+  }
 }
 
 /**
@@ -39,9 +84,8 @@ export function collectWeaponClassStats(
   steamIds: string[],
 ): Map<string, WeaponBreakdownRow[]> {
   const steamSet = new Set(steamIds);
-  const perPlayer = new Map<string, Map<string, WeaponBreakdownRow>>();
+  const perPlayer = makePerPlayerBuckets(steamIds);
   const roundsSeen = new Map<string, Set<number>>(); // `${steamid}::${category}` -> rounds
-  for (const sid of steamIds) perPlayer.set(sid, new Map());
 
   for (const f of fireEvents) {
     const category = WEAPON_CATEGORY[stripWeaponPrefix(f.weapon)];
@@ -59,28 +103,9 @@ export function collectWeaponClassStats(
     if (!rounds.has(round)) { rounds.add(round); b.rounds_played += 1; }
   }
 
-  for (const h of hurtEvents) {
-    const category = WEAPON_CATEGORY[h.weapon];
-    if (!category) continue;
-    const round = h.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+  accumulateHurtDamage(hurtEvents, context, steamSet, perPlayer, (h) => WEAPON_CATEGORY[h.weapon]);
 
-    const attacker = h.attacker_steamid;
-    const victim = h.user_steamid;
-    if (!attacker || !steamSet.has(attacker)) continue;
-    if (!victim || !steamSet.has(victim)) continue;
-    if (attacker === victim) continue;
-    if (isTeamKill(attacker, victim, context)) continue;
-
-    const b = getOrCreate(perPlayer.get(attacker)!, category);
-    b.shots_hit += 1;
-    b.damage_dealt += h.dmg_health;
-    if (h.hitgroup === HITGROUP_HEAD) b.headshot_hits += 1;
-  }
-
-  const out = new Map<string, WeaponBreakdownRow[]>();
-  for (const [sid, buckets] of perPlayer) out.set(sid, [...buckets.values()]);
-  return out;
+  return flattenBuckets(perPlayer);
 }
 
 /**
@@ -97,8 +122,7 @@ export function collectEconomyStats(
   steamIds: string[],
 ): Map<string, WeaponBreakdownRow[]> {
   const steamSet = new Set(steamIds);
-  const perPlayer = new Map<string, Map<string, WeaponBreakdownRow>>();
-  for (const sid of steamIds) perPlayer.set(sid, new Map());
+  const perPlayer = makePerPlayerBuckets(steamIds);
 
   for (const sid of steamIds) {
     const byRound = roundEconomy.get(sid);
@@ -119,27 +143,10 @@ export function collectEconomyStats(
     getOrCreate(perPlayer.get(shooter)!, type).shots_fired += 1;
   }
 
-  for (const h of hurtEvents) {
-    const round = h.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+  accumulateHurtDamage(
+    hurtEvents, context, steamSet, perPlayer,
+    (h, round) => roundEconomy.get(h.attacker_steamid!)?.get(round),
+  );
 
-    const attacker = h.attacker_steamid;
-    const victim = h.user_steamid;
-    if (!attacker || !steamSet.has(attacker)) continue;
-    if (!victim || !steamSet.has(victim)) continue;
-    if (attacker === victim) continue;
-    if (isTeamKill(attacker, victim, context)) continue;
-
-    const type = roundEconomy.get(attacker)?.get(round);
-    if (!type) continue;
-
-    const b = getOrCreate(perPlayer.get(attacker)!, type);
-    b.shots_hit += 1;
-    b.damage_dealt += h.dmg_health;
-    if (h.hitgroup === HITGROUP_HEAD) b.headshot_hits += 1;
-  }
-
-  const out = new Map<string, WeaponBreakdownRow[]>();
-  for (const [sid, buckets] of perPlayer) out.set(sid, [...buckets.values()]);
-  return out;
+  return flattenBuckets(perPlayer);
 }
