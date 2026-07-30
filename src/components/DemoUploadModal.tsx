@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import SabremetricsTable from '@/components/SabremetricsTable';
 import { useHasMounted } from './useHasMounted';
-import type { SabFields, RoundHistoryEntry } from '@/lib/types';
+import type { SabFields, RoundHistoryEntry, DemoWeaponStat } from '@/lib/types';
 type Faction = 'CT' | 'T' | null;
 
 interface MatchPlayer {
@@ -38,7 +38,7 @@ interface ParsedResult {
   skins_score: number | null;
   warnings: string[];
   sabremetrics?: SabremetricStat[];
-  weaponStats?: unknown[];
+  weaponStats?: DemoWeaponStat[];
   round_history?: RoundHistoryEntry[] | null;
 }
 
