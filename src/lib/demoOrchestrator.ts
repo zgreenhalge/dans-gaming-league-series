@@ -1,6 +1,6 @@
 import { parseEvent, parseTicks } from '@laihoe/demoparser2';
 import type { RosterEntry } from './demoParser';
-import type { SabFields, DemoSabremetricStat, ParsedDemoSabremetricsResult } from './types';
+import type { SabFields, DemoSabremetricStat, DemoWeaponStat, ParsedDemoSabremetricsResult } from './types';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
 import { buildMatchContext, findMatchStartTick, type PlayerDeathRow, type PlayerHurtRow } from './parsers/matchContext';
 import type { RoundEndRow } from './parsers/roundSides';
@@ -29,6 +29,10 @@ import {
 import {
   collectRoundsDropped, neededReloadTicks, type WeaponReloadRow, type PlayerReloadStateRow,
 } from './parsers/reload';
+import {
+  classifyRoundEconomy, neededEconomyTicks, type RoundFreezeEndRow, type PlayerEquipmentRow,
+} from './parsers/economy';
+import { collectWeaponClassStats, collectEconomyStats } from './parsers/weaponStats';
 
 const ZERO: SabFields = {
   kills_ct: 0, kills_t: 0,
@@ -129,6 +133,10 @@ export function parseDemoSabremetrics(
     demoBuffer, 'smokegrenade_expired', [], ['total_rounds_played'],
   ) as SmokeEventRow[];
 
+  const freezeEndEvents = parseEvent(
+    demoBuffer, 'round_freeze_end', [], ['total_rounds_played'],
+  ) as RoundFreezeEndRow[];
+
   // 3. Build match context — resolve the starting side the same way parseDemoFile does
   // (stored wins; otherwise infer from the demo) so sabremetrics and the score agree.
   const matchStartTick = findMatchStartTick(demoBuffer);
@@ -148,7 +156,7 @@ export function parseDemoSabremetrics(
   warnings.push(...context.warnings);
 
   if (context.rounds.length === 0) {
-    return { sabremetrics: [], warnings: [...warnings, 'No live rounds found in demo.'] };
+    return { sabremetrics: [], weaponStats: [], warnings: [...warnings, 'No live rounds found in demo.'] };
   }
 
   // 4. Accumulator-based stats (split basic + headshots + unsplit utility/flashed)
@@ -279,6 +287,34 @@ export function parseDemoSabremetrics(
   }
   const reloadStats = collectRoundsDropped(reloadEvents, reloadStateRows, context, steamIds);
 
+  // Round economy (#279): classifies each player's eco/force-buy/full-buy tier per round from
+  // CCSPlayerPawn.m_unFreezetimeEndEquipmentValue at each round's freeze-time-end, sampled once
+  // per round (not per shot) — same single-anchor-read shape as sideInference.ts. Wrapped
+  // defensively like the reload/inventory tick reads above.
+  const economyTicks = neededEconomyTicks(freezeEndEvents, context.liveRounds);
+  let equipmentRows: PlayerEquipmentRow[] = [];
+  if (economyTicks.length > 0) {
+    try {
+      const rawEquipmentRows = parseTicks(
+        demoBuffer, ['CCSPlayerPawn.m_unFreezetimeEndEquipmentValue'], economyTicks,
+      ) as Record<string, unknown>[];
+      equipmentRows = rawEquipmentRows.map((r) => ({
+        tick: Number(r.tick),
+        steamid: String(r.steamid ?? ''),
+        equipmentValue: Number(r['CCSPlayerPawn.m_unFreezetimeEndEquipmentValue'] ?? 0),
+      }));
+    } catch (err) {
+      warnings.push(
+        `Weapon-type economy stats not computed: demoparser2's "CCSPlayerPawn.m_unFreezetimeEndEquipmentValue" tick field failed (${(err as Error).message}).`,
+      );
+    }
+  }
+  const roundEconomy = classifyRoundEconomy(freezeEndEvents, equipmentRows, context, steamIds);
+
+  // Per-weapon-category and per-round-economy shot/accuracy/damage/rounds breakdowns (#279).
+  const weaponClassStats = collectWeaponClassStats(fireEvents, hurtEvents, context, steamIds);
+  const economyStats = collectEconomyStats(fireEvents, hurtEvents, roundEconomy, context, steamIds);
+
   // 6. Merge with zero defaults
   const sabremetrics: DemoSabremetricStat[] = steamIds.map((steamId) => ({
     player_id: steamToPlayer.get(steamId)!.player_id,
@@ -303,8 +339,28 @@ export function parseDemoSabremetrics(
     },
   }));
 
+  const weaponStats: DemoWeaponStat[] = steamIds.map((steamId) => ({
+    player_id: steamToPlayer.get(steamId)!.player_id,
+    weaponStats: weaponClassStats.get(steamId)!.map((row) => ({
+      weapon_category: row.bucket,
+      shots_fired: row.shots_fired,
+      shots_hit: row.shots_hit,
+      headshot_hits: row.headshot_hits,
+      damage_dealt: row.damage_dealt,
+      rounds_played: row.rounds_played,
+    })),
+    economyStats: economyStats.get(steamId)!.map((row) => ({
+      economy_type: row.bucket,
+      shots_fired: row.shots_fired,
+      shots_hit: row.shots_hit,
+      headshot_hits: row.headshot_hits,
+      damage_dealt: row.damage_dealt,
+      rounds_played: row.rounds_played,
+    })),
+  }));
+
   // Deduplicate warnings
   const uniqueWarnings = [...new Set(warnings)];
 
-  return { sabremetrics, warnings: uniqueWarnings };
+  return { sabremetrics, weaponStats, warnings: uniqueWarnings };
 }

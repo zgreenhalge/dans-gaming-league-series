@@ -1,6 +1,7 @@
 import type { SabFields } from '../types';
 import { isTeamKill, type MatchContext, type PlayerHurtRow } from './matchContext';
 import type { WeaponFireRow } from './utility';
+import { HITGROUP_HEAD } from './constants';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -16,10 +17,6 @@ const NON_GUN_FIRE_WEAPONS = new Set([
 const NON_GUN_HURT_WEAPONS = new Set([
   'hegrenade', 'flashbang', 'inferno', 'decoy', 'knife', 'knifegg', 'c4',
 ]);
-
-// player_hurt's hitgroup is already decoded to a friendly string ('head', 'chest',
-// 'right_arm', ...), not the raw HITGROUP_* enum int — confirmed against a real DGLS demo.
-const HITGROUP_HEAD = 'head';
 
 // Assumed short weapon name for the AWP, following the same unprefixed convention as
 // NON_GUN_HURT_WEAPONS (e.g. 'ak47', 'hkp2000') — not yet confirmed against a real DGLS demo with
