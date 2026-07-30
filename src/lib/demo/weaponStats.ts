@@ -6,8 +6,15 @@ import { getAdminClient } from '../supabase-admin';
 import type { DemoWeaponStat } from '../types';
 import { resolvePlayerMatchStatsIds } from './_shared';
 
-/** Upsert weapon-category and round-economy breakdown rows for a match. Rows whose `player_id`
- *  has no matching `player_match_stats` row for this match are dropped. */
+/** Replace weapon-category and round-economy breakdown rows for a match. Rows whose `player_id`
+ *  has no matching `player_match_stats` row for this match are dropped.
+ *
+ *  Delete-then-insert, not upsert: unlike `player_match_sabremetrics` (one row per player, so an
+ *  upsert always fully overwrites it), each player has several bucket rows here, and a reparse can
+ *  produce a smaller bucket set than the previous parse (e.g. no sniper shots this time) — an
+ *  upsert has no "this bucket wasn't in the new parse" signal to act on, so it would leave that
+ *  now-stale row behind forever. Deleting every existing row for the match's `player_match_stats`
+ *  ids first guarantees the persisted set always matches this parse exactly. */
 export async function persistWeaponStats(
   matchId: number,
   weaponStats: DemoWeaponStat[],
@@ -18,20 +25,23 @@ export async function persistWeaponStats(
 
   const weaponRows: Record<string, unknown>[] = [];
   const economyRows: Record<string, unknown>[] = [];
+  const pmsIds: number[] = [];
   for (const s of weaponStats) {
     const pmsId = pmsById.get(s.player_id);
     if (!pmsId) continue;
+    pmsIds.push(pmsId);
     for (const w of s.weaponStats) weaponRows.push({ player_match_stats_id: pmsId, ...w });
     for (const e of s.economyStats) economyRows.push({ player_match_stats_id: pmsId, ...e });
   }
+  if (pmsIds.length === 0) return;
 
   await Promise.all([
-    weaponRows.length > 0
-      ? supabaseAdmin.from('player_match_weapon_stats').upsert(weaponRows, { onConflict: 'player_match_stats_id,weapon_category' })
-      : Promise.resolve(),
-    economyRows.length > 0
-      ? supabaseAdmin.from('player_match_economy_stats').upsert(economyRows, { onConflict: 'player_match_stats_id,economy_type' })
-      : Promise.resolve(),
+    supabaseAdmin.from('player_match_weapon_stats').delete().in('player_match_stats_id', pmsIds),
+    supabaseAdmin.from('player_match_economy_stats').delete().in('player_match_stats_id', pmsIds),
+  ]);
+  await Promise.all([
+    weaponRows.length > 0 ? supabaseAdmin.from('player_match_weapon_stats').insert(weaponRows) : Promise.resolve(),
+    economyRows.length > 0 ? supabaseAdmin.from('player_match_economy_stats').insert(economyRows) : Promise.resolve(),
   ]);
 }
 
