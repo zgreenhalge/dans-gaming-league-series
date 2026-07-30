@@ -47,13 +47,9 @@ export interface Match {
   skins_starting_side: 'CT' | 'T' | null;
   is_playoff_game: boolean;
   is_feature_match: boolean;
-  is_interpolated: boolean;
   pre_match_win_prob: number | null;
   pre_match_win_prob_formula_version: string | null;
-  notes: string | null;
   scheduled_at: string | null;
-  screenshot_url_front: string | null;
-  screenshot_url_back: string | null;
   round_history: RoundHistoryEntry[] | null;
   recording_url: string | null;
   /** Optional because older environments may predate the column (see `docs/replay.md`). */
