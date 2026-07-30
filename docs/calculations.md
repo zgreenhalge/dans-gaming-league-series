@@ -378,13 +378,14 @@ feeding the same `gauntletSeeding` prop on `LeaderboardTable`:
 
 - **Real bracket, if the paired gauntlet has one.** Once the paired gauntlet season has a real,
   materialized bracket (`getGauntletBracketShape()`), the tint is read straight off it, regardless of
-  either season's status — a player whose only seed-sourced pod slot lands in a round after round 1
-  has a real bye (gold). This reflects reality even if the bracket was hand-edited away from the
-  shape `buildGauntletBracket()` would have produced (see the Gauntlet Bracket Generation section
-  below for what "hand-edited" can mean here) — a real bracket is never wrong to prefer over a guess.
-  There's no "won't qualify" case in this source, since a gauntlet's own bracket only ever contains
-  players who already qualified into it. `SeasonTabView.tsx` reads this directly off
-  `gauntletBracketShape`.
+  either season's status — a player whose only seed-sourced pod slot lands in the final pod itself
+  has a real bye (gold). A seed-sourced slot in an intermediate round (later than round 1 but not the
+  final) still plays that round, so it isn't a bye. This reflects reality even if the bracket was
+  hand-edited away from the shape `buildGauntletBracket()` would have produced (see the Gauntlet
+  Bracket Generation section below for what "hand-edited" can mean here) — a real bracket is never
+  wrong to prefer over a guess. There's no "won't qualify" case in this source, since a gauntlet's own
+  bracket only ever contains players who already qualified into it. `SeasonTabView.tsx` reads this
+  directly off `gauntletBracketShape`.
 
 - **Live projection, otherwise.** While the regular season is still *ACTIVE* and no real bracket
   exists yet, a live preview of what the gauntlet bracket would look like if built from the current
@@ -395,9 +396,9 @@ feeding the same `gauntletSeeding` prop on `LeaderboardTable`:
 
   | Outcome | Condition |
   |---------|-----------|
-  | Bye (gold) | The seed's bracket-entry slot is in a round after round 1 |
+  | Bye (gold) | The seed's bracket-entry slot is the final pod itself |
   | Won't qualify (red) | The seed is in `buildGauntletBracket(N)`'s `drops` — too many qualifiers for this bracket size, so the bottom seeds don't fit |
-  | Playing round 1 | Everyone else — placed straight into a round-1 pod |
+  | Playing round 1 (or an intermediate round) | Everyone else — placed straight into a round-1 pod, or (in the N≤7 rest ladder / N=12 shapes) into an intermediate round it still has to play |
 
   Every seed's projected round and pod are fully determined by `N` alone (no player-vs-player
   uncertainty). Returns no projection for a qualifier count `buildGauntletBracket` doesn't support

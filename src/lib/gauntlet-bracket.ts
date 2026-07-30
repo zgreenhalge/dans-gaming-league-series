@@ -236,9 +236,11 @@ export type SeedPlacement =
  * canonical-sort leader, same convention as `buildGauntletBracket` itself).
  *
  * A seed either doesn't fit the bracket shape at this qualifier count (`plan.drops`) or owns exactly
- * one 'seed'-sourced slot somewhere in the plan; `isBye` is true when that slot's round is later
- * than round 1 (a live player who never plays round 1 at all). Returns `null` when `qualifierCount`
- * falls outside `buildGauntletBracket`'s supported range (4-20) — there's no shape to project.
+ * one 'seed'-sourced slot somewhere in the plan; `isBye` is true only when that slot is in the final
+ * pod itself (a live player who rests all the way to the final without playing an earlier round).
+ * A seed-sourced slot in an intermediate round (later than round 1 but not the final) still plays
+ * that round, so it isn't a bye. Returns `null` when `qualifierCount` falls outside
+ * `buildGauntletBracket`'s supported range (4-20) — there's no shape to project.
  */
 export function projectGauntletSeeding(qualifierCount: number): Map<number, SeedPlacement> | null {
   let plan: BracketPlan;
@@ -258,7 +260,7 @@ export function projectGauntletSeeding(qualifierCount: number): Map<number, Seed
         round: pod.round_number,
         podIndex: pod.pod_index,
         isFinal: pod.is_final,
-        isBye: pod.round_number > 1,
+        isBye: pod.round_number > 1 && pod.is_final,
       });
     }
   }
@@ -271,7 +273,9 @@ export function projectGauntletSeeding(qualifierCount: number): Map<number, Seed
  * compute, just sourced from `gauntlet_pod_slots` rather than `buildGauntletBracket()`. Keyed by
  * `player_id` (not seed number, unlike `projectGauntletSeeding()`) since a real slot already carries
  * one — no separate seed-to-player lookup needed. There's no "won't qualify" case here: a real
- * bracket's pods only ever contain players who already qualified into it.
+ * bracket's pods only ever contain players who already qualified into it. `isBye` is true only for a
+ * seed-sourced slot in the final pod itself — a seed placed directly into an intermediate round still
+ * plays that round, so it isn't a bye.
  */
 export function seedPlacementsByPlayer(pods: { round_number: number; pod_index: number; is_final: boolean; slots: { source_kind: 'seed' | 'pod'; player_id: number | null }[] }[]): Map<number, SeedPlacement> {
   const placements = new Map<number, SeedPlacement>();
@@ -283,7 +287,7 @@ export function seedPlacementsByPlayer(pods: { round_number: number; pod_index: 
         round: pod.round_number,
         podIndex: pod.pod_index,
         isFinal: pod.is_final,
-        isBye: pod.round_number > 1,
+        isBye: pod.round_number > 1 && pod.is_final,
       });
     }
   }

@@ -97,8 +97,9 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   //   1. A real, materialized bracket for the paired gauntlet, once one exists
   //      (`gauntletBracketShape`) — read directly off `gauntlet_pod_slots` rather than computed, so
   //      it reflects reality even if the bracket was hand-edited away from the shape
-  //      `buildGauntletBracket()` would have produced. A seed-sourced slot in a round after round 1
-  //      is a real bye. Preferred unconditionally whenever it has real data, regardless of season
+  //      `buildGauntletBracket()` would have produced. A seed-sourced slot in the final pod itself is
+  //      a real bye — a seed placed directly into an intermediate round still has to play it, so
+  //      that's not a bye. Preferred unconditionally whenever it has real data, regardless of season
   //      status — a real bracket is never wrong to prefer over a guess.
   //   2. Otherwise, while this season is ACTIVE, a live "if the season ended today" projection from
   //      the *current standings*, since no gauntlet exists yet (`projectGauntletSeeding`).
