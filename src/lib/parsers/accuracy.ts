@@ -8,8 +8,18 @@ type CollectorOut = Map<string, Partial<SabFields>>;
 // weapon_fire's classnames for grenades/equipment — excluded so "shots" means gunfire only.
 const NON_GUN_FIRE_WEAPONS = new Set([
   'weapon_hegrenade', 'weapon_flashbang', 'weapon_smokegrenade', 'weapon_molotov',
-  'weapon_incgrenade', 'weapon_decoy', 'weapon_knife', 'weapon_knifegg', 'weapon_c4',
+  'weapon_incgrenade', 'weapon_decoy', 'weapon_c4',
 ]);
+
+// Every knife skin gets its own weapon_fire classname (confirmed against a real DGLS demo:
+// weapon_knife, weapon_knife_kukri, weapon_knife_push, weapon_knife_skeleton, weapon_knife_t —
+// not an exhaustive list, hence the prefix check rather than another exact-match set). A player
+// swinging a non-default knife would otherwise inflate Shots Fired with no matching Shots Hit
+// (player_hurt always reports the base 'knife' regardless of skin — see NON_GUN_HURT_WEAPONS),
+// silently deflating Accuracy/Aim+.
+function isKnifeFire(weapon: string): boolean {
+  return weapon.startsWith('weapon_knife');
+}
 
 // player_hurt's short weapon names for the same non-gun sources (confirmed unprefixed-friendly
 // format against a real DGLS demo, e.g. 'hkp2000', 'glock' for guns). Fire damage (molotov/
@@ -40,7 +50,7 @@ export function collectAccuracy(
   for (const sid of steamIds) out.set(sid, {});
 
   for (const f of fireEvents) {
-    if (NON_GUN_FIRE_WEAPONS.has(f.weapon)) continue;
+    if (NON_GUN_FIRE_WEAPONS.has(f.weapon) || isKnifeFire(f.weapon)) continue;
     const round = f.total_rounds_played + 1;
     if (!context.liveRounds.has(round)) continue;
     const shooter = f.user_steamid;
