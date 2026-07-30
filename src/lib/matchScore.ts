@@ -282,32 +282,37 @@ export async function writeMatchScore(
     if (statErr) return { ok: false, error: statErr.message, status: 500 };
   }
 
-  // Sabremetrics: upsert or clean up (non-fatal — never rolls back the committed score)
-  try {
-    if (sabremetrics && sabremetrics.length > 0) {
-      await persistSabremetrics(matchId, sabremetrics);
-    } else {
-      await clearSabremetrics(matchId);
-    }
-    await clearOpsError(supabaseAdmin, 'match', matchId, 'sabremetrics_persist');
-  } catch (e) {
-    console.error('Sabremetrics write/delete failed (non-fatal):', e);
-    await recordOpsError(supabaseAdmin, 'match', matchId, 'sabremetrics_persist', `Sabremetrics write failed: ${(e as Error).message}`);
-  }
-
-  // Weapon-category/round-economy breakdowns (#279): same non-fatal upsert-or-clear shape as
-  // sabremetrics above.
-  try {
-    if (weaponStats && weaponStats.length > 0) {
-      await persistWeaponStats(matchId, weaponStats);
-    } else {
-      await clearWeaponStats(matchId);
-    }
-    await clearOpsError(supabaseAdmin, 'match', matchId, 'weapon_stats_persist');
-  } catch (e) {
-    console.error('Weapon stats write/delete failed (non-fatal):', e);
-    await recordOpsError(supabaseAdmin, 'match', matchId, 'weapon_stats_persist', `Weapon stats write failed: ${(e as Error).message}`);
-  }
+  // Sabremetrics and weapon-category/round-economy breakdowns (#279): upsert or clean up, each
+  // non-fatal (never rolls back the committed score) and independent of the other, so they run
+  // concurrently rather than serialized behind each other's Supabase round-trip.
+  await Promise.all([
+    (async () => {
+      try {
+        if (sabremetrics && sabremetrics.length > 0) {
+          await persistSabremetrics(matchId, sabremetrics);
+        } else {
+          await clearSabremetrics(matchId);
+        }
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'sabremetrics_persist');
+      } catch (e) {
+        console.error('Sabremetrics write/delete failed (non-fatal):', e);
+        await recordOpsError(supabaseAdmin, 'match', matchId, 'sabremetrics_persist', `Sabremetrics write failed: ${(e as Error).message}`);
+      }
+    })(),
+    (async () => {
+      try {
+        if (weaponStats && weaponStats.length > 0) {
+          await persistWeaponStats(matchId, weaponStats);
+        } else {
+          await clearWeaponStats(matchId);
+        }
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'weapon_stats_persist');
+      } catch (e) {
+        console.error('Weapon stats write/delete failed (non-fatal):', e);
+        await recordOpsError(supabaseAdmin, 'match', matchId, 'weapon_stats_persist', `Weapon stats write failed: ${(e as Error).message}`);
+      }
+    })(),
+  ]);
 
   // Independent hooks — run concurrently (each already isolates its own failure) rather than
   // serializing behind the recompute's fetch, which never gates the others.
