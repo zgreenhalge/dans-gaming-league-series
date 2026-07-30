@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import type { SabFields, PlayerMatchSabremetrics } from '../types';
-import { isPlayedScore } from '../util';
 import { getPlayersById } from './player';
+import { resolveMatchSeasons } from './_shared';
 
 
 export interface SabremetricMatchRow {
@@ -20,38 +20,23 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
   const [
     { data: sabRows, error: sabErr },
     { data: pmsRows, error: pmsErr },
-    { data: matchRows, error: matchErr },
-    { data: weekRows, error: weekErr },
     { data: seasonRows, error: seasonErr },
+    matchSeason,
     playersById,
   ] = await Promise.all([
     supabase.from('player_match_sabremetrics').select('*'),
     supabase.from('player_match_stats').select('id, player_id, match_id, rounds_played'),
-    supabase.from('matches').select('id, week_id, final_score'),
-    supabase.from('weeks').select('id, season_id'),
     supabase.from('seasons').select('id, is_gauntlet'),
+    resolveMatchSeasons(),
     getPlayersById(),
   ]);
   if (sabErr) throw sabErr;
   if (pmsErr) throw pmsErr;
-  if (matchErr) throw matchErr;
-  if (weekErr) throw weekErr;
   if (seasonErr) throw seasonErr;
-
-  const weekToSeason = new Map<number, number>();
-  for (const w of (weekRows ?? []) as { id: number; season_id: number }[])
-    weekToSeason.set(w.id, w.season_id);
 
   const seasonIsGauntlet = new Map<number, boolean>();
   for (const s of (seasonRows ?? []) as { id: number; is_gauntlet: boolean }[])
     seasonIsGauntlet.set(s.id, s.is_gauntlet);
-
-  const matchSeason = new Map<number, number>();
-  for (const m of (matchRows ?? []) as { id: number; week_id: number; final_score: string | null }[]) {
-    if (!isPlayedScore(m.final_score)) continue;
-    const sid = weekToSeason.get(m.week_id);
-    if (sid != null) matchSeason.set(m.id, sid);
-  }
 
   const pmsLookup = new Map<number, { player_id: number; match_id: number; rounds_played: number }>();
   for (const r of (pmsRows ?? []) as { id: number; player_id: number; match_id: number; rounds_played: number }[])
