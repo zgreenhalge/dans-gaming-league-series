@@ -175,4 +175,35 @@ test('projectGauntletSeeding: out-of-range qualifier count returns null instead 
   assert.equal(projectGauntletSeeding(21), null);
 });
 
+test('projectGauntletSeeding: N=12 byes seed 1 straight to the final; seeds 2/3 enter round 2 and are not a bye', () => {
+  const placements = projectGauntletSeeding(12)!;
+  const seed1 = placements.get(1);
+  assert.equal(seed1?.qualifies, true);
+  assert.equal((seed1 as { round: number }).round, 3);
+  assert.equal((seed1 as { isFinal: boolean }).isFinal, true);
+  assert.equal((seed1 as { isBye: boolean }).isBye, true);
+  for (const seed of [2, 3]) {
+    const p = placements.get(seed);
+    assert.equal(p?.qualifies, true);
+    assert.equal((p as { round: number }).round, 2);
+    assert.equal((p as { isFinal: boolean }).isFinal, false);
+    assert.equal((p as { isBye: boolean }).isBye, false, `seed ${seed} plays round 2, so it isn't a bye`);
+  }
+});
+
+test('projectGauntletSeeding: N=7 rest ladder only marks the seed that rests all the way to the final as a bye', () => {
+  const placements = projectGauntletSeeding(7)!;
+  const seed1 = placements.get(1);
+  assert.equal(seed1?.qualifies, true);
+  assert.equal((seed1 as { isFinal: boolean }).isFinal, true);
+  assert.equal((seed1 as { isBye: boolean }).isBye, true);
+  for (const seed of [2, 3]) {
+    const p = placements.get(seed);
+    assert.equal(p?.qualifies, true);
+    assert.equal((p as { round: number }).round > 1, true, `seed ${seed} should still enter after round 1`);
+    assert.equal((p as { isFinal: boolean }).isFinal, false);
+    assert.equal((p as { isBye: boolean }).isBye, false, `seed ${seed} still has to play its entry round`);
+  }
+});
+
 report();
