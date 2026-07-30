@@ -25,40 +25,10 @@
 //   --props <a,b>       comma-separated wanted_props to probe with --ticks.
 
 import { readFileSync } from 'node:fs';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { listGameEvents, listUpdatedFields, parseEvent, parseTicks } from '@laihoe/demoparser2';
-import { r2, R2_BUCKET, demoKey } from '../src/lib/r2';
+import { demoKey } from '../src/lib/r2';
 import { gunzipMaybe } from '../src/lib/gzip';
-
-function parseArgs(argv: string[]): Record<string, string | boolean> {
-  const out: Record<string, string | boolean> = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (!a.startsWith('--')) continue;
-    const key = a.slice(2);
-    const next = argv[i + 1];
-    if (next === undefined || next.startsWith('--')) {
-      out[key] = true;
-    } else {
-      out[key] = next;
-      i++;
-    }
-  }
-  return out;
-}
-
-function die(msg: string): never {
-  console.error(`\n✖ ${msg}\n`);
-  process.exit(1);
-}
-
-async function loadDemoFromR2(matchId: number): Promise<Buffer> {
-  const res = await r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: demoKey(matchId) }));
-  if (!res.Body) die(`No demo in R2 at ${demoKey(matchId)}`);
-  const chunks: Buffer[] = [];
-  for await (const chunk of res.Body as AsyncIterable<Uint8Array>) chunks.push(Buffer.from(chunk));
-  return Buffer.concat(chunks);
-}
+import { parseArgs, die, loadDemoFromR2 } from './inspect-demo-shared';
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
