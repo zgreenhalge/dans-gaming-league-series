@@ -3,11 +3,11 @@
 // In-match server panel (Phase 4). Once the 5-stage veto completes, this drives the hosting UX:
 //   idle → (provision) → "Starting server…" spinner → Join + copy-`connect` → hidden once played.
 //
-// Updates via Supabase Realtime on the `matches` row (no polling) — the same channel pattern as
-// VetoSequence; the table is already in the realtime publication. The moment the row flips to `live`
-// we swap the spinner for the Join button. Teardown itself isn't a control here — it happens
-// automatically once the match is scored (`teardownMatchServer` in the score route / MatchZy log
-// ingest), with a manual "Tear down" safety valve on the admin server console for a server left live.
+// Updates via Supabase Realtime on the match's `match_server_state` row (no polling) — the table is
+// already in the realtime publication. The moment the row flips to `live` we swap the spinner for the
+// Join button. Teardown itself isn't a control here — it happens automatically once the match is
+// scored (`teardownMatchServer` in the score route / MatchZy log ingest), with a manual "Tear down"
+// safety valve on the admin server console for a server left live.
 
 import { useCallback, useEffect, useState } from 'react';
 import { getBrowserClient } from '@/lib/supabase-browser';

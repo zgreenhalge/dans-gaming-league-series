@@ -221,9 +221,9 @@ export function ServerConsolePanel({
     };
   }, [refreshStatus]);
 
-  // Raw DatHost state can change with no `matches` row write at all (autostop after idle, a start/
-  // stop from the DatHost panel directly, boot completing) — poll every 2s so the Start/Stop button
-  // and boot spinner stay in sync with the real server state.
+  // Raw DatHost state can change with no `match_server_state` row write at all (autostop after idle,
+  // a start/stop from the DatHost panel directly, boot completing) — poll every 2s so the Start/Stop
+  // button and boot spinner stay in sync with the real server state.
   useEffect(() => {
     const interval = setInterval(refreshStatus, 2_000);
     return () => clearInterval(interval);

@@ -104,9 +104,6 @@ so you don't have to reverse-engineer them from scratch each time.
   showing each upcoming player's recent form/history before a match is played.
 - **Bye** — a player who sits out a given week (`weeks.bye_player_id`); odd-numbered rosters mean
   someone rotates out each week.
-- **Interpolated match** (`is_interpolated`) — a historical match whose stats were estimated/filled
-  in during ingestion rather than recorded live (see `ingestion/`). Treat with the same care as any
-  imputed data when building stats views.
 - **Played match** — *not* simply "has a `final_score`." Season 3 matches were pre-staged with
   `"0-0"` placeholders before real scores were entered. Always gate on `isPlayedScore()` from
   `src/lib/util.ts`.
