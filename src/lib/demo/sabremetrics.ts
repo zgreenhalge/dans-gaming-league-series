@@ -4,6 +4,7 @@
 
 import { getAdminClient } from '../supabase-admin';
 import type { DemoSabremetricStat } from '../types';
+import { resolvePlayerMatchStatsIds } from './_shared';
 
 /** Upsert sabremetrics rows for a match. Rows whose `player_id` has no matching
  *  `player_match_stats` row for this match are dropped. */
@@ -13,13 +14,7 @@ export async function persistSabremetrics(
 ): Promise<void> {
   if (sabremetrics.length === 0) return;
   const supabaseAdmin = getAdminClient();
-  const { data: pmsRows } = await supabaseAdmin
-    .from('player_match_stats')
-    .select('id, player_id')
-    .eq('match_id', matchId);
-  const pmsById = new Map(
-    ((pmsRows ?? []) as { id: number; player_id: number }[]).map((r) => [r.player_id, r.id]),
-  );
+  const pmsById = await resolvePlayerMatchStatsIds(matchId);
 
   const sabRows = sabremetrics
     .map((s) => {
@@ -39,14 +34,11 @@ export async function persistSabremetrics(
 /** Delete all sabremetrics rows for a match — e.g. a re-entered score with no derivable sabremetrics. */
 export async function clearSabremetrics(matchId: number): Promise<void> {
   const supabaseAdmin = getAdminClient();
-  const { data: ids } = await supabaseAdmin
-    .from('player_match_stats')
-    .select('id')
-    .eq('match_id', matchId);
-  if (ids && ids.length > 0) {
+  const pmsIds = [...(await resolvePlayerMatchStatsIds(matchId)).values()];
+  if (pmsIds.length > 0) {
     await supabaseAdmin
       .from('player_match_sabremetrics')
       .delete()
-      .in('player_match_stats_id', (ids as { id: number }[]).map((r) => r.id));
+      .in('player_match_stats_id', pmsIds);
   }
 }

@@ -4,6 +4,7 @@
 
 import { getAdminClient } from '../supabase-admin';
 import type { DemoWeaponStat } from '../types';
+import { resolvePlayerMatchStatsIds } from './_shared';
 
 /** Upsert weapon-category and round-economy breakdown rows for a match. Rows whose `player_id`
  *  has no matching `player_match_stats` row for this match are dropped. */
@@ -13,13 +14,7 @@ export async function persistWeaponStats(
 ): Promise<void> {
   if (weaponStats.length === 0) return;
   const supabaseAdmin = getAdminClient();
-  const { data: pmsRows } = await supabaseAdmin
-    .from('player_match_stats')
-    .select('id, player_id')
-    .eq('match_id', matchId);
-  const pmsById = new Map(
-    ((pmsRows ?? []) as { id: number; player_id: number }[]).map((r) => [r.player_id, r.id]),
-  );
+  const pmsById = await resolvePlayerMatchStatsIds(matchId);
 
   const weaponRows: Record<string, unknown>[] = [];
   const economyRows: Record<string, unknown>[] = [];
@@ -30,29 +25,25 @@ export async function persistWeaponStats(
     for (const e of s.economyStats) economyRows.push({ player_match_stats_id: pmsId, ...e });
   }
 
-  if (weaponRows.length > 0) {
-    await supabaseAdmin
-      .from('player_match_weapon_stats')
-      .upsert(weaponRows, { onConflict: 'player_match_stats_id,weapon_category' });
-  }
-  if (economyRows.length > 0) {
-    await supabaseAdmin
-      .from('player_match_economy_stats')
-      .upsert(economyRows, { onConflict: 'player_match_stats_id,economy_type' });
-  }
+  await Promise.all([
+    weaponRows.length > 0
+      ? supabaseAdmin.from('player_match_weapon_stats').upsert(weaponRows, { onConflict: 'player_match_stats_id,weapon_category' })
+      : Promise.resolve(),
+    economyRows.length > 0
+      ? supabaseAdmin.from('player_match_economy_stats').upsert(economyRows, { onConflict: 'player_match_stats_id,economy_type' })
+      : Promise.resolve(),
+  ]);
 }
 
 /** Delete all weapon-category/round-economy rows for a match — e.g. a re-entered score with no
  *  derivable weapon stats. */
 export async function clearWeaponStats(matchId: number): Promise<void> {
   const supabaseAdmin = getAdminClient();
-  const { data: ids } = await supabaseAdmin
-    .from('player_match_stats')
-    .select('id')
-    .eq('match_id', matchId);
-  if (ids && ids.length > 0) {
-    const pmsIds = (ids as { id: number }[]).map((r) => r.id);
-    await supabaseAdmin.from('player_match_weapon_stats').delete().in('player_match_stats_id', pmsIds);
-    await supabaseAdmin.from('player_match_economy_stats').delete().in('player_match_stats_id', pmsIds);
+  const pmsIds = [...(await resolvePlayerMatchStatsIds(matchId)).values()];
+  if (pmsIds.length > 0) {
+    await Promise.all([
+      supabaseAdmin.from('player_match_weapon_stats').delete().in('player_match_stats_id', pmsIds),
+      supabaseAdmin.from('player_match_economy_stats').delete().in('player_match_stats_id', pmsIds),
+    ]);
   }
 }
