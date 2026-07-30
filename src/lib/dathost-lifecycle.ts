@@ -138,16 +138,38 @@ export async function findNearbyUnscoredMatch(
   return best;
 }
 
+/** Shape of a `match_server_state` row. Shared by every read/write below instead of each call site
+ *  re-declaring its own subset as an inline cast. */
+export interface MatchServerStateRow {
+  server_state: ServerState;
+  dathost_server_id: string | null;
+  connect_string: string | null;
+  server_started_at: string | null;
+  teardown_at: string | null;
+}
+
+const SERVER_STATE_COLUMNS = 'server_state, connect_string, server_started_at, dathost_server_id, teardown_at';
+
+/** Raw read of a match's `match_server_state` row (no DatHost reconciliation) — `null` if the match
+ *  has never been provisioned (`idle`). Shared by every caller that needs the DB value as-is (e.g. the
+ *  veto route's busy-check, which deliberately skips `getReconciledServerState`'s DatHost round-trip
+ *  on this latency-sensitive path). */
+export async function fetchServerStateRow(
+  supabaseAdmin: SupabaseClient,
+  matchId: number,
+): Promise<MatchServerStateRow | null> {
+  const { data } = await supabaseAdmin
+    .from('match_server_state')
+    .select(SERVER_STATE_COLUMNS)
+    .eq('match_id', matchId)
+    .maybeSingle();
+  return data as MatchServerStateRow | null;
+}
+
 async function setServerState(
   supabaseAdmin: SupabaseClient,
   matchId: number,
-  fields: {
-    server_state: ServerState;
-    dathost_server_id?: string | null;
-    connect_string?: string | null;
-    server_started_at?: string | null;
-    teardown_at?: string | null;
-  },
+  fields: { server_state: ServerState } & Partial<Omit<MatchServerStateRow, 'server_state'>>,
 ): Promise<void> {
   const { error } = await supabaseAdmin
     .from('match_server_state')
@@ -298,12 +320,7 @@ export async function teardownMatchServer(
   const serverId = dathostServerId();
 
   if (opts.onlyIfOwnsServer) {
-    const { data } = await supabaseAdmin
-      .from('match_server_state')
-      .select('server_state, dathost_server_id')
-      .eq('match_id', matchId)
-      .maybeSingle();
-    const row = data as { server_state?: string | null; dathost_server_id?: string | null } | null;
+    const row = await fetchServerStateRow(supabaseAdmin, matchId);
     const active =
       row?.server_state === 'provisioning' ||
       row?.server_state === 'live' ||
@@ -395,31 +412,25 @@ async function runDueTeardown(
  * this one). Best-effort throughout: hosting-unconfigured or a DatHost error returns the DB value
  * unchanged so the panel never breaks, and a due teardown that fails to actually stop stays
  * `tearing_down` for the next read to retry (DatHost's own autostop is the ultimate backstop).
+ *
+ * Pass `preFetchedRow` when the caller already has the match's `match_server_state` row (e.g.
+ * `getActiveServerMatch`, which selects it to find the occupant in the first place) so this doesn't
+ * re-query the same row it was just handed.
  */
 export async function getReconciledServerState(
   supabaseAdmin: SupabaseClient,
   matchId: number,
+  preFetchedRow?: MatchServerStateRow | null,
 ): Promise<ServerStatusView> {
-  const { data } = await supabaseAdmin
-    .from('match_server_state')
-    .select('server_state, connect_string, server_started_at, dathost_server_id, teardown_at')
-    .eq('match_id', matchId)
-    .maybeSingle();
-  const row = (data ?? {}) as {
-    server_state?: string | null;
-    connect_string?: string | null;
-    server_started_at?: string | null;
-    dathost_server_id?: string | null;
-    teardown_at?: string | null;
-  };
-  let serverState = (row.server_state ?? 'idle') as ServerState;
-  let connectString = row.connect_string ?? null;
+  const row = preFetchedRow !== undefined ? preFetchedRow : await fetchServerStateRow(supabaseAdmin, matchId);
+  let serverState = row?.server_state ?? 'idle';
+  let connectString = row?.connect_string ?? null;
 
   const serverId = process.env.DATHOST_SERVER_ID;
-  const ownsServer = !row.dathost_server_id || row.dathost_server_id === serverId;
+  const ownsServer = !row?.dathost_server_id || row.dathost_server_id === serverId;
 
   if (serverState === 'tearing_down' && serverId && ownsServer) {
-    if (await runDueTeardown(supabaseAdmin, matchId, serverId, row.teardown_at ?? null)) {
+    if (await runDueTeardown(supabaseAdmin, matchId, serverId, row?.teardown_at ?? null)) {
       serverState = 'done';
       connectString = null;
     }
@@ -439,7 +450,7 @@ export async function getReconciledServerState(
     }
   }
 
-  return { serverState, connectString, serverStartedAt: row.server_started_at ?? null };
+  return { serverState, connectString, serverStartedAt: row?.server_started_at ?? null };
 }
 
 export interface ActiveServerMatch {
@@ -462,24 +473,23 @@ export async function getActiveServerMatch(
   if (!serverId) return null;
   const { data } = await supabaseAdmin
     .from('match_server_state')
-    .select('match_id, server_started_at, matches(match_number, weeks(week_number, seasons(name)))')
+    .select(`match_id, ${SERVER_STATE_COLUMNS}, matches(match_number, weeks(week_number, seasons(name)))`)
     .eq('dathost_server_id', serverId)
     .in('server_state', OCCUPYING_STATES as unknown as string[])
     .order('server_started_at', { ascending: false })
     .limit(1);
-  const rows = (data ?? []) as unknown as {
+  const rows = (data ?? []) as unknown as (MatchServerStateRow & {
     match_id: number;
-    server_started_at: string | null;
     matches: {
       match_number: number | null;
       weeks: { week_number: number | null; seasons: { name: string | null } | null } | null;
     } | null;
-  }[];
+  })[];
   const row = rows[0];
   if (!row) return null;
 
-  // Reconcile so a server that already auto-stopped isn't shown as occupied.
-  const reconciled = await getReconciledServerState(supabaseAdmin, row.match_id);
+  // Already fetched above — reconcile against it directly instead of re-querying the same row.
+  const reconciled = await getReconciledServerState(supabaseAdmin, row.match_id, row);
   if (!OCCUPYING_STATES.includes(reconciled.serverState)) return null;
 
   return {
