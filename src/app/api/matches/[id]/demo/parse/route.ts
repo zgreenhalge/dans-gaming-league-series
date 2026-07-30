@@ -86,6 +86,7 @@ export async function POST(
   return NextResponse.json({
     ...result,
     sabremetrics: sabremetricsResult.sabremetrics,
+    weaponStats: sabremetricsResult.weaponStats,
     warnings: [...new Set([...result.warnings, ...sabremetricsResult.warnings])],
   });
 }

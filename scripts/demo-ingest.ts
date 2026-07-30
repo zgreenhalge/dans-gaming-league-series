@@ -48,6 +48,7 @@ import { getAdminClient } from '../src/lib/supabase-admin';
 import { gunzipMaybe } from '../src/lib/gzip';
 import { isPlayedScore, parseScore } from '../src/lib/util';
 import { persistSabremetrics } from '../src/lib/demo/sabremetrics';
+import { persistWeaponStats } from '../src/lib/demo/weaponStats';
 import { writeMatchScore } from '../src/lib/matchScore';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '../src/lib/demo/ingestResult';
 import { recordJobStatus, matchJobKey, jobStatusWriter } from '../src/lib/background-jobs';
@@ -132,6 +133,7 @@ async function main() {
     existing.skins === parsed.skins_score
   ) {
     await persistSabremetrics(matchId, sab.sabremetrics);
+    await persistWeaponStats(matchId, sab.weaponStats);
     await deleteR2Object(demoResultKey(matchId));
     await setJob({
       status: 'confirmed',
@@ -161,6 +163,7 @@ async function main() {
             adr: s.adr,
           })),
           sabremetrics: sab.sabremetrics,
+          weaponStats: sab.weaponStats,
           round_history: parsed.round_history,
         }
       : null;
@@ -185,6 +188,7 @@ async function main() {
         skins: payload.skins,
         player_stats: payload.player_stats,
         sabremetrics: payload.sabremetrics,
+        weaponStats: payload.weaponStats,
         round_history: payload.round_history,
       });
       if (written.ok) {

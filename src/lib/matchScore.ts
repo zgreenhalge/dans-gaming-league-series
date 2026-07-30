@@ -13,13 +13,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { triggerRatingRecompute } from './ehog-recompute';
 import { parseEliminationWarning } from './parsers/rosterResolver';
 import { persistSabremetrics, clearSabremetrics } from './demo/sabremetrics';
+import { persistWeaponStats, clearWeaponStats } from './demo/weaponStats';
 import { clearLiveScore } from './demo/liveScore';
 import { resolveAndPropagate } from './gauntlet-engine';
 import { checkSeasonCompletion, checkGauntletCompletion } from './season-lifecycle';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { advanceJobStatus, matchJobKey } from './background-jobs';
 import { DEMO_INGEST_JOB_TYPE } from './demo/ingestResult';
-import type { DemoSabremetricStat, RoundHistoryEntry } from './types';
+import type { DemoSabremetricStat, DemoWeaponStat, RoundHistoryEntry } from './types';
 
 type PlayerStatInput = {
   player_id: number;
@@ -109,6 +110,7 @@ export interface WriteMatchScoreInput {
   skins: unknown;
   player_stats: unknown;
   sabremetrics?: DemoSabremetricStat[];
+  weaponStats?: DemoWeaponStat[];
   round_history?: unknown;
   /** Parser warnings, forwarded so a single elimination-resolved match can learn a steam id. Only
    *  applied when `opts.learnSteamIds` is set. */
@@ -134,7 +136,7 @@ export async function writeMatchScore(
   input: WriteMatchScoreInput,
   opts: WriteMatchScoreOptions = {},
 ): Promise<WriteMatchScoreResult> {
-  const { shirts, skins, player_stats, sabremetrics, round_history, warnings } = input;
+  const { shirts, skins, player_stats, sabremetrics, weaponStats, round_history, warnings } = input;
 
   if (typeof shirts !== 'number' || typeof skins !== 'number' || !Number.isInteger(shirts) || !Number.isInteger(skins)) {
     return { ok: false, error: 'shirts and skins must be integers', status: 400 };
@@ -291,6 +293,20 @@ export async function writeMatchScore(
   } catch (e) {
     console.error('Sabremetrics write/delete failed (non-fatal):', e);
     await recordOpsError(supabaseAdmin, 'match', matchId, 'sabremetrics_persist', `Sabremetrics write failed: ${(e as Error).message}`);
+  }
+
+  // Weapon-category/round-economy breakdowns (#279): same non-fatal upsert-or-clear shape as
+  // sabremetrics above.
+  try {
+    if (weaponStats && weaponStats.length > 0) {
+      await persistWeaponStats(matchId, weaponStats);
+    } else {
+      await clearWeaponStats(matchId);
+    }
+    await clearOpsError(supabaseAdmin, 'match', matchId, 'weapon_stats_persist');
+  } catch (e) {
+    console.error('Weapon stats write/delete failed (non-fatal):', e);
+    await recordOpsError(supabaseAdmin, 'match', matchId, 'weapon_stats_persist', `Weapon stats write failed: ${(e as Error).message}`);
   }
 
   // Independent hooks — run concurrently (each already isolates its own failure) rather than
