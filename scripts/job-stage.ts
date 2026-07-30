@@ -1,4 +1,5 @@
-// Shared stage-tracking helper for job scripts (`demo-ingest.ts`, `replay-extract.ts`). Each named
+// Shared stage-tracking helper for job scripts (`demo-ingest.ts`, `replay-extract.ts`,
+// `radar-build.ts`). Each named
 // stage is reported two ways (issue #121): a collapsible GitHub Actions log group + `::notice::`
 // annotation, and a `background_jobs.stage` write, so the admin dashboard can show progress without
 // opening Actions. `currentStage` lets a script's top-level `fail()` report exactly where a run died,
