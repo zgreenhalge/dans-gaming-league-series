@@ -1,5 +1,7 @@
 import { gunzipMaybe } from '../gzip';
 import { getR2Object } from '../r2';
+import { supabase } from '../supabase';
+import { isPlayedScore } from '../util';
 
 const SUPABASE_PAGE_SIZE = 1000;
 
@@ -38,6 +40,33 @@ export async function fetchAllPages<T>(
 export function missingIds(requested: number[], covered: number[] | undefined): number[] {
   const coveredSet = new Set(covered ?? []);
   return requested.filter((id) => !coveredSet.has(id));
+}
+
+/**
+ * Resolves `match_id -> season_id` for every played match (`isPlayedScore(final_score)`), via
+ * `matches` -> `weeks` -> `seasons` — the join every demo-derived-stat query needs to scope its
+ * rows to a season. Shared by `getAllSabremetrics()` and the weapon-class/economy breakdown
+ * queries so the join logic can't drift between them.
+ */
+export async function resolveMatchSeasons(): Promise<Map<number, number>> {
+  const [{ data: matchRows, error: matchErr }, { data: weekRows, error: weekErr }] = await Promise.all([
+    supabase.from('matches').select('id, week_id, final_score'),
+    supabase.from('weeks').select('id, season_id'),
+  ]);
+  if (matchErr) throw matchErr;
+  if (weekErr) throw weekErr;
+
+  const weekToSeason = new Map<number, number>();
+  for (const w of (weekRows ?? []) as { id: number; season_id: number }[])
+    weekToSeason.set(w.id, w.season_id);
+
+  const matchSeason = new Map<number, number>();
+  for (const m of (matchRows ?? []) as { id: number; week_id: number; final_score: string | null }[]) {
+    if (!isPlayedScore(m.final_score)) continue;
+    const sid = weekToSeason.get(m.week_id);
+    if (sid != null) matchSeason.set(m.id, sid);
+  }
+  return matchSeason;
 }
 
 /**

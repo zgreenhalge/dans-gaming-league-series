@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import SabremetricsTable from '@/components/SabremetricsTable';
 import { useHasMounted } from './useHasMounted';
-import type { SabFields, RoundHistoryEntry } from '@/lib/types';
+import type { SabFields, RoundHistoryEntry, DemoWeaponStat } from '@/lib/types';
 type Faction = 'CT' | 'T' | null;
 
 interface MatchPlayer {
@@ -38,6 +38,7 @@ interface ParsedResult {
   skins_score: number | null;
   warnings: string[];
   sabremetrics?: SabremetricStat[];
+  weaponStats?: DemoWeaponStat[];
   round_history?: RoundHistoryEntry[] | null;
 }
 
@@ -315,6 +316,7 @@ export default function DemoUploadModal({
           skins: skInt,
           player_stats,
           sabremetrics: parsed.sabremetrics,
+          weaponStats: parsed.weaponStats,
           round_history: parsed.round_history ?? null,
           // Forward warnings so the score route can learn steam ids from elimination matches.
           warnings: parsed.warnings,

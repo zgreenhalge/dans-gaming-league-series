@@ -194,6 +194,8 @@ export interface PlayerMatchSabremetrics {
   smokes_blocking_push: number;
   ct_smokes_thrown: number;
   unused_util_value_on_death_total: number;
+  rounds_dropped_on_reload_total: number;
+  reloads_total: number;
 }
 
 export type SabFields = Omit<PlayerMatchSabremetrics, 'player_match_stats_id'>;
@@ -203,7 +205,36 @@ export interface DemoSabremetricStat {
   sabremetrics: SabFields;
 }
 
+// #279: per-player shot/accuracy/damage/rounds breakdown, bucketed either by weapon class
+// (pistol/smg/rifle/sniper/shotgun) or by round-economy tier (eco/force_buy/full_buy) — same
+// metric shape, two different tables (`player_match_weapon_stats`/`player_match_economy_stats`)
+// since a round's economy classification is independent of which weapon fired.
+export interface WeaponStatFields {
+  shots_fired: number;
+  shots_hit: number;
+  headshot_hits: number;
+  damage_dealt: number;
+  rounds_played: number;
+}
+
+export interface PlayerMatchWeaponStat extends WeaponStatFields {
+  player_match_stats_id: number;
+  weapon_category: string;
+}
+
+export interface PlayerMatchEconomyStat extends WeaponStatFields {
+  player_match_stats_id: number;
+  economy_type: string;
+}
+
+export interface DemoWeaponStat {
+  player_id: number;
+  weaponStats: (WeaponStatFields & { weapon_category: string })[];
+  economyStats: (WeaponStatFields & { economy_type: string })[];
+}
+
 export interface ParsedDemoSabremetricsResult {
   sabremetrics: DemoSabremetricStat[];
+  weaponStats: DemoWeaponStat[];
   warnings: string[];
 }

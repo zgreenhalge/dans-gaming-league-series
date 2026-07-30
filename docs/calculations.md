@@ -194,6 +194,15 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
   victim share a side that round, credited to the attacker. Uses the same side check that
   excludes a teamkill from `Entry+`'s opening kills and `KAST+`'s kill qualifier, just counted here
   instead of discarded.
+- `Rounds Dropped on Reload` — a raw counter, not folded into any `+` formula: bullets still in the
+  magazine — and therefore wasted — when a player reloads before it's empty, summed across every
+  `weapon_reload` event in a match (an empty-mag reload contributes 0). `Rounds Dropped/Reload` =
+  `Rounds Dropped on Reload` / `Reloads` averages that wastefulness per reload, with the
+  denominator counting every reload including clean ones. `weapon_reload` is a discrete game event
+  (confirmed against a real DGLS demo, unlike most CS2 actions this codebase tracks), so the
+  collector reads `Weapon.m_iClip1`/`Weapon.m_bInReload` at each event's own tick rather than
+  periodic sampling — the pre-reload clip count is frozen for the whole reload window (can't fire
+  mid-reload), so the event tick itself always lands inside it. See `src/lib/parsers/reload.ts`.
 - `Aim+` = `0.35 * Accuracy+` + `0.40 * Head Accuracy+` + `0.25 * Counter-Strafe+` (each itself
   `Player X` / `League Avg X`, computed on `Accuracy`/`Head Accuracy`/`Counter-Strafe %` from the
   Mechanics section below). A weighted blend rather than a sum on a shared point-scale like
@@ -251,6 +260,27 @@ Spotted)"); CS2's spotted mask (`m_bSpotted`) is known-flaky, so these ship unga
   round's end tick. This is position-based, not a true visibility/render check — see
   `docs/demo-parsing-reference.md` for why that's out of scope. The raw `Smokes Blocking Push`
   count (not the `%`) also feeds `Utility+` — see above.
+
+### Weapon-Class and Round-Economy Breakdowns
+
+Per-player shot/accuracy/damage/rounds breakdowns bucketed along two independent dimensions,
+neither folded into any `+` formula — raw splits of the same underlying counts as the Mechanics
+section, sliced a different way. Stored in their own tables (`player_match_weapon_stats`,
+`player_match_economy_stats`), not `player_match_sabremetrics`, since each player has several rows
+(one per bucket) rather than one. See `src/lib/parsers/weaponStats.ts`.
+
+- **Weapon class** — `pistol`/`smg`/`rifle`/`sniper`/`shotgun` (`WEAPON_CATEGORY` in
+  `src/lib/parsers/weaponClasses.ts`, the full CS2 gun roster). `Shots Fired`/`Shots Hit`/`Headshot
+  Hits`/`Damage Dealt` are the same guns-only counts as the Mechanics section, split by which
+  category fired or landed the shot. `Rounds Played` for a category is the count of distinct live
+  rounds the player fired that category in at least once — shot-triggered, like the other counts.
+- **Round economy** — `eco` (equipment value under $2000), `force_buy` ($2000-3499), or `full_buy`
+  ($3500+), classified per player per round from their own
+  `CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` at that round's freeze-time-end — an individual
+  read, not a team average (Wingman's 2-player sides make the two nearly equivalent anyway).
+  `Rounds Played` for a tier is seeded directly from this classification, independent of whether the
+  player fired a shot that round, unlike the weapon-class breakdown above — an eco round with zero
+  shots fired still counts as an eco round played.
 
 ### Player Rating (not yet implemented)
 

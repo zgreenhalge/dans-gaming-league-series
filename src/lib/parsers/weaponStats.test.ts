@@ -1,0 +1,97 @@
+/**
+ * Unit tests for collectWeaponClassStats and collectEconomyStats — per-weapon-category and
+ * per-round-economy shot/accuracy/damage/rounds breakdowns (#279).
+ *
+ * Run:  npx tsx src/lib/parsers/weaponStats.test.ts
+ */
+
+import assert from 'node:assert/strict';
+import { collectWeaponClassStats, collectEconomyStats, type WeaponBreakdownRow } from './weaponStats';
+import { makeContext, hurt } from './matchContextFixture';
+import type { WeaponFireRow } from './utility';
+import type { EconomyType } from './economy';
+import { test, report } from '../test-support/miniTest';
+
+function fire(opts: { round: number; tick: number; user: string | null; weapon: string }): WeaponFireRow {
+  return { tick: opts.tick, total_rounds_played: opts.round - 1, user_steamid: opts.user, weapon: opts.weapon };
+}
+
+const sides = { a: 'CT', b: 'CT', c: 'T', d: 'T' } as const;
+const ids = Object.keys(sides);
+const rounds = [{ roundNumber: 1, winnerSide: 'CT' as const }, { roundNumber: 2, winnerSide: 'T' as const }];
+
+function bucket(rows: WeaponBreakdownRow[], name: string): WeaponBreakdownRow | undefined {
+  return rows.find((r) => r.bucket === name);
+}
+
+test('collectWeaponClassStats: rifle shots/hits/headshots/damage bucket under "rifle"', () => {
+  const fires = [fire({ round: 1, tick: 100, user: 'a', weapon: 'weapon_ak47' })];
+  const hurts = [hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 40, hitgroup: 'head' })];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectWeaponClassStats(fires, hurts, ctx, ids);
+  const rifle = bucket(out.get('a')!, 'rifle');
+  assert.equal(rifle?.shots_fired, 1);
+  assert.equal(rifle?.shots_hit, 1);
+  assert.equal(rifle?.headshot_hits, 1);
+  assert.equal(rifle?.damage_dealt, 40);
+  assert.equal(rifle?.rounds_played, 1);
+});
+
+test('collectWeaponClassStats: a knife/grenade weapon is not categorized', () => {
+  const fires = [fire({ round: 1, tick: 100, user: 'a', weapon: 'weapon_knife_push' })];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectWeaponClassStats(fires, [], ctx, ids);
+  assert.equal(out.get('a')!.length, 0);
+});
+
+test('collectWeaponClassStats: rounds_played counts distinct rounds fired, not shots', () => {
+  const fires = [
+    fire({ round: 1, tick: 100, user: 'a', weapon: 'weapon_glock' }),
+    fire({ round: 1, tick: 110, user: 'a', weapon: 'weapon_glock' }),
+    fire({ round: 2, tick: 1100, user: 'a', weapon: 'weapon_glock' }),
+  ];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectWeaponClassStats(fires, [], ctx, ids);
+  const pistol = bucket(out.get('a')!, 'pistol');
+  assert.equal(pistol?.shots_fired, 3);
+  assert.equal(pistol?.rounds_played, 2);
+});
+
+test('collectWeaponClassStats: teamdamage is excluded from shots_hit/damage', () => {
+  const fires = [fire({ round: 1, tick: 100, user: 'a', weapon: 'weapon_ak47' })];
+  const hurts = [hurt({ round: 1, tick: 105, victim: 'b', attacker: 'a', weapon: 'ak47', dmgHealth: 40 })];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectWeaponClassStats(fires, hurts, ctx, ids);
+  const rifle = bucket(out.get('a')!, 'rifle');
+  assert.equal(rifle?.shots_hit ?? 0, 0);
+  assert.equal(rifle?.damage_dealt ?? 0, 0);
+});
+
+test('collectEconomyStats: rounds_played is seeded from classification, even with zero shots', () => {
+  const roundEconomy = new Map<string, Map<number, EconomyType>>([
+    ['a', new Map([[1, 'eco'], [2, 'full_buy']])],
+  ]);
+  const ctx = makeContext({ rounds, sides });
+  const out = collectEconomyStats([], [], roundEconomy, ctx, ids);
+  const eco = bucket(out.get('a')!, 'eco');
+  const full = bucket(out.get('a')!, 'full_buy');
+  assert.equal(eco?.rounds_played, 1);
+  assert.equal(eco?.shots_fired ?? 0, 0);
+  assert.equal(full?.rounds_played, 1);
+});
+
+test('collectEconomyStats: shots/hits/damage bucket into the round\'s own economy tier', () => {
+  const roundEconomy = new Map<string, Map<number, EconomyType>>([
+    ['a', new Map([[1, 'eco']])],
+  ]);
+  const fires = [fire({ round: 1, tick: 100, user: 'a', weapon: 'weapon_glock' })];
+  const hurts = [hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'glock', dmgHealth: 25 })];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectEconomyStats(fires, hurts, roundEconomy, ctx, ids);
+  const eco = bucket(out.get('a')!, 'eco');
+  assert.equal(eco?.shots_fired, 1);
+  assert.equal(eco?.shots_hit, 1);
+  assert.equal(eco?.damage_dealt, 25);
+});
+
+report();

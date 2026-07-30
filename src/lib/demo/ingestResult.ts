@@ -1,7 +1,7 @@
 // Shape of the pending demo-ingest result stored in R2 (`demoResultKey`) by the demo-ingest Action
 // and read by the in-match review block. Transient — deleted on confirm/dismiss. No DB schema.
 
-import type { DemoSabremetricStat, RoundHistoryEntry } from '../types';
+import type { DemoSabremetricStat, DemoWeaponStat, RoundHistoryEntry } from '../types';
 
 /** `background_jobs.job_type` for the demo-ingest pipeline (notify → Action → review block). */
 export const DEMO_INGEST_JOB_TYPE = 'demo_ingest';
@@ -22,6 +22,7 @@ export interface DemoConfirmPayload {
     adr: number;
   }[];
   sabremetrics: DemoSabremetricStat[];
+  weaponStats: DemoWeaponStat[];
   round_history: RoundHistoryEntry[] | null;
 }
 

@@ -29,6 +29,18 @@ test('collectAccuracy: gun shots count toward shots_fired, grenade throws do not
   assert.equal(out.get('a')?.shots_fired, 2);
 });
 
+test('collectAccuracy: a non-default knife skin does not count toward shots_fired', () => {
+  const fires: WeaponFireRow[] = [
+    fire({ round: 1, tick: 100, user: 'a', weapon: 'weapon_knife' }),
+    fire({ round: 1, tick: 110, user: 'a', weapon: 'weapon_knife_karambit' }),
+    fire({ round: 1, tick: 120, user: 'a', weapon: 'weapon_knife_push' }),
+    fire({ round: 1, tick: 200, user: 'a', weapon: 'weapon_ak47' }),
+  ];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectAccuracy(fires, [], ctx, ids);
+  assert.equal(out.get('a')?.shots_fired, 1);
+});
+
 test('collectAccuracy: a gun hit on an enemy counts toward shots_hit', () => {
   const hurts = [hurt({ round: 1, tick: 100, attacker: 'a', victim: 'c', weapon: 'ak47', dmgHealth: 27 })];
   const ctx = makeContext({ rounds, sides });
