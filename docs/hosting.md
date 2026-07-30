@@ -27,7 +27,10 @@ full golden-config layout and the diff/apply tooling that keeps it in sync with 
 
 ## Server-state machine
 
-Persisted on the `matches` row:
+Persisted on `match_server_state` — one row per match (`match_id` FK to `matches`, PK), created on
+first provision; no row means `idle`. Kept off the core `matches` row since this is transient
+per-match orchestration state (populated for the ~20 minutes a match is actually being provisioned/
+played, meaningless once scored), not match data — see issue #288.
 
 | Column | Meaning |
 |---|---|
@@ -282,7 +285,7 @@ purely advisory, since a scrim never blocks a match from actually starting.
   per-match provisioning makes (`applyGoldenSettings`), so a manual apply here and an automatic one at
   the next match provision can never disagree on which fields get re-asserted. It does *not* load a
   match config, so run **Apply match settings** after it if a match is mid-setup. Live via
-  Realtime on `matches`. Also hosts the **disk cleanup** controls (issue #132, see
+  Realtime on `match_server_state`. Also hosts the **disk cleanup** controls (issue #132, see
   `infra/matchzy/README.md`) — enable/disable the `dathost-cleanup` workflow, set its interval, and a
   **Run now** button, all through `src/lib/gh-dispatch.ts`'s GitHub Actions helpers rather than
   `background_jobs` (there's no per-match/per-map target for this job).

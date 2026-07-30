@@ -246,9 +246,9 @@ export async function PATCH(
   const merged = { ...m, ...update } as VetoFields;
   if (isVetoComplete(merged, computeGauntletOrPlayoff(isGauntlet, m.is_playoff_game))) {
     const { data: srv } = await supabaseAdmin
-      .from('matches')
+      .from('match_server_state')
       .select('server_state')
-      .eq('id', matchId)
+      .eq('match_id', matchId)
       .maybeSingle();
     const serverState = (srv as { server_state?: string | null } | null)?.server_state;
     const serverBusy = serverState === 'provisioning' || serverState === 'live';

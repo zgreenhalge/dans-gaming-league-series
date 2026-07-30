@@ -1,12 +1,13 @@
 // Per-match DatHost server lifecycle orchestration (Phase 4). Composes the `dathost.ts` client with
-// the match's data and persists a small server-state machine on the `matches` row.
+// the match's data and persists a small server-state machine on the `match_server_state` table (one
+// row per match, `match_id` FK to `matches`) — kept off the core `matches` row since this is
+// transient orchestration state, not match data (#288).
 //
 //   provision: provisioning → apply golden settings → start → wait ready → loadmatch → live
 //   teardown:  stop → idle
 //
-// Server-side only. Requires these columns on `matches` (see dathost_handoff schema proposal):
-//   server_state text, dathost_server_id text, connect_string text, server_started_at timestamptz,
-//   teardown_at timestamptz
+// Server-side only. `match_server_state` columns: server_state text, dathost_server_id text,
+// connect_string text, server_started_at timestamptz, teardown_at timestamptz. No row means `idle`.
 //
 // Reuse model (D2): teardown stops the persistent server; it never deletes it.
 
@@ -74,14 +75,14 @@ export async function findServerOccupant(
   const serverId = process.env.DATHOST_SERVER_ID;
   if (!serverId) return null;
   const { data } = await supabaseAdmin
-    .from('matches')
-    .select('id')
+    .from('match_server_state')
+    .select('match_id')
     .eq('dathost_server_id', serverId)
     .in('server_state', OCCUPYING_STATES as unknown as string[])
-    .neq('id', exceptMatchId)
+    .neq('match_id', exceptMatchId)
     .limit(1);
-  const rows = (data ?? []) as { id: number }[];
-  return rows.length ? rows[0].id : null;
+  const rows = (data ?? []) as { match_id: number }[];
+  return rows.length ? rows[0].match_id : null;
 }
 
 export interface NearbyUnscoredMatch {
@@ -148,7 +149,9 @@ async function setServerState(
     teardown_at?: string | null;
   },
 ): Promise<void> {
-  const { error } = await supabaseAdmin.from('matches').update(fields).eq('id', matchId);
+  const { error } = await supabaseAdmin
+    .from('match_server_state')
+    .upsert({ match_id: matchId, ...fields }, { onConflict: 'match_id' });
   if (error) throw new Error(`Failed to write server_state for match ${matchId}: ${error.message}`);
 }
 
@@ -296,9 +299,9 @@ export async function teardownMatchServer(
 
   if (opts.onlyIfOwnsServer) {
     const { data } = await supabaseAdmin
-      .from('matches')
+      .from('match_server_state')
       .select('server_state, dathost_server_id')
-      .eq('id', matchId)
+      .eq('match_id', matchId)
       .maybeSingle();
     const row = data as { server_state?: string | null; dathost_server_id?: string | null } | null;
     const active =
@@ -398,9 +401,9 @@ export async function getReconciledServerState(
   matchId: number,
 ): Promise<ServerStatusView> {
   const { data } = await supabaseAdmin
-    .from('matches')
+    .from('match_server_state')
     .select('server_state, connect_string, server_started_at, dathost_server_id, teardown_at')
-    .eq('id', matchId)
+    .eq('match_id', matchId)
     .maybeSingle();
   const row = (data ?? {}) as {
     server_state?: string | null;
@@ -458,32 +461,34 @@ export async function getActiveServerMatch(
   const serverId = process.env.DATHOST_SERVER_ID;
   if (!serverId) return null;
   const { data } = await supabaseAdmin
-    .from('matches')
-    .select('id, match_number, server_started_at, weeks(week_number, seasons(name))')
+    .from('match_server_state')
+    .select('match_id, server_started_at, matches(match_number, weeks(week_number, seasons(name)))')
     .eq('dathost_server_id', serverId)
     .in('server_state', OCCUPYING_STATES as unknown as string[])
     .order('server_started_at', { ascending: false })
     .limit(1);
   const rows = (data ?? []) as unknown as {
-    id: number;
-    match_number: number | null;
+    match_id: number;
     server_started_at: string | null;
-    weeks: { week_number: number | null; seasons: { name: string | null } | null } | null;
+    matches: {
+      match_number: number | null;
+      weeks: { week_number: number | null; seasons: { name: string | null } | null } | null;
+    } | null;
   }[];
   const row = rows[0];
   if (!row) return null;
 
   // Reconcile so a server that already auto-stopped isn't shown as occupied.
-  const reconciled = await getReconciledServerState(supabaseAdmin, row.id);
+  const reconciled = await getReconciledServerState(supabaseAdmin, row.match_id);
   if (!OCCUPYING_STATES.includes(reconciled.serverState)) return null;
 
   return {
-    matchId: row.id,
+    matchId: row.match_id,
     label: matchLabel({
-      matchId: row.id,
-      seasonName: row.weeks?.seasons?.name,
-      weekNumber: row.weeks?.week_number,
-      matchNumber: row.match_number,
+      matchId: row.match_id,
+      seasonName: row.matches?.weeks?.seasons?.name,
+      weekNumber: row.matches?.weeks?.week_number,
+      matchNumber: row.matches?.match_number ?? null,
     }),
     serverState: reconciled.serverState,
     connectString: reconciled.connectString,

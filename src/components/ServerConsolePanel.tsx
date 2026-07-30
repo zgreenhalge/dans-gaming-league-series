@@ -229,13 +229,13 @@ export function ServerConsolePanel({
     return () => clearInterval(interval);
   }, [refreshStatus]);
 
-  // Keep the console live — any match-row change (provision/teardown/reconcile) re-reads raw server
-  // status; router.refresh() re-fetches this component's `active` prop for consistency, but the
+  // Keep the console live — any match_server_state change (provision/teardown/reconcile) re-reads raw
+  // server status; router.refresh() re-fetches this component's `active` prop for consistency, but the
   // occupancy section below prefers status.active (fresher, from the same fetch) once it's loaded.
   useEffect(() => {
     const channel = getBrowserClient()
       .channel('admin-servers')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_server_state' }, () => {
         router.refresh();
         refreshStatus();
       })
