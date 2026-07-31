@@ -124,6 +124,16 @@ async function main() {
     assert.equal(result.missingOpponentPairs.length, 6);
   });
 
+  await test('an empty draft against a 0-1 player roster passes both checks vacuously — callers must separately reject an empty draft', () => {
+    // Both functions are correct here: with no matches there's nothing to violate, and with
+    // fewer than 2 roster players there are zero pairs to require coverage for. This is exactly
+    // why confirmSeasonScheduleDraft() checks draft non-emptiness itself rather than trusting
+    // "integrity ok && completeness complete" alone — those two facts don't imply a draft exists.
+    assert.equal(validateDraftIntegrity([]).ok, true);
+    assert.equal(validateDraftCompleteness([], []).complete, true);
+    assert.equal(validateDraftCompleteness([], [1]).complete, true);
+  });
+
   await test('validateDraftCompleteness — a partial draft (one week dropped) reports exactly the pairs only that week covered', () => {
     const weeks = toDraftWeeks(buildRosterSchedule(ROSTER_7));
     const partial = weeks.slice(0, -1); // drop the last week

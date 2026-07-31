@@ -93,6 +93,7 @@ export async function deleteSeasonScheduleDraft(supabaseAdmin: SupabaseClient, s
 
 export type ConfirmResult =
   | { status: 'already-materialized' }
+  | { status: 'no-draft' }
   | {
       status: 'invalid';
       integrityIssues: ValidationIssue[];
@@ -131,6 +132,12 @@ export async function confirmSeasonScheduleDraft(supabaseAdmin: SupabaseClient, 
   }
 
   const [draftWithPlayers, roster] = await Promise.all([getSeasonScheduleDraft(seasonId), getSeasonRoster(seasonId)]);
+
+  // Without this, an empty draft against a 0-1 player roster would pass both checks vacuously
+  // (nothing to violate, no pairs to require) and "confirm" a schedule with 0 weeks/matches.
+  if (draftWithPlayers.length === 0) {
+    return { status: 'no-draft' };
+  }
 
   const draftWeeks: DraftScheduleWeek[] = draftWithPlayers.map((w) => ({
     week_number: w.week_number,

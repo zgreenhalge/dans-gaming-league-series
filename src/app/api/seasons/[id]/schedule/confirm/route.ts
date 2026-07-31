@@ -10,9 +10,10 @@ const supabaseAdmin = getAdminClient();
  * Confirms a regular season's matchup draft — materializes it into real `weeks`/`matches`/
  * `player_match_stats` once (and only once) both `validateDraftIntegrity()` and
  * `validateDraftCompleteness()` pass. Admin-only, and only while the season is `UPCOMING`. Refuses
- * with 409 if the season already has a real schedule (no double-materialize) and 400 with the
- * specific integrity/completeness gaps if the draft isn't ready — the draft itself is never
- * touched by a rejected attempt, so more edits plus another confirm is the recovery path.
+ * with 409 if the season already has a real schedule (no double-materialize), 400 if no draft
+ * exists yet, and 400 with the specific integrity/completeness gaps if the draft isn't ready — the
+ * draft itself is never touched by a rejected attempt, so more edits plus another confirm is the
+ * recovery path.
  */
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
@@ -43,6 +44,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   if (result.status === 'already-materialized') {
     return NextResponse.json({ error: 'This season already has a real schedule' }, { status: 409 });
+  }
+
+  if (result.status === 'no-draft') {
+    return NextResponse.json({ error: 'No matchup draft exists yet — generate one first' }, { status: 400 });
   }
 
   if (result.status === 'invalid') {
