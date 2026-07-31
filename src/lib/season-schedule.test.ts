@@ -145,6 +145,12 @@ async function main() {
     });
   }
 
+  for (const n of [0, 1, 6, 20, 40]) {
+    await test(`buildSeasonSchedule(${n}) — throws: outside the supported 7-19 range`, () => {
+      assert.throws(() => buildSeasonSchedule(n));
+    });
+  }
+
   for (let n = 7; n <= 19; n++) {
     await test(`buildSeasonSchedule(${n}) — shirts/skins stay roughly balanced per seed`, () => {
       const weeks = buildSeasonSchedule(n);

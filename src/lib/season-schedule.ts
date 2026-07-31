@@ -301,7 +301,20 @@ function hasFullCoverage(weeks: WeekPlan[], seedCount: number): boolean {
 
 const MAX_ATTEMPTS = 200;
 
+/** The league's supported roster-size range (see docs/architecture.md). `bestMatchPairing()`'s
+ * search is factorial in team count (~seedCount/2) — cheap within this range (well under 10
+ * teams/round) but combinatorially explosive well beyond it, so seedCount is rejected outright
+ * rather than left to time out or hang whenever this is wired to a live roster size. */
+const MIN_SEED_COUNT = 7;
+const MAX_SEED_COUNT = 19;
+
 export function buildSeasonSchedule(seedCount: number, options?: { doubleheaderPolicy?: DoubleheaderPolicy }): WeekPlan[] {
+  if (seedCount < MIN_SEED_COUNT || seedCount > MAX_SEED_COUNT) {
+    throw new Error(
+      `buildSeasonSchedule: seedCount=${seedCount} is outside the supported range (${MIN_SEED_COUNT}-${MAX_SEED_COUNT})`,
+    );
+  }
+
   const policy = options?.doubleheaderPolicy ?? 'auto';
   const teammateRounds = buildTeammateRounds(seedCount);
 
