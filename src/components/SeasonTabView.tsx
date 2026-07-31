@@ -296,7 +296,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     <>
       {tabBar}
 
-      {tab === 'leaderboard' && (
+      {tab === 'leaderboard' && hasLeaderboard && (
         <>
           {isGauntlet && <GauntletStandings rounds={rounds} leaderboard={leaderboard} />}
           <LeaderboardTable
@@ -309,7 +309,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
         </>
       )}
 
-      {tab === 'schedule' && (
+      {tab === 'schedule' && hasSchedule && (
         isGauntlet ? (
           <>
             {bracketShape.length > 0 && (
@@ -343,13 +343,13 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
         )
       )}
 
-      {tab === 'stats' && <BasicStatsView rows={leaderboard} matches={allMatches} />}
+      {tab === 'stats' && hasStats && <BasicStatsView rows={leaderboard} matches={allMatches} />}
 
       {tab === 'advanced' && hasSab && (
         <SabremetricsLeaderboardView rows={sabremetrics!} />
       )}
 
-      {tab === 'h2h' && <H2HSection data={h2hData} />}
+      {tab === 'h2h' && hasH2H && <H2HSection data={h2hData} />}
     </>
   );
 }
