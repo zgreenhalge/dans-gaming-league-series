@@ -52,7 +52,11 @@ export function SeasonManager({
 }) {
   const eligibleIds = new Set(eligibleForGauntlet.map((s) => s.id));
   const gauntletByRegularId = new Map(gauntletsInProgress.map((g) => [g.regularSeasonId, g]));
+  const errorsByLabel = new Map(seasonOpsErrors.map((e) => [e.label, e]));
 
+  // Only used for the jump-target lookup below, where there's no already-fetched `gauntletRow` to
+  // derive this from — the row loop computes its own `canExpand` directly instead of calling this,
+  // so the map isn't queried twice per row.
   function expandable(s: SeasonSummary): boolean {
     return s.status === 'ACTIVE' && !s.isGauntlet && (eligibleIds.has(s.id) || gauntletByRegularId.has(s.id));
   }
@@ -84,9 +88,9 @@ export function SeasonManager({
         <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden">
           {allSeasons.map((s) => {
             const isOpen = openId === s.id;
-            const canExpand = expandable(s);
-            const error = seasonOpsErrors.find((e) => e.label === s.name);
+            const error = errorsByLabel.get(s.name);
             const gauntletRow = gauntletByRegularId.get(s.id);
+            const canExpand = s.status === 'ACTIVE' && !s.isGauntlet && (eligibleIds.has(s.id) || !!gauntletRow);
             return (
               <div
                 key={s.id}
