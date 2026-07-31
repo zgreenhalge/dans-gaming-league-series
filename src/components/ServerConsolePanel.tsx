@@ -518,15 +518,11 @@ export function ServerConsolePanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Match occupancy */}
-      <div>
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">Match occupancy</div>
-        {!active ? (
-          <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-6 font-mono text-[13px] text-[var(--color-text-secondary)]">
-            Shared server is <span className="text-[var(--color-accent-green-fg)]">idle</span> — no match is holding it.
-          </div>
-        ) : (
-          <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
+      {/* Server — occupancy + live state combined into one card (they're both "what's the server
+          doing right now"), so this is one bordered box instead of two. */}
+      <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
+        {active ? (
+          <div className="mb-4 pb-4 border-b border-[var(--color-border-tertiary)]">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
@@ -567,11 +563,12 @@ export function ServerConsolePanel({
             )}
             {teardownError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-2">{teardownError}</div>}
           </div>
+        ) : (
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-4 pb-4 border-b border-[var(--color-border-tertiary)]">
+            Shared server is <span className="text-[var(--color-accent-green-fg)]">idle</span> — no match is holding it.
+          </div>
         )}
-      </div>
 
-      {/* Server state + apply config */}
-      <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
         {pending && (
           <div className="border border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)] rounded px-3 py-2 mb-3">
             <div className="font-mono text-[11px] text-[var(--color-accent-amber-fg)] mb-2">{pending.message}</div>
@@ -710,10 +707,14 @@ export function ServerConsolePanel({
         </div>
       </div>
 
-      {/* Config vs golden — read-only drift check against the versioned infra/matchzy/ config. */}
-      <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">Config vs golden</div>
+      {/* Config vs golden — read-only drift check against the versioned infra/matchzy/ config.
+          Collapsed by default (least-frequently-used control here); the compare button lives in the
+          expanded body, not the summary, so clicking it never also toggles the disclosure. */}
+      <details className="border border-[var(--color-border-tertiary)] rounded px-4 py-3">
+        <summary className="cursor-pointer font-mono text-[12px] text-[var(--color-text-secondary)]">
+          Config vs golden
+        </summary>
+        <div className="mt-3">
           <button
             onClick={runDiff}
             disabled={diffBusy}
@@ -721,18 +722,30 @@ export function ServerConsolePanel({
           >
             {diffBusy ? 'Comparing…' : 'Compare to golden'}
           </button>
+          {diffError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-2">{diffError}</div>}
+          {diff && !diffError && <ConfigDiffView diff={diff} />}
         </div>
-        {diffError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-2">{diffError}</div>}
-        {diff && !diffError && <ConfigDiffView diff={diff} />}
-      </div>
+      </details>
 
-      {/* Disk cleanup (#132) */}
-      <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">Disk cleanup</div>
+      {/* Disk cleanup (#132) — collapsed by default; the summary still shows live schedule/last-run
+          status so a paused schedule reads as amber even without expanding. */}
+      <details className="border border-[var(--color-border-tertiary)] rounded px-4 py-3">
+        <summary className="cursor-pointer font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-3 flex-wrap">
+          <span>Disk cleanup</span>
+          {cleanup && (
+            <span
+              className={`font-mono text-[10px] ${
+                cleanup.enabled === false ? 'text-[var(--color-accent-amber-fg)]' : 'text-[var(--color-accent-green-fg)]'
+              }`}
+            >
+              {cleanup.enabled === null ? 'unknown' : cleanup.enabled ? 'scheduled' : 'paused'} · last run {lastRunSummary(cleanup.lastRun)}
+            </span>
+          )}
+        </summary>
         {!cleanup ? (
-          <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">Loading…</div>
+          <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-3">Loading…</div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 mt-3">
             <div className="font-mono text-[11px] text-[var(--color-text-secondary)] flex flex-wrap items-center gap-x-3 gap-y-1">
               <span
                 className={
@@ -800,7 +813,7 @@ export function ServerConsolePanel({
             {cleanupError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{cleanupError}</div>}
           </div>
         )}
-      </div>
+      </details>
     </div>
   );
 }
