@@ -13,7 +13,7 @@ export interface OpsErrorItem {
   occurredAt: string;
 }
 
-const OPERATION_LABELS: Record<string, string> = {
+export const OPERATION_LABELS: Record<string, string> = {
   gauntlet_build: 'Gauntlet Build',
   gauntlet_seed: 'Gauntlet Seed',
   gauntlet_archive: 'Gauntlet Archive',

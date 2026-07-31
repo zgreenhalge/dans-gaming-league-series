@@ -45,8 +45,8 @@ function searchText(m: AdminMatchRow): string {
   return parts.filter(Boolean).join(' ').toLowerCase();
 }
 
-export function MatchManager({ matches }: { matches: AdminMatchRow[] }) {
-  const [query, setQuery] = useState('');
+export function MatchManager({ matches, initialQuery = '' }: { matches: AdminMatchRow[]; initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery);
   const [openId, setOpenId] = useState<number | null>(null);
   const [demoMatchIds, setDemoMatchIds] = useState<Set<number> | null>(null);
 
