@@ -57,7 +57,7 @@ export function BulkReparseButton({ matchIds }: { matchIds: number[] }) {
       {ran && !busy && (
         <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">
           Dispatched {done}{failed > 0 ? `, ${failed} failed` : ''} —{' '}
-          <a href="/admin/jobs" className="text-[var(--color-accent-blue-fg)] hover:underline">
+          <a href="/admin?section=activity" className="text-[var(--color-accent-blue-fg)] hover:underline">
             watch progress
           </a>
         </span>
