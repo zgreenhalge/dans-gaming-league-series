@@ -3,11 +3,11 @@
 // In-match server panel (Phase 4). Once the 5-stage veto completes, this drives the hosting UX:
 //   idle → (provision) → "Starting server…" spinner → Join + copy-`connect` → hidden once played.
 //
-// Updates via Supabase Realtime on the `matches` row (no polling) — the same channel pattern as
-// VetoSequence; the table is already in the realtime publication. The moment the row flips to `live`
-// we swap the spinner for the Join button. Teardown itself isn't a control here — it happens
-// automatically once the match is scored (`teardownMatchServer` in the score route / MatchZy log
-// ingest), with a manual "Tear down" safety valve on the admin server console for a server left live.
+// Updates via Supabase Realtime on the match's `match_server_state` row (no polling) — the table is
+// already in the realtime publication. The moment the row flips to `live` we swap the spinner for the
+// Join button. Teardown itself isn't a control here — it happens automatically once the match is
+// scored (`teardownMatchServer` in the score route / MatchZy log ingest), with a manual "Tear down"
+// safety valve on the admin server console for a server left live.
 
 import { useCallback, useEffect, useState } from 'react';
 import { getBrowserClient } from '@/lib/supabase-browser';
@@ -59,13 +59,14 @@ export default function MatchServerPanel({
     };
   }, [matchId, apply]);
 
-  // Live updates straight off the matches row — no polling.
+  // Live updates straight off the match_server_state row — no polling. The row doesn't exist until
+  // the first provision (`idle`), so this listens for INSERT as well as UPDATE.
   useEffect(() => {
     const channel = getBrowserClient()
       .channel(`match-server-${matchId}`)
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` },
+        { event: '*', schema: 'public', table: 'match_server_state', filter: `match_id=eq.${matchId}` },
         (payload) => {
           const row = payload.new as {
             server_state?: ServerState;

@@ -13,13 +13,9 @@
     "skins_starting_side": null,
     "is_playoff_game": false,
     "is_feature_match": false,
-    "is_interpolated": false,
     "pre_match_win_prob": null,
     "pre_match_win_prob_formula_version": null,
-    "notes": null,
     "scheduled_at": "2026-01-15T19:00:00.000Z",
-    "screenshot_url_front": null,
-    "screenshot_url_back": null,
     "round_history": null,
     "recording_url": null,
     "replay_status": "none"

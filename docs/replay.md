@@ -429,7 +429,7 @@ the app reads server-side. Outputs live at deterministic R2 keys, so there are *
 `matches`** — derive the key from the match/map id.
 
 **`matches`** — denormalized status cache for cheap match-page reads (mirrors the existing
-`round_history`/`screenshot_url_*` precedent):
+`round_history` precedent):
 
 | Column | Type | Purpose |
 |---|---|---|

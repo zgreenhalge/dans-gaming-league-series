@@ -4,7 +4,12 @@ import { authOptions } from '@/lib/authOptions';
 import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { isVetoComplete, computeGauntletOrPlayoff, type VetoFields } from '@/lib/veto';
-import { provisionMatchServer, matchzyConfigContext, provisionErrorHandler } from '@/lib/dathost-lifecycle';
+import {
+  provisionMatchServer,
+  matchzyConfigContext,
+  provisionErrorHandler,
+  fetchServerStateRow,
+} from '@/lib/dathost-lifecycle';
 import { afterBestEffort } from '@/lib/after';
 
 const supabaseAdmin = getAdminClient();
@@ -245,13 +250,8 @@ export async function PATCH(
   // `server_state` gate also keeps a redundant edit from re-provisioning an already-running server.)
   const merged = { ...m, ...update } as VetoFields;
   if (isVetoComplete(merged, computeGauntletOrPlayoff(isGauntlet, m.is_playoff_game))) {
-    const { data: srv } = await supabaseAdmin
-      .from('matches')
-      .select('server_state')
-      .eq('id', matchId)
-      .maybeSingle();
-    const serverState = (srv as { server_state?: string | null } | null)?.server_state;
-    const serverBusy = serverState === 'provisioning' || serverState === 'live';
+    const srv = await fetchServerStateRow(supabaseAdmin, matchId);
+    const serverBusy = srv?.server_state === 'provisioning' || srv?.server_state === 'live';
     const base = process.env.APP_BASE_URL ?? req.nextUrl.origin;
     const ctx = matchzyConfigContext(base, matchId);
     if (!serverBusy && ctx) {
