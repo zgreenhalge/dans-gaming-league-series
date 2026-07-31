@@ -219,8 +219,36 @@ function pickDonorPlayer(matches: MatchPlan[], leftoverTeam: [number, number], s
   return best;
 }
 
+// ─── Shirts/skins side balance ─────────────────────────────────────────────────────────────────
+//
+// Which team a match calls "shirts" vs "skins" has no bearing on teammate/opponent coverage —
+// pairKey() and opponentPairsOf() are symmetric in the two labels — so it's decided as a pure
+// tiebreaker pass over pairings the coverage search has already locked in, never something that
+// search optimizes for. Each player's running (shirts count - skins count) is tracked as matches
+// are finalized in schedule order; for each match, whichever of the two possible side assignments
+// leaves its 4 players' balances closer to zero (summed |balance|) is taken, ties keeping the
+// pairing's given team order for determinism.
+function chooseSides(
+  teamA: [number, number],
+  teamB: [number, number],
+  balance: Map<number, number>,
+): MatchPlan {
+  const b = (seed: number) => balance.get(seed) ?? 0;
+  const costIfShirts = (team: [number, number]) => Math.abs(b(team[0]) + 1) + Math.abs(b(team[1]) + 1);
+  const costIfSkins = (team: [number, number]) => Math.abs(b(team[0]) - 1) + Math.abs(b(team[1]) - 1);
+
+  const costAShirtsBSkins = costIfShirts(teamA) + costIfSkins(teamB);
+  const costBShirtsASkins = costIfShirts(teamB) + costIfSkins(teamA);
+
+  const [shirts, skins] = costBShirtsASkins < costAShirtsBSkins ? [teamB, teamA] : [teamA, teamB];
+  for (const seed of shirts) balance.set(seed, b(seed) + 1);
+  for (const seed of skins) balance.set(seed, b(seed) - 1);
+  return { shirts, skins };
+}
+
 function attemptSchedule(teammateRounds: TeammateRound[], policy: DoubleheaderPolicy, rand: () => number): WeekPlan[] {
   const seenOpponentPairs = new Set<string>();
+  const sideBalance = new Map<number, number>();
   const weeks: WeekPlan[] = [];
 
   for (const round of teammateRounds) {
@@ -228,16 +256,17 @@ function attemptSchedule(teammateRounds: TeammateRound[], policy: DoubleheaderPo
     const leftoverTeam = teams.length % 2 === 1 ? teams.pop()! : null;
     const individualLeftover = round.byeSeed;
 
-    const { matches } = bestMatchPairing(teams, seenOpponentPairs, rand);
+    const { matches: pairedMatches } = bestMatchPairing(teams, seenOpponentPairs, rand);
+    const matches = pairedMatches.map((m) => chooseSides(m.shirts, m.skins, sideBalance));
     const byeSeeds: number[] = [];
 
     if (leftoverTeam && policy === 'auto') {
       if (individualLeftover != null) {
         const donor = pickDonorPlayer(matches, leftoverTeam, seenOpponentPairs, rand);
-        matches.push({ shirts: leftoverTeam, skins: [individualLeftover, donor] });
+        matches.push(chooseSides(leftoverTeam, [individualLeftover, donor], sideBalance));
       } else {
         const donorTeam = pickDonorTeam(matches, leftoverTeam, seenOpponentPairs, rand);
-        matches.push({ shirts: leftoverTeam, skins: donorTeam });
+        matches.push(chooseSides(leftoverTeam, donorTeam, sideBalance));
       }
     } else {
       if (leftoverTeam) byeSeeds.push(...leftoverTeam);

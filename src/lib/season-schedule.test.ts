@@ -2,10 +2,10 @@
  * Correctness proof for the regular-season matchup generator. buildTeammateRounds(): every pair
  * of seeds must appear as teammates in exactly one round, in the minimum possible number of
  * rounds. buildSeasonSchedule(): every pair must additionally play as opponents at least once,
- * every week has at most one bye, and doubleheaderPolicy 'never' throws exactly when a whole team
- * would otherwise be left over — for every roster size the league supports (7-19) plus a wider
- * band for confidence. No test framework — node:assert + a tiny runner, matching
- * gauntlet-bracket.test.ts / util.test.ts.
+ * every week has at most one bye, doubleheaderPolicy 'never' throws exactly when a whole team
+ * would otherwise be left over, and each seed's shirts/skins split stays within a loose empirical
+ * bound — for every roster size the league supports (7-19) plus a wider band for confidence. No
+ * test framework — node:assert + a tiny runner, matching gauntlet-bracket.test.ts / util.test.ts.
  *
  * Run:  npx tsx src/lib/season-schedule.test.ts
  */
@@ -142,6 +142,25 @@ async function main() {
   for (const n of [7, 10, 11, 14, 15, 18, 19]) {
     await test(`buildSeasonSchedule(${n}, 'never') — throws: a whole team would be left over every round`, () => {
       assert.throws(() => buildSeasonSchedule(n, { doubleheaderPolicy: 'never' }));
+    });
+  }
+
+  for (let n = 7; n <= 19; n++) {
+    await test(`buildSeasonSchedule(${n}) — shirts/skins stay roughly balanced per seed`, () => {
+      const weeks = buildSeasonSchedule(n);
+      const balance = new Map<number, number>();
+      for (const w of weeks) {
+        for (const m of w.matches) {
+          for (const s of m.shirts) balance.set(s, (balance.get(s) ?? 0) + 1);
+          for (const s of m.skins) balance.set(s, (balance.get(s) ?? 0) - 1);
+        }
+      }
+      // Best-effort tiebreaker, not an exact guarantee — bounded empirically (observed max 5
+      // across n=7-19) with headroom, to catch a real regression (e.g. side-balancing dropped
+      // entirely) without being a flaky assertion on the exact optimum.
+      for (const [seed, bal] of balance) {
+        assert.ok(Math.abs(bal) <= 6, `n=${n} seed ${seed}: shirts/skins imbalance ${bal}, expected within +/-6`);
+      }
     });
   }
 
