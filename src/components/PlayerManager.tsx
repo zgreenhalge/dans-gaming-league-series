@@ -37,12 +37,7 @@ export function PlayerManager({
 
   return (
     <>
-      <section className="mb-8 border border-[var(--color-border-tertiary)] rounded px-4 py-4">
-        <div className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-text-secondary)] mb-2">
-          EHOG ratings
-        </div>
-        <RecomputeButton />
-      </section>
+      <RecomputeButton />
 
       <input
         type="search"

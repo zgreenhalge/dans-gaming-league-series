@@ -31,22 +31,20 @@ export function RecomputeButton() {
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <button
-          onClick={trigger}
-          disabled={state === 'running'}
-          className="font-mono text-[11px] px-2.5 py-1 rounded border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-50"
-        >
-          {state === 'running' ? 'starting…' : 'Recompute now'}
-        </button>
-        {state === 'started' && (
-          <span className="font-mono text-[10px] text-[var(--color-accent-green-fg)]">recompute started — runs in the background</span>
-        )}
-        {state === 'error' && error && (
-          <span className="font-mono text-[10px] text-[var(--color-accent-red-fg)]">{error}</span>
-        )}
-      </div>
+    <div className="flex items-center gap-3 mb-4">
+      <button
+        onClick={trigger}
+        disabled={state === 'running'}
+        className="font-mono text-[11px] px-2.5 py-1 rounded border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-50"
+      >
+        {state === 'running' ? 'starting…' : 'Recompute now'}
+      </button>
+      {state === 'started' && (
+        <span className="font-mono text-[10px] text-[var(--color-accent-green-fg)]">recompute started — runs in the background</span>
+      )}
+      {state === 'error' && error && (
+        <span className="font-mono text-[10px] text-[var(--color-accent-red-fg)]">{error}</span>
+      )}
     </div>
   );
 }
