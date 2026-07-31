@@ -61,18 +61,14 @@ export function SeasonManager({
     return s.status === 'ACTIVE' && !s.isGauntlet && (eligibleIds.has(s.id) || gauntletByRegularId.has(s.id));
   }
 
-  const [openId, setOpenId] = useState<number | null>(null);
-
-  // Open the jump target's row as `focusLabel` changes — React's "adjust state during render" pattern
-  // (compare against a mirrored previous value) rather than an effect, since this only ever reacts to
-  // a prop, never a user click. Scrolling still needs a real effect below (refs aren't attached yet
-  // during render).
-  const [prevFocusLabel, setPrevFocusLabel] = useState(focusLabel);
-  if (focusLabel !== prevFocusLabel) {
-    setPrevFocusLabel(focusLabel);
+  // Opens the jump target's row at mount time. `AdminConsole` remounts this component (via `key`)
+  // on every jump, so a lazy initializer that reads `focusLabel` directly is enough — no effect or
+  // "previous value" comparison needed. Scrolling still needs a real effect below (refs aren't
+  // attached yet during render).
+  const [openId, setOpenId] = useState<number | null>(() => {
     const match = focusLabel ? allSeasons.find((s) => s.name === focusLabel) : undefined;
-    if (match && expandable(match)) setOpenId(match.id);
-  }
+    return match && expandable(match) ? match.id : null;
+  });
 
   const focusRef = useRef<HTMLDivElement>(null);
   useEffect(() => {

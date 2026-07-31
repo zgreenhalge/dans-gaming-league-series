@@ -12,6 +12,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { fmtUtcShort, tabCls } from '@/lib/util';
 import TabBar from './TabBar';
 import {
@@ -72,8 +73,9 @@ const RANGE_MS: Record<Exclude<RangeFilter, 'all'>, number> = {
   '24h': 24 * 60 * 60 * 1000,
 };
 
-function matchesRange(e: Event, range: RangeFilter, now: number): boolean {
+function matchesRange(e: Event, range: RangeFilter, now: number | null): boolean {
   if (range === 'all') return true;
+  if (now === null) return false;
   if (e.ts === null) return true;
   return now - e.ts <= RANGE_MS[range];
 }
@@ -275,6 +277,7 @@ export function AdminActivityFeed({
   opsErrors: OpsErrorItem[];
   onJump: (type: 'match' | 'player' | 'season', query: string) => void;
 }) {
+  const router = useRouter();
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const liveOpsErrors = useMemo(() => opsErrors.filter((e) => !dismissed.has(e.id)), [opsErrors, dismissed]);
 
@@ -313,8 +316,9 @@ export function AdminActivityFeed({
   const [rangeFilter, setRangeFilter] = useState<RangeFilter>('24h');
 
   // `Date.now()` can't be read during render (impure) — track it in state, refreshed periodically, so
-  // the range filter (30m/1h/…) has a "now" to compare against without one.
-  const [now, setNow] = useState(0);
+  // the range filter (30m/1h/…) has a "now" to compare against without one. `null` until the first
+  // tick means a non-"all" range filters out everything rather than (incorrectly) matching everything.
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     const tick = () => setNow(Date.now());
     const first = setTimeout(tick, 0);
@@ -333,6 +337,9 @@ export function AdminActivityFeed({
 
   function dismissOne(id: number) {
     setDismissed((prev) => new Set(prev).add(id));
+    // Refreshes the server-fetched `opsErrors` prop so a remount (e.g. switching tabs and back)
+    // doesn't resurrect an already-dismissed row from stale data.
+    router.refresh();
   }
 
   const EMPTY_MESSAGE: Record<Tier, string> = {
