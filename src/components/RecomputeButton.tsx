@@ -47,9 +47,6 @@ export function RecomputeButton() {
           <span className="font-mono text-[10px] text-[var(--color-accent-red-fg)]">{error}</span>
         )}
       </div>
-      <div className="font-mono text-[10px] text-[var(--color-text-secondary)]">
-        Ratings already recompute automatically on every score write — this forces a full walk now.
-      </div>
     </div>
   );
 }
