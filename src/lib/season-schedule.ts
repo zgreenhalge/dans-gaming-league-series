@@ -272,20 +272,29 @@ function attemptSchedule(teammateRounds: TeammateRound[], policy: DoubleheaderPo
   return weeks;
 }
 
+/** Teammate/opponent pair sets covered by a flat list of matches — shared by hasFullCoverage()
+ * here and validateDraftCompleteness() in season-schedule-validation.ts, since both need the same
+ * "what counts as a teammate pair vs. an opponent pair" rule applied to a differently-shaped but
+ * structurally identical match list. */
+export function collectCoveragePairs(
+  matches: { shirts: [number, number]; skins: [number, number] }[],
+): { teammatePairs: Set<string>; opponentPairs: Set<string> } {
+  const teammatePairs = new Set<string>();
+  const opponentPairs = new Set<string>();
+  for (const m of matches) {
+    teammatePairs.add(pairKey(m.shirts[0], m.shirts[1]));
+    teammatePairs.add(pairKey(m.skins[0], m.skins[1]));
+    for (const p of m.shirts) for (const q of m.skins) opponentPairs.add(pairKey(p, q));
+  }
+  return { teammatePairs, opponentPairs };
+}
+
 /** Every pair must appear as teammates at least once *and* as opponents at least once — the two
  * hard requirements a generated schedule has to satisfy before it's usable. Teammate coverage is
  * already guaranteed by construction (Layer 1's proof), but checked here too since it's cheap and
  * this is the single place that decides whether an attempt is acceptable. */
 function hasFullCoverage(weeks: WeekPlan[], seedCount: number): boolean {
-  const teammatePairs = new Set<string>();
-  const opponentPairs = new Set<string>();
-  for (const w of weeks) {
-    for (const m of w.matches) {
-      teammatePairs.add(pairKey(m.shirts[0], m.shirts[1]));
-      teammatePairs.add(pairKey(m.skins[0], m.skins[1]));
-      for (const p of m.shirts) for (const q of m.skins) opponentPairs.add(pairKey(p, q));
-    }
-  }
+  const { teammatePairs, opponentPairs } = collectCoveragePairs(weeks.flatMap((w) => w.matches));
   const expected = (seedCount * (seedCount - 1)) / 2;
   return teammatePairs.size === expected && opponentPairs.size === expected;
 }

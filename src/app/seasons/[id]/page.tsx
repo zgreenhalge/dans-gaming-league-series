@@ -215,7 +215,7 @@ export default async function SeasonPage({
 
   const isUpcoming = season.status === 'UPCOMING';
 
-  const [leaderboard, schedule, gauntletRounds, gauntletBracketShape, gauntletLeaderboard, h2hData, gauntletH2hData, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics, roster, playersById] = await Promise.all([
+  const [leaderboard, schedule, gauntletRounds, gauntletBracketShape, gauntletLeaderboard, h2hData, gauntletH2hData, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics, playersById] = await Promise.all([
     getSeasonLeaderboard(seasonId),
     getSeasonSchedule(seasonId),
     linkedGauntlet ? getGauntletRounds(linkedGauntlet.id) : Promise.resolve(null),
@@ -229,9 +229,11 @@ export default async function SeasonPage({
     linkedGauntlet ? getSeasonEhogRatings(linkedGauntlet.id) : Promise.resolve(null),
     getAllSabremetrics(seasonId),
     linkedGauntlet ? getAllSabremetrics(linkedGauntlet.id) : Promise.resolve([]),
-    isUpcoming ? getSeasonRoster(seasonId) : Promise.resolve([]),
     isUpcoming ? getPlayersById() : Promise.resolve(null),
   ]);
+  // getSeasonRoster() needs playersById too — pass the copy just fetched above instead of letting
+  // it do its own redundant full players-table read.
+  const roster = isUpcoming && playersById ? await getSeasonRoster(seasonId, playersById) : [];
   const matchCount = countMatches(schedule);
   const finalWeek = schedule.length > 0 ? schedule[schedule.length - 1].week_number : null;
   const seasonJsonLd = buildSeasonJsonLd({

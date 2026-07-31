@@ -10,7 +10,7 @@
  * just needs to map players down to their `id`s first.
  */
 
-import { pairKey } from './season-schedule';
+import { pairKey, collectCoveragePairs } from './season-schedule';
 
 export interface DraftScheduleMatch {
   match_number: number;
@@ -72,12 +72,13 @@ export function validateDraftIntegrity(weeks: DraftScheduleWeek[]): IntegrityRes
           message: `Week ${week.week_number}: player ${playerId} appears in ${count} matches (2 max, for a doubleheader)`,
         });
       }
-      if (playerId === week.bye_player_id) {
-        issues.push({
-          week_number: week.week_number,
-          message: `Week ${week.week_number}: player ${playerId} is marked as the bye but also appears in a match`,
-        });
-      }
+    }
+
+    if (week.bye_player_id != null && appearances.has(week.bye_player_id)) {
+      issues.push({
+        week_number: week.week_number,
+        message: `Week ${week.week_number}: player ${week.bye_player_id} is marked as the bye but also appears in a match`,
+      });
     }
   }
 
@@ -95,16 +96,7 @@ export interface CompletenessResult {
  * draft, re-checked here because a hand-edit can break either one. Reports every pair still
  * missing each way (not just a yes/no), so the editor can show specifically what's left. */
 export function validateDraftCompleteness(weeks: DraftScheduleWeek[], rosterPlayerIds: number[]): CompletenessResult {
-  const teammatePairs = new Set<string>();
-  const opponentPairs = new Set<string>();
-
-  for (const week of weeks) {
-    for (const m of week.matches) {
-      teammatePairs.add(pairKey(m.shirts[0], m.shirts[1]));
-      teammatePairs.add(pairKey(m.skins[0], m.skins[1]));
-      for (const p of m.shirts) for (const q of m.skins) opponentPairs.add(pairKey(p, q));
-    }
-  }
+  const { teammatePairs, opponentPairs } = collectCoveragePairs(weeks.flatMap((w) => w.matches));
 
   const missingTeammatePairs: [number, number][] = [];
   const missingOpponentPairs: [number, number][] = [];

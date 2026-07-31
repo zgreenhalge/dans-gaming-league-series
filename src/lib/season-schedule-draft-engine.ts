@@ -164,9 +164,6 @@ export async function confirmSeasonScheduleDraft(supabaseAdmin: SupabaseClient, 
     };
   }
 
-  let weeksCreated = 0;
-  let matchesCreated = 0;
-
   for (const week of draftWeeks) {
     const { data: weekRow, error: weekErr } = await supabaseAdmin
       .from('weeks')
@@ -175,7 +172,6 @@ export async function confirmSeasonScheduleDraft(supabaseAdmin: SupabaseClient, 
       .single();
     if (weekErr) throw weekErr;
     const weekId = (weekRow as { id: number }).id;
-    weeksCreated++;
 
     for (const m of week.matches) {
       const { data: matchRow, error: matchErr } = await supabaseAdmin
@@ -197,7 +193,6 @@ export async function confirmSeasonScheduleDraft(supabaseAdmin: SupabaseClient, 
         .single();
       if (matchErr) throw matchErr;
       const matchId = (matchRow as { id: number }).id;
-      matchesCreated++;
 
       const statRows = [
         { match_id: matchId, player_id: m.shirts[0], faction: 'SHIRTS', ...ZERO_MATCH_STATS },
@@ -210,5 +205,11 @@ export async function confirmSeasonScheduleDraft(supabaseAdmin: SupabaseClient, 
     }
   }
 
-  return { status: 'confirmed', weeksCreated, matchesCreated };
+  // Every insert throws on error, so getting here means every week/match in the plan was created —
+  // no need to track counts through the loop.
+  return {
+    status: 'confirmed',
+    weeksCreated: draftWeeks.length,
+    matchesCreated: draftWeeks.reduce((n, w) => n + w.matches.length, 0),
+  };
 }

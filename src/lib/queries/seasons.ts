@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import type { Season } from '../types';
+import type { Player, Season } from '../types';
 import { extractSeasonNumber } from '../util';
 import { getPlayersById } from './player';
 
@@ -48,18 +48,20 @@ export async function getLinkedRegularSeason(gauntletName: string): Promise<Seas
 }
 
 /** A season's explicit roster (`season_players`) — the pre-match-history source of who's on a
- * season before any matches exist to derive it from. Sorted by player name. */
-export async function getSeasonRoster(seasonId: number): Promise<SeasonRosterEntry[]> {
-  const [{ data, error }, playersById] = await Promise.all([
+ * season before any matches exist to derive it from. Sorted by player name. Pass an
+ * already-fetched `playersById` (e.g. one a caller needs for its own purposes too, like a full
+ * player picker) to skip this function's own redundant full-table read. */
+export async function getSeasonRoster(seasonId: number, playersById?: Map<number, Player>): Promise<SeasonRosterEntry[]> {
+  const [{ data, error }, resolvedPlayersById] = await Promise.all([
     supabase.from('season_players').select('player_id, joined_at').eq('season_id', seasonId),
-    getPlayersById(),
+    playersById ?? getPlayersById(),
   ]);
   if (error) throw error;
 
   const rows = (data ?? []) as { player_id: number; joined_at: string }[];
   const entries: SeasonRosterEntry[] = [];
   for (const r of rows) {
-    const player = playersById.get(r.player_id);
+    const player = resolvedPlayersById.get(r.player_id);
     if (!player) continue;
     entries.push({
       player_id: r.player_id,
