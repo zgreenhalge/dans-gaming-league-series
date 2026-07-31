@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason, getSeasonRoster, getSeasonScheduleDraft } from '@/lib/queries';
-import { generateSeasonScheduleDraft, deleteSeasonScheduleDraft } from '@/lib/season-schedule-draft-engine';
+import { generateSeasonScheduleDraft, deleteSeasonScheduleDraft, saveSeasonScheduleDraft } from '@/lib/season-schedule-draft-engine';
 import { MIN_SEED_COUNT, MAX_SEED_COUNT, type DoubleheaderPolicy } from '@/lib/season-schedule';
+import type { DraftScheduleWeek } from '@/lib/season-schedule-validation';
 
 const supabaseAdmin = getAdminClient();
 
@@ -61,6 +62,81 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const draft = await getSeasonScheduleDraft(seasonId);
   return NextResponse.json({ draft }, { status: 201 });
+}
+
+/** Shallow structural check on a PATCH body's `weeks` — just enough to reject garbage with a clean
+ * 400 instead of a raw crash inside validation/save; doesn't check for missing/extra weeks or
+ * matches (saveSeasonScheduleDraft() itself throws on those, since they'd mean the editor sent a
+ * structure generation never created). */
+function isPlausibleDraftWeeks(value: unknown): value is DraftScheduleWeek[] {
+  if (!Array.isArray(value)) return false;
+  return value.every(
+    (w) =>
+      typeof w === 'object' &&
+      w !== null &&
+      typeof (w as DraftScheduleWeek).week_number === 'number' &&
+      ((w as DraftScheduleWeek).bye_player_id === null || typeof (w as DraftScheduleWeek).bye_player_id === 'number') &&
+      Array.isArray((w as DraftScheduleWeek).matches) &&
+      (w as DraftScheduleWeek).matches.every(
+        (m) =>
+          typeof m === 'object' &&
+          m !== null &&
+          typeof m.match_number === 'number' &&
+          Array.isArray(m.shirts) &&
+          m.shirts.length === 2 &&
+          m.shirts.every((id) => typeof id === 'number') &&
+          Array.isArray(m.skins) &&
+          m.skins.length === 2 &&
+          m.skins.every((id) => typeof id === 'number'),
+      ),
+  );
+}
+
+/**
+ * Saves a hand-edit to a season's matchup draft — reassigns players within the existing generated
+ * week/match structure via `saveSeasonScheduleDraft()`. Admin-only, only while the season is
+ * `UPCOMING`. Refuses with 400 (and the specific issues) if the edit fails
+ * `validateDraftIntegrity()` — nothing is written in that case, so a rejected save can just be
+ * retried after fixing the flagged slots.
+ */
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const access = await requireAdminAccess();
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
+
+  const { id } = await params;
+  const seasonId = Number(id);
+  if (!Number.isFinite(seasonId)) {
+    return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
+  }
+
+  const [season, body] = await Promise.all([getSeason(seasonId), req.json().catch(() => null)]);
+  if (!season || season.is_gauntlet) {
+    return NextResponse.json({ error: 'Regular season not found' }, { status: 404 });
+  }
+  if (season.status !== 'UPCOMING') {
+    return NextResponse.json({ error: 'Season must be UPCOMING to edit its matchup draft' }, { status: 400 });
+  }
+
+  const weeks = (body as { weeks?: unknown } | null)?.weeks;
+  if (!isPlausibleDraftWeeks(weeks)) {
+    return NextResponse.json({ error: 'weeks must be an array of draft weeks' }, { status: 400 });
+  }
+
+  let result;
+  try {
+    result = await saveSeasonScheduleDraft(supabaseAdmin, seasonId, weeks);
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
+
+  if (!result.ok) {
+    return NextResponse.json({ error: 'Draft has integrity issues', issues: result.issues }, { status: 400 });
+  }
+
+  const draft = await getSeasonScheduleDraft(seasonId);
+  return NextResponse.json({ draft });
 }
 
 /** Clears a season's matchup draft with no side effects — nothing is materialized by generation,

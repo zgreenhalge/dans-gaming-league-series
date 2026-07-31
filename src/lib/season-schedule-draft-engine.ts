@@ -91,6 +91,82 @@ export async function deleteSeasonScheduleDraft(supabaseAdmin: SupabaseClient, s
   if (delWeeksErr) throw delWeeksErr;
 }
 
+export type SaveDraftResult = { ok: true } | { ok: false; issues: ValidationIssue[] };
+
+/** Applies a hand-edit to an existing draft — reassigns which players occupy which slots via plain
+ * UPDATEs, keyed by `(week_number, match_number)`. Unlike `generateSeasonScheduleDraft()`, this
+ * never inserts or deletes rows: the editor only ever reassigns players within the week/match
+ * structure generation already created, so every `(week_number, match_number)` in `weeks` is
+ * expected to already have a matching draft row — regenerating (which does add/remove rows) is a
+ * separate operation. Refuses (without writing anything) if the proposed draft fails
+ * `validateDraftIntegrity()` — never trusting client-side validation alone. */
+export async function saveSeasonScheduleDraft(
+  supabaseAdmin: SupabaseClient,
+  seasonId: number,
+  weeks: DraftScheduleWeek[],
+): Promise<SaveDraftResult> {
+  const integrity = validateDraftIntegrity(weeks);
+  if (!integrity.ok) {
+    return { ok: false, issues: integrity.issues };
+  }
+
+  const { data: weekRows, error: weekErr } = await supabaseAdmin
+    .from('season_schedule_draft_weeks')
+    .select('id, week_number')
+    .eq('season_id', seasonId);
+  if (weekErr) throw weekErr;
+  const weekIdByNumber = new Map(
+    ((weekRows ?? []) as { id: number; week_number: number }[]).map((w) => [w.week_number, w.id]),
+  );
+
+  const { data: matchRows, error: matchErr } = await supabaseAdmin
+    .from('season_schedule_draft_matches')
+    .select('id, draft_week_id, match_number')
+    .in('draft_week_id', Array.from(weekIdByNumber.values()));
+  if (matchErr) throw matchErr;
+  const matchIdByKey = new Map(
+    ((matchRows ?? []) as { id: number; draft_week_id: number; match_number: number }[]).map((m) => [
+      `${m.draft_week_id}:${m.match_number}`,
+      m.id,
+    ]),
+  );
+
+  for (const week of weeks) {
+    const weekId = weekIdByNumber.get(week.week_number);
+    if (weekId == null) {
+      throw new Error(`saveSeasonScheduleDraft: no draft week ${week.week_number} exists for season ${seasonId}`);
+    }
+
+    const { error: weekUpdateErr } = await supabaseAdmin
+      .from('season_schedule_draft_weeks')
+      .update({ bye_player_id: week.bye_player_id })
+      .eq('id', weekId);
+    if (weekUpdateErr) throw weekUpdateErr;
+
+    for (const m of week.matches) {
+      const matchId = matchIdByKey.get(`${weekId}:${m.match_number}`);
+      if (matchId == null) {
+        throw new Error(
+          `saveSeasonScheduleDraft: no draft match ${m.match_number} in week ${week.week_number} exists for season ${seasonId}`,
+        );
+      }
+
+      const { error: matchUpdateErr } = await supabaseAdmin
+        .from('season_schedule_draft_matches')
+        .update({
+          shirts_player1_id: m.shirts[0],
+          shirts_player2_id: m.shirts[1],
+          skins_player1_id: m.skins[0],
+          skins_player2_id: m.skins[1],
+        })
+        .eq('id', matchId);
+      if (matchUpdateErr) throw matchUpdateErr;
+    }
+  }
+
+  return { ok: true };
+}
+
 export type ConfirmResult =
   | { status: 'already-materialized' }
   | { status: 'no-draft' }
