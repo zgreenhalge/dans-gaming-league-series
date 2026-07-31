@@ -258,12 +258,12 @@ const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
 ];
 
 const RANGE_FILTERS: { value: RangeFilter; label: string }[] = [
-  { value: 'all', label: 'All time' },
-  { value: '30m', label: '30m' },
-  { value: '1h', label: '1h' },
-  { value: '6h', label: '6h' },
-  { value: '12h', label: '12h' },
   { value: '24h', label: '24h' },
+  { value: '12h', label: '12h' },
+  { value: '6h', label: '6h' },
+  { value: '1h', label: '1h' },
+  { value: '30m', label: '30m' },
+  { value: 'all', label: 'All time' },
 ];
 
 export function AdminActivityFeed({
@@ -310,7 +310,7 @@ export function AdminActivityFeed({
     return 'completed';
   });
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  const [rangeFilter, setRangeFilter] = useState<RangeFilter>('all');
+  const [rangeFilter, setRangeFilter] = useState<RangeFilter>('24h');
 
   // `Date.now()` can't be read during render (impure) — track it in state, refreshed periodically, so
   // the range filter (30m/1h/…) has a "now" to compare against without one.
