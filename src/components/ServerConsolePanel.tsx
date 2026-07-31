@@ -746,26 +746,18 @@ export function ServerConsolePanel({
           <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">Loading…</div>
         ) : (
           <div className="flex flex-col gap-2">
-            <div className="font-mono text-[11px] text-[var(--color-text-secondary)] flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span
-                className={
-                  cleanup.enabled === false ? 'text-[var(--color-accent-amber-fg)]' : 'text-[var(--color-accent-green-fg)]'
-                }
-              >
-                {cleanup.enabled === null ? 'unknown' : cleanup.enabled ? 'scheduled' : 'paused'}
-              </span>
-              <span>last run: {lastRunSummary(cleanup.lastRun)}</span>
-              {cleanup.lastRun && (
+            {cleanup.lastRun && (
+              <div className="font-mono text-[11px]">
                 <a
                   href={cleanup.lastRun.htmlUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="text-[var(--color-accent-blue-fg)] hover:underline"
                 >
-                  view run
+                  view last run ↗
                 </a>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-2">
               <button
