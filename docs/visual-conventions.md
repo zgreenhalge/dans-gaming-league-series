@@ -142,6 +142,21 @@ conventions, distinct from the content-page patterns above:
   Don't just concatenate sections. If a fact one surface shows is now equally visible somewhere else
   on the same page (a job's error state, a shared resource's current occupant), cut it from the
   second location instead of rendering it twice — keep only what's genuinely unique to that spot.
+  The exception is a fact that's also the *reason* you're looking at this surface right now (an ops
+  error that explains why a season needs attention, shown again next to its fix) — that's not
+  redundant ink, it's the "why" sitting next to the "what to do about it."
+- **Group by what a section of controls does, not by which old page it used to live on.** When
+  folding several previously-separate surfaces together, the goal is gathering genuinely related
+  functionality, not preserving each surface's old boundaries under one roof — re-derive the grouping
+  from what the controls actually do (a status readout and everything that reacts to it; every
+  control that asserts or compares server-level config), even if that cuts across where things used
+  to be split.
+- **Collapse sections that are used less often than their neighbors** with the shared
+  **`CollapsiblePanel`** (`src/components/CollapsiblePanel.tsx`) rather than hand-rolled
+  `<details>`/`<summary>` markup — it gives the ▸/▾ rotation (the same glyph `MatchManager`'s row
+  toggle already uses, driven by Tailwind's `group-open:` on the native `open` state, no JS) and a
+  `preview` slot for a live status summary that stays visible while collapsed, so a problem inside
+  still reads at a glance without expanding.
 
 ## When extending this system
 

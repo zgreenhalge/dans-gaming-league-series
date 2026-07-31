@@ -21,6 +21,7 @@ import { useRouter } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase-browser';
 import { ServerSpinner } from '@/components/ServerSpinner';
 import { StatePill, CopyConnectButton } from '@/components/ServerStatusBits';
+import { CollapsiblePanel } from '@/components/CollapsiblePanel';
 import { fmtUtcShort } from '@/lib/util';
 import { toSentenceCase } from '@/lib/maps';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
@@ -711,14 +712,13 @@ export function ServerConsolePanel({
         </div>
 
         <div className="mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
-          <div className="flex items-center justify-between gap-4">
-            <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">Compare live config to golden</div>
+          <div className="flex items-center justify-end gap-4">
             <button
               onClick={runDiff}
               disabled={diffBusy}
               className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-border-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)] disabled:opacity-50"
             >
-              {diffBusy ? 'Comparing…' : 'Compare to golden'}
+              {diffBusy ? 'Comparing…' : 'Compare to live config'}
             </button>
           </div>
           {diffError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-2">{diffError}</div>}
@@ -726,12 +726,12 @@ export function ServerConsolePanel({
         </div>
       </div>
 
-      {/* Disk cleanup (#132) — collapsed by default; the summary still shows live schedule/last-run
+      {/* Disk cleanup (#132) — collapsed by default; the preview still shows live schedule/last-run
           status so a paused schedule reads as amber even without expanding. */}
-      <details className="border border-[var(--color-border-tertiary)] rounded px-4 py-3">
-        <summary className="cursor-pointer font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-3 flex-wrap">
-          <span>Disk cleanup</span>
-          {cleanup && (
+      <CollapsiblePanel
+        title="Disk cleanup"
+        preview={
+          cleanup && (
             <span
               className={`font-mono text-[10px] ${
                 cleanup.enabled === false ? 'text-[var(--color-accent-amber-fg)]' : 'text-[var(--color-accent-green-fg)]'
@@ -739,12 +739,13 @@ export function ServerConsolePanel({
             >
               {cleanup.enabled === null ? 'unknown' : cleanup.enabled ? 'scheduled' : 'paused'} · last run {lastRunSummary(cleanup.lastRun)}
             </span>
-          )}
-        </summary>
+          )
+        }
+      >
         {!cleanup ? (
-          <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-3">Loading…</div>
+          <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">Loading…</div>
         ) : (
-          <div className="flex flex-col gap-2 mt-3">
+          <div className="flex flex-col gap-2">
             <div className="font-mono text-[11px] text-[var(--color-text-secondary)] flex flex-wrap items-center gap-x-3 gap-y-1">
               <span
                 className={
@@ -812,7 +813,7 @@ export function ServerConsolePanel({
             {cleanupError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{cleanupError}</div>}
           </div>
         )}
-      </details>
+      </CollapsiblePanel>
     </div>
   );
 }
