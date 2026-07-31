@@ -10,7 +10,7 @@
 // Job row actions reuse the same per-pipeline islands the old JobsDashboard used
 // (`IngestJobActions`, `JobRetryButton`) — only the grouping/tiering here is new, not the mutations.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { fmtUtcShort, tabCls } from '@/lib/util';
 import TabBar from './TabBar';
@@ -28,18 +28,21 @@ import { OPERATION_LABELS, type OpsErrorItem } from './OpsErrorList';
 
 type Tier = 'errored' | 'progress' | 'completed';
 type TypeFilter = 'all' | BackgroundJobType;
+type RangeFilter = 'all' | '30m' | '1h' | '6h' | '12h' | '24h';
 
 interface JobEvent {
   kind: 'job';
   key: string;
   job: BackgroundJobRow;
   when: string | null;
+  ts: number | null;
 }
 interface OpsEvent {
   kind: 'ops';
   key: string;
   err: OpsErrorItem;
   when: string | null;
+  ts: number | null;
 }
 type Event = JobEvent | OpsEvent;
 
@@ -49,10 +52,52 @@ function jobTier(job: BackgroundJobRow): Tier {
   return 'completed';
 }
 
+function toTs(iso: string | null): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
 function matchesFilter(e: Event, filter: TypeFilter): boolean {
   if (filter === 'all') return true;
   if (e.kind === 'ops') return false;
   return e.job.jobType === filter;
+}
+
+const RANGE_MS: Record<Exclude<RangeFilter, 'all'>, number> = {
+  '30m': 30 * 60 * 1000,
+  '1h': 60 * 60 * 1000,
+  '6h': 6 * 60 * 60 * 1000,
+  '12h': 12 * 60 * 60 * 1000,
+  '24h': 24 * 60 * 60 * 1000,
+};
+
+function matchesRange(e: Event, range: RangeFilter, now: number): boolean {
+  if (range === 'all') return true;
+  if (e.ts === null) return true;
+  return now - e.ts <= RANGE_MS[range];
+}
+
+/** One filter chip, the same shape whether it's narrowing by job type or by time range. */
+function FilterChip<T extends string>({ value, label, active, onClick }: {
+  value: T;
+  label: string;
+  active: boolean;
+  onClick: (value: T) => void;
+}) {
+  return (
+    <button
+      onClick={() => onClick(value)}
+      aria-pressed={active}
+      className={`font-mono text-[11px] px-2.5 py-1 rounded border transition-colors ${
+        active
+          ? 'border-[var(--color-accent)] text-[var(--color-text-primary)] bg-[var(--color-accent-blue-bg)]'
+          : 'border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+      }`}
+    >
+      {label}
+    </button>
+  );
 }
 
 function StatusPill({ status }: { status: string }) {
@@ -212,6 +257,15 @@ const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
   ...BACKGROUND_JOB_TYPES.map((t) => ({ value: t, label: JOB_TYPE_LABEL[t] })),
 ];
 
+const RANGE_FILTERS: { value: RangeFilter; label: string }[] = [
+  { value: 'all', label: 'All time' },
+  { value: '30m', label: '30m' },
+  { value: '1h', label: '1h' },
+  { value: '6h', label: '6h' },
+  { value: '12h', label: '12h' },
+  { value: '24h', label: '24h' },
+];
+
 export function AdminActivityFeed({
   jobs,
   opsErrors,
@@ -230,12 +284,14 @@ export function AdminActivityFeed({
       key: `job:${job.jobType}:${job.subject.kind === 'match' ? job.subject.matchId : job.subject.mapId}`,
       job,
       when: fmtUtcShort(job.updatedAt),
+      ts: toTs(job.updatedAt),
     }));
     const opsEvents: OpsEvent[] = liveOpsErrors.map((err) => ({
       kind: 'ops',
       key: `ops:${err.id}`,
       err,
       when: fmtUtcShort(err.occurredAt),
+      ts: toTs(err.occurredAt),
     }));
 
     const errored: Event[] = [
@@ -254,9 +310,29 @@ export function AdminActivityFeed({
     return 'completed';
   });
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [rangeFilter, setRangeFilter] = useState<RangeFilter>('all');
 
-  const byTier: Record<Tier, Event[]> = { errored, progress, completed };
-  const visible = byTier[tab].filter((e) => matchesFilter(e, typeFilter));
+  // `Date.now()` can't be read during render (impure) — track it in state, refreshed periodically, so
+  // the range filter (30m/1h/…) has a "now" to compare against without one.
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    const first = setTimeout(tick, 0);
+    const interval = setInterval(tick, 60_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const byTier: Record<Tier, Event[]> = useMemo(
+    () => ({ errored, progress, completed }),
+    [errored, progress, completed],
+  );
+  const visible = useMemo(
+    () => byTier[tab].filter((e) => matchesFilter(e, typeFilter) && matchesRange(e, rangeFilter, now)),
+    [byTier, tab, typeFilter, rangeFilter, now],
+  );
 
   function dismissOne(id: number) {
     setDismissed((prev) => new Set(prev).add(id));
@@ -284,20 +360,14 @@ export function AdminActivityFeed({
         </button>
       </TabBar>
 
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
         {TYPE_FILTERS.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => setTypeFilter(f.value)}
-            aria-pressed={typeFilter === f.value}
-            className={`font-mono text-[11px] px-2.5 py-1 rounded border transition-colors ${
-              typeFilter === f.value
-                ? 'border-[var(--color-accent)] text-[var(--color-text-primary)] bg-[var(--color-accent-blue-bg)]'
-                : 'border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-            }`}
-          >
-            {f.label}
-          </button>
+          <FilterChip key={f.value} value={f.value} label={f.label} active={typeFilter === f.value} onClick={setTypeFilter} />
+        ))}
+      </div>
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        {RANGE_FILTERS.map((f) => (
+          <FilterChip key={f.value} value={f.value} label={f.label} active={rangeFilter === f.value} onClick={setRangeFilter} />
         ))}
       </div>
 
