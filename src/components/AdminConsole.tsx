@@ -53,7 +53,7 @@ export function AdminConsole({
   };
 }) {
   const searchParams = useSearchParams();
-  const [sectionState, setSection] = useState<Section>(
+  const [section, setSection] = useState<Section>(
     searchParams.get('section') === 'manage' ? 'manage' : 'activity',
   );
   const [manageType, setManageType] = useState<ManageType>(() => {
@@ -75,8 +75,6 @@ export function AdminConsole({
   // Re-mounting on every jump (via this key) is what makes a fresh `initialQuery` actually take
   // effect — MatchManager/PlayerManager's search state only reads its initial prop at mount.
   const jumpNonce = jump?.nonce ?? 0;
-
-  const section = sectionState;
 
   return (
     <div className="flex flex-col gap-6">
