@@ -71,6 +71,15 @@ export interface Player {
   name_changed_at: string | null;
 }
 
+/** One row per player on a season's roster — explicit since a season with no matches yet has no
+ * roster derivable from `player_match_stats`. Unique per `(season_id, player_id)`. */
+export interface SeasonPlayer {
+  id: number;
+  season_id: number;
+  player_id: number;
+  joined_at: string;
+}
+
 export interface PlayerMatchStat {
   id: number;
   match_id: number;

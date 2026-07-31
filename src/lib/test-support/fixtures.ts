@@ -326,6 +326,16 @@ const PAGINATION_FILLER_MATCHES: Row[] = Array.from({ length: 1250 }, (_, i) => 
   replay_status: 'none',
 }));
 
+// ─── Season roster ─────────────────────────────────────────────────────────
+// Season 6 (id 3, ACTIVE) has an explicit roster; Season 5 (id 1) has none, exercising the
+// empty-roster path.
+
+export const SEASON_PLAYERS: Row[] = [
+  { id: 1, season_id: 3, player_id: 1, joined_at: '2026-03-15T00:00:00.000Z' },
+  { id: 2, season_id: 3, player_id: 3, joined_at: '2026-03-16T00:00:00.000Z' },
+  { id: 3, season_id: 3, player_id: 2, joined_at: '2026-03-14T00:00:00.000Z' },
+];
+
 // ─── Assembly ────────────────────────────────────────────────────────────
 
 export function buildFakeDb(): FakeDb {
@@ -347,5 +357,6 @@ export function buildFakeDb(): FakeDb {
     player_current_ratings: PLAYER_CURRENT_RATINGS,
     player_rating_history: PLAYER_RATING_HISTORY,
     player_name_history: PLAYER_NAME_HISTORY,
+    season_players: SEASON_PLAYERS,
   };
 }
