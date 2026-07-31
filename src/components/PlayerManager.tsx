@@ -16,8 +16,16 @@ function searchText(p: Player): string {
 
 const th = 'px-3 py-2 text-left font-mono text-[10px] uppercase tracking-wide text-[var(--color-text-secondary)]';
 
-export function PlayerManager({ players, selfId }: { players: Player[]; selfId: number | null }) {
-  const [query, setQuery] = useState('');
+export function PlayerManager({
+  players,
+  selfId,
+  initialQuery = '',
+}: {
+  players: Player[];
+  selfId: number | null;
+  initialQuery?: string;
+}) {
+  const [query, setQuery] = useState(initialQuery);
 
   const indexed = useMemo(() => players.map((p) => ({ p, text: searchText(p) })), [players]);
 
@@ -29,12 +37,7 @@ export function PlayerManager({ players, selfId }: { players: Player[]; selfId: 
 
   return (
     <>
-      <section className="mb-8 border border-[var(--color-border-tertiary)] rounded px-4 py-4">
-        <div className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-text-secondary)] mb-2">
-          EHOG ratings
-        </div>
-        <RecomputeButton />
-      </section>
+      <RecomputeButton />
 
       <input
         type="search"

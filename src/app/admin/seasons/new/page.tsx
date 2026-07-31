@@ -11,6 +11,11 @@ export const metadata = {
   description: 'Create a new DGLS season.',
 };
 
+/**
+ * Its own page rather than an inline panel in the admin console's Manage -> Season view (issue
+ * #262) — season creation is a deliberate, occasional, multi-field flow (map pool + new-map entry),
+ * not a quick action that belongs collapsed alongside a season list.
+ */
 export default async function NewSeasonPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.playerId) redirect('/');
@@ -26,7 +31,6 @@ export default async function NewSeasonPage() {
   }
   const nextName = `Season ${maxNum + 1} Regular Season`;
 
-  // Collect all known map names: maps table + prior season map pools
   const knownMaps = new Set<string>(Object.keys(mapLookup));
   for (const s of seasons) {
     for (const m of s.map_pool ?? []) {

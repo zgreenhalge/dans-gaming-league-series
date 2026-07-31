@@ -46,7 +46,7 @@ matches still self-derive a score and stats with no manual entry.
 
 Demos are kept in R2 indefinitely (`demoKey(matchId)` is never deleted), so a match can be reparsed at
 any time — most commonly to backfill fields from a sabremetric collector added after the match was
-first confirmed. The admin match console (`/admin/matches`) offers a per-match **reparse demo** button
+first confirmed. The admin console's Manage → Match view offers a per-match **reparse demo** button
 and a bulk **reparse all matches with demos** action; both re-dispatch `demo-ingest.yml`
 (`POST /api/matches/[id]/demo/dispatch`) exactly as a first-time parse does.
 
@@ -141,7 +141,7 @@ per-round lookup the split logic deliberately avoids.
 
 Precedence: **a stored side always wins** (it was entered deliberately); the demo only fills a missing
 value. When a stored side and the demo disagree, the parser keeps the stored side and emits a warning,
-which surfaces on the admin jobs dashboard (`/admin/jobs`) as a data-quality flag.
+which surfaces on the admin console's Activity feed as a data-quality flag.
 
 ## Environment
 

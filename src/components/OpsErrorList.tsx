@@ -13,7 +13,7 @@ export interface OpsErrorItem {
   occurredAt: string;
 }
 
-const OPERATION_LABELS: Record<string, string> = {
+export const OPERATION_LABELS: Record<string, string> = {
   gauntlet_build: 'Gauntlet Build',
   gauntlet_seed: 'Gauntlet Seed',
   gauntlet_archive: 'Gauntlet Archive',
@@ -24,6 +24,17 @@ const OPERATION_LABELS: Record<string, string> = {
   ehog_recompute: 'EHOG Recompute',
 };
 
+/** Dismiss one live `ops_errors` row. Shared by every surface that renders one (this list, and the
+ * Activity feed's merged Errored tier) so the request/response handling can't drift between them. */
+export async function dismissOpsError(id: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  const res = await fetch(`/api/ops-errors/${id}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { ok: false, error: body.error ?? 'Failed to dismiss.' };
+  }
+  return { ok: true };
+}
+
 function OpsErrorRow({ item }: { item: OpsErrorItem }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -33,10 +44,9 @@ function OpsErrorRow({ item }: { item: OpsErrorItem }) {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/ops-errors/${item.id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error ?? 'Failed to dismiss.');
+      const result = await dismissOpsError(item.id);
+      if (!result.ok) {
+        setError(result.error);
         return;
       }
       router.refresh();

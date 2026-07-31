@@ -45,8 +45,8 @@ function searchText(m: AdminMatchRow): string {
   return parts.filter(Boolean).join(' ').toLowerCase();
 }
 
-export function MatchManager({ matches }: { matches: AdminMatchRow[] }) {
-  const [query, setQuery] = useState('');
+export function MatchManager({ matches, initialQuery = '' }: { matches: AdminMatchRow[]; initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery);
   const [openId, setOpenId] = useState<number | null>(null);
   const [demoMatchIds, setDemoMatchIds] = useState<Set<number> | null>(null);
 
@@ -72,11 +72,13 @@ export function MatchManager({ matches }: { matches: AdminMatchRow[] }) {
   // Precompute each match's searchable text once, not on every keystroke.
   const indexed = useMemo(() => matches.map((m) => ({ m, text: searchText(m) })), [matches]);
 
+  // Every match ever played is too long a list to be meaningful unfiltered — show nothing until a
+  // search actually narrows it, rather than the full history by default.
   const filtered = useMemo(() => {
     const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if (tokens.length === 0) return matches;
+    if (tokens.length === 0) return [];
     return indexed.filter(({ text }) => tokens.every((t) => text.includes(t))).map(({ m }) => m);
-  }, [indexed, matches, query]);
+  }, [indexed, query]);
 
   return (
     <>
@@ -92,7 +94,7 @@ export function MatchManager({ matches }: { matches: AdminMatchRow[] }) {
 
       {filtered.length === 0 ? (
         <div className="font-mono text-[13px] text-[var(--color-text-secondary)] border border-[var(--color-border-tertiary)] rounded px-4 py-8 text-center">
-          No matches found.
+          {query.trim() ? 'No matches found.' : 'Search by season / week / match / map to find a match to manage.'}
         </div>
       ) : (
         <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden">

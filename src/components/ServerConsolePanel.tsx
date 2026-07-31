@@ -21,6 +21,7 @@ import { useRouter } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase-browser';
 import { ServerSpinner } from '@/components/ServerSpinner';
 import { StatePill, CopyConnectButton } from '@/components/ServerStatusBits';
+import { CollapsiblePanel } from '@/components/CollapsiblePanel';
 import { fmtUtcShort } from '@/lib/util';
 import { toSentenceCase } from '@/lib/maps';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
@@ -518,59 +519,8 @@ export function ServerConsolePanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Match occupancy */}
-      <div>
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">Match occupancy</div>
-        {!active ? (
-          <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-6 font-mono text-[13px] text-[var(--color-text-secondary)]">
-            Shared server is <span className="text-[var(--color-accent-green-fg)]">idle</span> — no match is holding it.
-          </div>
-        ) : (
-          <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                  Shared server ·{' '}
-                  <span className="text-[var(--color-accent-amber-fg)]">{active.serverState}</span>
-                </div>
-                <Link href={`/matches/${active.matchId}`} className="font-display text-[16px] font-semibold hover:underline">
-                  {active.label}
-                </Link>
-                <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1 flex flex-wrap gap-x-3">
-                  {active.connectString && <span>connect {active.connectString}</span>}
-                  {active.serverStartedAt && <span>since {fmtUtcShort(active.serverStartedAt)}</span>}
-                </div>
-              </div>
-              <div className="shrink-0 flex flex-col items-end gap-2">
-                <button
-                  onClick={applyMatchConfig}
-                  disabled={matchCfgBusy}
-                  title="Re-push this match's config (forced side + demo upload) via RCON loadmatch"
-                  className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
-                >
-                  {matchCfgBusy ? 'Applying…' : 'Apply match settings'}
-                </button>
-                <button
-                  onClick={teardown}
-                  disabled={teardownBusy}
-                  className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)] hover:bg-[var(--color-accent-red-bg)] disabled:opacity-50"
-                >
-                  {teardownBusy ? 'Stopping…' : 'Tear down'}
-                </button>
-              </div>
-            </div>
-            {matchCfgError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-2">{matchCfgError}</div>}
-            {matchCfgSuccess && !matchCfgError && (
-              <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)] mt-2">
-                Match config re-pushed — the server is in warmup / knife-select.
-              </div>
-            )}
-            {teardownError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-2">{teardownError}</div>}
-          </div>
-        )}
-      </div>
-
-      {/* Server state + apply config */}
+      {/* Status & direct controls — occupancy, raw DatHost state, and every action that responds to
+          either. One group: "what's happening right now, and what can I do about it." */}
       <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
         {pending && (
           <div className="border border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)] rounded px-3 py-2 mb-3">
@@ -592,12 +542,30 @@ export function ServerConsolePanel({
           </div>
         )}
 
-        <div className="flex items-start justify-between gap-4 mb-3">
+        <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-1 flex items-center gap-2">
               <StatePill configured={configured} server={server} />
               DatHost server
             </div>
+
+            {active ? (
+              <>
+                <Link href={`/matches/${active.matchId}`} className="font-display text-[16px] font-semibold hover:underline">
+                  {active.label}
+                </Link>
+                <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1 flex flex-wrap gap-x-3">
+                  <span className="text-[var(--color-accent-amber-fg)]">{active.serverState}</span>
+                  {active.connectString && <span>connect {active.connectString}</span>}
+                  {active.serverStartedAt && <span>since {fmtUtcShort(active.serverStartedAt)}</span>}
+                </div>
+              </>
+            ) : (
+              <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1">
+                <span className="text-[var(--color-accent-green-fg)]">idle</span> — no match is holding it.
+              </div>
+            )}
+
             {server && (
               <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-2 flex flex-col gap-y-1">
                 {status?.connect && (
@@ -615,9 +583,10 @@ export function ServerConsolePanel({
               </div>
             )}
           </div>
+
           {/* Button slot: an in-flight action shows a spinner in place of the button until the
               opposite control is available, so the pill + details above stay put. */}
-          <div className="shrink-0 flex gap-2">
+          <div className="shrink-0 flex flex-col items-end gap-2">
             {starting ? (
               <div className="w-40">
                 <ServerSpinner label="Starting server…" />
@@ -627,7 +596,7 @@ export function ServerConsolePanel({
                 <ServerSpinner label="Stopping server…" tone="stop" />
               </div>
             ) : (
-              <>
+              <div className="flex gap-2">
                 {canStart && (
                   <button
                     onClick={() => startServer()}
@@ -646,16 +615,49 @@ export function ServerConsolePanel({
                     {startStopBusy ? '…' : 'Stop'}
                   </button>
                 )}
+              </div>
+            )}
+            {active && (
+              <>
+                <button
+                  onClick={applyMatchConfig}
+                  disabled={matchCfgBusy}
+                  title="Re-push this match's config (forced side + demo upload) via RCON loadmatch"
+                  className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
+                >
+                  {matchCfgBusy ? 'Applying…' : 'Apply match settings'}
+                </button>
+                <button
+                  onClick={teardown}
+                  disabled={teardownBusy}
+                  className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)] hover:bg-[var(--color-accent-red-bg)] disabled:opacity-50"
+                >
+                  {teardownBusy ? 'Stopping…' : 'Tear down'}
+                </button>
               </>
             )}
           </div>
         </div>
+
         {(statusError || startStopError || status?.error) && (
-          <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mb-3">
+          <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-3">
             {statusError ?? startStopError ?? status?.error}
           </div>
         )}
+        {matchCfgError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-3">{matchCfgError}</div>}
+        {matchCfgSuccess && !matchCfgError && (
+          <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)] mt-3">
+            Match config re-pushed — the server is in warmup / knife-select.
+          </div>
+        )}
+        {teardownError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-3">{teardownError}</div>}
+      </div>
 
+      {/* Server config — apply a config set + map, and compare the live server to the versioned
+          golden config. Both are the same "server-level configuration" concern, grouped together
+          rather than split across two boxes. */}
+      <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
+        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">Server config</div>
         <div className="flex flex-col gap-2">
           <select
             value={configSet}
@@ -708,51 +710,54 @@ export function ServerConsolePanel({
             <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
           )}
         </div>
-      </div>
 
-      {/* Config vs golden — read-only drift check against the versioned infra/matchzy/ config. */}
-      <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">Config vs golden</div>
-          <button
-            onClick={runDiff}
-            disabled={diffBusy}
-            className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-border-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)] disabled:opacity-50"
-          >
-            {diffBusy ? 'Comparing…' : 'Compare to golden'}
-          </button>
+        <div className="mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
+          <div className="flex items-center justify-end gap-4">
+            <button
+              onClick={runDiff}
+              disabled={diffBusy}
+              className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-border-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)] disabled:opacity-50"
+            >
+              {diffBusy ? 'Comparing…' : 'Compare to live config'}
+            </button>
+          </div>
+          {diffError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-2">{diffError}</div>}
+          {diff && !diffError && <ConfigDiffView diff={diff} />}
         </div>
-        {diffError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-2">{diffError}</div>}
-        {diff && !diffError && <ConfigDiffView diff={diff} />}
       </div>
 
-      {/* Disk cleanup (#132) */}
-      <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">Disk cleanup</div>
+      {/* Disk cleanup (#132) — collapsed by default; the preview still shows live schedule/last-run
+          status so a paused schedule reads as amber even without expanding. */}
+      <CollapsiblePanel
+        title="Disk cleanup"
+        preview={
+          cleanup && (
+            <span
+              className={`font-mono text-[10px] ${
+                cleanup.enabled === false ? 'text-[var(--color-accent-amber-fg)]' : 'text-[var(--color-accent-green-fg)]'
+              }`}
+            >
+              {cleanup.enabled === null ? 'unknown' : cleanup.enabled ? 'scheduled' : 'paused'} · last run {lastRunSummary(cleanup.lastRun)}
+            </span>
+          )
+        }
+      >
         {!cleanup ? (
           <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">Loading…</div>
         ) : (
           <div className="flex flex-col gap-2">
-            <div className="font-mono text-[11px] text-[var(--color-text-secondary)] flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span
-                className={
-                  cleanup.enabled === false ? 'text-[var(--color-accent-amber-fg)]' : 'text-[var(--color-accent-green-fg)]'
-                }
-              >
-                {cleanup.enabled === null ? 'unknown' : cleanup.enabled ? 'scheduled' : 'paused'}
-              </span>
-              <span>last run: {lastRunSummary(cleanup.lastRun)}</span>
-              {cleanup.lastRun && (
+            {cleanup.lastRun && (
+              <div className="font-mono text-[11px]">
                 <a
                   href={cleanup.lastRun.htmlUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="text-[var(--color-accent-blue-fg)] hover:underline"
                 >
-                  view run
+                  view last run ↗
                 </a>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -800,7 +805,7 @@ export function ServerConsolePanel({
             {cleanupError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{cleanupError}</div>}
           </div>
         )}
-      </div>
+      </CollapsiblePanel>
     </div>
   );
 }

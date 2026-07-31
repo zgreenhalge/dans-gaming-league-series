@@ -29,8 +29,8 @@ so you don't have to reverse-engineer them from scratch each time.
   Not to be confused with the aspirational *Player Rating* sabremetric composite in
   [`calculations.md`](./calculations.md#player-rating-aspirational--requires-demo-data).
 - **Seed EHOG** — an admin-configured starting EHOG rating (`players.seed_ehog`) for a known new
-  player, used in place of the global new-player default until their first rated match. Set on
-  `/admin/players`; see [`ehog.md`](./ehog.md#seeding-a-known-players-starting-rating).
+  player, used in place of the global new-player default until their first rated match. Set from the
+  admin console's Manage → Player view; see [`ehog.md`](./ehog.md#seeding-a-known-players-starting-rating).
 - **EHOG win probability** — the pre-match probability one team beats another, derived purely from
   the teams' current OpenSkill state via the library's own `predict_win`/`predictWin` — no trained
   model, outcome-only like the rest of EHOG. See [`ehog.md`](./ehog.md#pre-match-win-probability).

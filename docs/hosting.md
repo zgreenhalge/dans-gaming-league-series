@@ -112,7 +112,7 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
                                                                               │
                                           in-match MatchDemoReviewBlock  ──admin Confirm──▶ PATCH /score  (confirmed)
                                                                               │  or Dismiss (dismissed)
-   admin /admin/jobs              ── dashboard of every background job + warnings/quarantine flags ─┘
+   admin console (/admin, Activity)── every background job + warnings/quarantine flags, live ─────────┘
 ```
 
 - `/api/ingest/matchzy-log` (machine-auth `x-matchzy-token`) is the `matchzy_remote_log_url` target.
@@ -261,34 +261,45 @@ purely advisory, since a scrim never blocks a match from actually starting.
 
 ## Admin surfaces
 
-- **`/admin`** — hub, linked from the Topbar (visible only when `session.user.isAdmin`). Add a tool
-  via the `TOOLS` array.
-- **`/admin/jobs`** — dashboard over **all** `background_jobs` pipelines (`demo_ingest`,
-  `replay_extract`, `radar_build`; #145), newest first, each row badged by type with a color-coded
-  status pill, stage/error, the Action log link, and — for staged demo jobs — parse warnings +
-  quarantine flags (read from R2). This is the notification channel: the surface for anything that
-  would otherwise fail silently (Discord is deprioritized). Demo rows carry inline actions —
-  **Confirm** (a cleanly parsed, score-derived result only), **Re-parse**, **Dismiss** — driven by
-  the shared `useDemoIngestActions` hook (the same one the in-match `MatchDemoReviewBlock` uses, so
-  they can't drift); replay/radar rows carry a **Retry** that re-dispatches their Action
-  (`JobRetryButton`). Data comes from `getBackgroundJobs()`; the list stays live via Realtime on
-  `background_jobs`.
-- **`/admin/servers`** — server console: the single shared server's current occupant (reconciled via
-  `getActiveServerMatch`), connect string, and — on the occupying match — two controls: **Apply match
-  settings** (re-push that match's MatchZy config via `matchzy_loadmatch_url`, restoring forced
-  `map_sides` + demo-upload cvars after an "Apply config set" or panel edit clobbered them; sends the
-  server back to warmup/knife-select) and **Teardown** (stop a server left live — the autostop-failed
-  safety valve). The **Config vs golden** block runs `diffGoldenConfig` read-only (settings + every
-  cfg file, cvar-by-cvar), the same comparison the `dathost-golden-diff` CLI renders. **Apply config
-  set** pushes the full `server` + `cs2_settings` baseline (`applyConfigSet`, map picker + config-set
-  dropdown) — the same fields `dathost-golden-apply.ts --reassert` pushes, and the same call
-  per-match provisioning makes (`applyGoldenSettings`), so a manual apply here and an automatic one at
-  the next match provision can never disagree on which fields get re-asserted. It does *not* load a
-  match config, so run **Apply match settings** after it if a match is mid-setup. Live via
-  Realtime on `match_server_state`. Also hosts the **disk cleanup** controls (issue #132, see
-  `infra/matchzy/README.md`) — enable/disable the `dathost-cleanup` workflow, set its interval, and a
-  **Run now** button, all through `src/lib/gh-dispatch.ts`'s GitHub Actions helpers rather than
-  `background_jobs` (there's no per-match/per-map target for this job).
+**`/admin`** is the unified admin console (issue #262), linked from the Topbar (visible only when
+`session.user.isAdmin`). Three zones on one page — a standalone Server panel (always visible,
+regardless of which tab below it is open — the shared server isn't scoped to any one tab), an Activity
+feed, and Manage:
+
+- **Activity feed** (`AdminActivityFeed.tsx`) — every `background_jobs` row across all three pipelines
+  (`demo_ingest`, `replay_extract`, `radar_build`; #145) merged with live `ops_errors`, tiered Errored /
+  In Progress / Completed (defaulting to the first non-empty tier in that priority order). This is the
+  notification channel: the surface for anything that would otherwise fail silently (Discord is
+  deprioritized). Each row is badged by type with a color-coded status pill, stage/error, the Action
+  log link, and — for staged demo jobs — parse warnings + quarantine flags (read from R2). Demo rows
+  carry inline actions — **Confirm** (a cleanly parsed, score-derived result only), **Re-parse**,
+  **Dismiss** — driven by the shared `useDemoIngestActions` hook (the same one the in-match
+  `MatchDemoReviewBlock` uses, so they can't drift); replay/radar rows carry a **Retry** that
+  re-dispatches their Action (`JobRetryButton`). Data comes from `getBackgroundJobs()`/`getOpsErrors()`;
+  the list stays live via Realtime on `background_jobs`. The Completed tier clusters consecutive
+  same-type/same-status runs (a bulk reparse reads as one line, not forty); Errored never clusters.
+- **Server panel** (`ServerConsolePanel.tsx`, unchanged from before the console unification) — the
+  single shared server's current occupant (reconciled via `getActiveServerMatch`), connect string, and
+  — on the occupying match — two controls: **Apply match settings** (re-push that match's MatchZy
+  config via `matchzy_loadmatch_url`, restoring forced `map_sides` + demo-upload cvars after an "Apply
+  config set" or panel edit clobbered them; sends the server back to warmup/knife-select) and
+  **Teardown** (stop a server left live — the autostop-failed safety valve). The **Config vs golden**
+  block runs `diffGoldenConfig` read-only (settings + every cfg file, cvar-by-cvar), the same
+  comparison the `dathost-golden-diff` CLI renders. **Apply config set** pushes the full `server` +
+  `cs2_settings` baseline (`applyConfigSet`, map picker + config-set dropdown) — the same fields
+  `dathost-golden-apply.ts --reassert` pushes, and the same call per-match provisioning makes
+  (`applyGoldenSettings`), so a manual apply here and an automatic one at the next match provision can
+  never disagree on which fields get re-asserted. It does *not* load a match config, so run **Apply
+  match settings** after it if a match is mid-setup. Live via Realtime on `match_server_state`. Also
+  hosts the **disk cleanup** controls (issue #132, see `infra/matchzy/README.md`) — enable/disable the
+  `dathost-cleanup` workflow, set its interval, and a **Run now** button, all through
+  `src/lib/gh-dispatch.ts`'s GitHub Actions helpers rather than `background_jobs` (there's no
+  per-match/per-map target for this job).
+- **Manage** — Match/Player/Season, reusing `MatchManager`/`PlayerManager`/`SeasonManager` behind a
+  Match/Player/Season switch; unrelated to the job/hosting pipelines documented here.
+
+An Activity-tab ops error for a `match`/`player`/`season` entity links straight into the matching
+Manage tab, prefiltered to that subject — see `AdminConsole.tsx`.
 
 `is_admin` is threaded into the session JWT (`authOptions.js`) and typed on `session.user.isAdmin`;
 existing sessions are backfilled on their next request (no re-login needed). Every admin page still
@@ -365,8 +376,8 @@ scrim/status`, consumed by both `ScrimPanel` and `ScrimNavStatus`) · `src/compo
 `src/components/ScrimNavStatus.tsx` · `src/app/scrim/page.tsx` ·
 `src/lib/scrim-session.ts` (the singleton `scrim_sessions` claim/release/reconcile) ·
 `scripts/scrim-warnings.ts` + `.github/workflows/scrim-warnings.yml` (pre-match warning cron) ·
-`src/components/SchedulingOverlapBanner.tsx` · `src/app/admin/jobs/page.tsx` ·
-`src/app/admin/servers/page.tsx` · `scripts/demo-ingest.ts` · `scripts/gen-matchzy-config.ts` ·
+`src/components/SchedulingOverlapBanner.tsx` · `src/app/admin/page.tsx` ·
+`src/components/AdminActivityFeed.tsx` · `scripts/demo-ingest.ts` · `scripts/gen-matchzy-config.ts` ·
 `scripts/inspect-demo.ts` · `scripts/dathost-golden-diff.ts` · `scripts/dathost-golden-apply.ts`
 (golden-config diff/capture/reassert — see [`infra/matchzy/README.md`](../infra/matchzy/README.md))
 · `scripts/dathost-cleanup.ts` (disk cleanup, issue #132) · `src/lib/gh-dispatch.ts` (workflow

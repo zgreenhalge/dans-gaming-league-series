@@ -1,83 +1,121 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { TopbarShell } from '@/components/TopbarShell';
-import { isPlayerAdmin } from '@/lib/queries';
+import { AdminConsole } from '@/components/AdminConsole';
+import {
+  isPlayerAdmin,
+  getBackgroundJobs,
+  getOpsErrors,
+  getAdminMatches,
+  getAdminPlayers,
+  getMapsForWorkshopPicker,
+  getSeasons,
+  getGauntletRounds,
+} from '@/lib/queries';
+import { getActiveServerMatch } from '@/lib/dathost-lifecycle';
+import { CONFIG_SET_OPTIONS } from '@/lib/dathost';
+import { getAdminClient } from '@/lib/supabase-admin';
+import { buildRegularToGauntletMap, isPlayedScore, extractSeasonNumber } from '@/lib/util';
+import type { GauntletRow } from '@/components/GauntletLifecycleList';
 
 export const metadata = {
   title: 'Admin',
-  description: 'DGLS admin tools.',
+  description: 'DGLS admin console — activity, jobs, and management in one view.',
 };
 
-// Central admin hub. Add a tool by dropping an entry in `TOOLS` — each links to an
-// existing admin-gated page (every target re-checks `isPlayerAdmin` server-side, so
-// this hub is a convenience surface, not the security boundary).
-const TOOLS: { href: string; title: string; desc: string }[] = [
-  {
-    href: '/admin/jobs',
-    title: 'Background Jobs',
-    desc: 'Every pipeline — demo ingest, replay, and radar — with status, warnings, and retry.',
-  },
-  {
-    href: '/admin/matches',
-    title: 'Manage Matches',
-    desc: 'Reschedule, clear/redo a pick-ban, and toggle the feature match from one place.',
-  },
-  {
-    href: '/admin/players',
-    title: 'Manage Players',
-    desc: 'Rename players, grant/remove admin, manage Steam links, and recompute EHOG ratings.',
-  },
-  {
-    href: '/admin/servers',
-    title: 'Server Console',
-    desc: 'Shared DatHost server state, manual start/stop, config-set + map apply, and match occupancy.',
-  },
-  {
-    href: '/admin/seasons/new',
-    title: 'Create Season',
-    desc: 'Start a new regular season with its map pool.',
-  },
-  {
-    href: '/admin/seasons/gauntlet',
-    title: 'Manage Gauntlet',
-    desc: 'Build, seed, or reset the single-elimination bracket for an active season.',
-  },
-  {
-    href: '/admin/ops-errors',
-    title: 'Ops Errors',
-    desc: 'Every best-effort background operation currently failing or needing admin attention.',
-  },
-];
+// Live operational surface — don't cache.
+export const dynamic = 'force-dynamic';
 
-export default async function AdminHubPage() {
+/**
+ * Unified admin console (issue #262). One page, replacing the seven separate admin routes: a
+ * standalone Server panel, an Activity feed (background jobs + ops errors), and Manage
+ * (Match/Player/Season). This server component only gates access and fetches — `AdminConsole` owns
+ * all the interactive composition, reusing the same panels/forms the old routes used unmodified.
+ */
+export default async function AdminPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.playerId) redirect('/');
-  if (!(await isPlayerAdmin(session.user.playerId))) redirect('/');
+  const selfId = session.user.playerId;
+  if (!(await isPlayerAdmin(selfId))) redirect('/');
+
+  const [jobs, opsErrors, matches, players, activeServerMatch, workshopMaps, seasons] =
+    await Promise.all([
+      getBackgroundJobs(),
+      getOpsErrors(),
+      getAdminMatches(),
+      getAdminPlayers(),
+      getActiveServerMatch(getAdminClient()),
+      getMapsForWorkshopPicker(),
+      getSeasons(),
+    ]);
+
+  // Season lifecycle + gauntlet pairing — same derivation the old /admin/seasons/gauntlet page used.
+  const regularSeasons = seasons.filter((s) => !s.is_gauntlet);
+  const gauntletSeasons = seasons.filter((s) => s.is_gauntlet);
+  const paired = buildRegularToGauntletMap(regularSeasons, gauntletSeasons);
+  const gauntletById = new Map(gauntletSeasons.map((g) => [g.id, g]));
+  const seasonOpsErrors = opsErrors.filter((e) => e.entityType === 'season');
+  const activeRegular = regularSeasons.filter((s) => s.status === 'ACTIVE');
+  const eligibleForGauntlet = activeRegular
+    .filter((s) => !paired.has(s.id))
+    .map((s) => ({ id: s.id, name: s.name }));
+  const gauntletsInProgress: GauntletRow[] = await Promise.all(
+    activeRegular
+      .filter((s) => paired.has(s.id))
+      .map(async (s) => {
+        const gauntletId = paired.get(s.id)!;
+        const rounds = await getGauntletRounds(gauntletId);
+        const seeded = rounds.length > 0;
+        const started = rounds.some((r) => r.matches.some((m) => isPlayedScore(m.final_score)));
+        return {
+          regularSeasonId: s.id,
+          regularSeasonName: s.name,
+          gauntletName: gauntletById.get(gauntletId)?.name ?? `Season ${gauntletId} Gauntlet`,
+          seeded,
+          started,
+        };
+      }),
+  );
+
+  // Next season's default name — shown on the "+ New Season" link, which now points at its own page
+  // (/admin/seasons/new) rather than an inline form; the create flow's own map-pool derivation lives
+  // there.
+  let maxNum = 0;
+  for (const s of seasons) {
+    if (s.is_gauntlet) continue;
+    const n = extractSeasonNumber(s.name);
+    if (n !== null && n > maxNum) maxNum = n;
+  }
+  const nextSeasonName = `Season ${maxNum + 1} Regular Season`;
+
+  const allSeasons = [...seasons]
+    .sort((a, b) => b.id - a.id)
+    .map((s) => ({ id: s.id, name: s.name, status: s.status, isGauntlet: s.is_gauntlet }));
 
   return (
     <div className="min-h-screen">
       <TopbarShell crumbs={[{ label: 'DGLS', href: '/' }, { label: 'Admin' }]} />
-      <main className="max-w-[760px] mx-auto px-6 pb-16">
+      <main className="max-w-[1200px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-6">
           <div className="font-display text-[28px] font-semibold leading-tight">Admin</div>
         </div>
 
-        <div className="flex flex-col gap-3">
-          {TOOLS.map((t) => (
-            <Link
-              key={t.href}
-              href={t.href}
-              className="lift-card block border border-[var(--color-border-tertiary)] rounded px-4 py-4"
-            >
-              <div className="font-display text-[17px] font-semibold">{t.title}</div>
-              <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1">
-                {t.desc}
-              </div>
-            </Link>
-          ))}
-        </div>
+        <AdminConsole
+          jobs={jobs}
+          opsErrors={opsErrors}
+          matches={matches}
+          players={players}
+          selfId={selfId}
+          server={{ active: activeServerMatch, configSets: CONFIG_SET_OPTIONS, maps: workshopMaps }}
+          season={{
+            allSeasons,
+            eligibleForGauntlet,
+            gauntletsInProgress,
+            seasonOpsErrors,
+            nextSeasonName,
+          }}
+        />
       </main>
     </div>
   );

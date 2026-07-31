@@ -70,6 +70,10 @@ export interface BackgroundJobRow {
 /** Demo statuses that still need a human (review or a failure); replay/radar only flag on failure. */
 const DEMO_ATTENTION_STATUSES: ReadonlySet<string> = new Set(['parsed', 'quarantined', 'failed']);
 
+/** Statuses with work still in flight, shared by any surface that needs to bucket jobs by whether
+ * they're still running (retry/cancel are no-ops while a job is in one of these). */
+export const JOB_IN_PROGRESS_STATUSES: ReadonlySet<string> = new Set(['received', 'queued', 'running']);
+
 /**
  * Whether a job needs an operator's attention right now — drives the Needs Attention tab and its
  * count. Demo review states (`parsed`/`quarantined`) and any pipeline's `failed` qualify; in-progress
