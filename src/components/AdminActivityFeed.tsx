@@ -258,12 +258,12 @@ const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
 ];
 
 const RANGE_FILTERS: { value: RangeFilter; label: string }[] = [
+  { value: 'all', label: 'All time' },
   { value: '24h', label: '24h' },
   { value: '12h', label: '12h' },
   { value: '6h', label: '6h' },
   { value: '1h', label: '1h' },
   { value: '30m', label: '30m' },
-  { value: 'all', label: 'All time' },
 ];
 
 export function AdminActivityFeed({
