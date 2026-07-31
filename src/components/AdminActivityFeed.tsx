@@ -24,7 +24,7 @@ import {
 } from '@/lib/jobs';
 import { IngestJobActions } from './IngestJobActions';
 import { JobRetryButton, JobsLiveRefresh } from './JobActions';
-import { OPERATION_LABELS, type OpsErrorItem } from './OpsErrorList';
+import { OPERATION_LABELS, dismissOpsError, type OpsErrorItem } from './OpsErrorList';
 
 type Tier = 'errored' | 'progress' | 'completed';
 type TypeFilter = 'all' | BackgroundJobType;
@@ -147,8 +147,8 @@ function DismissOpsError({ id, onDismissed }: { id: number; onDismissed: () => v
   async function dismiss() {
     setBusy(true);
     try {
-      const res = await fetch(`/api/ops-errors/${id}`, { method: 'DELETE' });
-      if (res.ok) onDismissed();
+      const result = await dismissOpsError(id);
+      if (result.ok) onDismissed();
     } finally {
       setBusy(false);
     }
@@ -297,7 +297,7 @@ export function AdminActivityFeed({
     const errored: Event[] = [
       ...jobEvents.filter((e) => jobTier(e.job) === 'errored'),
       ...opsEvents,
-    ].sort((a, b) => (b.when ?? '').localeCompare(a.when ?? ''));
+    ].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0));
     const progress: Event[] = jobEvents.filter((e) => jobTier(e.job) === 'progress');
     const completed: Event[] = jobEvents.filter((e) => jobTier(e.job) === 'completed');
 
@@ -325,13 +325,10 @@ export function AdminActivityFeed({
     };
   }, []);
 
-  const byTier: Record<Tier, Event[]> = useMemo(
-    () => ({ errored, progress, completed }),
-    [errored, progress, completed],
-  );
+  const tierEvents = tab === 'errored' ? errored : tab === 'progress' ? progress : completed;
   const visible = useMemo(
-    () => byTier[tab].filter((e) => matchesFilter(e, typeFilter) && matchesRange(e, rangeFilter, now)),
-    [byTier, tab, typeFilter, rangeFilter, now],
+    () => tierEvents.filter((e) => matchesFilter(e, typeFilter) && matchesRange(e, rangeFilter, now)),
+    [tierEvents, typeFilter, rangeFilter, now],
   );
 
   function dismissOne(id: number) {
@@ -373,7 +370,7 @@ export function AdminActivityFeed({
 
       {visible.length === 0 ? (
         <div className="font-mono text-[13px] text-[var(--color-text-secondary)] border border-[var(--color-border-tertiary)] rounded px-4 py-8 text-center">
-          {byTier[tab].length === 0 ? EMPTY_MESSAGE[tab] : 'Nothing matches this filter.'}
+          {tierEvents.length === 0 ? EMPTY_MESSAGE[tab] : 'Nothing matches this filter.'}
         </div>
       ) : (
         <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden max-h-[520px] overflow-y-auto [&>*:first-child]:border-t-0">
