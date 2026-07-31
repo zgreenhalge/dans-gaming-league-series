@@ -49,7 +49,6 @@ export function AdminConsole({
     eligibleForGauntlet: { id: number; name: string }[];
     gauntletsInProgress: GauntletRow[];
     seasonOpsErrors: OpsErrorItem[];
-    knownMaps: string[];
     nextSeasonName: string;
   };
 }) {
@@ -123,7 +122,6 @@ export function AdminConsole({
               eligibleForGauntlet={season.eligibleForGauntlet}
               gauntletsInProgress={season.gauntletsInProgress}
               seasonOpsErrors={season.seasonOpsErrors}
-              knownMaps={season.knownMaps}
               nextSeasonName={season.nextSeasonName}
               focusLabel={jumpQueryFor('season')}
             />

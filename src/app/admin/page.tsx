@@ -12,7 +12,6 @@ import {
   getMapsForWorkshopPicker,
   getSeasons,
   getGauntletRounds,
-  getMapLookup,
 } from '@/lib/queries';
 import { getActiveServerMatch } from '@/lib/dathost-lifecycle';
 import { CONFIG_SET_OPTIONS } from '@/lib/dathost';
@@ -40,7 +39,7 @@ export default async function AdminPage() {
   const selfId = session.user.playerId;
   if (!(await isPlayerAdmin(selfId))) redirect('/');
 
-  const [jobs, opsErrors, matches, players, activeServerMatch, workshopMaps, seasons, mapLookup] =
+  const [jobs, opsErrors, matches, players, activeServerMatch, workshopMaps, seasons] =
     await Promise.all([
       getBackgroundJobs(),
       getOpsErrors(),
@@ -49,7 +48,6 @@ export default async function AdminPage() {
       getActiveServerMatch(getAdminClient()),
       getMapsForWorkshopPicker(),
       getSeasons(),
-      getMapLookup(),
     ]);
 
   // Season lifecycle + gauntlet pairing — same derivation the old /admin/seasons/gauntlet page used.
@@ -80,7 +78,9 @@ export default async function AdminPage() {
       }),
   );
 
-  // Create-season defaults — same derivation the old /admin/seasons/new page used.
+  // Next season's default name — shown on the "+ New Season" link, which now points at its own page
+  // (/admin/seasons/new) rather than an inline form; the create flow's own map-pool derivation lives
+  // there.
   let maxNum = 0;
   for (const s of seasons) {
     if (s.is_gauntlet) continue;
@@ -88,11 +88,6 @@ export default async function AdminPage() {
     if (n !== null && n > maxNum) maxNum = n;
   }
   const nextSeasonName = `Season ${maxNum + 1} Regular Season`;
-  const knownMapSet = new Set<string>(Object.keys(mapLookup));
-  for (const s of seasons) {
-    for (const m of s.map_pool ?? []) knownMapSet.add(m.trim().toLowerCase());
-  }
-  const knownMaps = Array.from(knownMapSet).sort();
 
   const allSeasons = [...seasons]
     .sort((a, b) => b.id - a.id)
@@ -118,7 +113,6 @@ export default async function AdminPage() {
             eligibleForGauntlet,
             gauntletsInProgress,
             seasonOpsErrors,
-            knownMaps,
             nextSeasonName,
           }}
         />
