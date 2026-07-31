@@ -1,19 +1,18 @@
 /**
- * Correctness proof for buildTeammateRounds(): every pair of seeds must appear as teammates in
- * exactly one round, in the minimum possible number of rounds, for every roster size the league
- * supports (7-19) plus a wider band for confidence. No test framework — node:assert + a tiny
- * runner, matching gauntlet-bracket.test.ts / util.test.ts.
+ * Correctness proof for the regular-season matchup generator. buildTeammateRounds(): every pair
+ * of seeds must appear as teammates in exactly one round, in the minimum possible number of
+ * rounds. buildSeasonSchedule(): every pair must additionally play as opponents at least once,
+ * every week has at most one bye, and doubleheaderPolicy 'never' throws exactly when a whole team
+ * would otherwise be left over — for every roster size the league supports (7-19) plus a wider
+ * band for confidence. No test framework — node:assert + a tiny runner, matching
+ * gauntlet-bracket.test.ts / util.test.ts.
  *
  * Run:  npx tsx src/lib/season-schedule.test.ts
  */
 
 import assert from 'node:assert/strict';
-import { buildTeammateRounds } from './season-schedule';
+import { buildTeammateRounds, buildSeasonSchedule, pairKey } from './season-schedule';
 import { test, report } from './test-support/miniTest';
-
-function pairKey(a: number, b: number): string {
-  return a < b ? `${a}:${b}` : `${b}:${a}`;
-}
 
 function expectedRounds(n: number): number {
   return n % 2 === 0 ? n - 1 : n;
@@ -90,6 +89,59 @@ async function main() {
   for (let n = 4; n <= 25; n++) {
     await test(`buildTeammateRounds(${n}) — full teammate coverage, minimum rounds, no phantom leak`, () => {
       assertFullTeammateCoverage(n);
+    });
+  }
+
+  for (let n = 7; n <= 19; n++) {
+    await test(`buildSeasonSchedule(${n}) — every pair plays together and against, at most 1 bye/week`, () => {
+      const weeks = buildSeasonSchedule(n);
+      assert.equal(weeks.length, expectedRounds(n), `n=${n}: week count should match buildTeammateRounds`);
+
+      const teammatePairs = new Set<string>();
+      const opponentPairs = new Set<string>();
+
+      for (const w of weeks) {
+        const appearances = new Map<number, number>();
+        for (const m of w.matches) {
+          for (const seed of [...m.shirts, ...m.skins]) {
+            appearances.set(seed, (appearances.get(seed) ?? 0) + 1);
+          }
+          teammatePairs.add(pairKey(m.shirts[0], m.shirts[1]));
+          teammatePairs.add(pairKey(m.skins[0], m.skins[1]));
+          for (const p of m.shirts) for (const q of m.skins) opponentPairs.add(pairKey(p, q));
+        }
+
+        assert.ok(w.byeSeeds.length <= 1, `n=${n} week ${w.week}: expected at most 1 bye (doubleheader should absorb the rest), got ${w.byeSeeds.length}`);
+
+        let totalAppearances = 0;
+        for (let seed = 1; seed <= n; seed++) {
+          const count = appearances.get(seed) ?? 0;
+          totalAppearances += count;
+          if (count === 0) {
+            assert.ok(w.byeSeeds.includes(seed), `n=${n} week ${w.week}: seed ${seed} has no match but isn't listed as a bye`);
+          } else {
+            assert.ok(count === 1 || count === 2, `n=${n} week ${w.week}: seed ${seed} appears ${count} times, expected 1 (normal) or 2 (doubleheader donor)`);
+          }
+        }
+        assert.equal(totalAppearances, w.matches.length * 4, `n=${n} week ${w.week}: appearance total should match 4x match count`);
+      }
+
+      const expectedPairCount = (n * (n - 1)) / 2;
+      assert.equal(teammatePairs.size, expectedPairCount, `n=${n}: every pair should play together at least once (${teammatePairs.size}/${expectedPairCount})`);
+      assert.equal(opponentPairs.size, expectedPairCount, `n=${n}: every pair should play against each other at least once (${opponentPairs.size}/${expectedPairCount})`);
+    });
+  }
+
+  for (const n of [8, 9, 12, 13, 16, 17]) {
+    await test(`buildSeasonSchedule(${n}, 'never') — no leftover team, so 'never' is safe and byes stay <= 1`, () => {
+      const weeks = buildSeasonSchedule(n, { doubleheaderPolicy: 'never' });
+      for (const w of weeks) assert.ok(w.byeSeeds.length <= 1, `n=${n} week ${w.week}: unexpected multi-bye under 'never'`);
+    });
+  }
+
+  for (const n of [7, 10, 11, 14, 15, 18, 19]) {
+    await test(`buildSeasonSchedule(${n}, 'never') — throws: a whole team would be left over every round`, () => {
+      assert.throws(() => buildSeasonSchedule(n, { doubleheaderPolicy: 'never' }));
     });
   }
 
