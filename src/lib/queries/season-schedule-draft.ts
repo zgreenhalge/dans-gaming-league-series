@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import type { Player } from '../types';
 import { getPlayersById } from './player';
+import type { DraftScheduleWeek } from '../season-schedule-validation';
 
 export interface DraftMatchWithPlayers {
   id: number;
@@ -73,6 +74,22 @@ export async function getSeasonScheduleDraft(seasonId: number): Promise<DraftWee
       match_number: m.match_number,
       shirts: [player(m.shirts_player1_id), player(m.shirts_player2_id)] as [Player, Player],
       skins: [player(m.skins_player1_id), player(m.skins_player2_id)] as [Player, Player],
+    })),
+  }));
+}
+
+/** Player-joined draft (`getSeasonScheduleDraft()`'s shape) down to the plain-id shape
+ * `validateDraftIntegrity()`/`validateDraftCompleteness()`/`saveSeasonScheduleDraft()` operate on —
+ * shared by `confirmSeasonScheduleDraft()` and the manual editor page rather than each re-deriving
+ * the same player-object-to-id mapping. */
+export function toDraftScheduleWeeks(weeks: DraftWeekWithMatches[]): DraftScheduleWeek[] {
+  return weeks.map((w) => ({
+    week_number: w.week_number,
+    bye_player_id: w.bye_player?.id ?? null,
+    matches: w.matches.map((m) => ({
+      match_number: m.match_number,
+      shirts: [m.shirts[0].id, m.shirts[1].id] as [number, number],
+      skins: [m.skins[0].id, m.skins[1].id] as [number, number],
     })),
   }));
 }

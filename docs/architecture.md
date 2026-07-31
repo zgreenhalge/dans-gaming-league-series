@@ -28,6 +28,7 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/maps/[slug]` | Map detail — match history + per-player stats on that map |
 | `/admin` | Unified admin console (linked from the Topbar when `session.user.isAdmin`) — a standalone Server panel (shared DatHost server status/controls, see [`hosting.md`](./hosting.md)), an Activity feed (every `background_jobs` row across all three pipelines plus live `ops_errors`, tiered Errored / In Progress / Completed), and Manage (Match/Player/Season — reschedule/veto/feature-toggle, rename/admin/Steam-link/EHOG recompute, season creation + gauntlet build/seed/reset + "go live"). The former separate admin pages (`jobs`, `matches`, `players`, `servers`, `ops-errors`, `seasons/new`, `seasons/gauntlet`) now redirect here via `?section=`/`&type=` |
 | `/admin/seasons/gauntlet/manual/[id]` | Manual gauntlet pod editor — a full drag/pick/validate/save flow, kept as its own route rather than folded into the console |
+| `/admin/seasons/schedule/[id]` | Regular-season matchup draft editor — generate from the current roster (`season_players`), hand-edit any match slot, then confirm; linked from `/seasons/[id]`'s roster panel while `UPCOMING` |
 | `/auth/steam` | Steam auth landing — completes `signIn()` after the OpenID bounce |
 
 `/career-stats` is a permanent redirect to `/statistics`, not a standalone page.
@@ -74,6 +75,10 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `POST` | `/api/seasons/[id]/gauntlet/seed` | Seed an existing shape from the season's current leaderboard order and materialize round 1 (admin only) |
 | `DELETE` | `/api/seasons/[id]/gauntlet` | Reset a gauntlet — deletes it and everything materialized under it; refuses if any match has a score unless `{ force: true }` is passed (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet/pods` | Save the manual pod editor's current draft — creates the paired gauntlet season if needed, then inserts/updates/deletes pods to match (admin only) |
+| `POST/DELETE` | `/api/seasons/[id]/players` | Add/remove a player from a season's roster (`season_players`) — admins manage any player, a player can only add/remove themselves; `UPCOMING` only |
+| `POST/DELETE` | `/api/seasons/[id]/schedule` | Generate (fully regenerating) or clear a season's matchup draft from its current roster (admin only, `UPCOMING` only) |
+| `PATCH` | `/api/seasons/[id]/schedule` | Save a hand-edit to an existing matchup draft — reassigns players within the generated week/match structure (admin only, `UPCOMING` only) |
+| `POST` | `/api/seasons/[id]/schedule/confirm` | Materialize a validated matchup draft into real `weeks`/`matches`/`player_match_stats` (admin only, `UPCOMING` only) |
 | `PATCH` | `/api/players/[id]` | Edit a player — display name, `is_admin` (can't demote yourself), or Steam link (unlink / set SteamID64) (admin only) |
 | `PATCH` | `/api/players/me/name` | Self-service rename — the caller's own display name only, letters/spaces only, once every 7 days |
 | `POST` | `/api/ehog/recompute/trigger` | Admin-gated "recompute EHOG ratings now" — fires the full rating walk in the background (admin only) |

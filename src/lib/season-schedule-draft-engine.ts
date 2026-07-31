@@ -8,7 +8,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildRosterSchedule } from './season-schedule-engine';
 import type { DoubleheaderPolicy } from './season-schedule';
-import { getSeasonScheduleDraft, getSeasonRoster } from './queries';
+import { getSeasonScheduleDraft, getSeasonRoster, toDraftScheduleWeeks } from './queries';
 import {
   validateDraftIntegrity,
   validateDraftCompleteness,
@@ -215,15 +215,7 @@ export async function confirmSeasonScheduleDraft(supabaseAdmin: SupabaseClient, 
     return { status: 'no-draft' };
   }
 
-  const draftWeeks: DraftScheduleWeek[] = draftWithPlayers.map((w) => ({
-    week_number: w.week_number,
-    bye_player_id: w.bye_player?.id ?? null,
-    matches: w.matches.map((m) => ({
-      match_number: m.match_number,
-      shirts: [m.shirts[0].id, m.shirts[1].id] as [number, number],
-      skins: [m.skins[0].id, m.skins[1].id] as [number, number],
-    })),
-  }));
+  const draftWeeks = toDraftScheduleWeeks(draftWithPlayers);
 
   const integrity = validateDraftIntegrity(draftWeeks);
   const completeness = validateDraftCompleteness(

@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { TopbarShell } from '@/components/TopbarShell';
 import {
   getSeason,
@@ -280,7 +281,7 @@ export default async function SeasonPage({
           </div>
         </div>
         {isUpcoming && playersById && (
-          <div className="mb-10">
+          <div className="mb-10 flex flex-col gap-3">
             <SeasonRosterPanel
               seasonId={season.id}
               roster={roster}
@@ -288,6 +289,14 @@ export default async function SeasonPage({
               isAdmin={isAdmin}
               currentPlayerId={currentPlayerId}
             />
+            {isAdmin && (
+              <Link
+                href={`/admin/seasons/schedule/${season.id}`}
+                className="tracked text-[10px] font-semibold px-3 py-1.5 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors self-start"
+              >
+                Matchup Draft Editor →
+              </Link>
+            )}
           </div>
         )}
         {linkedGauntlet &&
