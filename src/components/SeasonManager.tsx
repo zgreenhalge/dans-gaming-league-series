@@ -13,12 +13,12 @@
 // not new mutation logic.
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import MarkSeasonActiveButton from './MarkSeasonActiveButton';
-import { CreateSeasonForm } from './CreateSeasonForm';
+import DeleteSeasonButton from './DeleteSeasonButton';
 import { CreateGauntletForm } from './CreateGauntletForm';
 import { GauntletLifecycleList, type GauntletRow } from './GauntletLifecycleList';
 import { OpsErrorList, type OpsErrorItem } from './OpsErrorList';
-import { CollapsiblePanel } from './CollapsiblePanel';
 
 export interface SeasonSummary {
   id: number;
@@ -39,7 +39,6 @@ export function SeasonManager({
   eligibleForGauntlet,
   gauntletsInProgress,
   seasonOpsErrors,
-  knownMaps,
   nextSeasonName,
   focusLabel,
 }: {
@@ -47,7 +46,6 @@ export function SeasonManager({
   eligibleForGauntlet: { id: number; name: string }[];
   gauntletsInProgress: GauntletRow[];
   seasonOpsErrors: OpsErrorItem[];
-  knownMaps: string[];
   nextSeasonName: string;
   /** Set when an Activity-tab ops error jumps here — opens and scrolls the matching season into view. */
   focusLabel?: string;
@@ -127,8 +125,9 @@ export function SeasonManager({
                     <div className="flex-1 min-w-0 px-3 py-2.5">{header}</div>
                   )}
                   {s.status === 'UPCOMING' && !s.isGauntlet && (
-                    <div className="pr-3 shrink-0">
+                    <div className="pr-3 shrink-0 flex items-center gap-3">
                       <MarkSeasonActiveButton seasonId={s.id} canEdit seasonStatus={s.status} />
+                      <DeleteSeasonButton seasonId={s.id} />
                     </div>
                   )}
                 </div>
@@ -148,9 +147,12 @@ export function SeasonManager({
         </div>
       </div>
 
-      <CollapsiblePanel title={`+ New season (${nextSeasonName})`}>
-        <CreateSeasonForm knownMaps={knownMaps} />
-      </CollapsiblePanel>
+      <Link
+        href="/admin/seasons/new"
+        className="tracked text-[10px] font-semibold px-3 py-2 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors self-start"
+      >
+        {`+ New Season (${nextSeasonName})`}
+      </Link>
     </div>
   );
 }
