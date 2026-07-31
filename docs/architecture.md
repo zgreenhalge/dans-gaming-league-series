@@ -26,12 +26,8 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/statistics` | Cross-season career leaderboard + gauntlet stats |
 | `/maps` | Map index — pick/ban/skip counts per map |
 | `/maps/[slug]` | Map detail — match history + per-player stats on that map |
-| `/admin` | Admin hub — links to admin tools (linked from the Topbar when `session.user.isAdmin`) |
-| `/admin/jobs` | Admin background-jobs dashboard — every `background_jobs` row across all three pipelines (`demo_ingest`, `replay_extract`, `radar_build`) with warnings/quarantine flags and per-type actions: confirm/re-parse/dismiss for demo, retry for replay/radar (see [`hosting.md`](./hosting.md)) |
-| `/admin/servers` | Admin server console — shared DatHost server status + teardown (see [`hosting.md`](./hosting.md)) |
-| `/admin/matches` | Admin match console — search a match to reschedule, clear/redo its pick-ban, or toggle the feature flag (reuses the match-page editors; score/stats editing stays on the match page) |
-| `/admin/players` | Admin player console — search a player to rename, toggle `is_admin`, or manage their Steam link (unlink / set SteamID64 by hand); also a manual EHOG rating recompute |
-| `/admin/seasons/new` | Create a new season (admin only) |
+| `/admin` | Unified admin console (linked from the Topbar when `session.user.isAdmin`) — a standalone Server panel (shared DatHost server status/controls, see [`hosting.md`](./hosting.md)), an Activity feed (every `background_jobs` row across all three pipelines plus live `ops_errors`, tiered Errored / In Progress / Completed), and Manage (Match/Player/Season — reschedule/veto/feature-toggle, rename/admin/Steam-link/EHOG recompute, season creation + gauntlet build/seed/reset + "go live"). The former separate admin pages (`jobs`, `matches`, `players`, `servers`, `ops-errors`, `seasons/new`, `seasons/gauntlet`) now redirect here via `?section=`/`&type=` |
+| `/admin/seasons/gauntlet/manual/[id]` | Manual gauntlet pod editor — a full drag/pick/validate/save flow, kept as its own route rather than folded into the console |
 | `/auth/steam` | Steam auth landing — completes `signIn()` after the OpenID bounce |
 
 `/career-stats` is a permanent redirect to `/statistics`, not a standalone page.
@@ -45,7 +41,7 @@ Players authenticate via **Steam OpenID**. The flow:
 3. The `/auth/steam` page calls NextAuth's `signIn("steam-credentials", { token })` to establish a session
 4. On first login a `RegisterModal` appears — the player links their Steam account to their existing player record (or creates a new one)
 
-Once linked, `session.user.playerId` is set. Admin players (`players.is_admin = true`) get elevated permissions: editing submitted scores, clearing pick/ban steps, and setting season start dates. `is_admin` is carried on the session token as `session.user.isAdmin` (backfilled into existing sessions on their next request), which gates the Topbar's admin-hub link; admin **pages** still re-check `isPlayerAdmin` server-side.
+Once linked, `session.user.playerId` is set. Admin players (`players.is_admin = true`) get elevated permissions: editing submitted scores, clearing pick/ban steps, and setting season start dates. `is_admin` is carried on the session token as `session.user.isAdmin` (backfilled into existing sessions on their next request), which gates the Topbar's admin-console link; admin **pages** still re-check `isPlayerAdmin` server-side.
 
 **Development shortcut:** When `NODE_ENV=development`, two mock login providers (`dev-zach-mock` / `dev-dan-mock`) appear that skip Steam auth entirely and sign you in as a known player. No `STEAM_API_KEY` needed locally.
 
@@ -208,8 +204,9 @@ any slot still pointing at one as its advancement source. Pass `{ force: true }`
 delete anyway even if matches have been played — there is no undo, so the admin UI (below) requires
 typing the gauntlet's name to confirm. If the gauntlet had already archived its paired regular
 season (see "Season status lifecycle"), deleting it reverts that season back to `COMPLETED` — an
-archived season with no gauntlet behind it is a dead end. `/admin/seasons/gauntlet` surfaces build,
-seed, and reset together, one row per season, based on where it is in that lifecycle.
+archived season with no gauntlet behind it is a dead end. The admin console's Manage → Season view
+(`SeasonManager.tsx`) surfaces build, seed, and reset together, one row per season, based on where it
+is in that lifecycle.
 
 #### Manual bracket construction
 
@@ -357,11 +354,12 @@ season itself as part of a reset, and the remaining hooks clear theirs inline on
 try block completes without error.
 
 `getOpsErrors()` in `src/lib/queries/ops.ts` reads every live row, resolving `entity_id` to a display name
-(season/match name, or "EHOG Recompute" for `system`). `/admin/ops-errors` lists all of them;
-`/admin/seasons/gauntlet` ("Manage Gauntlet") shows the same list filtered to `entity_type = 'season'`
-in an "Attention Needed" section above the rest of the page (`OpsErrorList.tsx`, shared by both).
-Either page's Dismiss button clears a row via `DELETE /api/ops-errors/[id]` without waiting for the
-underlying operation to succeed on its own.
+(season/match name, or "EHOG Recompute" for `system`). The admin console's Activity → Errored tab
+(`AdminActivityFeed.tsx`) lists all of them, merged with failed background jobs; Manage → Season
+(`SeasonManager.tsx`) shows the same rows filtered to `entity_type = 'season'` in an "Attention Needed"
+section above the rest of the view (`OpsErrorList.tsx`, shared by both). Either surface's Dismiss
+button clears a row via `DELETE /api/ops-errors/[id]` without waiting for the underlying operation to
+succeed on its own.
 
 ## Data Ingestion
 

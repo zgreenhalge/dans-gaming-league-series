@@ -25,7 +25,7 @@ Between seasons, σ is regressed toward `SIGMA_DEFAULT` and μ toward `EHOG_CENT
 A brand-new player starts at `MU_DEFAULT`/`SIGMA_DEFAULT`, which is deliberately **below** `CENTER`
 (the display transform's own midpoint anchor) — so an unproven player starts in the low-30s rather
 than mid-band, and climbs as results come in. A player with a known skill level can instead be seeded
-at an admin-configured starting rating (`players.seed_ehog`, set on `/admin/players`) — see
+at an admin-configured starting rating (`players.seed_ehog`, set from the admin console's Manage → Player view) — see
 **Seeding a known player's starting rating** below.
 
 ## Display tiers
@@ -160,7 +160,7 @@ produced it).
 
 `players.seed_ehog` (nullable) holds an admin-entered EHOG value (10–100, exclusive — those are the
 display transform's unreachable asymptotes) for a player whose real-world skill is already known. Set
-it on `/admin/players`. `from_ehog()` — the inverse of `to_ehog()`, in both `engine.py` and
+it from the admin console's Manage → Player view. `from_ehog()` — the inverse of `to_ehog()`, in both `engine.py` and
 `ehog.ts` — converts it to a starting μ at `SIGMA_DEFAULT` the first time that player appears in the
 chronological rating walk (`fetch_player_seeds()` / `compute_ratings()`'s `state_for()`); once a
 player has any `player_rating_history` rows, their seed no longer applies. The same conversion is
