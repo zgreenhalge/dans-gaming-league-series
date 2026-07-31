@@ -87,21 +87,6 @@ export function SeasonManager({
             const canExpand = expandable(s);
             const error = seasonOpsErrors.find((e) => e.label === s.name);
             const gauntletRow = gauntletByRegularId.get(s.id);
-            const header = (
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-display text-[14px] font-semibold truncate">{s.name}</span>
-                  <span className={`inline-block font-mono text-[9px] uppercase tracking-wide px-1.5 py-[1px] rounded border shrink-0 ${STATUS_BADGE[s.status] ?? STATUS_BADGE.ARCHIVED}`}>
-                    {s.status}
-                  </span>
-                </div>
-                {error && (
-                  <div className="font-mono text-[10.5px] text-[var(--color-accent-red-fg)] mt-1 break-words">
-                    ⚠ {error.message}
-                  </div>
-                )}
-              </div>
-            );
             return (
               <div
                 key={s.id}
@@ -110,22 +95,41 @@ export function SeasonManager({
                   s.name === focusLabel ? 'bg-[color-mix(in_srgb,var(--color-site-accent)_8%,transparent)]' : ''
                 }`}
               >
-                <div className="flex items-center gap-2">
-                  {canExpand ? (
+                {/* The chevron toggle and the season-name link are siblings, not nested — a <button>
+                    can't legally contain an <a>, and the name should link out regardless of whether
+                    this row has anything to expand. */}
+                <div className="flex items-center gap-2 px-3 py-2.5">
+                  {canExpand && (
                     <button
                       type="button"
                       onClick={() => setOpenId(isOpen ? null : s.id)}
                       aria-expanded={isOpen}
-                      className="lift-row flex-1 min-w-0 grid grid-cols-[auto_1fr] gap-2 items-center px-3 py-2.5 text-left"
+                      aria-label={isOpen ? 'Collapse' : 'Expand'}
+                      className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] w-3 shrink-0"
                     >
-                      <span className="font-mono text-[11px] text-[var(--color-text-secondary)] w-3">{isOpen ? '▾' : '▸'}</span>
-                      {header}
+                      {isOpen ? '▾' : '▸'}
                     </button>
-                  ) : (
-                    <div className="flex-1 min-w-0 px-3 py-2.5">{header}</div>
                   )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/seasons/${s.id}`}
+                        className="font-display text-[14px] font-semibold truncate hover:underline"
+                      >
+                        {s.name}
+                      </Link>
+                      <span className={`inline-block font-mono text-[9px] uppercase tracking-wide px-1.5 py-[1px] rounded border shrink-0 ${STATUS_BADGE[s.status] ?? STATUS_BADGE.ARCHIVED}`}>
+                        {s.status}
+                      </span>
+                    </div>
+                    {error && (
+                      <div className="font-mono text-[10.5px] text-[var(--color-accent-red-fg)] mt-1 break-words">
+                        ⚠ {error.message}
+                      </div>
+                    )}
+                  </div>
                   {s.status === 'UPCOMING' && !s.isGauntlet && (
-                    <div className="pr-3 shrink-0 flex items-center gap-3">
+                    <div className="shrink-0 flex items-center gap-3">
                       <MarkSeasonActiveButton seasonId={s.id} canEdit seasonStatus={s.status} />
                       <DeleteSeasonButton seasonId={s.id} />
                     </div>
