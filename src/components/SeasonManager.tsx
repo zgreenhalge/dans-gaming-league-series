@@ -153,7 +153,7 @@ export function SeasonManager({
 
       <Link
         href="/admin/seasons/new"
-        className="tracked text-[10px] font-semibold px-3 py-2 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors self-start"
+        className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all self-start"
       >
         {`+ New Season (${nextSeasonName})`}
       </Link>
