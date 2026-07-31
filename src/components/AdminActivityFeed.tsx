@@ -2,9 +2,10 @@
 
 // The unified admin console's Activity feed (issue #262): every background job and every live
 // ops_errors row, merged into one status-tiered list — Errored / In Progress / Completed — instead of
-// the separate jobs dashboard and ops-errors page this replaces. Errored never clusters (a failure
-// should never be one line buried in "38 more…"); Completed clusters consecutive same-type/same-status
-// runs, since that's the only tier bulk operations (a season-wide demo reparse) actually flood.
+// the separate jobs dashboard and ops-errors page this replaces. Each tier renders as a flat,
+// newest-first list in a fixed-height scrollable panel, narrowed by a job-type filter rather than
+// pre-collapsed into groups — a filter stays useful regardless of how a burst of activity is
+// distributed, where a grouping heuristic only helps the shapes it was tuned for.
 //
 // Job row actions reuse the same per-pipeline islands the old JobsDashboard used
 // (`IngestJobActions`, `JobRetryButton`) — only the grouping/tiering here is new, not the mutations.
@@ -14,6 +15,7 @@ import Link from 'next/link';
 import { fmtUtcShort, tabCls } from '@/lib/util';
 import TabBar from './TabBar';
 import {
+  BACKGROUND_JOB_TYPES,
   JOB_TYPE_LABEL,
   JOB_IN_PROGRESS_STATUSES,
   jobNeedsAttention,
@@ -25,6 +27,7 @@ import { JobRetryButton, JobsLiveRefresh } from './JobActions';
 import { OPERATION_LABELS, type OpsErrorItem } from './OpsErrorList';
 
 type Tier = 'errored' | 'progress' | 'completed';
+type TypeFilter = 'all' | BackgroundJobType | 'ops';
 
 interface JobEvent {
   kind: 'job';
@@ -44,6 +47,12 @@ function jobTier(job: BackgroundJobRow): Tier {
   if (jobNeedsAttention(job)) return 'errored';
   if (JOB_IN_PROGRESS_STATUSES.has(job.status)) return 'progress';
   return 'completed';
+}
+
+function matchesFilter(e: Event, filter: TypeFilter): boolean {
+  if (filter === 'all') return true;
+  if (e.kind === 'ops') return filter === 'ops';
+  return e.job.jobType === filter;
 }
 
 function StatusPill({ status }: { status: string }) {
@@ -134,7 +143,19 @@ function JobEventRow({ event }: { event: JobEvent }) {
       </div>
       <div className="flex flex-col items-end gap-1 text-right shrink-0">
         <span className="font-mono text-[10px] text-[var(--color-text-secondary)] tabular-nums">{event.when ?? '—'}</span>
-        <JobRowActions job={job} />
+        <div className="flex items-center gap-2">
+          {job.ghRunUrl && (
+            <a
+              href={job.ghRunUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-[10px] text-[var(--color-accent-blue-fg)] hover:underline"
+            >
+              action log ↗
+            </a>
+          )}
+          <JobRowActions job={job} />
+        </div>
       </div>
     </div>
   );
@@ -186,63 +207,11 @@ function OpsEventRow({ event, onJump, onDismissed }: {
   );
 }
 
-interface CompletedCluster {
-  key: string;
-  jobType: BackgroundJobType;
-  status: string;
-  items: JobEvent[];
-}
-
-const CLUSTER_MIN = 5;
-
-/** Collapse consecutive (already time-sorted) same-type/same-status completions into one rollup —
- * this is what makes a 40-match bulk reparse read as one line instead of 40. Real bursts cluster
- * naturally since they finish close together and land adjacent once sorted; nothing here depends on
- * a persisted "batch" concept. */
-function clusterCompleted(events: JobEvent[]): (JobEvent | CompletedCluster)[] {
-  const out: (JobEvent | CompletedCluster)[] = [];
-  let i = 0;
-  while (i < events.length) {
-    const cur = events[i];
-    let j = i + 1;
-    while (j < events.length && events[j].job.jobType === cur.job.jobType && events[j].job.status === cur.job.status) {
-      j++;
-    }
-    const run = events.slice(i, j);
-    if (run.length >= CLUSTER_MIN) {
-      out.push({ key: `cluster:${cur.key}`, jobType: cur.job.jobType, status: cur.job.status, items: run });
-    } else {
-      out.push(...run);
-    }
-    i = j;
-  }
-  return out;
-}
-
-function ClusterRow({ cluster }: { cluster: CompletedCluster }) {
-  return (
-    <details className="border-t border-[var(--color-border-tertiary)]">
-      <summary className="cursor-pointer list-none px-3 py-2.5 flex items-center gap-2 flex-wrap">
-        <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">▶</span>
-        <TypeBadge jobType={cluster.jobType} />
-        <StatusPill status={cluster.status} />
-        <span className="font-mono text-[12.5px]">{cluster.items.length} jobs</span>
-      </summary>
-      <ul className="pb-2">
-        {cluster.items.map((e) => (
-          <li key={e.key} className="px-3 py-1 flex items-center justify-between gap-3 pl-9">
-            <Link href={e.job.subject.href} className="font-mono text-[11.5px] hover:underline truncate">
-              {e.job.subject.label}
-            </Link>
-            <span className="font-mono text-[10px] text-[var(--color-text-secondary)] tabular-nums shrink-0">
-              {e.when ?? '—'}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </details>
-  );
-}
+const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  ...BACKGROUND_JOB_TYPES.map((t) => ({ value: t, label: JOB_TYPE_LABEL[t] })),
+  { value: 'ops', label: 'ops errors' },
+];
 
 export function AdminActivityFeed({
   jobs,
@@ -274,29 +243,37 @@ export function AdminActivityFeed({
       ...jobEvents.filter((e) => jobTier(e.job) === 'errored'),
       ...opsEvents,
     ].sort((a, b) => (b.when ?? '').localeCompare(a.when ?? ''));
-    const progress = jobEvents.filter((e) => jobTier(e.job) === 'progress');
-    const completed = jobEvents.filter((e) => jobTier(e.job) === 'completed');
+    const progress: Event[] = jobEvents.filter((e) => jobTier(e.job) === 'progress');
+    const completed: Event[] = jobEvents.filter((e) => jobTier(e.job) === 'completed');
 
     return { errored, progress, completed };
   }, [jobs, liveOpsErrors]);
-
-  const completedClustered = useMemo(() => clusterCompleted(completed), [completed]);
 
   const [tab, setTab] = useState<Tier>(() => {
     if (errored.length > 0) return 'errored';
     if (progress.length > 0) return 'progress';
     return 'completed';
   });
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+
+  const byTier: Record<Tier, Event[]> = { errored, progress, completed };
+  const visible = byTier[tab].filter((e) => matchesFilter(e, typeFilter));
 
   function dismissOne(id: number) {
     setDismissed((prev) => new Set(prev).add(id));
   }
 
+  const EMPTY_MESSAGE: Record<Tier, string> = {
+    errored: 'Nothing needs attention.',
+    progress: 'Nothing running right now.',
+    completed: 'Nothing completed yet.',
+  };
+
   return (
     <>
       <JobsLiveRefresh />
 
-      <TabBar bordered className="mb-4">
+      <TabBar bordered className="mb-3">
         <button onClick={() => setTab('errored')} className={tabCls(tab === 'errored')}>
           Errored ({errored.length})
         </button>
@@ -308,48 +285,38 @@ export function AdminActivityFeed({
         </button>
       </TabBar>
 
-      {tab === 'errored' &&
-        (errored.length === 0 ? (
-          <div className="font-mono text-[13px] text-[var(--color-text-secondary)] border border-[var(--color-border-tertiary)] rounded px-4 py-8 text-center">
-            Nothing needs attention.
-          </div>
-        ) : (
-          <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden [&>*:first-child]:border-t-0">
-            {errored.map((e) =>
-              e.kind === 'job' ? (
-                <JobEventRow key={e.key} event={e} />
-              ) : (
-                <OpsEventRow key={e.key} event={e} onJump={onJump} onDismissed={dismissOne} />
-              ),
-            )}
-          </div>
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        {TYPE_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => setTypeFilter(f.value)}
+            aria-pressed={typeFilter === f.value}
+            className={`font-mono text-[11px] px-2.5 py-1 rounded border transition-colors ${
+              typeFilter === f.value
+                ? 'border-[var(--color-accent)] text-[var(--color-text-primary)] bg-[var(--color-accent-blue-bg)]'
+                : 'border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+            }`}
+          >
+            {f.label}
+          </button>
         ))}
+      </div>
 
-      {tab === 'progress' &&
-        (progress.length === 0 ? (
-          <div className="font-mono text-[13px] text-[var(--color-text-secondary)] border border-[var(--color-border-tertiary)] rounded px-4 py-8 text-center">
-            Nothing running right now.
-          </div>
-        ) : (
-          <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden [&>*:first-child]:border-t-0">
-            {progress.map((e) => (
+      {visible.length === 0 ? (
+        <div className="font-mono text-[13px] text-[var(--color-text-secondary)] border border-[var(--color-border-tertiary)] rounded px-4 py-8 text-center">
+          {byTier[tab].length === 0 ? EMPTY_MESSAGE[tab] : 'Nothing matches this filter.'}
+        </div>
+      ) : (
+        <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden max-h-[520px] overflow-y-auto [&>*:first-child]:border-t-0">
+          {visible.map((e) =>
+            e.kind === 'job' ? (
               <JobEventRow key={e.key} event={e} />
-            ))}
-          </div>
-        ))}
-
-      {tab === 'completed' &&
-        (completedClustered.length === 0 ? (
-          <div className="font-mono text-[13px] text-[var(--color-text-secondary)] border border-[var(--color-border-tertiary)] rounded px-4 py-8 text-center">
-            Nothing completed yet.
-          </div>
-        ) : (
-          <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden max-h-[480px] overflow-y-auto [&>*:first-child]:border-t-0">
-            {completedClustered.map((item) =>
-              'items' in item ? <ClusterRow key={item.key} cluster={item} /> : <JobEventRow key={item.key} event={item} />,
-            )}
-          </div>
-        ))}
+            ) : (
+              <OpsEventRow key={e.key} event={e} onJump={onJump} onDismissed={dismissOne} />
+            ),
+          )}
+        </div>
+      )}
     </>
   );
 }
