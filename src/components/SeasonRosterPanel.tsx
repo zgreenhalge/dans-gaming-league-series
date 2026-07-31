@@ -25,6 +25,8 @@ interface Props {
   currentPlayerId: number | null;
 }
 
+const GREEN_BTN_CLS = 'border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110';
+
 /** Roster editor for an UPCOMING season's `season_players` — admins manage the full roster,
  * everyone else can join or drop themselves. Only rendered while the season is UPCOMING (the API
  * enforces the same gate server-side). */
@@ -73,7 +75,7 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
             className={`tracked text-[10px] font-semibold px-2 py-1 border transition-colors disabled:opacity-40 ${
               selfOnRoster
                 ? 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)]'
-                : 'border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110'
+                : GREEN_BTN_CLS
             }`}
           >
             {pendingPlayerId === currentPlayerId ? '…' : selfOnRoster ? 'Leave Season' : 'Join Season'}
@@ -134,7 +136,7 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
             disabled={!addPlayerId || pendingPlayerId != null}
             className={`tracked text-[10px] font-semibold px-3 py-2 border transition-colors disabled:opacity-40 ${
               addPlayerId
-                ? 'border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110'
+                ? GREEN_BTN_CLS
                 : 'border-[var(--color-border-primary)] text-[var(--color-text-secondary)]'
             }`}
           >

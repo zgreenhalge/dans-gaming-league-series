@@ -171,52 +171,43 @@ function bestMatchPairing(
   return best!;
 }
 
-/** Picks whichever already-matched team creates the most new opponent pairs against a leftover
- * team (ties broken via `rand`), to face it in a bonus (doubleheader) match. `matches` is always
- * non-empty whenever this is called — it's only reached when a round had enough teams to form at
- * least one primary match. */
-function pickDonorTeam(matches: MatchPlan[], leftoverTeam: [number, number], seen: ReadonlySet<string>, rand: () => number): [number, number] {
-  let best = matches[0].shirts;
+/** Picks whichever candidate scores highest, ties broken via reservoir sampling with `rand` — the
+ * shared "score every candidate, keep the best" shape behind pickDonorTeam/pickDonorPlayer. */
+function pickBestByScore<T>(candidates: T[], score: (candidate: T) => number, rand: () => number): T {
+  let best = candidates[0];
   let bestScore = -1;
   let tieCount = 0;
-  for (const m of matches) {
-    for (const candidate of [m.shirts, m.skins] as [number, number][]) {
-      const score = newOpponentPairCount(leftoverTeam, candidate, seen);
-      if (score > bestScore) {
-        bestScore = score;
-        best = candidate;
-        tieCount = 1;
-      } else if (score === bestScore) {
-        tieCount++;
-        if (shouldTakeTiedCandidate(tieCount, rand)) best = candidate;
-      }
+  for (const candidate of candidates) {
+    const s = score(candidate);
+    if (s > bestScore) {
+      bestScore = s;
+      best = candidate;
+      tieCount = 1;
+    } else if (s === bestScore) {
+      tieCount++;
+      if (shouldTakeTiedCandidate(tieCount, rand)) best = candidate;
     }
   }
   return best;
 }
 
+/** Picks whichever already-matched team creates the most new opponent pairs against a leftover
+ * team, to face it in a bonus (doubleheader) match. `matches` is always non-empty whenever this is
+ * called — it's only reached when a round had enough teams to form at least one primary match. */
+function pickDonorTeam(matches: MatchPlan[], leftoverTeam: [number, number], seen: ReadonlySet<string>, rand: () => number): [number, number] {
+  const candidates = matches.flatMap((m) => [m.shirts, m.skins] as [number, number][]);
+  return pickBestByScore(candidates, (candidate) => newOpponentPairCount(leftoverTeam, candidate, seen), rand);
+}
+
 /** Same idea as pickDonorTeam, but borrowing a single player (for the 3-leftover case, where the
  * bonus match pairs that donor with the individually-left-over seed). */
 function pickDonorPlayer(matches: MatchPlan[], leftoverTeam: [number, number], seen: ReadonlySet<string>, rand: () => number): number {
-  let best = matches[0].shirts[0];
-  let bestScore = -1;
-  let tieCount = 0;
-  for (const m of matches) {
-    for (const team of [m.shirts, m.skins] as [number, number][]) {
-      for (const player of team) {
-        const score = (seen.has(pairKey(player, leftoverTeam[0])) ? 0 : 1) + (seen.has(pairKey(player, leftoverTeam[1])) ? 0 : 1);
-        if (score > bestScore) {
-          bestScore = score;
-          best = player;
-          tieCount = 1;
-        } else if (score === bestScore) {
-          tieCount++;
-          if (shouldTakeTiedCandidate(tieCount, rand)) best = player;
-        }
-      }
-    }
-  }
-  return best;
+  const candidates = matches.flatMap((m) => [...m.shirts, ...m.skins]);
+  return pickBestByScore(
+    candidates,
+    (player) => (seen.has(pairKey(player, leftoverTeam[0])) ? 0 : 1) + (seen.has(pairKey(player, leftoverTeam[1])) ? 0 : 1),
+    rand,
+  );
 }
 
 // ─── Shirts/skins side balance ─────────────────────────────────────────────────────────────────
@@ -304,9 +295,11 @@ const MAX_ATTEMPTS = 200;
 /** The league's supported roster-size range (see docs/architecture.md). `bestMatchPairing()`'s
  * search is factorial in team count (~seedCount/2) — cheap within this range (well under 10
  * teams/round) but combinatorially explosive well beyond it, so seedCount is rejected outright
- * rather than left to time out or hang whenever this is wired to a live roster size. */
-const MIN_SEED_COUNT = 7;
-const MAX_SEED_COUNT = 19;
+ * rather than left to time out or hang whenever this is wired to a live roster size. Exported so
+ * callers (e.g. the schedule-generation API route) can validate a roster size up front with the
+ * same bounds, instead of a second hardcoded 7/19 that could drift out of sync with this one. */
+export const MIN_SEED_COUNT = 7;
+export const MAX_SEED_COUNT = 19;
 
 export function buildSeasonSchedule(seedCount: number, options?: { doubleheaderPolicy?: DoubleheaderPolicy }): WeekPlan[] {
   if (seedCount < MIN_SEED_COUNT || seedCount > MAX_SEED_COUNT) {

@@ -3,7 +3,7 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason, getSeasonRoster, getSeasonScheduleDraft } from '@/lib/queries';
 import { generateSeasonScheduleDraft, deleteSeasonScheduleDraft } from '@/lib/season-schedule-draft-engine';
-import type { DoubleheaderPolicy } from '@/lib/season-schedule';
+import { MIN_SEED_COUNT, MAX_SEED_COUNT, type DoubleheaderPolicy } from '@/lib/season-schedule';
 
 const supabaseAdmin = getAdminClient();
 
@@ -28,7 +28,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Invalid season ID' }, { status: 400 });
   }
 
-  const season = await getSeason(seasonId);
+  // Independent reads — none depends on another's result, so they run concurrently rather than
+  // paying three sequential round trips.
+  const [season, roster, body] = await Promise.all([
+    getSeason(seasonId),
+    getSeasonRoster(seasonId),
+    req.json().catch(() => ({})),
+  ]);
+
   if (!season || season.is_gauntlet) {
     return NextResponse.json({ error: 'Regular season not found' }, { status: 404 });
   }
@@ -36,15 +43,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Season must be UPCOMING to generate its matchup draft' }, { status: 400 });
   }
 
-  const body = await req.json().catch(() => ({}));
   const doubleheaderPolicy: DoubleheaderPolicy = (body as { doubleheaderPolicy?: DoubleheaderPolicy })?.doubleheaderPolicy === 'never' ? 'never' : 'auto';
-
-  const roster = await getSeasonRoster(seasonId);
   const playerIds = roster.map((r) => r.player_id);
 
-  if (playerIds.length < 7 || playerIds.length > 19) {
+  if (playerIds.length < MIN_SEED_COUNT || playerIds.length > MAX_SEED_COUNT) {
     return NextResponse.json(
-      { error: `This season's roster has ${playerIds.length} players — matchup generation supports 7-19` },
+      { error: `This season's roster has ${playerIds.length} players — matchup generation supports ${MIN_SEED_COUNT}-${MAX_SEED_COUNT}` },
       { status: 400 },
     );
   }

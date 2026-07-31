@@ -32,26 +32,7 @@ export async function generateSeasonScheduleDraft(
     }
   }
 
-  const { data: existingWeeks, error: existingErr } = await supabaseAdmin
-    .from('season_schedule_draft_weeks')
-    .select('id')
-    .eq('season_id', seasonId);
-  if (existingErr) throw existingErr;
-  const existingWeekIds = ((existingWeeks ?? []) as { id: number }[]).map((w) => w.id);
-
-  if (existingWeekIds.length > 0) {
-    const { error: delMatchesErr } = await supabaseAdmin
-      .from('season_schedule_draft_matches')
-      .delete()
-      .in('draft_week_id', existingWeekIds);
-    if (delMatchesErr) throw delMatchesErr;
-
-    const { error: delWeeksErr } = await supabaseAdmin
-      .from('season_schedule_draft_weeks')
-      .delete()
-      .eq('season_id', seasonId);
-    if (delWeeksErr) throw delWeeksErr;
-  }
+  await deleteSeasonScheduleDraft(supabaseAdmin, seasonId);
 
   for (const week of plan) {
     const { data: weekRow, error: weekErr } = await supabaseAdmin
