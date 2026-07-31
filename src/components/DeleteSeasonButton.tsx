@@ -6,6 +6,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ArmedConfirmButton } from './ArmedConfirmButton';
 
 export default function DeleteSeasonButton({ seasonId }: { seasonId: number }) {
   const router = useRouter();
@@ -31,33 +32,18 @@ export default function DeleteSeasonButton({ seasonId }: { seasonId: number }) {
   }
 
   return (
-    <div className="flex items-center gap-2">
-      {armed ? (
-        <>
-          <button
-            onClick={del}
-            disabled={busy}
-            className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-accent-red-border)] bg-[var(--color-accent-red-bg)] text-[var(--color-accent-red-fg)] hover:brightness-110 transition-all disabled:opacity-40"
-          >
-            {busy ? 'Deleting…' : 'Confirm Delete'}
-          </button>
-          <button
-            onClick={() => setArmed(false)}
-            disabled={busy}
-            className="font-mono text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-          >
-            Cancel
-          </button>
-        </>
-      ) : (
-        <button
-          onClick={() => setArmed(true)}
-          className="font-mono text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg)] transition-colors underline decoration-dotted"
-        >
-          Delete
-        </button>
-      )}
-      {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{error}</div>}
-    </div>
+    <ArmedConfirmButton
+      armed={armed}
+      onArm={() => setArmed(true)}
+      onCancel={() => setArmed(false)}
+      onConfirm={del}
+      busy={busy}
+      error={error}
+      triggerLabel="Delete"
+      triggerStyle="link"
+      confirmLabel="Confirm Delete"
+      busyLabel="Deleting…"
+      variant="danger"
+    />
   );
 }

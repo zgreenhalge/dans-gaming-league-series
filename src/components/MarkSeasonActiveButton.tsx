@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { ArmedConfirmButton } from './ArmedConfirmButton';
 
 interface Props {
   seasonId: number;
@@ -60,33 +61,17 @@ export default function MarkSeasonActiveButton({ seasonId, canEdit, seasonStatus
   if (!canEdit || seasonStatus !== 'UPCOMING') return null;
 
   return (
-    <div className="flex items-center gap-2">
-      {armed ? (
-        <>
-          <button
-            onClick={activate}
-            disabled={busy}
-            className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-accent-green-border)] bg-[var(--color-accent-green-bg)] text-[var(--color-accent-green-fg)] hover:brightness-110 transition-all disabled:opacity-40"
-          >
-            {busy ? 'Activating…' : 'Confirm Go Live'}
-          </button>
-          <button
-            onClick={() => setArmed(false)}
-            disabled={busy}
-            className="font-mono text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-          >
-            Cancel
-          </button>
-        </>
-      ) : (
-        <button
-          onClick={() => setArmed(true)}
-          className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
-        >
-          Mark Active
-        </button>
-      )}
-      {error && <div className="text-[11px] text-[var(--color-accent-red-fg)]">{error}</div>}
-    </div>
+    <ArmedConfirmButton
+      armed={armed}
+      onArm={() => setArmed(true)}
+      onCancel={() => setArmed(false)}
+      onConfirm={activate}
+      busy={busy}
+      error={error}
+      triggerLabel="Mark Active"
+      confirmLabel="Confirm Go Live"
+      busyLabel="Activating…"
+      variant="primary"
+    />
   );
 }

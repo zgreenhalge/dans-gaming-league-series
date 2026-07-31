@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ArmedConfirmButton } from './ArmedConfirmButton';
 
 export interface GauntletRow {
   regularSeasonId: number;
@@ -106,33 +107,19 @@ function GauntletLifecycleRow({ season }: { season: GauntletRow }) {
                 Force reset…
               </button>
             )
-          ) : resetArmed ? (
-            <>
-              <button
-                type="button"
-                onClick={() => reset(false)}
-                disabled={busy}
-                className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-accent-red-border)] bg-[var(--color-accent-red-bg)] text-[var(--color-accent-red-fg)] hover:brightness-110 transition-all disabled:opacity-40"
-              >
-                {busy ? 'Resetting…' : 'Confirm Reset'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setResetArmed(false)}
-                disabled={busy}
-                className="font-mono text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-              >
-                Cancel
-              </button>
-            </>
           ) : (
-            <button
-              type="button"
-              onClick={() => setResetArmed(true)}
-              className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
-            >
-              Reset
-            </button>
+            // `error` is shown once already, next to the season name above — not passed here too.
+            <ArmedConfirmButton
+              armed={resetArmed}
+              onArm={() => setResetArmed(true)}
+              onCancel={() => setResetArmed(false)}
+              onConfirm={() => reset(false)}
+              busy={busy}
+              triggerLabel="Reset"
+              confirmLabel="Confirm Reset"
+              busyLabel="Resetting…"
+              variant="danger"
+            />
           )}
         </div>
       </div>
