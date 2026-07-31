@@ -1,6 +1,6 @@
-// Shared plumbing for scripts/dathost-golden-diff.ts and scripts/dathost-golden-apply.ts: the
-// DatHost REST client basics and the tracked cfg-file list. Both scripts operate on the same golden
-// config, so this keeps them from drifting out of sync with each other.
+// Shared plumbing for the DatHost-facing scripts (dathost-golden-diff.ts, dathost-golden-apply.ts,
+// dathost-cleanup.ts, dathost-smoke.ts): the DatHost REST client basics, the tracked cfg-file list,
+// and a tiny CLI flag reader. Keeps them from drifting out of sync with each other.
 
 import { join } from 'node:path';
 
@@ -44,4 +44,13 @@ export async function api(
     /* not JSON — file downloads are raw text/bytes */
   }
   return { status: res.status, text, json };
+}
+
+/** Reads the value following `flag` in `args` (e.g. `flagValue(argv, '--capture')`), or `undefined`
+ *  if the flag is absent or has no value (the next token is itself a flag or missing). */
+export function flagValue(args: string[], flag: string): string | undefined {
+  const i = args.indexOf(flag);
+  if (i === -1) return undefined;
+  const v = args[i + 1];
+  return v && !v.startsWith('--') ? v : undefined;
 }

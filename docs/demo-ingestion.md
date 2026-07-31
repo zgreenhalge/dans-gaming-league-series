@@ -83,7 +83,7 @@ recorded score.
 | `smokes.ts` | CT-side smokes interfering with pushes, from `smokegrenade_detonate`/`_expired` + sampled enemy positions |
 | `unusedUtility.ts` | Buy-menu value of grenades held at death (`Unused Util/Death`) |
 | `reload.ts` | Rounds dropped on reload, read from the discrete `weapon_reload` event (`Rounds Dropped/Reload`) |
-| `weaponClasses.ts` | CS2 weapon → category (pistol/smg/rifle/sniper/shotgun) allowlist, shared by `weaponStats.ts` |
+| `weaponClasses.ts` | CS2 weapon → category (pistol/smg/rifle/sniper/shotgun) allowlist; also the gun/non-gun source of truth for `accuracy.ts`, shared with `weaponStats.ts` |
 | `economy.ts` | Per-round eco/force-buy/full-buy classification from `CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` at each round's freeze-time-end |
 | `weaponStats.ts` | Per-weapon-category and per-round-economy shot/accuracy/damage/rounds breakdowns |
 
