@@ -143,7 +143,9 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
 
   // A tab with nothing behind it (e.g. a gauntlet before any pod is seeded) is hidden rather than
   // shown with a "nothing here yet" message — mirrors the H2H empty check in `H2HSection`.
-  const hasLeaderboard = leaderboard.length > 0;
+  // A regular season's leaderboard also hides while its roster is still open for edit (UPCOMING,
+  // see SeasonRosterPanel) — any rows at that point are leftover/placeholder, not real standings.
+  const hasLeaderboard = leaderboard.length > 0 && !(!isGauntlet && seasonStatus === 'UPCOMING');
   const hasStats = leaderboard.length > 0;
   const hasH2H = h2hData.players.length > 0 && (h2hData.duos.length > 0 || h2hData.rivals.length > 0);
   const hasSchedule = isGauntlet ? bracketShape.length > 0 || rounds.length > 0 : schedule.length > 0;

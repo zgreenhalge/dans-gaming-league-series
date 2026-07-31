@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import PlayerAvatar from './PlayerAvatar';
+import { PlayerName } from './PlayerName';
 
 interface RosterEntry {
   player_id: number;
@@ -89,10 +91,12 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
             key={r.player_id}
             className="lift-row flex items-center justify-between gap-3 px-4 py-2.5 border-b border-[var(--color-border-tertiary)] last:border-b-0"
           >
-            <div className="flex items-center gap-3">
+            <Link href={`/players/${r.player_id}`} className="flex items-center gap-3">
               <PlayerAvatar name={r.player_name} imageUrl={r.steam_avatar_url} size="sm" />
-              <span className="font-display text-[14px] font-semibold">{r.player_name}</span>
-            </div>
+              <span className="font-display text-[14px] font-semibold">
+                <PlayerName name={r.player_name} isMe={currentPlayerId !== null && r.player_id === currentPlayerId} />
+              </span>
+            </Link>
             {isAdmin && (
               <button
                 type="button"
