@@ -37,7 +37,7 @@ export function RecomputeButton() {
         disabled={state === 'running'}
         className="font-mono text-[11px] px-2.5 py-1 rounded border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-50"
       >
-        {state === 'running' ? 'starting…' : 'Recompute now'}
+        {state === 'running' ? 'starting…' : 'Recompute all EHOGs'}
       </button>
       {state === 'started' && (
         <span className="font-mono text-[10px] text-[var(--color-accent-green-fg)]">recompute started — runs in the background</span>
