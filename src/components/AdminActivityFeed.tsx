@@ -27,7 +27,7 @@ import { JobRetryButton, JobsLiveRefresh } from './JobActions';
 import { OPERATION_LABELS, type OpsErrorItem } from './OpsErrorList';
 
 type Tier = 'errored' | 'progress' | 'completed';
-type TypeFilter = 'all' | BackgroundJobType | 'ops';
+type TypeFilter = 'all' | BackgroundJobType;
 
 interface JobEvent {
   kind: 'job';
@@ -51,7 +51,7 @@ function jobTier(job: BackgroundJobRow): Tier {
 
 function matchesFilter(e: Event, filter: TypeFilter): boolean {
   if (filter === 'all') return true;
-  if (e.kind === 'ops') return filter === 'ops';
+  if (e.kind === 'ops') return false;
   return e.job.jobType === filter;
 }
 
@@ -210,7 +210,6 @@ function OpsEventRow({ event, onJump, onDismissed }: {
 const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   ...BACKGROUND_JOB_TYPES.map((t) => ({ value: t, label: JOB_TYPE_LABEL[t] })),
-  { value: 'ops', label: 'ops errors' },
 ];
 
 export function AdminActivityFeed({
