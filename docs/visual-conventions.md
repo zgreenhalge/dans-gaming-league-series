@@ -110,7 +110,38 @@ Tables remain the right choice the moment there are multiple rows to compare acr
 with a row of tab buttons plus filter controls (season filter, side checkboxes, etc.). It owns the
 `flex-wrap` layout that keeps the controls from overrunning the page on narrow viewports — tabs as
 children, controls in the `controls` slot (pushed right via `ml-auto`), `bordered` for the standard
-bottom rule. Don't hand-roll a `flex justify-between` tab row; it won't wrap.
+bottom rule. Don't hand-roll a `flex justify-between` tab row; it won't wrap. This is also the *only*
+tab visual language on the site — a page-level tab row, a panel's internal status filter, and a
+card's own sub-view switch should all render as `TabBar`/`tabCls()`, sized or spaced via a prop
+rather than a second, differently-styled tab control. Two tab components that look different for no
+reason reads as two unrelated features, not one drill-down.
+
+## Console & admin-surface shapes
+
+Data-heavy operational pages (admin dashboards, ops consoles) recur enough to have their own shape
+conventions, distinct from the content-page patterns above:
+
+- **Shape the page around the subject, not the tool.** When a console surfaces the same underlying
+  data from multiple angles — a live status feed vs. a searchable management surface — split at that
+  seam, not at "which table does this come from." A live feed and a management surface interact
+  rarely enough that switching between them costs nothing (no page navigation), but rendering both at
+  once usually just produces two things fighting for width.
+- **Master-detail for "browse many, act on one."** A picker or search box on one side and the
+  selected subject's card (status + actions) on the other is one shape, reused for every subject
+  type it applies to — a match picker, a player search, a season list are the same interaction and
+  should share one layout rather than each getting its own bordered panel repeating the same chrome.
+- **A shared singleton resource gets its own standalone, always-visible panel** — not a row in an
+  activity feed, not an entry in a subject picker. The kind of resource one physical thing serves
+  many matches (the shared DatHost match server is the current example) isn't "an event that
+  happened" or "a thing you search for," so it shouldn't be gated behind a tab or a query.
+- **Default a severity-tabbed view to whatever's most urgent, not to the first tab.** A tab bar over
+  status tiers (e.g. Errored / In Progress / Completed) should land on the first non-empty tier in
+  that priority order, derived from the same counts the tab badges render — never a hardcoded
+  default — so nobody has to click past "nothing's wrong here" to find what needs attention.
+- **When consolidating several surfaces into one page, actively remove what becomes duplicate.**
+  Don't just concatenate sections. If a fact one surface shows is now equally visible somewhere else
+  on the same page (a job's error state, a shared resource's current occupant), cut it from the
+  second location instead of rendering it twice — keep only what's genuinely unique to that spot.
 
 ## When extending this system
 
