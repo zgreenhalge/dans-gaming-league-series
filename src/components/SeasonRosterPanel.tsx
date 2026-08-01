@@ -45,11 +45,17 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
     setError(null);
     setPendingPlayerId(playerId);
     try {
-      const res = await fetch(`/api/seasons/${seasonId}/players`, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ player_id: playerId }),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`/api/seasons/${seasonId}/players`, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ player_id: playerId }),
+        });
+      } catch {
+        setError('Network error — roster update failed.');
+        return;
+      }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error ?? 'Roster update failed.');
@@ -118,6 +124,7 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
           <select
             value={addPlayerId}
             onChange={(e) => setAddPlayerId(e.target.value)}
+            aria-label="Add a player to the roster"
             className="flex-1 font-mono text-[13px] px-3 py-2 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
           >
             <option value="">Add a player…</option>
