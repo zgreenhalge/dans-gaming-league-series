@@ -38,11 +38,22 @@ function updateMatchSlot(week: DraftScheduleWeek, matchNumber: number, slot: Slo
   };
 }
 
-/** Full roster in every dropdown, no exclusion — unlike gauntlet's slot pickers (where a seed can
- * only occupy one bracket slot, ever), a player here can legitimately occupy two slots the same
- * week (a doubleheader), so there's nothing to prune. validateDraftIntegrity() catches the
- * mistakes (3+ appearances, self-paired matches) that unrestricted picking can produce. */
-function PlayerSelect({ players, value, onChange }: { players: Player[]; value: number; onChange: (id: number) => void }) {
+/** Full roster in every dropdown — a player can legitimately occupy two slots the same week (a
+ * doubleheader), so there's no exclusion across matches. Within one match, though, a player
+ * already in one of its other 3 slots is shown greyed out (still visible, just unselectable) —
+ * that would always be a self-paired match, which validateDraftIntegrity() would flag as an error
+ * anyway, so it's caught here before the fact instead of after. */
+function PlayerSelect({
+  players,
+  value,
+  excludeIds,
+  onChange,
+}: {
+  players: Player[];
+  value: number;
+  excludeIds: ReadonlySet<number>;
+  onChange: (id: number) => void;
+}) {
   return (
     <select
       value={value}
@@ -50,7 +61,7 @@ function PlayerSelect({ players, value, onChange }: { players: Player[]; value: 
       className="font-mono text-[12px] px-2 py-1.5 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
     >
       {players.map((p) => (
-        <option key={p.id} value={p.id}>{p.name}</option>
+        <option key={p.id} value={p.id} disabled={excludeIds.has(p.id)}>{p.name}</option>
       ))}
     </select>
   );
@@ -147,7 +158,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
     return (
       <div className="flex flex-col gap-4">
         <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-          No matchup draft yet — generate one from the current roster ({players.length} players).
+          No schedule yet — generate one from the current roster ({players.length} players).
         </div>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)]">
@@ -201,14 +212,20 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
               {week.matches.map((m) => {
                 const onSlotChange = (slot: SlotKey) => (id: number) =>
                   setWeeks((prev) => prev.map((w) => (w.week_number === week.week_number ? updateMatchSlot(w, m.match_number, slot, id) : w)));
+                // Every other slot in *this* match — never this match's own value, so a slot's
+                // current selection always stays selectable, but each other occupied slot is
+                // excluded from the rest (self-pairing within one match makes no sense).
+                const slotValues: Record<SlotKey, number> = { shirts0: m.shirts[0], shirts1: m.shirts[1], skins0: m.skins[0], skins1: m.skins[1] };
+                const excludeFor = (slot: SlotKey) =>
+                  new Set(Object.entries(slotValues).filter(([k]) => k !== slot).map(([, id]) => id));
                 return (
                   <div key={m.match_number} className="flex items-center gap-2 flex-wrap font-mono text-[11px] text-[var(--color-text-secondary)]">
                     <span className="tracked text-[9px] w-14 shrink-0">Match {m.match_number}</span>
-                    <PlayerSelect players={players} value={m.shirts[0]} onChange={onSlotChange('shirts0')} />
-                    <PlayerSelect players={players} value={m.shirts[1]} onChange={onSlotChange('shirts1')} />
+                    <PlayerSelect players={players} value={m.shirts[0]} excludeIds={excludeFor('shirts0')} onChange={onSlotChange('shirts0')} />
+                    <PlayerSelect players={players} value={m.shirts[1]} excludeIds={excludeFor('shirts1')} onChange={onSlotChange('shirts1')} />
                     <span>vs</span>
-                    <PlayerSelect players={players} value={m.skins[0]} onChange={onSlotChange('skins0')} />
-                    <PlayerSelect players={players} value={m.skins[1]} onChange={onSlotChange('skins1')} />
+                    <PlayerSelect players={players} value={m.skins[0]} excludeIds={excludeFor('skins0')} onChange={onSlotChange('skins0')} />
+                    <PlayerSelect players={players} value={m.skins[1]} excludeIds={excludeFor('skins1')} onChange={onSlotChange('skins1')} />
                   </div>
                 );
               })}
@@ -256,7 +273,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
           disabled={busy || !integrity.ok}
           className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors disabled:opacity-40"
         >
-          {busyAction === 'save' ? 'Saving…' : 'Save Draft'}
+          {busyAction === 'save' ? 'Saving…' : 'Save Changes'}
         </button>
         <button
           type="button"
@@ -280,7 +297,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
           disabled={busy}
           className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg)] transition-colors underline decoration-dotted disabled:opacity-40"
         >
-          {busyAction === 'clear' ? 'Clearing…' : 'Clear Draft'}
+          {busyAction === 'clear' ? 'Clearing…' : 'Clear Schedule'}
         </button>
       </div>
     </div>

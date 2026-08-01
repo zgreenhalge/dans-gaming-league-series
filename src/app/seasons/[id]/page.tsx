@@ -1,7 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { TopbarShell } from '@/components/TopbarShell';
 import {
   getSeason,
@@ -9,6 +8,7 @@ import {
   getSeasonSchedule,
   getSeasonRoster,
   getPlayersById,
+  hasSeasonScheduleDraft,
   getGauntletRounds,
   getGauntletBracketShape,
   getGauntletSeasonLeaderboard,
@@ -26,6 +26,7 @@ import type { Season } from '@/lib/types';
 import SeasonStartDateButton from '@/components/SeasonStartDateButton';
 import MarkSeasonActiveButton from '@/components/MarkSeasonActiveButton';
 import { SeasonRosterPanel } from '@/components/SeasonRosterPanel';
+import { SeasonScheduleEntryPoint } from '@/components/SeasonScheduleEntryPoint';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 import { seasonTitle, weekWindow, matchTitle } from '@/lib/util';
@@ -216,7 +217,7 @@ export default async function SeasonPage({
 
   const isUpcoming = season.status === 'UPCOMING';
 
-  const [leaderboard, schedule, gauntletRounds, gauntletBracketShape, gauntletLeaderboard, h2hData, gauntletH2hData, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics, playersById] = await Promise.all([
+  const [leaderboard, schedule, gauntletRounds, gauntletBracketShape, gauntletLeaderboard, h2hData, gauntletH2hData, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics, playersById, hasSchedule] = await Promise.all([
     getSeasonLeaderboard(seasonId),
     getSeasonSchedule(seasonId),
     linkedGauntlet ? getGauntletRounds(linkedGauntlet.id) : Promise.resolve(null),
@@ -231,6 +232,7 @@ export default async function SeasonPage({
     getAllSabremetrics(seasonId),
     linkedGauntlet ? getAllSabremetrics(linkedGauntlet.id) : Promise.resolve([]),
     isUpcoming ? getPlayersById() : Promise.resolve(null),
+    isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
   ]);
   // getSeasonRoster() needs playersById too — pass the copy just fetched above instead of letting
   // it do its own redundant full players-table read.
@@ -289,14 +291,7 @@ export default async function SeasonPage({
               isAdmin={isAdmin}
               currentPlayerId={currentPlayerId}
             />
-            {isAdmin && (
-              <Link
-                href={`/admin/seasons/schedule/${season.id}`}
-                className="tracked text-[10px] font-semibold px-3 py-1.5 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors self-start"
-              >
-                Matchup Draft Editor →
-              </Link>
-            )}
+            {isAdmin && <SeasonScheduleEntryPoint seasonId={season.id} hasSchedule={hasSchedule} />}
           </div>
         )}
         {linkedGauntlet &&

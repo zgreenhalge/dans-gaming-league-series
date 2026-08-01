@@ -17,7 +17,20 @@ export interface DraftWeekWithMatches {
   matches: DraftMatchWithPlayers[];
 }
 
-/** A season's editable matchup draft (`season_schedule_draft_weeks`/`_matches`), fully joined to
+/** Whether a season has a schedule draft yet — a cheap existence check for callers (like the season
+ * page's generate-vs-edit entry point) that only need a yes/no, not the full player-joined draft
+ * `getSeasonScheduleDraft()` returns. */
+export async function hasSeasonScheduleDraft(seasonId: number): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('season_schedule_draft_weeks')
+    .select('id')
+    .eq('season_id', seasonId)
+    .limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
+/** A season's editable schedule draft (`season_schedule_draft_weeks`/`_matches`), fully joined to
  * player rows for display — empty until `generateSeasonScheduleDraft()` (or a hand-built draft)
  * exists for the season. */
 export async function getSeasonScheduleDraft(seasonId: number): Promise<DraftWeekWithMatches[]> {

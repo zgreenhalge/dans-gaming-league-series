@@ -7,8 +7,8 @@ import { getSeason, getSeasonRoster, getSeasonScheduleDraft, toDraftScheduleWeek
 import { seasonTitle } from '@/lib/util';
 
 export const metadata = {
-  title: 'Matchup Draft Editor',
-  description: 'Generate or hand-edit a regular season’s matchup schedule.',
+  title: 'Schedule Editor',
+  description: 'Generate or hand-edit a regular season’s schedule.',
 };
 
 export default async function SeasonScheduleEditorPage({ params }: { params: Promise<{ id: string }> }) {
@@ -34,12 +34,12 @@ export default async function SeasonScheduleEditorPage({ params }: { params: Pro
           { label: 'DGLS', href: '/' },
           { label: 'Admin', href: '/admin' },
           { label: seasonTitle(season.name), href: `/seasons/${seasonId}` },
-          { label: 'Matchup Draft' },
+          { label: 'Schedule' },
         ]}
       />
       <main className="max-w-[900px] mx-auto px-6 pb-16">
         <div className="mt-8 mb-8">
-          <div className="font-display text-[28px] font-semibold leading-tight">Matchup Draft Editor</div>
+          <div className="font-display text-[28px] font-semibold leading-tight">Schedule Editor</div>
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-2">
             {seasonTitle(season.name)} — generate a schedule from the current roster, then hand-edit
             any match before confirming. Confirming requires every roster pair to have played
