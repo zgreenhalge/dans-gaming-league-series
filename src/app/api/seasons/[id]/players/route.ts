@@ -8,9 +8,23 @@ type Access =
   | { ok: true; supabaseAdmin: ReturnType<typeof getAdminClient>; targetPlayerId: number }
   | { ok: false; status: number; error: string };
 
+/** Maps the `season_players_upcoming_only` trigger's raised exception (Postgres default SQLSTATE
+ * P0001) to the same 400 `resolveAccess()` returns for the non-racing case, and everything else to
+ * a 500. The trigger — not this file's pre-check — is what makes the UPCOMING gate atomic: it
+ * row-locks the season and re-verifies status inside the same transaction as the season_players
+ * write, closing the TOCTOU window between resolveAccess()'s read and the write below it. */
+function mapWriteError(error: { code?: string; message: string }): NextResponse {
+  if (error.code === 'P0001') {
+    return NextResponse.json({ error: 'Roster can only be edited while the season is UPCOMING' }, { status: 400 });
+  }
+  return NextResponse.json({ error: error.message }, { status: 500 });
+}
+
 // Admins can add/remove any player; a player can only add/remove themselves. Either way, the
 // roster is only editable while the season hasn't started — once it's ACTIVE, participation is
-// tracked through player_match_stats instead.
+// tracked through player_match_stats instead. This pre-check is a fast, friendly rejection for the
+// common (non-racing) case; the `season_players_upcoming_only` DB trigger is the atomic source of
+// truth that closes the race between this read and the write in POST/DELETE below.
 async function resolveAccess(req: NextRequest, seasonId: number): Promise<Access> {
   const session = await getServerSession(authOptions);
   const requestingPlayerId = session?.user?.playerId;
@@ -63,7 +77,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .from('season_players')
     .insert({ season_id: seasonId, player_id: access.targetPlayerId });
   if (insertErr && (insertErr as { code?: string }).code !== '23505') {
-    return NextResponse.json({ error: insertErr.message }, { status: 500 });
+    return mapWriteError(insertErr as { code?: string; message: string });
   }
 
   return NextResponse.json({ ok: true }, { status: 201 });
@@ -82,7 +96,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     .delete()
     .eq('season_id', seasonId)
     .eq('player_id', access.targetPlayerId);
-  if (deleteErr) return NextResponse.json({ error: deleteErr.message }, { status: 500 });
+  if (deleteErr) return mapWriteError(deleteErr as { code?: string; message: string });
 
   return NextResponse.json({ ok: true });
 }
