@@ -7,8 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { dathostServerId, applyConfigSet, getServer, CONFIG_SET_OPTIONS } from '@/lib/dathost';
-import { pushCfgFiles } from '@/lib/dathost-config';
+import { dathostServerId, applyConfigSet, getServer } from '@/lib/dathost';
+import { resolveConfigSet, pushCfgFiles, listConfigSets } from '@/lib/dathost-config';
 import { getServerOccupancy, occupancyMessage } from '@/lib/dathost-lifecycle';
 
 const WORKSHOP_ID_RE = /^\d+$/;
@@ -22,9 +22,12 @@ export async function POST(req: NextRequest) {
   const mapWorkshopId = typeof body?.mapWorkshopId === 'string' ? body.mapWorkshopId.trim() : '';
   const override = body?.override === true;
 
-  if (!CONFIG_SET_OPTIONS.some((c) => c.key === configSet)) {
+  const supabaseAdmin = getAdminClient();
+
+  const configSets = await listConfigSets(supabaseAdmin);
+  if (!configSets.some((c) => c.key === configSet)) {
     return NextResponse.json(
-      { error: `Unknown config set "${configSet}" — valid keys: ${CONFIG_SET_OPTIONS.map((c) => c.key).join(', ')}` },
+      { error: `Unknown config set "${configSet}" — valid keys: ${configSets.map((c) => c.key).join(', ')}` },
       { status: 400 },
     );
   }
@@ -34,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   const serverId = dathostServerId();
   const server = await getServer(serverId).catch(() => null);
-  const occupancy = await getServerOccupancy(getAdminClient(), server);
+  const occupancy = await getServerOccupancy(supabaseAdmin, server);
   if (occupancy.occupied && !override) {
     return NextResponse.json(
       { error: occupancyMessage(occupancy), code: 'server_occupied', ...occupancy },
@@ -42,13 +45,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let resolved;
   try {
-    await applyConfigSet(serverId, configSet, { mapWorkshopId });
+    resolved = await resolveConfigSet(supabaseAdmin, configSet);
+    await applyConfigSet(serverId, { server: resolved.server, cs2Settings: resolved.cs2Settings }, { mapWorkshopId });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Apply failed' }, { status: 502 });
   }
 
-  const cfgResults = await pushCfgFiles(serverId);
+  const cfgResults = await pushCfgFiles(serverId, resolved.cfgFiles);
   const cfgFailed = cfgResults.filter((r) => !r.ok);
   if (cfgFailed.length) {
     return NextResponse.json(
