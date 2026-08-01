@@ -194,14 +194,18 @@ both happen inside the `running` status, after the `parse` stage.
 
 ## Scrims
 
-**`/scrim`** — any signed-in player can pick a map and start the shared server for a casual, free-
-form game outside the DGLS match model entirely: no roster, no veto, no `matches` row, no stats. It
-calls the same `launchServer` orchestration (`dathost-lifecycle.ts`) the admin console's Start button
-uses via `POST /api/scrim/start`, minus the admin-only override — starting is refused outright (409,
-no override) if `getServerOccupancy` reports the server occupied, if a scrim is already running, or if
+**`/scrim`** — any signed-in player can pick a config set + map (the shared `LaunchOptionsPicker`,
+`src/components/LaunchOptionsPicker.tsx`) and start the shared server for a casual, free-form game
+outside the DGLS match model entirely: no roster, no veto, no `matches` row, no stats. It calls the
+same `launchServer` orchestration (`dathost-lifecycle.ts`) the admin console's Start button uses via
+`POST /api/scrim/start`, minus the admin-only override — starting is refused outright (409, no
+override) if `getServerOccupancy` reports the server occupied, if a scrim is already running, or if
 `findNearbyUnscoredMatch` (`dathost-lifecycle.ts`) finds a league match scheduled within
 `SCHEDULE_COLLISION_WINDOW_MS` of right now that hasn't been scored yet (`isPlayedScore`) — a scrim
-never bumps a real match, even one whose scheduled time has already passed.
+never bumps a real match, even one whose scheduled time has already passed. `POST /api/scrim/apply-
+config` is the no-boot counterpart — reasserts the picked config set without starting the server,
+using the same occupancy refusal (409, no override) and `applyConfigSetOnly` (`dathost-lifecycle.ts`)
+the admin console's Apply config set button uses.
 
 A scrim never calls `loadMatch` — with no roster loaded, MatchZy stays in **Pug Mode** (teams
 unlocked; players self-assign with `.ct`/`.t`/`.spec`, no locked roster like a real match). Right
@@ -280,26 +284,26 @@ feed, and Manage:
   re-dispatches their Action (`JobRetryButton`). Data comes from `getBackgroundJobs()`/`getOpsErrors()`;
   the list stays live via Realtime on `background_jobs`. The Completed tier clusters consecutive
   same-type/same-status runs (a bulk reparse reads as one line, not forty); Errored never clusters.
-- **Server panel** (`ServerConsolePanel.tsx`) — the single shared server's current occupant
-  (reconciled via `getActiveServerMatch`), connect string, and — on the occupying match — two
+- **Server panel** (`ServerConsolePanel.tsx`, one bordered box) — the single shared server's current
+  occupant (reconciled via `getActiveServerMatch`), connect string, and — on the occupying match — two
   controls: **Apply match settings** (re-push that match's MatchZy config via `matchzy_loadmatch_url`,
   restoring forced `map_sides` + demo-upload cvars after an "Apply config set" or panel edit clobbered
   them; sends the server back to warmup/knife-select) and **Teardown** (stop a server left live — the
-  autostop-failed safety valve). **Start** launches the server via the same `launchServer` orchestration
-  `/api/scrim/start` uses — it requires a config set + map (picked in the "Server config" box below)
-  and offers the same "Play out all rounds"/"Friendly" toggles scrim does (#315), so starting from the
-  admin console behaves identically to starting a scrim. The **Config vs live** block runs
+  autostop-failed safety valve). Below that, in the same box, the shared `LaunchOptionsPicker`
+  (config set + map + "Play out all rounds"/"Friendly" toggles — the same component `/scrim` uses) with
+  **Start** and **Apply config set** side by side: Start launches via `launchServer` (same orchestration
+  and toggles `/api/scrim/start` uses, so the two surfaces can't drift, #315); Apply config set pushes
+  the picked set's `server`/`cs2_settings` + cfg files without starting (`applyConfigSetOnly`) — the
+  same fields `dathost-golden-apply.ts --reassert` pushes, and the same call real-match provisioning
+  makes via `launchServer`, so a manual apply here and an automatic one at the next match provision can
+  never disagree on which fields get re-asserted. It does *not* load a match config, so run **Apply
+  match settings** after it if a match is mid-setup. The **Compare to live config** block runs
   `diffConfigSet` read-only for the selected config set (settings + every cfg file, cvar-by-cvar), the
-  same comparison the `dathost-golden-diff` CLI renders. **Apply config set** pushes the full `server`
-  + `cs2_settings` baseline (`applyConfigSet`, map picker + config-set dropdown) without starting the
-  server — the same fields `dathost-golden-apply.ts --reassert` pushes, and the same call real-match
-  provisioning makes (`launchServer`), so a manual apply here and an automatic one at the next match
-  provision can never disagree on which fields get re-asserted. It does *not* load a match config, so
-  run **Apply match settings** after it if a match is mid-setup. Live via Realtime on
-  `match_server_state`. Also hosts the **disk cleanup** controls (issue #132, see
-  `infra/matchzy/README.md`) — enable/disable the `dathost-cleanup` workflow, set its interval, and a
-  **Run now** button, all through `src/lib/gh-dispatch.ts`'s GitHub Actions helpers rather than
-  `background_jobs` (there's no per-match/per-map target for this job).
+  same comparison the `dathost-golden-diff` CLI renders. Live via Realtime on `match_server_state`. Also
+  hosts the **disk cleanup** controls (issue #132, see `infra/matchzy/README.md`) — enable/disable the
+  `dathost-cleanup` workflow, set its interval, and a **Run now** button, all through
+  `src/lib/gh-dispatch.ts`'s GitHub Actions helpers rather than `background_jobs` (there's no
+  per-match/per-map target for this job).
 - **Manage** — Match/Player/Season, reusing `MatchManager`/`PlayerManager`/`SeasonManager` behind a
   Match/Player/Season switch; unrelated to the job/hosting pipelines documented here.
 
@@ -326,10 +330,15 @@ disaster-recovery snapshot — it is **not read live** by the app.
 
 **`src/lib/dathost-config.ts`** is the single source for the config-set data model: `resolveConfigSet`
 (one set's settings + cfg files, by key), `listConfigSets` (key/label pairs for UI pickers),
-`pushCfgFiles` (pushes a resolved set's cfg files to the server — called by `launchServer` and by
+`pushCfgFiles` (pushes a resolved set's cfg files to the server — called by `applyConfigSetOnly` and by
 `dathost-golden-apply.ts --reassert`), and `diffConfigSet` (the read-only drift comparison shared by
 the admin console and `dathost-golden-diff.ts`). Because launching re-pushes a set's cfg files before
 every boot, a cfg edited only in the DatHost panel is overwritten on the next launch.
+
+**`applyConfigSetOnly`** (`dathost-lifecycle.ts`) is `resolveConfigSet` + the settings PUT + cfg-file
+push, without booting — the no-start half of `launchServer`, shared by `/api/admin/server/apply-config`
+and `/api/scrim/apply-config` so "reassert a config set" can't drift between the admin and scrim
+surfaces either.
 
 ## Config generation
 
@@ -348,6 +357,9 @@ the demo pull relies on live in the `golden` config set's `cfg/MatchZy/config.cf
 | POST | `/api/matches/[id]/server/apply-match-config` | session | re-push the match's loadmatch config (409 if busy) |
 | POST | `/api/matches/[id]/server/teardown` | session | stop the server |
 | GET | `/api/admin/server/config-diff` | admin | read-only config-set drift vs. live (`diffConfigSet`, `?configSet=` defaults to `golden`) |
+| POST | `/api/admin/server/start` | admin | launch via `launchServer` — config set + map + playout/friendly toggles (409 if busy unless `override`) |
+| POST | `/api/admin/server/apply-config` | admin | reassert a config set without starting (`applyConfigSetOnly`, 409 if busy unless `override`) |
+| POST | `/api/admin/server/stop` | admin | raw stop, no match-state writes (409 if busy unless `override`) |
 | GET | `/api/matches/[id]/matchzy-config` | machine (`X-MatchZy-Token`) | the `matchzy_loadmatch_url` target |
 | POST | `/api/ingest/matchzy-log` | machine (`x-matchzy-token`) | remote-log event → `map_result` keeps the payload (auto-commit oracle) + record/dispatch/teardown; `going_live`/`round_end`/`map_result` upsert `live_match_score`; the rest is ignored |
 | GET | `/api/matches/[id]/live-score` | public | initial read of `live_match_score`; `LiveScoreTicker` subscribes to the table directly for updates |
@@ -355,7 +367,8 @@ the demo pull relies on live in the `golden` config set's `cfg/MatchZy/config.cf
 | POST | `/api/matches/[id]/demo/dispatch` | session | re-parse the demo (manual counterpart to `matchzy-log`'s auto-dispatch) |
 | POST | `/api/matches/[id]/replay/dispatch` | session | (re)trigger the replay Action |
 | GET | `/api/scrim/status` | session | raw server state + active match + connected roster + blocking-match check + scrim ownership |
-| POST | `/api/scrim/start` | session | claim the singleton scrim session + apply golden config at a picked map + start in Pug Mode (409 if occupied, a scrim's already running, or a nearby match is unscored) |
+| POST | `/api/scrim/start` | session | claim the singleton scrim session + apply the picked config set at a picked map + start in Pug Mode (409 if occupied, a scrim's already running, or a nearby match is unscored) |
+| POST | `/api/scrim/apply-config` | session | reassert the picked config set without starting (`applyConfigSetOnly`, 409 if occupied, no override) |
 | POST | `/api/scrim/stop` | session | stop + release the scrim session (409 if a DGLS match holds the server, 403 if not the session's starter/an admin) |
 
 ## Environment
@@ -381,18 +394,20 @@ confirm).
 
 `src/lib/dathost.ts` (REST client — `applyConfigSet`, `runConsole`, `getConsoleLines`) ·
 `src/lib/dathost-config.ts` (config-set data model — `resolveConfigSet`, `listConfigSets`,
-`pushCfgFiles`, `diffConfigSet`) · `src/lib/dathost-lifecycle.ts` (`launchServer` + `pugModeCvarLine` +
-`getReconciledServerState` + `getActiveServerMatch` + `findServerOccupant` + `findNearbyUnscoredMatch`)
-· `src/lib/server-players.ts` (`parseConnectedPlayers` — derives the connected roster from the raw
-console log, no stored state) · `src/lib/matchzy.ts` · `src/lib/schedule.ts` ·
-`src/lib/matchScore.ts` (`writeMatchScore()` — shared score-write + hooks, #138) ·
-`src/lib/demo/mapResult.ts` (`map_result` parse/R2 read-write) ·
+`pushCfgFiles`, `diffConfigSet`) · `src/lib/dathost-lifecycle.ts` (`launchServer` + `applyConfigSetOnly`
++ `pugModeCvarLine` + `getReconciledServerState` + `getActiveServerMatch` + `findServerOccupant` +
+`findNearbyUnscoredMatch`) · `src/lib/server-players.ts` (`parseConnectedPlayers` — derives the
+connected roster from the raw console log, no stored state) · `src/lib/matchzy.ts` ·
+`src/lib/schedule.ts` · `src/lib/matchScore.ts` (`writeMatchScore()` — shared score-write + hooks,
+#138) · `src/lib/demo/mapResult.ts` (`map_result` parse/R2 read-write) ·
 `src/components/MatchServerPanel.tsx` · `src/components/MatchDemoReviewBlock.tsx` ·
 `src/components/useDemoIngestActions.ts` (shared confirm/dismiss/re-parse) ·
 `src/components/IngestJobActions.tsx` · `src/components/JobActions.tsx` (generic retry + live refresh) ·
-`src/components/ServerConsolePanel.tsx` · `src/components/MapPicker.tsx` (shared map-select + custom-
-workshop-ID input) · `src/components/ServerStatusBits.tsx` (shared status pill + copy-connect button)
-· `src/components/ScrimStatusContext.tsx` (single shared poll of `GET /api/scrim/status`, consumed by
+`src/components/ServerConsolePanel.tsx` · `src/components/LaunchOptionsPicker.tsx` (shared config-set +
+map + playout/friendly toggle controls, used by both `ServerConsolePanel` and `ScrimPanel`) ·
+`src/components/MapPicker.tsx` (shared map-select + custom-workshop-ID input) ·
+`src/components/ServerStatusBits.tsx` (shared status pill + copy-connect button) ·
+`src/components/ScrimStatusContext.tsx` (single shared poll of `GET /api/scrim/status`, consumed by
 both `ScrimPanel` and `ScrimNavStatus`) · `src/components/ScrimPanel.tsx` ·
 `src/components/ScrimNavStatus.tsx` · `src/app/scrim/page.tsx` ·
 `src/lib/scrim-session.ts` (the singleton `scrim_sessions` claim/release/reconcile) ·
