@@ -49,6 +49,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     );
   }
 
+  // Roster signups (season_players) are only meaningful before matches exist, and this season has
+  // none yet — clear them first so the FK to `seasons` doesn't block the delete.
+  const { error: rosterErr } = await supabaseAdmin.from('season_players').delete().eq('season_id', seasonId);
+  if (rosterErr) {
+    return NextResponse.json({ error: rosterErr.message }, { status: 500 });
+  }
+
   const { error: deleteErr } = await supabaseAdmin.from('seasons').delete().eq('id', seasonId);
   if (deleteErr) {
     return NextResponse.json({ error: deleteErr.message }, { status: 500 });
