@@ -17,7 +17,7 @@ import { matchLabel, isPlayedScore } from './util';
 import { SCHEDULE_COLLISION_WINDOW_MS } from './schedule';
 import {
   dathostServerId,
-  applyGoldenSettings,
+  applyConfigSet,
   startServer,
   stopServer,
   waitUntilReady,
@@ -25,11 +25,70 @@ import {
   connectHost,
   workshopIdFromUrl,
   getServer,
+  runConsole,
   type DathostServer,
 } from './dathost';
 import { releaseScrimSession } from './scrim-session';
-import { pushCfgFiles } from './dathost-config';
+import { resolveConfigSet, pushCfgFiles } from './dathost-config';
 import { recordOpsError, clearOpsError } from './ops-errors';
+
+/** The "friendly" cvars — only asserted when the launch-time "friendly" toggle is on. */
+export const FRIENDLY_CVARS = ['mp_autokick 0', 'mp_drop_knife_enable 1', 'mp_forcecamera 0', 'mp_shoot_dropped_grenades true'];
+
+/**
+ * Cvars asserted right after boot for any launch with no roster loaded (scrim, or an admin-console
+ * launch that doesn't follow up with `loadMatch`): no knife round (players pick their own side via
+ * `.ct`/`.t`/`.spec`), `matchzy_playout_enabled_default` and `FRIENDLY_CVARS` from their respective
+ * launch-time toggles, and `mp_warmup_pausetimer`/`matchzy_minimum_ready_required 0` unconditionally —
+ * the golden league config's `matchzy_minimum_ready_required 4` assumes a full 2v2 roster, which
+ * doesn't hold with no roster loaded, so it's overridden here (`0` = ready requires everyone currently
+ * connected, not a fixed headcount) rather than in the shared config set real matches also use.
+ */
+export function pugModeCvarLine(opts: { playout: boolean; friendly: boolean }): string {
+  const cvars = [
+    'matchzy_knife_enabled_default 0',
+    `matchzy_playout_enabled_default ${opts.playout ? 1 : 0}`,
+    'mp_warmup_pausetimer 1',
+    'matchzy_minimum_ready_required 0',
+    ...(opts.friendly ? FRIENDLY_CVARS : []),
+  ];
+  return cvars.join('; ');
+}
+
+export interface LaunchResult {
+  server: DathostServer;
+  connect: string;
+}
+
+/**
+ * Resolve a config set, push its cfg files, boot the server, and optionally assert extra cvars once
+ * ready — the one place "apply + push + boot + cvars" is composed, shared by real-match provisioning
+ * (`provisionMatchServer`, `configSetKey: 'golden'`, no `extraCvars` — `loadMatch` runs after instead)
+ * and the admin/scrim launch routes (their own config-set pick + `pugModeCvarLine`-derived
+ * `extraCvars`). A per-file cfg-push failure is logged, not fatal.
+ */
+export async function launchServer(
+  supabaseAdmin: SupabaseClient,
+  serverId: string,
+  opts: { configSetKey: string; mapWorkshopId: string | null; extraCvars?: string },
+): Promise<LaunchResult> {
+  const set = await resolveConfigSet(supabaseAdmin, opts.configSetKey);
+  await applyConfigSet(serverId, { server: set.server, cs2Settings: set.cs2Settings }, { mapWorkshopId: opts.mapWorkshopId });
+
+  const pushed = await pushCfgFiles(serverId, set.cfgFiles);
+  const failed = pushed.filter((p) => !p.ok);
+  if (failed.length) {
+    console.warn(`launchServer(${opts.configSetKey}): ${failed.length} cfg file(s) failed:`, failed);
+  }
+
+  await startServer(serverId);
+  const server = await waitUntilReady(serverId);
+  if (opts.extraCvars) await runConsole(serverId, opts.extraCvars);
+
+  const connect = connectHost(server);
+  if (!connect) throw new Error('Server ready but no connectable host');
+  return { server, connect };
+}
 
 /** Automatic teardown (map_result, score-write) waits this long before actually stopping the shared
  *  server, so players get to see the post-match scoreboard instead of an instant disconnect. Manual
@@ -252,21 +311,8 @@ export async function provisionMatchServer(
     });
 
     const mapWorkshopId = await resolveMapWorkshopId(supabaseAdmin, matchId);
-    await applyGoldenSettings(serverId, { mapWorkshopId });
-    // Reassert the versioned cfg files before boot (they're `exec`'d at boot / go-live), so the cfg
-    // dimension can't drift from the repo. A per-file failure shouldn't block the match, so log and
-    // continue rather than throw.
-    const pushed = await pushCfgFiles(serverId);
-    const failed = pushed.filter((p) => !p.ok);
-    if (failed.length) {
-      console.warn(`pushCfgFiles(${matchId}): ${failed.length} file(s) failed:`, failed);
-    }
-    await startServer(serverId);
-    const server = await waitUntilReady(serverId);
+    const { connect } = await launchServer(supabaseAdmin, serverId, { configSetKey: 'golden', mapWorkshopId });
     await loadMatch(serverId, configUrl, configAuth);
-
-    const connect = connectHost(server);
-    if (!connect) throw new Error('Server ready but no connectable host');
 
     await setServerState(supabaseAdmin, matchId, {
       server_state: 'live',
