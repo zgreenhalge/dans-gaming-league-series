@@ -60,10 +60,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
   const router = useRouter();
   const [weeks, setWeeks] = useState<DraftScheduleWeek[]>(initialWeeks);
   const [doubleheaderPolicy, setDoubleheaderPolicy] = useState<DoubleheaderPolicy>('auto');
-  const [generating, setGenerating] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [clearing, setClearing] = useState(false);
+  const [busyAction, setBusyAction] = useState<'generate' | 'save' | 'confirm' | 'clear' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const playerName = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
@@ -71,77 +68,78 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
   const integrity = useMemo(() => validateDraftIntegrity(weeks), [weeks]);
   const completeness = useMemo(() => validateDraftCompleteness(weeks, rosterPlayerIds), [weeks, rosterPlayerIds]);
 
-  const busy = generating || saving || confirming || clearing;
+  const busy = busyAction !== null;
+
+  /** Shared fetch/parse/error-report shape behind all four mutation actions below — returns the
+   * parsed body on success, or null (having already called setError) on failure. */
+  async function callApi(url: string, options: RequestInit, fallbackError: string): Promise<Record<string, unknown> | null> {
+    const res = await fetch(url, options);
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError((body as { error?: string }).error ?? fallbackError);
+      return null;
+    }
+    return body;
+  }
 
   async function generate() {
-    setGenerating(true);
+    setBusyAction('generate');
     setError(null);
     try {
-      const res = await fetch(`/api/seasons/${seasonId}/schedule`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ doubleheaderPolicy }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(body.error ?? 'Failed to generate the schedule.');
-        return;
-      }
-      router.refresh();
+      const body = await callApi(
+        `/api/seasons/${seasonId}/schedule`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doubleheaderPolicy }) },
+        'Failed to generate the schedule.',
+      );
+      if (body) router.refresh();
     } finally {
-      setGenerating(false);
+      setBusyAction(null);
     }
   }
 
+  /** PATCHes the current `weeks` state. Shared by save() and confirmDraft() — confirm operates on
+   * the *persisted* draft, not this component's state, so it must save first or it would silently
+   * materialize whatever was last saved instead of what's on screen. */
+  async function saveDraft(): Promise<boolean> {
+    const body = await callApi(
+      `/api/seasons/${seasonId}/schedule`,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weeks }) },
+      'Failed to save the draft.',
+    );
+    return body !== null;
+  }
+
   async function save() {
-    setSaving(true);
+    setBusyAction('save');
     setError(null);
     try {
-      const res = await fetch(`/api/seasons/${seasonId}/schedule`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ weeks }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(body.error ?? 'Failed to save the draft.');
-        return;
-      }
-      router.refresh();
+      if (await saveDraft()) router.refresh();
     } finally {
-      setSaving(false);
+      setBusyAction(null);
     }
   }
 
   async function confirmDraft() {
-    setConfirming(true);
+    setBusyAction('confirm');
     setError(null);
     try {
-      const res = await fetch(`/api/seasons/${seasonId}/schedule/confirm`, { method: 'POST' });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(body.error ?? 'Failed to confirm the schedule.');
-        return;
-      }
-      router.push(`/seasons/${seasonId}`);
+      if (!(await saveDraft())) return;
+
+      const body = await callApi(`/api/seasons/${seasonId}/schedule/confirm`, { method: 'POST' }, 'Failed to confirm the schedule.');
+      if (body) router.push(`/seasons/${seasonId}`);
     } finally {
-      setConfirming(false);
+      setBusyAction(null);
     }
   }
 
   async function clearDraft() {
-    setClearing(true);
+    setBusyAction('clear');
     setError(null);
     try {
-      const res = await fetch(`/api/seasons/${seasonId}/schedule`, { method: 'DELETE' });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(body.error ?? 'Failed to clear the draft.');
-        return;
-      }
-      router.refresh();
+      const body = await callApi(`/api/seasons/${seasonId}/schedule`, { method: 'DELETE' }, 'Failed to clear the draft.');
+      if (body) router.refresh();
     } finally {
-      setClearing(false);
+      setBusyAction(null);
     }
   }
 
@@ -168,7 +166,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
           disabled={busy}
           className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40 self-start"
         >
-          {generating ? 'Generating…' : 'Generate Schedule'}
+          {busyAction === 'generate' ? 'Generating…' : 'Generate Schedule'}
         </button>
       </div>
     );
@@ -200,32 +198,20 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
             </div>
 
             <div className="flex flex-col gap-2">
-              {week.matches.map((m) => (
-                <div key={m.match_number} className="flex items-center gap-2 flex-wrap font-mono text-[11px] text-[var(--color-text-secondary)]">
-                  <span className="tracked text-[9px] w-14 shrink-0">Match {m.match_number}</span>
-                  <PlayerSelect
-                    players={players}
-                    value={m.shirts[0]}
-                    onChange={(id) => setWeeks((prev) => prev.map((w) => (w.week_number === week.week_number ? updateMatchSlot(w, m.match_number, 'shirts0', id) : w)))}
-                  />
-                  <PlayerSelect
-                    players={players}
-                    value={m.shirts[1]}
-                    onChange={(id) => setWeeks((prev) => prev.map((w) => (w.week_number === week.week_number ? updateMatchSlot(w, m.match_number, 'shirts1', id) : w)))}
-                  />
-                  <span>vs</span>
-                  <PlayerSelect
-                    players={players}
-                    value={m.skins[0]}
-                    onChange={(id) => setWeeks((prev) => prev.map((w) => (w.week_number === week.week_number ? updateMatchSlot(w, m.match_number, 'skins0', id) : w)))}
-                  />
-                  <PlayerSelect
-                    players={players}
-                    value={m.skins[1]}
-                    onChange={(id) => setWeeks((prev) => prev.map((w) => (w.week_number === week.week_number ? updateMatchSlot(w, m.match_number, 'skins1', id) : w)))}
-                  />
-                </div>
-              ))}
+              {week.matches.map((m) => {
+                const onSlotChange = (slot: SlotKey) => (id: number) =>
+                  setWeeks((prev) => prev.map((w) => (w.week_number === week.week_number ? updateMatchSlot(w, m.match_number, slot, id) : w)));
+                return (
+                  <div key={m.match_number} className="flex items-center gap-2 flex-wrap font-mono text-[11px] text-[var(--color-text-secondary)]">
+                    <span className="tracked text-[9px] w-14 shrink-0">Match {m.match_number}</span>
+                    <PlayerSelect players={players} value={m.shirts[0]} onChange={onSlotChange('shirts0')} />
+                    <PlayerSelect players={players} value={m.shirts[1]} onChange={onSlotChange('shirts1')} />
+                    <span>vs</span>
+                    <PlayerSelect players={players} value={m.skins[0]} onChange={onSlotChange('skins0')} />
+                    <PlayerSelect players={players} value={m.skins[1]} onChange={onSlotChange('skins1')} />
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
@@ -270,7 +256,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
           disabled={busy || !integrity.ok}
           className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors disabled:opacity-40"
         >
-          {saving ? 'Saving…' : 'Save Draft'}
+          {busyAction === 'save' ? 'Saving…' : 'Save Draft'}
         </button>
         <button
           type="button"
@@ -278,7 +264,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
           disabled={busy || !integrity.ok || !completeness.complete}
           className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40"
         >
-          {confirming ? 'Confirming…' : 'Confirm Schedule'}
+          {busyAction === 'confirm' ? 'Confirming…' : 'Confirm Schedule'}
         </button>
         <button
           type="button"
@@ -286,7 +272,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
           disabled={busy}
           className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors underline decoration-dotted disabled:opacity-40"
         >
-          {generating ? 'Regenerating…' : 'Regenerate (discards edits)'}
+          {busyAction === 'generate' ? 'Regenerating…' : 'Regenerate (discards edits)'}
         </button>
         <button
           type="button"
@@ -294,7 +280,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
           disabled={busy}
           className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-accent-red-fg)] transition-colors underline decoration-dotted disabled:opacity-40"
         >
-          {clearing ? 'Clearing…' : 'Clear Draft'}
+          {busyAction === 'clear' ? 'Clearing…' : 'Clear Draft'}
         </button>
       </div>
     </div>
