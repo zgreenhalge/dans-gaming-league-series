@@ -204,8 +204,10 @@ override) if `getServerOccupancy` reports the server occupied, if a scrim is alr
 `SCHEDULE_COLLISION_WINDOW_MS` of right now that hasn't been scored yet (`isPlayedScore`) — a scrim
 never bumps a real match, even one whose scheduled time has already passed. `POST /api/scrim/apply-
 config` is the no-boot counterpart — reasserts the picked config set without starting the server,
-using the same occupancy refusal (409, no override) and `applyConfigSetOnly` (`dathost-lifecycle.ts`)
-the admin console's Apply config set button uses.
+using `applyConfigSetOnly` (`dathost-lifecycle.ts`, the admin console's Apply config set button uses
+the same one) and the identical two refusals Start has (occupancy, nearby unscored match) — applying
+a config set is exactly as disruptive as starting, so it's gated the same way, not just occupancy
+alone.
 
 A scrim never calls `loadMatch` — with no roster loaded, MatchZy stays in **Pug Mode** (teams
 unlocked; players self-assign with `.ct`/`.t`/`.spec`, no locked roster like a real match). Right
@@ -243,12 +245,14 @@ stuck either from an unobserved stop or from a failed start.
 
 Since a scrim otherwise has no roster data model, "who's connected" can't come from a DB row —
 `players_online` on the DatHost server object is a bare count with no roster, and there's no dedicated
-player-list endpoint. Instead `GET /api/scrim/status` reads the server's raw console log
-(`getConsoleLines`, a rolling ~1000-line window) and derives the current roster from the
+player-list endpoint. Instead `getConnectedPlayers` (`server-players.ts`) reads the server's raw
+console log (`getConsoleLines`, a rolling ~1000-line window) and derives the current roster from the
 connect/disconnect/round events already in it — every one carries `"name<userid><steamid><team>"` —
-via `parseConnectedPlayers` (`server-players.ts`). This is best-effort: a player whose connect line
-has scrolled out of the 1000-line window before any later event re-mentions them (e.g. a very long
-session with heavy chatter) won't appear even though they're still connected.
+via `parseConnectedPlayers`. Both `GET /api/scrim/status` and `GET /api/admin/server/status` call it,
+so the admin console gets the same real name list (`ConnectedRoster`, `ServerStatusBits.tsx`) instead
+of a bare count. This is best-effort: a player whose connect line has scrolled out of the 1000-line
+window before any later event re-mentions them (e.g. a very long session with heavy chatter) won't
+appear even though they're still connected.
 
 **The reused server's console log isn't reset by a stop/start** — a "connected" line from whatever
 last used the box (a previous scrim, a real match, a leftover test) with no matching "disconnected"
@@ -285,25 +289,29 @@ feed, and Manage:
   the list stays live via Realtime on `background_jobs`. The Completed tier clusters consecutive
   same-type/same-status runs (a bulk reparse reads as one line, not forty); Errored never clusters.
 - **Server panel** (`ServerConsolePanel.tsx`, one bordered box) — the single shared server's current
-  occupant (reconciled via `getActiveServerMatch`), connect string, and — on the occupying match — two
-  controls: **Apply match settings** (re-push that match's MatchZy config via `matchzy_loadmatch_url`,
-  restoring forced `map_sides` + demo-upload cvars after an "Apply config set" or panel edit clobbered
-  them; sends the server back to warmup/knife-select) and **Teardown** (stop a server left live — the
-  autostop-failed safety valve). Below that, in the same box, the shared `LaunchOptionsPicker`
-  (config set + map + "Play out all rounds"/"Friendly" toggles — the same component `/scrim` uses) with
-  **Start** and **Apply config set** side by side: Start launches via `launchServer` (same orchestration
-  and toggles `/api/scrim/start` uses, so the two surfaces can't drift, #315); Apply config set pushes
-  the picked set's `server`/`cs2_settings` + cfg files without starting (`applyConfigSetOnly`) — the
-  same fields `dathost-golden-apply.ts --reassert` pushes, and the same call real-match provisioning
-  makes via `launchServer`, so a manual apply here and an automatic one at the next match provision can
-  never disagree on which fields get re-asserted. It does *not* load a match config, so run **Apply
-  match settings** after it if a match is mid-setup. The **Compare to live config** block runs
-  `diffConfigSet` read-only for the selected config set (settings + every cfg file, cvar-by-cvar), the
-  same comparison the `dathost-golden-diff` CLI renders. Live via Realtime on `match_server_state`. Also
-  hosts the **disk cleanup** controls (issue #132, see `infra/matchzy/README.md`) — enable/disable the
-  `dathost-cleanup` workflow, set its interval, and a **Run now** button, all through
-  `src/lib/gh-dispatch.ts`'s GitHub Actions helpers rather than `background_jobs` (there's no
-  per-match/per-map target for this job).
+  occupant (reconciled via `getActiveServerMatch`), and — on the occupying match — two controls:
+  **Apply match settings** (re-push that match's MatchZy config via `matchzy_loadmatch_url`, restoring
+  forced `map_sides` + demo-upload cvars after an "Apply config set" or panel edit clobbered them;
+  sends the server back to warmup/knife-select) and **Teardown** (stop a server left live — the
+  autostop-failed safety valve). Connection details (a one-click Steam join, the raw `connect` string +
+  copy button) and the **connected roster** (`ConnectedRoster`, `ServerStatusBits.tsx` — a real name
+  list via `getConnectedPlayers`, not a bare count; its heading tints amber for "casual use," someone
+  connected outside a DGLS match) are the same shared components `/scrim` uses — no separate "idle"/
+  player-count lines duplicating what the state pill and roster already say. Below that, in the same
+  box, the shared `LaunchOptionsPicker` (config set + map + "Play out all rounds"/"Friendly" toggles —
+  the same component `/scrim` uses) with **Start** and **Apply config set** side by side: Start
+  launches via `launchServer` (same orchestration and toggles `/api/scrim/start` uses, so the two
+  surfaces can't drift, #315); Apply config set pushes the picked set's `server`/`cs2_settings` + cfg
+  files without starting (`applyConfigSetOnly`) — the same fields `dathost-golden-apply.ts --reassert`
+  pushes, and the same call real-match provisioning makes via `launchServer`, so a manual apply here
+  and an automatic one at the next match provision can never disagree on which fields get re-asserted.
+  It does *not* load a match config, so run **Apply match settings** after it if a match is mid-setup.
+  The **Compare to live config** block runs `diffConfigSet` read-only for the selected config set
+  (settings + every cfg file, cvar-by-cvar), the same comparison the `dathost-golden-diff` CLI renders.
+  Live via Realtime on `match_server_state`. Also hosts the **disk cleanup** controls (issue #132, see
+  `infra/matchzy/README.md`) — enable/disable the `dathost-cleanup` workflow, set its interval, and a
+  **Run now** button, all through `src/lib/gh-dispatch.ts`'s GitHub Actions helpers rather than
+  `background_jobs` (there's no per-match/per-map target for this job).
 - **Manage** — Match/Player/Season, reusing `MatchManager`/`PlayerManager`/`SeasonManager` behind a
   Match/Player/Season switch; unrelated to the job/hosting pipelines documented here.
 
@@ -396,17 +404,19 @@ confirm).
 `src/lib/dathost-config.ts` (config-set data model — `resolveConfigSet`, `listConfigSets`,
 `pushCfgFiles`, `diffConfigSet`) · `src/lib/dathost-lifecycle.ts` (`launchServer` + `applyConfigSetOnly`
 + `pugModeCvarLine` + `getReconciledServerState` + `getActiveServerMatch` + `findServerOccupant` +
-`findNearbyUnscoredMatch`) · `src/lib/server-players.ts` (`parseConnectedPlayers` — derives the
-connected roster from the raw console log, no stored state) · `src/lib/matchzy.ts` ·
-`src/lib/schedule.ts` · `src/lib/matchScore.ts` (`writeMatchScore()` — shared score-write + hooks,
-#138) · `src/lib/demo/mapResult.ts` (`map_result` parse/R2 read-write) ·
+`findNearbyUnscoredMatch`) · `src/lib/server-players.ts` (`getConnectedPlayers` — fetches + parses the
+connected roster from the raw console log, no stored state; `parseConnectedPlayers` is the pure parse
+step) · `src/lib/matchzy.ts` · `src/lib/schedule.ts` · `src/lib/matchScore.ts` (`writeMatchScore()` —
+shared score-write + hooks, #138) · `src/lib/demo/mapResult.ts` (`map_result` parse/R2 read-write) ·
 `src/components/MatchServerPanel.tsx` · `src/components/MatchDemoReviewBlock.tsx` ·
 `src/components/useDemoIngestActions.ts` (shared confirm/dismiss/re-parse) ·
 `src/components/IngestJobActions.tsx` · `src/components/JobActions.tsx` (generic retry + live refresh) ·
 `src/components/ServerConsolePanel.tsx` · `src/components/LaunchOptionsPicker.tsx` (shared config-set +
 map + playout/friendly toggle controls, used by both `ServerConsolePanel` and `ScrimPanel`) ·
 `src/components/MapPicker.tsx` (shared map-select + custom-workshop-ID input) ·
-`src/components/ServerStatusBits.tsx` (shared status pill + copy-connect button) ·
+`src/components/ServerStatusBits.tsx` (shared status pill, `ServerConnectionDetails` — join link +
+connect string + copy button — and `ConnectedRoster`, all used by both `ServerConsolePanel` and
+`ScrimPanel`) ·
 `src/components/ScrimStatusContext.tsx` (single shared poll of `GET /api/scrim/status`, consumed by
 both `ScrimPanel` and `ScrimNavStatus`) · `src/components/ScrimPanel.tsx` ·
 `src/components/ScrimNavStatus.tsx` · `src/app/scrim/page.tsx` ·
