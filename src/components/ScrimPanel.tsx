@@ -213,24 +213,26 @@ export function ScrimPanel({ maps }: { maps: WorkshopMapOption[] }) {
             </button>
           </div>
         )}
-      </div>
 
-      <div>
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">
-          Connected {connectedPlayers.length > 0 && `(${connectedPlayers.length})`}
-        </div>
-        {!serverOn ? (
-          <div className="font-mono text-[13px] text-[var(--color-text-secondary)]">Server is off.</div>
-        ) : connectedPlayers.length === 0 ? (
-          <div className="font-mono text-[13px] text-[var(--color-text-secondary)]">No one connected yet.</div>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {connectedPlayers.map((p, i) => (
-              <li key={`${p.steamId ?? 'pending'}-${i}`} className="font-mono text-[13px] text-[var(--color-text-primary)]">
-                {p.name}
-              </li>
-            ))}
-          </ul>
+        {/* Connected roster — kept in the same box as the state pill/controls above instead of a
+            separate, unstyled section, so the server's on/off state isn't shown in two places. */}
+        {serverOn && (
+          <div className="mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
+            <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">
+              Connected {connectedPlayers.length > 0 && `(${connectedPlayers.length})`}
+            </div>
+            {connectedPlayers.length === 0 ? (
+              <div className="font-mono text-[13px] text-[var(--color-text-secondary)]">No one connected yet.</div>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {connectedPlayers.map((p, i) => (
+                  <li key={`${p.steamId ?? 'pending'}-${i}`} className="font-mono text-[13px] text-[var(--color-text-primary)]">
+                    {p.name}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </div>
     </div>

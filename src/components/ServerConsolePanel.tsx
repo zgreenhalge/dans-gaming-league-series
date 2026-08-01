@@ -1,14 +1,15 @@
 'use client';
 
-// Admin server console (#134/#135, admin console b — now server-centric). Sections: match occupancy
-// (who holds it right now + "Apply match settings" — re-push the match's loadmatch config to restore
-// forced map_sides + demo-upload cvars — and Teardown, the autostop-failed safety valve); a combined
-// panel below it — raw DatHost server state + start/stop + "Apply config set" (map picker + config-set
-// dropdown, server-level settings only — doesn't start the server and doesn't load a match config);
-// "Config vs golden" (read-only drift check against the versioned infra/matchzy/ config); and disk
-// cleanup (issue #132) — enable/disable + interval + a manual "run now" for the dathost-cleanup GitHub
-// Action. The per-match MatchServerPanel still handles per-match provisioning on the match page; this
-// is the global operator view.
+// Admin server console (#134/#135, admin console b — now server-centric). One panel: occupancy/raw
+// DatHost state + start/stop at top (plus, on an occupying match, "Apply match settings" — re-push the
+// match's loadmatch config to restore forced map_sides + demo-upload cvars — and Teardown, the
+// autostop-failed safety valve); below it, in the same box, the config-set + map picker and
+// playout/friendly toggles Start launches with, "Apply config set" (settings-only, doesn't start the
+// server or load a match config), and "Compare to live config" (read-only drift check against the
+// selected config set) — kept in one panel since Start's behavior directly depends on that picker's
+// state (#315). Below that, disk cleanup (issue #132) — enable/disable + interval + a manual "run now"
+// for the dathost-cleanup GitHub Action. The per-match MatchServerPanel still handles per-match
+// provisioning on the match page; this is the global operator view.
 //
 // Start/Stop/Apply are occupancy-checked server-side (getServerOccupancy) — a DGLS match holding the
 // server, or live players on it with no DGLS match at all (casual/manual use), both refuse the action
@@ -599,7 +600,7 @@ export function ServerConsolePanel({
                   <button
                     onClick={() => startServer()}
                     disabled={startStopBusy || !configSet || !resolvedMapId}
-                    title={!configSet || !resolvedMapId ? 'Pick a config set and map below first' : undefined}
+                    title={!configSet || !resolvedMapId ? 'Pick a config set and map in Server config below first' : undefined}
                     className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
                   >
                     {startStopBusy ? '…' : 'Start'}
@@ -650,56 +651,56 @@ export function ServerConsolePanel({
           </div>
         )}
         {teardownError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-3">{teardownError}</div>}
-      </div>
 
-      {/* Server config — pick a config set + map (used by both Start, above, and Apply config set,
-          below), the launch-time toggles Start applies, and comparing the live server to a config
-          set. All the same "server-level configuration" concern, grouped in one box. */}
-      <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">Server config</div>
-        <div className="flex flex-col gap-2">
-          <select
-            value={configSet}
-            onChange={(e) => setConfigSet(e.target.value)}
-            className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
-          >
-            {configSets.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-          <MapPicker
-            maps={maps}
-            value={mapChoice}
-            onChange={setMapChoice}
-            customValue={customMapId}
-            onCustomChange={setCustomMapId}
-            customInvalid={customMapInvalid}
-          />
-          <label className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)]">
-            <input type="checkbox" checked={playout} onChange={(e) => setPlayout(e.target.checked)} />
-            Play out all rounds
-          </label>
-          <label className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)]">
-            <input type="checkbox" checked={friendly} onChange={(e) => setFriendly(e.target.checked)} />
-            Friendly
-          </label>
-          <div className="font-mono text-[10px] text-[var(--color-text-secondary)]">
-            Config set, map, and the toggles above are what Start (top) launches with.
+        {/* Server config — pick a config set + map + launch-time toggles (what Start, above, launches
+            with), apply them without starting, and compare the live server to a config set. Kept in
+            the same box as Start since its behavior directly depends on this picker's state (#315). */}
+        <div className="mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">Server config</div>
+          <div className="flex flex-col gap-2">
+            <select
+              value={configSet}
+              onChange={(e) => setConfigSet(e.target.value)}
+              className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
+            >
+              {configSets.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <MapPicker
+              maps={maps}
+              value={mapChoice}
+              onChange={setMapChoice}
+              customValue={customMapId}
+              onCustomChange={setCustomMapId}
+              customInvalid={customMapInvalid}
+            />
+            <label className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)]">
+              <input type="checkbox" checked={playout} onChange={(e) => setPlayout(e.target.checked)} />
+              Play out all rounds
+            </label>
+            <label className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)]">
+              <input type="checkbox" checked={friendly} onChange={(e) => setFriendly(e.target.checked)} />
+              Friendly
+            </label>
+            <div className="font-mono text-[10px] text-[var(--color-text-secondary)]">
+              Config set, map, and the toggles above are what Start (above) launches with.
+            </div>
+            <button
+              onClick={() => applyConfig()}
+              disabled={!configSet || !resolvedMapId || applyBusy}
+              title="Reassert settings on the server without starting it"
+              className="self-start font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
+            >
+              {applyBusy ? 'Applying…' : 'Apply config set'}
+            </button>
+            {applyError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{applyError}</div>}
+            {applySuccess && !applyError && (
+              <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
+            )}
           </div>
-          <button
-            onClick={() => applyConfig()}
-            disabled={!configSet || !resolvedMapId || applyBusy}
-            title="Reassert settings on the server without starting it"
-            className="self-start font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
-          >
-            {applyBusy ? 'Applying…' : 'Apply config set'}
-          </button>
-          {applyError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{applyError}</div>}
-          {applySuccess && !applyError && (
-            <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
-          )}
         </div>
 
         <div className="mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
