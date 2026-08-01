@@ -25,7 +25,7 @@ import { StatePill, ServerConnectionDetails, ConnectedRoster } from '@/component
 import { CollapsiblePanel } from '@/components/CollapsiblePanel';
 import { CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
 import { LaunchOptionsPicker } from '@/components/LaunchOptionsPicker';
-import { fmtUtcShort, isServerLive } from '@/lib/util';
+import { fmtUtcShort, isServerLive, isServerOff } from '@/lib/util';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
 import type { ConfigSetOption, ConfigSetDiff, DiffRow, CfgFileDiff } from '@/lib/dathost-config';
@@ -36,6 +36,13 @@ import type { DathostCleanupStatus } from '@/app/api/admin/dathost-cleanup/statu
 // Safety cap for the start/stop spinner — matches DatHost's own ready timeout (waitUntilReady). If an
 // action hasn't visibly settled by now, drop the spinner and show whatever raw state we have.
 const ACTION_CAP_MS = 90_000;
+
+// A start command's acknowledgment can briefly report `on: true` before the box has actually begun
+// booting — floor how long a start must have been running before `on && !booting` is trusted as ready,
+// so that flicker can't read as an instant "done." A fixed floor (rather than requiring the poll to
+// have caught an intermediate `booting: true` tick) can't be raced by a boot that completes faster
+// than the 2s poll interval.
+const MIN_BOOT_MS = 5_000;
 
 type PendingAction = { kind: 'start' | 'stop' | 'apply'; message: string };
 
@@ -176,13 +183,13 @@ export function ServerConsolePanel({
       }
       const data = (await res.json()) as AdminServerStatus;
       setStatus(data);
-      // Clear the in-flight spinner once the action has truly landed. Start: once the box is
-      // connectable (`on && !booting && connect`) — `connect` needs real ports assigned, which a
-      // start command's brief pre-boot `on` flicker never has, so it alone rules that out without
-      // needing to have also *observed* an intermediate `booting: true` poll first — DatHost's boot
-      // can flip through that window faster than this 2s poll interval, which would otherwise strand
-      // the spinner until the cap below times it out. Stop: once it's fully off. Either way, give up
-      // after ACTION_CAP_MS.
+      // Clear the in-flight spinner once the action has truly landed, using the exact same
+      // `isServerLive`/`isServerOff` calls every other consumer here (canStart/canStop, the
+      // connection-details block, the roster) treats as ready/off — a hand-rolled `on`/`booting`
+      // check here that drifts from those is exactly how this got stuck before: gating on `connect`
+      // too (DNS/ports DatHost can assign a beat after `on`/`booting` settle) stranded the spinner,
+      // and hid Stop, for a gap where the server was already live by every other measure. `MIN_BOOT_MS`
+      // is what rules out the pre-boot `on` flicker instead. Either way, give up after ACTION_CAP_MS.
       const s = data.server;
       if (s) {
         const capped = Date.now() - actionAtRef.current > ACTION_CAP_MS;
@@ -194,11 +201,11 @@ export function ServerConsolePanel({
           if (timedOut) setStartStopError(`Server never reported '${verb}' success`);
         };
         if (startingRef.current) {
-          const ready = s.on && !s.booting && !!data.connect;
+          const ready = isServerLive(s) && Date.now() - actionAtRef.current > MIN_BOOT_MS;
           if (ready) done(false, 'start');
           else if (capped) done(true, 'start');
         } else if (stoppingRef.current) {
-          if (!s.on && !s.booting) done(false, 'stop');
+          if (isServerOff(s)) done(false, 'stop');
           else if (capped) done(true, 'stop');
         }
       }
@@ -512,8 +519,8 @@ export function ServerConsolePanel({
   // Prefer status.active (fresher — refetched on load/poll/action) once we have it at all; only fall
   // back to the server-rendered initial prop before the first client fetch resolves.
   const active = status ? status.active : initialActive;
-  const canStart = configured && server && !server.on && !server.booting;
-  const canStop = configured && server && (server.on || server.booting);
+  const canStart = configured && !!server && isServerOff(server);
+  const canStop = configured && !!server && !isServerOff(server);
   const casualUse = !!(configured && server && !active && (server.players_online ?? 0) > 0);
 
   return (

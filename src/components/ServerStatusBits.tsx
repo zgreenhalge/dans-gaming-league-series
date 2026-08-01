@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Copy, Check, Play } from 'lucide-react';
 import type { DathostServer } from '@/lib/dathost';
 import type { ConnectedPlayer } from '@/lib/server-players';
+import { isServerLive, isServerOff } from '@/lib/util';
 
 export function StatePill({ configured, server }: { configured: boolean; server: DathostServer | null }) {
   if (!configured) {
@@ -30,7 +31,7 @@ export function StatePill({ configured, server }: { configured: boolean; server:
       </span>
     );
   }
-  const label = server.booting ? 'booting' : server.on ? 'on' : 'off';
+  const label = isServerLive(server) ? 'on' : isServerOff(server) ? 'off' : 'booting';
   const style =
     label === 'on'
       ? { bg: 'var(--color-accent-green-bg)', fg: 'var(--color-accent-green-fg)', border: 'var(--color-accent-green-border)' }

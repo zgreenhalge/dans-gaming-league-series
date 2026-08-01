@@ -15,6 +15,8 @@
 //   DATHOST_EMAIL, DATHOST_PASSWORD   HTTP Basic creds (account email + API password)
 //   DATHOST_SERVER_ID                 the persistent DGLS match server id
 
+import { isServerLive } from './util';
+
 export const BASE = 'https://dathost.com/api/0.1';
 
 /**
@@ -275,7 +277,7 @@ export async function waitUntilReady(
   return pollUntil(
     async () => {
       const server = await getServer(id);
-      return server.on && !server.booting && connectHost(server) ? server : null;
+      return isServerLive(server) && connectHost(server) ? server : null;
     },
     { timeoutMs, intervalMs: opts.intervalMs ?? 3_000, timeoutMessage: `Server ${id} not ready after ${Math.round(timeoutMs / 1000)}s` },
   );

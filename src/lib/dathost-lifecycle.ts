@@ -13,7 +13,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
-import { matchLabel, isPlayedScore } from './util';
+import { matchLabel, isPlayedScore, isServerOff } from './util';
 import { SCHEDULE_COLLISION_WINDOW_MS } from './schedule';
 import {
   dathostServerId,
@@ -495,10 +495,10 @@ export async function getReconciledServerState(
   } else if (serverState === 'live' && serverId && ownsServer) {
     try {
       const server = await getServer(serverId);
-      // Confirmed stopped only — NOT `!isServerLive(server)` (`!on || booting`), which would also
-      // fire mid-boot (`on: true, booting: true`, e.g. another process restarting the shared server)
-      // and wrongly downgrade a match that's still actually up.
-      if (!server.on && !server.booting) {
+      // Confirmed stopped only — `isServerOff`, NOT `!isServerLive(server)` (`!on || booting`), which
+      // would also fire mid-boot (`on: true, booting: true`, e.g. another process restarting the
+      // shared server) and wrongly downgrade a match that's still actually up.
+      if (isServerOff(server)) {
         await downgradeToDone(supabaseAdmin, matchId);
         serverState = 'done';
         connectString = null;
