@@ -1,8 +1,9 @@
 // Start a casual scrim on the shared DatHost server — any signed-in player, free-form roster (no
-// DGLS roster/veto, no stats). Applies the golden config at a chosen map and boots the server, same
-// primitives the admin console's "Apply config set" + "Start" use, minus the admin-only override:
-// refuses outright (409) if the server is occupied, a scrim is already running, or a league match is
-// scheduled within the hour and hasn't been scored yet — a scrim never bumps a real match.
+// DGLS roster/veto, no stats). Applies the chosen config set (defaults to `golden`) at a chosen map
+// and boots the server, the same `launchServer` orchestration the admin console's Start uses, minus
+// the admin-only override: refuses outright (409) if the server is occupied, a scrim is already
+// running, or a league match is scheduled within the hour and hasn't been scored yet — a scrim never
+// bumps a real match. See /api/scrim/apply-config for the no-boot "reassert without starting" half.
 //
 // Never calls `loadMatch` — with no roster loaded, MatchZy stays in Pug Mode (teams unlocked, players
 // self-assign with `.ct`/`.t`/`.spec`). A `scrim_sessions` row is claimed atomically right before
@@ -16,6 +17,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { dathostServerId, getServer } from '@/lib/dathost';
+import { listConfigSets } from '@/lib/dathost-config';
 import { getServerOccupancy, occupancyMessage, findNearbyUnscoredMatch, launchServer, pugModeCvarLine } from '@/lib/dathost-lifecycle';
 import { claimScrimSession, releaseScrimSession, reconcileScrimSession } from '@/lib/scrim-session';
 import { SCRIM_BOOT_MARKER } from '@/lib/server-players';
@@ -30,6 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => null);
+  const configSet = typeof body?.configSet === 'string' ? body.configSet : 'golden';
   const mapWorkshopId = typeof body?.mapWorkshopId === 'string' ? body.mapWorkshopId.trim() : '';
   if (!WORKSHOP_ID_RE.test(mapWorkshopId)) {
     return NextResponse.json({ error: 'mapWorkshopId must be a numeric Steam workshop ID' }, { status: 400 });
@@ -39,6 +42,14 @@ export async function POST(req: NextRequest) {
 
   const serverId = dathostServerId();
   const supabaseAdmin = getAdminClient();
+
+  const configSets = await listConfigSets(supabaseAdmin);
+  if (!configSets.some((c) => c.key === configSet)) {
+    return NextResponse.json(
+      { error: `Unknown config set "${configSet}" — valid keys: ${configSets.map((c) => c.key).join(', ')}` },
+      { status: 400 },
+    );
+  }
 
   const [blockingMatch, server] = await Promise.all([findNearbyUnscoredMatch(supabaseAdmin), getServer(serverId).catch(() => null)]);
   if (blockingMatch) {
@@ -76,7 +87,7 @@ export async function POST(req: NextRequest) {
     // history starts — see `SCRIM_BOOT_MARKER` — so the connected-roster read on `/api/scrim/status`
     // can discard residue left over from whatever last used the shared, reused server.
     await launchServer(supabaseAdmin, serverId, {
-      configSetKey: 'golden',
+      configSetKey: configSet,
       mapWorkshopId,
       extraCvars: `${pugModeCvarLine({ playout, friendly })}; echo ${SCRIM_BOOT_MARKER}`,
     });

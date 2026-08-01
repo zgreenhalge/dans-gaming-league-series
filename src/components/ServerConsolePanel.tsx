@@ -1,15 +1,15 @@
 'use client';
 
 // Admin server console (#134/#135, admin console b — now server-centric). One panel: occupancy/raw
-// DatHost state + start/stop at top (plus, on an occupying match, "Apply match settings" — re-push the
+// DatHost state at top (Stop, plus, on an occupying match, "Apply match settings" — re-push the
 // match's loadmatch config to restore forced map_sides + demo-upload cvars — and Teardown, the
-// autostop-failed safety valve); below it, in the same box, the config-set + map picker and
-// playout/friendly toggles Start launches with, "Apply config set" (settings-only, doesn't start the
-// server or load a match config), and "Compare to live config" (read-only drift check against the
-// selected config set) — kept in one panel since Start's behavior directly depends on that picker's
-// state (#315). Below that, disk cleanup (issue #132) — enable/disable + interval + a manual "run now"
-// for the dathost-cleanup GitHub Action. The per-match MatchServerPanel still handles per-match
-// provisioning on the match page; this is the global operator view.
+// autostop-failed safety valve); below it, in the same box, the shared `LaunchOptionsPicker`
+// (config-set + map + playout/friendly toggles) with Start and Apply config set side by side — Start
+// boots with them, Apply config set pushes them without starting (settings-only, doesn't load a match
+// config) — and "Compare to live config" (read-only drift check against the selected config set).
+// Below that, disk cleanup (issue #132) — enable/disable + interval + a manual "run now" for the
+// dathost-cleanup GitHub Action. The per-match MatchServerPanel still handles per-match provisioning
+// on the match page; this is the global operator view.
 //
 // Start/Stop/Apply are occupancy-checked server-side (getServerOccupancy) — a DGLS match holding the
 // server, or live players on it with no DGLS match at all (casual/manual use), both refuse the action
@@ -23,7 +23,8 @@ import { getBrowserClient } from '@/lib/supabase-browser';
 import { ServerSpinner } from '@/components/ServerSpinner';
 import { StatePill, CopyConnectButton } from '@/components/ServerStatusBits';
 import { CollapsiblePanel } from '@/components/CollapsiblePanel';
-import { MapPicker, CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
+import { CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
+import { LaunchOptionsPicker } from '@/components/LaunchOptionsPicker';
 import { fmtUtcShort } from '@/lib/util';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
@@ -584,7 +585,9 @@ export function ServerConsolePanel({
           </div>
 
           {/* Button slot: an in-flight action shows a spinner in place of the button until the
-              opposite control is available, so the pill + details above stay put. */}
+              opposite control is available, so the pill + details above stay put. Start itself lives
+              below, next to the config-set/map picker its payload comes from — this slot only ever
+              needs to react to it via the shared starting/stopping state. */}
           <div className="shrink-0 flex flex-col items-end gap-2">
             {starting ? (
               <div className="w-40">
@@ -595,27 +598,15 @@ export function ServerConsolePanel({
                 <ServerSpinner label="Stopping server…" tone="stop" />
               </div>
             ) : (
-              <div className="flex gap-2">
-                {canStart && (
-                  <button
-                    onClick={() => startServer()}
-                    disabled={startStopBusy || !configSet || !resolvedMapId}
-                    title={!configSet || !resolvedMapId ? 'Pick a config set and map in Server config below first' : undefined}
-                    className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
-                  >
-                    {startStopBusy ? '…' : 'Start'}
-                  </button>
-                )}
-                {canStop && (
-                  <button
-                    onClick={() => stopServer()}
-                    disabled={startStopBusy}
-                    className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)] hover:bg-[var(--color-accent-red-bg)] disabled:opacity-50"
-                  >
-                    {startStopBusy ? '…' : 'Stop'}
-                  </button>
-                )}
-              </div>
+              canStop && (
+                <button
+                  onClick={() => stopServer()}
+                  disabled={startStopBusy}
+                  className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)] hover:bg-[var(--color-accent-red-bg)] disabled:opacity-50"
+                >
+                  {startStopBusy ? '…' : 'Stop'}
+                </button>
+              )
             )}
             {active && (
               <>
@@ -652,50 +643,46 @@ export function ServerConsolePanel({
         )}
         {teardownError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-3">{teardownError}</div>}
 
-        {/* Server config — pick a config set + map + launch-time toggles (what Start, above, launches
-            with), apply them without starting, and compare the live server to a config set. Kept in
-            the same box as Start since its behavior directly depends on this picker's state (#315). */}
+        {/* Server config — pick a config set + map + launch-time toggles, then either Start (boot with
+            them) or Apply config set (push them without starting) — the two actions that consume this
+            picker's state, side by side (#315). */}
         <div className="mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">Server config</div>
           <div className="flex flex-col gap-2">
-            <select
-              value={configSet}
-              onChange={(e) => setConfigSet(e.target.value)}
-              className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
-            >
-              {configSets.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            <MapPicker
+            <LaunchOptionsPicker
+              configSets={configSets}
+              configSet={configSet}
+              onConfigSetChange={setConfigSet}
               maps={maps}
-              value={mapChoice}
-              onChange={setMapChoice}
-              customValue={customMapId}
-              onCustomChange={setCustomMapId}
-              customInvalid={customMapInvalid}
+              mapChoice={mapChoice}
+              onMapChoiceChange={setMapChoice}
+              customMapId={customMapId}
+              onCustomMapIdChange={setCustomMapId}
+              customMapInvalid={customMapInvalid}
+              playout={playout}
+              onPlayoutChange={setPlayout}
+              friendly={friendly}
+              onFriendlyChange={setFriendly}
             />
-            <label className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)]">
-              <input type="checkbox" checked={playout} onChange={(e) => setPlayout(e.target.checked)} />
-              Play out all rounds
-            </label>
-            <label className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)]">
-              <input type="checkbox" checked={friendly} onChange={(e) => setFriendly(e.target.checked)} />
-              Friendly
-            </label>
-            <div className="font-mono text-[10px] text-[var(--color-text-secondary)]">
-              Config set, map, and the toggles above are what Start (above) launches with.
+            <div className="flex gap-2">
+              {canStart && !starting && !stopping && (
+                <button
+                  onClick={() => startServer()}
+                  disabled={startStopBusy || !configSet || !resolvedMapId}
+                  className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
+                >
+                  {startStopBusy ? '…' : 'Start'}
+                </button>
+              )}
+              <button
+                onClick={() => applyConfig()}
+                disabled={!configSet || !resolvedMapId || applyBusy}
+                title="Reassert settings on the server without starting it"
+                className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
+              >
+                {applyBusy ? 'Applying…' : 'Apply config set'}
+              </button>
             </div>
-            <button
-              onClick={() => applyConfig()}
-              disabled={!configSet || !resolvedMapId || applyBusy}
-              title="Reassert settings on the server without starting it"
-              className="self-start font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
-            >
-              {applyBusy ? 'Applying…' : 'Apply config set'}
-            </button>
             {applyError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{applyError}</div>}
             {applySuccess && !applyError && (
               <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
