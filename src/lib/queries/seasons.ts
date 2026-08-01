@@ -61,6 +61,10 @@ export async function getSeasonRoster(seasonId: number, playersById?: Map<number
   const entries: SeasonRosterEntry[] = [];
   for (const r of rows) {
     const player = resolvedPlayersById.get(r.player_id);
+    // A roster is a flat list — a row referencing a player_id missing from playersById is simply
+    // omitted, unlike getSeasonScheduleDraft()'s player() helper, which throws on the equivalent
+    // case. That's deliberate, not an inconsistency to reconcile: a list tolerates one fewer row
+    // fine, but a schedule draft's match slot can't render at all without a real player in it.
     if (!player) continue;
     entries.push({
       player_id: r.player_id,
