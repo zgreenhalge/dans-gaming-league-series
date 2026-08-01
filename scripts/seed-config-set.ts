@@ -17,6 +17,8 @@ import { flagValue } from './dathost-golden-shared';
 function walkFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
+    // Skip dotfiles (e.g. a stray `.gitkeep` placeholder) — not real cfg content.
+    if (entry.startsWith('.')) continue;
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) out.push(...walkFiles(full));
     else out.push(full);
