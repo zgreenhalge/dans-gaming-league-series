@@ -128,14 +128,10 @@ export function ServerConsolePanel({
   const [stopping, setStopping] = useState(false);
   const startingRef = useRef(false);
   const stoppingRef = useRef(false);
-  // A fresh boot flips through a spurious `on` *before* it enters `booting`, so we can't treat the
-  // first `on` as ready — latch that we've seen `booting`, then accept `on && !booting`. `actionAt`
-  // caps the wait so a start/stop that never settles can't strand the spinner forever.
-  const sawBootingRef = useRef(false);
+  // `actionAt` caps the wait so a start/stop that never settles can't strand the spinner forever.
   const actionAtRef = useRef(0);
 
   const beginAction = (kind: 'start' | 'stop') => {
-    sawBootingRef.current = false;
     actionAtRef.current = Date.now();
     startingRef.current = kind === 'start';
     stoppingRef.current = kind === 'stop';
@@ -180,9 +176,13 @@ export function ServerConsolePanel({
       }
       const data = (await res.json()) as AdminServerStatus;
       setStatus(data);
-      // Clear the in-flight spinner once the action has truly landed. Start: only after the box has
-      // passed through `booting` and settled to a connectable `on` (ignore the spurious pre-boot
-      // `on`). Stop: once it's fully off. Either way, give up after ACTION_CAP_MS.
+      // Clear the in-flight spinner once the action has truly landed. Start: once the box is
+      // connectable (`on && !booting && connect`) — `connect` needs real ports assigned, which a
+      // start command's brief pre-boot `on` flicker never has, so it alone rules that out without
+      // needing to have also *observed* an intermediate `booting: true` poll first — DatHost's boot
+      // can flip through that window faster than this 2s poll interval, which would otherwise strand
+      // the spinner until the cap below times it out. Stop: once it's fully off. Either way, give up
+      // after ACTION_CAP_MS.
       const s = data.server;
       if (s) {
         const capped = Date.now() - actionAtRef.current > ACTION_CAP_MS;
@@ -194,9 +194,8 @@ export function ServerConsolePanel({
           if (timedOut) setStartStopError(`Server never reported '${verb}' success`);
         };
         if (startingRef.current) {
-          if (s.booting) sawBootingRef.current = true;
           const ready = s.on && !s.booting && !!data.connect;
-          if (sawBootingRef.current && ready) done(false, 'start');
+          if (ready) done(false, 'start');
           else if (capped) done(true, 'start');
         } else if (stoppingRef.current) {
           if (!s.on && !s.booting) done(false, 'stop');
