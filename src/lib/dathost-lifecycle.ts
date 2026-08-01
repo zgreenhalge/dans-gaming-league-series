@@ -29,7 +29,7 @@ import {
   type DathostServer,
 } from './dathost';
 import { releaseScrimSession } from './scrim-session';
-import { resolveConfigSet, pushCfgFiles } from './dathost-config';
+import { resolveConfigSet, pushCfgFiles, type CfgPushResult } from './dathost-config';
 import { recordOpsError, clearOpsError } from './ops-errors';
 
 /** The "friendly" cvars — only asserted when the launch-time "friendly" toggle is on. */
@@ -55,27 +55,39 @@ export function pugModeCvarLine(opts: { playout: boolean; friendly: boolean }): 
   return cvars.join('; ');
 }
 
+/**
+ * Resolve a config set and push it to the server — settings PUT + cfg files — without starting it.
+ * The no-boot half of `launchServer` below, shared by the admin and scrim "Apply config set" routes
+ * so reasserting a config set can't drift between the two surfaces.
+ */
+export async function applyConfigSetOnly(
+  supabaseAdmin: SupabaseClient,
+  serverId: string,
+  opts: { configSetKey: string; mapWorkshopId: string | null },
+): Promise<CfgPushResult[]> {
+  const set = await resolveConfigSet(supabaseAdmin, opts.configSetKey);
+  await applyConfigSet(serverId, { server: set.server, cs2Settings: set.cs2Settings }, { mapWorkshopId: opts.mapWorkshopId });
+  return pushCfgFiles(serverId, set.cfgFiles);
+}
+
 export interface LaunchResult {
   server: DathostServer;
   connect: string;
 }
 
 /**
- * Resolve a config set, push its cfg files, boot the server, and optionally assert extra cvars once
- * ready — the one place "apply + push + boot + cvars" is composed, shared by real-match provisioning
- * (`provisionMatchServer`, `configSetKey: 'golden'`, no `extraCvars` — `loadMatch` runs after instead)
- * and the admin/scrim launch routes (their own config-set pick + `pugModeCvarLine`-derived
- * `extraCvars`). A per-file cfg-push failure is logged, not fatal.
+ * `applyConfigSetOnly` + boot + optionally assert extra cvars once ready — the one place "apply + push
+ * + boot + cvars" is composed, shared by real-match provisioning (`provisionMatchServer`,
+ * `configSetKey: 'golden'`, no `extraCvars` — `loadMatch` runs after instead) and the admin/scrim
+ * launch routes (their own config-set pick + `pugModeCvarLine`-derived `extraCvars`). A per-file
+ * cfg-push failure is logged, not fatal.
  */
 export async function launchServer(
   supabaseAdmin: SupabaseClient,
   serverId: string,
   opts: { configSetKey: string; mapWorkshopId: string | null; extraCvars?: string },
 ): Promise<LaunchResult> {
-  const set = await resolveConfigSet(supabaseAdmin, opts.configSetKey);
-  await applyConfigSet(serverId, { server: set.server, cs2Settings: set.cs2Settings }, { mapWorkshopId: opts.mapWorkshopId });
-
-  const pushed = await pushCfgFiles(serverId, set.cfgFiles);
+  const pushed = await applyConfigSetOnly(supabaseAdmin, serverId, { configSetKey: opts.configSetKey, mapWorkshopId: opts.mapWorkshopId });
   const failed = pushed.filter((p) => !p.ok);
   if (failed.length) {
     console.warn(`launchServer(${opts.configSetKey}): ${failed.length} cfg file(s) failed:`, failed);
