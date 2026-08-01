@@ -2,6 +2,7 @@
 // existing callers. `_shared.ts` (fetchAllPages, SUPABASE_PAGE_SIZE) is intentionally not
 // re-exported here — it's private plumbing used only by the domain files themselves.
 export * from './seasons';
+export * from './season-schedule-draft';
 export * from './schedule';
 export * from './match';
 export * from './admin';

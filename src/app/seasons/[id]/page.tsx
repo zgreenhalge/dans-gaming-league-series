@@ -6,6 +6,9 @@ import {
   getSeason,
   getSeasonLeaderboard,
   getSeasonSchedule,
+  getSeasonRoster,
+  getPlayersById,
+  hasSeasonScheduleDraft,
   getGauntletRounds,
   getGauntletBracketShape,
   getGauntletSeasonLeaderboard,
@@ -22,6 +25,8 @@ import CombinedSeasonTabView from '@/components/CombinedSeasonTabView';
 import type { Season } from '@/lib/types';
 import SeasonStartDateButton from '@/components/SeasonStartDateButton';
 import MarkSeasonActiveButton from '@/components/MarkSeasonActiveButton';
+import { SeasonRosterPanel } from '@/components/SeasonRosterPanel';
+import { SeasonScheduleEntryPoint } from '@/components/SeasonScheduleEntryPoint';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 import { seasonTitle, weekWindow, matchTitle } from '@/lib/util';
@@ -210,7 +215,9 @@ export default async function SeasonPage({
   // Regular season — check for paired gauntlet
   const linkedGauntlet = await getLinkedGauntlet(season.name);
 
-  const [leaderboard, schedule, gauntletRounds, gauntletBracketShape, gauntletLeaderboard, h2hData, gauntletH2hData, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics] = await Promise.all([
+  const isUpcoming = season.status === 'UPCOMING';
+
+  const [leaderboard, schedule, gauntletRounds, gauntletBracketShape, gauntletLeaderboard, h2hData, gauntletH2hData, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics, playersById, hasSchedule] = await Promise.all([
     getSeasonLeaderboard(seasonId),
     getSeasonSchedule(seasonId),
     linkedGauntlet ? getGauntletRounds(linkedGauntlet.id) : Promise.resolve(null),
@@ -224,7 +231,12 @@ export default async function SeasonPage({
     linkedGauntlet ? getSeasonEhogRatings(linkedGauntlet.id) : Promise.resolve(null),
     getAllSabremetrics(seasonId),
     linkedGauntlet ? getAllSabremetrics(linkedGauntlet.id) : Promise.resolve([]),
+    isUpcoming ? getPlayersById() : Promise.resolve(null),
+    isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
   ]);
+  // getSeasonRoster() needs playersById too — pass the copy just fetched above instead of letting
+  // it do its own redundant full players-table read.
+  const roster = isUpcoming && playersById ? await getSeasonRoster(seasonId, playersById) : [];
   const matchCount = countMatches(schedule);
   const finalWeek = schedule.length > 0 ? schedule[schedule.length - 1].week_number : null;
   const seasonJsonLd = buildSeasonJsonLd({
@@ -270,6 +282,18 @@ export default async function SeasonPage({
             />
           </div>
         </div>
+        {isUpcoming && playersById && (
+          <div className="mb-10 flex flex-col gap-3">
+            <SeasonRosterPanel
+              seasonId={season.id}
+              roster={roster}
+              allPlayers={Array.from(playersById.values()).map((p) => ({ id: p.id, name: p.name }))}
+              isAdmin={isAdmin}
+              currentPlayerId={currentPlayerId}
+            />
+            {isAdmin && <SeasonScheduleEntryPoint seasonId={season.id} hasSchedule={hasSchedule} />}
+          </div>
+        )}
         {linkedGauntlet &&
         gauntletRounds &&
         gauntletBracketShape &&

@@ -71,6 +71,37 @@ export interface Player {
   name_changed_at: string | null;
 }
 
+/** One row per player on a season's roster — explicit since a season with no matches yet has no
+ * roster derivable from `player_match_stats`. Unique per `(season_id, player_id)`. */
+export interface SeasonPlayer {
+  id: number;
+  season_id: number;
+  player_id: number;
+  joined_at: string;
+}
+
+/** A regular season's editable matchup draft — mirrors `Week`/`Match` in shape (down to reusing
+ * `bye_player_id` singular, since `doubleheaderPolicy: 'auto'` caps byes at one per week by
+ * construction) but lives in its own tables until confirmed, so generating or hand-editing it
+ * never touches real `weeks`/`matches` rows. See `season-schedule.ts` / `season-schedule-engine.ts`
+ * for generation and `season-schedule-draft-engine.ts` for persistence. */
+export interface SeasonScheduleDraftWeek {
+  id: number;
+  season_id: number;
+  week_number: number;
+  bye_player_id: number | null;
+}
+
+export interface SeasonScheduleDraftMatch {
+  id: number;
+  draft_week_id: number;
+  match_number: number;
+  shirts_player1_id: number;
+  shirts_player2_id: number;
+  skins_player1_id: number;
+  skins_player2_id: number;
+}
+
 export interface PlayerMatchStat {
   id: number;
   match_id: number;
