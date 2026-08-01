@@ -205,7 +205,7 @@ export function ScrimPanel({ configSets, maps }: { configSets: ConfigSetOption[]
         )}
 
         {!serverOn && !starting && (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
             <LaunchOptionsPicker
               configSets={configSets}
               configSet={configSet}

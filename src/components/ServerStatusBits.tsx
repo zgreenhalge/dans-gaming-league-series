@@ -4,7 +4,7 @@
 // public scrim panel (`ScrimPanel`) — both render the same raw DatHost server state.
 
 import { useState } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Play } from 'lucide-react';
 import type { DathostServer } from '@/lib/dathost';
 import type { ConnectedPlayer } from '@/lib/server-players';
 
@@ -79,11 +79,27 @@ export function CopyConnectButton({ connect }: { connect: string }) {
   );
 }
 
+export function JoinServerButton({ connect }: { connect: string }) {
+  return (
+    // `steam://connect/<host>` is unreliable from a browser click (a Steam client bug, independent of
+    // host format) — `steam://run/730//+connect <ip:port>` (730 = CS2) is the documented workaround
+    // that still launches reliably.
+    <a
+      href={`steam://run/730//+connect ${connect}`}
+      title="Join server"
+      className="inline-flex items-center text-[var(--color-text-secondary)] hover:text-[var(--color-accent-green-fg)]"
+    >
+      <Play size={12} />
+    </a>
+  );
+}
+
 /**
  * The connect-related bits both the admin console and scrim panel show for a live/connectable server —
- * a one-click Steam join, the raw `connect` string + copy button, and (scrim only) who started it.
- * Renders inline (no wrapping element) so callers lay it out in their own flex row alongside anything
- * else they show (e.g. admin's `mode` field) — same pattern as `MapPicker`/`LaunchOptionsPicker`.
+ * a one-click Steam join icon right in front of the connect string + copy button, and (scrim only) who
+ * started it. Renders inline (no wrapping element) so callers lay it out in their own flex row
+ * alongside anything else they show (e.g. admin's `mode` field) — same pattern as
+ * `MapPicker`/`LaunchOptionsPicker`.
  */
 export function ServerConnectionDetails({
   connect,
@@ -97,18 +113,8 @@ export function ServerConnectionDetails({
   if (!connect) return null;
   return (
     <>
-      {serverOn && (
-        // `steam://connect/<host>` is unreliable from a browser click (a Steam client bug, independent
-        // of host format) — `steam://run/730//+connect <ip:port>` (730 = CS2) is the documented
-        // workaround that still launches reliably.
-        <a
-          href={`steam://run/730//+connect ${connect}`}
-          className="px-2 py-1 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)]"
-        >
-          Join server
-        </a>
-      )}
       <span className="inline-flex items-center gap-1.5">
+        {serverOn && <JoinServerButton connect={connect} />}
         connect {connect}
         <CopyConnectButton connect={connect} />
       </span>
