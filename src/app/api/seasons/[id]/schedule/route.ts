@@ -44,7 +44,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Season must be UPCOMING to generate its matchup draft' }, { status: 400 });
   }
 
-  const doubleheaderPolicy: DoubleheaderPolicy = (body as { doubleheaderPolicy?: DoubleheaderPolicy })?.doubleheaderPolicy === 'never' ? 'never' : 'auto';
+  const requestedPolicy = (body as { doubleheaderPolicy?: unknown })?.doubleheaderPolicy;
+  if (requestedPolicy !== undefined && requestedPolicy !== 'auto' && requestedPolicy !== 'never') {
+    return NextResponse.json({ error: "doubleheaderPolicy must be 'auto' or 'never'" }, { status: 400 });
+  }
+  const doubleheaderPolicy: DoubleheaderPolicy = requestedPolicy === 'never' ? 'never' : 'auto';
   const playerIds = roster.map((r) => r.player_id);
 
   if (playerIds.length < MIN_SEED_COUNT || playerIds.length > MAX_SEED_COUNT) {
