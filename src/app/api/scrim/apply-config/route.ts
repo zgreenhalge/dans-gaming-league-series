@@ -1,6 +1,7 @@
 // Reassert a config set on the shared DatHost server without starting it — the scrim-scoped
-// counterpart to /api/admin/server/apply-config, using the same occupancy refusal /api/scrim/start
-// uses (409, no override — a scrim never overrides occupancy the way an admin can).
+// counterpart to /api/admin/server/apply-config, gated exactly like /api/scrim/start: refused (409, no
+// override) if the server is occupied, and refused if a league match is scheduled within the hour and
+// hasn't been scored yet — a scrim never touches the server's config that close to a real match either.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -8,7 +9,7 @@ import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { dathostServerId, getServer } from '@/lib/dathost';
 import { listConfigSets } from '@/lib/dathost-config';
-import { getServerOccupancy, occupancyMessage, applyConfigSetOnly } from '@/lib/dathost-lifecycle';
+import { getServerOccupancy, occupancyMessage, findNearbyUnscoredMatch, applyConfigSetOnly } from '@/lib/dathost-lifecycle';
 
 const WORKSHOP_ID_RE = /^\d+$/;
 
@@ -36,7 +37,19 @@ export async function POST(req: NextRequest) {
   }
 
   const serverId = dathostServerId();
-  const server = await getServer(serverId).catch(() => null);
+
+  const [blockingMatch, server] = await Promise.all([findNearbyUnscoredMatch(supabaseAdmin), getServer(serverId).catch(() => null)]);
+  if (blockingMatch) {
+    return NextResponse.json(
+      {
+        error: `${blockingMatch.label} is scheduled too close to now and hasn't been scored yet — the shared server is reserved for it.`,
+        code: 'match_window',
+        blockingMatch,
+      },
+      { status: 409 },
+    );
+  }
+
   const occupancy = await getServerOccupancy(supabaseAdmin, server);
   if (occupancy.occupied) {
     return NextResponse.json(
