@@ -7,7 +7,6 @@ export interface SeasonRosterEntry {
   player_id: number;
   player_name: string;
   steam_avatar_url: string | null;
-  joined_at: string;
 }
 
 export async function getSeasons(): Promise<Season[]> {
@@ -53,12 +52,12 @@ export async function getLinkedRegularSeason(gauntletName: string): Promise<Seas
  * player picker) to skip this function's own redundant full-table read. */
 export async function getSeasonRoster(seasonId: number, playersById?: Map<number, Player>): Promise<SeasonRosterEntry[]> {
   const [{ data, error }, resolvedPlayersById] = await Promise.all([
-    supabase.from('season_players').select('player_id, joined_at').eq('season_id', seasonId),
+    supabase.from('season_players').select('player_id').eq('season_id', seasonId),
     playersById ?? getPlayersById(),
   ]);
   if (error) throw error;
 
-  const rows = (data ?? []) as { player_id: number; joined_at: string }[];
+  const rows = (data ?? []) as { player_id: number }[];
   const entries: SeasonRosterEntry[] = [];
   for (const r of rows) {
     const player = resolvedPlayersById.get(r.player_id);
@@ -67,7 +66,6 @@ export async function getSeasonRoster(seasonId: number, playersById?: Map<number
       player_id: r.player_id,
       player_name: player.name,
       steam_avatar_url: player.steam_avatar_url,
-      joined_at: r.joined_at,
     });
   }
   return entries.sort((a, b) => a.player_name.localeCompare(b.player_name));
