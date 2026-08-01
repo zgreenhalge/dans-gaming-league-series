@@ -22,19 +22,14 @@ import { getBrowserClient } from '@/lib/supabase-browser';
 import { ServerSpinner } from '@/components/ServerSpinner';
 import { StatePill, CopyConnectButton } from '@/components/ServerStatusBits';
 import { CollapsiblePanel } from '@/components/CollapsiblePanel';
+import { MapPicker, CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
 import { fmtUtcShort } from '@/lib/util';
-import { toSentenceCase } from '@/lib/maps';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
-import type { ConfigSetOption } from '@/lib/dathost';
-// Type-only — `import type` is erased at compile, so this never pulls dathost-config's node:fs into
-// the client bundle.
-import type { GoldenDiff, DiffRow, CfgFileDiff } from '@/lib/dathost-config';
+import type { ConfigSetOption, ConfigSetDiff, DiffRow, CfgFileDiff } from '@/lib/dathost-config';
 import type { WorkshopMapOption } from '@/lib/queries';
 import type { AdminServerStatus } from '@/app/api/admin/server/status/route';
 import type { DathostCleanupStatus } from '@/app/api/admin/dathost-cleanup/status/route';
-
-const CUSTOM_MAP_CHOICE = '__custom__';
 
 // Safety cap for the start/stop spinner — matches DatHost's own ready timeout (waitUntilReady). If an
 // action hasn't visibly settled by now, drop the spinner and show whatever raw state we have.
@@ -53,7 +48,7 @@ function DriftRows({ rows }: { rows: DiffRow[] }) {
       {changed.map((r) => (
         <div key={r.key} className="flex flex-wrap items-baseline gap-x-2">
           <span className="text-[var(--color-text-primary)]">{r.key}</span>
-          <span className="text-[var(--color-text-secondary)]">golden {r.local}</span>
+          <span className="text-[var(--color-text-secondary)]">set {r.local}</span>
           <span className="text-[var(--color-text-secondary)]">→</span>
           <span className={r.status === 'drift' ? 'text-[var(--color-accent-red-fg)]' : 'text-[var(--color-accent-amber-fg)]'}>
             live {r.live}
@@ -64,7 +59,7 @@ function DriftRows({ rows }: { rows: DiffRow[] }) {
   );
 }
 
-function ConfigDiffView({ diff }: { diff: GoldenDiff }) {
+function ConfigDiffView({ diff }: { diff: ConfigSetDiff }) {
   const settingsDrift = diff.settings.filter((r) => r.status === 'drift' || r.status === 'missing');
   const cfgWithDrift = diff.cfgFiles.filter(
     (f: CfgFileDiff) => f.error || f.rows.some((r) => r.status === 'drift' || r.status === 'missing'),
@@ -76,7 +71,7 @@ function ConfigDiffView({ diff }: { diff: GoldenDiff }) {
           diff.clean ? 'text-[var(--color-accent-green-fg)]' : 'text-[var(--color-accent-red-fg)]'
         }`}
       >
-        {diff.clean ? '✓ live server matches the versioned golden config.' : '✗ drift found — nothing was changed.'}
+        {diff.clean ? '✓ live server matches the config set.' : '✗ drift found — nothing was changed.'}
       </div>
 
       {settingsDrift.length > 0 && (
@@ -155,6 +150,8 @@ export function ServerConsolePanel({
   const [configSet, setConfigSet] = useState(configSets[0]?.key ?? '');
   const [mapChoice, setMapChoice] = useState('');
   const [customMapId, setCustomMapId] = useState('');
+  const [playout, setPlayout] = useState(false);
+  const [friendly, setFriendly] = useState(false);
   const [applyBusy, setApplyBusy] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applySuccess, setApplySuccess] = useState(false);
@@ -166,7 +163,7 @@ export function ServerConsolePanel({
   const [matchCfgError, setMatchCfgError] = useState<string | null>(null);
   const [matchCfgSuccess, setMatchCfgSuccess] = useState(false);
 
-  const [diff, setDiff] = useState<GoldenDiff | null>(null);
+  const [diff, setDiff] = useState<ConfigSetDiff | null>(null);
   const [diffBusy, setDiffBusy] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
 
@@ -355,6 +352,7 @@ export function ServerConsolePanel({
   };
 
   const startServer = async (override = false) => {
+    if (!configSet || !resolvedMapId) return;
     setStartStopBusy(true);
     setStartStopError(null);
     // Optimistic: show the spinner immediately. The 2s status poll clears it once boot has settled —
@@ -364,7 +362,7 @@ export function ServerConsolePanel({
       const res = await fetch('/api/admin/server/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ override }),
+        body: JSON.stringify({ configSet, mapWorkshopId: resolvedMapId, playout, friendly, override }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -494,13 +492,13 @@ export function ServerConsolePanel({
     setDiffBusy(true);
     setDiffError(null);
     try {
-      const res = await fetch('/api/admin/server/config-diff');
+      const res = await fetch(`/api/admin/server/config-diff?configSet=${encodeURIComponent(configSet || 'golden')}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setDiffError(body.error ?? 'Could not compare config');
         return;
       }
-      setDiff((await res.json()) as GoldenDiff);
+      setDiff((await res.json()) as ConfigSetDiff);
     } catch {
       setDiffError('Could not compare config');
     } finally {
@@ -600,7 +598,8 @@ export function ServerConsolePanel({
                 {canStart && (
                   <button
                     onClick={() => startServer()}
-                    disabled={startStopBusy}
+                    disabled={startStopBusy || !configSet || !resolvedMapId}
+                    title={!configSet || !resolvedMapId ? 'Pick a config set and map below first' : undefined}
                     className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
                   >
                     {startStopBusy ? '…' : 'Start'}
@@ -653,9 +652,9 @@ export function ServerConsolePanel({
         {teardownError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-3">{teardownError}</div>}
       </div>
 
-      {/* Server config — apply a config set + map, and compare the live server to the versioned
-          golden config. Both are the same "server-level configuration" concern, grouped together
-          rather than split across two boxes. */}
+      {/* Server config — pick a config set + map (used by both Start, above, and Apply config set,
+          below), the launch-time toggles Start applies, and comparing the live server to a config
+          set. All the same "server-level configuration" concern, grouped in one box. */}
       <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
         <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">Server config</div>
         <div className="flex flex-col gap-2">
@@ -670,37 +669,29 @@ export function ServerConsolePanel({
               </option>
             ))}
           </select>
-          <select
+          <MapPicker
+            maps={maps}
             value={mapChoice}
-            onChange={(e) => setMapChoice(e.target.value)}
-            className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
-          >
-            <option value="">Select a map…</option>
-            {maps.map((m) => (
-              <option key={m.workshopId} value={m.workshopId}>
-                {toSentenceCase(m.name)}
-              </option>
-            ))}
-            <option value={CUSTOM_MAP_CHOICE}>Custom workshop ID…</option>
-          </select>
-          {mapChoice === CUSTOM_MAP_CHOICE && (
-            <>
-              <input
-                value={customMapId}
-                onChange={(e) => setCustomMapId(e.target.value)}
-                placeholder="Steam workshop ID or URL"
-                className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
-              />
-              {customMapInvalid && (
-                <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">
-                  Enter a valid Steam workshop ID or URL.
-                </div>
-              )}
-            </>
-          )}
+            onChange={setMapChoice}
+            customValue={customMapId}
+            onCustomChange={setCustomMapId}
+            customInvalid={customMapInvalid}
+          />
+          <label className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)]">
+            <input type="checkbox" checked={playout} onChange={(e) => setPlayout(e.target.checked)} />
+            Play out all rounds
+          </label>
+          <label className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)]">
+            <input type="checkbox" checked={friendly} onChange={(e) => setFriendly(e.target.checked)} />
+            Friendly
+          </label>
+          <div className="font-mono text-[10px] text-[var(--color-text-secondary)]">
+            Config set, map, and the toggles above are what Start (top) launches with.
+          </div>
           <button
             onClick={() => applyConfig()}
             disabled={!configSet || !resolvedMapId || applyBusy}
+            title="Reassert settings on the server without starting it"
             className="self-start font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
           >
             {applyBusy ? 'Applying…' : 'Apply config set'}

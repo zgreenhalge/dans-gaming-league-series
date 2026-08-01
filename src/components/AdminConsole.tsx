@@ -24,7 +24,7 @@ import type { BackgroundJobRow } from '@/lib/jobs';
 import type { AdminMatchRow, WorkshopMapOption } from '@/lib/queries';
 import type { Player } from '@/lib/types';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
-import type { ConfigSetOption } from '@/lib/dathost';
+import type { ConfigSetOption } from '@/lib/dathost-config';
 
 type Section = 'activity' | 'manage';
 type ManageType = 'match' | 'player' | 'season';

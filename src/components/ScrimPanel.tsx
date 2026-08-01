@@ -16,13 +16,12 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ServerSpinner } from '@/components/ServerSpinner';
 import { StatePill, CopyConnectButton } from '@/components/ServerStatusBits';
-import { toSentenceCase } from '@/lib/maps';
+import { MapPicker, CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
 import { isServerLive } from '@/lib/util';
 import type { WorkshopMapOption } from '@/lib/queries';
 import { useScrimStatus } from '@/components/ScrimStatusContext';
 
-const CUSTOM_MAP_CHOICE = '__custom__';
 const ACTION_CAP_MS = 90_000;
 
 export function ScrimPanel({ maps }: { maps: WorkshopMapOption[] }) {
@@ -188,35 +187,15 @@ export function ScrimPanel({ maps }: { maps: WorkshopMapOption[] }) {
 
         {!serverOn && !starting && (
           <div className="flex flex-col gap-2">
-            <select
+            <MapPicker
+              maps={maps}
               value={mapChoice}
-              onChange={(e) => setMapChoice(e.target.value)}
+              onChange={setMapChoice}
+              customValue={customMapId}
+              onCustomChange={setCustomMapId}
+              customInvalid={customMapInvalid}
               disabled={!!blockingMatch}
-              className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] disabled:opacity-50"
-            >
-              <option value="">Select a map…</option>
-              {maps.map((m) => (
-                <option key={m.workshopId} value={m.workshopId}>
-                  {toSentenceCase(m.name)}
-                </option>
-              ))}
-              <option value={CUSTOM_MAP_CHOICE}>Custom workshop ID…</option>
-            </select>
-            {mapChoice === CUSTOM_MAP_CHOICE && (
-              <>
-                <input
-                  value={customMapId}
-                  onChange={(e) => setCustomMapId(e.target.value)}
-                  placeholder="Steam workshop ID or URL"
-                  className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
-                />
-                {customMapInvalid && (
-                  <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">
-                    Enter a valid Steam workshop ID or URL.
-                  </div>
-                )}
-              </>
-            )}
+            />
             <label className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)]">
               <input type="checkbox" checked={playout} onChange={(e) => setPlayout(e.target.checked)} />
               Play out all rounds
