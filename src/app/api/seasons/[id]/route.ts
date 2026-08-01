@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason } from '@/lib/queries';
+import { deleteSeasonScheduleDraft } from '@/lib/season-schedule-draft-engine';
 
 const supabaseAdmin = getAdminClient();
 
@@ -49,8 +50,15 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     );
   }
 
-  // Roster signups (season_players) are only meaningful before matches exist, and this season has
-  // none yet — clear them first so the FK to `seasons` doesn't block the delete.
+  // Roster signups (season_players) and any matchup draft are only meaningful before matches
+  // exist, and this season has none yet — clear them first so their FKs to `seasons` don't block
+  // the delete.
+  try {
+    await deleteSeasonScheduleDraft(supabaseAdmin, seasonId);
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
+
   const { error: rosterErr } = await supabaseAdmin.from('season_players').delete().eq('season_id', seasonId);
   if (rosterErr) {
     return NextResponse.json({ error: rosterErr.message }, { status: 500 });
