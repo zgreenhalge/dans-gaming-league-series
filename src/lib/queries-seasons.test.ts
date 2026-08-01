@@ -16,7 +16,7 @@ import { matchesSnapshot } from './test-support/snapshot';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getSeasons, getSeason, getLinkedGauntlet, getLinkedRegularSeason } from './queries';
+import { getSeasons, getSeason, getLinkedGauntlet, getLinkedRegularSeason, getSeasonRoster } from './queries';
 import { test, report } from './test-support/miniTest';
 
 async function main() {
@@ -50,6 +50,14 @@ async function main() {
 
   await test('getLinkedRegularSeason("Season 4 Gauntlet") — orphan gauntlet returns null', async () => {
     assert.equal(await getLinkedRegularSeason('Season 4 Gauntlet'), null);
+  });
+
+  await test('getSeasonRoster(3) — season with a roster, snapshot', async () => {
+    matchesSnapshot('getSeasonRoster-3', await getSeasonRoster(3));
+  });
+
+  await test('getSeasonRoster(1) — season with no roster rows returns empty array', async () => {
+    assert.deepEqual(await getSeasonRoster(1), []);
   });
 
   report();
