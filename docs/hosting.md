@@ -400,6 +400,8 @@ confirm).
 
 ## Key files
 
+`src/lib/util.ts` (`isServerLive`/`isServerOff` — the shared on/booting-state checks every consumer of
+a `DathostServer`, client or server, goes through instead of reading `.on`/`.booting` inline) ·
 `src/lib/dathost.ts` (REST client — `applyConfigSet`, `runConsole`, `getConsoleLines`) ·
 `src/lib/dathost-config.ts` (config-set data model — `resolveConfigSet`, `listConfigSets`,
 `pushCfgFiles`, `diffConfigSet`) · `src/lib/dathost-lifecycle.ts` (`launchServer` + `applyConfigSetOnly`
