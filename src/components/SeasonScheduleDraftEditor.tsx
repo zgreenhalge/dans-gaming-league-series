@@ -6,6 +6,7 @@ import {
   validateDraftIntegrity,
   validateDraftCompleteness,
   type DraftScheduleWeek,
+  type ValidationIssue,
 } from '@/lib/season-schedule-validation';
 import type { DoubleheaderPolicy } from '@/lib/season-schedule';
 
@@ -21,6 +22,24 @@ interface Props {
 }
 
 type SlotKey = 'shirts0' | 'shirts1' | 'skins0' | 'skins1';
+
+/** A week counts as edited if its bye or any match slot differs from the last-saved draft it was
+ * loaded from — matched by week_number/match_number rather than array position, since neither is
+ * reorderable by the user but identity-by-key is the more robust comparison either way. Drives the
+ * per-week "Edited" badge and the regenerate warning below. */
+function isWeekEdited(week: DraftScheduleWeek, initialWeeks: DraftScheduleWeek[]): boolean {
+  const original = initialWeeks.find((w) => w.week_number === week.week_number);
+  if (!original) return true;
+  if (original.bye_player_id !== week.bye_player_id) return true;
+  if (original.matches.length !== week.matches.length) return true;
+
+  const originalByMatch = new Map(original.matches.map((m) => [m.match_number, m]));
+  return week.matches.some((m) => {
+    const om = originalByMatch.get(m.match_number);
+    if (!om) return true;
+    return om.shirts[0] !== m.shirts[0] || om.shirts[1] !== m.shirts[1] || om.skins[0] !== m.skins[0] || om.skins[1] !== m.skins[1];
+  });
+}
 
 function updateMatchSlot(week: DraftScheduleWeek, matchNumber: number, slot: SlotKey, playerId: number): DraftScheduleWeek {
   return {
@@ -78,6 +97,23 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
   const rosterPlayerIds = useMemo(() => players.map((p) => p.id), [players]);
   const integrity = useMemo(() => validateDraftIntegrity(weeks), [weeks]);
   const completeness = useMemo(() => validateDraftCompleteness(weeks, rosterPlayerIds), [weeks, rosterPlayerIds]);
+
+  // Grouped by week_number so each week/match can render only the issues that concern it, instead
+  // of one dump at the bottom of the page.
+  const issuesByWeek = useMemo(() => {
+    const map = new Map<number, ValidationIssue[]>();
+    for (const issue of integrity.issues) {
+      const arr = map.get(issue.week_number) ?? [];
+      arr.push(issue);
+      map.set(issue.week_number, arr);
+    }
+    return map;
+  }, [integrity.issues]);
+
+  const editedWeekNumbers = useMemo(
+    () => weeks.filter((w) => isWeekEdited(w, initialWeeks)).map((w) => w.week_number),
+    [weeks, initialWeeks],
+  );
 
   const busy = busyAction !== null;
 
@@ -186,68 +222,93 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
-        {weeks.map((week) => (
-          <div key={week.week_number} className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="tracked text-[9px] text-[var(--color-text-secondary)]">Week {week.week_number}</div>
-              <label className="flex items-center gap-1.5 font-mono text-[10px] text-[var(--color-text-secondary)]">
-                Bye
-                <select
-                  value={week.bye_player_id ?? ''}
-                  onChange={(e) => {
-                    const v = e.target.value ? Number(e.target.value) : null;
-                    setWeeks((prev) => prev.map((w) => (w.week_number === week.week_number ? { ...w, bye_player_id: v } : w)));
-                  }}
-                  className="font-mono text-[12px] px-2 py-1 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
-                >
-                  <option value="">— none —</option>
-                  {players.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
+        {weeks.map((week) => {
+          const weekIssues = issuesByWeek.get(week.week_number) ?? [];
+          const weekLevelIssues = weekIssues.filter((i) => i.match_number == null);
+          const edited = editedWeekNumbers.includes(week.week_number);
+          return (
+            <div key={week.week_number} className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3 flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <div className="tracked text-[9px] text-[var(--color-text-secondary)]">Week {week.week_number}</div>
+                  {edited && (
+                    <span
+                      className="tracked text-[8px] px-1.5 py-0.5 border"
+                      style={{ borderColor: 'var(--color-accent-amber-border)', background: 'var(--color-accent-amber-bg)', color: 'var(--color-accent-amber-fg)' }}
+                    >
+                      Edited
+                    </span>
+                  )}
+                </div>
+                <label className="flex items-center gap-1.5 font-mono text-[10px] text-[var(--color-text-secondary)]">
+                  Bye
+                  <select
+                    value={week.bye_player_id ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value ? Number(e.target.value) : null;
+                      setWeeks((prev) => prev.map((w) => (w.week_number === week.week_number ? { ...w, bye_player_id: v } : w)));
+                    }}
+                    className="font-mono text-[12px] px-2 py-1 border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
+                  >
+                    <option value="">— none —</option>
+                    {players.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {weekLevelIssues.length > 0 && (
+                <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] flex flex-col gap-0.5">
+                  {weekLevelIssues.map((issue, i) => (
+                    <div key={i}>{issue.message}</div>
                   ))}
-                </select>
-              </label>
-            </div>
+                </div>
+              )}
 
-            <div className="flex flex-col gap-2">
-              {week.matches.map((m) => {
-                const onSlotChange = (slot: SlotKey) => (id: number) =>
-                  setWeeks((prev) => prev.map((w) => (w.week_number === week.week_number ? updateMatchSlot(w, m.match_number, slot, id) : w)));
-                // Every other slot in *this* match — never this match's own value, so a slot's
-                // current selection always stays selectable, but each other occupied slot is
-                // excluded from the rest (self-pairing within one match makes no sense).
-                const slotValues: Record<SlotKey, number> = { shirts0: m.shirts[0], shirts1: m.shirts[1], skins0: m.skins[0], skins1: m.skins[1] };
-                const excludeFor = (slot: SlotKey) =>
-                  new Set(Object.entries(slotValues).filter(([k]) => k !== slot).map(([, id]) => id));
-                return (
-                  <div key={m.match_number} className="flex items-center gap-2 flex-wrap font-mono text-[11px] text-[var(--color-text-secondary)]">
-                    <span className="tracked text-[9px] w-14 shrink-0">Match {m.match_number}</span>
-                    <PlayerSelect players={players} value={m.shirts[0]} excludeIds={excludeFor('shirts0')} onChange={onSlotChange('shirts0')} />
-                    <PlayerSelect players={players} value={m.shirts[1]} excludeIds={excludeFor('shirts1')} onChange={onSlotChange('shirts1')} />
-                    <span>vs</span>
-                    <PlayerSelect players={players} value={m.skins[0]} excludeIds={excludeFor('skins0')} onChange={onSlotChange('skins0')} />
-                    <PlayerSelect players={players} value={m.skins[1]} excludeIds={excludeFor('skins1')} onChange={onSlotChange('skins1')} />
-                  </div>
-                );
-              })}
+              <div className="flex flex-col gap-2">
+                {week.matches.map((m) => {
+                  const onSlotChange = (slot: SlotKey) => (id: number) =>
+                    setWeeks((prev) => prev.map((w) => (w.week_number === week.week_number ? updateMatchSlot(w, m.match_number, slot, id) : w)));
+                  // Every other slot in *this* match — never this match's own value, so a slot's
+                  // current selection always stays selectable, but each other occupied slot is
+                  // excluded from the rest (self-pairing within one match makes no sense).
+                  const slotValues: Record<SlotKey, number> = { shirts0: m.shirts[0], shirts1: m.shirts[1], skins0: m.skins[0], skins1: m.skins[1] };
+                  const excludeFor = (slot: SlotKey) =>
+                    new Set(Object.entries(slotValues).filter(([k]) => k !== slot).map(([, id]) => id));
+                  const matchIssues = weekIssues.filter((i) => i.match_number === m.match_number);
+                  return (
+                    <div key={m.match_number} className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2 flex-wrap font-mono text-[11px] text-[var(--color-text-secondary)]">
+                        <span className="tracked text-[9px] w-14 shrink-0">Match {m.match_number}</span>
+                        <PlayerSelect players={players} value={m.shirts[0]} excludeIds={excludeFor('shirts0')} onChange={onSlotChange('shirts0')} />
+                        <PlayerSelect players={players} value={m.shirts[1]} excludeIds={excludeFor('shirts1')} onChange={onSlotChange('shirts1')} />
+                        <span>vs</span>
+                        <PlayerSelect players={players} value={m.skins[0]} excludeIds={excludeFor('skins0')} onChange={onSlotChange('skins0')} />
+                        <PlayerSelect players={players} value={m.skins[1]} excludeIds={excludeFor('skins1')} onChange={onSlotChange('skins1')} />
+                      </div>
+                      {matchIssues.length > 0 && (
+                        <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] pl-16 flex flex-col gap-0.5">
+                          {matchIssues.map((issue, i) => (
+                            <div key={i}>{issue.message}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-
-      {!integrity.ok && (
-        <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)] flex flex-col gap-0.5">
-          {integrity.issues.map((issue, i) => (
-            <div key={i}>{issue.message}</div>
-          ))}
-        </div>
-      )}
 
       <div
         className="font-mono text-[12px] px-3 py-2 border"
         style={
           completeness.complete
             ? { borderColor: 'var(--color-accent-green-border)', background: 'var(--color-accent-green-bg)', color: 'var(--color-accent-green-fg)' }
-            : { borderColor: 'var(--color-border-primary)', background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)' }
+            : { borderColor: 'var(--color-accent-red-border)', background: 'var(--color-accent-red-bg)', color: 'var(--color-accent-red-fg)' }
         }
       >
         {completeness.complete ? (
@@ -265,6 +326,12 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
       </div>
 
       {error && <div className="font-mono text-[12px] text-[var(--color-accent-red-fg)]">{error}</div>}
+
+      {editedWeekNumbers.length > 0 && (
+        <div className="font-mono text-[11px]" style={{ color: 'var(--color-accent-amber-fg)' }}>
+          Regenerating will discard your edits to week{editedWeekNumbers.length === 1 ? '' : 's'} {editedWeekNumbers.join(', ')}.
+        </div>
+      )}
 
       <div className="flex items-center gap-3 flex-wrap">
         <button

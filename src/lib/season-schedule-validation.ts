@@ -26,6 +26,11 @@ export interface DraftScheduleWeek {
 
 export interface ValidationIssue {
   week_number: number;
+  /** Set only for issues that belong to one specific match (self-paired match, duplicate
+   * match_number) — lets a UI place the issue inline next to that match rather than only in a
+   * week- or draft-level list. Absent for issues that span a whole week (duplicate week_number, a
+   * player over-appearing, a bye conflict) since those don't belong to any one match. */
+  match_number?: number;
   message: string;
 }
 
@@ -54,13 +59,21 @@ export function validateDraftIntegrity(weeks: DraftScheduleWeek[]): IntegrityRes
 
     for (const m of week.matches) {
       if (seenMatchNumbers.has(m.match_number)) {
-        issues.push({ week_number: week.week_number, message: `Match ${m.match_number} appears more than once in week ${week.week_number}` });
+        issues.push({
+          week_number: week.week_number,
+          match_number: m.match_number,
+          message: `Match ${m.match_number} appears more than once in week ${week.week_number}`,
+        });
       }
       seenMatchNumbers.add(m.match_number);
 
       const slots = [...m.shirts, ...m.skins];
       if (new Set(slots).size !== 4) {
-        issues.push({ week_number: week.week_number, message: `Week ${week.week_number} match ${m.match_number}: all 4 players must be distinct` });
+        issues.push({
+          week_number: week.week_number,
+          match_number: m.match_number,
+          message: `Week ${week.week_number} match ${m.match_number}: all 4 players must be distinct`,
+        });
       }
       for (const id of slots) appearances.set(id, (appearances.get(id) ?? 0) + 1);
     }

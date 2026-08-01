@@ -40,16 +40,18 @@ async function main() {
     });
   }
 
-  await test('validateDraftIntegrity — flags a self-paired match (duplicate player in one match)', () => {
+  await test('validateDraftIntegrity — flags a self-paired match (duplicate player in one match), tagged with its match_number', () => {
     const weeks: DraftScheduleWeek[] = [
       { week_number: 1, bye_player_id: null, matches: [{ match_number: 1, shirts: [1, 2], skins: [1, 3] }] },
     ];
     const result = validateDraftIntegrity(weeks);
     assert.equal(result.ok, false);
-    assert.ok(result.issues.some((i) => i.message.includes('must be distinct')));
+    const issue = result.issues.find((i) => i.message.includes('must be distinct'));
+    assert.ok(issue);
+    assert.equal(issue.match_number, 1);
   });
 
-  await test('validateDraftIntegrity — flags a player in 3 matches the same week', () => {
+  await test('validateDraftIntegrity — flags a player in 3 matches the same week, untagged (spans multiple matches)', () => {
     const weeks: DraftScheduleWeek[] = [
       {
         week_number: 1,
@@ -63,7 +65,9 @@ async function main() {
     ];
     const result = validateDraftIntegrity(weeks);
     assert.equal(result.ok, false);
-    assert.ok(result.issues.some((i) => i.message.includes('appears in 3 matches')));
+    const issue = result.issues.find((i) => i.message.includes('appears in 3 matches'));
+    assert.ok(issue);
+    assert.equal(issue.match_number, undefined);
   });
 
   await test('validateDraftIntegrity — allows exactly 2 appearances (a legitimate doubleheader)', () => {
@@ -81,26 +85,30 @@ async function main() {
     assert.equal(result.ok, true);
   });
 
-  await test('validateDraftIntegrity — flags a bye player who also appears in a match', () => {
+  await test('validateDraftIntegrity — flags a bye player who also appears in a match, untagged (spans the whole week)', () => {
     const weeks: DraftScheduleWeek[] = [
       { week_number: 1, bye_player_id: 1, matches: [{ match_number: 1, shirts: [1, 2], skins: [3, 4] }] },
     ];
     const result = validateDraftIntegrity(weeks);
     assert.equal(result.ok, false);
-    assert.ok(result.issues.some((i) => i.message.includes('marked as the bye but also appears')));
+    const issue = result.issues.find((i) => i.message.includes('marked as the bye but also appears'));
+    assert.ok(issue);
+    assert.equal(issue.match_number, undefined);
   });
 
-  await test('validateDraftIntegrity — flags a duplicate week_number', () => {
+  await test('validateDraftIntegrity — flags a duplicate week_number, untagged (not about any one match)', () => {
     const weeks: DraftScheduleWeek[] = [
       { week_number: 1, bye_player_id: null, matches: [{ match_number: 1, shirts: [1, 2], skins: [3, 4] }] },
       { week_number: 1, bye_player_id: null, matches: [{ match_number: 1, shirts: [5, 6], skins: [7, 8] }] },
     ];
     const result = validateDraftIntegrity(weeks);
     assert.equal(result.ok, false);
-    assert.ok(result.issues.some((i) => i.message.includes('appears more than once')));
+    const issue = result.issues.find((i) => i.message.includes('appears more than once') && i.message.startsWith('Week'));
+    assert.ok(issue);
+    assert.equal(issue.match_number, undefined);
   });
 
-  await test('validateDraftIntegrity — flags a duplicate match_number within a week', () => {
+  await test('validateDraftIntegrity — flags a duplicate match_number within a week, tagged with that match_number', () => {
     const weeks: DraftScheduleWeek[] = [
       {
         week_number: 1,
@@ -113,7 +121,9 @@ async function main() {
     ];
     const result = validateDraftIntegrity(weeks);
     assert.equal(result.ok, false);
-    assert.ok(result.issues.some((i) => i.message.includes('Match 1 appears more than once')));
+    const issue = result.issues.find((i) => i.message.includes('Match 1 appears more than once'));
+    assert.ok(issue);
+    assert.equal(issue.match_number, 1);
   });
 
   await test('validateDraftCompleteness — empty draft reports every roster pair missing both ways', () => {
