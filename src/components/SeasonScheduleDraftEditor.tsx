@@ -95,7 +95,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
 
   const playerName = useMemo(() => new Map(players.map((p) => [p.id, p.name])), [players]);
   const rosterPlayerIds = useMemo(() => players.map((p) => p.id), [players]);
-  const integrity = useMemo(() => validateDraftIntegrity(weeks), [weeks]);
+  const integrity = useMemo(() => validateDraftIntegrity(weeks, rosterPlayerIds), [weeks, rosterPlayerIds]);
   const completeness = useMemo(() => validateDraftCompleteness(weeks, rosterPlayerIds), [weeks, rosterPlayerIds]);
 
   // Grouped by week_number so each week/match can render only the issues that concern it, instead

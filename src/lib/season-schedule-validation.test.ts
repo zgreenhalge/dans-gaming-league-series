@@ -29,7 +29,7 @@ async function main() {
   for (const roster of [ROSTER_7, ROSTER_12]) {
     await test(`a freshly generated schedule (${roster.length} players) passes both integrity and completeness`, () => {
       const weeks = toDraftWeeks(buildRosterSchedule(roster));
-      const integrity = validateDraftIntegrity(weeks);
+      const integrity = validateDraftIntegrity(weeks, roster);
       assert.deepEqual(integrity.issues, []);
       assert.equal(integrity.ok, true);
 
@@ -44,7 +44,7 @@ async function main() {
     const weeks: DraftScheduleWeek[] = [
       { week_number: 1, bye_player_id: null, matches: [{ match_number: 1, shirts: [1, 2], skins: [1, 3] }] },
     ];
-    const result = validateDraftIntegrity(weeks);
+    const result = validateDraftIntegrity(weeks, [1, 2, 3]);
     assert.equal(result.ok, false);
     const issue = result.issues.find((i) => i.message.includes('must be distinct'));
     assert.ok(issue);
@@ -63,7 +63,7 @@ async function main() {
         ],
       },
     ];
-    const result = validateDraftIntegrity(weeks);
+    const result = validateDraftIntegrity(weeks, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     assert.equal(result.ok, false);
     const issue = result.issues.find((i) => i.message.includes('appears in 3 matches'));
     assert.ok(issue);
@@ -81,7 +81,7 @@ async function main() {
         ],
       },
     ];
-    const result = validateDraftIntegrity(weeks);
+    const result = validateDraftIntegrity(weeks, [1, 2, 3, 4, 5, 6, 7]);
     assert.equal(result.ok, true);
   });
 
@@ -89,7 +89,7 @@ async function main() {
     const weeks: DraftScheduleWeek[] = [
       { week_number: 1, bye_player_id: 1, matches: [{ match_number: 1, shirts: [1, 2], skins: [3, 4] }] },
     ];
-    const result = validateDraftIntegrity(weeks);
+    const result = validateDraftIntegrity(weeks, [1, 2, 3, 4]);
     assert.equal(result.ok, false);
     const issue = result.issues.find((i) => i.message.includes('marked as the bye but also appears'));
     assert.ok(issue);
@@ -101,7 +101,7 @@ async function main() {
       { week_number: 1, bye_player_id: null, matches: [{ match_number: 1, shirts: [1, 2], skins: [3, 4] }] },
       { week_number: 1, bye_player_id: null, matches: [{ match_number: 1, shirts: [5, 6], skins: [7, 8] }] },
     ];
-    const result = validateDraftIntegrity(weeks);
+    const result = validateDraftIntegrity(weeks, [1, 2, 3, 4, 5, 6, 7, 8]);
     assert.equal(result.ok, false);
     const issue = result.issues.find((i) => i.message.includes('appears more than once') && i.message.startsWith('Week'));
     assert.ok(issue);
@@ -119,11 +119,34 @@ async function main() {
         ],
       },
     ];
-    const result = validateDraftIntegrity(weeks);
+    const result = validateDraftIntegrity(weeks, [1, 2, 3, 4, 5, 6, 7, 8]);
     assert.equal(result.ok, false);
     const issue = result.issues.find((i) => i.message.includes('Match 1 appears more than once'));
     assert.ok(issue);
     assert.equal(issue.match_number, 1);
+  });
+
+  await test('validateDraftIntegrity — flags a match slot referencing a player no longer on the roster, tagged with its match_number', () => {
+    const weeks: DraftScheduleWeek[] = [
+      { week_number: 1, bye_player_id: null, matches: [{ match_number: 1, shirts: [1, 2], skins: [3, 4] }] },
+    ];
+    // Player 4 has been dropped from the roster since this draft was generated.
+    const result = validateDraftIntegrity(weeks, [1, 2, 3]);
+    assert.equal(result.ok, false);
+    const issue = result.issues.find((i) => i.message.includes('player 4 is not on the current roster'));
+    assert.ok(issue);
+    assert.equal(issue.match_number, 1);
+  });
+
+  await test('validateDraftIntegrity — flags a bye player no longer on the roster, untagged (spans the whole week)', () => {
+    const weeks: DraftScheduleWeek[] = [
+      { week_number: 1, bye_player_id: 5, matches: [{ match_number: 1, shirts: [1, 2], skins: [3, 4] }] },
+    ];
+    const result = validateDraftIntegrity(weeks, [1, 2, 3, 4]);
+    assert.equal(result.ok, false);
+    const issue = result.issues.find((i) => i.message.includes('bye player 5 is not on the current roster'));
+    assert.ok(issue);
+    assert.equal(issue.match_number, undefined);
   });
 
   await test('validateDraftCompleteness — empty draft reports every roster pair missing both ways', () => {
@@ -139,7 +162,7 @@ async function main() {
     // fewer than 2 roster players there are zero pairs to require coverage for. This is exactly
     // why confirmSeasonScheduleDraft() checks draft non-emptiness itself rather than trusting
     // "integrity ok && completeness complete" alone — those two facts don't imply a draft exists.
-    assert.equal(validateDraftIntegrity([]).ok, true);
+    assert.equal(validateDraftIntegrity([], []).ok, true);
     assert.equal(validateDraftCompleteness([], []).complete, true);
     assert.equal(validateDraftCompleteness([], [1]).complete, true);
   });

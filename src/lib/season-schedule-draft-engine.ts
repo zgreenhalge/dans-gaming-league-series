@@ -99,13 +99,15 @@ export type SaveDraftResult = { ok: true } | { ok: false; issues: ValidationIssu
  * structure generation already created, so every `(week_number, match_number)` in `weeks` is
  * expected to already have a matching draft row — regenerating (which does add/remove rows) is a
  * separate operation. Refuses (without writing anything) if the proposed draft fails
- * `validateDraftIntegrity()` — never trusting client-side validation alone. */
+ * `validateDraftIntegrity()` against the season's current DB roster (not whatever roster the
+ * client last had) — never trusting client-side validation alone. */
 export async function saveSeasonScheduleDraft(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
   weeks: DraftScheduleWeek[],
 ): Promise<SaveDraftResult> {
-  const integrity = validateDraftIntegrity(weeks);
+  const roster = await getSeasonRoster(seasonId);
+  const integrity = validateDraftIntegrity(weeks, roster.map((r) => r.player_id));
   if (!integrity.ok) {
     return { ok: false, issues: integrity.issues };
   }
@@ -216,12 +218,10 @@ export async function confirmSeasonScheduleDraft(supabaseAdmin: SupabaseClient, 
   }
 
   const draftWeeks = toDraftScheduleWeeks(draftWithPlayers);
+  const rosterPlayerIds = roster.map((r) => r.player_id);
 
-  const integrity = validateDraftIntegrity(draftWeeks);
-  const completeness = validateDraftCompleteness(
-    draftWeeks,
-    roster.map((r) => r.player_id),
-  );
+  const integrity = validateDraftIntegrity(draftWeeks, rosterPlayerIds);
+  const completeness = validateDraftCompleteness(draftWeeks, rosterPlayerIds);
 
   if (!integrity.ok || !completeness.complete) {
     return {
