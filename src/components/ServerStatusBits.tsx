@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import type { DathostServer } from '@/lib/dathost';
+import type { ConnectedPlayer } from '@/lib/server-players';
 
 export function StatePill({ configured, server }: { configured: boolean; server: DathostServer | null }) {
   if (!configured) {
@@ -75,5 +76,71 @@ export function CopyConnectButton({ connect }: { connect: string }) {
     >
       {copied ? <Check size={12} /> : <Copy size={12} />}
     </button>
+  );
+}
+
+/**
+ * The connect-related bits both the admin console and scrim panel show for a live/connectable server —
+ * a one-click Steam join, the raw `connect` string + copy button, and (scrim only) who started it.
+ * Renders inline (no wrapping element) so callers lay it out in their own flex row alongside anything
+ * else they show (e.g. admin's `mode` field) — same pattern as `MapPicker`/`LaunchOptionsPicker`.
+ */
+export function ServerConnectionDetails({
+  connect,
+  serverOn,
+  startedByName,
+}: {
+  connect: string | null;
+  serverOn: boolean;
+  startedByName?: string | null;
+}) {
+  if (!connect) return null;
+  return (
+    <>
+      {serverOn && (
+        // `steam://connect/<host>` is unreliable from a browser click (a Steam client bug, independent
+        // of host format) — `steam://run/730//+connect <ip:port>` (730 = CS2) is the documented
+        // workaround that still launches reliably.
+        <a
+          href={`steam://run/730//+connect ${connect}`}
+          className="px-2 py-1 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)]"
+        >
+          Join server
+        </a>
+      )}
+      <span className="inline-flex items-center gap-1.5">
+        connect {connect}
+        <CopyConnectButton connect={connect} />
+      </span>
+      {startedByName && <span>Scrim started by {startedByName}</span>}
+    </>
+  );
+}
+
+/**
+ * The currently-connected roster — shared by the admin console and scrim panel so "who's on the box"
+ * reads the same way in both (a name list, not a bare count). `highlight` tints the heading amber for
+ * admin's "casual use" signal (someone connected outside a DGLS match); scrim has no such concept.
+ */
+export function ConnectedRoster({ connectedPlayers, highlight }: { connectedPlayers: ConnectedPlayer[]; highlight?: boolean }) {
+  return (
+    <div>
+      <div
+        className={`font-mono text-[12px] mb-2 ${highlight ? 'text-[var(--color-accent-amber-fg)]' : 'text-[var(--color-text-secondary)]'}`}
+      >
+        Connected {connectedPlayers.length > 0 && `(${connectedPlayers.length})`}
+      </div>
+      {connectedPlayers.length === 0 ? (
+        <div className="font-mono text-[13px] text-[var(--color-text-secondary)]">No one connected yet.</div>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {connectedPlayers.map((p, i) => (
+            <li key={`${p.steamId ?? 'pending'}-${i}`} className="font-mono text-[13px] text-[var(--color-text-primary)]">
+              {p.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

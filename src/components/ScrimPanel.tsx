@@ -3,22 +3,23 @@
 // Public scrim panel — any signed-in player can pick a config set + map and start the shared DatHost
 // server for a casual, free-form game, outside the DGLS match model (no roster/veto/stats). This
 // "publicizes" the slice of the admin server console (`ServerConsolePanel`) that matters for a scrim:
-// raw server state, the shared `LaunchOptionsPicker`, start/stop/apply — plus the currently-connected
-// roster (`ScrimStatus.connectedPlayers`, derived from the console log, since `players_online` alone
-// is a bare count). A league match holding the server is shown read-only with no controls; starting is
-// refused outright (no override) if the server is occupied, a scrim is already running, or a nearby
-// league match hasn't been scored yet — see `/api/scrim/start`. "Play out all rounds" toggles
-// `matchzy_playout_enabled_default`; "Friendly" toggles `FRIENDLY_CVARS` (no auto-kick, drop-knife
-// pickup, no forced spectator camera, shoot dropped grenades) — both for the session only, on top of
-// whichever config set is picked. Apply config set (`/api/scrim/apply-config`) pushes the picked set
-// without starting — same no-override occupancy refusal as Start, no admin gate either, since it never
-// does more than a scrim start already could. Stop is only shown to whoever started the scrim (or an
-// admin) — `status.canStop`.
+// raw server state via the shared `ServerConnectionDetails`/`ConnectedRoster` (`ServerStatusBits.tsx`)
+// and `LaunchOptionsPicker`, start/stop/apply. The connected roster (`ScrimStatus.connectedPlayers`)
+// is a real name list, not just DatHost's bare `players_online` count, derived from the console log
+// (`getConnectedPlayers`, `server-players.ts`). A league match holding the server is shown read-only
+// with no controls; starting is refused outright (no override) if the server is occupied, a scrim is
+// already running, or a nearby league match hasn't been scored yet — see `/api/scrim/start`. "Play out
+// all rounds" toggles `matchzy_playout_enabled_default`; "Friendly" toggles `FRIENDLY_CVARS` (no
+// auto-kick, drop-knife pickup, no forced spectator camera, shoot dropped grenades) — both for the
+// session only, on top of whichever config set is picked. Apply config set
+// (`/api/scrim/apply-config`) pushes the picked set without starting — same no-override occupancy
+// refusal as Start, no admin gate either, since it never does more than a scrim start already could.
+// Stop is only shown to whoever started the scrim (or an admin) — `status.canStop`.
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ServerSpinner } from '@/components/ServerSpinner';
-import { StatePill, CopyConnectButton } from '@/components/ServerStatusBits';
+import { StatePill, ServerConnectionDetails, ConnectedRoster } from '@/components/ServerStatusBits';
 import { CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
 import { LaunchOptionsPicker } from '@/components/LaunchOptionsPicker';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
@@ -168,25 +169,12 @@ export function ScrimPanel({ configSets, maps }: { configSets: ConfigSetOption[]
               Scrim server
             </div>
             {server && (
-              <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-2 flex flex-col gap-y-1">
-                {serverOn && status.connect && (
-                  <a
-                    // `steam://connect/<host>` is unreliable from a browser click (a Steam client bug,
-                    // independent of host format) — `steam://run/730//+connect <ip:port>` (730 = CS2)
-                    // is the documented workaround that still launches reliably.
-                    href={`steam://run/730//+connect ${status.connect}`}
-                    className="self-start px-2 py-1 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)]"
-                  >
-                    Join server
-                  </a>
-                )}
-                {status.connect && (
-                  <span className="inline-flex items-center gap-1.5">
-                    connect {status.connect}
-                    <CopyConnectButton connect={status.connect} />
-                  </span>
-                )}
-                {serverOn && !status.canStop && status.startedByName && <span>Scrim started by {status.startedByName}</span>}
+              <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <ServerConnectionDetails
+                  connect={status.connect}
+                  serverOn={serverOn}
+                  startedByName={!status.canStop ? status.startedByName : null}
+                />
               </div>
             )}
           </div>
@@ -257,24 +245,11 @@ export function ScrimPanel({ configSets, maps }: { configSets: ConfigSetOption[]
           </div>
         )}
 
-        {/* Connected roster — kept in the same box as the state pill/controls above instead of a
-            separate, unstyled section, so the server's on/off state isn't shown in two places. */}
+        {/* Connected roster — shared with the admin console (`ConnectedRoster`), kept in the same box
+            as the state pill/controls above instead of a separate, unstyled section. */}
         {serverOn && (
           <div className="mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">
-              Connected {connectedPlayers.length > 0 && `(${connectedPlayers.length})`}
-            </div>
-            {connectedPlayers.length === 0 ? (
-              <div className="font-mono text-[13px] text-[var(--color-text-secondary)]">No one connected yet.</div>
-            ) : (
-              <ul className="flex flex-col gap-1">
-                {connectedPlayers.map((p, i) => (
-                  <li key={`${p.steamId ?? 'pending'}-${i}`} className="font-mono text-[13px] text-[var(--color-text-primary)]">
-                    {p.name}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ConnectedRoster connectedPlayers={connectedPlayers} />
           </div>
         )}
       </div>

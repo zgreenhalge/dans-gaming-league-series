@@ -21,11 +21,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase-browser';
 import { ServerSpinner } from '@/components/ServerSpinner';
-import { StatePill, CopyConnectButton } from '@/components/ServerStatusBits';
+import { StatePill, ServerConnectionDetails, ConnectedRoster } from '@/components/ServerStatusBits';
 import { CollapsiblePanel } from '@/components/CollapsiblePanel';
 import { CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
 import { LaunchOptionsPicker } from '@/components/LaunchOptionsPicker';
-import { fmtUtcShort } from '@/lib/util';
+import { fmtUtcShort, isServerLive } from '@/lib/util';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
 import type { ConfigSetOption, ConfigSetDiff, DiffRow, CfgFileDiff } from '@/lib/dathost-config';
@@ -515,7 +515,7 @@ export function ServerConsolePanel({
   const active = status ? status.active : initialActive;
   const canStart = configured && server && !server.on && !server.booting;
   const canStop = configured && server && (server.on || server.booting);
-  const casualUse = configured && server && !active && (server.players_online ?? 0) > 0;
+  const casualUse = !!(configured && server && !active && (server.players_online ?? 0) > 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -549,7 +549,7 @@ export function ServerConsolePanel({
               DatHost server
             </div>
 
-            {active ? (
+            {active && (
               <>
                 <Link href={`/matches/${active.matchId}`} className="font-display text-[16px] font-semibold hover:underline">
                   {active.label}
@@ -560,26 +560,14 @@ export function ServerConsolePanel({
                   {active.serverStartedAt && <span>since {fmtUtcShort(active.serverStartedAt)}</span>}
                 </div>
               </>
-            ) : (
-              <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1">
-                <span className="text-[var(--color-accent-green-fg)]">idle</span> — no match is holding it.
-              </div>
             )}
 
+            {/* No separate "idle" line here — the state pill above already says off/booting/on, and
+                who (if anyone) holds it is exactly the `active` block above. */}
             {server && (
-              <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-2 flex flex-col gap-y-1">
-                {status?.connect && (
-                  <span className="inline-flex items-center gap-1.5">
-                    connect {status.connect}
-                    <CopyConnectButton connect={status.connect} />
-                  </span>
-                )}
+              <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <ServerConnectionDetails connect={status?.connect ?? null} serverOn={isServerLive(server)} />
                 {server.cs2_settings?.game_mode != null && <span>mode {String(server.cs2_settings.game_mode)}</span>}
-                {server.players_online != null && (
-                  <span className={casualUse ? 'text-[var(--color-accent-amber-fg)]' : undefined}>
-                    {server.players_online} player(s) online
-                  </span>
-                )}
               </div>
             )}
           </div>
@@ -642,6 +630,15 @@ export function ServerConsolePanel({
           </div>
         )}
         {teardownError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-3">{teardownError}</div>}
+
+        {/* Connected roster — shared with the scrim panel (`ConnectedRoster`), amber-tinted when
+            someone's on the box outside a DGLS match ("casual use") instead of a separate bare-count
+            line. */}
+        {server && isServerLive(server) && (
+          <div className="mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
+            <ConnectedRoster connectedPlayers={status?.connectedPlayers ?? []} highlight={casualUse} />
+          </div>
+        )}
 
         {/* Server config — pick a config set + map + launch-time toggles, then either Start (boot with
             them) or Apply config set (push them without starting) — the two actions that consume this
