@@ -1,13 +1,14 @@
-// Diff the versioned golden DatHost config (infra/matchzy/) against what's actually live on the
-// DGLS match server. Read-only — makes no changes. See infra/matchzy/README.md for what "golden"
-// means and why it can drift (the server is reconfigured in the DatHost panel for recreational
-// modes between matches).
+// Diff a Supabase-backed DatHost config set (default `golden`, the production baseline) against
+// what's actually live on the DGLS match server. Read-only — makes no changes. See
+// infra/matchzy/README.md for what a config set is and why it can drift (the server is reconfigured
+// in the DatHost panel for recreational modes between matches).
 //
 //   set -a; . ./.env.local; set +a
-//   tsx scripts/dathost-golden-diff.ts [serverId]
+//   tsx scripts/dathost-golden-diff.ts [serverId] [configSetKey]
 //
-// serverId defaults to DATHOST_SERVER_ID. Exits 0 if everything matches, 1 if any drift is found
-// (settings or cfg files), 2 on a hard error (auth, network, missing local file).
+// serverId defaults to DATHOST_SERVER_ID, configSetKey defaults to `golden`. Exits 0 if everything
+// matches, 1 if any drift is found (settings or cfg files), 2 on a hard error (auth, network, unknown
+// config set).
 //
 // The comparison itself (settings field-by-field, cfg files cvar-by-cvar so comment/whitespace edits
 // aren't noise) lives in `src/lib/dathost-config.ts` — the same code the admin console and provisioning
@@ -15,7 +16,8 @@
 // DatHost *does* have under `cfg/`, so you can point at the right path instead of a bare error.
 
 import { api } from './dathost-golden-shared';
-import { diffGoldenConfig, type DiffRow } from '../src/lib/dathost-config';
+import { getAdminClient } from '../src/lib/supabase-admin';
+import { diffConfigSet, type DiffRow } from '../src/lib/dathost-config';
 
 const COLOR = process.stderr.isTTY;
 const c = {
@@ -66,28 +68,29 @@ async function listCfgDir(serverId: string): Promise<string[]> {
 
 async function main() {
   const serverId = process.argv[2] || process.env.DATHOST_SERVER_ID;
+  const configSetKey = process.argv[3] || 'golden';
   if (!serverId) {
     console.error(c.red('✖ pass a server id or set DATHOST_SERVER_ID'));
     process.exit(2);
   }
 
-  console.error(c.bold(`DGLS golden config diff — server ${serverId}`));
+  console.error(c.bold(`DGLS config-set diff — server ${serverId}, set "${configSetKey}"`));
 
-  const diff = await diffGoldenConfig(serverId);
+  const diff = await diffConfigSet(getAdminClient(), serverId, configSetKey);
 
-  heading('SETTINGS  (golden-server-settings.json vs live cs2_settings)');
-  printTable(diff.settings, 'golden', 'live');
+  heading(`SETTINGS  (config set "${configSetKey}" vs live cs2_settings)`);
+  printTable(diff.settings, 'set', 'live');
   const drifted = diff.settings.filter((r) => r.status === 'drift' || r.status === 'missing').length;
   const skipped = diff.settings.filter((r) => r.status === 'skipped').length;
   const matched = diff.settings.filter((r) => r.status === 'match').length;
   console.error('');
   console.error(`  ${matched} matched, ${drifted} drifted, ${skipped} skipped (arrays — check manually)`);
 
-  heading('CFG FILES  (infra/matchzy/cfg/ vs live file manager, cvar-by-cvar)');
+  heading('CFG FILES  (config set vs live file manager, cvar-by-cvar)');
   let anyFetchFailed = false;
   for (const file of diff.cfgFiles) {
     console.error('');
-    console.error(`  ${file.local}  ↔  live:${file.remote}`);
+    console.error(`  ${file.remote}`);
     if (file.error) {
       console.error(`  ${c.yellow('⚠')} ${file.error}`);
       anyFetchFailed = true;
@@ -98,7 +101,7 @@ async function main() {
       console.error(`  ${c.green('✓')} all ${file.rows.length} cvars match`);
       continue;
     }
-    printTable(changed, 'local', 'live');
+    printTable(changed, 'set', 'live');
     console.error(`  ${file.rows.length - changed.length} matched, ${changed.length} differ`);
   }
 
@@ -107,17 +110,16 @@ async function main() {
     console.error(c.dim('  one or more files could not be fetched — listing what DatHost has under cfg/:'));
     const found = await listCfgDir(serverId);
     if (found.length === 0) {
-      console.error(c.dim('    (listing also failed or returned nothing — check credentials/server id, or'));
-      console.error(c.dim('     capture manually via DatHost File Manager/FTP and paste the content in.)'));
+      console.error(c.dim('    (listing also failed or returned nothing — check credentials/server id.)'));
     } else {
       for (const f of found) console.error(`    - ${f}`);
-      console.error(c.dim('  point CFG_FILES at the right remote path above, or paste content in manually.'));
+      console.error(c.dim('  point the config set at the right remote path above (edit config_set_files).'));
     }
   }
 
   heading('RESULT');
   if (diff.clean) {
-    console.error(c.green('✓ live server matches the versioned golden config.'));
+    console.error(c.green(`✓ live server matches config set "${configSetKey}".`));
     process.exit(0);
   }
   console.error(c.red('✗ drift found — see above. Nothing was changed.'));

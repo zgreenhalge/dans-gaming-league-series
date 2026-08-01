@@ -1,53 +1,73 @@
-// Server-side source of truth for the DGLS match server's *config files* and the golden-config diff.
-// Split from `dathost.ts` (the lifecycle REST client) because this side is about the versioned
-// `infra/matchzy/` config — the cfg files pushed to the server and the drift comparison against them.
-// Shared by three call sites so the file list and the parse/compare rules never fork:
-//   - provisioning (`pushCfgFiles` — reasserts the cfg files before every server boot),
-//   - the admin console (`diffGoldenConfig` — read-only "compare to golden"),
+// Server-side source of truth for DatHost *config sets* — settings + cfg files, held in Supabase
+// (`config_sets`/`config_set_files`) so every config set, `golden` (the production baseline)
+// included, is a single row: editable and diffable the same way regardless of which set it is. Split
+// from `dathost.ts` (the lifecycle REST client, DB-free) because this side owns the config-set data
+// model. Shared by three call sites so the file list and the parse/compare rules never fork:
+//   - launching (`launchServer` in dathost-lifecycle.ts — reasserts a set's cfg files before boot),
+//   - the admin console (`diffConfigSet` — read-only "compare to live"),
 //   - the CLI scripts (`scripts/dathost-golden-*.ts`, which render these same results in a terminal).
 //
-// Node runtime only (uses `node:fs` and HTTP Basic auth). Each cfg file is read through a literal
-// `new URL(..., import.meta.url)` (see `CfgFile.url`) so the bundler traces exactly those files into
-// the serverless function — a computed `fs` path would make Turbopack walk the whole directory.
+// `infra/matchzy/` (the versioned settings JSON + cfg files) is no longer read live — it's the
+// one-time seed input (`scripts/seed-config-set.ts`) and a disaster-recovery snapshot only.
 
-import { readFileSync } from 'node:fs';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { BASE, authHeader } from './dathost';
-import goldenServerSettings from '../../infra/matchzy/golden-server-settings.json';
 
-export interface CfgFile {
-  /** Repo-relative path — used by the capture script to write live content back to the repo. */
-  local: string;
-  /** Path on the server, rooted at the DatHost file-manager root (includes `cfg/`). */
-  remote: string;
-  /**
-   * Literal build-time URL to the file's content. It MUST be a literal `new URL(..., import.meta.url)`
-   * so the bundler traces exactly this file into the function (a computed `fs` path makes Turbopack
-   * pull in the whole directory and choke). `readCfgText` reads through this.
-   */
-  url: URL;
+export interface ConfigSetOption {
+  key: string;
+  label: string;
 }
 
-/**
- * The full set of cfg files that define match behavior — confirmed remote paths against the live API +
- * the DatHost files reference. `pushCfgFiles` reasserts all of them and `diffGoldenConfig` compares all
- * of them. `live_wingman_override.cfg` is the file MatchZy actually `exec`s at go-live (DGLS
- * engine-detects as Wingman), so it MUST be here or live_override.cfg's cvars never apply.
- */
-export const CFG_FILES: CfgFile[] = [
-  { local: 'infra/matchzy/cfg/MatchZy/config.cfg', remote: 'cfg/MatchZy/config.cfg', url: new URL('../../infra/matchzy/cfg/MatchZy/config.cfg', import.meta.url) },
-  { local: 'infra/matchzy/cfg/server.cfg', remote: 'cfg/server.cfg', url: new URL('../../infra/matchzy/cfg/server.cfg', import.meta.url) },
-  { local: 'infra/matchzy/cfg/gamemode_competitive2v2_server.cfg', remote: 'cfg/gamemode_competitive2v2_server.cfg', url: new URL('../../infra/matchzy/cfg/gamemode_competitive2v2_server.cfg', import.meta.url) },
-  { local: 'infra/matchzy/cfg/MatchZy/live_override.cfg', remote: 'cfg/MatchZy/live_override.cfg', url: new URL('../../infra/matchzy/cfg/MatchZy/live_override.cfg', import.meta.url) },
-  { local: 'infra/matchzy/cfg/MatchZy/live_wingman_override.cfg', remote: 'cfg/MatchZy/live_wingman_override.cfg', url: new URL('../../infra/matchzy/cfg/MatchZy/live_wingman_override.cfg', import.meta.url) },
-];
+export interface ResolvedConfigSet {
+  key: string;
+  label: string;
+  server: Record<string, unknown>;
+  cs2Settings: Record<string, unknown>;
+  cfgFiles: { remote: string; content: string }[];
+}
 
-/** Read a cfg file's content, or `null` if it can't be read (missing/untraced). */
-function readCfgText(f: CfgFile): string | null {
-  try {
-    return readFileSync(f.url, 'utf8');
-  } catch {
-    return null;
-  }
+interface ConfigSetRow {
+  id: number;
+  key: string;
+  label: string;
+  server_settings: Record<string, unknown>;
+  cs2_settings: Record<string, unknown>;
+}
+
+/** For UI pickers (e.g. the admin server console) — key/label pairs, insertion order. */
+export async function listConfigSets(supabaseAdmin: SupabaseClient): Promise<ConfigSetOption[]> {
+  const { data, error } = await supabaseAdmin.from('config_sets').select('key, label').order('id');
+  if (error) throw new Error(`Could not list config sets: ${error.message}`);
+  return (data ?? []) as ConfigSetOption[];
+}
+
+/** One config set's full settings + cfg files, by key. Throws if the key doesn't exist. */
+export async function resolveConfigSet(supabaseAdmin: SupabaseClient, key: string): Promise<ResolvedConfigSet> {
+  const { data: set, error: setErr } = await supabaseAdmin
+    .from('config_sets')
+    .select('id, key, label, server_settings, cs2_settings')
+    .eq('key', key)
+    .maybeSingle();
+  if (setErr) throw new Error(`Could not load config set "${key}": ${setErr.message}`);
+  if (!set) throw new Error(`Unknown config set "${key}"`);
+  const row = set as ConfigSetRow;
+
+  const { data: files, error: filesErr } = await supabaseAdmin
+    .from('config_set_files')
+    .select('remote_path, content')
+    .eq('config_set_id', row.id);
+  if (filesErr) throw new Error(`Could not load files for config set "${key}": ${filesErr.message}`);
+
+  return {
+    key: row.key,
+    label: row.label,
+    server: row.server_settings ?? {},
+    cs2Settings: row.cs2_settings ?? {},
+    cfgFiles: ((files ?? []) as { remote_path: string; content: string }[]).map((f) => ({
+      remote: f.remote_path,
+      content: f.content,
+    })),
+  };
 }
 
 // --- Pushing cfg files to the server -----------------------------------------------------------
@@ -60,22 +80,15 @@ export interface CfgPushResult {
 }
 
 /**
- * Push every tracked cfg file from `infra/matchzy/cfg/` to the live server's file manager, making the
- * repo the source of truth for the cfg dimension. Files take effect on the *next server boot* (they're
- * `exec`'d at boot / go-live), so callers must push before starting the server. Returns a per-file
- * result rather than throwing on a single failure, so a caller can log and decide.
+ * Push a config set's cfg files to the live server's file manager. Files take effect on the *next
+ * server boot* (they're `exec`'d at boot / go-live), so callers must push before starting the server.
+ * Returns a per-file result rather than throwing on a single failure, so a caller can log and decide.
  */
-export async function pushCfgFiles(serverId: string): Promise<CfgPushResult[]> {
+export async function pushCfgFiles(serverId: string, files: { remote: string; content: string }[]): Promise<CfgPushResult[]> {
   const results: CfgPushResult[] = [];
-  for (const f of CFG_FILES) {
-    const { remote } = f;
-    const text = readCfgText(f);
-    if (text === null) {
-      results.push({ remote, ok: false, status: 0 });
-      continue;
-    }
+  for (const { remote, content } of files) {
     const form = new FormData();
-    form.append('file', new Blob([text]), remote.split('/').pop());
+    form.append('file', new Blob([content]), remote.split('/').pop());
     const res = await fetch(`${BASE}/game-servers/${serverId}/files/${remote}`, {
       method: 'POST',
       headers: { Authorization: authHeader() },
@@ -86,13 +99,13 @@ export async function pushCfgFiles(serverId: string): Promise<CfgPushResult[]> {
   return results;
 }
 
-// --- Golden-config diff ------------------------------------------------------------------------
+// --- Config-set diff ----------------------------------------------------------------------------
 
 export type DiffStatus = 'match' | 'drift' | 'missing' | 'skipped';
 
 export interface DiffRow {
   key: string;
-  /** The versioned/golden value (or `(absent)` when only the live side has it). */
+  /** The config set's value (or `(absent)` when only the live side has it). */
   local: string;
   /** The live server's value (or `(absent)`). */
   live: string;
@@ -100,22 +113,22 @@ export interface DiffRow {
 }
 
 export interface CfgFileDiff {
-  local: string;
   remote: string;
   rows: DiffRow[];
   /** Set when the live file couldn't be fetched (e.g. never uploaded) — rows will be empty. */
   error?: string;
 }
 
-export interface GoldenDiff {
+export interface ConfigSetDiff {
   settings: DiffRow[];
   cfgFiles: CfgFileDiff[];
   /** True when nothing drifted or is missing (arrays/`skipped` don't count as drift). */
   clean: boolean;
 }
 
-/** Compare a flat golden object against the live one, one scalar key at a time. Arrays are reported
- *  as `skipped` (DatHost preserves them; their PUT encoding isn't re-asserted — see dathost.ts). */
+/** Compare a flat config-set object against the live one, one scalar key at a time. Arrays are
+ *  reported as `skipped` (DatHost preserves them; their PUT encoding isn't re-asserted — see
+ *  dathost.ts). */
 export function compareFlat(label: string, local: Record<string, unknown>, live: Record<string, unknown> | undefined): DiffRow[] {
   const rows: DiffRow[] = [];
   for (const [key, localVal] of Object.entries(local)) {
@@ -180,11 +193,11 @@ async function getText(path: string): Promise<{ status: number; text: string }> 
 }
 
 /**
- * Diff the versioned golden config (`infra/matchzy/`) against the live server — both the scalar
- * `server`/`cs2_settings` fields and every cfg file, cvar-by-cvar. Read-only; makes no changes.
+ * Diff a config set (by key) against the live server — both the scalar `server`/`cs2_settings`
+ * fields and every cfg file, cvar-by-cvar. Read-only; makes no changes.
  */
-export async function diffGoldenConfig(serverId: string): Promise<GoldenDiff> {
-  const golden = goldenServerSettings as { server?: Record<string, unknown>; cs2_settings?: Record<string, unknown> };
+export async function diffConfigSet(supabaseAdmin: SupabaseClient, serverId: string, key: string): Promise<ConfigSetDiff> {
+  const set = await resolveConfigSet(supabaseAdmin, key);
 
   const { status, text } = await getText(`/game-servers/${serverId}`);
   let live: Record<string, unknown> = {};
@@ -199,25 +212,19 @@ export async function diffGoldenConfig(serverId: string): Promise<GoldenDiff> {
   const liveCs2 = (live.cs2_settings ?? {}) as Record<string, unknown>;
 
   const settings = [
-    ...compareFlat('server', golden.server ?? {}, live),
-    ...compareFlat('cs2_settings', golden.cs2_settings ?? {}, liveCs2),
+    ...compareFlat('server', set.server, live),
+    ...compareFlat('cs2_settings', set.cs2Settings, liveCs2),
   ];
 
   const cfgFiles: CfgFileDiff[] = [];
-  for (const f of CFG_FILES) {
-    const { local, remote } = f;
-    const text = readCfgText(f);
-    if (text === null) {
-      cfgFiles.push({ local, remote, rows: [], error: 'missing local file' });
-      continue;
-    }
-    const fetched = await getText(`/game-servers/${serverId}/files/${remote}`);
+  for (const f of set.cfgFiles) {
+    const fetched = await getText(`/game-servers/${serverId}/files/${f.remote}`);
     if (fetched.status !== 200) {
-      cfgFiles.push({ local, remote, rows: [], error: `could not fetch (${fetched.status})` });
+      cfgFiles.push({ remote: f.remote, rows: [], error: `could not fetch (${fetched.status})` });
       continue;
     }
-    const rows = compareCfg(parseCfg(text), parseCfg(fetched.text));
-    cfgFiles.push({ local, remote, rows });
+    const rows = compareCfg(parseCfg(f.content), parseCfg(fetched.text));
+    cfgFiles.push({ remote: f.remote, rows });
   }
 
   const settingsClean = settings.every((r) => r.status === 'match' || r.status === 'skipped');

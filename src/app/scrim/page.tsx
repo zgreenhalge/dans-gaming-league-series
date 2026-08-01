@@ -3,6 +3,8 @@ import { authOptions } from '@/lib/authOptions';
 import { redirect } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getMapsForWorkshopPicker } from '@/lib/queries';
+import { listConfigSets } from '@/lib/dathost-config';
+import { getAdminClient } from '@/lib/supabase-admin';
 import { ScrimPanel } from '@/components/ScrimPanel';
 
 export const metadata = {
@@ -17,7 +19,7 @@ export default async function ScrimPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.playerId) redirect('/');
 
-  const maps = await getMapsForWorkshopPicker();
+  const [maps, configSets] = await Promise.all([getMapsForWorkshopPicker(), listConfigSets(getAdminClient())]);
 
   return (
     <div className="min-h-screen">
@@ -27,7 +29,7 @@ export default async function ScrimPage() {
           <div className="font-display text-[28px] font-semibold leading-tight">Scrims</div>
         </div>
         <div className="mt-6">
-          <ScrimPanel maps={maps} />
+          <ScrimPanel configSets={configSets} maps={maps} />
         </div>
       </main>
     </div>

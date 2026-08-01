@@ -5,6 +5,9 @@
 // without storing anything ourselves. Lines are processed oldest-first (the order `getConsoleLines`
 // returns them in): the last event per userid — connected or disconnected — wins.
 
+import { getConsoleLines, type DathostServer } from './dathost';
+import { isServerLive } from './util';
+
 export interface ConnectedPlayer {
   name: string;
   /** Steam3 id (e.g. `[U:1:12345]`) — `null` if only ever seen mid-connect (`STEAM_ID_PENDING`). */
@@ -58,4 +61,19 @@ export function parseConnectedPlayers(lines: string[]): ConnectedPlayer[] {
     if (p.connected) players.push({ name: p.name, steamId: p.steamId });
   }
   return players;
+}
+
+/**
+ * The currently-connected roster for a server, or `[]` if it's not live or the console log couldn't
+ * be read — shared by the admin and scrim status routes so "who's on the box" is derived the same way
+ * regardless of who's asking. Only worth reading the console log while the box is actually up.
+ */
+export async function getConnectedPlayers(serverId: string, server: DathostServer | null): Promise<ConnectedPlayer[]> {
+  if (!isServerLive(server)) return [];
+  try {
+    const lines = await getConsoleLines(serverId);
+    return parseConnectedPlayers(linesSinceMarker(lines, SCRIM_BOOT_MARKER));
+  } catch {
+    return [];
+  }
 }

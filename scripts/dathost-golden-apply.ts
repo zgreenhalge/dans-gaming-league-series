@@ -1,33 +1,35 @@
-// Resolve drift between the versioned golden DatHost config (infra/matchzy/) and the live DGLS
-// match server, in one of two directions. Always run scripts/dathost-golden-diff.ts first to see
-// what's actually different — this script does not diff, it just applies.
+// Resolve drift between a Supabase-backed DatHost config set (default `golden`, the production
+// baseline) and the live DGLS match server, in one of two directions. Always run
+// scripts/dathost-golden-diff.ts first to see what's actually different — this script does not diff,
+// it just applies.
 //
 //   set -a; . ./.env.local; set +a
 //
-//   --capture <serverId> --yes     live server → repo files (recapture: the panel was intentionally
-//                                   retuned and should become the new golden baseline)
-//   --reassert <serverId> --yes    repo files → live server (push golden config, overwriting
-//                                   whatever recreational-mode drift happened in the panel)
+//   --capture <serverId> --yes [--key golden]     live server → config_sets row (recapture: the
+//                                                  panel was intentionally retuned and should become
+//                                                  the new baseline for that set)
+//   --reassert <serverId> --yes [--key golden]    config_sets row → live server (push the set,
+//                                                  overwriting whatever recreational-mode drift
+//                                                  happened in the panel)
 //
-// Both mutate real state (repo files on disk, or the live match server) and require --yes.
-// --reassert only PUTs scalar cs2_settings/server fields (via buildScalarFields() in
-// src/lib/dathost.ts, the same builder applyConfigSet() uses) — array fields like metamod_plugins are
-// skipped, matching that function's documented reasoning: DatHost preserves them across changes, so
-// guessing form-encoding for an array isn't worth the risk. --reassert also does not touch
-// per_match_overrides (those are per-match, not part of the static baseline) or cfg file uploads if
-// the files endpoint 404s.
+// Both mutate real state (the `config_sets`/`config_set_files` tables, or the live match server) and
+// require --yes. Neither adds or removes tracked keys/files — `--capture` only overwrites values for
+// keys/files the config set already tracks (use `scripts/seed-config-set.ts` to add a new set or a
+// new tracked file). `--reassert` only PUTs scalar cs2_settings/server fields (via buildScalarFields()
+// in src/lib/dathost.ts, the same builder applyConfigSet() uses) — array fields like metamod_plugins
+// are skipped, matching that function's documented reasoning: DatHost preserves them across changes,
+// so guessing form-encoding for an array isn't worth the risk. `--reassert` also does not touch
+// per_match_overrides (those are per-match, not part of the static baseline).
 
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { REPO_ROOT, GOLDEN_JSON_PATH, CFG_FILES, api, flagValue } from './dathost-golden-shared';
-import { pushCfgFiles } from '../src/lib/dathost-config';
+import { api, flagValue } from './dathost-golden-shared';
+import { getAdminClient } from '../src/lib/supabase-admin';
+import { resolveConfigSet, pushCfgFiles } from '../src/lib/dathost-config';
 import { buildScalarFields, MAP_SELECTION_KEYS } from '../src/lib/dathost';
 
-function loadGoldenRaw(): Record<string, unknown> {
-  return JSON.parse(readFileSync(GOLDEN_JSON_PATH, 'utf8'));
-}
+async function capture(serverId: string, key: string) {
+  const supabase = getAdminClient();
+  const set = await resolveConfigSet(supabase, key);
 
-async function capture(serverId: string) {
   console.error(`— GET /game-servers/${serverId} (live cs2_settings) —`);
   const { status, json } = await api('GET', `/game-servers/${serverId}`);
   if (status !== 200) {
@@ -36,61 +38,67 @@ async function capture(serverId: string) {
   }
   const live = json as Record<string, unknown>;
   const liveCs2 = (live.cs2_settings ?? {}) as Record<string, unknown>;
-  const golden = loadGoldenRaw();
-  const localServer = (golden.server ?? {}) as Record<string, unknown>;
-  const localCs2 = (golden.cs2_settings ?? {}) as Record<string, unknown>;
 
-  const newServer: Record<string, unknown> = { ...localServer };
-  for (const key of Object.keys(localServer)) {
-    if (live[key] !== undefined) newServer[key] = live[key];
+  const newServer: Record<string, unknown> = { ...set.server };
+  for (const k of Object.keys(set.server)) {
+    if (live[k] !== undefined) newServer[k] = live[k];
   }
-  const newCs2: Record<string, unknown> = { ...localCs2 };
-  for (const key of Object.keys(localCs2)) {
-    if (liveCs2[key] !== undefined) newCs2[key] = liveCs2[key];
+  const newCs2: Record<string, unknown> = { ...set.cs2Settings };
+  for (const k of Object.keys(set.cs2Settings)) {
+    if (liveCs2[k] !== undefined) newCs2[k] = liveCs2[k];
   }
 
-  const updated = {
-    ...golden,
-    note: `${(golden.note as string).replace(/Captured live [\d-]+\.?/, '').trim()} Captured live ${new Date().toISOString().slice(0, 10)}.`,
-    server: newServer,
-    cs2_settings: newCs2,
-  };
-  writeFileSync(GOLDEN_JSON_PATH, JSON.stringify(updated, null, 2) + '\n');
-  console.error(`✓ wrote ${GOLDEN_JSON_PATH} from live settings`);
+  const { error: setErr } = await supabase
+    .from('config_sets')
+    .update({ server_settings: newServer, cs2_settings: newCs2, updated_at: new Date().toISOString() })
+    .eq('key', key);
+  if (setErr) {
+    console.error(`✖ could not update config_sets: ${setErr.message}`);
+    process.exit(2);
+  }
+  console.error(`✓ updated config_sets "${key}" from live settings`);
 
-  for (const { local, remote } of CFG_FILES) {
-    console.error(`— GET /game-servers/${serverId}/files/${remote} —`);
-    const { status: fstatus, text } = await api('GET', `/game-servers/${serverId}/files/${remote}`);
+  const { data: idRow } = await supabase.from('config_sets').select('id').eq('key', key).maybeSingle();
+  const configSetId = (idRow as { id: number } | null)?.id;
+
+  for (const f of set.cfgFiles) {
+    console.error(`— GET /game-servers/${serverId}/files/${f.remote} —`);
+    const { status: fstatus, text } = await api('GET', `/game-servers/${serverId}/files/${f.remote}`);
     if (fstatus !== 200) {
-      console.error(`  ⚠ could not fetch ${remote} (${fstatus}) — left ${local} untouched.`);
-      console.error(`    Capture it manually via DatHost File Manager/FTP.`);
+      console.error(`  ⚠ could not fetch ${f.remote} (${fstatus}) — left its stored content untouched.`);
       continue;
     }
-    const localPath = join(REPO_ROOT, local);
-    writeFileSync(localPath, text);
-    console.error(`  ✓ wrote ${local} from live ${remote}`);
+    const { error: fileErr } = await supabase
+      .from('config_set_files')
+      .update({ content: text })
+      .eq('config_set_id', configSetId)
+      .eq('remote_path', f.remote);
+    if (fileErr) {
+      console.error(`  ✗ could not update ${f.remote}: ${fileErr.message}`);
+      continue;
+    }
+    console.error(`  ✓ updated ${f.remote} from live content`);
   }
 
-  console.error('\nReview the diff (`git diff infra/matchzy/`) before committing.');
+  console.error(`\nReview via \`tsx scripts/dathost-golden-diff.ts ${serverId} ${key}\` (should now be clean).`);
 }
 
-async function reassert(serverId: string) {
-  const golden = loadGoldenRaw();
-  const localServer = (golden.server ?? {}) as Record<string, unknown>;
-  const localCs2 = (golden.cs2_settings ?? {}) as Record<string, unknown>;
+async function reassert(serverId: string, key: string) {
+  const supabase = getAdminClient();
+  const set = await resolveConfigSet(supabase, key);
 
   // Same scalar-field builder the app uses (applyConfigSet in src/lib/dathost.ts) — see its doc
   // comment for why non-scalar values (arrays like metamod_plugins, null, nested objects) are skipped
   // rather than guessed at. `onSkip` reports exactly what buildScalarFields itself excluded, so the
   // logged message can never drift from the actual PUT.
-  const skipMsg = (label: string) => (key: string) =>
-    console.error(`  ~ skipping ${label}.${key} (array/null/object — not re-asserted, see script header)`);
+  const skipMsg = (label: string) => (k: string) =>
+    console.error(`  ~ skipping ${label}.${k} (array/null/object — not re-asserted, see script header)`);
   const fields: Record<string, string> = {
-    ...buildScalarFields(localServer, { onSkip: skipMsg('server') }),
-    ...buildScalarFields(localCs2, { prefix: 'cs2_settings.', exclude: MAP_SELECTION_KEYS, onSkip: skipMsg('cs2_settings') }),
+    ...buildScalarFields(set.server, { onSkip: skipMsg('server') }),
+    ...buildScalarFields(set.cs2Settings, { prefix: 'cs2_settings.', exclude: MAP_SELECTION_KEYS, onSkip: skipMsg('cs2_settings') }),
   };
 
-  console.error(`— PUT /game-servers/${serverId} (golden settings) —`);
+  console.error(`— PUT /game-servers/${serverId} (config set "${key}") —`);
   const put = await api('PUT', `/game-servers/${serverId}`, new URLSearchParams(fields));
   if (put.status >= 400) {
     console.error(`✖ PUT failed (${put.status}): ${put.text.slice(0, 300)}`);
@@ -98,10 +106,9 @@ async function reassert(serverId: string) {
   }
   console.error(`✓ settings pushed (${put.status})`);
 
-  console.error(`— POST /game-servers/${serverId}/files/* (${CFG_FILES.length} cfg files) —`);
-  for (const r of await pushCfgFiles(serverId)) {
-    if (r.status === 0) console.error(`  ⚠ missing local file for ${r.remote} — skipped`);
-    else if (!r.ok) console.error(`  ✗ upload failed (${r.status}) for ${r.remote}`);
+  console.error(`— POST /game-servers/${serverId}/files/* (${set.cfgFiles.length} cfg files) —`);
+  for (const r of await pushCfgFiles(serverId, set.cfgFiles)) {
+    if (!r.ok) console.error(`  ✗ upload failed (${r.status}) for ${r.remote}`);
     else console.error(`  ✓ pushed ${r.remote}`);
   }
 
@@ -111,22 +118,23 @@ async function reassert(serverId: string) {
 async function main() {
   const args = process.argv.slice(2);
   const yes = args.includes('--yes');
+  const key = flagValue(args, '--key') ?? 'golden';
 
   const captureId = flagValue(args, '--capture');
   const reassertId = flagValue(args, '--reassert');
 
   if (!captureId && !reassertId) {
-    console.error('Usage: tsx scripts/dathost-golden-apply.ts --capture <serverId> --yes');
-    console.error('   or: tsx scripts/dathost-golden-apply.ts --reassert <serverId> --yes');
+    console.error('Usage: tsx scripts/dathost-golden-apply.ts --capture <serverId> --yes [--key golden]');
+    console.error('   or: tsx scripts/dathost-golden-apply.ts --reassert <serverId> --yes [--key golden]');
     process.exit(2);
   }
   if (!yes) {
-    console.error('⚠ this mutates real state (repo files or the live match server). Re-run with --yes.');
+    console.error('⚠ this mutates real state (config_sets/config_set_files, or the live match server). Re-run with --yes.');
     process.exit(1);
   }
 
-  if (captureId) await capture(captureId);
-  else if (reassertId) await reassert(reassertId);
+  if (captureId) await capture(captureId, key);
+  else if (reassertId) await reassert(reassertId, key);
 }
 
 main().catch((e) => {

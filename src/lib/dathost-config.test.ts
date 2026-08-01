@@ -1,6 +1,6 @@
 /**
  * Unit tests for dathost-config.ts's pure cfg-parsing and diff logic (#163) — parseCfg, compareCfg,
- * and compareFlat. diffGoldenConfig/pushCfgFiles hit the live DatHost API and local cfg files
+ * and compareFlat. diffConfigSet/pushCfgFiles/resolveConfigSet hit Supabase and the live DatHost API
  * directly; they're left as integration-only (exercised for real by scripts/dathost-golden-diff.ts
  * and scripts/dathost-golden-apply.ts against an actual server), the same "extract and test the pure
  * logic, leave IO-bound orchestration untested" split used elsewhere in this repo (e.g.
