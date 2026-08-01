@@ -69,6 +69,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `POST` | `/api/maps/[slug]/radar/dispatch` | (Re)trigger the radar-build Action for a map (admin only; [`replay.md`](./replay.md)) |
 | `PATCH` | `/api/seasons/[id]/start-date` | Set season start date (admin only) |
 | `PATCH` | `/api/seasons/[id]/status` | Transition a regular season `UPCOMING` → `ACTIVE` ("go live"); best-effort builds its gauntlet shape (admin only) |
+| `DELETE` | `/api/seasons/[id]` | Delete an `UPCOMING` regular season outright — refuses if it already has real `weeks`, otherwise clears its `season_players` roster and schedule draft first (admin only) |
 | `DELETE` | `/api/ops-errors/[id]` | Dismiss an `ops_errors` row, any entity type (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet/preview` | Compute what building would produce — qualifier count, games, rounds, pod/slot shape — without writing anything (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet` | Create the paired gauntlet season for an active regular season and build its bracket *shape* — unseeded, nothing materialized (admin only) |
