@@ -55,6 +55,42 @@ async function releaseScheduleDraftLock(supabaseAdmin: SupabaseClient, seasonId:
   if (error) throw error;
 }
 
+/** Claims the lock, runs `fn`, and releases the lock whether `fn` succeeds or throws — the shared
+ * scaffold behind generateSeasonScheduleDraft()/saveSeasonScheduleDraft()/deleteSeasonScheduleDraft(),
+ * so the claim/try/finally-release shape isn't repeated at each of the three call sites. */
+async function withScheduleDraftLock<T>(supabaseAdmin: SupabaseClient, seasonId: number, fn: () => Promise<T>): Promise<T> {
+  await claimScheduleDraftLock(supabaseAdmin, seasonId);
+  try {
+    return await fn();
+  } finally {
+    await releaseScheduleDraftLock(supabaseAdmin, seasonId);
+  }
+}
+
+/** Runs a best-effort `cleanup`, and if it throws, records the failure via recordOpsError() instead
+ * of letting it propagate — shared by generateSeasonScheduleDraft()'s and
+ * confirmSeasonScheduleDraft()'s mid-loop-failure handlers, which otherwise repeat the same
+ * try/catch/recordOpsError shape around a different cleanup action and message. */
+async function cleanupOrRecordOpsError(
+  supabaseAdmin: SupabaseClient,
+  seasonId: number,
+  operation: string,
+  description: string,
+  cleanup: () => Promise<void>,
+): Promise<void> {
+  try {
+    await cleanup();
+  } catch (cleanupErr) {
+    await recordOpsError(
+      supabaseAdmin,
+      'season',
+      seasonId,
+      operation,
+      `Failed to clean up ${description}: ${(cleanupErr as Error).message}`,
+    );
+  }
+}
+
 /** Thrown by generateSeasonScheduleDraft()/saveSeasonScheduleDraft()/deleteSeasonScheduleDraft()
  * once a season's schedule has been confirmed (real `weeks` exist) — the draft is superseded at
  * that point and editing it further would give no indication that it's now completely decoupled
@@ -110,8 +146,7 @@ export async function generateSeasonScheduleDraft(
   }
 
   await assertScheduleNotYetMaterialized(supabaseAdmin, seasonId);
-  await claimScheduleDraftLock(supabaseAdmin, seasonId);
-  try {
+  await withScheduleDraftLock(supabaseAdmin, seasonId, async () => {
     await deleteSeasonScheduleDraftRows(supabaseAdmin, seasonId);
 
     try {
@@ -145,22 +180,16 @@ export async function generateSeasonScheduleDraft(
       // whatever got inserted so the draft ends up either fully regenerated or fully empty, never
       // half. If the cleanup itself fails, recordOpsError() surfaces that rather than staying silent
       // — leaving the caller to only see (and report) the original error otherwise.
-      try {
-        await deleteSeasonScheduleDraftRows(supabaseAdmin, seasonId);
-      } catch (cleanupErr) {
-        await recordOpsError(
-          supabaseAdmin,
-          'season',
-          seasonId,
-          'schedule_generate_cleanup',
-          `Failed to clean up a half-generated draft after a generate error: ${(cleanupErr as Error).message}`,
-        );
-      }
+      await cleanupOrRecordOpsError(
+        supabaseAdmin,
+        seasonId,
+        'schedule_generate_cleanup',
+        'a half-generated draft after a generate error',
+        () => deleteSeasonScheduleDraftRows(supabaseAdmin, seasonId),
+      );
       throw err;
     }
-  } finally {
-    await releaseScheduleDraftLock(supabaseAdmin, seasonId);
-  }
+  });
 }
 
 /** The actual delete, unguarded by the lock — shared by deleteSeasonScheduleDraft() (which claims
@@ -194,12 +223,7 @@ async function deleteSeasonScheduleDraftRows(supabaseAdmin: SupabaseClient, seas
  * the one record of what was actually confirmed, with nothing to show it's now gone. */
 export async function deleteSeasonScheduleDraft(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
   await assertScheduleNotYetMaterialized(supabaseAdmin, seasonId);
-  await claimScheduleDraftLock(supabaseAdmin, seasonId);
-  try {
-    await deleteSeasonScheduleDraftRows(supabaseAdmin, seasonId);
-  } finally {
-    await releaseScheduleDraftLock(supabaseAdmin, seasonId);
-  }
+  await withScheduleDraftLock(supabaseAdmin, seasonId, () => deleteSeasonScheduleDraftRows(supabaseAdmin, seasonId));
 }
 
 export type SaveDraftResult = { ok: true } | { ok: false; issues: ValidationIssue[] };
@@ -219,16 +243,16 @@ export async function saveSeasonScheduleDraft(
   seasonId: number,
   weeks: DraftScheduleWeek[],
 ): Promise<SaveDraftResult> {
-  await assertScheduleNotYetMaterialized(supabaseAdmin, seasonId);
+  // Neither depends on the other's result, and the lock isn't claimed until after both resolve, so
+  // they run concurrently rather than paying two sequential round trips on every save.
+  const [, roster] = await Promise.all([assertScheduleNotYetMaterialized(supabaseAdmin, seasonId), getSeasonRoster(seasonId)]);
 
-  const roster = await getSeasonRoster(seasonId);
   const integrity = validateDraftIntegrity(weeks, roster.map((r) => r.player_id));
   if (!integrity.ok) {
     return { ok: false, issues: integrity.issues };
   }
 
-  await claimScheduleDraftLock(supabaseAdmin, seasonId);
-  try {
+  await withScheduleDraftLock(supabaseAdmin, seasonId, async () => {
     const { data: weekRows, error: weekErr } = await supabaseAdmin
       .from('season_schedule_draft_weeks')
       .select('id, week_number')
@@ -282,9 +306,7 @@ export async function saveSeasonScheduleDraft(
         if (matchUpdateErr) throw matchUpdateErr;
       }
     }
-  } finally {
-    await releaseScheduleDraftLock(supabaseAdmin, seasonId);
-  }
+  });
 
   return { ok: true };
 }
@@ -403,28 +425,25 @@ export async function confirmSeasonScheduleDraft(supabaseAdmin: SupabaseClient, 
     // assertScheduleNotYetMaterialized()), that half-materialized state would also lock an admin out
     // of every normal remediation route. Best-effort: delete whatever this attempt created (stats
     // before matches, matches before weeks, for the FKs) so the season ends up either fully
-    // confirmed or fully back to draft-only, never stuck in between. If the cleanup itself fails,
-    // recordOpsError() surfaces that for manual follow-up rather than staying silent.
-    try {
-      if (createdMatchIds.length > 0) {
-        const { error: statsCleanupErr } = await supabaseAdmin.from('player_match_stats').delete().in('match_id', createdMatchIds);
-        if (statsCleanupErr) throw statsCleanupErr;
-        const { error: matchesCleanupErr } = await supabaseAdmin.from('matches').delete().in('id', createdMatchIds);
-        if (matchesCleanupErr) throw matchesCleanupErr;
-      }
-      if (createdWeekIds.length > 0) {
-        const { error: weeksCleanupErr } = await supabaseAdmin.from('weeks').delete().in('id', createdWeekIds);
-        if (weeksCleanupErr) throw weeksCleanupErr;
-      }
-    } catch (cleanupErr) {
-      await recordOpsError(
-        supabaseAdmin,
-        'season',
-        seasonId,
-        'schedule_confirm_cleanup',
-        `Failed to clean up a partially materialized schedule (weeks ${createdWeekIds.join(',')}, matches ${createdMatchIds.join(',')}) after a confirm error: ${(cleanupErr as Error).message}`,
-      );
-    }
+    // confirmed or fully back to draft-only, never stuck in between.
+    await cleanupOrRecordOpsError(
+      supabaseAdmin,
+      seasonId,
+      'schedule_confirm_cleanup',
+      `a partially materialized schedule (weeks ${createdWeekIds.join(',')}, matches ${createdMatchIds.join(',')}) after a confirm error`,
+      async () => {
+        if (createdMatchIds.length > 0) {
+          const { error: statsCleanupErr } = await supabaseAdmin.from('player_match_stats').delete().in('match_id', createdMatchIds);
+          if (statsCleanupErr) throw statsCleanupErr;
+          const { error: matchesCleanupErr } = await supabaseAdmin.from('matches').delete().in('id', createdMatchIds);
+          if (matchesCleanupErr) throw matchesCleanupErr;
+        }
+        if (createdWeekIds.length > 0) {
+          const { error: weeksCleanupErr } = await supabaseAdmin.from('weeks').delete().in('id', createdWeekIds);
+          if (weeksCleanupErr) throw weeksCleanupErr;
+        }
+      },
+    );
     throw err;
   }
 
