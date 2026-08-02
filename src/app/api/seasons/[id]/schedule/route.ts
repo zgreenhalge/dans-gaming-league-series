@@ -6,23 +6,12 @@ import {
   generateSeasonScheduleDraft,
   deleteSeasonScheduleDraft,
   saveSeasonScheduleDraft,
-  ScheduleDraftLockedError,
-  ScheduleAlreadyMaterializedError,
+  mapScheduleDraftError,
 } from '@/lib/season-schedule-draft-engine';
 import { MIN_SEED_COUNT, MAX_SEED_COUNT, type DoubleheaderPolicy } from '@/lib/season-schedule';
 import type { DraftScheduleWeek } from '@/lib/season-schedule-validation';
 
 const supabaseAdmin = getAdminClient();
-
-/** Maps ScheduleDraftLockedError (another generate/save/delete already in flight for this season)
- * and ScheduleAlreadyMaterializedError (the season's schedule was already confirmed) to 409, and
- * everything else to 500. */
-function mapScheduleDraftError(err: unknown): NextResponse {
-  if (err instanceof ScheduleDraftLockedError || err instanceof ScheduleAlreadyMaterializedError) {
-    return NextResponse.json({ error: err.message }, { status: 409 });
-  }
-  return NextResponse.json({ error: (err as Error).message }, { status: 500 });
-}
 
 /**
  * Generates (or fully regenerates) a regular season's matchup draft from its current roster
@@ -79,7 +68,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     await generateSeasonScheduleDraft(supabaseAdmin, seasonId, playerIds, { doubleheaderPolicy });
   } catch (err) {
-    return mapScheduleDraftError(err);
+    const mapped = mapScheduleDraftError(err);
+    return NextResponse.json({ error: mapped.error }, { status: mapped.status });
   }
 
   const draft = await getSeasonScheduleDraft(seasonId);
@@ -151,7 +141,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     result = await saveSeasonScheduleDraft(supabaseAdmin, seasonId, weeks);
   } catch (err) {
-    return mapScheduleDraftError(err);
+    const mapped = mapScheduleDraftError(err);
+    return NextResponse.json({ error: mapped.error }, { status: mapped.status });
   }
 
   if (!result.ok) {
@@ -185,7 +176,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   try {
     await deleteSeasonScheduleDraft(supabaseAdmin, seasonId);
   } catch (err) {
-    return mapScheduleDraftError(err);
+    const mapped = mapScheduleDraftError(err);
+    return NextResponse.json({ error: mapped.error }, { status: mapped.status });
   }
   return NextResponse.json({ ok: true });
 }
