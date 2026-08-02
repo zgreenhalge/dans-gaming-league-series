@@ -54,11 +54,40 @@ async function releaseScheduleDraftLock(supabaseAdmin: SupabaseClient, seasonId:
   if (error) throw error;
 }
 
+/** Thrown by generateSeasonScheduleDraft()/saveSeasonScheduleDraft()/deleteSeasonScheduleDraft()
+ * once a season's schedule has been confirmed (real `weeks` exist) — the draft is superseded at
+ * that point and editing it further would give no indication that it's now completely decoupled
+ * from what's actually been materialized. `confirmSeasonScheduleDraft()` itself doesn't use this:
+ * it already reports the equivalent case as its own typed `{ status: 'already-materialized' }`
+ * result rather than throwing, since a repeat confirm attempt is an expected, non-exceptional
+ * outcome for its caller to branch on. */
+export class ScheduleAlreadyMaterializedError extends Error {
+  constructor(seasonId: number) {
+    super(`Season ${seasonId}'s schedule has already been confirmed — its draft can no longer be edited`);
+    this.name = 'ScheduleAlreadyMaterializedError';
+  }
+}
+
+async function hasMaterializedSchedule(supabaseAdmin: SupabaseClient, seasonId: number): Promise<boolean> {
+  const { data, error } = await supabaseAdmin.from('weeks').select('id').eq('season_id', seasonId).limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
+async function assertScheduleNotYetMaterialized(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+  if (await hasMaterializedSchedule(supabaseAdmin, seasonId)) {
+    throw new ScheduleAlreadyMaterializedError(seasonId);
+  }
+}
+
 /** Replaces a season's entire draft schedule with a freshly generated one: existing draft matches
  * and weeks are deleted first (matches before weeks, for the FK), then the new plan is inserted
  * week by week. Always a full regenerate — a season with locked-in results needs the more careful
  * "regenerate only the still-unplayed weeks" operation, which doesn't exist yet (it depends on
- * confirm/materialize existing first) and must not be reached for such a season in the meantime. */
+ * confirm/materialize existing first) and must not be reached for such a season in the meantime.
+ * Refuses with `ScheduleAlreadyMaterializedError` once the season's schedule has been confirmed —
+ * `season.status === 'UPCOMING'` alone doesn't rule this out, since confirming deliberately doesn't
+ * change status (that's a separate admin action). */
 export async function generateSeasonScheduleDraft(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
@@ -77,6 +106,7 @@ export async function generateSeasonScheduleDraft(
     }
   }
 
+  await assertScheduleNotYetMaterialized(supabaseAdmin, seasonId);
   await claimScheduleDraftLock(supabaseAdmin, seasonId);
   try {
     await deleteSeasonScheduleDraftRows(supabaseAdmin, seasonId);
@@ -135,9 +165,12 @@ async function deleteSeasonScheduleDraftRows(supabaseAdmin: SupabaseClient, seas
   if (delWeeksErr) throw delWeeksErr;
 }
 
-/** Deletes a season's entire draft schedule (matches, then weeks), with no confirm/materialize
- * side effects — for clearing a draft out from under a season that no longer needs one. */
+/** Deletes a season's entire draft schedule (matches, then weeks). Refuses with
+ * `ScheduleAlreadyMaterializedError` once the season's schedule has been confirmed — clearing the
+ * draft at that point wouldn't touch the real materialized `weeks`/`matches`, but it would destroy
+ * the one record of what was actually confirmed, with nothing to show it's now gone. */
 export async function deleteSeasonScheduleDraft(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+  await assertScheduleNotYetMaterialized(supabaseAdmin, seasonId);
   await claimScheduleDraftLock(supabaseAdmin, seasonId);
   try {
     await deleteSeasonScheduleDraftRows(supabaseAdmin, seasonId);
@@ -155,12 +188,16 @@ export type SaveDraftResult = { ok: true } | { ok: false; issues: ValidationIssu
  * expected to already have a matching draft row — regenerating (which does add/remove rows) is a
  * separate operation. Refuses (without writing anything) if the proposed draft fails
  * `validateDraftIntegrity()` against the season's current DB roster (not whatever roster the
- * client last had) — never trusting client-side validation alone. */
+ * client last had) — never trusting client-side validation alone. Also refuses with
+ * `ScheduleAlreadyMaterializedError` once the season's schedule has been confirmed — hand-editing a
+ * superseded draft would give no indication it's now decoupled from the real schedule. */
 export async function saveSeasonScheduleDraft(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
   weeks: DraftScheduleWeek[],
 ): Promise<SaveDraftResult> {
+  await assertScheduleNotYetMaterialized(supabaseAdmin, seasonId);
+
   const roster = await getSeasonRoster(seasonId);
   const integrity = validateDraftIntegrity(weeks, roster.map((r) => r.player_id));
   if (!integrity.ok) {
@@ -259,13 +296,7 @@ const ZERO_MATCH_STATS = {
  * confirming is the one place completeness stops being advisory. The draft rows themselves are
  * left untouched either way, so a rejected confirm can just be re-attempted after more edits. */
 export async function confirmSeasonScheduleDraft(supabaseAdmin: SupabaseClient, seasonId: number): Promise<ConfirmResult> {
-  const { data: existingRealWeeks, error: existingErr } = await supabaseAdmin
-    .from('weeks')
-    .select('id')
-    .eq('season_id', seasonId)
-    .limit(1);
-  if (existingErr) throw existingErr;
-  if ((existingRealWeeks ?? []).length > 0) {
+  if (await hasMaterializedSchedule(supabaseAdmin, seasonId)) {
     return { status: 'already-materialized' };
   }
 

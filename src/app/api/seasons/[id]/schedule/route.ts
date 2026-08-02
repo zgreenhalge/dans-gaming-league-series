@@ -7,16 +7,18 @@ import {
   deleteSeasonScheduleDraft,
   saveSeasonScheduleDraft,
   ScheduleDraftLockedError,
+  ScheduleAlreadyMaterializedError,
 } from '@/lib/season-schedule-draft-engine';
 import { MIN_SEED_COUNT, MAX_SEED_COUNT, type DoubleheaderPolicy } from '@/lib/season-schedule';
 import type { DraftScheduleWeek } from '@/lib/season-schedule-validation';
 
 const supabaseAdmin = getAdminClient();
 
-/** Maps ScheduleDraftLockedError (another generate/save/delete already in flight for this season) to
- * 409, and everything else to 500. */
+/** Maps ScheduleDraftLockedError (another generate/save/delete already in flight for this season)
+ * and ScheduleAlreadyMaterializedError (the season's schedule was already confirmed) to 409, and
+ * everything else to 500. */
 function mapScheduleDraftError(err: unknown): NextResponse {
-  if (err instanceof ScheduleDraftLockedError) {
+  if (err instanceof ScheduleDraftLockedError || err instanceof ScheduleAlreadyMaterializedError) {
     return NextResponse.json({ error: err.message }, { status: 409 });
   }
   return NextResponse.json({ error: (err as Error).message }, { status: 500 });
@@ -27,9 +29,11 @@ function mapScheduleDraftError(err: unknown): NextResponse {
  * (`season_players`) — `buildRosterSchedule()`'s output persisted into
  * `season_schedule_draft_weeks`/`_matches`. Admin-only, and only while the season is `UPCOMING`,
  * matching the window `SeasonRosterPanel` keeps the roster editable in — the draft is meant to be
- * generated once the roster is settled, then hand-edited, then confirmed (confirmation isn't built
- * yet). Always a full regenerate; there's no partial/reset-remaining mode yet since that depends on
- * confirm/materialize existing first.
+ * generated once the roster is settled, then hand-edited, then confirmed. Always a full regenerate;
+ * there's no partial/reset-remaining mode yet since that depends on confirm/materialize existing
+ * first. Refuses with 409 once the season's schedule has already been confirmed
+ * (generateSeasonScheduleDraft()'s ScheduleAlreadyMaterializedError) — the UPCOMING check above
+ * doesn't catch this, since confirming deliberately leaves season.status alone.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
@@ -115,7 +119,8 @@ function isPlausibleDraftWeeks(value: unknown): value is DraftScheduleWeek[] {
  * week/match structure via `saveSeasonScheduleDraft()`. Admin-only, only while the season is
  * `UPCOMING`. Refuses with 400 (and the specific issues) if the edit fails
  * `validateDraftIntegrity()` — nothing is written in that case, so a rejected save can just be
- * retried after fixing the flagged slots.
+ * retried after fixing the flagged slots. Also refuses with 409 once the season's schedule has
+ * already been confirmed (saveSeasonScheduleDraft()'s ScheduleAlreadyMaterializedError).
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
@@ -157,9 +162,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   return NextResponse.json({ draft });
 }
 
-/** Clears a season's matchup draft with no side effects — nothing is materialized by generation,
- * so there's nothing to protect against here (unlike the gauntlet DELETE route's played-match
- * check). */
+/** Clears a season's matchup draft. Refuses with 409 once the season's schedule has already been
+ * confirmed (deleteSeasonScheduleDraft()'s ScheduleAlreadyMaterializedError) — mirrors the gauntlet
+ * DELETE route's played-match check, just against the draft/real-schedule boundary instead. */
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
   if (!access.ok) {
