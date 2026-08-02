@@ -8,15 +8,14 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { dathostServerId, getServer, getConsoleLines, connectHost, type DathostServer } from '@/lib/dathost';
-import { isServerLive } from '@/lib/util';
+import { dathostServerId, getServer, connectHost, type DathostServer } from '@/lib/dathost';
 import {
   getActiveServerMatch,
   findNearbyUnscoredMatch,
   type ActiveServerMatch,
   type NearbyUnscoredMatch,
 } from '@/lib/dathost-lifecycle';
-import { parseConnectedPlayers, linesSinceMarker, SCRIM_BOOT_MARKER, type ConnectedPlayer } from '@/lib/server-players';
+import { getConnectedPlayers, type ConnectedPlayer } from '@/lib/server-players';
 import { reconcileScrimSession } from '@/lib/scrim-session';
 
 export interface ScrimStatus {
@@ -73,16 +72,9 @@ export async function GET() {
   const connect = server ? connectHost(server) : null;
   // `reconcileScrimSession` and the console-log read are independent — both only depend on `server`,
   // already resolved above — so they run together rather than one paying for the other's round trip.
-  // Only worth reading the console log while the box is actually up. Discard everything before this
-  // boot's marker line — the server is reused, so its log otherwise still carries stale "connected"
-  // residue from whatever last used it (see `SCRIM_BOOT_MARKER`).
   const [scrimSession, connectedPlayers] = await Promise.all([
     reconcileScrimSession(supabaseAdmin, server),
-    isServerLive(server)
-      ? getConsoleLines(serverId)
-          .then((lines) => parseConnectedPlayers(linesSinceMarker(lines, SCRIM_BOOT_MARKER)))
-          .catch(() => [])
-      : Promise.resolve([]),
+    getConnectedPlayers(serverId, server),
   ]);
 
   return NextResponse.json({

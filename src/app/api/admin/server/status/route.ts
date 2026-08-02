@@ -7,12 +7,14 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { dathostServerId, getServer, connectHost, type DathostServer } from '@/lib/dathost';
 import { getActiveServerMatch, type ActiveServerMatch } from '@/lib/dathost-lifecycle';
+import { getConnectedPlayers, type ConnectedPlayer } from '@/lib/server-players';
 
 export interface AdminServerStatus {
   configured: boolean;
   server: DathostServer | null;
   connect: string | null;
   active: ActiveServerMatch | null;
+  connectedPlayers: ConnectedPlayer[];
   error: string | null;
 }
 
@@ -25,7 +27,7 @@ export async function GET() {
     serverId = dathostServerId();
   } catch {
     return NextResponse.json(
-      { configured: false, server: null, connect: null, active: null, error: null } satisfies AdminServerStatus,
+      { configured: false, server: null, connect: null, active: null, connectedPlayers: [], error: null } satisfies AdminServerStatus,
     );
   }
 
@@ -40,5 +42,6 @@ export async function GET() {
 
   const { server, error } = serverResult;
   const connect = server ? connectHost(server) : null;
-  return NextResponse.json({ configured: true, server, connect, active, error } satisfies AdminServerStatus);
+  const connectedPlayers = await getConnectedPlayers(serverId, server);
+  return NextResponse.json({ configured: true, server, connect, active, connectedPlayers, error } satisfies AdminServerStatus);
 }

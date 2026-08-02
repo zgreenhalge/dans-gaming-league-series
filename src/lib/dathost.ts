@@ -3,50 +3,27 @@
 // endpoints. Server-side only (uses HTTP Basic with the account API password) — never import into a
 // client component.
 //
-// Lifecycle (every endpoint verified live 2026-06-29):
-//   applyGoldenSettings → startServer → waitUntilReady → loadMatch → (play) → stopServer
+// Lifecycle (composed by `launchServer` in dathost-lifecycle.ts):
+//   applyConfigSet('golden') → startServer → waitUntilReady → loadMatch → (play) → stopServer
 //
 // We REUSE one persistent server (decision D2): teardown is `stopServer`, never delete. The server is
-// reconfigured in the DatHost panel for recreational modes between matches, so `applyGoldenSettings`
-// MUST run before every match to overwrite that drift. `duplicateServer`/`deleteServer` exist only as
-// the documented fallback (concurrency overflow / golden-image rebuild).
+// reconfigured in the DatHost panel for recreational modes between matches, so the `golden` config set
+// MUST be re-applied before every match to overwrite that drift. `duplicateServer`/`deleteServer`
+// exist only as the documented fallback (concurrency overflow / golden-image rebuild).
 //
 // Env:
 //   DATHOST_EMAIL, DATHOST_PASSWORD   HTTP Basic creds (account email + API password)
 //   DATHOST_SERVER_ID                 the persistent DGLS match server id
 
-import goldenServerSettings from '../../infra/matchzy/golden-server-settings.json';
+import { isServerLive } from './util';
 
 export const BASE = 'https://dathost.com/api/0.1';
 
 /**
  * cs2_settings keys that are set per-match/per-apply (the picked workshop map), not part of any
- * static config set's baseline — see `per_match_overrides` in golden-server-settings.json.
+ * config set's baseline — see `per_match_overrides` in the seeded golden settings.
  */
 export const MAP_SELECTION_KEYS = new Set(['maps_source', 'workshop_collection_id', 'workshop_single_map_id']);
-
-/**
- * Named, selectable `server` + `cs2_settings` baselines. `golden` (read from `infra/matchzy/golden-
- * server-settings.json`, the canonical version-controlled snapshot) is the only one today — the DGLS
- * match server has never needed a second. Adding one: version a new settings JSON next to
- * golden-server-settings.json the same way, `import` it here, and add one entry below. Everything
- * that applies a config set (auto per-match provisioning, the admin console) goes through this
- * registry, so a new set is immediately available everywhere without further wiring.
- */
-const CONFIG_SETS: Record<string, { label: string; server: Record<string, unknown>; cs2Settings: Record<string, unknown> }> = {
-  golden: { label: 'DGLS Season 3 Default', server: goldenServerSettings.server, cs2Settings: goldenServerSettings.cs2_settings },
-};
-
-export interface ConfigSetOption {
-  key: string;
-  label: string;
-}
-
-/** For UI pickers (e.g. the admin server console) — key/label pairs, in registry order. */
-export const CONFIG_SET_OPTIONS: ConfigSetOption[] = Object.entries(CONFIG_SETS).map(([key, v]) => ({
-  key,
-  label: v.label,
-}));
 
 /**
  * The scalar PUT fields for one settings object — optionally `prefix`ed (`cs2_settings.` for that
@@ -175,28 +152,24 @@ export async function stopServer(id: string): Promise<void> {
 }
 
 /**
- * PUT a named config set's full `server` + `cs2_settings` baseline (+ a pinned map) to overwrite any
- * recreational-mode drift — the same fields `dathost-golden-apply.ts --reassert` pushes, but through
- * the shared registry so auto per-match provisioning, the admin console's "Apply config set", and
- * `/scrim/start` can never fall out of sync with each other on which fields get re-asserted. The
- * `server`-level fields (`autostop`, `autostop_minutes`, …) apply to every caller intentionally,
- * scrim included — they're a shared-server idle/billing policy, not something that should vary by
- * how the current boot was started.
+ * PUT a resolved config set's full `server` + `cs2_settings` baseline (+ a pinned map) to overwrite
+ * any recreational-mode drift. Callers resolve the set first (`resolveConfigSet` in
+ * `dathost-config.ts`, Supabase-backed) so this stays a pure REST call with no DB dependency — the
+ * same PUT whether it's real-match provisioning, the admin console's "Apply config set"/"Start", or
+ * `/scrim/start`, so they can never disagree on which fields get re-asserted. The `server`-level
+ * fields (`autostop`, `autostop_minutes`, …) apply to every caller intentionally, scrim included —
+ * they're a shared-server idle/billing policy, not something that should vary by how the current boot
+ * was started.
  *
  * `workshop_collection` mode does not behave reliably on the DGLS server (confirmed live) — every
  * apply must pin a single workshop map instead, so a resolved `mapWorkshopId` is required; this
- * throws rather than silently falling back to the broken collection mode. Also throws on an unknown
- * `configSetKey` — see `CONFIG_SET_OPTIONS` for the valid keys.
+ * throws rather than silently falling back to the broken collection mode.
  */
 export async function applyConfigSet(
   id: string,
-  configSetKey: string,
+  set: { server: Record<string, unknown>; cs2Settings: Record<string, unknown> },
   opts: { mapWorkshopId?: string | null } = {},
 ): Promise<void> {
-  const set = CONFIG_SETS[configSetKey];
-  if (!set) {
-    throw new Error(`Unknown config set "${configSetKey}" — valid keys: ${Object.keys(CONFIG_SETS).join(', ')}`);
-  }
   if (!opts.mapWorkshopId) {
     throw new Error(
       'applyConfigSet requires a resolved map workshop id — the server can only be configured with a ' +
@@ -210,11 +183,6 @@ export async function applyConfigSet(
     'cs2_settings.workshop_single_map_id': opts.mapWorkshopId,
   };
   await call('PUT', `/game-servers/${id}`, fields);
-}
-
-/** Per-match provisioning always uses the `golden` config set — this is a thin, named wrapper. */
-export async function applyGoldenSettings(id: string, opts: { mapWorkshopId?: string | null } = {}): Promise<void> {
-  return applyConfigSet(id, 'golden', opts);
 }
 
 /** Issue a console/RCON command on the server. */
@@ -309,7 +277,7 @@ export async function waitUntilReady(
   return pollUntil(
     async () => {
       const server = await getServer(id);
-      return server.on && !server.booting && connectHost(server) ? server : null;
+      return isServerLive(server) && connectHost(server) ? server : null;
     },
     { timeoutMs, intervalMs: opts.intervalMs ?? 3_000, timeoutMessage: `Server ${id} not ready after ${Math.round(timeoutMs / 1000)}s` },
   );

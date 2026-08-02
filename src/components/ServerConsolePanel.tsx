@@ -1,14 +1,15 @@
 'use client';
 
-// Admin server console (#134/#135, admin console b — now server-centric). Sections: match occupancy
-// (who holds it right now + "Apply match settings" — re-push the match's loadmatch config to restore
-// forced map_sides + demo-upload cvars — and Teardown, the autostop-failed safety valve); a combined
-// panel below it — raw DatHost server state + start/stop + "Apply config set" (map picker + config-set
-// dropdown, server-level settings only — doesn't start the server and doesn't load a match config);
-// "Config vs golden" (read-only drift check against the versioned infra/matchzy/ config); and disk
-// cleanup (issue #132) — enable/disable + interval + a manual "run now" for the dathost-cleanup GitHub
-// Action. The per-match MatchServerPanel still handles per-match provisioning on the match page; this
-// is the global operator view.
+// Admin server console (#134/#135, admin console b — now server-centric). One panel: occupancy/raw
+// DatHost state at top (Stop, plus, on an occupying match, "Apply match settings" — re-push the
+// match's loadmatch config to restore forced map_sides + demo-upload cvars — and Teardown, the
+// autostop-failed safety valve); below it, in the same box, the shared `LaunchOptionsPicker`
+// (config-set + map + playout/friendly toggles) with Start and Apply config set side by side — Start
+// boots with them, Apply config set pushes them without starting (settings-only, doesn't load a match
+// config) — and "Compare to live config" (read-only drift check against the selected config set).
+// Below that, disk cleanup (issue #132) — enable/disable + interval + a manual "run now" for the
+// dathost-cleanup GitHub Action. The per-match MatchServerPanel still handles per-match provisioning
+// on the match page; this is the global operator view.
 //
 // Start/Stop/Apply are occupancy-checked server-side (getServerOccupancy) — a DGLS match holding the
 // server, or live players on it with no DGLS match at all (casual/manual use), both refuse the action
@@ -20,25 +21,28 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase-browser';
 import { ServerSpinner } from '@/components/ServerSpinner';
-import { StatePill, CopyConnectButton } from '@/components/ServerStatusBits';
+import { StatePill, ServerConnectionDetails, ConnectedRoster } from '@/components/ServerStatusBits';
 import { CollapsiblePanel } from '@/components/CollapsiblePanel';
-import { fmtUtcShort } from '@/lib/util';
-import { toSentenceCase } from '@/lib/maps';
+import { CUSTOM_MAP_CHOICE } from '@/components/MapPicker';
+import { LaunchOptionsPicker } from '@/components/LaunchOptionsPicker';
+import { fmtUtcShort, isServerLive, isServerOff } from '@/lib/util';
 import { workshopIdFromUrl } from '@/lib/replay/radar';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
-import type { ConfigSetOption } from '@/lib/dathost';
-// Type-only — `import type` is erased at compile, so this never pulls dathost-config's node:fs into
-// the client bundle.
-import type { GoldenDiff, DiffRow, CfgFileDiff } from '@/lib/dathost-config';
+import type { ConfigSetOption, ConfigSetDiff, DiffRow, CfgFileDiff } from '@/lib/dathost-config';
 import type { WorkshopMapOption } from '@/lib/queries';
 import type { AdminServerStatus } from '@/app/api/admin/server/status/route';
 import type { DathostCleanupStatus } from '@/app/api/admin/dathost-cleanup/status/route';
 
-const CUSTOM_MAP_CHOICE = '__custom__';
-
 // Safety cap for the start/stop spinner — matches DatHost's own ready timeout (waitUntilReady). If an
 // action hasn't visibly settled by now, drop the spinner and show whatever raw state we have.
 const ACTION_CAP_MS = 90_000;
+
+// A start command's acknowledgment can briefly report `on: true` before the box has actually begun
+// booting — floor how long a start must have been running before `on && !booting` is trusted as ready,
+// so that flicker can't read as an instant "done." A fixed floor (rather than requiring the poll to
+// have caught an intermediate `booting: true` tick) can't be raced by a boot that completes faster
+// than the 2s poll interval.
+const MIN_BOOT_MS = 5_000;
 
 type PendingAction = { kind: 'start' | 'stop' | 'apply'; message: string };
 
@@ -53,7 +57,7 @@ function DriftRows({ rows }: { rows: DiffRow[] }) {
       {changed.map((r) => (
         <div key={r.key} className="flex flex-wrap items-baseline gap-x-2">
           <span className="text-[var(--color-text-primary)]">{r.key}</span>
-          <span className="text-[var(--color-text-secondary)]">golden {r.local}</span>
+          <span className="text-[var(--color-text-secondary)]">set {r.local}</span>
           <span className="text-[var(--color-text-secondary)]">→</span>
           <span className={r.status === 'drift' ? 'text-[var(--color-accent-red-fg)]' : 'text-[var(--color-accent-amber-fg)]'}>
             live {r.live}
@@ -64,7 +68,7 @@ function DriftRows({ rows }: { rows: DiffRow[] }) {
   );
 }
 
-function ConfigDiffView({ diff }: { diff: GoldenDiff }) {
+function ConfigDiffView({ diff }: { diff: ConfigSetDiff }) {
   const settingsDrift = diff.settings.filter((r) => r.status === 'drift' || r.status === 'missing');
   const cfgWithDrift = diff.cfgFiles.filter(
     (f: CfgFileDiff) => f.error || f.rows.some((r) => r.status === 'drift' || r.status === 'missing'),
@@ -76,7 +80,7 @@ function ConfigDiffView({ diff }: { diff: GoldenDiff }) {
           diff.clean ? 'text-[var(--color-accent-green-fg)]' : 'text-[var(--color-accent-red-fg)]'
         }`}
       >
-        {diff.clean ? '✓ live server matches the versioned golden config.' : '✗ drift found — nothing was changed.'}
+        {diff.clean ? '✓ live server matches the config set.' : '✗ drift found — nothing was changed.'}
       </div>
 
       {settingsDrift.length > 0 && (
@@ -131,14 +135,10 @@ export function ServerConsolePanel({
   const [stopping, setStopping] = useState(false);
   const startingRef = useRef(false);
   const stoppingRef = useRef(false);
-  // A fresh boot flips through a spurious `on` *before* it enters `booting`, so we can't treat the
-  // first `on` as ready — latch that we've seen `booting`, then accept `on && !booting`. `actionAt`
-  // caps the wait so a start/stop that never settles can't strand the spinner forever.
-  const sawBootingRef = useRef(false);
+  // `actionAt` caps the wait so a start/stop that never settles can't strand the spinner forever.
   const actionAtRef = useRef(0);
 
   const beginAction = (kind: 'start' | 'stop') => {
-    sawBootingRef.current = false;
     actionAtRef.current = Date.now();
     startingRef.current = kind === 'start';
     stoppingRef.current = kind === 'stop';
@@ -155,6 +155,8 @@ export function ServerConsolePanel({
   const [configSet, setConfigSet] = useState(configSets[0]?.key ?? '');
   const [mapChoice, setMapChoice] = useState('');
   const [customMapId, setCustomMapId] = useState('');
+  const [playout, setPlayout] = useState(false);
+  const [friendly, setFriendly] = useState(false);
   const [applyBusy, setApplyBusy] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applySuccess, setApplySuccess] = useState(false);
@@ -166,7 +168,7 @@ export function ServerConsolePanel({
   const [matchCfgError, setMatchCfgError] = useState<string | null>(null);
   const [matchCfgSuccess, setMatchCfgSuccess] = useState(false);
 
-  const [diff, setDiff] = useState<GoldenDiff | null>(null);
+  const [diff, setDiff] = useState<ConfigSetDiff | null>(null);
   const [diffBusy, setDiffBusy] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
 
@@ -181,9 +183,13 @@ export function ServerConsolePanel({
       }
       const data = (await res.json()) as AdminServerStatus;
       setStatus(data);
-      // Clear the in-flight spinner once the action has truly landed. Start: only after the box has
-      // passed through `booting` and settled to a connectable `on` (ignore the spurious pre-boot
-      // `on`). Stop: once it's fully off. Either way, give up after ACTION_CAP_MS.
+      // Clear the in-flight spinner once the action has truly landed, using the exact same
+      // `isServerLive`/`isServerOff` calls every other consumer here (canStart/canStop, the
+      // connection-details block, the roster) treats as ready/off — a hand-rolled `on`/`booting`
+      // check here that drifts from those is exactly how this got stuck before: gating on `connect`
+      // too (DNS/ports DatHost can assign a beat after `on`/`booting` settle) stranded the spinner,
+      // and hid Stop, for a gap where the server was already live by every other measure. `MIN_BOOT_MS`
+      // is what rules out the pre-boot `on` flicker instead. Either way, give up after ACTION_CAP_MS.
       const s = data.server;
       if (s) {
         const capped = Date.now() - actionAtRef.current > ACTION_CAP_MS;
@@ -195,12 +201,11 @@ export function ServerConsolePanel({
           if (timedOut) setStartStopError(`Server never reported '${verb}' success`);
         };
         if (startingRef.current) {
-          if (s.booting) sawBootingRef.current = true;
-          const ready = s.on && !s.booting && !!data.connect;
-          if (sawBootingRef.current && ready) done(false, 'start');
+          const ready = isServerLive(s) && Date.now() - actionAtRef.current > MIN_BOOT_MS;
+          if (ready) done(false, 'start');
           else if (capped) done(true, 'start');
         } else if (stoppingRef.current) {
-          if (!s.on && !s.booting) done(false, 'stop');
+          if (isServerOff(s)) done(false, 'stop');
           else if (capped) done(true, 'stop');
         }
       }
@@ -355,6 +360,7 @@ export function ServerConsolePanel({
   };
 
   const startServer = async (override = false) => {
+    if (!configSet || !resolvedMapId) return;
     setStartStopBusy(true);
     setStartStopError(null);
     // Optimistic: show the spinner immediately. The 2s status poll clears it once boot has settled —
@@ -364,7 +370,7 @@ export function ServerConsolePanel({
       const res = await fetch('/api/admin/server/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ override }),
+        body: JSON.stringify({ configSet, mapWorkshopId: resolvedMapId, playout, friendly, override }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -494,13 +500,13 @@ export function ServerConsolePanel({
     setDiffBusy(true);
     setDiffError(null);
     try {
-      const res = await fetch('/api/admin/server/config-diff');
+      const res = await fetch(`/api/admin/server/config-diff?configSet=${encodeURIComponent(configSet || 'golden')}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setDiffError(body.error ?? 'Could not compare config');
         return;
       }
-      setDiff((await res.json()) as GoldenDiff);
+      setDiff((await res.json()) as ConfigSetDiff);
     } catch {
       setDiffError('Could not compare config');
     } finally {
@@ -513,9 +519,9 @@ export function ServerConsolePanel({
   // Prefer status.active (fresher — refetched on load/poll/action) once we have it at all; only fall
   // back to the server-rendered initial prop before the first client fetch resolves.
   const active = status ? status.active : initialActive;
-  const canStart = configured && server && !server.on && !server.booting;
-  const canStop = configured && server && (server.on || server.booting);
-  const casualUse = configured && server && !active && (server.players_online ?? 0) > 0;
+  const canStart = configured && !!server && isServerOff(server);
+  const canStop = configured && !!server && !isServerOff(server);
+  const casualUse = !!(configured && server && !active && (server.players_online ?? 0) > 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -549,7 +555,7 @@ export function ServerConsolePanel({
               DatHost server
             </div>
 
-            {active ? (
+            {active && (
               <>
                 <Link href={`/matches/${active.matchId}`} className="font-display text-[16px] font-semibold hover:underline">
                   {active.label}
@@ -560,32 +566,22 @@ export function ServerConsolePanel({
                   {active.serverStartedAt && <span>since {fmtUtcShort(active.serverStartedAt)}</span>}
                 </div>
               </>
-            ) : (
-              <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-1">
-                <span className="text-[var(--color-accent-green-fg)]">idle</span> — no match is holding it.
-              </div>
             )}
 
+            {/* No separate "idle" line here — the state pill above already says off/booting/on, and
+                who (if anyone) holds it is exactly the `active` block above. */}
             {server && (
-              <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-2 flex flex-col gap-y-1">
-                {status?.connect && (
-                  <span className="inline-flex items-center gap-1.5">
-                    connect {status.connect}
-                    <CopyConnectButton connect={status.connect} />
-                  </span>
-                )}
+              <div className="font-mono text-[11px] text-[var(--color-text-secondary)] mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <ServerConnectionDetails connect={status?.connect ?? null} serverOn={isServerLive(server)} />
                 {server.cs2_settings?.game_mode != null && <span>mode {String(server.cs2_settings.game_mode)}</span>}
-                {server.players_online != null && (
-                  <span className={casualUse ? 'text-[var(--color-accent-amber-fg)]' : undefined}>
-                    {server.players_online} player(s) online
-                  </span>
-                )}
               </div>
             )}
           </div>
 
           {/* Button slot: an in-flight action shows a spinner in place of the button until the
-              opposite control is available, so the pill + details above stay put. */}
+              opposite control is available, so the pill + details above stay put. Start itself lives
+              below, next to the config-set/map picker its payload comes from — this slot only ever
+              needs to react to it via the shared starting/stopping state. */}
           <div className="shrink-0 flex flex-col items-end gap-2">
             {starting ? (
               <div className="w-40">
@@ -596,26 +592,15 @@ export function ServerConsolePanel({
                 <ServerSpinner label="Stopping server…" tone="stop" />
               </div>
             ) : (
-              <div className="flex gap-2">
-                {canStart && (
-                  <button
-                    onClick={() => startServer()}
-                    disabled={startStopBusy}
-                    className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
-                  >
-                    {startStopBusy ? '…' : 'Start'}
-                  </button>
-                )}
-                {canStop && (
-                  <button
-                    onClick={() => stopServer()}
-                    disabled={startStopBusy}
-                    className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)] hover:bg-[var(--color-accent-red-bg)] disabled:opacity-50"
-                  >
-                    {startStopBusy ? '…' : 'Stop'}
-                  </button>
-                )}
-              </div>
+              canStop && (
+                <button
+                  onClick={() => stopServer()}
+                  disabled={startStopBusy}
+                  className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)] hover:bg-[var(--color-accent-red-bg)] disabled:opacity-50"
+                >
+                  {startStopBusy ? '…' : 'Stop'}
+                </button>
+              )
             )}
             {active && (
               <>
@@ -651,64 +636,61 @@ export function ServerConsolePanel({
           </div>
         )}
         {teardownError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-3">{teardownError}</div>}
-      </div>
 
-      {/* Server config — apply a config set + map, and compare the live server to the versioned
-          golden config. Both are the same "server-level configuration" concern, grouped together
-          rather than split across two boxes. */}
-      <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">Server config</div>
-        <div className="flex flex-col gap-2">
-          <select
-            value={configSet}
-            onChange={(e) => setConfigSet(e.target.value)}
-            className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
-          >
-            {configSets.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={mapChoice}
-            onChange={(e) => setMapChoice(e.target.value)}
-            className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
-          >
-            <option value="">Select a map…</option>
-            {maps.map((m) => (
-              <option key={m.workshopId} value={m.workshopId}>
-                {toSentenceCase(m.name)}
-              </option>
-            ))}
-            <option value={CUSTOM_MAP_CHOICE}>Custom workshop ID…</option>
-          </select>
-          {mapChoice === CUSTOM_MAP_CHOICE && (
-            <>
-              <input
-                value={customMapId}
-                onChange={(e) => setCustomMapId(e.target.value)}
-                placeholder="Steam workshop ID or URL"
-                className="font-mono text-[12px] px-2 py-1.5 rounded border border-[var(--color-border-secondary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
-              />
-              {customMapInvalid && (
-                <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">
-                  Enter a valid Steam workshop ID or URL.
-                </div>
+        {/* Connected roster — shared with the scrim panel (`ConnectedRoster`), amber-tinted when
+            someone's on the box outside a DGLS match ("casual use") instead of a separate bare-count
+            line. */}
+        {server && isServerLive(server) && (
+          <div className="mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
+            <ConnectedRoster connectedPlayers={status?.connectedPlayers ?? []} highlight={casualUse} />
+          </div>
+        )}
+
+        {/* Server config — pick a config set + map + launch-time toggles, then either Start (boot with
+            them) or Apply config set (push them without starting) — the two actions that consume this
+            picker's state, side by side (#315). */}
+        <div className="mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
+          <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">Server config</div>
+          <div className="flex flex-col gap-2">
+            <LaunchOptionsPicker
+              configSets={configSets}
+              configSet={configSet}
+              onConfigSetChange={setConfigSet}
+              maps={maps}
+              mapChoice={mapChoice}
+              onMapChoiceChange={setMapChoice}
+              customMapId={customMapId}
+              onCustomMapIdChange={setCustomMapId}
+              customMapInvalid={customMapInvalid}
+              playout={playout}
+              onPlayoutChange={setPlayout}
+              friendly={friendly}
+              onFriendlyChange={setFriendly}
+            />
+            <div className="flex gap-2">
+              {canStart && !starting && !stopping && (
+                <button
+                  onClick={() => startServer()}
+                  disabled={startStopBusy || !configSet || !resolvedMapId}
+                  className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
+                >
+                  {startStopBusy ? '…' : 'Start'}
+                </button>
               )}
-            </>
-          )}
-          <button
-            onClick={() => applyConfig()}
-            disabled={!configSet || !resolvedMapId || applyBusy}
-            className="self-start font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
-          >
-            {applyBusy ? 'Applying…' : 'Apply config set'}
-          </button>
-          {applyError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{applyError}</div>}
-          {applySuccess && !applyError && (
-            <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
-          )}
+              <button
+                onClick={() => applyConfig()}
+                disabled={!configSet || !resolvedMapId || applyBusy}
+                title="Reassert settings on the server without starting it"
+                className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
+              >
+                {applyBusy ? 'Applying…' : 'Apply config set'}
+              </button>
+            </div>
+            {applyError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{applyError}</div>}
+            {applySuccess && !applyError && (
+              <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
+            )}
+          </div>
         </div>
 
         <div className="mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">

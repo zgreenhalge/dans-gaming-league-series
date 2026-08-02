@@ -14,7 +14,7 @@ import {
   getGauntletRounds,
 } from '@/lib/queries';
 import { getActiveServerMatch } from '@/lib/dathost-lifecycle';
-import { CONFIG_SET_OPTIONS } from '@/lib/dathost';
+import { listConfigSets } from '@/lib/dathost-config';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { buildRegularToGauntletMap, isPlayedScore, extractSeasonNumber } from '@/lib/util';
 import type { GauntletRow } from '@/components/GauntletLifecycleList';
@@ -39,15 +39,17 @@ export default async function AdminPage() {
   const selfId = session.user.playerId;
   if (!(await isPlayerAdmin(selfId))) redirect('/');
 
-  const [jobs, opsErrors, matches, players, activeServerMatch, workshopMaps, seasons] =
+  const adminClient = getAdminClient();
+  const [jobs, opsErrors, matches, players, activeServerMatch, workshopMaps, seasons, configSets] =
     await Promise.all([
       getBackgroundJobs(),
       getOpsErrors(),
       getAdminMatches(),
       getAdminPlayers(),
-      getActiveServerMatch(getAdminClient()),
+      getActiveServerMatch(adminClient),
       getMapsForWorkshopPicker(),
       getSeasons(),
+      listConfigSets(adminClient),
     ]);
 
   // Season lifecycle + gauntlet pairing — same derivation the old /admin/seasons/gauntlet page used.
@@ -107,7 +109,7 @@ export default async function AdminPage() {
           matches={matches}
           players={players}
           selfId={selfId}
-          server={{ active: activeServerMatch, configSets: CONFIG_SET_OPTIONS, maps: workshopMaps }}
+          server={{ active: activeServerMatch, configSets, maps: workshopMaps }}
           season={{
             allSeasons,
             eligibleForGauntlet,

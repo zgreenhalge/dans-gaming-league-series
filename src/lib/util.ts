@@ -4,10 +4,20 @@ import { mapSlug } from './maps';
  * Whether a DatHost server is actually up and reachable — the shared "on and done booting" check
  * every caller that treats a server as live (vs. mid-boot or off) should use, on both the server
  * (`dathost.ts`'s `DathostServer` is a structural match, so no import needed) and the client (this
- * file, unlike `dathost.ts`, is safe to import from a `'use client'` component).
+ * file, unlike `dathost.ts`, is safe to import from a `'use client'` component). A start/stop
+ * in-flight indicator that reimplements this check ad hoc instead of calling it can silently drift
+ * from what every other consumer (a connect/join link, a roster, a Stop button) considers "live" —
+ * always go through this function, never `server.on && !server.booting` inline.
  */
 export function isServerLive(server: { on: boolean; booting: boolean } | null | undefined): boolean {
   return !!server?.on && !server.booting;
+}
+
+/** The complement of `isServerLive` that also excludes mid-boot — fully stopped, not booting either.
+ *  The shared "can this be started" check, so it can't drift from `isServerLive`'s definition of the
+ *  states in between. */
+export function isServerOff(server: { on: boolean; booting: boolean } | null | undefined): boolean {
+  return !server?.on && !server?.booting;
 }
 
 /**

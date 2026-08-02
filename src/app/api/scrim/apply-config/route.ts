@@ -1,26 +1,27 @@
-// Manually apply a named config set + a pinned workshop map to the shared DatHost server, outside
-// of match provisioning. Reasserts both dimensions the golden-config compare checks — cs2_settings
-// and the cfg/ files — so a manual apply actually clears drift shown by the compare view. Does not
-// start the server (see /server/start). Refuses (409) if the server is occupied (a DGLS match holds
-// it, or live players are on it outside any match) unless `override: true`.
+// Reassert a config set on the shared DatHost server without starting it — the scrim-scoped
+// counterpart to /api/admin/server/apply-config, gated exactly like /api/scrim/start: refused (409, no
+// override) if the server is occupied, and refused if a league match is scheduled within the hour and
+// hasn't been scored yet — a scrim never touches the server's config that close to a real match either.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdminAccess } from '@/lib/admin-access';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { dathostServerId, getServer } from '@/lib/dathost';
 import { listConfigSets } from '@/lib/dathost-config';
-import { getServerOccupancy, occupancyMessage, applyConfigSetOnly } from '@/lib/dathost-lifecycle';
+import { getServerOccupancy, occupancyMessage, findNearbyUnscoredMatch, applyConfigSetOnly } from '@/lib/dathost-lifecycle';
 
 const WORKSHOP_ID_RE = /^\d+$/;
 
 export async function POST(req: NextRequest) {
-  const access = await requireAdminAccess();
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.playerId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   const body = await req.json().catch(() => null);
   const configSet = typeof body?.configSet === 'string' ? body.configSet : '';
   const mapWorkshopId = typeof body?.mapWorkshopId === 'string' ? body.mapWorkshopId.trim() : '';
-  const override = body?.override === true;
 
   const supabaseAdmin = getAdminClient();
 
@@ -36,9 +37,21 @@ export async function POST(req: NextRequest) {
   }
 
   const serverId = dathostServerId();
-  const server = await getServer(serverId).catch(() => null);
+
+  const [blockingMatch, server] = await Promise.all([findNearbyUnscoredMatch(supabaseAdmin), getServer(serverId).catch(() => null)]);
+  if (blockingMatch) {
+    return NextResponse.json(
+      {
+        error: `${blockingMatch.label} is scheduled too close to now and hasn't been scored yet — the shared server is reserved for it.`,
+        code: 'match_window',
+        blockingMatch,
+      },
+      { status: 409 },
+    );
+  }
+
   const occupancy = await getServerOccupancy(supabaseAdmin, server);
-  if (occupancy.occupied && !override) {
+  if (occupancy.occupied) {
     return NextResponse.json(
       { error: occupancyMessage(occupancy), code: 'server_occupied', ...occupancy },
       { status: 409 },
