@@ -15,12 +15,131 @@ import {
   type DraftScheduleWeek,
   type ValidationIssue,
 } from './season-schedule-validation';
+import { recordOpsError } from './ops-errors';
+
+/** Thrown when a caller tries to generate/save/delete a season's draft schedule while another such
+ * operation is already in flight for the same season — see claimScheduleDraftLock(). */
+export class ScheduleDraftLockedError extends Error {
+  constructor(seasonId: number) {
+    super(`Another schedule draft operation is already in progress for season ${seasonId} — try again shortly`);
+    this.name = 'ScheduleDraftLockedError';
+  }
+}
+
+// generateSeasonScheduleDraft()/saveSeasonScheduleDraft()/deleteSeasonScheduleDraft()/
+// confirmSeasonScheduleDraft() are each a sequence of several Supabase calls, not one DB
+// transaction, so two overlapping admin requests for the same season could otherwise interleave
+// their delete/insert or update sequences — or, for confirm, both pass its "not materialized yet"
+// check and both insert real rows. A Postgres advisory lock would only hold within one
+// transaction/connection, which none of these span, so instead `seasons.schedule_draft_locked_at`
+// is claimed via the same atomic-conditional-UPDATE pattern as the roster-edit cooldown (PATCH
+// /api/players/me/name): whichever request's UPDATE commits first is the only one whose WHERE the
+// other can still match. A lock older than SCHEDULE_DRAFT_LOCK_STALE_MS is treated as free, so a
+// request that crashes mid-operation can't wedge the season's draft tooling permanently.
+const SCHEDULE_DRAFT_LOCK_STALE_MS = 60_000;
+
+async function claimScheduleDraftLock(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+  const cutoff = new Date(Date.now() - SCHEDULE_DRAFT_LOCK_STALE_MS).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('seasons')
+    .update({ schedule_draft_locked_at: new Date().toISOString() })
+    .eq('id', seasonId)
+    .or(`schedule_draft_locked_at.is.null,schedule_draft_locked_at.lte.${cutoff}`)
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new ScheduleDraftLockedError(seasonId);
+}
+
+async function releaseScheduleDraftLock(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+  const { error } = await supabaseAdmin.from('seasons').update({ schedule_draft_locked_at: null }).eq('id', seasonId);
+  if (error) throw error;
+}
+
+/** Claims the lock, runs `fn`, and releases the lock whether `fn` succeeds or throws — the shared
+ * scaffold behind generateSeasonScheduleDraft()/saveSeasonScheduleDraft()/deleteSeasonScheduleDraft()/
+ * confirmSeasonScheduleDraft(), so the claim/try/finally-release shape isn't repeated at each call
+ * site. */
+async function withScheduleDraftLock<T>(supabaseAdmin: SupabaseClient, seasonId: number, fn: () => Promise<T>): Promise<T> {
+  await claimScheduleDraftLock(supabaseAdmin, seasonId);
+  try {
+    return await fn();
+  } finally {
+    await releaseScheduleDraftLock(supabaseAdmin, seasonId);
+  }
+}
+
+/** Runs a best-effort `cleanup`, and if it throws, records the failure via recordOpsError() instead
+ * of letting it propagate — shared by generateSeasonScheduleDraft()'s and
+ * confirmSeasonScheduleDraft()'s mid-loop-failure handlers, which otherwise repeat the same
+ * try/catch/recordOpsError shape around a different cleanup action and message. */
+async function cleanupOrRecordOpsError(
+  supabaseAdmin: SupabaseClient,
+  seasonId: number,
+  operation: string,
+  description: string,
+  cleanup: () => Promise<void>,
+): Promise<void> {
+  try {
+    await cleanup();
+  } catch (cleanupErr) {
+    await recordOpsError(
+      supabaseAdmin,
+      'season',
+      seasonId,
+      operation,
+      `Failed to clean up ${description}: ${(cleanupErr as Error).message}`,
+    );
+  }
+}
+
+/** Thrown by generateSeasonScheduleDraft()/saveSeasonScheduleDraft()/deleteSeasonScheduleDraft()
+ * once a season's schedule has been confirmed (real `weeks` exist) — the draft is superseded at
+ * that point and editing it further would give no indication that it's now completely decoupled
+ * from what's actually been materialized. `confirmSeasonScheduleDraft()` itself doesn't use this:
+ * it already reports the equivalent case as its own typed `{ status: 'already-materialized' }`
+ * result rather than throwing, since a repeat confirm attempt is an expected, non-exceptional
+ * outcome for its caller to branch on. */
+export class ScheduleAlreadyMaterializedError extends Error {
+  constructor(seasonId: number) {
+    super(`Season ${seasonId}'s schedule has already been confirmed — its draft can no longer be edited`);
+    this.name = 'ScheduleAlreadyMaterializedError';
+  }
+}
+
+async function hasMaterializedSchedule(supabaseAdmin: SupabaseClient, seasonId: number): Promise<boolean> {
+  const { data, error } = await supabaseAdmin.from('weeks').select('id').eq('season_id', seasonId).limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
+async function assertScheduleNotYetMaterialized(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+  if (await hasMaterializedSchedule(supabaseAdmin, seasonId)) {
+    throw new ScheduleAlreadyMaterializedError(seasonId);
+  }
+}
+
+/** Maps ScheduleDraftLockedError (another generate/save/delete/confirm already in flight for this
+ * season) and ScheduleAlreadyMaterializedError (the season's schedule was already confirmed) to
+ * 409, and everything else to 500 — shared by the schedule and schedule/confirm routes, which both
+ * call into this file's lock- and materialized-guarded functions and need the same mapping. */
+export function mapScheduleDraftError(err: unknown): { error: string; status: number } {
+  if (err instanceof ScheduleDraftLockedError || err instanceof ScheduleAlreadyMaterializedError) {
+    return { error: err.message, status: 409 };
+  }
+  return { error: (err as Error).message, status: 500 };
+}
 
 /** Replaces a season's entire draft schedule with a freshly generated one: existing draft matches
  * and weeks are deleted first (matches before weeks, for the FK), then the new plan is inserted
  * week by week. Always a full regenerate — a season with locked-in results needs the more careful
  * "regenerate only the still-unplayed weeks" operation, which doesn't exist yet (it depends on
- * confirm/materialize existing first) and must not be reached for such a season in the meantime. */
+ * confirm/materialize existing first) and must not be reached for such a season in the meantime.
+ * Refuses with `ScheduleAlreadyMaterializedError` once the season's schedule has been confirmed —
+ * `season.status === 'UPCOMING'` alone doesn't rule this out, since confirming deliberately doesn't
+ * change status (that's a separate admin action). Not a real transaction, so a mid-loop insert
+ * failure triggers a best-effort cleanup of whatever this attempt inserted before rethrowing,
+ * leaving the draft either fully regenerated or fully empty rather than half of each. */
 export async function generateSeasonScheduleDraft(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
@@ -39,37 +158,57 @@ export async function generateSeasonScheduleDraft(
     }
   }
 
-  await deleteSeasonScheduleDraft(supabaseAdmin, seasonId);
+  await assertScheduleNotYetMaterialized(supabaseAdmin, seasonId);
+  await withScheduleDraftLock(supabaseAdmin, seasonId, async () => {
+    await deleteSeasonScheduleDraftRows(supabaseAdmin, seasonId);
 
-  for (const week of plan) {
-    const { data: weekRow, error: weekErr } = await supabaseAdmin
-      .from('season_schedule_draft_weeks')
-      .insert({
-        season_id: seasonId,
-        week_number: week.week,
-        bye_player_id: week.byePlayerIds[0] ?? null,
-      })
-      .select('id')
-      .single();
-    if (weekErr) throw weekErr;
-    const weekId = (weekRow as { id: number }).id;
+    try {
+      for (const week of plan) {
+        const { data: weekRow, error: weekErr } = await supabaseAdmin
+          .from('season_schedule_draft_weeks')
+          .insert({
+            season_id: seasonId,
+            week_number: week.week,
+            bye_player_id: week.byePlayerIds[0] ?? null,
+          })
+          .select('id')
+          .single();
+        if (weekErr) throw weekErr;
+        const weekId = (weekRow as { id: number }).id;
 
-    const matchRows = week.matches.map((m, i) => ({
-      draft_week_id: weekId,
-      match_number: i + 1,
-      shirts_player1_id: m.shirts[0],
-      shirts_player2_id: m.shirts[1],
-      skins_player1_id: m.skins[0],
-      skins_player2_id: m.skins[1],
-    }));
-    const { error: matchErr } = await supabaseAdmin.from('season_schedule_draft_matches').insert(matchRows);
-    if (matchErr) throw matchErr;
-  }
+        const matchRows = week.matches.map((m, i) => ({
+          draft_week_id: weekId,
+          match_number: i + 1,
+          shirts_player1_id: m.shirts[0],
+          shirts_player2_id: m.shirts[1],
+          skins_player1_id: m.skins[0],
+          skins_player2_id: m.skins[1],
+        }));
+        const { error: matchErr } = await supabaseAdmin.from('season_schedule_draft_matches').insert(matchRows);
+        if (matchErr) throw matchErr;
+      }
+    } catch (err) {
+      // Not a real transaction — a mid-loop failure would otherwise leave a half-generated draft
+      // (some weeks present, the rest missing) with no automatic cleanup. Best-effort: clear
+      // whatever got inserted so the draft ends up either fully regenerated or fully empty, never
+      // half. If the cleanup itself fails, recordOpsError() surfaces that rather than staying silent
+      // — leaving the caller to only see (and report) the original error otherwise.
+      await cleanupOrRecordOpsError(
+        supabaseAdmin,
+        seasonId,
+        'schedule_generate_cleanup',
+        'a half-generated draft after a generate error',
+        () => deleteSeasonScheduleDraftRows(supabaseAdmin, seasonId),
+      );
+      throw err;
+    }
+  });
 }
 
-/** Deletes a season's entire draft schedule (matches, then weeks), with no confirm/materialize
- * side effects — for clearing a draft out from under a season that no longer needs one. */
-export async function deleteSeasonScheduleDraft(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+/** The actual delete, unguarded by the lock — shared by deleteSeasonScheduleDraft() (which claims
+ * the lock itself) and generateSeasonScheduleDraft() (which already holds it, so calling the locked
+ * export from inside would immediately fail against its own just-claimed lock). */
+async function deleteSeasonScheduleDraftRows(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
   const { data: existingWeeks, error: existingErr } = await supabaseAdmin
     .from('season_schedule_draft_weeks')
     .select('id')
@@ -91,6 +230,15 @@ export async function deleteSeasonScheduleDraft(supabaseAdmin: SupabaseClient, s
   if (delWeeksErr) throw delWeeksErr;
 }
 
+/** Deletes a season's entire draft schedule (matches, then weeks). Refuses with
+ * `ScheduleAlreadyMaterializedError` once the season's schedule has been confirmed — clearing the
+ * draft at that point wouldn't touch the real materialized `weeks`/`matches`, but it would destroy
+ * the one record of what was actually confirmed, with nothing to show it's now gone. */
+export async function deleteSeasonScheduleDraft(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+  await assertScheduleNotYetMaterialized(supabaseAdmin, seasonId);
+  await withScheduleDraftLock(supabaseAdmin, seasonId, () => deleteSeasonScheduleDraftRows(supabaseAdmin, seasonId));
+}
+
 export type SaveDraftResult = { ok: true } | { ok: false; issues: ValidationIssue[] };
 
 /** Applies a hand-edit to an existing draft — reassigns which players occupy which slots via plain
@@ -99,70 +247,79 @@ export type SaveDraftResult = { ok: true } | { ok: false; issues: ValidationIssu
  * structure generation already created, so every `(week_number, match_number)` in `weeks` is
  * expected to already have a matching draft row — regenerating (which does add/remove rows) is a
  * separate operation. Refuses (without writing anything) if the proposed draft fails
- * `validateDraftIntegrity()` — never trusting client-side validation alone. */
+ * `validateDraftIntegrity()` against the season's current DB roster (not whatever roster the
+ * client last had) — never trusting client-side validation alone. Also refuses with
+ * `ScheduleAlreadyMaterializedError` once the season's schedule has been confirmed — hand-editing a
+ * superseded draft would give no indication it's now decoupled from the real schedule. */
 export async function saveSeasonScheduleDraft(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
   weeks: DraftScheduleWeek[],
 ): Promise<SaveDraftResult> {
-  const integrity = validateDraftIntegrity(weeks);
+  // Neither depends on the other's result, and the lock isn't claimed until after both resolve, so
+  // they run concurrently rather than paying two sequential round trips on every save.
+  const [, roster] = await Promise.all([assertScheduleNotYetMaterialized(supabaseAdmin, seasonId), getSeasonRoster(seasonId)]);
+
+  const integrity = validateDraftIntegrity(weeks, roster.map((r) => r.player_id));
   if (!integrity.ok) {
     return { ok: false, issues: integrity.issues };
   }
 
-  const { data: weekRows, error: weekErr } = await supabaseAdmin
-    .from('season_schedule_draft_weeks')
-    .select('id, week_number')
-    .eq('season_id', seasonId);
-  if (weekErr) throw weekErr;
-  const weekIdByNumber = new Map(
-    ((weekRows ?? []) as { id: number; week_number: number }[]).map((w) => [w.week_number, w.id]),
-  );
-
-  const { data: matchRows, error: matchErr } = await supabaseAdmin
-    .from('season_schedule_draft_matches')
-    .select('id, draft_week_id, match_number')
-    .in('draft_week_id', Array.from(weekIdByNumber.values()));
-  if (matchErr) throw matchErr;
-  const matchIdByKey = new Map(
-    ((matchRows ?? []) as { id: number; draft_week_id: number; match_number: number }[]).map((m) => [
-      `${m.draft_week_id}:${m.match_number}`,
-      m.id,
-    ]),
-  );
-
-  for (const week of weeks) {
-    const weekId = weekIdByNumber.get(week.week_number);
-    if (weekId == null) {
-      throw new Error(`saveSeasonScheduleDraft: no draft week ${week.week_number} exists for season ${seasonId}`);
-    }
-
-    const { error: weekUpdateErr } = await supabaseAdmin
+  await withScheduleDraftLock(supabaseAdmin, seasonId, async () => {
+    const { data: weekRows, error: weekErr } = await supabaseAdmin
       .from('season_schedule_draft_weeks')
-      .update({ bye_player_id: week.bye_player_id })
-      .eq('id', weekId);
-    if (weekUpdateErr) throw weekUpdateErr;
+      .select('id, week_number')
+      .eq('season_id', seasonId);
+    if (weekErr) throw weekErr;
+    const weekIdByNumber = new Map(
+      ((weekRows ?? []) as { id: number; week_number: number }[]).map((w) => [w.week_number, w.id]),
+    );
 
-    for (const m of week.matches) {
-      const matchId = matchIdByKey.get(`${weekId}:${m.match_number}`);
-      if (matchId == null) {
-        throw new Error(
-          `saveSeasonScheduleDraft: no draft match ${m.match_number} in week ${week.week_number} exists for season ${seasonId}`,
-        );
+    const { data: matchRows, error: matchErr } = await supabaseAdmin
+      .from('season_schedule_draft_matches')
+      .select('id, draft_week_id, match_number')
+      .in('draft_week_id', Array.from(weekIdByNumber.values()));
+    if (matchErr) throw matchErr;
+    const matchIdByKey = new Map(
+      ((matchRows ?? []) as { id: number; draft_week_id: number; match_number: number }[]).map((m) => [
+        `${m.draft_week_id}:${m.match_number}`,
+        m.id,
+      ]),
+    );
+
+    for (const week of weeks) {
+      const weekId = weekIdByNumber.get(week.week_number);
+      if (weekId == null) {
+        throw new Error(`saveSeasonScheduleDraft: no draft week ${week.week_number} exists for season ${seasonId}`);
       }
 
-      const { error: matchUpdateErr } = await supabaseAdmin
-        .from('season_schedule_draft_matches')
-        .update({
-          shirts_player1_id: m.shirts[0],
-          shirts_player2_id: m.shirts[1],
-          skins_player1_id: m.skins[0],
-          skins_player2_id: m.skins[1],
-        })
-        .eq('id', matchId);
-      if (matchUpdateErr) throw matchUpdateErr;
+      const { error: weekUpdateErr } = await supabaseAdmin
+        .from('season_schedule_draft_weeks')
+        .update({ bye_player_id: week.bye_player_id })
+        .eq('id', weekId);
+      if (weekUpdateErr) throw weekUpdateErr;
+
+      for (const m of week.matches) {
+        const matchId = matchIdByKey.get(`${weekId}:${m.match_number}`);
+        if (matchId == null) {
+          throw new Error(
+            `saveSeasonScheduleDraft: no draft match ${m.match_number} in week ${week.week_number} exists for season ${seasonId}`,
+          );
+        }
+
+        const { error: matchUpdateErr } = await supabaseAdmin
+          .from('season_schedule_draft_matches')
+          .update({
+            shirts_player1_id: m.shirts[0],
+            shirts_player2_id: m.shirts[1],
+            skins_player1_id: m.skins[0],
+            skins_player2_id: m.skins[1],
+          })
+          .eq('id', matchId);
+        if (matchUpdateErr) throw matchUpdateErr;
+      }
     }
-  }
+  });
 
   return { ok: true };
 }
@@ -195,89 +352,128 @@ const ZERO_MATCH_STATS = {
  * has any real `weeks` (no double-materialize) or if the draft fails either check — both
  * `validateDraftIntegrity()` and `validateDraftCompleteness()` must pass, not just integrity;
  * confirming is the one place completeness stops being advisory. The draft rows themselves are
- * left untouched either way, so a rejected confirm can just be re-attempted after more edits. */
+ * left untouched either way, so a rejected confirm can just be re-attempted after more edits. Runs
+ * under the same `schedule_draft_locked_at` lock as generate/save/delete — two concurrent confirms
+ * could otherwise both pass the materialized check and both insert real rows, and `weeks` has no
+ * unique constraint on `(season_id, week_number)` to catch that at the DB level either. Not a real
+ * transaction beyond that lock — this is a sequence of several inserts, not one DB-side operation —
+ * so a mid-loop failure triggers a best-effort compensating cleanup of whatever this attempt created
+ * before rethrowing, rather than leaving a half-materialized schedule behind (see the `catch` block
+ * below for why that matters more now that the draft-mutating functions all refuse once any real
+ * week exists). */
 export async function confirmSeasonScheduleDraft(supabaseAdmin: SupabaseClient, seasonId: number): Promise<ConfirmResult> {
-  const { data: existingRealWeeks, error: existingErr } = await supabaseAdmin
-    .from('weeks')
-    .select('id')
-    .eq('season_id', seasonId)
-    .limit(1);
-  if (existingErr) throw existingErr;
-  if ((existingRealWeeks ?? []).length > 0) {
-    return { status: 'already-materialized' };
-  }
-
-  const [draftWithPlayers, roster] = await Promise.all([getSeasonScheduleDraft(seasonId), getSeasonRoster(seasonId)]);
-
-  // Without this, an empty draft against a 0-1 player roster would pass both checks vacuously
-  // (nothing to violate, no pairs to require) and "confirm" a schedule with 0 weeks/matches.
-  if (draftWithPlayers.length === 0) {
-    return { status: 'no-draft' };
-  }
-
-  const draftWeeks = toDraftScheduleWeeks(draftWithPlayers);
-
-  const integrity = validateDraftIntegrity(draftWeeks);
-  const completeness = validateDraftCompleteness(
-    draftWeeks,
-    roster.map((r) => r.player_id),
-  );
-
-  if (!integrity.ok || !completeness.complete) {
-    return {
-      status: 'invalid',
-      integrityIssues: integrity.issues,
-      missingTeammatePairs: completeness.missingTeammatePairs,
-      missingOpponentPairs: completeness.missingOpponentPairs,
-    };
-  }
-
-  for (const week of draftWeeks) {
-    const { data: weekRow, error: weekErr } = await supabaseAdmin
-      .from('weeks')
-      .insert({ season_id: seasonId, week_number: week.week_number, bye_player_id: week.bye_player_id })
-      .select('id')
-      .single();
-    if (weekErr) throw weekErr;
-    const weekId = (weekRow as { id: number }).id;
-
-    for (const m of week.matches) {
-      const { data: matchRow, error: matchErr } = await supabaseAdmin
-        .from('matches')
-        .insert({
-          week_id: weekId,
-          match_number: m.match_number,
-          is_playoff_game: false,
-          final_score: null,
-          picked_map: null,
-          shirts_ban: null,
-          shirts_ban2: null,
-          skins_ban1: null,
-          skins_ban2: null,
-          shirts_pick: null,
-          skins_starting_side: null,
-        })
-        .select('id')
-        .single();
-      if (matchErr) throw matchErr;
-      const matchId = (matchRow as { id: number }).id;
-
-      const statRows = [
-        { match_id: matchId, player_id: m.shirts[0], faction: 'SHIRTS', ...ZERO_MATCH_STATS },
-        { match_id: matchId, player_id: m.shirts[1], faction: 'SHIRTS', ...ZERO_MATCH_STATS },
-        { match_id: matchId, player_id: m.skins[0], faction: 'SKINS', ...ZERO_MATCH_STATS },
-        { match_id: matchId, player_id: m.skins[1], faction: 'SKINS', ...ZERO_MATCH_STATS },
-      ];
-      const { error: statsErr } = await supabaseAdmin.from('player_match_stats').insert(statRows);
-      if (statsErr) throw statsErr;
+  return withScheduleDraftLock(supabaseAdmin, seasonId, async () => {
+    // The materialized check must run *inside* the lock, not before it — two concurrent confirm
+    // requests could otherwise both see "not materialized yet" and both proceed to insert real
+    // weeks/matches (weeks has no unique constraint on (season_id, week_number) to catch that at the
+    // DB level either). Sharing the same lock generateSeasonScheduleDraft()/saveSeasonScheduleDraft()/
+    // deleteSeasonScheduleDraft() use also means a confirm can't land mid-regenerate and materialize a
+    // draft that's being deleted out from under it.
+    if (await hasMaterializedSchedule(supabaseAdmin, seasonId)) {
+      return { status: 'already-materialized' };
     }
-  }
 
-  // Every insert throws on error, so getting here means every week/match in the plan was created —
-  // no need to track counts through the loop.
-  return {
-    status: 'confirmed',
-    weeksCreated: draftWeeks.length,
-    matchesCreated: draftWeeks.reduce((n, w) => n + w.matches.length, 0),
-  };
+    const [draftWithPlayers, roster] = await Promise.all([getSeasonScheduleDraft(seasonId), getSeasonRoster(seasonId)]);
+
+    // Without this, an empty draft against a 0-1 player roster would pass both checks vacuously
+    // (nothing to violate, no pairs to require) and "confirm" a schedule with 0 weeks/matches.
+    if (draftWithPlayers.length === 0) {
+      return { status: 'no-draft' };
+    }
+
+    const draftWeeks = toDraftScheduleWeeks(draftWithPlayers);
+    const rosterPlayerIds = roster.map((r) => r.player_id);
+
+    const integrity = validateDraftIntegrity(draftWeeks, rosterPlayerIds);
+    const completeness = validateDraftCompleteness(draftWeeks, rosterPlayerIds);
+
+    if (!integrity.ok || !completeness.complete) {
+      return {
+        status: 'invalid',
+        integrityIssues: integrity.issues,
+        missingTeammatePairs: completeness.missingTeammatePairs,
+        missingOpponentPairs: completeness.missingOpponentPairs,
+      };
+    }
+
+    const createdWeekIds: number[] = [];
+    const createdMatchIds: number[] = [];
+    try {
+      for (const week of draftWeeks) {
+        const { data: weekRow, error: weekErr } = await supabaseAdmin
+          .from('weeks')
+          .insert({ season_id: seasonId, week_number: week.week_number, bye_player_id: week.bye_player_id })
+          .select('id')
+          .single();
+        if (weekErr) throw weekErr;
+        const weekId = (weekRow as { id: number }).id;
+        createdWeekIds.push(weekId);
+
+        for (const m of week.matches) {
+          const { data: matchRow, error: matchErr } = await supabaseAdmin
+            .from('matches')
+            .insert({
+              week_id: weekId,
+              match_number: m.match_number,
+              is_playoff_game: false,
+              final_score: null,
+              picked_map: null,
+              shirts_ban: null,
+              shirts_ban2: null,
+              skins_ban1: null,
+              skins_ban2: null,
+              shirts_pick: null,
+              skins_starting_side: null,
+            })
+            .select('id')
+            .single();
+          if (matchErr) throw matchErr;
+          const matchId = (matchRow as { id: number }).id;
+          createdMatchIds.push(matchId);
+
+          const statRows = [
+            { match_id: matchId, player_id: m.shirts[0], faction: 'SHIRTS', ...ZERO_MATCH_STATS },
+            { match_id: matchId, player_id: m.shirts[1], faction: 'SHIRTS', ...ZERO_MATCH_STATS },
+            { match_id: matchId, player_id: m.skins[0], faction: 'SKINS', ...ZERO_MATCH_STATS },
+            { match_id: matchId, player_id: m.skins[1], faction: 'SKINS', ...ZERO_MATCH_STATS },
+          ];
+          const { error: statsErr } = await supabaseAdmin.from('player_match_stats').insert(statRows);
+          if (statsErr) throw statsErr;
+        }
+      }
+    } catch (err) {
+      // Not a real transaction — a mid-loop failure would otherwise leave a half-materialized real
+      // schedule behind, and since generateSeasonScheduleDraft()/saveSeasonScheduleDraft()/
+      // deleteSeasonScheduleDraft() now all refuse once any real week exists (see
+      // assertScheduleNotYetMaterialized()), that half-materialized state would also lock an admin out
+      // of every normal remediation route. Best-effort: delete whatever this attempt created (stats
+      // before matches, matches before weeks, for the FKs) so the season ends up either fully
+      // confirmed or fully back to draft-only, never stuck in between.
+      await cleanupOrRecordOpsError(
+        supabaseAdmin,
+        seasonId,
+        'schedule_confirm_cleanup',
+        `a partially materialized schedule (weeks ${createdWeekIds.join(',')}, matches ${createdMatchIds.join(',')}) after a confirm error`,
+        async () => {
+          if (createdMatchIds.length > 0) {
+            const { error: statsCleanupErr } = await supabaseAdmin.from('player_match_stats').delete().in('match_id', createdMatchIds);
+            if (statsCleanupErr) throw statsCleanupErr;
+            const { error: matchesCleanupErr } = await supabaseAdmin.from('matches').delete().in('id', createdMatchIds);
+            if (matchesCleanupErr) throw matchesCleanupErr;
+          }
+          if (createdWeekIds.length > 0) {
+            const { error: weeksCleanupErr } = await supabaseAdmin.from('weeks').delete().in('id', createdWeekIds);
+            if (weeksCleanupErr) throw weeksCleanupErr;
+          }
+        },
+      );
+      throw err;
+    }
+
+    return {
+      status: 'confirmed',
+      weeksCreated: createdWeekIds.length,
+      matchesCreated: createdMatchIds.length,
+    };
+  });
 }

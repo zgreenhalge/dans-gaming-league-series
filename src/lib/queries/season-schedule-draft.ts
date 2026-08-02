@@ -72,6 +72,9 @@ export async function getSeasonScheduleDraft(seasonId: number): Promise<DraftWee
     matchesByWeek.set(m.draft_week_id, list);
   }
 
+  // Throws rather than skips (unlike getSeasonRoster()'s equivalent orphan case) because a match
+  // slot has no meaningful rendering with a missing player — a roster row can just be omitted, but
+  // a draft match can't drop one of its four players and still be a match.
   const player = (id: number): Player => {
     const p = playersById.get(id);
     if (!p) throw new Error(`getSeasonScheduleDraft: player_id ${id} not found`);

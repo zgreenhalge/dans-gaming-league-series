@@ -2,7 +2,8 @@
  * The two-tier check every draft schedule change goes through, mirroring gauntlet's editor
  * (`saveManualDraft()` in `gauntlet-engine.ts`): `validateDraftIntegrity()` is hard and blocks
  * saving a draft — structural soundness a draft must never violate, whether generated or
- * hand-edited. `validateDraftCompleteness()` is soft and status-only — it never blocks a save
+ * hand-edited, including every referenced player still being on the season's current roster.
+ * `validateDraftCompleteness()` is soft and status-only — it never blocks a save
  * (building a season's matchups out is expected to pass through incomplete states), but it's the
  * gate `confirm` (materializing a draft into real `weeks`/`matches`) requires *in addition to*
  * integrity. Both are pure — they operate on plain player_ids, not the DB or the
@@ -42,11 +43,16 @@ export interface IntegrityResult {
 /** Structural soundness only — not "does this look like a good schedule" (that's
  * `validateDraftCompleteness()`'s job). Checks, per week: every match's 4 players are distinct, no
  * player appears in more than 2 matches (2 = a legitimate doubleheader, 3+ isn't), the bye player
- * (if any) doesn't also appear in a match, `match_number`s are unique, and `week_number`s are
- * unique across the whole draft. */
-export function validateDraftIntegrity(weeks: DraftScheduleWeek[]): IntegrityResult {
+ * (if any) doesn't also appear in a match, `match_number`s are unique, `week_number`s are unique
+ * across the whole draft, and every referenced player (in a match slot or as the bye) is on
+ * `rosterPlayerIds` — a season's roster can change after a draft is generated or hand-edited (a
+ * player removed from `season_players`), and a draft still referencing someone no longer on the
+ * roster can't be played as scheduled, so it's treated as a structural violation rather than left
+ * for the UI to render as a blank/default player select. */
+export function validateDraftIntegrity(weeks: DraftScheduleWeek[], rosterPlayerIds: number[]): IntegrityResult {
   const issues: ValidationIssue[] = [];
   const seenWeekNumbers = new Set<number>();
+  const rosterSet = new Set(rosterPlayerIds);
 
   for (const week of weeks) {
     if (seenWeekNumbers.has(week.week_number)) {
@@ -75,6 +81,15 @@ export function validateDraftIntegrity(weeks: DraftScheduleWeek[]): IntegrityRes
           message: `Week ${week.week_number} match ${m.match_number}: all 4 players must be distinct`,
         });
       }
+      for (const id of new Set(slots)) {
+        if (!rosterSet.has(id)) {
+          issues.push({
+            week_number: week.week_number,
+            match_number: m.match_number,
+            message: `Week ${week.week_number} match ${m.match_number}: player ${id} is not on the current roster`,
+          });
+        }
+      }
       for (const id of slots) appearances.set(id, (appearances.get(id) ?? 0) + 1);
     }
 
@@ -87,11 +102,19 @@ export function validateDraftIntegrity(weeks: DraftScheduleWeek[]): IntegrityRes
       }
     }
 
-    if (week.bye_player_id != null && appearances.has(week.bye_player_id)) {
-      issues.push({
-        week_number: week.week_number,
-        message: `Week ${week.week_number}: player ${week.bye_player_id} is marked as the bye but also appears in a match`,
-      });
+    if (week.bye_player_id != null) {
+      if (appearances.has(week.bye_player_id)) {
+        issues.push({
+          week_number: week.week_number,
+          message: `Week ${week.week_number}: player ${week.bye_player_id} is marked as the bye but also appears in a match`,
+        });
+      }
+      if (!rosterSet.has(week.bye_player_id)) {
+        issues.push({
+          week_number: week.week_number,
+          message: `Week ${week.week_number}: bye player ${week.bye_player_id} is not on the current roster`,
+        });
+      }
     }
   }
 

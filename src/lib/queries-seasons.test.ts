@@ -56,7 +56,7 @@ async function main() {
     matchesSnapshot('getSeasonRoster-3', await getSeasonRoster(3));
   });
 
-  await test('getSeasonRoster(1) — season with no roster rows returns empty array', async () => {
+  await test('getSeasonRoster(1) — orphan row (player_id missing from playersById) is skipped', async () => {
     assert.deepEqual(await getSeasonRoster(1), []);
   });
 
