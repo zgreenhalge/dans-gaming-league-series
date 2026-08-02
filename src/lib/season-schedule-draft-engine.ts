@@ -16,6 +16,44 @@ import {
   type ValidationIssue,
 } from './season-schedule-validation';
 
+/** Thrown when a caller tries to generate/save/delete a season's draft schedule while another such
+ * operation is already in flight for the same season — see claimScheduleDraftLock(). */
+export class ScheduleDraftLockedError extends Error {
+  constructor(seasonId: number) {
+    super(`Another schedule draft operation is already in progress for season ${seasonId} — try again shortly`);
+    this.name = 'ScheduleDraftLockedError';
+  }
+}
+
+// generateSeasonScheduleDraft()/saveSeasonScheduleDraft()/deleteSeasonScheduleDraft() are each a
+// sequence of several Supabase calls, not one DB transaction, so two overlapping admin requests for
+// the same season could otherwise interleave their delete/insert or update sequences. A Postgres
+// advisory lock would only hold within one transaction/connection, which none of these span, so
+// instead `seasons.schedule_draft_locked_at` is claimed via the same atomic-conditional-UPDATE
+// pattern as the roster-edit cooldown (PATCH /api/players/me/name): whichever request's UPDATE
+// commits first is the only one whose WHERE the other can still match. A lock older than
+// SCHEDULE_DRAFT_LOCK_STALE_MS is treated as free, so a request that crashes mid-operation can't
+// wedge the season's draft tooling permanently.
+const SCHEDULE_DRAFT_LOCK_STALE_MS = 60_000;
+
+async function claimScheduleDraftLock(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+  const cutoff = new Date(Date.now() - SCHEDULE_DRAFT_LOCK_STALE_MS).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('seasons')
+    .update({ schedule_draft_locked_at: new Date().toISOString() })
+    .eq('id', seasonId)
+    .or(`schedule_draft_locked_at.is.null,schedule_draft_locked_at.lte.${cutoff}`)
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new ScheduleDraftLockedError(seasonId);
+}
+
+async function releaseScheduleDraftLock(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+  const { error } = await supabaseAdmin.from('seasons').update({ schedule_draft_locked_at: null }).eq('id', seasonId);
+  if (error) throw error;
+}
+
 /** Replaces a season's entire draft schedule with a freshly generated one: existing draft matches
  * and weeks are deleted first (matches before weeks, for the FK), then the new plan is inserted
  * week by week. Always a full regenerate — a season with locked-in results needs the more careful
@@ -39,37 +77,43 @@ export async function generateSeasonScheduleDraft(
     }
   }
 
-  await deleteSeasonScheduleDraft(supabaseAdmin, seasonId);
+  await claimScheduleDraftLock(supabaseAdmin, seasonId);
+  try {
+    await deleteSeasonScheduleDraftRows(supabaseAdmin, seasonId);
 
-  for (const week of plan) {
-    const { data: weekRow, error: weekErr } = await supabaseAdmin
-      .from('season_schedule_draft_weeks')
-      .insert({
-        season_id: seasonId,
-        week_number: week.week,
-        bye_player_id: week.byePlayerIds[0] ?? null,
-      })
-      .select('id')
-      .single();
-    if (weekErr) throw weekErr;
-    const weekId = (weekRow as { id: number }).id;
+    for (const week of plan) {
+      const { data: weekRow, error: weekErr } = await supabaseAdmin
+        .from('season_schedule_draft_weeks')
+        .insert({
+          season_id: seasonId,
+          week_number: week.week,
+          bye_player_id: week.byePlayerIds[0] ?? null,
+        })
+        .select('id')
+        .single();
+      if (weekErr) throw weekErr;
+      const weekId = (weekRow as { id: number }).id;
 
-    const matchRows = week.matches.map((m, i) => ({
-      draft_week_id: weekId,
-      match_number: i + 1,
-      shirts_player1_id: m.shirts[0],
-      shirts_player2_id: m.shirts[1],
-      skins_player1_id: m.skins[0],
-      skins_player2_id: m.skins[1],
-    }));
-    const { error: matchErr } = await supabaseAdmin.from('season_schedule_draft_matches').insert(matchRows);
-    if (matchErr) throw matchErr;
+      const matchRows = week.matches.map((m, i) => ({
+        draft_week_id: weekId,
+        match_number: i + 1,
+        shirts_player1_id: m.shirts[0],
+        shirts_player2_id: m.shirts[1],
+        skins_player1_id: m.skins[0],
+        skins_player2_id: m.skins[1],
+      }));
+      const { error: matchErr } = await supabaseAdmin.from('season_schedule_draft_matches').insert(matchRows);
+      if (matchErr) throw matchErr;
+    }
+  } finally {
+    await releaseScheduleDraftLock(supabaseAdmin, seasonId);
   }
 }
 
-/** Deletes a season's entire draft schedule (matches, then weeks), with no confirm/materialize
- * side effects — for clearing a draft out from under a season that no longer needs one. */
-export async function deleteSeasonScheduleDraft(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+/** The actual delete, unguarded by the lock — shared by deleteSeasonScheduleDraft() (which claims
+ * the lock itself) and generateSeasonScheduleDraft() (which already holds it, so calling the locked
+ * export from inside would immediately fail against its own just-claimed lock). */
+async function deleteSeasonScheduleDraftRows(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
   const { data: existingWeeks, error: existingErr } = await supabaseAdmin
     .from('season_schedule_draft_weeks')
     .select('id')
@@ -89,6 +133,17 @@ export async function deleteSeasonScheduleDraft(supabaseAdmin: SupabaseClient, s
     .delete()
     .eq('season_id', seasonId);
   if (delWeeksErr) throw delWeeksErr;
+}
+
+/** Deletes a season's entire draft schedule (matches, then weeks), with no confirm/materialize
+ * side effects — for clearing a draft out from under a season that no longer needs one. */
+export async function deleteSeasonScheduleDraft(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+  await claimScheduleDraftLock(supabaseAdmin, seasonId);
+  try {
+    await deleteSeasonScheduleDraftRows(supabaseAdmin, seasonId);
+  } finally {
+    await releaseScheduleDraftLock(supabaseAdmin, seasonId);
+  }
 }
 
 export type SaveDraftResult = { ok: true } | { ok: false; issues: ValidationIssue[] };
@@ -112,58 +167,63 @@ export async function saveSeasonScheduleDraft(
     return { ok: false, issues: integrity.issues };
   }
 
-  const { data: weekRows, error: weekErr } = await supabaseAdmin
-    .from('season_schedule_draft_weeks')
-    .select('id, week_number')
-    .eq('season_id', seasonId);
-  if (weekErr) throw weekErr;
-  const weekIdByNumber = new Map(
-    ((weekRows ?? []) as { id: number; week_number: number }[]).map((w) => [w.week_number, w.id]),
-  );
-
-  const { data: matchRows, error: matchErr } = await supabaseAdmin
-    .from('season_schedule_draft_matches')
-    .select('id, draft_week_id, match_number')
-    .in('draft_week_id', Array.from(weekIdByNumber.values()));
-  if (matchErr) throw matchErr;
-  const matchIdByKey = new Map(
-    ((matchRows ?? []) as { id: number; draft_week_id: number; match_number: number }[]).map((m) => [
-      `${m.draft_week_id}:${m.match_number}`,
-      m.id,
-    ]),
-  );
-
-  for (const week of weeks) {
-    const weekId = weekIdByNumber.get(week.week_number);
-    if (weekId == null) {
-      throw new Error(`saveSeasonScheduleDraft: no draft week ${week.week_number} exists for season ${seasonId}`);
-    }
-
-    const { error: weekUpdateErr } = await supabaseAdmin
+  await claimScheduleDraftLock(supabaseAdmin, seasonId);
+  try {
+    const { data: weekRows, error: weekErr } = await supabaseAdmin
       .from('season_schedule_draft_weeks')
-      .update({ bye_player_id: week.bye_player_id })
-      .eq('id', weekId);
-    if (weekUpdateErr) throw weekUpdateErr;
+      .select('id, week_number')
+      .eq('season_id', seasonId);
+    if (weekErr) throw weekErr;
+    const weekIdByNumber = new Map(
+      ((weekRows ?? []) as { id: number; week_number: number }[]).map((w) => [w.week_number, w.id]),
+    );
 
-    for (const m of week.matches) {
-      const matchId = matchIdByKey.get(`${weekId}:${m.match_number}`);
-      if (matchId == null) {
-        throw new Error(
-          `saveSeasonScheduleDraft: no draft match ${m.match_number} in week ${week.week_number} exists for season ${seasonId}`,
-        );
+    const { data: matchRows, error: matchErr } = await supabaseAdmin
+      .from('season_schedule_draft_matches')
+      .select('id, draft_week_id, match_number')
+      .in('draft_week_id', Array.from(weekIdByNumber.values()));
+    if (matchErr) throw matchErr;
+    const matchIdByKey = new Map(
+      ((matchRows ?? []) as { id: number; draft_week_id: number; match_number: number }[]).map((m) => [
+        `${m.draft_week_id}:${m.match_number}`,
+        m.id,
+      ]),
+    );
+
+    for (const week of weeks) {
+      const weekId = weekIdByNumber.get(week.week_number);
+      if (weekId == null) {
+        throw new Error(`saveSeasonScheduleDraft: no draft week ${week.week_number} exists for season ${seasonId}`);
       }
 
-      const { error: matchUpdateErr } = await supabaseAdmin
-        .from('season_schedule_draft_matches')
-        .update({
-          shirts_player1_id: m.shirts[0],
-          shirts_player2_id: m.shirts[1],
-          skins_player1_id: m.skins[0],
-          skins_player2_id: m.skins[1],
-        })
-        .eq('id', matchId);
-      if (matchUpdateErr) throw matchUpdateErr;
+      const { error: weekUpdateErr } = await supabaseAdmin
+        .from('season_schedule_draft_weeks')
+        .update({ bye_player_id: week.bye_player_id })
+        .eq('id', weekId);
+      if (weekUpdateErr) throw weekUpdateErr;
+
+      for (const m of week.matches) {
+        const matchId = matchIdByKey.get(`${weekId}:${m.match_number}`);
+        if (matchId == null) {
+          throw new Error(
+            `saveSeasonScheduleDraft: no draft match ${m.match_number} in week ${week.week_number} exists for season ${seasonId}`,
+          );
+        }
+
+        const { error: matchUpdateErr } = await supabaseAdmin
+          .from('season_schedule_draft_matches')
+          .update({
+            shirts_player1_id: m.shirts[0],
+            shirts_player2_id: m.shirts[1],
+            skins_player1_id: m.skins[0],
+            skins_player2_id: m.skins[1],
+          })
+          .eq('id', matchId);
+        if (matchUpdateErr) throw matchUpdateErr;
+      }
     }
+  } finally {
+    await releaseScheduleDraftLock(supabaseAdmin, seasonId);
   }
 
   return { ok: true };

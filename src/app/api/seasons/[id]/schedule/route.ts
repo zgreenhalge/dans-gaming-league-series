@@ -2,11 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason, getSeasonRoster, getSeasonScheduleDraft } from '@/lib/queries';
-import { generateSeasonScheduleDraft, deleteSeasonScheduleDraft, saveSeasonScheduleDraft } from '@/lib/season-schedule-draft-engine';
+import {
+  generateSeasonScheduleDraft,
+  deleteSeasonScheduleDraft,
+  saveSeasonScheduleDraft,
+  ScheduleDraftLockedError,
+} from '@/lib/season-schedule-draft-engine';
 import { MIN_SEED_COUNT, MAX_SEED_COUNT, type DoubleheaderPolicy } from '@/lib/season-schedule';
 import type { DraftScheduleWeek } from '@/lib/season-schedule-validation';
 
 const supabaseAdmin = getAdminClient();
+
+/** Maps ScheduleDraftLockedError (another generate/save/delete already in flight for this season) to
+ * 409, and everything else to 500. */
+function mapScheduleDraftError(err: unknown): NextResponse {
+  if (err instanceof ScheduleDraftLockedError) {
+    return NextResponse.json({ error: err.message }, { status: 409 });
+  }
+  return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+}
 
 /**
  * Generates (or fully regenerates) a regular season's matchup draft from its current roster
@@ -61,7 +75,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     await generateSeasonScheduleDraft(supabaseAdmin, seasonId, playerIds, { doubleheaderPolicy });
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    return mapScheduleDraftError(err);
   }
 
   const draft = await getSeasonScheduleDraft(seasonId);
@@ -132,7 +146,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     result = await saveSeasonScheduleDraft(supabaseAdmin, seasonId, weeks);
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    return mapScheduleDraftError(err);
   }
 
   if (!result.ok) {
@@ -163,6 +177,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Regular season not found' }, { status: 404 });
   }
 
-  await deleteSeasonScheduleDraft(supabaseAdmin, seasonId);
+  try {
+    await deleteSeasonScheduleDraft(supabaseAdmin, seasonId);
+  } catch (err) {
+    return mapScheduleDraftError(err);
+  }
   return NextResponse.json({ ok: true });
 }
