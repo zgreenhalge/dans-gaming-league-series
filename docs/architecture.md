@@ -338,7 +338,7 @@ learning and its server teardown, for instance) — without `operation` in the k
 success would clear an unrelated operation's still-live failure. `entity_id` is `0` for the one
 operation with no single entity (the site-wide EHOG recompute), using `entity_type = 'system'`.
 
-Wired into nine operations today:
+Wired into sixteen operations today:
 
 | Operation | Entity | Recorded from |
 |---|---|---|
@@ -346,20 +346,29 @@ Wired into nine operations today:
 | `season_complete` | `season` (regular) | `checkSeasonCompletion()`, if the `COMPLETED` status update itself fails |
 | `gauntlet_seed` | `season` (regular) | `checkSeasonCompletion()` (including a `trySeedGauntlet()` roster-`drift` result, which needs the same admin attention as a thrown error even though it isn't one) |
 | `gauntlet_archive` | `season` (gauntlet) | `checkGauntletCompletion()` |
+| `gauntlet_manual_save` | `season` (regular) | `saveManualDraft()` (`gauntlet-engine.ts`)'s materialize-step failure, and `POST /api/seasons/[id]/gauntlet/pods`'s own catch for any earlier failure in the same call |
 | `steam_id_learn` | `match` | `applyEliminationSteamIds()`'s hook in the score route |
-| `server_teardown` | `match` | `teardownMatchServer()`'s hooks in the score route and `/api/ingest/matchzy-log` |
+| `server_provision` | `match` | `provisionErrorHandler()` (`dathost-lifecycle.ts`)'s hook for a deferred `provisionMatchServer()` call, bound in `POST /api/matches/[id]/server/provision` and the veto route's auto-provision |
+| `server_teardown` | `match` | `teardownMatchServer()`'s hooks in the score route, `/api/ingest/matchzy-log`, and `POST /api/matches/[id]/server/teardown` |
 | `sabremetrics_persist` | `match` | `persistSabremetrics()`/`clearSabremetrics()`'s hook in the score route |
+| `weapon_stats_persist` | `match` | `persistWeaponStats()`/`clearWeaponStats()`'s hook in the score route |
 | `name_history_log` | `player` | `recordNameChange()` (`src/lib/player-name-history.ts`), from both `PATCH /api/players/[id]` and `PATCH /api/players/me/name` — also recorded directly if the admin route can't even read the player's prior name to log a "from" |
 | `ehog_recompute` | `system` (id `0`) | `triggerRatingRecompute()` |
+| `schedule_generate` | `season` (regular) | `generateSeasonScheduleDraft()`'s (`season-schedule-draft-engine.ts`) mid-loop failure, before the compensating cleanup runs |
+| `schedule_generate_cleanup` | `season` (regular) | `generateSeasonScheduleDraft()`'s compensating cleanup, if that cleanup itself fails |
+| `schedule_confirm` | `season` (regular) | `confirmSeasonScheduleDraft()`'s (`season-schedule-draft-engine.ts`) mid-loop failure, before the compensating cleanup runs |
+| `schedule_confirm_cleanup` | `season` (regular) | `confirmSeasonScheduleDraft()`'s compensating cleanup, if that cleanup itself fails |
 
-Each is cleared automatically the next time that same (entity, operation) succeeds —
+Most are cleared automatically the next time that same (entity, operation) succeeds —
 `tryBuildGauntletShape()` and `trySeedGauntlet()` clear their own on success, `checkGauntletCompletion()`
 clears `gauntlet_archive` once both halves of the archive (the gauntlet season and its paired regular
 season) are confirmed archived — tracking each half's outstanding status independently so a run that
 archived one but failed on the other retries only the missing half next time — `deleteGauntletSeason()`
 clears `gauntlet_build`/`gauntlet_seed` on the regular season and `gauntlet_archive` on the gauntlet
-season itself as part of a reset, and the remaining hooks clear theirs inline once their surrounding
-try block completes without error.
+season itself as part of a reset, and most of the remaining hooks clear theirs inline once their
+surrounding try block completes without error. The four `schedule_*` operations are the exception —
+`generateSeasonScheduleDraft()`/`confirmSeasonScheduleDraft()` never clear them on a later success, so
+a recorded row there only ever goes away via the admin console's Dismiss button.
 
 `getOpsErrors()` in `src/lib/queries/ops.ts` reads every live row, resolving `entity_id` to a display name
 (season/match name, or "EHOG Recompute" for `system`). The admin console's Activity → Errored tab

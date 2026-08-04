@@ -6,6 +6,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { requireMatchAccess } from '@/lib/match-access';
 import { teardownMatchServer } from '@/lib/dathost-lifecycle';
 import { parseMatchId } from '@/lib/util';
+import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 
 export async function POST(
   _req: NextRequest,
@@ -22,7 +23,15 @@ export async function POST(
 
   try {
     await teardownMatchServer(getAdminClient(), matchId);
+    await clearOpsError(getAdminClient(), 'match', matchId, 'server_teardown');
   } catch (err) {
+    await recordOpsError(
+      getAdminClient(),
+      'match',
+      matchId,
+      'server_teardown',
+      `Server teardown failed: ${err instanceof Error ? err.message : 'Teardown failed'}`,
+    );
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Teardown failed' },
       { status: 502 },

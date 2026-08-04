@@ -340,14 +340,20 @@ export async function provisionMatchServer(
 
 /** `afterBestEffort`'s `onError` for a deferred `provisionMatchServer` call: a `ServerBusyError` is
  *  the expected race-loser (another match claimed the server between the check and now) and just
- *  warns; anything else is a real provisioning failure. `context` distinguishes the caller in the log
- *  line (e.g. `'provision'` vs `'auto-provision'`). */
-export function provisionErrorHandler(context: string, matchId: number): (err: unknown) => void {
-  return (err) => {
+ *  warns; anything else is a real provisioning failure, recorded under `server_provision` so it's
+ *  visible to an admin rather than only reaching application logs. `context` distinguishes the caller
+ *  in the log line (e.g. `'provision'` vs `'auto-provision'`). */
+export function provisionErrorHandler(
+  supabaseAdmin: SupabaseClient,
+  context: string,
+  matchId: number,
+): (err: unknown) => Promise<void> {
+  return async (err) => {
     if (err instanceof ServerBusyError) {
       console.warn(`${context}(${matchId}) skipped: ${err.message}`);
     } else {
       console.error(`provisionMatchServer(${matchId}) failed:`, err);
+      await recordOpsError(supabaseAdmin, 'match', matchId, 'server_provision', `Server provision failed: ${(err as Error).message}`);
     }
   };
 }

@@ -3,6 +3,7 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { saveManualDraft } from '@/lib/gauntlet-engine';
 import type { DraftPod, DraftSlot } from '@/lib/gauntlet-draft';
+import { recordOpsError } from '@/lib/ops-errors';
 
 const supabaseAdmin = getAdminClient();
 
@@ -87,6 +88,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     result = await saveManualDraft(supabaseAdmin, regularSeasonId, pods as DraftPod[], { startDate: start_date });
   } catch (err) {
+    // saveManualDraft() already records `gauntlet_manual_save` itself for a materialize-step
+    // failure partway through the save — this catches everything upstream of that (e.g. `getSeason()`
+    // or the season leaderboard/bracket-shape reads throwing) so no failure path reaches the browser
+    // as a bare 500 with nothing durable behind it.
+    await recordOpsError(
+      supabaseAdmin,
+      'season',
+      regularSeasonId,
+      'gauntlet_manual_save',
+      `Manual bracket save failed: ${(err as Error).message}. Reload and check the bracket before editing further.`,
+    );
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 
