@@ -17,11 +17,18 @@ export const OPERATION_LABELS: Record<string, string> = {
   gauntlet_build: 'Gauntlet Build',
   gauntlet_seed: 'Gauntlet Seed',
   gauntlet_archive: 'Gauntlet Archive',
+  gauntlet_manual_save: 'Gauntlet Manual Save',
   steam_id_learn: 'Steam ID Learning',
+  server_provision: 'Server Provision',
   server_teardown: 'Server Teardown',
   sabremetrics_persist: 'Sabremetrics',
+  weapon_stats_persist: 'Weapon Stats',
   name_history_log: 'Name History Log',
   ehog_recompute: 'EHOG Recompute',
+  schedule_generate: 'Schedule Generate',
+  schedule_generate_cleanup: 'Schedule Generate Cleanup',
+  schedule_confirm: 'Schedule Confirm',
+  schedule_confirm_cleanup: 'Schedule Confirm Cleanup',
 };
 
 /** Dismiss one live `ops_errors` row. Shared by every surface that renders one (this list, and the
@@ -86,9 +93,9 @@ function OpsErrorRow({ item }: { item: OpsErrorItem }) {
   );
 }
 
-/** Surfaces live `ops_errors` rows — best-effort operations (gauntlet build/seed/archive, steam-id
- * learning, server teardown, sabremetrics, name history logging, EHOG recompute) that failed or
- * need admin attention.
+/** Surfaces live `ops_errors` rows — best-effort operations (gauntlet build/seed/archive/manual
+ * save, steam-id learning, server provisioning/teardown, sabremetrics/weapon stats, name history
+ * logging, EHOG recompute, schedule generate/confirm) that failed or need admin attention.
  * Each row can be dismissed once the admin has seen it, or resolves itself the next time that same
  * operation succeeds. Used both filtered to one entity type (the gauntlet admin page) and
  * unfiltered (the site-wide `/admin/ops-errors` console). */

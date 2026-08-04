@@ -13,6 +13,7 @@ import {
 } from '@/lib/dathost-lifecycle';
 import { parseMatchId } from '@/lib/util';
 import { afterBestEffort } from '@/lib/after';
+import { clearOpsError } from '@/lib/ops-errors';
 
 export async function POST(
   req: NextRequest,
@@ -47,8 +48,11 @@ export async function POST(
   // Boot is slow (~15–20s) — run it after the response and let the client subscribe for updates.
   afterBestEffort(
     `provisionMatchServer(${matchId})`,
-    () => provisionMatchServer(getAdminClient(), matchId, ctx.configUrl, ctx.configAuth),
-    provisionErrorHandler('provision', matchId),
+    async () => {
+      await provisionMatchServer(getAdminClient(), matchId, ctx.configUrl, ctx.configAuth);
+      await clearOpsError(getAdminClient(), 'match', matchId, 'server_provision');
+    },
+    provisionErrorHandler(getAdminClient(), 'provision', matchId),
   );
 
   return NextResponse.json({ ok: true, status: 'provisioning' }, { status: 202 });
