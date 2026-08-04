@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import type { PlayerMatchWeaponStat, PlayerMatchEconomyStat, WeaponStatFields } from '../types';
 import { getPlayersById } from './player';
-import { resolveMatchSeasons } from './_shared';
+import { resolveMatchSeasons, fetchAllPages } from './_shared';
 
 export interface WeaponClassMatchRow extends WeaponStatFields {
   player_id: number;
@@ -35,21 +35,22 @@ async function getAllBreakdownStats(
   bucketColumn: 'weapon_category' | 'economy_type',
   seasonId?: number,
 ): Promise<BreakdownRow[]> {
-  const [{ data: rows, error }, { data: pmsRows, error: pmsErr }, matchSeason, playersById] = await Promise.all([
-    supabase.from(table).select('*'),
-    supabase.from('player_match_stats').select('id, player_id, match_id'),
+  const [rows, pmsRows, matchSeason, playersById] = await Promise.all([
+    fetchAllPages<PlayerMatchWeaponStat | PlayerMatchEconomyStat>((from, to) =>
+      supabase.from(table).select('*').range(from, to),
+    ),
+    fetchAllPages<{ id: number; player_id: number; match_id: number }>((from, to) =>
+      supabase.from('player_match_stats').select('id, player_id, match_id').range(from, to),
+    ),
     resolveMatchSeasons(),
     getPlayersById(),
   ]);
-  if (error) throw error;
-  if (pmsErr) throw pmsErr;
 
   const pmsLookup = new Map<number, { player_id: number; match_id: number }>();
-  for (const r of (pmsRows ?? []) as { id: number; player_id: number; match_id: number }[])
-    pmsLookup.set(r.id, r);
+  for (const r of pmsRows) pmsLookup.set(r.id, r);
 
   const result: BreakdownRow[] = [];
-  for (const raw of (rows ?? []) as (PlayerMatchWeaponStat | PlayerMatchEconomyStat)[]) {
+  for (const raw of rows) {
     const pms = pmsLookup.get(raw.player_match_stats_id);
     if (!pms) continue;
     const sid = matchSeason.get(pms.match_id);

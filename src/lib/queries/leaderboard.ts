@@ -2,6 +2,7 @@ import { supabase } from '../supabase';
 import type { LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
 import { canonicalSort, deriveRates, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
+import { fetchAllPages } from './_shared';
 
 
 function n(v: number | null | undefined): number {
@@ -51,15 +52,27 @@ async function getSeasonBaseData(): Promise<{
   rosterBySeason: Map<number, Set<number>>;
 }> {
   const [
-    { data: stats, error: sErr },
+    stats,
     { data: matches, error: mErr },
     { data: weeks, error: wErr },
   ] = await Promise.all([
-    supabase.from('player_match_stats').select('player_id, assists, rounds_won, match_id, kills, deaths, is_win'),
+    fetchAllPages<{
+      player_id: number;
+      assists: number | null;
+      rounds_won: number | null;
+      match_id: number;
+      kills: number | null;
+      deaths: number | null;
+      is_win: boolean | null;
+    }>((from, to) =>
+      supabase
+        .from('player_match_stats')
+        .select('player_id, assists, rounds_won, match_id, kills, deaths, is_win')
+        .range(from, to),
+    ),
     supabase.from('matches').select('id, week_id, is_playoff_game, final_score'),
     supabase.from('weeks').select('id, season_id'),
   ]);
-  if (sErr) throw sErr;
   if (mErr) throw mErr;
   if (wErr) throw wErr;
 
@@ -81,15 +94,7 @@ async function getSeasonBaseData(): Promise<{
   const perPlayerStats = new Map<string, PerPlayerStats>();
   const rosterBySeason = new Map<number, Set<number>>();
 
-  for (const s of (stats ?? []) as {
-    player_id: number;
-    assists: number | null;
-    rounds_won: number | null;
-    match_id: number;
-    kills: number | null;
-    deaths: number | null;
-    is_win: boolean | null;
-  }[]) {
+  for (const s of stats) {
     const playedSid = playedMatchSeason.get(s.match_id);
     if (playedSid != null) {
       const key = `${playedSid}:${s.player_id}`;
