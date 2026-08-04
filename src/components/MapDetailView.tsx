@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import EmptyState from './EmptyState';
 import LeaderboardTable from './LeaderboardTable';
 import { MatchCard } from './MatchCard';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
@@ -180,7 +181,7 @@ export default function MapDetailView({
 
       {tab === 'leaderboard' && (
         filteredPlayerStats.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No data for this selection.</div>
+          <EmptyState message="No data for this selection." />
         ) : (
           <LeaderboardTable rows={filteredPlayerStats} showMedals={false} />
         )
@@ -188,7 +189,7 @@ export default function MapDetailView({
 
       {tab === 'stats' && (
         filteredPlayerStats.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No data for this selection.</div>
+          <EmptyState message="No data for this selection." />
         ) : (
           <BasicStatsView rows={filteredPlayerStats} matches={filteredMatches} singleMap />
         )
@@ -196,7 +197,7 @@ export default function MapDetailView({
 
       {tab === 'matches' && (
         filteredMatches.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No matches for this selection.</div>
+          <EmptyState message="No matches for this selection." />
         ) : (
           <div className="flex flex-col gap-2">
             {filteredMatches.map((m) => (

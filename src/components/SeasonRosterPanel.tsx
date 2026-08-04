@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import EmptyState from './EmptyState';
 import PlayerAvatar from './PlayerAvatar';
 import { PlayerName } from './PlayerName';
 
@@ -90,9 +91,7 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
       </div>
 
       {roster.length === 0 ? (
-        <div className="px-4 py-3 font-mono text-[12px] text-[var(--color-text-secondary)]">
-          No players on the roster yet.
-        </div>
+        <EmptyState message="No players on the roster yet." className="px-4 py-3" />
       ) : (
         roster.map((r) => (
           <div

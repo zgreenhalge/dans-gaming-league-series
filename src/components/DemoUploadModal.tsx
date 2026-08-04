@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import SabremetricsTable from '@/components/SabremetricsTable';
 import { useHasMounted } from './useHasMounted';
+import Modal from './Modal';
 import type { SabFields, RoundHistoryEntry, DemoWeaponStat } from '@/lib/types';
 type Faction = 'CT' | 'T' | null;
 
@@ -356,300 +356,297 @@ export default function DemoUploadModal({
   return (
     <>
       {trigger}
-      {open &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-            onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
-          >
-            <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-xl">
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border-primary)]">
-                <h2 className="font-display font-bold text-[16px] text-[var(--color-text-primary)]">
-                  {alreadyPlayed ? 'Edit Results' : stage === 'preview' ? 'Review Results' : 'Upload Demo'}
-                </h2>
+      {open && (
+        <Modal
+          onClose={handleClose}
+          overlayClassName="bg-black/60 backdrop-blur-sm p-4"
+          panelClassName="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-xl"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border-primary)]">
+            <h2 className="font-display font-bold text-[16px] text-[var(--color-text-primary)]">
+              {alreadyPlayed ? 'Edit Results' : stage === 'preview' ? 'Review Results' : 'Upload Demo'}
+            </h2>
+            <button
+              onClick={handleClose}
+              disabled={stage === 'uploading' || stage === 'parsing' || stage === 'submitting'}
+              className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors text-[18px] leading-none disabled:opacity-40"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="px-5 py-5 flex flex-col gap-5">
+            {/* Upload area — shown when idle */}
+            {stage === 'idle' && (
+              <label className="flex flex-col items-center justify-center gap-3 px-6 py-10 border-2 border-dashed border-[var(--color-border-primary)] hover:border-[var(--color-border-secondary)] cursor-pointer transition-colors">
+                <input
+                  type="file"
+                  accept=".dem,.dem.gz,.gz"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleFileSelect(f).catch(() => {});
+                  }}
+                />
+                <span className="text-[32px] opacity-40">📁</span>
+                <div className="text-center">
+                  <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">
+                    Choose demo file
+                  </p>
+                  <p className="text-[11px] text-[var(--color-text-secondary)] mt-1">
+                    .dem or .dem.gz — stats will be extracted automatically
+                  </p>
+                </div>
+              </label>
+            )}
+
+            {/* Manual-entry fallback — for when no demo is available */}
+            {stage === 'idle' && (
+              <div className="text-center">
                 <button
-                  onClick={handleClose}
-                  disabled={stage === 'uploading' || stage === 'parsing' || stage === 'submitting'}
-                  className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors text-[18px] leading-none disabled:opacity-40"
-                  aria-label="Close"
+                  type="button"
+                  onClick={enterManually}
+                  className="text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] underline underline-offset-2 transition-colors"
                 >
-                  ✕
+                  No demo? Enter results manually
                 </button>
               </div>
+            )}
 
-              <div className="px-5 py-5 flex flex-col gap-5">
-                {/* Upload area — shown when idle */}
-                {stage === 'idle' && (
-                  <label className="flex flex-col items-center justify-center gap-3 px-6 py-10 border-2 border-dashed border-[var(--color-border-primary)] hover:border-[var(--color-border-secondary)] cursor-pointer transition-colors">
-                    <input
-                      type="file"
-                      accept=".dem,.dem.gz,.gz"
-                      className="sr-only"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) handleFileSelect(f).catch(() => {});
-                      }}
-                    />
-                    <span className="text-[32px] opacity-40">📁</span>
-                    <div className="text-center">
-                      <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">
-                        Choose demo file
+            {/* Upload progress */}
+            {stage === 'uploading' && (
+              <div className="flex flex-col gap-3">
+                <div className="tracked text-[10px] text-[var(--color-text-secondary)]">
+                  Uploading demo…
+                </div>
+                <div className="h-1.5 bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] overflow-hidden">
+                  <div
+                    className="h-full bg-[var(--color-accent-green-fg)] transition-all duration-150"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+                <div className="text-[12px] font-mono text-[var(--color-text-secondary)]">
+                  {uploadProgress}%
+                </div>
+              </div>
+            )}
+
+            {/* Parsing spinner */}
+            {stage === 'parsing' && (
+              <div className="flex flex-col items-center gap-3 py-8">
+                <div className="w-6 h-6 border-2 border-[var(--color-border-primary)] border-t-[var(--color-accent-green-fg)] rounded-full animate-spin" />
+                <p className="text-[12px] text-[var(--color-text-secondary)]">
+                  Analyzing demo…
+                </p>
+              </div>
+            )}
+
+            {/* Preview / Edit */}
+            {(stage === 'preview' || stage === 'submitting') && parsed && (
+              <>
+                {/* Warnings */}
+                {parsed.warnings.length > 0 && (
+                  <div className="flex flex-col gap-1 px-3 py-2.5 border border-[var(--color-accent-amber-pickborder)] bg-[color-mix(in_srgb,var(--color-accent-amber-pickborder)_8%,var(--color-bg-primary))]">
+                    {parsed.warnings.map((w, i) => (
+                      <p key={i} className="text-[11px] text-[var(--color-accent-amber-pickborder)]">
+                        ⚠ {w}
                       </p>
-                      <p className="text-[11px] text-[var(--color-text-secondary)] mt-1">
-                        .dem or .dem.gz — stats will be extracted automatically
-                      </p>
-                    </div>
-                  </label>
-                )}
-
-                {/* Manual-entry fallback — for when no demo is available */}
-                {stage === 'idle' && (
-                  <div className="text-center">
-                    <button
-                      type="button"
-                      onClick={enterManually}
-                      className="text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] underline underline-offset-2 transition-colors"
-                    >
-                      No demo? Enter results manually
-                    </button>
+                    ))}
                   </div>
                 )}
 
-                {/* Upload progress */}
-                {stage === 'uploading' && (
-                  <div className="flex flex-col gap-3">
-                    <div className="tracked text-[10px] text-[var(--color-text-secondary)]">
-                      Uploading demo…
-                    </div>
-                    <div className="h-1.5 bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] overflow-hidden">
-                      <div
-                        className="h-full bg-[var(--color-accent-green-fg)] transition-all duration-150"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
-                    <div className="text-[12px] font-mono text-[var(--color-text-secondary)]">
-                      {uploadProgress}%
-                    </div>
+                {/* Score */}
+                <div>
+                  <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-2">
+                    Final Score
                   </div>
-                )}
-
-                {/* Parsing spinner */}
-                {stage === 'parsing' && (
-                  <div className="flex flex-col items-center gap-3 py-8">
-                    <div className="w-6 h-6 border-2 border-[var(--color-border-primary)] border-t-[var(--color-accent-green-fg)] rounded-full animate-spin" />
-                    <p className="text-[12px] text-[var(--color-text-secondary)]">
-                      Analyzing demo…
-                    </p>
-                  </div>
-                )}
-
-                {/* Preview / Edit */}
-                {(stage === 'preview' || stage === 'submitting') && parsed && (
-                  <>
-                    {/* Warnings */}
-                    {parsed.warnings.length > 0 && (
-                      <div className="flex flex-col gap-1 px-3 py-2.5 border border-[var(--color-accent-amber-pickborder)] bg-[color-mix(in_srgb,var(--color-accent-amber-pickborder)_8%,var(--color-bg-primary))]">
-                        {parsed.warnings.map((w, i) => (
-                          <p key={i} className="text-[11px] text-[var(--color-accent-amber-pickborder)]">
-                            ⚠ {w}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Score */}
-                    <div>
-                      <div className="tracked text-[10px] text-[var(--color-text-secondary)] mb-2">
-                        Final Score
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {(['SHIRTS', 'SKINS'] as const).map((faction) => {
-                          const score = faction === 'SHIRTS' ? shirtsScore : skinsScore;
-                          const setScore = faction === 'SHIRTS' ? setShirtsScore : setSkinsScore;
-                          const cls = factionClass(faction, skinsSide);
-                          return (
-                            <div key={faction} className={`flex flex-col gap-1 ${cls}`}>
-                              <label className="tracked text-[9px] faction-fg">
-                                {faction}
-                              </label>
-                              <input
-                                type="number"
-                                min={0}
-                                value={score}
-                                onChange={(e) => setScore(e.target.value)}
-                                className="w-16 px-2 py-1.5 font-mono text-[15px] text-center border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {parsed.shirts_score === null && (
-                        <p className="mt-2 text-[11px] text-[var(--color-text-secondary)]">
-                          Starting side unknown — enter the score manually.
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Per-faction stat tables (editable) */}
+                  <div className="flex items-center gap-3">
                     {(['SHIRTS', 'SKINS'] as const).map((faction) => {
-                      const fPlayers = faction === 'SHIRTS' ? shirtsPlayers : skinsPlayers;
+                      const score = faction === 'SHIRTS' ? shirtsScore : skinsScore;
+                      const setScore = faction === 'SHIRTS' ? setShirtsScore : setSkinsScore;
                       const cls = factionClass(faction, skinsSide);
                       return (
-                        <div key={faction}>
-                          <div className={`tracked text-[10px] mb-2 ${cls} faction-fg`}>
+                        <div key={faction} className={`flex flex-col gap-1 ${cls}`}>
+                          <label className="tracked text-[9px] faction-fg">
                             {faction}
-                          </div>
-                          <div className={`border border-[var(--color-border-primary)] overflow-x-auto faction-tint ${cls}`}>
-                            <table className="w-full min-w-max border-collapse text-[12px]">
-                              <thead>
-                                <tr className="bg-[var(--color-bg-secondary)]">
-                                  <th className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-left pl-3 pr-2 py-2 border-b border-[var(--color-border-primary)]">
-                                    Player
-                                  </th>
-                                  {(['K', 'A', 'D', 'DMG', 'ADR'] as const).map((h) => (
-                                    <th
-                                      key={h}
-                                      className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right px-2 py-2 border-b border-[var(--color-border-primary)] w-14"
-                                    >
-                                      {h}
-                                    </th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {fPlayers.map((p) => {
-                                  const s = statMap.get(p.player_id);
-                                  const d = draftStats[p.player_id];
-                                  const dmgVal = d ? (parseInt(d.damage, 10) || 0) : (s?.damage ?? 0);
-                                  // Demos carry per-player rounds; manual entry has none, so
-                                  // fall back to the rounds implied by the entered final score.
-                                  const liveRounds = (parseInt(shirtsScore, 10) || 0) + (parseInt(skinsScore, 10) || 0);
-                                  const rounds = (s?.rounds_played ?? 0) || liveRounds;
-                                  const derivedAdr = rounds > 0 ? Math.round(dmgVal / rounds) : 0;
-                                  const dash = <span className="text-[var(--color-text-secondary)]">—</span>;
-                                  return (
-                                    <tr
-                                      key={p.player_id}
-                                      className="border-b border-[var(--color-border-tertiary)] last:border-b-0"
-                                    >
-                                      <td className="pl-3 pr-2 py-1.5 font-display font-semibold text-[var(--color-text-primary)] faction-fg">
-                                        {p.player_name}
-                                      </td>
-                                      <td className="px-2 py-1.5 text-right">
-                                        {d ? (
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            value={d.kills}
-                                            onChange={(e) => updateDraft(p.player_id, 'kills', e.target.value)}
-                                            className={statInputCls}
-                                          />
-                                        ) : dash}
-                                      </td>
-                                      <td className="px-2 py-1.5 text-right">
-                                        {d ? (
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            value={d.assists}
-                                            onChange={(e) => updateDraft(p.player_id, 'assists', e.target.value)}
-                                            className={statInputCls}
-                                          />
-                                        ) : dash}
-                                      </td>
-                                      <td className="px-2 py-1.5 text-right">
-                                        {d ? (
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            value={d.deaths}
-                                            onChange={(e) => updateDraft(p.player_id, 'deaths', e.target.value)}
-                                            className={statInputCls}
-                                          />
-                                        ) : dash}
-                                      </td>
-                                      <td className="px-2 py-1.5 text-right">
-                                        {d ? (
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            value={d.damage}
-                                            onChange={(e) => updateDraft(p.player_id, 'damage', e.target.value)}
-                                            className={statInputCls}
-                                          />
-                                        ) : dash}
-                                      </td>
-                                      <td className="px-2 pr-3 py-1.5 text-right font-mono tnum font-semibold text-[var(--color-text-secondary)]">
-                                        {s ? derivedAdr : dash}
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={score}
+                            onChange={(e) => setScore(e.target.value)}
+                            className="w-16 px-2 py-1.5 font-mono text-[15px] text-center border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-text-secondary)]"
+                          />
                         </div>
                       );
                     })}
+                  </div>
+                  {parsed.shirts_score === null && (
+                    <p className="mt-2 text-[11px] text-[var(--color-text-secondary)]">
+                      Starting side unknown — enter the score manually.
+                    </p>
+                  )}
+                </div>
 
-                    {parsed.sabremetrics && parsed.sabremetrics.length > 0 && (() => {
-                      const allPlayers = [...shirtsPlayers, ...skinsPlayers];
-                      const sabPlayers = parsed.sabremetrics!.map((s) => {
-                        const mp = allPlayers.find((p) => p.player_id === s.player_id);
-                        const stat = statMap.get(s.player_id);
-                        return {
-                          player_id: s.player_id,
-                          player_name: mp?.player_name ?? `#${s.player_id}`,
-                          faction: mp?.faction ?? 'SHIRTS' as const,
-                          rounds_played: stat?.rounds_played ?? 0,
-                          sabremetrics: s.sabremetrics as SabFields,
-                        };
-                      });
-                      return (
-                        <div>
-                          <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-1.5">
-                            Advanced Stats
-                          </div>
-                          <SabremetricsTable players={sabPlayers} />
-                        </div>
-                      );
-                    })()}
+                {/* Per-faction stat tables (editable) */}
+                {(['SHIRTS', 'SKINS'] as const).map((faction) => {
+                  const fPlayers = faction === 'SHIRTS' ? shirtsPlayers : skinsPlayers;
+                  const cls = factionClass(faction, skinsSide);
+                  return (
+                    <div key={faction}>
+                      <div className={`tracked text-[10px] mb-2 ${cls} faction-fg`}>
+                        {faction}
+                      </div>
+                      <div className={`border border-[var(--color-border-primary)] overflow-x-auto faction-tint ${cls}`}>
+                        <table className="w-full min-w-max border-collapse text-[12px]">
+                          <thead>
+                            <tr className="bg-[var(--color-bg-secondary)]">
+                              <th className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-left pl-3 pr-2 py-2 border-b border-[var(--color-border-primary)]">
+                                Player
+                              </th>
+                              {(['K', 'A', 'D', 'DMG', 'ADR'] as const).map((h) => (
+                                <th
+                                  key={h}
+                                  className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)] text-right px-2 py-2 border-b border-[var(--color-border-primary)] w-14"
+                                >
+                                  {h}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {fPlayers.map((p) => {
+                              const s = statMap.get(p.player_id);
+                              const d = draftStats[p.player_id];
+                              const dmgVal = d ? (parseInt(d.damage, 10) || 0) : (s?.damage ?? 0);
+                              // Demos carry per-player rounds; manual entry has none, so
+                              // fall back to the rounds implied by the entered final score.
+                              const liveRounds = (parseInt(shirtsScore, 10) || 0) + (parseInt(skinsScore, 10) || 0);
+                              const rounds = (s?.rounds_played ?? 0) || liveRounds;
+                              const derivedAdr = rounds > 0 ? Math.round(dmgVal / rounds) : 0;
+                              const dash = <span className="text-[var(--color-text-secondary)]">—</span>;
+                              return (
+                                <tr
+                                  key={p.player_id}
+                                  className="border-b border-[var(--color-border-tertiary)] last:border-b-0"
+                                >
+                                  <td className="pl-3 pr-2 py-1.5 font-display font-semibold text-[var(--color-text-primary)] faction-fg">
+                                    {p.player_name}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-right">
+                                    {d ? (
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={d.kills}
+                                        onChange={(e) => updateDraft(p.player_id, 'kills', e.target.value)}
+                                        className={statInputCls}
+                                      />
+                                    ) : dash}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-right">
+                                    {d ? (
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={d.assists}
+                                        onChange={(e) => updateDraft(p.player_id, 'assists', e.target.value)}
+                                        className={statInputCls}
+                                      />
+                                    ) : dash}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-right">
+                                    {d ? (
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={d.deaths}
+                                        onChange={(e) => updateDraft(p.player_id, 'deaths', e.target.value)}
+                                        className={statInputCls}
+                                      />
+                                    ) : dash}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-right">
+                                    {d ? (
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={d.damage}
+                                        onChange={(e) => updateDraft(p.player_id, 'damage', e.target.value)}
+                                        className={statInputCls}
+                                      />
+                                    ) : dash}
+                                  </td>
+                                  <td className="px-2 pr-3 py-1.5 text-right font-mono tnum font-semibold text-[var(--color-text-secondary)]">
+                                    {s ? derivedAdr : dash}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
 
-                    {error && (
-                      <p className="text-[12px] text-[var(--color-accent-red-fg,#ef4444)]">{error}</p>
-                    )}
+                {parsed.sabremetrics && parsed.sabremetrics.length > 0 && (() => {
+                  const allPlayers = [...shirtsPlayers, ...skinsPlayers];
+                  const sabPlayers = parsed.sabremetrics!.map((s) => {
+                    const mp = allPlayers.find((p) => p.player_id === s.player_id);
+                    const stat = statMap.get(s.player_id);
+                    return {
+                      player_id: s.player_id,
+                      player_name: mp?.player_name ?? `#${s.player_id}`,
+                      faction: mp?.faction ?? 'SHIRTS' as const,
+                      rounds_played: stat?.rounds_played ?? 0,
+                      sabremetrics: s.sabremetrics as SabFields,
+                    };
+                  });
+                  return (
+                    <div>
+                      <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-1.5">
+                        Advanced Stats
+                      </div>
+                      <SabremetricsTable players={sabPlayers} />
+                    </div>
+                  );
+                })()}
 
-                    <button
-                      onClick={handleSubmit}
-                      disabled={stage === 'submitting' || isPending}
-                      className="w-full py-2 tracked text-[11px] font-semibold border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80 transition-opacity"
-                    >
-                      {stage === 'submitting' ? 'Saving…' : alreadyPlayed ? 'Save Changes' : 'Submit Results'}
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setParsed(null);
-                        setDraftStats({});
-                        setStage('idle');
-                      }}
-                      disabled={stage === 'submitting'}
-                      className="text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors text-center"
-                    >
-                      {alreadyPlayed ? 'Upload a new demo' : 'Upload a different demo'}
-                    </button>
-                  </>
-                )}
-
-                {error && stage === 'idle' && (
+                {error && (
                   <p className="text-[12px] text-[var(--color-accent-red-fg,#ef4444)]">{error}</p>
                 )}
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+
+                <button
+                  onClick={handleSubmit}
+                  disabled={stage === 'submitting' || isPending}
+                  className="w-full py-2 tracked text-[11px] font-semibold border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80 transition-opacity"
+                >
+                  {stage === 'submitting' ? 'Saving…' : alreadyPlayed ? 'Save Changes' : 'Submit Results'}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setParsed(null);
+                    setDraftStats({});
+                    setStage('idle');
+                  }}
+                  disabled={stage === 'submitting'}
+                  className="text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors text-center"
+                >
+                  {alreadyPlayed ? 'Upload a new demo' : 'Upload a different demo'}
+                </button>
+              </>
+            )}
+
+            {error && stage === 'idle' && (
+              <p className="text-[12px] text-[var(--color-accent-red-fg,#ef4444)]">{error}</p>
+            )}
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

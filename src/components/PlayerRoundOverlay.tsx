@@ -14,6 +14,7 @@ import { readTheme } from './replayTheme';
 import { useMapRadar } from './useMapRadar';
 import { useCanvasSize } from './useCanvasSize';
 import { useReplayClock } from './useReplayClock';
+import EmptyState from './EmptyState';
 
 const SPEEDS = [0.5, 1, 2, 4];
 const MAX_SIDE = 520;
@@ -176,11 +177,7 @@ export default function PlayerRoundOverlay({
   });
 
   if (traces.length === 0) {
-    return (
-      <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-        No rounds with position data for {playerName} on this map.
-      </div>
-    );
+    return <EmptyState message={`No rounds with position data for ${playerName} on this map.`} />;
   }
 
   return (

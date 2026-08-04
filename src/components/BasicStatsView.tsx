@@ -7,6 +7,8 @@ import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
 import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type MatchPickBanInput } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import { tabCls } from '@/lib/util';
+import EmptyState from './EmptyState';
+import Th from './Th';
 
 type SortKey = string;
 
@@ -485,15 +487,15 @@ function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
         <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Score distribution</span>
       </div>
       {dist.total === 0 ? (
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No match data.</div>
+        <EmptyState message="No match data." />
       ) : (
         <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
           <table className="w-full border-collapse text-[12px]">
             <thead>
               <tr className="bg-[var(--color-bg-secondary)]">
-                <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Category</th>
-                <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Count</th>
-                <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">%</th>
+                <Th align="left">Category</Th>
+                <Th align="right">Count</Th>
+                <Th align="right">%</Th>
               </tr>
             </thead>
             <tbody>
@@ -537,22 +539,20 @@ function MapsAndSidesSection({
           <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban stats</span>
         </div>
         {mapPickBanStats.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-            No map data.
-          </div>
+          <EmptyState message="No map data." />
         ) : (
           <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
             <table className="w-full border-collapse text-[12px]">
               <thead>
                 <tr className="bg-[var(--color-bg-secondary)]">
-                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Map</th>
-                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Picks</th>
-                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Bans</th>
-                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">No-picks</th>
-                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">CT</th>
-                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">T</th>
-                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Pick &amp; won</th>
-                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Avg rounds</th>
+                  <Th align="left">Map</Th>
+                  <Th align="right">Picks</Th>
+                  <Th align="right">Bans</Th>
+                  <Th align="right">No-picks</Th>
+                  <Th align="right">CT</Th>
+                  <Th align="right">T</Th>
+                  <Th align="right">Pick &amp; won</Th>
+                  <Th align="right">Avg rounds</Th>
                 </tr>
               </thead>
               <tbody>
@@ -582,17 +582,15 @@ function MapsAndSidesSection({
           <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Per-side stats</span>
         </div>
         {perSideStats.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-            No side data.
-          </div>
+          <EmptyState message="No side data." />
         ) : (
           <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
             <table className="w-full border-collapse text-[12px]">
               <thead>
                 <tr className="bg-[var(--color-bg-secondary)]">
-                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Side</th>
-                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Times Picked</th>
-                  <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W-L</th>
+                  <Th align="left">Side</Th>
+                  <Th align="right">Times Picked</Th>
+                  <Th align="right">W-L</Th>
                 </tr>
               </thead>
               <tbody>

@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GauntletBracketDiagram } from './GauntletBracketDiagram';
+import EmptyState from './EmptyState';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
 import {
   type DraftPod,
   type DraftSlot,
@@ -219,7 +221,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
             type="button"
             onClick={confirmSave}
             disabled={saving}
-            className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40"
+            className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
           >
             {saving ? 'Saving…' : 'Confirm & Save'}
           </button>
@@ -282,9 +284,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
 
       <div className="flex flex-col gap-4">
         <div className="tracked text-[10px] text-[var(--color-text-secondary)]">Pods</div>
-        {pods.length === 0 && (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No pods yet.</div>
-        )}
+        {pods.length === 0 && <EmptyState message="No pods yet." />}
         {pods.map((pod) => (
           <PodCard
             key={pod.key}
@@ -333,7 +333,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
           type="button"
           onClick={reviewBracket}
           disabled={!integrity.valid || pods.length === 0}
-          className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40"
+          className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
         >
           Review Bracket
         </button>

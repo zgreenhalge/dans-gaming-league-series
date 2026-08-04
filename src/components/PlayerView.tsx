@@ -9,6 +9,7 @@ import { aggregatePlayerStats, aggregatePlayerStatsByMap, extractSeasonNumber, i
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import DevGate from './DevGate';
+import EmptyState from './EmptyState';
 import { MatchCard } from './MatchCard';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
@@ -20,6 +21,7 @@ import EhogTimeline from './EhogTimeline';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import StatTileGrid from './StatTileGrid';
 import TabBar from './TabBar';
+import Th from './Th';
 
 type Filter = 'career' | number;
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
@@ -498,24 +500,22 @@ export default function PlayerView({
                 <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Pick/ban stats</span>
               </div>
               {playerMapStats.length === 0 ? (
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                  No map data.
-                </div>
+                <EmptyState message="No map data." />
               ) : (
                 <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
                   <table className="w-full min-w-max border-collapse text-[12px]">
                     <thead>
                       <tr className="bg-[var(--color-bg-secondary)]">
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Map</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Games</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Wins</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Picks</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Bans</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">No-picks</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Pick &amp; won</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">CT</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">T</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Avg rounds</th>
+                        <Th align="left">Map</Th>
+                        <Th align="right">Games</Th>
+                        <Th align="right">Wins</Th>
+                        <Th align="right">Picks</Th>
+                        <Th align="right">Bans</Th>
+                        <Th align="right">No-picks</Th>
+                        <Th align="right">Pick &amp; won</Th>
+                        <Th align="right">CT</Th>
+                        <Th align="right">T</Th>
+                        <Th align="right">Avg rounds</Th>
                       </tr>
                     </thead>
                     <tbody>
@@ -545,19 +545,17 @@ export default function PlayerView({
                 <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Side stats</span>
               </div>
               {playerSideStats.every((s) => s.played === 0) ? (
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                  No side data.
-                </div>
+                <EmptyState message="No side data." />
               ) : (
                 <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
                   <table className="w-full min-w-max border-collapse text-[12px]">
                     <thead>
                       <tr className="bg-[var(--color-bg-secondary)]">
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Side</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Played</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Times Picked</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W-L</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">RWR%</th>
+                        <Th align="left">Side</Th>
+                        <Th align="right">Played</Th>
+                        <Th align="right">Times Picked</Th>
+                        <Th align="right">W-L</Th>
+                        <Th align="right">RWR%</Th>
                       </tr>
                     </thead>
                     <tbody>
@@ -579,9 +577,7 @@ export default function PlayerView({
 
           <SectionLabel>Map stats</SectionLabel>
           {maps.length === 0 ? (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-              No map data.
-            </div>
+            <EmptyState message="No map data." />
           ) : (
             <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
               <table className="w-full min-w-max border-collapse text-[13px]">
@@ -697,9 +693,7 @@ export default function PlayerView({
           ) : (
             <>
               {playedHistory.length === 0 ? (
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                  No matches played yet.
-                </div>
+                <EmptyState message="No matches played yet." />
               ) : (
                 <div className="flex flex-col gap-3">
                   {playedHistory.map((h) => (
@@ -748,9 +742,7 @@ export default function PlayerView({
         <>
           <SectionLabel>Trophy case</SectionLabel>
           {filteredTrophies.length === 0 ? (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-              No trophies for the current filter.
-            </div>
+            <EmptyState message="No trophies for the current filter." />
           ) : (
             <div className="flex flex-col gap-2">
               {filteredTrophies

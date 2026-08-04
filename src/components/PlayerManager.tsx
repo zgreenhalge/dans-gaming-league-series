@@ -6,6 +6,7 @@
 
 import { useMemo, useState } from 'react';
 import type { Player } from '@/lib/types';
+import EmptyState from './EmptyState';
 import { PlayerRow } from './PlayerRow';
 import { RecomputeButton } from './RecomputeButton';
 
@@ -48,9 +49,7 @@ export function PlayerManager({
       />
 
       {filtered.length === 0 ? (
-        <div className="font-mono text-[13px] text-[var(--color-text-secondary)] border border-[var(--color-border-tertiary)] rounded px-4 py-8 text-center">
-          No players found.
-        </div>
+        <EmptyState size="lg" message="No players found." />
       ) : (
         <div className="border border-[var(--color-border-tertiary)] rounded overflow-x-auto">
           <table className="w-full border-collapse">

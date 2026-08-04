@@ -8,6 +8,7 @@ import { extractSeasonNumber, tabCls } from '@/lib/util';
 import { aggregateMapIndexStats } from '@/lib/mapSideStats';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import TabBar from './TabBar';
+import EmptyState from './EmptyState';
 import type { MapIndexEntry } from '@/lib/types';
 
 type SortKey = 'name' | 'seasonsPlayed' | 'pickCount' | 'banCount' | 'noPickCount' | 'pickAndWon' | 'totalKills' | 'totalAssists' | 'avgRounds';
@@ -111,7 +112,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
 
       {tab === 'tiles' && (
         filtered.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No maps for this selection.</div>
+          <EmptyState message="No maps for this selection." />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {filtered.map((map) => {
@@ -156,7 +157,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
 
       {tab === 'stats' && (
         sorted.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No maps for this selection.</div>
+          <EmptyState message="No maps for this selection." />
         ) : (
           <div className="overflow-x-auto">
           <table className="w-full min-w-max border-collapse font-mono text-[12px]">

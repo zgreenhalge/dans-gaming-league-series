@@ -5,42 +5,43 @@
 // than a bespoke progress UI here.
 
 import { useState } from 'react';
+import { useAsyncAction } from './useAsyncAction';
 
 const CONCURRENCY = 3;
 
 export function BulkReparseButton({ matchIds }: { matchIds: number[] }) {
-  const [busy, setBusy] = useState(false);
+  const { busy, run } = useAsyncAction();
   const [done, setDone] = useState(0);
   const [failed, setFailed] = useState(0);
   const [ran, setRan] = useState(false);
 
   async function runAll() {
-    setBusy(true);
     setRan(true);
     setDone(0);
     setFailed(0);
 
-    let cursor = 0;
-    let doneCount = 0;
-    let failedCount = 0;
+    await run(async () => {
+      let cursor = 0;
+      let doneCount = 0;
+      let failedCount = 0;
 
-    async function worker() {
-      while (cursor < matchIds.length) {
-        const id = matchIds[cursor++];
-        try {
-          const res = await fetch(`/api/matches/${id}/demo/dispatch`, { method: 'POST' });
-          if (res.ok) doneCount++;
-          else failedCount++;
-        } catch {
-          failedCount++;
+      async function worker() {
+        while (cursor < matchIds.length) {
+          const id = matchIds[cursor++];
+          try {
+            const res = await fetch(`/api/matches/${id}/demo/dispatch`, { method: 'POST' });
+            if (res.ok) doneCount++;
+            else failedCount++;
+          } catch {
+            failedCount++;
+          }
+          setDone(doneCount);
+          setFailed(failedCount);
         }
-        setDone(doneCount);
-        setFailed(failedCount);
       }
-    }
 
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, matchIds.length) }, worker));
-    setBusy(false);
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, matchIds.length) }, worker));
+    });
   }
 
   if (matchIds.length === 0) return null;
