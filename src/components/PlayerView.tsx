@@ -21,6 +21,7 @@ import EhogTimeline from './EhogTimeline';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import StatTileGrid from './StatTileGrid';
 import TabBar from './TabBar';
+import Th from './Th';
 
 type Filter = 'career' | number;
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
@@ -590,16 +591,16 @@ export default function PlayerView({
                   <table className="w-full min-w-max border-collapse text-[12px]">
                     <thead>
                       <tr className="bg-[var(--color-bg-secondary)]">
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Map</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Games</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Wins</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Picks</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Bans</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">No-picks</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Pick &amp; won</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">CT</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">T</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Avg rounds</th>
+                        <Th align="left">Map</Th>
+                        <Th align="right">Games</Th>
+                        <Th align="right">Wins</Th>
+                        <Th align="right">Picks</Th>
+                        <Th align="right">Bans</Th>
+                        <Th align="right">No-picks</Th>
+                        <Th align="right">Pick &amp; won</Th>
+                        <Th align="right">CT</Th>
+                        <Th align="right">T</Th>
+                        <Th align="right">Avg rounds</Th>
                       </tr>
                     </thead>
                     <tbody>
@@ -635,11 +636,11 @@ export default function PlayerView({
                   <table className="w-full min-w-max border-collapse text-[12px]">
                     <thead>
                       <tr className="bg-[var(--color-bg-secondary)]">
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Side</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Played</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Times Picked</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W-L</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">RWR%</th>
+                        <Th align="left">Side</Th>
+                        <Th align="right">Played</Th>
+                        <Th align="right">Times Picked</Th>
+                        <Th align="right">W-L</Th>
+                        <Th align="right">RWR%</Th>
                       </tr>
                     </thead>
                     <tbody>

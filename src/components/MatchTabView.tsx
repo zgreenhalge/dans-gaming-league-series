@@ -12,6 +12,7 @@ import ScoutingReport from '@/components/ScoutingReport';
 import { Checkbox } from '@/components/SeasonFilter';
 import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
+import Th from '@/components/Th';
 import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow } from '@/lib/queries';
 import type { SabFields } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
@@ -272,9 +273,9 @@ export function RatingProjectionTable({
                 Score
               </th>
               {allPlayers.map((p) => (
-                <th key={p.player_id} className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">
+                <Th key={p.player_id} align="right">
                   {p.player_name}
-                </th>
+                </Th>
               ))}
             </tr>
           </thead>
