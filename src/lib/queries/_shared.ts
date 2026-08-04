@@ -28,6 +28,36 @@ export async function fetchAllPages<T>(
   return results;
 }
 
+/** `.in()` batch size — keeps the request URL well under PostgREST/proxy length limits when a
+ *  caller's id list itself runs into the thousands. */
+export const SUPABASE_IN_BATCH = 200;
+
+/**
+ * Runs a `.in(column, ids)` select in `SUPABASE_IN_BATCH`-sized id chunks, each chunk itself
+ * paginated via `fetchAllPages()` — covers both truncation risks a large `.in()` list carries:
+ * the id list overflowing a safe URL length, and any single chunk's result overflowing
+ * PostgREST's row cap.
+ */
+export async function batchedIn<T>(
+  table: string,
+  column: string,
+  ids: number[],
+  select: string,
+): Promise<T[]> {
+  const results: T[] = [];
+  for (let i = 0; i < ids.length; i += SUPABASE_IN_BATCH) {
+    const chunk = ids.slice(i, i + SUPABASE_IN_BATCH);
+    const page = await fetchAllPages<T>((from, to) =>
+      supabase.from(table).select(select).in(column, chunk).range(from, to) as unknown as PromiseLike<{
+        data: T[] | null;
+        error: { message: string } | null;
+      }>,
+    );
+    results.push(...page);
+  }
+  return results;
+}
+
 /**
  * Which of `requested` aren't present in `covered` — a plain set difference, used
  * wherever a precomputed artifact (issue #127) only partially answers a request:

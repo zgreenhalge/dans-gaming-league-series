@@ -1,29 +1,12 @@
 import { supabase } from '../supabase';
 import { extractSeasonNumber } from '../util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG, fromEhog } from '../ehog';
+import { batchedIn, SUPABASE_IN_BATCH } from './_shared';
 
 
 // ---------------------------------------------------------------------------
 // EHOG rating data
 // ---------------------------------------------------------------------------
-
-const SUPABASE_IN_BATCH = 200;
-
-async function batchedIn<T>(
-  table: string,
-  column: string,
-  ids: number[],
-  select: string,
-): Promise<T[]> {
-  const results: T[] = [];
-  for (let i = 0; i < ids.length; i += SUPABASE_IN_BATCH) {
-    const chunk = ids.slice(i, i + SUPABASE_IN_BATCH);
-    const { data, error } = await supabase.from(table).select(select).in(column, chunk);
-    if (error) throw error;
-    if (data) results.push(...(data as T[]));
-  }
-  return results;
-}
 
 interface MatchContext {
   matchById: Map<number, { match_number: number; week_id: number }>;

@@ -8,7 +8,7 @@ import { mapSlug } from '../maps';
 import { workshopIdFromUrl } from '../replay/radar';
 import type { MapIndexEntry, LeaderboardRowWithId, Faction, PlayerMatchStat } from '../types';
 import { getPlayersById } from './player';
-import { fetchAllPages, missingIds, getVersionedR2Json } from './_shared';
+import { fetchAllPages, batchedIn, missingIds, getVersionedR2Json } from './_shared';
 
 
 export interface MapPlayerStat {
@@ -77,12 +77,10 @@ export async function getAllMatchesWithPickBan(): Promise<MapMatchRow[]> {
   if (playedMatches.length === 0) return [];
 
   const matchIds = playedMatches.map((m) => m.id);
-  const [{ data: statsData, error: sErr }, players] = await Promise.all([
-    supabase.from('player_match_stats').select('*').in('match_id', matchIds),
+  const [statRows, players] = await Promise.all([
+    batchedIn<PlayerMatchStat>('player_match_stats', 'match_id', matchIds, '*'),
     getPlayersById(),
   ]);
-  if (sErr) throw sErr;
-  const statRows = (statsData ?? []) as PlayerMatchStat[];
 
   const rosterByMatch = new Map<number, { shirts: MapPlayerStat[]; skins: MapPlayerStat[] }>();
   for (const s of statRows) {
