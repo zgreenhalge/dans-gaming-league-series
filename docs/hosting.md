@@ -223,11 +223,17 @@ after boot, `launchServer`'s `extraCvars` (built by `pugModeCvarLine`, `dathost-
 `mp_warmup_pausetimer 1`, and `matchzy_minimum_ready_required 0` unconditionally — the golden league
 config's `matchzy_minimum_ready_required 4` assumes a full 2v2 roster, which doesn't hold with no
 roster loaded, so it's overridden live rather than changed in the shared config set real matches also
-use (`0` = ready requires everyone currently connected, not a fixed headcount). A separate "Friendly"
-toggle gates `FRIENDLY_CVARS` (`mp_autokick 0`, `mp_drop_knife_enable 1`, `mp_forcecamera 0`,
-`mp_shoot_dropped_grenades true`) — only asserted when checked, left at whatever the config set sets
-otherwise. `pugModeCvarLine` is shared with the admin console's Start button (below), which offers the
-same two toggles — any launch with no roster loaded behaves the same way regardless of who starts it.
+use (`0` = ready requires everyone currently connected, not a fixed headcount). It also overrides
+`matchzy_demo_name_format`/`matchzy_hostname_format` to a `{TIME}`-based (not `{MATCH_ID}`-based)
+template: the golden config's `"{MATCH_ID}"` demo name is only unique because a real match's `matchid`
+comes from the loaded match JSON, and a roster-less launch never loads one, so left alone every pug
+session's demo would land at the same unresolved path — colliding with itself launch over launch, and
+risking collision with a real match's `MatchZy/{matchId}.dem` if that empty token ever resolved to
+something an actual match id could match. A separate "Friendly" toggle gates `FRIENDLY_CVARS`
+(`mp_autokick 0`, `mp_drop_knife_enable 1`, `mp_forcecamera 0`, `mp_shoot_dropped_grenades true`) —
+only asserted when checked, left at whatever the config set sets otherwise. `pugModeCvarLine` is
+shared with the admin console's Start button (below), which offers the same two toggles — any launch
+with no roster loaded behaves the same way regardless of who starts it.
 
 Concurrency is tracked by `scrim_sessions`, a **singleton** table (`src/lib/scrim-session.ts`): its
 primary key is pinned to a fixed value, so at most one row can ever exist, and `/api/scrim/start`
