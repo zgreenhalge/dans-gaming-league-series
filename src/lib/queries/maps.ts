@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import { heatmapKey, mapHeatmapKey } from '../r2';
 import { HEATMAP_SCHEMA_VERSION, MAP_HEATMAP_ROLLUP_VERSION, type HeatmapArtifact, type HeatmapKind } from '../replay/heatmap';
-import { isPlayedScore, parseScore, extractSeasonNumber, canonicalSort, compareMatchRefDesc } from '../util';
+import { isPlayedScore, parseScore, extractSeasonNumber, canonicalSort, compareMatchRefDesc, deriveRates } from '../util';
 import { classifyMatchVeto } from '../mapSideStats';
 import { mapSlug } from '../maps';
 import { workshopIdFromUrl } from '../replay/radar';
@@ -530,8 +530,7 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
   }
 
   const playerStats: LeaderboardRowWithId[] = Array.from(byPlayer.values()).map((a) => {
-    const rp = a.total_rounds_played;
-    const rw = a.total_rounds_won;
+    const rates = deriveRates(a);
     return {
       season_id: 0,
       player_id: a.player_id,
@@ -539,16 +538,16 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
       matches_played: a.matches_played,
       matches_won: a.matches_won,
       matches_lost: a.matches_lost,
-      win_rate_percentage: a.matches_played > 0 ? (a.matches_won / a.matches_played) * 100 : 0,
+      win_rate_percentage: rates.win_rate_percentage,
       total_kills: a.total_kills,
       total_assists: a.total_assists,
       total_deaths: a.total_deaths,
-      kd_ratio: a.total_deaths > 0 ? a.total_kills / a.total_deaths : a.total_kills,
+      kd_ratio: rates.kd_ratio,
       total_damage: a.total_damage,
-      total_rounds_played: rp,
-      total_rounds_won: rw,
-      rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
-      overall_adr: rp > 0 ? a.total_damage / rp : 0,
+      total_rounds_played: a.total_rounds_played,
+      total_rounds_won: a.total_rounds_won,
+      rwr_percentage: rates.rwr_percentage,
+      overall_adr: rates.overall_adr,
       kills_in_wins: a.kills_in_wins,
       deaths_in_wins: a.deaths_in_wins,
       kills_in_losses: a.kills_in_losses,

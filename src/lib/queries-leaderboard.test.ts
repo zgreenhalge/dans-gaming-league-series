@@ -10,7 +10,8 @@ import { __setTestClient } from './supabase';
 import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import { matchesSnapshot } from './test-support/snapshot';
-import { canonicalSort } from './util';
+import { canonicalSort, deriveRates } from './util';
+import type { LeaderboardRowWithId } from './types';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
@@ -26,6 +27,17 @@ function assertCanonicallySorted(
       canonicalSort(rows[i - 1], rows[i]) <= 0,
       `${label}: row ${i - 1} (${rows[i - 1].player_name}) should sort before/equal row ${i} (${rows[i].player_name})`,
     );
+  }
+}
+
+/** Guards against a duplicate inline reimplementation of `deriveRates()` silently reappearing. */
+function assertRatesMatchDeriveRates(rows: LeaderboardRowWithId[], label: string) {
+  for (const r of rows) {
+    const rates = deriveRates(r);
+    assert.equal(r.win_rate_percentage, rates.win_rate_percentage, `${label}: ${r.player_name} win_rate_percentage`);
+    assert.equal(r.kd_ratio, rates.kd_ratio, `${label}: ${r.player_name} kd_ratio`);
+    assert.equal(r.rwr_percentage, rates.rwr_percentage, `${label}: ${r.player_name} rwr_percentage`);
+    assert.equal(r.overall_adr, rates.overall_adr, `${label}: ${r.player_name} overall_adr`);
   }
 }
 
@@ -55,6 +67,7 @@ async function main() {
   await test('getCareerLeaderboard() — sums across seasons, canonically sorted, snapshot', async () => {
     const rows = await getCareerLeaderboard();
     assertCanonicallySorted(rows, 'getCareerLeaderboard()');
+    assertRatesMatchDeriveRates(rows, 'getCareerLeaderboard()');
     matchesSnapshot('getCareerLeaderboard', rows);
   });
 
