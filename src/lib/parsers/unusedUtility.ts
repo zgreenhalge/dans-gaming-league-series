@@ -1,5 +1,6 @@
 import type { SabFields } from '../types';
 import type { MatchContext, PlayerDeathRow } from './matchContext';
+import { initCollector, roundOf } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -30,8 +31,7 @@ const PRE_DEATH_TICK_OFFSET = 1;
 export function neededInventoryTicks(deathEvents: PlayerDeathRow[], context: MatchContext): number[] {
   const ticks = new Set<number>();
   for (const d of deathEvents) {
-    const round = d.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    if (roundOf(d, context.liveRounds) == null) continue;
     ticks.add(d.tick - PRE_DEATH_TICK_OFFSET);
   }
   return [...ticks];
@@ -51,9 +51,7 @@ export function collectUnusedUtility(
   context: MatchContext,
   steamIds: string[],
 ): CollectorOut {
-  const out: CollectorOut = new Map();
-  const steamSet = new Set(steamIds);
-  for (const sid of steamIds) out.set(sid, {});
+  const { out, steamSet } = initCollector<SabFields>(steamIds);
 
   const inventoryByTickAndPlayer = new Map<string, string[]>();
   for (const row of inventoryRows) {
@@ -61,8 +59,7 @@ export function collectUnusedUtility(
   }
 
   for (const d of deathEvents) {
-    const round = d.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    if (roundOf(d, context.liveRounds) == null) continue;
     const victim = d.user_steamid;
     if (!victim || !steamSet.has(victim)) continue;
 

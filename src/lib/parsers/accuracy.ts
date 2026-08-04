@@ -3,6 +3,7 @@ import { isTeamKill, type MatchContext, type PlayerHurtRow } from './matchContex
 import type { WeaponFireRow } from './utility';
 import { HITGROUP_HEAD } from './constants';
 import { WEAPON_CATEGORY, stripWeaponPrefix } from './weaponClasses';
+import { initCollector, roundOf } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -28,14 +29,11 @@ export function collectAccuracy(
   context: MatchContext,
   steamIds: string[],
 ): CollectorOut {
-  const out: CollectorOut = new Map();
-  const steamSet = new Set(steamIds);
-  for (const sid of steamIds) out.set(sid, {});
+  const { out, steamSet } = initCollector<SabFields>(steamIds);
 
   for (const f of fireEvents) {
     if (!WEAPON_CATEGORY[stripWeaponPrefix(f.weapon)]) continue;
-    const round = f.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    if (roundOf(f, context.liveRounds) == null) continue;
     const shooter = f.user_steamid;
     if (!shooter || !steamSet.has(shooter)) continue;
     const p = out.get(shooter)!;
@@ -44,8 +42,7 @@ export function collectAccuracy(
 
   for (const h of hurtEvents) {
     if (!WEAPON_CATEGORY[h.weapon]) continue;
-    const round = h.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    if (roundOf(h, context.liveRounds) == null) continue;
 
     const attacker = h.attacker_steamid;
     const victim = h.user_steamid;

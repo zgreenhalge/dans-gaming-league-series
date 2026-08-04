@@ -1,5 +1,6 @@
 import type { SabFields } from '../types';
 import type { MatchContext } from './matchContext';
+import { initCollector, roundOf } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -50,8 +51,8 @@ function buildSmokeLives(
 ): SmokeLife[] {
   const expireByKey = new Map<string, number>();
   for (const e of expireEvents) {
-    const round = e.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const round = roundOf(e, context.liveRounds);
+    if (round == null) continue;
     expireByKey.set(`${round}::${e.entityid}`, e.tick);
   }
 
@@ -60,8 +61,8 @@ function buildSmokeLives(
 
   const lives: SmokeLife[] = [];
   for (const d of detonateEvents) {
-    const round = d.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const round = roundOf(d, context.liveRounds);
+    if (round == null) continue;
     const thrower = d.user_steamid;
     if (!thrower) continue;
     const endTick = expireByKey.get(`${round}::${d.entityid}`) ?? roundEndTick.get(round) ?? d.tick;
@@ -108,9 +109,7 @@ export function collectSmokes(
   context: MatchContext,
   steamIds: string[],
 ): CollectorOut {
-  const out: CollectorOut = new Map();
-  const steamSet = new Set(steamIds);
-  for (const sid of steamIds) out.set(sid, {});
+  const { out, steamSet } = initCollector<SabFields>(steamIds);
 
   const positionsByTick = new Map<number, PlayerPositionRow[]>();
   for (const p of positionRows) {

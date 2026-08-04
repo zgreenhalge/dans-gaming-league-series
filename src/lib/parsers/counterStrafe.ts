@@ -1,6 +1,7 @@
 import type { SabFields } from '../types';
 import type { MatchContext } from './matchContext';
 import type { WeaponFireRow } from './utility';
+import { initCollector, roundOf } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -34,7 +35,7 @@ export function neededCounterStrafeTicks(fireEvents: WeaponFireRow[], liveRounds
   const ticks = new Set<number>();
   for (const f of fireEvents) {
     if (!RIFLE_WEAPONS.has(f.weapon)) continue;
-    if (!liveRounds.has(f.total_rounds_played + 1)) continue;
+    if (roundOf(f, liveRounds) == null) continue;
     ticks.add(f.tick);
     ticks.add(f.tick - SPEED_TICK_WINDOW);
   }
@@ -47,17 +48,14 @@ export function collectCounterStrafe(
   context: MatchContext,
   steamIds: string[],
 ): CollectorOut {
-  const out: CollectorOut = new Map();
-  const steamSet = new Set(steamIds);
-  for (const sid of steamIds) out.set(sid, {});
+  const { out, steamSet } = initCollector<SabFields>(steamIds);
 
   const rowLookup = new Map<string, PlayerTickRow>();
   for (const r of tickRows) rowLookup.set(`${r.steamid}::${r.tick}`, r);
 
   for (const f of fireEvents) {
     if (!RIFLE_WEAPONS.has(f.weapon)) continue;
-    const round = f.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    if (roundOf(f, context.liveRounds) == null) continue;
     const shooter = f.user_steamid;
     if (!shooter || !steamSet.has(shooter)) continue;
 

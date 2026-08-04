@@ -1,5 +1,6 @@
 import type { SabFields } from '../types';
 import { isTeamKill, type MatchContext, type PlayerDeathRow } from './matchContext';
+import { initCollector, roundOf } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -10,13 +11,10 @@ export function collectTeamkill(
   context: MatchContext,
   steamIds: string[],
 ): CollectorOut {
-  const out: CollectorOut = new Map();
-  const steamSet = new Set(steamIds);
-  for (const sid of steamIds) out.set(sid, {});
+  const { out, steamSet } = initCollector<SabFields>(steamIds);
 
   for (const d of deathEvents) {
-    const round = d.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    if (roundOf(d, context.liveRounds) == null) continue;
 
     const attacker = d.attacker_steamid;
     const victim = d.user_steamid;

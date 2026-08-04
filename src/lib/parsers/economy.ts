@@ -1,4 +1,5 @@
 import type { MatchContext } from './matchContext';
+import { roundOf } from './_shared';
 
 export type EconomyType = 'eco' | 'force_buy' | 'full_buy';
 
@@ -30,7 +31,7 @@ export function classifyEconomy(equipmentValue: number): EconomyType {
 export function neededEconomyTicks(freezeEndEvents: RoundFreezeEndRow[], liveRounds: Set<number>): number[] {
   const ticks = new Set<number>();
   for (const e of freezeEndEvents) {
-    if (!liveRounds.has(e.total_rounds_played + 1)) continue;
+    if (roundOf(e, liveRounds) == null) continue;
     ticks.add(e.tick);
   }
   return [...ticks];
@@ -56,8 +57,8 @@ export function classifyRoundEconomy(
   for (const r of equipmentRows) rowLookup.set(`${r.steamid}::${r.tick}`, r);
 
   for (const e of freezeEndEvents) {
-    const round = e.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const round = roundOf(e, context.liveRounds);
+    if (round == null) continue;
 
     for (const sid of steamIds) {
       if (!steamSet.has(sid)) continue;

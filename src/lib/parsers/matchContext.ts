@@ -1,5 +1,6 @@
 import { parseEvent, parseHeader } from '@laihoe/demoparser2';
 import { buildRoundSides, sideForFaction, type RoundEndRow, type RoundSideInfo } from './roundSides';
+import { roundOf } from './_shared';
 
 /**
  * Tick the live match starts at — the last `begin_new_match`. MatchZy fires it on every warmup
@@ -88,8 +89,8 @@ export function buildRoundDeaths(
 ): Map<string, Set<number>> {
   const roundDeaths = new Map<string, Set<number>>();
   for (const d of deathEvents) {
-    const roundNumber = d.total_rounds_played + 1;
-    if (!liveRounds.has(roundNumber)) continue;
+    const roundNumber = roundOf(d, liveRounds);
+    if (roundNumber == null) continue;
     const victim = d.user_steamid;
     if (!victim || !isKnownPlayer(victim)) continue;
     if (!roundDeaths.has(victim)) roundDeaths.set(victim, new Set());
