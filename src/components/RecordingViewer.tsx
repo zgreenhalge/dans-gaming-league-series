@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Modal from "./Modal";
 
 // Parse a YouTube video ID out of the URL a user pastes from the browser bar or the
 // "Share" button. Returns null for anything that isn't a recognizable YouTube URL, so
@@ -111,37 +112,33 @@ export function RecordingUrlForm({ matchId, videoId }: { matchId: number; videoI
     "tracked text-[10px] hover:underline underline-offset-2 transition-colors self-start disabled:opacity-40";
 
   const clearConfirm = showClearConfirm && (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay-strong)] px-4"
-      onClick={() => setShowClearConfirm(false)}
+    <Modal
+      onClose={() => setShowClearConfirm(false)}
+      overlayClassName="bg-[var(--overlay-strong)] px-4"
+      panelClassName="w-full max-w-sm border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] p-5 shadow-lg"
     >
-      <div
-        className="w-full max-w-sm border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] p-5 shadow-lg"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <p className="mb-4 font-display text-[15px] text-[var(--color-text-primary)]">
-          Remove this recording?
-        </p>
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => setShowClearConfirm(false)}
-            disabled={busy}
-            className="tracked text-[11px] font-semibold px-3 py-2 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-40"
-          >
-            Keep it
-          </button>
-          <button
-            type="button"
-            onClick={handleClear}
-            disabled={busy}
-            className="tracked text-[11px] font-semibold px-3 py-2 border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)] bg-[var(--color-accent-red-bg)] hover:brightness-110 transition-all disabled:opacity-40"
-          >
-            {busy ? "Removing…" : "Remove"}
-          </button>
-        </div>
+      <p className="mb-4 font-display text-[15px] text-[var(--color-text-primary)]">
+        Remove this recording?
+      </p>
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => setShowClearConfirm(false)}
+          disabled={busy}
+          className="tracked text-[11px] font-semibold px-3 py-2 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-40"
+        >
+          Keep it
+        </button>
+        <button
+          type="button"
+          onClick={handleClear}
+          disabled={busy}
+          className="tracked text-[11px] font-semibold px-3 py-2 border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)] bg-[var(--color-accent-red-bg)] hover:brightness-110 transition-all disabled:opacity-40"
+        >
+          {busy ? "Removing…" : "Remove"}
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 
   // Collapsed: a recording exists and we're not editing — show the controls as links.
