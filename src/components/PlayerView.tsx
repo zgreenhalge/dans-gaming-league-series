@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { PlayerHistoryRow, TrophyEntry, H2HData, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { deriveRates, extractSeasonNumber, groupByMap, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
+import { aggregatePlayerStats, aggregatePlayerStatsByMap, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import DevGate from './DevGate';
@@ -47,93 +47,8 @@ const GAUNTLET_PLACEMENTS: Record<1 | 2 | 3, string> = {
   3: '3rd Place',
 };
 
-interface Aggregate {
-  matches: number;
-  wins: number;
-  losses: number;
-  wr: number;
-  kills: number;
-  assists: number;
-  deaths: number;
-  kd: number;
-  damage: number;
-  rounds_played: number;
-  rounds_won: number;
-  rwr: number;
-  adr: number;
-  kills_in_wins: number;
-  deaths_in_wins: number;
-  kills_in_losses: number;
-  deaths_in_losses: number;
-}
-
 function isPlayed(r: PlayerHistoryRow): boolean {
   return isPlayedScore(r.final_score) && r.rounds_played > 0;
-}
-
-function aggregate(rowsRaw: PlayerHistoryRow[]): Aggregate {
-  const rows = rowsRaw.filter(isPlayed);
-  const matches = rows.length;
-  const wins = rows.filter((r) => r.is_win).length;
-  const losses = matches - wins;
-  const kills = rows.reduce((s, r) => s + r.kills, 0);
-  const assists = rows.reduce((s, r) => s + r.assists, 0);
-  const deaths = rows.reduce((s, r) => s + r.deaths, 0);
-  const damage = rows.reduce((s, r) => s + r.damage, 0);
-  const rounds_played = rows.reduce((s, r) => s + r.rounds_played, 0);
-  const rounds_won = rows.reduce((s, r) => s + r.rounds_won, 0);
-  const kills_in_wins = rows.reduce((s, r) => s + (r.is_win ? r.kills : 0), 0);
-  const deaths_in_wins = rows.reduce((s, r) => s + (r.is_win ? r.deaths : 0), 0);
-  const kills_in_losses = rows.reduce((s, r) => s + (r.is_win ? 0 : r.kills), 0);
-  const deaths_in_losses = rows.reduce((s, r) => s + (r.is_win ? 0 : r.deaths), 0);
-  const rates = deriveRates({
-    matches_played: matches,
-    matches_won: wins,
-    total_kills: kills,
-    total_deaths: deaths,
-    total_rounds_played: rounds_played,
-    total_rounds_won: rounds_won,
-    total_damage: damage,
-  });
-  return {
-    matches,
-    wins,
-    losses,
-    wr: rates.win_rate_percentage,
-    kills,
-    assists,
-    deaths,
-    kd: rates.kd_ratio,
-    damage,
-    rounds_played,
-    rounds_won,
-    rwr: rates.rwr_percentage,
-    adr: rates.overall_adr,
-    kills_in_wins,
-    deaths_in_wins,
-    kills_in_losses,
-    deaths_in_losses,
-  };
-}
-
-interface MapAgg {
-  map: string;
-  wins: number;
-  losses: number;
-  wr: number;
-  rwr: number;
-  adr: number;
-}
-
-function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
-  const buckets = groupByMap(rows, (r) => r.map);
-  const out: MapAgg[] = [];
-  for (const { display, rows: list } of buckets.values()) {
-    const a = aggregate(list);
-    if (a.matches === 0) continue;
-    out.push({ map: display, wins: a.wins, losses: a.losses, wr: a.wr, rwr: a.rwr, adr: a.adr });
-  }
-  return out.sort((a, b) => b.wr - a.wr || b.rwr - a.rwr || b.adr - a.adr);
 }
 
 /** Percentage of `all` strictly below `value` — "you're ahead of N% of the league". */
@@ -308,12 +223,12 @@ export default function PlayerView({
     );
   }, [filter, ehogHistory, includeRegular, includeGauntlet, regularSeasons]);
 
-  const agg = aggregate(filtered);
+  const agg = aggregatePlayerStats(filtered);
   const peakEhog = useMemo(() => {
     if (filteredEhog.length === 0) return null;
     return Math.max(...filteredEhog.map((h) => h.ehogRating));
   }, [filteredEhog]);
-  const maps = aggregateByMap(filtered);
+  const maps = aggregatePlayerStatsByMap(filtered);
   const playerMapStats = aggregatePlayerMapStats(filtered);
   const playerSideStats = aggregatePlayerSideStats(filtered);
   const playedHistory = filtered.filter(isPlayed);
@@ -536,7 +451,7 @@ export default function PlayerView({
                     if (pairedGntId != null && r.season_id === pairedGntId) return includeGauntlet;
                     return false;
                   });
-                  const a = aggregate(seasonRows);
+                  const a = aggregatePlayerStats(seasonRows);
                   return {
                     season_id: s.id,
                     player_id: s.id,
