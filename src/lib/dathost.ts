@@ -219,6 +219,24 @@ export async function getFileBytes(id: string, remote: string): Promise<Buffer |
 }
 
 /**
+ * A file's current size in bytes, from the same endpoint `getFileBytes` reads — without buffering
+ * the body, so repeatedly checking whether a large (~200MB+) demo is still growing doesn't mean
+ * repeatedly downloading it. Returns `null` on a 404 (not there yet) or if the response carries no
+ * `Content-Length` (can't confirm a size this round — same "not resolved yet" meaning as a 404 to
+ * callers, not a failure).
+ */
+export async function getFileSize(id: string, remote: string): Promise<number | null> {
+  const res = await request('GET', `/game-servers/${id}/files/${remote}`);
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new DathostError(`DatHost GET /game-servers/${id}/files/${remote} → ${res.status}`, res.status, null);
+  }
+  await res.body?.cancel();
+  const length = res.headers.get('content-length');
+  return length ? Number(length) : null;
+}
+
+/**
  * Load a per-match MatchZy config. `urlOrCommand` is either an authenticated config URL (→
  * `matchzy_loadmatch_url <url>`) or, if it contains a space, a full `matchzy_*` console line.
  */

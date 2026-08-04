@@ -131,9 +131,15 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
 - The demo's remote path is deterministic: `infra/matchzy/cfg/MatchZy/config.cfg` sets
   `matchzy_demo_path MatchZy/` and `matchzy_demo_name_format "{MATCH_ID}"`, so it always lands at
   `MatchZy/{matchId}.dem` on the game server — no directory listing/discovery needed.
-  `fetchDemoFromDathost` (`src/lib/demo/fetchFromDathost.ts`) polls that path for up to 5 minutes (GOTV
-  holds the file back for ~120s after `map_result` while it flushes the recording), gzips it, and
-  writes it to R2 at the same deterministic `demoKey(matchId)` a browser upload would use — both
+  Since MatchZy's recording is a `tv_record` wrapper around GOTV (see
+  [`cs2-stack-reference.md`](./cs2-stack-reference.md#gotv-vs-demo-recording--matchzys-recording-is-gotv-not-a-separate-system)),
+  that path already exists — and is still growing — for the entire match, not just after it ends, so
+  merely finding the file there doesn't mean the recording is finished. `fetchDemoFromDathost`
+  (`src/lib/demo/fetchFromDathost.ts`) instead waits out a 120s floor (GOTV's own post-`map_result`
+  flush delay) before ever checking, then polls the file's size (a cheap `Content-Length` read, not a
+  download) with exponential backoff until two consecutive checks agree it's stopped growing — only
+  then does it download, gzip, and write it to R2 at the same deterministic `demoKey(matchId)` a
+  browser upload would use, within an 8-minute overall ceiling. Both
   `demo-ingest.ts` and `replay-extract.ts` call it themselves, at the top of their own run, only if the
   demo isn't already in R2, so either one can be dispatched (or re-dispatched) independently. Since both
   are auto-dispatched together off the same `map_result` event and tend to detect the demo on the same

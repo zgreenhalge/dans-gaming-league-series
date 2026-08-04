@@ -9,13 +9,27 @@
 // at `MatchZy/{matchId}.dem` with no directory listing/discovery needed.
 
 import { gzipSync } from 'node:zlib';
-import { DathostError, getFileBytes, pollUntil } from '../dathost';
+import { DathostError, getFileBytes, getFileSize, pollUntil } from '../dathost';
 import { getR2Object, putR2Object, demoKey } from '../r2';
 
-// GOTV's flush delay holds the demo back for ~120s after `map_result`
-// (`tvFlushDelay`/`mp_match_restart_delay` in MatchZy's own match-end handling); comfortably longer.
-const FETCH_TIMEOUT_MS = 5 * 60_000;
-const FETCH_INTERVAL_MS = 10_000;
+// GOTV's recording (`tv_record`) starts at match go-live, not at match end, so the file at
+// `demoRemotePath` already exists — and is still growing — for the whole match. A poll that only
+// checks "does this path resolve" would happily grab a still-growing recording the moment it's
+// dispatched; `fetchDemoFromDathost` instead waits out `FLUSH_FLOOR_MS` — GOTV's own flush delay
+// after `map_result` (`tvFlushDelay`/`mp_match_restart_delay` in MatchZy's match-end handling) —
+// before ever checking, then confirms the file has actually stopped growing (the flush isn't a fixed
+// duration) before trusting it.
+const FLUSH_FLOOR_MS = 120_000;
+
+// After the floor, two consecutive size reads that agree mean the file has stopped growing.
+// Backed off exponentially between checks since there's no fixed cadence for how long a flush past
+// the floor takes.
+const STABILITY_CHECK_BASE_MS = 5_000;
+const STABILITY_CHECK_MAX_MS = 30_000;
+
+// Overall ceiling on the fetch, floor included — comfortably longer than the floor plus a realistic
+// run of backed-off stability checks.
+const FETCH_TIMEOUT_MS = 8 * 60_000;
 
 // `demo-ingest.yml` and `replay-extract.yml` are auto-dispatched together off the same `map_result`
 // event and tend to detect the demo on the same DatHost poll cycle, so both would otherwise pull,
@@ -58,16 +72,48 @@ async function waitForConcurrentPull(matchId: number): Promise<Buffer | null> {
   }
 }
 
-/** Poll DatHost for a match's demo until it appears, gzip-write it to R2 at `demoKey(matchId)`, and
- *  return those same gzipped bytes (so `ensureDemoInR2` doesn't have to read them straight back).
- *  Throws if it never shows up within `FETCH_TIMEOUT_MS`. */
+/** `setTimeout` as a promise — the plain sleep this file's floor/backoff waits need. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Waits for the file at `remote` to report the same size on two consecutive checks — still-growing
+ *  files, and ones DatHost can't yet resolve a size for, never satisfy this — backing off
+ *  exponentially between checks. Throws once `deadline` passes with no two agreeing reads. */
+async function waitForStableFileSize(serverId: string, remote: string, deadline: number): Promise<void> {
+  let lastSize: number | null = null;
+  let intervalMs = STABILITY_CHECK_BASE_MS;
+  for (;;) {
+    const size = await getFileSize(serverId, remote);
+    if (size !== null && size === lastSize) return;
+    lastSize = size;
+    if (Date.now() >= deadline) {
+      throw new DathostError(
+        `Demo at ${remote} on server ${serverId} never stabilized in size before the deadline`,
+        504,
+        null,
+      );
+    }
+    await sleep(intervalMs);
+    intervalMs = Math.min(intervalMs * 2, STABILITY_CHECK_MAX_MS);
+  }
+}
+
+/** Wait out `FLUSH_FLOOR_MS`, confirm the file's size has stabilized, then download it and gzip-write
+ *  it to R2 at `demoKey(matchId)`, returning those same gzipped bytes (so `ensureDemoInR2` doesn't
+ *  have to read them straight back). Throws if it never stabilizes within `FETCH_TIMEOUT_MS`. */
 async function fetchDemoFromDathost(serverId: string, matchId: number): Promise<Buffer> {
   const remote = demoRemotePath(matchId);
-  const bytes = await pollUntil(() => getFileBytes(serverId, remote), {
-    timeoutMs: FETCH_TIMEOUT_MS,
-    intervalMs: FETCH_INTERVAL_MS,
-    timeoutMessage: `Demo never appeared at ${remote} on server ${serverId} after ${Math.round(FETCH_TIMEOUT_MS / 1000)}s`,
-  });
+  const deadline = Date.now() + FETCH_TIMEOUT_MS;
+
+  await sleep(FLUSH_FLOOR_MS);
+  await waitForStableFileSize(serverId, remote, deadline);
+
+  const bytes = await getFileBytes(serverId, remote);
+  if (!bytes) {
+    throw new DathostError(`Demo at ${remote} on server ${serverId} disappeared right after stabilizing`, 504, null);
+  }
+
   const gzipped = gzipSync(bytes);
   await putR2Object(demoKey(matchId), gzipped, {
     contentType: 'application/octet-stream',
