@@ -1,6 +1,6 @@
 # CI — lint/test/build gate (issue #116).
 #
-# Runs on every PR and push to main. Two independent jobs, gated by changed paths so an
+# Runs on every PR and push to main. Independent jobs, gated by changed paths so an
 # ingestion-only PR doesn't spin up Node and vice versa. Frontend build needs real Supabase
 # creds because `next build` prerenders static pages that read from Supabase at build time.
 
@@ -24,6 +24,7 @@ jobs:
     outputs:
       frontend: ${{ steps.filter.outputs.frontend }}
       ingestion: ${{ steps.filter.outputs.ingestion }}
+      ehog: ${{ steps.filter.outputs.ehog }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -41,6 +42,9 @@ jobs:
               - '!LICENSE'
             ingestion:
               - 'ingestion/**'
+            ehog:
+              - 'ehog/**'
+              - 'src/lib/ehog.ts'
 
   frontend:
     needs: changes
@@ -63,6 +67,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Lint
         run: npm run lint
@@ -95,3 +102,32 @@ jobs:
 
       - name: Test
         run: python3 -m unittest tests.test_ingest
+
+  ehog:
+    needs: changes
+    if: needs.changes.outputs.ehog == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Python dependencies
+        run: pip install -r api/ehog/requirements.txt
+
+      - name: Parity test
+        run: python ehog/test_parity.py && npx tsx ehog/test_parity.ts

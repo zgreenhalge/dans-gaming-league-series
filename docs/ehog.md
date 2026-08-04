@@ -198,6 +198,9 @@ python ehog/backfill.py --calibration --grid
 python ehog/test_parity.py && npx tsx ehog/test_parity.ts
 ```
 
+The parity test also runs in CI (`.github/workflows/ci.yml`'s `ehog` job), gated on changes to
+`ehog/**` or `src/lib/ehog.ts`.
+
 ## Keeping Python and TS in sync
 
 The rating math is ~10 lines in each language. The guard against drift is:
