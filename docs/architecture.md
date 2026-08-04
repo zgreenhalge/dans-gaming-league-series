@@ -359,16 +359,16 @@ Wired into sixteen operations today:
 | `schedule_confirm` | `season` (regular) | `confirmSeasonScheduleDraft()`'s (`season-schedule-draft-engine.ts`) mid-loop failure, before the compensating cleanup runs |
 | `schedule_confirm_cleanup` | `season` (regular) | `confirmSeasonScheduleDraft()`'s compensating cleanup, if that cleanup itself fails |
 
-Most are cleared automatically the next time that same (entity, operation) succeeds —
+Each is cleared automatically the next time that same (entity, operation) succeeds —
 `tryBuildGauntletShape()` and `trySeedGauntlet()` clear their own on success, `checkGauntletCompletion()`
 clears `gauntlet_archive` once both halves of the archive (the gauntlet season and its paired regular
 season) are confirmed archived — tracking each half's outstanding status independently so a run that
 archived one but failed on the other retries only the missing half next time — `deleteGauntletSeason()`
 clears `gauntlet_build`/`gauntlet_seed` on the regular season and `gauntlet_archive` on the gauntlet
-season itself as part of a reset, and most of the remaining hooks clear theirs inline once their
-surrounding try block completes without error. The four `schedule_*` operations are the exception —
-`generateSeasonScheduleDraft()`/`confirmSeasonScheduleDraft()` never clear them on a later success, so
-a recorded row there only ever goes away via the admin console's Dismiss button.
+season itself as part of a reset, and the remaining hooks clear theirs inline once their surrounding
+try block completes without error — including `generateSeasonScheduleDraft()`/`confirmSeasonScheduleDraft()`,
+which clear both their own operation and its paired `_cleanup` operation (in case an earlier attempt's
+compensating cleanup also failed) on a later success.
 
 `getOpsErrors()` in `src/lib/queries/ops.ts` reads every live row, resolving `entity_id` to a display name
 (season/match name, or "EHOG Recompute" for `system`). The admin console's Activity → Errored tab

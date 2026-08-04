@@ -15,7 +15,7 @@ import {
   type DraftScheduleWeek,
   type ValidationIssue,
 } from './season-schedule-validation';
-import { recordOpsError } from './ops-errors';
+import { recordOpsError, clearOpsError } from './ops-errors';
 
 /** Thrown when a caller tries to generate/save/delete a season's draft schedule while another such
  * operation is already in flight for the same season — see claimScheduleDraftLock(). */
@@ -187,6 +187,8 @@ export async function generateSeasonScheduleDraft(
         const { error: matchErr } = await supabaseAdmin.from('season_schedule_draft_matches').insert(matchRows);
         if (matchErr) throw matchErr;
       }
+      await clearOpsError(supabaseAdmin, 'season', seasonId, 'schedule_generate');
+      await clearOpsError(supabaseAdmin, 'season', seasonId, 'schedule_generate_cleanup');
     } catch (err) {
       // Not a real transaction — a mid-loop failure would otherwise leave a half-generated draft
       // (some weeks present, the rest missing) with no automatic cleanup. The triggering error is
@@ -450,6 +452,8 @@ export async function confirmSeasonScheduleDraft(supabaseAdmin: SupabaseClient, 
           if (statsErr) throw statsErr;
         }
       }
+      await clearOpsError(supabaseAdmin, 'season', seasonId, 'schedule_confirm');
+      await clearOpsError(supabaseAdmin, 'season', seasonId, 'schedule_confirm_cleanup');
     } catch (err) {
       // Not a real transaction — a mid-loop failure would otherwise leave a half-materialized real
       // schedule behind, and since generateSeasonScheduleDraft()/saveSeasonScheduleDraft()/
