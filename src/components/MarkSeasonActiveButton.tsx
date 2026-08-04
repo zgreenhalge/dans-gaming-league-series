@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArmedConfirmButton } from './ArmedConfirmButton';
+import { useAsyncAction } from './useAsyncAction';
 
 interface Props {
   seasonId: number;
@@ -19,15 +20,12 @@ interface Props {
 export default function MarkSeasonActiveButton({ seasonId, canEdit, seasonStatus }: Props) {
   const router = useRouter();
   const [armed, setArmed] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useAsyncAction();
   const [warning, setWarning] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   async function activate() {
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       const res = await fetch(`/api/seasons/${seasonId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -35,17 +33,14 @@ export default function MarkSeasonActiveButton({ seasonId, canEdit, seasonStatus
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(body.error ?? 'Failed to activate season.');
         setArmed(false);
-        return;
+        throw new Error(body.error ?? 'Failed to activate season.');
       }
       if (body.gauntletBuilt === false) {
         setWarning(`Season is live, but its gauntlet bracket wasn't built: ${body.gauntletBuildError}`);
       }
       startTransition(() => router.refresh());
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   // Keep showing the warning even after refresh flips seasonStatus away from UPCOMING — it's the

@@ -7,28 +7,23 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArmedConfirmButton } from './ArmedConfirmButton';
+import { useAsyncAction } from './useAsyncAction';
 
 export default function DeleteSeasonButton({ seasonId }: { seasonId: number }) {
   const router = useRouter();
   const [armed, setArmed] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useAsyncAction();
 
   async function del() {
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       const res = await fetch(`/api/seasons/${seasonId}`, { method: 'DELETE' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError(body.error ?? 'Failed to delete season.');
         setArmed(false);
-        return;
+        throw new Error(body.error ?? 'Failed to delete season.');
       }
       router.refresh();
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
