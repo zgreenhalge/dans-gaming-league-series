@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { winRatePct, tabCls } from '@/lib/util';
 import type { H2HData } from '@/lib/queries';
 import { duoBlendedScorer, duoBreakdownScorer, rivalBlendedScorer, rivalBreakdownScorer } from '@/lib/queries';
+import EmptyState from './EmptyState';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
 import { DuoDetail, RivalDetail } from './MatchupDetail';
@@ -264,7 +265,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
 
   const hasData = h2hRows.length > 0 || b2bRows.length > 0;
   if (!hasData) {
-    return <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No matchup data yet.</div>;
+    return <EmptyState message="No matchup data yet." />;
   }
 
   const H2H_COLS: { col: H2HSortCol; label: string; title?: string; align?: 'left' | 'right' | 'center' }[] = [
@@ -350,7 +351,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
       {/* H2H table */}
       {subTab === 'h2h' && (
         h2hRows.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No opponent data yet.</div>
+          <EmptyState message="No opponent data yet." />
         ) : (
           <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
             <table className="w-full min-w-max border-collapse text-[13px]">
@@ -426,7 +427,7 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
       {/* B2B table */}
       {subTab === 'b2b' && (
         b2bRows.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No teammate data yet.</div>
+          <EmptyState message="No teammate data yet." />
         ) : (
           <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] overflow-x-auto">
             <table className="w-full min-w-max border-collapse text-[13px]">

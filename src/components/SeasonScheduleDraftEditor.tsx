@@ -9,6 +9,7 @@ import {
   type ValidationIssue,
 } from '@/lib/season-schedule-validation';
 import type { DoubleheaderPolicy } from '@/lib/season-schedule';
+import EmptyState from './EmptyState';
 
 interface Player {
   id: number;
@@ -193,9 +194,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
   if (weeks.length === 0) {
     return (
       <div className="flex flex-col gap-4">
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-          No schedule yet — generate one from the current roster ({players.length} players).
-        </div>
+        <EmptyState message={`No schedule yet — generate one from the current roster (${players.length} players).`} />
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--color-text-secondary)]">
             <input

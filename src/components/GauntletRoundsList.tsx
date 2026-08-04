@@ -1,5 +1,6 @@
 'use client';
 
+import EmptyState from './EmptyState';
 import { MatchCard } from './MatchCard';
 import { PlayerName } from './PlayerName';
 import { allMatchesPlayed, isPlayedScore, canonicalGauntletRankMap, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
@@ -219,11 +220,7 @@ export default function GauntletRoundsList({
   const rankMap = canonicalGauntletRankMap(allRounds);
 
   if (displayRounds.length === 0) {
-    return (
-      <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-        No matches found.
-      </div>
-    );
+    return <EmptyState message="No matches found." />;
   }
 
   return (

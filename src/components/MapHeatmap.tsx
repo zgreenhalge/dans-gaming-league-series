@@ -14,6 +14,7 @@ import { isAbortError } from '@/lib/util';
 import { readTheme } from './replayTheme';
 import { useMapRadar } from './useMapRadar';
 import { useCanvasSize } from './useCanvasSize';
+import EmptyState from './EmptyState';
 
 type SideFilter = 'all' | 'CT' | 'T';
 
@@ -273,11 +274,7 @@ export default function MapHeatmap({
   }
 
   if (points.length === 0) {
-    return (
-      <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-        No heatmap data yet — generate replays for this map&apos;s matches to populate it.
-      </div>
-    );
+    return <EmptyState message="No heatmap data yet — generate replays for this map's matches to populate it." />;
   }
 
   return (

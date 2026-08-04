@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import EmptyState from './EmptyState';
 import H2HMatrix, { type H2HPair } from './H2HMatrix';
 import { DuoDetail, RivalDetail } from './MatchupDetail';
 import { winRatePct, findDuo, findRival } from '@/lib/util';
@@ -67,11 +68,7 @@ export default function H2HSection({ data, initialPair }: { data: H2HData; initi
   }, [rivals, rivalScore]);
 
   if (players.length === 0 || (duos.length === 0 && rivals.length === 0)) {
-    return (
-      <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-        Not enough head-to-head data yet.
-      </div>
-    );
+    return <EmptyState message="Not enough head-to-head data yet." />;
   }
 
   const activeDuo = active?.type === 'partner' ? findDuo(duos, active.a, active.b) : undefined;

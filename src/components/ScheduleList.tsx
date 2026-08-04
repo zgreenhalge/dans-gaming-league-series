@@ -1,5 +1,6 @@
 'use client';
 
+import EmptyState from './EmptyState';
 import { MatchCard, type MatchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
 import { isPlayedScore, fmtWindowDate, weekWindow } from '@/lib/util';
@@ -91,11 +92,7 @@ export default function ScheduleList({
   currentPlayerId: number | null;
 }) {
   if (displaySchedule.length === 0) {
-    return (
-      <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-        No matches found.
-      </div>
-    );
+    return <EmptyState message="No matches found." />;
   }
 
   return (

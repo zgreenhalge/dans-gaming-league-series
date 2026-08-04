@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fmtUtcShort, tabCls } from '@/lib/util';
+import EmptyState from './EmptyState';
 import TabBar from './TabBar';
 import {
   BACKGROUND_JOB_TYPES,
@@ -376,9 +377,7 @@ export function AdminActivityFeed({
       </div>
 
       {visible.length === 0 ? (
-        <div className="font-mono text-[13px] text-[var(--color-text-secondary)] border border-[var(--color-border-tertiary)] rounded px-4 py-8 text-center">
-          {tierEvents.length === 0 ? EMPTY_MESSAGE[tab] : 'Nothing matches this filter.'}
-        </div>
+        <EmptyState size="lg" message={tierEvents.length === 0 ? EMPTY_MESSAGE[tab] : 'Nothing matches this filter.'} />
       ) : (
         <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden max-h-[520px] overflow-y-auto [&>*:first-child]:border-t-0">
           {visible.map((e) =>

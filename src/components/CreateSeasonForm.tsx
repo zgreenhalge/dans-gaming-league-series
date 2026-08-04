@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toSentenceCase } from '@/lib/maps';
+import EmptyState from './EmptyState';
 
 interface Props {
   knownMaps: string[];
@@ -96,11 +97,7 @@ export function CreateSeasonForm({ knownMaps }: Props) {
               </span>
             </label>
           ))}
-          {allMaps.length === 0 && (
-            <div className="px-4 py-3 font-mono text-[12px] text-[var(--color-text-secondary)]">
-              No maps found. Add one below.
-            </div>
-          )}
+          {allMaps.length === 0 && <EmptyState message="No maps found. Add one below." className="px-4 py-3" />}
         </div>
       </div>
 

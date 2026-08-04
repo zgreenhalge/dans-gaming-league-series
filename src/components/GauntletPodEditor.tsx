@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GauntletBracketDiagram } from './GauntletBracketDiagram';
+import EmptyState from './EmptyState';
 import {
   type DraftPod,
   type DraftSlot,
@@ -282,9 +283,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
 
       <div className="flex flex-col gap-4">
         <div className="tracked text-[10px] text-[var(--color-text-secondary)]">Pods</div>
-        {pods.length === 0 && (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No pods yet.</div>
-        )}
+        {pods.length === 0 && <EmptyState message="No pods yet." />}
         {pods.map((pod) => (
           <PodCard
             key={pod.key}

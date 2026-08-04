@@ -7,6 +7,7 @@ import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
 import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type MatchPickBanInput } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import { tabCls } from '@/lib/util';
+import EmptyState from './EmptyState';
 
 type SortKey = string;
 
@@ -485,7 +486,7 @@ function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
         <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Score distribution</span>
       </div>
       {dist.total === 0 ? (
-        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No match data.</div>
+        <EmptyState message="No match data." />
       ) : (
         <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
           <table className="w-full border-collapse text-[12px]">
@@ -537,9 +538,7 @@ function MapsAndSidesSection({
           <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Map pick/ban stats</span>
         </div>
         {mapPickBanStats.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-            No map data.
-          </div>
+          <EmptyState message="No map data." />
         ) : (
           <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
             <table className="w-full border-collapse text-[12px]">
@@ -582,9 +581,7 @@ function MapsAndSidesSection({
           <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Per-side stats</span>
         </div>
         {perSideStats.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-            No side data.
-          </div>
+          <EmptyState message="No side data." />
         ) : (
           <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
             <table className="w-full border-collapse text-[12px]">

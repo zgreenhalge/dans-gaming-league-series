@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GauntletBracketDiagram } from './GauntletBracketDiagram';
+import EmptyState from './EmptyState';
 import type { BracketPod } from '@/lib/queries';
 
 interface Props {
@@ -123,10 +124,7 @@ export function CreateGauntletForm({ seasons }: Props) {
 
   if (seasons.length === 0) {
     return (
-      <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-        No active seasons are eligible — either nothing is ACTIVE, or every active season already has
-        a gauntlet.
-      </div>
+      <EmptyState message="No active seasons are eligible — either nothing is ACTIVE, or every active season already has a gauntlet." />
     );
   }
 

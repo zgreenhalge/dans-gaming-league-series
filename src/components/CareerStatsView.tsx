@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import EmptyState from './EmptyState';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import H2HSection from './H2HSection';
@@ -243,9 +244,7 @@ export default function CareerStatsView({
 
       {tab === 'leaderboard' && (
         rows.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-            No data for this selection.
-          </div>
+          <EmptyState message="No data for this selection." />
         ) : (
           <>
             <div className="mb-4">
@@ -263,9 +262,7 @@ export default function CareerStatsView({
 
       {tab === 'stats' && (
         rows.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-            No data for this selection.
-          </div>
+          <EmptyState message="No data for this selection." />
         ) : (
           <BasicStatsView rows={rows} matches={filteredMatches} />
         )

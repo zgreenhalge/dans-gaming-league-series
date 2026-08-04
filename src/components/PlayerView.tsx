@@ -9,6 +9,7 @@ import { deriveRates, extractSeasonNumber, groupByMap, isPlayedScore, seasonTitl
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import DevGate from './DevGate';
+import EmptyState from './EmptyState';
 import { MatchCard } from './MatchCard';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
@@ -583,9 +584,7 @@ export default function PlayerView({
                 <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Pick/ban stats</span>
               </div>
               {playerMapStats.length === 0 ? (
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                  No map data.
-                </div>
+                <EmptyState message="No map data." />
               ) : (
                 <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
                   <table className="w-full min-w-max border-collapse text-[12px]">
@@ -630,9 +629,7 @@ export default function PlayerView({
                 <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Side stats</span>
               </div>
               {playerSideStats.every((s) => s.played === 0) ? (
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                  No side data.
-                </div>
+                <EmptyState message="No side data." />
               ) : (
                 <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
                   <table className="w-full min-w-max border-collapse text-[12px]">
@@ -664,9 +661,7 @@ export default function PlayerView({
 
           <SectionLabel>Map stats</SectionLabel>
           {maps.length === 0 ? (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-              No map data.
-            </div>
+            <EmptyState message="No map data." />
           ) : (
             <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
               <table className="w-full min-w-max border-collapse text-[13px]">
@@ -782,9 +777,7 @@ export default function PlayerView({
           ) : (
             <>
               {playedHistory.length === 0 ? (
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                  No matches played yet.
-                </div>
+                <EmptyState message="No matches played yet." />
               ) : (
                 <div className="flex flex-col gap-3">
                   {playedHistory.map((h) => (
@@ -833,9 +826,7 @@ export default function PlayerView({
         <>
           <SectionLabel>Trophy case</SectionLabel>
           {filteredTrophies.length === 0 ? (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-              No trophies for the current filter.
-            </div>
+            <EmptyState message="No trophies for the current filter." />
           ) : (
             <div className="flex flex-col gap-2">
               {filteredTrophies

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { tabCls, formatEhogDelta } from '@/lib/util';
+import EmptyState from '@/components/EmptyState';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import { PlayerName } from '@/components/PlayerName';
 import DemoUploadModal from '@/components/DemoUploadModal';
@@ -511,9 +512,7 @@ export default function MatchTabView({
       {tab === 'leaderboard' && (
         <>
           {!statsRecorded ? (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-4">
-              This match hasn&apos;t been recorded yet.
-            </div>
+            <EmptyState message="This match hasn't been recorded yet." className="mt-4" />
           ) : (
             <>
               <div>
