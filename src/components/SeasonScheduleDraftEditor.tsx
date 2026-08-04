@@ -10,6 +10,7 @@ import {
 } from '@/lib/season-schedule-validation';
 import type { DoubleheaderPolicy } from '@/lib/season-schedule';
 import EmptyState from './EmptyState';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
 
 interface Player {
   id: number;
@@ -210,7 +211,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
           type="button"
           onClick={generate}
           disabled={busy}
-          className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40 self-start"
+          className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40 self-start`}
         >
           {busyAction === 'generate' ? 'Generating…' : 'Generate Schedule'}
         </button>
@@ -345,7 +346,7 @@ export function SeasonScheduleDraftEditor({ seasonId, players, initialWeeks }: P
           type="button"
           onClick={confirmDraft}
           disabled={busy || !integrity.ok || !completeness.complete}
-          className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40"
+          className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
         >
           {busyAction === 'confirm' ? 'Confirming…' : 'Confirm Schedule'}
         </button>

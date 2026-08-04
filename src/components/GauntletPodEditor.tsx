@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GauntletBracketDiagram } from './GauntletBracketDiagram';
 import EmptyState from './EmptyState';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
 import {
   type DraftPod,
   type DraftSlot,
@@ -220,7 +221,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
             type="button"
             onClick={confirmSave}
             disabled={saving}
-            className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40"
+            className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
           >
             {saving ? 'Saving…' : 'Confirm & Save'}
           </button>
@@ -332,7 +333,7 @@ export function GauntletPodEditor({ regularSeasonId, players, initialPods }: Pro
           type="button"
           onClick={reviewBracket}
           disabled={!integrity.valid || pods.length === 0}
-          className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40"
+          className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
         >
           Review Bracket
         </button>

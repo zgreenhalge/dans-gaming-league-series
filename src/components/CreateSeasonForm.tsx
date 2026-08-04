@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toSentenceCase } from '@/lib/maps';
 import EmptyState from './EmptyState';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
 
 interface Props {
   knownMaps: string[];
@@ -149,7 +150,7 @@ export function CreateSeasonForm({ knownMaps }: Props) {
           type="button"
           onClick={submit}
           disabled={busy || selected.size !== 5}
-          className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40 self-start"
+          className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40 self-start`}
         >
           {busy ? 'Creating…' : 'Create Season'}
         </button>

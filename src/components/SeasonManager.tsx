@@ -19,6 +19,7 @@ import DeleteSeasonButton from './DeleteSeasonButton';
 import { CreateGauntletForm } from './CreateGauntletForm';
 import { GauntletLifecycleList, type GauntletRow } from './GauntletLifecycleList';
 import { OpsErrorList, type OpsErrorItem } from './OpsErrorList';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
 
 export interface SeasonSummary {
   id: number;
@@ -153,7 +154,7 @@ export function SeasonManager({
 
       <Link
         href="/admin/seasons/new"
-        className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all self-start"
+        className={`${ADMIN_PRIMARY_BUTTON_CLS} self-start`}
       >
         {`+ New Season (${nextSeasonName})`}
       </Link>

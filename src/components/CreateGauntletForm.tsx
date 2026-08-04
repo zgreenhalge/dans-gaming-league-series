@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GauntletBracketDiagram } from './GauntletBracketDiagram';
 import EmptyState from './EmptyState';
+import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
 import type { BracketPod } from '@/lib/queries';
 
 interface Props {
@@ -93,7 +94,7 @@ export function CreateGauntletForm({ seasons }: Props) {
             type="button"
             onClick={confirm}
             disabled={confirming}
-            className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40"
+            className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
           >
             {confirming ? 'Saving…' : 'Confirm & Build'}
           </button>
@@ -163,7 +164,7 @@ export function CreateGauntletForm({ seasons }: Props) {
         type="button"
         onClick={loadPreview}
         disabled={previewing || !selectedSeasonId}
-        className="tracked text-[11px] font-semibold px-4 py-2.5 border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] bg-[var(--color-accent-green-bg)] hover:brightness-110 transition-all disabled:opacity-40 self-start"
+        className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40 self-start`}
       >
         {previewing ? 'Loading Preview…' : 'Preview Bracket'}
       </button>
