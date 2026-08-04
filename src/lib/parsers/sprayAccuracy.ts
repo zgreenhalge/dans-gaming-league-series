@@ -2,6 +2,7 @@ import type { SabFields } from '../types';
 import { isTeamKill, type MatchContext, type PlayerHurtRow } from './matchContext';
 import type { WeaponFireRow } from './utility';
 import { RIFLE_WEAPONS } from './counterStrafe';
+import { initCollector, roundOf } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -30,9 +31,7 @@ export function collectSprayAccuracy(
   context: MatchContext,
   steamIds: string[],
 ): CollectorOut {
-  const out: CollectorOut = new Map();
-  const steamSet = new Set(steamIds);
-  for (const sid of steamIds) out.set(sid, {});
+  const { out, steamSet } = initCollector<SabFields>(steamIds);
 
   const gapTicks = Math.round(SPRAY_GAP_SECONDS * context.tickRate);
 
@@ -41,8 +40,8 @@ export function collectSprayAccuracy(
   const shotsByKey = new Map<string, number[]>();
   for (const f of fireEvents) {
     if (!RIFLE_WEAPONS.has(f.weapon)) continue;
-    const round = f.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const round = roundOf(f, context.liveRounds);
+    if (round == null) continue;
     const shooter = f.user_steamid;
     if (!shooter || !steamSet.has(shooter)) continue;
     const key = `${shooter}::${round}::${f.weapon}`;
@@ -54,8 +53,8 @@ export function collectSprayAccuracy(
   const hurtTicksByKey = new Map<string, number[]>();
   for (const h of hurtEvents) {
     if (!RIFLE_HURT_WEAPONS.has(h.weapon)) continue;
-    const round = h.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const round = roundOf(h, context.liveRounds);
+    if (round == null) continue;
     const attacker = h.attacker_steamid;
     const victim = h.user_steamid;
     if (!attacker || !steamSet.has(attacker)) continue;

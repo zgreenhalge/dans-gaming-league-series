@@ -1,5 +1,6 @@
 import type { SabFields } from '../types';
 import { isTeamKill, type MatchContext, type PlayerDeathRow } from './matchContext';
+import { initCollector, roundOf } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -25,9 +26,7 @@ export function collectUtility(
   context: MatchContext,
   steamIds: string[],
 ): CollectorOut {
-  const out: CollectorOut = new Map();
-  const steamSet = new Set(steamIds);
-  for (const sid of steamIds) out.set(sid, {});
+  const { out, steamSet } = initCollector<SabFields>(steamIds);
 
   const flashAssistWindow = Math.round(3 * context.tickRate);
 
@@ -41,8 +40,8 @@ export function collectUtility(
   // Build death lookup: steamId → [{tick, round}]
   const deathLookup = new Map<string, { tick: number; round: number; attacker: string | null }[]>();
   for (const d of deathEvents) {
-    const round = d.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const round = roundOf(d, context.liveRounds);
+    if (round == null) continue;
     const victim = d.user_steamid;
     if (!victim || !steamSet.has(victim)) continue;
     if (!deathLookup.has(victim)) deathLookup.set(victim, []);
@@ -55,8 +54,8 @@ export function collectUtility(
   const flashGroups = new Map<string, number[]>();
 
   for (const b of blindEvents) {
-    const round = b.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const round = roundOf(b, context.liveRounds);
+    if (round == null) continue;
 
     const flasher = b.attacker_steamid;
     const blinded = b.user_steamid;
@@ -131,8 +130,7 @@ export function collectUtility(
   // --- Flashes thrown ---
   for (const f of fireEvents) {
     if (f.weapon !== 'weapon_flashbang') continue;
-    const round = f.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    if (roundOf(f, context.liveRounds) == null) continue;
     const thrower = f.user_steamid;
     if (!thrower || !steamSet.has(thrower)) continue;
     const p = out.get(thrower)!;
