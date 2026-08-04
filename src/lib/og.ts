@@ -1,6 +1,6 @@
 import { cache } from 'react';
 import { supabase } from '@/lib/supabase';
-import { isPlayedScore, parseScore, canonicalSort } from '@/lib/util';
+import { isPlayedScore, parseScore, canonicalSort, deriveRates } from '@/lib/util';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { getMapLookup, getMatchTeamNames } from './queries';
 import type { Player, Match } from '@/lib/types';
@@ -63,9 +63,10 @@ export const getPlayerMeta = cache(async (playerId: number) => {
 
   const ehog: number | null = (ratingRow as { ehog_v1?: number } | null)?.ehog_v1 ?? null;
 
-  const wr = agg.matches_played > 0 ? ((agg.matches_won / agg.matches_played) * 100).toFixed(0) : null;
-  const kd = agg.total_deaths > 0 ? (agg.total_kills / agg.total_deaths).toFixed(2) : null;
-  const adr = agg.total_rounds_played > 0 ? (agg.total_damage / agg.total_rounds_played).toFixed(2) : null;
+  const rates = deriveRates({ ...agg, total_rounds_won: 0 });
+  const wr = agg.matches_played > 0 ? rates.win_rate_percentage.toFixed(0) : null;
+  const kd = agg.total_deaths > 0 ? rates.kd_ratio.toFixed(2) : null;
+  const adr = agg.total_rounds_played > 0 ? rates.overall_adr.toFixed(2) : null;
   const record = agg.matches_played > 0 ? `${agg.matches_won}–${agg.matches_played - agg.matches_won}` : null;
   const ehogStr = ehog != null ? ehog.toFixed(2) : null;
 
@@ -247,13 +248,24 @@ async function getGauntletSeasonMeta(seasonId: number): Promise<SeasonLeaderboar
 
   return Array.from(byPlayer.entries())
     .filter(([, a]) => a.rp > 0)
-    .map(([id, a]) => ({
-      player_name: namesById.get(id) ?? '?',
-      win_rate_percentage: a.mp > 0 ? (a.mw / a.mp) * 100 : 0,
-      rwr_percentage: a.rp > 0 ? (a.rw / a.rp) * 100 : 0,
-      overall_adr: a.rp > 0 ? a.damage / a.rp : 0,
-      kd_ratio: a.deaths > 0 ? a.kills / a.deaths : a.kills,
-    }))
+    .map(([id, a]) => {
+      const rates = deriveRates({
+        matches_played: a.mp,
+        matches_won: a.mw,
+        total_kills: a.kills,
+        total_deaths: a.deaths,
+        total_rounds_played: a.rp,
+        total_rounds_won: a.rw,
+        total_damage: a.damage,
+      });
+      return {
+        player_name: namesById.get(id) ?? '?',
+        win_rate_percentage: rates.win_rate_percentage,
+        rwr_percentage: rates.rwr_percentage,
+        overall_adr: rates.overall_adr,
+        kd_ratio: rates.kd_ratio,
+      };
+    })
     .sort(canonicalSort)
     .slice(0, 4);
 }

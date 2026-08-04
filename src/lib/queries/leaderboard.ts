@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import type { LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
-import { canonicalSort, isPlayedScore } from '../util';
+import { canonicalSort, deriveRates, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
 
 
@@ -301,6 +301,7 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
 
   const out: LeaderboardRowWithId[] = [];
   for (const [player_name, a] of byName) {
+    const rates = deriveRates(a);
     out.push({
       season_id: 0,
       player_name,
@@ -308,18 +309,16 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
       matches_played: a.matches_played,
       matches_won: a.matches_won,
       matches_lost: a.matches_lost,
-      win_rate_percentage:
-        a.matches_played > 0 ? (a.matches_won / a.matches_played) * 100 : 0,
+      win_rate_percentage: rates.win_rate_percentage,
       total_kills: a.total_kills,
       total_assists: a.total_assists,
       total_deaths: a.total_deaths,
-      kd_ratio: a.total_deaths > 0 ? a.total_kills / a.total_deaths : a.total_kills,
+      kd_ratio: rates.kd_ratio,
       total_damage: a.total_damage,
       total_rounds_played: a.total_rounds_played,
       total_rounds_won: a.total_rounds_won,
-      rwr_percentage: a.total_rounds_played > 0 ? (a.total_rounds_won / a.total_rounds_played) * 100 : 0,
-      overall_adr:
-        a.total_rounds_played > 0 ? a.total_damage / a.total_rounds_played : 0,
+      rwr_percentage: rates.rwr_percentage,
+      overall_adr: rates.overall_adr,
       kills_in_wins: a.kills_in_wins,
       deaths_in_wins: a.deaths_in_wins,
       kills_in_losses: a.kills_in_losses,

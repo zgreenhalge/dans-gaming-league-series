@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import type { LeaderboardRowWithId, PlayerMatchStat, Match } from '../types';
-import { allMatchesPlayed, canonicalSort, isPlayedScore } from '../util';
+import { allMatchesPlayed, canonicalSort, deriveRates, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
 
 
@@ -24,6 +24,7 @@ function aggToRow(
   },
   season_id: number,
 ): LeaderboardRowWithId {
+  const rates = deriveRates(agg);
   return {
     season_id,
     player_id: agg.player_id,
@@ -31,28 +32,16 @@ function aggToRow(
     matches_played: agg.matches_played,
     matches_won: agg.matches_won,
     matches_lost: agg.matches_lost,
-    win_rate_percentage:
-      agg.matches_played > 0
-        ? (agg.matches_won / agg.matches_played) * 100
-        : 0,
+    win_rate_percentage: rates.win_rate_percentage,
     total_kills: agg.total_kills,
     total_assists: agg.total_assists,
     total_deaths: agg.total_deaths,
-    kd_ratio:
-      agg.total_deaths > 0
-        ? agg.total_kills / agg.total_deaths
-        : agg.total_kills,
+    kd_ratio: rates.kd_ratio,
     total_damage: agg.total_damage,
     total_rounds_played: agg.total_rounds_played,
     total_rounds_won: agg.total_rounds_won,
-    rwr_percentage:
-      agg.total_rounds_played > 0
-        ? (agg.total_rounds_won / agg.total_rounds_played) * 100
-        : 0,
-    overall_adr:
-      agg.total_rounds_played > 0
-        ? agg.total_damage / agg.total_rounds_played
-        : 0,
+    rwr_percentage: rates.rwr_percentage,
+    overall_adr: rates.overall_adr,
     kills_in_wins: agg.kills_in_wins,
     deaths_in_wins: agg.deaths_in_wins,
     kills_in_losses: agg.kills_in_losses,
