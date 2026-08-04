@@ -1,5 +1,3 @@
-'use client';
-
 import type { CSSProperties } from 'react';
 import { PlayerName } from './PlayerName';
 import type { BracketPod, BracketSlot } from '@/lib/queries';

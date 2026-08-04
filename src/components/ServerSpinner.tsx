@@ -1,5 +1,3 @@
-'use client';
-
 // Shared button-sized spinner for in-flight server actions, used by MatchServerPanel (per-match
 // provisioning) and ServerConsolePanel (admin start/stop). DatHost gives us no real progress and the
 // timing is inconsistent, so it's a plain indeterminate spinner — kept here so both call sites
