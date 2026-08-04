@@ -2,6 +2,7 @@ import { supabase } from '../supabase';
 import type { LeaderboardRowWithId, PlayerMatchStat, Match } from '../types';
 import { allMatchesPlayed, canonicalSort, deriveRates, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
+import { getWeekLookup } from './_shared';
 
 
 function aggToRow(
@@ -70,23 +71,15 @@ export async function getGauntletStats(): Promise<{
     (s) => s.id,
   );
 
-  const { data: weeks, error: wErr } = await supabase
-    .from('weeks')
-    .select('id, season_id')
-    .in('season_id', gauntletSeasonIds);
-  if (wErr) throw wErr;
-  if (!weeks || weeks.length === 0) return { career: [], bySeason: {} };
-
-  const weekRows = weeks as { id: number; season_id: number }[];
-  const weekToSeason = new Map<number, number>();
-  for (const w of weekRows) weekToSeason.set(w.id, w.season_id);
+  const weekLookup = await getWeekLookup(gauntletSeasonIds);
+  if (weekLookup.size === 0) return { career: [], bySeason: {} };
 
   const { data: matches, error: mErr } = await supabase
     .from('matches')
     .select('id, week_id, final_score')
     .in(
       'week_id',
-      weekRows.map((w) => w.id),
+      [...weekLookup.keys()],
     )
     .eq('is_playoff_game', true);
   if (mErr) throw mErr;
@@ -96,7 +89,7 @@ export async function getGauntletStats(): Promise<{
     .filter((m) => isPlayedScore(m.final_score));
   const matchToSeason = new Map<number, number>();
   for (const m of matchRows) {
-    const sid = weekToSeason.get(m.week_id);
+    const sid = weekLookup.get(m.week_id)?.season_id;
     if (sid != null) matchToSeason.set(m.id, sid);
   }
 
@@ -244,19 +237,13 @@ export interface GauntletRound {
 export async function getGauntletSeasonLeaderboard(
   seasonId: number,
 ): Promise<LeaderboardRowWithId[]> {
-  const { data: weeks, error: wErr } = await supabase
-    .from('weeks')
-    .select('id')
-    .eq('season_id', seasonId);
-  if (wErr) throw wErr;
-  if (!weeks || weeks.length === 0) return [];
-
-  const weekIds = (weeks as { id: number }[]).map((w) => w.id);
+  const weekLookup = await getWeekLookup([seasonId]);
+  if (weekLookup.size === 0) return [];
 
   const { data: matches, error: mErr } = await supabase
     .from('matches')
     .select('id, final_score')
-    .in('week_id', weekIds)
+    .in('week_id', [...weekLookup.keys()])
     .eq('is_playoff_game', true);
   if (mErr) throw mErr;
   if (!matches || matches.length === 0) return [];
@@ -600,11 +587,11 @@ export async function getAllGauntletSummaries(): Promise<Map<number, GauntletSum
   if (!gauntletSeasons || gauntletSeasons.length === 0) return new Map();
   const seasonIds = (gauntletSeasons as { id: number }[]).map((s) => s.id);
 
-  const [{ data: weeks }, players] = await Promise.all([
-    supabase.from('weeks').select('id, season_id, week_number').in('season_id', seasonIds),
+  const [weekLookup, players] = await Promise.all([
+    getWeekLookup(seasonIds),
     getPlayersById(),
   ]);
-  const weekRows = (weeks ?? []) as { id: number; season_id: number; week_number: number }[];
+  const weekRows = Array.from(weekLookup, ([id, w]) => ({ id, ...w }));
   if (weekRows.length === 0) return new Map();
 
   const weekIds = weekRows.map((w) => w.id);

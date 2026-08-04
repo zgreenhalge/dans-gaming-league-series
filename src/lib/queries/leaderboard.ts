@@ -2,7 +2,7 @@ import { supabase } from '../supabase';
 import type { LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
 import { canonicalSort, deriveRates, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
-import { fetchAllPages } from './_shared';
+import { fetchAllPages, getWeekLookup } from './_shared';
 
 
 function n(v: number | null | undefined): number {
@@ -54,7 +54,7 @@ async function getSeasonBaseData(): Promise<{
   const [
     stats,
     { data: matches, error: mErr },
-    { data: weeks, error: wErr },
+    weekLookup,
   ] = await Promise.all([
     fetchAllPages<{
       player_id: number;
@@ -71,21 +71,16 @@ async function getSeasonBaseData(): Promise<{
         .range(from, to),
     ),
     supabase.from('matches').select('id, week_id, is_playoff_game, final_score'),
-    supabase.from('weeks').select('id, season_id'),
+    getWeekLookup(),
   ]);
   if (mErr) throw mErr;
-  if (wErr) throw wErr;
-
-  const weekToSeason = new Map<number, number>();
-  for (const w of (weeks ?? []) as { id: number; season_id: number }[])
-    weekToSeason.set(w.id, w.season_id);
 
   // played non-playoff matches → their season (for perPlayerStats)
   const playedMatchSeason = new Map<number, number>();
   // unplayed matches → their season (for rosterBySeason)
   const unplayedMatchSeason = new Map<number, number>();
   for (const m of (matches ?? []) as { id: number; week_id: number; is_playoff_game: boolean; final_score: string | null }[]) {
-    const sid = weekToSeason.get(m.week_id);
+    const sid = weekLookup.get(m.week_id)?.season_id;
     if (sid == null) continue;
     if (isPlayedScore(m.final_score) && !m.is_playoff_game) playedMatchSeason.set(m.id, sid);
     if (!isPlayedScore(m.final_score)) unplayedMatchSeason.set(m.id, sid);

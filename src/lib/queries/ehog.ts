@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import { extractSeasonNumber } from '../util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG, fromEhog } from '../ehog';
-import { batchedIn, SUPABASE_IN_BATCH } from './_shared';
+import { batchedIn, SUPABASE_IN_BATCH, getWeekLookup } from './_shared';
 
 
 // ---------------------------------------------------------------------------
@@ -143,14 +143,10 @@ export async function getAllEhogSnapshots(): Promise<EhogSnapshotRow[]> {
 }
 
 export async function getSeasonEhogRatings(seasonId: number): Promise<Record<number, number>> {
-  const { data: weeks, error: wErr } = await supabase
-    .from('weeks')
-    .select('id')
-    .eq('season_id', seasonId);
-  if (wErr) throw wErr;
-  if (!weeks || weeks.length === 0) return {};
+  const weekLookup = await getWeekLookup([seasonId]);
+  if (weekLookup.size === 0) return {};
 
-  const weekIds = weeks.map((w) => w.id);
+  const weekIds = [...weekLookup.keys()];
   const matches = await batchedIn<{ id: number }>('matches', 'week_id', weekIds, 'id');
   if (matches.length === 0) return {};
 
