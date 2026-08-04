@@ -114,32 +114,6 @@ export async function resolveMatchSeasons(): Promise<Map<number, number>> {
 }
 
 /**
- * Resolves `match_id -> { season_id, week_number }` for every played match, via the same
- * `matches` -> `weeks` -> `seasons` join as `resolveMatchSeasons()`, for callers that also need
- * `week_number` (e.g. head-to-head match ordering). Pass `seasonIds` to scope to specific seasons.
- */
-export async function resolveMatchWeeks(
-  seasonIds?: number[],
-): Promise<Map<number, { season_id: number; week_number: number }>> {
-  const weekLookup = await getWeekLookup(seasonIds);
-  if (weekLookup.size === 0) return new Map();
-
-  const { data: matchRows, error: matchErr } = await supabase
-    .from('matches')
-    .select('id, week_id, final_score')
-    .in('week_id', [...weekLookup.keys()]);
-  if (matchErr) throw matchErr;
-
-  const matchWeeks = new Map<number, { season_id: number; week_number: number }>();
-  for (const m of (matchRows ?? []) as { id: number; week_id: number; final_score: string | null }[]) {
-    if (!isPlayedScore(m.final_score)) continue;
-    const week = weekLookup.get(m.week_id);
-    if (week != null) matchWeeks.set(m.id, week);
-  }
-  return matchWeeks;
-}
-
-/**
  * Read a gzipped JSON artifact from R2 at `key`, or `null` if it doesn't exist, fails
  * to parse, or its `version` doesn't match `expectedVersion` — used by the map-level
  * rollup readers (`getMapHeatmapRollup()`, `getMapTraceRollup()`), which share this

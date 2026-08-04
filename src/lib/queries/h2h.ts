@@ -2,6 +2,7 @@ import { supabase } from '../supabase';
 import {
   extractSeasonNumber,
   buildRegularToGauntletMap,
+  isPlayedScore,
   winRatePct,
   computeH2H,
   resolveH2HPickedBy,
@@ -11,7 +12,7 @@ import type { DuoStats, H2HStats, H2HData, H2HMatchInput } from '../util';
 import type { Season, Faction } from '../types';
 import { getSeasons } from './seasons';
 import { getPlayersById } from './player';
-import { resolveMatchWeeks } from './_shared';
+import { getWeekLookup } from './_shared';
 
 
 // ─── H2H data layer ──────────────────────────────────────────────────────────
@@ -156,11 +157,11 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
   const seasonIds = resolveH2HSeasonIds(selection, regularSeasons, gauntletSeasons, regularToGauntlet);
   if (seasonIds.size === 0) return { duos: [], rivals: [], players: [] };
 
-  const [matchWeeks, players] = await Promise.all([
-    resolveMatchWeeks([...seasonIds]),
+  const [weekLookup, players] = await Promise.all([
+    getWeekLookup([...seasonIds]),
     getPlayersById(),
   ]);
-  if (matchWeeks.size === 0) return { duos: [], rivals: [], players: [] };
+  if (weekLookup.size === 0) return { duos: [], rivals: [], players: [] };
   const allSeasons = [...regularSeasons, ...gauntletSeasons];
   const seasonNumberById = new Map(allSeasons.map((s) => [s.id, extractSeasonNumber(s.name)]));
   const seasonIsGauntletById = new Map(allSeasons.map((s) => [s.id, s.is_gauntlet]));
@@ -168,7 +169,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
   const { data: matches, error: mErr } = await supabase
     .from('matches')
     .select('id, week_id, match_number, final_score, shirts_pick, picked_map, skins_starting_side')
-    .in('id', [...matchWeeks.keys()]);
+    .in('week_id', [...weekLookup.keys()]);
   if (mErr) throw mErr;
 
   type MatchRow = {
@@ -184,8 +185,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
   // `picked_map` — fall back the same way the rest of the codebase does
   // (see `getMatchById`, `getCareerMatchHistory`, etc).
   const mapFor = (m: MatchRow): string | null => m.shirts_pick ?? m.picked_map;
-  // `matchWeeks` already resolved only played matches, so this fetch is played-only by construction.
-  const playedMatches = (matches ?? []) as MatchRow[];
+  const playedMatches = ((matches ?? []) as MatchRow[]).filter((m) => isPlayedScore(m.final_score));
   if (playedMatches.length === 0) return { duos: [], rivals: [], players: [] };
 
   const mapFilter = selection.map ? mapSlug(selection.map) : null;
@@ -222,7 +222,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
   for (const m of filteredMatches) {
     const roster = statsByMatch.get(m.id) ?? [];
     if (roster.length === 0) continue;
-    const week = matchWeeks.get(m.id);
+    const week = weekLookup.get(m.week_id);
     const seasonId = week?.season_id ?? -1;
     matchInputs.push({
       matchId: m.id,
