@@ -29,9 +29,12 @@ export async function triggerRatingRecompute(supabaseAdmin: SupabaseClient): Pro
     );
     return;
   }
-  // APP_BASE_URL covers the demo-ingest Action, which runs outside Vercel and has no VERCEL_URL.
+  // APP_BASE_URL covers the demo-ingest Action, which runs outside Vercel and has no VERCEL_URL. Uses
+  // `||`, not `??`: a GitHub Actions repo variable that isn't set still substitutes as an empty
+  // string (`${{ vars.APP_BASE_URL }}`), never `undefined`, so `??` alone would leave `base` empty and
+  // turn the fetch below into a relative-URL parse error instead of falling through.
   const base =
-    process.env.APP_BASE_URL ??
+    process.env.APP_BASE_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
   try {
     const res = await fetch(`${base}/api/ehog/recompute`, {

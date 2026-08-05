@@ -43,6 +43,13 @@ export const FRIENDLY_CVARS = ['mp_autokick 0', 'mp_drop_knife_enable 1', 'mp_fo
  * the golden league config's `matchzy_minimum_ready_required 4` assumes a full 2v2 roster, which
  * doesn't hold with no roster loaded, so it's overridden here (`0` = ready requires everyone currently
  * connected, not a fixed headcount) rather than in the shared config set real matches also use.
+ *
+ * `matchzy_demo_name_format`/`matchzy_hostname_format` override the golden config's `{MATCH_ID}`-based
+ * templates (`cfg/MatchZy/config.cfg`), which is only unique because a real match's `matchid` comes
+ * from the loaded match JSON (`loadMatch`, `provisionMatchServer`) — a roster-less launch never loads
+ * one, so `{MATCH_ID}` has nothing to substitute. `{TIME}` is unique per launch instead, so a pug demo
+ * never collides with (or silently overwrites) a real match's `MatchZy/{matchId}.dem` that
+ * `fetchFromDathost.ts` pulls by that exact deterministic path.
  */
 export function pugModeCvarLine(opts: { playout: boolean; friendly: boolean }): string {
   const cvars = [
@@ -50,6 +57,8 @@ export function pugModeCvarLine(opts: { playout: boolean; friendly: boolean }): 
     `matchzy_playout_enabled_default ${opts.playout ? 1 : 0}`,
     'mp_warmup_pausetimer 1',
     'matchzy_minimum_ready_required 0',
+    'matchzy_demo_name_format "pug_{TIME}_{MAP}"',
+    'matchzy_hostname_format "DGLS Pug Server"',
     ...(opts.friendly ? FRIENDLY_CVARS : []),
   ];
   return cvars.join('; ');

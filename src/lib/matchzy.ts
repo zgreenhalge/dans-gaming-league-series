@@ -15,6 +15,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getReplayInputs } from './replay/inputs';
 import type { RosterEntry } from './demoParser';
+import { mapSlug } from './maps';
 
 export interface MatchzyConfig {
   matchid: number;
@@ -42,6 +43,26 @@ export interface MatchzyConfigOptions {
   remoteLogSecret?: string;
   /** Override `maplist` (e.g. the Steam workshop id for Phase 4 instead of the DGLS map name). */
   maplistOverride?: string;
+}
+
+/**
+ * The demo filename MatchZy will write for this match (no `.dem`, no `MatchZy/` path prefix) —
+ * `{date}_{matchId}_{map}`, e.g. `2026-08-04_58_de-rooftop` (`mapSlug()` hyphenates). Fully literal (no MatchZy `{TOKEN}`
+ * substitution) and computed purely from already-known DB values, so `buildMatchzyConfig` (which sets
+ * this as the `matchzy_demo_name_format` cvar) and `fetchFromDathost.ts` (which polls for the exact
+ * same path to pull the finished recording) each call this directly instead of one guessing at what
+ * the other produced — the two can't drift apart, because there's only one function computing it.
+ *
+ * Deliberately doesn't use MatchZy's own `{MAP}` token: that's populated from the engine's live map
+ * state at recording time, not observable ahead of the pull, and using it would reintroduce exactly
+ * the directory-discovery problem this deterministic-path scheme exists to avoid. `date` is
+ * `scheduledAt`'s calendar date (UTC) — a label, not a promise the match was actually played that day,
+ * since a delayed match keeps its original `scheduledAt`.
+ */
+export function demoBaseName(matchId: number, scheduledAt: string | null, mapRaw: string | null): string {
+  const date = scheduledAt ? scheduledAt.slice(0, 10) : 'unscheduled';
+  const map = mapRaw ? mapSlug(mapRaw) : 'unknown-map';
+  return `${date}_${matchId}_${map}`;
 }
 
 /** Which team is CT, given which side SKINS (team2) starts on. */
@@ -92,7 +113,9 @@ export async function buildMatchzyConfig(
     spectators[p.steam_id] = p.steam_nickname || p.name;
   }
 
-  const cvars: Record<string, string> = {};
+  const cvars: Record<string, string> = {
+    matchzy_demo_name_format: demoBaseName(matchId, inputs.scheduledAt, inputs.map),
+  };
   if (opts.remoteLogUrl) {
     cvars.matchzy_remote_log_url = opts.remoteLogUrl;
     cvars.matchzy_remote_log_header_key = 'X-MatchZy-Token';

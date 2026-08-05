@@ -89,7 +89,7 @@ export function authHeader(): string {
 }
 
 /** One authenticated DatHost request, returning the raw `Response` — shared by `call()` (JSON/text
- *  body) and `getFileBytes` (binary body), which otherwise duplicate the same URL/auth-header
+ *  body) and `getFileResponse()` (binary body), which otherwise duplicate the same URL/auth-header
  *  construction. Body consumption is left to the caller since JSON and binary reads can't share one. */
 async function request(method: string, path: string, form?: Record<string, string>): Promise<Response> {
   const body = form ? new URLSearchParams(form) : undefined;
@@ -203,19 +203,44 @@ export async function getConsoleLines(id: string): Promise<string[]> {
 }
 
 /**
- * Download a file's raw bytes from the server's file manager (same root `dathost-config.ts`'s cfg
- * push/diff uses, e.g. `cfg/server.cfg`). Binary-safe, unlike `dathost-config.ts`'s `getText` (which
- * reads the response as text — fine for cfg files, not for a `.dem`). Returns `null` on a 404 rather
- * than throwing, since "not there yet" is an expected, pollable state for a demo still being flushed
- * by GOTV — not a genuine failure the way any other non-2xx is.
+ * GET a file manager entry and apply the shared "not there yet" semantics `getFileBytes`/`getFileSize`
+ * both need: `null` on a 404 (an expected, pollable state for a demo still being flushed by GOTV, not
+ * a failure), thrown `DathostError` on any other non-2xx. Callers consume the returned `Response`'s
+ * body however suits them (full buffer vs. just the `Content-Length` header).
  */
-export async function getFileBytes(id: string, remote: string): Promise<Buffer | null> {
+async function getFileResponse(id: string, remote: string): Promise<Response | null> {
   const res = await request('GET', `/game-servers/${id}/files/${remote}`);
   if (res.status === 404) return null;
   if (!res.ok) {
     throw new DathostError(`DatHost GET /game-servers/${id}/files/${remote} → ${res.status}`, res.status, null);
   }
+  return res;
+}
+
+/**
+ * Download a file's raw bytes from the server's file manager (same root `dathost-config.ts`'s cfg
+ * push/diff uses, e.g. `cfg/server.cfg`). Binary-safe, unlike `dathost-config.ts`'s `getText` (which
+ * reads the response as text — fine for cfg files, not for a `.dem`).
+ */
+export async function getFileBytes(id: string, remote: string): Promise<Buffer | null> {
+  const res = await getFileResponse(id, remote);
+  if (!res) return null;
   return Buffer.from(await res.arrayBuffer());
+}
+
+/**
+ * A file's current size in bytes, from the same endpoint `getFileBytes` reads — without buffering
+ * the body, so repeatedly checking whether a large (~200MB+) demo is still growing doesn't mean
+ * repeatedly downloading it. Returns `null` on a 404 (not there yet, same as `getFileBytes`) or if the
+ * response carries no `Content-Length` (can't confirm a size this round — same "not resolved yet"
+ * meaning to callers, not a failure).
+ */
+export async function getFileSize(id: string, remote: string): Promise<number | null> {
+  const res = await getFileResponse(id, remote);
+  if (!res) return null;
+  await res.body?.cancel();
+  const length = res.headers.get('content-length');
+  return length ? Number(length) : null;
 }
 
 /**
@@ -247,11 +272,17 @@ export function connectHost(server: DathostServer): string | null {
   return `${host}:${port}`;
 }
 
+/** `setTimeout` as a promise. Exported for `fetchFromDathost.ts`'s own floor/backoff waits, which are
+ *  plain delays rather than a `pollUntil` loop. */
+export function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 /**
  * Poll `fn` until it returns a truthy result, or throw a `DathostError` after `timeoutMs`. Shared by
- * `waitUntilReady` below and `fetchDemoFromDathost` (`src/lib/demo/fetchFromDathost.ts`) — both are
- * "keep checking an external DatHost resource until it's ready" loops that would otherwise duplicate
- * the same timeout/backoff shape.
+ * `waitUntilReady` below and `waitForConcurrentPull` (`src/lib/demo/fetchFromDathost.ts`, polling R2
+ * for a concurrent pull to land) — both are "keep checking a resource until it's ready" loops that
+ * would otherwise duplicate the same timeout/backoff shape.
  */
 export async function pollUntil<T>(
   fn: () => Promise<T | null>,
@@ -264,7 +295,7 @@ export async function pollUntil<T>(
     if (Date.now() - start > opts.timeoutMs) {
       throw new DathostError(opts.timeoutMessage, 504, null);
     }
-    await new Promise((r) => setTimeout(r, opts.intervalMs));
+    await sleep(opts.intervalMs);
   }
 }
 

@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import type { FakeDb } from './test-support/fakeSupabase';
-import { buildMatchzyConfig } from './matchzy';
+import { buildMatchzyConfig, demoBaseName } from './matchzy';
 import { test, report } from './test-support/miniTest';
 
 /** A minimal, valid one-match DB: match 500, shirts/skins each with one rostered player, plus one
@@ -25,6 +25,7 @@ function buildDb(overrides: Partial<{ match: FakeDb['matches'][number] }> = {}):
         shirts_pick: null,
         picked_map: 'de_such',
         skins_starting_side: 'CT',
+        scheduled_at: '2026-08-04T23:00:00+00:00',
         week_id: 1,
         ...overrides.match,
       },
@@ -119,16 +120,17 @@ async function main() {
     assert.deepEqual(config.maplist, ['workshop/123/de_override']);
   });
 
-  await test('cvars are empty when no remote-log option is passed', async () => {
+  await test('cvars carry only the demo name format when no remote-log option is passed', async () => {
     const client = createFakeSupabaseClient(buildDb());
     const { config } = await buildMatchzyConfig(client, 500);
-    assert.deepEqual(config.cvars, {});
+    assert.deepEqual(config.cvars, { matchzy_demo_name_format: '2026-08-04_500_de-such' });
   });
 
   await test('a remoteLogUrl without its secret sets the header key but not the header value', async () => {
     const client = createFakeSupabaseClient(buildDb());
     const { config } = await buildMatchzyConfig(client, 500, { remoteLogUrl: 'https://worker.example/log' });
     assert.deepEqual(config.cvars, {
+      matchzy_demo_name_format: '2026-08-04_500_de-such',
       matchzy_remote_log_url: 'https://worker.example/log',
       matchzy_remote_log_header_key: 'X-MatchZy-Token',
     });
@@ -141,10 +143,34 @@ async function main() {
       remoteLogSecret: 'log-secret',
     });
     assert.deepEqual(config.cvars, {
+      matchzy_demo_name_format: '2026-08-04_500_de-such',
       matchzy_remote_log_url: 'https://worker.example/log',
       matchzy_remote_log_header_key: 'X-MatchZy-Token',
       matchzy_remote_log_header_value: 'log-secret',
     });
+  });
+
+  await test('matchzy_demo_name_format uses shirts_pick over picked_map, matching maplist precedence', async () => {
+    const client = createFakeSupabaseClient(
+      buildDb({ match: { shirts_pick: 'de_picked_by_shirts', picked_map: 'de_such' } }),
+    );
+    const { config } = await buildMatchzyConfig(client, 500);
+    assert.equal(config.cvars.matchzy_demo_name_format, '2026-08-04_500_de-picked-by-shirts');
+  });
+
+  await test('matchzy_demo_name_format ignores maplistOverride (a workshop id, not a demo-name-worthy map slug)', async () => {
+    const client = createFakeSupabaseClient(buildDb());
+    const { config } = await buildMatchzyConfig(client, 500, { maplistOverride: 'workshop/123/de_override' });
+    assert.equal(config.maplist[0], 'workshop/123/de_override');
+    assert.equal(config.cvars.matchzy_demo_name_format, '2026-08-04_500_de-such');
+  });
+
+  await test('demoBaseName() — matches buildMatchzyConfig exactly, so the pull path and the cvar can never drift', () => {
+    assert.equal(demoBaseName(500, '2026-08-04T23:00:00+00:00', 'de_such'), '2026-08-04_500_de-such');
+  });
+
+  await test('demoBaseName() — falls back to placeholders for an unscheduled match or unset map', () => {
+    assert.equal(demoBaseName(500, null, null), 'unscheduled_500_unknown-map');
   });
 
   await test('fixed shape: matchid, num_maps, players_per_team, clinch_series, team names', async () => {

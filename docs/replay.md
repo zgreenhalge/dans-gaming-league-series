@@ -386,6 +386,17 @@ actually claimed for the match, `replay-extract.ts` treats it as the pull's owne
 pull to land (much cheaper than DatHost) before falling back to pulling independently, so the two
 Actions don't both download and re-upload the same demo.
 
+Once it has the demo bytes, `replay-extract.ts` also waits for (and defers to) `demo_ingest`'s own
+verdict on the *same* demo (`awaitDemoIngestVerdict()`, bounded the same as `fetchFromDathost.ts`'s own
+fetch ceiling): a demo `demo_ingest` quarantined or a human dismissed is known-bad, and parsing it here
+would just reproduce whatever data-quality problem tripped that verdict — a truncated demo's ticks
+parse without error, but its player traces come out empty, "succeeding" into a garbage replay rather
+than failing loudly the way a bad score at least gets quarantined. On a known-bad verdict, the job
+exits cleanly (not a crash) with `replay_status: 'failed'` and a message pointing at the demo review,
+writing nothing — any existing `replay.json`/`heatmap.json`/`traces.json` from an earlier good extract
+is left untouched. A `demo_ingest` failure (the Action itself broke, not the demo) doesn't gate this —
+that says nothing about whether the demo bytes are bad, so replay-extract still tries independently.
+
 | Action | Trigger | Output |
 |---|---|---|
 | **A — `replay-extract`** | auto, on match end (`/api/ingest/matchzy-log`'s `map_result` handler — `REPLAY_AUTO_DISPATCH=false` is the manual override) or manual (Recap tab / admin `POST /api/matches/[id]/replay/dispatch`) | `replay.json`, compact `heatmap.json` **and** `traces.json`, plus a rebuild of the map's `heatmap.json`/`traces.json` rollups → R2 (`.github/workflows/replay-extract.yml` + `scripts/replay-extract.ts`) |
@@ -406,14 +417,15 @@ Actions don't both download and re-upload the same demo.
 Each job's ordered `stage()` list (see [`github-actions.md`](./github-actions.md#conventions-every-job-follows)
 for what stages are and how they're surfaced):
 
-`replay-extract`: `validate → download-demo → decompress → parse-ticks → parse-events →
+`replay-extract`: `validate → download-demo → decompress → demo-status → parse-ticks → parse-events →
 parse-grenades → assemble → gzip → upload → heatmap → traces → map-rollup → done`.
 (`buildReplay()` does the three parse stages plus `assemble` in one library pass; they're surfaced as
-ordered stages around that call for progress. `heatmap` builds + uploads the `heatmap.json` points
-artifact; `traces` builds + uploads the `traces.json` per-player trace artifact; `map-rollup`
-rebuilds the map's merged `heatmap.json`/`traces.json` rollups from every match on the map — see the
-Heatmap/Pathing tab sections above. `map-rollup` is fail-soft: a hiccup there logs a `::warning::` and
-leaves this match's own already-`ready` replay untouched.)
+ordered stages around that call for progress. `demo-status` is `awaitDemoIngestVerdict()` (see above) —
+the job exits cleanly here, before any parsing, on a known-bad verdict. `heatmap` builds + uploads the
+`heatmap.json` points artifact; `traces` builds + uploads the `traces.json` per-player trace artifact;
+`map-rollup` rebuilds the map's merged `heatmap.json`/`traces.json` rollups from every match on the
+map — see the Heatmap/Pathing tab sections above. `map-rollup` is fail-soft: a hiccup there logs a
+`::warning::` and leaves this match's own already-`ready` replay untouched.)
 
 `radar-build`: `validate-workshop-id → steamcmd-download → extract-vpk → decode-vtex →
 compute-calibration → upload-radar → upsert-map → done`. The deterministic parsing

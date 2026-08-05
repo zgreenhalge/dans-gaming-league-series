@@ -129,11 +129,23 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
   `LiveScoreTicker` while the demo doesn't exist yet. Every other event type is acknowledged and
   dropped.
 - The demo's remote path is deterministic: `infra/matchzy/cfg/MatchZy/config.cfg` sets
-  `matchzy_demo_path MatchZy/` and `matchzy_demo_name_format "{MATCH_ID}"`, so it always lands at
-  `MatchZy/{matchId}.dem` on the game server — no directory listing/discovery needed.
-  `fetchDemoFromDathost` (`src/lib/demo/fetchFromDathost.ts`) polls that path for up to 5 minutes (GOTV
-  holds the file back for ~120s after `map_result` while it flushes the recording), gzips it, and
-  writes it to R2 at the same deterministic `demoKey(matchId)` a browser upload would use — both
+  `matchzy_demo_path MatchZy/`, and a real match's loaded config JSON carries a per-match
+  `matchzy_demo_name_format` cvar (`buildMatchzyConfig`, `src/lib/matchzy.ts`) set to `demoBaseName()`'s
+  output — a literal `{date}_{matchId}_{map}` (e.g. `2026-08-04_58_de-rooftop`) computed purely from the
+  match's own DB row, with no MatchZy `{TOKEN}` left for the engine to fill in. So the demo always lands
+  at `MatchZy/{demoBaseName}.dem` on the game server — no directory listing/discovery needed, and no
+  reliance on MatchZy's own `{MAP}`/`{TIME}` substitution, which isn't observable ahead of the pull.
+  `fetchDemoFromDathost` (below) calls the exact same `demoBaseName()` rather than recomputing the name
+  itself, so the two sides can't independently drift apart.
+  Since MatchZy's recording is a `tv_record` wrapper around GOTV (see
+  [`cs2-stack-reference.md`](./cs2-stack-reference.md#gotv-vs-demo-recording--matchzys-recording-is-gotv-not-a-separate-system)),
+  that path already exists — and is still growing — for the entire match, not just after it ends, so
+  merely finding the file there doesn't mean the recording is finished. `fetchDemoFromDathost`
+  (`src/lib/demo/fetchFromDathost.ts`) instead waits out a 120s floor (GOTV's own post-`map_result`
+  flush delay) before ever checking, then polls the file's size (a cheap `Content-Length` read, not a
+  download) with exponential backoff until two consecutive checks agree it's stopped growing — only
+  then does it download, gzip, and write it to R2 at the same deterministic `demoKey(matchId)` a
+  browser upload would use, within an 8-minute overall ceiling. Both
   `demo-ingest.ts` and `replay-extract.ts` call it themselves, at the top of their own run, only if the
   demo isn't already in R2, so either one can be dispatched (or re-dispatched) independently. Since both
   are auto-dispatched together off the same `map_result` event and tend to detect the demo on the same
@@ -217,11 +229,17 @@ after boot, `launchServer`'s `extraCvars` (built by `pugModeCvarLine`, `dathost-
 `mp_warmup_pausetimer 1`, and `matchzy_minimum_ready_required 0` unconditionally — the golden league
 config's `matchzy_minimum_ready_required 4` assumes a full 2v2 roster, which doesn't hold with no
 roster loaded, so it's overridden live rather than changed in the shared config set real matches also
-use (`0` = ready requires everyone currently connected, not a fixed headcount). A separate "Friendly"
-toggle gates `FRIENDLY_CVARS` (`mp_autokick 0`, `mp_drop_knife_enable 1`, `mp_forcecamera 0`,
-`mp_shoot_dropped_grenades true`) — only asserted when checked, left at whatever the config set sets
-otherwise. `pugModeCvarLine` is shared with the admin console's Start button (below), which offers the
-same two toggles — any launch with no roster loaded behaves the same way regardless of who starts it.
+use (`0` = ready requires everyone currently connected, not a fixed headcount). It also overrides
+`matchzy_demo_name_format`/`matchzy_hostname_format` to a `{TIME}`-based (not `{MATCH_ID}`-based)
+template: the golden config's `"{MATCH_ID}"` demo name is only unique because a real match's `matchid`
+comes from the loaded match JSON, and a roster-less launch never loads one, so left alone every pug
+session's demo would land at the same unresolved path — colliding with itself launch over launch, and
+risking collision with a real match's `MatchZy/{matchId}.dem` if that empty token ever resolved to
+something an actual match id could match. A separate "Friendly" toggle gates `FRIENDLY_CVARS`
+(`mp_autokick 0`, `mp_drop_knife_enable 1`, `mp_forcecamera 0`, `mp_shoot_dropped_grenades true`) —
+only asserted when checked, left at whatever the config set sets otherwise. `pugModeCvarLine` is
+shared with the admin console's Start button (below), which offers the same two toggles — any launch
+with no roster loaded behaves the same way regardless of who starts it.
 
 Concurrency is tracked by `scrim_sessions`, a **singleton** table (`src/lib/scrim-session.ts`): its
 primary key is pinned to a fixed value, so at most one row can ever exist, and `/api/scrim/start`
@@ -351,10 +369,13 @@ surfaces either.
 ## Config generation
 
 **`src/lib/matchzy.ts#buildMatchzyConfig`** emits the per-match MatchZy config (teams by steamid64,
-`players_per_team: 2`, conditional `map_sides`, remote-log cvars). It's the target of the machine-auth
+`players_per_team: 2`, conditional `map_sides`, remote-log cvars, and the per-match
+`matchzy_demo_name_format` cvar — see `demoBaseName()` above). It's the target of the machine-auth
 `GET /api/matches/[id]/matchzy-config` route (the `matchzy_loadmatch_url`) and is reused by the
-`scripts/gen-matchzy-config.ts` CLI. The deterministic `matchzy_demo_path`/`matchzy_demo_name_format`
-the demo pull relies on live in the `golden` config set's `cfg/MatchZy/config.cfg`.
+`scripts/gen-matchzy-config.ts` CLI. `matchzy_demo_path` (the deterministic `MatchZy/` directory the
+demo pull relies on) lives in the `golden` config set's static `cfg/MatchZy/config.cfg`, alongside a
+`matchzy_demo_name_format "{MATCH_ID}"` fallback that only matters if some future launch path forgets
+to set its own override (a real match's per-match cvar here, or a scrim/pug's `pugModeCvarLine`).
 
 ## Routes
 
