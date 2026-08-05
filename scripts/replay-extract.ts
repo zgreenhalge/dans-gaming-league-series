@@ -3,6 +3,12 @@
 // demo (R2) → buildReplay() → gzipped replay.json (R2 `<matchId>/replay.json`).
 // Reuses the SAME `src/lib/replay/*` code as the app, so there is no logic drift.
 //
+// Gated on demo-ingest's own verdict for the same demo (`awaitDemoIngestVerdict`): a demo quarantined
+// or dismissed there is known-bad, and parsing it here would just reproduce whatever data-quality
+// problem tripped that verdict into a replay that "succeeds" but is actually garbage (a truncated
+// demo's ticks look parseable but its player traces come out empty) — so this exits cleanly instead of
+// writing one, rather than leaving that up to demo-ingest's quarantine check alone.
+//
 // Observability: each named stage is reported two ways (issue #121) —
 //   1. collapsible GitHub log groups + ::notice/::warning/::error annotations, and
 //   2. `background_jobs.stage`, so the app can show progress without opening Actions.
@@ -32,7 +38,7 @@ import { mapSlug } from '../src/lib/maps';
 import { recordJobStatus, matchJobKey, jobStatusWriter } from '../src/lib/background-jobs';
 import { ensureDemoInR2 } from '../src/lib/demo/fetchFromDathost';
 import { DEMO_INGEST_JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '../src/lib/demo/ingestResult';
-import { dathostServerId } from '../src/lib/dathost';
+import { dathostServerId, sleep } from '../src/lib/dathost';
 import { notice, warning, error } from './gh-actions-log';
 import { createStageRunner } from './job-stage';
 
@@ -42,6 +48,7 @@ const STAGES = [
   'validate',
   'download-demo',
   'decompress',
+  'demo-status',
   'parse-ticks',
   'parse-events',
   'parse-grenades',
@@ -53,6 +60,21 @@ const STAGES = [
   'map-rollup',
   'done',
 ] as const;
+
+// Terminal demo_ingest verdicts that mean the demo itself is known-bad — quarantined by the round-
+// count/backup-replay heuristics, or dismissed outright by a human — so building a replay from it
+// would just reproduce whatever data-quality problem tripped that verdict (match 58: a truncated demo
+// quarantined for its score parsed clean-looking-but-garbage into a replay with zero player traces).
+// Deliberately excludes 'failed': that means the demo-ingest Action itself broke (e.g. a DatHost auth
+// error), which says nothing about whether the demo bytes are actually bad, so replay-extract still
+// tries its own independent pull+parse rather than blocking on an unrelated infra failure.
+const DEMO_INGEST_KNOWN_BAD: ReadonlySet<string> = new Set(['quarantined', 'dismissed']);
+
+// How long to wait for an in-flight demo_ingest run to reach a verdict before proceeding without one —
+// bounded the same as fetchFromDathost.ts's own fetch ceiling, since a still-running demo_ingest is
+// most likely itself inside that same wait.
+const DEMO_INGEST_VERDICT_TIMEOUT_MS = 8 * 60_000;
+const DEMO_INGEST_VERDICT_POLL_MS = 10_000;
 
 const matchId = Number(process.env.MATCH_ID);
 const ghRunId = process.env.GH_RUN_ID ? Number(process.env.GH_RUN_ID) : null;
@@ -83,19 +105,41 @@ async function markRunning() {
     .throwOnError();
 }
 
-/** Whether a `demo_ingest` run for this match is currently claimed — real evidence a concurrent pull
- *  is racing this one, worth waiting out (see `fetchFromDathost.ts`'s `waitForConcurrentPull`). The
- *  auto-dispatch path always has one (`dispatchDemoIngest` claims it before `dispatchReplayExtractIfEnabled`
- *  fires); a manual "Regenerate" dispatch doesn't, and should pull immediately instead of waiting out
- *  a grace window for nothing. */
-async function demoIngestInFlight(): Promise<boolean> {
+/** This match's `demo_ingest` job status, or `null` if no such job exists. */
+async function readDemoIngestStatus(): Promise<string | null> {
   const { data } = await supabase
     .from('background_jobs')
     .select('status')
     .eq('job_type', DEMO_INGEST_JOB_TYPE)
     .eq('match_id', matchId)
     .maybeSingle();
-  return data ? DEMO_INGEST_IN_PROGRESS.has(data.status as string) : false;
+  return (data as { status: string } | null)?.status ?? null;
+}
+
+/** Whether a `demo_ingest` run for this match is currently claimed — real evidence a concurrent pull
+ *  is racing this one, worth waiting out (see `fetchFromDathost.ts`'s `waitForConcurrentPull`). The
+ *  auto-dispatch path always has one (`dispatchDemoIngest` claims it before `dispatchReplayExtractIfEnabled`
+ *  fires); a manual "Regenerate" dispatch doesn't, and should pull immediately instead of waiting out
+ *  a grace window for nothing. */
+async function demoIngestInFlight(): Promise<boolean> {
+  const status = await readDemoIngestStatus();
+  return status !== null && DEMO_INGEST_IN_PROGRESS.has(status);
+}
+
+/** This match's `demo_ingest` verdict, waiting out an in-flight run until it reaches a terminal status
+ *  (or `DEMO_INGEST_VERDICT_TIMEOUT_MS` elapses) — `null` if no `demo_ingest` job exists for this match
+ *  at all (nothing to gate on, e.g. a very old match predating the pipeline). Checked once the demo is
+ *  already downloaded (not before) so the common, non-quarantined case doesn't pay an extra serial wait
+ *  on top of `download-demo`'s own — this only has to catch up if demo-ingest's parse is still slower
+ *  than the download, not wait for demo-ingest's whole run unconditionally. */
+async function awaitDemoIngestVerdict(): Promise<string | null> {
+  let status = await readDemoIngestStatus();
+  const deadline = Date.now() + DEMO_INGEST_VERDICT_TIMEOUT_MS;
+  while (status !== null && DEMO_INGEST_IN_PROGRESS.has(status) && Date.now() < deadline) {
+    await sleep(DEMO_INGEST_VERDICT_POLL_MS);
+    status = await readDemoIngestStatus();
+  }
+  return status;
 }
 
 /** Gzip a JSON-serializable value and upload it, returning the gzipped byte length for logging. */
@@ -142,6 +186,21 @@ async function main() {
   });
 
   demoBuffer = await stage('decompress', () => gunzipMaybe(demoBuffer));
+
+  const demoIngestStatus = await stage('demo-status', () => awaitDemoIngestVerdict());
+  if (demoIngestStatus !== null && DEMO_INGEST_KNOWN_BAD.has(demoIngestStatus)) {
+    const msg = `Demo for match ${matchId} is ${demoIngestStatus} (flagged for manual review) — skipping replay parsing until it's resolved.`;
+    warning(msg);
+    await setJob({
+      status: 'failed',
+      stage: 'demo-status',
+      error_message: msg,
+      finished_at: new Date().toISOString(),
+    });
+    await supabase.from('matches').update({ replay_status: 'failed' }).eq('id', matchId).throwOnError();
+    notice('replay-extract skipped: demo flagged for manual review — not an Action failure, exiting cleanly');
+    return; // exit 0 — the gate did exactly what it should; retry once the demo is confirmed or reparsed
+  }
 
   // buildReplay() does parse-ticks → parse-events → parse-grenades → assemble in one
   // pass; we surface those as ordered stages around it for progress reporting.
