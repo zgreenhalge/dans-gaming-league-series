@@ -137,7 +137,7 @@ async function main() {
     // pull, and a miss here waits briefly for its pull to land the object in R2 instead of
     // redundantly re-pulling the same demo from DatHost. A manual "Regenerate" dispatch has no such
     // row and pulls immediately.
-    const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map || null);
+    const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
     return ensureDemoInR2(dathostServerId(), matchId, baseName, { shouldWaitForConcurrentPull: demoIngestInFlight });
   });
 

@@ -114,7 +114,7 @@ export async function buildMatchzyConfig(
   }
 
   const cvars: Record<string, string> = {
-    matchzy_demo_name_format: demoBaseName(matchId, inputs.scheduledAt, inputs.map || null),
+    matchzy_demo_name_format: demoBaseName(matchId, inputs.scheduledAt, inputs.map),
   };
   if (opts.remoteLogUrl) {
     cvars.matchzy_remote_log_url = opts.remoteLogUrl;

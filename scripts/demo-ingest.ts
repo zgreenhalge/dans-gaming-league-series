@@ -99,7 +99,7 @@ async function main() {
   // Read first (cheap) so the fetch stage can poll the same deterministic path buildMatchzyConfig
   // set as the match's matchzy_demo_name_format cvar — see demoBaseName()'s doc comment.
   const inputs = await getReplayInputs(supabase, matchId);
-  const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map || null);
+  const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
 
   // Pulls the demo from DatHost if it isn't already in R2 (a manual reparse of an already-staged/
   // confirmed match has it already).

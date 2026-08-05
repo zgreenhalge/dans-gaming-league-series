@@ -12,7 +12,7 @@
 // than this file recomputing it, so the two sides can't independently drift apart.
 
 import { gzipSync } from 'node:zlib';
-import { DathostError, getFileBytes, getFileSize, pollUntil } from '../dathost';
+import { DathostError, getFileBytes, getFileSize, pollUntil, sleep } from '../dathost';
 import { getR2Object, putR2Object, demoKey } from '../r2';
 
 // GOTV's recording (`tv_record`) starts at match go-live, not at match end, so the file at
@@ -73,11 +73,6 @@ async function waitForConcurrentPull(matchId: number): Promise<Buffer | null> {
     if (isPollTimeout(err)) return null;
     throw err;
   }
-}
-
-/** `setTimeout` as a promise — the plain sleep this file's floor/backoff waits need. */
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
 }
 
 /** Waits for the file at `remote` to report the same size on two consecutive checks — still-growing
