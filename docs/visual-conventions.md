@@ -116,6 +116,28 @@ card's own sub-view switch should all render as `TabBar`/`tabCls()`, sized or sp
 rather than a second, differently-styled tab control. Two tab components that look different for no
 reason reads as two unrelated features, not one drill-down.
 
+**Table header cells.** Use the shared **`Th`** (`src/components/Th.tsx`, `align="left"|"right"`)
+for a stat table's static (non-sortable) header cells instead of repeating the tracked/bordered class
+string per column. A column whose header is itself clickable to sort keeps its own `SortableTh`-style
+component — that's a different, interactive shape, not a `Th` variant.
+
+**Empty states.** Use the shared **`EmptyState`** (`src/components/EmptyState.tsx`,
+`size="sm"|"lg"`) for a "nothing here" message — `sm` for an inline one-liner inside an existing
+layout, `lg` for a standalone bordered/centered block. Don't hand-roll the class string per call
+site. A **loading** placeholder is a different thing than an empty state (there's data coming, there
+just isn't any *yet* to show) — keep those as their own inline markup even if the visual styling
+happens to look similar; forcing a loading message through `EmptyState` mislabels what's happening.
+
+## Modals
+
+Use the shared **`Modal`** (`src/components/Modal.tsx`) for any full-viewport overlay dialog — it
+owns the fixed backdrop, centering, portal-to-`document.body`, and backdrop-click-to-dismiss wiring.
+Pass `panelClassName` for the panel's own styling (this varies per use and stays the caller's
+markup) and `overlayClassName` only when the backdrop itself needs a non-default color/blur
+treatment — that's a parameter of the existing primitive, not a reason to fork it. Omit `onClose` for
+a dialog that must be dismissed via an explicit button rather than a backdrop click (e.g. a
+destructive confirm).
+
 ## Console & admin-surface shapes
 
 Data-heavy operational pages (admin dashboards, ops consoles) recur enough to have their own shape
@@ -157,6 +179,10 @@ conventions, distinct from the content-page patterns above:
   toggle already uses, driven by Tailwind's `group-open:` on the native `open` state, no JS) and a
   `preview` slot for a live status summary that stays visible while collapsed, so a problem inside
   still reads at a glance without expanding.
+- **A primary admin action button** uses the shared `ADMIN_PRIMARY_BUTTON_CLS` (exported from
+  `src/components/ArmedConfirmButton.tsx` alongside its `CONFIRM_VARIANT` styles) rather than a
+  re-typed class string per form — append any call-site-specific modifier (`disabled:opacity-40`,
+  `self-start`) on top rather than forking the base style.
 
 ## When extending this system
 
