@@ -2,6 +2,7 @@ import type { SabFields } from '../types';
 import { isTeamKill, type MatchContext, type PlayerDeathRow, type PlayerHurtRow } from './matchContext';
 import { TRADE_WINDOW_SECONDS } from './constants';
 import type { PlayerPositionRow } from './smokes';
+import { groupByRound, initCollector, roundOf } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -50,8 +51,7 @@ function isTradeOpportunity(
 export function neededTradeTicks(deathEvents: PlayerDeathRow[], context: MatchContext): number[] {
   const ticks = new Set<number>();
   for (const d of deathEvents) {
-    const round = d.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    if (roundOf(d, context.liveRounds) == null) continue;
     ticks.add(d.tick);
   }
   return [...ticks];
@@ -81,13 +81,7 @@ export function computeTradeOpportunities(
   const positionIndex = new Map<string, { x: number; y: number }>();
   for (const p of positionRows) positionIndex.set(tradeOpportunityKey(p.tick, p.steamid), { x: p.x, y: p.y });
 
-  const deathsByRound = new Map<number, PlayerDeathRow[]>();
-  for (const d of deathEvents) {
-    const round = d.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
-    if (!deathsByRound.has(round)) deathsByRound.set(round, []);
-    deathsByRound.get(round)!.push(d);
-  }
+  const deathsByRound = groupByRound(deathEvents, context.liveRounds);
 
   const opportunities: TradeOpportunities = new Map();
 
@@ -145,27 +139,12 @@ export function collectTrades(
   context: MatchContext,
   steamIds: string[],
 ): CollectorOut {
-  const out: CollectorOut = new Map();
-  const steamSet = new Set(steamIds);
-  for (const sid of steamIds) out.set(sid, {});
+  const { out, steamSet } = initCollector<SabFields>(steamIds);
 
   const tradeWindow = Math.round(TRADE_WINDOW_SECONDS * context.tickRate);
 
-  const deathsByRound = new Map<number, PlayerDeathRow[]>();
-  for (const d of deathEvents) {
-    const round = d.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
-    if (!deathsByRound.has(round)) deathsByRound.set(round, []);
-    deathsByRound.get(round)!.push(d);
-  }
-
-  const hurtsByRound = new Map<number, PlayerHurtRow[]>();
-  for (const h of hurtEvents) {
-    const round = h.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
-    if (!hurtsByRound.has(round)) hurtsByRound.set(round, []);
-    hurtsByRound.get(round)!.push(h);
-  }
+  const deathsByRound = groupByRound(deathEvents, context.liveRounds);
+  const hurtsByRound = groupByRound(hurtEvents, context.liveRounds);
 
   for (const round of context.liveRounds) {
     const deaths = deathsByRound.get(round) ?? [];

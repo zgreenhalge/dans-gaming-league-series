@@ -12,6 +12,7 @@ import type { DuoStats, H2HStats, H2HData, H2HMatchInput } from '../util';
 import type { Season, Faction } from '../types';
 import { getSeasons } from './seasons';
 import { getPlayersById } from './player';
+import { getWeekLookup } from './_shared';
 
 
 // ─── H2H data layer ──────────────────────────────────────────────────────────
@@ -156,15 +157,11 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
   const seasonIds = resolveH2HSeasonIds(selection, regularSeasons, gauntletSeasons, regularToGauntlet);
   if (seasonIds.size === 0) return { duos: [], rivals: [], players: [] };
 
-  const [{ data: weeks, error: wErr }, players] = await Promise.all([
-    supabase.from('weeks').select('id, season_id, week_number').in('season_id', [...seasonIds]),
+  const [weekLookup, players] = await Promise.all([
+    getWeekLookup([...seasonIds]),
     getPlayersById(),
   ]);
-  if (wErr) throw wErr;
-  const weekRows = (weeks ?? []) as { id: number; season_id: number; week_number: number }[];
-  if (weekRows.length === 0) return { duos: [], rivals: [], players: [] };
-  const weekNumberById = new Map(weekRows.map((w) => [w.id, w.week_number]));
-  const seasonIdByWeek = new Map(weekRows.map((w) => [w.id, w.season_id]));
+  if (weekLookup.size === 0) return { duos: [], rivals: [], players: [] };
   const allSeasons = [...regularSeasons, ...gauntletSeasons];
   const seasonNumberById = new Map(allSeasons.map((s) => [s.id, extractSeasonNumber(s.name)]));
   const seasonIsGauntletById = new Map(allSeasons.map((s) => [s.id, s.is_gauntlet]));
@@ -172,7 +169,7 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
   const { data: matches, error: mErr } = await supabase
     .from('matches')
     .select('id, week_id, match_number, final_score, shirts_pick, picked_map, skins_starting_side')
-    .in('week_id', weekRows.map((w) => w.id));
+    .in('week_id', [...weekLookup.keys()]);
   if (mErr) throw mErr;
 
   type MatchRow = {
@@ -225,10 +222,11 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
   for (const m of filteredMatches) {
     const roster = statsByMatch.get(m.id) ?? [];
     if (roster.length === 0) continue;
-    const seasonId = seasonIdByWeek.get(m.week_id) ?? -1;
+    const week = weekLookup.get(m.week_id);
+    const seasonId = week?.season_id ?? -1;
     matchInputs.push({
       matchId: m.id,
-      weekNumber: weekNumberById.get(m.week_id) ?? 0,
+      weekNumber: week?.week_number ?? 0,
       matchNumber: m.match_number,
       seasonNumber: seasonNumberById.get(seasonId) ?? null,
       isGauntlet: seasonIsGauntletById.get(seasonId) ?? false,

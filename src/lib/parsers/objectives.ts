@@ -1,5 +1,6 @@
 import type { SabFields } from '../types';
 import type { MatchContext } from './matchContext';
+import { initCollector, roundOf } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -15,13 +16,10 @@ export function collectObjectives(
   context: MatchContext,
   steamIds: string[],
 ): CollectorOut {
-  const out: CollectorOut = new Map();
-  const steamSet = new Set(steamIds);
-  for (const sid of steamIds) out.set(sid, {});
+  const { out, steamSet } = initCollector<SabFields>(steamIds);
 
   for (const p of plantEvents) {
-    const round = p.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    if (roundOf(p, context.liveRounds) == null) continue;
     const planter = p.user_steamid;
     if (!planter || !steamSet.has(planter)) continue;
     const row = out.get(planter)!;
@@ -29,8 +27,7 @@ export function collectObjectives(
   }
 
   for (const d of defuseEvents) {
-    const round = d.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    if (roundOf(d, context.liveRounds) == null) continue;
     const defuser = d.user_steamid;
     if (!defuser || !steamSet.has(defuser)) continue;
     const row = out.get(defuser)!;

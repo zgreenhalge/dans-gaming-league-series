@@ -3,18 +3,15 @@
 // Admin control to flip a match's `is_feature_match` flag via `PATCH /feature` (#144). Standalone so
 // it can sit on the match console now and the match page later without duplication.
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAsyncAction } from './useAsyncAction';
 
 export function FeatureMatchToggle({ matchId, isFeature }: { matchId: number; isFeature: boolean }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useAsyncAction();
 
   async function toggle() {
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       const res = await fetch(`/api/matches/${matchId}/feature`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
@@ -22,15 +19,10 @@ export function FeatureMatchToggle({ matchId, isFeature }: { matchId: number; is
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(j.error ?? 'Failed to update');
-        return;
+        throw new Error(j.error ?? 'Failed to update');
       }
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (

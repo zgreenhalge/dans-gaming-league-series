@@ -15,9 +15,11 @@ import {
   aggregateScoreDistribution,
   classifyMatchVeto,
   aggregatePlayerMapStats,
+  aggregateMapIndexStats,
   type MatchPickBanInput,
   type PlayerMatchInput,
 } from './mapSideStats';
+import type { MapIndexEntry, MapSeasonStat } from './types';
 
 function match(opts: Partial<MatchPickBanInput>): MatchPickBanInput {
   return {
@@ -226,6 +228,108 @@ test('aggregateScoreDistribution: loser-round bucket boundaries', () => {
   assert.equal(out.convincing, 2);
   assert.equal(out.competitive, 2);
   assert.equal(out.close, 1);
+});
+
+function seasonStat(opts: Partial<MapSeasonStat>): MapSeasonStat {
+  return {
+    seasonId: 1,
+    isGauntlet: false,
+    pickCount: 0,
+    banCount: 0,
+    noPickCount: 0,
+    totalKills: 0,
+    totalAssists: 0,
+    totalRounds: 0,
+    pickAndWon: 0,
+    ...opts,
+  };
+}
+
+function mapIndexEntry(opts: Partial<MapIndexEntry>): MapIndexEntry {
+  return {
+    name: 'Palais',
+    slug: 'palais',
+    pickCount: 0,
+    banCount: 0,
+    noPickCount: 0,
+    seasons: [{ id: 1, name: 'Season 1', is_gauntlet: false }],
+    statsBySeason: [],
+    ...opts,
+  };
+}
+
+const allIn = { includeRegular: true, includeGauntlet: true, selectedSeason: 'all' as const };
+
+test('aggregateMapIndexStats: sums a map\'s per-season stats and derives avgRounds from totalRounds/pickCount', () => {
+  const maps = [
+    mapIndexEntry({
+      slug: 'palais',
+      statsBySeason: [
+        seasonStat({ seasonId: 1, pickCount: 2, totalRounds: 44, totalKills: 100, totalAssists: 20, banCount: 1, noPickCount: 0, pickAndWon: 1 }),
+        seasonStat({ seasonId: 2, pickCount: 1, totalRounds: 20, totalKills: 40, totalAssists: 8, banCount: 0, noPickCount: 1, pickAndWon: 0 }),
+      ],
+    }),
+  ];
+  const out = aggregateMapIndexStats(maps, allIn);
+  const palais = out.get('palais');
+  assert.ok(palais);
+  assert.equal(palais!.pickCount, 3);
+  assert.equal(palais!.banCount, 1);
+  assert.equal(palais!.noPickCount, 1);
+  assert.equal(palais!.pickAndWon, 1);
+  assert.equal(palais!.totalKills, 140);
+  assert.equal(palais!.totalAssists, 28);
+  assert.equal(palais!.avgRounds, 64 / 3); // (44 + 20) / (2 + 1)
+});
+
+test('aggregateMapIndexStats: a map with zero picks in scope has avgRounds 0, not NaN', () => {
+  const maps = [mapIndexEntry({ slug: 'nuke', statsBySeason: [] })];
+  const out = aggregateMapIndexStats(maps, allIn);
+  assert.equal(out.get('nuke')!.avgRounds, 0);
+});
+
+test('aggregateMapIndexStats: includeGauntlet=false excludes gauntlet-season stats from the totals', () => {
+  const maps = [
+    mapIndexEntry({
+      slug: 'palais',
+      statsBySeason: [
+        seasonStat({ seasonId: 1, isGauntlet: false, pickCount: 2 }),
+        seasonStat({ seasonId: 2, isGauntlet: true, pickCount: 5 }),
+      ],
+    }),
+  ];
+  const out = aggregateMapIndexStats(maps, { includeRegular: true, includeGauntlet: false, selectedSeason: 'all' });
+  assert.equal(out.get('palais')!.pickCount, 2);
+});
+
+test('aggregateMapIndexStats: selectedSeason narrows to a single season regardless of the regular/gauntlet toggles', () => {
+  const maps = [
+    mapIndexEntry({
+      slug: 'palais',
+      statsBySeason: [
+        seasonStat({ seasonId: 1, pickCount: 2 }),
+        seasonStat({ seasonId: 2, pickCount: 5 }),
+      ],
+    }),
+  ];
+  const out = aggregateMapIndexStats(maps, { includeRegular: true, includeGauntlet: true, selectedSeason: 2 });
+  assert.equal(out.get('palais')!.pickCount, 5);
+});
+
+test('aggregateMapIndexStats: seasonsPlayed counts distinct regular-season numbers in the pool, unaffected by the season filter', () => {
+  const maps = [
+    mapIndexEntry({
+      slug: 'palais',
+      seasons: [
+        { id: 1, name: 'Season 1', is_gauntlet: false },
+        { id: 2, name: 'Season 1 Gauntlet', is_gauntlet: true },
+        { id: 3, name: 'Season 2', is_gauntlet: false },
+      ],
+      statsBySeason: [],
+    }),
+  ];
+  const out = aggregateMapIndexStats(maps, { includeRegular: false, includeGauntlet: false, selectedSeason: 'all' });
+  assert.equal(out.get('palais')!.seasonsPlayed, 2); // Season 1 and Season 2 (gauntlet excluded, filter ignored)
 });
 
 report();

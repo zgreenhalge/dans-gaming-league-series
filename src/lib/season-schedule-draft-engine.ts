@@ -15,7 +15,7 @@ import {
   type DraftScheduleWeek,
   type ValidationIssue,
 } from './season-schedule-validation';
-import { recordOpsError } from './ops-errors';
+import { recordOpsError, clearOpsError } from './ops-errors';
 
 /** Thrown when a caller tries to generate/save/delete a season's draft schedule while another such
  * operation is already in flight for the same season — see claimScheduleDraftLock(). */
@@ -187,12 +187,23 @@ export async function generateSeasonScheduleDraft(
         const { error: matchErr } = await supabaseAdmin.from('season_schedule_draft_matches').insert(matchRows);
         if (matchErr) throw matchErr;
       }
+      await clearOpsError(supabaseAdmin, 'season', seasonId, 'schedule_generate');
+      await clearOpsError(supabaseAdmin, 'season', seasonId, 'schedule_generate_cleanup');
     } catch (err) {
       // Not a real transaction — a mid-loop failure would otherwise leave a half-generated draft
-      // (some weeks present, the rest missing) with no automatic cleanup. Best-effort: clear
-      // whatever got inserted so the draft ends up either fully regenerated or fully empty, never
-      // half. If the cleanup itself fails, recordOpsError() surfaces that rather than staying silent
-      // — leaving the caller to only see (and report) the original error otherwise.
+      // (some weeks present, the rest missing) with no automatic cleanup. The triggering error is
+      // rethrown to the caller regardless, so it's recorded under its own operation here rather than
+      // only reaching them as a dropped request; the best-effort cleanup below records separately
+      // (`schedule_generate_cleanup`) if IT also fails, keeping "the generate itself failed" and "the
+      // cleanup after it also failed" distinguishable in the admin UI instead of one overwriting the
+      // other.
+      await recordOpsError(
+        supabaseAdmin,
+        'season',
+        seasonId,
+        'schedule_generate',
+        `Schedule generate failed: ${(err as Error).message}`,
+      );
       await cleanupOrRecordOpsError(
         supabaseAdmin,
         seasonId,
@@ -441,14 +452,25 @@ export async function confirmSeasonScheduleDraft(supabaseAdmin: SupabaseClient, 
           if (statsErr) throw statsErr;
         }
       }
+      await clearOpsError(supabaseAdmin, 'season', seasonId, 'schedule_confirm');
+      await clearOpsError(supabaseAdmin, 'season', seasonId, 'schedule_confirm_cleanup');
     } catch (err) {
       // Not a real transaction — a mid-loop failure would otherwise leave a half-materialized real
       // schedule behind, and since generateSeasonScheduleDraft()/saveSeasonScheduleDraft()/
       // deleteSeasonScheduleDraft() now all refuse once any real week exists (see
       // assertScheduleNotYetMaterialized()), that half-materialized state would also lock an admin out
-      // of every normal remediation route. Best-effort: delete whatever this attempt created (stats
-      // before matches, matches before weeks, for the FKs) so the season ends up either fully
-      // confirmed or fully back to draft-only, never stuck in between.
+      // of every normal remediation route. The triggering error is rethrown to the caller regardless,
+      // so it's recorded under its own operation here rather than only reaching them as a dropped
+      // request; the best-effort cleanup below (delete whatever this attempt created — stats before
+      // matches, matches before weeks, for the FKs) records separately (`schedule_confirm_cleanup`)
+      // if IT also fails, keeping the two failure modes distinguishable in the admin UI.
+      await recordOpsError(
+        supabaseAdmin,
+        'season',
+        seasonId,
+        'schedule_confirm',
+        `Schedule confirm failed: ${(err as Error).message}`,
+      );
       await cleanupOrRecordOpsError(
         supabaseAdmin,
         seasonId,

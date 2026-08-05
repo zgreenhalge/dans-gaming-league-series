@@ -1,7 +1,8 @@
 import { supabase } from '../supabase';
 import type { LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
-import { canonicalSort, isPlayedScore } from '../util';
+import { canonicalSort, deriveRates, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
+import { fetchAllPages, getWeekLookup } from './_shared';
 
 
 function n(v: number | null | undefined): number {
@@ -51,28 +52,35 @@ async function getSeasonBaseData(): Promise<{
   rosterBySeason: Map<number, Set<number>>;
 }> {
   const [
-    { data: stats, error: sErr },
+    stats,
     { data: matches, error: mErr },
-    { data: weeks, error: wErr },
+    weekLookup,
   ] = await Promise.all([
-    supabase.from('player_match_stats').select('player_id, assists, rounds_won, match_id, kills, deaths, is_win'),
+    fetchAllPages<{
+      player_id: number;
+      assists: number | null;
+      rounds_won: number | null;
+      match_id: number;
+      kills: number | null;
+      deaths: number | null;
+      is_win: boolean | null;
+    }>((from, to) =>
+      supabase
+        .from('player_match_stats')
+        .select('player_id, assists, rounds_won, match_id, kills, deaths, is_win')
+        .range(from, to),
+    ),
     supabase.from('matches').select('id, week_id, is_playoff_game, final_score'),
-    supabase.from('weeks').select('id, season_id'),
+    getWeekLookup(),
   ]);
-  if (sErr) throw sErr;
   if (mErr) throw mErr;
-  if (wErr) throw wErr;
-
-  const weekToSeason = new Map<number, number>();
-  for (const w of (weeks ?? []) as { id: number; season_id: number }[])
-    weekToSeason.set(w.id, w.season_id);
 
   // played non-playoff matches → their season (for perPlayerStats)
   const playedMatchSeason = new Map<number, number>();
   // unplayed matches → their season (for rosterBySeason)
   const unplayedMatchSeason = new Map<number, number>();
   for (const m of (matches ?? []) as { id: number; week_id: number; is_playoff_game: boolean; final_score: string | null }[]) {
-    const sid = weekToSeason.get(m.week_id);
+    const sid = weekLookup.get(m.week_id)?.season_id;
     if (sid == null) continue;
     if (isPlayedScore(m.final_score) && !m.is_playoff_game) playedMatchSeason.set(m.id, sid);
     if (!isPlayedScore(m.final_score)) unplayedMatchSeason.set(m.id, sid);
@@ -81,15 +89,7 @@ async function getSeasonBaseData(): Promise<{
   const perPlayerStats = new Map<string, PerPlayerStats>();
   const rosterBySeason = new Map<number, Set<number>>();
 
-  for (const s of (stats ?? []) as {
-    player_id: number;
-    assists: number | null;
-    rounds_won: number | null;
-    match_id: number;
-    kills: number | null;
-    deaths: number | null;
-    is_win: boolean | null;
-  }[]) {
+  for (const s of stats) {
     const playedSid = playedMatchSeason.get(s.match_id);
     if (playedSid != null) {
       const key = `${playedSid}:${s.player_id}`;
@@ -301,6 +301,7 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
 
   const out: LeaderboardRowWithId[] = [];
   for (const [player_name, a] of byName) {
+    const rates = deriveRates(a);
     out.push({
       season_id: 0,
       player_name,
@@ -308,18 +309,16 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
       matches_played: a.matches_played,
       matches_won: a.matches_won,
       matches_lost: a.matches_lost,
-      win_rate_percentage:
-        a.matches_played > 0 ? (a.matches_won / a.matches_played) * 100 : 0,
+      win_rate_percentage: rates.win_rate_percentage,
       total_kills: a.total_kills,
       total_assists: a.total_assists,
       total_deaths: a.total_deaths,
-      kd_ratio: a.total_deaths > 0 ? a.total_kills / a.total_deaths : a.total_kills,
+      kd_ratio: rates.kd_ratio,
       total_damage: a.total_damage,
       total_rounds_played: a.total_rounds_played,
       total_rounds_won: a.total_rounds_won,
-      rwr_percentage: a.total_rounds_played > 0 ? (a.total_rounds_won / a.total_rounds_played) * 100 : 0,
-      overall_adr:
-        a.total_rounds_played > 0 ? a.total_damage / a.total_rounds_played : 0,
+      rwr_percentage: rates.rwr_percentage,
+      overall_adr: rates.overall_adr,
       kills_in_wins: a.kills_in_wins,
       deaths_in_wins: a.deaths_in_wins,
       kills_in_losses: a.kills_in_losses,

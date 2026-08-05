@@ -4,6 +4,7 @@ import type { WeaponFireRow } from './utility';
 import { WEAPON_CATEGORY, stripWeaponPrefix } from './weaponClasses';
 import type { EconomyType } from './economy';
 import { HITGROUP_HEAD } from './constants';
+import { roundOf } from './_shared';
 
 export interface WeaponBreakdownRow {
   bucket: string;
@@ -51,8 +52,8 @@ function accumulateHurtDamage(
   getBucket: (h: PlayerHurtRow, round: number) => string | undefined,
 ): void {
   for (const h of hurtEvents) {
-    const round = h.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const round = roundOf(h, context.liveRounds);
+    if (round == null) continue;
 
     const attacker = h.attacker_steamid;
     const victim = h.user_steamid;
@@ -90,8 +91,8 @@ export function collectWeaponClassStats(
   for (const f of fireEvents) {
     const category = WEAPON_CATEGORY[stripWeaponPrefix(f.weapon)];
     if (!category) continue;
-    const round = f.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const round = roundOf(f, context.liveRounds);
+    if (round == null) continue;
     const shooter = f.user_steamid;
     if (!shooter || !steamSet.has(shooter)) continue;
 
@@ -133,8 +134,8 @@ export function collectEconomyStats(
   }
 
   for (const f of fireEvents) {
-    const round = f.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const round = roundOf(f, context.liveRounds);
+    if (round == null) continue;
     const shooter = f.user_steamid;
     if (!shooter || !steamSet.has(shooter)) continue;
     const type = roundEconomy.get(shooter)?.get(round);

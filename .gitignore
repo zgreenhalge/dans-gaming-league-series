@@ -21,6 +21,9 @@ __pycache__/
 # Handoff files from Claude
 *handoff/
 
+# Claude Code agent worktrees (runtime-managed, not part of the repo)
+.claude/worktrees/
+
 # Whatever this windows shit is
 *:Zone.Identifier
 

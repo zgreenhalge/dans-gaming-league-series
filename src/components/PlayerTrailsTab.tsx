@@ -5,6 +5,7 @@ import type { PlayerHistoryRow } from '@/lib/queries';
 import type { PlayerTrace } from '@/lib/replay/aggregate';
 import { groupByMap, isAbortError, isPlayedScore, tabCls } from '@/lib/util';
 import { mapSlug } from '@/lib/maps';
+import EmptyState from './EmptyState';
 import PlayerRoundOverlay from './PlayerRoundOverlay';
 
 /**
@@ -78,11 +79,7 @@ export default function PlayerTrailsTab({
   }, [playerId, matchIds, selectedMap]);
 
   if (mapOptions.length === 0) {
-    return (
-      <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-        No matches with a generated replay for this selection.
-      </div>
-    );
+    return <EmptyState message="No matches with a generated replay for this selection." />;
   }
 
   return (

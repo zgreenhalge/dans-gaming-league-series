@@ -1,5 +1,3 @@
-'use client';
-
 import type { SabFields } from '@/lib/types';
 
 interface PlayerSabRow {

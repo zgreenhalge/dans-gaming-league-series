@@ -5,10 +5,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { PlayerHistoryRow, TrophyEntry, H2HData, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { deriveRates, extractSeasonNumber, groupByMap, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
+import { aggregatePlayerStats, aggregatePlayerStatsByMap, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import DevGate from './DevGate';
+import EmptyState from './EmptyState';
 import { MatchCard } from './MatchCard';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
@@ -20,6 +21,7 @@ import EhogTimeline from './EhogTimeline';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import StatTileGrid from './StatTileGrid';
 import TabBar from './TabBar';
+import Th from './Th';
 
 type Filter = 'career' | number;
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
@@ -47,93 +49,8 @@ const GAUNTLET_PLACEMENTS: Record<1 | 2 | 3, string> = {
   3: '3rd Place',
 };
 
-interface Aggregate {
-  matches: number;
-  wins: number;
-  losses: number;
-  wr: number;
-  kills: number;
-  assists: number;
-  deaths: number;
-  kd: number;
-  damage: number;
-  rounds_played: number;
-  rounds_won: number;
-  rwr: number;
-  adr: number;
-  kills_in_wins: number;
-  deaths_in_wins: number;
-  kills_in_losses: number;
-  deaths_in_losses: number;
-}
-
 function isPlayed(r: PlayerHistoryRow): boolean {
   return isPlayedScore(r.final_score) && r.rounds_played > 0;
-}
-
-function aggregate(rowsRaw: PlayerHistoryRow[]): Aggregate {
-  const rows = rowsRaw.filter(isPlayed);
-  const matches = rows.length;
-  const wins = rows.filter((r) => r.is_win).length;
-  const losses = matches - wins;
-  const kills = rows.reduce((s, r) => s + r.kills, 0);
-  const assists = rows.reduce((s, r) => s + r.assists, 0);
-  const deaths = rows.reduce((s, r) => s + r.deaths, 0);
-  const damage = rows.reduce((s, r) => s + r.damage, 0);
-  const rounds_played = rows.reduce((s, r) => s + r.rounds_played, 0);
-  const rounds_won = rows.reduce((s, r) => s + r.rounds_won, 0);
-  const kills_in_wins = rows.reduce((s, r) => s + (r.is_win ? r.kills : 0), 0);
-  const deaths_in_wins = rows.reduce((s, r) => s + (r.is_win ? r.deaths : 0), 0);
-  const kills_in_losses = rows.reduce((s, r) => s + (r.is_win ? 0 : r.kills), 0);
-  const deaths_in_losses = rows.reduce((s, r) => s + (r.is_win ? 0 : r.deaths), 0);
-  const rates = deriveRates({
-    matches_played: matches,
-    matches_won: wins,
-    total_kills: kills,
-    total_deaths: deaths,
-    total_rounds_played: rounds_played,
-    total_rounds_won: rounds_won,
-    total_damage: damage,
-  });
-  return {
-    matches,
-    wins,
-    losses,
-    wr: rates.win_rate_percentage,
-    kills,
-    assists,
-    deaths,
-    kd: rates.kd_ratio,
-    damage,
-    rounds_played,
-    rounds_won,
-    rwr: rates.rwr_percentage,
-    adr: rates.overall_adr,
-    kills_in_wins,
-    deaths_in_wins,
-    kills_in_losses,
-    deaths_in_losses,
-  };
-}
-
-interface MapAgg {
-  map: string;
-  wins: number;
-  losses: number;
-  wr: number;
-  rwr: number;
-  adr: number;
-}
-
-function aggregateByMap(rows: PlayerHistoryRow[]): MapAgg[] {
-  const buckets = groupByMap(rows, (r) => r.map);
-  const out: MapAgg[] = [];
-  for (const { display, rows: list } of buckets.values()) {
-    const a = aggregate(list);
-    if (a.matches === 0) continue;
-    out.push({ map: display, wins: a.wins, losses: a.losses, wr: a.wr, rwr: a.rwr, adr: a.adr });
-  }
-  return out.sort((a, b) => b.wr - a.wr || b.rwr - a.rwr || b.adr - a.adr);
 }
 
 /** Percentage of `all` strictly below `value` — "you're ahead of N% of the league". */
@@ -308,12 +225,12 @@ export default function PlayerView({
     );
   }, [filter, ehogHistory, includeRegular, includeGauntlet, regularSeasons]);
 
-  const agg = aggregate(filtered);
+  const agg = aggregatePlayerStats(filtered);
   const peakEhog = useMemo(() => {
     if (filteredEhog.length === 0) return null;
     return Math.max(...filteredEhog.map((h) => h.ehogRating));
   }, [filteredEhog]);
-  const maps = aggregateByMap(filtered);
+  const maps = aggregatePlayerStatsByMap(filtered);
   const playerMapStats = aggregatePlayerMapStats(filtered);
   const playerSideStats = aggregatePlayerSideStats(filtered);
   const playedHistory = filtered.filter(isPlayed);
@@ -536,7 +453,7 @@ export default function PlayerView({
                     if (pairedGntId != null && r.season_id === pairedGntId) return includeGauntlet;
                     return false;
                   });
-                  const a = aggregate(seasonRows);
+                  const a = aggregatePlayerStats(seasonRows);
                   return {
                     season_id: s.id,
                     player_id: s.id,
@@ -583,24 +500,22 @@ export default function PlayerView({
                 <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Pick/ban stats</span>
               </div>
               {playerMapStats.length === 0 ? (
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                  No map data.
-                </div>
+                <EmptyState message="No map data." />
               ) : (
                 <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
                   <table className="w-full min-w-max border-collapse text-[12px]">
                     <thead>
                       <tr className="bg-[var(--color-bg-secondary)]">
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Map</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Games</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Wins</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Picks</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Bans</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">No-picks</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Pick &amp; won</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">CT</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">T</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Avg rounds</th>
+                        <Th align="left">Map</Th>
+                        <Th align="right">Games</Th>
+                        <Th align="right">Wins</Th>
+                        <Th align="right">Picks</Th>
+                        <Th align="right">Bans</Th>
+                        <Th align="right">No-picks</Th>
+                        <Th align="right">Pick &amp; won</Th>
+                        <Th align="right">CT</Th>
+                        <Th align="right">T</Th>
+                        <Th align="right">Avg rounds</Th>
                       </tr>
                     </thead>
                     <tbody>
@@ -630,19 +545,17 @@ export default function PlayerView({
                 <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Side stats</span>
               </div>
               {playerSideStats.every((s) => s.played === 0) ? (
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                  No side data.
-                </div>
+                <EmptyState message="No side data." />
               ) : (
                 <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
                   <table className="w-full min-w-max border-collapse text-[12px]">
                     <thead>
                       <tr className="bg-[var(--color-bg-secondary)]">
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-secondary)]">Side</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Played</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">Times Picked</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">W-L</th>
-                        <th className="tracked text-[9px] font-semibold py-2 px-3 border-b border-[var(--color-border-primary)] text-right text-[var(--color-text-secondary)]">RWR%</th>
+                        <Th align="left">Side</Th>
+                        <Th align="right">Played</Th>
+                        <Th align="right">Times Picked</Th>
+                        <Th align="right">W-L</Th>
+                        <Th align="right">RWR%</Th>
                       </tr>
                     </thead>
                     <tbody>
@@ -664,9 +577,7 @@ export default function PlayerView({
 
           <SectionLabel>Map stats</SectionLabel>
           {maps.length === 0 ? (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-              No map data.
-            </div>
+            <EmptyState message="No map data." />
           ) : (
             <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
               <table className="w-full min-w-max border-collapse text-[13px]">
@@ -782,9 +693,7 @@ export default function PlayerView({
           ) : (
             <>
               {playedHistory.length === 0 ? (
-                <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                  No matches played yet.
-                </div>
+                <EmptyState message="No matches played yet." />
               ) : (
                 <div className="flex flex-col gap-3">
                   {playedHistory.map((h) => (
@@ -833,9 +742,7 @@ export default function PlayerView({
         <>
           <SectionLabel>Trophy case</SectionLabel>
           {filteredTrophies.length === 0 ? (
-            <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-              No trophies for the current filter.
-            </div>
+            <EmptyState message="No trophies for the current filter." />
           ) : (
             <div className="flex flex-col gap-2">
               {filteredTrophies

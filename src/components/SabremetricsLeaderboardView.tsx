@@ -10,6 +10,7 @@ import {
   type SabremetricStatRow,
 } from '@/lib/queries';
 import { tabCls } from '@/lib/util';
+import EmptyState from './EmptyState';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
 
 // Side-tint helper (CT/T, not SHIRTS/SKINS) — matches MatchTabView.tsx's own factionClass(),
@@ -730,11 +731,7 @@ export default function SabremetricsLeaderboardView({
   const [sub, setSub] = useState<SubTab>('mechanics');
 
   if (aggregated.length === 0) {
-    return (
-      <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-        No sabremetric data available. Upload demos on match pages to populate advanced stats.
-      </div>
-    );
+    return <EmptyState message="No sabremetric data available. Upload demos on match pages to populate advanced stats." />;
   }
 
   const tabBar = (

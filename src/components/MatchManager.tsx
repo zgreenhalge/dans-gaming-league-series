@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { isPlayedScore } from '@/lib/util';
 import type { AdminMatchRow } from '@/lib/queries';
 import type { ScheduledMatchRef } from '@/lib/schedule';
+import EmptyState from './EmptyState';
 import VetoSequence from './VetoSequence';
 import { ScheduleEditor } from './ScheduleEditor';
 import { FeatureMatchToggle } from './FeatureMatchToggle';
@@ -93,9 +94,7 @@ export function MatchManager({ matches, initialQuery = '' }: { matches: AdminMat
       />
 
       {filtered.length === 0 ? (
-        <div className="font-mono text-[13px] text-[var(--color-text-secondary)] border border-[var(--color-border-tertiary)] rounded px-4 py-8 text-center">
-          {query.trim() ? 'No matches found.' : 'Search by season / week / match / map to find a match to manage.'}
-        </div>
+        <EmptyState size="lg" message={query.trim() ? 'No matches found.' : 'Search by season / week / match / map to find a match to manage.'} />
       ) : (
         <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden">
           {filtered.map((m) => {

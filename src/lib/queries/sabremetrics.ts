@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import type { SabFields, PlayerMatchSabremetrics } from '../types';
 import { getPlayersById } from './player';
-import { resolveMatchSeasons } from './_shared';
+import { resolveMatchSeasons, fetchAllPages } from './_shared';
 
 
 export interface SabremetricMatchRow {
@@ -18,20 +18,22 @@ export interface SabremetricMatchRow {
  *  season-scoped callers (the season page) can't drift from the career-wide one. */
 export async function getAllSabremetrics(seasonId?: number): Promise<SabremetricMatchRow[]> {
   const [
-    { data: sabRows, error: sabErr },
-    { data: pmsRows, error: pmsErr },
+    sabRows,
+    pmsRows,
     { data: seasonRows, error: seasonErr },
     matchSeason,
     playersById,
   ] = await Promise.all([
-    supabase.from('player_match_sabremetrics').select('*'),
-    supabase.from('player_match_stats').select('id, player_id, match_id, rounds_played'),
+    fetchAllPages<PlayerMatchSabremetrics>((from, to) =>
+      supabase.from('player_match_sabremetrics').select('*').range(from, to),
+    ),
+    fetchAllPages<{ id: number; player_id: number; match_id: number; rounds_played: number }>((from, to) =>
+      supabase.from('player_match_stats').select('id, player_id, match_id, rounds_played').range(from, to),
+    ),
     supabase.from('seasons').select('id, is_gauntlet'),
     resolveMatchSeasons(),
     getPlayersById(),
   ]);
-  if (sabErr) throw sabErr;
-  if (pmsErr) throw pmsErr;
   if (seasonErr) throw seasonErr;
 
   const seasonIsGauntlet = new Map<number, boolean>();
@@ -39,11 +41,10 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     seasonIsGauntlet.set(s.id, s.is_gauntlet);
 
   const pmsLookup = new Map<number, { player_id: number; match_id: number; rounds_played: number }>();
-  for (const r of (pmsRows ?? []) as { id: number; player_id: number; match_id: number; rounds_played: number }[])
-    pmsLookup.set(r.id, r);
+  for (const r of pmsRows) pmsLookup.set(r.id, r);
 
   const result: SabremetricMatchRow[] = [];
-  for (const raw of (sabRows ?? []) as PlayerMatchSabremetrics[]) {
+  for (const raw of sabRows) {
     const pms = pmsLookup.get(raw.player_match_stats_id);
     if (!pms) continue;
     const sid = matchSeason.get(pms.match_id);

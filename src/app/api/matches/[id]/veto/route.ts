@@ -11,6 +11,7 @@ import {
   fetchServerStateRow,
 } from '@/lib/dathost-lifecycle';
 import { afterBestEffort } from '@/lib/after';
+import { clearOpsError } from '@/lib/ops-errors';
 
 const supabaseAdmin = getAdminClient();
 
@@ -257,8 +258,11 @@ export async function PATCH(
     if (!serverBusy && ctx) {
       afterBestEffort(
         `provisionMatchServer(${matchId})`,
-        () => provisionMatchServer(supabaseAdmin, matchId, ctx.configUrl, ctx.configAuth),
-        provisionErrorHandler('auto-provision', matchId),
+        async () => {
+          await provisionMatchServer(supabaseAdmin, matchId, ctx.configUrl, ctx.configAuth);
+          await clearOpsError(supabaseAdmin, 'match', matchId, 'server_provision');
+        },
+        provisionErrorHandler(supabaseAdmin, 'auto-provision', matchId),
       );
     }
   }

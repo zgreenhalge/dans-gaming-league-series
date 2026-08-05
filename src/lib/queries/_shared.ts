@@ -28,6 +28,36 @@ export async function fetchAllPages<T>(
   return results;
 }
 
+/** `.in()` batch size — keeps the request URL well under PostgREST/proxy length limits when a
+ *  caller's id list itself runs into the thousands. */
+export const SUPABASE_IN_BATCH = 200;
+
+/**
+ * Runs a `.in(column, ids)` select in `SUPABASE_IN_BATCH`-sized id chunks, each chunk itself
+ * paginated via `fetchAllPages()` — covers both truncation risks a large `.in()` list carries:
+ * the id list overflowing a safe URL length, and any single chunk's result overflowing
+ * PostgREST's row cap.
+ */
+export async function batchedIn<T>(
+  table: string,
+  column: string,
+  ids: number[],
+  select: string,
+): Promise<T[]> {
+  const results: T[] = [];
+  for (let i = 0; i < ids.length; i += SUPABASE_IN_BATCH) {
+    const chunk = ids.slice(i, i + SUPABASE_IN_BATCH);
+    const page = await fetchAllPages<T>((from, to) =>
+      supabase.from(table).select(select).in(column, chunk).range(from, to) as unknown as PromiseLike<{
+        data: T[] | null;
+        error: { message: string } | null;
+      }>,
+    );
+    results.push(...page);
+  }
+  return results;
+}
+
 /**
  * Which of `requested` aren't present in `covered` — a plain set difference, used
  * wherever a precomputed artifact (issue #127) only partially answers a request:
@@ -43,28 +73,42 @@ export function missingIds(requested: number[], covered: number[] | undefined): 
 }
 
 /**
+ * Resolves `week_id -> { season_id, week_number }` — the `weeks` -> `seasons` half of the
+ * `matches` -> `weeks` -> `seasons` join every season-scoped query needs. Pass `seasonIds` to
+ * scope to specific seasons (e.g. gauntlet seasons); omit it to resolve every week in the league.
+ */
+export async function getWeekLookup(
+  seasonIds?: number[],
+): Promise<Map<number, { season_id: number; week_number: number }>> {
+  let query = supabase.from('weeks').select('id, season_id, week_number');
+  if (seasonIds) query = query.in('season_id', seasonIds);
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const lookup = new Map<number, { season_id: number; week_number: number }>();
+  for (const w of (data ?? []) as { id: number; season_id: number; week_number: number }[])
+    lookup.set(w.id, { season_id: w.season_id, week_number: w.week_number });
+  return lookup;
+}
+
+/**
  * Resolves `match_id -> season_id` for every played match (`isPlayedScore(final_score)`), via
  * `matches` -> `weeks` -> `seasons` — the join every demo-derived-stat query needs to scope its
  * rows to a season. Shared by `getAllSabremetrics()` and the weapon-class/economy breakdown
  * queries so the join logic can't drift between them.
  */
 export async function resolveMatchSeasons(): Promise<Map<number, number>> {
-  const [{ data: matchRows, error: matchErr }, { data: weekRows, error: weekErr }] = await Promise.all([
+  const [{ data: matchRows, error: matchErr }, weekLookup] = await Promise.all([
     supabase.from('matches').select('id, week_id, final_score'),
-    supabase.from('weeks').select('id, season_id'),
+    getWeekLookup(),
   ]);
   if (matchErr) throw matchErr;
-  if (weekErr) throw weekErr;
-
-  const weekToSeason = new Map<number, number>();
-  for (const w of (weekRows ?? []) as { id: number; season_id: number }[])
-    weekToSeason.set(w.id, w.season_id);
 
   const matchSeason = new Map<number, number>();
   for (const m of (matchRows ?? []) as { id: number; week_id: number; final_score: string | null }[]) {
     if (!isPlayedScore(m.final_score)) continue;
-    const sid = weekToSeason.get(m.week_id);
-    if (sid != null) matchSeason.set(m.id, sid);
+    const week = weekLookup.get(m.week_id);
+    if (week != null) matchSeason.set(m.id, week.season_id);
   }
   return matchSeason;
 }

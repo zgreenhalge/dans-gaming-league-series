@@ -1,5 +1,3 @@
-'use client';
-
 // Head-to-head EHOG win-probability bar for the match detail page — SHIRTS/SKINS on either end,
 // the bar split at the SHIRTS-win percentage. Pre-match uses a live prediction (current ratings);
 // post-match reads the frozen matches.pre_match_win_prob and marks whichever side actually won.

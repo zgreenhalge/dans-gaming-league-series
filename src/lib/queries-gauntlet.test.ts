@@ -12,6 +12,8 @@ import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import { matchesSnapshot } from './test-support/snapshot';
 import { test, report } from './test-support/miniTest';
+import { deriveRates } from './util';
+import type { LeaderboardRowWithId } from './types';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
@@ -24,9 +26,22 @@ import {
   getAllGauntletSummaries,
 } from './queries';
 
+/** Guards against a duplicate inline reimplementation of `deriveRates()` silently reappearing. */
+function assertRatesMatchDeriveRates(rows: LeaderboardRowWithId[], label: string) {
+  for (const r of rows) {
+    const rates = deriveRates(r);
+    assert.equal(r.win_rate_percentage, rates.win_rate_percentage, `${label}: ${r.player_name} win_rate_percentage`);
+    assert.equal(r.kd_ratio, rates.kd_ratio, `${label}: ${r.player_name} kd_ratio`);
+    assert.equal(r.rwr_percentage, rates.rwr_percentage, `${label}: ${r.player_name} rwr_percentage`);
+    assert.equal(r.overall_adr, rates.overall_adr, `${label}: ${r.player_name} overall_adr`);
+  }
+}
+
 async function main() {
   await test('getGauntletStats() — career + bySeason across both gauntlets, snapshot', async () => {
-    matchesSnapshot('getGauntletStats', await getGauntletStats());
+    const stats = await getGauntletStats();
+    assertRatesMatchDeriveRates(stats.career, 'getGauntletStats().career');
+    matchesSnapshot('getGauntletStats', stats);
   });
 
   await test('getGauntletSeasonLeaderboard(2) — paired gauntlet, snapshot', async () => {

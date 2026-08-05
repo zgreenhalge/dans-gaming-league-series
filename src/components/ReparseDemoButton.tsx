@@ -7,30 +7,23 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAsyncAction } from './useAsyncAction';
 
 export function ReparseDemoButton({ matchId }: { matchId: number }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useAsyncAction();
   const [queued, setQueued] = useState(false);
 
   async function reparse() {
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       const res = await fetch(`/api/matches/${matchId}/demo/dispatch`, { method: 'POST' });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(j.error ?? 'Failed to dispatch');
-        return;
+        throw new Error(j.error ?? 'Failed to dispatch');
       }
       setQueued(true);
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong');
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (

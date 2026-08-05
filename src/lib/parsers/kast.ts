@@ -2,6 +2,7 @@ import type { SabFields } from '../types';
 import { isTeamKill, type MatchContext, type PlayerDeathRow } from './matchContext';
 import { TRADE_WINDOW_SECONDS } from './constants';
 import { tradeOpportunityKey, type TradeOpportunities } from './trades';
+import { groupByRound, initCollector } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -11,19 +12,9 @@ export function collectKast(
   steamIds: string[],
   tradeOpportunities: TradeOpportunities,
 ): CollectorOut {
-  const out: CollectorOut = new Map();
-  for (const sid of steamIds) out.set(sid, {});
-
+  const { out } = initCollector<SabFields>(steamIds);
   const tradeWindow = Math.round(TRADE_WINDOW_SECONDS * context.tickRate);
-
-  // Group deaths by round
-  const deathsByRound = new Map<number, PlayerDeathRow[]>();
-  for (const d of deathEvents) {
-    const round = d.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
-    if (!deathsByRound.has(round)) deathsByRound.set(round, []);
-    deathsByRound.get(round)!.push(d);
-  }
+  const deathsByRound = groupByRound(deathEvents, context.liveRounds);
 
   for (const round of context.liveRounds) {
     const deaths = deathsByRound.get(round) ?? [];

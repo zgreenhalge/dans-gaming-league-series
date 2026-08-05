@@ -1,5 +1,6 @@
 import type { SabFields } from '../types';
 import type { MatchContext } from './matchContext';
+import { initCollector, roundOf } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -21,7 +22,7 @@ export interface PlayerReloadStateRow {
 export function neededReloadTicks(reloadEvents: WeaponReloadRow[], liveRounds: Set<number>): number[] {
   const ticks = new Set<number>();
   for (const r of reloadEvents) {
-    if (!liveRounds.has(r.total_rounds_played + 1)) continue;
+    if (roundOf(r, liveRounds) == null) continue;
     ticks.add(r.tick);
   }
   return [...ticks];
@@ -41,16 +42,13 @@ export function collectRoundsDropped(
   context: MatchContext,
   steamIds: string[],
 ): CollectorOut {
-  const out: CollectorOut = new Map();
-  const steamSet = new Set(steamIds);
-  for (const sid of steamIds) out.set(sid, {});
+  const { out, steamSet } = initCollector<SabFields>(steamIds);
 
   const rowLookup = new Map<string, PlayerReloadStateRow>();
   for (const r of tickRows) rowLookup.set(`${r.steamid}::${r.tick}`, r);
 
   for (const reload of reloadEvents) {
-    const round = reload.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
+    if (roundOf(reload, context.liveRounds) == null) continue;
     const shooter = reload.user_steamid;
     if (!shooter || !steamSet.has(shooter)) continue;
 

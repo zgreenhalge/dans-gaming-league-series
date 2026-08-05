@@ -1,4 +1,5 @@
-import { isPlayedScore, parseScore } from './util';
+import { extractSeasonNumber, isPlayedScore, parseScore } from './util';
+import type { MapIndexEntry } from './types';
 
 /**
  * The veto fields needed to classify a match's maps as picked/banned/no-picked — shared by every
@@ -334,4 +335,66 @@ export function aggregatePlayerSideStats(matches: PlayerMatchInput[]): PlayerSid
     { side: 'CT', ...ct },
     { side: 'T', ...t },
   ];
+}
+
+// ─── Map index display stats ─────────────────────────────────────────────────
+
+export interface MapIndexSeasonFilter {
+  includeRegular: boolean;
+  includeGauntlet: boolean;
+  selectedSeason: number | 'all';
+}
+
+export interface MapIndexDisplayStat {
+  seasonsPlayed: number;
+  pickCount: number;
+  banCount: number;
+  noPickCount: number;
+  pickAndWon: number;
+  totalKills: number;
+  totalAssists: number;
+  avgRounds: number;
+}
+
+/**
+ * Rolls each map's already-per-season stats (`MapIndexEntry.statsBySeason`, produced by
+ * `getMapIndex()`) up into the totals the map index's Statistics tab displays, honoring the same
+ * season filter as every other cross-season view (see `useSeasonFilter`/`SeasonFilter`).
+ * `seasonsPlayed` counts distinct regular-season numbers in the map's pool (`extractSeasonNumber`,
+ * falling back to the season id when a name has no parseable number) and is intentionally not
+ * affected by the filter — "how many seasons has this map ever been in the pool for" doesn't
+ * change with what's currently being viewed.
+ */
+export function aggregateMapIndexStats(
+  maps: MapIndexEntry[],
+  filter: MapIndexSeasonFilter,
+): Map<string, MapIndexDisplayStat> {
+  const { includeRegular, includeGauntlet, selectedSeason } = filter;
+  const result = new Map<string, MapIndexDisplayStat>();
+  for (const map of maps) {
+    const relevant = map.statsBySeason.filter((s) => {
+      if (!includeRegular && !s.isGauntlet) return false;
+      if (!includeGauntlet && s.isGauntlet) return false;
+      if (selectedSeason !== 'all' && s.seasonId !== selectedSeason) return false;
+      return true;
+    });
+    const regularPoolNums = new Set(
+      map.seasons
+        .filter((s) => !s.is_gauntlet)
+        .map((s) => extractSeasonNumber(s.name) ?? s.id),
+    );
+    const pickCount = relevant.reduce((sum, s) => sum + s.pickCount, 0);
+    const totalRounds = relevant.reduce((sum, s) => sum + s.totalRounds, 0);
+    result.set(map.slug, {
+      seasonsPlayed: regularPoolNums.size,
+      pickCount,
+      banCount: relevant.reduce((sum, s) => sum + s.banCount, 0),
+      noPickCount: relevant.reduce((sum, s) => sum + s.noPickCount, 0),
+      pickAndWon: relevant.reduce((sum, s) => sum + s.pickAndWon, 0),
+      totalKills: relevant.reduce((sum, s) => sum + s.totalKills, 0),
+      totalAssists: relevant.reduce((sum, s) => sum + s.totalAssists, 0),
+      avgRounds: pickCount > 0 ? totalRounds / pickCount : 0,
+    });
+  }
+  return result;
 }

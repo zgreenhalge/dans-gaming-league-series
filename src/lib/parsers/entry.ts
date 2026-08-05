@@ -1,5 +1,6 @@
 import type { SabFields } from '../types';
 import { isTeamKill, type MatchContext, type PlayerDeathRow } from './matchContext';
+import { groupByRound, initCollector } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -8,18 +9,8 @@ export function collectEntry(
   context: MatchContext,
   steamIds: string[],
 ): CollectorOut {
-  const out: CollectorOut = new Map();
-  const steamSet = new Set(steamIds);
-  for (const sid of steamIds) out.set(sid, {});
-
-  // Group deaths by round, sorted by tick
-  const deathsByRound = new Map<number, PlayerDeathRow[]>();
-  for (const d of deathEvents) {
-    const round = d.total_rounds_played + 1;
-    if (!context.liveRounds.has(round)) continue;
-    if (!deathsByRound.has(round)) deathsByRound.set(round, []);
-    deathsByRound.get(round)!.push(d);
-  }
+  const { out, steamSet } = initCollector<SabFields>(steamIds);
+  const deathsByRound = groupByRound(deathEvents, context.liveRounds);
 
   for (const [, deaths] of deathsByRound) {
     deaths.sort((a, b) => a.tick - b.tick);

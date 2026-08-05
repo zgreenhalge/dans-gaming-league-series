@@ -5,8 +5,10 @@ import Link from 'next/link';
 import { toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
 import { extractSeasonNumber, tabCls } from '@/lib/util';
+import { aggregateMapIndexStats } from '@/lib/mapSideStats';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import TabBar from './TabBar';
+import EmptyState from './EmptyState';
 import type { MapIndexEntry } from '@/lib/types';
 
 type SortKey = 'name' | 'seasonsPlayed' | 'pickCount' | 'banCount' | 'noPickCount' | 'pickAndWon' | 'totalKills' | 'totalAssists' | 'avgRounds';
@@ -38,36 +40,11 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
     return Array.from(seen.values()).sort((a, b) => a.id - b.id);
   }, [maps]);
 
-  // Compute per-map filtered stats from statsBySeason
-  const displayStats = useMemo(() => {
-    const result = new Map<string, { seasonsPlayed: number; pickCount: number; banCount: number; noPickCount: number; pickAndWon: number; totalKills: number; totalAssists: number; avgRounds: number }>();
-    for (const map of maps) {
-      const relevant = map.statsBySeason.filter((s) => {
-        if (!includeRegular && !s.isGauntlet) return false;
-        if (!includeGauntlet && s.isGauntlet) return false;
-        if (selectedSeason !== 'all' && s.seasonId !== selectedSeason) return false;
-        return true;
-      });
-      const regularPoolNums = new Set(
-        map.seasons
-          .filter((s) => !s.is_gauntlet)
-          .map((s) => extractSeasonNumber(s.name) ?? s.id),
-      );
-      const pickCount = relevant.reduce((sum, s) => sum + s.pickCount, 0);
-      const totalRounds = relevant.reduce((sum, s) => sum + s.totalRounds, 0);
-      result.set(map.slug, {
-        seasonsPlayed: regularPoolNums.size,
-        pickCount,
-        banCount: relevant.reduce((sum, s) => sum + s.banCount, 0),
-        noPickCount: relevant.reduce((sum, s) => sum + s.noPickCount, 0),
-        pickAndWon: relevant.reduce((sum, s) => sum + s.pickAndWon, 0),
-        totalKills: relevant.reduce((sum, s) => sum + s.totalKills, 0),
-        totalAssists: relevant.reduce((sum, s) => sum + s.totalAssists, 0),
-        avgRounds: pickCount > 0 ? totalRounds / pickCount : 0,
-      });
-    }
-    return result;
-  }, [maps, includeRegular, includeGauntlet, selectedSeason]);
+  // Per-map filtered stats, rolled up from statsBySeason.
+  const displayStats = useMemo(
+    () => aggregateMapIndexStats(maps, { includeRegular, includeGauntlet, selectedSeason }),
+    [maps, includeRegular, includeGauntlet, selectedSeason],
+  );
 
   const filtered = useMemo(() => {
     return maps.filter((map) => {
@@ -135,7 +112,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
 
       {tab === 'tiles' && (
         filtered.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No maps for this selection.</div>
+          <EmptyState message="No maps for this selection." />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {filtered.map((map) => {
@@ -180,7 +157,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
 
       {tab === 'stats' && (
         sorted.length === 0 ? (
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No maps for this selection.</div>
+          <EmptyState message="No maps for this selection." />
         ) : (
           <div className="overflow-x-auto">
           <table className="w-full min-w-max border-collapse font-mono text-[12px]">

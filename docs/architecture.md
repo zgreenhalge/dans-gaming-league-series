@@ -338,7 +338,7 @@ learning and its server teardown, for instance) — without `operation` in the k
 success would clear an unrelated operation's still-live failure. `entity_id` is `0` for the one
 operation with no single entity (the site-wide EHOG recompute), using `entity_type = 'system'`.
 
-Wired into nine operations today:
+Wired into sixteen operations today:
 
 | Operation | Entity | Recorded from |
 |---|---|---|
@@ -346,11 +346,18 @@ Wired into nine operations today:
 | `season_complete` | `season` (regular) | `checkSeasonCompletion()`, if the `COMPLETED` status update itself fails |
 | `gauntlet_seed` | `season` (regular) | `checkSeasonCompletion()` (including a `trySeedGauntlet()` roster-`drift` result, which needs the same admin attention as a thrown error even though it isn't one) |
 | `gauntlet_archive` | `season` (gauntlet) | `checkGauntletCompletion()` |
+| `gauntlet_manual_save` | `season` (regular) | `saveManualDraft()` (`gauntlet-engine.ts`)'s materialize-step failure, and `POST /api/seasons/[id]/gauntlet/pods`'s own catch for any earlier failure in the same call |
 | `steam_id_learn` | `match` | `applyEliminationSteamIds()`'s hook in the score route |
-| `server_teardown` | `match` | `teardownMatchServer()`'s hooks in the score route and `/api/ingest/matchzy-log` |
+| `server_provision` | `match` | `provisionErrorHandler()` (`dathost-lifecycle.ts`)'s hook for a deferred `provisionMatchServer()` call, bound in `POST /api/matches/[id]/server/provision` and the veto route's auto-provision |
+| `server_teardown` | `match` | `teardownMatchServer()`'s hooks in the score route, `/api/ingest/matchzy-log`, and `POST /api/matches/[id]/server/teardown` |
 | `sabremetrics_persist` | `match` | `persistSabremetrics()`/`clearSabremetrics()`'s hook in the score route |
+| `weapon_stats_persist` | `match` | `persistWeaponStats()`/`clearWeaponStats()`'s hook in the score route |
 | `name_history_log` | `player` | `recordNameChange()` (`src/lib/player-name-history.ts`), from both `PATCH /api/players/[id]` and `PATCH /api/players/me/name` — also recorded directly if the admin route can't even read the player's prior name to log a "from" |
 | `ehog_recompute` | `system` (id `0`) | `triggerRatingRecompute()` |
+| `schedule_generate` | `season` (regular) | `generateSeasonScheduleDraft()`'s (`season-schedule-draft-engine.ts`) mid-loop failure, before the compensating cleanup runs |
+| `schedule_generate_cleanup` | `season` (regular) | `generateSeasonScheduleDraft()`'s compensating cleanup, if that cleanup itself fails |
+| `schedule_confirm` | `season` (regular) | `confirmSeasonScheduleDraft()`'s (`season-schedule-draft-engine.ts`) mid-loop failure, before the compensating cleanup runs |
+| `schedule_confirm_cleanup` | `season` (regular) | `confirmSeasonScheduleDraft()`'s compensating cleanup, if that cleanup itself fails |
 
 Each is cleared automatically the next time that same (entity, operation) succeeds —
 `tryBuildGauntletShape()` and `trySeedGauntlet()` clear their own on success, `checkGauntletCompletion()`
@@ -359,7 +366,9 @@ season) are confirmed archived — tracking each half's outstanding status indep
 archived one but failed on the other retries only the missing half next time — `deleteGauntletSeason()`
 clears `gauntlet_build`/`gauntlet_seed` on the regular season and `gauntlet_archive` on the gauntlet
 season itself as part of a reset, and the remaining hooks clear theirs inline once their surrounding
-try block completes without error.
+try block completes without error — including `generateSeasonScheduleDraft()`/`confirmSeasonScheduleDraft()`,
+which clear both their own operation and its paired `_cleanup` operation (in case an earlier attempt's
+compensating cleanup also failed) on a later success.
 
 `getOpsErrors()` in `src/lib/queries/ops.ts` reads every live row, resolving `entity_id` to a display name
 (season/match name, or "EHOG Recompute" for `system`). The admin console's Activity → Errored tab
@@ -395,4 +404,4 @@ Vercel auto-detects the Next.js project from the repo root. Set all env vars in 
 
 ### CI
 
-`.github/workflows/ci.yml` gates PRs and pushes to `main`: a `frontend` job (`npm run lint && npm test && npm run build`) and an `ingestion` job (`python3 -m unittest tests.test_ingest`), each skipped unless its area's paths changed. The frontend job needs `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` as repo secrets — `next build` prerenders static pages that read from Supabase. This is separate from `demo-ingest.yml`/`radar-build.yml`, which are `workflow_dispatch`/`repository_dispatch`-triggered ingestion jobs, not PR gates.
+`.github/workflows/ci.yml` gates PRs and pushes to `main`: a `frontend` job (`npm run typecheck && npm run lint && npm test && npm run build`), an `ingestion` job (`python3 -m unittest tests.test_ingest`), and an `ehog` job (the Python↔TS parity test — see [`ehog.md`](./ehog.md)'s "Running" section), each skipped unless its area's paths changed. The frontend job needs `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` as repo secrets — `next build` prerenders static pages that read from Supabase. This is separate from `demo-ingest.yml`/`radar-build.yml`, which are `workflow_dispatch`/`repository_dispatch`-triggered ingestion jobs, not PR gates.
