@@ -38,6 +38,7 @@ import { gzipSync } from 'node:zlib';
 import { parseDemoFile } from '../src/lib/demoParser';
 import { parseDemoSabremetrics } from '../src/lib/demoOrchestrator';
 import { getReplayInputs } from '../src/lib/replay/inputs';
+import { demoBaseName } from '../src/lib/matchzy';
 import { quarantineDemo } from '../src/lib/demo/quarantine';
 import { putR2Object, deleteR2Object, demoResultKey, mapResultKey } from '../src/lib/r2';
 import { getMapResult } from '../src/lib/demo/mapResult';
@@ -95,18 +96,22 @@ async function main() {
     started_at: new Date().toISOString(),
   });
 
+  // Read first (cheap) so the fetch stage can poll the same deterministic path buildMatchzyConfig
+  // set as the match's matchzy_demo_name_format cvar — see demoBaseName()'s doc comment.
+  const inputs = await getReplayInputs(supabase, matchId);
+  const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map || null);
+
   // Pulls the demo from DatHost if it isn't already in R2 (a manual reparse of an already-staged/
   // confirmed match has it already).
-  const raw = await stage('fetch', () => ensureDemoInR2(dathostServerId(), matchId));
+  const raw = await stage('fetch', () => ensureDemoInR2(dathostServerId(), matchId, baseName));
 
-  const { inputs, parsed, sab, warnings } = await stage('parse', async () => {
-    const inputs = await getReplayInputs(supabase, matchId);
+  const { parsed, sab, warnings } = await stage('parse', async () => {
     const demo = gunzipMaybe(raw);
 
     const parsed = parseDemoFile(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
     const sab = parseDemoSabremetrics(demo, inputs.roster, inputs.skinsSide, inputs.targetWinRounds);
     const warnings = [...new Set([...parsed.warnings, ...sab.warnings])];
-    return { inputs, parsed, sab, warnings };
+    return { parsed, sab, warnings };
   });
 
   const q = quarantineDemo({

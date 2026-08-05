@@ -5,8 +5,11 @@
 // Action, not an inbound POST through Cloudflare's edge.
 //
 // The remote path is deterministic — `infra/matchzy/cfg/MatchZy/config.cfg` sets
-// `matchzy_demo_path MatchZy/` and `matchzy_demo_name_format "{MATCH_ID}"`, so every match's demo lands
-// at `MatchZy/{matchId}.dem` with no directory listing/discovery needed.
+// `matchzy_demo_path MatchZy/`, and `buildMatchzyConfig` (`../matchzy.ts`) sets the per-match
+// `matchzy_demo_name_format` cvar to `demoBaseName()`'s output — so every match's demo lands at
+// `MatchZy/{demoBaseName}.dem` with no directory listing/discovery needed. Callers pass that same
+// `demoBaseName` in (computed the same way `buildMatchzyConfig` did, from the match's own data) rather
+// than this file recomputing it, so the two sides can't independently drift apart.
 
 import { gzipSync } from 'node:zlib';
 import { DathostError, getFileBytes, getFileSize, pollUntil } from '../dathost';
@@ -41,9 +44,9 @@ const FETCH_TIMEOUT_MS = 8 * 60_000;
 const CONCURRENT_PULL_GRACE_MS = FETCH_TIMEOUT_MS;
 const CONCURRENT_PULL_INTERVAL_MS = 5_000;
 
-/** The deterministic remote path a match's demo is saved at, given the golden cfg above. */
-function demoRemotePath(matchId: number): string {
-  return `MatchZy/${matchId}.dem`;
+/** The deterministic remote path a match's demo is saved at, given `demoBaseName` (`../matchzy.ts`). */
+function demoRemotePath(demoBaseName: string): string {
+  return `MatchZy/${demoBaseName}.dem`;
 }
 
 /** Whether `err` is `pollUntil`'s own deadline-exceeded signal — safe to treat as "nothing landed
@@ -102,8 +105,8 @@ async function waitForStableFileSize(serverId: string, remote: string, deadline:
 /** Wait out `FLUSH_FLOOR_MS`, confirm the file's size has stabilized, then download it and gzip-write
  *  it to R2 at `demoKey(matchId)`, returning those same gzipped bytes (so `ensureDemoInR2` doesn't
  *  have to read them straight back). Throws if it never stabilizes within `FETCH_TIMEOUT_MS`. */
-async function fetchDemoFromDathost(serverId: string, matchId: number): Promise<Buffer> {
-  const remote = demoRemotePath(matchId);
+async function fetchDemoFromDathost(serverId: string, matchId: number, demoBaseName: string): Promise<Buffer> {
+  const remote = demoRemotePath(demoBaseName);
   const deadline = Date.now() + FETCH_TIMEOUT_MS;
 
   await sleep(FLUSH_FLOOR_MS);
@@ -126,6 +129,10 @@ async function fetchDemoFromDathost(serverId: string, matchId: number): Promise<
  *  already in R2. Shared by `demo-ingest.ts` and `replay-extract.ts` so neither re-derives the same
  *  check-then-pull sequence.
  *
+ *  `demoBaseName`: the same string `buildMatchzyConfig` (`../matchzy.ts`) computed and set as the
+ *  match's `matchzy_demo_name_format` cvar — callers get it from `demoBaseName()` there, fed the
+ *  match's own `matchId`/`scheduledAt`/map, not from this file re-deriving it.
+ *
  *  `shouldWaitForConcurrentPull`: called only on an R2 miss (never on the common already-cached path)
  *  to decide whether another already-dispatched job actually owns this pull — if so, wait out
  *  `waitForConcurrentPull()`'s grace window (polling R2, not DatHost) before pulling from DatHost
@@ -134,6 +141,7 @@ async function fetchDemoFromDathost(serverId: string, matchId: number): Promise<
 export async function ensureDemoInR2(
   serverId: string,
   matchId: number,
+  demoBaseName: string,
   opts: { shouldWaitForConcurrentPull?: () => Promise<boolean> } = {},
 ): Promise<Buffer> {
   const existing = await getR2Object(demoKey(matchId));
@@ -144,5 +152,5 @@ export async function ensureDemoInR2(
     if (landed) return landed;
   }
 
-  return fetchDemoFromDathost(serverId, matchId);
+  return fetchDemoFromDathost(serverId, matchId, demoBaseName);
 }

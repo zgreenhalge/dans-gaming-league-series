@@ -12,6 +12,7 @@
 
 import { gzipSync } from 'node:zlib';
 import { getReplayInputs } from '../src/lib/replay/inputs';
+import { demoBaseName } from '../src/lib/matchzy';
 import { buildReplay } from '../src/lib/replay/extract';
 import { buildHeatmapPoints, MAP_HEATMAP_ROLLUP_VERSION } from '../src/lib/replay/heatmap';
 import { buildMatchTraces, MAP_TRACE_ROLLUP_VERSION } from '../src/lib/replay/aggregate';
@@ -136,7 +137,8 @@ async function main() {
     // pull, and a miss here waits briefly for its pull to land the object in R2 instead of
     // redundantly re-pulling the same demo from DatHost. A manual "Regenerate" dispatch has no such
     // row and pulls immediately.
-    return ensureDemoInR2(dathostServerId(), matchId, { shouldWaitForConcurrentPull: demoIngestInFlight });
+    const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map || null);
+    return ensureDemoInR2(dathostServerId(), matchId, baseName, { shouldWaitForConcurrentPull: demoIngestInFlight });
   });
 
   demoBuffer = await stage('decompress', () => gunzipMaybe(demoBuffer));

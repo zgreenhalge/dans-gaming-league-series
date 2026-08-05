@@ -15,6 +15,8 @@ export interface ReplayInputs {
   roster: RosterEntry[];
   /** True for gauntlet/knife-round seasons — see `BuildReplayInput.includeKnifeRound`. */
   isGauntlet: boolean;
+  /** `matches.scheduled_at`, unparsed — feeds `demoBaseName()`'s date component (`matchzy.ts`). */
+  scheduledAt: string | null;
 }
 
 export async function getReplayInputs(
@@ -24,7 +26,7 @@ export async function getReplayInputs(
   const [{ data: matchRow, error: matchErr }, { data: matchStats }] = await Promise.all([
     supabaseAdmin
       .from('matches')
-      .select('id, shirts_pick, picked_map, skins_starting_side, weeks(seasons(target_win_rounds, is_gauntlet))')
+      .select('id, shirts_pick, picked_map, skins_starting_side, scheduled_at, weeks(seasons(target_win_rounds, is_gauntlet))')
       .eq('id', matchId)
       .maybeSingle(),
     supabaseAdmin
@@ -40,6 +42,7 @@ export async function getReplayInputs(
     shirts_pick: string | null;
     picked_map: string | null;
     skins_starting_side: Side | null;
+    scheduled_at: string | null;
     weeks: unknown;
   };
 
@@ -83,5 +86,6 @@ export async function getReplayInputs(
     targetWinRounds,
     roster,
     isGauntlet,
+    scheduledAt: match.scheduled_at,
   };
 }

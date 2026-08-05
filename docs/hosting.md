@@ -129,8 +129,14 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
   `LiveScoreTicker` while the demo doesn't exist yet. Every other event type is acknowledged and
   dropped.
 - The demo's remote path is deterministic: `infra/matchzy/cfg/MatchZy/config.cfg` sets
-  `matchzy_demo_path MatchZy/` and `matchzy_demo_name_format "{MATCH_ID}"`, so it always lands at
-  `MatchZy/{matchId}.dem` on the game server — no directory listing/discovery needed.
+  `matchzy_demo_path MatchZy/`, and a real match's loaded config JSON carries a per-match
+  `matchzy_demo_name_format` cvar (`buildMatchzyConfig`, `src/lib/matchzy.ts`) set to `demoBaseName()`'s
+  output — a literal `{date}_{matchId}_{map}` (e.g. `2026-08-04_58_de-rooftop`) computed purely from the
+  match's own DB row, with no MatchZy `{TOKEN}` left for the engine to fill in. So the demo always lands
+  at `MatchZy/{demoBaseName}.dem` on the game server — no directory listing/discovery needed, and no
+  reliance on MatchZy's own `{MAP}`/`{TIME}` substitution, which isn't observable ahead of the pull.
+  `fetchDemoFromDathost` (below) calls the exact same `demoBaseName()` rather than recomputing the name
+  itself, so the two sides can't independently drift apart.
   Since MatchZy's recording is a `tv_record` wrapper around GOTV (see
   [`cs2-stack-reference.md`](./cs2-stack-reference.md#gotv-vs-demo-recording--matchzys-recording-is-gotv-not-a-separate-system)),
   that path already exists — and is still growing — for the entire match, not just after it ends, so
@@ -363,10 +369,13 @@ surfaces either.
 ## Config generation
 
 **`src/lib/matchzy.ts#buildMatchzyConfig`** emits the per-match MatchZy config (teams by steamid64,
-`players_per_team: 2`, conditional `map_sides`, remote-log cvars). It's the target of the machine-auth
+`players_per_team: 2`, conditional `map_sides`, remote-log cvars, and the per-match
+`matchzy_demo_name_format` cvar — see `demoBaseName()` above). It's the target of the machine-auth
 `GET /api/matches/[id]/matchzy-config` route (the `matchzy_loadmatch_url`) and is reused by the
-`scripts/gen-matchzy-config.ts` CLI. The deterministic `matchzy_demo_path`/`matchzy_demo_name_format`
-the demo pull relies on live in the `golden` config set's `cfg/MatchZy/config.cfg`.
+`scripts/gen-matchzy-config.ts` CLI. `matchzy_demo_path` (the deterministic `MatchZy/` directory the
+demo pull relies on) lives in the `golden` config set's static `cfg/MatchZy/config.cfg`, alongside a
+`matchzy_demo_name_format "{MATCH_ID}"` fallback that only matters if some future launch path forgets
+to set its own override (a real match's per-match cvar here, or a scrim/pug's `pugModeCvarLine`).
 
 ## Routes
 
