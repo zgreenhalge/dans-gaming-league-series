@@ -89,7 +89,7 @@ export function authHeader(): string {
 }
 
 /** One authenticated DatHost request, returning the raw `Response` — shared by `call()` (JSON/text
- *  body) and `getFileBytes` (binary body), which otherwise duplicate the same URL/auth-header
+ *  body) and `getFileResponse()` (binary body), which otherwise duplicate the same URL/auth-header
  *  construction. Body consumption is left to the caller since JSON and binary reads can't share one. */
 async function request(method: string, path: string, form?: Record<string, string>): Promise<Response> {
   const body = form ? new URLSearchParams(form) : undefined;
@@ -280,9 +280,9 @@ export function sleep(ms: number): Promise<void> {
 
 /**
  * Poll `fn` until it returns a truthy result, or throw a `DathostError` after `timeoutMs`. Shared by
- * `waitUntilReady` below and `fetchDemoFromDathost` (`src/lib/demo/fetchFromDathost.ts`) — both are
- * "keep checking an external DatHost resource until it's ready" loops that would otherwise duplicate
- * the same timeout/backoff shape.
+ * `waitUntilReady` below and `waitForConcurrentPull` (`src/lib/demo/fetchFromDathost.ts`, polling R2
+ * for a concurrent pull to land) — both are "keep checking a resource until it's ready" loops that
+ * would otherwise duplicate the same timeout/backoff shape.
  */
 export async function pollUntil<T>(
   fn: () => Promise<T | null>,

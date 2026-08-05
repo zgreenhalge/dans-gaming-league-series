@@ -96,14 +96,17 @@ async function main() {
     started_at: new Date().toISOString(),
   });
 
-  // Read first (cheap) so the fetch stage can poll the same deterministic path buildMatchzyConfig
-  // set as the match's matchzy_demo_name_format cvar — see demoBaseName()'s doc comment.
-  const inputs = await getReplayInputs(supabase, matchId);
-  const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
-
   // Pulls the demo from DatHost if it isn't already in R2 (a manual reparse of an already-staged/
-  // confirmed match has it already).
-  const raw = await stage('fetch', () => ensureDemoInR2(dathostServerId(), matchId, baseName));
+  // confirmed match has it already). Reads the match's inputs first (cheap) so it can poll the same
+  // deterministic path buildMatchzyConfig set as the matchzy_demo_name_format cvar — see
+  // demoBaseName()'s doc comment. Inside the stage() wrapper (not before it) so a failure either way
+  // still gets the stage's log group/notice and reports stage: 'fetch'.
+  const { inputs, raw } = await stage('fetch', async () => {
+    const inputs = await getReplayInputs(supabase, matchId);
+    const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
+    const raw = await ensureDemoInR2(dathostServerId(), matchId, baseName);
+    return { inputs, raw };
+  });
 
   const { parsed, sab, warnings } = await stage('parse', async () => {
     const demo = gunzipMaybe(raw);

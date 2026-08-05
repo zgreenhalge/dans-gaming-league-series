@@ -47,7 +47,7 @@ export interface MatchzyConfigOptions {
 
 /**
  * The demo filename MatchZy will write for this match (no `.dem`, no `MatchZy/` path prefix) —
- * `{date}_{matchId}_{map}`, e.g. `2026-08-04_58_de_rooftop`. Fully literal (no MatchZy `{TOKEN}`
+ * `{date}_{matchId}_{map}`, e.g. `2026-08-04_58_de-rooftop` (`mapSlug()` hyphenates). Fully literal (no MatchZy `{TOKEN}`
  * substitution) and computed purely from already-known DB values, so `buildMatchzyConfig` (which sets
  * this as the `matchzy_demo_name_format` cvar) and `fetchFromDathost.ts` (which polls for the exact
  * same path to pull the finished recording) each call this directly instead of one guessing at what
