@@ -268,11 +268,28 @@ export function canonicalSort(
   );
 }
 
+/** Round-weighted win rate from round totals alone — the `rwr_percentage` half of `deriveRates()`,
+ * split out for callers (e.g. `getSeasonLeaderboard()`, `getAllLeaderboards()`) that already have
+ * `overall_adr` from `player_season_leaderboard` and only need this one field re-derived. */
+export function deriveRwr(totals: { total_rounds_played: number; total_rounds_won: number }): number {
+  return totals.total_rounds_played > 0 ? (totals.total_rounds_won / totals.total_rounds_played) * 100 : 0;
+}
+
+/** Average damage per round from round/damage totals alone — the `overall_adr` half of
+ * `deriveRates()`, split out for callers that have round and damage totals but not the full
+ * match/kill totals `deriveRates()` requires. */
+export function deriveAdr(totals: { total_rounds_played: number; total_damage: number }): number {
+  return totals.total_rounds_played > 0 ? totals.total_damage / totals.total_rounds_played : 0;
+}
+
 /**
  * Derives the four canonical leaderboard rates (the exact `canonicalSort` keys) from summed totals.
  * Every place that aggregates per-match stats into a leaderboard row must derive these the same way
  * — keep this the single source so the rankings can't drift between the player, career, and map views.
  * Callers do their own summation (input shapes differ); this only does the division + zero-guards.
+ * A caller with only round/damage totals in scope (not the full set below) should reach for
+ * `deriveRwr()`/`deriveAdr()` directly instead of fabricating the other fields to satisfy this
+ * signature.
  */
 export function deriveRates(totals: {
   matches_played: number;
@@ -288,12 +305,12 @@ export function deriveRates(totals: {
   rwr_percentage: number;
   overall_adr: number;
 } {
-  const { matches_played: mp, matches_won: mw, total_kills, total_deaths, total_rounds_played: rp, total_rounds_won: rw, total_damage } = totals;
+  const { matches_played: mp, matches_won: mw, total_kills, total_deaths } = totals;
   return {
     win_rate_percentage: mp > 0 ? (mw / mp) * 100 : 0,
     kd_ratio: total_deaths > 0 ? total_kills / total_deaths : total_kills,
-    rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
-    overall_adr: rp > 0 ? total_damage / rp : 0,
+    rwr_percentage: deriveRwr(totals),
+    overall_adr: deriveAdr(totals),
   };
 }
 
