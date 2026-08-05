@@ -338,7 +338,7 @@ learning and its server teardown, for instance) — without `operation` in the k
 success would clear an unrelated operation's still-live failure. `entity_id` is `0` for the one
 operation with no single entity (the site-wide EHOG recompute), using `entity_type = 'system'`.
 
-Wired into sixteen operations today:
+Wired into seventeen operations today:
 
 | Operation | Entity | Recorded from |
 |---|---|---|
@@ -346,6 +346,7 @@ Wired into sixteen operations today:
 | `season_complete` | `season` (regular) | `checkSeasonCompletion()`, if the `COMPLETED` status update itself fails |
 | `gauntlet_seed` | `season` (regular) | `checkSeasonCompletion()` (including a `trySeedGauntlet()` roster-`drift` result, which needs the same admin attention as a thrown error even though it isn't one) |
 | `gauntlet_archive` | `season` (gauntlet) | `checkGauntletCompletion()` |
+| `gauntlet_delete` | `season` (gauntlet) | `deleteGauntletSeason()`'s mid-sequence failure — safe to retry since every delete step is a no-op against an already-empty target |
 | `gauntlet_manual_save` | `season` (regular) | `saveManualDraft()` (`gauntlet-engine.ts`)'s materialize-step failure, and `POST /api/seasons/[id]/gauntlet/pods`'s own catch for any earlier failure in the same call |
 | `steam_id_learn` | `match` | `applyEliminationSteamIds()`'s hook in the score route |
 | `server_provision` | `match` | `provisionErrorHandler()` (`dathost-lifecycle.ts`)'s hook for a deferred `provisionMatchServer()` call, bound in `POST /api/matches/[id]/server/provision` and the veto route's auto-provision |
@@ -364,8 +365,9 @@ Each is cleared automatically the next time that same (entity, operation) succee
 clears `gauntlet_archive` once both halves of the archive (the gauntlet season and its paired regular
 season) are confirmed archived — tracking each half's outstanding status independently so a run that
 archived one but failed on the other retries only the missing half next time — `deleteGauntletSeason()`
-clears `gauntlet_build`/`gauntlet_seed` on the regular season and `gauntlet_archive` on the gauntlet
-season itself as part of a reset, and the remaining hooks clear theirs inline once their surrounding
+clears `gauntlet_build`/`gauntlet_seed` on the regular season, `gauntlet_archive` on the gauntlet
+season itself, and its own `gauntlet_delete` on a later successful reset, and the remaining hooks
+clear theirs inline once their surrounding
 try block completes without error — including `generateSeasonScheduleDraft()`/`confirmSeasonScheduleDraft()`,
 which clear both their own operation and its paired `_cleanup` operation (in case an earlier attempt's
 compensating cleanup also failed) on a later success.
