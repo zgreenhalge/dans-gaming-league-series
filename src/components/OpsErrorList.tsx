@@ -24,6 +24,7 @@ export const OPERATION_LABELS: Record<string, string> = {
   server_teardown: 'Server Teardown',
   sabremetrics_persist: 'Sabremetrics',
   weapon_stats_persist: 'Weapon Stats',
+  live_score_clear: 'Live Score Clear',
   name_history_log: 'Name History Log',
   ehog_recompute: 'EHOG Recompute',
   schedule_generate: 'Schedule Generate',

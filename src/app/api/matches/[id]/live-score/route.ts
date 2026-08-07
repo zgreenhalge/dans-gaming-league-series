@@ -2,7 +2,7 @@
 // rather than gating behind `requireMatchAccess` the way mutation-adjacent demo/server routes do.
 // Sourced from the `live_match_score` table, written by `going_live`/`round_end`/`map_result` events
 // in `/api/ingest/matchzy-log` (see `src/lib/demo/liveScore.ts`) — this route is only the initial read;
-// `LiveScoreTicker` subscribes to the table directly for updates, the same way `MatchServerPanel`
+// `MatchScoreHero` subscribes to the table directly for updates, the same way `MatchServerPanel`
 // subscribes to `matches`.
 
 import { NextRequest, NextResponse } from 'next/server';

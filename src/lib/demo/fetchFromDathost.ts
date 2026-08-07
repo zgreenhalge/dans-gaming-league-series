@@ -121,10 +121,9 @@ async function fetchDemoFromDathost(serverId: string, matchId: number, demoBaseN
 }
 
 /** The match's demo bytes (still gzipped, as stored), pulling it from DatHost first if it isn't
- *  already in R2. Shared by `demo-ingest.ts` and `replay-extract.ts` so neither re-derives the same
- *  check-then-pull sequence. Callers should treat a resolved call as "the demo is now confirmed
- *  present" — see `clearLiveScoreBestEffort()` (`liveScore.ts`), which both of them call right after
- *  this to clear the site-wide live-match ticker.
+ *  already in R2 — the R2/DatHost-only half of the pull; a resolved call means the demo is now
+ *  confirmed present, which also has to clear the site-wide live-match ticker, so most callers should
+ *  go through `pullDemoAndClearLiveScore()` (`liveScore.ts`) instead of calling this directly.
  *
  *  `demoBaseName`: the same string `buildMatchzyConfig` (`../matchzy.ts`) computed and set as the
  *  match's `matchzy_demo_name_format` cvar — callers get it from `demoBaseName()` there, fed the
