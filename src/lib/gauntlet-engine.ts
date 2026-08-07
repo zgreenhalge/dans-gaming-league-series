@@ -434,69 +434,88 @@ export async function seedBracket(
  * action for a roster-drift seed failure, so a fresh start shouldn't carry the old failure forward.
  * Used both to clean up a failed bracket build and to let an admin reset a gauntlet — callers are
  * responsible for deciding whether it's safe to delete (e.g. force-clearing one that has already
- * started play) before calling this. */
+ * started play) before calling this. A mid-sequence failure is recorded via `recordOpsError()`
+ * (`season`/`gauntlet_delete`, keyed on the gauntlet season) rather than thrown bare — every step
+ * is a no-op against an already-empty target, so the recorded error is safe to retry, and is
+ * cleared on the next successful delete. */
 export async function deleteGauntletSeason(supabaseAdmin: SupabaseClient, gauntletSeasonId: number): Promise<void> {
-  const { data: gauntletRow, error: gauntletSelErr } = await supabaseAdmin
-    .from('seasons')
-    .select('name')
-    .eq('id', gauntletSeasonId)
-    .maybeSingle();
-  if (gauntletSelErr) throw gauntletSelErr;
-  const gauntletName = (gauntletRow as { name: string } | null)?.name ?? null;
+  try {
+    const { data: gauntletRow, error: gauntletSelErr } = await supabaseAdmin
+      .from('seasons')
+      .select('name')
+      .eq('id', gauntletSeasonId)
+      .maybeSingle();
+    if (gauntletSelErr) throw gauntletSelErr;
+    const gauntletName = (gauntletRow as { name: string } | null)?.name ?? null;
 
-  const podIds = await getPodIds(supabaseAdmin, gauntletSeasonId);
-  if (podIds.length > 0) {
-    const { error: slotsErr } = await supabaseAdmin.from('gauntlet_pod_slots').delete().in('pod_id', podIds);
-    if (slotsErr) throw slotsErr;
-  }
-  const { error: podsErr } = await supabaseAdmin.from('gauntlet_pods').delete().eq('season_id', gauntletSeasonId);
-  if (podsErr) throw podsErr;
+    const podIds = await getPodIds(supabaseAdmin, gauntletSeasonId);
+    if (podIds.length > 0) {
+      const { error: slotsErr } = await supabaseAdmin.from('gauntlet_pod_slots').delete().in('pod_id', podIds);
+      if (slotsErr) throw slotsErr;
+    }
+    const { error: podsErr } = await supabaseAdmin.from('gauntlet_pods').delete().eq('season_id', gauntletSeasonId);
+    if (podsErr) throw podsErr;
 
-  const { data: weekRows, error: weekSelErr } = await supabaseAdmin
-    .from('weeks')
-    .select('id')
-    .eq('season_id', gauntletSeasonId);
-  if (weekSelErr) throw weekSelErr;
-  const weekIds = ((weekRows ?? []) as { id: number }[]).map((w) => w.id);
-
-  if (weekIds.length > 0) {
-    const { data: matchRows, error: matchSelErr } = await supabaseAdmin
-      .from('matches')
+    const { data: weekRows, error: weekSelErr } = await supabaseAdmin
+      .from('weeks')
       .select('id')
-      .in('week_id', weekIds);
-    if (matchSelErr) throw matchSelErr;
-    const matchIds = ((matchRows ?? []) as { id: number }[]).map((m) => m.id);
+      .eq('season_id', gauntletSeasonId);
+    if (weekSelErr) throw weekSelErr;
+    const weekIds = ((weekRows ?? []) as { id: number }[]).map((w) => w.id);
 
-    if (matchIds.length > 0) {
-      const { error: statsErr } = await supabaseAdmin.from('player_match_stats').delete().in('match_id', matchIds);
-      if (statsErr) throw statsErr;
-      const { error: matchDelErr } = await supabaseAdmin.from('matches').delete().in('id', matchIds);
-      if (matchDelErr) throw matchDelErr;
-    }
+    if (weekIds.length > 0) {
+      const { data: matchRows, error: matchSelErr } = await supabaseAdmin
+        .from('matches')
+        .select('id')
+        .in('week_id', weekIds);
+      if (matchSelErr) throw matchSelErr;
+      const matchIds = ((matchRows ?? []) as { id: number }[]).map((m) => m.id);
 
-    const { error: weekDelErr } = await supabaseAdmin.from('weeks').delete().in('id', weekIds);
-    if (weekDelErr) throw weekDelErr;
-  }
-
-  const { error: seasonDelErr } = await supabaseAdmin.from('seasons').delete().eq('id', gauntletSeasonId);
-  if (seasonDelErr) throw seasonDelErr;
-
-  await clearOpsError(supabaseAdmin, 'season', gauntletSeasonId, 'gauntlet_archive');
-
-  if (gauntletName) {
-    const regularSeason = await getLinkedRegularSeason(gauntletName);
-    if (regularSeason) {
-      if (regularSeason.status === 'ARCHIVED') {
-        const { error: revertErr } = await supabaseAdmin
-          .from('seasons')
-          .update({ status: 'COMPLETED' })
-          .eq('id', regularSeason.id);
-        if (revertErr) throw revertErr;
+      if (matchIds.length > 0) {
+        const { error: statsErr } = await supabaseAdmin.from('player_match_stats').delete().in('match_id', matchIds);
+        if (statsErr) throw statsErr;
+        const { error: matchDelErr } = await supabaseAdmin.from('matches').delete().in('id', matchIds);
+        if (matchDelErr) throw matchDelErr;
       }
-      await clearOpsError(supabaseAdmin, 'season', regularSeason.id, 'gauntlet_build');
-      await clearOpsError(supabaseAdmin, 'season', regularSeason.id, 'gauntlet_seed');
+
+      const { error: weekDelErr } = await supabaseAdmin.from('weeks').delete().in('id', weekIds);
+      if (weekDelErr) throw weekDelErr;
     }
+
+    // Revert the paired regular season (and clear its stale ops-errors) BEFORE deleting the
+    // gauntlet season row below — `gauntletName` is only resolvable while that row still exists, so
+    // a retry after a failure in this block must still find the row to redo it. Ordering the season
+    // row delete last means it's the one step ever retried in isolation once this one has landed,
+    // which is what makes every step here genuinely a no-op on retry rather than silently skipped.
+    if (gauntletName) {
+      const regularSeason = await getLinkedRegularSeason(gauntletName);
+      if (regularSeason) {
+        if (regularSeason.status === 'ARCHIVED') {
+          const { error: revertErr } = await supabaseAdmin
+            .from('seasons')
+            .update({ status: 'COMPLETED' })
+            .eq('id', regularSeason.id);
+          if (revertErr) throw revertErr;
+        }
+        await clearOpsError(supabaseAdmin, 'season', regularSeason.id, 'gauntlet_build');
+        await clearOpsError(supabaseAdmin, 'season', regularSeason.id, 'gauntlet_seed');
+      }
+    }
+
+    const { error: seasonDelErr } = await supabaseAdmin.from('seasons').delete().eq('id', gauntletSeasonId);
+    if (seasonDelErr) throw seasonDelErr;
+
+    await clearOpsError(supabaseAdmin, 'season', gauntletSeasonId, 'gauntlet_archive');
+  } catch (err) {
+    // Mid-sequence failure leaves the gauntlet partially deleted — safe to retry (each step is a
+    // no-op against an already-empty target), but worth a persistent trace so an admin isn't left
+    // guessing why a reset silently stalled.
+    const message = (err as Error).message;
+    await recordOpsError(supabaseAdmin, 'season', gauntletSeasonId, 'gauntlet_delete', `Gauntlet delete failed: ${message}. Retry the reset.`);
+    throw err;
   }
+
+  await clearOpsError(supabaseAdmin, 'season', gauntletSeasonId, 'gauntlet_delete');
 }
 
 /** Called from the score route's post-commit hook for every gauntlet match. No-op if the match

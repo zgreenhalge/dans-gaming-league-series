@@ -16,8 +16,8 @@ with logic duplicated across components. Decision order:
    recompute something the view already provides.
 2. **Is it derivable from fields the view *does* expose** (e.g. a percentage/ratio of two existing
    columns)? Compute it once in the query layer and attach it to the row type — see
-   `rwr_percentage` on `LeaderboardRow` (`src/lib/types.ts`), derived in
-   `getSeasonLeaderboard()`/`getCareerLeaderboard()` as `total_rounds_won / total_rounds_played * 100`.
+   `rwr_percentage` on `LeaderboardRow` (`src/lib/types.ts`), derived via `deriveRwr()` in
+   `getSeasonLeaderboard()`/`getAllLeaderboards()`.
 3. **Is it missing from the view entirely** (like `total_assists`/`total_rounds_won`)? Augment it by
    reading `player_match_stats` directly and merging — the canonical pattern is
    `getSeasonBaseData()` in `src/lib/queries/leaderboard.ts`, called from every leaderboard-shaped
@@ -37,7 +37,10 @@ to move it — see the "Always prefer extracting/abstracting shared logic" rule 
 When you aggregate per-match stats into a leaderboard row, sum the totals however the input shape
 requires but derive the four canonical-sort fields (`win_rate_percentage`, `kd_ratio`,
 `rwr_percentage`, `overall_adr`) through `deriveRates()` in `src/lib/util.ts` — it's the single
-source for those divisions so the rankings can't drift between the player, career, and map views.
+source for those divisions so the rankings can't drift between the player, career, and map views. A
+caller that only has round/damage totals in scope (not the full set `deriveRates()` needs) should
+use its narrower siblings `deriveRwr()`/`deriveAdr()` instead of fabricating unused fields to satisfy
+`deriveRates()`'s signature.
 
 If the new stat should appear on **career views**, it must respect `useSeasonFilter()` the same way
 `getCareerLeaderboard()` and `CareerStatsView.tsx` do — don't build a parallel filter.

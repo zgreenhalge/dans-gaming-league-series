@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import type { LeaderboardRowWithId } from '../types';
-import { allMatchesPlayed, canonicalSort } from '../util';
+import { allMatchesPlayed, canonicalSort, deriveRwr, deriveAdr } from '../util';
 import { getSeasons } from './seasons';
 import { getAllLeaderboards } from './leaderboard';
 import { getGauntletSeasonLeaderboard } from './gauntlet';
@@ -156,10 +156,10 @@ export async function getAllSeasonMedalists(): Promise<Map<number, TrophyEntry[]
             const af = finalRoundAgg.get(a.player_id);
             const bf = finalRoundAgg.get(b.player_id);
             if (!af || !bf) return 0;
-            const aRwr = af.rounds_played > 0 ? af.rounds_won / af.rounds_played : 0;
-            const bRwr = bf.rounds_played > 0 ? bf.rounds_won / bf.rounds_played : 0;
-            const aAdr = af.rounds_played > 0 ? af.total_damage / af.rounds_played : 0;
-            const bAdr = bf.rounds_played > 0 ? bf.total_damage / bf.rounds_played : 0;
+            const aRwr = deriveRwr({ total_rounds_played: af.rounds_played, total_rounds_won: af.rounds_won });
+            const bRwr = deriveRwr({ total_rounds_played: bf.rounds_played, total_rounds_won: bf.rounds_won });
+            const aAdr = deriveAdr({ total_rounds_played: af.rounds_played, total_damage: af.total_damage });
+            const bAdr = deriveAdr({ total_rounds_played: bf.rounds_played, total_damage: bf.total_damage });
             return bRwr - aRwr || bAdr - aAdr;
           });
 

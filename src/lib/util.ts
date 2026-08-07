@@ -268,11 +268,29 @@ export function canonicalSort(
   );
 }
 
+/** The canonical `rwr_percentage` formula (round-weighted win rate) — every RWR% anywhere in the
+ * codebase must go through this, directly or via `deriveRates()` below, which delegates to it. Call
+ * this directly (not `deriveRates()`) when only round totals are in scope. */
+export function deriveRwr(totals: { total_rounds_played: number; total_rounds_won: number }): number {
+  return totals.total_rounds_played > 0 ? (totals.total_rounds_won / totals.total_rounds_played) * 100 : 0;
+}
+
+/** The canonical `overall_adr` formula (average damage per round) — every ADR anywhere in the
+ * codebase must go through this, directly or via `deriveRates()` below, which delegates to it. Call
+ * this directly (not `deriveRates()`) when only round/damage totals are in scope. */
+export function deriveAdr(totals: { total_rounds_played: number; total_damage: number }): number {
+  return totals.total_rounds_played > 0 ? totals.total_damage / totals.total_rounds_played : 0;
+}
+
 /**
- * Derives the four canonical leaderboard rates (the exact `canonicalSort` keys) from summed totals.
- * Every place that aggregates per-match stats into a leaderboard row must derive these the same way
- * — keep this the single source so the rankings can't drift between the player, career, and map views.
- * Callers do their own summation (input shapes differ); this only does the division + zero-guards.
+ * Derives the four canonical leaderboard rates (the exact `canonicalSort` keys) from summed totals —
+ * `rwr_percentage`/`overall_adr` via `deriveRwr()`/`deriveAdr()` above (the real implementations),
+ * `win_rate_percentage`/`kd_ratio` computed directly here. Every place that aggregates per-match
+ * stats into a leaderboard row must derive these the same way — keep this the single source so the
+ * rankings can't drift between the player, career, and map views. Callers do their own summation
+ * (input shapes differ); this only does the division + zero-guards. A caller with only round/damage
+ * totals in scope (not the full set below) should call `deriveRwr()`/`deriveAdr()` directly instead
+ * of fabricating the other fields to satisfy this signature.
  */
 export function deriveRates(totals: {
   matches_played: number;
@@ -288,12 +306,12 @@ export function deriveRates(totals: {
   rwr_percentage: number;
   overall_adr: number;
 } {
-  const { matches_played: mp, matches_won: mw, total_kills, total_deaths, total_rounds_played: rp, total_rounds_won: rw, total_damage } = totals;
+  const { matches_played: mp, matches_won: mw, total_kills, total_deaths } = totals;
   return {
     win_rate_percentage: mp > 0 ? (mw / mp) * 100 : 0,
     kd_ratio: total_deaths > 0 ? total_kills / total_deaths : total_kills,
-    rwr_percentage: rp > 0 ? (rw / rp) * 100 : 0,
-    overall_adr: rp > 0 ? total_damage / rp : 0,
+    rwr_percentage: deriveRwr(totals),
+    overall_adr: deriveAdr(totals),
   };
 }
 
@@ -391,8 +409,8 @@ export function canonicalGauntletRankMap(rounds: _GauntletRound[]): Map<number, 
   const finalPlayers = Array.from(finalAgg.entries()).map(([id, s]) => ({
     player_id: id,
     wins: s.wins,
-    rwr: s.rounds_played > 0 ? s.rounds_won / s.rounds_played : 0,
-    adr: s.rounds_played > 0 ? s.total_damage / s.rounds_played : 0,
+    rwr: deriveRwr({ total_rounds_played: s.rounds_played, total_rounds_won: s.rounds_won }),
+    adr: deriveAdr({ total_rounds_played: s.rounds_played, total_damage: s.total_damage }),
   }));
 
   finalPlayers.sort((a, b) => b.wins - a.wins || b.rwr - a.rwr || b.adr - a.adr);
@@ -412,8 +430,8 @@ export function canonicalGauntletRankMap(rounds: _GauntletRound[]): Map<number, 
       player_id: id,
       lastRound,
       wins: s?.wins ?? 0,
-      rwr: s && s.rounds_played > 0 ? s.rounds_won / s.rounds_played : 0,
-      adr: s && s.rounds_played > 0 ? s.total_damage / s.rounds_played : 0,
+      rwr: deriveRwr({ total_rounds_played: s?.rounds_played ?? 0, total_rounds_won: s?.rounds_won ?? 0 }),
+      adr: deriveAdr({ total_rounds_played: s?.rounds_played ?? 0, total_damage: s?.total_damage ?? 0 }),
     });
   }
 

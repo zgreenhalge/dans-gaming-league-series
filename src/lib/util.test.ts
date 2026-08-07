@@ -17,6 +17,8 @@ import {
   extractSeasonNumber,
   canonicalSort,
   deriveRates,
+  deriveRwr,
+  deriveAdr,
   parseMatchId,
   weekWindow,
   matchLabel,
@@ -131,6 +133,27 @@ test('deriveRates: zero-guards (no division by zero, KD falls back to kills)', (
   assert.equal(r.kd_ratio, 5); // deaths === 0 → kills, not Infinity
   assert.equal(r.rwr_percentage, 0);
   assert.equal(r.overall_adr, 0);
+});
+
+// --- deriveRwr / deriveAdr: deriveRates' narrower siblings, for callers without the full
+// matches/kills totals in scope — must agree with deriveRates() on the same inputs ---
+test('deriveRwr / deriveAdr: match deriveRates() on the same round/damage totals', () => {
+  const totals = {
+    matches_played: 4,
+    matches_won: 3,
+    total_kills: 80,
+    total_deaths: 40,
+    total_rounds_played: 100,
+    total_rounds_won: 55,
+    total_damage: 9000,
+  };
+  const r = deriveRates(totals);
+  approx(deriveRwr(totals), r.rwr_percentage);
+  approx(deriveAdr(totals), r.overall_adr);
+});
+test('deriveRwr / deriveAdr: zero-guard when no rounds played', () => {
+  assert.equal(deriveRwr({ total_rounds_played: 0, total_rounds_won: 0 }), 0);
+  assert.equal(deriveAdr({ total_rounds_played: 0, total_damage: 0 }), 0);
 });
 
 // --- parseMatchId: route param -> positive integer, or null ---
