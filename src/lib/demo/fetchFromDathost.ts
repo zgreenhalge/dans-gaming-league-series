@@ -12,7 +12,7 @@
 // than this file recomputing it, so the two sides can't independently drift apart.
 
 import { gzipSync } from 'node:zlib';
-import { DathostError, getFileBytes, listFiles, pollUntil, sleep } from '../dathost';
+import { DathostError, getFileBytes, getFileSize, pollUntil, sleep } from '../dathost';
 import { getR2Object, putR2Object, demoKey } from '../r2';
 
 // GOTV's recording (`tv_record`) starts at match go-live, not at match end, so the file at
@@ -75,20 +75,6 @@ async function waitForConcurrentPull(matchId: number): Promise<Buffer | null> {
   }
 }
 
-/** `remote`'s current size via `listFiles()` (its directory prefix, then match its filename in that
- *  listing) — not the direct-download route, which DatHost serves with no `Content-Length` and no
- *  Range support, so it can never answer "how big is this file" at all (see `listFiles`'s doc
- *  comment). `null` if the file isn't in the listing (not there yet) or is marked `deleted` — same
- *  "not resolved yet" meaning `waitForStableFileSize` already treats a missing size as. */
-async function getRemoteFileSize(serverId: string, remote: string): Promise<number | null> {
-  const slash = remote.lastIndexOf('/');
-  const dir = slash === -1 ? '' : remote.slice(0, slash);
-  const name = slash === -1 ? remote : remote.slice(slash + 1);
-  const files = await listFiles(serverId, dir);
-  const match = files.find((f) => f.path === name && !f.deleted);
-  return match ? match.size : null;
-}
-
 /** Waits for the file at `remote` to report the same size on two consecutive checks — still-growing
  *  files, and ones DatHost can't yet resolve a size for, never satisfy this — backing off
  *  exponentially between checks. Throws once `deadline` passes with no two agreeing reads. */
@@ -96,7 +82,7 @@ async function waitForStableFileSize(serverId: string, remote: string, deadline:
   let lastSize: number | null = null;
   let intervalMs = STABILITY_CHECK_BASE_MS;
   for (;;) {
-    const size = await getRemoteFileSize(serverId, remote);
+    const size = await getFileSize(serverId, remote);
     if (size !== null && size === lastSize) return;
     lastSize = size;
     if (Date.now() >= deadline) {

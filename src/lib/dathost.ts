@@ -254,6 +254,22 @@ export async function listFiles(id: string, dir: string): Promise<DathostFile[]>
 }
 
 /**
+ * A single file's current size in bytes, via `listFiles()` on its containing directory rather than
+ * `getFileBytes`/`getFileResponse`'s direct-download route (see `listFiles`'s doc comment, and the
+ * "DatHost API patterns" gotcha in docs/cs2-stack-reference.md, for why that route can't answer this).
+ * `null` if `remote` isn't in its directory's listing (not there yet) or is marked `deleted` — a
+ * pollable "not resolved yet" state, not a failure.
+ */
+export async function getFileSize(id: string, remote: string): Promise<number | null> {
+  const slash = remote.lastIndexOf('/');
+  const dir = slash === -1 ? '' : remote.slice(0, slash);
+  const name = remote.slice(slash + 1);
+  const files = await listFiles(id, dir);
+  const match = files.find((f) => f.path === name && !f.deleted);
+  return match ? match.size : null;
+}
+
+/**
  * Load a per-match MatchZy config. `urlOrCommand` is either an authenticated config URL (→
  * `matchzy_loadmatch_url <url>`) or, if it contains a space, a full `matchzy_*` console line.
  */
