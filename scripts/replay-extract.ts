@@ -182,7 +182,7 @@ async function main() {
     // redundantly re-pulling the same demo from DatHost. A manual "Regenerate" dispatch has no such
     // row and pulls immediately.
     const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
-    return ensureDemoInR2(dathostServerId(), matchId, baseName, { shouldWaitForConcurrentPull: demoIngestInFlight });
+    return ensureDemoInR2(supabase, dathostServerId(), matchId, baseName, { shouldWaitForConcurrentPull: demoIngestInFlight });
   });
 
   demoBuffer = await stage('decompress', () => gunzipMaybe(demoBuffer));

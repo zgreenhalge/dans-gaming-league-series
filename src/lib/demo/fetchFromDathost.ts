@@ -12,8 +12,10 @@
 // than this file recomputing it, so the two sides can't independently drift apart.
 
 import { gzipSync } from 'node:zlib';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { DathostError, getFileBytes, getFileSize, pollUntil, sleep } from '../dathost';
 import { getR2Object, putR2Object, demoKey } from '../r2';
+import { clearLiveScore } from './liveScore';
 
 // GOTV's recording (`tv_record`) starts at match go-live, not at match end, so the file at
 // `demoRemotePath` already exists — and is still growing — for the whole match. A poll that only
@@ -122,7 +124,9 @@ async function fetchDemoFromDathost(serverId: string, matchId: number, demoBaseN
 
 /** The match's demo bytes (still gzipped, as stored), pulling it from DatHost first if it isn't
  *  already in R2. Shared by `demo-ingest.ts` and `replay-extract.ts` so neither re-derives the same
- *  check-then-pull sequence.
+ *  check-then-pull sequence — also the single choke point for "the demo is confirmed present", so
+ *  both callers clear the site-wide live-match ticker the same way regardless of which of them
+ *  actually owns the pull.
  *
  *  `demoBaseName`: the same string `buildMatchzyConfig` (`../matchzy.ts`) computed and set as the
  *  match's `matchzy_demo_name_format` cvar — callers get it from `demoBaseName()` there, fed the
@@ -134,18 +138,32 @@ async function fetchDemoFromDathost(serverId: string, matchId: number, demoBaseN
  *  ourselves. `replay-extract.ts` passes a check for a claimed `demo_ingest` job row; `demo-ingest.ts`
  *  itself omits this entirely, since nothing else pulls the demo when it's the only job running. */
 export async function ensureDemoInR2(
+  admin: SupabaseClient,
   serverId: string,
   matchId: number,
   demoBaseName: string,
   opts: { shouldWaitForConcurrentPull?: () => Promise<boolean> } = {},
 ): Promise<Buffer> {
-  const existing = await getR2Object(demoKey(matchId));
-  if (existing) return existing;
+  const bytes = await (async () => {
+    const existing = await getR2Object(demoKey(matchId));
+    if (existing) return existing;
 
-  if (opts.shouldWaitForConcurrentPull && (await opts.shouldWaitForConcurrentPull())) {
-    const landed = await waitForConcurrentPull(matchId);
-    if (landed) return landed;
+    if (opts.shouldWaitForConcurrentPull && (await opts.shouldWaitForConcurrentPull())) {
+      const landed = await waitForConcurrentPull(matchId);
+      if (landed) return landed;
+    }
+
+    return fetchDemoFromDathost(serverId, matchId, demoBaseName);
+  })();
+
+  // The demo is confirmed present in R2 — the "Live" ticker's job is done regardless of whether a
+  // score has been derived or confirmed yet (see `liveScore.ts`'s header comment). Best-effort: a
+  // transient failure here must not fail the (already-successful) demo pull.
+  try {
+    await clearLiveScore(admin, matchId);
+  } catch (e) {
+    console.error(`clearLiveScore(${matchId}) failed (non-fatal):`, e);
   }
 
-  return fetchDemoFromDathost(serverId, matchId, demoBaseName);
+  return bytes;
 }

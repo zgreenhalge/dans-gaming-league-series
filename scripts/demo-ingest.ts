@@ -104,7 +104,7 @@ async function main() {
   const { inputs, raw } = await stage('fetch', async () => {
     const inputs = await getReplayInputs(supabase, matchId);
     const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
-    const raw = await ensureDemoInR2(dathostServerId(), matchId, baseName);
+    const raw = await ensureDemoInR2(supabase, dathostServerId(), matchId, baseName);
     return { inputs, raw };
   });
 

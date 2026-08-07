@@ -236,12 +236,10 @@ export async function writeMatchScore(
     .eq('id', matchId);
   if (matchErr) return { ok: false, error: matchErr.message, status: 500 };
 
-  // The match now has a real score — the live-score ticker's job is done. This is the single choke
-  // point for that (not map_result, and not wherever the demo happens to finish parsing): every path
-  // that ends in an actual score, whether auto-committed or a human confirm, runs through here, so a
-  // quarantined/staged-for-review match keeps showing its last live score to spectators (who can't see
-  // the admin-only review card) instead of going blank until someone confirms it. Best-effort — a
-  // transient failure here must not fail an otherwise-successful score write.
+  // Normally a no-op: `ensureDemoInR2()` already cleared this row once the demo landed, well before
+  // any demo-backed score reaches here. This is the fallback for a score confirmed with no demo ever
+  // pulled (e.g. a manual override after a failed DatHost pull), so the row can't linger forever in
+  // that case. Best-effort — a transient failure here must not fail an otherwise-successful score write.
   try {
     await clearLiveScore(supabaseAdmin, matchId);
   } catch (e) {

@@ -7,13 +7,15 @@
 // to deliver DELETE events matching a `match_id=eq.` filter — no `REPLICA IDENTITY FULL` needed; if
 // this table's key ever changes, re-verify that.
 //
-// The row is deleted by `writeMatchScore()` (`matchScore.ts`) once the match has an actual score —
-// not at `map_result`, and not wherever `demo-ingest.ts` happens to finish parsing. Those are both too
-// early: a quarantined or shadow-mode-staged result has nothing else to show in the ticker's place for
-// a spectator (the review card is admin/in-match-only), so clearing there would blank the page for
-// everyone else until someone confirms. `writeMatchScore` is the one place every path that produces a
-// real score — auto-commit or a human confirm — already converges, so it's the only point that's both
-// early enough (no unnecessary lingering) and late enough (never blank before a replacement exists).
+// The row is deleted by `ensureDemoInR2()` (`fetchFromDathost.ts`) as soon as the match's demo is
+// confirmed present in R2 — not at `map_result` (GOTV's flush can lag well behind the event, so the
+// demo may not exist yet) and not once a score is confirmed (auto-commit or a human confirm can lag
+// well behind the demo landing, especially for a quarantined/staged-for-review match). A demo existing
+// is proof the match is over regardless of whether its stats have been derived yet, so that's the
+// point the "Live" label should stop being true. `writeMatchScore()` (`matchScore.ts`) also clears the
+// row as a fallback, for the rare case a score gets confirmed with no demo ever pulled (e.g. a manual
+// override after a failed DatHost pull) — by the time any demo-backed score lands, this has always
+// already run.
 //
 // Field names for `round_end`'s payload are inferred from `map_result`'s confirmed shape (`matchid`,
 // `team1.score`/`team2.score` — `buildMatchzyConfig` fixes team1 = SHIRTS, team2 = SKINS) since
@@ -143,8 +145,8 @@ export async function getLiveScore(admin: SupabaseClient, matchId: number): Prom
   return rowToLiveScore(matchId, data as LiveScoreDbRow);
 }
 
-/** Deleted by `writeMatchScore()` once the match has an actual score — see the header comment for why
- *  that's the right trigger, instead of `map_result` or wherever `demo-ingest.ts` finishes parsing. */
+/** Deleted by `ensureDemoInR2()` once the match's demo is confirmed present in R2, with
+ *  `writeMatchScore()` clearing it too as a fallback — see the header comment for why. */
 export async function clearLiveScore(admin: SupabaseClient, matchId: number): Promise<void> {
   await admin.from('live_match_score').delete().eq('match_id', matchId);
 }
