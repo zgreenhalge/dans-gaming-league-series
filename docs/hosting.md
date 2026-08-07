@@ -127,8 +127,8 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
   regardless of auto-commit or manual confirm. `going_live`, `round_end`, and `map_result` all upsert
   `live_match_score` (`liveScore.ts`) through the same generic path, shown on the match page
   (`MatchScoreHero`) and site-wide (`LiveMatchTicker`) while the demo doesn't exist in R2 yet —
-  `ensureDemoInR2` (`fetchFromDathost.ts`) clears the row the moment it does. Every other event type is
-  acknowledged and dropped.
+  `clearLiveScoreBestEffort` (`liveScore.ts`) clears the row the moment `ensureDemoInR2`
+  (`fetchFromDathost.ts`) confirms it does. Every other event type is acknowledged and dropped.
 - The demo's remote path is deterministic: `infra/matchzy/cfg/MatchZy/config.cfg` sets
   `matchzy_demo_path MatchZy/`, and a real match's loaded config JSON carries a per-match
   `matchzy_demo_name_format` cvar (`buildMatchzyConfig`, `src/lib/matchzy.ts`) set to `demoBaseName()`'s
@@ -453,10 +453,10 @@ both `ScrimPanel` and `ScrimNavStatus`) · `src/components/ScrimPanel.tsx` ·
 `scripts/seed-config-set.ts` (seed/add a config set from local files) ·
 `scripts/dathost-cleanup.ts` (disk cleanup, issue #132) · `src/lib/gh-dispatch.ts` (workflow
 dispatch + enable/disable/runs/variables helpers) · `infra/matchzy/` (config-set seed / DR snapshot) ·
-`src/lib/demo/fetchFromDathost.ts` (the demo pull, and where the demo's arrival in R2 clears
-`live_match_score`) · `src/lib/demo/liveScore.ts` (writes/reads the `live_match_score` table) +
-`src/components/MatchScoreHero.tsx` (per-match live score) + `src/components/LiveMatchTicker.tsx`
-(site-wide live ticker), both Realtime subscriptions.
+`src/lib/demo/fetchFromDathost.ts` (the demo pull) · `src/lib/demo/liveScore.ts` (writes/reads the
+`live_match_score` table, and `clearLiveScoreBestEffort` which the demo's arrival in R2 clears it
+through) · `src/components/MatchScoreHero.tsx` (per-match live score) +
+`src/components/LiveMatchTicker.tsx` (site-wide live ticker), both Realtime subscriptions.
 
 ## Known limitations / friction
 

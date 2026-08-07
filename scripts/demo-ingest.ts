@@ -43,6 +43,7 @@ import { quarantineDemo } from '../src/lib/demo/quarantine';
 import { putR2Object, deleteR2Object, demoResultKey, mapResultKey } from '../src/lib/r2';
 import { getMapResult } from '../src/lib/demo/mapResult';
 import { ensureDemoInR2 } from '../src/lib/demo/fetchFromDathost';
+import { clearLiveScoreBestEffort } from '../src/lib/demo/liveScore';
 import { dathostServerId } from '../src/lib/dathost';
 import { evaluateAutoCommit } from '../src/lib/demo/autoCommit';
 import { getAdminClient } from '../src/lib/supabase-admin';
@@ -104,7 +105,10 @@ async function main() {
   const { inputs, raw } = await stage('fetch', async () => {
     const inputs = await getReplayInputs(supabase, matchId);
     const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
-    const raw = await ensureDemoInR2(supabase, dathostServerId(), matchId, baseName);
+    const raw = await ensureDemoInR2(dathostServerId(), matchId, baseName);
+    // The demo is now confirmed present in R2 — clear the site-wide live-match ticker regardless of
+    // whether a score has been derived/confirmed yet (see liveScore.ts's header comment).
+    await clearLiveScoreBestEffort(supabase, matchId);
     return { inputs, raw };
   });
 

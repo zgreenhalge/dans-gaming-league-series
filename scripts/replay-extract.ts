@@ -37,6 +37,7 @@ import { getMapTraces } from '../src/lib/queries/replay';
 import { mapSlug } from '../src/lib/maps';
 import { recordJobStatus, matchJobKey, jobStatusWriter } from '../src/lib/background-jobs';
 import { ensureDemoInR2 } from '../src/lib/demo/fetchFromDathost';
+import { clearLiveScoreBestEffort } from '../src/lib/demo/liveScore';
 import { DEMO_INGEST_JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '../src/lib/demo/ingestResult';
 import { dathostServerId, sleep } from '../src/lib/dathost';
 import { notice, warning, error } from './gh-actions-log';
@@ -182,7 +183,11 @@ async function main() {
     // redundantly re-pulling the same demo from DatHost. A manual "Regenerate" dispatch has no such
     // row and pulls immediately.
     const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
-    return ensureDemoInR2(supabase, dathostServerId(), matchId, baseName, { shouldWaitForConcurrentPull: demoIngestInFlight });
+    const raw = await ensureDemoInR2(dathostServerId(), matchId, baseName, { shouldWaitForConcurrentPull: demoIngestInFlight });
+    // The demo is now confirmed present in R2 — clear the site-wide live-match ticker regardless of
+    // whether a score has been derived/confirmed yet (see liveScore.ts's header comment).
+    await clearLiveScoreBestEffort(supabase, matchId);
+    return raw;
   });
 
   demoBuffer = await stage('decompress', () => gunzipMaybe(demoBuffer));

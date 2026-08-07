@@ -7,15 +7,16 @@
 // to deliver DELETE events matching a `match_id=eq.` filter — no `REPLICA IDENTITY FULL` needed; if
 // this table's key ever changes, re-verify that.
 //
-// The row is deleted by `ensureDemoInR2()` (`fetchFromDathost.ts`) as soon as the match's demo is
-// confirmed present in R2 — not at `map_result` (GOTV's flush can lag well behind the event, so the
-// demo may not exist yet) and not once a score is confirmed (auto-commit or a human confirm can lag
-// well behind the demo landing, especially for a quarantined/staged-for-review match). A demo existing
-// is proof the match is over regardless of whether its stats have been derived yet, so that's the
-// point the "Live" label should stop being true. `writeMatchScore()` (`matchScore.ts`) also clears the
-// row as a fallback, for the rare case a score gets confirmed with no demo ever pulled (e.g. a manual
-// override after a failed DatHost pull) — by the time any demo-backed score lands, this has always
-// already run.
+// The row is cleared as soon as the match's demo is confirmed present in R2 — `demo-ingest.ts` and
+// `replay-extract.ts` both call `clearLiveScoreBestEffort()` right after their own `ensureDemoInR2()`
+// call resolves, so whichever of them actually owns the pull clears it, and the other's redundant call
+// is a cheap no-op. Not at `map_result` (GOTV's flush can lag well behind the event, so the demo may
+// not exist yet) and not once a score is confirmed (auto-commit or a human confirm can lag well behind
+// the demo landing, especially for a quarantined/staged-for-review match). A demo existing is proof
+// the match is over regardless of whether its stats have been derived yet, so that's the point the
+// "Live" label should stop being true. `writeMatchScore()` (`matchScore.ts`) also clears the row as a
+// fallback, for the rare case a score gets confirmed with no demo ever pulled (e.g. a manual override
+// after a failed DatHost pull) — by the time any demo-backed score lands, this has always already run.
 //
 // Field names for `round_end`'s payload are inferred from `map_result`'s confirmed shape (`matchid`,
 // `team1.score`/`team2.score` — `buildMatchzyConfig` fixes team1 = SHIRTS, team2 = SKINS) since
@@ -145,8 +146,19 @@ export async function getLiveScore(admin: SupabaseClient, matchId: number): Prom
   return rowToLiveScore(matchId, data as LiveScoreDbRow);
 }
 
-/** Deleted by `ensureDemoInR2()` once the match's demo is confirmed present in R2, with
- *  `writeMatchScore()` clearing it too as a fallback — see the header comment for why. */
+/** Called once the match's demo is confirmed present in R2, with `writeMatchScore()` calling it too
+ *  as a fallback — see the header comment for why. */
 export async function clearLiveScore(admin: SupabaseClient, matchId: number): Promise<void> {
   await admin.from('live_match_score').delete().eq('match_id', matchId);
+}
+
+/** `clearLiveScore`, swallowing (and logging) a failure instead of throwing — every caller treats
+ *  clearing the ticker as best-effort, since it must never fail an otherwise-successful demo pull or
+ *  score write. Shared so each call site doesn't restate the same try/catch. */
+export async function clearLiveScoreBestEffort(admin: SupabaseClient, matchId: number): Promise<void> {
+  try {
+    await clearLiveScore(admin, matchId);
+  } catch (e) {
+    console.error(`clearLiveScore(${matchId}) failed (non-fatal):`, e);
+  }
 }
