@@ -68,11 +68,10 @@ GitHub release notes after any CS2 update if the server starts behaving oddly.
   any live cvar change, or debug commands without a game client — useful for scripting or a quick
   live check without connecting.
 - **The file-manager download route (`GET /game-servers/{id}/files/{path}`) reports no `Content-Length`
-  and no `Content-Range`/Range support** for a large or still-growing file (confirmed live against the
-  DGLS server: a HEAD, a ranged GET, and a plain GET all came back `200` with neither header) — a
-  file's size can never be read off that route's response. The file-listing route
-  (`GET /game-servers/{id}/files?path=<dir>`) is the only reliable size source: it reports `size`
-  directly as JSON per entry (`src/lib/dathost.ts`'s `listFiles`/`getFileSize`).
+  and no `Content-Range`/Range support** for a large or still-growing file — a file's size can never be
+  read off that route's response. The file-listing route (`GET /game-servers/{id}/files?path=<dir>`) is
+  the only reliable size source: it reports `size` directly as JSON per entry (`src/lib/dathost.ts`'s
+  `listFiles`/`getFileSize`).
 
 ## MatchZy match-config contract
 

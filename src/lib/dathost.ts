@@ -228,37 +228,47 @@ export async function getFileBytes(id: string, remote: string): Promise<Buffer |
 }
 
 /** One entry from `listFiles()` — a file (or directory) on the server's local disk, per DatHost's
- *  file-manager listing. */
+ *  file-manager listing. `size` is `null` when the listing itself omits it (distinct from a file that
+ *  genuinely reports a `0` size) — `getFileSize()` treats either "no entry" or "entry with a `null`
+ *  size" as unresolved, not as a real zero-byte reading. */
 export interface DathostFile {
   path: string;
-  size: number;
+  size: number | null;
   deleted: boolean;
 }
 
 /**
- * List files under `dir` (e.g. `MatchZy`) on the server's local disk, each with a concrete `size` —
- * this listing endpoint reports it directly as JSON. That's distinct from (and more reliable than)
- * `getFileBytes`'s direct-download route: confirmed live against the DGLS server that a HEAD, a
- * Range GET, and a plain GET against a real in-progress demo all came back `200` with no
- * `Content-Length` header and no `Content-Range`/Range support at all — so a file's size can never be
- * read off that route's response, only off this listing. `path` in each returned entry is relative to
- * `dir`, not the full remote path.
+ * List files under `dir` (e.g. `MatchZy`) on the server's local disk, each with a `size` — this
+ * listing endpoint reports it directly as JSON. That's distinct from (and more reliable than)
+ * `getFileBytes`'s direct-download route, which reports neither a `Content-Length` header nor
+ * `Content-Range`/Range support for a large or in-progress file — so a file's size can never be read
+ * off that route's response, only off this listing (see the "DatHost API patterns" gotcha in
+ * docs/cs2-stack-reference.md). `path` in each returned entry is relative to `dir`, not the full
+ * remote path. A `dir` DatHost has no record of (never written to, e.g. before MatchZy has recorded
+ * anything) resolves the same "not there yet" way a missing file does: an empty list, not a thrown
+ * error.
  */
 export async function listFiles(id: string, dir: string): Promise<DathostFile[]> {
-  const data = (await call('GET', `/game-servers/${id}/files?path=${encodeURIComponent(dir)}`)) as Array<{
-    path: string;
-    size?: number;
-    deleted?: boolean;
-  }>;
-  return data.map((f) => ({ path: f.path, size: f.size ?? 0, deleted: f.deleted ?? false }));
+  let data: unknown;
+  try {
+    data = await call('GET', `/game-servers/${id}/files?path=${encodeURIComponent(dir)}`);
+  } catch (err) {
+    if (err instanceof DathostError && err.status === 404) return [];
+    throw err;
+  }
+  return (data as Array<{ path: string; size?: number; deleted?: boolean }>).map((f) => ({
+    path: f.path,
+    size: f.size ?? null,
+    deleted: f.deleted ?? false,
+  }));
 }
 
 /**
  * A single file's current size in bytes, via `listFiles()` on its containing directory rather than
  * `getFileBytes`/`getFileResponse`'s direct-download route (see `listFiles`'s doc comment, and the
  * "DatHost API patterns" gotcha in docs/cs2-stack-reference.md, for why that route can't answer this).
- * `null` if `remote` isn't in its directory's listing (not there yet) or is marked `deleted` — a
- * pollable "not resolved yet" state, not a failure.
+ * `null` if `remote` isn't in its directory's listing (not there yet), is marked `deleted`, or is
+ * listed with no resolvable size yet — a pollable "not resolved yet" state, not a failure.
  */
 export async function getFileSize(id: string, remote: string): Promise<number | null> {
   const slash = remote.lastIndexOf('/');
@@ -266,7 +276,7 @@ export async function getFileSize(id: string, remote: string): Promise<number | 
   const name = remote.slice(slash + 1);
   const files = await listFiles(id, dir);
   const match = files.find((f) => f.path === name && !f.deleted);
-  return match ? match.size : null;
+  return match?.size ?? null;
 }
 
 /**
