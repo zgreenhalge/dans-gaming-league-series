@@ -203,10 +203,9 @@ export async function getConsoleLines(id: string): Promise<string[]> {
 }
 
 /**
- * GET a file manager entry and apply the shared "not there yet" semantics `getFileBytes`/`getFileSize`
- * both need: `null` on a 404 (an expected, pollable state for a demo still being flushed by GOTV, not
- * a failure), thrown `DathostError` on any other non-2xx. Callers consume the returned `Response`'s
- * body however suits them (full buffer vs. just the `Content-Length` header).
+ * GET a file manager entry and apply `getFileBytes`'s "not there yet" semantics: `null` on a 404 (an
+ * expected, pollable state for a demo still being flushed by GOTV, not a failure), thrown
+ * `DathostError` on any other non-2xx.
  */
 async function getFileResponse(id: string, remote: string): Promise<Response | null> {
   const res = await request('GET', `/game-servers/${id}/files/${remote}`);
@@ -228,19 +227,30 @@ export async function getFileBytes(id: string, remote: string): Promise<Buffer |
   return Buffer.from(await res.arrayBuffer());
 }
 
+/** One entry from `listFiles()` — a file (or directory) on the server's local disk, per DatHost's
+ *  file-manager listing. */
+export interface DathostFile {
+  path: string;
+  size: number;
+  deleted: boolean;
+}
+
 /**
- * A file's current size in bytes, from the same endpoint `getFileBytes` reads — without buffering
- * the body, so repeatedly checking whether a large (~200MB+) demo is still growing doesn't mean
- * repeatedly downloading it. Returns `null` on a 404 (not there yet, same as `getFileBytes`) or if the
- * response carries no `Content-Length` (can't confirm a size this round — same "not resolved yet"
- * meaning to callers, not a failure).
+ * List files under `dir` (e.g. `MatchZy`) on the server's local disk, each with a concrete `size` —
+ * this listing endpoint reports it directly as JSON. That's distinct from (and more reliable than)
+ * `getFileBytes`'s direct-download route: confirmed live against the DGLS server that a HEAD, a
+ * Range GET, and a plain GET against a real in-progress demo all came back `200` with no
+ * `Content-Length` header and no `Content-Range`/Range support at all — so a file's size can never be
+ * read off that route's response, only off this listing. `path` in each returned entry is relative to
+ * `dir`, not the full remote path.
  */
-export async function getFileSize(id: string, remote: string): Promise<number | null> {
-  const res = await getFileResponse(id, remote);
-  if (!res) return null;
-  await res.body?.cancel();
-  const length = res.headers.get('content-length');
-  return length ? Number(length) : null;
+export async function listFiles(id: string, dir: string): Promise<DathostFile[]> {
+  const data = (await call('GET', `/game-servers/${id}/files?path=${encodeURIComponent(dir)}`)) as Array<{
+    path: string;
+    size?: number;
+    deleted?: boolean;
+  }>;
+  return data.map((f) => ({ path: f.path, size: f.size ?? 0, deleted: f.deleted ?? false }));
 }
 
 /**
