@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import type { LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
-import { canonicalSort, deriveRates, isPlayedScore } from '../util';
+import { canonicalSort, deriveRates, deriveRwr, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
 import { fetchAllPages, getWeekLookup } from './_shared';
 
@@ -168,7 +168,7 @@ export async function getSeasonLeaderboard(
       ...normalizeRow(r),
       total_assists: ps?.assists ?? 0,
       total_rounds_won,
-      rwr_percentage: total_rounds_played > 0 ? (total_rounds_won / total_rounds_played) * 100 : 0,
+      rwr_percentage: deriveRwr({ total_rounds_played, total_rounds_won }),
       kills_in_wins: ps?.kills_in_wins ?? 0,
       deaths_in_wins: ps?.deaths_in_wins ?? 0,
       kills_in_losses: ps?.kills_in_losses ?? 0,
@@ -350,7 +350,7 @@ export async function getAllLeaderboards(): Promise<
       ...normalizeRow(r),
       total_assists: ps?.assists ?? 0,
       total_rounds_won,
-      rwr_percentage: total_rounds_played > 0 ? (total_rounds_won / total_rounds_played) * 100 : 0,
+      rwr_percentage: deriveRwr({ total_rounds_played, total_rounds_won }),
       kills_in_wins: ps?.kills_in_wins ?? 0,
       deaths_in_wins: ps?.deaths_in_wins ?? 0,
       kills_in_losses: ps?.kills_in_losses ?? 0,

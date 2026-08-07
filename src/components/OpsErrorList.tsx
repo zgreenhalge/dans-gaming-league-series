@@ -17,6 +17,7 @@ export const OPERATION_LABELS: Record<string, string> = {
   gauntlet_build: 'Gauntlet Build',
   gauntlet_seed: 'Gauntlet Seed',
   gauntlet_archive: 'Gauntlet Archive',
+  gauntlet_delete: 'Gauntlet Delete',
   gauntlet_manual_save: 'Gauntlet Manual Save',
   steam_id_learn: 'Steam ID Learning',
   server_provision: 'Server Provision',

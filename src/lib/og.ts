@@ -1,6 +1,6 @@
 import { cache } from 'react';
 import { supabase } from '@/lib/supabase';
-import { isPlayedScore, parseScore, canonicalSort, deriveRates } from '@/lib/util';
+import { isPlayedScore, parseScore, canonicalSort, deriveRates, deriveRwr, deriveAdr } from '@/lib/util';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { getMapLookup, getMatchTeamNames } from './queries';
 import type { Player, Match } from '@/lib/types';
@@ -197,8 +197,8 @@ async function getRegularSeasonMeta(seasonId: number): Promise<SeasonLeaderboard
       return {
         player_name: r.player_name,
         win_rate_percentage: r.win_rate_percentage,
-        rwr_percentage: rwr && rwr.played > 0 ? (rwr.won / rwr.played) * 100 : 0,
-        overall_adr: r.total_rounds_played > 0 ? r.total_damage / r.total_rounds_played : 0,
+        rwr_percentage: deriveRwr({ total_rounds_played: rwr?.played ?? 0, total_rounds_won: rwr?.won ?? 0 }),
+        overall_adr: deriveAdr({ total_rounds_played: r.total_rounds_played, total_damage: r.total_damage }),
         kd_ratio: r.kd_ratio,
       };
     })

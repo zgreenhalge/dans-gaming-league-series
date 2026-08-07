@@ -73,7 +73,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
  * Resets a gauntlet — deletes the gauntlet season and everything materialized under it (pods,
  * slots, matches, stats, weeks), freeing the regular season up to have its bracket rebuilt. Refuses
  * once any match has a played score unless `force: true` is passed, since that discards real
- * results with no way to recover them. There is no partial reset either way.
+ * results with no way to recover them. A mid-sequence failure can leave the gauntlet partially
+ * deleted, but every step is a no-op on an already-deleted target, so simply retrying the same
+ * request finishes the reset (`deleteGauntletSeason()` records the failure via `recordOpsError()`
+ * in the meantime).
  */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
