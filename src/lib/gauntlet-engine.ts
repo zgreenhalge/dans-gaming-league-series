@@ -482,11 +482,11 @@ export async function deleteGauntletSeason(supabaseAdmin: SupabaseClient, gauntl
       if (weekDelErr) throw weekDelErr;
     }
 
-    const { error: seasonDelErr } = await supabaseAdmin.from('seasons').delete().eq('id', gauntletSeasonId);
-    if (seasonDelErr) throw seasonDelErr;
-
-    await clearOpsError(supabaseAdmin, 'season', gauntletSeasonId, 'gauntlet_archive');
-
+    // Revert the paired regular season (and clear its stale ops-errors) BEFORE deleting the
+    // gauntlet season row below — `gauntletName` is only resolvable while that row still exists, so
+    // a retry after a failure in this block must still find the row to redo it. Ordering the season
+    // row delete last means it's the one step ever retried in isolation once this one has landed,
+    // which is what makes every step here genuinely a no-op on retry rather than silently skipped.
     if (gauntletName) {
       const regularSeason = await getLinkedRegularSeason(gauntletName);
       if (regularSeason) {
@@ -501,6 +501,11 @@ export async function deleteGauntletSeason(supabaseAdmin: SupabaseClient, gauntl
         await clearOpsError(supabaseAdmin, 'season', regularSeason.id, 'gauntlet_seed');
       }
     }
+
+    const { error: seasonDelErr } = await supabaseAdmin.from('seasons').delete().eq('id', gauntletSeasonId);
+    if (seasonDelErr) throw seasonDelErr;
+
+    await clearOpsError(supabaseAdmin, 'season', gauntletSeasonId, 'gauntlet_archive');
   } catch (err) {
     // Mid-sequence failure leaves the gauntlet partially deleted — safe to retry (each step is a
     // no-op against an already-empty target), but worth a persistent trace so an admin isn't left
