@@ -26,6 +26,24 @@ export interface JobKey {
 export const matchJobKey = (id: number): JobKey => ({ column: 'match_id', id });
 export const mapJobKey = (id: number): JobKey => ({ column: 'map_id', id });
 
+/** `created_at` of a `background_jobs` row for `(jobType, key)`, or `null` if no such row exists yet.
+ *  Every write path that touches an existing row (`recordJobStatus`, `advanceJobStatus`) only ever
+ *  sets the columns it's given, so `created_at` — set once, at the row's first claim — survives every
+ *  later retry/status update untouched. For a `job_type` that's claimed unconditionally at dispatch
+ *  time (e.g. `demo_ingest`, claimed by `matchzy-log`'s handler the moment `map_result` fires,
+ *  regardless of how any later run of that job is triggered), this is effectively "when the
+ *  originating event happened," not just "when this particular run started." */
+export async function getJobCreatedAt(admin: SupabaseClient, jobType: string, key: JobKey): Promise<Date | null> {
+  const { data } = await admin
+    .from('background_jobs')
+    .select('created_at')
+    .eq('job_type', jobType)
+    .eq(key.column, key.id)
+    .maybeSingle();
+  const createdAt = (data as { created_at?: string } | null)?.created_at;
+  return createdAt ? new Date(createdAt) : null;
+}
+
 async function mirrorSubjectStatus(
   admin: SupabaseClient,
   subject: JobSubject,

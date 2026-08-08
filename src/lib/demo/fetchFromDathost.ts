@@ -18,11 +18,12 @@ import { getR2Object, putR2Object, demoKey } from '../r2';
 // GOTV's recording (`tv_record`) starts at match go-live, not at match end, so the file at
 // `demoRemotePath` already exists — and is still growing — for the whole match. A poll that only
 // checks "does this path resolve" would happily grab a still-growing recording the moment it's
-// dispatched; `fetchDemoFromDathost` instead waits out `FLUSH_FLOOR_MS` — GOTV's own flush delay
-// after `map_result` (`tvFlushDelay`/`mp_match_restart_delay` in MatchZy's match-end handling) —
-// before ever checking, then confirms the file has actually stopped growing (the flush isn't a fixed
-// duration) before trusting it.
-const FLUSH_FLOOR_MS = 120_000;
+// dispatched; `fetchDemoFromDathost` instead waits out `FLUSH_FLOOR_MS` (or whatever's left of it —
+// see `remainingFlushFloorMs`) — GOTV's own flush delay after `map_result` (`tvFlushDelay`/
+// `mp_match_restart_delay` in MatchZy's match-end handling) — before ever checking, then confirms the
+// file has actually stopped growing (the flush isn't a fixed duration) before trusting it. Exported so
+// callers computing a remaining wait share this exact number rather than each guessing their own.
+export const FLUSH_FLOOR_MS = 120_000;
 
 // After the floor, two consecutive size reads that agree mean the file has stopped growing.
 // Backed off exponentially between checks since there's no fixed cadence for how long a flush past
@@ -47,6 +48,20 @@ const CONCURRENT_PULL_INTERVAL_MS = 5_000;
 /** The deterministic remote path a match's demo is saved at, given `demoBaseName` (`../matchzy.ts`). */
 function demoRemotePath(demoBaseName: string): string {
   return `MatchZy/${demoBaseName}.dem`;
+}
+
+/** How much of `FLUSH_FLOOR_MS` is still outstanding, given `mapResultAt` — when `map_result` first
+ *  fired for this match (see `getJobCreatedAt` in `../background-jobs.ts`, keyed to the demo_ingest
+ *  job row, which every match gets regardless of how replay-extract's own auto-dispatch is
+ *  configured). A dispatch minutes or days after that point needs little or none of the floor left; a
+ *  dispatch seconds after it — the real auto-dispatch flow, or a manual click that happens to land
+ *  right after match end — still gets (up to) the full wait. `null` (no row yet, or this is a
+ *  first-ever manual dispatch with nothing to anchor to) is treated the same as "just now": the full
+ *  floor applies, since there's no evidence otherwise. Pure function of its input and the current
+ *  time — exported for testing. */
+export function remainingFlushFloorMs(mapResultAt: Date | null): number {
+  if (!mapResultAt) return FLUSH_FLOOR_MS;
+  return Math.max(0, FLUSH_FLOOR_MS - (Date.now() - mapResultAt.getTime()));
 }
 
 /** Whether `err` is `pollUntil`'s own deadline-exceeded signal — safe to treat as "nothing landed
@@ -97,14 +112,19 @@ async function waitForStableFileSize(serverId: string, remote: string, deadline:
   }
 }
 
-/** Wait out `FLUSH_FLOOR_MS`, confirm the file's size has stabilized, then download it and gzip-write
- *  it to R2 at `demoKey(matchId)`, returning those same gzipped bytes (so `ensureDemoInR2` doesn't
- *  have to read them straight back). Throws if it never stabilizes within `FETCH_TIMEOUT_MS`. */
-async function fetchDemoFromDathost(serverId: string, matchId: number, demoBaseName: string): Promise<Buffer> {
+/** Wait out `flushFloorMs`, confirm the file's size has stabilized, then download it and gzip-write it
+ *  to R2 at `demoKey(matchId)`, returning those same gzipped bytes (so `ensureDemoInR2` doesn't have
+ *  to read them straight back). Throws if it never stabilizes within `FETCH_TIMEOUT_MS`. */
+async function fetchDemoFromDathost(
+  serverId: string,
+  matchId: number,
+  demoBaseName: string,
+  flushFloorMs: number,
+): Promise<Buffer> {
   const remote = demoRemotePath(demoBaseName);
   const deadline = Date.now() + FETCH_TIMEOUT_MS;
 
-  await sleep(FLUSH_FLOOR_MS);
+  await sleep(flushFloorMs);
   await waitForStableFileSize(serverId, remote, deadline);
 
   const bytes = await getFileBytes(serverId, remote);
@@ -133,12 +153,23 @@ async function fetchDemoFromDathost(serverId: string, matchId: number, demoBaseN
  *  to decide whether another already-dispatched job actually owns this pull — if so, wait out
  *  `waitForConcurrentPull()`'s grace window (polling R2, not DatHost) before pulling from DatHost
  *  ourselves. `replay-extract.ts` passes a check for a claimed `demo_ingest` job row; `demo-ingest.ts`
- *  itself omits this entirely, since nothing else pulls the demo when it's the only job running. */
+ *  itself omits this entirely, since nothing else pulls the demo when it's the only job running.
+ *
+ *  `getFlushFloorMs`: resolves how long to wait out before ever checking the file's size — like
+ *  `shouldWaitForConcurrentPull`, called only once we're actually committed to pulling from DatHost
+ *  ourselves (never on an R2 hit, and never if a concurrent pull's grace window already landed the
+ *  file), so a cache hit or a landed concurrent pull never pays for the Supabase read this typically
+ *  requires. Omitted entirely defaults to the full `FLUSH_FLOOR_MS`. Callers that can determine how
+ *  long ago `map_result` actually fired (`remainingFlushFloorMs()`, fed `getJobCreatedAt()` from
+ *  `../background-jobs.ts`) resolve what's actually left of the floor instead of trusting *why* this
+ *  call is happening (auto-dispatch vs. a manual reparse minutes or days later) — the elapsed real time
+ *  is the same regardless of which triggered it, and a dispatch that lands seconds after match end
+ *  still needs the full wait no matter which one it was. */
 export async function ensureDemoInR2(
   serverId: string,
   matchId: number,
   demoBaseName: string,
-  opts: { shouldWaitForConcurrentPull?: () => Promise<boolean> } = {},
+  opts: { shouldWaitForConcurrentPull?: () => Promise<boolean>; getFlushFloorMs?: () => Promise<number> } = {},
 ): Promise<Buffer> {
   const existing = await getR2Object(demoKey(matchId));
   if (existing) return existing;
@@ -148,5 +179,6 @@ export async function ensureDemoInR2(
     if (landed) return landed;
   }
 
-  return fetchDemoFromDathost(serverId, matchId, demoBaseName);
+  const flushFloorMs = opts.getFlushFloorMs ? await opts.getFlushFloorMs() : FLUSH_FLOOR_MS;
+  return fetchDemoFromDathost(serverId, matchId, demoBaseName, flushFloorMs);
 }

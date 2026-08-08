@@ -142,11 +142,20 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
   [`cs2-stack-reference.md`](./cs2-stack-reference.md#gotv-vs-demo-recording--matchzys-recording-is-gotv-not-a-separate-system)),
   that path already exists — and is still growing — for the entire match, not just after it ends, so
   merely finding the file there doesn't mean the recording is finished. `fetchDemoFromDathost`
-  (`src/lib/demo/fetchFromDathost.ts`) instead waits out a 120s floor (GOTV's own post-`map_result`
-  flush delay) before ever checking, then polls the file's size (a cheap `Content-Length` read, not a
-  download) with exponential backoff until two consecutive checks agree it's stopped growing — only
-  then does it download, gzip, and write it to R2 at the same deterministic `demoKey(matchId)` a
-  browser upload would use, within an 8-minute overall ceiling. Both
+  (`src/lib/demo/fetchFromDathost.ts`) instead waits out however much of a 120s floor (GOTV's own
+  post-`map_result` flush delay) is still outstanding since `map_result` actually fired for this match
+  — `remainingFlushFloorMs()`, anchored to the `demo_ingest` job row's `created_at`
+  (`getJobCreatedAt()`, `src/lib/background-jobs.ts`), set once at that row's first claim and never
+  overwritten by a later retry or manual dispatch — before ever checking, then polls the file's size
+  via DatHost's file-listing endpoint (`listFiles()`/`getFileSize()`, `src/lib/dathost.ts` — the
+  direct-download route reports neither `Content-Length` nor `Content-Range` for a large/in-progress
+  file, see [`cs2-stack-reference.md`](./cs2-stack-reference.md)'s DatHost API patterns) with
+  exponential backoff until two consecutive checks agree it's stopped growing — only then does it
+  download, gzip, and write it to R2 at the same deterministic `demoKey(matchId)` a browser upload
+  would use, within an 8-minute overall ceiling. A dispatch that lands well after `map_result` (a
+  manual reparse hours or days later) needs little or none of the floor left; one that lands soon after
+  it — the real auto-dispatch flow, or a manual click that happens to land in that window — still gets
+  up to the full wait, regardless of which triggered it. Both
   `demo-ingest.ts` and `replay-extract.ts` call it themselves, at the top of their own run, only if the
   demo isn't already in R2, so either one can be dispatched (or re-dispatched) independently. Since both
   are auto-dispatched together off the same `map_result` event and tend to detect the demo on the same

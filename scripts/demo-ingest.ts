@@ -43,6 +43,7 @@ import { quarantineDemo } from '../src/lib/demo/quarantine';
 import { putR2Object, deleteR2Object, demoResultKey, mapResultKey } from '../src/lib/r2';
 import { getMapResult } from '../src/lib/demo/mapResult';
 import { pullDemoAndClearLiveScore } from '../src/lib/demo/liveScore';
+import { demoIngestFlushFloorMs } from '../src/lib/demo/flushFloor';
 import { dathostServerId } from '../src/lib/dathost';
 import { evaluateAutoCommit } from '../src/lib/demo/autoCommit';
 import { getAdminClient } from '../src/lib/supabase-admin';
@@ -104,7 +105,9 @@ async function main() {
   const { inputs, raw } = await stage('fetch', async () => {
     const inputs = await getReplayInputs(supabase, matchId);
     const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
-    const raw = await pullDemoAndClearLiveScore(supabase, dathostServerId(), matchId, baseName);
+    const raw = await pullDemoAndClearLiveScore(supabase, dathostServerId(), matchId, baseName, {
+      getFlushFloorMs: () => demoIngestFlushFloorMs(supabase, matchId),
+    });
     return { inputs, raw };
   });
 
