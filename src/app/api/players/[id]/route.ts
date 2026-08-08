@@ -3,6 +3,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { recordNameChange, recordNameHistoryLogError, renameFields } from '@/lib/player-name-history';
+import type { Database } from '@/lib/database.types';
+
+type PlayerUpdate = Database['public']['Tables']['players']['Update'];
 
 // Admin player management (#144): edit a player's display name, toggle their `is_admin` flag, or
 // change their Steam link (unlink, or set a SteamID64 by hand). Admin-only. All three edits go
@@ -44,7 +47,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
 
-  const update: Record<string, unknown> = {};
+  const update: PlayerUpdate = {};
   let renamedFrom: string | null = null;
 
   // Display name

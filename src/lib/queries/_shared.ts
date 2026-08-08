@@ -12,6 +12,19 @@ const SUPABASE_PAGE_SIZE = 1000;
  * aggregate computed from the result. Pass a query builder rather than a built query so this
  * can attach `.range()` per page.
  */
+/**
+ * Casts a Supabase query result to the `{ data: T[] | null; error }` shape `fetchAllPages`/
+ * `batchedIn` expect. The generated `Database` type checks a query's columns are real, but its
+ * per-column nullability is the schema's, which is sometimes looser than a caller's own narrower
+ * type trusts by app-level invariant (e.g. a nullable FK column ingestion always populates) — this
+ * is that narrowing, applied once at each call site instead of restating the target shape inline.
+ */
+export function asPage<T>(
+  query: PromiseLike<unknown>,
+): PromiseLike<{ data: T[] | null; error: { message: string } | null }> {
+  return query as unknown as PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
+}
+
 export async function fetchAllPages<T>(
   buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
 ): Promise<T[]> {
@@ -47,11 +60,11 @@ export async function batchedIn<T>(
   const results: T[] = [];
   for (let i = 0; i < ids.length; i += SUPABASE_IN_BATCH) {
     const chunk = ids.slice(i, i + SUPABASE_IN_BATCH);
+    // `table` is caller-supplied and genuinely dynamic across this helper's call sites, so it can't
+    // be narrowed to the generated client's per-table literal union — `asPage<T>` below covers the
+    // rest of the result shape.
     const page = await fetchAllPages<T>((from, to) =>
-      supabase.from(table).select(select).in(column, chunk).range(from, to) as unknown as PromiseLike<{
-        data: T[] | null;
-        error: { message: string } | null;
-      }>,
+      asPage<T>(supabase.from(table as never).select(select).in(column, chunk).range(from, to)),
     );
     results.push(...page);
   }

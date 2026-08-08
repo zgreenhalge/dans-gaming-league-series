@@ -13,6 +13,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { flagValue } from './dathost-golden-shared';
+import type { Json } from '../src/lib/database.types';
 
 function walkFiles(dir: string): string[] {
   const out: string[] = [];
@@ -56,7 +57,15 @@ async function main() {
 
   const { data: set, error: setErr } = await supabase
     .from('config_sets')
-    .upsert({ key, label, server_settings: raw.server ?? {}, cs2_settings: raw.cs2_settings ?? {} }, { onConflict: 'key' })
+    .upsert(
+      {
+        key,
+        label,
+        server_settings: (raw.server ?? {}) as unknown as Json,
+        cs2_settings: (raw.cs2_settings ?? {}) as unknown as Json,
+      },
+      { onConflict: 'key' },
+    )
     .select('id')
     .single();
   if (setErr || !set) {

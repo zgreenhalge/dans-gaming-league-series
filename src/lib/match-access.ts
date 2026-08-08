@@ -22,7 +22,7 @@ export async function requireMatchAccess(matchId: number): Promise<MatchAccess> 
   ]);
 
   const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
-  const isInMatch = (matchStats ?? []).some((s: { player_id: number }) => s.player_id === playerId);
+  const isInMatch = (matchStats ?? []).some((s) => s.player_id === playerId);
   if (!isAdmin && !isInMatch) return { ok: false, status: 403, error: 'Forbidden' };
 
   return { ok: true, playerId, isAdmin };

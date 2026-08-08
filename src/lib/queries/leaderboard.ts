@@ -2,7 +2,7 @@ import { supabase } from '../supabase';
 import type { LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
 import { canonicalSort, deriveRates, deriveRwr, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
-import { fetchAllPages, getWeekLookup } from './_shared';
+import { asPage, fetchAllPages, getWeekLookup } from './_shared';
 
 
 function n(v: number | null | undefined): number {
@@ -56,6 +56,9 @@ async function getSeasonBaseData(): Promise<{
     { data: matches, error: mErr },
     weekLookup,
   ] = await Promise.all([
+    // player_id/match_id are nullable in the generated schema type (they're nullable FK columns),
+    // but every row the ingest pipeline writes to player_match_stats always sets both — asPage()
+    // narrows to that app-level invariant rather than threading `| null` through every consumer.
     fetchAllPages<{
       player_id: number;
       assists: number | null;
@@ -65,10 +68,12 @@ async function getSeasonBaseData(): Promise<{
       deaths: number | null;
       is_win: boolean | null;
     }>((from, to) =>
-      supabase
-        .from('player_match_stats')
-        .select('player_id, assists, rounds_won, match_id, kills, deaths, is_win')
-        .range(from, to),
+      asPage(
+        supabase
+          .from('player_match_stats')
+          .select('player_id, assists, rounds_won, match_id, kills, deaths, is_win')
+          .range(from, to),
+      ),
     ),
     supabase.from('matches').select('id, week_id, is_playoff_game, final_score'),
     getWeekLookup(),

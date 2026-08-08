@@ -3,7 +3,7 @@ import type { Player, Season, Week, Match, PlayerMatchStat, ReplayStatus } from 
 import { extractSeasonNumber, compareMatchRefDesc } from '../util';
 import type { RosterStat } from './schedule';
 import { getAllSeasonMedalists, type TrophyEntry } from './trophies';
-import { fetchAllPages } from './_shared';
+import { asPage, fetchAllPages } from './_shared';
 
 
 export interface PlayerHistoryRow extends PlayerMatchStat {
@@ -76,7 +76,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
 
   const [statRows, medalists] = await Promise.all([
     fetchAllPages<PlayerMatchStat>((from, to) =>
-      supabase.from('player_match_stats').select('*').eq('player_id', playerId).range(from, to),
+      asPage(supabase.from('player_match_stats').select('*').eq('player_id', playerId).range(from, to)),
     ),
     getAllSeasonMedalists(),
   ]);

@@ -1,8 +1,9 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { type SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from './database.types';
 
 type GlobalWithServerClient = typeof globalThis & {
-  __dgls_serverClient?: SupabaseClient;
+  __dgls_serverClient?: SupabaseClient<Database>;
 };
 
 // Server-side Supabase client. Currently uses no-op cookie handlers because
@@ -14,7 +15,7 @@ type GlobalWithServerClient = typeof globalThis & {
 //             (those routes will no longer be ISR-cacheable, which is correct
 //             — authenticated reads/writes must hit the database per-request).
 //   - browser: createBrowserClient for client components that need auth state.
-function getClient(): SupabaseClient {
+function getClient(): SupabaseClient<Database> {
   const g = globalThis as GlobalWithServerClient;
   if (g.__dgls_serverClient) return g.__dgls_serverClient;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -24,7 +25,7 @@ function getClient(): SupabaseClient {
       'Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local (local) and Vercel project settings (deployed).',
     );
   }
-  g.__dgls_serverClient = createServerClient(url, anon, {
+  g.__dgls_serverClient = createServerClient<Database>(url, anon, {
     cookies: {
       getAll() {
         return [];
@@ -38,7 +39,7 @@ function getClient(): SupabaseClient {
   return g.__dgls_serverClient;
 }
 
-export const supabase = new Proxy({} as SupabaseClient, {
+export const supabase = new Proxy({} as SupabaseClient<Database>, {
   get(_target, prop, receiver) {
     return Reflect.get(getClient(), prop, receiver);
   },
@@ -49,7 +50,7 @@ export const supabase = new Proxy({} as SupabaseClient, {
  * `src/lib/queries.ts`) runs against it instead of a real Supabase connection. Call with
  * `undefined` to restore real-client behavior. Not used by application code.
  */
-export function __setTestClient(client: SupabaseClient | undefined): void {
+export function __setTestClient(client: SupabaseClient<Database> | undefined): void {
   const g = globalThis as GlobalWithServerClient;
   g.__dgls_serverClient = client;
 }

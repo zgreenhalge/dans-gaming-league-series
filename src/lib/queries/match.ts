@@ -4,7 +4,7 @@ import { isPlayedScore, avgOf, compareMatchRefDesc, extractSeasonNumber, matchLa
 import { mapSlug } from '../maps';
 import type { ScheduledMatchRef } from '../schedule';
 import { getPlayersById } from './player';
-import { fetchAllPages } from './_shared';
+import { asPage, fetchAllPages } from './_shared';
 import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '../demo/liveScore';
 
 
@@ -316,11 +316,17 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
 
   const [statRows, players, leagueStatRows, leagueMatchRows] = await Promise.all([
     fetchAllPages<PlayerMatchStat>((from, to) =>
-      supabase.from('player_match_stats').select('*').in('player_id', playerIds).range(from, to),
+      asPage(supabase.from('player_match_stats').select('*').in('player_id', playerIds).range(from, to)),
     ),
     getPlayersById(),
     fetchAllPages<LeagueStatRow>((from, to) =>
-      supabase.from('player_match_stats').select('match_id, adr, kills, deaths, assists, is_win').gt('rounds_played', 0).range(from, to),
+      asPage(
+        supabase
+          .from('player_match_stats')
+          .select('match_id, adr, kills, deaths, assists, is_win')
+          .gt('rounds_played', 0)
+          .range(from, to),
+      ),
     ),
     fetchAllPages<LeagueMatchRow>((from, to) =>
       supabase.from('matches').select('id, final_score, shirts_pick, picked_map').range(from, to),
