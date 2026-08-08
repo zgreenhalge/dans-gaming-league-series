@@ -2,7 +2,7 @@ import { supabase } from '../supabase';
 import type { LeaderboardRowWithId, PlayerMatchStat, Match } from '../types';
 import { allMatchesPlayed, canonicalSort, deriveRates, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
-import { getWeekLookup } from './_shared';
+import { getWeekLookup, weekRowsFromLookup } from './_shared';
 
 
 function aggToRow(
@@ -464,15 +464,13 @@ export async function getGauntletBracketShape(gauntletSeasonId: number): Promise
 
 /** Fetches all matches for a gauntlet season and groups them into rounds by week_number. */
 export async function getGauntletRounds(seasonId: number): Promise<GauntletRound[]> {
-  const { data: weeks, error: wErr } = await supabase
-    .from('weeks')
-    .select('id, week_number')
-    .eq('season_id', seasonId)
-    .order('week_number');
-  if (wErr) throw wErr;
-  if (!weeks || weeks.length === 0) return [];
+  // getWeekLookup() carries no ordering guarantee, unlike the `.order('week_number')` this used to
+  // run itself — sort explicitly here since round_number below is assigned in weekRows iteration
+  // order.
+  const weekLookup = await getWeekLookup([seasonId]);
+  const weekRows = weekRowsFromLookup(weekLookup).sort((a, b) => a.week_number - b.week_number);
+  if (weekRows.length === 0) return [];
 
-  const weekRows = weeks as { id: number; week_number: number }[];
   const weekIds = weekRows.map((w) => w.id);
 
   const { data: matchData, error: mErr } = await supabase
@@ -591,7 +589,7 @@ export async function getAllGauntletSummaries(): Promise<Map<number, GauntletSum
     getWeekLookup(seasonIds),
     getPlayersById(),
   ]);
-  const weekRows = Array.from(weekLookup, ([id, w]) => ({ id, ...w }));
+  const weekRows = weekRowsFromLookup(weekLookup);
   if (weekRows.length === 0) return new Map();
 
   const weekIds = weekRows.map((w) => w.id);

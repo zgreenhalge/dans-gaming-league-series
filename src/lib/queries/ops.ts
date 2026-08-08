@@ -9,8 +9,9 @@ import {
   type BackgroundJobRow,
 } from '../jobs';
 import type { OpsErrorEntityType } from '../ops-errors';
-import type { Match, Week, Season } from '../types';
+import type { Match, Season } from '../types';
 import { matchLabel, extractSeasonNumber } from '../util';
+import { getWeekLookup } from './_shared';
 
 
 /** Job statuses that still have a staged `demo-result.json` artifact in R2 to read detail from. */
@@ -36,32 +37,33 @@ async function loadMatchJobContext(matchIds: number[]): Promise<Map<number, Matc
   const out = new Map<number, MatchJobContext>();
   if (!matchIds.length) return out;
 
-  const { data: matchRows } = await supabase
-    .from('matches')
-    .select('id, match_number, picked_map, final_score, week_id')
-    .in('id', matchIds);
+  const [{ data: matchRows }, weekLookup] = await Promise.all([
+    supabase
+      .from('matches')
+      .select('id, match_number, picked_map, final_score, week_id')
+      .in('id', matchIds),
+    getWeekLookup(),
+  ]);
   const matches = (matchRows ?? []) as Pick<
     Match,
     'id' | 'match_number' | 'picked_map' | 'final_score' | 'week_id'
   >[];
 
-  const weekIds = Array.from(new Set(matches.map((m) => m.week_id)));
-  const { data: weekRows } = weekIds.length
-    ? await supabase.from('weeks').select('id, week_number, season_id').in('id', weekIds)
-    : { data: [] as Pick<Week, 'id' | 'week_number' | 'season_id'>[] };
-  const weeks = (weekRows ?? []) as Pick<Week, 'id' | 'week_number' | 'season_id'>[];
-
-  const seasonIds = Array.from(new Set(weeks.map((w) => w.season_id)));
+  const seasonIds = Array.from(
+    new Set(
+      matches
+        .map((m) => weekLookup.get(m.week_id)?.season_id)
+        .filter((id): id is number => id != null),
+    ),
+  );
   const { data: seasonRows } = seasonIds.length
     ? await supabase.from('seasons').select('id, name, is_gauntlet').in('id', seasonIds)
     : { data: [] as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[] };
   const seasons = (seasonRows ?? []) as Pick<Season, 'id' | 'name' | 'is_gauntlet'>[];
-
-  const weekById = new Map(weeks.map((w) => [w.id, w]));
   const seasonById = new Map(seasons.map((s) => [s.id, s]));
 
   for (const m of matches) {
-    const w = weekById.get(m.week_id) ?? null;
+    const w = weekLookup.get(m.week_id) ?? null;
     const s = w ? seasonById.get(w.season_id) ?? null : null;
     out.set(m.id, {
       label: matchLabel({

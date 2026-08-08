@@ -90,18 +90,24 @@ export function missingIds(requested: number[], covered: number[] | undefined): 
  * `matches` -> `weeks` -> `seasons` join every season-scoped query needs. Pass `seasonIds` to
  * scope to specific seasons (e.g. gauntlet seasons); omit it to resolve every week in the league.
  */
-export async function getWeekLookup(
-  seasonIds?: number[],
-): Promise<Map<number, { season_id: number; week_number: number }>> {
+export type WeekLookup = Map<number, { season_id: number; week_number: number }>;
+
+export async function getWeekLookup(seasonIds?: number[]): Promise<WeekLookup> {
   let query = supabase.from('weeks').select('id, season_id, week_number');
   if (seasonIds) query = query.in('season_id', seasonIds);
   const { data, error } = await query;
   if (error) throw error;
 
-  const lookup = new Map<number, { season_id: number; week_number: number }>();
+  const lookup: WeekLookup = new Map();
   for (const w of (data ?? []) as { id: number; season_id: number; week_number: number }[])
     lookup.set(w.id, { season_id: w.season_id, week_number: w.week_number });
   return lookup;
+}
+
+/** `getWeekLookup()`'s entries as `{id, season_id, week_number}` rows — for callers that need to
+ *  filter/sort/iterate them as a list rather than look up by id. */
+export function weekRowsFromLookup(lookup: WeekLookup): { id: number; season_id: number; week_number: number }[] {
+  return Array.from(lookup, ([id, w]) => ({ id, ...w }));
 }
 
 /**

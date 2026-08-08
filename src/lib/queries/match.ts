@@ -4,7 +4,7 @@ import { isPlayedScore, avgOf, compareMatchRefDesc, extractSeasonNumber, matchLa
 import { mapSlug } from '../maps';
 import type { ScheduledMatchRef } from '../schedule';
 import { getPlayersById } from './player';
-import { asPage, fetchAllPages } from './_shared';
+import { asPage, fetchAllPages, getWeekLookup } from './_shared';
 import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '../demo/liveScore';
 
 
@@ -314,7 +314,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   type LeagueMatchRow = { id: number; final_score: string | null; shirts_pick: string | null; picked_map: string | null };
   type LeagueStatRow = { match_id: number; adr: number; kills: number; deaths: number; assists: number; is_win: boolean };
 
-  const [statRows, players, leagueStatRows, leagueMatchRows] = await Promise.all([
+  const [statRows, players, leagueStatRows, leagueMatchRows, weekLookup] = await Promise.all([
     fetchAllPages<PlayerMatchStat>((from, to) =>
       asPage(supabase.from('player_match_stats').select('*').in('player_id', playerIds).range(from, to)),
     ),
@@ -331,6 +331,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
     fetchAllPages<LeagueMatchRow>((from, to) =>
       supabase.from('matches').select('id, final_score, shirts_pick, picked_map').range(from, to),
     ),
+    getWeekLookup(),
   ]);
   const allStats = statRows;
 
@@ -340,13 +341,13 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   const matchById = new Map<number, Match>();
   for (const mm of (matches ?? []) as Match[]) matchById.set(mm.id, mm);
 
-  const weekIds = Array.from(new Set((matches ?? []).map((mm) => (mm as Match).week_id)));
-  const { data: weeks, error: wErr } = await supabase.from('weeks').select('*').in('id', weekIds);
-  if (wErr) throw wErr;
-  const weekById = new Map<number, Week>();
-  for (const w of (weeks ?? []) as Week[]) weekById.set(w.id, w);
-
-  const seasonIds = Array.from(new Set((weeks ?? []).map((w) => (w as Week).season_id)));
+  const seasonIds = Array.from(
+    new Set(
+      (matches ?? [])
+        .map((mm) => weekLookup.get((mm as Match).week_id)?.season_id)
+        .filter((id): id is number => id != null),
+    ),
+  );
   const { data: seasons, error: seErr } = await supabase.from('seasons').select('id, name, is_gauntlet').in('id', seasonIds);
   if (seErr) throw seErr;
   const seasonNameById = new Map<number, string>();
@@ -363,10 +364,10 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
       .filter((s) => s.player_id === playerId && s.rounds_played > 0)
       .map((s) => {
         const mm = matchById.get(s.match_id);
-        const w = mm ? weekById.get(mm.week_id) : undefined;
+        const w = mm ? weekLookup.get(mm.week_id) : undefined;
         return mm && w && isPlayedScore(mm.final_score) ? { stat: s, match: mm, week: w } : null;
       })
-      .filter((r): r is { stat: PlayerMatchStat; match: Match; week: Week } => r !== null)
+      .filter((r): r is { stat: PlayerMatchStat; match: Match; week: { season_id: number; week_number: number } } => r !== null)
       .sort((a, b) =>
         -compareMatchRefDesc(
           { seasonNumber: extractSeasonNumber(seasonNameById.get(a.week.season_id) ?? ''), isGauntlet: seasonIsGauntletById.get(a.week.season_id) ?? false, weekNumber: a.week.week_number, matchNumber: a.match.match_number },
