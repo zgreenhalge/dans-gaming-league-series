@@ -36,7 +36,7 @@ import { getMatchIdsForMap, getMapHeatmap } from '../src/lib/queries/maps';
 import { getMapTraces } from '../src/lib/queries/replay';
 import { mapSlug } from '../src/lib/maps';
 import { recordJobStatus, matchJobKey, jobStatusWriter } from '../src/lib/background-jobs';
-import { ensureDemoInR2 } from '../src/lib/demo/fetchFromDathost';
+import { pullDemoAndClearLiveScore } from '../src/lib/demo/liveScore';
 import { DEMO_INGEST_JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '../src/lib/demo/ingestResult';
 import { dathostServerId, sleep } from '../src/lib/dathost';
 import { notice, warning, error } from './gh-actions-log';
@@ -175,14 +175,16 @@ async function main() {
   let demoBuffer = await stage('download-demo', async () => {
     // Pulled from DatHost directly (not pushed by MatchZy — see fetchFromDathost.ts) — this Action can
     // be dispatched as soon as the match ends, before the demo has actually landed in R2 yet, so
-    // ensureDemoInR2 pulls it if it isn't already present. demoIngestInFlight is only checked on a
-    // miss (never on the common already-cached path, to skip the DB round-trip): when a demo_ingest
-    // run is actually claimed for this match (the auto-dispatch path always has one), it owns the
-    // pull, and a miss here waits briefly for its pull to land the object in R2 instead of
+    // pullDemoAndClearLiveScore pulls it if it isn't already present. demoIngestInFlight is only
+    // checked on a miss (never on the common already-cached path, to skip the DB round-trip): when a
+    // demo_ingest run is actually claimed for this match (the auto-dispatch path always has one), it
+    // owns the pull, and a miss here waits briefly for its pull to land the object in R2 instead of
     // redundantly re-pulling the same demo from DatHost. A manual "Regenerate" dispatch has no such
     // row and pulls immediately.
     const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
-    return ensureDemoInR2(dathostServerId(), matchId, baseName, { shouldWaitForConcurrentPull: demoIngestInFlight });
+    return pullDemoAndClearLiveScore(supabase, dathostServerId(), matchId, baseName, {
+      shouldWaitForConcurrentPull: demoIngestInFlight,
+    });
   });
 
   demoBuffer = await stage('decompress', () => gunzipMaybe(demoBuffer));

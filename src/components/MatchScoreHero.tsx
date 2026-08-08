@@ -2,9 +2,9 @@
 
 // The big centered score under the match header — one component covers both states so a live match
 // and a played one render in the identical spot with identical numerals. Before the match is played,
-// this drives itself off `live_match_score` the same way the old standalone `LiveScoreTicker` did:
-// self-hides until MatchZy reports `going_live` (seeded 0-0), updates on every `round_end` via
-// Supabase Realtime (no polling), and self-hides again once `writeMatchScore()` clears the row — see
+// this drives itself off `live_match_score`: self-hides until MatchZy reports `going_live` (seeded
+// 0-0), updates on every `round_end` via Supabase Realtime (no polling), and self-hides again once
+// the match's demo is confirmed present in R2, which clears the row — see
 // `src/lib/demo/liveScore.ts`'s header comment for why that's the right trigger. Once `played` is
 // true, it renders the final score from the `matches` row instead and the live wiring never mounts.
 

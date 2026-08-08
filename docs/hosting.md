@@ -125,9 +125,10 @@ MatchZy (map_result event) ──POST /api/ingest/matchzy-log──▶ R2 (mapRe
   players see the post-match scoreboard rather than getting disconnected mid-celebration; see
   Reconciliation below for how the delayed stop actually runs. The Action never touches DatHost
   regardless of auto-commit or manual confirm. `going_live`, `round_end`, and `map_result` all upsert
-  `live_match_score` (`liveScore.ts`) through the same generic path, shown on the match page as
-  `LiveScoreTicker` while the demo doesn't exist yet. Every other event type is acknowledged and
-  dropped.
+  `live_match_score` (`liveScore.ts`) through the same generic path, shown on the match page
+  (`MatchScoreHero`) and site-wide (`LiveMatchTicker`) while the demo doesn't exist in R2 yet —
+  `pullDemoAndClearLiveScore` (`liveScore.ts`) clears the row the moment its `ensureDemoInR2`
+  (`fetchFromDathost.ts`) pull confirms it does. Every other event type is acknowledged and dropped.
 - The demo's remote path is deterministic: `infra/matchzy/cfg/MatchZy/config.cfg` sets
   `matchzy_demo_path MatchZy/`, and a real match's loaded config JSON carries a per-match
   `matchzy_demo_name_format` cvar (`buildMatchzyConfig`, `src/lib/matchzy.ts`) set to `demoBaseName()`'s
@@ -391,7 +392,7 @@ to set its own override (a real match's per-match cvar here, or a scrim/pug's `p
 | POST | `/api/admin/server/stop` | admin | raw stop, no match-state writes (409 if busy unless `override`) |
 | GET | `/api/matches/[id]/matchzy-config` | machine (`X-MatchZy-Token`) | the `matchzy_loadmatch_url` target |
 | POST | `/api/ingest/matchzy-log` | machine (`x-matchzy-token`) | remote-log event → `map_result` keeps the payload (auto-commit oracle) + record/dispatch/teardown; `going_live`/`round_end`/`map_result` upsert `live_match_score`; the rest is ignored |
-| GET | `/api/matches/[id]/live-score` | public | initial read of `live_match_score`; `LiveScoreTicker` subscribes to the table directly for updates |
+| GET | `/api/matches/[id]/live-score` | public | initial read of `live_match_score`; `MatchScoreHero` subscribes to the table directly for updates |
 | GET·DELETE | `/api/matches/[id]/demo/result` | session | read / dispose the staged `DemoIngestResult` |
 | POST | `/api/matches/[id]/demo/dispatch` | session | re-parse the demo (manual counterpart to `matchzy-log`'s auto-dispatch) |
 | POST | `/api/matches/[id]/replay/dispatch` | session | (re)trigger the replay Action |
@@ -453,8 +454,9 @@ both `ScrimPanel` and `ScrimNavStatus`) · `src/components/ScrimPanel.tsx` ·
 `scripts/dathost-cleanup.ts` (disk cleanup, issue #132) · `src/lib/gh-dispatch.ts` (workflow
 dispatch + enable/disable/runs/variables helpers) · `infra/matchzy/` (config-set seed / DR snapshot) ·
 `src/lib/demo/fetchFromDathost.ts` (the demo pull) · `src/lib/demo/liveScore.ts` (writes/reads the
-`live_match_score` table) + `src/components/LiveScoreTicker.tsx` (live in-match score, Realtime
-subscription).
+`live_match_score` table, and `pullDemoAndClearLiveScore` which the demo's arrival in R2 clears it
+through) · `src/components/MatchScoreHero.tsx` (per-match live score) +
+`src/components/LiveMatchTicker.tsx` (site-wide live ticker), both Realtime subscriptions.
 
 ## Known limitations / friction
 

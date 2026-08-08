@@ -7,13 +7,17 @@
 // to deliver DELETE events matching a `match_id=eq.` filter — no `REPLICA IDENTITY FULL` needed; if
 // this table's key ever changes, re-verify that.
 //
-// The row is deleted by `writeMatchScore()` (`matchScore.ts`) once the match has an actual score —
-// not at `map_result`, and not wherever `demo-ingest.ts` happens to finish parsing. Those are both too
-// early: a quarantined or shadow-mode-staged result has nothing else to show in the ticker's place for
-// a spectator (the review card is admin/in-match-only), so clearing there would blank the page for
-// everyone else until someone confirms. `writeMatchScore` is the one place every path that produces a
-// real score — auto-commit or a human confirm — already converges, so it's the only point that's both
-// early enough (no unnecessary lingering) and late enough (never blank before a replacement exists).
+// The row is cleared as soon as the match's demo is confirmed present in R2 — `demo-ingest.ts` and
+// `replay-extract.ts` both pull their demo through `pullDemoAndClearLiveScore()` below rather than
+// calling `ensureDemoInR2()` (`fetchFromDathost.ts`) directly, so the pairing can't be forgotten by a
+// future caller; whichever of them actually owns the pull clears it, and the other's redundant call is
+// a cheap no-op. Not at `map_result` (GOTV's flush can lag well behind the event, so the demo may not
+// exist yet) and not once a score is confirmed (auto-commit or a human confirm can lag well behind the
+// demo landing, especially for a quarantined/staged-for-review match). A demo existing is proof the
+// match is over regardless of whether its stats have been derived yet, so that's the point the "Live"
+// label should stop being true. `writeMatchScore()` (`matchScore.ts`) also clears the row as a
+// fallback, for the rare case a score gets confirmed with no demo ever pulled (e.g. a manual override
+// after a failed DatHost pull) — by the time any demo-backed score lands, this has always already run.
 //
 // Field names for `round_end`'s payload are inferred from `map_result`'s confirmed shape (`matchid`,
 // `team1.score`/`team2.score` — `buildMatchzyConfig` fixes team1 = SHIRTS, team2 = SKINS) since
@@ -24,6 +28,10 @@
 // reader as `round_end` (it's the same shape, just with no round number).
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { ensureDemoInR2 } from './fetchFromDathost';
+import { recordOpsError, clearOpsError } from '../ops-errors';
+
+const LIVE_SCORE_CLEAR_OP = 'live_score_clear';
 
 export interface LiveScoreRow {
   matchId: number;
@@ -33,14 +41,14 @@ export interface LiveScoreRow {
    *  doesn't carry a round number). */
   round: number | null;
   /** When this row was last written — lets a consumer that reads from more than one source (an
-   *  initial GET racing a Realtime subscription, e.g. `LiveScoreTicker`) tell which one is newer
-   *  instead of trusting arrival order. */
+   *  initial GET racing a Realtime subscription, e.g. `MatchScoreHero`/`LiveMatchTicker`) tell which
+   *  one is newer instead of trusting arrival order. */
   updatedAt: string;
 }
 
 /** Raw `live_match_score` columns, as both a Postgres `select()` and a Realtime `payload.new` return
- *  them. Shared by `getLiveScore` below and `LiveScoreTicker`'s Realtime handler so the snake_case →
- *  camelCase mapping lives in exactly one place. */
+ *  them. Shared by `getLiveScore` below and `MatchScoreHero`/`LiveMatchTicker`'s Realtime handlers so
+ *  the snake_case → camelCase mapping lives in exactly one place. */
 export interface LiveScoreDbRow {
   shirts_score: number;
   skins_score: number;
@@ -143,8 +151,42 @@ export async function getLiveScore(admin: SupabaseClient, matchId: number): Prom
   return rowToLiveScore(matchId, data as LiveScoreDbRow);
 }
 
-/** Deleted by `writeMatchScore()` once the match has an actual score — see the header comment for why
- *  that's the right trigger, instead of `map_result` or wherever `demo-ingest.ts` finishes parsing. */
+/** Called once the match's demo is confirmed present in R2, with `writeMatchScore()` calling it too
+ *  as a fallback — see the header comment for why. Throws on a Supabase-level failure (surfaced by
+ *  `clearLiveScoreBestEffort` below), rather than the delete silently no-oping. */
 export async function clearLiveScore(admin: SupabaseClient, matchId: number): Promise<void> {
-  await admin.from('live_match_score').delete().eq('match_id', matchId);
+  const { error } = await admin.from('live_match_score').delete().eq('match_id', matchId);
+  if (error) throw error;
+}
+
+/** `clearLiveScore`, routed through the `ops_errors` surface instead of throwing — every caller treats
+ *  clearing the ticker as best-effort, since it must never fail an otherwise-successful demo pull or
+ *  score write, but a stuck row still needs to be visible to an admin (the same `recordOpsError`/
+ *  `clearOpsError` pattern `writeMatchScore()` uses for its own sibling best-effort ops, e.g.
+ *  `sabremetrics_persist`) rather than only `console.error`'d. Shared so each call site doesn't
+ *  restate the same try/catch. */
+export async function clearLiveScoreBestEffort(admin: SupabaseClient, matchId: number): Promise<void> {
+  try {
+    await clearLiveScore(admin, matchId);
+    await clearOpsError(admin, 'match', matchId, LIVE_SCORE_CLEAR_OP);
+  } catch (e) {
+    console.error(`clearLiveScore(${matchId}) failed (non-fatal):`, e);
+    await recordOpsError(admin, 'match', matchId, LIVE_SCORE_CLEAR_OP, `Live score clear failed: ${(e as Error).message}`);
+  }
+}
+
+/** `ensureDemoInR2()` (`fetchFromDathost.ts`) plus the live-score clear that must always follow a
+ *  resolved call — the demo pipeline's only entry point for "get the demo, and keep the site's Live
+ *  indicator in sync with that." `demo-ingest.ts` and `replay-extract.ts` both call this instead of
+ *  `ensureDemoInR2()` directly, so a future caller can't pull a demo without also clearing the row. */
+export async function pullDemoAndClearLiveScore(
+  admin: SupabaseClient,
+  serverId: string,
+  matchId: number,
+  demoBaseName: string,
+  opts: { shouldWaitForConcurrentPull?: () => Promise<boolean> } = {},
+): Promise<Buffer> {
+  const bytes = await ensureDemoInR2(serverId, matchId, demoBaseName, opts);
+  await clearLiveScoreBestEffort(admin, matchId);
+  return bytes;
 }

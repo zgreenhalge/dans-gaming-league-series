@@ -14,7 +14,7 @@ import { triggerRatingRecompute } from './ehog-recompute';
 import { parseEliminationWarning } from './parsers/rosterResolver';
 import { persistSabremetrics, clearSabremetrics } from './demo/sabremetrics';
 import { persistWeaponStats, clearWeaponStats } from './demo/weaponStats';
-import { clearLiveScore } from './demo/liveScore';
+import { clearLiveScoreBestEffort } from './demo/liveScore';
 import { resolveAndPropagate } from './gauntlet-engine';
 import { checkSeasonCompletion, checkGauntletCompletion } from './season-lifecycle';
 import { recordOpsError, clearOpsError } from './ops-errors';
@@ -236,17 +236,11 @@ export async function writeMatchScore(
     .eq('id', matchId);
   if (matchErr) return { ok: false, error: matchErr.message, status: 500 };
 
-  // The match now has a real score — the live-score ticker's job is done. This is the single choke
-  // point for that (not map_result, and not wherever the demo happens to finish parsing): every path
-  // that ends in an actual score, whether auto-committed or a human confirm, runs through here, so a
-  // quarantined/staged-for-review match keeps showing its last live score to spectators (who can't see
-  // the admin-only review card) instead of going blank until someone confirms it. Best-effort — a
-  // transient failure here must not fail an otherwise-successful score write.
-  try {
-    await clearLiveScore(supabaseAdmin, matchId);
-  } catch (e) {
-    console.error(`clearLiveScore(${matchId}) failed (non-fatal):`, e);
-  }
+  // Normally a no-op: the demo-ingest/replay-extract pipeline already cleared this row once the demo
+  // landed, well before any demo-backed score reaches here. This is the fallback for a score confirmed
+  // with no demo ever pulled (e.g. a manual override after a failed DatHost pull), so the row can't
+  // linger forever in that case.
+  await clearLiveScoreBestEffort(supabaseAdmin, matchId);
 
   // Same choke point reconciles the demo-ingest job row, if one exists — a manual confirm (browser
   // upload, or the review card) can follow a run that left the row at `failed`/`parsed`/`quarantined`,
