@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createHmac } from "crypto";
+import { hmacSign } from "@/lib/hmacSign";
 
 export async function GET(request) {
   try {
@@ -38,9 +38,7 @@ export async function GET(request) {
 
     const expires = Date.now() + 60_000;
     const payload = `${steamId}:${expires}`;
-    const sig = createHmac("sha256", process.env.NEXTAUTH_SECRET)
-      .update(payload)
-      .digest("hex");
+    const sig = hmacSign(payload);
     const token = Buffer.from(JSON.stringify({ steamId, expires, sig })).toString("base64url");
 
     return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/auth/steam?token=${token}`);

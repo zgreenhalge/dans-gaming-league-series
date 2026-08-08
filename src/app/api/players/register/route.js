@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
 import { createClient } from "@supabase/supabase-js";
+import { verifyPlayerClaim } from "@/lib/playerClaim";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -11,21 +12,6 @@ function requireUnlinkedSession(session) {
   if (!session?.user?.steamId) return { error: "Not authenticated", status: 401 };
   if (session.user.playerId != null) return { error: "Already registered", status: 400 };
   return null;
-}
-
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  const err = requireUnlinkedSession(session);
-  if (err) return Response.json({ error: err.error }, { status: err.status });
-
-  const { data: players, error } = await supabase
-    .from("players")
-    .select("id, name")
-    .is("steam_id", null)
-    .order("name");
-
-  if (error) return Response.json({ error: error.message }, { status: 500 });
-  return Response.json({ players: players ?? [] });
 }
 
 export async function POST(request) {
@@ -50,12 +36,18 @@ export async function POST(request) {
     steam_avatar_url: steamProfile?.avatarfull ?? null,
   };
 
-  // Link an existing player record
-  if (body.existingPlayerId != null) {
+  // Link an existing player record — only via an admin-issued claim link, which proves the caller
+  // was actually handed this specific player row rather than self-declaring any unclaimed name.
+  if (body.claim != null) {
+    const claim = verifyPlayerClaim(String(body.claim));
+    if (!claim) {
+      return Response.json({ error: "This claim link is invalid or has expired." }, { status: 400 });
+    }
+
     const { data: player, error } = await supabase
       .from("players")
       .update(steamFields)
-      .eq("id", body.existingPlayerId)
+      .eq("id", claim.playerId)
       .is("steam_id", null) // only link if still unlinked
       .select("id, name")
       .single();

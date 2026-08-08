@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { createHmac } from "crypto";
+import { hmacVerify } from "./hmacSign";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -30,10 +30,7 @@ const steamProvider = CredentialsProvider({
         Buffer.from(credentials.token, "base64url").toString()
       );
       if (Date.now() > expires) return null;
-      const expected = createHmac("sha256", process.env.NEXTAUTH_SECRET)
-        .update(`${steamId}:${expires}`)
-        .digest("hex");
-      if (sig !== expected) return null;
+      if (!hmacVerify(`${steamId}:${expires}`, sig)) return null;
 
       const { name, image } = await fetchSteamProfile(steamId);
       return { id: steamId, name, image, steamId };
