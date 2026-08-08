@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { recordNameChange, recordNameHistoryLogError, renameFields } from '@/lib/player-name-history';
 import type { Database } from '@/lib/database.types';
@@ -21,18 +20,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  const callerId = session?.user?.playerId;
-  if (!callerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: callerRow } = await supabaseAdmin
-    .from('players')
-    .select('is_admin')
-    .eq('id', callerId)
-    .maybeSingle();
-  if (!(callerRow as { is_admin?: boolean } | null)?.is_admin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const access = await requireAdminAccess();
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const callerId = access.playerId;
 
   const { id } = await params;
   const targetId = Number(id);
