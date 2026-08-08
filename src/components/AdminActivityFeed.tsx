@@ -26,7 +26,7 @@ import {
 } from '@/lib/jobs';
 import { IngestJobActions } from './IngestJobActions';
 import { JobRetryButton, JobsLiveRefresh } from './JobActions';
-import { OPERATION_LABELS, dismissOpsError, type OpsErrorItem } from './OpsErrorList';
+import { OPERATION_LABELS, dismissOpsError, retryEndpointFor, type OpsErrorItem } from './OpsErrorList';
 
 type Tier = 'errored' | 'progress' | 'completed';
 type TypeFilter = 'all' | BackgroundJobType;
@@ -216,6 +216,7 @@ function OpsEventRow({ event, onJump, onDismissed }: {
 }) {
   const { err } = event;
   const jumpType = err.entityType === 'system' ? null : err.entityType;
+  const retryUrl = retryEndpointFor(err);
   return (
     <div className="px-3 py-2.5 border-t border-[var(--color-border-tertiary)]">
       <div className="flex items-start justify-between gap-3">
@@ -247,6 +248,7 @@ function OpsEventRow({ event, onJump, onDismissed }: {
                 Open in Manage
               </button>
             )}
+            {retryUrl && <JobRetryButton dispatchUrl={retryUrl} inProgress={false} />}
             <DismissOpsError id={err.id} onDismissed={() => onDismissed(err.id)} />
           </div>
         </div>
