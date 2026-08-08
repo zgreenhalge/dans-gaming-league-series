@@ -107,17 +107,22 @@ export const authOptions = {
         token.playerName = sessionData.playerName;
       }
 
-      // Backfill is_admin for sessions that predate the field — no re-login needed. The jwt callback
-      // runs on every session read, so an existing token picks it up on its next request (e.g. the
-      // client Topbar's useSession) and the updated token is re-persisted to the cookie. Only queries
-      // when unset, so it's a one-time hit per stale session (fresh sign-ins set it above).
-      if (token.isAdmin === undefined && token.playerId != null) {
-        const { data: p } = await supabase
+      // The jwt callback runs on every request that touches the session (e.g. the client Topbar's
+      // useSession), so re-deriving is_admin here on every read — rather than caching it for the
+      // JWT's lifetime — is what makes an admin demotion (or promotion) take effect on that player's
+      // very next request. Skipped when the sign-in branches above already fetched it fresh this
+      // call, to avoid querying twice. Left untouched on a query error, so a transient DB failure
+      // can't silently strip an admin's access.
+      const freshlyComputed = user?.devPlayerId != null || user?.steamId != null;
+      if (!freshlyComputed && token.playerId != null) {
+        const { data: p, error } = await supabase
           .from("players")
           .select("is_admin")
           .eq("id", token.playerId)
           .maybeSingle();
-        token.isAdmin = !!p?.is_admin;
+        if (!error) {
+          token.isAdmin = !!p?.is_admin;
+        }
       }
 
       return token;
