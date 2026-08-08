@@ -257,11 +257,11 @@ export default function ScoutingReport({
 
   return (
     <div className="mt-6">
-      <div className="flex items-center gap-2 mb-4 border-b border-[var(--color-border-primary)]">
-        <button type="button" className={tabCls(sub === 'scouting')} onClick={() => setSub('scouting')}>
+      <div role="tablist" className="flex items-center gap-2 mb-4 border-b border-[var(--color-border-primary)]">
+        <button role="tab" aria-selected={sub === 'scouting'} type="button" className={tabCls(sub === 'scouting')} onClick={() => setSub('scouting')}>
           H2H
         </button>
-        <button type="button" className={tabCls(sub === 'map')} onClick={() => setSub('map')}>
+        <button role="tab" aria-selected={sub === 'map'} type="button" className={tabCls(sub === 'map')} onClick={() => setSub('map')}>
           Map Intel
         </button>
       </div>

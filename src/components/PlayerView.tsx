@@ -402,6 +402,8 @@ export default function PlayerView({
         {playerTabs.map((t) => (
           <button
             key={t.key}
+            role="tab"
+            aria-selected={tab === t.key}
             onClick={() => setTab(t.key)}
             className={tabCls(tab === t.key)}
           >
@@ -660,11 +662,11 @@ export default function PlayerView({
       {tab === 'matches' && (
         <>
           {upcomingHistory.length > 0 && (
-            <div className="flex items-center gap-0 border-b border-[var(--color-border-primary)] mb-6">
-              <button onClick={() => setMatchesSubTab('history')} className={tabCls(matchesSubTab === 'history')}>
+            <div role="tablist" className="flex items-center gap-0 border-b border-[var(--color-border-primary)] mb-6">
+              <button role="tab" aria-selected={matchesSubTab === 'history'} onClick={() => setMatchesSubTab('history')} className={tabCls(matchesSubTab === 'history')}>
                 History
               </button>
-              <button onClick={() => setMatchesSubTab('upcoming')} className={tabCls(matchesSubTab === 'upcoming')}>
+              <button role="tab" aria-selected={matchesSubTab === 'upcoming'} onClick={() => setMatchesSubTab('upcoming')} className={tabCls(matchesSubTab === 'upcoming')}>
                 Upcoming ({upcomingHistory.length})
               </button>
             </div>

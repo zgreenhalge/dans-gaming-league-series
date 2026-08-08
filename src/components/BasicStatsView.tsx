@@ -645,9 +645,9 @@ export function BasicStatsView({ rows, matches, singleMap = false }: { rows: Lea
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div role="tablist" className="flex flex-wrap items-center gap-2">
         {tabs.map((t) => (
-          <button key={t.key} type="button" className={tabCls(tab === t.key)} onClick={() => setTab(t.key)}>
+          <button key={t.key} role="tab" aria-selected={tab === t.key} type="button" className={tabCls(tab === t.key)} onClick={() => setTab(t.key)}>
             {t.label}
           </button>
         ))}

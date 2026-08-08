@@ -488,23 +488,23 @@ export default function MatchTabView({
           ) : undefined
         }
       >
-        <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
+        <button role="tab" aria-selected={tab === 'leaderboard'} type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
           Scoreboard
         </button>
         {hasSab && (
-          <button type="button" className={tabCls(tab === 'advanced')} onClick={() => setTab('advanced')}>
+          <button role="tab" aria-selected={tab === 'advanced'} type="button" className={tabCls(tab === 'advanced')} onClick={() => setTab('advanced')}>
             Advanced Stats
           </button>
         )}
 
         {hasScoutingData && (
-          <button type="button" className={tabCls(tab === 'scouting')} onClick={() => setTab('scouting')}>
+          <button role="tab" aria-selected={tab === 'scouting'} type="button" className={tabCls(tab === 'scouting')} onClick={() => setTab('scouting')}>
             Scouting Report
           </button>
         )}
 
         {played && hasRecap && (
-          <button type="button" className={tabCls(tab === 'recap')} onClick={() => setTab('recap')}>
+          <button role="tab" aria-selected={tab === 'recap'} type="button" className={tabCls(tab === 'recap')} onClick={() => setTab('recap')}>
             Recap
           </button>
         )}

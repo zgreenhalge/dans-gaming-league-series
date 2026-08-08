@@ -468,22 +468,22 @@ export default function MatchRecapTab({
 
   return (
     <div className="mt-4">
-      <div className="flex items-center gap-2 mb-4">
-        <button type="button" className={tabCls(sub === 'replay')} onClick={() => setSub('replay')}>
+      <div role="tablist" className="flex items-center gap-2 mb-4">
+        <button role="tab" aria-selected={sub === 'replay'} type="button" className={tabCls(sub === 'replay')} onClick={() => setSub('replay')}>
           2D Replay
         </button>
         {showHeatmap && (
-          <button type="button" className={tabCls(sub === 'heatmap')} onClick={() => setSub('heatmap')}>
+          <button role="tab" aria-selected={sub === 'heatmap'} type="button" className={tabCls(sub === 'heatmap')} onClick={() => setSub('heatmap')}>
             Heatmap
           </button>
         )}
         {showTrails && (
-          <button type="button" className={tabCls(sub === 'trails')} onClick={() => setSub('trails')}>
+          <button role="tab" aria-selected={sub === 'trails'} type="button" className={tabCls(sub === 'trails')} onClick={() => setSub('trails')}>
             Pathing
           </button>
         )}
         {showRecording && (
-          <button type="button" className={tabCls(sub === 'recording')} onClick={() => setSub('recording')}>
+          <button role="tab" aria-selected={sub === 'recording'} type="button" className={tabCls(sub === 'recording')} onClick={() => setSub('recording')}>
             Recording
           </button>
         )}

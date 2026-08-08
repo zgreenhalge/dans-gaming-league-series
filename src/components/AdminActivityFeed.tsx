@@ -356,13 +356,13 @@ export function AdminActivityFeed({
       <JobsLiveRefresh />
 
       <TabBar bordered className="mb-3">
-        <button onClick={() => setTab('errored')} className={tabCls(tab === 'errored')}>
+        <button role="tab" aria-selected={tab === 'errored'} onClick={() => setTab('errored')} className={tabCls(tab === 'errored')}>
           Errored ({errored.length})
         </button>
-        <button onClick={() => setTab('progress')} className={tabCls(tab === 'progress')}>
+        <button role="tab" aria-selected={tab === 'progress'} onClick={() => setTab('progress')} className={tabCls(tab === 'progress')}>
           In Progress ({progress.length})
         </button>
-        <button onClick={() => setTab('completed')} className={tabCls(tab === 'completed')}>
+        <button role="tab" aria-selected={tab === 'completed'} onClick={() => setTab('completed')} className={tabCls(tab === 'completed')}>
           Completed ({completed.length})
         </button>
       </TabBar>

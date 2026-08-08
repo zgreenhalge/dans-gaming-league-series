@@ -735,9 +735,9 @@ export default function SabremetricsLeaderboardView({
   }
 
   const tabBar = (
-    <div className="flex flex-wrap items-center gap-2">
+    <div role="tablist" className="flex flex-wrap items-center gap-2">
       {subTabs.map((t) => (
-        <button key={t.key} type="button" className={tabCls(sub === t.key)} onClick={() => setSub(t.key)}>
+        <button key={t.key} role="tab" aria-selected={sub === t.key} type="button" className={tabCls(sub === t.key)} onClick={() => setSub(t.key)}>
           {t.label}
         </button>
       ))}

@@ -81,10 +81,10 @@ export function AdminConsole({
       <ServerConsolePanel active={server.active} configSets={server.configSets} maps={server.maps} />
 
       <TabBar bordered className="pb-1">
-        <button onClick={() => setSection('activity')} className={tabCls(section === 'activity', { accent: true })}>
+        <button role="tab" aria-selected={section === 'activity'} onClick={() => setSection('activity')} className={tabCls(section === 'activity', { accent: true })}>
           Activity
         </button>
-        <button onClick={() => setSection('manage')} className={tabCls(section === 'manage', { accent: true })}>
+        <button role="tab" aria-selected={section === 'manage'} onClick={() => setSection('manage')} className={tabCls(section === 'manage', { accent: true })}>
           Manage
         </button>
       </TabBar>
@@ -96,13 +96,13 @@ export function AdminConsole({
       {section === 'manage' && (
         <div className="flex flex-col gap-4">
           <TabBar>
-            <button onClick={() => setManageType('match')} className={tabCls(manageType === 'match', { compact: true })}>
+            <button role="tab" aria-selected={manageType === 'match'} onClick={() => setManageType('match')} className={tabCls(manageType === 'match', { compact: true })}>
               Match
             </button>
-            <button onClick={() => setManageType('player')} className={tabCls(manageType === 'player', { compact: true })}>
+            <button role="tab" aria-selected={manageType === 'player'} onClick={() => setManageType('player')} className={tabCls(manageType === 'player', { compact: true })}>
               Player
             </button>
-            <button onClick={() => setManageType('season')} className={tabCls(manageType === 'season', { compact: true })}>
+            <button role="tab" aria-selected={manageType === 'season'} onClick={() => setManageType('season')} className={tabCls(manageType === 'season', { compact: true })}>
               Season
             </button>
           </TabBar>

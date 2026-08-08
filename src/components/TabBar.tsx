@@ -26,7 +26,7 @@ export default function TabBar({
         bordered ? 'border-b border-[var(--color-border-primary)]' : ''
       } ${className}`}
     >
-      <div className="flex flex-wrap items-center">{children}</div>
+      <div role="tablist" className="flex flex-wrap items-center">{children}</div>
       {controls && (
         <div className="ml-auto flex flex-wrap items-center gap-4 pb-0.5">{controls}</div>
       )}

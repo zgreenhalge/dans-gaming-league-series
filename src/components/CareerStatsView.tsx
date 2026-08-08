@@ -228,16 +228,16 @@ export default function CareerStatsView({
           ) : undefined
         }
       >
-        <button className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
+        <button role="tab" aria-selected={tab === 'leaderboard'} className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
           Leaderboard
         </button>
-        <button className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
+        <button role="tab" aria-selected={tab === 'stats'} className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
           Stats
         </button>
-        <button className={tabCls(tab === 'advanced')} onClick={() => setTab('advanced')}>
+        <button role="tab" aria-selected={tab === 'advanced'} className={tabCls(tab === 'advanced')} onClick={() => setTab('advanced')}>
           Advanced Stats
         </button>
-        <button className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
+        <button role="tab" aria-selected={tab === 'h2h'} className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
           H2H
         </button>
       </TabBar>
