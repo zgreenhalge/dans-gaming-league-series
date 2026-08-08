@@ -235,6 +235,10 @@ export interface DathostFile {
   path: string;
   size: number | null;
   deleted: boolean;
+  /** Raw `modified_at` from the listing, undefined if the listing omitted it. DatHost doesn't
+   *  document whether this is Unix seconds or milliseconds — see `parseModifiedAt()` in
+   *  `dathost-retention.ts`, which resolves that by magnitude, for turning this into a `Date`. */
+  modifiedAt: number | undefined;
 }
 
 /**
@@ -256,10 +260,11 @@ export async function listFiles(id: string, dir: string): Promise<DathostFile[]>
     if (err instanceof DathostError && err.status === 404) return [];
     throw err;
   }
-  return (data as Array<{ path: string; size?: number; deleted?: boolean }>).map((f) => ({
+  return (data as Array<{ path: string; size?: number; deleted?: boolean; modified_at?: number }>).map((f) => ({
     path: f.path,
     size: f.size ?? null,
     deleted: f.deleted ?? false,
+    modifiedAt: f.modified_at,
   }));
 }
 
