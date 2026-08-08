@@ -25,7 +25,10 @@ function decodeClaimName(token: string): string | null {
   try {
     const base64 = token.replace(/-/g, "+").replace(/_/g, "/");
     const padded = base64 + "===".slice((base64.length + 3) % 4);
-    const { name } = JSON.parse(atob(padded));
+    // atob() alone would reinterpret the UTF-8 bytes as Latin-1, garbling any non-ASCII name —
+    // decode through TextDecoder instead so accented/unicode names round-trip correctly.
+    const bytes = Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
+    const { name } = JSON.parse(new TextDecoder().decode(bytes));
     return typeof name === "string" ? name : null;
   } catch {
     return null;

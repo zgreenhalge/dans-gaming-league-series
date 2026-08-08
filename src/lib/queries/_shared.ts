@@ -6,13 +6,6 @@ import { isPlayedScore } from '../util';
 const SUPABASE_PAGE_SIZE = 1000;
 
 /**
- * Runs `buildQuery` across successive `.range()` windows until a page comes back short,
- * working around PostgREST's default 1000-row response cap — a plain `.select()` (or a
- * `.limit()` above 1000) silently truncates once a table grows past that, biasing any
- * aggregate computed from the result. Pass a query builder rather than a built query so this
- * can attach `.range()` per page.
- */
-/**
  * Casts a Supabase query result to the `{ data: T[] | null; error }` shape `fetchAllPages`/
  * `batchedIn` expect. The generated `Database` type checks a query's columns are real, but its
  * per-column nullability is the schema's, which is sometimes looser than a caller's own narrower
@@ -25,6 +18,13 @@ export function asPage<T>(
   return query as unknown as PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
 }
 
+/**
+ * Runs `buildQuery` across successive `.range()` windows until a page comes back short,
+ * working around PostgREST's default 1000-row response cap — a plain `.select()` (or a
+ * `.limit()` above 1000) silently truncates once a table grows past that, biasing any
+ * aggregate computed from the result. Pass a query builder rather than a built query so this
+ * can attach `.range()` per page.
+ */
 export async function fetchAllPages<T>(
   buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
 ): Promise<T[]> {
