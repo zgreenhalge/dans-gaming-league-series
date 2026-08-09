@@ -3,14 +3,39 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LocalTime } from './LocalTime';
+import { JobRetryButton } from './JobActions';
 
 export interface OpsErrorItem {
   id: number;
   entityType: 'season' | 'match' | 'player' | 'system';
+  entityId: number;
   label: string;
   operation: string;
   message: string;
   occurredAt: string;
+}
+
+/**
+ * The endpoint that re-attempts a row's failed operation, for operations that have a safe,
+ * idempotent, no-extra-input retry path — `null` means dismiss is the only available action.
+ * Deliberately narrow: an operation only belongs here once its retry is confirmed safe to fire
+ * blind against a row that may be stale by the time an admin clicks it, not just because *a*
+ * related endpoint happens to exist.
+ *
+ * `server_teardown` is deliberately excluded: its explicit-teardown route stops the shared match
+ * server unconditionally (no `onlyIfOwnsServer` guard — see `teardownMatchServer()`'s doc comment
+ * in `dathost-lifecycle.ts`), since it's built for a human admin looking at the *current* server
+ * state, not for retrying a possibly-stale failure that could now belong to a different match.
+ */
+export function retryEndpointFor(item: Pick<OpsErrorItem, 'operation' | 'entityId'>): string | null {
+  switch (item.operation) {
+    case 'ehog_recompute':
+      return '/api/ehog/recompute/trigger';
+    case 'server_provision':
+      return `/api/matches/${item.entityId}/server/provision`;
+    default:
+      return null;
+  }
 }
 
 export const OPERATION_LABELS: Record<string, string> = {
@@ -48,6 +73,7 @@ function OpsErrorRow({ item }: { item: OpsErrorItem }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const retryUrl = retryEndpointFor(item);
 
   async function dismiss() {
     setBusy(true);
@@ -82,14 +108,17 @@ function OpsErrorRow({ item }: { item: OpsErrorItem }) {
           </div>
           {error && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-1">{error}</div>}
         </div>
-        <button
-          type="button"
-          onClick={dismiss}
-          disabled={busy}
-          className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors disabled:opacity-40 shrink-0"
-        >
-          {busy ? 'Dismissing…' : 'Dismiss'}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {retryUrl && <JobRetryButton dispatchUrl={retryUrl} inProgress={false} />}
+          <button
+            type="button"
+            onClick={dismiss}
+            disabled={busy}
+            className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors disabled:opacity-40 shrink-0"
+          >
+            {busy ? 'Dismissing…' : 'Dismiss'}
+          </button>
+        </div>
       </div>
     </div>
   );

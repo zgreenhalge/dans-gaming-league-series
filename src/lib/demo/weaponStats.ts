@@ -4,7 +4,11 @@
 
 import { getAdminClient } from '../supabase-admin';
 import type { DemoWeaponStat } from '../types';
+import type { Database } from '../database.types';
 import { resolvePlayerMatchStatsIds } from './_shared';
+
+type WeaponRow = Database['public']['Tables']['player_match_weapon_stats']['Insert'];
+type EconomyRow = Database['public']['Tables']['player_match_economy_stats']['Insert'];
 
 /** Replace weapon-category and round-economy breakdown rows for a match. Rows whose `player_id`
  *  has no matching `player_match_stats` row for this match are dropped.
@@ -23,8 +27,8 @@ export async function persistWeaponStats(
   const supabaseAdmin = getAdminClient();
   const pmsById = await resolvePlayerMatchStatsIds(matchId);
 
-  const weaponRows: Record<string, unknown>[] = [];
-  const economyRows: Record<string, unknown>[] = [];
+  const weaponRows: WeaponRow[] = [];
+  const economyRows: EconomyRow[] = [];
   const pmsIds: number[] = [];
   for (const s of weaponStats) {
     const pmsId = pmsById.get(s.player_id);

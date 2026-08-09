@@ -4,6 +4,7 @@ import { allMatchesPlayed, canonicalSort, deriveRwr, deriveAdr } from '../util';
 import { getSeasons } from './seasons';
 import { getAllLeaderboards } from './leaderboard';
 import { getGauntletSeasonLeaderboard } from './gauntlet';
+import { getWeekLookup, weekRowsFromLookup } from './_shared';
 
 
 export interface TrophyStatLine {
@@ -85,11 +86,8 @@ export async function getAllSeasonMedalists(): Promise<Map<number, TrophyEntry[]
       ),
     );
 
-    const { data: weekData } = await supabase
-      .from('weeks')
-      .select('id, season_id, week_number')
-      .in('season_id', seasonIds);
-    const weekRows = (weekData ?? []) as { id: number; season_id: number; week_number: number }[];
+    const weekLookup = await getWeekLookup(seasonIds);
+    const weekRows = weekRowsFromLookup(weekLookup);
 
     if (weekRows.length > 0) {
       const weekIds = weekRows.map((w) => w.id);

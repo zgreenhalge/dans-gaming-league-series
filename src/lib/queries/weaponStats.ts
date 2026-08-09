@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import type { PlayerMatchWeaponStat, PlayerMatchEconomyStat, WeaponStatFields } from '../types';
 import { getPlayersById } from './player';
-import { resolveMatchSeasons, fetchAllPages } from './_shared';
+import { resolveMatchSeasons, fetchAllPages, asPage } from './_shared';
 
 export interface WeaponClassMatchRow extends WeaponStatFields {
   player_id: number;
@@ -40,7 +40,7 @@ async function getAllBreakdownStats(
       supabase.from(table).select('*').range(from, to),
     ),
     fetchAllPages<{ id: number; player_id: number; match_id: number }>((from, to) =>
-      supabase.from('player_match_stats').select('id, player_id, match_id').range(from, to),
+      asPage(supabase.from('player_match_stats').select('id, player_id, match_id').range(from, to)),
     ),
     resolveMatchSeasons(),
     getPlayersById(),

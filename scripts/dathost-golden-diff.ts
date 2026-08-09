@@ -15,9 +15,9 @@
 // use — so this script only renders the result. When a cfg file can't be fetched it also lists what
 // DatHost *does* have under `cfg/`, so you can point at the right path instead of a bare error.
 
-import { api } from './dathost-golden-shared';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { diffConfigSet, type DiffRow } from '../src/lib/dathost-config';
+import { listFiles } from '../src/lib/dathost';
 
 const COLOR = process.stderr.isTTY;
 const c = {
@@ -59,11 +59,19 @@ function printTable(rows: DiffRow[], localLabel: string, liveLabel: string) {
 }
 
 /** List everything DatHost reports under `cfg/` — used when a specific file couldn't be fetched, so
- *  the user has something to point at instead of a bare error. */
+ *  the user has something to point at instead of a bare error. Goes through `src/lib/dathost.ts`'s
+ *  `listFiles()`, the codebase's one DatHost file-listing implementation, so this agrees with
+ *  `getFileSize()` and the cleanup sweep on `deleted`/size semantics for the same endpoint.
+ *  Best-effort: this is supplementary "here's what IS there" output after a real failure already
+ *  happened above, so a failure listing it too falls back to `[]` (printed as "listing also failed")
+ *  rather than aborting the script before it reaches its RESULT section. */
 async function listCfgDir(serverId: string): Promise<string[]> {
-  const { status, json } = await api('GET', `/game-servers/${serverId}/files?path=cfg`);
-  if (status !== 200 || !Array.isArray(json)) return [];
-  return (json as Array<Record<string, unknown>>).map((f) => `cfg/${String(f.path ?? f.name ?? f)}`);
+  try {
+    const files = await listFiles(serverId, 'cfg');
+    return files.filter((f) => !f.deleted).map((f) => `cfg/${f.path}`);
+  } catch {
+    return [];
+  }
 }
 
 async function main() {

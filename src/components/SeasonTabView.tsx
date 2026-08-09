@@ -283,6 +283,8 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const tabBarButtons = tabs.map((t) => (
     <button
       key={t.key}
+      role="tab"
+      aria-selected={tab === t.key}
       onClick={() => setTab(t.key)}
       className={tabCls(tab === t.key, { compact: subStyle, accent: subStyle })}
     >

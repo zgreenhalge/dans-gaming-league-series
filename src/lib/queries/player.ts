@@ -1,9 +1,9 @@
 import { supabase } from '../supabase';
-import type { Player, Season, Week, Match, PlayerMatchStat, ReplayStatus } from '../types';
+import type { Player, Season, Match, PlayerMatchStat, ReplayStatus } from '../types';
 import { extractSeasonNumber, compareMatchRefDesc } from '../util';
 import type { RosterStat } from './schedule';
 import { getAllSeasonMedalists, type TrophyEntry } from './trophies';
-import { fetchAllPages } from './_shared';
+import { asPage, fetchAllPages, getWeekLookup } from './_shared';
 
 
 export interface PlayerHistoryRow extends PlayerMatchStat {
@@ -76,7 +76,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
 
   const [statRows, medalists] = await Promise.all([
     fetchAllPages<PlayerMatchStat>((from, to) =>
-      supabase.from('player_match_stats').select('*').eq('player_id', playerId).range(from, to),
+      asPage(supabase.from('player_match_stats').select('*').eq('player_id', playerId).range(from, to)),
     ),
     getAllSeasonMedalists(),
   ]);
@@ -86,27 +86,20 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
   }
 
   const matchIds = Array.from(new Set(statRows.map((s) => s.match_id)));
-  const { data: matches, error: mErr } = await supabase
-    .from('matches')
-    .select('*')
-    .in('id', matchIds);
+  const [{ data: matches, error: mErr }, weekLookup] = await Promise.all([
+    supabase.from('matches').select('*').in('id', matchIds),
+    getWeekLookup(),
+  ]);
   if (mErr) throw mErr;
   const matchById = new Map<number, Match>();
   for (const m of (matches ?? []) as Match[]) matchById.set(m.id, m);
 
-  const weekIds = Array.from(
-    new Set((matches ?? []).map((m) => (m as Match).week_id)),
-  );
-  const { data: weeks, error: wErr } = await supabase
-    .from('weeks')
-    .select('*')
-    .in('id', weekIds);
-  if (wErr) throw wErr;
-  const weekById = new Map<number, Week>();
-  for (const w of (weeks ?? []) as Week[]) weekById.set(w.id, w);
-
   const seasonIds = Array.from(
-    new Set((weeks ?? []).map((w) => (w as Week).season_id)),
+    new Set(
+      (matches ?? [])
+        .map((m) => weekLookup.get((m as Match).week_id)?.season_id)
+        .filter((id): id is number => id != null),
+    ),
   );
   const { data: seasons, error: seErr } = await supabase
     .from('seasons')
@@ -175,7 +168,7 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
     .map((s) => {
       const m = matchById.get(s.match_id);
       if (!m) return null;
-      const w = weekById.get(m.week_id);
+      const w = weekLookup.get(m.week_id);
       if (!w) return null;
       const se = seasonById.get(w.season_id);
       if (!se) return null;

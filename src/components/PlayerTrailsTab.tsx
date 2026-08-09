@@ -84,10 +84,12 @@ export default function PlayerTrailsTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-1">
+      <div role="tablist" className="flex flex-wrap gap-1">
         {mapOptions.map((o) => (
           <button
             key={o.display}
+            role="tab"
+            aria-selected={selectedMap === o.display}
             type="button"
             className={tabCls(selectedMap === o.display)}
             onClick={() => setExplicitMap(o.display)}

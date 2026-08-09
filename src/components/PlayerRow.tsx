@@ -70,6 +70,24 @@ export function PlayerRow({ player, isSelf }: { player: Player; isSelf: boolean 
     }
   }
 
+  async function copyClaimLink() {
+    setBusy('claim');
+    setError(null);
+    try {
+      const res = await fetch(`/api/players/${player.id}/claim-link`);
+      const j = (await res.json().catch(() => ({}))) as { token?: string; error?: string };
+      if (!res.ok || !j.token) {
+        setError(j.error ?? 'Failed to generate claim link');
+        return;
+      }
+      await navigator.clipboard.writeText(`${window.location.origin}/?claim=${j.token}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const steamValid = /^\d{17}$/.test(steamVal.trim());
 
   async function saveSeed() {
@@ -226,7 +244,12 @@ export function PlayerRow({ player, isSelf }: { player: Player; isSelf: boolean 
               {busy === 'steam' ? '…' : 'Unlink'}
             </button>
           ) : (
-            <button onClick={() => { setSteamVal(''); setLinking(true); }} className={cellBtn}>Link</button>
+            <div className="flex items-center gap-1.5 justify-end">
+              <button onClick={copyClaimLink} disabled={busy === 'claim'} className={cellBtn}>
+                {busy === 'claim' ? '…' : 'Copy claim link'}
+              </button>
+              <button onClick={() => { setSteamVal(''); setLinking(true); }} className={cellBtn}>Link</button>
+            </div>
           )}
         </td>
       </tr>

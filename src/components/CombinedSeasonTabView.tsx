@@ -14,10 +14,12 @@ function TopTabBar({ tab, setTab }: { tab: TopTab; setTab: (t: TopTab) => void }
     { key: 'gauntlet', label: 'Gauntlet' },
   ];
   return (
-    <div className="flex border-b border-[var(--color-border-primary)] mb-6">
+    <div role="tablist" className="flex border-b border-[var(--color-border-primary)] mb-6">
       {tabs.map((t) => (
         <button
           key={t.key}
+          role="tab"
+          aria-selected={tab === t.key}
           onClick={() => setTab(t.key)}
           className={tabCls(tab === t.key)}
         >

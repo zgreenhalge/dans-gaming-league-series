@@ -8,7 +8,7 @@ import { mapSlug } from '../maps';
 import { workshopIdFromUrl } from '../replay/radar';
 import type { MapIndexEntry, LeaderboardRowWithId, Faction, PlayerMatchStat } from '../types';
 import { getPlayersById } from './player';
-import { fetchAllPages, batchedIn, missingIds, getVersionedR2Json } from './_shared';
+import { fetchAllPages, batchedIn, missingIds, getVersionedR2Json, getWeekLookup, weekRowsFromLookup } from './_shared';
 
 
 export interface MapPlayerStat {
@@ -159,18 +159,17 @@ async function fetchMapRawData(): Promise<{
   weeks: RawWeek[];
   seasons: RawSeason[];
 }> {
-  const [{ data: matches, error: mErr }, { data: weeks, error: wErr }, { data: seasons, error: sErr }] =
+  const [{ data: matches, error: mErr }, weekLookup, { data: seasons, error: sErr }] =
     await Promise.all([
       supabase.from('matches').select('id, week_id, match_number, final_score, shirts_pick, picked_map, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, is_playoff_game, skins_starting_side'),
-      supabase.from('weeks').select('id, season_id, week_number'),
+      getWeekLookup(),
       supabase.from('seasons').select('id, name, is_gauntlet, map_pool'),
     ]);
   if (mErr) throw mErr;
-  if (wErr) throw wErr;
   if (sErr) throw sErr;
   return {
     matches: (matches ?? []) as RawMatch[],
-    weeks: (weeks ?? []) as RawWeek[],
+    weeks: weekRowsFromLookup(weekLookup),
     seasons: (seasons ?? []) as RawSeason[],
   };
 }

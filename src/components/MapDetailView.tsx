@@ -159,22 +159,22 @@ export default function MapDetailView({
           />
         }
       >
-        <button type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
+        <button role="tab" aria-selected={tab === 'leaderboard'} type="button" className={tabCls(tab === 'leaderboard')} onClick={() => setTab('leaderboard')}>
           Leaderboard
         </button>
-        <button type="button" className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
+        <button role="tab" aria-selected={tab === 'stats'} type="button" className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
           Stats
         </button>
-        <button type="button" className={tabCls(tab === 'matches')} onClick={() => setTab('matches')}>
+        <button role="tab" aria-selected={tab === 'matches'} type="button" className={tabCls(tab === 'matches')} onClick={() => setTab('matches')}>
           Matches
           <span className="ml-1.5 font-mono text-[10px] text-[var(--color-text-secondary)]">
             ({filteredMatches.length})
           </span>
         </button>
-        <button type="button" className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
+        <button role="tab" aria-selected={tab === 'h2h'} type="button" className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
           H2H
         </button>
-        <button type="button" className={tabCls(tab === 'heatmap')} onClick={() => setTab('heatmap')}>
+        <button role="tab" aria-selected={tab === 'heatmap'} type="button" className={tabCls(tab === 'heatmap')} onClick={() => setTab('heatmap')}>
           Heatmap
         </button>
       </TabBar>

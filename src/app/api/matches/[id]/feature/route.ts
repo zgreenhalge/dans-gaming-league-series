@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { parseMatchId } from '@/lib/util';
 
@@ -14,23 +13,13 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  const playerId = session?.user?.playerId;
-  if (!playerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const access = await requireAdminAccess();
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
   const { id } = await params;
   const matchId = parseMatchId(id);
   if (matchId === null) {
     return NextResponse.json({ error: 'Invalid match ID' }, { status: 400 });
-  }
-
-  const { data: playerRow } = await supabaseAdmin
-    .from('players')
-    .select('is_admin')
-    .eq('id', playerId)
-    .maybeSingle();
-  if (!(playerRow as { is_admin?: boolean } | null)?.is_admin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const body = await req.json().catch(() => null);

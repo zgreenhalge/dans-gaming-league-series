@@ -339,11 +339,11 @@ export default function MatchupsTab({ playerId, h2hData }: { playerId: number; h
       )}
 
       {/* Sub-tabs */}
-      <div className="flex gap-0 border-b border-[var(--color-border-primary)]">
-        <button onClick={() => setSubTab('h2h')} className={tabCls(subTab === 'h2h')}>
+      <div role="tablist" className="flex gap-0 border-b border-[var(--color-border-primary)]">
+        <button role="tab" aria-selected={subTab === 'h2h'} onClick={() => setSubTab('h2h')} className={tabCls(subTab === 'h2h')}>
           Rivals{h2hRows.length > 0 ? ` (${h2hRows.length})` : ''}
         </button>
-        <button onClick={() => setSubTab('b2b')} className={tabCls(subTab === 'b2b')}>
+        <button role="tab" aria-selected={subTab === 'b2b'} onClick={() => setSubTab('b2b')} className={tabCls(subTab === 'b2b')}>
           Friends{b2bRows.length > 0 ? ` (${b2bRows.length})` : ''}
         </button>
       </div>

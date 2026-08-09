@@ -6,6 +6,19 @@ import { isPlayedScore } from '../util';
 const SUPABASE_PAGE_SIZE = 1000;
 
 /**
+ * Casts a Supabase query result to the `{ data: T[] | null; error }` shape `fetchAllPages`/
+ * `batchedIn` expect. The generated `Database` type checks a query's columns are real, but its
+ * per-column nullability is the schema's, which is sometimes looser than a caller's own narrower
+ * type trusts by app-level invariant (e.g. a nullable FK column ingestion always populates) — this
+ * is that narrowing, applied once at each call site instead of restating the target shape inline.
+ */
+export function asPage<T>(
+  query: PromiseLike<unknown>,
+): PromiseLike<{ data: T[] | null; error: { message: string } | null }> {
+  return query as unknown as PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
+}
+
+/**
  * Runs `buildQuery` across successive `.range()` windows until a page comes back short,
  * working around PostgREST's default 1000-row response cap — a plain `.select()` (or a
  * `.limit()` above 1000) silently truncates once a table grows past that, biasing any
@@ -47,11 +60,11 @@ export async function batchedIn<T>(
   const results: T[] = [];
   for (let i = 0; i < ids.length; i += SUPABASE_IN_BATCH) {
     const chunk = ids.slice(i, i + SUPABASE_IN_BATCH);
+    // `table` is caller-supplied and genuinely dynamic across this helper's call sites, so it can't
+    // be narrowed to the generated client's per-table literal union — `asPage<T>` below covers the
+    // rest of the result shape.
     const page = await fetchAllPages<T>((from, to) =>
-      supabase.from(table).select(select).in(column, chunk).range(from, to) as unknown as PromiseLike<{
-        data: T[] | null;
-        error: { message: string } | null;
-      }>,
+      asPage<T>(supabase.from(table as never).select(select).in(column, chunk).range(from, to)),
     );
     results.push(...page);
   }
@@ -77,18 +90,24 @@ export function missingIds(requested: number[], covered: number[] | undefined): 
  * `matches` -> `weeks` -> `seasons` join every season-scoped query needs. Pass `seasonIds` to
  * scope to specific seasons (e.g. gauntlet seasons); omit it to resolve every week in the league.
  */
-export async function getWeekLookup(
-  seasonIds?: number[],
-): Promise<Map<number, { season_id: number; week_number: number }>> {
+export type WeekLookup = Map<number, { season_id: number; week_number: number }>;
+
+export async function getWeekLookup(seasonIds?: number[]): Promise<WeekLookup> {
   let query = supabase.from('weeks').select('id, season_id, week_number');
   if (seasonIds) query = query.in('season_id', seasonIds);
   const { data, error } = await query;
   if (error) throw error;
 
-  const lookup = new Map<number, { season_id: number; week_number: number }>();
+  const lookup: WeekLookup = new Map();
   for (const w of (data ?? []) as { id: number; season_id: number; week_number: number }[])
     lookup.set(w.id, { season_id: w.season_id, week_number: w.week_number });
   return lookup;
+}
+
+/** `getWeekLookup()`'s entries as `{id, season_id, week_number}` rows — for callers that need to
+ *  filter/sort/iterate them as a list rather than look up by id. */
+export function weekRowsFromLookup(lookup: WeekLookup): { id: number; season_id: number; week_number: number }[] {
+  return Array.from(lookup, ([id, w]) => ({ id, ...w }));
 }
 
 /**

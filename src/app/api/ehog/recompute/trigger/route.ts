@@ -1,6 +1,5 @@
 import { after, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { triggerRatingRecompute } from '@/lib/ehog-recompute';
 
@@ -12,18 +11,8 @@ import { triggerRatingRecompute } from '@/lib/ehog-recompute';
 const supabaseAdmin = getAdminClient();
 
 export async function POST() {
-  const session = await getServerSession(authOptions);
-  const playerId = session?.user?.playerId;
-  if (!playerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: playerRow } = await supabaseAdmin
-    .from('players')
-    .select('is_admin')
-    .eq('id', playerId)
-    .maybeSingle();
-  if (!(playerRow as { is_admin?: boolean } | null)?.is_admin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const access = await requireAdminAccess();
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
   if (!process.env.RECOMPUTE_SECRET) {
     return NextResponse.json({ error: 'Recompute not configured (RECOMPUTE_SECRET missing)' }, { status: 500 });

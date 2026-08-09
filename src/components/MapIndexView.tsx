@@ -102,10 +102,10 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
           />
         }
       >
-        <button type="button" className={tabCls(tab === 'tiles')} onClick={() => setTab('tiles')}>
+        <button role="tab" aria-selected={tab === 'tiles'} type="button" className={tabCls(tab === 'tiles')} onClick={() => setTab('tiles')}>
           Maps
         </button>
-        <button type="button" className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
+        <button role="tab" aria-selected={tab === 'stats'} type="button" className={tabCls(tab === 'stats')} onClick={() => setTab('stats')}>
           Statistics
         </button>
       </TabBar>

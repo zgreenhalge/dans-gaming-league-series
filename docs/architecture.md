@@ -40,9 +40,9 @@ Players authenticate via **Steam OpenID**. The flow:
 1. User clicks "Sign in with Steam" → `/api/auth/steam` redirects to Steam
 2. Steam bounces back to `/api/auth/steam/callback`, which validates the response, mints a short-lived signed token, and redirects to `/auth/steam`
 3. The `/auth/steam` page calls NextAuth's `signIn("steam-credentials", { token })` to establish a session
-4. On first login a `RegisterModal` appears — the player links their Steam account to their existing player record (or creates a new one)
+4. On first login a `RegisterModal` appears. If the URL carries an admin-issued claim link (`?claim=<token>`, minted via `GET /api/players/[id]/claim-link` and handed out of band), the player confirms and links their Steam account to that specific, already-known player record; otherwise they create a new one. Self-service linking to an arbitrary existing record is not possible — the claim token is what proves the player was actually handed that record.
 
-Once linked, `session.user.playerId` is set. Admin players (`players.is_admin = true`) get elevated permissions: editing submitted scores, clearing pick/ban steps, and setting season start dates. `is_admin` is carried on the session token as `session.user.isAdmin` (backfilled into existing sessions on their next request), which gates the Topbar's admin-console link; admin **pages** still re-check `isPlayerAdmin` server-side.
+Once linked, `session.user.playerId` is set. Admin players (`players.is_admin = true`) get elevated permissions: editing submitted scores, clearing pick/ban steps, and setting season start dates. `is_admin` is carried on the session token as `session.user.isAdmin`, re-derived from the DB on every session read rather than cached for the JWT's lifetime — a demotion (or promotion) takes effect on that player's very next request. It gates the Topbar's admin-console link; admin **pages** still re-check `isPlayerAdmin` server-side.
 
 **Development shortcut:** When `NODE_ENV=development`, two mock login providers (`dev-zach-mock` / `dev-dan-mock`) appear that skip Steam auth entirely and sign you in as a known player. No `STEAM_API_KEY` needed locally.
 
@@ -83,12 +83,13 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `PATCH` | `/api/players/[id]` | Edit a player — display name, `is_admin` (can't demote yourself), or Steam link (unlink / set SteamID64) (admin only) |
 | `PATCH` | `/api/players/me/name` | Self-service rename — the caller's own display name only, letters/spaces only, once every 7 days |
 | `POST` | `/api/ehog/recompute/trigger` | Admin-gated "recompute EHOG ratings now" — fires the full rating walk in the background (admin only) |
-| `GET/POST` | `/api/players/register` | List unlinked players / link a Steam account to a player record |
+| `POST` | `/api/players/register` | Link a Steam account to a player record via an admin-issued claim token, or create a new player record |
+| `GET` | `/api/players/[id]/claim-link` | Mint a signed claim token for an unlinked player, to hand to them out of band (admin only) |
 | `GET` | `/api/cron/refresh-steam` | Refresh Steam avatars/nicknames for all linked players (Vercel cron; see below) |
 
 ## Database
 
-Supabase (`public` schema). RLS is **off** on all tables — do not enable it without writing policies first. Types mirroring these shapes live in `src/lib/types.ts`.
+Supabase (`public` schema). RLS is **off** on all tables — do not enable it without writing policies first. `src/lib/database.types.ts` is generated directly from the live schema (via the Supabase MCP `generate_typescript_types` tool, or `npx supabase gen types typescript`) and is what both Supabase clients (`src/lib/supabase.ts`, `src/lib/supabase-admin.ts`) type-check every query against — regenerate it after any migration changes a table shape. `src/lib/types.ts` is a separate, hand-written layer of domain types (`LeaderboardRow`, `PlayerMatchStat`, …) shaping query *output*, not to be confused with the generated file.
 
 **Any Supabase MCP tool that mutates state** — `apply_migration`, a non-`SELECT` `execute_sql`, or any project/branch-management tool (`create_project`, `create_branch`, `delete_branch`, `merge_branch`, `rebase_branch`, `reset_branch`, `restore_project`, `pause_project`, `deploy_edge_function`, `confirm_cost`) — **requires the user's explicit approval of that exact command, given at the time it's about to run.** See [`../AGENTS.md`](../AGENTS.md)'s "Supabase changes require live, per-operation approval." Read-only tools (`list_tables`, `get_logs`, `get_advisors`, `search_docs`, `list_migrations`, `list_branches`, `list_extensions`, `list_projects`, `get_project`, `get_organization`, `list_organizations`, `get_cost`, `get_project_url`, `get_publishable_keys`, `list_edge_functions`, `get_edge_function`, `generate_typescript_types`, and a plain-`SELECT` `execute_sql`) don't need it.
 

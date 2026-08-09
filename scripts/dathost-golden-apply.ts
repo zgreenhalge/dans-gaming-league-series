@@ -25,6 +25,7 @@ import { api, flagValue } from './dathost-golden-shared';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { resolveConfigSet, pushCfgFiles } from '../src/lib/dathost-config';
 import { buildScalarFields, MAP_SELECTION_KEYS } from '../src/lib/dathost';
+import type { Json } from '../src/lib/database.types';
 
 async function capture(serverId: string, key: string) {
   const supabase = getAdminClient();
@@ -50,7 +51,11 @@ async function capture(serverId: string, key: string) {
 
   const { error: setErr } = await supabase
     .from('config_sets')
-    .update({ server_settings: newServer, cs2_settings: newCs2, updated_at: new Date().toISOString() })
+    .update({
+      server_settings: newServer as unknown as Json,
+      cs2_settings: newCs2 as unknown as Json,
+      updated_at: new Date().toISOString(),
+    })
     .eq('key', key);
   if (setErr) {
     console.error(`✖ could not update config_sets: ${setErr.message}`);
@@ -59,7 +64,11 @@ async function capture(serverId: string, key: string) {
   console.error(`✓ updated config_sets "${key}" from live settings`);
 
   const { data: idRow } = await supabase.from('config_sets').select('id').eq('key', key).maybeSingle();
-  const configSetId = (idRow as { id: number } | null)?.id;
+  const configSetId = idRow?.id;
+  if (configSetId == null) {
+    console.error(`✖ could not resolve config_sets.id for "${key}" — cfg files left untouched.`);
+    process.exit(2);
+  }
 
   for (const f of set.cfgFiles) {
     console.error(`— GET /game-servers/${serverId}/files/${f.remote} —`);

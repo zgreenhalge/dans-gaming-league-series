@@ -135,7 +135,8 @@ export async function PATCH(
     if (!isAdmin) {
       return NextResponse.json({ error: 'Only admins can clear a pick/ban' }, { status: 403 });
     }
-    const { error } = await supabaseAdmin.from('matches').update({ [field]: null }).eq('id', matchId);
+    const clearUpdate: Partial<Record<VetoField, null>> = { [field]: null };
+    const { error } = await supabaseAdmin.from('matches').update(clearUpdate).eq('id', matchId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
@@ -224,7 +225,7 @@ export async function PATCH(
     }
   }
 
-  const update: Record<string, string | null> = { [field]: value };
+  const update: Partial<Record<VetoField, string | null>> = { [field]: value };
 
   // For playoff/gauntlet: once all 4 bans are set, auto-pick the remaining map
   if (computeGauntletOrPlayoff(isGauntlet, m.is_playoff_game)) {

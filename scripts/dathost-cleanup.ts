@@ -40,6 +40,7 @@ import { r2, R2_BUCKET, demoKey } from '../src/lib/r2';
 import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import { notice, warning, error } from './gh-actions-log';
 import { groupByMatchId, daysAgo, parseModifiedAt, residueAgeDays, type RemoteFile } from '../src/lib/dathost-retention';
+import { getServer, listFiles } from '../src/lib/dathost';
 
 const DRY_RUN = !/^(0|false)$/i.test(process.env.DRY_RUN ?? 'true');
 const RETENTION_DAYS = Number(process.env.RETENTION_DAYS ?? '3');
@@ -116,16 +117,24 @@ async function scheduleShouldRun(): Promise<boolean> {
   }
 }
 
+/** Everything on the server's local disk, via the same `listFiles()` `src/lib/dathost.ts` uses
+ *  elsewhere (`getFileSize()`), so every DatHost file-manager listing in the codebase agrees on
+ *  `deleted`/size semantics for the same underlying API response. Soft-deleted entries are dropped
+ *  here the same way `getFileSize()` already treats them: not actually present, so not residue to
+ *  age or delete again. `listFiles()` treats a 404 as "empty directory" (a subdirectory MatchZy
+ *  hasn't written to yet), which would misread a bad/nonexistent `serverId` as "clean server, delete
+ *  nothing" instead of a real failure — `getServer()` confirms the server itself exists first, so
+ *  that case still fails loudly. */
 async function listAllFiles(serverId: string): Promise<RemoteFile[]> {
-  const { status, json } = await api('GET', `/game-servers/${serverId}/files?path=`);
-  if (status !== 200 || !Array.isArray(json)) {
-    throw new Error(`Could not list server files (status ${status})`);
-  }
-  return (json as Array<{ path: string; size?: number; modified_at?: number }>).map((f) => ({
-    path: f.path,
-    size: f.size ?? 0,
-    modifiedAt: parseModifiedAt(f.modified_at),
-  }));
+  await getServer(serverId);
+  const files = await listFiles(serverId, '');
+  return files
+    .filter((f) => !f.deleted)
+    .map((f) => ({
+      path: f.path,
+      size: f.size ?? 0,
+      modifiedAt: parseModifiedAt(f.modifiedAt),
+    }));
 }
 
 /** The subset of `matchIds` that are real DGLS matches (have a `matches` row) — one round-trip for
