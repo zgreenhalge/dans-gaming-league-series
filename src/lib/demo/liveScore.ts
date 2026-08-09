@@ -184,7 +184,7 @@ export async function pullDemoAndClearLiveScore(
   serverId: string,
   matchId: number,
   demoBaseName: string,
-  opts: { shouldWaitForConcurrentPull?: () => Promise<boolean> } = {},
+  opts: { shouldWaitForConcurrentPull?: () => Promise<boolean>; getFlushFloorMs?: () => Promise<number> } = {},
 ): Promise<Buffer> {
   const bytes = await ensureDemoInR2(serverId, matchId, demoBaseName, opts);
   await clearLiveScoreBestEffort(admin, matchId);

@@ -37,6 +37,7 @@ import { getMapTraces } from '../src/lib/queries/replay';
 import { mapSlug } from '../src/lib/maps';
 import { recordJobStatus, matchJobKey, jobStatusWriter } from '../src/lib/background-jobs';
 import { pullDemoAndClearLiveScore } from '../src/lib/demo/liveScore';
+import { demoIngestFlushFloorMs } from '../src/lib/demo/flushFloor';
 import { DEMO_INGEST_JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '../src/lib/demo/ingestResult';
 import { dathostServerId, sleep } from '../src/lib/dathost';
 import { notice, warning, error } from './gh-actions-log';
@@ -184,6 +185,7 @@ async function main() {
     const baseName = demoBaseName(matchId, inputs.scheduledAt, inputs.map);
     return pullDemoAndClearLiveScore(supabase, dathostServerId(), matchId, baseName, {
       shouldWaitForConcurrentPull: demoIngestInFlight,
+      getFlushFloorMs: () => demoIngestFlushFloorMs(supabase, matchId),
     });
   });
 
