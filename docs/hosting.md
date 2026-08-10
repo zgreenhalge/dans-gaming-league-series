@@ -304,8 +304,8 @@ purely advisory, since a scrim never blocks a match from actually starting.
 regardless of which tab below it is open — the shared server isn't scoped to any one tab), an Activity
 feed, and Manage:
 
-- **Activity feed** (`AdminActivityFeed.tsx`) — every `background_jobs` row across all three pipelines
-  (`demo_ingest`, `replay_extract`, `radar_build`; #145) merged with live `ops_errors`, tiered Errored /
+- **Activity feed** (`AdminActivityFeed.tsx`) — every `background_jobs` row across all four pipelines
+  (`demo_ingest`, `replay_extract`, `radar_build`, `ehog_recompute`; #145) merged with live `ops_errors`, tiered Errored /
   In Progress / Completed (defaulting to the first non-empty tier in that priority order). This is the
   notification channel: the surface for anything that would otherwise fail silently (Discord is
   deprioritized). Each row is badged by type with a color-coded status pill, stage/error, the Action

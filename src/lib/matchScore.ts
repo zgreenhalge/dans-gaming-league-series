@@ -130,6 +130,61 @@ export interface WriteMatchScoreOptions {
 
 export type WriteMatchScoreResult = { ok: true } | { ok: false; error: string; status: number };
 
+/** Runs `fn`, logging (not throwing) on failure — shared by every post-score hook step below so one
+ *  step's failure never blocks a sibling step. */
+async function isolateFailure(label: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+  } catch (err) {
+    console.error(`${label} failed:`, err);
+  }
+}
+
+/**
+ * Gauntlet-only completion step, run as an explicit two-step pipeline rather than two independent
+ * hooks: propagate this match's result through the bracket, then check whether the season has now
+ * finished. Order matters — checking completion before propagation settles can see an incomplete
+ * round (the final round not yet materialized) as "every existing match played" and archive early
+ * (see docs/architecture.md). Each step isolates its own failure so one never blocks the other.
+ * `deps` defaults to the real implementations; a test can inject fakes to assert ordering.
+ */
+export async function runGauntletCompletionPipeline(
+  supabaseAdmin: SupabaseClient,
+  matchId: number,
+  gauntletSeasonId: number,
+  deps: {
+    resolveAndPropagate: typeof resolveAndPropagate;
+    checkGauntletCompletion: typeof checkGauntletCompletion;
+  } = { resolveAndPropagate, checkGauntletCompletion },
+): Promise<void> {
+  await isolateFailure(`gauntlet propagate(${matchId})`, () => deps.resolveAndPropagate(supabaseAdmin, matchId));
+  await isolateFailure(`gauntlet completion check(${gauntletSeasonId})`, () =>
+    deps.checkGauntletCompletion(supabaseAdmin, gauntletSeasonId),
+  );
+}
+
+async function runSeasonCompletionCheck(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+  await isolateFailure(`season completion check(${seasonId})`, () => checkSeasonCompletion(supabaseAdmin, seasonId));
+}
+
+/** `warnings` may be an empty array (a clean confirm) — still clear a stale ops error;
+ *  elimination-learning itself is only meaningful with at least one warning to parse. */
+async function runSteamIdLearningHook(
+  supabaseAdmin: SupabaseClient,
+  matchId: number,
+  learnSteamIds: boolean | undefined,
+  warnings: string[] | undefined,
+): Promise<void> {
+  if (!learnSteamIds || !warnings) return;
+  try {
+    if (warnings.length > 0) await applyEliminationSteamIds(supabaseAdmin, matchId, warnings);
+    await clearOpsError(supabaseAdmin, 'match', matchId, 'steam_id_learn');
+  } catch (err) {
+    console.error(`learn steam id(${matchId}) failed:`, err);
+    await recordOpsError(supabaseAdmin, 'match', matchId, 'steam_id_learn', `Learn steam id failed: ${(err as Error).message}`);
+  }
+}
+
 export async function writeMatchScore(
   supabaseAdmin: SupabaseClient,
   matchId: number,
@@ -309,45 +364,15 @@ export async function writeMatchScore(
   ]);
 
   // Independent hooks — run concurrently (each already isolates its own failure) rather than
-  // serializing behind the recompute's fetch, which never gates the others.
+  // serializing behind the recompute's fetch, which never gates the others. The gauntlet branch is
+  // itself an ordered two-step pipeline (see runGauntletCompletionPipeline).
   const runHooks = async (): Promise<void> => {
     await Promise.all([
-      triggerRatingRecompute(supabaseAdmin),
-      (async () => {
-        if (isGauntlet) {
-          // Completion must run after propagation resolves — otherwise it can see an incomplete
-          // round (the final round not yet materialized) as "every existing match played" and
-          // archive early.
-          try {
-            await resolveAndPropagate(supabaseAdmin, matchId);
-          } catch (err) {
-            console.error(`gauntlet propagate(${matchId}) failed:`, err);
-          }
-          try {
-            await checkGauntletCompletion(supabaseAdmin, m.weeks.season_id);
-          } catch (err) {
-            console.error(`gauntlet completion check(${m.weeks.season_id}) failed:`, err);
-          }
-        } else {
-          try {
-            await checkSeasonCompletion(supabaseAdmin, m.weeks.season_id);
-          } catch (err) {
-            console.error(`season completion check(${m.weeks.season_id}) failed:`, err);
-          }
-        }
-      })(),
-      (async () => {
-        // `warnings` may be an empty array (a clean confirm) — still clear a stale ops error;
-        // elimination-learning itself is only meaningful with at least one warning to parse.
-        if (!opts.learnSteamIds || !warnings) return;
-        try {
-          if (warnings.length > 0) await applyEliminationSteamIds(supabaseAdmin, matchId, warnings);
-          await clearOpsError(supabaseAdmin, 'match', matchId, 'steam_id_learn');
-        } catch (err) {
-          console.error(`learn steam id(${matchId}) failed:`, err);
-          await recordOpsError(supabaseAdmin, 'match', matchId, 'steam_id_learn', `Learn steam id failed: ${(err as Error).message}`);
-        }
-      })(),
+      triggerRatingRecompute(supabaseAdmin, { jobKey: matchJobKey(matchId) }),
+      isGauntlet
+        ? runGauntletCompletionPipeline(supabaseAdmin, matchId, m.weeks.season_id)
+        : runSeasonCompletionCheck(supabaseAdmin, m.weeks.season_id),
+      runSteamIdLearningHook(supabaseAdmin, matchId, opts.learnSteamIds, warnings),
     ]);
   };
 

@@ -6,21 +6,25 @@
 import { compareMatchRefDesc } from './util';
 
 /**
- * The three background-job pipelines surfaced on the dashboard. `demo_ingest` and `replay_extract`
- * are keyed by match; `radar_build` is keyed by map. A const tuple so the getter's `.in()` filter and
- * the `BackgroundJobType` union stay in lockstep.
+ * The four background-job pipelines surfaced on the dashboard. `demo_ingest`, `replay_extract`, and
+ * `ehog_recompute` are keyed by match; `radar_build` is keyed by map. A const tuple so the getter's
+ * `.in()` filter and the `BackgroundJobType` union stay in lockstep.
  */
-export const BACKGROUND_JOB_TYPES = ['demo_ingest', 'replay_extract', 'radar_build'] as const;
+export const BACKGROUND_JOB_TYPES = ['demo_ingest', 'replay_extract', 'radar_build', 'ehog_recompute'] as const;
 export type BackgroundJobType = (typeof BACKGROUND_JOB_TYPES)[number];
 
 /** `replay_extract`'s job-type literal, shared so dispatch routes don't each redeclare their own copy. */
 export const REPLAY_EXTRACT_JOB_TYPE: BackgroundJobType = 'replay_extract';
+
+/** `ehog_recompute`'s job-type literal, shared so `triggerRatingRecompute()` doesn't redeclare it. */
+export const EHOG_RECOMPUTE_JOB_TYPE: BackgroundJobType = 'ehog_recompute';
 
 /** Short badge per pipeline, for a scannable mixed list. */
 export const JOB_TYPE_LABEL: Record<BackgroundJobType, string> = {
   demo_ingest: 'demo',
   replay_extract: 'replay',
   radar_build: 'radar',
+  ehog_recompute: 'ehog',
 };
 
 /**
@@ -97,10 +101,11 @@ export interface JobGroup {
   lanes: JobLane[];
 }
 
-// Lane order within a card: demo before replay (radar is the sole lane for maps).
+// Lane order within a card: demo, then replay, then ehog recompute (radar is the sole lane for maps).
 const LANE_ORDER: Record<BackgroundJobType, number> = {
   demo_ingest: 0,
   replay_extract: 1,
+  ehog_recompute: 2,
   radar_build: 0,
 };
 
