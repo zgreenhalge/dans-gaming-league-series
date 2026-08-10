@@ -130,6 +130,16 @@ export interface WriteMatchScoreOptions {
 
 export type WriteMatchScoreResult = { ok: true } | { ok: false; error: string; status: number };
 
+/** Runs `fn`, logging (not throwing) on failure — shared by every post-score hook step below so one
+ *  step's failure never blocks a sibling step. */
+async function isolateFailure(label: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+  } catch (err) {
+    console.error(`${label} failed:`, err);
+  }
+}
+
 /**
  * Gauntlet-only completion step, run as an explicit two-step pipeline rather than two independent
  * hooks: propagate this match's result through the bracket, then check whether the season has now
@@ -147,24 +157,14 @@ export async function runGauntletCompletionPipeline(
     checkGauntletCompletion: typeof checkGauntletCompletion;
   } = { resolveAndPropagate, checkGauntletCompletion },
 ): Promise<void> {
-  try {
-    await deps.resolveAndPropagate(supabaseAdmin, matchId);
-  } catch (err) {
-    console.error(`gauntlet propagate(${matchId}) failed:`, err);
-  }
-  try {
-    await deps.checkGauntletCompletion(supabaseAdmin, gauntletSeasonId);
-  } catch (err) {
-    console.error(`gauntlet completion check(${gauntletSeasonId}) failed:`, err);
-  }
+  await isolateFailure(`gauntlet propagate(${matchId})`, () => deps.resolveAndPropagate(supabaseAdmin, matchId));
+  await isolateFailure(`gauntlet completion check(${gauntletSeasonId})`, () =>
+    deps.checkGauntletCompletion(supabaseAdmin, gauntletSeasonId),
+  );
 }
 
 async function runSeasonCompletionCheck(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
-  try {
-    await checkSeasonCompletion(supabaseAdmin, seasonId);
-  } catch (err) {
-    console.error(`season completion check(${seasonId}) failed:`, err);
-  }
+  await isolateFailure(`season completion check(${seasonId})`, () => checkSeasonCompletion(supabaseAdmin, seasonId));
 }
 
 /** `warnings` may be an empty array (a clean confirm) — still clear a stale ops error;
