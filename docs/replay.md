@@ -457,13 +457,14 @@ the app reads server-side. Outputs live at deterministic R2 keys, so there are *
 | `radar_source` | text | `'vpk'` \| `'auto'` \| `'manual'` |
 
 **`background_jobs`** — latest-run state only, NOT a log; shared with every other background-job
-pipeline (`demo_ingest` — see [`hosting.md`](./hosting.md) — as well as `replay_extract`/`radar_build`):
+pipeline (`demo_ingest` — see [`hosting.md`](./hosting.md) — `radar_build`, and `ehog_recompute` — see
+[`ehog.md`](./ehog.md) — as well as `replay_extract`):
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | bigint pk | |
-| `job_type` | text | `replay_extract\|radar_build\|demo_ingest` |
-| `match_id` | fk → matches, null | target (extract) |
+| `job_type` | text | `replay_extract\|radar_build\|demo_ingest\|ehog_recompute` |
+| `match_id` | fk → matches, null | target (extract, ehog_recompute) |
 | `map_id` | fk → maps, null | target (radar_build) |
 | `status` | text | `queued\|running\|succeeded\|failed\|canceled` |
 | `stage` | text | current named stage |
@@ -475,8 +476,10 @@ pipeline (`demo_ingest` — see [`hosting.md`](./hosting.md) — as well as `rep
 **Retention is bounded by design — no cleanup job.** One row per `(job_type, match_id)` (and
 `(job_type, map_id)` for radar), **upserted** on each dispatch — it holds only the latest run's state.
 Add a **unique index on `(job_type, match_id)`** (the extract script upserts with
-`onConflict: 'job_type,match_id'`). This bounds the table to ~`matches×2 + maps` rows forever and *is*
-the dedup guard. GitHub retains full run history/logs (~90d) as the audit trail.
+`onConflict: 'job_type,match_id'`). This bounds the table to ~`matches×3 + maps` rows forever and *is*
+the dedup guard. GitHub retains full run history/logs (~90d) as the audit trail; `ehog_recompute` has
+no GitHub Action run behind it (it calls the Vercel Python function directly), so its row's
+`gh_run_id`/`gh_run_url` stay null.
 
 ## R2 keys
 

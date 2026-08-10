@@ -54,6 +54,15 @@ The UI renders a color-coded badge (`EhogBadge.tsx`) and tier bar (`EhogTierBar.
 | `src/lib/ehog.ts` | TS predictor — mirrors the engine math for client-side match projections. |
 | `api/ehog/recompute.py` | Vercel Python function (configured in `vercel.json`), triggered after a score is submitted. Thin wrapper over `ehog/engine.py`; also freezes each match's pre-match win probability on first recompute — see **Persisted pre-match snapshot** below. |
 
+`triggerRatingRecompute()` (`src/lib/ehog-recompute.ts`) fires that function. A score-triggered call
+(from `writeMatchScore()`) is tracked as a `background_jobs` row keyed by the triggering match
+(`job_type: 'ehog_recompute'`, same `queued\|running\|succeeded\|failed` shape as the other three
+pipelines — see `docs/replay.md`'s Schema section), so it shows up in `AdminActivityFeed.tsx`
+alongside demo/replay for that match. The admin "recompute now" control
+(`/api/ehog/recompute/trigger/route.ts`) isn't tied to any single match, so it skips the job row and
+relies solely on the `ops_errors` `system`/`0` singleton (`entity_type`/`entity_id`) for failure
+surfacing.
+
 ## `constants.json` reference
 
 ### OpenSkill model

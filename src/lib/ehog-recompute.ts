@@ -9,10 +9,25 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { recordOpsError, clearOpsError } from './ops-errors';
+import { recordJobStatus, advanceJobStatus, type JobKey } from './background-jobs';
+import { EHOG_RECOMPUTE_JOB_TYPE } from './jobs';
+
+export interface TriggerRatingRecomputeOptions {
+  /** Track this invocation as a `background_jobs` row (job_type `ehog_recompute`) alongside the
+   *  existing `ops_errors` failure recording, so it shows up in AdminActivityFeed the same way the
+   *  other three pipelines do. Pass the triggering match's key from `writeMatchScore` — every
+   *  auto-triggered recompute rides along a score write, so a match key is always available there.
+   *  Omitted by the admin "recompute now" control, which has no single match to key a row against. */
+  jobKey?: JobKey;
+}
 
 /** There's no per-match or per-season entity a recompute failure belongs to — it's a single
  * site-wide history walk — so it's recorded against the `system` entity type's singleton id. */
-export async function triggerRatingRecompute(supabaseAdmin: SupabaseClient): Promise<void> {
+export async function triggerRatingRecompute(
+  supabaseAdmin: SupabaseClient,
+  opts: TriggerRatingRecomputeOptions = {},
+): Promise<void> {
+  const { jobKey } = opts;
   const secret = process.env.RECOMPUTE_SECRET;
   if (!secret) {
     // A silent no-op here is indistinguishable from a healthy system with nothing to do — this
@@ -27,7 +42,24 @@ export async function triggerRatingRecompute(supabaseAdmin: SupabaseClient): Pro
       'ehog_recompute',
       'EHOG recompute skipped: RECOMPUTE_SECRET is not set in this environment',
     );
+    if (jobKey) {
+      await recordJobStatus(supabaseAdmin, EHOG_RECOMPUTE_JOB_TYPE, jobKey, {
+        status: 'failed',
+        stage: 'skipped',
+        error_message: 'RECOMPUTE_SECRET is not set in this environment',
+        finished_at: new Date().toISOString(),
+      });
+    }
     return;
+  }
+  if (jobKey) {
+    await recordJobStatus(supabaseAdmin, EHOG_RECOMPUTE_JOB_TYPE, jobKey, {
+      status: 'running',
+      stage: 'recompute',
+      error_message: null,
+      started_at: new Date().toISOString(),
+      finished_at: null,
+    });
   }
   // APP_BASE_URL covers the demo-ingest Action, which runs outside Vercel and has no VERCEL_URL. Uses
   // `||`, not `??`: a GitHub Actions repo variable that isn't set still substitutes as an empty
@@ -43,8 +75,23 @@ export async function triggerRatingRecompute(supabaseAdmin: SupabaseClient): Pro
     });
     if (!res.ok) throw new Error(`recompute endpoint responded ${res.status}`);
     await clearOpsError(supabaseAdmin, 'system', 0, 'ehog_recompute');
+    if (jobKey) {
+      await advanceJobStatus(supabaseAdmin, EHOG_RECOMPUTE_JOB_TYPE, jobKey, {
+        status: 'succeeded',
+        stage: 'done',
+        error_message: null,
+        finished_at: new Date().toISOString(),
+      });
+    }
   } catch (e) {
     console.error('EHOG recompute trigger failed:', e);
     await recordOpsError(supabaseAdmin, 'system', 0, 'ehog_recompute', `EHOG recompute failed: ${(e as Error).message}`);
+    if (jobKey) {
+      await advanceJobStatus(supabaseAdmin, EHOG_RECOMPUTE_JOB_TYPE, jobKey, {
+        status: 'failed',
+        error_message: `EHOG recompute failed: ${(e as Error).message}`,
+        finished_at: new Date().toISOString(),
+      });
+    }
   }
 }
