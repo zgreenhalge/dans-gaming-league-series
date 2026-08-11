@@ -2,8 +2,8 @@
  * In-memory Supabase stand-in for testing `src/lib/queries.ts` without a live database.
  *
  * Implements exactly the query-builder surface `queries.ts` actually uses (verified by grep):
- * `.select()`, `.eq()`, `.in()`, `.neq()`, `.gt()`, `.not()`, `.or()`, `.order()`, `.range()`,
- * `.limit()`, `.maybeSingle()`. It is not a general PostgREST/Supabase reimplementation — it
+ * `.select()`, `.eq()`, `.in()`, `.neq()`, `.gt()`, `.gte()`, `.is()`, `.not()`, `.or()`, `.order()`,
+ * `.range()`, `.limit()`, `.maybeSingle()`. It is not a general PostgREST/Supabase reimplementation — it
  * covers this file's real call shapes, nothing more (e.g. `.not()` only supports the `'is'`
  * operator, `.or()` only supports comma-joined `col.eq.val` clauses, since those are the only
  * forms `queries.ts` sends).
@@ -111,7 +111,7 @@ function projectRow(
   return out;
 }
 
-type FilterOp = 'eq' | 'neq' | 'gt' | 'in' | 'not_is';
+type FilterOp = 'eq' | 'neq' | 'gt' | 'gte' | 'in' | 'is' | 'not_is';
 interface Filter {
   col: string;
   op: FilterOp;
@@ -135,8 +135,12 @@ function matchFilter(row: Row, f: Filter): boolean {
       return rv !== f.val;
     case 'gt':
       return (rv as number) > (f.val as number);
+    case 'gte':
+      return (rv as number) >= (f.val as number);
     case 'in':
       return (f.val as unknown[]).includes(rv);
+    case 'is':
+      return rv === f.val;
     case 'not_is':
       return f.val === null ? rv !== null : rv !== f.val;
   }
@@ -191,8 +195,16 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
     this.filters.push({ col, op: 'gt', val });
     return this;
   }
+  gte(col: string, val: unknown): this {
+    this.filters.push({ col, op: 'gte', val });
+    return this;
+  }
   in(col: string, vals: unknown[]): this {
     this.filters.push({ col, op: 'in', val: vals });
+    return this;
+  }
+  is(col: string, val: unknown): this {
+    this.filters.push({ col, op: 'is', val });
     return this;
   }
   not(col: string, op: string, val: unknown): this {

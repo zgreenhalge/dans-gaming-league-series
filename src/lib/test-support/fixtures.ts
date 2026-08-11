@@ -271,9 +271,9 @@ export const BACKGROUND_JOBS: Row[] = [
 // ─── ops_errors ────────────────────────────────────────────────────────────
 
 export const OPS_ERRORS: Row[] = [
-  { id: 1, entity_type: 'season', entity_id: 1, operation: 'gauntlet_auto_seed', message: 'Could not seed pod 3: ambiguous tiebreak', occurred_at: '2026-02-01T00:00:00.000Z' },
-  { id: 2, entity_type: 'match', entity_id: 100, operation: 'steam_id_learn', message: 'Player Bob has no linked steam_id', occurred_at: '2026-01-10T00:00:00.000Z' },
-  { id: 3, entity_type: 'system', entity_id: 0, operation: 'ehog_recompute', message: 'Recompute failed: timeout', occurred_at: '2026-03-01T00:00:00.000Z' },
+  { id: 1, entity_type: 'season', entity_id: 1, operation: 'gauntlet_auto_seed', message: 'Could not seed pod 3: ambiguous tiebreak', occurred_at: '2026-02-01T00:00:00.000Z', dismissed_at: null },
+  { id: 2, entity_type: 'match', entity_id: 100, operation: 'steam_id_learn', message: 'Player Bob has no linked steam_id', occurred_at: '2026-01-10T00:00:00.000Z', dismissed_at: null },
+  { id: 3, entity_type: 'system', entity_id: 0, operation: 'ehog_recompute', message: 'Recompute failed: timeout', occurred_at: '2026-03-01T00:00:00.000Z', dismissed_at: null },
 ];
 
 // ─── player_current_ratings / player_rating_history ─────────────────────────
