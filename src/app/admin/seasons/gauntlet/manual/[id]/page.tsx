@@ -1,9 +1,7 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
-import { redirect, notFound } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { GauntletPodEditor } from '@/components/GauntletPodEditor';
-import { getSeason, getSeasonLeaderboard, getLinkedGauntlet, getGauntletBracketShape, isPlayerAdmin } from '@/lib/queries';
+import { getSeason, getSeasonLeaderboard, getLinkedGauntlet, getGauntletBracketShape } from '@/lib/queries';
 import { buildGauntletBracket } from '@/lib/gauntlet-bracket';
 import { fromPersistedShape, fromGeneratedPlan, emptyDraftPod, type DraftPod } from '@/lib/gauntlet-draft';
 
@@ -12,11 +10,9 @@ export const metadata = {
   description: 'Hand-build or extend a gauntlet bracket, pod by pod.',
 };
 
+// Admin gate lives in this route group's layout.tsx (#336) — this page doesn't need the session
+// itself.
 export default async function ManualGauntletPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.playerId) redirect('/');
-  if (!(await isPlayerAdmin(session.user.playerId))) redirect('/');
-
   const { id } = await params;
   const regularSeasonId = Number(id);
   if (!Number.isFinite(regularSeasonId)) notFound();

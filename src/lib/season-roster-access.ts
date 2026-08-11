@@ -9,10 +9,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from './authOptions';
 import { getAdminClient } from './supabase-admin';
 import { isPlayerAdmin } from './queries';
+import type { AccessResult } from './access-control';
 
-export type SeasonRosterAccess =
-  | { ok: true; supabaseAdmin: ReturnType<typeof getAdminClient>; targetPlayerId: number }
-  | { ok: false; status: number; error: string };
+export type SeasonRosterAccess = AccessResult<{
+  supabaseAdmin: ReturnType<typeof getAdminClient>;
+  targetPlayerId: number;
+}>;
 
 // The roster is only editable while the season hasn't started — once it's ACTIVE, participation is
 // tracked through player_match_stats instead. This pre-check is a fast, friendly rejection for the

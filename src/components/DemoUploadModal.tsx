@@ -336,6 +336,7 @@ export default function DemoUploadModal({
   const shirtsPlayers = players.filter((p) => p.faction === 'SHIRTS');
   const skinsPlayers = players.filter((p) => p.faction === 'SKINS');
   const statMap = new Map((parsed?.stats ?? []).map((s) => [s.player_id, s]));
+  const modalTitle = alreadyPlayed ? 'Edit Results' : stage === 'preview' ? 'Review Results' : 'Upload Demo';
 
   const trigger = alreadyPlayed ? (
     <button
@@ -361,11 +362,12 @@ export default function DemoUploadModal({
           onClose={handleClose}
           overlayClassName="bg-black/60 backdrop-blur-sm p-4"
           panelClassName="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-xl"
+          ariaLabel={modalTitle}
         >
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border-primary)]">
             <h2 className="font-display font-bold text-[16px] text-[var(--color-text-primary)]">
-              {alreadyPlayed ? 'Edit Results' : stage === 'preview' ? 'Review Results' : 'Upload Demo'}
+              {modalTitle}
             </h2>
             <button
               onClick={handleClose}
