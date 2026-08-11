@@ -5,10 +5,9 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from './authOptions';
 import { getAdminClient } from './supabase-admin';
+import type { AccessResult } from './access-control';
 
-export type MatchAccess =
-  | { ok: true; playerId: number; isAdmin: boolean }
-  | { ok: false; status: number; error: string };
+export type MatchAccess = AccessResult<{ playerId: number; isAdmin: boolean }>;
 
 export async function requireMatchAccess(matchId: number): Promise<MatchAccess> {
   const session = await getServerSession(authOptions);

@@ -1,10 +1,8 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { getSession } from '@/lib/session';
 import { redirect } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { AdminConsole } from '@/components/AdminConsole';
 import {
-  isPlayerAdmin,
   getBackgroundJobs,
   getOpsErrors,
   getAdminMatches,
@@ -34,10 +32,11 @@ export const dynamic = 'force-dynamic';
  * all the interactive composition, reusing the same panels/forms the old routes used unmodified.
  */
 export default async function AdminPage() {
-  const session = await getServerSession(authOptions);
+  // Admin gate lives in this route group's layout.tsx (#336) — the session read below reuses
+  // that same call via getSession()'s per-request cache rather than paying for it twice.
+  const session = await getSession();
   if (!session?.user?.playerId) redirect('/');
   const selfId = session.user.playerId;
-  if (!(await isPlayerAdmin(selfId))) redirect('/');
 
   const adminClient = getAdminClient();
   const [jobs, opsErrors, matches, players, activeServerMatch, workshopMaps, seasons, configSets] =

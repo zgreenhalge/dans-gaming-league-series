@@ -5,8 +5,9 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from './authOptions';
 import { isPlayerAdmin } from './queries';
+import type { AccessResult } from './access-control';
 
-export type AdminAccess = { ok: true; playerId: number } | { ok: false; status: number; error: string };
+export type AdminAccess = AccessResult<{ playerId: number }>;
 
 export async function requireAdminAccess(): Promise<AdminAccess> {
   const session = await getServerSession(authOptions);

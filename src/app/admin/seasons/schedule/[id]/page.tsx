@@ -1,9 +1,8 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { getSession } from '@/lib/session';
 import { redirect, notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { SeasonScheduleDraftEditor } from '@/components/SeasonScheduleDraftEditor';
-import { getSeason, getSeasonRoster, getSeasonScheduleDraft, toDraftScheduleWeeks, isPlayerAdmin } from '@/lib/queries';
+import { getSeason, getSeasonRoster, getSeasonScheduleDraft, toDraftScheduleWeeks } from '@/lib/queries';
 import { seasonTitle } from '@/lib/util';
 
 export const metadata = {
@@ -12,9 +11,9 @@ export const metadata = {
 };
 
 export default async function SeasonScheduleEditorPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
+  // Admin gate lives in this route group's layout.tsx (#336).
+  const session = await getSession();
   if (!session?.user?.playerId) redirect('/');
-  if (!(await isPlayerAdmin(session.user.playerId))) redirect('/');
 
   const { id } = await params;
   const seasonId = Number(id);
