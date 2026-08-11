@@ -5,8 +5,7 @@
 // inline at each consumer.
 
 import { NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from './authOptions';
+import { requireSession } from './session';
 import { getAdminClient } from './supabase-admin';
 import { isPlayerAdmin } from './queries';
 import type { AccessResult } from './access-control';
@@ -21,7 +20,7 @@ export type SeasonRosterAccess = AccessResult<{
 // common (non-racing) case; the `season_players_upcoming_only` DB trigger is the atomic source of
 // truth that closes the race between this read and the caller's write.
 export async function requireSeasonRosterAccess(req: NextRequest, seasonId: number): Promise<SeasonRosterAccess> {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   const requestingPlayerId = session?.user?.playerId;
   if (!requestingPlayerId) return { ok: false, status: 401, error: 'Unauthorized' };
 
