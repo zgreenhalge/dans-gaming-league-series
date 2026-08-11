@@ -57,6 +57,18 @@ export async function mirrorSubjectStatus(
   return error ? { error: error.message } : {};
 }
 
+/** `mirrorSubjectStatus`, or a no-op resolving to `{}` when there's no subject to mirror — every
+ *  caller that conditionally mirrors onto an optional `JobSubject` (this module's own
+ *  `dispatchAndRecordFailure`, and `scripts/job-stage.ts`'s `createJobRunner`) shares this instead of
+ *  each restating the same ternary. */
+export function mirrorSubjectStatusOrNoop(
+  admin: SupabaseClient,
+  subject: JobSubject | undefined,
+  value: string,
+): Promise<{ error?: string }> {
+  return subject ? mirrorSubjectStatus(admin, subject, value) : Promise.resolve({});
+}
+
 /** Upsert a `background_jobs` row for `(jobType, key)`, stamping `updated_at`. `onConflict` is
  *  always `job_type,<key.column>` — the unique index that is this pipeline's dedup guard. */
 export async function recordJobStatus(
@@ -133,7 +145,7 @@ export async function dispatchAndRecordFailure(
         status: 'failed',
         error_message: `dispatch failed: ${dispatch.error}`,
       }),
-      params.subject ? mirrorSubjectStatus(admin, params.subject, 'failed') : Promise.resolve<{ error?: string }>({}),
+      mirrorSubjectStatusOrNoop(admin, params.subject, 'failed'),
     ]);
     if (jobResult.error) {
       console.error(`Could not roll back ${params.jobType}/${params.key.id} to failed: ${jobResult.error}`);

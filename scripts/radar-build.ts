@@ -240,7 +240,8 @@ async function main() {
 main().catch(async (err) => {
   // The GH run summary write is genuinely script-local (radar-build is the only job that renders
   // one) — `runner.fail` covers the shared job-row write, this covers the one-off decoration around it.
-  // `formatError` keeps this message identical to the one `runner.fail` logs/records, computed once.
-  summary(`\n❌ **${mapLabel}** failed at \`${runner.currentStage}\`: ${formatError(err)}`);
-  await runner.fail(err);
+  // `message` is computed once and passed to `runner.fail` so both writes use the identical string.
+  const message = formatError(err);
+  summary(`\n❌ **${mapLabel}** failed at \`${runner.currentStage}\`: ${message}`);
+  await runner.fail(err, message);
 });

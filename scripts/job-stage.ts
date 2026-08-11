@@ -12,6 +12,7 @@ import {
   jobStatusWriter,
   recordJobStatus,
   mirrorSubjectStatus,
+  mirrorSubjectStatusOrNoop,
   type JobKey,
   type JobSubject,
 } from '../src/lib/background-jobs';
@@ -35,16 +36,16 @@ export interface JobRunner {
   setStage(stage: string): Promise<void>;
   /** Run `fn` inside a collapsible GH log group, emitting a `::notice::` and recording the stage first. */
   stage<T>(name: string, fn: () => Promise<T> | T): Promise<T>;
-  /** Mark the row queued→running (idempotent), recording the GH run link and — if `subject` was
-   *  passed to `createJobRunner` — mirroring `'running'` onto it. Throws if either write fails, so a
-   *  script that can't even claim its own row aborts via `main().catch(...)` rather than proceeding
-   *  unclaimed. */
+  /** Mark the row queued→running (idempotent), recording the GH run link, THEN — if `subject` was
+   *  passed to `createJobRunner` — mirroring `'running'` onto it, so the mirror never reports a status
+   *  the job row hasn't actually committed yet. Throws if either write fails, so a script that can't
+   *  even claim its own row aborts via `main().catch(...)` rather than proceeding unclaimed. */
   markRunning(): Promise<void>;
-  /** The job script's top-level failure handler: logs `message` at `currentStage`, writes `failed` to
-   *  the job row (+ mirrors onto `subject`, best-effort — this must not throw while already unwinding),
-   *  and exits 1. `label` overrides the log line's leading tag (defaults to `jobType`) — pass a thunk
-   *  when a more specific label resolves partway through the run (e.g. radar-build's map name). */
-  fail(err: unknown): Promise<void>;
+  /** The job script's top-level failure handler: logs at `currentStage`, writes `failed` to the job
+   *  row (+ mirrors onto `subject`, both best-effort and logged if they fail — this must not throw
+   *  while already unwinding), and exits 1. Pass `message` when a caller already derived it (e.g.
+   *  radar-build's own GH-summary write, via `formatError`) so it isn't derived from `err` twice. */
+  fail(err: unknown, message?: string): Promise<void>;
 }
 
 /**
@@ -87,34 +88,41 @@ export function createJobRunner(
       }
     },
     async markRunning() {
-      // The job row and its mirrored subject are independent writes to different tables — run them
-      // together rather than serially, the same shape `dispatchAndRecordFailure` (background-jobs.ts)
-      // already uses for its own job-row + subject pair.
-      const [, mirrorResult] = await Promise.all([
-        setJob({
-          status: 'running',
-          stage: initial,
-          error_message: null,
-          gh_run_id: ghRunId,
-          gh_run_url: ghRunUrl,
-          started_at: new Date().toISOString(),
-        }),
-        opts.subject ? mirrorSubjectStatus(admin, opts.subject, 'running') : Promise.resolve<{ error?: string }>({}),
-      ]);
-      if (mirrorResult.error) throw new Error(mirrorResult.error);
+      // Sequential, not parallel: the mirror must never report 'running' before the job row itself
+      // has actually landed that status.
+      await setJob({
+        status: 'running',
+        stage: initial,
+        error_message: null,
+        gh_run_id: ghRunId,
+        gh_run_url: ghRunUrl,
+        started_at: new Date().toISOString(),
+      });
+      if (opts.subject) {
+        const { error: mirrorError } = await mirrorSubjectStatus(admin, opts.subject, 'running');
+        if (mirrorError) throw new Error(mirrorError);
+      }
     },
-    async fail(err) {
-      const message = formatError(err);
+    async fail(err, precomputed) {
+      const message = precomputed ?? formatError(err);
       error(`${label()} failed at stage ${runner.currentStage}: ${message}`);
-      await Promise.all([
+      // Both writes are terminal and best-effort (this must not throw while already unwinding) — run
+      // them together the same shape `dispatchAndRecordFailure` (background-jobs.ts) uses for its own
+      // job-row + subject pair, and log either write's own failure the same way that function does,
+      // rather than letting a write failure here vanish with no trace.
+      const [jobResult, subjectResult] = await Promise.all([
         recordJobStatus(admin, jobType, key, {
           status: 'failed',
           stage: runner.currentStage,
           error_message: message,
           finished_at: new Date().toISOString(),
         }),
-        opts.subject ? mirrorSubjectStatus(admin, opts.subject, 'failed') : Promise.resolve<{ error?: string }>({}),
+        mirrorSubjectStatusOrNoop(admin, opts.subject, 'failed'),
       ]);
+      if (jobResult.error) error(`could not record failure to ${jobType}/${key.column}=${key.id}: ${jobResult.error}`);
+      if (subjectResult.error) {
+        error(`could not mirror failed status onto ${opts.subject?.table}.${opts.subject?.column}: ${subjectResult.error}`);
+      }
       process.exit(1);
     },
   };
