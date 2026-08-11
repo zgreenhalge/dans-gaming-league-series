@@ -1,12 +1,14 @@
 /**
- * In-memory Supabase stand-in for testing `src/lib/queries.ts` without a live database.
+ * In-memory Supabase stand-in for testing `src/lib/queries.ts` and route-handler mutations without
+ * a live database.
  *
- * Implements exactly the query-builder surface `queries.ts` actually uses (verified by grep):
+ * Implements exactly the query-builder surface real call sites use (verified by grep):
  * `.select()`, `.eq()`, `.in()`, `.neq()`, `.gt()`, `.gte()`, `.is()`, `.not()`, `.or()`, `.order()`,
- * `.range()`, `.limit()`, `.maybeSingle()`. It is not a general PostgREST/Supabase reimplementation — it
- * covers this file's real call shapes, nothing more (e.g. `.not()` only supports the `'is'`
- * operator, `.or()` only supports comma-joined `col.eq.val` clauses, since those are the only
- * forms `queries.ts` sends).
+ * `.range()`, `.limit()`, `.maybeSingle()`, `.insert()`, `.delete()`. It is not a general
+ * PostgREST/Supabase reimplementation — it covers real call shapes, nothing more (e.g. `.not()`
+ * only supports the `'is'` operator, `.or()` only supports comma-joined `col.eq.val` clauses, and
+ * `.insert()`/`.delete()` don't emulate unique/FK constraints or return errors, since none of the
+ * routes this harness has exercised so far depend on the fake surfacing one).
  *
  * Embedded-resource selects (`weeks(week_number, seasons(name))`) are resolved against `FK_MAP`
  * and nested as a single object (to-one, matching the runtime shape Supabase actually returns —
@@ -176,11 +178,27 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
   private rangeSpec: { from: number; to: number } | null = null;
   private limitN: number | null = null;
   private single = false;
+  private mode: 'select' | 'insert' | 'delete' = 'select';
+  private insertRows: Row[] = [];
 
   constructor(private table: string, private db: FakeDb) {}
 
   select(cols: string): this {
     this.selectStr = cols;
+    return this;
+  }
+  /** Appends row(s) to the table — mirrors the mutation call shape route handlers use, e.g.
+   * `.from('season_players').insert({ season_id, player_id })`. Doesn't emulate unique/FK
+   * constraints; a route relying on the DB rejecting a duplicate insert needs a dedicated test. */
+  insert(rows: Row | Row[]): this {
+    this.mode = 'insert';
+    this.insertRows = Array.isArray(rows) ? rows : [rows];
+    return this;
+  }
+  /** Marks this builder for row removal — the `.eq()` filters chained after `.delete()` select
+   * which rows to remove, same as a real Supabase delete builder. */
+  delete(): this {
+    this.mode = 'delete';
     return this;
   }
   eq(col: string, val: unknown): this {
@@ -256,6 +274,17 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
   }
 
   private async execute(): Promise<{ data: T[] | T | null; error: null }> {
+    if (this.mode === 'insert') {
+      const table = (this.db[this.table] ??= []);
+      table.push(...this.insertRows.map((r) => ({ ...r })));
+      return { data: null, error: null };
+    }
+    if (this.mode === 'delete') {
+      const table = this.db[this.table] ?? [];
+      this.db[this.table] = table.filter((row) => !this.matchesRow(row));
+      return { data: null, error: null };
+    }
+
     const table = this.db[this.table] ?? [];
     let rows = table.filter((row) => this.matchesRow(row));
 
