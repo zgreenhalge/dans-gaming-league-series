@@ -33,14 +33,16 @@ function fromRegex(re: RegExp): Matcher {
   };
 }
 
-const DEMO_PATH_RE = /^MatchZy\/(.+)\.dem$/;
+const DEMO_PREFIX = 'MatchZy/';
+const DEMO_SUFFIX = '.dem';
 
 /** A current-format demo's match id, via `matchIdFromDemoBaseName()` (`./matchzy.ts`) — the same
  *  function `demoBaseName()` has as its own inverse, so this can't independently drift out of sync
  *  with whatever `demoBaseName()` actually produces the way a hand-maintained regex could. */
 function demoBaseNameMatcher(path: string): number | null {
-  const m = DEMO_PATH_RE.exec(path);
-  return m ? matchIdFromDemoBaseName(m[1]) : null;
+  if (!path.startsWith(DEMO_PREFIX) || !path.endsWith(DEMO_SUFFIX)) return null;
+  const base = path.slice(DEMO_PREFIX.length, -DEMO_SUFFIX.length);
+  return matchIdFromDemoBaseName(base);
 }
 
 /** Group every match-scoped file by the match id embedded in its path, by known MatchZy pattern.

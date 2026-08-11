@@ -208,12 +208,10 @@ async function main() {
     if (!isTracked) {
       console.log(`match ${matchId}: no matches row — not a DGLS match, deleting immediately (no retention)`);
     } else {
-      let days = residueAgeDays(matchFiles);
-      if (days === null) {
-        days = daysAgo(matches.get(matchId) ?? null);
-        if (days !== null) {
-          console.log(`match ${matchId}: DatHost returned no file timestamp — using scheduled_at (${days.toFixed(1)}d old) instead`);
-        }
+      const fileDays = residueAgeDays(matchFiles);
+      const days = fileDays ?? daysAgo(matches.get(matchId) ?? null);
+      if (fileDays === null && days !== null) {
+        console.log(`match ${matchId}: DatHost returned no file timestamp — using scheduled_at (${days.toFixed(1)}d old) instead`);
       }
       if (days === null) {
         warning(`match ${matchId}: no DatHost file timestamp and no scheduled_at — skipping (unknown age)`);
