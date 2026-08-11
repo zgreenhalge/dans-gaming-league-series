@@ -241,6 +241,7 @@ export async function getOpsErrors(): Promise<OpsErrorRow[]> {
   const { data, error } = await supabase
     .from('ops_errors')
     .select('id, entity_type, entity_id, operation, message, occurred_at')
+    .is('dismissed_at', null)
     .order('occurred_at', { ascending: false });
   if (error) throw error;
   type Row = {
@@ -311,4 +312,50 @@ export async function getOpsErrors(): Promise<OpsErrorRow[]> {
     occurredAt: r.occurred_at,
     label: labelFor(r),
   }));
+}
+
+export interface OpsErrorHistoryRow {
+  operation: string;
+  /** ISO date (UTC, Monday) of the week this count falls in. */
+  weekStart: string;
+  count: number;
+}
+
+const OPS_ERROR_HISTORY_WEEKS = 8;
+
+/** Start (UTC, Monday) of the calendar week containing `iso`, as `YYYY-MM-DD`. */
+function weekStartOf(iso: string): string {
+  const d = new Date(iso);
+  const dayOfWeek = (d.getUTCDay() + 6) % 7; // Monday = 0 .. Sunday = 6
+  const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dayOfWeek));
+  return monday.toISOString().slice(0, 10);
+}
+
+/**
+ * Recent-failure history for the admin console's History tab (#343): every `ops_errors` row from
+ * the last `OPS_ERROR_HISTORY_WEEKS` weeks — dismissed or still live — grouped into a flat
+ * `(operation, week)` count so a pattern of intermittent failures shows up even after the rows
+ * behind it have been dismissed. Not a full analytics layer, just enough to spot a trend a flat
+ * list of currently-unresolved items can't show.
+ */
+export async function getOpsErrorHistory(): Promise<OpsErrorHistoryRow[]> {
+  const since = new Date(Date.now() - OPS_ERROR_HISTORY_WEEKS * 7 * 86_400_000).toISOString();
+  const { data, error } = await supabase
+    .from('ops_errors')
+    .select('operation, occurred_at')
+    .gte('occurred_at', since);
+  if (error) throw error;
+
+  const counts = new Map<string, OpsErrorHistoryRow>();
+  for (const r of (data ?? []) as { operation: string; occurred_at: string }[]) {
+    const weekStart = weekStartOf(r.occurred_at);
+    const key = `${weekStart}:${r.operation}`;
+    const existing = counts.get(key);
+    if (existing) existing.count += 1;
+    else counts.set(key, { operation: r.operation, weekStart, count: 1 });
+  }
+
+  return Array.from(counts.values()).sort(
+    (a, b) => b.weekStart.localeCompare(a.weekStart) || b.count - a.count,
+  );
 }

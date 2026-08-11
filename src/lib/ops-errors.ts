@@ -11,6 +11,12 @@
  * instance) — without `operation` in the key, one operation's success would clear an unrelated
  * operation's still-live failure. `entity_id` is `0` for operations with no single entity (the
  * site-wide EHOG recompute).
+ *
+ * Rows are never hard-deleted: `dismissed_at` marks a row no-longer-live (an admin dismissed it, or
+ * a later attempt at the same (entity, operation) succeeded) without erasing it, so
+ * `getOpsErrorHistory()` can still answer "how often has this operation been failing" after the
+ * fact. A row's `dismissed_at` is cleared automatically the next time the same (entity, operation)
+ * fails again, since a fresh failure is live again regardless of how the last one was resolved.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -27,14 +33,22 @@ export async function recordOpsError(
   message: string,
 ): Promise<void> {
   const { error } = await supabaseAdmin.from('ops_errors').upsert(
-    { entity_type: entityType, entity_id: entityId, operation, message, occurred_at: new Date().toISOString() },
+    {
+      entity_type: entityType,
+      entity_id: entityId,
+      operation,
+      message,
+      occurred_at: new Date().toISOString(),
+      dismissed_at: null,
+    },
     { onConflict: 'entity_type,entity_id,operation' },
   );
   if (error) console.error(`ops-error record failed(${entityType} ${entityId}/${operation}):`, error);
 }
 
-/** Clears a stale error left by an earlier failed attempt at this (entity, operation) pair —
- * best-effort, since a failure here shouldn't turn a real success into an error response. */
+/** Marks a stale error left by an earlier failed attempt at this (entity, operation) pair as
+ * resolved — best-effort, since a failure here shouldn't turn a real success into an error
+ * response. The row stays in place (dismissed, not deleted) so it still counts toward history. */
 export async function clearOpsError(
   supabaseAdmin: SupabaseClient,
   entityType: OpsErrorEntityType,
@@ -43,9 +57,10 @@ export async function clearOpsError(
 ): Promise<void> {
   const { error } = await supabaseAdmin
     .from('ops_errors')
-    .delete()
+    .update({ dismissed_at: new Date().toISOString() })
     .eq('entity_type', entityType)
     .eq('entity_id', entityId)
-    .eq('operation', operation);
+    .eq('operation', operation)
+    .is('dismissed_at', null);
   if (error) console.error(`ops-error clear failed(${entityType} ${entityId}/${operation}):`, error);
 }

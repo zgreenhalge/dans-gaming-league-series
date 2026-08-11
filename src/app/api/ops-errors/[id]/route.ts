@@ -6,7 +6,8 @@ const supabaseAdmin = getAdminClient();
 
 /** Dismisses a single `ops_errors` row by its id — the admin has seen it and either fixed the
  * underlying issue or is choosing to ignore it. Applies to any entity type (season, match, system)
- * since they all share this one table. */
+ * since they all share this one table. Sets `dismissed_at` rather than deleting the row, so it drops
+ * out of the live view but still counts toward `getOpsErrorHistory()`. */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();
   if (!access.ok) {
@@ -19,7 +20,10 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Invalid ops_errors ID' }, { status: 400 });
   }
 
-  const { error } = await supabaseAdmin.from('ops_errors').delete().eq('id', opsErrorId);
+  const { error } = await supabaseAdmin
+    .from('ops_errors')
+    .update({ dismissed_at: new Date().toISOString() })
+    .eq('id', opsErrorId);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
