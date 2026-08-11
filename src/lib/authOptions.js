@@ -1,20 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { hmacVerify } from "./hmacSign";
-
-// Built lazily (not at module load) so merely importing authOptions — e.g. via a route's session
-// gate — doesn't require real Supabase env vars to be set. Mirrors the getClient()/getAdminClient()
-// lazy-init pattern in supabase.ts/supabase-admin.ts.
-let _supabase;
-function getSupabase() {
-  if (!_supabase) {
-    _supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-  }
-  return _supabase;
-}
+import { getAdminClient } from "./supabase-admin";
 
 async function fetchSteamProfile(steamId) {
   const res = await fetch(
@@ -76,7 +62,7 @@ export const authOptions = {
     async jwt({ token, user, trigger, session: sessionData }) {
       // user is populated on first sign-in for credentials providers
       if (user?.devPlayerId) {
-        const { data: player } = await getSupabase()
+        const { data: player } = await getAdminClient()
           .from("players")
           .select("id, name, is_admin")
           .eq("id", user.devPlayerId)
@@ -88,7 +74,7 @@ export const authOptions = {
         token.steamId = user.steamId;
         token.avatarUrl = user.image ?? "";
 
-        const { data: player } = await getSupabase()
+        const { data: player } = await getAdminClient()
           .from("players")
           .select("id, name, is_admin")
           .eq("steam_id", String(user.steamId))
@@ -100,7 +86,7 @@ export const authOptions = {
 
         // Keep Steam profile info fresh in the DB on every login
         if (player) {
-          await getSupabase()
+          await getAdminClient()
             .from("players")
             .update({
               steam_nickname: user.name,
@@ -124,7 +110,7 @@ export const authOptions = {
       // can't silently strip an admin's access.
       const freshlyComputed = user?.devPlayerId != null || user?.steamId != null;
       if (!freshlyComputed && token.playerId != null) {
-        const { data: p, error } = await getSupabase()
+        const { data: p, error } = await getAdminClient()
           .from("players")
           .select("is_admin")
           .eq("id", token.playerId)
