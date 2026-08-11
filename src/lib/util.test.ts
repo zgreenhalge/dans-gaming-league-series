@@ -31,6 +31,7 @@ import {
   avgOf,
   formatEhogDelta,
   fmtUtcShort,
+  formatDuration,
   canonicalGauntletRankMap,
   groupByMap,
   aggregatePlayerStats,
@@ -174,6 +175,18 @@ test('fmtUtcShort: formats a fixed UTC timestamp regardless of local timezone', 
 test('fmtUtcShort: null or an invalid date returns null, not "Invalid Date"', () => {
   assert.equal(fmtUtcShort(null), null);
   assert.equal(fmtUtcShort('not a date'), null);
+});
+
+// --- formatDuration: compact elapsed-time labels for admin job/duration surfaces ---
+test('formatDuration: renders days/hours, hours/minutes, minutes, and sub-minute tiers', () => {
+  assert.equal(formatDuration(3 * 24 * 60 * 60_000 + 4 * 60 * 60_000), '3d 4h');
+  assert.equal(formatDuration(2 * 60 * 60_000 + 14 * 60_000), '2h 14m');
+  assert.equal(formatDuration(45 * 60_000), '45m');
+  assert.equal(formatDuration(30_000), '<1m');
+});
+
+test('formatDuration: negative input clamps to zero instead of going negative', () => {
+  assert.equal(formatDuration(-1000), '<1m');
 });
 
 // --- matchLabel: "Season · Wk N · Match M", falling back to "Match #id" ---

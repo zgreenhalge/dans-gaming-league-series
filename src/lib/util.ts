@@ -135,6 +135,22 @@ export function fmtUtcShort(iso: string | null): string | null {
   return `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
 }
 
+/**
+ * Compact elapsed-time label ("2h 14m", "3d 4h", "45m", "<1m") for a millisecond duration. Used by
+ * admin surfaces that show how long a background job has been running or took to finish, where a raw
+ * timestamp forces the reader to do the subtraction themselves.
+ */
+export function formatDuration(ms: number): string {
+  const totalMinutes = Math.floor(Math.max(ms, 0) / 60_000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return '<1m';
+}
+
 /** Human label for a match: "Season · Wk N · Match M", falling back to "Match #id". */
 export function matchLabel(opts: {
   matchId: number;

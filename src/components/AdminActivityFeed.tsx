@@ -13,7 +13,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { fmtUtcShort, tabCls } from '@/lib/util';
+import { fmtUtcShort, formatDuration, tabCls } from '@/lib/util';
 import EmptyState from './EmptyState';
 import TabBar from './TabBar';
 import {
@@ -21,6 +21,7 @@ import {
   JOB_TYPE_LABEL,
   JOB_IN_PROGRESS_STATUSES,
   jobNeedsAttention,
+  jobStartedAt,
   type BackgroundJobRow,
   type BackgroundJobType,
 } from '@/lib/jobs';
@@ -61,6 +62,21 @@ function toTs(iso: string | null): number | null {
   if (!iso) return null;
   const t = new Date(iso).getTime();
   return Number.isNaN(t) ? null : t;
+}
+
+/**
+ * Elapsed-time label for a job row — "running 2h 14m" while it's still in flight (ticking live off
+ * `now`), or "took 4m" once it's finished. `null` when there's nothing to compute from (no start time
+ * yet, or an in-progress job before the first `now` tick).
+ */
+function jobDurationLabel(job: BackgroundJobRow, now: number | null): string | null {
+  const start = toTs(jobStartedAt(job));
+  if (start === null) return null;
+  if (JOB_IN_PROGRESS_STATUSES.has(job.status)) {
+    return now === null ? null : `running ${formatDuration(now - start)}`;
+  }
+  const finish = toTs(job.finishedAt);
+  return finish === null ? null : `took ${formatDuration(finish - start)}`;
 }
 
 function matchesFilter(e: Event, filter: TypeFilter): boolean {
@@ -171,8 +187,9 @@ function DismissOpsError({ id, onDismissed }: { id: number; onDismissed: () => v
   );
 }
 
-function JobEventRow({ event }: { event: JobEvent }) {
+function JobEventRow({ event, now }: { event: JobEvent; now: number | null }) {
   const { job } = event;
+  const durationLabel = jobDurationLabel(job, now);
   return (
     <div className="grid grid-cols-[1fr_auto] gap-2 items-start px-3 py-2.5 border-t border-[var(--color-border-tertiary)]">
       <div className="min-w-0">
@@ -194,6 +211,9 @@ function JobEventRow({ event }: { event: JobEvent }) {
       </div>
       <div className="flex flex-col items-end gap-1 text-right shrink-0">
         <span className="font-mono text-[10px] text-[var(--color-text-secondary)] tabular-nums">{event.when ?? '—'}</span>
+        {durationLabel && (
+          <span className="font-mono text-[10px] text-[var(--color-text-secondary)] tabular-nums">{durationLabel}</span>
+        )}
         <div className="flex items-center gap-2">
           {job.ghRunUrl && (
             <a
@@ -428,7 +448,7 @@ export function AdminActivityFeed({
             <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden max-h-[520px] overflow-y-auto [&>*:first-child]:border-t-0">
               {visible.map((e) =>
                 e.kind === 'job' ? (
-                  <JobEventRow key={e.key} event={e} />
+                  <JobEventRow key={e.key} event={e} now={now} />
                 ) : (
                   <OpsEventRow key={e.key} event={e} onJump={onJump} onDismissed={dismissOne} />
                 ),

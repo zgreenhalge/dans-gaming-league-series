@@ -88,6 +88,12 @@ export function jobNeedsAttention(job: BackgroundJobRow): boolean {
   return job.status === 'failed';
 }
 
+/** A job's effective start time for elapsed-duration display — falls back to `createdAt` since a
+ * `queued` row may not have `startedAt` set yet. */
+export function jobStartedAt(job: BackgroundJobRow): string | null {
+  return job.startedAt ?? job.createdAt;
+}
+
 /** One pipeline's state within a subject group (a match's demo/replay lane, or a map's radar lane). */
 export interface JobLane {
   job: BackgroundJobRow;
