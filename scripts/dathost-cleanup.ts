@@ -5,10 +5,17 @@
 // in R2. None of this self-cleans — MatchZy writes it per match and never removes it, so it
 // accumulates forever on a disk with a fixed size cap.
 //
-// Age is read directly off each file's own `modified_at` from the DatHost file listing — the most
-// recently touched file in a match's group stands in for the whole group, so a match isn't
-// partially cleaned while any of its files are still being written. This needs no DB record to
-// work, so it's never blocked by a match missing a `scheduled_at` or a demo_ingest job.
+// Age is read directly off each file's own `modified_at` from the DatHost file listing where
+// available — the most recently touched file in a match's group stands in for the whole group, so a
+// match isn't partially cleaned while any of its files are still being written. This needs no DB
+// record to work, so it's never blocked by a match missing a `scheduled_at` or a demo_ingest job.
+// Some DatHost accounts' file-listing responses omit `modified_at` on every entry rather than per
+// file, in which case age falls back to the match's own `scheduled_at` — a DB record, but the only
+// other timestamp this script has any way to reach. `scheduled_at` is a label, not a promise the
+// match was actually played that day (a delayed match keeps its original `scheduled_at` — see
+// `demoBaseName()`'s doc comment in `matchzy.ts`), so it can be stale by more than `RETENTION_DAYS`
+// for a match still being actively played; the fallback only applies once `final_score` shows the
+// match as played (`isPlayedScore()`), so a delayed-but-live match's residue is never in scope.
 //
 // The server also hosts non-DGLS games between matches (recreational-mode drift, ad-hoc testing),
 // and MatchZy leaves the exact same kind of residue for those — but they have no `matches` row at
@@ -39,8 +46,9 @@ import { getAdminClient } from '../src/lib/supabase-admin';
 import { r2, R2_BUCKET, demoKey } from '../src/lib/r2';
 import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import { notice, warning, error } from './gh-actions-log';
-import { groupByMatchId, daysAgo, parseModifiedAt, residueAgeDays, type RemoteFile } from '../src/lib/dathost-retention';
+import { groupByMatchId, daysAgo, parseModifiedAt, residueAgeDays, isDemoPath, type RemoteFile } from '../src/lib/dathost-retention';
 import { getServer, listFiles } from '../src/lib/dathost';
+import { isPlayedScore } from '../src/lib/util';
 
 const DRY_RUN = !/^(0|false)$/i.test(process.env.DRY_RUN ?? 'true');
 const RETENTION_DAYS = Number(process.env.RETENTION_DAYS ?? '3');
@@ -137,18 +145,34 @@ async function listAllFiles(serverId: string): Promise<RemoteFile[]> {
     }));
 }
 
-/** The subset of `matchIds` that are real DGLS matches (have a `matches` row) — one round-trip for
- *  every match on disk, rather than one per match. A match not in the returned set isn't a DGLS
- *  match at all (a non-DGLS game or ad-hoc test reusing MatchZy on the shared server), so nothing
- *  for it is worth retaining regardless of age. */
-async function trackedMatchIds(supabase: ReturnType<typeof getAdminClient>, matchIds: number[]): Promise<Set<number>> {
-  if (matchIds.length === 0) return new Set();
-  const { data, error } = await supabase.from('matches').select('id').in('id', matchIds);
+interface TrackedMatch {
+  scheduledAt: string | null;
+  finalScore: string | null;
+}
+
+/** The DGLS matches (rows in `matches`) among `matchIds`, keyed by id with each row's
+ *  `scheduled_at` and `final_score` — one round-trip for every match on disk, rather than one per
+ *  match. A match not in the returned map isn't a DGLS match at all (a non-DGLS game or ad-hoc test
+ *  reusing MatchZy on the shared server), so nothing for it is worth retaining regardless of age.
+ *  `scheduled_at` feeds `residueAgeDays()`'s fallback when DatHost's own file timestamps are
+ *  unavailable; `final_score` gates that same fallback on the match actually being played (see the
+ *  header comment on why `scheduled_at` alone isn't safe to age a still-live match by). */
+async function trackedMatches(
+  supabase: ReturnType<typeof getAdminClient>,
+  matchIds: number[],
+): Promise<Map<number, TrackedMatch>> {
+  if (matchIds.length === 0) return new Map();
+  const { data, error } = await supabase.from('matches').select('id, scheduled_at, final_score').in('id', matchIds);
   // A failed query here must not be read as "nothing is tracked" — that would make every match's
   // residue look like untracked non-DGLS junk, deleting it immediately with no retention check and,
   // for demos, no R2-confirmation check either. Fail the whole run instead.
   if (error) throw new Error(`Could not check tracked matches: ${error.message}`);
-  return new Set((data ?? []).map((row) => (row as { id: number }).id));
+  return new Map(
+    (data ?? []).map((row) => {
+      const r = row as { id: number; scheduled_at: string | null; final_score: string | null };
+      return [r.id, { scheduledAt: r.scheduled_at, finalScore: r.final_score }];
+    }),
+  );
 }
 
 async function demoIsSafeInR2(matchId: number): Promise<boolean> {
@@ -187,22 +211,44 @@ async function main() {
   const files = await listAllFiles(serverId);
   const byMatch = groupByMatchId(files);
   notice(`found ${byMatch.size} distinct match id(s) with residue on disk`);
+  // One account-level signal instead of rediscovering this per match below — some DatHost accounts
+  // omit `modified_at` on every file-listing entry rather than per file, and that's worth surfacing
+  // once loudly rather than only visible as a pattern across N repeated per-match log lines.
+  if (files.length > 0 && files.every((f) => f.modifiedAt === null)) {
+    warning('this DatHost account\'s file listing returned no modified_at for any file — every tracked match will age off scheduled_at instead');
+  }
 
   let deletedFiles = 0;
   let freedBytes = 0;
   let skippedMatches = 0;
 
-  const tracked = await trackedMatchIds(supabase, [...byMatch.keys()]);
+  const matches = await trackedMatches(supabase, [...byMatch.keys()]);
 
   for (const [matchId, matchFiles] of [...byMatch.entries()].sort((a, b) => a[0] - b[0])) {
     console.log(`::group::match ${matchId} (${matchFiles.length} file(s))`);
-    const isTracked = tracked.has(matchId);
+    const isTracked = matches.has(matchId);
     if (!isTracked) {
       console.log(`match ${matchId}: no matches row — not a DGLS match, deleting immediately (no retention)`);
     } else {
-      const days = residueAgeDays(matchFiles);
+      const fileDays = residueAgeDays(matchFiles);
+      let days = fileDays;
       if (days === null) {
-        warning(`match ${matchId}: DatHost returned no file timestamp — skipping (unknown age)`);
+        // No real file timestamp to trust — scheduled_at is the only fallback, but it doesn't move
+        // while a delayed match is actively being played (see the header comment), so it's only
+        // safe to trust once final_score confirms the match is actually over.
+        if (!isPlayedScore(matches.get(matchId)?.finalScore ?? null)) {
+          console.log(`match ${matchId}: no file timestamp and not yet played (final_score unset) — skipping regardless of schedule`);
+          skippedMatches++;
+          console.log('::endgroup::');
+          continue;
+        }
+        days = daysAgo(matches.get(matchId)?.scheduledAt ?? null);
+        if (days !== null) {
+          console.log(`match ${matchId}: DatHost returned no file timestamp — using scheduled_at (${days.toFixed(1)}d old) instead`);
+        }
+      }
+      if (days === null) {
+        warning(`match ${matchId}: no DatHost file timestamp and no scheduled_at — skipping (unknown age)`);
         skippedMatches++;
         console.log('::endgroup::');
         continue;
@@ -215,7 +261,7 @@ async function main() {
     }
 
     for (const file of matchFiles) {
-      const isDemo = /^MatchZy\/.*\.dem$/.test(file.path);
+      const isDemo = isDemoPath(file.path);
       // Only a tracked DGLS match's demo goes through our own upload pipeline — an untracked
       // match's demo will never be in R2, and we don't want it there, so don't gate its deletion
       // on a check that can only ever fail.

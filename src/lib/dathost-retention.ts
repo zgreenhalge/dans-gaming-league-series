@@ -2,6 +2,8 @@
 // file-naming conventions back to a DGLS match id, and measuring how old a timestamp is. No DatHost
 // API or Supabase calls here — those stay in the script, which is the IO-bound orchestration layer.
 
+import { matchIdFromDemoBaseName } from './matchzy';
+
 export interface RemoteFile {
   path: string;
   size: number;
@@ -22,21 +24,78 @@ export function parseModifiedAt(raw: number | undefined): Date | null {
   return ms >= MODIFIED_AT_FLOOR_MS ? new Date(ms) : null;
 }
 
-/** Group every match-scoped file by the match id embedded in its path, by known MatchZy pattern. */
+type Matcher = (path: string) => number | null;
+
+function fromRegex(re: RegExp): Matcher {
+  return (path) => {
+    const m = re.exec(path);
+    return m ? Number(m[1]) : null;
+  };
+}
+
+/** Every recorded demo lives at `MatchZy/<base>.dem` — the one directory/extension convention every
+ *  demo matcher (current and legacy) shares, and the same one `scripts/dathost-cleanup.ts` checks
+ *  before gating a demo's deletion on its R2 presence. Exported so both stay in sync. */
+export const DEMO_PREFIX = 'MatchZy/';
+export const DEMO_SUFFIX = '.dem';
+
+export function isDemoPath(path: string): boolean {
+  return path.startsWith(DEMO_PREFIX) && path.endsWith(DEMO_SUFFIX);
+}
+
+/** A demo path's base name (the part between `DEMO_PREFIX` and `DEMO_SUFFIX`), or `null` if `path`
+ *  isn't a demo path at all. Shared by every demo matcher below so each only has to describe its own
+ *  base-name shape, not repeat the directory/extension it already has in common with the others. */
+function demoBase(path: string): string | null {
+  return isDemoPath(path) ? path.slice(DEMO_PREFIX.length, -DEMO_SUFFIX.length) : null;
+}
+
+/** A current-format demo's match id, via `matchIdFromDemoBaseName()` (`./matchzy.ts`) — the same
+ *  function `demoBaseName()` has as its own inverse, so this can't independently drift out of sync
+ *  with whatever `demoBaseName()` actually produces the way a hand-maintained regex could. */
+function demoBaseNameMatcher(path: string): number | null {
+  const base = demoBase(path);
+  return base === null ? null : matchIdFromDemoBaseName(base);
+}
+
+const LEGACY_DATHOST_AUTO_BASE_RE = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_(\d+)_.*$/;
+const LEGACY_BARE_ID_BASE_RE = /^(\d+)$/;
+
+/** DatHost's own pre-`matchzy_demo_name_format` auto-naming: `date_HH-MM-SS_matchId_map.dem`. */
+function legacyDatHostAutoMatcher(path: string): number | null {
+  const base = demoBase(path);
+  if (base === null) return null;
+  const m = LEGACY_DATHOST_AUTO_BASE_RE.exec(base);
+  return m ? Number(m[1]) : null;
+}
+
+/** An even older bare `matchId.dem`, predating both naming schemes above. */
+function legacyBareIdMatcher(path: string): number | null {
+  const base = demoBase(path);
+  if (base === null) return null;
+  const m = LEGACY_BARE_ID_BASE_RE.exec(base);
+  return m ? Number(m[1]) : null;
+}
+
+/** Group every match-scoped file by the match id embedded in its path, by known MatchZy pattern.
+ *  The two legacy demo matchers only cover residue predating `demoBaseName()`: DatHost's own
+ *  auto-generated naming (before `matchzy_demo_name_format` pinned the current scheme), and an even
+ *  older bare `matchId.dem`. */
 export function groupByMatchId(files: RemoteFile[]): Map<number, RemoteFile[]> {
-  const patterns: RegExp[] = [
-    /^matchzy_(\d+)_\d+_round\d+\.txt$/,
-    /^MatchZyDataBackup\/matchzy_(\d+)_\d+_round\d+\.json$/,
-    /^MatchZy_Stats\/(\d+)\//,
-    /^MatchZyPlayerNames\/Match_(\d+)\.ini$/,
-    /^MatchZy\/\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_(\d+)_.*\.dem$/,
+  const matchers: Matcher[] = [
+    fromRegex(/^matchzy_(\d+)_\d+_round\d+\.txt$/),
+    fromRegex(/^MatchZyDataBackup\/matchzy_(\d+)_\d+_round\d+\.json$/),
+    fromRegex(/^MatchZy_Stats\/(\d+)\//),
+    fromRegex(/^MatchZyPlayerNames\/Match_(\d+)\.ini$/),
+    demoBaseNameMatcher,
+    legacyDatHostAutoMatcher,
+    legacyBareIdMatcher,
   ];
   const byMatch = new Map<number, RemoteFile[]>();
   for (const file of files) {
-    for (const pattern of patterns) {
-      const m = pattern.exec(file.path);
-      if (!m) continue;
-      const matchId = Number(m[1]);
+    for (const matcher of matchers) {
+      const matchId = matcher(file.path);
+      if (matchId === null) continue;
       if (!byMatch.has(matchId)) byMatch.set(matchId, []);
       byMatch.get(matchId)!.push(file);
       break;

@@ -1,6 +1,6 @@
 // Shared plumbing for the DatHost-facing scripts (dathost-golden-diff.ts, dathost-golden-apply.ts,
-// dathost-cleanup.ts, dathost-smoke.ts): the DatHost REST client basics and a tiny CLI flag reader.
-// Keeps them from drifting out of sync with each other.
+// dathost-cleanup.ts): the DatHost REST client basics and a tiny CLI flag reader. Keeps them from
+// drifting out of sync with each other.
 
 export const BASE = 'https://dathost.com/api/0.1';
 

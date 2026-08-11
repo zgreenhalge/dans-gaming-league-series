@@ -65,6 +65,25 @@ export function demoBaseName(matchId: number, scheduledAt: string | null, mapRaw
   return `${date}_${matchId}_${map}`;
 }
 
+// The map segment is `*` (zero-or-more), not `+`: `mapSlug()` can collapse an all-punctuation
+// `mapRaw` to `''` (e.g. `mapSlug('!!!') === ''`), and `demoBaseName()` only substitutes
+// `'unknown-map'` when `mapRaw` itself is null/empty, not when a non-empty `mapRaw` slugifies to
+// nothing — so a trailing-underscore, empty-map name like `unscheduled_59_` is real output this must
+// still round-trip.
+const DEMO_BASE_NAME_RE = /^(?:\d{4}-\d{2}-\d{2}|unscheduled)_(\d+)_[a-z0-9-]*$/;
+
+/**
+ * `demoBaseName()`'s inverse: the match id embedded in a `{date-or-"unscheduled"}_{matchId}_
+ * {mapSlug}` demo base name (no `.dem`, no directory prefix), or `null` if `name` isn't in that
+ * shape. Kept next to `demoBaseName()` so its callers (`dathost-retention.ts`'s `groupByMatchId()`,
+ * matching residue on disk back to a match) parse the exact format this function produces, rather
+ * than a hand-maintained regex that can drift out of sync with it the next time this format changes.
+ */
+export function matchIdFromDemoBaseName(name: string): number | null {
+  const m = DEMO_BASE_NAME_RE.exec(name);
+  return m ? Number(m[1]) : null;
+}
+
 /** Which team is CT, given which side SKINS (team2) starts on. */
 function mapSides(skinsSide: 'CT' | 'T' | null): string[] {
   if (skinsSide === 'CT') return ['team2_ct']; // skins start CT
