@@ -76,7 +76,7 @@ export default function RegisterModal() {
 
   if (claimToken && claimName !== null && !dismissedClaim) {
     return (
-      <Modal panelClassName={panelClassName}>
+      <Modal panelClassName={panelClassName} ariaLabel="Confirm your identity">
         <h2 className="font-display font-bold text-[18px] text-[var(--color-text-primary)] mb-3">
           Are you really{" "}
           <span className="text-[var(--color-ct)]">{claimName}</span>?
@@ -106,7 +106,7 @@ export default function RegisterModal() {
   }
 
   return (
-    <Modal panelClassName={panelClassName}>
+    <Modal panelClassName={panelClassName} ariaLabel="Welcome to DGLS">
       <h2 className="font-display font-bold text-[20px] text-[var(--color-text-primary)] mb-1">
         Welcome to DGLS
       </h2>

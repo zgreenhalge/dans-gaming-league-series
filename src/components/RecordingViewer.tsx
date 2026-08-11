@@ -116,6 +116,7 @@ export function RecordingUrlForm({ matchId, videoId }: { matchId: number; videoI
       onClose={() => setShowClearConfirm(false)}
       overlayClassName="bg-[var(--overlay-strong)] px-4"
       panelClassName="w-full max-w-sm border border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] p-5 shadow-lg"
+      ariaLabel="Remove this recording?"
     >
       <p className="mb-4 font-display text-[15px] text-[var(--color-text-primary)]">
         Remove this recording?

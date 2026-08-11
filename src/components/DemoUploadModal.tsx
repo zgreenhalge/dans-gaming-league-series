@@ -361,6 +361,7 @@ export default function DemoUploadModal({
           onClose={handleClose}
           overlayClassName="bg-black/60 backdrop-blur-sm p-4"
           panelClassName="bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-xl"
+          ariaLabel={alreadyPlayed ? 'Edit Results' : stage === 'preview' ? 'Review Results' : 'Upload Demo'}
         >
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border-primary)]">
