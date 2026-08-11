@@ -63,40 +63,50 @@ function seasonPlayersOf(db: FakeDb, seasonId: number): Row[] {
 
 const url = (seasonId: number | string) => `http://localhost/api/seasons/${seasonId}/players`;
 
+type Handler = typeof POST;
+
+/** Builds and calls the request the same way for every case: a JSON body carrying `player_id`, and
+ * the dynamic route's `id` param matching the season id in the URL. */
+function call(handler: Handler, method: 'POST' | 'DELETE', seasonId: number | string, playerId: number) {
+  return handler(jsonRequest(url(seasonId), method, { player_id: playerId }), {
+    params: Promise.resolve({ id: String(seasonId) }),
+  });
+}
+
 async function main() {
-  await test('POST — unauthenticated request is rejected (401)', async () => {
-    installFixture();
-    __setTestSession(null);
-    const res = await POST(jsonRequest(url(UPCOMING_SEASON_ID), 'POST', { player_id: PLAYER_ID }), {
-      params: Promise.resolve({ id: String(UPCOMING_SEASON_ID) }),
+  // Cases that only assert the response status — no roster-state side effect to check.
+  const statusOnlyCases: {
+    name: string;
+    handler: Handler;
+    method: 'POST' | 'DELETE';
+    sessionPlayerId: number | null;
+    seasonId: number | string;
+    playerId: number;
+    status: number;
+  }[] = [
+    { name: 'POST — unauthenticated request is rejected (401)', handler: POST, method: 'POST', sessionPlayerId: null, seasonId: UPCOMING_SEASON_ID, playerId: PLAYER_ID, status: 401 },
+    { name: 'POST — non-numeric season id is rejected (400)', handler: POST, method: 'POST', sessionPlayerId: ADMIN_ID, seasonId: 'abc', playerId: PLAYER_ID, status: 400 },
+    { name: 'POST — unknown season id is rejected (404)', handler: POST, method: 'POST', sessionPlayerId: ADMIN_ID, seasonId: 999, playerId: PLAYER_ID, status: 404 },
+    { name: 'POST — non-admin adding a different player is rejected (403)', handler: POST, method: 'POST', sessionPlayerId: PLAYER_ID, seasonId: UPCOMING_SEASON_ID, playerId: OTHER_PLAYER_ID, status: 403 },
+    { name: 'POST — a player not in the players table is rejected (404)', handler: POST, method: 'POST', sessionPlayerId: ADMIN_ID, seasonId: UPCOMING_SEASON_ID, playerId: 9999, status: 404 },
+    { name: 'POST — roster edits are rejected once the season is ACTIVE (400)', handler: POST, method: 'POST', sessionPlayerId: ADMIN_ID, seasonId: ACTIVE_SEASON_ID, playerId: OTHER_PLAYER_ID, status: 400 },
+    { name: 'DELETE — unauthenticated request is rejected (401)', handler: DELETE, method: 'DELETE', sessionPlayerId: null, seasonId: UPCOMING_SEASON_ID, playerId: PLAYER_ID, status: 401 },
+    { name: 'DELETE — roster edits are rejected once the season is ACTIVE (400)', handler: DELETE, method: 'DELETE', sessionPlayerId: ADMIN_ID, seasonId: ACTIVE_SEASON_ID, playerId: PLAYER_ID, status: 400 },
+  ];
+  for (const c of statusOnlyCases) {
+    await test(c.name, async () => {
+      installFixture();
+      __setTestSession(c.sessionPlayerId == null ? null : sessionFor(c.sessionPlayerId));
+      const res = await call(c.handler, c.method, c.seasonId, c.playerId);
+      assert.equal(res.status, c.status);
     });
-    assert.equal(res.status, 401);
-  });
+  }
 
-  await test('POST — non-numeric season id is rejected (400)', async () => {
-    installFixture();
-    __setTestSession(sessionFor(ADMIN_ID));
-    const res = await POST(jsonRequest(url('abc'), 'POST', { player_id: PLAYER_ID }), {
-      params: Promise.resolve({ id: 'abc' }),
-    });
-    assert.equal(res.status, 400);
-  });
-
-  await test('POST — unknown season id is rejected (404)', async () => {
-    installFixture();
-    __setTestSession(sessionFor(ADMIN_ID));
-    const res = await POST(jsonRequest(url(999), 'POST', { player_id: PLAYER_ID }), {
-      params: Promise.resolve({ id: '999' }),
-    });
-    assert.equal(res.status, 404);
-  });
-
+  // Cases that also assert the resulting `season_players` roster state, kept as individual tests.
   await test('POST — admin adds another player to the roster (201)', async () => {
     const db = installFixture();
     __setTestSession(sessionFor(ADMIN_ID));
-    const res = await POST(jsonRequest(url(UPCOMING_SEASON_ID), 'POST', { player_id: OTHER_PLAYER_ID }), {
-      params: Promise.resolve({ id: String(UPCOMING_SEASON_ID) }),
-    });
+    const res = await call(POST, 'POST', UPCOMING_SEASON_ID, OTHER_PLAYER_ID);
     assert.equal(res.status, 201);
     assert.deepEqual(
       seasonPlayersOf(db, UPCOMING_SEASON_ID).map((r) => r.player_id).sort(),
@@ -107,55 +117,15 @@ async function main() {
   await test('POST — non-admin adds themselves to the roster (201)', async () => {
     const db = installFixture();
     __setTestSession(sessionFor(OTHER_PLAYER_ID));
-    const res = await POST(jsonRequest(url(UPCOMING_SEASON_ID), 'POST', { player_id: OTHER_PLAYER_ID }), {
-      params: Promise.resolve({ id: String(UPCOMING_SEASON_ID) }),
-    });
+    const res = await call(POST, 'POST', UPCOMING_SEASON_ID, OTHER_PLAYER_ID);
     assert.equal(res.status, 201);
     assert.ok(seasonPlayersOf(db, UPCOMING_SEASON_ID).some((r) => r.player_id === OTHER_PLAYER_ID));
-  });
-
-  await test('POST — non-admin adding a different player is rejected (403)', async () => {
-    installFixture();
-    __setTestSession(sessionFor(PLAYER_ID));
-    const res = await POST(jsonRequest(url(UPCOMING_SEASON_ID), 'POST', { player_id: OTHER_PLAYER_ID }), {
-      params: Promise.resolve({ id: String(UPCOMING_SEASON_ID) }),
-    });
-    assert.equal(res.status, 403);
-  });
-
-  await test('POST — a player not in the players table is rejected (404)', async () => {
-    installFixture();
-    __setTestSession(sessionFor(ADMIN_ID));
-    const res = await POST(jsonRequest(url(UPCOMING_SEASON_ID), 'POST', { player_id: 9999 }), {
-      params: Promise.resolve({ id: String(UPCOMING_SEASON_ID) }),
-    });
-    assert.equal(res.status, 404);
-  });
-
-  await test('POST — roster edits are rejected once the season is ACTIVE (400)', async () => {
-    installFixture();
-    __setTestSession(sessionFor(ADMIN_ID));
-    const res = await POST(jsonRequest(url(ACTIVE_SEASON_ID), 'POST', { player_id: OTHER_PLAYER_ID }), {
-      params: Promise.resolve({ id: String(ACTIVE_SEASON_ID) }),
-    });
-    assert.equal(res.status, 400);
-  });
-
-  await test('DELETE — unauthenticated request is rejected (401)', async () => {
-    installFixture();
-    __setTestSession(null);
-    const res = await DELETE(jsonRequest(url(UPCOMING_SEASON_ID), 'DELETE', { player_id: PLAYER_ID }), {
-      params: Promise.resolve({ id: String(UPCOMING_SEASON_ID) }),
-    });
-    assert.equal(res.status, 401);
   });
 
   await test('DELETE — admin removes another player from the roster (200)', async () => {
     const db = installFixture();
     __setTestSession(sessionFor(ADMIN_ID));
-    const res = await DELETE(jsonRequest(url(UPCOMING_SEASON_ID), 'DELETE', { player_id: PLAYER_ID }), {
-      params: Promise.resolve({ id: String(UPCOMING_SEASON_ID) }),
-    });
+    const res = await call(DELETE, 'DELETE', UPCOMING_SEASON_ID, PLAYER_ID);
     assert.equal(res.status, 200);
     assert.equal(seasonPlayersOf(db, UPCOMING_SEASON_ID).length, 0);
   });
@@ -163,9 +133,7 @@ async function main() {
   await test('DELETE — non-admin removes themselves from the roster (200)', async () => {
     const db = installFixture();
     __setTestSession(sessionFor(PLAYER_ID));
-    const res = await DELETE(jsonRequest(url(UPCOMING_SEASON_ID), 'DELETE', { player_id: PLAYER_ID }), {
-      params: Promise.resolve({ id: String(UPCOMING_SEASON_ID) }),
-    });
+    const res = await call(DELETE, 'DELETE', UPCOMING_SEASON_ID, PLAYER_ID);
     assert.equal(res.status, 200);
     assert.equal(seasonPlayersOf(db, UPCOMING_SEASON_ID).length, 0);
   });
@@ -173,20 +141,9 @@ async function main() {
   await test('DELETE — non-admin removing a different player is rejected (403)', async () => {
     const db = installFixture();
     __setTestSession(sessionFor(OTHER_PLAYER_ID));
-    const res = await DELETE(jsonRequest(url(UPCOMING_SEASON_ID), 'DELETE', { player_id: PLAYER_ID }), {
-      params: Promise.resolve({ id: String(UPCOMING_SEASON_ID) }),
-    });
+    const res = await call(DELETE, 'DELETE', UPCOMING_SEASON_ID, PLAYER_ID);
     assert.equal(res.status, 403);
     assert.equal(seasonPlayersOf(db, UPCOMING_SEASON_ID).length, 1);
-  });
-
-  await test('DELETE — roster edits are rejected once the season is ACTIVE (400)', async () => {
-    installFixture();
-    __setTestSession(sessionFor(ADMIN_ID));
-    const res = await DELETE(jsonRequest(url(ACTIVE_SEASON_ID), 'DELETE', { player_id: PLAYER_ID }), {
-      params: Promise.resolve({ id: String(ACTIVE_SEASON_ID) }),
-    });
-    assert.equal(res.status, 400);
   });
 
   __setTestSession(undefined);

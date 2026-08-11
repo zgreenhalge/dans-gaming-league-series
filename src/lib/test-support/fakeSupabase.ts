@@ -179,7 +179,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
   private limitN: number | null = null;
   private single = false;
   private mode: 'select' | 'insert' | 'delete' = 'select';
-  private insertRows: Row[] | null = null;
+  private insertRows: Row[] = [];
 
   constructor(private table: string, private db: FakeDb) {}
 
@@ -276,7 +276,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
   private async execute(): Promise<{ data: T[] | T | null; error: null }> {
     if (this.mode === 'insert') {
       const table = (this.db[this.table] ??= []);
-      table.push(...this.insertRows!.map((r) => ({ ...r })));
+      table.push(...this.insertRows.map((r) => ({ ...r })));
       return { data: null, error: null };
     }
     if (this.mode === 'delete') {
