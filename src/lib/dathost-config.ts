@@ -11,7 +11,7 @@
 // one-time seed input (`scripts/seed-config-set.ts`) and a disaster-recovery snapshot only.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { BASE, authHeader } from './dathost';
+import { request } from './dathost';
 
 export interface ConfigSetOption {
   key: string;
@@ -89,11 +89,7 @@ export async function pushCfgFiles(serverId: string, files: { remote: string; co
   for (const { remote, content } of files) {
     const form = new FormData();
     form.append('file', new Blob([content]), remote.split('/').pop());
-    const res = await fetch(`${BASE}/game-servers/${serverId}/files/${remote}`, {
-      method: 'POST',
-      headers: { Authorization: authHeader() },
-      body: form,
-    });
+    const res = await request('POST', `/game-servers/${serverId}/files/${remote}`, form);
     results.push({ remote, ok: res.ok, status: res.status });
   }
   return results;
@@ -188,7 +184,7 @@ export function compareCfg(local: Map<string, string>, live: Map<string, string>
 }
 
 async function getText(path: string): Promise<{ status: number; text: string }> {
-  const res = await fetch(`${BASE}${path}`, { headers: { Authorization: authHeader() } });
+  const res = await request('GET', path);
   return { status: res.status, text: await res.text() };
 }
 

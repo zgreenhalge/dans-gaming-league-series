@@ -44,13 +44,29 @@ export async function getJobCreatedAt(admin: SupabaseClient, jobType: string, ke
   return createdAt ? new Date(createdAt) : null;
 }
 
-async function mirrorSubjectStatus(
+/** Write `value` onto a `JobSubject`'s mirrored column — e.g. `matches.replay_status`. Exported for
+ *  `scripts/job-stage.ts`'s `createJobRunner`, whose `markRunning`/`fail` mirror the same way this
+ *  module's own `dispatchAndRecordFailure` does, so a job script's lifecycle writes and a dispatch
+ *  route's rollback write can't disagree on what "mirror onto the subject" means. */
+export async function mirrorSubjectStatus(
   admin: SupabaseClient,
   subject: JobSubject,
   value: string,
 ): Promise<{ error?: string }> {
   const { error } = await admin.from(subject.table).update({ [subject.column]: value }).eq('id', subject.id);
   return error ? { error: error.message } : {};
+}
+
+/** `mirrorSubjectStatus`, or a no-op resolving to `{}` when there's no subject to mirror — every
+ *  caller that conditionally mirrors onto an optional `JobSubject` (this module's own
+ *  `dispatchAndRecordFailure`, and `scripts/job-stage.ts`'s `createJobRunner`) shares this instead of
+ *  each restating the same ternary. */
+export function mirrorSubjectStatusOrNoop(
+  admin: SupabaseClient,
+  subject: JobSubject | undefined,
+  value: string,
+): Promise<{ error?: string }> {
+  return subject ? mirrorSubjectStatus(admin, subject, value) : Promise.resolve({});
 }
 
 /** Upsert a `background_jobs` row for `(jobType, key)`, stamping `updated_at`. `onConflict` is
@@ -129,7 +145,7 @@ export async function dispatchAndRecordFailure(
         status: 'failed',
         error_message: `dispatch failed: ${dispatch.error}`,
       }),
-      params.subject ? mirrorSubjectStatus(admin, params.subject, 'failed') : Promise.resolve<{ error?: string }>({}),
+      mirrorSubjectStatusOrNoop(admin, params.subject, 'failed'),
     ]);
     if (jobResult.error) {
       console.error(`Could not roll back ${params.jobType}/${params.key.id} to failed: ${jobResult.error}`);

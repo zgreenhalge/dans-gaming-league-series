@@ -67,9 +67,11 @@ lives in Actions.
    `npm ci`; secrets passed as `env`; one line: `npx tsx scripts/<job>.ts`.
 
 3. **Job script — `scripts/<job>.ts`, run via `tsx`.** Reuses the **same `src/lib/*` code as the
-   app** (no logic drift — e.g. `getReplayInputs`, the demo parsers, the R2 helpers, and
-   `recordJobStatus` from `src/lib/background-jobs.ts` for its own `markRunning`/`setJob`-style upsert).
-   Drives the `background_jobs` state machine and prints GitHub log annotations. See the template below.
+   app** (no logic drift — e.g. `getReplayInputs`, the demo parsers, the R2 helpers) and gets its whole
+   job lifecycle — `stage`/`setStage`, `markRunning`, `fail`, and the bound `setJob` writer for its own
+   terminal statuses — from `createJobRunner()` in `scripts/job-stage.ts`, so the queued→running claim
+   and the top-level failure write aren't hand-rolled per script. Drives the `background_jobs` state
+   machine and prints GitHub log annotations. See the template below.
 
 ## Conventions every job follows
 
@@ -93,8 +95,16 @@ lives in Actions.
 - **Idempotency via deterministic R2 keys.** Outputs go to fixed keys (`demoKey`, `replayKey`,
   `heatmapKey` in `src/lib/r2.ts`) so a re-dispatch overwrites cleanly (last-write-wins). Re-running a
   job must be safe.
-- **Fail loudly to the DB.** A top-level `.catch(fail)` writes `status: 'failed'` + `error_message` +
-  `finished_at` and `process.exit(1)`, so failures surface in the app, not just the Actions log.
+- **Fail loudly to the DB.** A top-level `.catch(runner.fail)` writes `status: 'failed'` +
+  `error_message` + `finished_at` and `process.exit(1)`, so failures surface in the app, not just the
+  Actions log.
+- **Logic spanning two owning modules gets its own tiny composition file, not a home in either one.**
+  When a concern genuinely spans, e.g., the job-lifecycle layer and a domain module — neither of which
+  should depend on the other or grow a special case for it — put the composition in a small file of its
+  own that imports from both. `src/lib/demo/flushFloor.ts`'s `demoIngestFlushFloorMs()` is the pattern:
+  it composes `getJobCreatedAt()` (`src/lib/background-jobs.ts`, job-lifecycle) with
+  `remainingFlushFloorMs()` (`src/lib/demo/fetchFromDathost.ts`, demo domain) into the one function both
+  `demo-ingest.ts` and `replay-extract.ts` call, without either owning file depending on the other.
 - **Secrets** are GitHub Actions repo secrets, passed through the workflow `env`. The standard set:
   `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the four `CLOUDFLARE_R2_*` vars. The
   app side needs `GITHUB_DISPATCH_TOKEN`, `GITHUB_REPO`, and optionally `GITHUB_DISPATCH_REF`.
@@ -132,9 +142,13 @@ These are GitHub's official hardening practices ([security-hardening for GitHub 
 
 ## Adding a new job (checklist)
 
-1. **`scripts/<job>.ts`** — copy `scripts/replay-extract.ts`. Set `JOB_TYPE`, define `STAGES`, reuse
-   `getReplayInputs` / `src/lib/*` for inputs and logic, write outputs to a deterministic R2 key,
-   keep `markRunning` / `stage` / `fail` / `done` intact.
+1. **`scripts/<job>.ts`** — copy `scripts/replay-extract.ts`. Set `JOB_TYPE`, define `STAGES`, build a
+   `runner` from `createJobRunner()` (`scripts/job-stage.ts`) — pass a `subject` (table/column/id) if
+   this job mirrors a coarse status onto a domain row, and a `label` thunk if a more specific one than
+   `JOB_TYPE` resolves partway through the run (radar-build's map name) — reuse `getReplayInputs` /
+   `src/lib/*` for inputs and logic, write outputs to a deterministic R2 key, keep
+   `runner.markRunning()` / `runner.stage()` / `main().catch(runner.fail)` / a final `'done'` stage
+   intact.
 2. **`.github/workflows/<job>.yml`** — copy `replay-extract.yml`. Rename, set the `concurrency.group`,
    keep `cancel-in-progress: false`, pass the same secrets, end with `npx tsx scripts/<job>.ts`.
 3. **Trigger** — a session-gated dispatch route (mirror `replay/dispatch`) or a machine-auth route
