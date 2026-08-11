@@ -23,7 +23,7 @@ import { putR2Object, radarKey } from '../src/lib/r2';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { mapJobKey } from '../src/lib/background-jobs';
 import { notice, warning } from './gh-actions-log';
-import { createJobRunner } from './job-stage';
+import { createJobRunner, formatError } from './job-stage';
 
 const JOB_TYPE = 'radar_build';
 
@@ -240,7 +240,7 @@ async function main() {
 main().catch(async (err) => {
   // The GH run summary write is genuinely script-local (radar-build is the only job that renders
   // one) — `runner.fail` covers the shared job-row write, this covers the one-off decoration around it.
-  const msg = err instanceof Error ? err.message : String(err);
-  summary(`\n❌ **${mapLabel}** failed at \`${runner.currentStage}\`: ${msg}`);
+  // `formatError` keeps this message identical to the one `runner.fail` logs/records, computed once.
+  summary(`\n❌ **${mapLabel}** failed at \`${runner.currentStage}\`: ${formatError(err)}`);
   await runner.fail(err);
 });

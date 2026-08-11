@@ -17,6 +17,13 @@ import {
 } from '../src/lib/background-jobs';
 import { notice, error } from './gh-actions-log';
 
+/** Normalizes a caught value into a loggable/DB-writable string — shared so `fail()` and a script's
+ *  own wrapping `.catch()` (e.g. radar-build's GH-summary write, which needs the same message
+ *  alongside its shared job-row write) derive it once rather than each re-deriving it from `err`. */
+export function formatError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export interface JobRunner {
   /** The stage currently in flight, or the last one entered before a failure. */
   currentStage: string;
@@ -80,29 +87,34 @@ export function createJobRunner(
       }
     },
     async markRunning() {
-      await setJob({
-        status: 'running',
-        stage: initial,
-        error_message: null,
-        gh_run_id: ghRunId,
-        gh_run_url: ghRunUrl,
-        started_at: new Date().toISOString(),
-      });
-      if (opts.subject) {
-        const { error: mirrorError } = await mirrorSubjectStatus(admin, opts.subject, 'running');
-        if (mirrorError) throw new Error(mirrorError);
-      }
+      // The job row and its mirrored subject are independent writes to different tables — run them
+      // together rather than serially, the same shape `dispatchAndRecordFailure` (background-jobs.ts)
+      // already uses for its own job-row + subject pair.
+      const [, mirrorResult] = await Promise.all([
+        setJob({
+          status: 'running',
+          stage: initial,
+          error_message: null,
+          gh_run_id: ghRunId,
+          gh_run_url: ghRunUrl,
+          started_at: new Date().toISOString(),
+        }),
+        opts.subject ? mirrorSubjectStatus(admin, opts.subject, 'running') : Promise.resolve<{ error?: string }>({}),
+      ]);
+      if (mirrorResult.error) throw new Error(mirrorResult.error);
     },
     async fail(err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = formatError(err);
       error(`${label()} failed at stage ${runner.currentStage}: ${message}`);
-      await recordJobStatus(admin, jobType, key, {
-        status: 'failed',
-        stage: runner.currentStage,
-        error_message: message,
-        finished_at: new Date().toISOString(),
-      });
-      if (opts.subject) await mirrorSubjectStatus(admin, opts.subject, 'failed');
+      await Promise.all([
+        recordJobStatus(admin, jobType, key, {
+          status: 'failed',
+          stage: runner.currentStage,
+          error_message: message,
+          finished_at: new Date().toISOString(),
+        }),
+        opts.subject ? mirrorSubjectStatus(admin, opts.subject, 'failed') : Promise.resolve<{ error?: string }>({}),
+      ]);
       process.exit(1);
     },
   };
