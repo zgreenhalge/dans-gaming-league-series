@@ -13,7 +13,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { fmtUtcShort, formatDuration, tabCls } from '@/lib/util';
+import { fmtUtcShort, tabCls } from '@/lib/util';
 import EmptyState from './EmptyState';
 import TabBar from './TabBar';
 import {
@@ -21,7 +21,7 @@ import {
   JOB_TYPE_LABEL,
   JOB_IN_PROGRESS_STATUSES,
   jobNeedsAttention,
-  jobStartedAt,
+  jobDurationLabel,
   type BackgroundJobRow,
   type BackgroundJobType,
 } from '@/lib/jobs';
@@ -62,21 +62,6 @@ function toTs(iso: string | null): number | null {
   if (!iso) return null;
   const t = new Date(iso).getTime();
   return Number.isNaN(t) ? null : t;
-}
-
-/**
- * Elapsed-time label for a job row — "running 2h 14m" while it's still in flight (ticking live off
- * `now`), or "took 4m" once it's finished. `null` when there's nothing to compute from (no start time
- * yet, or an in-progress job before the first `now` tick).
- */
-function jobDurationLabel(job: BackgroundJobRow, now: number | null): string | null {
-  const start = toTs(jobStartedAt(job));
-  if (start === null) return null;
-  if (JOB_IN_PROGRESS_STATUSES.has(job.status)) {
-    return now === null ? null : `running ${formatDuration(now - start)}`;
-  }
-  const finish = toTs(job.finishedAt);
-  return finish === null ? null : `took ${formatDuration(finish - start)}`;
 }
 
 function matchesFilter(e: Event, filter: TypeFilter): boolean {

@@ -3,7 +3,7 @@
 // server-only Supabase client) so client components can import it. queries.ts owns only the data
 // fetch (`getBackgroundJobs`) and imports these types back.
 
-import { compareMatchRefDesc } from './util';
+import { compareMatchRefDesc, formatDuration } from './util';
 
 /**
  * The four background-job pipelines surfaced on the dashboard. `demo_ingest`, `replay_extract`, and
@@ -88,10 +88,22 @@ export function jobNeedsAttention(job: BackgroundJobRow): boolean {
   return job.status === 'failed';
 }
 
-/** A job's effective start time for elapsed-duration display — falls back to `createdAt` since a
- * `queued` row may not have `startedAt` set yet. */
-export function jobStartedAt(job: BackgroundJobRow): string | null {
-  return job.startedAt ?? job.createdAt;
+/**
+ * Elapsed-time label for a job row — "running 2h 14m" while it's still in flight (ticking live off
+ * the caller's `nowMs`), or "took 4m" once it's finished. `null` when there's nothing to compute from
+ * (no start time yet, or an in-progress job before the caller has a `nowMs` to compare against). Start
+ * time falls back to `createdAt` since a `queued` row may not have `startedAt` set yet.
+ */
+export function jobDurationLabel(job: BackgroundJobRow, nowMs: number | null): string | null {
+  const startIso = job.startedAt ?? job.createdAt;
+  const start = startIso ? new Date(startIso).getTime() : NaN;
+  if (Number.isNaN(start)) return null;
+  if (JOB_IN_PROGRESS_STATUSES.has(job.status)) {
+    return nowMs === null ? null : `running ${formatDuration(nowMs - start)}`;
+  }
+  if (!job.finishedAt) return null;
+  const finish = new Date(job.finishedAt).getTime();
+  return Number.isNaN(finish) ? null : `took ${formatDuration(finish - start)}`;
 }
 
 /** One pipeline's state within a subject group (a match's demo/replay lane, or a map's radar lane). */
