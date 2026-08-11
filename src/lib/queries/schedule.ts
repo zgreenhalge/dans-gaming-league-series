@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
-import type { Week, Match, PlayerMatchStat, Faction } from '../types';
+import type { Week, Match, Faction } from '../types';
 import { allMatchesPlayed } from '../util';
 import { getPlayersById } from './player';
 
@@ -29,103 +29,78 @@ export interface WeekWithMatches extends Week {
   matches: MatchWithRoster[];
 }
 
-/** Weeks + matches + per-match Shirts/Skins rosters (from player_match_stats). */
+type RosterStatRow = {
+  match_id: number;
+  player_id: number;
+  faction: 'SHIRTS' | 'SKINS';
+  kills: number;
+  assists: number;
+  deaths: number;
+  adr: number;
+  is_win: boolean;
+};
+
+type EmbeddedMatch = Match & { player_match_stats: RosterStatRow[] };
+type EmbeddedWeek = Week & { matches: EmbeddedMatch[] };
+
+function buildRosterStats(roster: RosterStatRow[], faction: 'SHIRTS' | 'SKINS', players: Map<number, { name: string }>): RosterStat[] {
+  return roster
+    .filter((r) => r.faction === faction)
+    .map((r) => ({
+      match_id: r.match_id,
+      player_id: r.player_id,
+      player_name: players.get(r.player_id)?.name ?? `#${r.player_id}`,
+      faction,
+      kills: r.kills,
+      assists: r.assists ?? 0,
+      deaths: r.deaths,
+      adr: r.adr,
+      is_win: !!r.is_win,
+    }));
+}
+
+/** Weeks + matches + per-match Shirts/Skins rosters (from player_match_stats) — one embedded
+ *  query (weeks -> matches -> player_match_stats) instead of three sequential round trips, each
+ *  depending on the previous one's ids. */
 export async function getSeasonSchedule(
   seasonId: number,
 ): Promise<WeekWithMatches[]> {
   const [{ data: weeks, error: wErr }, players] = await Promise.all([
     supabase
       .from('weeks')
-      .select('*')
+      .select('*, matches(*, player_match_stats(*))')
       .eq('season_id', seasonId)
-      .order('week_number'),
+      .order('week_number')
+      .order('match_number', { referencedTable: 'matches' }),
     getPlayersById(),
   ]);
   if (wErr) throw wErr;
-  const weekRows = (weeks ?? []) as Week[];
-  if (weekRows.length === 0) return [];
+  // Supabase types embedded to-many relations as arrays already, so no unwrap needed at that
+  // level — still cast through unknown since the generated Database type doesn't model this
+  // nested select shape (same pattern as the to-one embeds elsewhere in this codebase).
+  const weekRows = (weeks ?? []) as unknown as EmbeddedWeek[];
 
-  const weekIds = weekRows.map((w) => w.id);
-  const { data: matches, error: mErr } = await supabase
-    .from('matches')
-    .select('*')
-    .in('week_id', weekIds)
-    .order('match_number');
-  if (mErr) throw mErr;
-  const matchRows = (matches ?? []) as Match[];
-  const matchIds = matchRows.map((m) => m.id);
-
-  let stats: PlayerMatchStat[] = [];
-  if (matchIds.length > 0) {
-    const { data: s, error: sErr } = await supabase
-      .from('player_match_stats')
-      .select('*')
-      .in('match_id', matchIds);
-    if (sErr) throw sErr;
-    stats = (s ?? []) as PlayerMatchStat[];
-  }
-
-  type StatRow = {
-    match_id: number;
-    player_id: number;
-    faction: 'SHIRTS' | 'SKINS';
-    kills: number;
-    assists: number;
-    deaths: number;
-    adr: number;
-    is_win: boolean;
-  };
-
-  const statsByMatch = new Map<number, StatRow[]>();
-  for (const s of stats as StatRow[]) {
-    const list = statsByMatch.get(s.match_id) ?? [];
-    list.push(s);
-    statsByMatch.set(s.match_id, list);
-  }
-
-  const matchesByWeek = new Map<number, MatchWithRoster[]>();
-  for (const m of matchRows) {
-    const roster = (statsByMatch.get(m.id) ?? []) as StatRow[];
-    const shirtsStats = roster
-      .filter((r) => r.faction === 'SHIRTS')
-      .map((r) => ({
-        match_id: r.match_id,
-        player_id: r.player_id,
-        player_name: players.get(r.player_id)?.name ?? `#${r.player_id}`,
-        faction: 'SHIRTS' as const,
-        kills: r.kills,
-        assists: r.assists ?? 0,
-        deaths: r.deaths,
-        adr: r.adr,
-        is_win: !!r.is_win,
-      }));
-    const skinsStats = roster
-      .filter((r) => r.faction === 'SKINS')
-      .map((r) => ({
-        match_id: r.match_id,
-        player_id: r.player_id,
-        player_name: players.get(r.player_id)?.name ?? `#${r.player_id}`,
-        faction: 'SKINS' as const,
-        kills: r.kills,
-        assists: r.assists ?? 0,
-        deaths: r.deaths,
-        adr: r.adr,
-        is_win: !!r.is_win,
-      }));
-
-    const list = matchesByWeek.get(m.week_id) ?? [];
-    // Attach stats arrays as shirts_stats/skins_stats (may be empty)
-    list.push({ ...m, shirts: shirtsStats.map(s => ({ player_id: s.player_id, player_name: s.player_name })), skins: skinsStats.map(s => ({ player_id: s.player_id, player_name: s.player_name })), shirts_stats: shirtsStats, skins_stats: skinsStats });
-    matchesByWeek.set(m.week_id, list);
-  }
-
-  return weekRows.map((w) => ({
-    ...w,
-    bye_player_name: w.bye_player_id
-      ? players.get(w.bye_player_id)?.name ?? null
-      : null,
-    matches: matchesByWeek.get(w.id) ?? [],
-  }));
+  return weekRows.map((w) => {
+    const { matches, ...weekFields } = w;
+    return {
+      ...weekFields,
+      bye_player_name: w.bye_player_id
+        ? players.get(w.bye_player_id)?.name ?? null
+        : null,
+      matches: matches.map((m): MatchWithRoster => {
+        const { player_match_stats: roster, ...matchFields } = m;
+        const shirtsStats = buildRosterStats(roster, 'SHIRTS', players);
+        const skinsStats = buildRosterStats(roster, 'SKINS', players);
+        return {
+          ...matchFields,
+          shirts: shirtsStats.map((s) => ({ player_id: s.player_id, player_name: s.player_name })),
+          skins: skinsStats.map((s) => ({ player_id: s.player_id, player_name: s.player_name })),
+          shirts_stats: shirtsStats,
+          skins_stats: skinsStats,
+        };
+      }),
+    };
+  });
 }
 
 /** Fetches `final_score` for every match in the given weeks — the shared fetch shape behind

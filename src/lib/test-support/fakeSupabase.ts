@@ -9,9 +9,12 @@
  * forms `queries.ts` sends).
  *
  * Embedded-resource selects (`weeks(week_number, seasons(name))`) are resolved against `FK_MAP`
- * and nested as a single object, matching the runtime shape Supabase actually returns (queries.ts
- * itself documents this with "Supabase types embedded to-one relations as arrays, but returns
- * objects at runtime").
+ * and nested as a single object (to-one, matching the runtime shape Supabase actually returns —
+ * queries.ts itself documents this with "Supabase types embedded to-one relations as arrays, but
+ * returns objects at runtime") or an array (to-many, e.g. `weeks(matches(...))`). A to-many embed's
+ * row order follows `.order(col, { referencedTable })`, scoped by the embed's key — this harness
+ * doesn't distinguish two different to-many embeds that reuse the same key at different nesting
+ * depths, since `queries.ts` never does that.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -19,11 +22,20 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export type Row = Record<string, unknown>;
 export type FakeDb = Record<string, Row[]>;
 
-// table -> embed key (the alias used in a select string) -> which column on this table points at
-// which target table. Only covers the embeds queries.ts actually performs.
-const FK_MAP: Record<string, Record<string, { fk: string; table: string }>> = {
-  matches: { weeks: { fk: 'week_id', table: 'weeks' } },
-  weeks: { seasons: { fk: 'season_id', table: 'seasons' } },
+// table -> embed key (the alias used in a select string) -> which column relates this table to
+// which target table, and in which direction. 'one': `fk` lives on this table and points at the
+// target's id (matches -> weeks). 'many': `fk` lives on the target table and points back at this
+// row's id (weeks -> matches). Only covers the embeds queries.ts actually performs.
+type EmbedMapping = { kind: 'one' | 'many'; fk: string; table: string };
+const FK_MAP: Record<string, Record<string, EmbedMapping>> = {
+  matches: {
+    weeks: { kind: 'one', fk: 'week_id', table: 'weeks' },
+    player_match_stats: { kind: 'many', fk: 'match_id', table: 'player_match_stats' },
+  },
+  weeks: {
+    seasons: { kind: 'one', fk: 'season_id', table: 'seasons' },
+    matches: { kind: 'many', fk: 'week_id', table: 'matches' },
+  },
 };
 
 interface ParsedSelect {
@@ -59,24 +71,43 @@ function parseSelect(select: string): ParsedSelect {
   return { cols, embeds };
 }
 
-function resolveEmbed(table: string, row: Row, key: string, inner: string, db: FakeDb): unknown {
+function resolveEmbed(
+  table: string,
+  row: Row,
+  key: string,
+  inner: string,
+  db: FakeDb,
+  referencedOrders: Record<string, OrderSpec[]>,
+): unknown {
   const mapping = FK_MAP[table]?.[key];
   if (!mapping) {
     throw new Error(`fakeSupabase: no FK_MAP entry for "${table}.${key}" — add one in fakeSupabase.ts`);
   }
+  if (mapping.kind === 'many') {
+    let rows = (db[mapping.table] ?? []).filter((r) => r[mapping.fk] === row.id);
+    const orderSpecs = referencedOrders[key];
+    if (orderSpecs) rows = sortRows(rows, orderSpecs);
+    return rows.map((r) => projectRow(mapping.table, r, inner, db, referencedOrders));
+  }
   const fkVal = row[mapping.fk];
   const target = (db[mapping.table] ?? []).find((r) => r.id === fkVal);
   if (!target) return null;
-  return projectRow(mapping.table, target, inner, db);
+  return projectRow(mapping.table, target, inner, db, referencedOrders);
 }
 
-function projectRow(table: string, row: Row, select: string, db: FakeDb): Row {
+function projectRow(
+  table: string,
+  row: Row,
+  select: string,
+  db: FakeDb,
+  referencedOrders: Record<string, OrderSpec[]> = {},
+): Row {
   const { cols, embeds } = parseSelect(select);
   const out: Row = cols.includes('*') ? { ...row } : {};
   if (!cols.includes('*')) {
     for (const c of cols) out[c] = row[c];
   }
-  for (const e of embeds) out[e.key] = resolveEmbed(table, row, e.key, e.inner, db);
+  for (const e of embeds) out[e.key] = resolveEmbed(table, row, e.key, e.inner, db, referencedOrders);
   return out;
 }
 
@@ -117,11 +148,27 @@ function coerceOrValue(raw: string): unknown {
   return raw;
 }
 
+/** Shared by top-level `.order()` and a to-many embed's `.order(col, { referencedTable })`. */
+function sortRows(rows: Row[], specs: OrderSpec[]): Row[] {
+  return [...rows].sort((a, b) => {
+    for (const spec of specs) {
+      const av = a[spec.col] as string | number | null;
+      const bv = b[spec.col] as string | number | null;
+      if (av === bv) continue;
+      if (av == null) return spec.ascending ? -1 : 1;
+      if (bv == null) return spec.ascending ? 1 : -1;
+      return av < bv ? (spec.ascending ? -1 : 1) : spec.ascending ? 1 : -1;
+    }
+    return 0;
+  });
+}
+
 class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; error: null }> {
   private filters: Filter[] = [];
   private orClauses: OrClause[] | null = null;
   private selectStr = '*';
   private orderSpecs: OrderSpec[] = [];
+  private referencedOrders: Record<string, OrderSpec[]> = {};
   private rangeSpec: { from: number; to: number } | null = null;
   private limitN: number | null = null;
   private single = false;
@@ -161,8 +208,13 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
     });
     return this;
   }
-  order(col: string, opts?: { ascending?: boolean }): this {
-    this.orderSpecs.push({ col, ascending: opts?.ascending ?? true });
+  order(col: string, opts?: { ascending?: boolean; referencedTable?: string }): this {
+    const spec: OrderSpec = { col, ascending: opts?.ascending ?? true };
+    if (opts?.referencedTable) {
+      (this.referencedOrders[opts.referencedTable] ??= []).push(spec);
+    } else {
+      this.orderSpecs.push(spec);
+    }
     return this;
   }
   range(from: number, to: number): this {
@@ -195,20 +247,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
     const table = this.db[this.table] ?? [];
     let rows = table.filter((row) => this.matchesRow(row));
 
-    if (this.orderSpecs.length > 0) {
-      const specs = this.orderSpecs;
-      rows = [...rows].sort((a, b) => {
-        for (const spec of specs) {
-          const av = a[spec.col] as string | number | null;
-          const bv = b[spec.col] as string | number | null;
-          if (av === bv) continue;
-          if (av == null) return spec.ascending ? -1 : 1;
-          if (bv == null) return spec.ascending ? 1 : -1;
-          return av < bv ? (spec.ascending ? -1 : 1) : spec.ascending ? 1 : -1;
-        }
-        return 0;
-      });
-    }
+    if (this.orderSpecs.length > 0) rows = sortRows(rows, this.orderSpecs);
 
     if (this.rangeSpec) {
       rows = rows.slice(this.rangeSpec.from, this.rangeSpec.to + 1);
@@ -216,7 +255,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
       rows = rows.slice(0, this.limitN);
     }
 
-    const projected = rows.map((r) => projectRow(this.table, r, this.selectStr, this.db)) as T[];
+    const projected = rows.map((r) => projectRow(this.table, r, this.selectStr, this.db, this.referencedOrders)) as T[];
 
     if (this.single) {
       return { data: (projected[0] ?? null) as T | null, error: null };
