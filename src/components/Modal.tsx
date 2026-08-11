@@ -58,6 +58,10 @@ export default function Modal({
         return;
       }
       if (e.key !== 'Tab') return;
+      // The trap keeps focus inside the panel by construction, so this only ever fires for
+      // Tab presses that originated there — but skip the DOM query if focus somehow left anyway
+      // (e.g. a second, unrelated Modal instance's own listener sees this same keydown).
+      if (!panel!.contains(document.activeElement)) return;
       const focusable = Array.from(panel!.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
         (el) => el.offsetParent !== null,
       );

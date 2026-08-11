@@ -1,5 +1,4 @@
-import { getSession } from '@/lib/session';
-import { redirect, notFound } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { SeasonScheduleDraftEditor } from '@/components/SeasonScheduleDraftEditor';
 import { getSeason, getSeasonRoster, getSeasonScheduleDraft, toDraftScheduleWeeks } from '@/lib/queries';
@@ -10,11 +9,9 @@ export const metadata = {
   description: 'Generate or hand-edit a regular season’s schedule.',
 };
 
+// Admin gate lives in this route group's layout.tsx (#336) — this page doesn't need the session
+// itself.
 export default async function SeasonScheduleEditorPage({ params }: { params: Promise<{ id: string }> }) {
-  // Admin gate lives in this route group's layout.tsx (#336).
-  const session = await getSession();
-  if (!session?.user?.playerId) redirect('/');
-
   const { id } = await params;
   const seasonId = Number(id);
   if (!Number.isFinite(seasonId)) notFound();

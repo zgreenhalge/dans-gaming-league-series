@@ -29,21 +29,12 @@ export interface WeekWithMatches extends Week {
   matches: MatchWithRoster[];
 }
 
-type RosterStatRow = {
-  match_id: number;
-  player_id: number;
-  faction: 'SHIRTS' | 'SKINS';
-  kills: number;
-  assists: number;
-  deaths: number;
-  adr: number;
-  is_win: boolean;
-};
+type RosterStatRow = Omit<RosterStat, 'player_name'>;
 
 type EmbeddedMatch = Match & { player_match_stats: RosterStatRow[] };
 type EmbeddedWeek = Week & { matches: EmbeddedMatch[] };
 
-function buildRosterStats(roster: RosterStatRow[], faction: 'SHIRTS' | 'SKINS', players: Map<number, { name: string }>): RosterStat[] {
+function buildRosterStats(roster: RosterStatRow[], faction: Faction, players: Map<number, { name: string }>): RosterStat[] {
   return roster
     .filter((r) => r.faction === faction)
     .map((r) => ({

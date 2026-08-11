@@ -1,5 +1,4 @@
-import { getSession } from '@/lib/session';
-import { redirect } from 'next/navigation';
+import { sessionPlayerId } from '@/lib/session';
 import { TopbarShell } from '@/components/TopbarShell';
 import { AdminConsole } from '@/components/AdminConsole';
 import {
@@ -32,11 +31,9 @@ export const dynamic = 'force-dynamic';
  * all the interactive composition, reusing the same panels/forms the old routes used unmodified.
  */
 export default async function AdminPage() {
-  // Admin gate lives in this route group's layout.tsx (#336) — the session read below reuses
-  // that same call via getSession()'s per-request cache rather than paying for it twice.
-  const session = await getSession();
-  if (!session?.user?.playerId) redirect('/');
-  const selfId = session.user.playerId;
+  // Admin gate lives in this route group's layout.tsx (#336) — sessionPlayerId() trusts that
+  // guarantee instead of re-deriving and re-checking it.
+  const selfId = await sessionPlayerId();
 
   const adminClient = getAdminClient();
   const [jobs, opsErrors, matches, players, activeServerMatch, workshopMaps, seasons, configSets] =

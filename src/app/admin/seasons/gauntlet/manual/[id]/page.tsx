@@ -1,5 +1,4 @@
-import { getSession } from '@/lib/session';
-import { redirect, notFound } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { GauntletPodEditor } from '@/components/GauntletPodEditor';
 import { getSeason, getSeasonLeaderboard, getLinkedGauntlet, getGauntletBracketShape } from '@/lib/queries';
@@ -11,11 +10,9 @@ export const metadata = {
   description: 'Hand-build or extend a gauntlet bracket, pod by pod.',
 };
 
+// Admin gate lives in this route group's layout.tsx (#336) — this page doesn't need the session
+// itself.
 export default async function ManualGauntletPage({ params }: { params: Promise<{ id: string }> }) {
-  // Admin gate lives in this route group's layout.tsx (#336).
-  const session = await getSession();
-  if (!session?.user?.playerId) redirect('/');
-
   const { id } = await params;
   const regularSeasonId = Number(id);
   if (!Number.isFinite(regularSeasonId)) notFound();

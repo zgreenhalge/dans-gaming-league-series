@@ -1,5 +1,3 @@
-import { getSession } from '@/lib/session';
-import { redirect } from 'next/navigation';
 import { TopbarShell } from '@/components/TopbarShell';
 import { CreateSeasonForm } from '@/components/CreateSeasonForm';
 import { getSeasons, getMapLookup } from '@/lib/queries';
@@ -15,11 +13,9 @@ export const metadata = {
  * #262) — season creation is a deliberate, occasional, multi-field flow (map pool + new-map entry),
  * not a quick action that belongs collapsed alongside a season list.
  */
+// Admin gate lives in this route group's layout.tsx (#336) — this page doesn't need the session
+// itself.
 export default async function NewSeasonPage() {
-  // Admin gate lives in this route group's layout.tsx (#336).
-  const session = await getSession();
-  if (!session?.user?.playerId) redirect('/');
-
   const [seasons, mapLookup] = await Promise.all([getSeasons(), getMapLookup()]);
 
   let maxNum = 0;
