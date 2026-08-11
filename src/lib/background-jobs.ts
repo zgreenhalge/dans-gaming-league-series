@@ -44,7 +44,11 @@ export async function getJobCreatedAt(admin: SupabaseClient, jobType: string, ke
   return createdAt ? new Date(createdAt) : null;
 }
 
-async function mirrorSubjectStatus(
+/** Write `value` onto a `JobSubject`'s mirrored column — e.g. `matches.replay_status`. Exported for
+ *  `scripts/job-stage.ts`'s `createJobRunner`, whose `markRunning`/`fail` mirror the same way this
+ *  module's own `dispatchAndRecordFailure` does, so a job script's lifecycle writes and a dispatch
+ *  route's rollback write can't disagree on what "mirror onto the subject" means. */
+export async function mirrorSubjectStatus(
   admin: SupabaseClient,
   subject: JobSubject,
   value: string,

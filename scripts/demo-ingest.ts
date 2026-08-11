@@ -53,49 +53,27 @@ import { persistSabremetrics } from '../src/lib/demo/sabremetrics';
 import { persistWeaponStats } from '../src/lib/demo/weaponStats';
 import { writeMatchScore } from '../src/lib/matchScore';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '../src/lib/demo/ingestResult';
-import { recordJobStatus, matchJobKey, jobStatusWriter } from '../src/lib/background-jobs';
-import { notice, error } from './gh-actions-log';
-import { createStageRunner } from './job-stage';
+import { matchJobKey } from '../src/lib/background-jobs';
+import { notice } from './gh-actions-log';
+import { createJobRunner } from './job-stage';
 
 const STAGES = ['fetch', 'parse'] as const;
 
 const matchId = Number(process.env.MATCH_ID);
-const ghRunId = process.env.GH_RUN_ID ? Number(process.env.GH_RUN_ID) : null;
-const ghRunUrl = process.env.GH_RUN_URL ?? null;
 const supabase = getAdminClient();
 
-/** Upsert the job row (it normally exists from the matchzy-log route; upsert covers manual runs too).
- *  Throws if the write fails, so a corrupted status row aborts the run via `main().catch(fail)`
- *  rather than leaving the row stuck at its last-written status looking like a hang; `fail()` below
- *  writes directly instead, since it must not throw while already unwinding. */
-const setJob = jobStatusWriter(supabase, JOB_TYPE, matchJobKey(matchId));
-
-const stageRunner = createStageRunner(STAGES[0], setJob);
-const { stage } = stageRunner;
-
-async function fail(err: unknown) {
-  const message = err instanceof Error ? err.message : String(err);
-  error(`demo-ingest failed at stage ${stageRunner.currentStage}: ${message}`);
-  await recordJobStatus(supabase, JOB_TYPE, matchJobKey(matchId), {
-    status: 'failed',
-    stage: stageRunner.currentStage,
-    error_message: message,
-    finished_at: new Date().toISOString(),
-  });
-  process.exit(1);
-}
+/** `runner.markRunning()` upserts the job row (it normally exists from the matchzy-log route; upsert
+ *  covers manual runs too) and throws if the write fails, so a corrupted status row aborts the run via
+ *  `main().catch(runner.fail)` rather than leaving the row stuck at its last-written status looking
+ *  like a hang; `runner.fail` below writes directly instead, since it must not throw while already
+ *  unwinding. */
+const runner = createJobRunner(supabase, JOB_TYPE, matchJobKey(matchId), STAGES[0]);
+const { stage, setJob } = runner;
 
 async function main() {
   if (!Number.isInteger(matchId) || matchId <= 0) throw new Error(`Bad MATCH_ID: ${process.env.MATCH_ID}`);
 
-  await setJob({
-    status: 'running',
-    stage: STAGES[0],
-    error_message: null,
-    gh_run_id: ghRunId,
-    gh_run_url: ghRunUrl,
-    started_at: new Date().toISOString(),
-  });
+  await runner.markRunning();
 
   // Pulls the demo from DatHost if it isn't already in R2 (a manual reparse of an already-staged/
   // confirmed match has it already). Reads the match's inputs first (cheap) so it can poll the same
@@ -249,4 +227,4 @@ async function main() {
   );
 }
 
-main().catch(fail);
+main().catch(runner.fail);

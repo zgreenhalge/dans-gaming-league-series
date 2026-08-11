@@ -35,13 +35,13 @@ import { getAdminClient } from '../src/lib/supabase-admin';
 import { getMatchIdsForMap, getMapHeatmap } from '../src/lib/queries/maps';
 import { getMapTraces } from '../src/lib/queries/replay';
 import { mapSlug } from '../src/lib/maps';
-import { recordJobStatus, matchJobKey, jobStatusWriter } from '../src/lib/background-jobs';
+import { matchJobKey } from '../src/lib/background-jobs';
 import { pullDemoAndClearLiveScore } from '../src/lib/demo/liveScore';
 import { demoIngestFlushFloorMs } from '../src/lib/demo/flushFloor';
 import { DEMO_INGEST_JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '../src/lib/demo/ingestResult';
 import { dathostServerId, sleep } from '../src/lib/dathost';
-import { notice, warning, error } from './gh-actions-log';
-import { createStageRunner } from './job-stage';
+import { notice, warning } from './gh-actions-log';
+import { createJobRunner } from './job-stage';
 
 const JOB_TYPE = 'replay_extract';
 
@@ -78,33 +78,16 @@ const DEMO_INGEST_VERDICT_TIMEOUT_MS = 8 * 60_000;
 const DEMO_INGEST_VERDICT_POLL_MS = 10_000;
 
 const matchId = Number(process.env.MATCH_ID);
-const ghRunId = process.env.GH_RUN_ID ? Number(process.env.GH_RUN_ID) : null;
-const ghRunUrl = process.env.GH_RUN_URL ?? null;
 const supabase = getAdminClient();
 
-/** Every non-terminal write in this script (running/stage/succeeded) goes through this one choke
- *  point; `fail()` below writes directly instead, since it must not throw while already unwinding. */
-const setJob = jobStatusWriter(supabase, JOB_TYPE, matchJobKey(matchId));
-
-const stageRunner = createStageRunner(STAGES[0], setJob);
-const { stage, setStage } = stageRunner;
-
-/** Mark the row queued→running (idempotent), recording the GH run link. */
-async function markRunning() {
-  await setJob({
-    status: 'running',
-    stage: STAGES[0],
-    error_message: null,
-    gh_run_id: ghRunId,
-    gh_run_url: ghRunUrl,
-    started_at: new Date().toISOString(),
-  });
-  await supabase
-    .from('matches')
-    .update({ replay_status: 'running' })
-    .eq('id', matchId)
-    .throwOnError();
-}
+/** Every non-terminal write in this script (running/stage/succeeded) goes through `runner`'s bound
+ *  writer; `runner.fail` writes directly instead, since it must not throw while already unwinding.
+ *  `subject` mirrors `running`/`failed` onto `matches.replay_status` alongside the job row, the same
+ *  way `markRunning`/`fail` in every other job script mirror onto their own subject. */
+const runner = createJobRunner(supabase, JOB_TYPE, matchJobKey(matchId), STAGES[0], {
+  subject: { table: 'matches', column: 'replay_status', id: matchId },
+});
+const { stage, setStage, setJob } = runner;
 
 /** This match's `demo_ingest` job status, or `null` if no such job exists. */
 async function readDemoIngestStatus(): Promise<string | null> {
@@ -150,22 +133,9 @@ async function uploadGzippedJson(key: string, data: unknown): Promise<number> {
   return gz.length;
 }
 
-async function fail(err: unknown) {
-  const msg = err instanceof Error ? err.message : String(err);
-  error(`failed at stage ${stageRunner.currentStage}: ${msg}`);
-  await recordJobStatus(supabase, JOB_TYPE, matchJobKey(matchId), {
-    status: 'failed',
-    stage: stageRunner.currentStage,
-    error_message: msg,
-    finished_at: new Date().toISOString(),
-  });
-  await supabase.from('matches').update({ replay_status: 'failed' }).eq('id', matchId);
-  process.exit(1);
-}
-
 async function main() {
   if (!Number.isFinite(matchId)) throw new Error('MATCH_ID env var missing or invalid');
-  await markRunning();
+  await runner.markRunning();
 
   const inputs = await stage('validate', async () => {
     const i = await getReplayInputs(supabase, matchId);
@@ -321,4 +291,4 @@ async function main() {
   notice('replay-extract complete');
 }
 
-main().catch(fail);
+main().catch(runner.fail);

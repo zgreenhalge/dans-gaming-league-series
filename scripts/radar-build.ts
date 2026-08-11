@@ -21,9 +21,9 @@ import { homedir } from 'node:os';
 import { parseOverview, workshopIdFromUrl } from '../src/lib/replay/radar';
 import { putR2Object, radarKey } from '../src/lib/r2';
 import { getAdminClient } from '../src/lib/supabase-admin';
-import { recordJobStatus, mapJobKey, jobStatusWriter } from '../src/lib/background-jobs';
-import { notice, warning, error } from './gh-actions-log';
-import { createStageRunner } from './job-stage';
+import { mapJobKey } from '../src/lib/background-jobs';
+import { notice, warning } from './gh-actions-log';
+import { createJobRunner } from './job-stage';
 
 const JOB_TYPE = 'radar_build';
 
@@ -39,8 +39,6 @@ const STAGES = [
 ] as const;
 
 const mapId = Number(process.env.MAP_ID);
-const ghRunId = process.env.GH_RUN_ID ? Number(process.env.GH_RUN_ID) : null;
-const ghRunUrl = process.env.GH_RUN_URL ?? null;
 const STEAMCMD = process.env.STEAMCMD || 'steamcmd';
 const DECOMPILER = process.env.DECOMPILER || 'Source2Viewer-CLI';
 const supabase = getAdminClient();
@@ -55,36 +53,12 @@ function summary(md: string) {
   if (file) appendFileSync(file, md + '\n');
 }
 
-/** Every non-terminal write in this script (running/stage/succeeded) goes through this one choke
- *  point; `fail()` below writes directly instead, since it must not throw while already unwinding. */
-const setJob = jobStatusWriter(supabase, JOB_TYPE, mapJobKey(mapId));
-
-const stageRunner = createStageRunner(STAGES[0], setJob);
-const { stage } = stageRunner;
-
-async function markRunning() {
-  await setJob({
-    status: 'running',
-    stage: STAGES[0],
-    error_message: null,
-    gh_run_id: ghRunId,
-    gh_run_url: ghRunUrl,
-    started_at: new Date().toISOString(),
-  });
-}
-
-async function fail(err: unknown) {
-  const msg = err instanceof Error ? err.message : String(err);
-  error(`${mapLabel} failed at stage ${stageRunner.currentStage}: ${msg}`);
-  summary(`\n❌ **${mapLabel}** failed at \`${stageRunner.currentStage}\`: ${msg}`);
-  await recordJobStatus(supabase, JOB_TYPE, mapJobKey(mapId), {
-    status: 'failed',
-    stage: stageRunner.currentStage,
-    error_message: msg,
-    finished_at: new Date().toISOString(),
-  });
-  process.exit(1);
-}
+/** Every non-terminal write in this script (running/stage/succeeded) goes through `runner`'s bound
+ *  writer; `runner.fail` writes directly instead, since it must not throw while already unwinding.
+ *  `label` gives `runner.fail`'s log line the resolved map name instead of the bare job type, once
+ *  `validate-workshop-id` resolves it. */
+const runner = createJobRunner(supabase, JOB_TYPE, mapJobKey(mapId), STAGES[0], { label: () => mapLabel });
+const { stage, setJob } = runner;
 
 /** Recursively collect files under `dir` whose path matches `test`. */
 function walk(dir: string, test: (path: string) => boolean, out: string[] = []): string[] {
@@ -98,7 +72,7 @@ function walk(dir: string, test: (path: string) => boolean, out: string[] = []):
 
 async function main() {
   if (!Number.isFinite(mapId)) throw new Error('MAP_ID env var missing or invalid');
-  await markRunning();
+  await runner.markRunning();
 
   const { workshopId, mapName } = await stage('validate-workshop-id', async () => {
     const { data } = await supabase
@@ -263,4 +237,10 @@ async function main() {
   notice(`radar-build complete for "${mapName}"`);
 }
 
-main().catch(fail);
+main().catch(async (err) => {
+  // The GH run summary write is genuinely script-local (radar-build is the only job that renders
+  // one) — `runner.fail` covers the shared job-row write, this covers the one-off decoration around it.
+  const msg = err instanceof Error ? err.message : String(err);
+  summary(`\n❌ **${mapLabel}** failed at \`${runner.currentStage}\`: ${msg}`);
+  await runner.fail(err);
+});
