@@ -108,7 +108,7 @@ async function reassert(serverId: string, key: string) {
   };
 
   console.error(`— PUT /game-servers/${serverId} (config set "${key}") —`);
-  const put = await api('PUT', `/game-servers/${serverId}`, new URLSearchParams(fields));
+  const put = await api('PUT', `/game-servers/${serverId}`, fields);
   if (put.status >= 400) {
     console.error(`✖ PUT failed (${put.status}): ${put.text.slice(0, 300)}`);
     process.exit(2);

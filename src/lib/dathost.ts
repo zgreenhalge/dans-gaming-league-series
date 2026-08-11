@@ -90,16 +90,27 @@ export function authHeader(): string {
 
 /** One authenticated DatHost request, returning the raw `Response` — shared by `call()` (JSON/text
  *  body) and `getFileResponse()` (binary body), which otherwise duplicate the same URL/auth-header
- *  construction. Body consumption is left to the caller since JSON and binary reads can't share one. */
-async function request(method: string, path: string, form?: Record<string, string>): Promise<Response> {
-  const body = form ? new URLSearchParams(form) : undefined;
+ *  construction, and exported for `dathost-config.ts`'s cfg-file push/diff reads and
+ *  `scripts/dathost-golden-shared.ts`'s CLI-facing `api()` — the codebase's one place that builds a
+ *  DatHost request, so a CLI script's `{status, text, json}` contract and this module's throw-on-
+ *  non-2xx `call()` can't independently drift on the URL/auth/body-encoding underneath both. `body` is
+ *  form-encoded from a plain record (the common case) or passed through as-is for a multipart upload
+ *  (`pushCfgFiles`'s `FormData`) — `fetch` sets the multipart boundary header itself, so a `FormData`
+ *  body must NOT get the urlencoded `Content-Type` the record case needs. Body consumption is left to
+ *  the caller since JSON and binary reads can't share one. */
+export async function request(
+  method: string,
+  path: string,
+  body?: Record<string, string> | FormData,
+): Promise<Response> {
+  const encoded = body === undefined || body instanceof FormData ? body : new URLSearchParams(body);
   return fetch(`${BASE}${path}`, {
     method,
     headers: {
       Authorization: authHeader(),
-      ...(body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+      ...(encoded instanceof URLSearchParams ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
     },
-    body,
+    body: encoded,
   });
 }
 
