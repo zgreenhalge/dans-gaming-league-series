@@ -22,14 +22,19 @@ export function parseModifiedAt(raw: number | undefined): Date | null {
   return ms >= MODIFIED_AT_FLOOR_MS ? new Date(ms) : null;
 }
 
-/** Group every match-scoped file by the match id embedded in its path, by known MatchZy pattern. */
+/** Group every match-scoped file by the match id embedded in its path, by known MatchZy pattern.
+ *  The demo entry covers `demoBaseName()`'s (`src/lib/matchzy.ts`) own naming — `{date-or-
+ *  "unscheduled"}_{matchId}_{mapSlug}.dem`, an optional `_HH-MM-SS` after the date for a demo
+ *  DatHost auto-named itself before `matchzy_demo_name_format` pinned this scheme — plus a bare
+ *  `{matchId}.dem` for demos recorded before either naming scheme existed. */
 export function groupByMatchId(files: RemoteFile[]): Map<number, RemoteFile[]> {
   const patterns: RegExp[] = [
     /^matchzy_(\d+)_\d+_round\d+\.txt$/,
     /^MatchZyDataBackup\/matchzy_(\d+)_\d+_round\d+\.json$/,
     /^MatchZy_Stats\/(\d+)\//,
     /^MatchZyPlayerNames\/Match_(\d+)\.ini$/,
-    /^MatchZy\/\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_(\d+)_.*\.dem$/,
+    /^MatchZy\/(?:\d{4}-\d{2}-\d{2}(?:_\d{2}-\d{2}-\d{2})?|unscheduled)_(\d+)_.*\.dem$/,
+    /^MatchZy\/(\d+)\.dem$/,
   ];
   const byMatch = new Map<number, RemoteFile[]>();
   for (const file of files) {

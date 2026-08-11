@@ -29,6 +29,21 @@ test('groupByMatchId: matches each known MatchZy path pattern', () => {
   assert.equal(byMatch.get(501)?.length, 5);
 });
 
+test('groupByMatchId: matches demoBaseName()\'s current naming (date_matchId_map, no time)', () => {
+  const byMatch = groupByMatchId([file('MatchZy/2026-08-06_59_memento.dem')]);
+  assert.deepEqual([...byMatch.keys()], [59]);
+});
+
+test('groupByMatchId: matches demoBaseName()\'s "unscheduled" date placeholder', () => {
+  const byMatch = groupByMatchId([file('MatchZy/unscheduled_501_de_such.dem')]);
+  assert.deepEqual([...byMatch.keys()], [501]);
+});
+
+test('groupByMatchId: matches a bare {matchId}.dem demo', () => {
+  const byMatch = groupByMatchId([file('MatchZy/54.dem')]);
+  assert.deepEqual([...byMatch.keys()], [54]);
+});
+
 test('groupByMatchId: different match ids land in separate buckets', () => {
   const files = [file('matchzy_501_1_round1.txt'), file('matchzy_502_1_round1.txt')];
   const byMatch = groupByMatchId(files);
