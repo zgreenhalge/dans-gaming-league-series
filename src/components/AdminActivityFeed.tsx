@@ -21,6 +21,7 @@ import {
   JOB_TYPE_LABEL,
   JOB_IN_PROGRESS_STATUSES,
   jobNeedsAttention,
+  jobDurationLabel,
   type BackgroundJobRow,
   type BackgroundJobType,
 } from '@/lib/jobs';
@@ -171,8 +172,9 @@ function DismissOpsError({ id, onDismissed }: { id: number; onDismissed: () => v
   );
 }
 
-function JobEventRow({ event }: { event: JobEvent }) {
+function JobEventRow({ event, now }: { event: JobEvent; now: number | null }) {
   const { job } = event;
+  const durationLabel = jobDurationLabel(job, now);
   return (
     <div className="grid grid-cols-[1fr_auto] gap-2 items-start px-3 py-2.5 border-t border-[var(--color-border-tertiary)]">
       <div className="min-w-0">
@@ -194,6 +196,9 @@ function JobEventRow({ event }: { event: JobEvent }) {
       </div>
       <div className="flex flex-col items-end gap-1 text-right shrink-0">
         <span className="font-mono text-[10px] text-[var(--color-text-secondary)] tabular-nums">{event.when ?? '—'}</span>
+        {durationLabel && (
+          <span className="font-mono text-[10px] text-[var(--color-text-secondary)] tabular-nums">{durationLabel}</span>
+        )}
         <div className="flex items-center gap-2">
           {job.ghRunUrl && (
             <a
@@ -428,7 +433,7 @@ export function AdminActivityFeed({
             <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden max-h-[520px] overflow-y-auto [&>*:first-child]:border-t-0">
               {visible.map((e) =>
                 e.kind === 'job' ? (
-                  <JobEventRow key={e.key} event={e} />
+                  <JobEventRow key={e.key} event={e} now={now} />
                 ) : (
                   <OpsEventRow key={e.key} event={e} onJump={onJump} onDismissed={dismissOne} />
                 ),
