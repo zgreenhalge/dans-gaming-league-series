@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { SITE_URL } from '@/lib/site';
+import { SITE_URL } from '@/lib/seo/site';
 import { getSeasons, getPlayersById, getMapLookup, getAllPlayedMatchIds } from '@/lib/queries';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

@@ -1,5 +1,5 @@
 import { ImageResponse } from 'next/og';
-import { getPlayerMeta } from '@/lib/og';
+import { getPlayerMeta } from '@/lib/seo/og';
 import { OG_SIZE, colors, loadFonts, fontConfig, CardShell, StatPill, ehogColor } from '@/lib/og-card';
 
 export const alt = 'DGLS Player';

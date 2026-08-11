@@ -30,7 +30,7 @@ import { SeasonScheduleEntryPoint } from '@/components/SeasonScheduleEntryPoint'
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 import { seasonTitle, weekWindow, matchTitle } from '@/lib/util';
-import { buildSeasonJsonLd } from '@/lib/structured-data';
+import { buildSeasonJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 
 export const revalidate = 60;

@@ -1,5 +1,5 @@
 import { SITE_URL } from './site';
-import { matchTitle } from './util';
+import { matchTitle } from '../util';
 
 /**
  * Serializes a JSON-LD object for a `<script type="application/ld+json">` tag. Escapes `<` so a

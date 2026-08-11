@@ -9,7 +9,7 @@ import { MapProvider } from "@/components/MapContext";
 import { ScrimStatusProvider } from "@/components/ScrimStatusContext";
 import { LiveMatchTicker, TICKER_HEIGHT_PX } from "@/components/LiveMatchTicker";
 import { getSeasons, getMapLookup, getLiveTickerMatch } from "@/lib/queries";
-import { SITE_URL } from "@/lib/site";
+import { SITE_URL } from "@/lib/seo/site";
 import Script from "next/script";
 import "./globals.css";
 

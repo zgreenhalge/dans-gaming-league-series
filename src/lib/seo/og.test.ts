@@ -4,15 +4,15 @@
  * totals and must match `deriveRates()` (util.ts) for the same input, so a duplicate inline
  * reimplementation can't silently reappear.
  *
- * Run:  npx tsx src/lib/og.test.ts
+ * Run:  npx tsx src/lib/seo/og.test.ts
  */
 
 import assert from 'node:assert/strict';
-import { __setTestClient } from './supabase';
-import { createFakeSupabaseClient } from './test-support/fakeSupabase';
-import { buildFakeDb } from './test-support/fixtures';
-import { deriveRates } from './util';
-import { test, report } from './test-support/miniTest';
+import { __setTestClient } from '../supabase';
+import { createFakeSupabaseClient } from '../test-support/fakeSupabase';
+import { buildFakeDb } from '../test-support/fixtures';
+import { deriveRates } from '../util';
+import { test, report } from '../test-support/miniTest';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 

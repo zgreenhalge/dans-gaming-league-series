@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { SITE_URL } from '@/lib/site';
+import { SITE_URL } from '@/lib/seo/site';
 
 // Permissive by design, including for AI crawlers (ClaudeBot, GPTBot, PerplexityBot,
 // Google-Extended) — only API routes and authenticated admin/auth surfaces are off-limits.
