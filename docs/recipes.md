@@ -109,6 +109,43 @@ in.
    one-off fixture in the test file — it's a single shared, internally-consistent "league" other
    tests also depend on.
 
+## Recipe: Test a route handler
+
+`route.ts` handlers can be called directly in a test — no running server needed — using the same
+zero-dependency `test()`/`report()` harness as everywhere else. `src/app/api/seasons/[id]/players/route.test.ts`
+is the reference example, covering `requireSeasonRosterAccess()`'s admin-vs-self permission branches
+and its `UPCOMING`-only status gate.
+
+1. **Build the request** with `jsonRequest(url, method, body)` (`src/lib/test-support/nextRequest.ts`)
+   — it constructs a real `NextRequest` with a JSON body, exactly what the handler's `req.json()`
+   expects. Call the exported `POST`/`DELETE`/etc. directly, passing `{ params: Promise.resolve({ id: '...' }) }`
+   for a dynamic route segment.
+2. **Fake the session** with `__setTestSession(session | null)` (`src/lib/session.ts`) instead of a
+   real `getServerSession()` call — set it to `null` for the unauthenticated case, or
+   `{ user: { playerId }, expires: '<iso date>' }` for a signed-in one. This only intercepts session
+   reads that go through `requireSession()` (route handlers) or `getSession()` (Server Components);
+   a gate that still imports `getServerSession` from `next-auth` directly needs the same one-line
+   swap `season-roster-access.ts` made before it's testable this way.
+3. **Fake both Supabase clients** with `__setTestClient()` (`src/lib/supabase.ts`, already used by
+   the query-helper harness) and `__setTestAdminClient()` (`src/lib/supabase-admin.ts`) pointed at
+   the *same* `createFakeSupabaseClient(db)` instance, since a route typically reads through one
+   (`isPlayerAdmin()` uses the anon client) and writes through the other (`getAdminClient()`) — one
+   shared fake keeps a mutation made through either visible to both. Build a small local `FakeDb`
+   fixture scoped to the route under test rather than reaching for the big shared
+   `test-support/fixtures.ts` "league" (that fixture is tuned for the `queries/*.ts` regression
+   suite's read-only cross-function graph, not a single route's mutation scenarios).
+4. **Mutations are supported** — `fakeSupabase.ts`'s `.insert()`/`.delete()` push/remove rows in the
+   `FakeDb` object directly, so assert on the outcome either from the handler's `NextResponse` (status
+   code, JSON body) or by re-reading the same `FakeDb` object the test built. It doesn't emulate
+   unique/FK constraints or return errors — a route whose behavior depends on the database rejecting
+   a write needs its own targeted case.
+5. **Reset shared state between tests.** The `__setTest*` functions install process-global overrides,
+   so build a fresh `FakeDb`/fake client per `test()` block (a small `installFixture()` helper that
+   both installs it and returns the `db` for later assertions, called at the top of each test, works
+   well) rather than sharing one across cases — otherwise a mutation in one test leaks into the next.
+   Call every `__setTest*` function with `undefined` at the end of the file to restore real behavior
+   for any test file that happens to run in the same process afterward.
+
 ## Recipe: Add a new map
 
 Pure asset task, no query changes:
@@ -141,13 +178,16 @@ if the element carries a semantic color (win/loss) that should survive hover.
 - `npm run build` (type-checks + lints via the build)
 - `npm run lint`
 - `npm test` — runs every `*.test.ts` under `src` (zero-dependency `node:assert` runner via `tsx`,
-  no config). Two kinds: unit tests for pure invariants in `util.ts` (canonical sort, played-match
+  no config). Three kinds: unit tests for pure invariants in `util.ts` (canonical sort, played-match
   check, score parsing, season pairing, `deriveRates`) — add a case in `src/lib/util.test.ts` if you
-  touched any of those — and the `src/lib/queries-*.test.ts` regression harness for
+  touched any of those; the `src/lib/queries-*.test.ts` regression harness for
   `src/lib/queries/*.ts`, which snapshots every exported function's output against a shared fixture
-  (see the query-helper recipe above). If you touched a `queries/*.ts` function's behavior, run its
-  domain test file with `UPDATE_SNAPSHOTS=1` and review the snapshot diff before committing — a diff
-  you didn't expect is a bug, not something to blindly regenerate away.
+  (see the query-helper recipe above) — if you touched a `queries/*.ts` function's behavior, run its
+  domain test file with `UPDATE_SNAPSHOTS=1` and review the snapshot diff before committing, since a
+  diff you didn't expect is a bug, not something to blindly regenerate away; and route-handler tests
+  colocated with the `route.ts` they cover (e.g. `src/app/api/seasons/[id]/players/route.test.ts`),
+  see the route-handler recipe above — not every route has one yet, so this is opt-in per route
+  rather than a required gate.
 - If you touched `src/lib/queries/`, double check you didn't duplicate a join/derivation that
   already exists — grep for the field name first
 - If you added a domain concept (new season format, new stat, new filter), add it to
