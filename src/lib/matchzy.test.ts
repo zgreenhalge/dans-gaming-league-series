@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import { createFakeSupabaseClient } from './test-support/fakeSupabase';
 import type { FakeDb } from './test-support/fakeSupabase';
-import { buildMatchzyConfig, demoBaseName } from './matchzy';
+import { buildMatchzyConfig, demoBaseName, matchIdFromDemoBaseName } from './matchzy';
 import { test, report } from './test-support/miniTest';
 
 /** A minimal, valid one-match DB: match 500, shirts/skins each with one rostered player, plus one
@@ -171,6 +171,17 @@ async function main() {
 
   await test('demoBaseName() — falls back to placeholders for an unscheduled match or unset map', () => {
     assert.equal(demoBaseName(500, null, null), 'unscheduled_500_unknown-map');
+  });
+
+  await test('matchIdFromDemoBaseName() round-trips demoBaseName() for a scheduled and an unscheduled match — this is the test that would have caught #354', () => {
+    assert.equal(matchIdFromDemoBaseName(demoBaseName(500, '2026-08-04T23:00:00+00:00', 'de_such')), 500);
+    assert.equal(matchIdFromDemoBaseName(demoBaseName(59, null, 'memento')), 59);
+  });
+
+  await test('matchIdFromDemoBaseName() — null for a name in a different shape (e.g. a legacy DatHost-auto or bare-id demo)', () => {
+    assert.equal(matchIdFromDemoBaseName('2026-07-20_18-30-00_501_de_such'), null);
+    assert.equal(matchIdFromDemoBaseName('54'), null);
+    assert.equal(matchIdFromDemoBaseName('not-a-demo-name'), null);
   });
 
   await test('fixed shape: matchid, num_maps, players_per_team, clinch_series, team names', async () => {

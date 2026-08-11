@@ -35,7 +35,7 @@ test('groupByMatchId: matches demoBaseName()\'s current naming (date_matchId_map
 });
 
 test('groupByMatchId: matches demoBaseName()\'s "unscheduled" date placeholder', () => {
-  const byMatch = groupByMatchId([file('MatchZy/unscheduled_501_de_such.dem')]);
+  const byMatch = groupByMatchId([file('MatchZy/unscheduled_501_de-such.dem')]);
   assert.deepEqual([...byMatch.keys()], [501]);
 });
 

@@ -2,6 +2,8 @@
 // file-naming conventions back to a DGLS match id, and measuring how old a timestamp is. No DatHost
 // API or Supabase calls here — those stay in the script, which is the IO-bound orchestration layer.
 
+import { matchIdFromDemoBaseName } from './matchzy';
+
 export interface RemoteFile {
   path: string;
   size: number;
@@ -22,26 +24,44 @@ export function parseModifiedAt(raw: number | undefined): Date | null {
   return ms >= MODIFIED_AT_FLOOR_MS ? new Date(ms) : null;
 }
 
+type Matcher = (path: string) => number | null;
+
+function fromRegex(re: RegExp): Matcher {
+  return (path) => {
+    const m = re.exec(path);
+    return m ? Number(m[1]) : null;
+  };
+}
+
+const DEMO_PATH_RE = /^MatchZy\/(.+)\.dem$/;
+
+/** A current-format demo's match id, via `matchIdFromDemoBaseName()` (`./matchzy.ts`) — the same
+ *  function `demoBaseName()` has as its own inverse, so this can't independently drift out of sync
+ *  with whatever `demoBaseName()` actually produces the way a hand-maintained regex could. */
+function demoBaseNameMatcher(path: string): number | null {
+  const m = DEMO_PATH_RE.exec(path);
+  return m ? matchIdFromDemoBaseName(m[1]) : null;
+}
+
 /** Group every match-scoped file by the match id embedded in its path, by known MatchZy pattern.
- *  The demo entry covers `demoBaseName()`'s (`src/lib/matchzy.ts`) own naming — `{date-or-
- *  "unscheduled"}_{matchId}_{mapSlug}.dem`, an optional `_HH-MM-SS` after the date for a demo
- *  DatHost auto-named itself before `matchzy_demo_name_format` pinned this scheme — plus a bare
- *  `{matchId}.dem` for demos recorded before either naming scheme existed. */
+ *  The two legacy demo matchers only cover residue predating `demoBaseName()`: DatHost's own
+ *  auto-generated `date_HH-MM-SS_matchId_map.dem` naming (before `matchzy_demo_name_format` pinned
+ *  the current scheme), and an even older bare `matchId.dem`. */
 export function groupByMatchId(files: RemoteFile[]): Map<number, RemoteFile[]> {
-  const patterns: RegExp[] = [
-    /^matchzy_(\d+)_\d+_round\d+\.txt$/,
-    /^MatchZyDataBackup\/matchzy_(\d+)_\d+_round\d+\.json$/,
-    /^MatchZy_Stats\/(\d+)\//,
-    /^MatchZyPlayerNames\/Match_(\d+)\.ini$/,
-    /^MatchZy\/(?:\d{4}-\d{2}-\d{2}(?:_\d{2}-\d{2}-\d{2})?|unscheduled)_(\d+)_.*\.dem$/,
-    /^MatchZy\/(\d+)\.dem$/,
+  const matchers: Matcher[] = [
+    fromRegex(/^matchzy_(\d+)_\d+_round\d+\.txt$/),
+    fromRegex(/^MatchZyDataBackup\/matchzy_(\d+)_\d+_round\d+\.json$/),
+    fromRegex(/^MatchZy_Stats\/(\d+)\//),
+    fromRegex(/^MatchZyPlayerNames\/Match_(\d+)\.ini$/),
+    demoBaseNameMatcher,
+    fromRegex(/^MatchZy\/\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_(\d+)_.*\.dem$/),
+    fromRegex(/^MatchZy\/(\d+)\.dem$/),
   ];
   const byMatch = new Map<number, RemoteFile[]>();
   for (const file of files) {
-    for (const pattern of patterns) {
-      const m = pattern.exec(file.path);
-      if (!m) continue;
-      const matchId = Number(m[1]);
+    for (const matcher of matchers) {
+      const matchId = matcher(file.path);
+      if (matchId === null) continue;
       if (!byMatch.has(matchId)) byMatch.set(matchId, []);
       byMatch.get(matchId)!.push(file);
       break;
