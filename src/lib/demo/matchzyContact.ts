@@ -1,13 +1,13 @@
 // Tracks the last MatchZy remote-log event received for a match, regardless of event type — unlike
 // `mapResult.ts`, which only keeps the one `map_result` payload the auto-commit cross-check needs.
-// Written by every authenticated hit to `POST /api/ingest/matchzy-log`. Read by the admin jobs
-// dashboard to distinguish "the remote-log webhook never reached us at all for this match" from "it
-// reached us, but the demo upload specifically never did" — a distinction otherwise only checkable by
-// live RCON on the game server mid-match.
+// Written by every authenticated hit to `POST /api/ingest/matchzy-log`, distinguishing "the
+// remote-log webhook never reached us at all for this match" from "it reached us, but the demo
+// upload specifically never did" — a distinction otherwise only checkable by live RCON on the game
+// server mid-match. No reader exists yet; this is groundwork for that distinction to be surfaced
+// somewhere (e.g. an admin jobs view) once one is built.
 
 import { gzipSync } from 'node:zlib';
-import { getR2Object, putR2Object, matchzyContactKey } from '../r2';
-import { gunzipMaybe } from '../gzip';
+import { putR2Object, matchzyContactKey } from '../r2';
 
 export interface MatchzyContact {
   event: string;
@@ -34,16 +34,4 @@ export async function putMatchzyContact(matchId: number, event: string): Promise
     contentType: 'application/json',
     contentEncoding: 'gzip',
   });
-}
-
-/** Read the last recorded MatchZy contact for a match, or `null` if none was ever recorded (or it's
- *  unreadable). */
-export async function getMatchzyContact(matchId: number): Promise<MatchzyContact | null> {
-  const buf = await getR2Object(matchzyContactKey(matchId));
-  if (!buf) return null;
-  try {
-    return JSON.parse(gunzipMaybe(buf).toString('utf8')) as MatchzyContact;
-  } catch {
-    return null;
-  }
 }
