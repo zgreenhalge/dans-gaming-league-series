@@ -21,7 +21,7 @@ import { SeasonManager, type SeasonSummary } from './SeasonManager';
 import type { OpsErrorItem } from './OpsErrorList';
 import type { GauntletRow } from './GauntletLifecycleList';
 import type { BackgroundJobRow } from '@/lib/jobs';
-import type { AdminMatchRow, WorkshopMapOption } from '@/lib/queries';
+import type { AdminMatchRow, WorkshopMapOption, OpsErrorHistoryRow } from '@/lib/queries';
 import type { Player } from '@/lib/types';
 import type { ActiveServerMatch } from '@/lib/dathost-lifecycle';
 import type { ConfigSetOption } from '@/lib/dathost-config';
@@ -32,6 +32,7 @@ type ManageType = 'match' | 'player' | 'season';
 export function AdminConsole({
   jobs,
   opsErrors,
+  opsErrorHistory,
   matches,
   players,
   selfId,
@@ -40,6 +41,7 @@ export function AdminConsole({
 }: {
   jobs: BackgroundJobRow[];
   opsErrors: OpsErrorItem[];
+  opsErrorHistory: OpsErrorHistoryRow[];
   matches: AdminMatchRow[];
   players: Player[];
   selfId: number | null;
@@ -90,7 +92,7 @@ export function AdminConsole({
       </TabBar>
 
       {section === 'activity' && (
-        <AdminActivityFeed jobs={jobs} opsErrors={opsErrors} onJump={jumpToManage} />
+        <AdminActivityFeed jobs={jobs} opsErrors={opsErrors} opsErrorHistory={opsErrorHistory} onJump={jumpToManage} />
       )}
 
       {section === 'manage' && (

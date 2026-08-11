@@ -26,7 +26,7 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/statistics` | Cross-season career leaderboard + gauntlet stats |
 | `/maps` | Map index — pick/ban/skip counts per map |
 | `/maps/[slug]` | Map detail — match history + per-player stats on that map |
-| `/admin` | Unified admin console (linked from the Topbar when `session.user.isAdmin`) — a standalone Server panel (shared DatHost server status/controls, see [`hosting.md`](./hosting.md)), an Activity feed (every `background_jobs` row across all three pipelines plus live `ops_errors`, tiered Errored / In Progress / Completed), and Manage (Match/Player/Season — reschedule/veto/feature-toggle, rename/admin/Steam-link/EHOG recompute, season creation + gauntlet build/seed/reset + "go live"). The former separate admin pages (`jobs`, `matches`, `players`, `servers`, `ops-errors`, `seasons/new`, `seasons/gauntlet`) now redirect here via `?section=`/`&type=` |
+| `/admin` | Unified admin console (linked from the Topbar when `session.user.isAdmin`) — a standalone Server panel (shared DatHost server status/controls, see [`hosting.md`](./hosting.md)), an Activity feed (every `background_jobs` row across all three pipelines plus live `ops_errors`, tiered Errored / In Progress / Completed / History), and Manage (Match/Player/Season — reschedule/veto/feature-toggle, rename/admin/Steam-link/EHOG recompute, season creation + gauntlet build/seed/reset + "go live"). The former separate admin pages (`jobs`, `matches`, `players`, `servers`, `ops-errors`, `seasons/new`, `seasons/gauntlet`) now redirect here via `?section=`/`&type=` |
 | `/admin/seasons/gauntlet/manual/[id]` | Manual gauntlet pod editor — a full drag/pick/validate/save flow, kept as its own route rather than folded into the console |
 | `/admin/seasons/schedule/[id]` | Regular-season Schedule Editor — hand-edit any match slot, then confirm. Generation itself happens on `/seasons/[id]` (`SeasonScheduleEntryPoint`, shown to admins while `UPCOMING`): if no schedule draft exists yet, that's where the doubleheader-policy choice and "Generate Schedule" live, landing here immediately after; once one exists, that same spot is just an "Edit Schedule" link here |
 | `/auth/steam` | Steam auth landing — completes `signIn()` after the OpenID bounce |
@@ -113,7 +113,7 @@ Supabase (`public` schema). RLS is **off** on all tables — do not enable it wi
 | `background_jobs` | Background-job state machine, one row per (`job_type`, `match_id`/`map_id`). `job_type` is `replay_extract`/`radar_build` ([`replay.md`](./replay.md)), `demo_ingest` ([`hosting.md`](./hosting.md)), or `ehog_recompute` ([`ehog.md`](./ehog.md)); tracks `status`/`stage`/`error_message` + GitHub Action run refs. |
 | `gauntlet_pods` | One row per pod in a gauntlet bracket: `season_id`, `round_number` (== `weeks.week_number`), `pod_index`, `advance_rule` (`single`/`wildcard`), `is_final`, `week_id`, `match1_id`/`match2_id` (set once materialized). Frozen at bracket creation — nothing re-derives it. |
 | `gauntlet_pod_slots` | The 4 slots (`slot_index` 0-3) feeding each pod: `source_kind` (`seed`/`pod`), `source_seed` (for seed slots) or `source_pod_id` (the advancement edge, for pod slots), and the resolved `player_id`. |
-| `ops_errors` | Generic best-effort-operation-failure surface: `entity_type` (`season`/`match`/`system`), `entity_id` (`0` for the `system` singleton), `operation`, `message`, `occurred_at`. Unique on `(entity_type, entity_id, operation)`. See "Surfacing best-effort failures". |
+| `ops_errors` | Generic best-effort-operation-failure surface: `entity_type` (`season`/`match`/`system`), `entity_id` (`0` for the `system` singleton), `operation`, `message`, `occurred_at`, `dismissed_at` (`null` while live). Unique on `(entity_type, entity_id, operation)`. See "Surfacing best-effort failures". |
 | `scrim_sessions` | Singleton table (`id` pinned to `1`) tracking the one active scrim, if any: `started_by` (owner, for the stop-authorization check), `warned_15`/`warned_10`/`warned_5` (pre-match warning one-shots). See [`hosting.md`](./hosting.md)'s Scrims section. |
 | `live_match_score` | One row per in-progress match (`match_id` PK): `shirts_score`, `skins_score`, `round` (nullable). Written by `going_live`/`round_end`/`map_result` events, read live via Supabase Realtime by `MatchScoreHero`/`LiveMatchTicker`. Deleted by `pullDemoAndClearLiveScore()` (`liveScore.ts`), which both `demo-ingest.ts` and `replay-extract.ts` call instead of `ensureDemoInR2()` directly so the demo pull always clears the row — a demo existing is proof the match is over regardless of whether its score has been derived/confirmed yet; `writeMatchScore()` also clears it as a fallback for a score confirmed with no demo ever pulled — see [`hosting.md`](./hosting.md). |
 | `match_server_state` | One row per match (`match_id` PK), created on first provision — no row means `idle`. Transient DatHost server-lifecycle state (`server_state`, `dathost_server_id`, `connect_string`, `server_started_at`, `teardown_at`), kept off the core `matches` row since it's orchestration state, not match data. See [`hosting.md`](./hosting.md)'s Server-state machine section. |
@@ -340,6 +340,14 @@ an admin deciding what to do next. Rows are keyed by `(entity_type, entity_id, o
 learning and its server teardown, for instance) — without `operation` in the key, one operation's
 success would clear an unrelated operation's still-live failure. `entity_id` is `0` for the one
 operation with no single entity (the site-wide EHOG recompute), using `entity_type = 'system'`.
+
+Rows are never hard-deleted. `dismissed_at` marks a row no-longer-live — set when an admin dismisses
+it (`DELETE /api/ops-errors/[id]`) or when a later attempt at the same `(entity_type, entity_id,
+operation)` succeeds (`clearOpsError()`) — and is cleared automatically the next time that key fails
+again. `getOpsErrors()` (the live Activity-feed/`OpsErrorList` view) filters to `dismissed_at IS
+NULL`; `getOpsErrorHistory()` reads every row from the last 8 weeks regardless of `dismissed_at`,
+grouped into a flat `(operation, week)` failure count, for the admin console's Activity → History
+tab.
 
 Wired into eighteen operations today:
 

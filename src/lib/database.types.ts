@@ -458,6 +458,7 @@ export type Database = {
       }
       ops_errors: {
         Row: {
+          dismissed_at: string | null
           entity_id: number
           entity_type: string
           id: number
@@ -466,6 +467,7 @@ export type Database = {
           operation: string
         }
         Insert: {
+          dismissed_at?: string | null
           entity_id?: number
           entity_type: string
           id?: number
@@ -474,6 +476,7 @@ export type Database = {
           operation: string
         }
         Update: {
+          dismissed_at?: string | null
           entity_id?: number
           entity_type?: string
           id?: number

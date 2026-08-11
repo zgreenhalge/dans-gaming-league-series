@@ -4,6 +4,7 @@ import { AdminConsole } from '@/components/AdminConsole';
 import {
   getBackgroundJobs,
   getOpsErrors,
+  getOpsErrorHistory,
   getAdminMatches,
   getAdminPlayers,
   getMapsForWorkshopPicker,
@@ -36,10 +37,11 @@ export default async function AdminPage() {
   const selfId = await sessionPlayerId();
 
   const adminClient = getAdminClient();
-  const [jobs, opsErrors, matches, players, activeServerMatch, workshopMaps, seasons, configSets] =
+  const [jobs, opsErrors, opsErrorHistory, matches, players, activeServerMatch, workshopMaps, seasons, configSets] =
     await Promise.all([
       getBackgroundJobs(),
       getOpsErrors(),
+      getOpsErrorHistory(),
       getAdminMatches(),
       getAdminPlayers(),
       getActiveServerMatch(adminClient),
@@ -102,6 +104,7 @@ export default async function AdminPage() {
         <AdminConsole
           jobs={jobs}
           opsErrors={opsErrors}
+          opsErrorHistory={opsErrorHistory}
           matches={matches}
           players={players}
           selfId={selfId}

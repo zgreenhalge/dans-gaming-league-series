@@ -27,8 +27,9 @@ import {
 import { IngestJobActions } from './IngestJobActions';
 import { JobRetryButton, JobsLiveRefresh } from './JobActions';
 import { OPERATION_LABELS, dismissOpsError, retryEndpointFor, type OpsErrorItem } from './OpsErrorList';
+import type { OpsErrorHistoryRow } from '@/lib/queries';
 
-type Tier = 'errored' | 'progress' | 'completed';
+type Tier = 'errored' | 'progress' | 'completed' | 'history';
 type TypeFilter = 'all' | BackgroundJobType;
 type RangeFilter = 'all' | '30m' | '1h' | '6h' | '12h' | '24h';
 
@@ -47,6 +48,8 @@ interface OpsEvent {
   ts: number | null;
 }
 type Event = JobEvent | OpsEvent;
+
+const EMPTY_EVENTS: Event[] = [];
 
 function jobTier(job: BackgroundJobRow): Tier {
   if (jobNeedsAttention(job)) return 'errored';
@@ -271,13 +274,46 @@ const RANGE_FILTERS: { value: RangeFilter; label: string }[] = [
   { value: '30m', label: '30m' },
 ];
 
+/** History tab (#343): a flat, week-grouped count of every `ops_errors` row (dismissed or still
+ * live) from `getOpsErrorHistory()` — enough to spot a pattern of intermittent failures across
+ * weeks, without duplicating the Errored tier's per-row detail. */
+function HistoryTable({ rows }: { rows: OpsErrorHistoryRow[] }) {
+  if (rows.length === 0) {
+    return <EmptyState size="lg" message="No failure history in the last 8 weeks." />;
+  }
+  return (
+    <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden max-h-[520px] overflow-y-auto">
+      <table className="w-full text-left">
+        <thead>
+          <tr className="border-b border-[var(--color-border-tertiary)]">
+            <th className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-text-secondary)] px-3 py-2">Week Of</th>
+            <th className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-text-secondary)] px-3 py-2">Operation</th>
+            <th className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-text-secondary)] px-3 py-2 text-right">Failures</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={`${r.weekStart}:${r.operation}`} className="border-t border-[var(--color-border-tertiary)]">
+              <td className="font-mono text-[11px] text-[var(--color-text-secondary)] px-3 py-2 tabular-nums">{r.weekStart}</td>
+              <td className="font-display text-[13px] px-3 py-2">{OPERATION_LABELS[r.operation] ?? r.operation}</td>
+              <td className="font-mono text-[13px] px-3 py-2 text-right tabular-nums">{r.count}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function AdminActivityFeed({
   jobs,
   opsErrors,
+  opsErrorHistory,
   onJump,
 }: {
   jobs: BackgroundJobRow[];
   opsErrors: OpsErrorItem[];
+  opsErrorHistory: OpsErrorHistoryRow[];
   onJump: (type: 'match' | 'player' | 'season', query: string) => void;
 }) {
   const router = useRouter();
@@ -332,7 +368,8 @@ export function AdminActivityFeed({
     };
   }, []);
 
-  const tierEvents = tab === 'errored' ? errored : tab === 'progress' ? progress : completed;
+  const tierEvents =
+    tab === 'errored' ? errored : tab === 'progress' ? progress : tab === 'completed' ? completed : EMPTY_EVENTS;
   const visible = useMemo(
     () => tierEvents.filter((e) => matchesFilter(e, typeFilter) && matchesRange(e, rangeFilter, now)),
     [tierEvents, typeFilter, rangeFilter, now],
@@ -345,7 +382,7 @@ export function AdminActivityFeed({
     router.refresh();
   }
 
-  const EMPTY_MESSAGE: Record<Tier, string> = {
+  const EMPTY_MESSAGE: Record<Exclude<Tier, 'history'>, string> = {
     errored: 'Nothing needs attention.',
     progress: 'Nothing running right now.',
     completed: 'Nothing completed yet.',
@@ -365,31 +402,40 @@ export function AdminActivityFeed({
         <button role="tab" aria-selected={tab === 'completed'} onClick={() => setTab('completed')} className={tabCls(tab === 'completed')}>
           Completed ({completed.length})
         </button>
+        <button role="tab" aria-selected={tab === 'history'} onClick={() => setTab('history')} className={tabCls(tab === 'history')}>
+          History
+        </button>
       </TabBar>
 
-      <div className="flex items-center gap-2 mb-2 flex-wrap">
-        {TYPE_FILTERS.map((f) => (
-          <FilterChip key={f.value} value={f.value} label={f.label} active={typeFilter === f.value} onClick={setTypeFilter} />
-        ))}
-      </div>
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        {RANGE_FILTERS.map((f) => (
-          <FilterChip key={f.value} value={f.value} label={f.label} active={rangeFilter === f.value} onClick={setRangeFilter} />
-        ))}
-      </div>
-
-      {visible.length === 0 ? (
-        <EmptyState size="lg" message={tierEvents.length === 0 ? EMPTY_MESSAGE[tab] : 'Nothing matches this filter.'} />
+      {tab === 'history' ? (
+        <HistoryTable rows={opsErrorHistory} />
       ) : (
-        <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden max-h-[520px] overflow-y-auto [&>*:first-child]:border-t-0">
-          {visible.map((e) =>
-            e.kind === 'job' ? (
-              <JobEventRow key={e.key} event={e} />
-            ) : (
-              <OpsEventRow key={e.key} event={e} onJump={onJump} onDismissed={dismissOne} />
-            ),
+        <>
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            {TYPE_FILTERS.map((f) => (
+              <FilterChip key={f.value} value={f.value} label={f.label} active={typeFilter === f.value} onClick={setTypeFilter} />
+            ))}
+          </div>
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            {RANGE_FILTERS.map((f) => (
+              <FilterChip key={f.value} value={f.value} label={f.label} active={rangeFilter === f.value} onClick={setRangeFilter} />
+            ))}
+          </div>
+
+          {visible.length === 0 ? (
+            <EmptyState size="lg" message={tierEvents.length === 0 ? EMPTY_MESSAGE[tab] : 'Nothing matches this filter.'} />
+          ) : (
+            <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden max-h-[520px] overflow-y-auto [&>*:first-child]:border-t-0">
+              {visible.map((e) =>
+                e.kind === 'job' ? (
+                  <JobEventRow key={e.key} event={e} />
+                ) : (
+                  <OpsEventRow key={e.key} event={e} onJump={onJump} onDismissed={dismissOne} />
+                ),
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
     </>
   );
