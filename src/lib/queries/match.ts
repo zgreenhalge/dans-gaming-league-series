@@ -30,9 +30,11 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   if (!match) return null;
   const m = match as Match;
 
+  // Week and season resolve in one embedded query — the DB does the join instead of two
+  // sequential hand-rolled round trips (#332).
   const [{ data: week, error: wErr }, { data: stats, error: sErr }, players] =
     await Promise.all([
-      supabase.from('weeks').select('*').eq('id', m.week_id).maybeSingle(),
+      supabase.from('weeks').select('*, seasons(*)').eq('id', m.week_id).maybeSingle(),
       supabase
         .from('player_match_stats')
         .select('*')
@@ -41,16 +43,12 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
     ]);
   if (wErr) throw wErr;
   if (sErr) throw sErr;
-  const w = week as Week | null;
-  if (!w) return null;
-
-  const { data: season, error: seErr } = await supabase
-    .from('seasons')
-    .select('*')
-    .eq('id', w.season_id)
-    .maybeSingle();
-  if (seErr) throw seErr;
-  if (!season) return null;
+  // Supabase types embedded to-one relations as arrays, but returns an object at runtime — cast
+  // through unknown (same pattern as the embedded selects in getMatchTeamNames/getOtherScheduledMatches
+  // below).
+  const w = week as unknown as (Week & { seasons: Season | null }) | null;
+  if (!w || !w.seasons) return null;
+  const { seasons: season, ...weekRow } = w;
 
   const statRows: MatchStatRow[] = ((stats ?? []) as PlayerMatchStat[]).map(
     (s) => ({
@@ -60,7 +58,7 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
     }),
   );
 
-  return { match: m, week: w, season: season as Season, stats: statRows };
+  return { match: m, week: weekRow as Week, season, stats: statRows };
 }
 
 export interface MatchTeamNames {
