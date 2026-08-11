@@ -4,7 +4,7 @@
 // machine, window/collision warnings, and save/clear all live in the shared `useScheduleEditor` hook
 // (the match-page hero renders its own markup off the same hook).
 
-import type { ScheduledMatchRef } from '@/lib/schedule';
+import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import { useScheduleEditor } from './useScheduleEditor';
 import { ScheduleWarningBox } from './ScheduleWarning';
 

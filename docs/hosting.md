@@ -89,7 +89,7 @@ claims the server (so a refusal never marks *it* failed). There is a tiny check-
 (two vetos completing within the same DB round-trip); accepted, since veto completions are seconds+
 apart in practice and this turns a silent mid-game clobber into a clean refusal.
 
-A **soft scheduling warning** (`src/lib/schedule.ts`) flags — on the match page and in the admin
+A **soft scheduling warning** (`src/lib/server-schedule-collision.ts`) flags — on the match page and in the admin
 match console (both render the shared `ScheduleEditor` over `useScheduleEditor`) — when two matches
 are scheduled **strictly under an hour** apart (they'd contend for the one server); it links the
 conflicting match and never blocks scheduling.
@@ -439,7 +439,7 @@ a `DathostServer`, client or server, goes through instead of reading `.on`/`.boo
 + `pugModeCvarLine` + `getReconciledServerState` + `getActiveServerMatch` + `findServerOccupant` +
 `findNearbyUnscoredMatch`) · `src/lib/server-players.ts` (`getConnectedPlayers` — fetches + parses the
 connected roster from the raw console log, no stored state; `parseConnectedPlayers` is the pure parse
-step) · `src/lib/matchzy.ts` · `src/lib/schedule.ts` · `src/lib/matchScore.ts` (`writeMatchScore()` —
+step) · `src/lib/matchzy.ts` · `src/lib/server-schedule-collision.ts` · `src/lib/matchScore.ts` (`writeMatchScore()` —
 shared score-write + hooks, #138) · `src/lib/demo/mapResult.ts` (`map_result` parse/R2 read-write) ·
 `src/components/MatchServerPanel.tsx` · `src/components/MatchDemoReviewBlock.tsx` ·
 `src/components/useDemoIngestActions.ts` (shared confirm/dismiss/re-parse) ·

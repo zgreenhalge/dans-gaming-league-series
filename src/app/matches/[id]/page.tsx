@@ -22,7 +22,7 @@ import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
 import { FeatureMatchBanner } from '@/components/FeatureMatch';
 import { SchedulingOverlapBanner } from '@/components/SchedulingOverlapBanner';
-import { findScheduleCollision } from '@/lib/schedule';
+import { findScheduleCollision } from '@/lib/server-schedule-collision';
 import { HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { r2, R2_BUCKET, demoKey as makeDemoKey } from '@/lib/r2';

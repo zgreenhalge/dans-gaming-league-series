@@ -7,7 +7,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { findScheduleCollision, type ScheduledMatchRef } from '@/lib/schedule';
+import { findScheduleCollision, type ScheduledMatchRef } from '@/lib/server-schedule-collision';
 
 /** ISO → the `datetime-local` input value in the viewer's local time. */
 function toDatetimeLocal(iso: string): string {
