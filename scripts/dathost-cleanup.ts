@@ -11,7 +11,11 @@
 // record to work, so it's never blocked by a match missing a `scheduled_at` or a demo_ingest job.
 // Some DatHost accounts' file-listing responses omit `modified_at` on every entry rather than per
 // file, in which case age falls back to the match's own `scheduled_at` — a DB record, but the only
-// other timestamp this script has any way to reach.
+// other timestamp this script has any way to reach. `scheduled_at` is a label, not a promise the
+// match was actually played that day (a delayed match keeps its original `scheduled_at` — see
+// `demoBaseName()`'s doc comment in `matchzy.ts`), so it can be stale by more than `RETENTION_DAYS`
+// for a match still being actively played; the fallback only applies once `final_score` shows the
+// match as played (`isPlayedScore()`), so a delayed-but-live match's residue is never in scope.
 //
 // The server also hosts non-DGLS games between matches (recreational-mode drift, ad-hoc testing),
 // and MatchZy leaves the exact same kind of residue for those — but they have no `matches` row at
@@ -44,6 +48,7 @@ import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import { notice, warning, error } from './gh-actions-log';
 import { groupByMatchId, daysAgo, parseModifiedAt, residueAgeDays, type RemoteFile } from '../src/lib/dathost-retention';
 import { getServer, listFiles } from '../src/lib/dathost';
+import { isPlayedScore } from '../src/lib/util';
 
 const DRY_RUN = !/^(0|false)$/i.test(process.env.DRY_RUN ?? 'true');
 const RETENTION_DAYS = Number(process.env.RETENTION_DAYS ?? '3');
@@ -140,23 +145,34 @@ async function listAllFiles(serverId: string): Promise<RemoteFile[]> {
     }));
 }
 
+interface TrackedMatch {
+  scheduledAt: string | null;
+  finalScore: string | null;
+}
+
 /** The DGLS matches (rows in `matches`) among `matchIds`, keyed by id with each row's
- *  `scheduled_at` — one round-trip for every match on disk, rather than one per match. A match not
- *  in the returned map isn't a DGLS match at all (a non-DGLS game or ad-hoc test reusing MatchZy on
- *  the shared server), so nothing for it is worth retaining regardless of age. `scheduled_at` is
- *  carried alongside for `residueAgeDays()`'s fallback when DatHost's own file timestamps are
- *  unavailable. */
+ *  `scheduled_at` and `final_score` — one round-trip for every match on disk, rather than one per
+ *  match. A match not in the returned map isn't a DGLS match at all (a non-DGLS game or ad-hoc test
+ *  reusing MatchZy on the shared server), so nothing for it is worth retaining regardless of age.
+ *  `scheduled_at` feeds `residueAgeDays()`'s fallback when DatHost's own file timestamps are
+ *  unavailable; `final_score` gates that same fallback on the match actually being played (see the
+ *  header comment on why `scheduled_at` alone isn't safe to age a still-live match by). */
 async function trackedMatches(
   supabase: ReturnType<typeof getAdminClient>,
   matchIds: number[],
-): Promise<Map<number, string | null>> {
+): Promise<Map<number, TrackedMatch>> {
   if (matchIds.length === 0) return new Map();
-  const { data, error } = await supabase.from('matches').select('id, scheduled_at').in('id', matchIds);
+  const { data, error } = await supabase.from('matches').select('id, scheduled_at, final_score').in('id', matchIds);
   // A failed query here must not be read as "nothing is tracked" — that would make every match's
   // residue look like untracked non-DGLS junk, deleting it immediately with no retention check and,
   // for demos, no R2-confirmation check either. Fail the whole run instead.
   if (error) throw new Error(`Could not check tracked matches: ${error.message}`);
-  return new Map((data ?? []).map((row) => [(row as { id: number }).id, (row as { scheduled_at: string | null }).scheduled_at]));
+  return new Map(
+    (data ?? []).map((row) => {
+      const r = row as { id: number; scheduled_at: string | null; final_score: string | null };
+      return [r.id, { scheduledAt: r.scheduled_at, finalScore: r.final_score }];
+    }),
+  );
 }
 
 async function demoIsSafeInR2(matchId: number): Promise<boolean> {
@@ -209,9 +225,21 @@ async function main() {
       console.log(`match ${matchId}: no matches row — not a DGLS match, deleting immediately (no retention)`);
     } else {
       const fileDays = residueAgeDays(matchFiles);
-      const days = fileDays ?? daysAgo(matches.get(matchId) ?? null);
-      if (fileDays === null && days !== null) {
-        console.log(`match ${matchId}: DatHost returned no file timestamp — using scheduled_at (${days.toFixed(1)}d old) instead`);
+      let days = fileDays;
+      if (days === null) {
+        // No real file timestamp to trust — scheduled_at is the only fallback, but it doesn't move
+        // while a delayed match is actively being played (see the header comment), so it's only
+        // safe to trust once final_score confirms the match is actually over.
+        if (!isPlayedScore(matches.get(matchId)?.finalScore ?? null)) {
+          console.log(`match ${matchId}: no file timestamp and not yet played (final_score unset) — skipping regardless of schedule`);
+          skippedMatches++;
+          console.log('::endgroup::');
+          continue;
+        }
+        days = daysAgo(matches.get(matchId)?.scheduledAt ?? null);
+        if (days !== null) {
+          console.log(`match ${matchId}: DatHost returned no file timestamp — using scheduled_at (${days.toFixed(1)}d old) instead`);
+        }
       }
       if (days === null) {
         warning(`match ${matchId}: no DatHost file timestamp and no scheduled_at — skipping (unknown age)`);
