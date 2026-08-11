@@ -65,6 +65,11 @@ export function demoBaseName(matchId: number, scheduledAt: string | null, mapRaw
   return `${date}_${matchId}_${map}`;
 }
 
+// The map segment is `*` (zero-or-more), not `+`: `mapSlug()` can collapse an all-punctuation
+// `mapRaw` to `''` (e.g. `mapSlug('!!!') === ''`), and `demoBaseName()` only substitutes
+// `'unknown-map'` when `mapRaw` itself is null/empty, not when a non-empty `mapRaw` slugifies to
+// nothing — so a trailing-underscore, empty-map name like `unscheduled_59_` is real output this must
+// still round-trip.
 const DEMO_BASE_NAME_RE = /^(?:\d{4}-\d{2}-\d{2}|unscheduled)_(\d+)_[a-z0-9-]*$/;
 
 /**

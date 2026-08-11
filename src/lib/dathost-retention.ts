@@ -33,22 +33,54 @@ function fromRegex(re: RegExp): Matcher {
   };
 }
 
-const DEMO_PREFIX = 'MatchZy/';
-const DEMO_SUFFIX = '.dem';
+/** Every recorded demo lives at `MatchZy/<base>.dem` — the one directory/extension convention every
+ *  demo matcher (current and legacy) shares, and the same one `scripts/dathost-cleanup.ts` checks
+ *  before gating a demo's deletion on its R2 presence. Exported so both stay in sync. */
+export const DEMO_PREFIX = 'MatchZy/';
+export const DEMO_SUFFIX = '.dem';
+
+export function isDemoPath(path: string): boolean {
+  return path.startsWith(DEMO_PREFIX) && path.endsWith(DEMO_SUFFIX);
+}
+
+/** A demo path's base name (the part between `DEMO_PREFIX` and `DEMO_SUFFIX`), or `null` if `path`
+ *  isn't a demo path at all. Shared by every demo matcher below so each only has to describe its own
+ *  base-name shape, not repeat the directory/extension it already has in common with the others. */
+function demoBase(path: string): string | null {
+  return isDemoPath(path) ? path.slice(DEMO_PREFIX.length, -DEMO_SUFFIX.length) : null;
+}
 
 /** A current-format demo's match id, via `matchIdFromDemoBaseName()` (`./matchzy.ts`) — the same
  *  function `demoBaseName()` has as its own inverse, so this can't independently drift out of sync
  *  with whatever `demoBaseName()` actually produces the way a hand-maintained regex could. */
 function demoBaseNameMatcher(path: string): number | null {
-  if (!path.startsWith(DEMO_PREFIX) || !path.endsWith(DEMO_SUFFIX)) return null;
-  const base = path.slice(DEMO_PREFIX.length, -DEMO_SUFFIX.length);
-  return matchIdFromDemoBaseName(base);
+  const base = demoBase(path);
+  return base === null ? null : matchIdFromDemoBaseName(base);
+}
+
+const LEGACY_DATHOST_AUTO_BASE_RE = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_(\d+)_.*$/;
+const LEGACY_BARE_ID_BASE_RE = /^(\d+)$/;
+
+/** DatHost's own pre-`matchzy_demo_name_format` auto-naming: `date_HH-MM-SS_matchId_map.dem`. */
+function legacyDatHostAutoMatcher(path: string): number | null {
+  const base = demoBase(path);
+  if (base === null) return null;
+  const m = LEGACY_DATHOST_AUTO_BASE_RE.exec(base);
+  return m ? Number(m[1]) : null;
+}
+
+/** An even older bare `matchId.dem`, predating both naming schemes above. */
+function legacyBareIdMatcher(path: string): number | null {
+  const base = demoBase(path);
+  if (base === null) return null;
+  const m = LEGACY_BARE_ID_BASE_RE.exec(base);
+  return m ? Number(m[1]) : null;
 }
 
 /** Group every match-scoped file by the match id embedded in its path, by known MatchZy pattern.
  *  The two legacy demo matchers only cover residue predating `demoBaseName()`: DatHost's own
- *  auto-generated `date_HH-MM-SS_matchId_map.dem` naming (before `matchzy_demo_name_format` pinned
- *  the current scheme), and an even older bare `matchId.dem`. */
+ *  auto-generated naming (before `matchzy_demo_name_format` pinned the current scheme), and an even
+ *  older bare `matchId.dem`. */
 export function groupByMatchId(files: RemoteFile[]): Map<number, RemoteFile[]> {
   const matchers: Matcher[] = [
     fromRegex(/^matchzy_(\d+)_\d+_round\d+\.txt$/),
@@ -56,8 +88,8 @@ export function groupByMatchId(files: RemoteFile[]): Map<number, RemoteFile[]> {
     fromRegex(/^MatchZy_Stats\/(\d+)\//),
     fromRegex(/^MatchZyPlayerNames\/Match_(\d+)\.ini$/),
     demoBaseNameMatcher,
-    fromRegex(/^MatchZy\/\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_(\d+)_.*\.dem$/),
-    fromRegex(/^MatchZy\/(\d+)\.dem$/),
+    legacyDatHostAutoMatcher,
+    legacyBareIdMatcher,
   ];
   const byMatch = new Map<number, RemoteFile[]>();
   for (const file of files) {

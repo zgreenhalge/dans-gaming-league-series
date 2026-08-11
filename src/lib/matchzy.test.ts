@@ -173,9 +173,13 @@ async function main() {
     assert.equal(demoBaseName(500, null, null), 'unscheduled_500_unknown-map');
   });
 
-  await test('matchIdFromDemoBaseName() round-trips demoBaseName() for a scheduled and an unscheduled match — this is the test that would have caught #354', () => {
+  await test('matchIdFromDemoBaseName() round-trips demoBaseName() for a scheduled and an unscheduled match', () => {
     assert.equal(matchIdFromDemoBaseName(demoBaseName(500, '2026-08-04T23:00:00+00:00', 'de_such')), 500);
     assert.equal(matchIdFromDemoBaseName(demoBaseName(59, null, 'memento')), 59);
+  });
+
+  await test('matchIdFromDemoBaseName() round-trips demoBaseName() even when an all-punctuation map slugifies to empty', () => {
+    assert.equal(matchIdFromDemoBaseName(demoBaseName(59, null, '!!!')), 59);
   });
 
   await test('matchIdFromDemoBaseName() — null for a name in a different shape (e.g. a legacy DatHost-auto or bare-id demo)', () => {

@@ -71,6 +71,24 @@ test('groupByMatchId: empty input returns an empty map', () => {
   assert.equal(groupByMatchId([]).size, 0);
 });
 
+test('groupByMatchId: all three demo naming schemes resolve independently when mixed in one call — no matcher shadows another', () => {
+  // One demo per scheme, each a different match id: current demoBaseName() format, the legacy
+  // DatHost-auto format (with an HH-MM-SS segment demoBaseName() never produces), and the even
+  // older bare {matchId}.dem. If matcher precedence in groupByMatchId() ever regressed (e.g. a
+  // future matcher inserted ahead of these three), one of these would resolve to the wrong id or
+  // to `null` instead.
+  const files = [
+    file('MatchZy/2026-08-06_59_memento.dem'), // current
+    file('MatchZy/2026-07-20_18-30-00_501_de_such.dem'), // legacy DatHost-auto
+    file('MatchZy/54.dem'), // legacy bare id
+  ];
+  const byMatch = groupByMatchId(files);
+  assert.deepEqual([...byMatch.keys()].sort((a, b) => a - b), [54, 59, 501]);
+  assert.equal(byMatch.get(59)?.[0].path, 'MatchZy/2026-08-06_59_memento.dem');
+  assert.equal(byMatch.get(501)?.[0].path, 'MatchZy/2026-07-20_18-30-00_501_de_such.dem');
+  assert.equal(byMatch.get(54)?.[0].path, 'MatchZy/54.dem');
+});
+
 // --- daysAgo ---
 
 test('daysAgo: null input returns null (unknown age, never eligible)', () => {

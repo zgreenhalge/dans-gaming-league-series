@@ -46,7 +46,7 @@ import { getAdminClient } from '../src/lib/supabase-admin';
 import { r2, R2_BUCKET, demoKey } from '../src/lib/r2';
 import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import { notice, warning, error } from './gh-actions-log';
-import { groupByMatchId, daysAgo, parseModifiedAt, residueAgeDays, type RemoteFile } from '../src/lib/dathost-retention';
+import { groupByMatchId, daysAgo, parseModifiedAt, residueAgeDays, isDemoPath, type RemoteFile } from '../src/lib/dathost-retention';
 import { getServer, listFiles } from '../src/lib/dathost';
 import { isPlayedScore } from '../src/lib/util';
 
@@ -211,6 +211,12 @@ async function main() {
   const files = await listAllFiles(serverId);
   const byMatch = groupByMatchId(files);
   notice(`found ${byMatch.size} distinct match id(s) with residue on disk`);
+  // One account-level signal instead of rediscovering this per match below — some DatHost accounts
+  // omit `modified_at` on every file-listing entry rather than per file, and that's worth surfacing
+  // once loudly rather than only visible as a pattern across N repeated per-match log lines.
+  if (files.length > 0 && files.every((f) => f.modifiedAt === null)) {
+    warning('this DatHost account\'s file listing returned no modified_at for any file — every tracked match will age off scheduled_at instead');
+  }
 
   let deletedFiles = 0;
   let freedBytes = 0;
@@ -255,7 +261,7 @@ async function main() {
     }
 
     for (const file of matchFiles) {
-      const isDemo = /^MatchZy\/.*\.dem$/.test(file.path);
+      const isDemo = isDemoPath(file.path);
       // Only a tracked DGLS match's demo goes through our own upload pipeline — an untracked
       // match's demo will never be in R2, and we don't want it there, so don't gate its deletion
       // on a check that can only ever fail.
