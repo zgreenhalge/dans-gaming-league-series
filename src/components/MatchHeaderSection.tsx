@@ -224,8 +224,8 @@ export default function MatchHeaderSection({
                     </Link>
                   ) : (
                     'another match'
-                  )}{' '}
-                  — they share one game server and may contend.
+                  )}
+                  .
                 </>
               ) : (
                 `Outside week window${windowLabel ? ` (${windowLabel})` : ''}.`

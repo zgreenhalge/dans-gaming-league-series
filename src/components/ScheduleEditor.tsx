@@ -98,8 +98,8 @@ export function ScheduleEditor({
                   </Link>
                 ) : (
                   'another match'
-                )}{' '}
-                — they share one game server and may contend.
+                )}
+                .
               </>
             ) : (
               'Outside the week window.'

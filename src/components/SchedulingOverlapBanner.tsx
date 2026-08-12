@@ -11,8 +11,7 @@ export function SchedulingOverlapBanner({ conflict }: { conflict: ScheduledMatch
       ⚠ Scheduled within an hour of{' '}
       <Link href={`/matches/${conflict.id}`} className="underline hover:opacity-80">
         {conflict.label}
-      </Link>{' '}
-      — they share one game server and may contend.
+      </Link>.
     </div>
   );
 }
