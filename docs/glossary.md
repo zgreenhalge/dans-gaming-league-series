@@ -49,7 +49,11 @@ so you don't have to reverse-engineer them from scratch each time.
     aggregations must be guarded with `is_gauntlet` checks or by only operating on the structures
     that carry veto fields (`Match`, `MatchWithRoster`, `MapMatchRow`).
 - **Gauntlet** — a season format (`is_gauntlet = true`) that runs as a single-elimination bracket
-  instead of round-robin weeks:
+  instead of round-robin weeks. **Gauntlet = playoffs**: there is no separate non-gauntlet "playoff"
+  format anywhere in the app. `is_gauntlet` (season) is the one flag code branches on to pick a veto
+  shape or ranking rule; `is_playoff_game` (match) is a downstream consequence of it, set only by the
+  gauntlet bracket engine and the gauntlet CSV importer — never an independent input. `isVetoComplete()`
+  / `getSteps()` (`src/lib/veto.ts`, `VetoSequence.tsx`) take `isGauntlet` alone for this reason.
   - `weeks` rows represent **bracket rounds**, not calendar weeks
   - Veto is simultaneous (each side submits 2 bans at once, no turn order); 4 bans total auto-picks
     the remaining map
