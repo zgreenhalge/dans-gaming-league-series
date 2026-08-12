@@ -13,8 +13,8 @@ const REGULAR_STEPS = [
   { field: 'shirts_ban', label: 'Shirts ban', type: 'ban' },
   { field: 'skins_ban1', label: 'Skins ban', type: 'ban' },
   { field: 'skins_ban2', label: 'Skins ban', type: 'ban' },
-  { field: 'shirts_pick', label: 'Map pick', type: 'pick' },
-  { field: 'skins_starting_side', label: 'Skins side', type: 'side' },
+  { field: 'shirts_pick', label: 'Shirts pick', type: 'pick' },
+  { field: 'skins_starting_side', label: 'Skins start', type: 'side' },
 ] as const;
 
 const PLAYOFF_STEPS = [
