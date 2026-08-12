@@ -12,12 +12,11 @@
  */
 
 import assert from 'node:assert/strict';
-import type { Session } from 'next-auth';
 import { __setTestSession } from '@/lib/session';
 import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
-import { jsonRequest } from '@/lib/test-support/nextRequest';
+import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { POST, DELETE } from './route';
 
@@ -51,10 +50,6 @@ function installFixture(): FakeDb {
   __setTestClient(client);
   __setTestAdminClient(client);
   return db;
-}
-
-function sessionFor(playerId: number): Session {
-  return { user: { playerId }, expires: '2099-01-01T00:00:00.000Z' };
 }
 
 function seasonPlayersOf(db: FakeDb, seasonId: number): Row[] {
