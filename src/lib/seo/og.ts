@@ -208,5 +208,7 @@ async function getRegularSeasonMeta(seasonId: number): Promise<SeasonLeaderboard
 
 async function getGauntletSeasonMeta(seasonId: number): Promise<SeasonLeaderboardMeta[]> {
   const rows = await getGauntletSeasonLeaderboard(seasonId);
-  return rows.slice(0, 4);
+  // Exclude any row with no rounds played — a malformed/partial stat row on an
+  // otherwise-played match shouldn't surface as a 0%/0.00 entry on the OG card.
+  return rows.filter((r) => r.total_rounds_played > 0).slice(0, 4);
 }

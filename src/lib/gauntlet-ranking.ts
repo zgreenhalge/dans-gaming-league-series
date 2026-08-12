@@ -50,13 +50,11 @@ export function canonicalGauntletRankMap(rounds: _GauntletRound[]): Map<number, 
     return agg;
   }
 
-  // Determine which players appeared in each round.
-  const playerFirstRound = new Map<number, number>();
+  // Determine each player's last-appeared round.
   const playerLastRound = new Map<number, number>();
   for (const r of rounds) {
     for (const m of r.matches) {
       for (const p of [...m.shirts_stats, ...m.skins_stats]) {
-        if (!playerFirstRound.has(p.player_id)) playerFirstRound.set(p.player_id, r.round_number);
         const prev = playerLastRound.get(p.player_id) ?? 0;
         if (r.round_number > prev) playerLastRound.set(p.player_id, r.round_number);
       }
