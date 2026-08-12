@@ -4,11 +4,10 @@ import {
   buildRegularToGauntletMap,
   isPlayedScore,
   winRatePct,
-  computeH2H,
-  resolveH2HPickedBy,
 } from '../util';
+import { computeH2H, resolveH2HPickedBy } from '../h2h';
 import { mapSlug } from '../maps';
-import type { DuoStats, H2HStats, H2HData, H2HMatchInput } from '../util';
+import type { DuoStats, H2HStats, H2HData, H2HMatchInput } from '../h2h';
 import type { Season, Faction } from '../types';
 import { getSeasons } from './seasons';
 import { getPlayersById } from './player';
@@ -19,7 +18,7 @@ import { getWeekLookup } from './_shared';
 //
 // Powers the H2H tab on the Statistics page, the Map detail page, and the
 // match scouting report. The aggregation core (`computeH2H`) lives in
-// `util.ts` — client-bundle-safe (no supabase import) — so the Statistics and
+// `../h2h.ts` — client-bundle-safe (no supabase import) — so the Statistics and
 // Map pages, which already load full match history client-side for their
 // other tabs, can compute H2H directly from it and honor a live season filter
 // instead of a static server-fetched snapshot. `getH2HData` below is the
@@ -27,7 +26,7 @@ import { getWeekLookup } from './_shared';
 // page, season page, match scouting) — see `docs/patterns.md` re: extracting
 // shared aggregation logic instead of duplicating it.
 //
-// Types re-exported here for backward compatibility with existing imports.
+// Types re-exported here so every existing `import { H2HData } from '@/lib/queries'` keeps resolving.
 export type {
   MatchRosterPlayer,
   DuoMatchSummary,
@@ -37,7 +36,7 @@ export type {
   H2HStats,
   H2HMapStat,
   H2HData,
-} from '../util';
+} from '../h2h';
 
 /**
  * Resolved season selection for H2H — mirrors how `CareerStatsView` resolves

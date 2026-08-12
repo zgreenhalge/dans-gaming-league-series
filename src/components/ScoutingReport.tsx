@@ -5,7 +5,8 @@ import type { DuoStats, H2HStats, MapLeagueAvg, MapStat, ScoutingPlayer } from '
 import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
-import { avgOf, tabCls, findDuo, findRival } from '@/lib/util';
+import { avgOf, tabCls } from '@/lib/util';
+import { findDuo, findRival } from '@/lib/h2h';
 import Link from 'next/link';
 import { DuoDetail, RivalDetail } from './MatchupDetail';
 import MapHeatmap from './MapHeatmap';

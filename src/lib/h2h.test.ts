@@ -1,16 +1,15 @@
 /**
- * Regression tests for `computeH2H` (util.ts) — the shared duo/rival aggregation
- * core behind the H2H tab. Written before refactoring `getH2HData` (queries.ts)
- * to delegate to this function, and before wiring the client-side call sites
- * (CareerStatsView, MapDetailView) added by issue #84, to lock in the existing
- * behavior first.
+ * Regression tests for `computeH2H` (h2h.ts) — the shared duo/rival aggregation
+ * core behind the H2H tab, `getH2HData` (queries/h2h.ts), and the client-side
+ * call sites (CareerStatsView, MapDetailView) that compute H2H directly from
+ * already-loaded match history.
  *
  * No test framework — just `node:assert` and a tiny runner (mirrors util.test.ts):
  *   npx tsx src/lib/h2h.test.ts
  */
 
 import assert from 'node:assert/strict';
-import { computeH2H, findDuo, findRival, mapMatchRowsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './util';
+import { computeH2H, findDuo, findRival, mapMatchRowsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './h2h';
 import { test, report } from './test-support/miniTest';
 
 const players = new Map<number, { name: string; steam_avatar_url: string | null }>([

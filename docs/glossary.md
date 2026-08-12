@@ -135,6 +135,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | All Supabase data-fetching | `src/lib/queries/` — split by domain behind a barrel `index.ts` (grep for `export async function get…`); see `docs/recipes.md`'s query-helper recipe |
 | Shared types matching DB shape | `src/lib/types.ts` |
 | Cross-cutting helpers (score parsing, season pairing, tab styles, formatting) | `src/lib/util.ts` |
+| H2H (duo/rival) aggregation core | `src/lib/h2h.ts` |
 | Map name → image/slug lookups | `src/lib/maps.ts` |
 | Season filter state (career/season/regular/gauntlet) | `src/components/SeasonFilter.tsx` |
 | Veto sequence rendering | `src/components/VetoSequence.tsx` |
