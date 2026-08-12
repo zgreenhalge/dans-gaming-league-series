@@ -16,10 +16,10 @@ import { test, report } from '../test-support/miniTest';
 
 test('collectClutch: a 1v2 clutcher who fights down to a 1v1 keeps the 1v2 credit and also picks up the 1v1', () => {
   // 2v2: a,b CT vs c,d T. c dies (T down to 1v2 vs CT's 2) then b dies (CT down to 1v1: a vs d).
-  // By the second death the round has narrowed to a real 1v1 between a and d, so d, who was
-  // already in a 1v2, additionally picks up a 1v1 attempt for the narrower phase — the original
-  // 1v2 attempt is not erased. a's clutch state only ever existed as a straight 1v1.
-  // Round won by CT -> a's 1v1 is a win; d's 1v2 and (additional) 1v1 are both losses.
+  // By the second death the round has narrowed to a real 1v1 between a and d, so d holds both a
+  // 1v2 attempt (from the first death) and a 1v1 attempt (from the second). a's clutch state only
+  // ever exists as a straight 1v1.
+  // Round won by CT -> a's 1v1 is a win; d's 1v2 and 1v1 are both losses.
   const sides = { a: 'CT', b: 'CT', c: 'T', d: 'T' } as const;
   const ids = Object.keys(sides);
   const rounds = [{ roundNumber: 1, winnerSide: 'CT' as const }];
@@ -56,9 +56,8 @@ test('collectClutch: enemy count > 2 is not tracked at all', () => {
 });
 
 test('collectClutch: a 1v2 that narrows to a 1v1 credits both the 1v2 attempt and the later 1v1', () => {
-  // a alone vs c,d (1v2). Then c also dies -> a is now 1v1 vs d. a keeps the 1v2 attempt (a's own
-  // teammate b died first, putting a in a real 1v2) and additionally picks up a 1v1 attempt once
-  // the round narrows further, rather than the 1v2 being erased in favor of the 1v1.
+  // a alone vs c,d (1v2). Then c also dies -> a is now 1v1 vs d. a holds both: the 1v2 attempt
+  // from when teammate b died first, and a 1v1 attempt for the later, narrower duel against d.
   const sides = { a: 'CT', b: 'CT', c: 'T', d: 'T' } as const;
   const ids = Object.keys(sides);
   const rounds = [{ roundNumber: 1, winnerSide: 'CT' as const }];

@@ -74,9 +74,13 @@ export function collectClutch(
             // Already recorded this round. If they entered facing 2 enemies and that count has
             // since dropped to 1, the round has also narrowed to a genuine 1v1 between the two
             // survivors — credit both: the original 1v2 attempt/win stands, and a separate 1v1
-            // attempt/win is added for the narrower phase the round produced afterward.
+            // attempt/win is added for the narrower phase the round produced afterward. The map
+            // entry is left at '1v2' rather than updated: alive counts only ever decrease within
+            // a round, so this branch can't fire a second time for the same clutcher, and nothing
+            // else reads `category` afterward.
             if (existing.category === '1v2' && enemyCount === 1) {
-              bumpClutch(out.get(clutcher)!, 'clutch_1v1_attempts', 'clutch_1v1_wins', won);
+              const p = out.get(clutcher)!;
+              bumpClutch(p, 'clutch_1v1_attempts', 'clutch_1v1_wins', won);
             }
             continue;
           }
