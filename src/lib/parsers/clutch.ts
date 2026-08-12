@@ -10,10 +10,9 @@ function bumpClutch(
   attemptsKey: 'clutch_1v1_attempts' | 'clutch_1v2_attempts' | 'clutch_2v1_attempts',
   winsKey: 'clutch_1v1_wins' | 'clutch_1v2_wins' | 'clutch_2v1_wins',
   won: boolean,
-  delta = 1,
 ): void {
-  p[attemptsKey] = ((p[attemptsKey] as number) ?? 0) + delta;
-  if (won) p[winsKey] = ((p[winsKey] as number) ?? 0) + delta;
+  p[attemptsKey] = ((p[attemptsKey] as number) ?? 0) + 1;
+  if (won) p[winsKey] = ((p[winsKey] as number) ?? 0) + 1;
 }
 
 export function collectClutch(
@@ -77,9 +76,7 @@ export function collectClutch(
             // survivors — credit both: the original 1v2 attempt/win stands, and a separate 1v1
             // attempt/win is added for the narrower phase the round produced afterward.
             if (existing.category === '1v2' && enemyCount === 1) {
-              const p = out.get(clutcher)!;
-              bumpClutch(p, 'clutch_1v1_attempts', 'clutch_1v1_wins', won);
-              clutchState.set(side, { steamId: clutcher, category: '1v1' });
+              bumpClutch(out.get(clutcher)!, 'clutch_1v1_attempts', 'clutch_1v1_wins', won);
             }
             continue;
           }
