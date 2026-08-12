@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { GauntletRound } from '@/lib/queries';
-import { canonicalGauntletRankMap } from '@/lib/util';
+import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import { PlayerName } from '@/components/PlayerName';
 

@@ -366,7 +366,7 @@ the leaderboard table share the one ranking implementation.
 
 Returns no ranking while the gauntlet is incomplete (final round not fully played).
 
-Implemented by `canonicalGauntletRankMap(rounds)` in `src/lib/util.ts`. Pass the result as the
+Implemented by `canonicalGauntletRankMap(rounds)` in `src/lib/gauntlet-ranking.ts`. Pass the result as the
 `canonicalRanking` prop to `LeaderboardTable` anywhere gauntlet leaderboards are ranked.
 
 ## Gauntlet Seeding Projection
