@@ -72,10 +72,15 @@ export function LiveMatchTicker({ initial }: { initial: LiveTickerMatch | null }
             return;
           }
           const row = payload.new as LiveScoreDbRow & { match_id: number };
-          if (!guardRef.current(row.match_id, row.updated_at)) return;
           if (tickerRef.current && tickerRef.current.matchId === row.match_id) {
+            if (!guardRef.current(row.match_id, row.updated_at)) return;
             setTicker({ ...tickerRef.current, shirts: row.shirts_score, skins: row.skins_score });
           } else {
+            // A different match than what's currently shown (or nothing shown yet) — always fresh, not
+            // a race, so don't pre-consume the guard here: `refresh()` fetches the joined title/roster
+            // and applies its own guard check against what it gets back. Consuming the guard for
+            // `row.match_id` first would make that check see its own just-recorded version and reject
+            // the refetch as "not newer," leaving the ticker stuck on the old match.
             refresh();
           }
         },
