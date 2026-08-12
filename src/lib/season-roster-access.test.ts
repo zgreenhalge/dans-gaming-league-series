@@ -44,16 +44,16 @@ async function main() {
     installFixture();
     __setTestSession(sessionFor(ADMIN_ID));
     const result = await requireSeasonRosterAccess(request(OTHER_PLAYER_ID), UPCOMING_SEASON_ID);
-    assert.equal(result.ok, true);
-    assert.equal((result as { targetPlayerId: number }).targetPlayerId, OTHER_PLAYER_ID);
+    assert.ok(result.ok);
+    assert.equal(result.targetPlayerId, OTHER_PLAYER_ID);
   });
 
   await test('a player acting on themself is granted access', async () => {
     installFixture();
     __setTestSession(sessionFor(PLAYER_ID));
     const result = await requireSeasonRosterAccess(request(PLAYER_ID), UPCOMING_SEASON_ID);
-    assert.equal(result.ok, true);
-    assert.equal((result as { targetPlayerId: number }).targetPlayerId, PLAYER_ID);
+    assert.ok(result.ok);
+    assert.equal(result.targetPlayerId, PLAYER_ID);
   });
 
   await test('a player acting on someone else is denied (403)', async () => {
