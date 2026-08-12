@@ -17,9 +17,8 @@ const REGULAR_STEPS = [
   { field: 'skins_starting_side', label: 'Skins start', type: 'side' },
 ] as const;
 
-// Gauntlet rounds ARE the playoffs — every gauntlet match carries is_playoff_game = true, and no
-// match carries is_playoff_game without belonging to a gauntlet season. There is no separate
-// "playoff" format to branch on; `isGauntlet` is the only flag this component needs.
+// Gauntlet = playoffs, so `isGauntlet` is the only flag this component branches on for veto shape —
+// see docs/glossary.md's Gauntlet entry.
 // Simultaneous: each player bans their own slot independently; displayed in this order
 const GAUNTLET_STEPS = [
   { field: 'shirts_ban', label: 'Shirts ban', type: 'ban' },
@@ -45,10 +44,6 @@ const ALL_VETO_FIELDS: StepField[] = [
   'shirts_pick',
   'skins_starting_side',
 ];
-
-function getSteps(isGauntlet: boolean) {
-  return isGauntlet ? GAUNTLET_STEPS : REGULAR_STEPS;
-}
 
 function getFieldValue(match: Match, field: StepField): string | null {
   return match[field as keyof Match] as string | null;
@@ -100,7 +95,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
     return () => { getBrowserClient().removeChannel(channel); };
   }, [match.id, router]);
 
-  const steps = getSteps(isGauntlet);
+  const steps = isGauntlet ? GAUNTLET_STEPS : REGULAR_STEPS;
 
   const side = match.skins_starting_side;
   const sideCls =

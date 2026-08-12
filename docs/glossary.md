@@ -51,9 +51,11 @@ so you don't have to reverse-engineer them from scratch each time.
 - **Gauntlet** — a season format (`is_gauntlet = true`) that runs as a single-elimination bracket
   instead of round-robin weeks. **Gauntlet = playoffs**: there is no separate non-gauntlet "playoff"
   format anywhere in the app. `is_gauntlet` (season) is the one flag code branches on to pick a veto
-  shape or ranking rule; `is_playoff_game` (match) is a downstream consequence of it, set only by the
-  gauntlet bracket engine and the gauntlet CSV importer — never an independent input. `isVetoComplete()`
-  / `getSteps()` (`src/lib/veto.ts`, `VetoSequence.tsx`) take `isGauntlet` alone for this reason.
+  shape or ranking rule; `is_playoff_game` (match) is only ever set true alongside it — by the
+  gauntlet bracket engine and the gauntlet CSV importer, both of which set both flags together (this
+  is a convention every match-writing path follows, not a DB constraint). `isVetoComplete()`
+  (`src/lib/veto.ts`) and the step selection in `VetoSequence.tsx` take `isGauntlet` alone for this
+  reason.
   - `weeks` rows represent **bracket rounds**, not calendar weeks
   - Veto is simultaneous (each side submits 2 bans at once, no turn order); 4 bans total auto-picks
     the remaining map
