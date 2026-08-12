@@ -69,9 +69,9 @@ so you don't have to reverse-engineer them from scratch each time.
     `getGauntletRounds`)
   - **Canonical gauntlet ranking** — the official finish order for a completed gauntlet; see
     [`calculations.md`](./calculations.md#canonical-gauntlet-ranking) for the
-    full placement rules. Implemented by `canonicalGauntletRankMap()` in `src/lib/util.ts` — pass
-    the result as `canonicalRanking` to `LeaderboardTable`. Returns an empty map while the gauntlet
-    is in progress.
+    full placement rules. Implemented by `canonicalGauntletRankMap()` in `src/lib/gauntlet-ranking.ts`
+    — pass the result as `canonicalRanking` to `LeaderboardTable`. Returns an empty map while the
+    gauntlet is in progress.
 - **Regular ↔ gauntlet pairing** — each regular season has a companion gauntlet season (playoffs),
   matched **by name, not ID** (e.g. "Season 5" ↔ "Season 5 Gauntlet"). Always go through
   `extractSeasonNumber()` / `buildRegularToGauntletMap()` in `src/lib/util.ts`, or the
@@ -135,6 +135,9 @@ so you don't have to reverse-engineer them from scratch each time.
 | All Supabase data-fetching | `src/lib/queries/` — split by domain behind a barrel `index.ts` (grep for `export async function get…`); see `docs/recipes.md`'s query-helper recipe |
 | Shared types matching DB shape | `src/lib/types.ts` |
 | Cross-cutting helpers (score parsing, season pairing, tab styles, formatting) | `src/lib/util.ts` |
+| H2H (duo/rival) aggregation core | `src/lib/h2h.ts` |
+| Player per-match stat aggregation (career/season/per-map) | `src/lib/player-stats.ts` |
+| Canonical gauntlet finish-order ranking | `src/lib/gauntlet-ranking.ts` |
 | Map name → image/slug lookups | `src/lib/maps.ts` |
 | Season filter state (career/season/regular/gauntlet) | `src/components/SeasonFilter.tsx` |
 | Veto sequence rendering | `src/components/VetoSequence.tsx` |

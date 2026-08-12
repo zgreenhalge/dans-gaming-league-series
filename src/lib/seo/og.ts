@@ -2,7 +2,7 @@ import { cache } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isPlayedScore, parseScore, canonicalSort, deriveRates, deriveRwr, deriveAdr } from '@/lib/util';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
-import { getMapLookup, getMatchTeamNames } from '../queries';
+import { getMapLookup, getMatchTeamNames, getGauntletSeasonLeaderboard } from '../queries';
 import type { Player, Match } from '@/lib/types';
 
 type LeaderboardAgg = {
@@ -207,65 +207,8 @@ async function getRegularSeasonMeta(seasonId: number): Promise<SeasonLeaderboard
 }
 
 async function getGauntletSeasonMeta(seasonId: number): Promise<SeasonLeaderboardMeta[]> {
-  const { data: weekRows } = await supabase.from('weeks').select('id').eq('season_id', seasonId);
-  const weekIds = ((weekRows ?? []) as { id: number }[]).map(w => w.id);
-  if (weekIds.length === 0) return [];
-
-  const { data: matchRows } = await supabase
-    .from('matches')
-    .select('id, final_score')
-    .in('week_id', weekIds)
-    .eq('is_playoff_game', true);
-  const matchIds = ((matchRows ?? []) as { id: number; final_score: string | null }[])
-    .filter(m => isPlayedScore(m.final_score))
-    .map(m => m.id);
-  if (matchIds.length === 0) return [];
-
-  const [{ data: stats }, { data: players }] = await Promise.all([
-    supabase
-      .from('player_match_stats')
-      .select('player_id, kills, deaths, damage, rounds_played, rounds_won, is_win')
-      .in('match_id', matchIds),
-    supabase.from('players').select('id, name'),
-  ]);
-
-  const namesById = new Map<number, string>();
-  for (const p of (players ?? []) as Pick<Player, 'id' | 'name'>[]) namesById.set(p.id, p.name);
-
-  type Agg = { mp: number; mw: number; kills: number; deaths: number; damage: number; rp: number; rw: number };
-  const byPlayer = new Map<number, Agg>();
-  for (const s of (stats ?? []) as { player_id: number; kills: number; deaths: number; damage: number; rounds_played: number; rounds_won: number; is_win: boolean }[]) {
-    const prev = byPlayer.get(s.player_id) ?? { mp: 0, mw: 0, kills: 0, deaths: 0, damage: 0, rp: 0, rw: 0 };
-    prev.mp += 1;
-    prev.mw += s.is_win ? 1 : 0;
-    prev.kills += s.kills;
-    prev.deaths += s.deaths;
-    prev.damage += s.damage;
-    prev.rp += s.rounds_played;
-    prev.rw += s.rounds_won;
-    byPlayer.set(s.player_id, prev);
-  }
-
-  return Array.from(byPlayer.entries())
-    .filter(([, a]) => a.rp > 0)
-    .map(([id, a]) => {
-      const rates = deriveRates({
-        matches_played: a.mp,
-        matches_won: a.mw,
-        total_kills: a.kills,
-        total_deaths: a.deaths,
-        total_rounds_played: a.rp,
-        total_rounds_won: a.rw,
-        total_damage: a.damage,
-      });
-      return {
-        player_name: namesById.get(id) ?? '?',
-        win_rate_percentage: rates.win_rate_percentage,
-        rwr_percentage: rates.rwr_percentage,
-        overall_adr: rates.overall_adr,
-        kd_ratio: rates.kd_ratio,
-      };
-    })
-    .sort(canonicalSort)
-    .slice(0, 4);
+  const rows = await getGauntletSeasonLeaderboard(seasonId);
+  // Exclude any row with no rounds played — a malformed/partial stat row on an
+  // otherwise-played match shouldn't surface as a 0%/0.00 entry on the OG card.
+  return rows.filter((r) => r.total_rounds_played > 0).slice(0, 4);
 }

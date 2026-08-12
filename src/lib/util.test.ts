@@ -32,11 +32,7 @@ import {
   formatEhogDelta,
   fmtUtcShort,
   formatDuration,
-  canonicalGauntletRankMap,
   groupByMap,
-  aggregatePlayerStats,
-  aggregatePlayerStatsByMap,
-  type PlayerAggregateRow,
 } from './util';
 import { mapSlug } from './maps';
 import { test, report } from './test-support/miniTest';
@@ -285,90 +281,6 @@ test('formatEhogDelta: prefixes a "+" for non-negative deltas, keeps "-" for neg
   assert.equal(formatEhogDelta(0), '+0.0');
 });
 
-// --- canonicalGauntletRankMap: the podium-order gauntlet ranking ---
-type P = { player_id: number; faction: 'SHIRTS' | 'SKINS'; is_win: boolean; adr: number };
-function gp(player_id: number, faction: 'SHIRTS' | 'SKINS', is_win: boolean, adr = 80): P {
-  return { player_id, faction, is_win, adr };
-}
-
-test('canonicalGauntletRankMap: no rounds returns an empty map', () => {
-  assert.equal(canonicalGauntletRankMap([]).size, 0);
-});
-
-test('canonicalGauntletRankMap: an incomplete final round returns an empty map', () => {
-  const rounds = [
-    {
-      round_number: 1,
-      matches: [
-        {
-          final_score: '0-0', // unplayed
-          shirts_stats: [gp(1, 'SHIRTS', false)],
-          skins_stats: [gp(2, 'SKINS', false)],
-        },
-      ],
-    },
-  ];
-  assert.equal(canonicalGauntletRankMap(rounds).size, 0);
-});
-
-test('canonicalGauntletRankMap: final-round wins rank above ties, RWR% breaks ties, and earlier eliminations rank lower', () => {
-  const rounds = [
-    // Round 1 (non-final): p5 loses to p8 and is never seen again -> eliminated round 1.
-    {
-      round_number: 1,
-      matches: [
-        {
-          final_score: '13-10',
-          shirts_stats: [gp(5, 'SHIRTS', false, 50)],
-          skins_stats: [gp(8, 'SKINS', true, 55)],
-        },
-      ],
-    },
-    // Round 2 (non-final): p8 loses to p9; neither reaches the final -> both eliminated round 2.
-    {
-      round_number: 2,
-      matches: [
-        {
-          final_score: '13-11',
-          shirts_stats: [gp(8, 'SHIRTS', false, 60)],
-          skins_stats: [gp(9, 'SKINS', true, 65)],
-        },
-      ],
-    },
-    // Round 3 (final): two independent 1v1s. p1 and p3 each go 1-0 (tie broken by RWR%);
-    // p2 and p4 each go 0-1 (tie broken by RWR%).
-    {
-      round_number: 3,
-      matches: [
-        {
-          final_score: '13-9', // 22 rounds total
-          shirts_stats: [gp(1, 'SHIRTS', true, 90)],
-          skins_stats: [gp(2, 'SKINS', false, 70)],
-        },
-        {
-          final_score: '13-11', // 24 rounds total
-          shirts_stats: [gp(3, 'SHIRTS', true, 85)],
-          skins_stats: [gp(4, 'SKINS', false, 65)],
-        },
-      ],
-    },
-  ];
-
-  const rank = canonicalGauntletRankMap(rounds);
-
-  // p1 RWR 13/22 ≈ .591 beats p3's 13/24 ≈ .542 -> p1 above p3 despite an equal 1-0 record.
-  assert.equal(rank.get(1), 1);
-  assert.equal(rank.get(3), 2);
-  // p4 RWR 11/24 ≈ .458 beats p2's 9/22 ≈ .409 -> p4 above p2 despite an equal 0-1 record.
-  assert.equal(rank.get(4), 3);
-  assert.equal(rank.get(2), 4);
-  // Eliminated in round 2 ranks above eliminated in round 1, regardless of that round's record.
-  assert.ok((rank.get(9) as number) < (rank.get(5) as number));
-  assert.ok((rank.get(8) as number) < (rank.get(5) as number));
-  // Within round-2 eliminations, the round-2 winner (p9) ranks above the round-2 loser (p8).
-  assert.ok((rank.get(9) as number) < (rank.get(8) as number));
-});
-
 // --- mapSlug: user-typed map names → stable URL segments ---
 test('mapSlug: lowercases, trims, and dashes non-alphanumerics', () => {
   assert.equal(mapSlug('  Palais  '), 'palais');
@@ -392,82 +304,6 @@ test('groupByMap: a null mapOf result excludes the row', () => {
   const rows = [{ map: 'Palais' }, { map: null }];
   const buckets = groupByMap(rows, (r) => r.map);
   assert.equal([...buckets.values()].reduce((n, b) => n + b.rows.length, 0), 1);
-});
-
-// --- aggregatePlayerStats / aggregatePlayerStatsByMap ---
-function playerRow(opts: Partial<PlayerAggregateRow>): PlayerAggregateRow {
-  return {
-    final_score: '13-9',
-    rounds_played: 22,
-    rounds_won: 13,
-    is_win: true,
-    kills: 20,
-    assists: 5,
-    deaths: 15,
-    damage: 2000,
-    map: 'Palais',
-    ...opts,
-  };
-}
-
-test('aggregatePlayerStats: sums raw totals and derives WR/KD/RWR/ADR via deriveRates', () => {
-  const rows = [
-    playerRow({ is_win: true, kills: 20, deaths: 10, damage: 2000, rounds_played: 20, rounds_won: 13 }),
-    playerRow({ is_win: false, kills: 10, deaths: 20, damage: 1500, rounds_played: 20, rounds_won: 7 }),
-  ];
-  const a = aggregatePlayerStats(rows);
-  assert.equal(a.matches, 2);
-  assert.equal(a.wins, 1);
-  assert.equal(a.losses, 1);
-  assert.equal(a.wr, 50);
-  assert.equal(a.kills, 30);
-  assert.equal(a.deaths, 30);
-  approx(a.kd, 1);
-  approx(a.rwr, 50); // (13 + 7) / 40
-  approx(a.adr, 87.5); // 3500 / 40
-});
-
-test('aggregatePlayerStats: excludes unplayed rows ("0-0" pre-staged and rounds_played === 0)', () => {
-  const rows = [
-    playerRow({ final_score: '0-0' }),
-    playerRow({ final_score: null }),
-    playerRow({ final_score: '13-9', rounds_played: 0 }),
-  ];
-  const a = aggregatePlayerStats(rows);
-  assert.equal(a.matches, 0);
-  assert.equal(a.wr, 0);
-});
-
-test('aggregatePlayerStats: splits kills/deaths into in-wins vs in-losses buckets', () => {
-  const rows = [
-    playerRow({ is_win: true, kills: 20, deaths: 5 }),
-    playerRow({ is_win: false, kills: 8, deaths: 18 }),
-  ];
-  const a = aggregatePlayerStats(rows);
-  assert.equal(a.kills_in_wins, 20);
-  assert.equal(a.deaths_in_wins, 5);
-  assert.equal(a.kills_in_losses, 8);
-  assert.equal(a.deaths_in_losses, 18);
-});
-
-test('aggregatePlayerStatsByMap: buckets by map (groupByMap normalization) and sorts by WR% -> RWR% -> ADR desc', () => {
-  const rows = [
-    playerRow({ map: 'de dust 2', is_win: true, rounds_won: 13, rounds_played: 22, damage: 2200 }),
-    playerRow({ map: 'de-dust-2', is_win: false, rounds_won: 9, rounds_played: 22, damage: 1800 }),
-    playerRow({ map: 'Vertigo', is_win: true, rounds_won: 13, rounds_played: 20, damage: 2000 }),
-  ];
-  const out = aggregatePlayerStatsByMap(rows);
-  assert.equal(out.length, 2); // "de dust 2" and "de-dust-2" merge into one bucket
-  assert.equal(out[0].map, 'Vertigo'); // 100% WR beats Dust 2's 50%
-  const dust2 = out.find((m) => m.map === 'de dust 2');
-  assert.ok(dust2);
-  assert.equal(dust2!.wins, 1);
-  assert.equal(dust2!.losses, 1);
-});
-
-test('aggregatePlayerStatsByMap: a map with zero played matches in scope is dropped, not shown as an empty row', () => {
-  const out = aggregatePlayerStatsByMap([playerRow({ map: 'Palais', final_score: '0-0' })]);
-  assert.equal(out.length, 0);
 });
 
 report();

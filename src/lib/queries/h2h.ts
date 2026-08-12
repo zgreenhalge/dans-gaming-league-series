@@ -4,11 +4,9 @@ import {
   buildRegularToGauntletMap,
   isPlayedScore,
   winRatePct,
-  computeH2H,
-  resolveH2HPickedBy,
 } from '../util';
+import { computeH2H, resolveH2HPickedBy, type DuoStats, type H2HStats, type H2HData, type H2HMatchInput } from '../h2h';
 import { mapSlug } from '../maps';
-import type { DuoStats, H2HStats, H2HData, H2HMatchInput } from '../util';
 import type { Season, Faction } from '../types';
 import { getSeasons } from './seasons';
 import { getPlayersById } from './player';
@@ -19,7 +17,7 @@ import { getWeekLookup } from './_shared';
 //
 // Powers the H2H tab on the Statistics page, the Map detail page, and the
 // match scouting report. The aggregation core (`computeH2H`) lives in
-// `util.ts` — client-bundle-safe (no supabase import) — so the Statistics and
+// `../h2h.ts` — client-bundle-safe (no supabase import) — so the Statistics and
 // Map pages, which already load full match history client-side for their
 // other tabs, can compute H2H directly from it and honor a live season filter
 // instead of a static server-fetched snapshot. `getH2HData` below is the
@@ -27,7 +25,7 @@ import { getWeekLookup } from './_shared';
 // page, season page, match scouting) — see `docs/patterns.md` re: extracting
 // shared aggregation logic instead of duplicating it.
 //
-// Types re-exported here for backward compatibility with existing imports.
+// Types re-exported here so every existing `import { H2HData } from '@/lib/queries'` keeps resolving.
 export type {
   MatchRosterPlayer,
   DuoMatchSummary,
@@ -37,7 +35,7 @@ export type {
   H2HStats,
   H2HMapStat,
   H2HData,
-} from '../util';
+} from '../h2h';
 
 /**
  * Resolved season selection for H2H — mirrors how `CareerStatsView` resolves
@@ -147,7 +145,7 @@ export function rivalBreakdownScorer(rivals: H2HStats[]): (r: H2HStats) => strin
  * Computes head-to-head relationship data — partner records (`duos`) and
  * opponent records (`rivals`) — for the given resolved season selection.
  * Only played matches count (see `isPlayedScore`). Fetches the raw match/stat
- * rows and delegates the actual aggregation to `computeH2H` (util.ts).
+ * rows and delegates the actual aggregation to `computeH2H` (`../h2h.ts`).
  */
 export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData> {
   const seasons = await getSeasons();

@@ -3,7 +3,8 @@
 import EmptyState from './EmptyState';
 import { MatchCard } from './MatchCard';
 import { PlayerName } from './PlayerName';
-import { allMatchesPlayed, isPlayedScore, canonicalGauntletRankMap, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
+import { allMatchesPlayed, isPlayedScore, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
+import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
 import type { GauntletRound, GauntletMatch } from '@/lib/queries';
 
 function computeGauntletRecords(matches: GauntletMatch[]) {

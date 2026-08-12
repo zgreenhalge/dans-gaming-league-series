@@ -13,7 +13,7 @@ import {
   type TrophyEntry, type AggregatedSab, type LeagueAverages,
 } from '../src/lib/queries';
 import { projectRatingDeltas, type PlayerRating, type RatingProjection } from '../src/lib/ehog';
-import { findDuo, findRival } from '../src/lib/util';
+import { findDuo, findRival } from '../src/lib/h2h';
 
 interface MatchRow {
   id: number;

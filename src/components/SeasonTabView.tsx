@@ -13,7 +13,8 @@ import TabBar from './TabBar';
 import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { MatchPickBanInput } from '@/lib/mapSideStats';
-import { isPlayedScore, tabCls, canonicalGauntletRankMap } from '@/lib/util';
+import { isPlayedScore, tabCls } from '@/lib/util';
+import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
 import { projectGauntletSeeding, seedPlacementsByPlayer, type SeedPlacement } from '@/lib/gauntlet-bracket';
 
 type Tab = 'leaderboard' | 'schedule' | 'h2h' | 'stats' | 'advanced';

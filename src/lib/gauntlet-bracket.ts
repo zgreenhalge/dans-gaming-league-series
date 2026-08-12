@@ -2,7 +2,7 @@
  * Pure, deterministic gauntlet bracket generator. Operates entirely on abstract seed numbers
  * (1..N, seed 1 = canonical-sort leader) — the caller maps seeds to player_ids from the paired
  * regular season's leaderboard order. See docs/calculations.md#canonical-gauntlet-ranking and
- * `canonicalGauntletRankMap` in util.ts for the read-path contract this bracket shape must satisfy:
+ * `canonicalGauntletRankMap` in gauntlet-ranking.ts for the read-path contract this bracket shape must satisfy:
  * the final pod must be the sole pod in the maximum round_number, and eliminated players' last
  * appearance must be the round they lost (both fall out naturally here).
  *
