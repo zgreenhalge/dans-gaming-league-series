@@ -136,6 +136,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | Shared types matching DB shape | `src/lib/types.ts` |
 | Cross-cutting helpers (score parsing, season pairing, tab styles, formatting) | `src/lib/util.ts` |
 | H2H (duo/rival) aggregation core | `src/lib/h2h.ts` |
+| Player per-match stat aggregation (career/season/per-map) | `src/lib/player-stats.ts` |
 | Map name → image/slug lookups | `src/lib/maps.ts` |
 | Season filter state (career/season/regular/gauntlet) | `src/components/SeasonFilter.tsx` |
 | Veto sequence rendering | `src/components/VetoSequence.tsx` |
