@@ -174,11 +174,13 @@ Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
 - `Clutch+` = `Player Clutch Score` / `League Avg Clutch Score`
   - `Clutch Score` = `1v1 wins` + 3 * `1v2 wins`
   - A player is credited a `1v1`/`1v2` attempt the moment they become the sole survivor on their
-    side, bucketed by how many enemies are alive at that instant. If that enemy count later drops
-    to 1 (their teammate also dies) before the round ends, the round has narrowed to a genuine
-    1-on-1 duel — the attempt is upgraded from `1v2` to `1v1` in place rather than left stuck in
-    the wrong bucket. This keeps a true 1v1 duel symmetric: both survivors end up with a `1v1`
-    attempt, whichever of them was left alone first.
+    side, bucketed by how many enemies are alive at that instant. Once an enemy count of 2 drops
+    to 1 (an enemy dies) before the round ends, the round has also narrowed to a genuine 1-on-1
+    duel — the player picks up a separate `1v1` attempt for that later phase on top of the `1v2`
+    attempt already recorded. This is the norm, not an edge case: any 1v2 resolved by killing the
+    two enemies at different moments (rather than both dying simultaneously to one grenade) feeds
+    both buckets. Both attempts resolve win/loss off the same final round outcome, so a
+    sequentially-won 1v2 contributes `3 + 1 = 4` to `Clutch Score`, not just `3`.
 - `Choke+` = `Player Choke Score` / `League Avg Choke Score` — lower is better (fewer/smaller
   blown advantages)
   - `Choke Score` = `1v1 losses` + 2 * `1v2 losses` + 5 * `2v1 losses`
