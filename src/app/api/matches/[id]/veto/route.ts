@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { isVetoComplete, computeGauntletOrPlayoff, type VetoFields } from '@/lib/veto';
+import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import {
   provisionMatchServer,
   matchzyConfigContext,
@@ -32,8 +32,6 @@ const REGULAR_STEPS: VetoField[] = [
   'shirts_pick',
   'skins_starting_side',
 ];
-// Team blocks: Shirts bans first, then Skins
-const PLAYOFF_STEPS: VetoField[] = ['shirts_ban', 'shirts_ban2', 'skins_ban1', 'skins_ban2'];
 
 type MatchRow = {
   id: number;
@@ -45,7 +43,6 @@ type MatchRow = {
   skins_ban2: string | null;
   shirts_pick: string | null;
   skins_starting_side: string | null;
-  is_playoff_game: boolean;
   weeks: {
     seasons: {
       is_gauntlet: boolean;
@@ -75,7 +72,7 @@ export async function PATCH(
     supabaseAdmin
       .from('matches')
       .select(
-        'id, final_score, scheduled_at, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, is_playoff_game, weeks(seasons(is_gauntlet, map_pool))',
+        'id, final_score, scheduled_at, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(seasons(is_gauntlet, map_pool))',
       )
       .eq('id', matchId)
       .maybeSingle(),
@@ -142,7 +139,6 @@ export async function PATCH(
   }
 
   const isGauntlet = season?.is_gauntlet ?? false;
-  const isPlayoff = m.is_playoff_game && !isGauntlet;
   const mapPool: string[] = season?.map_pool ?? [];
 
   const currentValues: Record<VetoField, string | null> = {
@@ -179,14 +175,13 @@ export async function PATCH(
     }
     // Allow overwriting an already-set slot (admin or correct player can correct mistakes)
   } else {
-    // Non-gauntlet: enforce sequential order for new entries; allow overwriting existing ones
-    const steps = isPlayoff ? PLAYOFF_STEPS : REGULAR_STEPS;
-    if (!steps.includes(field)) {
+    // Regular season: enforce sequential order for new entries; allow overwriting existing ones
+    if (!REGULAR_STEPS.includes(field)) {
       return NextResponse.json({ error: 'Invalid field for this match type' }, { status: 400 });
     }
     if (currentValues[field] === null) {
       // Filling a new step: must be the next unfilled one in sequence
-      const nextStep = steps.find((s) => currentValues[s] === null);
+      const nextStep = REGULAR_STEPS.find((s) => currentValues[s] === null);
       if (!nextStep) {
         return NextResponse.json({ error: 'Pick/ban phase already complete' }, { status: 400 });
       }
@@ -227,8 +222,8 @@ export async function PATCH(
 
   const update: Partial<Record<VetoField, string | null>> = { [field]: value };
 
-  // For playoff/gauntlet: once all 4 bans are set, auto-pick the remaining map
-  if (computeGauntletOrPlayoff(isGauntlet, m.is_playoff_game)) {
+  // For gauntlet: once all 4 bans are set, auto-pick the remaining map
+  if (isGauntlet) {
     const bansAfter = [
       field === 'shirts_ban'  ? value : m.shirts_ban,
       field === 'shirts_ban2' ? value : m.shirts_ban2,
@@ -251,7 +246,7 @@ export async function PATCH(
   // disrupt a server that's already booting/live: an admin stops it first to change the map. (The
   // `server_state` gate also keeps a redundant edit from re-provisioning an already-running server.)
   const merged = { ...m, ...update } as VetoFields;
-  if (isVetoComplete(merged, computeGauntletOrPlayoff(isGauntlet, m.is_playoff_game))) {
+  if (isVetoComplete(merged, isGauntlet)) {
     const srv = await fetchServerStateRow(supabaseAdmin, matchId);
     const serverBusy = srv?.server_state === 'provisioning' || srv?.server_state === 'live';
     const base = process.env.APP_BASE_URL ?? req.nextUrl.origin;

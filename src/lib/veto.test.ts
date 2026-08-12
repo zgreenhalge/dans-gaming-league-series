@@ -1,7 +1,7 @@
 /**
  * Unit tests for isVetoComplete — gates server provisioning (the incomplete->complete transition
- * fires it), so both the gauntlet/playoff shape (4 bans, no pick/side) and the regular shape (bans +
- * pick + starting side) need their own case, plus that a partial set of fields in either shape isn't
+ * fires it), so both the gauntlet shape (4 bans, no pick/side) and the regular shape (bans + pick +
+ * starting side) need their own case, plus that a partial set of fields in either shape isn't
  * mistaken for complete.
  *
  * Run:  npx tsx src/lib/veto.test.ts
@@ -20,12 +20,12 @@ const full: VetoFields = {
   skins_starting_side: 'CT',
 };
 
-test('isVetoComplete: gauntlet/playoff only needs the 4 bans', () => {
+test('isVetoComplete: gauntlet only needs the 4 bans', () => {
   const m: VetoFields = { ...full, shirts_pick: null, skins_starting_side: null };
   assert.equal(isVetoComplete(m, true), true);
 });
 
-test('isVetoComplete: gauntlet/playoff with a missing ban is incomplete', () => {
+test('isVetoComplete: gauntlet with a missing ban is incomplete', () => {
   const m: VetoFields = { ...full, shirts_pick: null, skins_starting_side: null, skins_ban2: null };
   assert.equal(isVetoComplete(m, true), false);
 });

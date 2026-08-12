@@ -49,7 +49,17 @@ so you don't have to reverse-engineer them from scratch each time.
     aggregations must be guarded with `is_gauntlet` checks or by only operating on the structures
     that carry veto fields (`Match`, `MatchWithRoster`, `MapMatchRow`).
 - **Gauntlet** — a season format (`is_gauntlet = true`) that runs as a single-elimination bracket
-  instead of round-robin weeks:
+  instead of round-robin weeks. **Gauntlet = playoffs**: there is no separate non-gauntlet "playoff"
+  format anywhere in the app, and `is_gauntlet` (season) is the flag code should prefer for picking a
+  veto shape or ranking rule. This pairing is a convention, not a DB constraint: the gauntlet CSV
+  importer (`ingestion/import_gauntlets.py`) writes `is_playoff_game = true` on the matches and then
+  patches the season's `is_gauntlet` in a separate step that can silently no-op (warns and returns if
+  the season name lookup fails), so a botched import can leave a season with real playoff matches but
+  `is_gauntlet = false`. For that reason, the display paths that read a match's veto
+  shape — `isVetoComplete()` (`src/lib/veto.ts`) and `VetoSequence.tsx`'s step/tile selection — treat
+  `isGauntlet || match.is_playoff_game` as gauntlet-shaped rather than trusting `is_gauntlet` alone;
+  live veto submission (`/api/matches/[id]/veto`) still keys off `is_gauntlet` alone since only
+  already-played CSV imports can hit the mismatch.
   - `weeks` rows represent **bracket rounds**, not calendar weeks
   - Veto is simultaneous (each side submits 2 bans at once, no turn order); 4 bans total auto-picks
     the remaining map

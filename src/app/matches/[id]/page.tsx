@@ -23,6 +23,7 @@ import { supabase } from '@/lib/supabase';
 import { FeatureMatchBanner } from '@/components/FeatureMatch';
 import { SchedulingOverlapBanner } from '@/components/SchedulingOverlapBanner';
 import { findScheduleCollision } from '@/lib/server-schedule-collision';
+import { isVetoComplete } from '@/lib/veto';
 import { HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { r2, R2_BUCKET, demoKey as makeDemoKey } from '@/lib/r2';
@@ -201,11 +202,10 @@ export default async function MatchPage({
   // eslint-disable-next-line react-hooks/purity
   const vetoWindowOpen = !!scheduledTime && Date.now() >= scheduledTime - 10 * 60 * 1000;
 
-  // Veto complete: all required pick/ban fields are filled
-  const isGauntletOrPlayoff = season.is_gauntlet || match.is_playoff_game;
-  const vetoComplete = isGauntletOrPlayoff
-    ? !!(match.shirts_ban && match.shirts_ban2 && match.skins_ban1 && match.skins_ban2)
-    : !!(match.shirts_ban && match.skins_ban1 && match.skins_ban2 && match.shirts_pick && match.skins_starting_side);
+  // Veto complete: all required pick/ban fields are filled. Falls back to the match's own
+  // is_playoff_game if the season's is_gauntlet was never set (e.g. a gauntlet CSV import whose
+  // season-patch step failed) — the pairing is a convention, not a DB constraint.
+  const vetoComplete = isVetoComplete(match, season.is_gauntlet || match.is_playoff_game);
 
   // Determine edit/veto permissions: admins or players in the match
   let canEdit = false;
