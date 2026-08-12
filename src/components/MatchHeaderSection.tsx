@@ -6,6 +6,7 @@ import { toSentenceCase, mapSlug } from '@/lib/maps';
 import { type ScheduledMatchRef } from '@/lib/schedule';
 import { useScheduleEditor } from './useScheduleEditor';
 import { useHasMounted } from './useHasMounted';
+import { ScheduleWarningBox } from './ScheduleWarning';
 
 interface Props {
   map: string | null;
@@ -213,39 +214,14 @@ export default function MatchHeaderSection({
       {/* ── Warning row: only appears here, never inside the header row ─────── */}
       {showSchedule && warning && (
         <div className="flex justify-start">
-          <div className="border border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)] px-3 py-2.5 flex flex-col gap-2">
-            <span className="text-[12px] text-[var(--color-accent-amber-fg)]">
-              {warning === 'collision' ? (
-                <>
-                  Within an hour of{' '}
-                  {collisionWith ? (
-                    <Link href={`/matches/${collisionWith.id}`} className="underline hover:opacity-80">
-                      {collisionWith.label}
-                    </Link>
-                  ) : (
-                    'another match'
-                  )}{' '}
-                  — they share one game server and may contend.
-                </>
-              ) : (
-                `Outside week window${windowLabel ? ` (${windowLabel})` : ''}.`
-              )}
-            </span>
-            <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => save(true)}
-                className="tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-accent-amber-border)] text-[var(--color-accent-amber-fg)] transition-colors"
-              >
-                Schedule anyway
-              </button>
-              <button
-                onClick={dismissWarning}
-                className="tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+          <ScheduleWarningBox
+            warning={warning}
+            collisionWith={collisionWith}
+            windowMessage={`Outside week window${windowLabel ? ` (${windowLabel})` : ''}.`}
+            onScheduleAnyway={() => save(true)}
+            onDismiss={dismissWarning}
+            variant="hero"
+          />
         </div>
       )}
 

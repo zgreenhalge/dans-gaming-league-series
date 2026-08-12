@@ -4,9 +4,9 @@
 // machine, window/collision warnings, and save/clear all live in the shared `useScheduleEditor` hook
 // (the match-page hero renders its own markup off the same hook).
 
-import Link from 'next/link';
 import type { ScheduledMatchRef } from '@/lib/schedule';
 import { useScheduleEditor } from './useScheduleEditor';
+import { ScheduleWarningBox } from './ScheduleWarning';
 
 function fmtScheduled(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
@@ -86,41 +86,14 @@ export function ScheduleEditor({
         </button>
       </div>
 
-      {s.warning && (
-        <div className="border border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)] px-3 py-2 flex flex-col gap-2 rounded">
-          <span className="font-mono text-[11px] text-[var(--color-accent-amber-fg)]">
-            {s.warning === 'collision' ? (
-              <>
-                Within an hour of{' '}
-                {s.collisionWith ? (
-                  <Link href={`/matches/${s.collisionWith.id}`} className="underline hover:opacity-80">
-                    {s.collisionWith.label}
-                  </Link>
-                ) : (
-                  'another match'
-                )}{' '}
-                — they share one game server and may contend.
-              </>
-            ) : (
-              'Outside the week window.'
-            )}
-          </span>
-          <div className="flex items-center justify-end gap-3">
-            <button
-              onClick={() => s.save(true)}
-              className="font-mono text-[10px] font-semibold px-2 py-1 rounded border border-[var(--color-accent-amber-border)] text-[var(--color-accent-amber-fg)] transition-colors"
-            >
-              Schedule anyway
-            </button>
-            <button
-              onClick={s.dismissWarning}
-              className="font-mono text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <ScheduleWarningBox
+        warning={s.warning}
+        collisionWith={s.collisionWith}
+        windowMessage="Outside the week window."
+        onScheduleAnyway={() => s.save(true)}
+        onDismiss={s.dismissWarning}
+        variant="compact"
+      />
 
       {s.error && <span className="font-mono text-[10px] text-[var(--color-accent-red-fg)]">{s.error}</span>}
     </div>
