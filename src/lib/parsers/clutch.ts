@@ -44,8 +44,8 @@ export function collectClutch(
 
     // Track which player entered a clutch situation this round, and under which category, plus
     // which side entered a 2v1 advantage (first-occurrence-only, same reasoning: once true it
-    // stays true until the next death changes the alive counts). The clutch category can still
-    // change after it's first recorded — see the 1v2->1v1 upgrade below.
+    // stays true until the next death changes the alive counts). A player can pick up a second,
+    // narrower clutch credit later in the same round — see the 1v2-then-1v1 case below.
     const clutchState = new Map<'CT' | 'T', { steamId: string; category: ClutchCategory }>();
     const advantageRecorded = new Set<string>();
 
@@ -73,12 +73,11 @@ export function collectClutch(
 
           if (existing?.steamId === clutcher) {
             // Already recorded this round. If they entered facing 2 enemies and that count has
-            // since dropped to 1, the round has narrowed to a genuine 1v1 between the two
-            // survivors — upgrade the earlier 1v2 attempt to 1v1 instead of leaving one side
-            // stuck under a category the round outgrew.
+            // since dropped to 1, the round has also narrowed to a genuine 1v1 between the two
+            // survivors — credit both: the original 1v2 attempt/win stands, and a separate 1v1
+            // attempt/win is added for the narrower phase the round produced afterward.
             if (existing.category === '1v2' && enemyCount === 1) {
               const p = out.get(clutcher)!;
-              bumpClutch(p, 'clutch_1v2_attempts', 'clutch_1v2_wins', won, -1);
               bumpClutch(p, 'clutch_1v1_attempts', 'clutch_1v1_wins', won);
               clutchState.set(side, { steamId: clutcher, category: '1v1' });
             }
