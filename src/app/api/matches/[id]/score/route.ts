@@ -7,7 +7,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { writeMatchScore } from '@/lib/matchScore';
-import { isVetoComplete, computeGauntletOrPlayoff, type VetoFields } from '@/lib/veto';
+import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import type { DemoSabremetricStat, DemoWeaponStat } from '@/lib/types';
 import { afterBestEffort } from '@/lib/after';
 
@@ -16,7 +16,6 @@ const supabaseAdmin = getAdminClient();
 type MatchRow = {
   id: number;
   final_score: string | null;
-  is_playoff_game: boolean;
   shirts_ban: string | null;
   shirts_ban2: string | null;
   skins_ban1: string | null;
@@ -52,7 +51,7 @@ export async function PATCH(
     supabaseAdmin
       .from('matches')
       .select(
-        'id, final_score, is_playoff_game, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(season_id, seasons(is_gauntlet))',
+        'id, final_score, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(season_id, seasons(is_gauntlet))',
       )
       .eq('id', matchId)
       .maybeSingle(),
@@ -84,7 +83,7 @@ export async function PATCH(
   }
 
   const isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
-  if (!isVetoComplete(m as VetoFields, computeGauntletOrPlayoff(isGauntlet, m.is_playoff_game))) {
+  if (!isVetoComplete(m as VetoFields, isGauntlet)) {
     return NextResponse.json({ error: 'Pick/ban phase not complete' }, { status: 403 });
   }
 

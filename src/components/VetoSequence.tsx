@@ -17,13 +17,9 @@ const REGULAR_STEPS = [
   { field: 'skins_starting_side', label: 'Skins start', type: 'side' },
 ] as const;
 
-const PLAYOFF_STEPS = [
-  { field: 'shirts_ban', label: 'Shirts ban', type: 'ban' },
-  { field: 'shirts_ban2', label: 'Shirts ban', type: 'ban' },
-  { field: 'skins_ban1', label: 'Skins ban', type: 'ban' },
-  { field: 'skins_ban2', label: 'Skins ban', type: 'ban' },
-] as const;
-
+// Gauntlet rounds ARE the playoffs — every gauntlet match carries is_playoff_game = true, and no
+// match carries is_playoff_game without belonging to a gauntlet season. There is no separate
+// "playoff" format to branch on; `isGauntlet` is the only flag this component needs.
 // Simultaneous: each player bans their own slot independently; displayed in this order
 const GAUNTLET_STEPS = [
   { field: 'shirts_ban', label: 'Shirts ban', type: 'ban' },
@@ -50,10 +46,8 @@ const ALL_VETO_FIELDS: StepField[] = [
   'skins_starting_side',
 ];
 
-function getSteps(match: Match, isGauntlet: boolean) {
-  if (isGauntlet) return GAUNTLET_STEPS;
-  if (match.is_playoff_game) return PLAYOFF_STEPS;
-  return REGULAR_STEPS;
+function getSteps(isGauntlet: boolean) {
+  return isGauntlet ? GAUNTLET_STEPS : REGULAR_STEPS;
 }
 
 function getFieldValue(match: Match, field: StepField): string | null {
@@ -106,7 +100,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
     return () => { getBrowserClient().removeChannel(channel); };
   }, [match.id, router]);
 
-  const steps = getSteps(match, isGauntlet);
+  const steps = getSteps(isGauntlet);
 
   const side = match.skins_starting_side;
   const sideCls =
@@ -188,9 +182,8 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
     return pendingCls;
   }
 
-  // For playoff/gauntlet: show auto-picked map tile
-  const isPlayoffOrGauntlet = match.is_playoff_game || isGauntlet;
-  const autoPickedMap = isPlayoffOrGauntlet ? (match.shirts_pick ?? match.picked_map) : null;
+  // Gauntlet: show auto-picked map tile
+  const autoPickedMap = isGauntlet ? (match.shirts_pick ?? match.picked_map) : null;
 
   async function submitVeto(field: StepField, value: string | null) {
     setError(null);
@@ -328,8 +321,8 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
             );
           })}
 
-          {/* Auto-picked map tile for playoff/gauntlet */}
-          {isPlayoffOrGauntlet && (
+          {/* Auto-picked map tile for gauntlet */}
+          {isGauntlet && (
             <span className="flex items-center gap-1 flex-1 min-w-[88px]">
               <span className="text-[var(--color-text-secondary)] text-sm shrink-0 font-mono">›</span>
               <div className={`flex-1 min-w-[88px] px-2.5 py-2 border ${autoPickedMap ? pickCls : pendingCls}`}>
