@@ -3,23 +3,33 @@
 // variable) survives Next.js dev-server hot reloads, which re-evaluate modules but not globalThis.
 
 type GlobalWithSingletons = typeof globalThis & {
-  __dgls_singletons?: Record<string, unknown>;
+  __dgls_singletons?: Map<symbol, unknown>;
 };
 
-/** Returns the cached value for `key`, creating it via `create()` on first call. */
-export function getOrCreateSingleton<T>(key: string, create: () => T): T {
+function store(): Map<symbol, unknown> {
   const g = globalThis as GlobalWithSingletons;
-  g.__dgls_singletons ??= {};
-  const cached = g.__dgls_singletons[key];
-  if (cached) return cached as T;
-  const created = create();
-  g.__dgls_singletons[key] = created;
-  return created;
+  g.__dgls_singletons ??= new Map();
+  return g.__dgls_singletons;
 }
 
-/** Test-only: inject or clear (`undefined`) the cached value for `key`. */
-export function setSingleton<T>(key: string, value: T | undefined): void {
-  const g = globalThis as GlobalWithSingletons;
-  g.__dgls_singletons ??= {};
-  g.__dgls_singletons[key] = value;
+/**
+ * Creates a typed globalThis-backed singleton slot: `get()` returns the cached value, calling
+ * `create()` on first access; `set()` is a test-only override (pass `undefined` to clear it back
+ * to real-client behavior). Keyed by a private `Symbol` per call site so slots can never collide,
+ * unlike a shared string-keyed cache.
+ */
+export function createSingleton<T>(create: () => T): { get: () => T; set: (value: T | undefined) => void } {
+  const key = Symbol();
+  return {
+    get(): T {
+      const s = store();
+      if (s.has(key)) return s.get(key) as T;
+      const created = create();
+      s.set(key, created);
+      return created;
+    },
+    set(value: T | undefined): void {
+      store().set(key, value);
+    },
+  };
 }
