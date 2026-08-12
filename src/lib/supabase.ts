@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
-import { createSingleton } from './supabase-singleton';
+import { getOrCreateSingleton, setSingleton } from './supabase-singleton';
 
 // Server-side Supabase client. Currently uses no-op cookie handlers because
 // there's no auth yet — this keeps pages eligible for ISR (calling cookies()
@@ -12,7 +12,7 @@ import { createSingleton } from './supabase-singleton';
 //             (those routes will no longer be ISR-cacheable, which is correct
 //             — authenticated reads/writes must hit the database per-request).
 //   - browser: createBrowserClient for client components that need auth state.
-const serverClient = createSingleton<SupabaseClient<Database>>(() => {
+function createServerSupabaseClient(): SupabaseClient<Database> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) {
@@ -31,11 +31,15 @@ const serverClient = createSingleton<SupabaseClient<Database>>(() => {
       },
     },
   });
-});
+}
+
+function getClient(): SupabaseClient<Database> {
+  return getOrCreateSingleton('server', createServerSupabaseClient);
+}
 
 export const supabase = new Proxy({} as SupabaseClient<Database>, {
   get(_target, prop, receiver) {
-    return Reflect.get(serverClient.get(), prop, receiver);
+    return Reflect.get(getClient(), prop, receiver);
   },
 });
 
@@ -45,5 +49,5 @@ export const supabase = new Proxy({} as SupabaseClient<Database>, {
  * `undefined` to restore real-client behavior. Not used by application code.
  */
 export function __setTestClient(client: SupabaseClient<Database> | undefined): void {
-  serverClient.set(client);
+  setSingleton('server', client);
 }

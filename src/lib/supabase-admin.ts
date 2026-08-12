@@ -1,16 +1,16 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
-import { createSingleton } from './supabase-singleton';
+import { getOrCreateSingleton, setSingleton } from './supabase-singleton';
 
-const adminClient = createSingleton<SupabaseClient<Database>>(() =>
-  createClient<Database>(
+function createAdminSupabaseClient(): SupabaseClient<Database> {
+  return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  ),
-);
+  );
+}
 
 export function getAdminClient(): SupabaseClient<Database> {
-  return adminClient.get();
+  return getOrCreateSingleton('admin', createAdminSupabaseClient);
 }
 
 /**
@@ -20,5 +20,5 @@ export function getAdminClient(): SupabaseClient<Database> {
  * behavior. Not used by application code.
  */
 export function __setTestAdminClient(client: SupabaseClient<Database> | undefined): void {
-  adminClient.set(client);
+  setSingleton('admin', client);
 }
