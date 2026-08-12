@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 import { getMapDetail, getMapLookup } from '@/lib/queries';
 import { toSentenceCase, mapImageFor } from '@/lib/maps';
-import { OG_SIZE, colors, loadFonts, fontConfig, CardShell, StatPill, loadMapImageAsDataUri } from '@/lib/og-card';
+import { OG_SIZE, colors, loadFonts, fontConfig, CardShell, StatPill, loadMapImageAsDataUri } from '@/lib/seo/og-card';
 
 export const alt = 'DGLS Map';
 export const size = OG_SIZE;
