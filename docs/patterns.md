@@ -87,6 +87,21 @@ Pick one policy per call site and apply it for the same reason across every scri
 the shape — don't let equivalent call sites disagree on whether a write failure aborts, gets recorded,
 or vanishes.
 
+## Test external IO by extracting the logic around it, not by mocking the call
+
+When a module wraps an external HTTP call (DatHost, GitHub Actions dispatch, R2, Steam), the call
+itself stays untested in place — don't build fetch-mocking infrastructure for it. Instead, extract
+the pure decision logic around the call (retry/timeout predicates, payload shaping, error
+classification) into its own function and test that directly with `test-support/miniTest.ts`, the
+same as any other pure helper.
+
+`fetchFromDathost.test.ts` is the existing example: it never mocks `fetch`, but it does test
+`isPollTimeout()` (distinguishing a `pollUntil` deadline from a real R2 read failure) and
+`remainingFlushFloorMs()` (the flush-floor wait math) — both sit beside the DatHost call they inform,
+not inside it. Apply the same split to `dathost.ts`, `gh-dispatch.ts`, `r2.ts`, and `steam.ts`: keep
+the client thin and untested, and pull anything with real branching out to where it can be tested
+without a network boundary.
+
 ## Don't caption a page instead of designing it
 
 A page never gets a subheading whose only job is to narrate what the UI below it already shows
