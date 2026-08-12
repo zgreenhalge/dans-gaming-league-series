@@ -1,8 +1,9 @@
 // Pick/ban completion check, shared by the match page (rendering) and the veto route (which uses it
 // to detect the incomplete→complete transition that fires server provisioning).
 //
-// Gauntlet = playoffs, so `isGauntlet` is the only flag this needs — see docs/glossary.md's
-// Gauntlet entry.
+// Gauntlet = playoffs, so a single gauntlet-shaped boolean is all this needs — see docs/glossary.md's
+// Gauntlet entry for why callers should pass `isGauntlet || match.is_playoff_game` rather than
+// `isGauntlet` alone.
 
 export interface VetoFields {
   shirts_ban: string | null;

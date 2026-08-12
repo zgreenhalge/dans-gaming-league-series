@@ -95,7 +95,11 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
     return () => { getBrowserClient().removeChannel(channel); };
   }, [match.id, router]);
 
-  const steps = isGauntlet ? GAUNTLET_STEPS : REGULAR_STEPS;
+  // Falls back to the match's own is_playoff_game if the season's is_gauntlet was never set (e.g. a
+  // gauntlet CSV import whose season-patch step failed) — the pairing is a convention, not a DB
+  // constraint, so a mismatched match still needs to render its actual 4-ban shape.
+  const gauntletShaped = isGauntlet || match.is_playoff_game;
+  const steps = gauntletShaped ? GAUNTLET_STEPS : REGULAR_STEPS;
 
   const side = match.skins_starting_side;
   const sideCls =
@@ -177,8 +181,8 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
     return pendingCls;
   }
 
-  // Gauntlet: show auto-picked map tile
-  const autoPickedMap = isGauntlet ? (match.shirts_pick ?? match.picked_map) : null;
+  // Gauntlet-shaped: show auto-picked map tile
+  const autoPickedMap = gauntletShaped ? (match.shirts_pick ?? match.picked_map) : null;
 
   async function submitVeto(field: StepField, value: string | null) {
     setError(null);
@@ -317,7 +321,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
           })}
 
           {/* Auto-picked map tile for gauntlet */}
-          {isGauntlet && (
+          {gauntletShaped && (
             <span className="flex items-center gap-1 flex-1 min-w-[88px]">
               <span className="text-[var(--color-text-secondary)] text-sm shrink-0 font-mono">›</span>
               <div className={`flex-1 min-w-[88px] px-2.5 py-2 border ${autoPickedMap ? pickCls : pendingCls}`}>

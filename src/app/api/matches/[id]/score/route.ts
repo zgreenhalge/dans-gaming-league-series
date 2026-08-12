@@ -16,6 +16,7 @@ const supabaseAdmin = getAdminClient();
 type MatchRow = {
   id: number;
   final_score: string | null;
+  is_playoff_game: boolean;
   shirts_ban: string | null;
   shirts_ban2: string | null;
   skins_ban1: string | null;
@@ -51,7 +52,7 @@ export async function PATCH(
     supabaseAdmin
       .from('matches')
       .select(
-        'id, final_score, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(season_id, seasons(is_gauntlet))',
+        'id, final_score, is_playoff_game, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(season_id, seasons(is_gauntlet))',
       )
       .eq('id', matchId)
       .maybeSingle(),
@@ -82,8 +83,12 @@ export async function PATCH(
     return NextResponse.json({ error: 'Only admins can edit a submitted result' }, { status: 403 });
   }
 
+  // Falls back to the match's own is_playoff_game if the season's is_gauntlet was never set (e.g. a
+  // gauntlet CSV import whose season-patch step failed) — the pairing is a convention, not a DB
+  // constraint. Matters here specifically because an admin can reach this check on an already-played
+  // (CSV-imported) match to correct its score.
   const isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
-  if (!isVetoComplete(m as VetoFields, isGauntlet)) {
+  if (!isVetoComplete(m as VetoFields, isGauntlet || m.is_playoff_game)) {
     return NextResponse.json({ error: 'Pick/ban phase not complete' }, { status: 403 });
   }
 
