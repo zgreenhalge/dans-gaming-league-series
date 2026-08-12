@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { isPlayedScore } from '@/lib/util';
 import type { AdminMatchRow } from '@/lib/queries';
-import type { ScheduledMatchRef } from '@/lib/schedule';
+import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import EmptyState from './EmptyState';
 import VetoSequence from './VetoSequence';
 import { ScheduleEditor } from './ScheduleEditor';

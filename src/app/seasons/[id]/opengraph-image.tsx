@@ -1,8 +1,8 @@
 import { ImageResponse } from 'next/og';
 import { getSeason } from '@/lib/queries';
-import { getSeasonMetaLeaderboard } from '@/lib/og';
+import { getSeasonMetaLeaderboard } from '@/lib/seo/og';
 import { seasonTitle } from '@/lib/util';
-import { OG_SIZE, colors, loadFonts, fontConfig, CardShell } from '@/lib/og-card';
+import { OG_SIZE, colors, loadFonts, fontConfig, CardShell } from '@/lib/seo/og-card';
 
 export const alt = 'DGLS Season';
 export const size = OG_SIZE;

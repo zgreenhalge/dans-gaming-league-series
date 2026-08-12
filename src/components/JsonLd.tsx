@@ -1,4 +1,4 @@
-import { jsonLdScript } from '@/lib/structured-data';
+import { jsonLdScript } from '@/lib/seo/structured-data';
 
 /** Renders a `<script type="application/ld+json">` tag, or nothing when `data` is `null`. */
 export function JsonLd({ data }: { data: Record<string, unknown> | null }) {

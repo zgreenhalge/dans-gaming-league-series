@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { toSentenceCase, mapSlug } from '@/lib/maps';
-import { type ScheduledMatchRef } from '@/lib/schedule';
+import { type ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import { useScheduleEditor } from './useScheduleEditor';
 import { useHasMounted } from './useHasMounted';
 import { ScheduleWarningBox } from './ScheduleWarning';

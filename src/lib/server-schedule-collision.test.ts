@@ -3,11 +3,11 @@
  * documented as strict (`<`, not `<=`) so matches exactly an hour apart do NOT collide; lock that
  * exact boundary down since it's the whole point of the function.
  *
- * Run:  npx tsx src/lib/schedule.test.ts
+ * Run:  npx tsx src/lib/server-schedule-collision.test.ts
  */
 
 import assert from 'node:assert/strict';
-import { findScheduleCollision, SCHEDULE_COLLISION_WINDOW_MS, type ScheduledMatchRef } from './schedule';
+import { findScheduleCollision, SCHEDULE_COLLISION_WINDOW_MS, type ScheduledMatchRef } from './server-schedule-collision';
 import { test, report } from './test-support/miniTest';
 
 function ref(id: number, iso: string): ScheduledMatchRef {

@@ -2,7 +2,7 @@ import { supabase } from '../supabase';
 import type { Match, Week, Season, Player, PlayerMatchStat, PlayerMatchSabremetrics, Faction } from '../types';
 import { isPlayedScore, avgOf, compareMatchRefDesc, extractSeasonNumber, matchLabel, matchTitle } from '../util';
 import { mapSlug } from '../maps';
-import type { ScheduledMatchRef } from '../schedule';
+import type { ScheduledMatchRef } from '../server-schedule-collision';
 import { getPlayersById } from './player';
 import { asPage, fetchAllPages, getWeekLookup } from './_shared';
 import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '../demo/liveScore';

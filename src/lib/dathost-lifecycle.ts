@@ -14,7 +14,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapSlug } from './maps';
 import { matchLabel, isPlayedScore, isServerOff } from './util';
-import { SCHEDULE_COLLISION_WINDOW_MS } from './schedule';
+import { SCHEDULE_COLLISION_WINDOW_MS } from './server-schedule-collision';
 import {
   dathostServerId,
   applyConfigSet,

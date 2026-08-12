@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
-import { getMatchMeta } from '@/lib/og';
-import { OG_SIZE, colors, loadFonts, fontConfig, CardShell, loadMapImageAsDataUri } from '@/lib/og-card';
+import { getMatchMeta } from '@/lib/seo/og';
+import { OG_SIZE, colors, loadFonts, fontConfig, CardShell, loadMapImageAsDataUri } from '@/lib/seo/og-card';
 
 export const alt = 'DGLS Match';
 export const size = OG_SIZE;

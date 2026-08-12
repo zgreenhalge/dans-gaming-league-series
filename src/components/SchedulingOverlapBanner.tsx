@@ -2,7 +2,7 @@
 // shared-server window (#134). Rendered like the Match-of-the-Week banner, in the same slot.
 // Server-safe (no interactivity) — visibility is decided by the page from `findScheduleCollision`.
 
-import type { ScheduledMatchRef } from '@/lib/schedule';
+import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import { ScheduleCollisionMessage } from './ScheduleWarning';
 
 export function SchedulingOverlapBanner({ conflict }: { conflict: ScheduledMatchRef }) {

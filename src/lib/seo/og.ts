@@ -2,7 +2,7 @@ import { cache } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isPlayedScore, parseScore, canonicalSort, deriveRates, deriveRwr, deriveAdr } from '@/lib/util';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
-import { getMapLookup, getMatchTeamNames } from './queries';
+import { getMapLookup, getMatchTeamNames } from '../queries';
 import type { Player, Match } from '@/lib/types';
 
 type LeaderboardAgg = {
