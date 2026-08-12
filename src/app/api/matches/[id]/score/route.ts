@@ -7,7 +7,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { writeMatchScore } from '@/lib/matchScore';
-import { isVetoComplete, computeGauntletOrPlayoff, type VetoFields } from '@/lib/veto';
+import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import type { DemoSabremetricStat, DemoWeaponStat } from '@/lib/types';
 import { afterBestEffort } from '@/lib/after';
 
@@ -83,8 +83,12 @@ export async function PATCH(
     return NextResponse.json({ error: 'Only admins can edit a submitted result' }, { status: 403 });
   }
 
+  // Falls back to the match's own is_playoff_game if the season's is_gauntlet was never set (e.g. a
+  // gauntlet CSV import whose season-patch step failed) — the pairing is a convention, not a DB
+  // constraint. Matters here specifically because an admin can reach this check on an already-played
+  // (CSV-imported) match to correct its score.
   const isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
-  if (!isVetoComplete(m as VetoFields, computeGauntletOrPlayoff(isGauntlet, m.is_playoff_game))) {
+  if (!isVetoComplete(m as VetoFields, isGauntlet || m.is_playoff_game)) {
     return NextResponse.json({ error: 'Pick/ban phase not complete' }, { status: 403 });
   }
 

@@ -9,7 +9,7 @@ import { requireMatchAccess } from '@/lib/match-access';
 import { getR2Object, deleteR2Object, headDemoObject, demoResultKey, mapResultKey } from '@/lib/r2';
 import { gunzipMaybe } from '@/lib/gzip';
 import { isPlayedScore, parseMatchId } from '@/lib/util';
-import { isVetoComplete, computeGauntletOrPlayoff, type VetoFields } from '@/lib/veto';
+import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '@/lib/demo/ingestResult';
 import { recordJobStatus, matchJobKey } from '@/lib/background-jobs';
 
@@ -25,7 +25,6 @@ async function jobStatus(matchId: number): Promise<string | null> {
 
 type OrphanGateRow = VetoFields & {
   final_score: string | null;
-  is_playoff_game: boolean;
   weeks: { seasons: { is_gauntlet: boolean } | null } | null;
 };
 
@@ -39,7 +38,7 @@ async function isAwaitingScoreAfterVeto(matchId: number): Promise<boolean> {
   const { data } = await getAdminClient()
     .from('matches')
     .select(
-      'final_score, is_playoff_game, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(seasons(is_gauntlet))',
+      'final_score, shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side, weeks(seasons(is_gauntlet))',
     )
     .eq('id', matchId)
     .maybeSingle();
@@ -47,7 +46,7 @@ async function isAwaitingScoreAfterVeto(matchId: number): Promise<boolean> {
   const m = data as unknown as OrphanGateRow;
   if (isPlayedScore(m.final_score)) return false;
   const isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
-  return isVetoComplete(m, computeGauntletOrPlayoff(isGauntlet, m.is_playoff_game));
+  return isVetoComplete(m, isGauntlet);
 }
 
 // A demo can land in R2 (e.g. a manual browser upload) slightly ahead of its background_jobs row
