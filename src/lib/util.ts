@@ -271,7 +271,7 @@ export function winRateColor(winRate: number): string {
 /**
  * Canonical leaderboard sort: WR% → RWR% → ADR (all descending).
  * Use this wherever player rows are ranked — never sort by ADR alone.
- * For gauntlet season pages, use canonicalGauntletRankMap instead.
+ * For gauntlet season pages, use canonicalGauntletRankMap (gauntlet-ranking.ts) instead.
  */
 export function canonicalSort(
   a: { win_rate_percentage: number; rwr_percentage: number; overall_adr: number },
@@ -351,7 +351,8 @@ export function compareMatchRefDesc(
 
 /** Stakes copy for a gauntlet pod, shown wherever its matches render — shared so the round list
  * and the match detail page can't drift. Not shown for the final pod (advance_rule is unused
- * there; nobody "advances" from it — canonicalGauntletRankMap ranks it on read instead). */
+ * there; nobody "advances" from it — canonicalGauntletRankMap (gauntlet-ranking.ts) ranks it on
+ * read instead). */
 export const GAUNTLET_POD_STAKES_LABEL: Record<'single' | 'wildcard', string> = {
   single: 'Elimination pod — win both games to survive (3 of 4 are out).',
   wildcard: 'Wildcard pod — only last place is eliminated (3 of 4 advance).',

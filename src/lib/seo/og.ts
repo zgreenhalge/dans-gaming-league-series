@@ -208,11 +208,5 @@ async function getRegularSeasonMeta(seasonId: number): Promise<SeasonLeaderboard
 
 async function getGauntletSeasonMeta(seasonId: number): Promise<SeasonLeaderboardMeta[]> {
   const rows = await getGauntletSeasonLeaderboard(seasonId);
-  return rows.slice(0, 4).map((r) => ({
-    player_name: r.player_name,
-    win_rate_percentage: r.win_rate_percentage,
-    rwr_percentage: r.rwr_percentage,
-    overall_adr: r.overall_adr,
-    kd_ratio: r.kd_ratio,
-  }));
+  return rows.slice(0, 4);
 }

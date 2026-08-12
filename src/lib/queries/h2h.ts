@@ -5,9 +5,8 @@ import {
   isPlayedScore,
   winRatePct,
 } from '../util';
-import { computeH2H, resolveH2HPickedBy } from '../h2h';
+import { computeH2H, resolveH2HPickedBy, type DuoStats, type H2HStats, type H2HData, type H2HMatchInput } from '../h2h';
 import { mapSlug } from '../maps';
-import type { DuoStats, H2HStats, H2HData, H2HMatchInput } from '../h2h';
 import type { Season, Faction } from '../types';
 import { getSeasons } from './seasons';
 import { getPlayersById } from './player';
@@ -146,7 +145,7 @@ export function rivalBreakdownScorer(rivals: H2HStats[]): (r: H2HStats) => strin
  * Computes head-to-head relationship data — partner records (`duos`) and
  * opponent records (`rivals`) — for the given resolved season selection.
  * Only played matches count (see `isPlayedScore`). Fetches the raw match/stat
- * rows and delegates the actual aggregation to `computeH2H` (util.ts).
+ * rows and delegates the actual aggregation to `computeH2H` (`../h2h.ts`).
  */
 export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData> {
   const seasons = await getSeasons();
