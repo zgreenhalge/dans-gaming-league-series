@@ -9,7 +9,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import type { ScheduledMatchRef } from '@/lib/schedule';
+import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import type { ScheduleWarning } from './useScheduleEditor';
 
 export function ScheduleCollisionMessage({
