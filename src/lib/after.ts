@@ -2,7 +2,7 @@
 // shape every API route in this repo uses for work that shouldn't block or fail the response it rides
 // in on (server provisioning/teardown, demo-pipeline dispatch, MatchZy event bookkeeping).
 
-import { after } from 'next/server';
+import { after as realAfter } from 'next/server';
 
 // `after()` throws synchronously when called outside a real Next.js request scope, which a
 // route-handler test invoking an exported handler directly (see test-support/nextRequest.ts) never
@@ -27,6 +27,21 @@ export async function __flushTestAfter(): Promise<void> {
   await Promise.all(queue.map((fn) => fn()));
 }
 
+/** The `after()` seam every deferred call in this file routes through — queues `fn` under test mode
+ * instead of calling the real `next/server` `after()`. Also exported directly (not just wrapped by
+ * `afterBestEffort()` below) for the one caller — `matches/[id]/score/route.ts` — that hands its own
+ * `after` on to `writeMatchScore()`'s injectable `opts.after` rather than calling `afterBestEffort()`
+ * itself; importing this instead of `next/server`'s `after` there keeps that path test-seamed too. */
+export function after(fn: () => void | Promise<void>): void {
+  if (testQueue) {
+    testQueue.push(async () => {
+      await fn();
+    });
+  } else {
+    realAfter(fn);
+  }
+}
+
 /** Runs `fn` in `after()`, awaiting `onError` (default: `console.error(`${label} failed:`, err)`) if
  *  it rejects instead of letting the rejection escape. Pass a custom `onError` when a caller needs to
  *  distinguish an expected failure (e.g. a race-loser error) from a real one, or needs to run other
@@ -36,16 +51,11 @@ export function afterBestEffort(
   fn: () => Promise<unknown>,
   onError: (err: unknown) => void | Promise<void> = (err) => console.error(`${label} failed:`, err),
 ): void {
-  const run = async () => {
+  after(async () => {
     try {
       await fn();
     } catch (err) {
       await onError(err);
     }
-  };
-  if (testQueue) {
-    testQueue.push(run);
-  } else {
-    after(run);
-  }
+  });
 }

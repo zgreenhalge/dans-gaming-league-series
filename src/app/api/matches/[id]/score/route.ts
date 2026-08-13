@@ -1,7 +1,5 @@
-import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireSession } from '@/lib/session';
 import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
@@ -9,7 +7,7 @@ import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { writeMatchScore } from '@/lib/matchScore';
 import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import type { DemoSabremetricStat, DemoWeaponStat } from '@/lib/types';
-import { afterBestEffort } from '@/lib/after';
+import { after, afterBestEffort } from '@/lib/after';
 
 type MatchRow = {
   id: number;
@@ -34,7 +32,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const supabaseAdmin = getAdminClient();
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   if (!session?.user?.playerId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
