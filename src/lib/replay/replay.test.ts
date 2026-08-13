@@ -33,8 +33,9 @@ import { buildHeatmapPoints } from './heatmap';
 import { extractPlayerTrace, traceStateAt, maxDurationTicks, buildMatchTraces } from './aggregate';
 import { freezeDeadPositions } from './extract';
 import { parseOverview, workshopIdFromUrl } from './radar';
-import type { ReplayRound, ReplayFrame, ReplayPayload, ReplayPlayerFrame } from './types';
+import type { ReplayFrame, ReplayPayload, ReplayPlayerFrame } from './types';
 import { test, report } from '../test-support/miniTest';
+import { round } from '../test-support/replayFixtures';
 
 function approx(actual: number, expected: number, msg?: string) {
   assert.ok(Math.abs(actual - expected) < 1e-6, msg ?? `expected ~${expected}, got ${actual}`);
@@ -54,23 +55,6 @@ function pf(id: number, x: number, y: number, extra: Partial<ReplayPlayerFrame> 
 }
 function frame(tick: number, players: ReplayPlayerFrame[]): ReplayFrame {
   return { tick, players, bomb: null };
-}
-function round(partial: Partial<ReplayRound>): ReplayRound {
-  return {
-    round: 1,
-    startTick: 0,
-    endTick: 1000,
-    freezeEndTick: 0,
-    sideByFaction: { SHIRTS: 'CT', SKINS: 'T' },
-    frames: [],
-    events: [],
-    grenades: [],
-    shots: [],
-    blinds: [],
-    hurts: [],
-    bombCarrier: [],
-    ...partial,
-  };
 }
 
 // --- autoFitProjector: y-flip + corner mapping ---
