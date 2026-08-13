@@ -130,6 +130,14 @@ export async function headDemoObject(
   }
 }
 
+/** The match id embedded in a demo object key (`demoKey()`'s own `<id>/game.dem` shape), or `null`
+ *  if `key` isn't a demo key at all — e.g. `replay.json`/`heatmap.json` siblings under the same
+ *  match prefix, or an unrelated object in the bucket. */
+export function demoMatchIdFromKey(key: string): number | null {
+  const m = /^(\d+)\/game\.dem$/.exec(key);
+  return m ? Number(m[1]) : null;
+}
+
 /** Every match id with an uploaded demo (`<id>/game.dem`), ascending. Paginates the whole bucket. */
 export async function listDemoMatchIds(): Promise<number[]> {
   const ids = new Set<number>();
@@ -137,8 +145,8 @@ export async function listDemoMatchIds(): Promise<number[]> {
   do {
     const res = await r2.send(new ListObjectsV2Command({ Bucket: R2_BUCKET, ContinuationToken: token }));
     for (const obj of res.Contents ?? []) {
-      const m = /^(\d+)\/game\.dem$/.exec(obj.Key ?? '');
-      if (m) ids.add(Number(m[1]));
+      const matchId = demoMatchIdFromKey(obj.Key ?? '');
+      if (matchId !== null) ids.add(matchId);
     }
     token = res.IsTruncated ? res.NextContinuationToken : undefined;
   } while (token);
