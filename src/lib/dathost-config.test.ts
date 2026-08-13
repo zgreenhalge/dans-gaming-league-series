@@ -1,16 +1,16 @@
 /**
- * Unit tests for dathost-config.ts's pure cfg-parsing and diff logic (#163) — parseCfg, compareCfg,
- * and compareFlat. diffConfigSet/pushCfgFiles/resolveConfigSet hit Supabase and the live DatHost API
- * directly; they're left as integration-only (exercised for real by scripts/dathost-golden-diff.ts
- * and scripts/dathost-golden-apply.ts against an actual server), the same "extract and test the pure
- * logic, leave IO-bound orchestration untested" split used elsewhere in this repo (e.g.
- * src/lib/demo/quarantine.test.ts).
+ * Unit tests for dathost-config.ts's pure cfg-parsing, diff, and capture logic (#163, #384) —
+ * parseCfg, compareCfg, compareFlat, and captureOverlay. diffConfigSet/pushCfgFiles/resolveConfigSet
+ * hit Supabase and the live DatHost API directly; they're left as integration-only (exercised for
+ * real by scripts/dathost-golden-diff.ts and scripts/dathost-golden-apply.ts against an actual
+ * server), the same "extract and test the pure logic, leave IO-bound orchestration untested" split
+ * used elsewhere in this repo (e.g. src/lib/demo/quarantine.test.ts).
  *
  * Run:  npx tsx src/lib/dathost-config.test.ts
  */
 
 import assert from 'node:assert/strict';
-import { parseCfg, compareCfg, compareFlat } from './dathost-config';
+import { parseCfg, compareCfg, compareFlat, captureOverlay } from './dathost-config';
 import { test, report } from './test-support/miniTest';
 
 // --- parseCfg ---
@@ -113,6 +113,28 @@ test('compareFlat skips array/object values as "not comparable" instead of diffi
   assert.deepEqual(rows, [
     { key: 'cs2_settings.tags', local: JSON.stringify(['a', 'b']), live: '(not comparable)', status: 'skipped' },
   ]);
+});
+
+// --- captureOverlay ---
+
+test('captureOverlay: overlays a live value onto a key the set already tracks', () => {
+  const result = captureOverlay({ mp_roundtime: '1.92' }, { mp_roundtime: '2.5' });
+  assert.deepEqual(result, { mp_roundtime: '2.5' });
+});
+
+test('captureOverlay: keeps the tracked value when live is undefined for that key', () => {
+  const result = captureOverlay({ mp_roundtime: '1.92' }, {});
+  assert.deepEqual(result, { mp_roundtime: '1.92' });
+});
+
+test('captureOverlay: never adds a key live has but tracked does not', () => {
+  const result = captureOverlay({ mp_roundtime: '1.92' }, { mp_roundtime: '1.92', mp_freezetime: '15' });
+  assert.deepEqual(result, { mp_roundtime: '1.92' });
+});
+
+test('captureOverlay: an empty tracked set overlays nothing, regardless of live', () => {
+  const result = captureOverlay({}, { mp_roundtime: '2.5' });
+  assert.deepEqual(result, {});
 });
 
 report();

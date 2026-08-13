@@ -23,7 +23,7 @@
 
 import { api, flagValue } from './dathost-golden-shared';
 import { getAdminClient } from '../src/lib/supabase-admin';
-import { resolveConfigSet, pushCfgFiles } from '../src/lib/dathost-config';
+import { resolveConfigSet, pushCfgFiles, captureOverlay } from '../src/lib/dathost-config';
 import { buildScalarFields, MAP_SELECTION_KEYS } from '../src/lib/dathost';
 import type { Json } from '../src/lib/database.types';
 
@@ -40,14 +40,8 @@ async function capture(serverId: string, key: string) {
   const live = json as Record<string, unknown>;
   const liveCs2 = (live.cs2_settings ?? {}) as Record<string, unknown>;
 
-  const newServer: Record<string, unknown> = { ...set.server };
-  for (const k of Object.keys(set.server)) {
-    if (live[k] !== undefined) newServer[k] = live[k];
-  }
-  const newCs2: Record<string, unknown> = { ...set.cs2Settings };
-  for (const k of Object.keys(set.cs2Settings)) {
-    if (liveCs2[k] !== undefined) newCs2[k] = liveCs2[k];
-  }
+  const newServer = captureOverlay(set.server, live);
+  const newCs2 = captureOverlay(set.cs2Settings, liveCs2);
 
   const { error: setErr } = await supabase
     .from('config_sets')
