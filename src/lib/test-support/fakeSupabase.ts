@@ -39,7 +39,8 @@ export type FakeDb = Record<string, Row[]>;
 // table -> embed key (the alias used in a select string) -> which column relates this table to
 // which target table, and in which direction. 'one': `fk` lives on this table and points at the
 // target's id (matches -> weeks). 'many': `fk` lives on the target table and points back at this
-// row's id (weeks -> matches). Only covers the embeds queries.ts actually performs.
+// row's id (weeks -> matches). Only covers the embeds real call sites (queries.ts, gauntlet-engine.ts)
+// actually perform.
 type EmbedMapping = { kind: 'one' | 'many'; fk: string; table: string };
 const FK_MAP: Record<string, Record<string, EmbedMapping>> = {
   matches: {
@@ -49,6 +50,12 @@ const FK_MAP: Record<string, Record<string, EmbedMapping>> = {
   weeks: {
     seasons: { kind: 'one', fk: 'season_id', table: 'seasons' },
     matches: { kind: 'many', fk: 'week_id', table: 'matches' },
+  },
+  gauntlet_pods: {
+    // gauntlet_pod_slots has two FKs into gauntlet_pods (pod_id, source_pod_id) — getSeedByPlayer()
+    // (gauntlet-engine.ts) disambiguates with `gauntlet_pod_slots!pod_id(...)`, which this fake
+    // resolves to the one mapping below regardless of the `!hint` (see parseSelect()).
+    gauntlet_pod_slots: { kind: 'many', fk: 'pod_id', table: 'gauntlet_pod_slots' },
   },
 };
 
@@ -78,7 +85,12 @@ function parseSelect(select: string): ParsedSelect {
   for (const raw of parts) {
     const part = raw.trim();
     if (!part) continue;
-    const m = part.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\(([\s\S]*)\)$/);
+    // `table!fk_column(...)` disambiguates which FK to embed through when more than one points
+    // between the two tables (e.g. `gauntlet_pod_slots!pod_id(...)`, since gauntlet_pod_slots has
+    // both `pod_id` and `source_pod_id` pointing at gauntlet_pods) — the `!hint` is only meaningful
+    // to real PostgREST; this fake has exactly one FK_MAP entry per (table, embed key) either way,
+    // so the hint is discarded once it's stripped off the key.
+    const m = part.match(/^([a-zA-Z_][a-zA-Z0-9_]*)(?:![a-zA-Z_][a-zA-Z0-9_]*)?\(([\s\S]*)\)$/);
     if (m) embeds.push({ key: m[1], inner: m[2] });
     else cols.push(part);
   }
