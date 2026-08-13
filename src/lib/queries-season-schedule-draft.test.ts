@@ -1,7 +1,6 @@
 /**
  * Regression harness for queries/season-schedule-draft.ts — hasSeasonScheduleDraft(),
- * getSeasonScheduleDraft(), toDraftScheduleWeeks(). The only file in src/lib/queries/ with real
- * logic that previously lacked a queries-*.test.ts sibling (#380).
+ * getSeasonScheduleDraft(), toDraftScheduleWeeks().
  *
  * Run:  npx tsx src/lib/queries-season-schedule-draft.test.ts
  */
