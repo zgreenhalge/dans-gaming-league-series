@@ -109,11 +109,14 @@ test('isDathostNotFound: true only for a DathostError with status 404', () => {
 
 // ─── applyConfigSet's no-mapWorkshopId guard ─────────────────────────────────
 
-test('applyConfigSet: throws before any network call when no map workshop id is resolved', async () => {
-  await assert.rejects(
-    () => applyConfigSet('srv-1', { server: {}, cs2Settings: {} }),
-    /requires a resolved map workshop id/,
-  );
-});
+async function main() {
+  await test('applyConfigSet: throws before any network call when no map workshop id is resolved', async () => {
+    await assert.rejects(
+      () => applyConfigSet('srv-1', { server: {}, cs2Settings: {} }),
+      /requires a resolved map workshop id/,
+    );
+  });
+  report();
+}
 
-report();
+main();
