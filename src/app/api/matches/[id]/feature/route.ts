@@ -7,8 +7,6 @@ import { parseMatchId } from '@/lib/util';
 // the league spotlights), not something an in-match player should flip, so this doesn't use the
 // in-match fallback the schedule/score routes allow.
 
-const supabaseAdmin = getAdminClient();
-
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -16,6 +14,7 @@ export async function PATCH(
   const access = await requireAdminAccess();
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
+  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const matchId = parseMatchId(id);
   if (matchId === null) {

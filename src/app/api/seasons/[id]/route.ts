@@ -4,8 +4,6 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason } from '@/lib/queries';
 import { deleteSeasonScheduleDraft } from '@/lib/season-schedule-draft-engine';
 
-const supabaseAdmin = getAdminClient();
-
 /**
  * Deletes an UPCOMING regular season outright. UPCOMING is the one stage a season has no schedule or
  * results yet — nothing in this app ever writes `weeks` rows for a season before it goes live (that
@@ -20,6 +18,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
+  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const seasonId = Number(id);
   if (!Number.isFinite(seasonId)) {

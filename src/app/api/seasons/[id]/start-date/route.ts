@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 
-const supabaseAdmin = getAdminClient();
-
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -11,6 +9,7 @@ export async function PATCH(
   const access = await requireAdminAccess();
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
+  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const seasonId = Number(id);
   if (!Number.isFinite(seasonId)) {

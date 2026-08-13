@@ -5,8 +5,6 @@ import { getSeason, getLinkedGauntlet, getGauntletRounds, getGauntletBracketShap
 import { isPlayedScore } from '@/lib/util';
 import { tryBuildGauntletShape, deleteGauntletSeason } from '@/lib/gauntlet-engine';
 
-const supabaseAdmin = getAdminClient();
-
 /**
  * Creates the paired "Season N Gauntlet" season row for a regular season and builds its bracket
  * *shape* — pods and slots, with every slot unseeded (`player_id` null). The shape only depends on
@@ -24,6 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
+  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const regularSeasonId = Number(id);
   if (!Number.isFinite(regularSeasonId)) {
@@ -84,6 +83,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
+  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const regularSeasonId = Number(id);
   if (!Number.isFinite(regularSeasonId)) {

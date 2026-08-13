@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 
-const supabaseAdmin = getAdminClient();
-
 /** Dismisses a single `ops_errors` row by its id — the admin has seen it and either fixed the
  * underlying issue or is choosing to ignore it. Applies to any entity type (season, match, system)
  * since they all share this one table. Sets `dismissed_at` rather than deleting the row, so it drops
@@ -14,6 +12,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
+  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const opsErrorId = Number(id);
   if (!Number.isFinite(opsErrorId)) {

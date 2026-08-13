@@ -8,8 +8,6 @@ import { triggerRatingRecompute } from '@/lib/ehog-recompute';
 // `after()` so the response returns immediately while the walk runs in the background — the caller
 // just needs to know it was kicked off, not wait for it.
 
-const supabaseAdmin = getAdminClient();
-
 export async function POST() {
   const access = await requireAdminAccess();
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
@@ -18,6 +16,7 @@ export async function POST() {
     return NextResponse.json({ error: 'Recompute not configured (RECOMPUTE_SECRET missing)' }, { status: 500 });
   }
 
+  const supabaseAdmin = getAdminClient();
   after(() => triggerRatingRecompute(supabaseAdmin));
   return NextResponse.json({ ok: true });
 }

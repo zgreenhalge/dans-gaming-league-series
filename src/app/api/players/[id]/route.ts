@@ -11,8 +11,6 @@ type PlayerUpdate = Database['public']['Tables']['players']['Update'];
 // through this one route with a whitelisted body — there are no side effects to isolate the way the
 // match /score and /veto routes have, so a single partial-update route is simpler than three.
 
-const supabaseAdmin = getAdminClient();
-
 /** SteamID64: 17 decimal digits. */
 const STEAM_ID_RE = /^\d{17}$/;
 
@@ -24,6 +22,7 @@ export async function PATCH(
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const callerId = access.playerId;
 
+  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const targetId = Number(id);
   if (!Number.isInteger(targetId) || targetId <= 0) {

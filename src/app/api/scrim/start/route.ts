@@ -13,8 +13,7 @@
 // (a DatHost idle timeout) can't block every future start.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { dathostServerId, getServer } from '@/lib/dathost';
 import { listConfigSets } from '@/lib/dathost-config';
@@ -25,7 +24,7 @@ import { SCRIM_BOOT_MARKER } from '@/lib/server-players';
 const WORKSHOP_ID_RE = /^\d+$/;
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   const playerId = session?.user?.playerId;
   if (!playerId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
