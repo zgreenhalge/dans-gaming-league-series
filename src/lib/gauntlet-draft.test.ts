@@ -215,16 +215,7 @@ test('fromGeneratedPlan: a slot with neither seed nor pod source data maps to em
 // ─── pruneInvalidReferences ──────────────────────────────────────────────────
 
 function draftPod(overrides: Partial<DraftPod> & { key: string }): DraftPod {
-  return {
-    persistedId: null,
-    materialized: false,
-    round_number: 1,
-    pod_index: 0,
-    advance_rule: 'wildcard',
-    is_final: false,
-    slots: [{ kind: 'empty' }, { kind: 'empty' }, { kind: 'empty' }, { kind: 'empty' }],
-    ...overrides,
-  };
+  return { ...emptyDraftPod(overrides.key, overrides.round_number ?? 1, overrides.pod_index ?? 0), ...overrides };
 }
 
 test('pruneInvalidReferences: clears an advance slot whose source pod no longer exists', () => {
