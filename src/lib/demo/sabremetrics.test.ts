@@ -12,30 +12,11 @@ import assert from 'node:assert/strict';
 import { persistSabremetrics, clearSabremetrics } from './sabremetrics';
 import { __setTestAdminClient } from '../supabase-admin';
 import { createFakeSupabaseClient, type FakeDb } from '../test-support/fakeSupabase';
-import type { DemoSabremetricStat, SabFields } from '../types';
+import { zeroSabFields as zeroSab } from '../test-support/sabFields';
+import type { DemoSabremetricStat } from '../types';
 import { test, report } from '../test-support/miniTest';
 
 const MATCH_ID = 100;
-
-function zeroSab(overrides: Partial<SabFields> = {}): SabFields {
-  return {
-    kills_ct: 0, kills_t: 0, deaths_ct: 0, deaths_t: 0, assists_ct: 0, assists_t: 0, damage_ct: 0, damage_t: 0,
-    headshot_kills: 0, headshot_kills_ct: 0, headshot_kills_t: 0, opening_kills: 0, opening_deaths: 0,
-    kast_rounds: 0, clutch_1v1_attempts: 0, clutch_1v1_wins: 0, clutch_1v2_attempts: 0, clutch_1v2_wins: 0,
-    clutch_2v1_attempts: 0, clutch_2v1_wins: 0, teamkills: 0,
-    flash_assists: 0, flashes_leading_to_kill: 0, utility_damage: 0, blind_duration_dealt: 0, enemies_flashed: 0,
-    flashes_thrown: 0, teamflash_duration: 0, plants: 0, defuses: 0, two_k_rounds: 0,
-    trade_kill_opportunities: 0, trade_kill_attempts: 0, trade_kill_successes: 0,
-    traded_death_opportunities: 0, traded_death_attempts: 0, traded_death_successes: 0,
-    he_thrown: 0, he_damage: 0, blind_duration_max_sum: 0, effective_flashes: 0,
-    shots_fired: 0, shots_hit: 0, headshot_hits: 0, shots_hit_no_awp: 0, headshot_hits_no_awp: 0,
-    counter_strafe_shots: 0, counter_strafe_good_shots: 0,
-    spray_shots_fired: 0, spray_shots_hit: 0, smokes_blocking_push: 0, ct_smokes_thrown: 0,
-    unused_util_value_on_death_total: 0,
-    rounds_dropped_on_reload_total: 0, reloads_total: 0,
-    ...overrides,
-  };
-}
 
 function baseDb(): FakeDb {
   return {

@@ -12,66 +12,67 @@
 
 import assert from 'node:assert/strict';
 import { killWeaponLabel } from './draw';
-import type { ReplayRound, ReplayGrenade } from './types';
+import type { ReplayGrenade } from './types';
 import { test, report } from '../test-support/miniTest';
+import { round } from '../test-support/replayFixtures';
 
 function grenade(overrides: Partial<ReplayGrenade> & { type: string }): ReplayGrenade {
   return { throwerId: 1, detonateTick: 100, trajectory: [], ...overrides } as ReplayGrenade;
 }
 
-function round(grenades: ReplayGrenade[]): ReplayRound {
-  return { grenades } as unknown as ReplayRound;
-}
-
 test('killWeaponLabel: a non-fire weapon is returned verbatim, stripped of its weapon_ prefix', () => {
-  assert.equal(killWeaponLabel(round([]), { weapon: 'weapon_ak47', attackerId: 1, tick: 500 }), 'ak47');
+  assert.equal(killWeaponLabel(round(), { weapon: 'weapon_ak47', attackerId: 1, tick: 500 }), 'ak47');
 });
 
 test('killWeaponLabel: a null weapon (world kill) is the empty string, not "fire"', () => {
-  assert.equal(killWeaponLabel(round([]), { weapon: null, attackerId: null, tick: 500 }), '');
+  assert.equal(killWeaponLabel(round(), { weapon: null, attackerId: null, tick: 500 }), '');
 });
 
 test('killWeaponLabel: an inferno kill with no correlated grenade falls back to "fire"', () => {
-  assert.equal(killWeaponLabel(round([]), { weapon: 'inferno', attackerId: 1, tick: 500 }), 'fire');
+  assert.equal(killWeaponLabel(round(), { weapon: 'inferno', attackerId: 1, tick: 500 }), 'fire');
 });
 
 test('killWeaponLabel: an inferno kill resolves to the thrower\'s molotov', () => {
-  const r = round([grenade({ type: 'molotov', throwerId: 1, detonateTick: 100 })]);
+  const r = round({ grenades: [grenade({ type: 'molotov', throwerId: 1, detonateTick: 100 })] });
   assert.equal(killWeaponLabel(r, { weapon: 'inferno', attackerId: 1, tick: 500 }), 'molotov');
 });
 
 test('killWeaponLabel: an inferno kill resolves to the thrower\'s incendiary', () => {
-  const r = round([grenade({ type: 'incendiary', throwerId: 1, detonateTick: 100 })]);
+  const r = round({ grenades: [grenade({ type: 'incendiary', throwerId: 1, detonateTick: 100 })] });
   assert.equal(killWeaponLabel(r, { weapon: 'inferno', attackerId: 1, tick: 500 }), 'incendiary');
 });
 
 test('killWeaponLabel: only the attacker\'s own fire grenade is matched, not a teammate\'s', () => {
-  const r = round([grenade({ type: 'molotov', throwerId: 2, detonateTick: 100 })]);
+  const r = round({ grenades: [grenade({ type: 'molotov', throwerId: 2, detonateTick: 100 })] });
   assert.equal(killWeaponLabel(r, { weapon: 'inferno', attackerId: 1, tick: 500 }), 'fire');
 });
 
 test('killWeaponLabel: a null attackerId (world/self kill) matches any thrower\'s fire grenade', () => {
-  const r = round([grenade({ type: 'incendiary', throwerId: 7, detonateTick: 100 })]);
+  const r = round({ grenades: [grenade({ type: 'incendiary', throwerId: 7, detonateTick: 100 })] });
   assert.equal(killWeaponLabel(r, { weapon: 'inferno', attackerId: null, tick: 500 }), 'incendiary');
 });
 
 test('killWeaponLabel: a fire grenade that detonates AFTER the kill is never matched', () => {
-  const r = round([grenade({ type: 'molotov', throwerId: 1, detonateTick: 600 })]);
+  const r = round({ grenades: [grenade({ type: 'molotov', throwerId: 1, detonateTick: 600 })] });
   assert.equal(killWeaponLabel(r, { weapon: 'inferno', attackerId: 1, tick: 500 }), 'fire');
 });
 
 test('killWeaponLabel: picks the MOST RECENT eligible fire grenade, not the first one thrown', () => {
-  const r = round([
-    grenade({ type: 'molotov', throwerId: 1, detonateTick: 100 }),
-    grenade({ type: 'incendiary', throwerId: 1, detonateTick: 300 }),
-  ]);
+  const r = round({
+    grenades: [
+      grenade({ type: 'molotov', throwerId: 1, detonateTick: 100 }),
+      grenade({ type: 'incendiary', throwerId: 1, detonateTick: 300 }),
+    ],
+  });
   assert.equal(killWeaponLabel(r, { weapon: 'inferno', attackerId: 1, tick: 500 }), 'incendiary');
 });
 
 test('killWeaponLabel: falls back to the last trajectory tick when detonateTick is null (still in flight)', () => {
-  const r = round([
-    grenade({ type: 'molotov', throwerId: 1, detonateTick: null, trajectory: [{ tick: 50, x: 0, y: 0, z: 0 }, { tick: 480, x: 10, y: 10, z: 0 }] }),
-  ]);
+  const r = round({
+    grenades: [
+      grenade({ type: 'molotov', throwerId: 1, detonateTick: null, trajectory: [{ tick: 50, x: 0, y: 0, z: 0 }, { tick: 480, x: 10, y: 10, z: 0 }] }),
+    ],
+  });
   assert.equal(killWeaponLabel(r, { weapon: 'inferno', attackerId: 1, tick: 500 }), 'molotov');
 });
 

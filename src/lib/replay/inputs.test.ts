@@ -49,9 +49,12 @@ function buildDb(): FakeDb {
   };
 }
 
+// getReplayInputs() only reads (no insert/update/delete), so a single fake client is safe to
+// share across every test below — no cross-test mutation to isolate against.
+const supabase = createFakeSupabaseClient(buildDb());
+
 async function main() {
   await test('getReplayInputs: resolves map, side, target rounds, gauntlet flag, and roster for a regular match', async () => {
-    const supabase = createFakeSupabaseClient(buildDb());
     const inputs = await getReplayInputs(supabase, 100);
     assert.equal(inputs.map, 'Foroglio');
     assert.equal(inputs.skinsSide, 'CT');
@@ -66,13 +69,11 @@ async function main() {
   });
 
   await test('getReplayInputs: falls back to picked_map when shirts_pick is not yet set', async () => {
-    const supabase = createFakeSupabaseClient(buildDb());
     const inputs = await getReplayInputs(supabase, 101);
     assert.equal(inputs.map, 'Vertigo');
   });
 
   await test('getReplayInputs: reads target rounds and the gauntlet flag off the paired season', async () => {
-    const supabase = createFakeSupabaseClient(buildDb());
     const inputs = await getReplayInputs(supabase, 200);
     assert.equal(inputs.targetWinRounds, 16);
     assert.equal(inputs.isGauntlet, true);
@@ -80,7 +81,6 @@ async function main() {
   });
 
   await test('getReplayInputs: a roster player missing its own players row gets a placeholder name and null steam fields', async () => {
-    const supabase = createFakeSupabaseClient(buildDb());
     const inputs = await getReplayInputs(supabase, 100);
     const bob = inputs.roster.find((r) => r.player_id === 2)!;
     assert.equal(bob.name, '#2');
@@ -89,7 +89,6 @@ async function main() {
   });
 
   await test('getReplayInputs: throws for a match that does not exist', async () => {
-    const supabase = createFakeSupabaseClient(buildDb());
     await assert.rejects(() => getReplayInputs(supabase, 9999), /not found/);
   });
 
