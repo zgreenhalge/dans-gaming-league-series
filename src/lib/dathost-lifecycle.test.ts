@@ -36,23 +36,6 @@ import {
   type ServerOccupancy,
 } from './dathost-lifecycle';
 
-function withEnv<T>(vars: Record<string, string | undefined>, fn: () => T): T {
-  const prev: Record<string, string | undefined> = {};
-  for (const [k, v] of Object.entries(vars)) {
-    prev[k] = process.env[k];
-    if (v === undefined) delete process.env[k];
-    else process.env[k] = v;
-  }
-  try {
-    return fn();
-  } finally {
-    for (const [k, v] of Object.entries(prev)) {
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-    }
-  }
-}
-
 async function withEnvAsync<T>(vars: Record<string, string | undefined>, fn: () => Promise<T>): Promise<T> {
   const prev: Record<string, string | undefined> = {};
   for (const [k, v] of Object.entries(vars)) {
@@ -72,21 +55,23 @@ async function withEnvAsync<T>(vars: Record<string, string | undefined>, fn: () 
 
 // ─── pure helpers ────────────────────────────────────────────────────────────
 
-test('matchzyConfigContext: null when MATCHZY_CONFIG_SECRET is unset', () => {
-  withEnv({ MATCHZY_CONFIG_SECRET: undefined }, () => {
-    assert.equal(matchzyConfigContext('https://dgls.example.com', 100), null);
-  });
-});
-
-test('matchzyConfigContext: builds the authenticated config URL + header when configured', () => {
-  withEnv({ MATCHZY_CONFIG_SECRET: 'sekret' }, () => {
-    const ctx = matchzyConfigContext('https://dgls.example.com', 100);
-    assert.deepEqual(ctx, {
-      configUrl: 'https://dgls.example.com/api/matches/100/matchzy-config',
-      configAuth: { headerKey: 'X-MatchZy-Token', headerValue: 'sekret' },
+async function testMatchzyConfigContext() {
+  await test('matchzyConfigContext: null when MATCHZY_CONFIG_SECRET is unset', async () => {
+    await withEnvAsync({ MATCHZY_CONFIG_SECRET: undefined }, async () => {
+      assert.equal(matchzyConfigContext('https://dgls.example.com', 100), null);
     });
   });
-});
+
+  await test('matchzyConfigContext: builds the authenticated config URL + header when configured', async () => {
+    await withEnvAsync({ MATCHZY_CONFIG_SECRET: 'sekret' }, async () => {
+      const ctx = matchzyConfigContext('https://dgls.example.com', 100);
+      assert.deepEqual(ctx, {
+        configUrl: 'https://dgls.example.com/api/matches/100/matchzy-config',
+        configAuth: { headerKey: 'X-MatchZy-Token', headerValue: 'sekret' },
+      });
+    });
+  });
+}
 
 test('occupancyMessage: names the occupying match when one is active', () => {
   const occupancy: ServerOccupancy = {
@@ -354,6 +339,7 @@ async function testTeardownNoOpBranches() {
 }
 
 async function main() {
+  await testMatchzyConfigContext();
   await testProvisionErrorHandler();
   await testFindServerOccupant();
   await testFindNearbyUnscoredMatch();
