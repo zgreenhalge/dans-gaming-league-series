@@ -4,9 +4,9 @@
  * saveManualDraft()'s not-eligible/invalid/saved outcomes through the exported handler directly.
  *
  * saveManualDraft() calls the `reconcile_gauntlet_draft` RPC, which has no generic fake
- * implementation (see fakeSupabase.ts's header comment) — this reuses the same test-local fake
- * implementation gauntlet-engine.test.ts built, registered via createFakeSupabaseClient()'s
- * rpcHandlers argument.
+ * implementation (see fakeSupabase.ts's header comment) — this reuses the same shared fake
+ * implementation (test-support/reconcileGauntletDraftRpc.ts) gauntlet-engine.test.ts uses,
+ * registered via createFakeSupabaseClient()'s rpcHandlers argument.
  *
  * Run:  npx tsx "src/app/api/seasons/[id]/gauntlet/pods/route.test.ts"
  */
@@ -15,7 +15,8 @@ import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
-import { createFakeSupabaseClient, type FakeDb, type RpcHandler } from '@/lib/test-support/fakeSupabase';
+import { createFakeSupabaseClient, type FakeDb } from '@/lib/test-support/fakeSupabase';
+import { makeReconcileGauntletDraftRpc } from '@/lib/test-support/reconcileGauntletDraftRpc';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { POST } from './route';
@@ -23,79 +24,6 @@ import { POST } from './route';
 const ADMIN_ID = 1;
 const PLAYER_ID = 2;
 const SEASON_ID = 10;
-
-type PodRef = { kind: 'id' | 'temp'; value: number | string };
-type RpcSlot = {
-  pod_ref: PodRef;
-  slot_index: number;
-  source_kind: 'seed' | 'pod';
-  source_seed: number | null;
-  source_pod_ref: PodRef | null;
-  player_id: number | null;
-};
-
-/** Mirrors the real Postgres reconcile_gauntlet_draft() function closely enough for
- * saveManualDraft()'s call shape — see gauntlet-engine.test.ts, which documents the behavior this
- * duplicates (delete/insert/update/slot-rewrite, skipping any target pod that raced to materialized). */
-function makeReconcileGauntletDraftRpc(): RpcHandler {
-  return (args, db) => {
-    const pods = (db.gauntlet_pods ??= []);
-    const slots = (db.gauntlet_pod_slots ??= []);
-
-    const deletePodIds = args.p_delete_pod_ids as number[];
-    const newPods = args.p_new_pods as { temp_key: string; season_id: number; round_number: number; pod_index: number; advance_rule: string; is_final: boolean }[];
-    const updatedPods = args.p_updated_pods as { id: number; advance_rule: string; is_final: boolean }[];
-    const rewritePodIds = args.p_slot_rewrite_pod_ids as number[];
-    const submittedSlots = args.p_slots as RpcSlot[];
-
-    const isMaterialized = (id: number) => pods.find((p) => p.id === id)?.match1_id != null;
-    const skipped = new Set<number>();
-    for (const id of deletePodIds) if (isMaterialized(id)) skipped.add(id);
-    for (const id of rewritePodIds) if (isMaterialized(id)) skipped.add(id);
-
-    const toActuallyDelete = deletePodIds.filter((id) => !skipped.has(id));
-    db.gauntlet_pod_slots = slots.filter((s) => !toActuallyDelete.includes(s.pod_id as number));
-    db.gauntlet_pods = pods.filter((p) => !toActuallyDelete.includes(p.id as number));
-
-    for (const u of updatedPods) {
-      if (skipped.has(u.id)) continue;
-      const pod = db.gauntlet_pods.find((p) => p.id === u.id);
-      if (pod) {
-        pod.advance_rule = u.advance_rule;
-        pod.is_final = u.is_final;
-      }
-    }
-
-    const keyMap: Record<string, number> = {};
-    let nextPodId = 1 + Math.max(0, ...db.gauntlet_pods.map((p) => (typeof p.id === 'number' ? p.id : 0)));
-    for (const np of newPods) {
-      const id = nextPodId++;
-      db.gauntlet_pods.push({ id, season_id: np.season_id, round_number: np.round_number, pod_index: np.pod_index, advance_rule: np.advance_rule, is_final: np.is_final, week_id: null, match1_id: null, match2_id: null });
-      keyMap[np.temp_key] = id;
-    }
-
-    const resolveRef = (ref: PodRef): number => (ref.kind === 'id' ? Number(ref.value) : keyMap[ref.value as string]);
-    const rewriteTargets = new Set<number>([...newPods.map((np) => keyMap[np.temp_key]), ...rewritePodIds.filter((id) => !skipped.has(id))]);
-    db.gauntlet_pod_slots = db.gauntlet_pod_slots.filter((s) => !rewriteTargets.has(s.pod_id as number));
-
-    let nextSlotId = 1 + Math.max(0, ...db.gauntlet_pod_slots.map((s) => (typeof s.id === 'number' ? s.id : 0)));
-    for (const slot of submittedSlots) {
-      const podId = resolveRef(slot.pod_ref);
-      if (!rewriteTargets.has(podId)) continue;
-      db.gauntlet_pod_slots.push({
-        id: nextSlotId++,
-        pod_id: podId,
-        slot_index: slot.slot_index,
-        source_kind: slot.source_kind,
-        source_seed: slot.source_seed,
-        source_pod_id: slot.source_pod_ref ? resolveRef(slot.source_pod_ref) : null,
-        player_id: slot.player_id,
-      });
-    }
-
-    return { key_map: keyMap, skipped_pod_ids: [...skipped] };
-  };
-}
 
 function makeDb(): FakeDb {
   return {

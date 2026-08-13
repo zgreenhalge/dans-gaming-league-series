@@ -11,7 +11,8 @@
  * `__setTestClient()` and passing the fake as `supabaseAdmin` in every test below.
  *
  * The `reconcile_gauntlet_draft` RPC has no generic in-memory equivalent (see fakeSupabase.ts's own
- * header comment) — `reconcileGauntletDraftRpc()` below is a test-local fake implementation
+ * header comment) — `makeReconcileGauntletDraftRpc()` (test-support/reconcileGauntletDraftRpc.ts,
+ * shared with seasons/[id]/gauntlet/pods/route.test.ts) is a test-local fake implementation
  * registered via `createFakeSupabaseClient(db, { reconcile_gauntlet_draft: ... })`, covering exactly
  * the delete/insert/update/slot-rewrite/materialization-race-skip shape `saveManualDraft()` actually
  * calls it with.
@@ -22,100 +23,10 @@
 import assert from 'node:assert/strict';
 import { __setTestClient } from './supabase';
 import { createFakeSupabaseClient, type FakeDb, type Row, type RpcHandler } from './test-support/fakeSupabase';
+import { makeReconcileGauntletDraftRpc } from './test-support/reconcileGauntletDraftRpc';
 import { test, report } from './test-support/miniTest';
 import { materializePod, resolveAndPropagate, saveManualDraft } from './gauntlet-engine';
-import type { DraftPod } from './gauntlet-draft';
-
-// ─── fake `reconcile_gauntlet_draft` RPC ────────────────────────────────────
-
-type PodRef = { kind: 'id' | 'temp'; value: number | string };
-type RpcSlot = {
-  pod_ref: PodRef;
-  slot_index: number;
-  source_kind: 'seed' | 'pod';
-  source_seed: number | null;
-  source_pod_ref: PodRef | null;
-  player_id: number | null;
-};
-
-/** Mirrors the real Postgres function closely enough for saveManualDraft()'s call shape: deletes
- * removed pods, inserts new ones (minting real ids, returning a temp_key -> id map), updates
- * changed ones, and wholesale-replaces slots for every touched pod — skipping (and reporting) any
- * targeted pod that materialized (`match1_id` set) since the caller's initial read, exactly the race
- * `saveManualDraft()`'s doc comment describes. */
-function makeReconcileGauntletDraftRpc(): RpcHandler {
-  return (args, db) => {
-    const pods = (db.gauntlet_pods ??= []);
-    const slots = (db.gauntlet_pod_slots ??= []);
-
-    const deletePodIds = args.p_delete_pod_ids as number[];
-    const newPods = args.p_new_pods as { temp_key: string; season_id: number; round_number: number; pod_index: number; advance_rule: string; is_final: boolean }[];
-    const updatedPods = args.p_updated_pods as { id: number; advance_rule: string; is_final: boolean }[];
-    const rewritePodIds = args.p_slot_rewrite_pod_ids as number[];
-    const submittedSlots = args.p_slots as RpcSlot[];
-
-    const isMaterialized = (id: number) => pods.find((p) => p.id === id)?.match1_id != null;
-    const skipped = new Set<number>();
-    for (const id of deletePodIds) if (isMaterialized(id)) skipped.add(id);
-    for (const id of rewritePodIds) if (isMaterialized(id)) skipped.add(id);
-
-    const toActuallyDelete = deletePodIds.filter((id) => !skipped.has(id));
-    db.gauntlet_pod_slots = slots.filter((s) => !toActuallyDelete.includes(s.pod_id as number));
-    db.gauntlet_pods = pods.filter((p) => !toActuallyDelete.includes(p.id as number));
-
-    for (const u of updatedPods) {
-      if (skipped.has(u.id)) continue;
-      const pod = db.gauntlet_pods.find((p) => p.id === u.id);
-      if (pod) {
-        pod.advance_rule = u.advance_rule;
-        pod.is_final = u.is_final;
-      }
-    }
-
-    const keyMap: Record<string, number> = {};
-    let nextPodId = 1 + Math.max(0, ...db.gauntlet_pods.map((p) => (typeof p.id === 'number' ? p.id : 0)));
-    for (const np of newPods) {
-      const id = nextPodId++;
-      db.gauntlet_pods.push({
-        id,
-        season_id: np.season_id,
-        round_number: np.round_number,
-        pod_index: np.pod_index,
-        advance_rule: np.advance_rule,
-        is_final: np.is_final,
-        week_id: null,
-        match1_id: null,
-        match2_id: null,
-      });
-      keyMap[np.temp_key] = id;
-    }
-
-    const resolveRef = (ref: PodRef): number => (ref.kind === 'id' ? Number(ref.value) : keyMap[ref.value as string]);
-
-    const rewriteTargets = new Set<number>([
-      ...newPods.map((np) => keyMap[np.temp_key]),
-      ...rewritePodIds.filter((id) => !skipped.has(id)),
-    ]);
-    db.gauntlet_pod_slots = db.gauntlet_pod_slots.filter((s) => !rewriteTargets.has(s.pod_id as number));
-
-    let nextSlotId = 1 + Math.max(0, ...db.gauntlet_pod_slots.map((s) => (typeof s.id === 'number' ? s.id : 0)));
-    for (const slot of submittedSlots) {
-      const podId = resolveRef(slot.pod_ref);
-      if (!rewriteTargets.has(podId)) continue;
-      db.gauntlet_pod_slots.push({
-        id: nextSlotId++,
-        pod_id: podId,
-        slot_index: slot.slot_index,
-        source_kind: slot.source_kind,
-        source_seed: slot.source_seed,
-        source_pod_id: slot.source_pod_ref ? resolveRef(slot.source_pod_ref) : null,
-        player_id: slot.player_id,
-      });
-    }
-
-    return { key_map: keyMap, skipped_pod_ids: [...skipped] };
-  };
-}
+import { emptyDraftPod, type DraftPod } from './gauntlet-draft';
 
 // ─── shared fixture plumbing ─────────────────────────────────────────────────
 
@@ -123,10 +34,14 @@ function makePlayers(ids: number[]): Row[] {
   return ids.map((id) => ({ id, name: `Player ${id}`, is_admin: false }));
 }
 
-function installFixture(db: FakeDb): FakeDb {
+/** Wires `db` up as both the module-level `supabase` singleton (via `__setTestClient()`, for the
+ * `./queries`/`gauntlet-engine.ts` helpers built on it) and returns the same client for direct use as
+ * a test's `supabaseAdmin` argument — one fake client per fixture, not two independent ones pointed
+ * at the same `db`. */
+function installFixture(db: FakeDb): ReturnType<typeof createFakeSupabaseClient> {
   const client = createFakeSupabaseClient(db, { reconcile_gauntlet_draft: makeReconcileGauntletDraftRpc() });
   __setTestClient(client);
-  return db;
+  return client;
 }
 
 function podsOf(db: FakeDb, seasonId: number): Row[] {
@@ -149,10 +64,10 @@ async function main() {
     gauntlet_pod_slots: [],
     players: makePlayers([1, 2, 3, 4]),
   };
-  installFixture(db);
+  const client = installFixture(db);
 
   const seedByPlayer = new Map([[1, 1], [2, 2], [3, 3], [4, 4]]);
-  await materializePod(createFakeSupabaseClient(db) as never, { id: 900, season_id: 20, round_number: 1 }, [
+  await materializePod(client as never, { id: 900, season_id: 20, round_number: 1 }, [
     { player_id: 4 }, { player_id: 2 }, { player_id: 1 }, { player_id: 3 },
   ], seedByPlayer);
 
@@ -194,8 +109,7 @@ async function main() {
     gauntlet_pod_slots: [],
     players: makePlayers([1, 2, 3, 4]),
   };
-  installFixture(db);
-  const client = createFakeSupabaseClient(db);
+  const client = installFixture(db);
 
   await materializePod(client as never, { id: 900, season_id: 20, round_number: 1 }, [
     { player_id: 1 }, { player_id: 2 }, { player_id: 3 }, { player_id: 4 },
@@ -256,8 +170,7 @@ function twoPodFixture(): FakeDb {
 
   await test('resolveAndPropagate: the single-elim 2-0 survivor is written into the downstream slot, which auto-materializes once full', async () => {
   const db = twoPodFixture();
-  installFixture(db);
-  const client = createFakeSupabaseClient(db);
+  const client = installFixture(db);
 
   await resolveAndPropagate(client as never, 500);
 
@@ -309,8 +222,7 @@ function twoPodFixture(): FakeDb {
     ],
     players: makePlayers([1, 2, 3, 4, 5, 6]),
   };
-  installFixture(db);
-  const client = createFakeSupabaseClient(db);
+  const client = installFixture(db);
 
   await resolveAndPropagate(client as never, 500);
 
@@ -322,8 +234,7 @@ function twoPodFixture(): FakeDb {
   const db = twoPodFixture();
   // Make pod A itself the Final so propagation must not touch anything.
   db.gauntlet_pods.find((p) => p.id === 100)!.is_final = true;
-  installFixture(db);
-  const client = createFakeSupabaseClient(db);
+  const client = installFixture(db);
   const before = JSON.stringify(db.gauntlet_pod_slots);
 
   await resolveAndPropagate(client as never, 500);
@@ -333,8 +244,7 @@ function twoPodFixture(): FakeDb {
   await test('resolveAndPropagate: no-ops while the pod\'s other match is still unplayed', async () => {
   const db = twoPodFixture();
   db.matches.find((m) => m.id === 501)!.final_score = null;
-  installFixture(db);
-  const client = createFakeSupabaseClient(db);
+  const client = installFixture(db);
 
   await resolveAndPropagate(client as never, 500);
   const podBSlot0 = db.gauntlet_pod_slots.find((s) => s.pod_id === 200 && s.slot_index === 0)!;
@@ -343,8 +253,7 @@ function twoPodFixture(): FakeDb {
 
   await test('resolveAndPropagate: no-ops for a match that isn\'t linked to any pod', async () => {
   const db = twoPodFixture();
-  installFixture(db);
-  const client = createFakeSupabaseClient(db);
+  const client = installFixture(db);
   // Should simply return without throwing.
   await resolveAndPropagate(client as never, 99999);
 });
@@ -369,22 +278,12 @@ function draftFixtureDb(): FakeDb {
 }
 
 function draftPod(overrides: Partial<DraftPod> & { key: string }): DraftPod {
-  return {
-    persistedId: null,
-    materialized: false,
-    round_number: 1,
-    pod_index: 0,
-    advance_rule: 'wildcard',
-    is_final: false,
-    slots: [{ kind: 'empty' }, { kind: 'empty' }, { kind: 'empty' }, { kind: 'empty' }],
-    ...overrides,
-  };
+  return { ...emptyDraftPod(overrides.key, overrides.round_number ?? 1, overrides.pod_index ?? 0), ...overrides };
 }
 
   await test('saveManualDraft: an integrity violation is rejected before touching the database', async () => {
   const db = draftFixtureDb();
-  installFixture(db);
-  const client = createFakeSupabaseClient(db, { reconcile_gauntlet_draft: makeReconcileGauntletDraftRpc() });
+  const client = installFixture(db);
 
   const pods: DraftPod[] = [draftPod({ key: 'a', is_final: true }), draftPod({ key: 'b', is_final: true })];
   const result = await saveManualDraft(client as never, 30, pods);
@@ -395,8 +294,7 @@ function draftPod(overrides: Partial<DraftPod> & { key: string }): DraftPod {
 
   await test('saveManualDraft: a missing regular season is not-eligible', async () => {
   const db = draftFixtureDb();
-  installFixture(db);
-  const client = createFakeSupabaseClient(db, { reconcile_gauntlet_draft: makeReconcileGauntletDraftRpc() });
+  const client = installFixture(db);
 
   const result = await saveManualDraft(client as never, 99999, [draftPod({ key: 'a' })]);
   assert.deepEqual(result, { status: 'not-eligible', reason: 'Regular season not found' });
@@ -404,8 +302,7 @@ function draftPod(overrides: Partial<DraftPod> & { key: string }): DraftPod {
 
   await test('saveManualDraft: a seed number the current roster can\'t resolve is rejected', async () => {
   const db = draftFixtureDb();
-  installFixture(db);
-  const client = createFakeSupabaseClient(db, { reconcile_gauntlet_draft: makeReconcileGauntletDraftRpc() });
+  const client = installFixture(db);
 
   const pods: DraftPod[] = [
     draftPod({ key: 'a', is_final: true, slots: [{ kind: 'seed', seed: 99 }, { kind: 'empty' }, { kind: 'empty' }, { kind: 'empty' }] }),
@@ -417,8 +314,7 @@ function draftPod(overrides: Partial<DraftPod> & { key: string }): DraftPod {
 
   await test('saveManualDraft: first save creates the paired gauntlet season, persists pods/slots, and materializes a fully-seeded pod', async () => {
   const db = draftFixtureDb();
-  installFixture(db);
-  const client = createFakeSupabaseClient(db, { reconcile_gauntlet_draft: makeReconcileGauntletDraftRpc() });
+  const client = installFixture(db);
 
   const pods: DraftPod[] = [
     draftPod({
@@ -475,13 +371,12 @@ function draftPod(overrides: Partial<DraftPod> & { key: string }): DraftPod {
       { id: 3, pod_id: 500, slot_index: 2, source_kind: 'seed', source_seed: 3, source_pod_id: null, player_id: 3 },
       { id: 4, pod_id: 500, slot_index: 3, source_kind: 'seed', source_seed: 4, source_pod_id: null, player_id: 4 },
     );
-    installFixture(db);
-
     // A one-off RPC handler that simulates a concurrent resolveAndPropagate() materializing pod 500
     // in the gap between saveManualDraft()'s initial read and this RPC call actually landing — the
     // exact race `reconcile_gauntlet_draft()`'s own re-check (mirrored by the shared fake's
     // isMaterialized() guard) exists to protect against, per gauntlet-engine.ts's comment above the
-    // RPC call.
+    // RPC call. Needs its own client (installFixture()'s default RPC handler won't do), wired as both
+    // the singleton and the direct supabaseAdmin argument, same as installFixture() does internally.
     const baseRpc = makeReconcileGauntletDraftRpc();
     const raceRpc: RpcHandler = (args, rpcDb) => {
       const pod = rpcDb.gauntlet_pods.find((p) => p.id === 500);
@@ -492,6 +387,7 @@ function draftPod(overrides: Partial<DraftPod> & { key: string }): DraftPod {
       return baseRpc(args, rpcDb);
     };
     const client = createFakeSupabaseClient(db, { reconcile_gauntlet_draft: raceRpc });
+    __setTestClient(client);
 
     // The submitted draft still carries this pod (persistedId 500) and tries to change its
     // advance_rule to 'wildcard' — since it materialized behind the scenes, the RPC should skip it.
