@@ -61,6 +61,9 @@ const FK_MAP: Record<string, Record<string, EmbedMapping>> = {
   scrim_sessions: {
     players: { kind: 'one', fk: 'started_by', table: 'players' },
   },
+  match_server_state: {
+    matches: { kind: 'one', fk: 'match_id', table: 'matches' },
+  },
 };
 
 interface ParsedSelect {
