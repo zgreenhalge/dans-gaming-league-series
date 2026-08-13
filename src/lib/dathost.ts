@@ -79,6 +79,15 @@ export class DathostError extends Error {
   }
 }
 
+/** Distinguishes a DatHost 404 (a "not there yet" state — an in-progress demo flush, a directory
+ *  DatHost has no record of yet — expected and pollable) from a real failure. Pulled out beside the
+ *  call it informs (`listFiles()`'s empty-list-on-missing-dir fallback) rather than tested by mocking
+ *  `fetch`, the same extract-and-test split `fetchFromDathost.ts`'s `isPollTimeout()` uses — see
+ *  docs/patterns.md's "Test external IO by extracting the logic around it" convention. */
+export function isDathostNotFound(err: unknown): boolean {
+  return err instanceof DathostError && err.status === 404;
+}
+
 function authHeader(): string {
   const email = process.env.DATHOST_EMAIL;
   const password = process.env.DATHOST_PASSWORD;
@@ -268,7 +277,7 @@ export async function listFiles(id: string, dir: string): Promise<DathostFile[]>
   try {
     data = await call('GET', `/game-servers/${id}/files?path=${encodeURIComponent(dir)}`);
   } catch (err) {
-    if (err instanceof DathostError && err.status === 404) return [];
+    if (isDathostNotFound(err)) return [];
     throw err;
   }
   return (data as Array<{ path: string; size?: number; deleted?: boolean; modified_at?: number }>).map((f) => ({
