@@ -95,6 +95,21 @@ export async function pushCfgFiles(serverId: string, files: { remote: string; co
   return results;
 }
 
+// --- Capturing live values back into a config set ------------------------------------------------
+
+/** For `--capture` (`scripts/dathost-golden-apply.ts`): overlay the live server's values onto a
+ *  config set's currently-tracked keys. Only keys `tracked` already has get updated — capture never
+ *  adds a new key to the set, since an untracked live field could be recreational-mode drift rather
+ *  than something the baseline should start following. A key `live` doesn't have (`undefined`, e.g.
+ *  the field couldn't be read) keeps its current tracked value instead of being dropped. */
+export function captureOverlay(tracked: Record<string, unknown>, live: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...tracked };
+  for (const key of Object.keys(tracked)) {
+    if (live[key] !== undefined) result[key] = live[key];
+  }
+  return result;
+}
+
 // --- Config-set diff ----------------------------------------------------------------------------
 
 export type DiffStatus = 'match' | 'drift' | 'missing' | 'skipped';
