@@ -32,10 +32,9 @@ export const getSession = cache(resolveSession);
 
 /**
  * Same as `getSession()` without React's per-render `cache()` — for API route handlers, which don't
- * render as components and so don't share that dedup scope. `season-roster-access.ts` calls this
- * instead of `getSession()`; its sibling access gates (`match-access.ts`, `admin-access.ts`) still
- * call `getServerSession(authOptions)` directly and would need the same swap to pick up
- * `__setTestSession()`.
+ * render as components and so don't share that dedup scope. The session-based access gates
+ * (`season-roster-access.ts`, `match-access.ts`, `admin-access.ts`) all call this instead of
+ * `getSession()`, so `__setTestSession()` intercepts every one of them.
  */
 export const requireSession = resolveSession;
 

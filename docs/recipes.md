@@ -122,10 +122,11 @@ and its `UPCOMING`-only status gate.
    for a dynamic route segment.
 2. **Fake the session** with `__setTestSession(session | null)` (`src/lib/session.ts`) instead of a
    real `getServerSession()` call — set it to `null` for the unauthenticated case, or
-   `{ user: { playerId }, expires: '<iso date>' }` for a signed-in one. This only intercepts session
-   reads that go through `requireSession()` (route handlers) or `getSession()` (Server Components);
-   a gate that still imports `getServerSession` from `next-auth` directly needs the same one-line
-   swap `season-roster-access.ts` made before it's testable this way.
+   `{ user: { playerId }, expires: '<iso date>' }` for a signed-in one, via the shared
+   `sessionFor(playerId)` builder (`src/lib/test-support/nextRequest.ts`). This only intercepts
+   session reads that go through `requireSession()` (route handlers) or `getSession()` (Server
+   Components) — the three session-based access gates (`season-roster-access.ts`,
+   `match-access.ts`, `admin-access.ts`) all do.
 3. **Fake both Supabase clients** with `__setTestClient()` (`src/lib/supabase.ts`, already used by
    the query-helper harness) and `__setTestAdminClient()` (`src/lib/supabase-admin.ts`) pointed at
    the *same* `createFakeSupabaseClient(db)` instance, since a route typically reads through one

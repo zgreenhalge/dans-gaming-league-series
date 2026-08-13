@@ -2,15 +2,14 @@
 // the match. Composes the existing auth (next-auth session + `players.is_admin`) — it does not modify
 // auth logic. Used by the demo upload-url / result and server provision/status/teardown routes.
 
-import { getServerSession } from 'next-auth';
-import { authOptions } from './authOptions';
+import { requireSession } from './session';
 import { getAdminClient } from './supabase-admin';
 import type { AccessResult } from './access-control';
 
 export type MatchAccess = AccessResult<{ playerId: number; isAdmin: boolean }>;
 
 export async function requireMatchAccess(matchId: number): Promise<MatchAccess> {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   const playerId = session?.user?.playerId;
   if (!playerId) return { ok: false, status: 401, error: 'Unauthorized' };
 

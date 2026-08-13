@@ -5,6 +5,7 @@
  */
 
 import { NextRequest } from 'next/server';
+import type { Session } from 'next-auth';
 
 export function jsonRequest(url: string, method: string, body?: unknown): NextRequest {
   return new NextRequest(url, {
@@ -12,4 +13,10 @@ export function jsonRequest(url: string, method: string, body?: unknown): NextRe
     headers: { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+}
+
+/** A minimal next-auth `Session` carrying just the `playerId` the session-based access gates read,
+ * for use with `__setTestSession()` (`src/lib/session.ts`). */
+export function sessionFor(playerId: number): Session {
+  return { user: { playerId }, expires: '2099-01-01T00:00:00.000Z' };
 }
