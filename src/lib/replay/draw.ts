@@ -606,7 +606,7 @@ function weaponShort(weapon: string | null): string {
  * (issue #128). Recover the distinction by matching the kill to the attacker's most
  * recent fire grenade; fall back to a generic `fire` when none can be correlated.
  */
-function killWeaponLabel(round: ReplayRound, k: { weapon: string | null; attackerId: number | null; tick: number }): string {
+export function killWeaponLabel(round: ReplayRound, k: { weapon: string | null; attackerId: number | null; tick: number }): string {
   const w = weaponShort(k.weapon);
   if (w !== 'inferno') return w;
   let best: string | null = null;
