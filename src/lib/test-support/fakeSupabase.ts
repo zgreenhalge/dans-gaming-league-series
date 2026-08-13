@@ -9,10 +9,11 @@
  * real call shapes, nothing more (e.g. `.not()` only supports the `'is'` operator, `.or()` only
  * supports comma-joined `col.eq.val` clauses, and `.insert()`/`.delete()`/`.update()`/`.upsert()`
  * don't emulate unique/FK constraints or return errors, since none of the routes this harness has
- * exercised so far depend on the fake surfacing one). `.update()` and `.upsert()` honor a trailing
- * `.select()`/`.maybeSingle()` and return the affected row(s), matching real call shapes like
- * `.update(x).eq(...).select('*').maybeSingle()`. `.rpc()` has no generic in-memory equivalent (RPC
- * bodies are arbitrary SQL/PL-pgSQL) — pass per-name fake implementations to `createFakeSupabaseClient()`.
+ * exercised so far depend on the fake surfacing one). `.update()` and `.upsert()` only return the
+ * affected row(s) (`data`) when `.select()` is also chained — matching real call shapes like
+ * `.update(x).eq(...).select('*').maybeSingle()` and PostgREST's `Prefer: return=minimal` default,
+ * `data` comes back `null` otherwise. `.rpc()` has no generic in-memory equivalent (RPC bodies are
+ * arbitrary SQL/PL-pgSQL) — pass per-name fake implementations to `createFakeSupabaseClient()`.
  *
  * Embedded-resource selects (`weeks(week_number, seasons(name))`) are resolved against `FK_MAP`
  * and nested as a single object (to-one, matching the runtime shape Supabase actually returns —
@@ -183,6 +184,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
   private limitN: number | null = null;
   private single = false;
   private mode: 'select' | 'insert' | 'delete' | 'update' | 'upsert' = 'select';
+  private selectCalled = false;
   private insertRows: Row[] = [];
   private updateValues: Row = {};
   private upsertRows: Row[] = [];
@@ -193,6 +195,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
 
   select(cols: string): this {
     this.selectStr = cols;
+    this.selectCalled = true;
     return this;
   }
   /** Appends row(s) to the table — mirrors the mutation call shape route handlers use, e.g.
@@ -210,7 +213,9 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
     return this;
   }
   /** Applies `values` to every row matched by the `.eq()`/`.in()`/`.or()`/etc. filters chained after
-   * it, reusing the same `matchesRow()` gating `.delete()` relies on. */
+   * it, reusing the same `matchesRow()` gating `.delete()` relies on. Like real PostgREST, the
+   * updated row(s) are only returned (`data`) when `.select()` is also chained — otherwise `data` is
+   * `null`, mirroring the `Prefer: return=minimal` default. */
   update(values: Row): this {
     this.mode = 'update';
     this.updateValues = values;
@@ -220,7 +225,8 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
    * matching real call shapes like `.upsert(rows, { onConflict: 'job_type,match_id' })`. When
    * `ignoreDuplicates` is set, an incoming row that already matches an existing row on the conflict
    * columns is left untouched and omitted from the returned rows — mirrors Postgres's `ON CONFLICT DO
-   * NOTHING RETURNING`, which returns nothing for a conflicting row. */
+   * NOTHING RETURNING`, which returns nothing for a conflicting row. Like `.update()`, the affected
+   * row(s) are only returned when `.select()` is also chained, otherwise `data` is `null`. */
   upsert(rows: Row | Row[], options?: { onConflict?: string; ignoreDuplicates?: boolean }): this {
     this.mode = 'upsert';
     this.upsertRows = Array.isArray(rows) ? rows : [rows];
@@ -320,7 +326,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
           updated.push(row);
         }
       }
-      return this.projectResult(updated);
+      return this.selectCalled ? this.projectResult(updated) : { data: null, error: null };
     }
     if (this.mode === 'upsert') {
       const table = (this.db[this.table] ??= []);
@@ -338,7 +344,7 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
           affected.push(inserted);
         }
       }
-      return this.projectResult(affected);
+      return this.selectCalled ? this.projectResult(affected) : { data: null, error: null };
     }
 
     const table = this.db[this.table] ?? [];

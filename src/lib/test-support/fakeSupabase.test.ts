@@ -14,11 +14,17 @@ async function main() {
   await test('.update() — applies values only to rows matching the chained filters', async () => {
     const db: FakeDb = { players: [{ id: 1, name: 'a', status: 'ACTIVE' }, { id: 2, name: 'b', status: 'ACTIVE' }] };
     const client = createFakeSupabaseClient(db);
-    const { data, error } = await client.from('players').update({ status: 'BENCHED' }).eq('id', 1);
+    const { error } = await client.from('players').update({ status: 'BENCHED' }).eq('id', 1);
     assert.equal(error, null);
-    assert.deepEqual(data, [{ id: 1, name: 'a', status: 'BENCHED' }]);
     assert.equal(db.players[0].status, 'BENCHED');
     assert.equal(db.players[1].status, 'ACTIVE');
+  });
+
+  await test('.update() — data is null when .select() is not chained, matching return=minimal', async () => {
+    const db: FakeDb = { players: [{ id: 1, status: 'ACTIVE' }] };
+    const client = createFakeSupabaseClient(db);
+    const { data } = await client.from('players').update({ status: 'BENCHED' }).eq('id', 1);
+    assert.equal(data, null);
   });
 
   await test('.update() — .select().maybeSingle() returns the updated row, projected', async () => {
@@ -84,12 +90,13 @@ async function main() {
     assert.equal(db.background_jobs.length, 1);
   });
 
-  await test('.upsert() — updates the existing row in place on a composite conflict-column match', async () => {
+  await test('.upsert() — updates the existing row in place on a composite conflict-column match, data null without .select()', async () => {
     const db: FakeDb = { background_jobs: [{ job_type: 'demo-ingest', match_id: 5, status: 'received' }] };
     const client = createFakeSupabaseClient(db);
-    await client
+    const { data } = await client
       .from('background_jobs')
       .upsert({ job_type: 'demo-ingest', match_id: 5, status: 'queued' }, { onConflict: 'job_type,match_id' });
+    assert.equal(data, null);
     assert.equal(db.background_jobs.length, 1);
     assert.equal(db.background_jobs[0].status, 'queued');
   });

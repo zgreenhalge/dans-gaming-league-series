@@ -137,8 +137,10 @@ and its `UPCOMING`-only status gate.
 4. **Mutations are supported** — `fakeSupabase.ts`'s `.insert()`/`.delete()`/`.update()`/`.upsert()`
    push/remove/modify rows in the `FakeDb` object directly, so assert on the outcome either from the
    handler's `NextResponse` (status code, JSON body) or by re-reading the same `FakeDb` object the test
-   built. `.update()`/`.upsert()` honor a trailing `.select()`/`.maybeSingle()` and return the affected
-   row(s), matching real call shapes. None of the four emulate unique/FK constraints or return errors —
+   built. `.update()`/`.upsert()` only return the affected row(s) in `data` when `.select()` is also
+   chained, matching PostgREST's `Prefer: return=minimal` default — `data` is `null` otherwise, so a
+   handler that forgot `.select()` fails the same way it would against a real database. None of the
+   four emulate unique/FK constraints or return errors —
    a route whose behavior depends on the database rejecting a write needs its own targeted case. A
    route that calls `.rpc()` needs a fake implementation passed to `createFakeSupabaseClient(db, {
    [rpcName]: (args) => ({ data, error }) })`, since RPC bodies are arbitrary SQL with no generic
