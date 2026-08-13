@@ -11,8 +11,6 @@ import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import type { DemoSabremetricStat, DemoWeaponStat } from '@/lib/types';
 import { afterBestEffort } from '@/lib/after';
 
-const supabaseAdmin = getAdminClient();
-
 type MatchRow = {
   id: number;
   final_score: string | null;
@@ -35,6 +33,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const supabaseAdmin = getAdminClient();
   const session = await getServerSession(authOptions);
   if (!session?.user?.playerId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

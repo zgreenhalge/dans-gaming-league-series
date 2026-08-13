@@ -5,8 +5,6 @@ import { saveManualDraft } from '@/lib/gauntlet-engine';
 import type { DraftPod, DraftSlot } from '@/lib/gauntlet-draft';
 import { recordOpsError } from '@/lib/ops-errors';
 
-const supabaseAdmin = getAdminClient();
-
 function parseSlot(value: unknown): DraftSlot | null {
   if (!value || typeof value !== 'object') return null;
   const kind = (value as { kind?: unknown }).kind;
@@ -58,6 +56,7 @@ function parsePod(value: unknown): DraftPod | null {
  * currently-persisted shape.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const supabaseAdmin = getAdminClient();
   const access = await requireAdminAccess();
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status });

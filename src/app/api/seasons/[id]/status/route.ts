@@ -4,8 +4,6 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason } from '@/lib/queries';
 import { activateSeason } from '@/lib/season-lifecycle';
 
-const supabaseAdmin = getAdminClient();
-
 /**
  * Regular-season status transitions. Only UPCOMING -> ACTIVE ("go live") is supported today —
  * ACTIVE -> COMPLETED is automatic (see `checkSeasonCompletion` in season-lifecycle.ts, hooked onto
@@ -15,6 +13,7 @@ const supabaseAdmin = getAdminClient();
  * of the click, not just in server logs. Activation itself always succeeds regardless.
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const supabaseAdmin = getAdminClient();
   const access = await requireAdminAccess();
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status });

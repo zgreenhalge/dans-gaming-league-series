@@ -13,8 +13,6 @@ import {
 import { afterBestEffort } from '@/lib/after';
 import { clearOpsError } from '@/lib/ops-errors';
 
-const supabaseAdmin = getAdminClient();
-
 const VALID_FIELDS = [
   'shirts_ban',
   'shirts_ban2',
@@ -55,6 +53,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const supabaseAdmin = getAdminClient();
   const session = await getServerSession(authOptions);
   if (!session?.user?.playerId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

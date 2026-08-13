@@ -3,8 +3,6 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { trySeedGauntlet } from '@/lib/gauntlet-engine';
 
-const supabaseAdmin = getAdminClient();
-
 /**
  * Seeds an already-built (but unseeded) gauntlet bracket from the regular season's *current*
  * canonical-sort leaderboard order, then materializes round 1 (and any pod that becomes fully
@@ -15,6 +13,7 @@ const supabaseAdmin = getAdminClient();
  * than waiting for the last match to be scored.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const supabaseAdmin = getAdminClient();
   const access = await requireAdminAccess();
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status });
