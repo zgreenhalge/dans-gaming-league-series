@@ -4,11 +4,15 @@
  *
  * Implements exactly the query-builder surface real call sites use (verified by grep):
  * `.select()`, `.eq()`, `.in()`, `.neq()`, `.gt()`, `.gte()`, `.is()`, `.not()`, `.or()`, `.order()`,
- * `.range()`, `.limit()`, `.maybeSingle()`, `.insert()`, `.delete()`. It is not a general
- * PostgREST/Supabase reimplementation — it covers real call shapes, nothing more (e.g. `.not()`
- * only supports the `'is'` operator, `.or()` only supports comma-joined `col.eq.val` clauses, and
- * `.insert()`/`.delete()` don't emulate unique/FK constraints or return errors, since none of the
- * routes this harness has exercised so far depend on the fake surfacing one).
+ * `.range()`, `.limit()`, `.maybeSingle()`, `.insert()`, `.delete()`, `.update()`, `.upsert()`, plus
+ * `.rpc()` on the client itself. It is not a general PostgREST/Supabase reimplementation — it covers
+ * real call shapes, nothing more (e.g. `.not()` only supports the `'is'` operator, `.or()` only
+ * supports comma-joined `col.eq.val` clauses, and `.insert()`/`.delete()`/`.update()`/`.upsert()`
+ * don't emulate unique/FK constraints or return errors, since none of the routes this harness has
+ * exercised so far depend on the fake surfacing one). `.update()` and `.upsert()` honor a trailing
+ * `.select()`/`.maybeSingle()` and return the affected row(s), matching real call shapes like
+ * `.update(x).eq(...).select('*').maybeSingle()`. `.rpc()` has no generic in-memory equivalent (RPC
+ * bodies are arbitrary SQL/PL-pgSQL) — pass per-name fake implementations to `createFakeSupabaseClient()`.
  *
  * Embedded-resource selects (`weeks(week_number, seasons(name))`) are resolved against `FK_MAP`
  * and nested as a single object (to-one, matching the runtime shape Supabase actually returns —
@@ -178,8 +182,12 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
   private rangeSpec: { from: number; to: number } | null = null;
   private limitN: number | null = null;
   private single = false;
-  private mode: 'select' | 'insert' | 'delete' = 'select';
+  private mode: 'select' | 'insert' | 'delete' | 'update' | 'upsert' = 'select';
   private insertRows: Row[] = [];
+  private updateValues: Row = {};
+  private upsertRows: Row[] = [];
+  private upsertOnConflict = 'id';
+  private upsertIgnoreDuplicates = false;
 
   constructor(private table: string, private db: FakeDb) {}
 
@@ -199,6 +207,25 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
    * which rows to remove, same as a real Supabase delete builder. */
   delete(): this {
     this.mode = 'delete';
+    return this;
+  }
+  /** Applies `values` to every row matched by the `.eq()`/`.in()`/`.or()`/etc. filters chained after
+   * it, reusing the same `matchesRow()` gating `.delete()` relies on. */
+  update(values: Row): this {
+    this.mode = 'update';
+    this.updateValues = values;
+    return this;
+  }
+  /** Insert-or-update keyed on `options.onConflict` (comma-separated column names, default `'id'`),
+   * matching real call shapes like `.upsert(rows, { onConflict: 'job_type,match_id' })`. When
+   * `ignoreDuplicates` is set, an incoming row that already matches an existing row on the conflict
+   * columns is left untouched and omitted from the returned rows — mirrors Postgres's `ON CONFLICT DO
+   * NOTHING RETURNING`, which returns nothing for a conflicting row. */
+  upsert(rows: Row | Row[], options?: { onConflict?: string; ignoreDuplicates?: boolean }): this {
+    this.mode = 'upsert';
+    this.upsertRows = Array.isArray(rows) ? rows : [rows];
+    this.upsertOnConflict = options?.onConflict ?? 'id';
+    this.upsertIgnoreDuplicates = options?.ignoreDuplicates ?? false;
     return this;
   }
   eq(col: string, val: unknown): this {
@@ -284,6 +311,35 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
       this.db[this.table] = table.filter((row) => !this.matchesRow(row));
       return { data: null, error: null };
     }
+    if (this.mode === 'update') {
+      const table = this.db[this.table] ?? [];
+      const updated: Row[] = [];
+      for (const row of table) {
+        if (this.matchesRow(row)) {
+          Object.assign(row, this.updateValues);
+          updated.push(row);
+        }
+      }
+      return this.projectResult(updated);
+    }
+    if (this.mode === 'upsert') {
+      const table = (this.db[this.table] ??= []);
+      const conflictCols = this.upsertOnConflict.split(',');
+      const affected: Row[] = [];
+      for (const incoming of this.upsertRows) {
+        const existing = table.find((row) => conflictCols.every((c) => row[c] === incoming[c]));
+        if (existing) {
+          if (this.upsertIgnoreDuplicates) continue;
+          Object.assign(existing, incoming);
+          affected.push(existing);
+        } else {
+          const inserted = { ...incoming };
+          table.push(inserted);
+          affected.push(inserted);
+        }
+      }
+      return this.projectResult(affected);
+    }
 
     const table = this.db[this.table] ?? [];
     let rows = table.filter((row) => this.matchesRow(row));
@@ -296,8 +352,11 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
       rows = rows.slice(0, this.limitN);
     }
 
-    const projected = rows.map((r) => projectRow(this.table, r, this.selectStr, this.db, this.referencedOrders)) as T[];
+    return this.projectResult(rows);
+  }
 
+  private projectResult(rows: Row[]): { data: T[] | T | null; error: null } {
+    const projected = rows.map((r) => projectRow(this.table, r, this.selectStr, this.db, this.referencedOrders)) as T[];
     if (this.single) {
       return { data: (projected[0] ?? null) as T | null, error: null };
     }
@@ -305,14 +364,28 @@ class FakeQueryBuilder<T = Row> implements PromiseLike<{ data: T[] | T | null; e
   }
 }
 
+export type RpcResult = { data: unknown; error: { message: string } | null };
+/** A fake implementation for one RPC name, given the args the call site passed. RPC bodies are
+ * arbitrary SQL/PL-pgSQL with no generic in-memory equivalent, so there's no way to interpret one
+ * from `db` alone — a test registers the behavior it needs per RPC name instead. */
+export type RpcImpl = (args: Record<string, unknown>) => RpcResult | Promise<RpcResult>;
+
 export class FakeSupabaseClient {
-  constructor(private db: FakeDb) {}
+  constructor(private db: FakeDb, private rpcImpls: Record<string, RpcImpl> = {}) {}
   from<T = Row>(table: string): FakeQueryBuilder<T> {
     return new FakeQueryBuilder<T>(table, this.db);
   }
+  async rpc(name: string, args: Record<string, unknown> = {}): Promise<RpcResult> {
+    const impl = this.rpcImpls[name];
+    if (!impl) {
+      throw new Error(`fakeSupabase: no fake registered for rpc "${name}" — pass one to createFakeSupabaseClient()`);
+    }
+    return await impl(args);
+  }
 }
 
-/** Build a fake client typed as `SupabaseClient` so it structurally satisfies every call site. */
-export function createFakeSupabaseClient(db: FakeDb): SupabaseClient {
-  return new FakeSupabaseClient(db) as unknown as SupabaseClient;
+/** Build a fake client typed as `SupabaseClient` so it structurally satisfies every call site.
+ * `rpcImpls` maps an RPC name to the fake implementation a test needs for it — see `RpcImpl`. */
+export function createFakeSupabaseClient(db: FakeDb, rpcImpls: Record<string, RpcImpl> = {}): SupabaseClient {
+  return new FakeSupabaseClient(db, rpcImpls) as unknown as SupabaseClient;
 }
