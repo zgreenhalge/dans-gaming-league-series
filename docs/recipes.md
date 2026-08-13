@@ -134,11 +134,15 @@ and its `UPCOMING`-only status gate.
    fixture scoped to the route under test rather than reaching for the big shared
    `test-support/fixtures.ts` "league" (that fixture is tuned for the `queries/*.ts` regression
    suite's read-only cross-function graph, not a single route's mutation scenarios).
-4. **Mutations are supported** — `fakeSupabase.ts`'s `.insert()`/`.delete()` push/remove rows in the
-   `FakeDb` object directly, so assert on the outcome either from the handler's `NextResponse` (status
-   code, JSON body) or by re-reading the same `FakeDb` object the test built. It doesn't emulate
-   unique/FK constraints or return errors — a route whose behavior depends on the database rejecting
-   a write needs its own targeted case.
+4. **Mutations are supported** — `fakeSupabase.ts`'s `.insert()`/`.delete()`/`.update()`/`.upsert()`
+   push/remove/modify rows in the `FakeDb` object directly, so assert on the outcome either from the
+   handler's `NextResponse` (status code, JSON body) or by re-reading the same `FakeDb` object the test
+   built. `.update()`/`.upsert()` honor a trailing `.select()`/`.maybeSingle()` and return the affected
+   row(s), matching real call shapes. None of the four emulate unique/FK constraints or return errors —
+   a route whose behavior depends on the database rejecting a write needs its own targeted case. A
+   route that calls `.rpc()` needs a fake implementation passed to `createFakeSupabaseClient(db, {
+   [rpcName]: (args) => ({ data, error }) })`, since RPC bodies are arbitrary SQL with no generic
+   in-memory equivalent.
 5. **Reset shared state between tests.** The `__setTest*` functions install process-global overrides,
    so build a fresh `FakeDb`/fake client per `test()` block (a small `installFixture()` helper that
    both installs it and returns the `db` for later assertions, called at the top of each test, works
