@@ -4,8 +4,6 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason } from '@/lib/queries';
 import { confirmSeasonScheduleDraft, mapScheduleDraftError } from '@/lib/season-schedule-draft-engine';
 
-const supabaseAdmin = getAdminClient();
-
 /**
  * Confirms a regular season's matchup draft — materializes it into real `weeks`/`matches`/
  * `player_match_stats` once (and only once) both `validateDraftIntegrity()` and
@@ -18,6 +16,7 @@ const supabaseAdmin = getAdminClient();
  * rejected attempt, so more edits plus another confirm is the recovery path.
  */
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const supabaseAdmin = getAdminClient();
   const access = await requireAdminAccess();
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status });

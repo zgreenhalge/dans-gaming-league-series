@@ -1,6 +1,6 @@
 /**
  * Shared, internally-consistent fixture "league" for the queries.ts regression harness. One graph
- * spans all 14 tables/views so cross-function calls (`getPlayersById()` alone feeds ~17 other
+ * spans all 16 tables/views so cross-function calls (`getPlayersById()` alone feeds ~17 other
  * exported functions) stay consistent without re-deriving IDs per test file.
  *
  * Covers the edge cases queries.ts's own code/docs call out as load-bearing:
@@ -15,6 +15,7 @@
  * - background jobs across pipelines/statuses (deliberately none in `parsed`/`quarantined`
  *   `demo_ingest` status, since that path also reads R2, which this harness doesn't fake)
  * - ops-errors across all three entity types
+ * - a season schedule draft (Season 6, id 3) and a season with none yet (Season 5, id 1)
  */
 
 import type { FakeDb, Row } from './fakeSupabase';
@@ -338,6 +339,16 @@ export const SEASON_PLAYERS: Row[] = [
   { id: 4, season_id: 1, player_id: 999, joined_at: '2026-01-10T00:00:00.000Z' },
 ];
 
+// ─── Season schedule draft ───────────────────────────────────────────────────
+// A single-week draft for Season 6 (id 3) — one bye (player 5) and one match (shirts 1+2 vs
+// skins 3+4). Season 5 (id 1) deliberately has no draft rows, exercising the "no draft yet" path.
+
+export const SEASON_SCHEDULE_DRAFT_WEEKS: Row[] = [{ id: 1, season_id: 3, week_number: 1, bye_player_id: 5 }];
+
+export const SEASON_SCHEDULE_DRAFT_MATCHES: Row[] = [
+  { id: 1, draft_week_id: 1, match_number: 1, shirts_player1_id: 1, shirts_player2_id: 2, skins_player1_id: 3, skins_player2_id: 4 },
+];
+
 // ─── Assembly ────────────────────────────────────────────────────────────
 
 export function buildFakeDb(): FakeDb {
@@ -360,5 +371,7 @@ export function buildFakeDb(): FakeDb {
     player_rating_history: PLAYER_RATING_HISTORY,
     player_name_history: PLAYER_NAME_HISTORY,
     season_players: SEASON_PLAYERS,
+    season_schedule_draft_weeks: SEASON_SCHEDULE_DRAFT_WEEKS,
+    season_schedule_draft_matches: SEASON_SCHEDULE_DRAFT_MATCHES,
   };
 }
