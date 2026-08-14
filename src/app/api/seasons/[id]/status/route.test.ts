@@ -5,7 +5,7 @@
  * `__setTestClient()`/`__setTestAdminClient()` harness `seasons/[id]/players/route.test.ts` (#319)
  * established.
  *
- * Run:  npx tsx src/app/api/seasons/[id]/status/route.test.ts
+ * Run:  npx vitest run src/app/api/seasons/[id]/status/route.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -145,4 +145,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

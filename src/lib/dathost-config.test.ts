@@ -6,7 +6,7 @@
  * server), the same "extract and test the pure logic, leave IO-bound orchestration untested" split
  * used elsewhere in this repo (e.g. src/lib/demo/quarantine.test.ts).
  *
- * Run:  npx tsx src/lib/dathost-config.test.ts
+ * Run:  npx vitest run src/lib/dathost-config.test.ts
  */
 
 import assert from 'node:assert/strict';

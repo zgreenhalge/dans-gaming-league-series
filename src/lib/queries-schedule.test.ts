@@ -2,7 +2,7 @@
  * Regression harness for queries.ts's schedule functions (#63) — getSeasonSchedule,
  * getOtherScheduledMatches.
  *
- * Run:  npx tsx src/lib/queries-schedule.test.ts
+ * Run:  npx vitest run src/lib/queries-schedule.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -47,4 +47,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

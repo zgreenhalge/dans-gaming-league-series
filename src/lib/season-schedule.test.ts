@@ -7,7 +7,7 @@
  * bound — for every roster size the league supports (7-19) plus a wider band for confidence. No
  * test framework — node:assert + a tiny runner, matching gauntlet-bracket.test.ts / util.test.ts.
  *
- * Run:  npx tsx src/lib/season-schedule.test.ts
+ * Run:  npx vitest run src/lib/season-schedule.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -173,4 +173,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

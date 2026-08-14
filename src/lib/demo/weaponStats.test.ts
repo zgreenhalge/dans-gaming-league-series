@@ -6,7 +6,7 @@
  * every existing row first guarantees no stale bucket survives. Against `fakeSupabase.ts` via
  * `__setTestAdminClient`, mirroring `sabremetrics.test.ts`'s setup.
  *
- * Run:  npx tsx src/lib/demo/weaponStats.test.ts
+ * Run:  npx vitest run src/lib/demo/weaponStats.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -99,4 +99,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

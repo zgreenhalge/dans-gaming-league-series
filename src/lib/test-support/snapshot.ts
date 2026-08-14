@@ -1,8 +1,8 @@
 /**
  * Minimal golden-master snapshot helper for the queries.ts regression harness — proves a
  * mechanical refactor changed nothing, by comparing a function's current output against a
- * checked-in copy of what it produced before the refactor. No new dependency: `node:fs` +
- * `node:assert` only, matching the rest of this codebase's zero-dependency test convention.
+ * checked-in copy of what it produced before the refactor. Uses `node:fs` + `node:assert` directly
+ * rather than Vitest's own snapshot matcher, so the serialized format here is explicit and stable.
  *
  * Regenerate with `UPDATE_SNAPSHOTS=1 npx vitest run <test file>` — but only when a change to the
  * snapshotted output is expected and has been reviewed; regenerating blindly defeats the point.

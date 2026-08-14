@@ -5,7 +5,7 @@
  * handling down.
  *
  * Run (mirrors util.test.ts — no framework, just node:assert):
- *   npx tsx src/lib/replay/radar.test.ts
+ *   npx vitest run src/lib/replay/radar.test.ts
  */
 
 import assert from 'node:assert/strict';

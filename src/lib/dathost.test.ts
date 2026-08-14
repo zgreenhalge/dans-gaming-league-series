@@ -8,7 +8,7 @@
  * untested here, same as fetchFromDathost.test.ts leaves fetchDemoFromDathost() untested — only the
  * decision logic that sits beside those calls is covered.
  *
- * Run:  npx tsx src/lib/dathost.test.ts
+ * Run:  npx vitest run src/lib/dathost.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -119,4 +119,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

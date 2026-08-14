@@ -6,7 +6,7 @@
  * frame interpolation, angular wrap, and the event/grenade time windows.
  *
  * Run (mirrors util.test.ts — no framework, just node:assert):
- *   npx tsx src/lib/replay/replay.test.ts
+ *   npx vitest run src/lib/replay/replay.test.ts
  */
 
 import assert from 'node:assert/strict';

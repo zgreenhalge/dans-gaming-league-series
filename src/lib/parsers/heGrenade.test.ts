@@ -3,7 +3,7 @@
  * weapon_fire and player_hurt name the same weapon differently (weapon_hegrenade vs
  * hegrenade) — the throw/damage split exercises both.
  *
- * Run:  npx tsx src/lib/parsers/heGrenade.test.ts
+ * Run:  npx vitest run src/lib/parsers/heGrenade.test.ts
  */
 
 import assert from 'node:assert/strict';

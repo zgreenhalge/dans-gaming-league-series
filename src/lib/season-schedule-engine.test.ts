@@ -2,10 +2,10 @@
  * Correctness proof for buildRosterSchedule() — that it's a faithful relabeling of
  * buildSeasonSchedule()'s seed-based output onto real player_ids, not just correct when seed
  * numbers happen to equal player_ids. Uses deliberately shuffled, non-sequential player_id arrays
- * to catch that class of bug. No test framework — node:assert + a tiny runner, matching
+ * to catch that class of bug. Assertions are plain node:assert, no matcher library — matching
  * season-schedule.test.ts.
  *
- * Run:  npx tsx src/lib/season-schedule-engine.test.ts
+ * Run:  npx vitest run src/lib/season-schedule-engine.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -81,4 +81,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

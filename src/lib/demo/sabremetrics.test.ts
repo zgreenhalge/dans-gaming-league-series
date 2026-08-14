@@ -5,7 +5,7 @@
  * "unresolvable player is dropped, not written" guard, against `fakeSupabase.ts` via
  * `__setTestAdminClient` (these call `getAdminClient()` directly rather than taking a client param).
  *
- * Run:  npx tsx src/lib/demo/sabremetrics.test.ts
+ * Run:  npx vitest run src/lib/demo/sabremetrics.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -87,4 +87,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

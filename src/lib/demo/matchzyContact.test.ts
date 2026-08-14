@@ -2,7 +2,7 @@
  * Unit tests for `parseMatchzyEventIdentity()` — the best-effort `{event, matchid}` extraction
  * shared by every MatchZy remote-log event, regardless of whether its other fields are understood.
  *
- * Run:  npx tsx src/lib/demo/matchzyContact.test.ts
+ * Run:  npx vitest run src/lib/demo/matchzyContact.test.ts
  */
 
 import assert from 'node:assert/strict';

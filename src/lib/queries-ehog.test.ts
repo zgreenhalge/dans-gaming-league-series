@@ -4,7 +4,7 @@
  * getPlayerRatings. getPlayerRatings covers all three player-rating fallback tiers: full history
  * (player 1), seed_ehog-only (player 6), and neither (player 7).
  *
- * Run:  npx tsx src/lib/queries-ehog.test.ts
+ * Run:  npx vitest run src/lib/queries-ehog.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -71,4 +71,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

@@ -4,7 +4,7 @@
  * qualifier (same trade window, same permissive same-side check), so a few cases here mirror
  * kast.test.ts's trade cases directly.
  *
- * Run:  npx tsx src/lib/parsers/trades.test.ts
+ * Run:  npx vitest run src/lib/parsers/trades.test.ts
  */
 
 import assert from 'node:assert/strict';

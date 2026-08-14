@@ -6,7 +6,7 @@
  * to match, exercising the collector's own value-summing/round-filtering/offset logic given
  * already-shaped inventory rows.
  *
- * Run:  npx tsx src/lib/parsers/unusedUtility.test.ts
+ * Run:  npx vitest run src/lib/parsers/unusedUtility.test.ts
  */
 
 import assert from 'node:assert/strict';

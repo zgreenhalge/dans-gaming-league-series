@@ -4,7 +4,7 @@
  * since checking completion first can see an incomplete round as "everything played" and archive a
  * gauntlet season early (see docs/architecture.md).
  *
- * Run:  npx tsx src/lib/matchScore.test.ts
+ * Run:  npx vitest run src/lib/matchScore.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -54,4 +54,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

@@ -4,7 +4,7 @@
  * that same tick (Weapon.m_iClip1/Weapon.m_bInReload), matching how demoOrchestrator.ts samples
  * the netprop once per event rather than periodically.
  *
- * Run:  npx tsx src/lib/parsers/reload.test.ts
+ * Run:  npx vitest run src/lib/parsers/reload.test.ts
  */
 
 import assert from 'node:assert/strict';

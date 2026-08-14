@@ -3,7 +3,7 @@
  * from a 1-tick position delta (this parser exposes no direct velocity read — confirmed against
  * a real DGLS demo), so these fixtures supply position rows at the fire tick and one tick prior.
  *
- * Run:  npx tsx src/lib/parsers/counterStrafe.test.ts
+ * Run:  npx vitest run src/lib/parsers/counterStrafe.test.ts
  */
 
 import assert from 'node:assert/strict';

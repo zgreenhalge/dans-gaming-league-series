@@ -4,7 +4,7 @@
  * test files, which all take pre-parsed event rows) — this file guards the static wiring that
  * decides which engine accumulator feeds which SabFields column.
  *
- * Run:  npx tsx src/lib/parsers/accumulators.test.ts
+ * Run:  npx vitest run src/lib/parsers/accumulators.test.ts
  */
 
 import assert from 'node:assert/strict';

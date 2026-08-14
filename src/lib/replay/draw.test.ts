@@ -7,7 +7,7 @@
  * legitimately canvas-only — every other helper takes a `Ctx2D` and calls draw methods directly, with
  * no extractable decision logic to test apart from the drawing itself.
  *
- * Run:  npx tsx src/lib/replay/draw.test.ts
+ * Run:  npx vitest run src/lib/replay/draw.test.ts
  */
 
 import assert from 'node:assert/strict';

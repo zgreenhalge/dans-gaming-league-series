@@ -2,7 +2,7 @@
  * Regression harness for queries.ts's leaderboard functions (#63) — getSeasonLeaderboard,
  * getCareerLeaderboard, getAllLeaderboards.
  *
- * Run:  npx tsx src/lib/queries-leaderboard.test.ts
+ * Run:  npx vitest run src/lib/queries-leaderboard.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -79,4 +79,4 @@ async function main() {
   report();
 }
 
-main();
+await main();
