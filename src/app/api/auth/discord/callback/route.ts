@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase-admin";
 import { verifyDiscordLinkState } from "@/lib/discordLinkState";
+import { isDiscordIdTaken } from "@/lib/discord-link";
 
 // Completes the Discord account-linking OAuth2 flow (#394) started by /api/auth/discord/link:
 // exchanges the auth code for a token, reads the caller's Discord user id via /users/@me, and
@@ -63,19 +64,19 @@ export async function GET(request: Request) {
     if (!discordUser.id) return redirectToProfile(playerId, "error");
 
     // discord_id must be unique — a duplicate would make role sync and @mentions ambiguous.
-    const { data: clash } = await supabaseAdmin
-      .from("players")
-      .select("id")
-      .eq("discord_id", discordUser.id)
-      .neq("id", playerId)
-      .maybeSingle();
-    if (clash) return redirectToProfile(playerId, "taken");
+    if (await isDiscordIdTaken(supabaseAdmin, discordUser.id, playerId)) {
+      return redirectToProfile(playerId, "taken");
+    }
 
-    const { error: updateError } = await supabaseAdmin
+    const { data: updated, error: updateError } = await supabaseAdmin
       .from("players")
       .update({ discord_id: discordUser.id })
-      .eq("id", playerId);
-    if (updateError) return redirectToProfile(playerId, "error");
+      .eq("id", playerId)
+      .select("id")
+      .maybeSingle();
+    // No matching row (e.g. the player was deleted mid-flow) isn't a Supabase `error` — check
+    // explicitly rather than reporting "linked" for a write that touched nothing.
+    if (updateError || !updated) return redirectToProfile(playerId, "error");
 
     return redirectToProfile(playerId, "linked");
   } catch (e) {

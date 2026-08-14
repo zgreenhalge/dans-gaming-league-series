@@ -11,11 +11,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-const FEEDBACK_MESSAGES: Record<string, string> = {
-  linked: 'Discord linked.',
-  denied: 'Discord link cancelled.',
-  taken: 'That Discord account is already linked to another player.',
-  error: 'Something went wrong linking Discord. Try again.',
+const FEEDBACK: Record<string, { message: string; isError?: boolean }> = {
+  linked: { message: 'Discord linked.' },
+  denied: { message: 'Discord link cancelled.', isError: true },
+  taken: { message: 'That Discord account is already linked to another player.', isError: true },
+  error: { message: 'Something went wrong linking Discord. Try again.', isError: true },
 };
 
 export default function DiscordLinkButton({
@@ -28,9 +28,12 @@ export default function DiscordLinkButton({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // `feedback` reflects the URL's ?discord= status at load time — it doesn't update itself when
+  // Unlink changes the linked state client-side, so a successful unlink dismisses it locally
+  // rather than leaving a stale "Discord linked." message next to a now-unlinked button.
+  const [dismissed, setDismissed] = useState(false);
 
-  const feedbackMessage = feedback ? FEEDBACK_MESSAGES[feedback] : null;
-  const feedbackIsError = feedback != null && feedback !== 'linked';
+  const feedbackEntry = !dismissed && feedback ? FEEDBACK[feedback] : null;
 
   async function unlink() {
     setBusy(true);
@@ -42,6 +45,7 @@ export default function DiscordLinkButton({
         setError(body.error ?? 'Failed to unlink');
         return;
       }
+      setDismissed(true);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
@@ -72,15 +76,15 @@ export default function DiscordLinkButton({
         </Link>
       )}
       {error && <span className="text-[var(--color-accent-red-fg,#f87171)]">{error}</span>}
-      {!error && feedbackMessage && (
+      {!error && feedbackEntry && (
         <span
           className={
-            feedbackIsError
+            feedbackEntry.isError
               ? 'text-[var(--color-accent-red-fg,#f87171)]'
               : 'text-[var(--color-accent-green-fg)]'
           }
         >
-          {feedbackMessage}
+          {feedbackEntry.message}
         </span>
       )}
     </div>

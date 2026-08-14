@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { recordNameChange, recordNameHistoryLogError, renameFields } from '@/lib/player-name-history';
+import { isDiscordIdTaken } from '@/lib/discord-link';
 import type { Database } from '@/lib/database.types';
 
 type PlayerUpdate = Database['public']['Tables']['players']['Update'];
@@ -126,13 +127,13 @@ export async function PATCH(
     if (body.discord_id === null) {
       update.discord_id = null;
     } else if (typeof body.discord_id === 'string' && DISCORD_ID_RE.test(body.discord_id)) {
-      const { data: clash } = await supabaseAdmin
-        .from('players')
-        .select('id')
-        .eq('discord_id', body.discord_id)
-        .neq('id', targetId)
-        .maybeSingle();
-      if (clash) {
+      let taken: boolean;
+      try {
+        taken = await isDiscordIdTaken(supabaseAdmin, body.discord_id, targetId);
+      } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : 'Could not verify Discord ID' }, { status: 500 });
+      }
+      if (taken) {
         return NextResponse.json({ error: 'That Discord account is already linked to another player.' }, { status: 409 });
       }
       update.discord_id = body.discord_id;
