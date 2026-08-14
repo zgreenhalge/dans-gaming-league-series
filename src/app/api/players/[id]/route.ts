@@ -165,7 +165,18 @@ export async function PATCH(
     .eq('id', targetId)
     .select('*')
     .maybeSingle();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    // The DB's own unique constraints (name, players_steam_id_key, players_discord_id_key) are the
+    // backstop for this route's own pre-checks above racing a concurrent write — report it the same
+    // way a check that caught it up front would, not as a generic 500 with a raw Postgres message.
+    if ((error as { code?: string }).code === '23505') {
+      return NextResponse.json(
+        { error: 'That name, Steam ID, or Discord ID is already in use by another player.' },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   if (!data) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
 
   if (renamedFrom) {

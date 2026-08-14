@@ -74,9 +74,16 @@ export async function GET(request: Request) {
       .eq("id", playerId)
       .select("id")
       .maybeSingle();
+    if (updateError) {
+      // The DB's own players_discord_id_key constraint is the backstop for the isDiscordIdTaken()
+      // check above racing a concurrent link attempt for the same Discord account — report it the
+      // same way as a check that caught it up front, not as a generic failure.
+      const status = (updateError as { code?: string }).code === "23505" ? "taken" : "error";
+      return redirectToProfile(playerId, status);
+    }
     // No matching row (e.g. the player was deleted mid-flow) isn't a Supabase `error` — check
     // explicitly rather than reporting "linked" for a write that touched nothing.
-    if (updateError || !updated) return redirectToProfile(playerId, "error");
+    if (!updated) return redirectToProfile(playerId, "error");
 
     return redirectToProfile(playerId, "linked");
   } catch (e) {
