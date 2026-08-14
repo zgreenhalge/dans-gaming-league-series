@@ -93,6 +93,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `POST` | `/api/players/register` | Link a Steam account to a player record via an admin-issued claim token, or create a new player record |
 | `GET` | `/api/players/[id]/claim-link` | Mint a signed claim token for an unlinked player, to hand to them out of band (admin only) |
 | `GET` | `/api/cron/refresh-steam` | Refresh Steam avatars/nicknames for all linked players (Vercel cron; see below) |
+| `POST` | `/api/discord/interactions` | Discord Interactions endpoint (#396) — Ed25519-verified (`DISCORD_PUBLIC_KEY`), serves `/leaderboard`, `/scheduled`, `/player` slash commands (`src/lib/discord-commands.ts`). Command *definitions* are separate, pushed by `scripts/register-discord-commands.ts` — this route only serves already-registered commands, it doesn't register them |
 
 ## Database
 
