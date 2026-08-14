@@ -16,6 +16,9 @@ const supabaseAdmin = getAdminClient();
 /** SteamID64: 17 decimal digits. */
 const STEAM_ID_RE = /^\d{17}$/;
 
+/** Discord snowflake id: 17-20 decimal digits. */
+const DISCORD_ID_RE = /^\d{17,20}$/;
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -31,7 +34,7 @@ export async function PATCH(
   }
 
   const body = (await req.json().catch(() => null)) as
-    | { name?: unknown; is_admin?: unknown; steam_id?: unknown; seed_ehog?: unknown }
+    | { name?: unknown; is_admin?: unknown; steam_id?: unknown; discord_id?: unknown; seed_ehog?: unknown }
     | null;
   if (!body || typeof body !== 'object') {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
@@ -113,6 +116,28 @@ export async function PATCH(
       });
     } else {
       return NextResponse.json({ error: 'steam_id must be null or a 17-digit SteamID64' }, { status: 400 });
+    }
+  }
+
+  // Discord link (#394). `null` unlinks; a snowflake id links by hand — the same admin-override
+  // path steam_id above has, for a player who can't complete the self-service OAuth flow
+  // themselves. No cached nickname/avatar to clear here (unlike Steam), since none is stored.
+  if ('discord_id' in body) {
+    if (body.discord_id === null) {
+      update.discord_id = null;
+    } else if (typeof body.discord_id === 'string' && DISCORD_ID_RE.test(body.discord_id)) {
+      const { data: clash } = await supabaseAdmin
+        .from('players')
+        .select('id')
+        .eq('discord_id', body.discord_id)
+        .neq('id', targetId)
+        .maybeSingle();
+      if (clash) {
+        return NextResponse.json({ error: 'That Discord account is already linked to another player.' }, { status: 409 });
+      }
+      update.discord_id = body.discord_id;
+    } else {
+      return NextResponse.json({ error: 'discord_id must be null or a 17-20 digit Discord user id' }, { status: 400 });
     }
   }
 
