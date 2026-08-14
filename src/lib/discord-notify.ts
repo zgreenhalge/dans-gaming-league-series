@@ -3,8 +3,12 @@
 // failure never throws, matching the rest of this codebase's best-effort hooks (ops-errors.ts, the
 // score route's post-commit hooks via afterBestEffort()). A real failure (the webhook itself
 // erroring, not just being unconfigured) is recorded to ops_errors — entity 'match', operation
-// 'discord_notify' — so it's visible in the admin console's Activity feed instead of only a Vercel
-// function log nobody's tailing; cleared automatically the next notification that succeeds.
+// 'discord_notify_server_live'/'discord_notify_score' — so it's visible in the admin console's
+// Activity feed instead of only a Vercel function log nobody's tailing; cleared automatically the
+// next notification of that same kind that succeeds. The two notifications use distinct operation
+// keys (not a shared 'discord_notify') so a live-notification failure and a score-notification
+// failure for the same match can't clear each other out — see ops-errors.ts's own docstring on why
+// `operation` is part of the key.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from './supabase';
@@ -13,11 +17,13 @@ import { recordOpsError, clearOpsError } from './ops-errors';
 
 const COLOR_LIVE = 0x57f287; // Discord's "green"
 const COLOR_SCORE = 0x5865f2; // Discord's "blurple"
-const OPERATION = 'discord_notify';
+const OPERATION_SERVER_LIVE = 'discord_notify_server_live';
+const OPERATION_SCORE = 'discord_notify_score';
 
 async function postEmbed(
   supabaseAdmin: SupabaseClient,
   matchId: number,
+  operation: string,
   webhookUrl: string,
   embed: { title: string; description?: string; color: number },
 ): Promise<void> {
@@ -28,12 +34,12 @@ async function postEmbed(
       body: JSON.stringify({ embeds: [embed] }),
     });
     if (!res.ok) {
-      await recordOpsError(supabaseAdmin, 'match', matchId, OPERATION, `Webhook returned ${res.status}`);
+      await recordOpsError(supabaseAdmin, 'match', matchId, operation, `Webhook returned ${res.status}`);
       return;
     }
-    await clearOpsError(supabaseAdmin, 'match', matchId, OPERATION);
+    await clearOpsError(supabaseAdmin, 'match', matchId, operation);
   } catch (e) {
-    await recordOpsError(supabaseAdmin, 'match', matchId, OPERATION, `Webhook post failed: ${(e as Error).message}`);
+    await recordOpsError(supabaseAdmin, 'match', matchId, operation, `Webhook post failed: ${(e as Error).message}`);
   }
 }
 
@@ -45,7 +51,7 @@ export async function notifyMatchServerLive(supabaseAdmin: SupabaseClient, match
 
   const teamNames = await getMatchTeamNames(matchId).catch(() => null);
   if (!teamNames) return;
-  await postEmbed(supabaseAdmin, matchId, webhookUrl, {
+  await postEmbed(supabaseAdmin, matchId, OPERATION_SERVER_LIVE, webhookUrl, {
     title: `🟢 Server is live — ${teamNames.title}`,
     description: `${teamNames.shirtNames} vs ${teamNames.skinNames}`,
     color: COLOR_LIVE,
@@ -73,7 +79,7 @@ export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, ma
   // Effective played map (glossary): shirts_pick when shirts made the pick, picked_map otherwise —
   // only one is ever populated per match.
   const map = shirtsPick ?? pickedMap;
-  await postEmbed(supabaseAdmin, matchId, webhookUrl, {
+  await postEmbed(supabaseAdmin, matchId, OPERATION_SCORE, webhookUrl, {
     title: `🏁 Final: ${finalScore} — ${teamNames.title}`,
     description: `${teamNames.shirtNames} vs ${teamNames.skinNames}${map ? ` on ${map}` : ''}`,
     color: COLOR_SCORE,

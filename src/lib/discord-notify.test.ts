@@ -32,9 +32,9 @@ function stubFetch(status = 200): { calls: FetchCall[] } {
   return { calls };
 }
 
-function liveOpsErrors(matchId: number): Row[] {
+function liveOpsErrors(matchId: number, operation: string): Row[] {
   return fakeDb.ops_errors.filter(
-    (r) => r.entity_type === 'match' && r.entity_id === matchId && r.operation === 'discord_notify' && r.dismissed_at === null,
+    (r) => r.entity_type === 'match' && r.entity_id === matchId && r.operation === operation && r.dismissed_at === null,
   );
 }
 
@@ -103,7 +103,7 @@ async function main() {
       throw new Error('network down');
     }) as typeof fetch;
     await notifyMatchServerLive(adminClient, 100);
-    const rows = liveOpsErrors(100);
+    const rows = liveOpsErrors(100, 'discord_notify_server_live');
     assert.equal(rows.length, 1);
     assert.match(rows[0].message as string, /network down/);
   });
@@ -112,17 +112,29 @@ async function main() {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
     stubFetch(500);
     await notifyMatchServerLive(adminClient, 100);
-    const rows = liveOpsErrors(100);
+    const rows = liveOpsErrors(100, 'discord_notify_server_live');
     assert.equal(rows.length, 1);
     assert.match(rows[0].message as string, /500/);
   });
 
   await test('notifyMatchServerLive: a later success clears the prior ops_errors row', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
-    assert.equal(liveOpsErrors(100).length, 1, 'precondition: the previous test left a live error');
+    assert.equal(liveOpsErrors(100, 'discord_notify_server_live').length, 1, 'precondition: the previous test left a live error');
     stubFetch(200);
     await notifyMatchServerLive(adminClient, 100);
-    assert.equal(liveOpsErrors(100).length, 0);
+    assert.equal(liveOpsErrors(100, 'discord_notify_server_live').length, 0);
+  });
+
+  await test("a server-live failure and a score-reported success for the same match don't clear each other's ops_errors row", async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    stubFetch(500);
+    await notifyMatchServerLive(adminClient, 100);
+    assert.equal(liveOpsErrors(100, 'discord_notify_server_live').length, 1, 'precondition: server-live failed');
+
+    stubFetch(200);
+    await notifyMatchScoreReported(adminClient, 100);
+    assert.equal(liveOpsErrors(100, 'discord_notify_score').length, 0, 'score-reported succeeded');
+    assert.equal(liveOpsErrors(100, 'discord_notify_server_live').length, 1, 'the unrelated server-live failure is still live');
   });
 
   delete process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;

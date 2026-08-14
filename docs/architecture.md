@@ -393,8 +393,9 @@ Wired into twenty-one operations today:
 | `schedule_generate_cleanup` | `season` (regular) | `generateSeasonScheduleDraft()`'s compensating cleanup, if that cleanup itself fails |
 | `schedule_confirm` | `season` (regular) | `confirmSeasonScheduleDraft()`'s (`season-schedule-draft-engine.ts`) mid-loop failure, before the compensating cleanup runs |
 | `schedule_confirm_cleanup` | `season` (regular) | `confirmSeasonScheduleDraft()`'s compensating cleanup, if that cleanup itself fails |
-| `discord_notify` | `match` | `notifyMatchServerLive()`/`notifyMatchScoreReported()` (`discord-notify.ts`, #395) — a real webhook failure, not just the channel being unconfigured |
-| `discord_role_sync` | `player` | `discord-roles.ts` (#397)'s `setGuildMemberRole()` — a real Discord API failure, not just the role sync being unconfigured or the player having no `discord_id` |
+| `discord_notify_server_live` | `match` | `notifyMatchServerLive()` (`discord-notify.ts`, #395) — a real webhook failure, not just the channel being unconfigured |
+| `discord_notify_score` | `match` | `notifyMatchScoreReported()` (`discord-notify.ts`, #395) — a real webhook failure, not just the channel being unconfigured. A distinct operation from `discord_notify_server_live` (not a shared `discord_notify`) so a failure from one notification can't be silently cleared by an unrelated success of the other for the same match |
+| `discord_role_sync` | `player`, or `season` (regular) for a roster-fetch failure | `discord-roles.ts` (#397)'s `setGuildMemberRole()` for the per-player case — a real Discord API failure, not just the role sync being unconfigured or the player having no `discord_id`; `season-lifecycle.ts`'s `syncParticipantRoleForRoster()` for the season-level case, when fetching the roster itself fails ahead of the (never-throwing) per-player grant/revoke pass |
 | `discord_link` | `player`, or `system` (id `0`) for a config failure | `GET /api/auth/discord/callback` (#394) — a genuine failure (bad response from Discord, an unhandled exception, missing `DISCORD_CLIENT_ID`/`SECRET`), not the expected "denied"/"taken" outcomes, which redirect the one affected player but aren't logged |
 
 Each is cleared automatically the next time that same (entity, operation) succeeds —

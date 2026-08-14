@@ -10,11 +10,11 @@
  * All side effects are best-effort: a failure here never blocks the status transition that
  * triggered it. Every failure (or roster-drift outcome that needs admin attention) is recorded via
  * `recordOpsError()` (`src/lib/ops-errors.ts`, entity type `season`, operation
- * `season_complete`/`gauntlet_build`/`gauntlet_seed`/`gauntlet_archive`) — cleared automatically the
- * next time that same operation succeeds, whether that's another auto-trigger or a manual retry
- * from the admin UI (`tryBuildGauntletShape` and `trySeedGauntlet` clear it themselves on success;
- * `checkGauntletCompletion` clears `gauntlet_archive` on success; `deleteGauntletSeason` clears
- * `gauntlet_build`/`gauntlet_seed` on reset).
+ * `season_complete`/`gauntlet_build`/`gauntlet_seed`/`gauntlet_archive`/`discord_role_sync`) —
+ * cleared automatically the next time that same operation succeeds, whether that's another
+ * auto-trigger or a manual retry from the admin UI (`tryBuildGauntletShape` and `trySeedGauntlet`
+ * clear it themselves on success; `checkGauntletCompletion` clears `gauntlet_archive` on success;
+ * `deleteGauntletSeason` clears `gauntlet_build`/`gauntlet_seed` on reset).
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -33,8 +33,12 @@ export interface ActivateSeasonResult {
 
 /** Shared shape behind the `@Participants` grant/revoke passes in `activateSeason()` and
  * `checkSeasonCompletion()` below — fetch the roster, hand it to whichever roster-wide sync
- * function the caller needs, and log (never throw) if either step fails. Never lets a transient DB
- * hiccup on this best-effort step block the season transition it rides along with. */
+ * function the caller needs, and record (never throw) if the roster fetch itself fails. `sync`
+ * (grant/revoke to the roster) never throws on its own — each per-player Discord API failure inside
+ * it is already recorded to `ops_errors` at the player level (`discord-roles.ts`) — so the only
+ * failure this can catch is `getSeasonRoster()` itself, surfaced here at the season level so a
+ * transient DB hiccup on this best-effort step is visible in the admin console instead of only a
+ * Vercel function log, without ever blocking the season transition it rides along with. */
 async function syncParticipantRoleForRoster(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
@@ -44,8 +48,10 @@ async function syncParticipantRoleForRoster(
   try {
     const roster = await getSeasonRoster(seasonId);
     await sync(supabaseAdmin, roster);
+    await clearOpsError(supabaseAdmin, 'season', seasonId, 'discord_role_sync');
   } catch (err) {
     console.error(`@Participants ${label}(season ${seasonId}) failed:`, err);
+    await recordOpsError(supabaseAdmin, 'season', seasonId, 'discord_role_sync', `@Participants ${label} failed: ${(err as Error).message}`);
   }
 }
 
