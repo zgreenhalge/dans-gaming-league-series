@@ -8,6 +8,7 @@ import { writeMatchScore } from '@/lib/matchScore';
 import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import type { DemoSabremetricStat, DemoWeaponStat } from '@/lib/types';
 import { after, afterBestEffort } from '@/lib/after';
+import { notifyMatchScoreReported } from '@/lib/discord-notify';
 
 type MatchRow = {
   id: number;
@@ -120,6 +121,15 @@ export async function PATCH(
   );
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
+  }
+
+  // Discord notification, only on the transition into "played" — an admin correcting an
+  // already-played score (alreadyPlayed was computed before writeMatchScore() above) shouldn't
+  // re-post a "Final:" announcement for the same match.
+  if (!alreadyPlayed) {
+    afterBestEffort(`discord-notify: score reported for match ${matchId}`, () =>
+      notifyMatchScoreReported(matchId),
+    );
   }
 
   // Score reported → schedule the match server's teardown (reuse model = stop, never delete), same

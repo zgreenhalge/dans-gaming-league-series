@@ -52,6 +52,7 @@ Create `.env.local` at the repo root:
 | `STEAM_API_KEY` | Steam Web API key — fetches player avatars/nicknames |
 | `DISCORD_CLIENT_ID` | Discord application client id — self-service Discord account linking (`/api/auth/discord/link`) |
 | `DISCORD_CLIENT_SECRET` | Discord application client secret — token exchange in `/api/auth/discord/callback`, server-side only |
+| `DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL` | Discord incoming webhook URL for the `#match-notifications` channel — server-live and final-score alerts (`src/lib/discord-notify.ts`). Omit to disable; every call site no-ops without it |
 | `CRON_SECRET` | Bearer token checked by the Vercel cron endpoint |
 | `CLOUDFLARE_R2_ACCOUNT_ID` | Cloudflare R2 account ID (demo uploads) |
 | `CLOUDFLARE_R2_ACCESS_KEY_ID` | Cloudflare R2 access key (demo uploads) |

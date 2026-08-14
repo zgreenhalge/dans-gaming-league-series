@@ -31,6 +31,7 @@ import {
 import { releaseScrimSession } from './scrim-session';
 import { resolveConfigSet, pushCfgFiles, type CfgPushResult } from './dathost-config';
 import { recordOpsError, clearOpsError } from './ops-errors';
+import { notifyMatchServerLive } from './discord-notify';
 
 /** The "friendly" cvars — only asserted when the launch-time "friendly" toggle is on. */
 export const FRIENDLY_CVARS = ['mp_autokick 0', 'mp_drop_knife_enable 1', 'mp_forcecamera 0', 'mp_shoot_dropped_grenades true'];
@@ -340,6 +341,10 @@ export async function provisionMatchServer(
       dathost_server_id: serverId,
       connect_string: connect,
     });
+    // Both callers of provisionMatchServer() already run it inside afterBestEffort() themselves,
+    // so this never adds latency to the HTTP response it's ultimately deferred from — safe to await
+    // inline. notifyMatchServerLive() never throws (self-contained best-effort).
+    await notifyMatchServerLive(matchId);
     return { connect, serverId };
   } catch (err) {
     await setServerState(supabaseAdmin, matchId, { server_state: 'failed' }).catch(() => {});

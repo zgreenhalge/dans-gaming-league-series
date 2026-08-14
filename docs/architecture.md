@@ -59,7 +59,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | Method | Path | Description |
 |---|---|---|
 | `PATCH` | `/api/matches/[id]/veto` | Submit a single pick/ban step (auto-provisions the server on completion) |
-| `PATCH` | `/api/matches/[id]/score` | Submit final score + player stats (tears down the server) |
+| `PATCH` | `/api/matches/[id]/score` | Submit final score + player stats (tears down the server; posts a `#match-notifications` Discord alert the first time a match transitions into "played" — see [`hosting.md`](./hosting.md)) |
 | `PATCH` | `/api/matches/[id]/schedule` | Set a match's scheduled time |
 | `PATCH` | `/api/matches/[id]/feature` | Toggle a match's `is_feature_match` flag (admin only) |
 | `POST` | `/api/matches/[id]/demo/upload-url` | Mint a presigned Cloudflare R2 URL to upload a `.dem` file |
