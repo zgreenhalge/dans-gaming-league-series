@@ -4,7 +4,7 @@
  * fixed-slot) vs. regular (sequential, turn-based) pick/ban rules, map-pool/side validation, the
  * gauntlet auto-pick-remaining-map step, and the auto-provision-on-veto-complete side effect.
  *
- * Run:  npx tsx "src/app/api/matches/[id]/veto/route.test.ts"
+ * Run:  npx vitest run "src/app/api/matches/[id]/veto/route.test.ts"
  */
 
 import assert from 'node:assert/strict';
@@ -259,4 +259,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

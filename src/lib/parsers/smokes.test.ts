@@ -4,7 +4,7 @@
  * (round, entityid) — confirmed against a real DGLS demo that both events share the same
  * entityid and detonation position.
  *
- * Run:  npx tsx src/lib/parsers/smokes.test.ts
+ * Run:  npx vitest run src/lib/parsers/smokes.test.ts
  */
 
 import assert from 'node:assert/strict';

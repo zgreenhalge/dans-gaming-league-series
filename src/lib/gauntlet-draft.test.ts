@@ -5,7 +5,7 @@
  * `availableAdvancements()` (slot-picker options), and `draftToPreviewPods()` (live diagram
  * preview). No DB fixture needed — everything here is a pure function of its arguments.
  *
- * Run:  npx tsx src/lib/gauntlet-draft.test.ts
+ * Run:  npx vitest run src/lib/gauntlet-draft.test.ts
  */
 
 import assert from 'node:assert/strict';

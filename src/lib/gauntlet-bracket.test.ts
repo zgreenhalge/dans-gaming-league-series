@@ -1,9 +1,9 @@
 /**
  * Oracle test for buildGauntletBracket(N) — locks the generator to the handoff's reference table
  * (games/drops/rest-bye/wildcard-pod counts for N=6-20) and a handful of literal worked-shape seed
- * assignments. No test framework — node:assert + a tiny runner, matching util.test.ts.
+ * assignments. Assertions are plain node:assert, no matcher library — matching util.test.ts.
  *
- * Run: npx tsx src/lib/gauntlet-bracket.test.ts
+ * Run: npx vitest run src/lib/gauntlet-bracket.test.ts
  */
 
 import assert from 'node:assert/strict';

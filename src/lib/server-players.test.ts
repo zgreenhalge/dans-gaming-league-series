@@ -3,7 +3,7 @@
  * console/log lines (real formats captured live from the DGLS server: round-reset broadcasts,
  * purchases, disconnects, and the `STEAM_ID_PENDING` state a player passes through mid-team-switch).
  *
- * Run:  npx tsx src/lib/server-players.test.ts
+ * Run:  npx vitest run src/lib/server-players.test.ts
  */
 
 import assert from 'node:assert/strict';

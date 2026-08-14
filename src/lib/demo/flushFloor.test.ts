@@ -3,7 +3,7 @@
  * `created_at` (via `getJobCreatedAt`) rather than any other job type's row, then defers the actual
  * remaining-time math to `remainingFlushFloorMs()` (already locked by `fetchFromDathost.test.ts`).
  *
- * Run:  npx tsx src/lib/demo/flushFloor.test.ts
+ * Run:  npx vitest run src/lib/demo/flushFloor.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -47,4 +47,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

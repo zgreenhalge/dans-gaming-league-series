@@ -3,7 +3,7 @@
  * body and the `MatchzyMapResult` the auto-commit cross-check trusts. Only R2-independent parsing
  * is covered here; `putMapResult`/`getMapResult` are thin R2 wrappers with no branching to lock.
  *
- * Run:  npx tsx src/lib/demo/mapResult.test.ts
+ * Run:  npx vitest run src/lib/demo/mapResult.test.ts
  */
 
 import assert from 'node:assert/strict';

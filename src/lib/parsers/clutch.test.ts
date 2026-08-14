@@ -6,7 +6,7 @@
  * picks up when the enemy count later drops to 1, and the 2v1 branch, where both alive teammates
  * share the attempt/win credit.
  *
- * Run:  npx tsx src/lib/parsers/clutch.test.ts
+ * Run:  npx vitest run src/lib/parsers/clutch.test.ts
  */
 
 import assert from 'node:assert/strict';

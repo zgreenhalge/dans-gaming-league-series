@@ -3,7 +3,7 @@
  * (by tick) counts, and an opening teamkill must not be credited as an opening kill (the victim still
  * gets the opening death either way). Both are easy to get backwards.
  *
- * Run:  npx tsx src/lib/parsers/entry.test.ts
+ * Run:  npx vitest run src/lib/parsers/entry.test.ts
  */
 
 import assert from 'node:assert/strict';

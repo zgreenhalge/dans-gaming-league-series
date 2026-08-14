@@ -17,7 +17,7 @@
  * the delete/insert/update/slot-rewrite/materialization-race-skip shape `saveManualDraft()` actually
  * calls it with.
  *
- * Run:  npx tsx src/lib/gauntlet-engine.test.ts
+ * Run:  npx vitest run src/lib/gauntlet-engine.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -412,4 +412,4 @@ function draftPod(overrides: Partial<DraftPod> & { key: string }): DraftPod {
   });
 }
 
-main().then(report);
+await main().then(report);

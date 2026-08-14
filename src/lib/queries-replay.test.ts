@@ -3,7 +3,7 @@
  * (getAllPlayedMatchIds is covered in queries-maps.test.ts since it shares the map-domain
  * pagination test; getReplayEventsView reads R2 directly, no Supabase involved, out of scope.)
  *
- * Run:  npx tsx src/lib/queries-replay.test.ts
+ * Run:  npx vitest run src/lib/queries-replay.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -39,4 +39,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

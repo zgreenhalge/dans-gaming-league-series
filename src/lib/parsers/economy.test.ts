@@ -2,7 +2,7 @@
  * Unit tests for classifyRoundEconomy — round-economy tier classification (#279), from each
  * player's own CCSPlayerPawn.m_unFreezetimeEndEquipmentValue at a round's freeze-time-end.
  *
- * Run:  npx tsx src/lib/parsers/economy.test.ts
+ * Run:  npx vitest run src/lib/parsers/economy.test.ts
  */
 
 import assert from 'node:assert/strict';

@@ -5,7 +5,7 @@
  * pre-staged) matches must be excluded. `aggregateScoreDistribution`'s margin buckets are also
  * boundary-prone, so those get a couple of cases too.
  *
- * Run:  npx tsx src/lib/mapSideStats.test.ts
+ * Run:  npx vitest run src/lib/mapSideStats.test.ts
  */
 
 import assert from 'node:assert/strict';

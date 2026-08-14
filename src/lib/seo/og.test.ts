@@ -4,7 +4,7 @@
  * totals and must match `deriveRates()` (util.ts) for the same input, so a duplicate inline
  * reimplementation can't silently reappear.
  *
- * Run:  npx tsx src/lib/seo/og.test.ts
+ * Run:  npx vitest run src/lib/seo/og.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -67,4 +67,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

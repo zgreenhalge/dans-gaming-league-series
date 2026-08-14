@@ -4,7 +4,7 @@
  * the match, so lock down the regulation-half boundary, the OT-half flip cadence, and the
  * unknown-starting-side bail-out.
  *
- * Run:  npx tsx src/lib/parsers/roundSides.test.ts
+ * Run:  npx vitest run src/lib/parsers/roundSides.test.ts
  */
 
 import assert from 'node:assert/strict';

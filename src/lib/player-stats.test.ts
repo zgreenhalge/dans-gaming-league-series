@@ -3,8 +3,8 @@
  * shared per-match-row aggregation behind PlayerView's career/season summary tile, its
  * season-history table rows, and per-map buckets.
  *
- * No test framework — just `node:assert` and a tiny runner (mirrors util.test.ts):
- *   npx tsx src/lib/player-stats.test.ts
+ * Assertions are plain `node:assert`, no matcher library (mirrors util.test.ts). Run:
+ *   npx vitest run src/lib/player-stats.test.ts
  */
 
 import assert from 'node:assert/strict';

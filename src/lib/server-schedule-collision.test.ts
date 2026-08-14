@@ -3,7 +3,7 @@
  * documented as strict (`<`, not `<=`) so matches exactly an hour apart do NOT collide; lock that
  * exact boundary down since it's the whole point of the function.
  *
- * Run:  npx tsx src/lib/server-schedule-collision.test.ts
+ * Run:  npx vitest run src/lib/server-schedule-collision.test.ts
  */
 
 import assert from 'node:assert/strict';

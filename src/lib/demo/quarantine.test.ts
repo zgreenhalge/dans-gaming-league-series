@@ -4,7 +4,7 @@
  * real *messy* demo (backup/restore) is validated separately during the Phase-0/3 spike; here we
  * lock the logic so a refactor can't silently stop quarantining bad demos.
  *
- * Run:  npx tsx src/lib/demo/quarantine.test.ts
+ * Run:  npx vitest run src/lib/demo/quarantine.test.ts
  */
 
 import assert from 'node:assert/strict';

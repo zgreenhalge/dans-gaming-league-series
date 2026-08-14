@@ -5,9 +5,9 @@
  * them down so a refactor can't silently change a ranking or a "did this match happen?" answer.
  *
  * Run (mirrors the EHOG parity test):
- *   npx tsx src/lib/util.test.ts
+ *   npx vitest run src/lib/util.test.ts
  *
- * No test framework — just `node:assert` and a tiny runner, to keep zero dependencies.
+ * Assertions are plain `node:assert`, no matcher library — Vitest supplies the runner and reporter.
  */
 
 import assert from 'node:assert/strict';

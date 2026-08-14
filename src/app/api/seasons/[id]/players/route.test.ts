@@ -8,7 +8,7 @@
  *    (test-support/fakeSupabase.ts) backing both the anon client (`isPlayerAdmin()` reads through
  *    it) and the admin client (everything else in the route reads/writes through it)
  *
- * Run:  npx tsx src/app/api/seasons/[id]/players/route.test.ts
+ * Run:  npx vitest run src/app/api/seasons/[id]/players/route.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -147,4 +147,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

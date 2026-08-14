@@ -2,7 +2,7 @@
  * Unit tests for collectWeaponClassStats and collectEconomyStats — per-weapon-category and
  * per-round-economy shot/accuracy/damage/rounds breakdowns (#279).
  *
- * Run:  npx tsx src/lib/parsers/weaponStats.test.ts
+ * Run:  npx vitest run src/lib/parsers/weaponStats.test.ts
  */
 
 import assert from 'node:assert/strict';
