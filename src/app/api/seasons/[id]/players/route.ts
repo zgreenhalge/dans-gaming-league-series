@@ -43,17 +43,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const access = await requireSeasonRosterAccess(req, seasonId);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
-  const { data: player } = await access.supabaseAdmin
-    .from('players')
-    .select('discord_id')
-    .eq('id', access.targetPlayerId)
-    .maybeSingle();
-
-  const { error: deleteErr } = await access.supabaseAdmin
-    .from('season_players')
-    .delete()
-    .eq('season_id', seasonId)
-    .eq('player_id', access.targetPlayerId);
+  // Independent reads/writes — the discord_id lookup doesn't gate the delete (unlike POST's
+  // player-exists check, which must happen first) — run them concurrently.
+  const [{ data: player }, { error: deleteErr }] = await Promise.all([
+    access.supabaseAdmin.from('players').select('discord_id').eq('id', access.targetPlayerId).maybeSingle(),
+    access.supabaseAdmin.from('season_players').delete().eq('season_id', seasonId).eq('player_id', access.targetPlayerId),
+  ]);
   if (deleteErr) {
     const mapped = mapSeasonRosterWriteError(deleteErr as { code?: string; message: string });
     return NextResponse.json({ error: mapped.error }, { status: mapped.status });

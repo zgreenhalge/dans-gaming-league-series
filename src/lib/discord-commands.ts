@@ -15,6 +15,7 @@ import {
 } from './queries';
 import { extractSeasonNumber, matchTitle, isPlayedScore } from './util';
 import { type DiscordInteraction, optionValue, callerDiscordId, messageResponse } from './discordInteractions';
+import type { Player } from './types';
 
 const MAX_LEADERBOARD_ROWS = 25;
 
@@ -81,12 +82,13 @@ export async function handleScheduledCommand() {
 export async function handlePlayerCommand(interaction: DiscordInteraction) {
   const name = optionValue(interaction, 'name');
 
-  const player = name != null
-    ? await findPlayerByName(String(name))
-    : await (async () => {
-        const discordId = callerDiscordId(interaction);
-        return discordId ? getPlayerByDiscordId(discordId) : null;
-      })();
+  let player: Player | null;
+  if (name != null) {
+    player = await findPlayerByName(String(name));
+  } else {
+    const discordId = callerDiscordId(interaction);
+    player = discordId ? await getPlayerByDiscordId(discordId) : null;
+  }
 
   if (!player) {
     return messageResponse(

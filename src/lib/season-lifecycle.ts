@@ -22,7 +22,7 @@ import { allMatchesPlayed } from './util';
 import { tryBuildGauntletShape, trySeedGauntlet, isGauntletBracketDecided } from './gauntlet-engine';
 import { getLinkedRegularSeason, getMatchScoresForWeeks, getSeasonRoster } from './queries';
 import { recordOpsError, clearOpsError } from './ops-errors';
-import { grantParticipantRoleToRoster, revokeParticipantRoleFromRoster } from './discord-roles';
+import { grantParticipantRoleToRoster, revokeParticipantRoleFromRoster, type RosterRoleEntry } from './discord-roles';
 
 export interface ActivateSeasonResult {
   gauntletBuilt: boolean;
@@ -31,25 +31,27 @@ export interface ActivateSeasonResult {
   gauntletBuildError: string | null;
 }
 
-/** Transitions a regular season UPCOMING -> ACTIVE, then best-effort builds its gauntlet bracket
- * shape (sized from the roster at go-live time — see `tryBuildGauntletShape`). Throws only if the
- * status update itself fails; a shape-build failure is reported in the return value (and recorded
- * as an `ops_error`), not thrown — activation still succeeds either way. */
-export async function activateSeason(supabaseAdmin: SupabaseClient, seasonId: number): Promise<ActivateSeasonResult> {
-  const { error } = await supabaseAdmin.from('seasons').update({ status: 'ACTIVE' }).eq('id', seasonId);
-  if (error) throw error;
-
-  // @Participants catch-up grant (#397): covers anyone whose individual add-to-roster grant
-  // (POST /api/seasons/[id]/players) was a no-op because they linked Discord after joining.
-  // discord-roles.ts itself never throws, but the roster read can — caught here so a transient DB
-  // hiccup on this best-effort step can never block the activation this function exists to do.
+/** Shared shape behind the `@Participants` grant/revoke passes in `activateSeason()` and
+ * `checkSeasonCompletion()` below — fetch the roster, hand it to whichever roster-wide sync
+ * function the caller needs, and log (never throw) if either step fails. Never lets a transient DB
+ * hiccup on this best-effort step block the season transition it rides along with. */
+async function syncParticipantRoleForRoster(
+  supabaseAdmin: SupabaseClient,
+  seasonId: number,
+  label: string,
+  sync: (supabaseAdmin: SupabaseClient, roster: RosterRoleEntry[]) => Promise<void>,
+): Promise<void> {
   try {
     const roster = await getSeasonRoster(seasonId);
-    await grantParticipantRoleToRoster(supabaseAdmin, roster);
+    await sync(supabaseAdmin, roster);
   } catch (err) {
-    console.error(`@Participants catch-up grant(season ${seasonId}) failed:`, err);
+    console.error(`@Participants ${label}(season ${seasonId}) failed:`, err);
   }
+}
 
+/** Best-effort gauntlet-shape build behind `activateSeason()` — never throws; a build failure is
+ * reported in the returned `ActivateSeasonResult` (and recorded as an `ops_error`) instead. */
+async function buildGauntletShapeBestEffort(supabaseAdmin: SupabaseClient, seasonId: number): Promise<ActivateSeasonResult> {
   try {
     const result = await tryBuildGauntletShape(supabaseAdmin, seasonId);
     if (result.status === 'built') {
@@ -66,6 +68,25 @@ export async function activateSeason(supabaseAdmin: SupabaseClient, seasonId: nu
   }
 }
 
+/** Transitions a regular season UPCOMING -> ACTIVE, then best-effort builds its gauntlet bracket
+ * shape (sized from the roster at go-live time — see `tryBuildGauntletShape`) and grants
+ * `@Participants` to the whole roster (a catch-up pass covering anyone whose individual
+ * add-to-roster grant, `POST /api/seasons/[id]/players`, was a no-op because they linked Discord
+ * after joining). The two run concurrently — neither depends on the other's result, and both are
+ * independently best-effort (never reject `Promise.all`). Throws only if the status update itself
+ * fails; a shape-build failure is reported in the return value (and recorded as an `ops_error`), not
+ * thrown — activation still succeeds either way. */
+export async function activateSeason(supabaseAdmin: SupabaseClient, seasonId: number): Promise<ActivateSeasonResult> {
+  const { error } = await supabaseAdmin.from('seasons').update({ status: 'ACTIVE' }).eq('id', seasonId);
+  if (error) throw error;
+
+  const [, result] = await Promise.all([
+    syncParticipantRoleForRoster(supabaseAdmin, seasonId, 'catch-up grant', grantParticipantRoleToRoster),
+    buildGauntletShapeBestEffort(supabaseAdmin, seasonId),
+  ]);
+  return result;
+}
+
 /** True if the season has a schedule (at least one week/match exists) and every match in it has a
  * played score. A season with no matches yet is never "fully played". */
 async function isSeasonFullyPlayed(supabaseAdmin: SupabaseClient, seasonId: number): Promise<boolean> {
@@ -75,10 +96,32 @@ async function isSeasonFullyPlayed(supabaseAdmin: SupabaseClient, seasonId: numb
   return allMatchesPlayed(await getMatchScoresForWeeks(supabaseAdmin, weekIds));
 }
 
+/** Best-effort gauntlet-seed behind `checkSeasonCompletion()` — never throws; a roster-drift skip
+ * or a real failure is recorded as an `ops_error` instead. */
+async function seedGauntletBestEffort(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+  try {
+    const result = await trySeedGauntlet(supabaseAdmin, seasonId);
+    if (result.status === 'drift') {
+      await recordOpsError(
+        supabaseAdmin,
+        'season',
+        seasonId,
+        'gauntlet_seed',
+        `Auto-seed skipped: roster drifted since the bracket was built (shape expects ${result.shapeSeedCount} qualifiers, season now has ${result.currentCount}). Reset and rebuild the bracket.`,
+      );
+    }
+  } catch (err) {
+    console.error(`gauntlet auto-seed(season ${seasonId}) failed:`, err);
+    await recordOpsError(supabaseAdmin, 'season', seasonId, 'gauntlet_seed', `Auto-seed failed: ${(err as Error).message}`);
+  }
+}
+
 /** Called from the score route's post-commit hook for every regular-season match. If this score
  * completed the season (every match now played) and the season is still ACTIVE, marks it
- * COMPLETED and best-effort seeds its linked gauntlet from final standings. No-op for gauntlet
- * matches, seasons not currently ACTIVE, or seasons with matches still outstanding. */
+ * COMPLETED, then concurrently best-effort seeds its linked gauntlet from final standings and
+ * revokes `@Participants` from the whole roster (the season's over, so it's no longer "current") —
+ * neither depends on the other's result. No-op for gauntlet matches, seasons not currently ACTIVE,
+ * or seasons with matches still outstanding. */
 export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
   const { data: seasonRow, error: seasonErr } = await supabaseAdmin
     .from('seasons')
@@ -97,30 +140,10 @@ export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seaso
     throw updErr;
   }
 
-  // @Participants revoke (#397): the season's over, so its roster is no longer "current." Same
-  // best-effort/never-blocks-the-transition reasoning as the catch-up grant in activateSeason().
-  try {
-    const roster = await getSeasonRoster(seasonId);
-    await revokeParticipantRoleFromRoster(supabaseAdmin, roster);
-  } catch (err) {
-    console.error(`@Participants revoke(season ${seasonId}) failed:`, err);
-  }
-
-  try {
-    const result = await trySeedGauntlet(supabaseAdmin, seasonId);
-    if (result.status === 'drift') {
-      await recordOpsError(
-        supabaseAdmin,
-        'season',
-        seasonId,
-        'gauntlet_seed',
-        `Auto-seed skipped: roster drifted since the bracket was built (shape expects ${result.shapeSeedCount} qualifiers, season now has ${result.currentCount}). Reset and rebuild the bracket.`,
-      );
-    }
-  } catch (err) {
-    console.error(`gauntlet auto-seed(season ${seasonId}) failed:`, err);
-    await recordOpsError(supabaseAdmin, 'season', seasonId, 'gauntlet_seed', `Auto-seed failed: ${(err as Error).message}`);
-  }
+  await Promise.all([
+    syncParticipantRoleForRoster(supabaseAdmin, seasonId, 'revoke', revokeParticipantRoleFromRoster),
+    seedGauntletBestEffort(supabaseAdmin, seasonId),
+  ]);
 }
 
 /** Called from the score route's post-commit hook for every gauntlet match. Once every match in
