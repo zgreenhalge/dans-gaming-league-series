@@ -347,6 +347,32 @@ export type Database = {
         }
         Relationships: []
       }
+      match_discord_state: {
+        Row: {
+          match_id: number
+          reminder_sent_at: string | null
+          thread_id: string | null
+        }
+        Insert: {
+          match_id: number
+          reminder_sent_at?: string | null
+          thread_id?: string | null
+        }
+        Update: {
+          match_id?: number
+          reminder_sent_at?: string | null
+          thread_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_discord_state_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_server_state: {
         Row: {
           connect_string: string | null

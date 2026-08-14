@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/authOptions";
+import { requireSession } from "@/lib/session";
 import { signDiscordLinkState } from "@/lib/discordLinkState";
 
 // Starts the Discord account-linking OAuth2 flow (#394) for the signed-in player. This links an
@@ -8,7 +7,7 @@ import { signDiscordLinkState } from "@/lib/discordLinkState";
 // Steam's OpenID flow, which establishes the session itself; linking here never touches the
 // session or JWT.
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   const playerId = session?.user?.playerId;
   if (!playerId) {
     return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/?error=discord_unauthenticated`);

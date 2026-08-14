@@ -46,7 +46,7 @@ Once linked, `session.user.playerId` is set. Admin players (`players.is_admin = 
 
 **Development shortcut:** When `NODE_ENV=development`, two mock login providers (`dev-zach-mock` / `dev-dan-mock`) appear that skip Steam auth entirely and sign you in as a known player. No `STEAM_API_KEY` needed locally.
 
-**Discord account linking** is a separate, self-service flow from Steam sign-in — it links an already-authenticated player's Discord user id (`players.discord_id`) rather than establishing the session itself, and never touches the session or JWT. `GET /api/auth/discord/link` (session-gated) redirects to Discord's OAuth2 consent screen with a signed `state` param (`signDiscordLinkState()`/`verifyDiscordLinkState()`, `src/lib/discordLinkState.ts`, same HMAC-signed-token shape as `playerClaim.ts`) naming the calling player; `GET /api/auth/discord/callback` verifies it, exchanges the code, reads the Discord user id via `/users/@me`, and writes `discord_id` — refusing if that id is already linked to a different player. `DELETE /api/players/me/discord` is the self-service unlink (mirrors `PATCH /api/players/me/name`'s auth pattern); `PATCH /api/players/[id]` also accepts `discord_id` as an admin override (`null` unlinks, a 17–20 digit snowflake links by hand), the same shape as its existing `steam_id` handling. `DiscordLinkButton.tsx`, shown only on a player's own profile, is the UI for both halves.
+**Discord account linking** is a separate, self-service flow from Steam sign-in — it links an already-authenticated player's Discord user id (`players.discord_id`) rather than establishing the session itself, and never touches the session or JWT. `GET /api/auth/discord/link` (session-gated) redirects to Discord's OAuth2 consent screen with a signed `state` param (`signDiscordLinkState()`/`verifyDiscordLinkState()`, `src/lib/discordLinkState.ts`, same HMAC-signed-token shape as `playerClaim.ts`) naming the calling player; `GET /api/auth/discord/callback` verifies it, exchanges the code, reads the Discord user id via `/users/@me`, and writes `discord_id` — refusing if that id is already linked to a different player. A genuine failure there (as opposed to the player simply declining consent) is recorded to `ops_errors` (`discord_link`) — see "Surfacing best-effort failures" below. `DELETE /api/players/me/discord` is the self-service unlink (mirrors `PATCH /api/players/me/name`'s auth pattern); `PATCH /api/players/[id]` also accepts `discord_id` as an admin override (`null` unlinks, a 17–20 digit snowflake links by hand), the same shape as its existing `steam_id` handling. `DiscordLinkButton.tsx`, shown only on a player's own profile, is the UI for both halves.
 
 **Access-control gates:** session-scoped mutation routes (not `/admin/**` pages, which the layout above covers) delegate to one small dedicated gate file per access shape rather than reimplementing the check inline — `admin-access.ts` (admin-only), `match-access.ts` (admin-or-in-match), `season-roster-access.ts` (admin-or-self). All three return the shared `AccessResult<T>` discriminated union (`src/lib/access-control.ts`): `{ ok: true, ...T }` or `{ ok: false, status, error }`, so a caller's `if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status })` works identically regardless of which gate it called. A new permission tier (e.g. a "season commissioner" role) should get its own gate file returning `AccessResult<...>` rather than a bespoke shape. `machine-auth.ts` (shared-secret routes called by the game server, not a browser session) is deliberately not part of this family — see its own docstring.
 
@@ -59,7 +59,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | Method | Path | Description |
 |---|---|---|
 | `PATCH` | `/api/matches/[id]/veto` | Submit a single pick/ban step (auto-provisions the server on completion) |
-| `PATCH` | `/api/matches/[id]/score` | Submit final score + player stats (tears down the server) |
+| `PATCH` | `/api/matches/[id]/score` | Submit final score + player stats (tears down the server; posts a `#match-notifications` Discord alert the first time a match transitions into "played" — see [`hosting.md`](./hosting.md)) |
 | `PATCH` | `/api/matches/[id]/schedule` | Set a match's scheduled time |
 | `PATCH` | `/api/matches/[id]/feature` | Toggle a match's `is_feature_match` flag (admin only) |
 | `POST` | `/api/matches/[id]/demo/upload-url` | Mint a presigned Cloudflare R2 URL to upload a `.dem` file |
@@ -80,7 +80,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `POST` | `/api/seasons/[id]/gauntlet/seed` | Seed an existing shape from the season's current leaderboard order and materialize round 1 (admin only) |
 | `DELETE` | `/api/seasons/[id]/gauntlet` | Reset a gauntlet — deletes it and everything materialized under it; refuses if any match has a score unless `{ force: true }` is passed (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet/pods` | Save the manual pod editor's current draft — creates the paired gauntlet season if needed, then inserts/updates/deletes pods to match (admin only) |
-| `POST/DELETE` | `/api/seasons/[id]/players` | Add/remove a player from a season's roster (`season_players`) — admins manage any player, a player can only add/remove themselves; `UPCOMING` only |
+| `POST/DELETE` | `/api/seasons/[id]/players` | Add/remove a player from a season's roster (`season_players`) — admins manage any player, a player can only add/remove themselves; `UPCOMING` only. Best-effort grants/revokes the `@Participants` Discord role (#397) for that one player if they're linked |
 | `POST/DELETE` | `/api/seasons/[id]/schedule` | Generate (fully regenerating) or clear a season's schedule draft from its current roster (admin only, `UPCOMING` only) |
 | `PATCH` | `/api/seasons/[id]/schedule` | Save a hand-edit to an existing schedule draft — reassigns players within the generated week/match structure (admin only, `UPCOMING` only) |
 | `POST` | `/api/seasons/[id]/schedule/confirm` | Materialize a validated schedule draft into real `weeks`/`matches`/`player_match_stats` (admin only, `UPCOMING` only) |
@@ -93,6 +93,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `POST` | `/api/players/register` | Link a Steam account to a player record via an admin-issued claim token, or create a new player record |
 | `GET` | `/api/players/[id]/claim-link` | Mint a signed claim token for an unlinked player, to hand to them out of band (admin only) |
 | `GET` | `/api/cron/refresh-steam` | Refresh Steam avatars/nicknames for all linked players (Vercel cron; see below) |
+| `POST` | `/api/discord/interactions` | Discord Interactions endpoint (#396) — Ed25519-verified (`DISCORD_PUBLIC_KEY`), serves `/leaderboard`, `/scheduled`, `/player` slash commands (`src/lib/discord-commands.ts`). Command *definitions* are separate, pushed by `scripts/register-discord-commands.ts` — this route only serves already-registered commands, it doesn't register them |
 
 ## Database
 
@@ -122,6 +123,7 @@ Supabase (`public` schema). RLS is **off** on all tables — do not enable it wi
 | `scrim_sessions` | Singleton table (`id` pinned to `1`) tracking the one active scrim, if any: `started_by` (owner, for the stop-authorization check), `warned_15`/`warned_10`/`warned_5` (pre-match warning one-shots). See [`hosting.md`](./hosting.md)'s Scrims section. |
 | `live_match_score` | One row per in-progress match (`match_id` PK): `shirts_score`, `skins_score`, `round` (nullable). Written by `going_live`/`round_end`/`map_result` events, read live via Supabase Realtime by `MatchScoreHero`/`LiveMatchTicker`. Deleted by `pullDemoAndClearLiveScore()` (`liveScore.ts`), which both `demo-ingest.ts` and `replay-extract.ts` call instead of `ensureDemoInR2()` directly so the demo pull always clears the row — a demo existing is proof the match is over regardless of whether its score has been derived/confirmed yet; `writeMatchScore()` also clears it as a fallback for a score confirmed with no demo ever pulled — see [`hosting.md`](./hosting.md). |
 | `match_server_state` | One row per match (`match_id` PK), created on first provision — no row means `idle`. Transient DatHost server-lifecycle state (`server_state`, `dathost_server_id`, `connect_string`, `server_started_at`, `teardown_at`), kept off the core `matches` row since it's orchestration state, not match data. See [`hosting.md`](./hosting.md)'s Server-state machine section. |
+| `match_discord_state` | One row per match (`match_id` PK, `ON DELETE CASCADE`), created on first use — no row means neither has happened yet. Transient Discord-integration bookkeeping, same "not match data" reasoning as `match_server_state`: `reminder_sent_at` (nullable) is the one-shot guard for the 1-hour-out reminder (#395); `thread_id` (nullable) is the weekly match-thread's Discord thread id (#398), letting the weekly job tell "already has a thread" from "needs one." |
 
 ### View: `player_season_leaderboard`
 
@@ -335,6 +337,21 @@ Gauntlet seasons are born `ACTIVE` at creation and have no `UPCOMING` phase or a
 transition of their own — `ACTIVE → ARCHIVED` is their entire lifecycle, driven by
 `checkGauntletCompletion()` alone.
 
+**`@Participants` Discord role sync (#397).** `activateSeason()` best-effort grants the role to
+every linked (`discord_id` set) player on the roster — a catch-up pass covering anyone who linked
+Discord after already being added, since `POST /api/seasons/[id]/players`'s own per-player grant
+(see below) would have been a no-op at that time. `checkSeasonCompletion()` best-effort revokes it
+from the same roster once the season is `COMPLETED` — the role tracks the *current* season's
+participants, not a career badge. `syncParticipantRoleForPlayer()` covers the other trigger — a
+player linking Discord after already being rostered — by granting the role right away if they're on
+the active roster; it's called from the OAuth callback and the admin override's link path. The role
+is always driven by roster membership: unlinking Discord never revokes it, since a player can be
+rostered and participating without ever linking their account. Everything here goes through
+`src/lib/discord-roles.ts`, which no-ops unconditionally (no error, no throw) when
+`DISCORD_BOT_TOKEN`/`DISCORD_GUILD_ID`/`DISCORD_PARTICIPANTS_ROLE_ID` aren't all set, or when a given
+player has no linked `discord_id` — a real Discord API failure is recorded to `ops_errors`
+(`discord_role_sync`), see below.
+
 #### Surfacing best-effort failures (`ops_errors`)
 
 Any best-effort operation that fails (or produces an outcome needing admin attention, like a roster
@@ -354,7 +371,7 @@ NULL`; `getOpsErrorHistory()` reads every row from the last 8 weeks regardless o
 grouped into a flat `(operation, week)` failure count, for the admin console's Activity → History
 tab.
 
-Wired into eighteen operations today:
+Wired into twenty-one operations today:
 
 | Operation | Entity | Recorded from |
 |---|---|---|
@@ -376,6 +393,10 @@ Wired into eighteen operations today:
 | `schedule_generate_cleanup` | `season` (regular) | `generateSeasonScheduleDraft()`'s compensating cleanup, if that cleanup itself fails |
 | `schedule_confirm` | `season` (regular) | `confirmSeasonScheduleDraft()`'s (`season-schedule-draft-engine.ts`) mid-loop failure, before the compensating cleanup runs |
 | `schedule_confirm_cleanup` | `season` (regular) | `confirmSeasonScheduleDraft()`'s compensating cleanup, if that cleanup itself fails |
+| `discord_notify_server_live` | `match` | `notifyMatchServerLive()` (`discord-notify.ts`, #395) — a real webhook failure, not just the channel being unconfigured |
+| `discord_notify_score` | `match` | `notifyMatchScoreReported()` (`discord-notify.ts`, #395) — a real webhook failure, not just the channel being unconfigured. A distinct operation from `discord_notify_server_live` (not a shared `discord_notify`) so a failure from one notification can't be silently cleared by an unrelated success of the other for the same match |
+| `discord_role_sync` | `player`, or `season` (regular) for a roster-fetch failure | `discord-roles.ts` (#397)'s `setGuildMemberRole()` for the per-player case — a real Discord API failure, not just the role sync being unconfigured or the player having no `discord_id`; `season-lifecycle.ts`'s `syncParticipantRoleForRoster()` for the season-level case, when fetching the roster itself fails ahead of the (never-throwing) per-player grant/revoke pass |
+| `discord_link` | `player`, or `system` (id `0`) for a config failure | `GET /api/auth/discord/callback` (#394) — a genuine failure (bad response from Discord, an unhandled exception, missing `DISCORD_CLIENT_ID`/`SECRET`), not the expected "denied"/"taken" outcomes, which redirect the one affected player but aren't logged |
 
 Each is cleared automatically the next time that same (entity, operation) succeeds —
 `tryBuildGauntletShape()` and `trySeedGauntlet()` clear their own on success, `checkGauntletCompletion()`

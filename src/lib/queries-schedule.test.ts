@@ -13,8 +13,21 @@ import { matchesSnapshot } from './test-support/snapshot';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getSeasonSchedule, getOtherScheduledMatches } from './queries';
+import { getSeasonSchedule, getOtherScheduledMatches, findCurrentWeek, weekWindowMs, type WeekWithMatches } from './queries';
 import { test, report } from './test-support/miniTest';
+
+/** Minimal WeekWithMatches stand-ins — findCurrentWeek/weekWindowMs only read week_number and
+ *  (for the "has matches" check elsewhere) matches.length, so nothing else needs to be real. */
+function week(weekNumber: number, hasMatches = true): WeekWithMatches {
+  return {
+    id: weekNumber,
+    season_id: 1,
+    week_number: weekNumber,
+    bye_player_id: null,
+    bye_player_name: null,
+    matches: hasMatches ? [{} as WeekWithMatches['matches'][number]] : [],
+  };
+}
 
 async function main() {
   await test('getSeasonSchedule(1) — regular season with a bye week, snapshot', async () => {
@@ -42,6 +55,47 @@ async function main() {
   await test('getOtherScheduledMatches(101) — excludes itself via .neq()', async () => {
     const others = await getOtherScheduledMatches(101);
     assert.equal(others.some((m) => m.id === 101), false);
+  });
+
+  await test('weekWindowMs: week 1 is the 7 days starting on start_date', () => {
+    const win = weekWindowMs('2026-01-01', 1);
+    assert.equal(win.start, Date.UTC(2026, 0, 1));
+    assert.equal(win.end, Date.UTC(2026, 0, 8) - 1);
+  });
+
+  await test('weekWindowMs: week 3 starts 14 days after start_date', () => {
+    const win = weekWindowMs('2026-01-01', 3);
+    assert.equal(win.start, Date.UTC(2026, 0, 15));
+  });
+
+  await test('findCurrentWeek: empty schedule returns null', () => {
+    assert.equal(findCurrentWeek([], '2026-01-01'), null);
+  });
+
+  await test('findCurrentWeek: no start_date falls back to the first week', () => {
+    const schedule = [week(1), week(2)];
+    assert.equal(findCurrentWeek(schedule, null), schedule[0]);
+  });
+
+  await test('findCurrentWeek: picks the week whose window contains today', () => {
+    const now = Date.now();
+    // start_date 21 days ago, at the start of week 1 -- today falls in week 4's window (days 21-27).
+    const startDate = new Date(now - 21 * 86_400_000).toISOString().slice(0, 10);
+    const schedule = [week(1), week(2), week(3), week(4), week(5)];
+    const current = findCurrentWeek(schedule, startDate);
+    assert.equal(current?.week_number, 4);
+  });
+
+  await test('findCurrentWeek: before the season starts returns the next upcoming week', () => {
+    const startDate = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+    const schedule = [week(1), week(2)];
+    assert.equal(findCurrentWeek(schedule, startDate)?.week_number, 1);
+  });
+
+  await test('findCurrentWeek: every window past returns the last week', () => {
+    const startDate = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
+    const schedule = [week(1), week(2)];
+    assert.equal(findCurrentWeek(schedule, startDate)?.week_number, 2);
   });
 
   report();

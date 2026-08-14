@@ -2,16 +2,19 @@
   {
     "player_id": 1,
     "player_name": "Alice",
-    "steam_avatar_url": null
+    "steam_avatar_url": null,
+    "discord_id": null
   },
   {
     "player_id": 2,
     "player_name": "Bob",
-    "steam_avatar_url": null
+    "steam_avatar_url": null,
+    "discord_id": null
   },
   {
     "player_id": 3,
     "player_name": "Carol",
-    "steam_avatar_url": null
+    "steam_avatar_url": null,
+    "discord_id": null
   }
 ]

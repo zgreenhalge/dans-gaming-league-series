@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { Week, Match, Faction } from '../types';
-import { allMatchesPlayed } from '../util';
+import { allMatchesPlayed, weekWindow } from '../util';
 import { getPlayersById } from './player';
 
 
@@ -110,6 +110,42 @@ export async function getMatchScoresForWeeks(
     .in('week_id', weekIds);
   if (error) throw error;
   return (data ?? []) as { final_score: string | null }[];
+}
+
+/** A week's calendar window as epoch ms, `end` inclusive of the full last day — the numeric-
+ *  comparison counterpart to `weekWindow()` (`util.ts`, which returns display `Date`s with `end` at
+ *  the start of the last day). Built on the same underlying date math rather than re-deriving it, so
+ *  the two can't drift. `startDate` is required here (unlike `weekWindow()`'s nullable one) since
+ *  `findCurrentWeek()` below only calls this once it's already checked for a season `start_date`. */
+export function weekWindowMs(startDate: string, weekNumber: number): { start: number; end: number } {
+  const win = weekWindow(startDate, weekNumber)!;
+  return { start: win.start.getTime(), end: win.end.getTime() + 86_399_999 };
+}
+
+/** Whichever week "today" falls in, from an already-fetched schedule — the week whose window
+ *  contains now, else the next upcoming week, else the last week if every window is past. Falls
+ *  back to the first week with any matches when the season has no `start_date` yet. Shared by the
+ *  home page's This Week / Next Week panels and the `/scheduled` Discord command (#396) so they
+ *  can't drift on what "current week" means. */
+export function findCurrentWeek(schedule: WeekWithMatches[], startDate: string | null): WeekWithMatches | null {
+  if (schedule.length === 0) return null;
+
+  if (startDate) {
+    const now = Date.now();
+    const current = schedule.find((w) => {
+      const win = weekWindowMs(startDate, w.week_number);
+      return now >= win.start && now <= win.end;
+    });
+    if (current) return current;
+    const next = schedule.find((w) => {
+      const win = weekWindowMs(startDate, w.week_number);
+      return now < win.start;
+    });
+    if (next) return next;
+    return schedule[schedule.length - 1];
+  }
+
+  return schedule[0];
 }
 
 /** True if the given week exists, has at least one match, and every match in it has a final,

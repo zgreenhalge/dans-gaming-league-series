@@ -47,10 +47,16 @@ Orchestration lives in **`src/lib/dathost-lifecycle.ts`** over the typed client 
 - **`provisionMatchServer`** — `findServerOccupant` guard → `provisioning` → `launchServer` (resolves
   the `golden` config set, PUTs it + the picked workshop map, reasserts its cfg files since they're
   `exec`'d at boot / go-live, `startServer`, `waitUntilReady`) → `loadMatch` (`matchzy_loadmatch_url`)
-  → `live` + `connect_string`. Marks `failed` and rethrows on any error. A per-file cfg-push failure is
-  logged, not fatal. `launchServer` is the same shared orchestration the admin console's Start and
-  `/api/scrim/start` use (with a different `configSetKey`/`extraCvars`, no `loadMatch` after), so all
-  three can't disagree on what "apply + push + boot" means (#315).
+  → `live` + `connect_string` → best-effort `notifyMatchServerLive()` (`src/lib/discord-notify.ts`,
+  #395), a `#match-notifications` Discord webhook post naming the two rosters (never the connect
+  string — that's per-player, not broadcast). A real webhook failure is recorded to `ops_errors`
+  (`discord_notify`, entity `match`) — see [`architecture.md`](./architecture.md)'s "Surfacing
+  best-effort failures". Marks `failed` and rethrows on any error. A per-file
+  cfg-push failure is logged, not fatal. `launchServer` is the same shared orchestration the admin
+  console's Start and `/api/scrim/start` use (with a different `configSetKey`/`extraCvars`, no
+  `loadMatch` after), so all three can't disagree on what "apply + push + boot" means (#315) — only
+  `provisionMatchServer` itself triggers the live notification, since scrims and admin-console starts
+  don't go through it.
 - **`teardownMatchServer`** — `stop` (never delete) → `done`, or, given `delayMs`, schedules the stop
   instead of running it inline (`tearing_down` + `teardown_at`, see Reconciliation below).
   `onlyIfOwnsServer` no-ops unless this match is the current occupant, so tearing down one match never

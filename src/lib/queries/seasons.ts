@@ -7,6 +7,7 @@ export interface SeasonRosterEntry {
   player_id: number;
   player_name: string;
   steam_avatar_url: string | null;
+  discord_id: string | null;
 }
 
 export async function getSeasons(): Promise<Season[]> {
@@ -16,6 +17,16 @@ export async function getSeasons(): Promise<Season[]> {
     .order('id');
   if (error) throw error;
   return (data ?? []) as Season[];
+}
+
+/** The current regular (non-gauntlet) `ACTIVE` season, or `null` if none is — a gauntlet can also be
+ *  `ACTIVE` at the same time as its paired regular season briefly completes ahead of it (see
+ *  architecture.md's season status lifecycle), so this always excludes gauntlets rather than
+ *  picking whichever `ACTIVE` row sorts first. Ties (more than one `ACTIVE` regular season) resolve
+ *  to the lowest id, same as the home page's own `active[0]` — not expected in practice. */
+export async function getActiveRegularSeason(): Promise<Season | null> {
+  const seasons = await getSeasons();
+  return seasons.find((s) => !s.is_gauntlet && s.status === 'ACTIVE') ?? null;
 }
 
 export async function getSeason(id: number): Promise<Season | null> {
@@ -70,6 +81,7 @@ export async function getSeasonRoster(seasonId: number, playersById?: Map<number
       player_id: r.player_id,
       player_name: player.name,
       steam_avatar_url: player.steam_avatar_url,
+      discord_id: player.discord_id,
     });
   }
   return entries.sort((a, b) => a.player_name.localeCompare(b.player_name));

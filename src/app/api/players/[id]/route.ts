@@ -3,6 +3,8 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { recordNameChange, recordNameHistoryLogError, renameFields } from '@/lib/player-name-history';
 import { isDiscordIdTaken } from '@/lib/discord-link';
+import { syncParticipantRoleForPlayer } from '@/lib/discord-roles';
+import { afterBestEffort } from '@/lib/after';
 import type { Database } from '@/lib/database.types';
 
 type PlayerUpdate = Database['public']['Tables']['players']['Update'];
@@ -11,8 +13,6 @@ type PlayerUpdate = Database['public']['Tables']['players']['Update'];
 // change their Steam link (unlink, or set a SteamID64 by hand). Admin-only. All three edits go
 // through this one route with a whitelisted body — there are no side effects to isolate the way the
 // match /score and /veto routes have, so a single partial-update route is simpler than three.
-
-const supabaseAdmin = getAdminClient();
 
 /** SteamID64: 17 decimal digits. */
 const STEAM_ID_RE = /^\d{17}$/;
@@ -24,6 +24,10 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // Resolved per-request, not at module scope, so a test can inject a fresh fake client
+  // (getAdminClient() resolves once at import time otherwise, before any override could take effect).
+  const supabaseAdmin = getAdminClient();
+
   const access = await requireAdminAccess();
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const callerId = access.playerId;
@@ -123,6 +127,7 @@ export async function PATCH(
   // Discord link (#394). `null` unlinks; a snowflake id links by hand — the same admin-override
   // path steam_id above has, for a player who can't complete the self-service OAuth flow
   // themselves. No cached nickname/avatar to clear here (unlike Steam), since none is stored.
+  // Unlinking never touches @Participants -- see players/me/discord/route.ts's comment.
   if ('discord_id' in body) {
     if (body.discord_id === null) {
       update.discord_id = null;
@@ -181,6 +186,15 @@ export async function PATCH(
 
   if (renamedFrom) {
     await recordNameChange(supabaseAdmin, targetId, renamedFrom, (data as { name: string }).name);
+  }
+
+  // @Participants sync for a newly-linked discord_id -- grants right away if this player is already
+  // on the active roster, same reasoning as the OAuth callback's own call. Unlinking is deliberately
+  // not handled here; see players/me/discord/route.ts's comment.
+  if ('discord_id' in body && body.discord_id !== null) {
+    afterBestEffort(`discord-roles: sync @Participants for admin-linked player ${targetId}`, () =>
+      syncParticipantRoleForPlayer(supabaseAdmin, targetId, (data as { discord_id: string | null }).discord_id),
+    );
   }
 
   return NextResponse.json({ ok: true, player: data });
