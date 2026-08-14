@@ -3,6 +3,8 @@ import { getAdminClient } from "@/lib/supabase-admin";
 import { verifyDiscordLinkState } from "@/lib/discordLinkState";
 import { isDiscordIdTaken } from "@/lib/discord-link";
 import { recordOpsError, clearOpsError } from "@/lib/ops-errors";
+import { syncParticipantRoleForPlayer } from "@/lib/discord-roles";
+import { afterBestEffort } from "@/lib/after";
 
 // Completes the Discord account-linking OAuth2 flow (#394) started by /api/auth/discord/link:
 // exchanges the auth code for a token, reads the caller's Discord user id via /users/@me, and
@@ -105,6 +107,12 @@ export async function GET(request: Request) {
     if (!updated) return redirectWithError(playerId, "players update matched no row");
 
     await clearOpsError(supabaseAdmin, "player", playerId, "discord_link");
+    // Grants @Participants right away if this player is already on the current season's roster —
+    // otherwise they'd wait for the next roster/season event that happens to touch them. Deferred
+    // so the Discord + DB round trip doesn't delay the redirect.
+    afterBestEffort(`discord-roles: sync @Participants for newly-linked player ${playerId}`, () =>
+      syncParticipantRoleForPlayer(supabaseAdmin, playerId, discordUser.id!),
+    );
     return redirectToProfile(playerId, "linked");
   } catch (e) {
     return redirectWithError(playerId, `unhandled error: ${(e as Error).message}`);

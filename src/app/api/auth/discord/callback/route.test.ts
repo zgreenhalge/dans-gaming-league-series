@@ -9,6 +9,7 @@
 
 import assert from 'node:assert/strict';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
+import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
 import { createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
 import { buildFakeDb } from '@/lib/test-support/fixtures';
 import { signDiscordLinkState } from '@/lib/discordLinkState';
@@ -88,7 +89,8 @@ async function main() {
     assert.match(rows[0].message as string, /401/);
   });
 
-  await test('a successful link redirects "linked", writes discord_id, and clears a prior ops_error', async () => {
+  await test('a successful link redirects "linked", writes discord_id, clears a prior ops_error, and syncs @Participants', async () => {
+    __setTestAfterMode(true);
     const { db, client } = freshDb();
     // Simulate a prior failed attempt having left a live error, to prove success clears it.
     await client.from('ops_errors').insert({
@@ -103,9 +105,11 @@ async function main() {
     });
     const state = signDiscordLinkState(PLAYER_ID);
     const res = await GET(new Request(callbackUrl({ code: 'abc', state })));
+    await __flushTestAfter();
     assert.equal(res.headers.get('location'), `http://localhost:3000/players/${PLAYER_ID}?discord=linked`);
     assert.equal(db.players.find((p) => p.id === PLAYER_ID)!.discord_id, 'discord-user-1');
     assert.equal(liveOpsErrors(db, 'player', PLAYER_ID).length, 0);
+    __setTestAfterMode(false);
   });
 
   await test('a discord_id already linked to another player redirects "taken", not logged as an error', async () => {

@@ -7,6 +7,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { __setTestClient } from './supabase';
 import { createFakeSupabaseClient, type FakeDb, type Row } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 import {
@@ -14,8 +15,14 @@ import {
   revokeParticipantRole,
   grantParticipantRoleToRoster,
   revokeParticipantRoleFromRoster,
+  syncParticipantRoleForPlayer,
 } from './discord-roles';
 import { test, report } from './test-support/miniTest';
+
+// Season 3 ("Season 6") is the fixture's one ACTIVE non-gauntlet season, rostering players 1/2/3
+// (Alice/Bob/Carol) — see test-support/fixtures.ts's SEASON_PLAYERS. Player 4 (Dave) is not on it.
+const ROSTERED_PLAYER_ID = 1;
+const UNROSTERED_PLAYER_ID = 4;
 
 const PLAYER_ID = 1;
 const ENV_KEYS = ['DISCORD_BOT_TOKEN', 'DISCORD_GUILD_ID', 'DISCORD_PARTICIPANTS_ROLE_ID'] as const;
@@ -46,7 +53,12 @@ function stubFetch(status = 204): { calls: FetchCall[] } {
 
 function freshDb(): { db: FakeDb; client: ReturnType<typeof createFakeSupabaseClient> } {
   const db = buildFakeDb();
-  return { db, client: createFakeSupabaseClient(db) };
+  const client = createFakeSupabaseClient(db);
+  // syncParticipantRoleForPlayer() reads getActiveRegularSeason()/getSeasonRoster() through the
+  // query layer's own anon-client singleton, not the explicit `client` param the rest of this file
+  // passes around -- both need to point at the same fake db.
+  __setTestClient(client);
+  return { db, client };
 }
 
 function liveOpsErrors(db: FakeDb, playerId: number): Row[] {
@@ -167,6 +179,32 @@ async function main() {
     ]);
     assert.equal(calls.length, 1);
     assert.equal(calls[0].method, 'DELETE');
+  });
+
+  await test('syncParticipantRoleForPlayer: grants when the player is on the active season roster', async () => {
+    setEnv();
+    const { client } = freshDb();
+    const { calls } = stubFetch();
+    await syncParticipantRoleForPlayer(client, ROSTERED_PLAYER_ID, 'user-1');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'PUT');
+  });
+
+  await test('syncParticipantRoleForPlayer: revokes when the player is not on the active season roster', async () => {
+    setEnv();
+    const { client } = freshDb();
+    const { calls } = stubFetch();
+    await syncParticipantRoleForPlayer(client, UNROSTERED_PLAYER_ID, 'user-4');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'DELETE');
+  });
+
+  await test('syncParticipantRoleForPlayer: no-ops without a discord_id', async () => {
+    setEnv();
+    const { client } = freshDb();
+    const { calls } = stubFetch();
+    await syncParticipantRoleForPlayer(client, ROSTERED_PLAYER_ID, null);
+    assert.equal(calls.length, 0);
   });
 
   clearEnv();

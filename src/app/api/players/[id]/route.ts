@@ -3,6 +3,8 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { recordNameChange, recordNameHistoryLogError, renameFields } from '@/lib/player-name-history';
 import { isDiscordIdTaken } from '@/lib/discord-link';
+import { revokeParticipantRole, syncParticipantRoleForPlayer } from '@/lib/discord-roles';
+import { afterBestEffort } from '@/lib/after';
 import type { Database } from '@/lib/database.types';
 
 type PlayerUpdate = Database['public']['Tables']['players']['Update'];
@@ -11,8 +13,6 @@ type PlayerUpdate = Database['public']['Tables']['players']['Update'];
 // change their Steam link (unlink, or set a SteamID64 by hand). Admin-only. All three edits go
 // through this one route with a whitelisted body — there are no side effects to isolate the way the
 // match /score and /veto routes have, so a single partial-update route is simpler than three.
-
-const supabaseAdmin = getAdminClient();
 
 /** SteamID64: 17 decimal digits. */
 const STEAM_ID_RE = /^\d{17}$/;
@@ -24,6 +24,10 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // Resolved per-request, not at module scope, so a test can inject a fresh fake client
+  // (getAdminClient() resolves once at import time otherwise, before any override could take effect).
+  const supabaseAdmin = getAdminClient();
+
   const access = await requireAdminAccess();
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const callerId = access.playerId;
@@ -43,6 +47,9 @@ export async function PATCH(
 
   const update: PlayerUpdate = {};
   let renamedFrom: string | null = null;
+  // Set only when unlinking (discord_id -> null) -- the prior id, since revokeParticipantRole()
+  // needs it and there's nothing left to revoke against once the column is cleared.
+  let discordIdToRevoke: string | null = null;
 
   // Display name
   if ('name' in body) {
@@ -125,6 +132,8 @@ export async function PATCH(
   // themselves. No cached nickname/avatar to clear here (unlike Steam), since none is stored.
   if ('discord_id' in body) {
     if (body.discord_id === null) {
+      const { data: existing } = await supabaseAdmin.from('players').select('discord_id').eq('id', targetId).maybeSingle();
+      discordIdToRevoke = (existing as { discord_id: string | null } | null)?.discord_id ?? null;
       update.discord_id = null;
     } else if (typeof body.discord_id === 'string' && DISCORD_ID_RE.test(body.discord_id)) {
       let taken: boolean;
@@ -181,6 +190,18 @@ export async function PATCH(
 
   if (renamedFrom) {
     await recordNameChange(supabaseAdmin, targetId, renamedFrom, (data as { name: string }).name);
+  }
+
+  // @Participants sync for the discord_id change just committed -- see discordIdToRevoke's own
+  // comment for why unlink needs the id captured before the update, not read back from `data`.
+  if (discordIdToRevoke) {
+    afterBestEffort(`discord-roles: revoke @Participants from admin-unlinked player ${targetId}`, () =>
+      revokeParticipantRole(supabaseAdmin, targetId, discordIdToRevoke),
+    );
+  } else if ('discord_id' in body && body.discord_id !== null) {
+    afterBestEffort(`discord-roles: sync @Participants for admin-linked player ${targetId}`, () =>
+      syncParticipantRoleForPlayer(supabaseAdmin, targetId, (data as { discord_id: string | null }).discord_id),
+    );
   }
 
   return NextResponse.json({ ok: true, player: data });
