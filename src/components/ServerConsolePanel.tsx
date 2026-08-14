@@ -261,6 +261,10 @@ export function ServerConsolePanel({
   const [intervalSaved, setIntervalSaved] = useState(false);
   const [intervalError, setIntervalError] = useState<string | null>(null);
 
+  const [registerCommandsBusy, setRegisterCommandsBusy] = useState(false);
+  const [registerCommandsError, setRegisterCommandsError] = useState<string | null>(null);
+  const [registerCommandsMessage, setRegisterCommandsMessage] = useState<string | null>(null);
+
   const refreshCleanup = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/dathost-cleanup/status');
@@ -356,6 +360,23 @@ export function ServerConsolePanel({
       setTimeout(refreshCleanup, 5000);
     } finally {
       setCleanupRunBusy(false);
+    }
+  };
+
+  const registerDiscordCommands = async () => {
+    setRegisterCommandsBusy(true);
+    setRegisterCommandsError(null);
+    setRegisterCommandsMessage(null);
+    try {
+      const res = await fetch('/api/admin/discord/register-commands', { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRegisterCommandsError(body.error ?? 'Could not register commands');
+        return;
+      }
+      setRegisterCommandsMessage(`Registered: ${(body.names as string[]).join(', ')}. Can take up to an hour to show up in Discord.`);
+    } finally {
+      setRegisterCommandsBusy(false);
     }
   };
 
@@ -787,6 +808,34 @@ export function ServerConsolePanel({
             {cleanupError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{cleanupError}</div>}
           </div>
         )}
+      </CollapsiblePanel>
+
+      {/* Discord slash-command registration (#396) — a stand-in for running
+          scripts/register-discord-commands.ts locally, for pushing a command definition change to
+          Discord from anywhere admin access reaches (no .env.local needed). Remove this panel and its
+          route together with the script once local registration is no longer the blocker it is today. */}
+      <CollapsiblePanel title="Discord commands">
+        <div className="flex flex-col gap-2">
+          <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
+            Pushes the current command set (leaderboard/scheduled/player) to Discord. Safe to run
+            repeatedly — it replaces the whole set each time.
+          </div>
+          <div>
+            <button
+              onClick={registerDiscordCommands}
+              disabled={registerCommandsBusy}
+              className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
+            >
+              {registerCommandsBusy ? 'Registering…' : 'Register commands'}
+            </button>
+          </div>
+          {registerCommandsError && (
+            <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{registerCommandsError}</div>
+          )}
+          {registerCommandsMessage && !registerCommandsError && (
+            <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">{registerCommandsMessage}</div>
+          )}
+        </div>
       </CollapsiblePanel>
     </div>
   );
