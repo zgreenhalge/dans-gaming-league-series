@@ -14,6 +14,7 @@ import PlayerView from '@/components/PlayerView';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import EhogBadge from '@/components/EhogBadge';
 import PlayerNameEditor from '@/components/PlayerNameEditor';
+import DiscordLinkButton from '@/components/DiscordLinkButton';
 
 export const revalidate = 60;
 
@@ -43,10 +44,13 @@ export async function generateMetadata({
 
 export default async function PlayerPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ discord?: string }>;
 }) {
   const { id } = await params;
+  const { discord: discordFeedback } = await searchParams;
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
   const [session, detail, careerLeaderboard, h2hData, ehog, leagueSabremetrics, nameHistory, playerMeta] = await Promise.all([
@@ -113,15 +117,28 @@ export default async function PlayerPage({
                 Formerly {[...nameHistory].reverse().map((h) => h.old_name).join(', ')}
               </div>
             )}
-            {detail.player.steam_id && detail.player.steam_nickname && (
-              <Link
-                href={`https://steamcommunity.com/profiles/${detail.player.steam_id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-mono text-[12px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-              >
-                {detail.player.steam_nickname} ↗
-              </Link>
+            {((detail.player.steam_id && detail.player.steam_nickname) || isSelf) && (
+              <div className="mt-1 flex items-center gap-2 flex-wrap font-mono text-[12px]">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Connected:</span>
+                {detail.player.steam_id && detail.player.steam_nickname && (
+                  <Link
+                    href={`https://steamcommunity.com/profiles/${detail.player.steam_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+                  >
+                    {detail.player.steam_nickname} ↗
+                  </Link>
+                )}
+                {isSelf && (
+                  <>
+                    {detail.player.steam_id && detail.player.steam_nickname && (
+                      <span className="text-[var(--color-border-primary)] select-none">·</span>
+                    )}
+                    <DiscordLinkButton linked={!!detail.player.discord_id} feedback={discordFeedback} />
+                  </>
+                )}
+              </div>
             )}
           </div>
           {ehog.currentRating != null && (

@@ -50,6 +50,8 @@ Create `.env.local` at the repo root:
 | `NEXTAUTH_URL` | Full base URL, e.g. `http://localhost:3000` |
 | `NEXTAUTH_SECRET` | Secret for signing session tokens (any random string locally) |
 | `STEAM_API_KEY` | Steam Web API key — fetches player avatars/nicknames |
+| `DISCORD_CLIENT_ID` | Discord application client id — self-service Discord account linking (`/api/auth/discord/link`) |
+| `DISCORD_CLIENT_SECRET` | Discord application client secret — token exchange in `/api/auth/discord/callback`, server-side only |
 | `CRON_SECRET` | Bearer token checked by the Vercel cron endpoint |
 | `CLOUDFLARE_R2_ACCOUNT_ID` | Cloudflare R2 account ID (demo uploads) |
 | `CLOUDFLARE_R2_ACCESS_KEY_ID` | Cloudflare R2 access key (demo uploads) |

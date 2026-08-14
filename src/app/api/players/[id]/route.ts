@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { recordNameChange, recordNameHistoryLogError, renameFields } from '@/lib/player-name-history';
+import { isDiscordIdTaken } from '@/lib/discord-link';
 import type { Database } from '@/lib/database.types';
 
 type PlayerUpdate = Database['public']['Tables']['players']['Update'];
@@ -15,6 +16,9 @@ const supabaseAdmin = getAdminClient();
 
 /** SteamID64: 17 decimal digits. */
 const STEAM_ID_RE = /^\d{17}$/;
+
+/** Discord snowflake id: 17-20 decimal digits. */
+const DISCORD_ID_RE = /^\d{17,20}$/;
 
 export async function PATCH(
   req: NextRequest,
@@ -31,7 +35,7 @@ export async function PATCH(
   }
 
   const body = (await req.json().catch(() => null)) as
-    | { name?: unknown; is_admin?: unknown; steam_id?: unknown; seed_ehog?: unknown }
+    | { name?: unknown; is_admin?: unknown; steam_id?: unknown; discord_id?: unknown; seed_ehog?: unknown }
     | null;
   if (!body || typeof body !== 'object') {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
@@ -116,6 +120,28 @@ export async function PATCH(
     }
   }
 
+  // Discord link (#394). `null` unlinks; a snowflake id links by hand — the same admin-override
+  // path steam_id above has, for a player who can't complete the self-service OAuth flow
+  // themselves. No cached nickname/avatar to clear here (unlike Steam), since none is stored.
+  if ('discord_id' in body) {
+    if (body.discord_id === null) {
+      update.discord_id = null;
+    } else if (typeof body.discord_id === 'string' && DISCORD_ID_RE.test(body.discord_id)) {
+      let taken: boolean;
+      try {
+        taken = await isDiscordIdTaken(supabaseAdmin, body.discord_id, targetId);
+      } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : 'Could not verify Discord ID' }, { status: 500 });
+      }
+      if (taken) {
+        return NextResponse.json({ error: 'That Discord account is already linked to another player.' }, { status: 409 });
+      }
+      update.discord_id = body.discord_id;
+    } else {
+      return NextResponse.json({ error: 'discord_id must be null or a 17-20 digit Discord user id' }, { status: 400 });
+    }
+  }
+
   // Seed EHOG — the starting rating a known new player is seeded at, in place of the global
   // default, until their first rated match. `null` clears it back to the default. The (10, 100)
   // bound is exclusive: those are the display transform's unreachable asymptotes.
@@ -139,7 +165,18 @@ export async function PATCH(
     .eq('id', targetId)
     .select('*')
     .maybeSingle();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    // The DB's own unique constraints (name, players_steam_id_key, players_discord_id_key) are the
+    // backstop for this route's own pre-checks above racing a concurrent write — report it the same
+    // way a check that caught it up front would, not as a generic 500 with a raw Postgres message.
+    if ((error as { code?: string }).code === '23505') {
+      return NextResponse.json(
+        { error: 'That name, Steam ID, or Discord ID is already in use by another player.' },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   if (!data) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
 
   if (renamedFrom) {
