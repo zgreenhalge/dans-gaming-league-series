@@ -5,7 +5,7 @@
  * testable end-to-end against an in-memory fake DB with no network or module-level mocking —
  * see src/lib/test-support/fakeSupabase.ts, the same harness the queries.ts regression tests use.
  *
- * Run:  npx tsx src/lib/matchzy.test.ts
+ * Run:  npx vitest run src/lib/matchzy.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -202,4 +202,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

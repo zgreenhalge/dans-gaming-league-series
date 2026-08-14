@@ -3,9 +3,9 @@
  * getLinkedGauntlet, getLinkedRegularSeason. Golden-master snapshots against the shared fixture
  * (test-support/fixtures.ts) prove the eventual file split changes nothing.
  *
- * Run:  npx tsx src/lib/queries-seasons.test.ts
+ * Run:  npx vitest run src/lib/queries-seasons.test.ts
  * Regenerate snapshots (only after reviewing a deliberate change):
- *   UPDATE_SNAPSHOTS=1 npx tsx src/lib/queries-seasons.test.ts
+ *   UPDATE_SNAPSHOTS=1 npx vitest run src/lib/queries-seasons.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -16,7 +16,7 @@ import { matchesSnapshot } from './test-support/snapshot';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getSeasons, getSeason, getLinkedGauntlet, getLinkedRegularSeason, getSeasonRoster } from './queries';
+import { getSeasons, getSeason, getLinkedGauntlet, getLinkedRegularSeason, getSeasonRoster, getActiveRegularSeason } from './queries';
 import { test, report } from './test-support/miniTest';
 
 async function main() {
@@ -60,7 +60,14 @@ async function main() {
     assert.deepEqual(await getSeasonRoster(1), []);
   });
 
+  await test('getActiveRegularSeason() — the fixture\'s one ACTIVE non-gauntlet season', async () => {
+    const season = await getActiveRegularSeason();
+    assert.equal(season?.id, 3);
+    assert.equal(season?.is_gauntlet, false);
+    assert.equal(season?.status, 'ACTIVE');
+  });
+
   report();
 }
 
-main();
+await main();

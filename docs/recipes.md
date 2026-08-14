@@ -103,8 +103,8 @@ in.
    (`src/lib/test-support/fakeSupabase.ts`), asserting on a golden-master snapshot
    (`src/lib/test-support/snapshot.ts`). For a new function: add a `test(...)` block calling it
    against the existing fixture and `matchesSnapshot('<name>', result)` — run with
-   `UPDATE_SNAPSHOTS=1 npx tsx src/lib/queries-<domain>.test.ts` once to generate the snapshot,
-   then commit it. If the fixture doesn't cover a case the new function needs (a new edge case,
+   `UPDATE_SNAPSHOTS=1 npx vitest run src/lib/queries-<domain>.test.ts` once to generate the
+   snapshot, then commit it. If the fixture doesn't cover a case the new function needs (a new edge case,
    not just a new function over existing data), extend `fixtures.ts` rather than building a
    one-off fixture in the test file — it's a single shared, internally-consistent "league" other
    tests also depend on.
@@ -112,7 +112,8 @@ in.
 ## Recipe: Test a route handler
 
 `route.ts` handlers can be called directly in a test — no running server needed — using the same
-zero-dependency `test()`/`report()` harness as everywhere else. `src/app/api/seasons/[id]/players/route.test.ts`
+`test()`/`report()` shape (`test-support/miniTest.ts`, a thin wrapper over Vitest's `test()`) as
+everywhere else. `src/app/api/seasons/[id]/players/route.test.ts`
 is the reference example, covering `requireSeasonRosterAccess()`'s admin-vs-self permission branches
 and its `UPCOMING`-only status gate.
 
@@ -178,8 +179,8 @@ if the element carries a semantic color (win/loss) that should survive hover.
 
 - `npm run build` (type-checks + lints via the build)
 - `npm run lint`
-- `npm test` — runs every `*.test.ts` under `src` (zero-dependency `node:assert` runner via `tsx`,
-  no config). Three kinds: unit tests for pure invariants in `util.ts` (canonical sort, played-match
+- `npm test` — runs every `src/**/*.test.ts` file under Vitest (`vitest.config.mts`). Three kinds:
+  unit tests for pure invariants in `util.ts` (canonical sort, played-match
   check, score parsing, season pairing, `deriveRates`) — add a case in `src/lib/util.test.ts` if you
   touched any of those; the `src/lib/queries-*.test.ts` regression harness for
   `src/lib/queries/*.ts`, which snapshots every exported function's output against a shared fixture

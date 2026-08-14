@@ -3,7 +3,7 @@
  * demo-learned steam ids (the score-confirm path parses it back), so the builder and parser must
  * stay in lockstep — this locks that.
  *
- * Run:  npx tsx src/lib/parsers/rosterResolver.test.ts
+ * Run:  npx vitest run src/lib/parsers/rosterResolver.test.ts
  */
 
 import assert from 'node:assert/strict';

@@ -7,7 +7,7 @@
  * getMatchIdsForMap()/getAllPlayedMatchIds() exercise fetchAllPages() across a real >1000-row
  * PostgREST page boundary via the fixture's pagination filler on the `matches` table.
  *
- * Run:  npx tsx src/lib/queries-maps.test.ts
+ * Run:  npx vitest run src/lib/queries-maps.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -120,4 +120,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

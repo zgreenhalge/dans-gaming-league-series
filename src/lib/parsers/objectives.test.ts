@@ -3,7 +3,7 @@
  * liveRounds-gating pattern with every other collector, so a regression there (off-by-one, or
  * forgetting the gate) would silently misattribute every objective stat in the demo pipeline.
  *
- * Run:  npx tsx src/lib/parsers/objectives.test.ts
+ * Run:  npx vitest run src/lib/parsers/objectives.test.ts
  */
 
 import assert from 'node:assert/strict';

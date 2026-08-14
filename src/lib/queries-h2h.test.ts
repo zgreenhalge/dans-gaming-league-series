@@ -4,7 +4,7 @@
  * are pure (no Supabase) but live in queries.ts and move in the #63 split — exercised here against
  * getH2HData()'s real output rather than hand-built DuoStats/H2HStats fixtures.
  *
- * Run:  npx tsx src/lib/queries-h2h.test.ts
+ * Run:  npx vitest run src/lib/queries-h2h.test.ts
  */
 
 import { __setTestClient } from './supabase';
@@ -49,4 +49,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

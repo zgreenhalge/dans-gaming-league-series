@@ -8,7 +8,7 @@
  * implementation (test-support/reconcileGauntletDraftRpc.ts) gauntlet-engine.test.ts uses,
  * registered via createFakeSupabaseClient()'s rpcHandlers argument.
  *
- * Run:  npx tsx "src/app/api/seasons/[id]/gauntlet/pods/route.test.ts"
+ * Run:  npx vitest run "src/app/api/seasons/[id]/gauntlet/pods/route.test.ts"
  */
 
 import assert from 'node:assert/strict';
@@ -155,4 +155,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

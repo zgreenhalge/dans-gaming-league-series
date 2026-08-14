@@ -4,8 +4,8 @@
  * call sites (CareerStatsView, MapDetailView) that compute H2H directly from
  * already-loaded match history.
  *
- * No test framework — just `node:assert` and a tiny runner (mirrors util.test.ts):
- *   npx tsx src/lib/h2h.test.ts
+ * Assertions are plain `node:assert`, no matcher library (mirrors util.test.ts). Run:
+ *   npx vitest run src/lib/h2h.test.ts
  */
 
 import assert from 'node:assert/strict';

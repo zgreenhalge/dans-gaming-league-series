@@ -65,6 +65,28 @@ export async function getPlayersById(): Promise<Map<number, Player>> {
   return map;
 }
 
+/** Resolves a linked Discord user id (`players.discord_id`) to its player row — the "me" lookup
+ *  behind Discord slash commands (#396). `null` for an unlinked/unknown id. */
+export async function getPlayerByDiscordId(discordId: string): Promise<Player | null> {
+  const { data, error } = await supabase.from('players').select('*').eq('discord_id', discordId).maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as Player | null;
+}
+
+/** Case-insensitive exact name match — `players_name_lower_unique` guarantees at most one row, so
+ *  this is a lookup, not a search. Used by Discord slash commands (#396) resolving a typed player
+ *  name rather than an argument-less "me". Filters client-side over `getPlayersById()` rather than
+ *  a server-side `ilike`, same "the whole table is cheap" reasoning `getPlayersById()` itself
+ *  already relies on. */
+export async function findPlayerByName(name: string): Promise<Player | null> {
+  const target = name.toLowerCase();
+  const players = await getPlayersById();
+  for (const player of players.values()) {
+    if (player.name.toLowerCase() === target) return player;
+  }
+  return null;
+}
+
 export async function getPlayer(playerId: number): Promise<PlayerDetail | null> {
   const { data: player, error: pErr } = await supabase
     .from('players')

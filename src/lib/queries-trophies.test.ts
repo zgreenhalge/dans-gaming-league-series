@@ -4,7 +4,7 @@
  * "not archived, skip" branch for regular-season trophies — only the gauntlet trophy path (which
  * doesn't check season status) can produce entries against this fixture.
  *
- * Run:  npx tsx src/lib/queries-trophies.test.ts
+ * Run:  npx vitest run src/lib/queries-trophies.test.ts
  */
 
 import { __setTestClient } from './supabase';
@@ -25,4 +25,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

@@ -8,13 +8,14 @@
  *    (test-support/fakeSupabase.ts) backing both the anon client (`isPlayerAdmin()` reads through
  *    it) and the admin client (everything else in the route reads/writes through it)
  *
- * Run:  npx tsx src/app/api/seasons/[id]/players/route.test.ts
+ * Run:  npx vitest run src/app/api/seasons/[id]/players/route.test.ts
  */
 
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
+import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
 import { createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
@@ -98,39 +99,55 @@ async function main() {
   }
 
   // Cases that also assert the resulting `season_players` roster state, kept as individual tests.
+  // Each reaches the route's success path, which defers a discord-roles sync via afterBestEffort() —
+  // __setTestAfterMode(true)/__flushTestAfter() let that run deterministically under test instead of
+  // after() throwing (it requires a real Next.js request scope, which a directly-invoked handler
+  // never has — see after.ts).
   await test('POST — admin adds another player to the roster (201)', async () => {
+    __setTestAfterMode(true);
     const db = installFixture();
     __setTestSession(sessionFor(ADMIN_ID));
     const res = await call(POST, 'POST', UPCOMING_SEASON_ID, OTHER_PLAYER_ID);
+    await __flushTestAfter();
     assert.equal(res.status, 201);
     assert.deepEqual(
       seasonPlayersOf(db, UPCOMING_SEASON_ID).map((r) => r.player_id).sort(),
       [PLAYER_ID, OTHER_PLAYER_ID].sort(),
     );
+    __setTestAfterMode(false);
   });
 
   await test('POST — non-admin adds themselves to the roster (201)', async () => {
+    __setTestAfterMode(true);
     const db = installFixture();
     __setTestSession(sessionFor(OTHER_PLAYER_ID));
     const res = await call(POST, 'POST', UPCOMING_SEASON_ID, OTHER_PLAYER_ID);
+    await __flushTestAfter();
     assert.equal(res.status, 201);
     assert.ok(seasonPlayersOf(db, UPCOMING_SEASON_ID).some((r) => r.player_id === OTHER_PLAYER_ID));
+    __setTestAfterMode(false);
   });
 
   await test('DELETE — admin removes another player from the roster (200)', async () => {
+    __setTestAfterMode(true);
     const db = installFixture();
     __setTestSession(sessionFor(ADMIN_ID));
     const res = await call(DELETE, 'DELETE', UPCOMING_SEASON_ID, PLAYER_ID);
+    await __flushTestAfter();
     assert.equal(res.status, 200);
     assert.equal(seasonPlayersOf(db, UPCOMING_SEASON_ID).length, 0);
+    __setTestAfterMode(false);
   });
 
   await test('DELETE — non-admin removes themselves from the roster (200)', async () => {
+    __setTestAfterMode(true);
     const db = installFixture();
     __setTestSession(sessionFor(PLAYER_ID));
     const res = await call(DELETE, 'DELETE', UPCOMING_SEASON_ID, PLAYER_ID);
+    await __flushTestAfter();
     assert.equal(res.status, 200);
     assert.equal(seasonPlayersOf(db, UPCOMING_SEASON_ID).length, 0);
+    __setTestAfterMode(false);
   });
 
   await test('DELETE — non-admin removing a different player is rejected (403)', async () => {
@@ -147,4 +164,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

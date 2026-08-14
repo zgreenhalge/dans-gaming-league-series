@@ -4,7 +4,7 @@
  * branch that silently under/over-counts if it regresses, and the trade window boundary is an easy
  * off-by-one, so each gets a dedicated case.
  *
- * Run:  npx tsx src/lib/parsers/kast.test.ts
+ * Run:  npx vitest run src/lib/parsers/kast.test.ts
  */
 
 import assert from 'node:assert/strict';

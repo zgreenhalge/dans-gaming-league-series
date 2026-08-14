@@ -4,7 +4,7 @@
  * everyone else `is_admin: false`) as the admin-vs-non-admin fixture, wired as the anon client
  * `isPlayerAdmin()` reads through.
  *
- * Run:  npx tsx src/lib/admin-access.test.ts
+ * Run:  npx vitest run src/lib/admin-access.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -50,4 +50,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

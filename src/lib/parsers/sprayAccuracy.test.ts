@@ -2,7 +2,7 @@
  * Unit tests for collectSprayAccuracy — spray accuracy within sequences of 3+ rifle shots
  * (#173 phase 3.2).
  *
- * Run:  npx tsx src/lib/parsers/sprayAccuracy.test.ts
+ * Run:  npx vitest run src/lib/parsers/sprayAccuracy.test.ts
  */
 
 import assert from 'node:assert/strict';

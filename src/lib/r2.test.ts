@@ -4,7 +4,7 @@
  * list) stay integration-only, the same "extract and test the pure logic, leave IO-bound
  * orchestration untested" split used elsewhere in this repo (e.g. src/lib/dathost-retention.test.ts).
  *
- * Run:  npx tsx src/lib/r2.test.ts
+ * Run:  npx vitest run src/lib/r2.test.ts
  */
 
 import assert from 'node:assert/strict';

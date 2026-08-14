@@ -5,7 +5,7 @@
  * mismatched byte) and `machineSecretGuard()`'s three outcomes (secret not configured, provided
  * secret doesn't match, provided secret matches).
  *
- * Run:  npx tsx src/lib/machine-auth.test.ts
+ * Run:  npx vitest run src/lib/machine-auth.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -67,4 +67,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

@@ -50,6 +50,14 @@ Create `.env.local` at the repo root:
 | `NEXTAUTH_URL` | Full base URL, e.g. `http://localhost:3000` |
 | `NEXTAUTH_SECRET` | Secret for signing session tokens (any random string locally) |
 | `STEAM_API_KEY` | Steam Web API key — fetches player avatars/nicknames |
+| `DISCORD_CLIENT_ID` | Discord application client id — self-service Discord account linking (`/api/auth/discord/link`) |
+| `DISCORD_CLIENT_SECRET` | Discord application client secret — token exchange in `/api/auth/discord/callback`, server-side only |
+| `DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL` | Discord incoming webhook URL for the `#match-notifications` channel — server-live and final-score alerts (`src/lib/discord-notify.ts`). Omit to disable; every call site no-ops without it |
+| `DISCORD_PUBLIC_KEY` | Discord application public key — verifies incoming slash-command requests to `/api/discord/interactions` (`src/lib/discordInteractions.ts`) |
+| `DISCORD_APPLICATION_ID` | Discord application id — used only by `scripts/register-discord-commands.ts` to register/update the slash command definitions |
+| `DISCORD_BOT_TOKEN` | Discord bot token — grants/revokes `@Participants` (`src/lib/discord-roles.ts`, #397) and registers slash commands (`scripts/register-discord-commands.ts`); the interactions endpoint itself is verified by `DISCORD_PUBLIC_KEY`, not this token. Needs `Manage Roles` (and, once #398 lands, thread/event permissions), with the bot's own role positioned above `@Participants` in the server's role hierarchy |
+| `DISCORD_GUILD_ID` | The DGLS Discord server's id — scopes the `@Participants` role-sync API calls to the right guild |
+| `DISCORD_PARTICIPANTS_ROLE_ID` | The `@Participants` role's id — what `src/lib/discord-roles.ts` grants/revokes |
 | `CRON_SECRET` | Bearer token checked by the Vercel cron endpoint |
 | `CLOUDFLARE_R2_ACCOUNT_ID` | Cloudflare R2 account ID (demo uploads) |
 | `CLOUDFLARE_R2_ACCESS_KEY_ID` | Cloudflare R2 access key (demo uploads) |

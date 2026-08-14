@@ -9,7 +9,7 @@
  * this test doesn't mock the DatHost call, it only asserts the failure is captured via
  * provisionErrorHandler()'s recordOpsError(), the same as veto/route.test.ts's auto-provision case.
  *
- * Run:  npx tsx "src/app/api/matches/[id]/server/provision/route.test.ts"
+ * Run:  npx vitest run "src/app/api/matches/[id]/server/provision/route.test.ts"
  */
 
 import assert from 'node:assert/strict';
@@ -121,4 +121,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

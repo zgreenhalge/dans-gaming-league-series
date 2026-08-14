@@ -1,7 +1,7 @@
 /**
  * Unit tests for collectAccuracy — raw accuracy / head accuracy (#173 phase 3.3).
  *
- * Run:  npx tsx src/lib/parsers/accuracy.test.ts
+ * Run:  npx vitest run src/lib/parsers/accuracy.test.ts
  */
 
 import assert from 'node:assert/strict';

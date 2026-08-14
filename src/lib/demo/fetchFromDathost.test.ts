@@ -6,7 +6,7 @@
  * when `map_result` actually fired, the fact `ensureDemoInR2` now bases its wait on instead of trusting
  * a caller's "this dispatch was manual" assertion.
  *
- * Run:  npx tsx src/lib/demo/fetchFromDathost.test.ts
+ * Run:  npx vitest run src/lib/demo/fetchFromDathost.test.ts
  */
 
 import assert from 'node:assert/strict';

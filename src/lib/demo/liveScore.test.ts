@@ -5,7 +5,7 @@
  * covered here — it wraps `ensureDemoInR2()`'s real DatHost/R2 IO, out of scope per
  * `docs/patterns.md`'s "test external IO by extracting the logic around it" convention.
  *
- * Run:  npx tsx src/lib/demo/liveScore.test.ts
+ * Run:  npx vitest run src/lib/demo/liveScore.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -131,4 +131,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

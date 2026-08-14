@@ -4,7 +4,7 @@
  * showing Infinity — that's the behavior worth locking down, since a new player row with 0 matches
  * played is a real, common case (not an edge case).
  *
- * Run:  npx tsx src/lib/stats.test.ts
+ * Run:  npx vitest run src/lib/stats.test.ts
  */
 
 import assert from 'node:assert/strict';

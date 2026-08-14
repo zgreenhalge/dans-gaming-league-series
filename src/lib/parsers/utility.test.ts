@@ -7,7 +7,7 @@
  * threshold (1.1s) gates enemies_flashed/flash_assists but not blind_duration_dealt, which stays
  * a raw, ungated exposure measure.
  *
- * Run:  npx tsx src/lib/parsers/utility.test.ts
+ * Run:  npx vitest run src/lib/parsers/utility.test.ts
  */
 
 import assert from 'node:assert/strict';

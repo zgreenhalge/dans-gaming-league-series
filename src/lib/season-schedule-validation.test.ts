@@ -1,10 +1,10 @@
 /**
  * Correctness proof for validateDraftIntegrity()/validateDraftCompleteness(). Ties back to the
  * generator's own guarantees (a fresh buildRosterSchedule() output must always pass both checks)
- * and exercises each integrity violation and completeness gap individually. No test framework —
- * node:assert + a tiny runner, matching season-schedule.test.ts.
+ * and exercises each integrity violation and completeness gap individually. Assertions are plain
+ * node:assert, no matcher library — matching season-schedule.test.ts.
  *
- * Run:  npx tsx src/lib/season-schedule-validation.test.ts
+ * Run:  npx vitest run src/lib/season-schedule-validation.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -183,4 +183,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

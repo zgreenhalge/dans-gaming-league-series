@@ -2,7 +2,7 @@
  * Unit tests for playerClaim.ts — the signed claim-link tokens that replaced self-declared
  * `existingPlayerId` linking (#322) in the player registration flow.
  *
- * Run:  npx tsx src/lib/playerClaim.test.ts
+ * Run:  npx vitest run src/lib/playerClaim.test.ts
  */
 
 import assert from 'node:assert/strict';

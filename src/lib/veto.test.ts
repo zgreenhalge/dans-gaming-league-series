@@ -4,7 +4,7 @@
  * starting side) need their own case, plus that a partial set of fields in either shape isn't
  * mistaken for complete.
  *
- * Run:  npx tsx src/lib/veto.test.ts
+ * Run:  npx vitest run src/lib/veto.test.ts
  */
 
 import assert from 'node:assert/strict';

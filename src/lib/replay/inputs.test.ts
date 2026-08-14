@@ -4,7 +4,7 @@
  * path and the `replay-extract` Action. Against `fakeSupabase.ts`, exercising the
  * `matches -> weeks -> seasons` embed chain and the `shirts_pick`/`picked_map` map fallback.
  *
- * Run:  npx tsx src/lib/replay/inputs.test.ts
+ * Run:  npx vitest run src/lib/replay/inputs.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -95,4 +95,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

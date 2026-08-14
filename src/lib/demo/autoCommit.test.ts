@@ -3,7 +3,7 @@
  * must hold for a match to skip the human Confirm step, so this locks each gate individually (in
  * the order the function checks them) plus the fully-eligible pass case.
  *
- * Run:  npx tsx src/lib/demo/autoCommit.test.ts
+ * Run:  npx vitest run src/lib/demo/autoCommit.test.ts
  */
 
 import assert from 'node:assert/strict';

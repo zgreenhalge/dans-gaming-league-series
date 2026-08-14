@@ -3,8 +3,8 @@
  * ranking for a completed gauntlet, rendered by `GauntletStandings`'s podium and passed as
  * `canonicalRanking` to `LeaderboardTable` on gauntlet season pages.
  *
- * No test framework — just `node:assert` and a tiny runner (mirrors util.test.ts):
- *   npx tsx src/lib/gauntlet-ranking.test.ts
+ * Assertions are plain `node:assert`, no matcher library (mirrors util.test.ts). Run:
+ *   npx vitest run src/lib/gauntlet-ranking.test.ts
  */
 
 import assert from 'node:assert/strict';
