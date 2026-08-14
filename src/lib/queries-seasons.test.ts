@@ -16,7 +16,7 @@ import { matchesSnapshot } from './test-support/snapshot';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getSeasons, getSeason, getLinkedGauntlet, getLinkedRegularSeason, getSeasonRoster } from './queries';
+import { getSeasons, getSeason, getLinkedGauntlet, getLinkedRegularSeason, getSeasonRoster, getActiveRegularSeason } from './queries';
 import { test, report } from './test-support/miniTest';
 
 async function main() {
@@ -58,6 +58,13 @@ async function main() {
 
   await test('getSeasonRoster(1) — orphan row (player_id missing from playersById) is skipped', async () => {
     assert.deepEqual(await getSeasonRoster(1), []);
+  });
+
+  await test('getActiveRegularSeason() — the fixture\'s one ACTIVE non-gauntlet season', async () => {
+    const season = await getActiveRegularSeason();
+    assert.equal(season?.id, 3);
+    assert.equal(season?.is_gauntlet, false);
+    assert.equal(season?.status, 'ACTIVE');
   });
 
   report();

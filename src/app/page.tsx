@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
-import { getSeasons, getAllLeaderboards, getSeasonSchedule } from '@/lib/queries';
+import { getSeasons, getAllLeaderboards, getSeasonSchedule, findCurrentWeek } from '@/lib/queries';
 import type { MatchWithRoster, WeekWithMatches } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
 import { TopbarShell } from '@/components/TopbarShell';
@@ -10,40 +10,6 @@ import { NextUpPanel } from '@/components/NextUpPanel';
 import { NextWeekPanel } from '@/components/NextWeekPanel';
 
 export const dynamic = 'force-dynamic';
-
-function weekWindowMs(startDate: string, weekNumber: number): { start: number; end: number } {
-  const [y, m, d] = startDate.split('-').map(Number);
-  const base = Date.UTC(y, m - 1, d);
-  return {
-    start: base + (weekNumber - 1) * 7 * 86_400_000,
-    end: base + ((weekNumber - 1) * 7 + 6) * 86_400_000 + 86_399_999,
-  };
-}
-
-function findCurrentWeek(schedule: WeekWithMatches[], startDate: string | null): WeekWithMatches | null {
-  if (schedule.length === 0) return null;
-
-  if (startDate) {
-    const now = Date.now();
-    // Week whose window contains today
-    const current = schedule.find((w) => {
-      const win = weekWindowMs(startDate, w.week_number);
-      return now >= win.start && now <= win.end;
-    });
-    if (current) return current;
-    // Today is before the first week or between weeks — return the next upcoming week
-    const next = schedule.find((w) => {
-      const win = weekWindowMs(startDate, w.week_number);
-      return now < win.start;
-    });
-    if (next) return next;
-    // All week windows are past — return the last week
-    return schedule[schedule.length - 1];
-  }
-
-  // No start_date: fall back to first week with any matches
-  return schedule[0];
-}
 
 function HomeTopbar() {
   return <TopbarShell crumbs={[{ label: 'DGLS' }]} />;
