@@ -342,10 +342,15 @@ every linked (`discord_id` set) player on the roster — a catch-up pass coverin
 Discord after already being added, since `POST /api/seasons/[id]/players`'s own per-player grant
 (see below) would have been a no-op at that time. `checkSeasonCompletion()` best-effort revokes it
 from the same roster once the season is `COMPLETED` — the role tracks the *current* season's
-participants, not a career badge. Both go through `src/lib/discord-roles.ts`, which no-ops
-unconditionally (no error, no throw) when `DISCORD_BOT_TOKEN`/`DISCORD_GUILD_ID`/
-`DISCORD_PARTICIPANTS_ROLE_ID` aren't all set, or when a given player has no linked `discord_id` — a
-real Discord API failure is recorded to `ops_errors` (`discord_role_sync`), see below.
+participants, not a career badge. `syncParticipantRoleForPlayer()` covers the other trigger — a
+player linking Discord after already being rostered — by granting the role right away if they're on
+the active roster; it's called from the OAuth callback and the admin override's link path. The role
+is always driven by roster membership: unlinking Discord never revokes it, since a player can be
+rostered and participating without ever linking their account. Everything here goes through
+`src/lib/discord-roles.ts`, which no-ops unconditionally (no error, no throw) when
+`DISCORD_BOT_TOKEN`/`DISCORD_GUILD_ID`/`DISCORD_PARTICIPANTS_ROLE_ID` aren't all set, or when a given
+player has no linked `discord_id` — a real Discord API failure is recorded to `ops_errors`
+(`discord_role_sync`), see below.
 
 #### Surfacing best-effort failures (`ops_errors`)
 

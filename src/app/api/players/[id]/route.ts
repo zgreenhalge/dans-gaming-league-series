@@ -3,7 +3,7 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { recordNameChange, recordNameHistoryLogError, renameFields } from '@/lib/player-name-history';
 import { isDiscordIdTaken } from '@/lib/discord-link';
-import { revokeParticipantRole, syncParticipantRoleForPlayer } from '@/lib/discord-roles';
+import { syncParticipantRoleForPlayer } from '@/lib/discord-roles';
 import { afterBestEffort } from '@/lib/after';
 import type { Database } from '@/lib/database.types';
 
@@ -47,9 +47,6 @@ export async function PATCH(
 
   const update: PlayerUpdate = {};
   let renamedFrom: string | null = null;
-  // Set only when unlinking (discord_id -> null) -- the prior id, since revokeParticipantRole()
-  // needs it and there's nothing left to revoke against once the column is cleared.
-  let discordIdToRevoke: string | null = null;
 
   // Display name
   if ('name' in body) {
@@ -130,10 +127,9 @@ export async function PATCH(
   // Discord link (#394). `null` unlinks; a snowflake id links by hand — the same admin-override
   // path steam_id above has, for a player who can't complete the self-service OAuth flow
   // themselves. No cached nickname/avatar to clear here (unlike Steam), since none is stored.
+  // Unlinking never touches @Participants -- see players/me/discord/route.ts's comment.
   if ('discord_id' in body) {
     if (body.discord_id === null) {
-      const { data: existing } = await supabaseAdmin.from('players').select('discord_id').eq('id', targetId).maybeSingle();
-      discordIdToRevoke = (existing as { discord_id: string | null } | null)?.discord_id ?? null;
       update.discord_id = null;
     } else if (typeof body.discord_id === 'string' && DISCORD_ID_RE.test(body.discord_id)) {
       let taken: boolean;
@@ -192,13 +188,10 @@ export async function PATCH(
     await recordNameChange(supabaseAdmin, targetId, renamedFrom, (data as { name: string }).name);
   }
 
-  // @Participants sync for the discord_id change just committed -- see discordIdToRevoke's own
-  // comment for why unlink needs the id captured before the update, not read back from `data`.
-  if (discordIdToRevoke) {
-    afterBestEffort(`discord-roles: revoke @Participants from admin-unlinked player ${targetId}`, () =>
-      revokeParticipantRole(supabaseAdmin, targetId, discordIdToRevoke),
-    );
-  } else if ('discord_id' in body && body.discord_id !== null) {
+  // @Participants sync for a newly-linked discord_id -- grants right away if this player is already
+  // on the active roster, same reasoning as the OAuth callback's own call. Unlinking is deliberately
+  // not handled here; see players/me/discord/route.ts's comment.
+  if ('discord_id' in body && body.discord_id !== null) {
     afterBestEffort(`discord-roles: sync @Participants for admin-linked player ${targetId}`, () =>
       syncParticipantRoleForPlayer(supabaseAdmin, targetId, (data as { discord_id: string | null }).discord_id),
     );

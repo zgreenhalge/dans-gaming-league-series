@@ -80,14 +80,13 @@ export async function revokeParticipantRoleFromRoster(supabaseAdmin: SupabaseCli
 
 /** Reconciles one player's @Participants membership against whether they're on the current ACTIVE
  *  regular season's roster right now. The functions above are all roster-event-driven (grant/revoke
- *  fires when *roster membership* changes); this is the other half of the same invariant
- *  (`should have @Participants` = linked AND on the active roster) for when *link status* changes
- *  instead — a player linking Discord after already being rostered, for instance, would otherwise
- *  never get the role until some later roster event happened to touch them. Call this after writing
- *  a new (non-null) `discord_id` — self-service OAuth link or an admin override. No-op if `discordId`
- *  is null (nothing to grant, and nothing to revoke against once it's already cleared — a caller
- *  unlinking should call `revokeParticipantRole()` directly with the *prior* id before clearing it,
- *  not this). */
+ *  fires when *roster membership* changes); this covers the other direction — a player linking
+ *  Discord after already being rostered, who would otherwise never get the role until some later
+ *  roster event happened to touch them. Call this after writing a new (non-null) `discord_id` —
+ *  self-service OAuth link or an admin override. Deliberately one-directional: unlinking Discord
+ *  never revokes the role, since roster membership (not having a linked account) is what makes a
+ *  player a participant — a player can be rostered and active without ever linking Discord. No-op if
+ *  `discordId` is null. */
 export async function syncParticipantRoleForPlayer(
   supabaseAdmin: SupabaseClient,
   playerId: number,
