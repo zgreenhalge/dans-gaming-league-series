@@ -8,6 +8,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
 import { createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
@@ -25,6 +26,11 @@ function freshDb(): { db: FakeDb; client: ReturnType<typeof createFakeSupabaseCl
   const db = buildFakeDb();
   const client = createFakeSupabaseClient(db);
   __setTestAdminClient(client);
+  // A successful link's afterBestEffort hook calls syncParticipantRoleForPlayer(), which reads
+  // getActiveRegularSeason()/getSeasonRoster() through the query layer's own anon-client singleton,
+  // not the admin client above -- both need to point at the same fake db, or that call falls through
+  // to a real network request.
+  __setTestClient(client);
   return { db, client };
 }
 
@@ -129,6 +135,7 @@ async function main() {
   });
 
   __setTestAdminClient(undefined);
+  __setTestClient(undefined);
   report();
 }
 
