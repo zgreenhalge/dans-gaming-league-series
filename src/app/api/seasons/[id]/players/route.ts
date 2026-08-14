@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const discordId = (player as { discord_id: string | null }).discord_id;
   afterBestEffort(`discord-roles: grant @Participants to player ${access.targetPlayerId}`, () =>
-    grantParticipantRole(discordId),
+    grantParticipantRole(access.supabaseAdmin, access.targetPlayerId, discordId),
   );
 
   return NextResponse.json({ ok: true }, { status: 201 });
@@ -61,7 +61,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const discordId = (player as { discord_id: string | null } | null)?.discord_id ?? null;
   afterBestEffort(`discord-roles: revoke @Participants from player ${access.targetPlayerId}`, () =>
-    revokeParticipantRole(discordId),
+    revokeParticipantRole(access.supabaseAdmin, access.targetPlayerId, discordId),
   );
 
   return NextResponse.json({ ok: true });

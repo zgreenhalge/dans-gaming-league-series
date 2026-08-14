@@ -128,7 +128,7 @@ export async function PATCH(
   // re-post a "Final:" announcement for the same match.
   if (!alreadyPlayed) {
     afterBestEffort(`discord-notify: score reported for match ${matchId}`, () =>
-      notifyMatchScoreReported(matchId),
+      notifyMatchScoreReported(supabaseAdmin, matchId),
     );
   }
 

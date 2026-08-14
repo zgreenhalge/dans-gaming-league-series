@@ -45,7 +45,7 @@ export async function activateSeason(supabaseAdmin: SupabaseClient, seasonId: nu
   // hiccup on this best-effort step can never block the activation this function exists to do.
   try {
     const roster = await getSeasonRoster(seasonId);
-    await grantParticipantRoleToRoster(roster.map((r) => r.discord_id));
+    await grantParticipantRoleToRoster(supabaseAdmin, roster);
   } catch (err) {
     console.error(`@Participants catch-up grant(season ${seasonId}) failed:`, err);
   }
@@ -101,7 +101,7 @@ export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seaso
   // best-effort/never-blocks-the-transition reasoning as the catch-up grant in activateSeason().
   try {
     const roster = await getSeasonRoster(seasonId);
-    await revokeParticipantRoleFromRoster(roster.map((r) => r.discord_id));
+    await revokeParticipantRoleFromRoster(supabaseAdmin, roster);
   } catch (err) {
     console.error(`@Participants revoke(season ${seasonId}) failed:`, err);
   }

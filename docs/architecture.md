@@ -46,7 +46,7 @@ Once linked, `session.user.playerId` is set. Admin players (`players.is_admin = 
 
 **Development shortcut:** When `NODE_ENV=development`, two mock login providers (`dev-zach-mock` / `dev-dan-mock`) appear that skip Steam auth entirely and sign you in as a known player. No `STEAM_API_KEY` needed locally.
 
-**Discord account linking** is a separate, self-service flow from Steam sign-in — it links an already-authenticated player's Discord user id (`players.discord_id`) rather than establishing the session itself, and never touches the session or JWT. `GET /api/auth/discord/link` (session-gated) redirects to Discord's OAuth2 consent screen with a signed `state` param (`signDiscordLinkState()`/`verifyDiscordLinkState()`, `src/lib/discordLinkState.ts`, same HMAC-signed-token shape as `playerClaim.ts`) naming the calling player; `GET /api/auth/discord/callback` verifies it, exchanges the code, reads the Discord user id via `/users/@me`, and writes `discord_id` — refusing if that id is already linked to a different player. `DELETE /api/players/me/discord` is the self-service unlink (mirrors `PATCH /api/players/me/name`'s auth pattern); `PATCH /api/players/[id]` also accepts `discord_id` as an admin override (`null` unlinks, a 17–20 digit snowflake links by hand), the same shape as its existing `steam_id` handling. `DiscordLinkButton.tsx`, shown only on a player's own profile, is the UI for both halves.
+**Discord account linking** is a separate, self-service flow from Steam sign-in — it links an already-authenticated player's Discord user id (`players.discord_id`) rather than establishing the session itself, and never touches the session or JWT. `GET /api/auth/discord/link` (session-gated) redirects to Discord's OAuth2 consent screen with a signed `state` param (`signDiscordLinkState()`/`verifyDiscordLinkState()`, `src/lib/discordLinkState.ts`, same HMAC-signed-token shape as `playerClaim.ts`) naming the calling player; `GET /api/auth/discord/callback` verifies it, exchanges the code, reads the Discord user id via `/users/@me`, and writes `discord_id` — refusing if that id is already linked to a different player. A genuine failure there (as opposed to the player simply declining consent) is recorded to `ops_errors` (`discord_link`) — see "Surfacing best-effort failures" below. `DELETE /api/players/me/discord` is the self-service unlink (mirrors `PATCH /api/players/me/name`'s auth pattern); `PATCH /api/players/[id]` also accepts `discord_id` as an admin override (`null` unlinks, a 17–20 digit snowflake links by hand), the same shape as its existing `steam_id` handling. `DiscordLinkButton.tsx`, shown only on a player's own profile, is the UI for both halves.
 
 **Access-control gates:** session-scoped mutation routes (not `/admin/**` pages, which the layout above covers) delegate to one small dedicated gate file per access shape rather than reimplementing the check inline — `admin-access.ts` (admin-only), `match-access.ts` (admin-or-in-match), `season-roster-access.ts` (admin-or-self). All three return the shared `AccessResult<T>` discriminated union (`src/lib/access-control.ts`): `{ ok: true, ...T }` or `{ ok: false, status, error }`, so a caller's `if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status })` works identically regardless of which gate it called. A new permission tier (e.g. a "season commissioner" role) should get its own gate file returning `AccessResult<...>` rather than a bespoke shape. `machine-auth.ts` (shared-secret routes called by the game server, not a browser session) is deliberately not part of this family — see its own docstring.
 
@@ -344,7 +344,8 @@ Discord after already being added, since `POST /api/seasons/[id]/players`'s own 
 from the same roster once the season is `COMPLETED` — the role tracks the *current* season's
 participants, not a career badge. Both go through `src/lib/discord-roles.ts`, which no-ops
 unconditionally (no error, no throw) when `DISCORD_BOT_TOKEN`/`DISCORD_GUILD_ID`/
-`DISCORD_PARTICIPANTS_ROLE_ID` aren't all set, or when a given player has no linked `discord_id`.
+`DISCORD_PARTICIPANTS_ROLE_ID` aren't all set, or when a given player has no linked `discord_id` — a
+real Discord API failure is recorded to `ops_errors` (`discord_role_sync`), see below.
 
 #### Surfacing best-effort failures (`ops_errors`)
 
@@ -365,7 +366,7 @@ NULL`; `getOpsErrorHistory()` reads every row from the last 8 weeks regardless o
 grouped into a flat `(operation, week)` failure count, for the admin console's Activity → History
 tab.
 
-Wired into eighteen operations today:
+Wired into twenty-one operations today:
 
 | Operation | Entity | Recorded from |
 |---|---|---|
@@ -387,6 +388,9 @@ Wired into eighteen operations today:
 | `schedule_generate_cleanup` | `season` (regular) | `generateSeasonScheduleDraft()`'s compensating cleanup, if that cleanup itself fails |
 | `schedule_confirm` | `season` (regular) | `confirmSeasonScheduleDraft()`'s (`season-schedule-draft-engine.ts`) mid-loop failure, before the compensating cleanup runs |
 | `schedule_confirm_cleanup` | `season` (regular) | `confirmSeasonScheduleDraft()`'s compensating cleanup, if that cleanup itself fails |
+| `discord_notify` | `match` | `notifyMatchServerLive()`/`notifyMatchScoreReported()` (`discord-notify.ts`, #395) — a real webhook failure, not just the channel being unconfigured |
+| `discord_role_sync` | `player` | `discord-roles.ts` (#397)'s `setGuildMemberRole()` — a real Discord API failure, not just the role sync being unconfigured or the player having no `discord_id` |
+| `discord_link` | `player`, or `system` (id `0`) for a config failure | `GET /api/auth/discord/callback` (#394) — a genuine failure (bad response from Discord, an unhandled exception, missing `DISCORD_CLIENT_ID`/`SECRET`), not the expected "denied"/"taken" outcomes, which redirect the one affected player but aren't logged |
 
 Each is cleared automatically the next time that same (entity, operation) succeeds —
 `tryBuildGauntletShape()` and `trySeedGauntlet()` clear their own on success, `checkGauntletCompletion()`

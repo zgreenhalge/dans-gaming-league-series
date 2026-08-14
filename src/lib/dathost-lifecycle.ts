@@ -344,7 +344,7 @@ export async function provisionMatchServer(
     // Both callers of provisionMatchServer() already run it inside afterBestEffort() themselves,
     // so this never adds latency to the HTTP response it's ultimately deferred from — safe to await
     // inline. notifyMatchServerLive() never throws (self-contained best-effort).
-    await notifyMatchServerLive(matchId);
+    await notifyMatchServerLive(supabaseAdmin, matchId);
     return { connect, serverId };
   } catch (err) {
     await setServerState(supabaseAdmin, matchId, { server_state: 'failed' }).catch(() => {});
