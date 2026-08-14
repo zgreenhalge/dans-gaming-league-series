@@ -117,19 +117,27 @@ export default async function PlayerPage({
                 Formerly {[...nameHistory].reverse().map((h) => h.old_name).join(', ')}
               </div>
             )}
-            {detail.player.steam_id && detail.player.steam_nickname && (
-              <Link
-                href={`https://steamcommunity.com/profiles/${detail.player.steam_id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-mono text-[12px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-              >
-                {detail.player.steam_nickname} ↗
-              </Link>
-            )}
-            {isSelf && (
-              <div className="mt-1">
-                <DiscordLinkButton linked={!!detail.player.discord_id} feedback={discordFeedback} />
+            {((detail.player.steam_id && detail.player.steam_nickname) || isSelf) && (
+              <div className="mt-1 flex items-center gap-2 flex-wrap font-mono text-[12px]">
+                <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Connected:</span>
+                {detail.player.steam_id && detail.player.steam_nickname && (
+                  <Link
+                    href={`https://steamcommunity.com/profiles/${detail.player.steam_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+                  >
+                    {detail.player.steam_nickname} ↗
+                  </Link>
+                )}
+                {isSelf && (
+                  <>
+                    {detail.player.steam_id && detail.player.steam_nickname && (
+                      <span className="text-[var(--color-border-primary)] select-none">·</span>
+                    )}
+                    <DiscordLinkButton linked={!!detail.player.discord_id} feedback={discordFeedback} />
+                  </>
+                )}
               </div>
             )}
           </div>
