@@ -4,8 +4,8 @@
  * rounds. buildSeasonSchedule(): every pair must additionally play as opponents at least once,
  * every week has at most one bye, doubleheaderPolicy 'never' throws exactly when a whole team
  * would otherwise be left over, and each seed's shirts/skins split stays within a loose empirical
- * bound — for every roster size the league supports (7-19) plus a wider band for confidence. No
- * test framework — node:assert + a tiny runner, matching gauntlet-bracket.test.ts / util.test.ts.
+ * bound — for every roster size the league supports (7-19) plus a wider band for confidence.
+ * Assertions are plain node:assert, no matcher library — matching gauntlet-bracket.test.ts / util.test.ts.
  *
  * Run:  npx vitest run src/lib/season-schedule.test.ts
  */

@@ -5,7 +5,7 @@
  * the invariants: y-flip, aspect-preserved auto-fit, the calibrated radar transform,
  * frame interpolation, angular wrap, and the event/grenade time windows.
  *
- * Run (mirrors util.test.ts — no framework, just node:assert):
+ * Assertions are plain node:assert, no matcher library (mirrors util.test.ts). Run:
  *   npx vitest run src/lib/replay/replay.test.ts
  */
 
