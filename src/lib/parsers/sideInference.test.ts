@@ -4,7 +4,7 @@
  * needing a real demo. Real demos are validated separately via the parity harness (the
  * inferred side must equal each stored `skins_starting_side`).
  *
- * Run:  npx tsx src/lib/parsers/sideInference.test.ts
+ * Run:  npx vitest run src/lib/parsers/sideInference.test.ts
  */
 
 import assert from 'node:assert/strict';

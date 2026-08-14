@@ -3,7 +3,7 @@
  * residueAgeDays, the pure file-naming and age-math logic behind scripts/dathost-cleanup.ts. The
  * script's own IO (DatHost file listing, R2 HEAD checks, Supabase reads) stays integration-only.
  *
- * Run:  npx tsx src/lib/dathost-retention.test.ts
+ * Run:  npx vitest run src/lib/dathost-retention.test.ts
  */
 
 import assert from 'node:assert/strict';

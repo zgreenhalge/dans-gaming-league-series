@@ -6,7 +6,7 @@
  * waiting for the still-in-flight 'running' upsert, which could then land afterward and silently
  * overwrite the failure back to a stuck "running" row forever.
  *
- * Run:  npx tsx src/lib/ehog-recompute.test.ts
+ * Run:  npx vitest run src/lib/ehog-recompute.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -105,6 +105,6 @@ async function main() {
   report();
 }
 
-main().finally(() => {
+await main().finally(() => {
   process.env.RECOMPUTE_SECRET = ORIGINAL_SECRET;
 });

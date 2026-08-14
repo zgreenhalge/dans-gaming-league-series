@@ -6,7 +6,7 @@
  * `requireMatchAccess()` reads `players`/`player_match_stats` via `getAdminClient()` directly rather
  * than `isPlayerAdmin()`.
  *
- * Run:  npx tsx src/lib/match-access.test.ts
+ * Run:  npx vitest run src/lib/match-access.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -68,4 +68,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

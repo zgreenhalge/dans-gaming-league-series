@@ -2,7 +2,7 @@
  * Regression harness for queries.ts's match-detail functions (#63) — getMatch,
  * getMatchSabremetrics, getMatchScoutingData.
  *
- * Run:  npx tsx src/lib/queries-match-detail.test.ts
+ * Run:  npx vitest run src/lib/queries-match-detail.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -56,4 +56,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

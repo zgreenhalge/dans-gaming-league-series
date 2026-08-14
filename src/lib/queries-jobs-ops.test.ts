@@ -3,7 +3,7 @@
  * getOpsErrors. getOpsErrors exercises the fake client's embedded-select resolution again (a
  * second, independent call site from getAdminMatches/getOtherScheduledMatches).
  *
- * Run:  npx tsx src/lib/queries-jobs-ops.test.ts
+ * Run:  npx vitest run src/lib/queries-jobs-ops.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -36,4 +36,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

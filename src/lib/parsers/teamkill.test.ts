@@ -2,7 +2,7 @@
  * Unit tests for collectTeamkill — teamkills committed, credited to the attacker. A same-side
  * death is a teamkill; a cross-side death is a normal kill and must not count.
  *
- * Run:  npx tsx src/lib/parsers/teamkill.test.ts
+ * Run:  npx vitest run src/lib/parsers/teamkill.test.ts
  */
 
 import assert from 'node:assert/strict';

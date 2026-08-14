@@ -4,7 +4,7 @@
  * attributed to the same attacker (a teamkill of one enemy by someone else shouldn't count toward
  * this player's 2K).
  *
- * Run:  npx tsx src/lib/parsers/multikill.test.ts
+ * Run:  npx vitest run src/lib/parsers/multikill.test.ts
  */
 
 import assert from 'node:assert/strict';

@@ -10,7 +10,7 @@
  * not `supabaseAdmin`) must point at the same fake db — hence wiring both `__setTestClient()` and
  * passing the fake as `supabaseAdmin` in every test below.
  *
- * Run:  npx tsx src/lib/season-lifecycle.test.ts
+ * Run:  npx vitest run src/lib/season-lifecycle.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -252,4 +252,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

@@ -2,7 +2,7 @@
  * Unit tests for hmacSign.ts — the shared HMAC signer/verifier behind the Steam login handoff
  * token (authOptions.js, api/auth/steam/callback) and player claim links (playerClaim.ts).
  *
- * Run:  npx tsx src/lib/hmacSign.test.ts
+ * Run:  npx vitest run src/lib/hmacSign.test.ts
  */
 
 import assert from 'node:assert/strict';

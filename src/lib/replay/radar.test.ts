@@ -4,8 +4,8 @@
  * radar (wrong offset/scale) or fails to find the workshop item, so lock the format
  * handling down.
  *
- * Run (mirrors util.test.ts — no framework, just node:assert):
- *   npx tsx src/lib/replay/radar.test.ts
+ * Assertions are plain node:assert, no matcher library (mirrors util.test.ts). Run:
+ *   npx vitest run src/lib/replay/radar.test.ts
  */
 
 import assert from 'node:assert/strict';

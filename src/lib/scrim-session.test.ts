@@ -6,7 +6,7 @@
  * a 23505 error — see fakeSupabase.ts's header comment for why that's the one constraint this fake
  * emulates.
  *
- * Run:  npx tsx src/lib/scrim-session.test.ts
+ * Run:  npx vitest run src/lib/scrim-session.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -144,4 +144,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

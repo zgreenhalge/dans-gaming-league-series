@@ -6,7 +6,7 @@
  * scripts/match-context.ts with a stale Utility+ formula and different zero-denominator
  * fallbacks); it now lives here as the one implementation both consume.
  *
- * Run:  npx tsx src/lib/queries-sabremetrics.test.ts
+ * Run:  npx vitest run src/lib/queries-sabremetrics.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -176,4 +176,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

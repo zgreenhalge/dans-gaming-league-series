@@ -3,9 +3,9 @@
  * getLinkedGauntlet, getLinkedRegularSeason. Golden-master snapshots against the shared fixture
  * (test-support/fixtures.ts) prove the eventual file split changes nothing.
  *
- * Run:  npx tsx src/lib/queries-seasons.test.ts
+ * Run:  npx vitest run src/lib/queries-seasons.test.ts
  * Regenerate snapshots (only after reviewing a deliberate change):
- *   UPDATE_SNAPSHOTS=1 npx tsx src/lib/queries-seasons.test.ts
+ *   UPDATE_SNAPSHOTS=1 npx vitest run src/lib/queries-seasons.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -63,4 +63,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

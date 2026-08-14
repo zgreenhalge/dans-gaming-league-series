@@ -13,7 +13,7 @@
  * provisionMatchServer()/teardownMatchServer()'s actual network-touching happy paths are left
  * untested here (already indirectly covered by the route tests' failure-path assertions).
  *
- * Run:  npx tsx src/lib/dathost-lifecycle.test.ts
+ * Run:  npx vitest run src/lib/dathost-lifecycle.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -351,4 +351,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

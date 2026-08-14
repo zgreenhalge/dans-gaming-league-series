@@ -3,7 +3,7 @@
  * getGauntletSeasonLeaderboard, getGauntletPodForMatch, getGauntletBracketShape,
  * getGauntletRounds, getAllGauntletSummaries.
  *
- * Run:  npx tsx src/lib/queries-gauntlet.test.ts
+ * Run:  npx vitest run src/lib/queries-gauntlet.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -93,4 +93,4 @@ async function main() {
   report();
 }
 
-main();
+await main();

@@ -3,7 +3,7 @@
  * getAllEconomyStats. Exercises the player_match_stats -> matches -> weeks -> seasons join and
  * the season_id filter against the fixture DB's match-100 rows (week 10 -> season 1).
  *
- * Run:  npx tsx src/lib/queries-weaponStats.test.ts
+ * Run:  npx vitest run src/lib/queries-weaponStats.test.ts
  */
 
 import assert from 'node:assert/strict';
@@ -48,4 +48,4 @@ async function main() {
   report();
 }
 
-main();
+await main();
