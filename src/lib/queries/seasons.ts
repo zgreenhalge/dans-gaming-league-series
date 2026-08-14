@@ -7,6 +7,7 @@ export interface SeasonRosterEntry {
   player_id: number;
   player_name: string;
   steam_avatar_url: string | null;
+  discord_id: string | null;
 }
 
 export async function getSeasons(): Promise<Season[]> {
@@ -80,6 +81,7 @@ export async function getSeasonRoster(seasonId: number, playersById?: Map<number
       player_id: r.player_id,
       player_name: player.name,
       steam_avatar_url: player.steam_avatar_url,
+      discord_id: player.discord_id,
     });
   }
   return entries.sort((a, b) => a.player_name.localeCompare(b.player_name));

@@ -80,7 +80,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `POST` | `/api/seasons/[id]/gauntlet/seed` | Seed an existing shape from the season's current leaderboard order and materialize round 1 (admin only) |
 | `DELETE` | `/api/seasons/[id]/gauntlet` | Reset a gauntlet — deletes it and everything materialized under it; refuses if any match has a score unless `{ force: true }` is passed (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet/pods` | Save the manual pod editor's current draft — creates the paired gauntlet season if needed, then inserts/updates/deletes pods to match (admin only) |
-| `POST/DELETE` | `/api/seasons/[id]/players` | Add/remove a player from a season's roster (`season_players`) — admins manage any player, a player can only add/remove themselves; `UPCOMING` only |
+| `POST/DELETE` | `/api/seasons/[id]/players` | Add/remove a player from a season's roster (`season_players`) — admins manage any player, a player can only add/remove themselves; `UPCOMING` only. Best-effort grants/revokes the `@Participants` Discord role (#397) for that one player if they're linked |
 | `POST/DELETE` | `/api/seasons/[id]/schedule` | Generate (fully regenerating) or clear a season's schedule draft from its current roster (admin only, `UPCOMING` only) |
 | `PATCH` | `/api/seasons/[id]/schedule` | Save a hand-edit to an existing schedule draft — reassigns players within the generated week/match structure (admin only, `UPCOMING` only) |
 | `POST` | `/api/seasons/[id]/schedule/confirm` | Materialize a validated schedule draft into real `weeks`/`matches`/`player_match_stats` (admin only, `UPCOMING` only) |
@@ -336,6 +336,15 @@ season rows and has one admin-triggered and two automatic transitions, all in
 Gauntlet seasons are born `ACTIVE` at creation and have no `UPCOMING` phase or admin-triggered
 transition of their own — `ACTIVE → ARCHIVED` is their entire lifecycle, driven by
 `checkGauntletCompletion()` alone.
+
+**`@Participants` Discord role sync (#397).** `activateSeason()` best-effort grants the role to
+every linked (`discord_id` set) player on the roster — a catch-up pass covering anyone who linked
+Discord after already being added, since `POST /api/seasons/[id]/players`'s own per-player grant
+(see below) would have been a no-op at that time. `checkSeasonCompletion()` best-effort revokes it
+from the same roster once the season is `COMPLETED` — the role tracks the *current* season's
+participants, not a career badge. Both go through `src/lib/discord-roles.ts`, which no-ops
+unconditionally (no error, no throw) when `DISCORD_BOT_TOKEN`/`DISCORD_GUILD_ID`/
+`DISCORD_PARTICIPANTS_ROLE_ID` aren't all set, or when a given player has no linked `discord_id`.
 
 #### Surfacing best-effort failures (`ops_errors`)
 

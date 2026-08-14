@@ -150,6 +150,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | Historical CSV ingestion (Python, not deployed) | `ingestion/` |
 | Discord account linking (OAuth2 → `players.discord_id`) | `src/lib/discordLinkState.ts`, `src/lib/discord-link.ts`, `src/app/api/auth/discord/`, `src/components/DiscordLinkButton.tsx` |
 | Discord `#match-notifications` webhook alerts | `src/lib/discord-notify.ts` |
+| Discord `@Participants` role sync | `src/lib/discord-roles.ts`, hooked from `src/app/api/seasons/[id]/players/route.ts` (POST/DELETE) and `src/lib/season-lifecycle.ts` (`activateSeason()`/`checkSeasonCompletion()`) |
 | Discord slash commands (`/leaderboard`, `/scheduled`, `/player`) | `src/lib/discordInteractions.ts` (Ed25519 verification, response shapes), `src/lib/discord-commands.ts` (handlers), `src/app/api/discord/interactions/route.ts`, `scripts/register-discord-commands.ts` (registers the command *definitions*, separate from serving them) |
 
 ## Conventions to know before reading the query layer

@@ -20,8 +20,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { allMatchesPlayed } from './util';
 import { tryBuildGauntletShape, trySeedGauntlet, isGauntletBracketDecided } from './gauntlet-engine';
-import { getLinkedRegularSeason, getMatchScoresForWeeks } from './queries';
+import { getLinkedRegularSeason, getMatchScoresForWeeks, getSeasonRoster } from './queries';
 import { recordOpsError, clearOpsError } from './ops-errors';
+import { grantParticipantRoleToRoster, revokeParticipantRoleFromRoster } from './discord-roles';
 
 export interface ActivateSeasonResult {
   gauntletBuilt: boolean;
@@ -37,6 +38,17 @@ export interface ActivateSeasonResult {
 export async function activateSeason(supabaseAdmin: SupabaseClient, seasonId: number): Promise<ActivateSeasonResult> {
   const { error } = await supabaseAdmin.from('seasons').update({ status: 'ACTIVE' }).eq('id', seasonId);
   if (error) throw error;
+
+  // @Participants catch-up grant (#397): covers anyone whose individual add-to-roster grant
+  // (POST /api/seasons/[id]/players) was a no-op because they linked Discord after joining.
+  // discord-roles.ts itself never throws, but the roster read can — caught here so a transient DB
+  // hiccup on this best-effort step can never block the activation this function exists to do.
+  try {
+    const roster = await getSeasonRoster(seasonId);
+    await grantParticipantRoleToRoster(roster.map((r) => r.discord_id));
+  } catch (err) {
+    console.error(`@Participants catch-up grant(season ${seasonId}) failed:`, err);
+  }
 
   try {
     const result = await tryBuildGauntletShape(supabaseAdmin, seasonId);
@@ -83,6 +95,15 @@ export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seaso
   if (updErr) {
     await recordOpsError(supabaseAdmin, 'season', seasonId, 'season_complete', `Marking season COMPLETED failed: ${updErr.message}`);
     throw updErr;
+  }
+
+  // @Participants revoke (#397): the season's over, so its roster is no longer "current." Same
+  // best-effort/never-blocks-the-transition reasoning as the catch-up grant in activateSeason().
+  try {
+    const roster = await getSeasonRoster(seasonId);
+    await revokeParticipantRoleFromRoster(roster.map((r) => r.discord_id));
+  } catch (err) {
+    console.error(`@Participants revoke(season ${seasonId}) failed:`, err);
   }
 
   try {
