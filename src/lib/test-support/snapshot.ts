@@ -4,7 +4,7 @@
  * checked-in copy of what it produced before the refactor. No new dependency: `node:fs` +
  * `node:assert` only, matching the rest of this codebase's zero-dependency test convention.
  *
- * Regenerate with `UPDATE_SNAPSHOTS=1 npx tsx <test file>` — but only when a change to the
+ * Regenerate with `UPDATE_SNAPSHOTS=1 npx vitest run <test file>` — but only when a change to the
  * snapshotted output is expected and has been reviewed; regenerating blindly defeats the point.
  */
 
