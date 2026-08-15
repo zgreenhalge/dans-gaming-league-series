@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/session";
 import { getAdminClient } from "@/lib/supabase-admin";
-import { deleteNameRole } from "@/lib/discord-roles";
+import { deleteNameRole, getStoredNameRoleId } from "@/lib/discord-roles";
 import { afterBestEffort } from "@/lib/after";
 
 // Self-service Discord unlink (#394) — clears the caller's own players.discord_id. Linking itself
@@ -24,12 +24,7 @@ export async function DELETE() {
   const playerId = session?.user?.playerId;
   if (!playerId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: current } = await supabaseAdmin
-    .from("players")
-    .select("discord_name_role_id")
-    .eq("id", playerId)
-    .maybeSingle();
-  const nameRoleId = (current as { discord_name_role_id: string | null } | null)?.discord_name_role_id ?? null;
+  const nameRoleId = await getStoredNameRoleId(supabaseAdmin, playerId);
 
   const { error } = await supabaseAdmin
     .from("players")

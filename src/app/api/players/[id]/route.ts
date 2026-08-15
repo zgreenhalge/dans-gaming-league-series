@@ -3,7 +3,7 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { recordNameChange, recordNameHistoryLogError, renameFields } from '@/lib/player-name-history';
 import { isDiscordIdTaken } from '@/lib/discord-link';
-import { syncParticipantRoleForPlayer, createNameRole, renameNameRole, deleteNameRole } from '@/lib/discord-roles';
+import { syncParticipantRoleForPlayer, createNameRole, renameNameRole, deleteNameRole, getStoredNameRoleId } from '@/lib/discord-roles';
 import { afterBestEffort } from '@/lib/after';
 import type { Database } from '@/lib/database.types';
 
@@ -132,12 +132,7 @@ export async function PATCH(
   // does delete the player's name-color role, since that role only makes sense while linked.
   if ('discord_id' in body) {
     if (body.discord_id === null) {
-      const { data: currentLink } = await supabaseAdmin
-        .from('players')
-        .select('discord_name_role_id')
-        .eq('id', targetId)
-        .maybeSingle();
-      unlinkingNameRoleId = (currentLink as { discord_name_role_id: string | null } | null)?.discord_name_role_id ?? null;
+      unlinkingNameRoleId = await getStoredNameRoleId(supabaseAdmin, targetId);
       update.discord_id = null;
       update.discord_name_role_id = null;
     } else if (typeof body.discord_id === 'string' && DISCORD_ID_RE.test(body.discord_id)) {
@@ -216,7 +211,7 @@ export async function PATCH(
       createNameRole(supabaseAdmin, targetId, linkedDiscordId, (data as { name: string }).name),
     );
   }
-  if ('discord_id' in body && body.discord_id === null && unlinkingNameRoleId) {
+  if (unlinkingNameRoleId) {
     afterBestEffort(`discord-roles: delete name role for admin-unlinked player ${targetId}`, () =>
       deleteNameRole(supabaseAdmin, targetId, unlinkingNameRoleId),
     );
