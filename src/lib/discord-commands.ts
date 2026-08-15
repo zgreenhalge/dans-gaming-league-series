@@ -15,6 +15,7 @@ import {
 } from './queries';
 import { extractSeasonNumber, matchTitle, isPlayedScore } from './util';
 import { type DiscordInteraction, optionValue, callerDiscordId, messageResponse } from './discordInteractions';
+import { setDiscordRoleColor } from './discord-roles';
 import type { Player } from './types';
 import { SITE_URL } from './seo/site';
 
@@ -120,4 +121,41 @@ export async function handlePlayerCommand(interaction: DiscordInteraction) {
   lines.push(playerUrl);
 
   return messageResponse(lines.join('\n'));
+}
+
+const HEX_COLOR_RE = /^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/;
+
+/** Parses a `#rgb`/`rgb`/`#rrggbb`/`rrggbb` hex color into Discord's 24-bit role-color integer.
+ *  `null` for anything that doesn't match. */
+function parseHexColor(input: string): number | null {
+  const match = HEX_COLOR_RE.exec(input.trim());
+  if (!match) return null;
+  const hex = match[1].length === 3 ? match[1].split('').map((c) => c + c).join('') : match[1];
+  return parseInt(hex, 16);
+}
+
+export async function handleNameColorCommand(interaction: DiscordInteraction) {
+  const hex = optionValue(interaction, 'hex');
+  const color = hex != null ? parseHexColor(String(hex)) : null;
+  if (color == null) {
+    return messageResponse("That doesn't look like a hex color — try something like `ff5733` or `#ff5733`.", true);
+  }
+
+  const discordId = callerDiscordId(interaction);
+  const player = discordId ? await getPlayerByDiscordId(discordId) : null;
+  if (!player) {
+    return messageResponse("You're not linked to a DGLS player yet — link your Discord account on your profile.", true);
+  }
+  if (!player.discord_name_role_id) {
+    return messageResponse(
+      "You don't have a name role yet — ask an admin to run the Discord name-role backfill, or unlink and re-link your Discord account.",
+      true,
+    );
+  }
+
+  const result = await setDiscordRoleColor(player.discord_name_role_id, color);
+  if (!result.ok) {
+    return messageResponse(`Couldn't set your role color: ${result.error}`, true);
+  }
+  return messageResponse(`Updated your name color to #${color.toString(16).padStart(6, '0')}.`, true);
 }
