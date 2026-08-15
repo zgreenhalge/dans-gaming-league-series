@@ -16,6 +16,7 @@ import {
 import { extractSeasonNumber, matchTitle, isPlayedScore } from './util';
 import { type DiscordInteraction, optionValue, callerDiscordId, messageResponse } from './discordInteractions';
 import type { Player } from './types';
+import { SITE_URL } from './seo/site';
 
 const MAX_LEADERBOARD_ROWS = 25;
 
@@ -32,8 +33,9 @@ export async function handleLeaderboardCommand(interaction: DiscordInteraction) 
     );
   }
 
+  const seasonUrl = `${SITE_URL}/seasons/${season.id}`;
   const rows = await getSeasonLeaderboard(season.id);
-  if (rows.length === 0) return messageResponse(`**${season.name}** — no games played yet.`);
+  if (rows.length === 0) return messageResponse(`**${season.name}** — no games played yet.\n${seasonUrl}`);
 
   const shown = rows.slice(0, MAX_LEADERBOARD_ROWS);
   const lines = shown.map((r, i) => {
@@ -44,7 +46,7 @@ export async function handleLeaderboardCommand(interaction: DiscordInteraction) 
   });
   const more = rows.length > MAX_LEADERBOARD_ROWS ? `\n… and ${rows.length - MAX_LEADERBOARD_ROWS} more` : '';
 
-  return messageResponse(`**${season.name}**\n\`\`\`\n${lines.join('\n')}${more}\n\`\`\``, false);
+  return messageResponse(`**${season.name}**\n\`\`\`\n${lines.join('\n')}${more}\n\`\`\`\n${seasonUrl}`);
 }
 
 export async function handleScheduledCommand() {
@@ -54,7 +56,7 @@ export async function handleScheduledCommand() {
   const schedule = await getSeasonSchedule(season.id);
   const week = findCurrentWeek(schedule, season.start_date);
   if (!week || week.matches.length === 0) {
-    return messageResponse(`**${season.name}** has no scheduled matches right now.`);
+    return messageResponse(`**${season.name}** has no scheduled matches right now.\n${SITE_URL}/seasons/${season.id}`);
   }
 
   const lines = [...week.matches]
@@ -73,10 +75,10 @@ export async function handleScheduledCommand() {
         : m.scheduled_at
           ? new Date(m.scheduled_at).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
           : 'Not yet scheduled';
-      return `**${title}**\n${shirts} vs ${skins} — ${status}`;
+      return `**[${title}](${SITE_URL}/matches/${m.id})**\n${shirts} vs ${skins} — ${status}`;
     });
 
-  return messageResponse(lines.join('\n\n'), false);
+  return messageResponse(lines.join('\n\n'));
 }
 
 export async function handlePlayerCommand(interaction: DiscordInteraction) {
@@ -98,6 +100,7 @@ export async function handlePlayerCommand(interaction: DiscordInteraction) {
     );
   }
 
+  const playerUrl = `${SITE_URL}/players/${player.id}`;
   const [careerRows, ehog] = await Promise.all([
     getCareerLeaderboard(),
     getPlayerEhogRating(player.id),
@@ -105,7 +108,7 @@ export async function handlePlayerCommand(interaction: DiscordInteraction) {
   const career = careerRows.find((r) => r.player_id === player.id);
 
   if (!career || career.matches_played === 0) {
-    return messageResponse(`**${player.name}** hasn't played a match yet.`);
+    return messageResponse(`**${player.name}** hasn't played a match yet.\n${playerUrl}`);
   }
 
   const lines = [
@@ -114,6 +117,7 @@ export async function handlePlayerCommand(interaction: DiscordInteraction) {
     `ADR: ${career.overall_adr.toFixed(1)} · RWR: ${career.rwr_percentage.toFixed(1)}%`,
   ];
   if (ehog.currentRating != null) lines.push(`EHOG: ${ehog.currentRating.toFixed(1)}`);
+  lines.push(playerUrl);
 
   return messageResponse(lines.join('\n'));
 }

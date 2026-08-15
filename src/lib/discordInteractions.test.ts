@@ -58,16 +58,16 @@ async function main() {
     assert.deepEqual(pongResponse(), { type: 1 });
   });
 
-  await test('messageResponse: defaults to ephemeral (flags set)', () => {
+  await test('messageResponse: defaults to public (no flags)', () => {
     const res = messageResponse('hi');
     assert.equal(res.type, 4);
     assert.equal(res.data.content, 'hi');
-    assert.equal(res.data.flags, 64);
+    assert.equal(res.data.flags, undefined);
   });
 
-  await test('messageResponse: ephemeral=false omits flags', () => {
-    const res = messageResponse('hi', false);
-    assert.equal(res.data.flags, undefined);
+  await test('messageResponse: ephemeral=true sets the ephemeral flag', () => {
+    const res = messageResponse('hi', true);
+    assert.equal(res.data.flags, 64);
   });
 
   await test('optionValue: reads a named option', () => {
