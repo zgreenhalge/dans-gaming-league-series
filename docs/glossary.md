@@ -151,7 +151,8 @@ so you don't have to reverse-engineer them from scratch each time.
 | Discord account linking (OAuth2 → `players.discord_id`) | `src/lib/discordLinkState.ts`, `src/lib/discord-link.ts`, `src/app/api/auth/discord/`, `src/components/DiscordLinkButton.tsx` |
 | Discord `#match-notifications` webhook alerts | `src/lib/discord-notify.ts` |
 | Discord `@Participants` role sync | `src/lib/discord-roles.ts`, hooked from `src/app/api/seasons/[id]/players/route.ts` (POST/DELETE) and `src/lib/season-lifecycle.ts` (`activateSeason()`/`checkSeasonCompletion()`) |
-| Discord slash commands (`/leaderboard`, `/scheduled`, `/player`) | `src/lib/discordInteractions.ts` (Ed25519 verification, response shapes), `src/lib/discord-commands.ts` (handlers), `src/app/api/discord/interactions/route.ts`, `scripts/register-discord-commands.ts` (registers the command *definitions*, separate from serving them) |
+| Discord name-color roles (per-player cosmetic role, `players.discord_name_role_id`) | `src/lib/discord-roles.ts` (`createNameRole()`/`renameNameRole()`/`deleteNameRole()`/`setDiscordRoleColor()`/`backfillNameRoles()`), hooked from the link/unlink/rename routes (`src/app/api/auth/discord/callback/`, `src/app/api/players/[id]/`, `src/app/api/players/me/discord/`, `src/app/api/players/me/name/`), `scripts/backfill-discord-name-roles.ts` / `POST /api/admin/discord/backfill-name-roles` |
+| Discord slash commands (`/leaderboard`, `/scheduled`, `/player`, `/name-color`) | `src/lib/discordInteractions.ts` (Ed25519 verification, response shapes), `src/lib/discord-commands.ts` (handlers), `src/app/api/discord/interactions/route.ts`, `scripts/register-discord-commands.ts` (registers the command *definitions*, separate from serving them) |
 
 ## Conventions to know before reading the query layer
 
