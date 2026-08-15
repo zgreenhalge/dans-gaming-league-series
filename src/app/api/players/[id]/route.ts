@@ -32,7 +32,6 @@ export async function PATCH(
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const callerId = access.playerId;
 
-  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const targetId = Number(id);
   if (!Number.isInteger(targetId) || targetId <= 0) {
