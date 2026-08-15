@@ -15,7 +15,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { recordOpsError, clearOpsError } from './ops-errors';
-import { getActiveRegularSeason, getSeasonRoster } from './queries';
+import { getActiveRegularSeason, getSeasonParticipants } from './queries';
 
 const OPERATION = 'discord_role_sync';
 const NAME_ROLE_OPERATION = 'discord_name_role_sync';
@@ -125,7 +125,7 @@ export async function syncParticipantRoleForPlayer(
   if (!discordId) return;
   const activeSeason = await getActiveRegularSeason();
   const onActiveRoster = activeSeason
-    ? (await getSeasonRoster(activeSeason.id)).some((r) => r.player_id === playerId)
+    ? (await getSeasonParticipants(activeSeason.id)).some((r) => r.player_id === playerId)
     : false;
   if (onActiveRoster) {
     await grantParticipantRole(supabaseAdmin, playerId, discordId);

@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/authOptions";
+import { requireSession } from "@/lib/session";
 import { getAdminClient } from "@/lib/supabase-admin";
 import { parseMatchId } from "@/lib/util";
 
 // Set or clear a match's recording_url. Editable by admins and in-match players — the same
 // gate the score route uses, since a recording is part of a match's result.
 
-const supabaseAdmin = getAdminClient();
-
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   const playerId = session?.user?.playerId;
   if (!playerId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const matchId = parseMatchId(id);
   if (matchId === null) {

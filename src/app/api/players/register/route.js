@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/authOptions";
+import { requireSession } from "@/lib/session";
 import { createClient } from "@supabase/supabase-js";
 import { verifyPlayerClaim } from "@/lib/playerClaim";
 
@@ -15,7 +14,7 @@ function requireUnlinkedSession(session) {
 }
 
 export async function POST(request) {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   const err = requireUnlinkedSession(session);
   if (err) return Response.json({ error: err.error }, { status: err.status });
 

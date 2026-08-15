@@ -5,8 +5,7 @@
 // status route's shape but isn't admin-gated, since starting/stopping a scrim isn't an admin action).
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { dathostServerId, getServer, connectHost, type DathostServer } from '@/lib/dathost';
 import {
@@ -35,7 +34,7 @@ export interface ScrimStatus {
 }
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   const playerId = session?.user?.playerId;
   if (!playerId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

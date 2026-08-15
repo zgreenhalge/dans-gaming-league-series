@@ -86,3 +86,45 @@ export async function getSeasonRoster(seasonId: number, playersById?: Map<number
   }
   return entries.sort((a, b) => a.player_name.localeCompare(b.player_name));
 }
+
+/** Everyone currently part of a season, unioning `season_players` with anyone who already has a
+ *  scheduled or played match under it (`weeks` → `matches` → `player_match_stats`). `season_players`
+ *  alone is the pre-schedule signup list; once a schedule exists, a season's real participants are
+ *  whoever it actually rostered into matches — which for a season imported or scheduled without ever
+ *  writing `season_players` rows (e.g. a historically-imported season) is the *only* place that
+ *  membership is recorded. Used wherever "is this player currently part of the season" needs to be
+ *  right regardless of which stage produced that membership — the `@Participants` Discord role sync
+ *  (`discord-roles.ts`, `season-lifecycle.ts`), not `getSeasonRoster()`'s own callers (the roster
+ *  editor, schedule generation), which specifically want the raw pre-schedule signup list. */
+export async function getSeasonParticipants(seasonId: number, playersById?: Map<number, Player>): Promise<SeasonRosterEntry[]> {
+  const [roster, resolvedPlayersById, { data: weekRows, error: weekErr }] = await Promise.all([
+    getSeasonRoster(seasonId, playersById),
+    playersById ?? getPlayersById(),
+    supabase.from('weeks').select('id').eq('season_id', seasonId),
+  ]);
+  if (weekErr) throw weekErr;
+
+  const byId = new Map(roster.map((r) => [r.player_id, r]));
+  const weekIds = ((weekRows ?? []) as { id: number }[]).map((w) => w.id);
+  if (weekIds.length > 0) {
+    const { data: matchRows, error: matchErr } = await supabase.from('matches').select('id').in('week_id', weekIds);
+    if (matchErr) throw matchErr;
+    const matchIds = ((matchRows ?? []) as { id: number }[]).map((m) => m.id);
+    if (matchIds.length > 0) {
+      const { data: statRows, error: statErr } = await supabase.from('player_match_stats').select('player_id').in('match_id', matchIds);
+      if (statErr) throw statErr;
+      for (const { player_id } of (statRows ?? []) as { player_id: number }[]) {
+        if (byId.has(player_id)) continue;
+        const player = resolvedPlayersById.get(player_id);
+        if (!player) continue;
+        byId.set(player_id, {
+          player_id,
+          player_name: player.name,
+          steam_avatar_url: player.steam_avatar_url,
+          discord_id: player.discord_id,
+        });
+      }
+    }
+  }
+  return [...byId.values()].sort((a, b) => a.player_name.localeCompare(b.player_name));
+}

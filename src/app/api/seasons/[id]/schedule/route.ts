@@ -11,8 +11,6 @@ import {
 import { MIN_SEED_COUNT, MAX_SEED_COUNT, type DoubleheaderPolicy } from '@/lib/season-schedule';
 import type { DraftScheduleWeek } from '@/lib/season-schedule-validation';
 
-const supabaseAdmin = getAdminClient();
-
 /**
  * Generates (or fully regenerates) a regular season's matchup draft from its current roster
  * (`season_players`) — `buildRosterSchedule()`'s output persisted into
@@ -30,6 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
+  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const seasonId = Number(id);
   if (!Number.isFinite(seasonId)) {
@@ -118,6 +117,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
+  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const seasonId = Number(id);
   if (!Number.isFinite(seasonId)) {
@@ -162,6 +162,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
+  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const seasonId = Number(id);
   if (!Number.isFinite(seasonId)) {

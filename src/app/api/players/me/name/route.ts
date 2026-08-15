@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { recordNameChange, renameFields } from '@/lib/player-name-history';
 import { normalizePlayerName, isValidPlayerName, PLAYER_NAME_MIN_LENGTH, PLAYER_NAME_MAX_LENGTH } from '@/lib/util';
@@ -26,15 +25,14 @@ import { afterBestEffort } from '@/lib/after';
 // "Bob", but the write already has to handle a same-case collision this way regardless, so a
 // pre-check only adds a round-trip without letting that handling be dropped.
 
-const supabaseAdmin = getAdminClient();
-
 const RENAME_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function PATCH(req: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   const playerId = session?.user?.playerId;
   if (!playerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const supabaseAdmin = getAdminClient();
   const body = (await req.json().catch(() => null)) as { name?: unknown } | null;
   if (!body || typeof body.name !== 'string') {
     return NextResponse.json({ error: 'name is required' }, { status: 400 });

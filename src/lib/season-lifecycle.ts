@@ -20,7 +20,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { allMatchesPlayed } from './util';
 import { tryBuildGauntletShape, trySeedGauntlet, isGauntletBracketDecided } from './gauntlet-engine';
-import { getLinkedRegularSeason, getMatchScoresForWeeks, getSeasonRoster } from './queries';
+import { getLinkedRegularSeason, getMatchScoresForWeeks, getSeasonParticipants } from './queries';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { grantParticipantRoleToRoster, revokeParticipantRoleFromRoster, type RosterRoleEntry } from './discord-roles';
 
@@ -36,7 +36,7 @@ export interface ActivateSeasonResult {
  * function the caller needs, and record (never throw) if the roster fetch itself fails. `sync`
  * (grant/revoke to the roster) never throws on its own — each per-player Discord API failure inside
  * it is already recorded to `ops_errors` at the player level (`discord-roles.ts`) — so the only
- * failure this can catch is `getSeasonRoster()` itself, surfaced here at the season level so a
+ * failure this can catch is `getSeasonParticipants()` itself, surfaced here at the season level so a
  * transient DB hiccup on this best-effort step is visible in the admin console instead of only a
  * Vercel function log, without ever blocking the season transition it rides along with. */
 async function syncParticipantRoleForRoster(
@@ -46,7 +46,7 @@ async function syncParticipantRoleForRoster(
   sync: (supabaseAdmin: SupabaseClient, roster: RosterRoleEntry[]) => Promise<void>,
 ): Promise<void> {
   try {
-    const roster = await getSeasonRoster(seasonId);
+    const roster = await getSeasonParticipants(seasonId);
     await sync(supabaseAdmin, roster);
     await clearOpsError(supabaseAdmin, 'season', seasonId, 'discord_role_sync');
   } catch (err) {

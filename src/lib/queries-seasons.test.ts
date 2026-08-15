@@ -16,7 +16,7 @@ import { matchesSnapshot } from './test-support/snapshot';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getSeasons, getSeason, getLinkedGauntlet, getLinkedRegularSeason, getSeasonRoster, getActiveRegularSeason } from './queries';
+import { getSeasons, getSeason, getLinkedGauntlet, getLinkedRegularSeason, getSeasonRoster, getSeasonParticipants, getActiveRegularSeason } from './queries';
 import { test, report } from './test-support/miniTest';
 
 async function main() {
@@ -58,6 +58,28 @@ async function main() {
 
   await test('getSeasonRoster(1) — orphan row (player_id missing from playersById) is skipped', async () => {
     assert.deepEqual(await getSeasonRoster(1), []);
+  });
+
+  await test('getSeasonParticipants(3) — unions season_players with match-derived players not on it', async () => {
+    const participants = await getSeasonParticipants(3);
+    // Season 6 (id 3)'s season_players roster is Alice/Bob/Carol (players 1/2/3) — see SEASON_PLAYERS.
+    // Match 400 (week 13, season 3) additionally pre-stages Erin/Frank/Grace (5/6/7), who never got a
+    // season_players row — exactly the shape of a season scheduled/imported without ever writing one.
+    assert.deepEqual(
+      participants.map((p) => p.player_name),
+      ['Alice', 'Bob', 'Carol', 'Erin', 'Frank', 'Grace'],
+    );
+  });
+
+  await test('getSeasonParticipants(1) — orphan season_players row skipped like getSeasonRoster(), match-derived players still included', async () => {
+    // Season 5 (id 1)'s only season_players row references player 999, missing from playersById —
+    // getSeasonRoster(1) returns [] for it, same as the orphan-row test above. But season 1 has real
+    // match history (players 1-8 across matches 100-102), so getSeasonParticipants(1) isn't empty.
+    const participants = await getSeasonParticipants(1);
+    assert.deepEqual(
+      participants.map((p) => p.player_name),
+      ['Alice', 'Bob', 'Carol', 'Dave', 'Erin', 'Frank', 'Grace', 'Heidi'],
+    );
   });
 
   await test('getActiveRegularSeason() — the fixture\'s one ACTIVE non-gauntlet season', async () => {

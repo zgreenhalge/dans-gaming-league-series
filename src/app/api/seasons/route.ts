@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { isPlayerAdmin } from '@/lib/queries';
 import { extractSeasonNumber } from '@/lib/util';
@@ -36,7 +35,7 @@ async function fetchWorkshopPreviewImage(workshopUrl: string): Promise<string | 
 const WORKSHOP_URL_RE = /^https:\/\/steamcommunity\.com\/sharedfiles\/filedetails\/\?id=\d+/;
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   if (!session?.user?.playerId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
