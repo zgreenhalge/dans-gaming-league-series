@@ -465,6 +465,38 @@ async function main() {
     assert.equal(result.attempted, 1);
   });
 
+  await test('backfillNameRoles: processes players sequentially, not concurrently', async () => {
+    // Regression test: Promise.all()-ing createNameRole() across a batch that shares one
+    // precomputed topPosition races each player's reposition PATCH for the same target slot --
+    // Discord resolves each request against whatever order already exists with no visibility into
+    // the others in flight, so the final order depends on network timing instead of every role
+    // landing directly under the bot. Sequential processing is what makes that deterministic.
+    setEnv();
+    const { db, client } = freshDb();
+    db.players.find((p) => p.id === 1)!.discord_id = 'user-1';
+    db.players.find((p) => p.id === 2)!.discord_id = 'user-2';
+    const { calls } = stubFetchSequence([
+      { status: 200, json: { id: 'bot-1' } }, // GET @me (topPosition resolved once for the batch)
+      { status: 200, json: { roles: ['bot-role-a'] } }, // GET member
+      { status: 200, json: [{ id: 'bot-role-a', position: 5 }] }, // GET roles
+      { status: 201, json: { id: 'role-1' } }, // player 1: create
+      { status: 200 }, // player 1: reposition
+      { status: 204 }, // player 1: assign
+      { status: 201, json: { id: 'role-2' } }, // player 2: create
+      { status: 200 }, // player 2: reposition
+      { status: 204 }, // player 2: assign
+    ]);
+    const result = await backfillNameRoles(client);
+    assert.equal(result.attempted, 2);
+    assert.equal(calls.length, 9);
+    // Each player's create -> reposition -> assign trio must complete, in order, before the next
+    // player's create fires -- concurrent processing interleaves these across players instead.
+    assert.deepEqual(calls.slice(3, 6).map((c) => c.method), ['POST', 'PATCH', 'PUT']);
+    assert.equal(calls[5].url, 'https://discord.com/api/v10/guilds/test-guild-id/members/user-1/roles/role-1');
+    assert.deepEqual(calls.slice(6, 9).map((c) => c.method), ['POST', 'PATCH', 'PUT']);
+    assert.equal(calls[8].url, 'https://discord.com/api/v10/guilds/test-guild-id/members/user-2/roles/role-2');
+  });
+
   clearEnv();
   report();
 }
