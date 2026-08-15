@@ -265,6 +265,10 @@ export function ServerConsolePanel({
   const [registerCommandsError, setRegisterCommandsError] = useState<string | null>(null);
   const [registerCommandsMessage, setRegisterCommandsMessage] = useState<string | null>(null);
 
+  const [backfillRolesBusy, setBackfillRolesBusy] = useState(false);
+  const [backfillRolesError, setBackfillRolesError] = useState<string | null>(null);
+  const [backfillRolesMessage, setBackfillRolesMessage] = useState<string | null>(null);
+
   const refreshCleanup = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/dathost-cleanup/status');
@@ -377,6 +381,23 @@ export function ServerConsolePanel({
       setRegisterCommandsMessage(`Registered: ${(body.names as string[]).join(', ')}. Can take up to an hour to show up in Discord.`);
     } finally {
       setRegisterCommandsBusy(false);
+    }
+  };
+
+  const backfillNameRoles = async () => {
+    setBackfillRolesBusy(true);
+    setBackfillRolesError(null);
+    setBackfillRolesMessage(null);
+    try {
+      const res = await fetch('/api/admin/discord/backfill-name-roles', { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setBackfillRolesError(body.error ?? 'Could not run the backfill');
+        return;
+      }
+      setBackfillRolesMessage(`Attempted ${body.attempted} player(s). Check the Activity feed for any failures.`);
+    } finally {
+      setBackfillRolesBusy(false);
     }
   };
 
@@ -813,28 +834,55 @@ export function ServerConsolePanel({
       {/* Discord slash-command registration (#396) — a stand-in for running
           scripts/register-discord-commands.ts locally, for pushing a command definition change to
           Discord from anywhere admin access reaches (no .env.local needed). Remove this panel and its
-          route together with the script once local registration is no longer the blocker it is today. */}
+          route together with the script once local registration is no longer the blocker it is today.
+          Shares the panel with the name-color-role backfill (same "manual trigger for the local
+          script" reasoning) since both are one-off Discord admin actions rather than live state. */}
       <CollapsiblePanel title="Discord commands">
-        <div className="flex flex-col gap-2">
-          <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-            Pushes the current command set (leaderboard/scheduled/player) to Discord. Safe to run
-            repeatedly — it replaces the whole set each time.
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
+              Pushes the current command set (leaderboard/scheduled/player/name-color) to Discord. Safe
+              to run repeatedly — it replaces the whole set each time.
+            </div>
+            <div>
+              <button
+                onClick={registerDiscordCommands}
+                disabled={registerCommandsBusy}
+                className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
+              >
+                {registerCommandsBusy ? 'Registering…' : 'Register commands'}
+              </button>
+            </div>
+            {registerCommandsError && (
+              <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{registerCommandsError}</div>
+            )}
+            {registerCommandsMessage && !registerCommandsError && (
+              <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">{registerCommandsMessage}</div>
+            )}
           </div>
-          <div>
-            <button
-              onClick={registerDiscordCommands}
-              disabled={registerCommandsBusy}
-              className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
-            >
-              {registerCommandsBusy ? 'Registering…' : 'Register commands'}
-            </button>
+
+          <div className="flex flex-col gap-2 pt-4 border-t border-[var(--color-border-tertiary)]">
+            <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
+              Creates each linked player&apos;s name-color role for anyone who linked Discord before
+              this feature existed. Safe to run repeatedly — only players still missing a role are
+              touched.
+            </div>
+            <div>
+              <button
+                onClick={backfillNameRoles}
+                disabled={backfillRolesBusy}
+                className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
+              >
+                {backfillRolesBusy ? 'Backfilling…' : 'Backfill name-color roles'}
+              </button>
+            </div>
+            {backfillRolesError && (
+              <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{backfillRolesError}</div>
+            )}
+            {backfillRolesMessage && !backfillRolesError && (
+              <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">{backfillRolesMessage}</div>
+            )}
           </div>
-          {registerCommandsError && (
-            <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{registerCommandsError}</div>
-          )}
-          {registerCommandsMessage && !registerCommandsError && (
-            <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">{registerCommandsMessage}</div>
-          )}
         </div>
       </CollapsiblePanel>
     </div>
