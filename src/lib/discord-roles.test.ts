@@ -1,7 +1,8 @@
 /**
- * Unit tests for discord-roles.ts's @Participants role sync (#397), including the ops_errors
- * observability retrofit — a real Discord API failure must be visible in the admin console's
- * Activity feed, not just a Vercel function log.
+ * Unit tests for discord-roles.ts's @Participants role sync (#397) and its name-color role lifecycle
+ * (create/rename/delete/color/backfill), including the ops_errors observability retrofit — a real
+ * Discord API failure must be visible in the admin console's Activity feed, not just a Vercel
+ * function log.
  *
  * Run:  npx vitest run src/lib/discord-roles.test.ts
  */
@@ -16,6 +17,11 @@ import {
   grantParticipantRoleToRoster,
   revokeParticipantRoleFromRoster,
   syncParticipantRoleForPlayer,
+  createNameRole,
+  renameNameRole,
+  deleteNameRole,
+  setDiscordRoleColor,
+  backfillNameRoles,
 } from './discord-roles';
 import { test, report } from './test-support/miniTest';
 
@@ -40,19 +46,38 @@ function setEnv() {
 interface FetchCall {
   url: string;
   method: string;
+  body?: unknown;
 }
 
 function stubFetch(status = 204): { calls: FetchCall[] } {
   const calls: FetchCall[] = [];
   (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
-    calls.push({ url, method: init?.method ?? 'GET' });
+    calls.push({ url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(init.body as string) : undefined });
     return { ok: status >= 200 && status < 300, status } as Response;
   }) as typeof fetch;
   return { calls };
 }
 
+/** Like `stubFetch()`, but returns a different response for each successive call (holding the last
+ *  one for any call beyond the list) — for exercising the name-role functions' multi-request
+ *  sequences (create → resolve the bot's top role position → reposition → assign). */
+function stubFetchSequence(responses: { status: number; json?: unknown }[]): { calls: FetchCall[] } {
+  const calls: FetchCall[] = [];
+  let i = 0;
+  (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
+    calls.push({ url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(init.body as string) : undefined });
+    const r = responses[Math.min(i, responses.length - 1)];
+    i++;
+    return { ok: r.status >= 200 && r.status < 300, status: r.status, json: async () => r.json ?? {} } as unknown as Response;
+  }) as typeof fetch;
+  return { calls };
+}
+
 function freshDb(): { db: FakeDb; client: ReturnType<typeof createFakeSupabaseClient> } {
-  const db = buildFakeDb();
+  // buildFakeDb() returns the shared fixture arrays by reference, not copies -- a deep clone here is
+  // what makes each test's mutations (e.g. setting a player's discord_id/discord_name_role_id) local
+  // to that test instead of leaking into every later test in this file.
+  const db = structuredClone(buildFakeDb());
   const client = createFakeSupabaseClient(db);
   // syncParticipantRoleForPlayer() reads getActiveRegularSeason()/getSeasonRoster() through the
   // query layer's own anon-client singleton, not the explicit `client` param the rest of this file
@@ -61,9 +86,9 @@ function freshDb(): { db: FakeDb; client: ReturnType<typeof createFakeSupabaseCl
   return { db, client };
 }
 
-function liveOpsErrors(db: FakeDb, playerId: number): Row[] {
+function liveOpsErrors(db: FakeDb, playerId: number, operation = 'discord_role_sync'): Row[] {
   return db.ops_errors.filter(
-    (r) => r.entity_type === 'player' && r.entity_id === playerId && r.operation === 'discord_role_sync' && r.dismissed_at === null,
+    (r) => r.entity_type === 'player' && r.entity_id === playerId && r.operation === operation && r.dismissed_at === null,
   );
 }
 
@@ -205,6 +230,211 @@ async function main() {
     const { calls } = stubFetch();
     await syncParticipantRoleForPlayer(client, ROSTERED_PLAYER_ID, null);
     assert.equal(calls.length, 0);
+  });
+
+  // ─── createNameRole ────────────────────────────────────────────────────────
+
+  await test('createNameRole: no-ops without a discordId', async () => {
+    setEnv();
+    const { client } = freshDb();
+    const { calls } = stubFetch();
+    await createNameRole(client, PLAYER_ID, null, 'Alice');
+    assert.equal(calls.length, 0);
+  });
+
+  await test('createNameRole: no-ops without full config', async () => {
+    clearEnv();
+    const { client } = freshDb();
+    const { calls } = stubFetch();
+    await createNameRole(client, PLAYER_ID, 'user-1', 'Alice');
+    assert.equal(calls.length, 0);
+  });
+
+  await test('createNameRole: no-ops (idempotent) if the player already has a role recorded', async () => {
+    setEnv();
+    const { db, client } = freshDb();
+    db.players.find((p) => p.id === PLAYER_ID)!.discord_name_role_id = 'existing-role';
+    const { calls } = stubFetch();
+    await createNameRole(client, PLAYER_ID, 'user-1', 'Alice');
+    assert.equal(calls.length, 0);
+  });
+
+  await test('createNameRole: creates, positions below the bot, assigns, and stores the role id', async () => {
+    setEnv();
+    const { db, client } = freshDb();
+    const { calls } = stubFetchSequence([
+      { status: 201, json: { id: 'role-1' } }, // POST create
+      { status: 200, json: { id: 'bot-1' } }, // GET @me
+      { status: 200, json: { roles: ['bot-role-a'] } }, // GET member
+      { status: 200, json: [{ id: 'bot-role-a', position: 5 }, { id: 'other', position: 2 }] }, // GET roles
+      { status: 200, json: [] }, // PATCH reposition
+      { status: 204 }, // PUT assign
+    ]);
+    await createNameRole(client, PLAYER_ID, 'user-1', 'Alice');
+
+    assert.equal(calls.length, 6);
+    assert.equal(calls[0].method, 'POST');
+    assert.equal(calls[0].url, 'https://discord.com/api/v10/guilds/test-guild-id/roles');
+    assert.deepEqual(calls[0].body, { name: 'Alice' });
+    assert.equal(calls[4].method, 'PATCH');
+    assert.deepEqual(calls[4].body, [{ id: 'role-1', position: 4 }]);
+    assert.equal(calls[5].method, 'PUT');
+    assert.equal(calls[5].url, 'https://discord.com/api/v10/guilds/test-guild-id/members/user-1/roles/role-1');
+
+    const player = db.players.find((p) => p.id === PLAYER_ID);
+    assert.equal(player?.discord_name_role_id, 'role-1');
+    assert.equal(liveOpsErrors(db, PLAYER_ID, 'discord_name_role_sync').length, 0);
+  });
+
+  await test('createNameRole: a failed create is recorded to ops_errors and stores nothing', async () => {
+    setEnv();
+    const { db, client } = freshDb();
+    stubFetchSequence([{ status: 403 }]);
+    await createNameRole(client, PLAYER_ID, 'user-1', 'Alice');
+    const player = db.players.find((p) => p.id === PLAYER_ID);
+    assert.equal(player?.discord_name_role_id, null);
+    assert.equal(liveOpsErrors(db, PLAYER_ID, 'discord_name_role_sync').length, 1);
+  });
+
+  await test('createNameRole: a failed assign (position lookup itself failing) is recorded and stores nothing', async () => {
+    setEnv();
+    const { db, client } = freshDb();
+    const { calls } = stubFetchSequence([
+      { status: 201, json: { id: 'role-1' } }, // POST create
+      { status: 404 }, // GET @me fails -> position lookup gives up, reposition skipped
+      { status: 403 }, // PUT assign fails
+    ]);
+    await createNameRole(client, PLAYER_ID, 'user-1', 'Alice');
+    assert.equal(calls.length, 3, 'reposition should be skipped once the position lookup fails');
+    const player = db.players.find((p) => p.id === PLAYER_ID);
+    assert.equal(player?.discord_name_role_id, null);
+    assert.equal(liveOpsErrors(db, PLAYER_ID, 'discord_name_role_sync').length, 1);
+  });
+
+  // ─── renameNameRole ────────────────────────────────────────────────────────
+
+  await test('renameNameRole: no-ops without a roleId', async () => {
+    setEnv();
+    const { client } = freshDb();
+    const { calls } = stubFetch();
+    await renameNameRole(client, PLAYER_ID, null, 'New Name');
+    assert.equal(calls.length, 0);
+  });
+
+  await test('renameNameRole: no-ops without full config', async () => {
+    clearEnv();
+    const { client } = freshDb();
+    const { calls } = stubFetch();
+    await renameNameRole(client, PLAYER_ID, 'role-1', 'New Name');
+    assert.equal(calls.length, 0);
+  });
+
+  await test('renameNameRole: PATCHes the role with the new name', async () => {
+    setEnv();
+    const { db, client } = freshDb();
+    const { calls } = stubFetch(200);
+    await renameNameRole(client, PLAYER_ID, 'role-1', 'New Name');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'PATCH');
+    assert.equal(calls[0].url, 'https://discord.com/api/v10/guilds/test-guild-id/roles/role-1');
+    assert.equal(liveOpsErrors(db, PLAYER_ID, 'discord_name_role_sync').length, 0);
+  });
+
+  await test('renameNameRole: swallows a 404 (role already gone) without recording an error', async () => {
+    setEnv();
+    const { db, client } = freshDb();
+    stubFetch(404);
+    await renameNameRole(client, PLAYER_ID, 'role-1', 'New Name');
+    assert.equal(liveOpsErrors(db, PLAYER_ID, 'discord_name_role_sync').length, 0);
+  });
+
+  await test('renameNameRole: a non-ok, non-404 response is recorded to ops_errors', async () => {
+    setEnv();
+    const { db, client } = freshDb();
+    stubFetch(403);
+    await renameNameRole(client, PLAYER_ID, 'role-1', 'New Name');
+    assert.equal(liveOpsErrors(db, PLAYER_ID, 'discord_name_role_sync').length, 1);
+  });
+
+  // ─── deleteNameRole ────────────────────────────────────────────────────────
+
+  await test('deleteNameRole: no-ops without a roleId', async () => {
+    setEnv();
+    const { client } = freshDb();
+    const { calls } = stubFetch();
+    await deleteNameRole(client, PLAYER_ID, null);
+    assert.equal(calls.length, 0);
+  });
+
+  await test('deleteNameRole: DELETEs the role', async () => {
+    setEnv();
+    const { db, client } = freshDb();
+    const { calls } = stubFetch(204);
+    await deleteNameRole(client, PLAYER_ID, 'role-1');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'DELETE');
+    assert.equal(calls[0].url, 'https://discord.com/api/v10/guilds/test-guild-id/roles/role-1');
+    assert.equal(liveOpsErrors(db, PLAYER_ID, 'discord_name_role_sync').length, 0);
+  });
+
+  await test('deleteNameRole: swallows a 404 (already gone) without recording an error', async () => {
+    setEnv();
+    const { db, client } = freshDb();
+    stubFetch(404);
+    await deleteNameRole(client, PLAYER_ID, 'role-1');
+    assert.equal(liveOpsErrors(db, PLAYER_ID, 'discord_name_role_sync').length, 0);
+  });
+
+  await test('deleteNameRole: a non-ok, non-404 response is recorded to ops_errors', async () => {
+    setEnv();
+    const { db, client } = freshDb();
+    stubFetch(500);
+    await deleteNameRole(client, PLAYER_ID, 'role-1');
+    assert.equal(liveOpsErrors(db, PLAYER_ID, 'discord_name_role_sync').length, 1);
+  });
+
+  // ─── setDiscordRoleColor ───────────────────────────────────────────────────
+
+  await test('setDiscordRoleColor: reports not-configured without full config', async () => {
+    clearEnv();
+    const { calls } = stubFetch();
+    const result = await setDiscordRoleColor('role-1', 0xff5733);
+    assert.equal(result.ok, false);
+    assert.equal(calls.length, 0);
+  });
+
+  await test('setDiscordRoleColor: PATCHes the role color', async () => {
+    setEnv();
+    const { calls } = stubFetch(200);
+    const result = await setDiscordRoleColor('role-1', 0xff5733);
+    assert.equal(result.ok, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'PATCH');
+    assert.deepEqual(calls[0].body, { color: 0xff5733 });
+  });
+
+  await test('setDiscordRoleColor: surfaces a non-ok Discord response as an error result', async () => {
+    setEnv();
+    stubFetch(403);
+    const result = await setDiscordRoleColor('role-1', 0xff5733);
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? '', /403/);
+  });
+
+  // ─── backfillNameRoles ─────────────────────────────────────────────────────
+
+  await test('backfillNameRoles: only attempts linked players still missing a role', async () => {
+    // Config left unset so createNameRole() no-ops per player, isolating the selection query itself.
+    clearEnv();
+    const { db, client } = freshDb();
+    db.players.find((p) => p.id === 1)!.discord_id = 'user-1'; // linked, no role -> selected
+    const bob = db.players.find((p) => p.id === 2)!;
+    bob.discord_id = 'user-2';
+    bob.discord_name_role_id = 'role-existing'; // linked, already has a role -> skipped
+    db.players.find((p) => p.id === 3)!.discord_id = null; // unlinked -> skipped
+
+    const result = await backfillNameRoles(client);
+    assert.equal(result.attempted, 1);
   });
 
   clearEnv();
