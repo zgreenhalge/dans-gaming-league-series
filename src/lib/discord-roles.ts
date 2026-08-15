@@ -324,6 +324,15 @@ export async function backfillNameRoles(supabaseAdmin: SupabaseClient): Promise<
   const guildId = process.env.DISCORD_GUILD_ID;
   const topPosition = token && guildId ? await getBotTopRolePosition(guildId, token) : null;
 
-  await Promise.all(players.map((p) => createNameRole(supabaseAdmin, p.id, p.discord_id, p.name, topPosition)));
+  // Sequential, not Promise.all: every player in the batch requests the same "just below the bot"
+  // target position, and Discord's reposition endpoint resolves each request against whatever the
+  // guild's role order already is -- it has no visibility into other in-flight requests. Firing them
+  // concurrently races multiple roles for the same slot, so the final order depends on network timing
+  // instead of every role landing directly under the bot as intended. Awaiting each one in turn lets
+  // Discord's order settle before the next request reads it, so each new role correctly stacks in
+  // just below the bot, pushing the previous batch entries (and everything below them) down by one.
+  for (const p of players) {
+    await createNameRole(supabaseAdmin, p.id, p.discord_id, p.name, topPosition);
+  }
   return { attempted: players.length };
 }
