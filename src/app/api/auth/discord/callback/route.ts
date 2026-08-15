@@ -3,7 +3,7 @@ import { getAdminClient } from "@/lib/supabase-admin";
 import { verifyDiscordLinkState } from "@/lib/discordLinkState";
 import { isDiscordIdTaken } from "@/lib/discord-link";
 import { recordOpsError, clearOpsError } from "@/lib/ops-errors";
-import { syncParticipantRoleForPlayer } from "@/lib/discord-roles";
+import { syncParticipantRoleForPlayer, createNameRole } from "@/lib/discord-roles";
 import { afterBestEffort } from "@/lib/after";
 
 // Completes the Discord account-linking OAuth2 flow (#394) started by /api/auth/discord/link:
@@ -93,7 +93,7 @@ export async function GET(request: Request) {
       .from("players")
       .update({ discord_id: discordUser.id })
       .eq("id", playerId)
-      .select("id")
+      .select("id, name")
       .maybeSingle();
     if (updateError) {
       // The DB's own players_discord_id_key constraint is the backstop for the isDiscordIdTaken()
@@ -112,6 +112,9 @@ export async function GET(request: Request) {
     // so the Discord + DB round trip doesn't delay the redirect.
     afterBestEffort(`discord-roles: sync @Participants for newly-linked player ${playerId}`, () =>
       syncParticipantRoleForPlayer(supabaseAdmin, playerId, discordUser.id!),
+    );
+    afterBestEffort(`discord-roles: create name role for newly-linked player ${playerId}`, () =>
+      createNameRole(supabaseAdmin, playerId, discordUser.id!, (updated as { name: string }).name),
     );
     return redirectToProfile(playerId, "linked");
   } catch (e) {

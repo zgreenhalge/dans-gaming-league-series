@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/authOptions';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { recordNameChange, renameFields } from '@/lib/player-name-history';
 import { normalizePlayerName, isValidPlayerName, PLAYER_NAME_MIN_LENGTH, PLAYER_NAME_MAX_LENGTH } from '@/lib/util';
+import { renameNameRole } from '@/lib/discord-roles';
+import { afterBestEffort } from '@/lib/after';
 
 // Self-service rename (issue #268): a player changes their own display name, in place on their
 // profile page. Distinct from the admin-only `PATCH /api/players/[id]` — that route can rename any
@@ -50,15 +52,16 @@ export async function PATCH(req: NextRequest) {
 
   const { data: current, error: fetchError } = await supabaseAdmin
     .from('players')
-    .select('name, name_changed_at')
+    .select('name, name_changed_at, discord_name_role_id')
     .eq('id', playerId)
     .maybeSingle();
   if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
   if (!current) return NextResponse.json({ error: 'Player not found' }, { status: 404 });
 
-  const { name: previousName, name_changed_at: lastKnownChangedAt } = current as {
+  const { name: previousName, name_changed_at: lastKnownChangedAt, discord_name_role_id: nameRoleId } = current as {
     name: string;
     name_changed_at: string | null;
+    discord_name_role_id: string | null;
   };
   if (next === previousName) {
     return NextResponse.json({ ok: true, player: { id: playerId, name: previousName } });
@@ -108,6 +111,11 @@ export async function PATCH(req: NextRequest) {
   }
 
   await recordNameChange(supabaseAdmin, playerId, previousName, next);
+  if (nameRoleId) {
+    afterBestEffort(`discord-roles: rename name role for self-renamed player ${playerId}`, () =>
+      renameNameRole(supabaseAdmin, playerId, nameRoleId, next),
+    );
+  }
 
   return NextResponse.json({ ok: true, player: { id: playerId, name: next } });
 }

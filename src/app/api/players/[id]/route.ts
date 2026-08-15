@@ -3,7 +3,7 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { recordNameChange, recordNameHistoryLogError, renameFields } from '@/lib/player-name-history';
 import { isDiscordIdTaken } from '@/lib/discord-link';
-import { syncParticipantRoleForPlayer } from '@/lib/discord-roles';
+import { syncParticipantRoleForPlayer, createNameRole, renameNameRole, deleteNameRole } from '@/lib/discord-roles';
 import { afterBestEffort } from '@/lib/after';
 import type { Database } from '@/lib/database.types';
 
@@ -47,6 +47,7 @@ export async function PATCH(
 
   const update: PlayerUpdate = {};
   let renamedFrom: string | null = null;
+  let unlinkingNameRoleId: string | null = null;
 
   // Display name
   if ('name' in body) {
@@ -127,10 +128,18 @@ export async function PATCH(
   // Discord link (#394). `null` unlinks; a snowflake id links by hand — the same admin-override
   // path steam_id above has, for a player who can't complete the self-service OAuth flow
   // themselves. No cached nickname/avatar to clear here (unlike Steam), since none is stored.
-  // Unlinking never touches @Participants -- see players/me/discord/route.ts's comment.
+  // Unlinking never touches @Participants -- see players/me/discord/route.ts's comment -- but it
+  // does delete the player's name-color role, since that role only makes sense while linked.
   if ('discord_id' in body) {
     if (body.discord_id === null) {
+      const { data: currentLink } = await supabaseAdmin
+        .from('players')
+        .select('discord_name_role_id')
+        .eq('id', targetId)
+        .maybeSingle();
+      unlinkingNameRoleId = (currentLink as { discord_name_role_id: string | null } | null)?.discord_name_role_id ?? null;
       update.discord_id = null;
+      update.discord_name_role_id = null;
     } else if (typeof body.discord_id === 'string' && DISCORD_ID_RE.test(body.discord_id)) {
       let taken: boolean;
       try {
@@ -186,14 +195,30 @@ export async function PATCH(
 
   if (renamedFrom) {
     await recordNameChange(supabaseAdmin, targetId, renamedFrom, (data as { name: string }).name);
+    const currentNameRoleId = (data as { discord_name_role_id: string | null }).discord_name_role_id;
+    if (currentNameRoleId) {
+      afterBestEffort(`discord-roles: rename name role for admin-renamed player ${targetId}`, () =>
+        renameNameRole(supabaseAdmin, targetId, currentNameRoleId, (data as { name: string }).name),
+      );
+    }
   }
 
-  // @Participants sync for a newly-linked discord_id -- grants right away if this player is already
-  // on the active roster, same reasoning as the OAuth callback's own call. Unlinking is deliberately
-  // not handled here; see players/me/discord/route.ts's comment.
+  // @Participants sync + name-role creation for a newly-linked discord_id -- grants/creates right
+  // away if this player is already on the active roster / linked for the first time, same reasoning
+  // as the OAuth callback's own calls. Unlinking is deliberately not handled here for @Participants;
+  // see players/me/discord/route.ts's comment. The name role, however, is deleted on unlink above.
   if ('discord_id' in body && body.discord_id !== null) {
+    const linkedDiscordId = (data as { discord_id: string | null }).discord_id;
     afterBestEffort(`discord-roles: sync @Participants for admin-linked player ${targetId}`, () =>
-      syncParticipantRoleForPlayer(supabaseAdmin, targetId, (data as { discord_id: string | null }).discord_id),
+      syncParticipantRoleForPlayer(supabaseAdmin, targetId, linkedDiscordId),
+    );
+    afterBestEffort(`discord-roles: create name role for admin-linked player ${targetId}`, () =>
+      createNameRole(supabaseAdmin, targetId, linkedDiscordId, (data as { name: string }).name),
+    );
+  }
+  if ('discord_id' in body && body.discord_id === null && unlinkingNameRoleId) {
+    afterBestEffort(`discord-roles: delete name role for admin-unlinked player ${targetId}`, () =>
+      deleteNameRole(supabaseAdmin, targetId, unlinkingNameRoleId),
     );
   }
 
