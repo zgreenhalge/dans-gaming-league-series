@@ -6,15 +6,14 @@
 // — e.g. the admin console — with no per-session owner to check against).
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { dathostServerId } from '@/lib/dathost';
 import { getActiveServerMatch, stopSharedServer } from '@/lib/dathost-lifecycle';
 import { getScrimSession } from '@/lib/scrim-session';
 
 export async function POST() {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   const playerId = session?.user?.playerId;
   if (!playerId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

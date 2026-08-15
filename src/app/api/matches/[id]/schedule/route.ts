@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
-
-const supabaseAdmin = getAdminClient();
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   if (!session?.user?.playerId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const matchId = Number(id);
   if (!Number.isFinite(matchId)) {

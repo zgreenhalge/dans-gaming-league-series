@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requireSession } from '@/lib/session';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { authOptions } from '@/lib/authOptions';
 import { parseDemoFile } from '@/lib/demoParser';
 import { parseDemoSabremetrics } from '@/lib/demoOrchestrator';
 import { getReplayInputs } from '@/lib/replay/inputs';
@@ -17,7 +16,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   if (!session?.user?.playerId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

@@ -4,8 +4,7 @@
 // hasn't been scored yet — a scrim never touches the server's config that close to a real match either.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { dathostServerId, getServer } from '@/lib/dathost';
 import { listConfigSets } from '@/lib/dathost-config';
@@ -14,7 +13,7 @@ import { getServerOccupancy, occupancyMessage, findNearbyUnscoredMatch, applyCon
 const WORKSHOP_ID_RE = /^\d+$/;
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   if (!session?.user?.playerId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

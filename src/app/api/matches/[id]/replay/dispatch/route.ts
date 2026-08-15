@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { recordJobStatus, dispatchAndRecordFailure, matchJobKey } from '@/lib/background-jobs';
 import { REPLAY_EXTRACT_JOB_TYPE as JOB_TYPE } from '@/lib/jobs';
@@ -14,7 +13,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   if (!session?.user?.playerId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

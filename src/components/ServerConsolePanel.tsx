@@ -354,7 +354,7 @@ export function ServerConsolePanel({
         setCleanupError(body.error ?? 'Could not trigger cleanup');
         return;
       }
-      setCleanupRunMessage('Triggered — check the Actions log for progress.');
+      setCleanupRunMessage('Triggered — status below will update automatically.');
       // The new run won't show up in the status endpoint for a few seconds; one delayed refresh
       // is enough for an admin glancing back at this panel, no need to poll tightly for it.
       setTimeout(refreshCleanup, 5000);

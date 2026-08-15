@@ -2,13 +2,12 @@
 // per-match and bulk "reparse demo" actions.
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireSession } from '@/lib/session';
 import { isPlayerAdmin } from '@/lib/queries';
 import { listDemoMatchIds } from '@/lib/r2';
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   if (!session?.user?.playerId || !(await isPlayerAdmin(session.user.playerId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

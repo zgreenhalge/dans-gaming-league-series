@@ -7,8 +7,6 @@ import { signPlayerClaim } from '@/lib/playerClaim';
 // person out of band (Discord, text) instead of self-service registration trusting a caller's
 // unverified choice of `existingPlayerId`.
 
-const supabaseAdmin = getAdminClient();
-
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -16,6 +14,7 @@ export async function GET(
   const access = await requireAdminAccess();
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
+  const supabaseAdmin = getAdminClient();
   const { id } = await params;
   const targetId = Number(id);
   if (!Number.isInteger(targetId) || targetId <= 0) {

@@ -4,8 +4,7 @@
 // Source2Viewer run there, not in this request — see docs/replay.md).
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { isPlayerAdmin } from '@/lib/queries';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
@@ -18,7 +17,7 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
-  const session = await getServerSession(authOptions);
+  const session = await requireSession();
   const playerId = session?.user?.playerId;
   if (!playerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!(await isPlayerAdmin(playerId))) {
