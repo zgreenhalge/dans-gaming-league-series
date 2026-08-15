@@ -50,8 +50,8 @@ Orchestration lives in **`src/lib/dathost-lifecycle.ts`** over the typed client 
   → `live` + `connect_string` → best-effort `notifyMatchServerLive()` (`src/lib/discord-notify.ts`,
   #395), a `#match-notifications` Discord webhook post naming the two rosters (never the connect
   string — that's per-player, not broadcast). A real webhook failure is recorded to `ops_errors`
-  (`discord_notify`, entity `match`) — see [`architecture.md`](./architecture.md)'s "Surfacing
-  best-effort failures". Marks `failed` and rethrows on any error. A per-file
+  (`discord_notify_server_live`, entity `match`) — see [`architecture.md`](./architecture.md)'s
+  "Surfacing best-effort failures". Marks `failed` and rethrows on any error. A per-file
   cfg-push failure is logged, not fatal. `launchServer` is the same shared orchestration the admin
   console's Start and `/api/scrim/start` use (with a different `configSetKey`/`extraCvars`, no
   `loadMatch` after), so all three can't disagree on what "apply + push + boot" means (#315) — only
