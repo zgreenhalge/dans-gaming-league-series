@@ -61,10 +61,10 @@ export function pongResponse() {
   return { type: RESPONSE_TYPE_PONG };
 }
 
-/** A plain-text command reply. `ephemeral` (visible only to the caller) is the default — these
- *  commands answer a question for the person who asked, not something the whole channel needs to
- *  see fire every time; pass `false` for one a channel benefits from seeing shared. */
-export function messageResponse(content: string, ephemeral = true) {
+/** A plain-text command reply. Public (visible to the whole channel) by default — these are
+ *  league-wide lookups anyone in the channel benefits from seeing; pass `true` for one that's
+ *  personal to the caller instead. */
+export function messageResponse(content: string, ephemeral = false) {
   return {
     type: RESPONSE_TYPE_CHANNEL_MESSAGE,
     data: { content, flags: ephemeral ? EPHEMERAL_FLAG : undefined },
