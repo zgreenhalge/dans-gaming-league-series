@@ -296,6 +296,20 @@ async function main() {
     assert.equal(liveOpsErrors(db, PLAYER_ID, 'discord_name_role_sync').length, 1);
   });
 
+  await test('createNameRole: a 404 on create is a real failure, not a tolerated no-op', async () => {
+    // Unlike rename/delete/assign (where a 404 means the target is already gone -- not worth
+    // surfacing), a 404 creating a role means something is actually broken (e.g. a bad guild id) --
+    // it must be recorded, not silently treated as success with an undefined role id.
+    setEnv();
+    const { db, client } = freshDb();
+    const { calls } = stubFetchSequence([{ status: 404 }]);
+    await createNameRole(client, PLAYER_ID, 'user-1', 'Alice');
+    assert.equal(calls.length, 1, 'must stop at the failed create, not proceed to reposition/assign');
+    const player = db.players.find((p) => p.id === PLAYER_ID);
+    assert.equal(player?.discord_name_role_id, null);
+    assert.equal(liveOpsErrors(db, PLAYER_ID, 'discord_name_role_sync').length, 1);
+  });
+
   await test('createNameRole: a failed assign (position lookup itself failing) is recorded and stores nothing', async () => {
     setEnv();
     const { db, client } = freshDb();
