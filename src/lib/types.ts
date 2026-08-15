@@ -60,6 +60,8 @@ export interface Player {
   id: number;
   name: string;
   discord_id: string | null;
+  /** The player's cosmetic name-color Discord role — `null` if unlinked or not yet created. */
+  discord_name_role_id: string | null;
   steam_id: string | null;
   steam_nickname: string | null;
   steam_avatar_url: string | null;
