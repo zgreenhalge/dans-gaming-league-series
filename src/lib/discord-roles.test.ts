@@ -23,6 +23,11 @@ import { test, report } from './test-support/miniTest';
 // (Alice/Bob/Carol) — see test-support/fixtures.ts's SEASON_PLAYERS. Player 4 (Dave) is not on it.
 const ROSTERED_PLAYER_ID = 1;
 const UNROSTERED_PLAYER_ID = 4;
+// Player 5 (Erin) has no season_players row for season 3, but is already rostered into match 400
+// (week 13, season 3's own zero-stat placeholder rows) — the shape of a season scheduled/imported
+// without ever writing season_players, which is what #397's bug report turned out to be (see
+// discord-roles.ts's getSeasonParticipants() usage).
+const MATCH_ROSTERED_ONLY_PLAYER_ID = 5;
 
 const PLAYER_ID = 1;
 const ENV_KEYS = ['DISCORD_BOT_TOKEN', 'DISCORD_GUILD_ID', 'DISCORD_PARTICIPANTS_ROLE_ID'] as const;
@@ -186,6 +191,15 @@ async function main() {
     const { client } = freshDb();
     const { calls } = stubFetch();
     await syncParticipantRoleForPlayer(client, ROSTERED_PLAYER_ID, 'user-1');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'PUT');
+  });
+
+  await test('syncParticipantRoleForPlayer: grants when the player is only rostered via a match, not season_players', async () => {
+    setEnv();
+    const { client } = freshDb();
+    const { calls } = stubFetch();
+    await syncParticipantRoleForPlayer(client, MATCH_ROSTERED_ONLY_PLAYER_ID, 'user-5');
     assert.equal(calls.length, 1);
     assert.equal(calls[0].method, 'PUT');
   });
