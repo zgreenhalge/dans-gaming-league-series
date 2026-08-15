@@ -35,6 +35,18 @@ export const DISCORD_COMMANDS = [
       },
     ],
   },
+  {
+    name: 'name-color',
+    description: 'Set the color of your DGLS name role',
+    options: [
+      {
+        type: 3, // STRING
+        name: 'hex',
+        description: 'A hex color, e.g. ff5733 or #ff5733',
+        required: true,
+      },
+    ],
+  },
 ];
 
 export type RegisterDiscordCommandsResult =

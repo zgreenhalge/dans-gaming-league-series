@@ -7,7 +7,12 @@ import {
   INTERACTION_TYPE_APPLICATION_COMMAND,
   type DiscordInteraction,
 } from '@/lib/discordInteractions';
-import { handleLeaderboardCommand, handleScheduledCommand, handlePlayerCommand } from '@/lib/discord-commands';
+import {
+  handleLeaderboardCommand,
+  handleScheduledCommand,
+  handlePlayerCommand,
+  handleNameColorCommand,
+} from '@/lib/discord-commands';
 
 // Discord Interactions HTTP endpoint (#396) — serverless slash commands, no gateway bot process.
 // Discord POSTs every interaction here (after verifying this URL responds correctly to its PING
@@ -45,6 +50,8 @@ export async function POST(request: Request) {
           return NextResponse.json(await handleScheduledCommand());
         case 'player':
           return NextResponse.json(await handlePlayerCommand(interaction));
+        case 'name-color':
+          return NextResponse.json(await handleNameColorCommand(interaction));
         default:
           return NextResponse.json(messageResponse(`Unknown command: ${name}`));
       }

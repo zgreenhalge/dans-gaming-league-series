@@ -55,8 +55,8 @@ Create `.env.local` at the repo root:
 | `DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL` | Discord incoming webhook URL for the `#match-notifications` channel — server-live and final-score alerts (`src/lib/discord-notify.ts`). Omit to disable; every call site no-ops without it |
 | `DISCORD_PUBLIC_KEY` | Discord application public key — verifies incoming slash-command requests to `/api/discord/interactions` (`src/lib/discordInteractions.ts`) |
 | `DISCORD_APPLICATION_ID` | Discord application id — used only by `scripts/register-discord-commands.ts` to register/update the slash command definitions |
-| `DISCORD_BOT_TOKEN` | Discord bot token — grants/revokes `@Participants` (`src/lib/discord-roles.ts`, #397) and registers slash commands (`scripts/register-discord-commands.ts`); the interactions endpoint itself is verified by `DISCORD_PUBLIC_KEY`, not this token. Needs `Manage Roles` (and, once #398 lands, thread/event permissions), with the bot's own role positioned above `@Participants` in the server's role hierarchy |
-| `DISCORD_GUILD_ID` | The DGLS Discord server's id — scopes the `@Participants` role-sync API calls to the right guild |
+| `DISCORD_BOT_TOKEN` | Discord bot token — grants/revokes `@Participants` and manages per-player name-color roles (`src/lib/discord-roles.ts`, #397) and registers slash commands (`scripts/register-discord-commands.ts`); the interactions endpoint itself is verified by `DISCORD_PUBLIC_KEY`, not this token. Needs `Manage Roles` (and, once #398 lands, thread/event permissions), with the bot's own role positioned at the top of the server's role hierarchy — above `@Participants` and above where name-color roles get created |
+| `DISCORD_GUILD_ID` | The DGLS Discord server's id — scopes the `@Participants`/name-color role API calls to the right guild |
 | `DISCORD_PARTICIPANTS_ROLE_ID` | The `@Participants` role's id — what `src/lib/discord-roles.ts` grants/revokes |
 | `CRON_SECRET` | Bearer token checked by the Vercel cron endpoint |
 | `CLOUDFLARE_R2_ACCOUNT_ID` | Cloudflare R2 account ID (demo uploads) |

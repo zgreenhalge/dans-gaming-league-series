@@ -57,7 +57,7 @@ async function main() {
     const { calls } = stubFetch(200, registered);
     const result = await registerDiscordCommands();
     assert.equal(result.ok, true);
-    assert.deepEqual(result.ok && result.names, ['leaderboard', 'scheduled', 'player']);
+    assert.deepEqual(result.ok && result.names, ['leaderboard', 'scheduled', 'player', 'name-color']);
     assert.equal(calls.length, 1);
     assert.equal(calls[0].method, 'PUT');
     assert.equal(calls[0].url, 'https://discord.com/api/v10/applications/test-app-id/commands');

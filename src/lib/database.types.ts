@@ -985,6 +985,7 @@ export type Database = {
       players: {
         Row: {
           discord_id: string | null
+          discord_name_role_id: string | null
           id: number
           is_admin: boolean
           name: string
@@ -997,6 +998,7 @@ export type Database = {
         }
         Insert: {
           discord_id?: string | null
+          discord_name_role_id?: string | null
           id?: number
           is_admin?: boolean
           name: string
@@ -1009,6 +1011,7 @@ export type Database = {
         }
         Update: {
           discord_id?: string | null
+          discord_name_role_id?: string | null
           id?: number
           is_admin?: boolean
           name?: string

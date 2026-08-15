@@ -3,6 +3,7 @@
     "id": 1,
     "name": "Alice",
     "discord_id": null,
+    "discord_name_role_id": null,
     "steam_id": "76500000000000001",
     "steam_nickname": "alice_cs",
     "steam_avatar_url": null,
