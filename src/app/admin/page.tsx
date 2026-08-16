@@ -57,9 +57,6 @@ export default async function AdminPage() {
   const gauntletById = new Map(gauntletSeasons.map((g) => [g.id, g]));
   const seasonOpsErrors = opsErrors.filter((e) => e.entityType === 'season');
   const activeRegular = regularSeasons.filter((s) => s.status === 'ACTIVE');
-  const eligibleForGauntlet = activeRegular
-    .filter((s) => !paired.has(s.id))
-    .map((s) => ({ id: s.id, name: s.name }));
   const gauntletsInProgress: GauntletRow[] = await Promise.all(
     activeRegular
       .filter((s) => paired.has(s.id))
@@ -111,7 +108,6 @@ export default async function AdminPage() {
           server={{ active: activeServerMatch, configSets, maps: workshopMaps }}
           season={{
             allSeasons,
-            eligibleForGauntlet,
             gauntletsInProgress,
             seasonOpsErrors,
             nextSeasonName,

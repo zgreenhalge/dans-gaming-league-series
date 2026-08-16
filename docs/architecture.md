@@ -61,7 +61,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | Method | Path | Description |
 |---|---|---|
 | `PATCH` | `/api/matches/[id]/veto` | Submit a single pick/ban step (auto-provisions the server on completion) |
-| `PATCH` | `/api/matches/[id]/score` | Submit final score + player stats (tears down the server; posts a `#match-notifications` Discord alert the first time a match transitions into "played" — see [`hosting.md`](./hosting.md)) |
+| `PATCH` | `/api/matches/[id]/score` | Submit final score + player stats (tears down the server; posts a `#match-notifications` Discord alert and closes the match's Discord thread, if any, the first time a match transitions into "played" — see [`hosting.md`](./hosting.md)) |
 | `PATCH` | `/api/matches/[id]/schedule` | Set a match's scheduled time |
 | `PATCH` | `/api/matches/[id]/feature` | Toggle a match's `is_feature_match` flag (admin only) |
 | `POST` | `/api/matches/[id]/demo/upload-url` | Mint a presigned Cloudflare R2 URL to upload a `.dem` file |
@@ -97,6 +97,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `GET` | `/api/cron/refresh-steam` | Refresh Steam avatars/nicknames for all linked players (Vercel cron; see below) |
 | `POST` | `/api/discord/interactions` | Discord Interactions endpoint (#396) — Ed25519-verified (`DISCORD_PUBLIC_KEY`), serves `/leaderboard`, `/scheduled`, `/player`, `/name-color` slash commands (`src/lib/discord-commands.ts`). Command *definitions* are separate, pushed by `scripts/register-discord-commands.ts` — this route only serves already-registered commands, it doesn't register them |
 | `POST` | `/api/admin/discord/backfill-name-roles` | Creates name-color Discord roles for every linked player still missing one (admin only; see "Discord account linking" above) |
+| `POST` | `/api/seasons/[id]/discord-threads` | Publish one week's Discord match threads — `{ week: number \| 'next' }` — to a regular season's `season-{N}` forum channel, tagging rostered players (`publishWeekThreads()`, `src/lib/discord-threads.ts`, #398). Admin-triggered only; refuses gauntlet seasons (admin only) |
 
 ## Database
 
@@ -126,7 +127,7 @@ Supabase (`public` schema). RLS is **off** on all tables — do not enable it wi
 | `scrim_sessions` | Singleton table (`id` pinned to `1`) tracking the one active scrim, if any: `started_by` (owner, for the stop-authorization check), `warned_15`/`warned_10`/`warned_5` (pre-match warning one-shots). See [`hosting.md`](./hosting.md)'s Scrims section. |
 | `live_match_score` | One row per in-progress match (`match_id` PK): `shirts_score`, `skins_score`, `round` (nullable). Written by `going_live`/`round_end`/`map_result` events, read live via Supabase Realtime by `MatchScoreHero`/`LiveMatchTicker`. Deleted by `pullDemoAndClearLiveScore()` (`liveScore.ts`), which both `demo-ingest.ts` and `replay-extract.ts` call instead of `ensureDemoInR2()` directly so the demo pull always clears the row — a demo existing is proof the match is over regardless of whether its score has been derived/confirmed yet; `writeMatchScore()` also clears it as a fallback for a score confirmed with no demo ever pulled — see [`hosting.md`](./hosting.md). |
 | `match_server_state` | One row per match (`match_id` PK), created on first provision — no row means `idle`. Transient DatHost server-lifecycle state (`server_state`, `dathost_server_id`, `connect_string`, `server_started_at`, `teardown_at`), kept off the core `matches` row since it's orchestration state, not match data. See [`hosting.md`](./hosting.md)'s Server-state machine section. |
-| `match_discord_state` | One row per match (`match_id` PK, `ON DELETE CASCADE`). Reserved, not yet read or written by any code: `reminder_sent_at` will be the one-shot guard for a planned 1-hour-out reminder (#395); `thread_id` will be a planned weekly match-thread's Discord thread id (#398), letting that future job tell "already has a thread" from "needs one." Both land as part of #389. |
+| `match_discord_state` | One row per match (`match_id` PK, `ON DELETE CASCADE`). `thread_id` is the match's Discord forum-thread id, written by `publishWeekThreads()` (`src/lib/discord-threads.ts`, #398) once its thread is created or adopted — a read cache for `closeMatchThread()` to find the right thread once the match is played, not the source of truth for create idempotency, which `listChannelThreads()` checks against Discord itself. `reminder_sent_at` is reserved for a planned 1-hour-out match reminder (#395), not yet built. |
 
 ### View: `player_season_leaderboard`
 
@@ -374,7 +375,7 @@ NULL`; `getOpsErrorHistory()` reads every row from the last 8 weeks regardless o
 grouped into a flat `(operation, week)` failure count, for the admin console's Activity → History
 tab.
 
-Wired into twenty-one operations today:
+Wired into twenty-five operations today:
 
 | Operation | Entity | Recorded from |
 |---|---|---|
@@ -400,6 +401,9 @@ Wired into twenty-one operations today:
 | `discord_notify_score` | `match` | `notifyMatchScoreReported()` (`discord-notify.ts`, #395) — a real webhook failure, not just the channel being unconfigured. A distinct operation from `discord_notify_server_live` (not a shared `discord_notify`) so a failure from one notification can't be silently cleared by an unrelated success of the other for the same match |
 | `discord_role_sync` | `player`, or `season` (regular) for a roster-fetch failure | `discord-roles.ts` (#397)'s `setGuildMemberRole()` for the per-player case — a real Discord API failure, not just the role sync being unconfigured or the player having no `discord_id`; `season-lifecycle.ts`'s `syncParticipantRoleForRoster()` for the season-level case, when fetching the roster itself fails ahead of the (never-throwing) per-player grant/revoke pass |
 | `discord_link` | `player`, or `system` (id `0`) for a config failure | `GET /api/auth/discord/callback` (#394) — a genuine failure (bad response from Discord, an unhandled exception, missing `DISCORD_CLIENT_ID`/`SECRET`), not the expected "denied"/"taken" outcomes, which redirect the one affected player but aren't logged |
+| `discord_thread_publish` | `season` (regular) | `publishWeekThreads()` (`discord-threads.ts`, #398) — the season-level forum channel couldn't be resolved (missing/misnamed/wrong-type `season-{N}` channel, or the guild-channels listing call itself failed), before any per-match thread is attempted |
+| `discord_thread_create` | `match` | `publishWeekThreads()` (`discord-threads.ts`, #398) — either a real Discord API failure creating that match's thread, or an idempotency skip (a thread titled for this match already exists in the channel, checked against Discord itself via `listChannelThreads()`, not `match_discord_state` — so a thread an admin created by hand is adopted instead of duplicated), recorded the same "needs admin eyes" way as the gauntlet roster-drift case |
+| `discord_thread_close` | `match` | `closeMatchThread()` (`discord-threads.ts`, #398) — a real Discord API failure archiving/locking a match's thread, called from the score route's best-effort hooks (`PATCH /api/matches/[id]/score`) only on the transition into "played" |
 
 Each is cleared automatically the next time that same (entity, operation) succeeds —
 `tryBuildGauntletShape()` and `trySeedGauntlet()` clear their own on success, `checkGauntletCompletion()`

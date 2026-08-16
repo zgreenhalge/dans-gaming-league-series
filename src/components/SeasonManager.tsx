@@ -19,6 +19,7 @@ import DeleteSeasonButton from './DeleteSeasonButton';
 import { CreateGauntletForm } from './CreateGauntletForm';
 import { GauntletLifecycleList, type GauntletRow } from './GauntletLifecycleList';
 import { OpsErrorList, type OpsErrorItem } from './OpsErrorList';
+import { DiscordThreadPublisher } from './DiscordThreadPublisher';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
 
 export interface SeasonSummary {
@@ -37,29 +38,25 @@ const STATUS_BADGE: Record<string, string> = {
 
 export function SeasonManager({
   allSeasons,
-  eligibleForGauntlet,
   gauntletsInProgress,
   seasonOpsErrors,
   nextSeasonName,
   focusLabel,
 }: {
   allSeasons: SeasonSummary[];
-  eligibleForGauntlet: { id: number; name: string }[];
   gauntletsInProgress: GauntletRow[];
   seasonOpsErrors: OpsErrorItem[];
   nextSeasonName: string;
   /** Set when an Activity-tab ops error jumps here — opens and scrolls the matching season into view. */
   focusLabel?: string;
 }) {
-  const eligibleIds = new Set(eligibleForGauntlet.map((s) => s.id));
   const gauntletByRegularId = new Map(gauntletsInProgress.map((g) => [g.regularSeasonId, g]));
   const errorsByLabel = new Map(seasonOpsErrors.map((e) => [e.label, e]));
 
-  // Only used for the jump-target lookup below, where there's no already-fetched `gauntletRow` to
-  // derive this from — the row loop computes its own `canExpand` directly instead of calling this,
-  // so the map isn't queried twice per row.
+  // Every ACTIVE regular season is expandable — gauntlet lifecycle controls (build/seed/reset, or the
+  // eligible "create" form) and the Discord match-thread publisher both live in the expansion.
   function expandable(s: SeasonSummary): boolean {
-    return s.status === 'ACTIVE' && !s.isGauntlet && (eligibleIds.has(s.id) || gauntletByRegularId.has(s.id));
+    return s.status === 'ACTIVE' && !s.isGauntlet;
   }
 
   // Opens the jump target's row at mount time. `AdminConsole` remounts this component (via `key`)
@@ -87,7 +84,7 @@ export function SeasonManager({
             const isOpen = openId === s.id;
             const error = errorsByLabel.get(s.name);
             const gauntletRow = gauntletByRegularId.get(s.id);
-            const canExpand = s.status === 'ACTIVE' && !s.isGauntlet && (eligibleIds.has(s.id) || !!gauntletRow);
+            const canExpand = expandable(s);
             return (
               <div
                 key={s.id}
@@ -138,12 +135,13 @@ export function SeasonManager({
                 </div>
 
                 {isOpen && canExpand && (
-                  <div className="px-3 py-4 bg-[var(--color-bg-secondary)] border-t border-[var(--color-border-tertiary)]">
+                  <div className="px-3 py-4 bg-[var(--color-bg-secondary)] border-t border-[var(--color-border-tertiary)] flex flex-col gap-6">
                     {gauntletRow ? (
                       <GauntletLifecycleList seasons={[gauntletRow]} />
                     ) : (
                       <CreateGauntletForm seasons={[{ id: s.id, name: s.name }]} />
                     )}
+                    <DiscordThreadPublisher seasonId={s.id} />
                   </div>
                 )}
               </div>
