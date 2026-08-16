@@ -156,12 +156,13 @@ async function getBotTopRolePosition(guildId: string, token: string): Promise<nu
   return positions.length > 0 ? Math.max(...positions) : null;
 }
 
-/** Creates this player's cosmetic name-color role — named after their current DGLS name, positioned
- *  directly below the bot's own top role, and assigned to their Discord member — storing its id in
- *  `players.discord_name_role_id`. No-ops without full config, without a `discordId`, or if the
- *  player already has a role recorded (idempotent, so a retry or a repeat backfill pass can't create
- *  duplicates). Call this after writing a new (non-null) `discord_id` — self-service OAuth link or an
- *  admin override — same trigger point as `syncParticipantRoleForPlayer`.
+/** Creates this player's cosmetic name-color role — named after their current DGLS name, mentionable
+ *  by anyone in the server, positioned directly below the bot's own top role, and assigned to their
+ *  Discord member — storing its id in `players.discord_name_role_id`. No-ops without full config,
+ *  without a `discordId`, or if the player already has a role recorded (idempotent, so a retry or a
+ *  repeat backfill pass can't create duplicates). Call this after writing a new (non-null)
+ *  `discord_id` — self-service OAuth link or an admin override — same trigger point as
+ *  `syncParticipantRoleForPlayer`.
  *
  *  `topPosition` lets a caller resolving several players in one batch (`backfillNameRoles()`) pass in
  *  the bot's top-role position once for the whole batch instead of every call re-resolving the same
@@ -190,7 +191,7 @@ export async function createNameRole(
   const createRes = await discordApiCall(
     supabaseAdmin, playerId, NAME_ROLE_OPERATION, 'role create',
     `https://discord.com/api/v10/guilds/${guildId}/roles`,
-    { method: 'POST', headers, body: JSON.stringify({ name: playerName }) },
+    { method: 'POST', headers, body: JSON.stringify({ name: playerName, mentionable: true }) },
     false, // a 404 here means bad config (guild gone), not an already-absent target -- must not be tolerated
   );
   if (!createRes) return;
