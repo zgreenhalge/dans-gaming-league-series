@@ -289,7 +289,7 @@ async function main() {
     assert.equal(calls.length, 6);
     assert.equal(calls[0].method, 'POST');
     assert.equal(calls[0].url, 'https://discord.com/api/v10/guilds/test-guild-id/roles');
-    assert.deepEqual(calls[0].body, { name: 'Alice' });
+    assert.deepEqual(calls[0].body, { name: 'Alice', mentionable: true });
     assert.equal(calls[4].method, 'PATCH');
     assert.deepEqual(calls[4].body, [{ id: 'role-1', position: 4 }]);
     assert.equal(calls[5].method, 'PUT');
