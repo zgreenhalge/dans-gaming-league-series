@@ -9,6 +9,7 @@ import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import type { DemoSabremetricStat, DemoWeaponStat } from '@/lib/types';
 import { after, afterBestEffort } from '@/lib/after';
 import { notifyMatchScoreReported } from '@/lib/discord-notify';
+import { closeMatchThread } from '@/lib/discord-threads';
 
 type MatchRow = {
   id: number;
@@ -123,12 +124,16 @@ export async function PATCH(
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  // Discord notification, only on the transition into "played" — an admin correcting an
-  // already-played score (alreadyPlayed was computed before writeMatchScore() above) shouldn't
-  // re-post a "Final:" announcement for the same match.
+  // Discord notification + match-thread close, only on the transition into "played" — an admin
+  // correcting an already-played score (alreadyPlayed was computed before writeMatchScore() above)
+  // shouldn't re-post a "Final:" announcement or re-attempt closing a thread that's presumably
+  // already closed for the same match.
   if (!alreadyPlayed) {
     afterBestEffort(`discord-notify: score reported for match ${matchId}`, () =>
       notifyMatchScoreReported(supabaseAdmin, matchId),
+    );
+    afterBestEffort(`discord-threads: close thread for match ${matchId}`, () =>
+      closeMatchThread(supabaseAdmin, matchId),
     );
   }
 

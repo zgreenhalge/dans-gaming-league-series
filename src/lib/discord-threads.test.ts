@@ -1,7 +1,8 @@
 /**
- * Unit tests for discord-threads.ts's admin-triggered weekly match-thread publish (#398): forum-
- * channel resolution, per-match idempotency, the season-wide played-match thread-close sweep, and the
- * ops_errors observability trail alongside the per-match results returned to the caller.
+ * Unit tests for discord-threads.ts: `publishWeekThreads()`'s admin-triggered weekly match-thread
+ * publish (#398) — forum-channel resolution, per-match idempotency, and the ops_errors observability
+ * trail alongside the per-match results returned to the caller — plus `closeMatchThread()`'s
+ * best-effort single-match close, the score route's hook on the transition into "played".
  *
  * Run:  npx vitest run src/lib/discord-threads.test.ts
  */
@@ -21,7 +22,7 @@ fakeDb.players = fakeDb.players.map((p) =>
 const adminClient = createFakeSupabaseClient(fakeDb);
 __setTestClient(adminClient);
 
-import { publishWeekThreads } from './discord-threads';
+import { publishWeekThreads, closeMatchThread } from './discord-threads';
 import { test, report } from './test-support/miniTest';
 
 const GUILD_CHANNELS = [
@@ -34,9 +35,7 @@ interface FetchCall {
   init?: RequestInit;
 }
 
-function stubDiscord(
-  opts: { threadStatus?: number; threadBody?: unknown; closeStatus?: number; closeBody?: unknown } = {},
-): { calls: FetchCall[] } {
+function stubDiscord(opts: { threadStatus?: number; threadBody?: unknown } = {}): { calls: FetchCall[] } {
   const calls: FetchCall[] = [];
   let threadCounter = 0;
   (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
@@ -53,15 +52,17 @@ function stubDiscord(
         json: async () => opts.threadBody ?? (ok ? { id: `thread-${++threadCounter}` } : { message: 'Missing Access' }),
       } as unknown as Response;
     }
-    // PATCH https://discord.com/api/v10/channels/{threadId} — the archive/lock close call, the only
-    // other shape a channels/... URL takes once the two branches above are ruled out.
-    const status = opts.closeStatus ?? 200;
-    const ok = status >= 200 && status < 300;
-    return {
-      ok,
-      status,
-      json: async () => opts.closeBody ?? (ok ? {} : { message: 'Missing Permissions' }),
-    } as unknown as Response;
+    throw new Error(`unexpected fetch to ${url}`);
+  }) as typeof fetch;
+  return { calls };
+}
+
+function stubDiscordClose(status = 200, body?: unknown): { calls: FetchCall[] } {
+  const calls: FetchCall[] = [];
+  const ok = status >= 200 && status < 300;
+  (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
+    calls.push({ url, init });
+    return { ok, status, json: async () => body ?? (ok ? {} : { message: 'Missing Permissions' }) } as unknown as Response;
   }) as typeof fetch;
   return { calls };
 }
@@ -127,16 +128,6 @@ async function main() {
 
     const { data: state100 } = await adminClient.from('match_discord_state').select('thread_id').eq('match_id', 100).maybeSingle();
     assert.ok((state100 as { thread_id: string }).thread_id);
-
-    // Match 100 is already played (final_score '13-9' in the fixture) — its brand-new thread should
-    // be swept closed in the same call, since "existing thread for a played match" doesn't care when
-    // the thread was created. Match 101 isn't played yet, so it's untouched.
-    assert.equal(ok.closed.length, 1);
-    assert.equal(ok.closed[0].matchId, 100);
-    assert.equal(ok.closed[0].status, 'closed');
-    const closeCall = calls.find((c) => c.init?.method === 'PATCH');
-    assert.ok(closeCall);
-    assert.deepEqual(JSON.parse(closeCall!.init!.body as string), { archived: true, locked: true });
   });
 
   await test('publishWeekThreads: re-publishing the same week skips the already-threaded match and records an ops_errors row', async () => {
@@ -149,12 +140,6 @@ async function main() {
     assert.deepEqual(ok.matches.map((m) => m.status), ['skipped', 'skipped']);
     assert.equal(liveOpsErrors('match', 100, 'discord_thread_create').length, 1);
     assert.match(liveOpsErrors('match', 100, 'discord_thread_create')[0].message as string, /Already has a thread/);
-
-    // Match 100's already-closed thread gets swept again — archiving/locking an already-archived
-    // thread is a harmless no-op on Discord's side, so this doesn't need its own idempotency guard.
-    assert.equal(ok.closed.length, 1);
-    assert.equal(ok.closed[0].matchId, 100);
-    assert.equal(ok.closed[0].status, 'closed');
   });
 
   await test('publishWeekThreads: "next" resolves the same way findCurrentWeek does', async () => {
@@ -166,10 +151,7 @@ async function main() {
     // no-start_date fallback (though season 3 does have a start_date; either way there's one week).
     const result = await publishWeekThreads(adminClient, 3, 'next');
     assert.ok(!('error' in result));
-    const ok = result as Exclude<typeof result, { error: string }>;
-    assert.equal(ok.weekNumber, 1);
-    // Season 3 has no played matches yet, so nothing to sweep closed.
-    assert.deepEqual(ok.closed, []);
+    assert.equal((result as { weekNumber: number }).weekNumber, 1);
   });
 
   await test('publishWeekThreads: a channel resolution failure is recorded to ops_errors (entity season) and returned directly', async () => {
@@ -202,37 +184,70 @@ async function main() {
     assert.match(rows[0].message as string, /Missing Access/);
   });
 
-  await test('publishWeekThreads: a thread published while a match was upcoming gets closed once it is played; a close failure is recorded to ops_errors', async () => {
+  await test('closeMatchThread: no-ops without DISCORD_BOT_TOKEN', async () => {
+    delete process.env.DISCORD_BOT_TOKEN;
+    const { calls } = stubDiscordClose();
+    await closeMatchThread(adminClient, 100);
+    assert.equal(calls.length, 0);
+  });
+
+  await test('closeMatchThread: no-ops for a match with no recorded thread', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    // Match 200 (gauntlet) has never been threaded — no match_discord_state row at all.
+    const { calls } = stubDiscordClose();
+    await closeMatchThread(adminClient, 200);
+    assert.equal(calls.length, 0);
+  });
+
+  await test('closeMatchThread: archives and locks the match\'s thread', async () => {
     process.env.DISCORD_BOT_TOKEN = 'bot-token';
     process.env.DISCORD_GUILD_ID = 'guild-1';
-
-    // Match 102 never got a thread in the earlier "Discord API failure creating a thread" test (that
-    // attempt failed) — give it one now with a clean, successful stub, while it's still unplayed.
+    // Give match 101 a thread first via a normal publish (season 1 week 1's second match).
     stubDiscord();
-    const first = await publishWeekThreads(adminClient, 1, 2);
-    assert.ok(!('error' in first));
-    const firstOk = first as Exclude<typeof first, { error: string }>;
-    assert.equal(firstOk.matches.find((m) => m.matchId === 102)?.status, 'created');
-    assert.ok(!firstOk.closed.some((c) => c.matchId === 102), 'not played yet — nothing to close');
+    await publishWeekThreads(adminClient, 1, 1);
+    const { data } = await adminClient.from('match_discord_state').select('thread_id').eq('match_id', 101).maybeSingle();
+    const threadId = (data as { thread_id: string }).thread_id;
 
-    // Now it's played — the scenario this sweep exists for.
-    await adminClient.from('matches').update({ final_score: '13-5' }).eq('id', 102);
+    const { calls } = stubDiscordClose();
+    await closeMatchThread(adminClient, 101);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, `https://discord.com/api/v10/channels/${threadId}`);
+    assert.equal(calls[0].init?.method, 'PATCH');
+    assert.deepEqual(JSON.parse(calls[0].init?.body as string), { archived: true, locked: true });
+    assert.equal(liveOpsErrors('match', 101, 'discord_thread_close').length, 0);
+  });
 
-    stubDiscord({ closeStatus: 500, closeBody: { message: 'Missing Permissions' } });
-    const second = await publishWeekThreads(adminClient, 1, 2);
-    assert.ok(!('error' in second));
-    const secondOk = second as Exclude<typeof second, { error: string }>;
-    // Already has a thread from the first call, so creation is skipped — only closing is attempted.
-    assert.equal(secondOk.matches.find((m) => m.matchId === 102)?.status, 'skipped');
-    const closeResult = secondOk.closed.find((c) => c.matchId === 102);
-    assert.equal(closeResult?.status, 'failed');
-    assert.match(closeResult?.detail ?? '', /500/);
-    assert.match(closeResult?.detail ?? '', /Missing Permissions/);
-    const rows = liveOpsErrors('match', 102, 'discord_thread_close');
+  await test('closeMatchThread: a Discord API failure is recorded to ops_errors', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    stubDiscordClose(403, { message: 'Missing Permissions' });
+    await closeMatchThread(adminClient, 101);
+    const rows = liveOpsErrors('match', 101, 'discord_thread_close');
     assert.equal(rows.length, 1);
+    assert.match(rows[0].message as string, /403/);
     assert.match(rows[0].message as string, /Missing Permissions/);
   });
 
+  await test('closeMatchThread: a later success clears the prior ops_errors row', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    assert.equal(liveOpsErrors('match', 101, 'discord_thread_close').length, 1, 'precondition: the previous test left a live error');
+    stubDiscordClose(200);
+    await closeMatchThread(adminClient, 101);
+    assert.equal(liveOpsErrors('match', 101, 'discord_thread_close').length, 0);
+  });
+
+  await test('closeMatchThread: a thrown fetch error is recorded, not thrown', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    (globalThis as unknown as { fetch: typeof fetch }).fetch = (async () => {
+      throw new Error('network down');
+    }) as typeof fetch;
+    await assert.doesNotReject(() => closeMatchThread(adminClient, 101));
+    const rows = liveOpsErrors('match', 101, 'discord_thread_close');
+    assert.equal(rows.length, 1);
+    assert.match(rows[0].message as string, /network down/);
+  });
+
+  delete process.env.DISCORD_BOT_TOKEN;
+  delete process.env.DISCORD_GUILD_ID;
   report();
 }
 

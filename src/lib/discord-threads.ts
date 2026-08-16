@@ -6,15 +6,15 @@
 // `POST /api/seasons/[id]/discord-threads`. Every match's outcome is both recorded to `ops_errors`
 // (`discord_thread_create`, entity `match`) and returned directly to the caller, since a channel
 // permission overwrite is the likeliest first-attempt failure and needs to be visible immediately in
-// the admin console, not only in the Activity feed on a later page load. Each publish also sweeps the
-// whole season for existing threads whose match has since been played and archives/locks them
-// (`discord_thread_close`) — there's no separate trigger for this, it rides along with whatever
-// already calls `publishWeekThreads()`.
+// the admin console, not only in the Activity feed on a later page load. `closeMatchThread()` is the
+// other half — archives + locks one match's thread once it has nothing left to coordinate, called
+// from `PATCH /api/matches/[id]/score`'s best-effort hooks on the transition into "played" (same spot
+// `notifyMatchScoreReported()` fires from), not from `publishWeekThreads()`.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSeason, getSeasonSchedule, findCurrentWeek, getPlayersById } from './queries';
 import type { WeekWithMatches, MatchWithRoster } from './queries/schedule';
-import { extractSeasonNumber, isPlayedScore } from './util';
+import { extractSeasonNumber } from './util';
 import { recordOpsError, clearOpsError } from './ops-errors';
 
 const CHANNEL_OPERATION = 'discord_thread_publish';
@@ -29,18 +29,10 @@ export interface ThreadPublishResult {
   detail: string;
 }
 
-export interface ThreadCloseResult {
-  matchId: number;
-  title: string;
-  status: 'closed' | 'failed';
-  detail: string;
-}
-
 export interface PublishWeekThreadsResult {
   seasonName: string;
   weekNumber: number;
   matches: ThreadPublishResult[];
-  closed: ThreadCloseResult[];
 }
 
 interface DiscordChannel {
@@ -154,69 +146,49 @@ function resolveTargetWeek(schedule: WeekWithMatches[], startDate: string | null
   return week === 'next' ? findCurrentWeek(schedule, startDate) : schedule.find((w) => w.week_number === week) ?? null;
 }
 
-/** Archives + locks the Discord thread for every played match across the whole season (not just the
- *  week being published) that still has one open — a played match's thread has nothing left to
- *  coordinate, so it's swept closed as a side effect of whatever publish call happens to run next
- *  rather than needing its own trigger. Archiving/locking an already-archived thread is a harmless
- *  no-op on Discord's side, so this doesn't need to track "already closed" itself — it just re-checks
- *  every played match with a thread on every call. */
-async function closePlayedMatchThreads(
-  supabaseAdmin: SupabaseClient,
-  token: string,
-  schedule: WeekWithMatches[],
-): Promise<ThreadCloseResult[]> {
-  const playedMatches = schedule.flatMap((w) =>
-    w.matches.filter((m) => isPlayedScore(m.final_score)).map((m) => ({ ...m, weekNumber: w.week_number })),
-  );
-  if (playedMatches.length === 0) return [];
+/** Archives + locks a single match's Discord thread, if it has one — the score route's best-effort
+ *  hook, called only on the transition into "played" (an admin correcting an already-played score
+ *  shouldn't re-attempt closing a thread that's presumably already closed). No-ops without
+ *  `DISCORD_BOT_TOKEN` or without a recorded `match_discord_state.thread_id` — most matches were
+ *  never threaded in the first place. Archiving/locking an already-archived thread is a harmless
+ *  no-op on Discord's side, so a retry (or an admin re-editing a score) can't double-fail. */
+export async function closeMatchThread(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  if (!token) return;
 
   const { data } = await supabaseAdmin
     .from('match_discord_state')
-    .select('match_id, thread_id')
-    .in('match_id', playedMatches.map((m) => m.id))
-    .not('thread_id', 'is', null);
-  const threadByMatch = new Map(
-    ((data ?? []) as { match_id: number; thread_id: string }[]).map((r) => [r.match_id, r.thread_id]),
-  );
+    .select('thread_id')
+    .eq('match_id', matchId)
+    .maybeSingle();
+  const threadId = (data as { thread_id: string | null } | null)?.thread_id;
+  if (!threadId) return;
 
-  const results: ThreadCloseResult[] = [];
-  for (const match of playedMatches) {
-    const threadId = threadByMatch.get(match.id);
-    if (!threadId) continue;
-    const title = threadTitle(match.weekNumber, match.match_number);
-    try {
-      const res = await fetch(`https://discord.com/api/v10/channels/${threadId}`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ archived: true, locked: true }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { message?: string } | null;
-        const detail = `Thread close returned ${res.status}${body?.message ? `: ${body.message}` : ''}`;
-        await recordOpsError(supabaseAdmin, 'match', match.id, THREAD_CLOSE_OPERATION, detail);
-        results.push({ matchId: match.id, title, status: 'failed', detail });
-        continue;
-      }
-      await clearOpsError(supabaseAdmin, 'match', match.id, THREAD_CLOSE_OPERATION);
-      results.push({ matchId: match.id, title, status: 'closed', detail: `Thread ${threadId} archived & locked` });
-    } catch (e) {
-      const detail = `Thread close failed: ${(e as Error).message}`;
-      await recordOpsError(supabaseAdmin, 'match', match.id, THREAD_CLOSE_OPERATION, detail);
-      results.push({ matchId: match.id, title, status: 'failed', detail });
+  try {
+    const res = await fetch(`https://discord.com/api/v10/channels/${threadId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archived: true, locked: true }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { message?: string } | null;
+      const detail = `Thread close returned ${res.status}${body?.message ? `: ${body.message}` : ''}`;
+      await recordOpsError(supabaseAdmin, 'match', matchId, THREAD_CLOSE_OPERATION, detail);
+      return;
     }
+    await clearOpsError(supabaseAdmin, 'match', matchId, THREAD_CLOSE_OPERATION);
+  } catch (e) {
+    await recordOpsError(supabaseAdmin, 'match', matchId, THREAD_CLOSE_OPERATION, `Thread close failed: ${(e as Error).message}`);
   }
-  return results;
 }
 
 /** Publishes one week's match threads for a regular season. `week` is either an explicit week number
  *  or `'next'`, resolved via `findCurrentWeek()` — the same helper the home page and the `/scheduled`
  *  Discord command use — so "publish next week" can never disagree with what the rest of the site
  *  calls "next week." Threads are created one at a time rather than in parallel, out of caution around
- *  Discord's per-route rate limits on forum thread creation. Also sweeps and closes (`closed`) every
- *  played match's thread across the whole season, not just the published week — see
- *  `closePlayedMatchThreads()`. Returns `{ error }` for a season-level failure (bad season,
- *  unconfigured Discord, channel not found/wrong type, no such week) before any match is attempted;
- *  otherwise every match's own create/close outcome, whether or not some of them failed. */
+ *  Discord's per-route rate limits on forum thread creation. Returns `{ error }` for a season-level
+ *  failure (bad season, unconfigured Discord, channel not found/wrong type, no such week) before any
+ *  match is attempted; otherwise every match's own outcome, whether or not some of them failed. */
 export async function publishWeekThreads(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
@@ -248,7 +220,5 @@ export async function publishWeekThreads(
     results.push(await publishMatchThread(supabaseAdmin, channel.channelId, token, targetWeek.week_number, match, playersById));
   }
 
-  const closed = await closePlayedMatchThreads(supabaseAdmin, token, schedule);
-
-  return { seasonName: season.name, weekNumber: targetWeek.week_number, matches: results, closed };
+  return { seasonName: season.name, weekNumber: targetWeek.week_number, matches: results };
 }
