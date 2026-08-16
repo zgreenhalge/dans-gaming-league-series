@@ -214,7 +214,7 @@ export async function createNameRole(
 }
 
 /** Renames this player's name-color role to match a new DGLS name. No-op without full config or a
- *  `roleId` (never linked, or linked before this feature existed and not yet backfilled). */
+ *  `roleId` (never linked, or linked before this feature existed). */
 export async function renameNameRole(
   supabaseAdmin: SupabaseClient,
   playerId: number,
