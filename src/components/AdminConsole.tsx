@@ -48,7 +48,6 @@ export function AdminConsole({
   server: { active: ActiveServerMatch | null; configSets: ConfigSetOption[]; maps: WorkshopMapOption[] };
   season: {
     allSeasons: SeasonSummary[];
-    eligibleForGauntlet: { id: number; name: string }[];
     gauntletsInProgress: GauntletRow[];
     seasonOpsErrors: OpsErrorItem[];
     nextSeasonName: string;
@@ -119,7 +118,6 @@ export function AdminConsole({
             <SeasonManager
               key={jumpNonce}
               allSeasons={season.allSeasons}
-              eligibleForGauntlet={season.eligibleForGauntlet}
               gauntletsInProgress={season.gauntletsInProgress}
               seasonOpsErrors={season.seasonOpsErrors}
               nextSeasonName={season.nextSeasonName}
