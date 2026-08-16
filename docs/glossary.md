@@ -153,6 +153,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | Discord `@Participants` role sync | `src/lib/discord-roles.ts`, hooked from `src/app/api/seasons/[id]/players/route.ts` (POST/DELETE) and `src/lib/season-lifecycle.ts` (`activateSeason()`/`checkSeasonCompletion()`) |
 | Discord name-color roles (per-player cosmetic role, `players.discord_name_role_id`) | `src/lib/discord-roles.ts` (`createNameRole()`/`renameNameRole()`/`deleteNameRole()`/`setDiscordRoleColor()`/`backfillNameRoles()`), hooked from the link/unlink/rename routes (`src/app/api/auth/discord/callback/`, `src/app/api/players/[id]/`, `src/app/api/players/me/discord/`, `src/app/api/players/me/name/`), `scripts/backfill-discord-name-roles.ts` / `POST /api/admin/discord/backfill-name-roles` |
 | Discord slash commands (`/leaderboard`, `/scheduled`, `/player`, `/name-color`) | `src/lib/discordInteractions.ts` (Ed25519 verification, response shapes), `src/lib/discord-commands.ts` (handlers), `src/app/api/discord/interactions/route.ts`, `scripts/register-discord-commands.ts` (registers the command *definitions*, separate from serving them) |
+| Discord weekly match-thread publish (`season-{N}` forum channel, `match_discord_state.thread_id`) | `src/lib/discord-threads.ts` (`publishWeekThreads()`), `src/app/api/seasons/[id]/discord-threads/route.ts`, `src/components/DiscordThreadPublisher.tsx` (admin console → Manage → Season) |
 
 ## Conventions to know before reading the query layer
 
