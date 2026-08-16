@@ -1,8 +1,10 @@
 /**
  * Unit tests for discord-threads.ts: `publishWeekThreads()`'s admin-triggered weekly match-thread
- * publish (#398) — forum-channel resolution, per-match idempotency, and the ops_errors observability
- * trail alongside the per-match results returned to the caller — plus `closeMatchThread()`'s
- * best-effort single-match close, the score route's hook on the transition into "played".
+ * publish (#398) — forum-channel resolution, per-match idempotency checked against Discord itself
+ * (not `match_discord_state`, so a hand-created thread is discovered and adopted rather than
+ * duplicated), and the ops_errors observability trail alongside the per-match results returned to the
+ * caller — plus `closeMatchThread()`'s best-effort single-match close, the score route's hook on the
+ * transition into "played".
  *
  * Run:  npx vitest run src/lib/discord-threads.test.ts
  */
@@ -35,26 +37,53 @@ interface FetchCall {
   init?: RequestInit;
 }
 
-function stubDiscord(opts: { threadStatus?: number; threadBody?: unknown } = {}): { calls: FetchCall[] } {
+interface StubThread {
+  id: string;
+  name: string;
+  parent_id?: string;
+}
+
+/**
+ * Stubs the guild-channels lookup, `listChannelThreads()`'s active/archived listing, and thread
+ * creation. `opts.existingThreads` seeds threads Discord already "has" before any create call —
+ * simulating one an admin made by hand — and every thread this stub's own create endpoint accepts
+ * gets appended to that same live list, so a second `publishWeekThreads()` call against the *same*
+ * stub instance (not a fresh `stubDiscord()`) sees its own prior output, the same way real Discord
+ * would. That's what makes the re-publish idempotency tests below meaningful: idempotency is checked
+ * against this simulated Discord state, never against `match_discord_state`.
+ */
+function stubDiscord(
+  opts: { threadStatus?: number; threadBody?: unknown; existingThreads?: StubThread[] } = {},
+): { calls: FetchCall[]; threads: StubThread[] } {
   const calls: FetchCall[] = [];
+  const threads: StubThread[] = [...(opts.existingThreads ?? [])];
   let threadCounter = 0;
   (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
     calls.push({ url, init });
     if (url.endsWith('/channels')) {
       return { ok: true, status: 200, json: async () => GUILD_CHANNELS } as unknown as Response;
     }
-    if (url.includes('/threads')) {
+    if (url.endsWith('/threads/active')) {
+      return { ok: true, status: 200, json: async () => ({ threads }) } as unknown as Response;
+    }
+    if (url.includes('/threads/archived/public')) {
+      return { ok: true, status: 200, json: async () => ({ threads: [] }) } as unknown as Response;
+    }
+    if (url.endsWith('/threads')) {
       const status = opts.threadStatus ?? 200;
       const ok = status >= 200 && status < 300;
-      return {
-        ok,
-        status,
-        json: async () => opts.threadBody ?? (ok ? { id: `thread-${++threadCounter}` } : { message: 'Missing Access' }),
-      } as unknown as Response;
+      if (!ok) {
+        return { ok, status, json: async () => opts.threadBody ?? { message: 'Missing Access' } } as unknown as Response;
+      }
+      const parentId = url.match(/\/channels\/([^/]+)\/threads$/)?.[1];
+      const name = (JSON.parse(init?.body as string) as { name: string }).name;
+      const id = `thread-${++threadCounter}`;
+      threads.push({ id, name, parent_id: parentId });
+      return { ok, status, json: async () => opts.threadBody ?? { id } } as unknown as Response;
     }
     throw new Error(`unexpected fetch to ${url}`);
   }) as typeof fetch;
-  return { calls };
+  return { calls, threads };
 }
 
 function stubDiscordClose(status = 200, body?: unknown): { calls: FetchCall[] } {
@@ -119,9 +148,9 @@ async function main() {
     assert.deepEqual(ok.matches.map((m) => m.status), ['created', 'created']);
     assert.deepEqual(ok.matches.map((m) => m.title), ['Week 1 Game 1', 'Week 1 Game 2']);
 
-    const threadCalls = calls.filter((c) => c.url.includes('/threads'));
-    assert.equal(threadCalls.length, 2);
-    const firstBody = JSON.parse(threadCalls[0].init?.body as string);
+    const createCalls = calls.filter((c) => c.init?.method === 'POST');
+    assert.equal(createCalls.length, 2);
+    const firstBody = JSON.parse(createCalls[0].init?.body as string);
     assert.equal(firstBody.name, 'Week 1 Game 1');
     // Match 100: shirts Alice(1)+Bob(2, both linked), skins Carol(3)+Dave(4, unlinked).
     assert.equal(firstBody.message.content, '<@discord-alice> & <@discord-bob> vs Carol & Dave');
@@ -130,16 +159,53 @@ async function main() {
     assert.ok((state100 as { thread_id: string }).thread_id);
   });
 
-  await test('publishWeekThreads: re-publishing the same week skips the already-threaded match and records an ops_errors row', async () => {
+  await test('publishWeekThreads: re-publishing the same week finds its own threads in Discord (not match_discord_state) and skips them', async () => {
     process.env.DISCORD_BOT_TOKEN = 'bot-token';
     process.env.DISCORD_GUILD_ID = 'guild-1';
-    stubDiscord();
-    const result = await publishWeekThreads(adminClient, 1, 1);
-    assert.ok(!('error' in result));
-    const ok = result as Exclude<typeof result, { error: string }>;
+    // One stub instance shared across both calls — its `threads` list is what Discord "actually has",
+    // updated in place by the first call's creates, so the second call's idempotency check is really
+    // reading that simulated Discord state, not any DB row.
+    const { calls } = stubDiscord();
+    const first = await publishWeekThreads(adminClient, 1, 1);
+    assert.ok(!('error' in first));
+    assert.deepEqual((first as Exclude<typeof first, { error: string }>).matches.map((m) => m.status), ['created', 'created']);
+
+    const second = await publishWeekThreads(adminClient, 1, 1);
+    assert.ok(!('error' in second));
+    const ok = second as Exclude<typeof second, { error: string }>;
     assert.deepEqual(ok.matches.map((m) => m.status), ['skipped', 'skipped']);
     assert.equal(liveOpsErrors('match', 100, 'discord_thread_create').length, 1);
-    assert.match(liveOpsErrors('match', 100, 'discord_thread_create')[0].message as string, /Already has a thread/);
+    assert.match(liveOpsErrors('match', 100, 'discord_thread_create')[0].message as string, /already exists in the channel/);
+
+    // No new thread was created on the second call — only the first call's two POSTs ever happened.
+    assert.equal(calls.filter((c) => c.init?.method === 'POST').length, 2);
+  });
+
+  await test('publishWeekThreads: finds a thread an admin created by hand and adopts it instead of duplicating or posting into it', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    // Week 2 (season 1, week_id 11) has one match, 102 — "Week 2 Game 1". Simulate an admin having
+    // already created that exact thread by hand; match_discord_state has no record of it either way.
+    const { calls } = stubDiscord({
+      existingThreads: [{ id: 'admin-thread-1', name: 'Week 2 Game 1', parent_id: 'channel-season-5' }],
+    });
+    const result = await publishWeekThreads(adminClient, 1, 2);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    assert.equal(ok.matches.length, 1);
+    assert.equal(ok.matches[0].status, 'skipped');
+    assert.equal(ok.matches[0].detail, 'Already exists (thread admin-thread-1)');
+
+    // Never touched — no thread-create POST was made at all.
+    assert.equal(calls.filter((c) => c.init?.method === 'POST').length, 0);
+
+    // Adopted into match_discord_state anyway, so closeMatchThread() can still find it once played.
+    const { data } = await adminClient.from('match_discord_state').select('thread_id').eq('match_id', 102).maybeSingle();
+    assert.equal((data as { thread_id: string }).thread_id, 'admin-thread-1');
+
+    const rows = liveOpsErrors('match', 102, 'discord_thread_create');
+    assert.equal(rows.length, 1);
+    assert.match(rows[0].message as string, /already exists in the channel/);
   });
 
   await test('publishWeekThreads: "next" resolves the same way findCurrentWeek does', async () => {

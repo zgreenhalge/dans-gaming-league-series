@@ -10,6 +10,15 @@
 // other half — archives + locks one match's thread once it has nothing left to coordinate, called
 // from `PATCH /api/matches/[id]/score`'s best-effort hooks on the transition into "played" (same spot
 // `notifyMatchScoreReported()` fires from), not from `publishWeekThreads()`.
+//
+// Idempotency is checked against Discord itself, not `match_discord_state` — an admin can create a
+// match's thread by hand (or a previous run's Discord call could have succeeded right before its own
+// DB write failed), and the DB would have no record of it either way. `listChannelThreads()` reads
+// the forum channel's actual threads before creating anything, matched by exact title
+// (`threadTitle()`'s "Week N Game M"), the only link back to a match a hand-made thread can carry. A
+// match whose title already exists in the channel is never posted into or otherwise touched — its
+// thread id is just adopted into `match_discord_state` so `closeMatchThread()` can still find it once
+// the match is played.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSeason, getSeasonSchedule, findCurrentWeek, getPlayersById } from './queries';
@@ -86,6 +95,42 @@ function threadTitle(weekNumber: number, matchNumber: number): string {
   return `Week ${weekNumber} Game ${matchNumber}`;
 }
 
+interface DiscordThread {
+  id: string;
+  name: string;
+  parent_id?: string | null;
+}
+
+/** Every thread Discord currently has in this forum channel — active, plus the first page (100, the
+ *  API max) of publicly archived ones, which comfortably covers a single season's worth of weekly
+ *  threads. The active-threads endpoint is guild-wide (Discord has no per-channel version), hence the
+ *  `parent_id` filter; the archived one is already channel-scoped. Read once per `publishWeekThreads()`
+ *  call and matched by title against every match in the target week, rather than trusting
+ *  `match_discord_state` — see this file's header. */
+async function listChannelThreads(
+  guildId: string,
+  channelId: string,
+  token: string,
+): Promise<DiscordThread[] | { error: string }> {
+  const headers = { Authorization: `Bot ${token}` };
+  let activeRes: Response;
+  let archivedRes: Response;
+  try {
+    [activeRes, archivedRes] = await Promise.all([
+      fetch(`https://discord.com/api/v10/guilds/${guildId}/threads/active`, { headers }),
+      fetch(`https://discord.com/api/v10/channels/${channelId}/threads/archived/public?limit=100`, { headers }),
+    ]);
+  } catch (e) {
+    return { error: `Listing existing threads failed: ${(e as Error).message}` };
+  }
+  if (!activeRes.ok) return { error: await discordErrorDetail('Listing active threads', activeRes) };
+  if (!archivedRes.ok) return { error: await discordErrorDetail('Listing archived threads', archivedRes) };
+
+  const active = (await activeRes.json()) as { threads: DiscordThread[] };
+  const archived = (await archivedRes.json()) as { threads: DiscordThread[] };
+  return [...active.threads.filter((t) => t.parent_id === channelId), ...archived.threads];
+}
+
 /** One match's opening-post body — mentions every rostered player who's linked their Discord account
  *  (`<@discord_id>`), falling back to their plain DGLS name for anyone unlinked. */
 function openingPost(match: MatchWithRoster, playersById: Map<number, { discord_id: string | null }>): string {
@@ -96,10 +141,12 @@ function openingPost(match: MatchWithRoster, playersById: Map<number, { discord_
   return `${match.shirts.map(mention).join(' & ')} vs ${match.skins.map(mention).join(' & ')}`;
 }
 
-/** Creates one match's Discord thread. Idempotent: a match that already has
- *  `match_discord_state.thread_id` set is skipped rather than duplicated, and the skip itself is
- *  recorded to `ops_errors` (same "detected, skipped, needs admin eyes" pattern as a real failure) so
- *  a re-publish attempt on an already-published week is visible, not silently a no-op. */
+/** Creates one match's Discord thread — unless `existingThreadId` says Discord already has one titled
+ *  for this match (looked up once per `publishWeekThreads()` call via `listChannelThreads()`, not
+ *  read from `match_discord_state`), in which case it's adopted into the DB rather than duplicated or
+ *  posted into. Either way the outcome is recorded to `ops_errors` (same "detected, skipped, needs
+ *  admin eyes" pattern as a real failure for the adopt case) so a re-publish attempt on an
+ *  already-published week is visible, not silently a no-op. */
 async function publishMatchThread(
   supabaseAdmin: SupabaseClient,
   channelId: string,
@@ -107,21 +154,19 @@ async function publishMatchThread(
   weekNumber: number,
   match: MatchWithRoster,
   playersById: Map<number, { discord_id: string | null }>,
+  existingThreadId: string | undefined,
 ): Promise<ThreadPublishResult> {
   const title = threadTitle(weekNumber, match.match_number);
 
-  const { data: existing } = await supabaseAdmin
-    .from('match_discord_state')
-    .select('thread_id')
-    .eq('match_id', match.id)
-    .maybeSingle();
-  const existingThreadId = (existing as { thread_id: string | null } | null)?.thread_id;
   if (existingThreadId) {
+    await supabaseAdmin
+      .from('match_discord_state')
+      .upsert({ match_id: match.id, thread_id: existingThreadId }, { onConflict: 'match_id' });
     await recordOpsError(
       supabaseAdmin, 'match', match.id, THREAD_OPERATION,
-      `Already has a thread (${existingThreadId}) — skipped duplicate create for "${title}"`,
+      `Thread "${title}" already exists in the channel (${existingThreadId}) — adopted it instead of creating a duplicate`,
     );
-    return { matchId: match.id, title, status: 'skipped', detail: `Already published (thread ${existingThreadId})` };
+    return { matchId: match.id, title, status: 'skipped', detail: `Already exists (thread ${existingThreadId})` };
   }
 
   try {
@@ -217,12 +262,22 @@ export async function publishWeekThreads(
     await recordOpsError(supabaseAdmin, 'season', seasonId, CHANNEL_OPERATION, channel.error);
     return { error: channel.error };
   }
+
+  const existingThreads = await listChannelThreads(guildId, channel.channelId, token);
+  if ('error' in existingThreads) {
+    await recordOpsError(supabaseAdmin, 'season', seasonId, CHANNEL_OPERATION, existingThreads.error);
+    return { error: existingThreads.error };
+  }
   await clearOpsError(supabaseAdmin, 'season', seasonId, CHANNEL_OPERATION);
+  const existingByTitle = new Map(existingThreads.map((t) => [t.name, t.id]));
 
   const playersById = await getPlayersById();
   const results: ThreadPublishResult[] = [];
   for (const match of targetWeek.matches) {
-    results.push(await publishMatchThread(supabaseAdmin, channel.channelId, token, targetWeek.week_number, match, playersById));
+    const title = threadTitle(targetWeek.week_number, match.match_number);
+    results.push(
+      await publishMatchThread(supabaseAdmin, channel.channelId, token, targetWeek.week_number, match, playersById, existingByTitle.get(title)),
+    );
   }
 
   return { seasonName: season.name, weekNumber: targetWeek.week_number, matches: results };
