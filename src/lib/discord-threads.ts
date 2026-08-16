@@ -41,6 +41,14 @@ interface DiscordChannel {
   type: number;
 }
 
+/** Formats a non-ok Discord response as `"{prefix} returned {status}: {message}"` — the one shared
+ *  shape every Discord call in this file uses to describe a failure, both for an `ops_errors` message
+ *  and a result's own `detail`. */
+async function discordErrorDetail(prefix: string, res: Response): Promise<string> {
+  const body = (await res.json().catch(() => null)) as { message?: string } | null;
+  return `${prefix} returned ${res.status}${body?.message ? `: ${body.message}` : ''}`;
+}
+
 /** Resolves a season's forum channel by its `season-{N}` name — Discord's thread-creation endpoint
  *  needs a channel id, not a name, and there's no lookup-by-name API. Distinguishes "no such channel"
  *  from "wrong channel type" in its error, since a misnamed or non-forum channel is a plausible
@@ -63,8 +71,7 @@ async function resolveSeasonForumChannel(
     return { error: `Listing guild channels failed: ${(e as Error).message}` };
   }
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { message?: string } | null;
-    return { error: `Listing guild channels returned ${res.status}${body?.message ? `: ${body.message}` : ''}` };
+    return { error: await discordErrorDetail('Listing guild channels', res) };
   }
   const channels = (await res.json()) as DiscordChannel[];
   const channel = channels.find((c) => c.name === expectedName);
@@ -124,8 +131,7 @@ async function publishMatchThread(
       body: JSON.stringify({ name: title, message: { content: openingPost(match, playersById) } }),
     });
     if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { message?: string } | null;
-      const detail = `Thread create returned ${res.status}${body?.message ? `: ${body.message}` : ''}`;
+      const detail = await discordErrorDetail('Thread create', res);
       await recordOpsError(supabaseAdmin, 'match', match.id, THREAD_OPERATION, detail);
       return { matchId: match.id, title, status: 'failed', detail };
     }
@@ -171,8 +177,7 @@ export async function closeMatchThread(supabaseAdmin: SupabaseClient, matchId: n
       body: JSON.stringify({ archived: true, locked: true }),
     });
     if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { message?: string } | null;
-      const detail = `Thread close returned ${res.status}${body?.message ? `: ${body.message}` : ''}`;
+      const detail = await discordErrorDetail('Thread close', res);
       await recordOpsError(supabaseAdmin, 'match', matchId, THREAD_CLOSE_OPERATION, detail);
       return;
     }

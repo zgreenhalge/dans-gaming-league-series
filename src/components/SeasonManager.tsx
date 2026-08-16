@@ -54,10 +54,7 @@ export function SeasonManager({
   const errorsByLabel = new Map(seasonOpsErrors.map((e) => [e.label, e]));
 
   // Every ACTIVE regular season is expandable — gauntlet lifecycle controls (build/seed/reset, or the
-  // eligible "create" form) and the Discord match-thread publisher both live in the expansion. Used
-  // for the jump-target lookup below, where there's no already-fetched `gauntletRow` to derive this
-  // from — the row loop computes its own `canExpand` directly instead of calling this, so the map
-  // isn't queried twice per row.
+  // eligible "create" form) and the Discord match-thread publisher both live in the expansion.
   function expandable(s: SeasonSummary): boolean {
     return s.status === 'ACTIVE' && !s.isGauntlet;
   }
@@ -87,7 +84,7 @@ export function SeasonManager({
             const isOpen = openId === s.id;
             const error = errorsByLabel.get(s.name);
             const gauntletRow = gauntletByRegularId.get(s.id);
-            const canExpand = s.status === 'ACTIVE' && !s.isGauntlet;
+            const canExpand = expandable(s);
             return (
               <div
                 key={s.id}
