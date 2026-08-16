@@ -97,7 +97,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `GET` | `/api/cron/refresh-steam` | Refresh Steam avatars/nicknames for all linked players (Vercel cron; see below) |
 | `POST` | `/api/discord/interactions` | Discord Interactions endpoint (#396) — Ed25519-verified (`DISCORD_PUBLIC_KEY`), serves `/leaderboard`, `/scheduled`, `/player`, `/name-color` slash commands (`src/lib/discord-commands.ts`). Command *definitions* are separate, pushed by `scripts/register-discord-commands.ts` — this route only serves already-registered commands, it doesn't register them |
 | `POST` | `/api/admin/discord/backfill-name-roles` | Creates name-color Discord roles for every linked player still missing one (admin only; see "Discord account linking" above) |
-| `POST` | `/api/seasons/[id]/discord-threads` | Publish one week's Discord match threads — `{ week: number \| 'next' }` — to a regular season's `season-{N}` forum channel, tagging rostered players (`publishWeekThreads()`, `src/lib/discord-threads.ts`, #398). Admin-triggered only; refuses gauntlet seasons (admin only) |
+| `POST` | `/api/seasons/[id]/discord-threads` | Publish one week's Discord match threads — `{ week: number \| 'next' }` — to a regular season's `season-{N}` forum channel, tagging rostered players; also sweeps the whole season and archives/locks any existing thread whose match has since been played (`publishWeekThreads()`, `src/lib/discord-threads.ts`, #398). Admin-triggered only; refuses gauntlet seasons (admin only) |
 
 ## Database
 
@@ -375,7 +375,7 @@ NULL`; `getOpsErrorHistory()` reads every row from the last 8 weeks regardless o
 grouped into a flat `(operation, week)` failure count, for the admin console's Activity → History
 tab.
 
-Wired into twenty-four operations today:
+Wired into twenty-five operations today:
 
 | Operation | Entity | Recorded from |
 |---|---|---|
@@ -403,6 +403,7 @@ Wired into twenty-four operations today:
 | `discord_link` | `player`, or `system` (id `0`) for a config failure | `GET /api/auth/discord/callback` (#394) — a genuine failure (bad response from Discord, an unhandled exception, missing `DISCORD_CLIENT_ID`/`SECRET`), not the expected "denied"/"taken" outcomes, which redirect the one affected player but aren't logged |
 | `discord_thread_publish` | `season` (regular) | `publishWeekThreads()` (`discord-threads.ts`, #398) — the season-level forum channel couldn't be resolved (missing/misnamed/wrong-type `season-{N}` channel, or the guild-channels listing call itself failed), before any per-match thread is attempted |
 | `discord_thread_create` | `match` | `publishWeekThreads()` (`discord-threads.ts`, #398) — either a real Discord API failure creating that match's thread, or an idempotency skip (the match already has a `match_discord_state.thread_id`), recorded the same "needs admin eyes" way as the gauntlet roster-drift case |
+| `discord_thread_close` | `match` | `closePlayedMatchThreads()` (`discord-threads.ts`, #398) — a real Discord API failure archiving/locking a played match's thread, swept on every `publishWeekThreads()` call across the whole season, not just the week being published |
 
 Each is cleared automatically the next time that same (entity, operation) succeeds —
 `tryBuildGauntletShape()` and `trySeedGauntlet()` clear their own on success, `checkGauntletCompletion()`

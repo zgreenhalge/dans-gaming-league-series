@@ -4,7 +4,9 @@
 // start_date is often arbitrary and so is when an admin actually wants a week's threads posted.
 // "Publish Next Week" resolves "next" the same way the home page and `/scheduled` do
 // (`findCurrentWeek()`, server-side in `publishWeekThreads()`); the week-number field covers
-// publishing an arbitrary past/future week by hand. Results render per match immediately — a channel
+// publishing an arbitrary past/future week by hand. Every publish also sweeps the whole season for
+// already-played matches whose thread is still open and archives/locks them — that "Closed" list
+// shows alongside the published week's own results. All of it renders immediately — a channel
 // permission overwrite is the likeliest first-attempt failure and needs to be visible right here, not
 // only in the Activity feed on a later page load.
 
@@ -14,7 +16,7 @@ import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
 interface ThreadResult {
   matchId: number;
   title: string;
-  status: 'created' | 'skipped' | 'failed';
+  status: 'created' | 'skipped' | 'failed' | 'closed';
   detail: string;
 }
 
@@ -22,7 +24,24 @@ const STATUS_ICON: Record<ThreadResult['status'], string> = {
   created: '✅',
   skipped: '⏭',
   failed: '❌',
+  closed: '🔒',
 };
+
+function ResultList({ heading, results }: { heading: string; results: ThreadResult[] }) {
+  if (results.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1 border border-[var(--color-border-tertiary)] rounded px-3 py-2.5">
+      <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-1">{heading}</div>
+      {results.map((r) => (
+        <div key={r.matchId} className="font-mono text-[11px] flex items-baseline gap-2">
+          <span>{STATUS_ICON[r.status]}</span>
+          <span className="text-[var(--color-text-primary)] shrink-0">{r.title}</span>
+          <span className="text-[var(--color-text-secondary)] truncate">{r.detail}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function DiscordThreadPublisher({ seasonId }: { seasonId: number }) {
   const [weekInput, setWeekInput] = useState('');
@@ -30,6 +49,7 @@ export function DiscordThreadPublisher({ seasonId }: { seasonId: number }) {
   const [error, setError] = useState<string | null>(null);
   const [publishedWeek, setPublishedWeek] = useState<number | null>(null);
   const [results, setResults] = useState<ThreadResult[]>([]);
+  const [closed, setClosed] = useState<ThreadResult[]>([]);
 
   async function publish(week: number | 'next') {
     setBusy(true);
@@ -44,11 +64,13 @@ export function DiscordThreadPublisher({ seasonId }: { seasonId: number }) {
       if (!res.ok) {
         setError(body.error ?? 'Could not publish threads');
         setResults([]);
+        setClosed([]);
         setPublishedWeek(null);
         return;
       }
       setPublishedWeek(body.weekNumber ?? null);
       setResults((body.matches ?? []) as ThreadResult[]);
+      setClosed((body.closed ?? []) as ThreadResult[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
@@ -95,18 +117,8 @@ export function DiscordThreadPublisher({ seasonId }: { seasonId: number }) {
 
       {error && <div className="text-[12px] text-[var(--color-accent-red-fg,#f87171)]">{error}</div>}
 
-      {results.length > 0 && (
-        <div className="flex flex-col gap-1 border border-[var(--color-border-tertiary)] rounded px-3 py-2.5">
-          <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-1">Week {publishedWeek}</div>
-          {results.map((r) => (
-            <div key={r.matchId} className="font-mono text-[11px] flex items-baseline gap-2">
-              <span>{STATUS_ICON[r.status]}</span>
-              <span className="text-[var(--color-text-primary)] shrink-0">{r.title}</span>
-              <span className="text-[var(--color-text-secondary)] truncate">{r.detail}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      <ResultList heading={`Week ${publishedWeek}`} results={results} />
+      <ResultList heading="Closed (already played)" results={closed} />
     </div>
   );
 }
