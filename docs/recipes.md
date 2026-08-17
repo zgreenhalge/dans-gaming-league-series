@@ -35,12 +35,13 @@ just render it.** If you find yourself writing a join/reduce inside a `.tsx` fil
 to move it — see the "Always prefer extracting/abstracting shared logic" rule in `CLAUDE.md`.
 
 When you aggregate per-match stats into a leaderboard row, sum the totals however the input shape
-requires but derive the four canonical-sort fields (`win_rate_percentage`, `kd_ratio`,
-`rwr_percentage`, `overall_adr`) through `deriveRates()` in `src/lib/util.ts` — it's the single
-source for those divisions so the rankings can't drift between the player, career, and map views. A
-caller that only has round/damage totals in scope (not the full set `deriveRates()` needs) should
-use its narrower siblings `deriveRwr()`/`deriveAdr()` instead of fabricating unused fields to satisfy
-`deriveRates()`'s signature.
+requires but derive the four rate/ratio fields (`win_rate_percentage`, `kd_ratio`, `rwr_percentage`,
+`overall_adr` — `rwr_percentage` and `overall_adr` are two of the three `canonicalSort()` keys,
+alongside `matches_won` from the raw totals) through `deriveRates()` in `src/lib/util.ts` — it's the
+single source for those divisions so the rankings can't drift between the player, career, and map
+views. A caller that only has round/damage totals in scope (not the full set `deriveRates()` needs)
+should use its narrower siblings `deriveRwr()`/`deriveAdr()` instead of fabricating unused fields to
+satisfy `deriveRates()`'s signature.
 
 If the new stat should appear on **career views**, it must respect `useSeasonFilter()` the same way
 `getCareerLeaderboard()` and `CareerStatsView.tsx` do — don't build a parallel filter.

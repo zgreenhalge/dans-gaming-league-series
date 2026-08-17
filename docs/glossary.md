@@ -7,18 +7,22 @@ so you don't have to reverse-engineer them from scratch each time.
 ## League format & domain terms
 
 - **Individual Rotating Mixer** — the league format. Teammates change every week (randomly drawn),
-  so traditional W-L records say more about your draw than your skill. This is *why* the whole site
-  is built around rate-based stats instead of win totals.
+  so match outcomes are partly a function of your draw, not just your skill. RWR% and ADR are
+  rate-normalized stats that help correct for that when breaking ties in the canonical leaderboard
+  sort.
 - **ADR (Average Damage per Round)** — the platform's primary individual skill metric; the
-  *tertiary* tiebreaker in the canonical leaderboard sort (WR% → RWR% → ADR). Never sort by ADR
+  *tertiary* tiebreaker in the canonical leaderboard sort (Wins → RWR% → ADR). Never sort by ADR
   alone — always apply `canonicalSort()` from `src/lib/util.ts`.
-- **WR% (Win Rate)** — `wins / games_played`; the *primary* sort key in the canonical leaderboard
-  sort. Stored as `total_wins / total_games` on `player_season_leaderboard`.
+- **Wins (match wins)** — `matches_won`; the *primary* sort key in the canonical leaderboard sort —
+  a raw win count, not rate-normalized.
+- **WR% (Win Rate)** — `wins / games_played`; displayed alongside the win/loss record but not
+  itself a key in the canonical leaderboard sort. Stored as `total_wins / total_games` on
+  `player_season_leaderboard`.
 - **RWR% (Round Win Rate)** — `total_rounds_won / total_rounds_played`; the *secondary* sort key in
   the canonical leaderboard sort. Derived, not stored; see `LeaderboardRow.rwr_percentage` in
   `src/lib/types.ts`.
 - **Canonical sort (regular season)** — the standard leaderboard sort order for regular-season and
-  career views: **WR% → RWR% → ADR**, all descending. Implemented by `canonicalSort()` in
+  career views: **Wins → RWR% → ADR**, all descending. Implemented by `canonicalSort()` in
   `src/lib/util.ts`; see
   [`calculations.md`](./calculations.md#canonical-regular-season-ranking)
   for the full rationale. Not to be confused with the canonical *gauntlet* ranking below.
@@ -151,7 +155,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | Discord account linking (OAuth2 → `players.discord_id`) | `src/lib/discordLinkState.ts`, `src/lib/discord-link.ts`, `src/app/api/auth/discord/`, `src/components/DiscordLinkButton.tsx` |
 | Discord `#match-notifications` webhook alerts | `src/lib/discord-notify.ts` |
 | Discord `@Participants` role sync | `src/lib/discord-roles.ts`, hooked from `src/app/api/seasons/[id]/players/route.ts` (POST/DELETE) and `src/lib/season-lifecycle.ts` (`activateSeason()`/`checkSeasonCompletion()`) |
-| Discord name-color roles (per-player cosmetic role, `players.discord_name_role_id`) | `src/lib/discord-roles.ts` (`createNameRole()`/`renameNameRole()`/`deleteNameRole()`/`setDiscordRoleColor()`), hooked from the link/unlink/rename routes (`src/app/api/auth/discord/callback/`, `src/app/api/players/[id]/`, `src/app/api/players/me/discord/`, `src/app/api/players/me/name/`) |
+| Discord name-color roles (per-player cosmetic role, `players.discord_name_role_id`) | `src/lib/discord-roles.ts` (`createNameRole()`/`renameNameRole()`/`deleteNameRole()`/`setDiscordRoleColor()`/`backfillNameRoles()`), hooked from the link/unlink/rename routes (`src/app/api/auth/discord/callback/`, `src/app/api/players/[id]/`, `src/app/api/players/me/discord/`, `src/app/api/players/me/name/`), `scripts/backfill-discord-name-roles.ts` / `POST /api/admin/discord/backfill-name-roles` |
 | Discord slash commands (`/leaderboard`, `/scheduled`, `/player`, `/name-color`) | `src/lib/discordInteractions.ts` (Ed25519 verification, response shapes), `src/lib/discord-commands.ts` (handlers), `src/app/api/discord/interactions/route.ts`, `scripts/register-discord-commands.ts` (registers the command *definitions*, separate from serving them) |
 | Discord weekly match-thread publish (`season-{N}` forum channel, `match_discord_state.thread_id`) | `src/lib/discord-threads.ts` (`publishWeekThreads()`), `src/app/api/seasons/[id]/discord-threads/route.ts`, `src/components/DiscordThreadPublisher.tsx` (admin console → Manage → Season) |
 | Discord match-thread close on score report | `src/lib/discord-threads.ts` (`closeMatchThread()`), hooked from `src/app/api/matches/[id]/score/route.ts` alongside `notifyMatchScoreReported()` |
