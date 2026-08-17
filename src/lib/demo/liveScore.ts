@@ -124,21 +124,26 @@ function parseLiveScoreEvent(body: unknown): ParsedLiveScoreEvent | null {
   return null;
 }
 
-/** Parse a raw remote-log body and upsert it if it's a live-score-relevant event; a no-op for any
- *  other event type. */
-export async function putLiveScoreEvent(admin: SupabaseClient, body: unknown): Promise<void> {
+/** Parse a raw remote-log body and upsert it if it's a live-score-relevant event; a no-op (returning
+ *  `null`) for any other event type. Returns the row it just wrote — not just `void` — so a caller
+ *  that also needs to react to the new score (`matchzy-log`'s route, feeding `notifyMatchLiveScore()`)
+ *  doesn't have to pay for a second `live_match_score` read to get back what this function already
+ *  computed and wrote a moment earlier. */
+export async function putLiveScoreEvent(admin: SupabaseClient, body: unknown): Promise<LiveScoreRow | null> {
   const row = parseLiveScoreEvent(body);
-  if (!row) return;
+  if (!row) return null;
+  const updatedAt = new Date().toISOString();
   await admin.from('live_match_score').upsert(
     {
       match_id: row.matchId,
       shirts_score: row.shirts,
       skins_score: row.skins,
       round: row.round,
-      updated_at: new Date().toISOString(),
+      updated_at: updatedAt,
     },
     { onConflict: 'match_id' },
   );
+  return { matchId: row.matchId, shirts: row.shirts, skins: row.skins, round: row.round, updatedAt };
 }
 
 export async function getLiveScore(admin: SupabaseClient, matchId: number): Promise<LiveScoreRow | null> {

@@ -12,6 +12,7 @@
 //
 // Auth: shared secret in `x-matchzy-token`, constant-time compared against `INGEST_REMOTE_LOG_SECRET`.
 
+import { gzipSync } from 'node:zlib';
 import { NextRequest, NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { machineSecretGuard } from '@/lib/machine-auth';
@@ -19,6 +20,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { parseMapResultEvent, putMapResult } from '@/lib/demo/mapResult';
 import { parseMatchzyEventIdentity, putMatchzyContact } from '@/lib/demo/matchzyContact';
 import { putLiveScoreEvent } from '@/lib/demo/liveScore';
+import { notifyMatchLiveScore } from '@/lib/discord-notify';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
 import { advanceJobStatus, dispatchAndRecordFailure, matchJobKey } from '@/lib/background-jobs';
 import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
@@ -26,6 +28,7 @@ import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { DEMO_INGEST_JOB_TYPE } from '@/lib/demo/ingestResult';
 import { REPLAY_EXTRACT_JOB_TYPE } from '@/lib/jobs';
 import { afterBestEffort } from '@/lib/after';
+import { putR2Object } from '@/lib/r2';
 
 /** Claims the demo-ingest job atomically before dispatching — a plain check-then-act (SELECT to see
  *  if a job's already in flight, then upsert) can't tell two concurrent map_result deliveries for the
@@ -160,8 +163,9 @@ export async function POST(req: NextRequest) {
   // Best-effort and deferred: this fires on every event MatchZy sends, including high-frequency ones
   // like round_end, so none of this adds latency to the ack MatchZy is waiting on. Covers map_result
   // too (parseMatchzyEventIdentity/putLiveScoreEvent both recognize it), so there's no separate path
-  // needed for the final score. Both writes are independent, so one `after()` runs them concurrently
-  // rather than paying for two separate registrations on this route's highest-frequency path.
+  // needed for the final score. notifyMatchLiveScore() is called unconditionally, same as the other
+  // two writes — it decides for itself (by event name) whether going_live/round_end is worth an edit,
+  // so this route doesn't need to know Discord's own notification-cadence rules.
   const identity = parseMatchzyEventIdentity(body);
   if (identity) {
     afterBestEffort(`matchzy-log: per-event side effects for match ${identity.matchid}`, async () => {
@@ -174,6 +178,21 @@ export async function POST(req: NextRequest) {
       }
       if (liveScore.status === 'rejected') {
         console.error(`matchzy-log: record live score for match ${identity.matchid} failed:`, liveScore.reason);
+      } else {
+        await notifyMatchLiveScore(supabaseAdmin, identity.matchid, identity.event, liveScore.value);
+      }
+
+      // Temporary diagnostic: captures one real round_end payload to a fixed debug key so its exact
+      // per-player stats shape (MatchZy's own source implies team1/team2.players[].stats.{kills,
+      // deaths, assists, damage, ...}) can be inspected before a parser is built around it. Delete
+      // this block, and the R2 object at 'debug/matchzy-round-end-sample.json', once a sample has
+      // been captured.
+      if (identity.event === 'round_end') {
+        await putR2Object(
+          'debug/matchzy-round-end-sample.json',
+          gzipSync(Buffer.from(JSON.stringify(body))),
+          { contentType: 'application/json', contentEncoding: 'gzip' },
+        ).catch((e) => console.error(`matchzy-log: debug round_end capture for match ${identity.matchid} failed:`, e));
       }
     });
   }

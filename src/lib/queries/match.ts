@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import type { Match, Week, Season, Player, PlayerMatchStat, PlayerMatchSabremetrics, Faction } from '../types';
-import { isPlayedScore, avgOf, compareMatchRefDesc, extractSeasonNumber, matchLabel, matchTitle } from '../util';
+import { isPlayedScore, avgOf, compareMatchRefDesc, extractSeasonNumber, matchLabel, matchWeekLabel } from '../util';
 import { mapSlug } from '../maps';
 import type { ScheduledMatchRef } from '../server-schedule-collision';
 import { getPlayersById } from './player';
@@ -61,15 +61,45 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   return { match: m, week: weekRow as Week, season, stats: statRows };
 }
 
+/** One rostered player's box-score line — kept to just the columns a compact scoreboard needs
+ *  (not the full `PlayerMatchStat` row). `adr` is the stored per-match whole number, not the
+ *  recomputed aggregate float `overall_adr` uses elsewhere. */
+export interface MatchBoxScorePlayer {
+  name: string;
+  kills: number;
+  assists: number;
+  deaths: number;
+  adr: number;
+}
+
 export interface MatchTeamNames {
   title: string;
+  /** Just the season name half of `title` (e.g. "Season 3 Regular Season") — for callers like
+   *  Discord notifications that render the season and week/match on separate lines. */
+  seasonName: string;
+  /** The week/round + match half of `title` (e.g. "Week 11 · Match 1"). */
+  weekMatchLabel: string;
   shirtNames: string;
   skinNames: string;
 }
 
+/** Resolves a set of player ids to names in one query — shared by `getMatchTeamNames()` and
+ *  `getMatchBoxScore()`, which each need to label a small, disjoint set of columns from
+ *  `player_match_stats` by rostered player name. */
+async function resolvePlayerNames(playerIds: number[]): Promise<Map<number, string>> {
+  const names: Map<number, string> = new Map();
+  if (playerIds.length === 0) return names;
+  const { data: players } = await supabase.from('players').select('id, name').in('id', playerIds);
+  for (const p of (players ?? []) as Pick<Player, 'id' | 'name'>[]) names.set(p.id, p.name);
+  return names;
+}
+
 /** A match's display title ("Season · Week N · Match M") and its rostered players joined per side
  *  ("Player A & Player B") — shared by `getMatchMeta` (OG/meta tags) and `getLiveTickerMatch` (the
- *  site-wide live ticker) so the season/week/roster lookup lives in exactly one place. */
+ *  site-wide live ticker) so the season/week/roster lookup lives in exactly one place. Deliberately
+ *  doesn't fetch box-score columns — only `getMatchBoxScore()`'s one caller (the post-match Discord
+ *  notification) needs those, and this function's other callers include the live ticker, which
+ *  re-reads every round; see `getMatchBoxScore()`. */
 export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames | null> {
   // Match/week/season collapse into one embedded select (same pattern as `getOtherScheduledMatches`
   // below), run in parallel with the roster fetch rather than chained after it — the roster only
@@ -90,28 +120,54 @@ export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames
   };
   if (!m.weeks || !m.weeks.seasons) return null;
 
-  const title = matchTitle({
-    seasonName: m.weeks.seasons.name,
+  const seasonName = m.weeks.seasons.name;
+  const weekMatchLabel = matchWeekLabel({
     weekNumber: m.weeks.week_number,
     matchNumber: m.match_number,
     isGauntlet: m.weeks.seasons.is_gauntlet,
   });
+  const title = `${seasonName} · ${weekMatchLabel}`;
 
   const playerRows = (stats ?? []) as Pick<PlayerMatchStat, 'player_id' | 'faction'>[];
   const shirtIds = playerRows.filter((p) => p.faction === 'SHIRTS').map((p) => p.player_id);
   const skinIds = playerRows.filter((p) => p.faction === 'SKINS').map((p) => p.player_id);
 
-  const names: Map<number, string> = new Map();
-  const allIds = [...shirtIds, ...skinIds];
-  if (allIds.length > 0) {
-    const { data: players } = await supabase.from('players').select('id, name').in('id', allIds);
-    for (const p of (players ?? []) as Pick<Player, 'id' | 'name'>[]) names.set(p.id, p.name);
-  }
+  const names = await resolvePlayerNames([...shirtIds, ...skinIds]);
 
   const shirtNames = shirtIds.map((id) => names.get(id) ?? '?').join(' & ');
   const skinNames = skinIds.map((id) => names.get(id) ?? '?').join(' & ');
 
-  return { title, shirtNames, skinNames };
+  return { title, seasonName, weekMatchLabel, shirtNames, skinNames };
+}
+
+/** Per-player box score for a match, split by faction — its own query rather than folded into
+ *  `getMatchTeamNames()`, since only the post-match Discord notification (`notifyMatchScoreReported()`)
+ *  needs it; `getMatchTeamNames()`'s other callers (OG cards, meta tags, and especially the live
+ *  ticker, which re-reads every round) would otherwise pay for a `player_match_stats` read and a
+ *  box-score derivation they never use. This does mean `notifyMatchScoreReported()` itself now makes
+ *  two `player_match_stats` reads (one here, one inside `getMatchTeamNames()`) where a single combined
+ *  query used to suffice — an accepted tradeoff since it fires once per match, unlike the live-score
+ *  path this split was written to stop wasting work on every round. Don't re-merge the two without
+ *  re-checking that tradeoff. */
+export async function getMatchBoxScore(matchId: number): Promise<{ shirts: MatchBoxScorePlayer[]; skins: MatchBoxScorePlayer[] }> {
+  const { data: stats } = await supabase
+    .from('player_match_stats')
+    .select('player_id, faction, kills, assists, deaths, adr')
+    .eq('match_id', matchId);
+  const playerRows = (stats ?? []) as Pick<PlayerMatchStat, 'player_id' | 'faction' | 'kills' | 'assists' | 'deaths' | 'adr'>[];
+  const shirtRows = playerRows.filter((p) => p.faction === 'SHIRTS');
+  const skinRows = playerRows.filter((p) => p.faction === 'SKINS');
+
+  const names = await resolvePlayerNames(playerRows.map((p) => p.player_id));
+
+  const toBoxRow = (p: (typeof playerRows)[number]): MatchBoxScorePlayer => ({
+    name: names.get(p.player_id) ?? '?',
+    kills: p.kills,
+    assists: p.assists,
+    deaths: p.deaths,
+    adr: p.adr,
+  });
+  return { shirts: shirtRows.map(toBoxRow), skins: skinRows.map(toBoxRow) };
 }
 
 /** Whichever match is currently live, with no `matchId` known ahead of time — the first step of
