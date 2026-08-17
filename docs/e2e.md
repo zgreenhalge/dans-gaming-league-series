@@ -81,14 +81,17 @@ database itself is disposable.
 
 ## CI placement
 
-`.github/workflows/e2e.yml` is a separate workflow from `ci.yml`, **not** run on every PR — the
-`next dev` startup and local-Supabase-stack cost is too slow/heavy to gate every push on. Trigger it
-manually (`workflow_dispatch`) or by adding the `run-e2e` label to a PR. It installs the Supabase CLI
-(`supabase/setup-cli`), runs `supabase start`, pulls `NEXT_PUBLIC_SUPABASE_URL` from `supabase status
--o env`'s `API_URL` (the one value that CLI output has reliably carried), sets the anon/service_role
-keys from the same fixed JWTs documented above (job-level `env:`, not parsed from CLI output — see
-the "Running locally" section for why), verifies none of the three ended up empty before running
-anything, runs the suite, then `supabase stop`.
+`e2e` is a job in `.github/workflows/ci.yml`, gated on the same `changes.outputs.frontend` path
+filter as the `frontend` job — it runs on every PR that touches the app (skipped for
+ingestion/docs-only changes), same as any other check, no manual trigger or label needed. A fully
+local Docker-based stack made this cheap enough to run on every push: no Supabase branch to
+provision per run, no state-pollution risk against a shared project, and the whole job (image pulls,
+`supabase start`, Playwright browsers, the suite itself) runs in a couple of minutes. It installs the
+Supabase CLI (`supabase/setup-cli`), runs `supabase start`, pulls `NEXT_PUBLIC_SUPABASE_URL` from
+`supabase status -o env`'s `API_URL` (the one value that CLI output has reliably carried), sets the
+anon/service_role keys from the same fixed JWTs documented above (job-level `env:`, not parsed from
+CLI output — see the "Running locally" section for why), verifies none of the three ended up empty
+before running anything, runs the suite, then `supabase stop`.
 
 ## Adding a new flow
 
