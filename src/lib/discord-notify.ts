@@ -71,37 +71,44 @@ interface MatchEmbedParts {
   boxScore?: { shirts: MatchBoxScorePlayer[]; skins: MatchBoxScorePlayer[] };
 }
 
-/** Renders a team's box score as a fixed-width `Player  K/A/D  ADR` table inside a code block —
- *  embed field values render in Discord's default (non-monospace) font otherwise, so alignment needs
- *  the fence. Column widths are computed from this team's own rows, not shared across both fields,
- *  since the two are independent inline fields with no visual alignment between them. */
-function boxScoreBlock(players: MatchBoxScorePlayer[]): string {
-  const rows = players.map((p) => ({ name: p.name, kad: `${p.kills}/${p.assists}/${p.deaths}`, adr: String(p.adr) }));
-  const nameWidth = Math.max('Player'.length, ...rows.map((r) => r.name.length));
-  const kadWidth = Math.max('K/A/D'.length, ...rows.map((r) => r.kad.length));
-  const adrWidth = Math.max('ADR'.length, ...rows.map((r) => r.adr.length));
-  const line = (name: string, kad: string, adr: string) =>
-    `${name.padEnd(nameWidth)}  ${kad.padStart(kadWidth)}  ${adr.padStart(adrWidth)}`;
-  return ['```', line('Player', 'K/A/D', 'ADR'), ...rows.map((r) => line(r.name, r.kad, r.adr)), '```'].join('\n');
+/** A player's name-color role mention (`<@&roleId>`) when they have one, else their plain name
+ *  bolded — the same "tag if linked, else plain name" fallback `discord-threads.ts`'s `openingPost()`
+ *  uses for user mentions. Role mentions only render as a clickable, colored tag in normal message
+ *  text; Discord does not parse mentions inside a code block, which is why the box score below isn't
+ *  fenced/column-aligned the way it used to be. */
+function playerTag(player: Pick<MatchBoxScorePlayer, 'name' | 'discordNameRoleId'>): string {
+  return player.discordNameRoleId ? `<@&${player.discordNameRoleId}>` : `**${player.name}**`;
+}
+
+/** Renders a team's box score as one line per player — name-color role tag (or bolded name, for
+ *  anyone not yet linked), then K/A/D and ADR. Not a column-aligned table: role mentions don't render
+ *  inside a code block, so each line is self-labeled instead of relying on a shared header row. */
+function boxScoreLines(players: MatchBoxScorePlayer[]): string {
+  return players.map((p) => `${playerTag(p)} — ${p.kills}/${p.assists}/${p.deaths} K/A/D · ${p.adr} ADR`).join('\n');
 }
 
 /** Shared embed layout for all three notification kinds. The season name is the embed's `author`
  *  line (Discord's small "eyebrow" text above the title — the same role it plays for real
  *  sports/esports score bots), the title is just "Week N · Match M" (short enough to never wrap
  *  oddly, and doubles as a clickable link to the match page via `url`) — the description doesn't
- *  repeat that link, since the title already carries it. The description leads with the roster/map
- *  line, then the status block, so the "who's playing" context reads before the (more changeable,
- *  edited-in-place) status. A post-match box score, when given, becomes two full-width (non-inline)
- *  fields, Shirts then Skins stacked — inline (side-by-side) halves the available width, which wraps
- *  the fixed-width `Player  K/A/D  ADR` table mid-column on anything narrower than a desktop client.
- *  `matchUrl`/the thumbnail are derived here (from `matchId`/`image`) rather than by each caller,
- *  since all three need the same ones. */
+ *  repeat that link, since the title already carries it. `matchUrl`/the thumbnail are derived here
+ *  (from `matchId`/`image`) rather than by each caller, since all three need the same ones.
+ *
+ *  A post-match box score, when given, becomes two full-width (non-inline) fields, Shirts then Skins
+ *  stacked, each player tagged by their name-color role — and the roster/map line is dropped from the
+ *  description entirely, since the box score already names every player; only the map name survives,
+ *  folded onto the score line. Without a box score (server-live, live-score), the roster/map line is
+ *  the only place players are named, so it stays, leading the description with the status block
+ *  after it. */
 function buildMatchEmbed(parts: MatchEmbedParts): Embed {
   const matchUrl = `${SITE_URL}/matches/${parts.matchId}`;
-  const roster = `${parts.shirtNames} vs ${parts.skinNames}${parts.map ? ` on ${parts.map}` : ''}`;
+  const mapSuffix = parts.map ? ` on ${parts.map}` : '';
+  const description = parts.boxScore
+    ? `${parts.statusLine}${mapSuffix}`
+    : `${parts.shirtNames} vs ${parts.skinNames}${mapSuffix}\n\n${parts.statusLine}`;
   const embed: Embed = {
     title: parts.weekMatchLabel,
-    description: `${roster}\n\n${parts.statusLine}`,
+    description,
     color: parts.color,
     url: matchUrl,
     author: { name: parts.seasonName },
@@ -109,8 +116,8 @@ function buildMatchEmbed(parts: MatchEmbedParts): Embed {
   if (parts.image) embed.thumbnail = { url: `${SITE_URL}${parts.image}` };
   if (parts.boxScore) {
     const fields: EmbedField[] = [];
-    if (parts.boxScore.shirts.length > 0) fields.push({ name: 'Shirts', value: boxScoreBlock(parts.boxScore.shirts) });
-    if (parts.boxScore.skins.length > 0) fields.push({ name: 'Skins', value: boxScoreBlock(parts.boxScore.skins) });
+    if (parts.boxScore.shirts.length > 0) fields.push({ name: 'Shirts', value: boxScoreLines(parts.boxScore.shirts) });
+    if (parts.boxScore.skins.length > 0) fields.push({ name: 'Skins', value: boxScoreLines(parts.boxScore.skins) });
     if (fields.length > 0) embed.fields = fields;
   }
   return embed;

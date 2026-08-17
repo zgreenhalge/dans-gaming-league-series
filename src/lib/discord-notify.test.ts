@@ -125,11 +125,10 @@ async function main() {
     assert.equal(embed.author.name, 'Season 5');
     assert.match(embed.description, /Match complete\*\*\n\*\*Final: 13-9/, '"Final: 13-9" is on its own line — descriptions support \\n, unlike titles');
     // Match 100's shirts_pick ('Foroglio') is the effective played map, not picked_map alone.
-    assert.match(embed.description, /Alice & Bob vs Carol & Dave on Foroglio/);
     assert.equal(
       embed.description,
-      'Alice & Bob vs Carol & Dave on Foroglio\n\n🏁 **Match complete**\n**Final: 13-9**',
-      'roster/map line comes first, then the status block',
+      '🏁 **Match complete**\n**Final: 13-9** on Foroglio',
+      'no roster line once there\'s a box score — the map name folds onto the status line instead',
     );
     assert.doesNotMatch(embed.description, /\/matches\//, 'no link line — the title is already the link');
 
@@ -137,12 +136,27 @@ async function main() {
     const shirts = embed.fields?.find((f) => f.name === 'Shirts');
     const skins = embed.fields?.find((f) => f.name === 'Skins');
     assert.ok(!shirts?.inline && !skins?.inline, 'box score fields stack full-width, not side by side');
-    assert.match(shirts!.value, /Alice\s+20\/3\/15/);
-    assert.match(shirts!.value, /Bob\s+18\/5\/16/);
-    assert.match(skins!.value, /Carol\s+14\/4\/19/);
-    assert.match(skins!.value, /Dave\s+12\/6\/20/);
+    assert.equal(shirts!.value, '**Alice** — 20/3/15 K/A/D · 85.5 ADR\n**Bob** — 18/5/16 K/A/D · 78.18 ADR', 'no linked Discord role — falls back to the bolded name');
+    assert.equal(skins!.value, '**Carol** — 14/4/19 K/A/D · 65 ADR\n**Dave** — 12/6/20 K/A/D · 60.09 ADR');
 
     assert.equal(discordState(100)?.notification_message_id, 'stub-msg-1');
+  });
+
+  await test('notifyMatchScoreReported: tags a player with a linked name-color role instead of bolding their name', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(100);
+    const alice = fakeDb.players.find((p) => p.id === 1)!;
+    alice.discord_name_role_id = '123456789012345678';
+    try {
+      const { calls } = stubFetch();
+      await notifyMatchScoreReported(adminClient, 100);
+      const embed = calls[0].body.embeds[0];
+      const shirts = embed.fields?.find((f) => f.name === 'Shirts');
+      assert.match(shirts!.value, /^<@&123456789012345678> — 20\/3\/15 K\/A\/D · 85\.5 ADR/, 'a linked player is a role mention, not a bolded name');
+      assert.match(shirts!.value, /\*\*Bob\*\*/, 'a player with no linked role still falls back to their bolded name');
+    } finally {
+      alice.discord_name_role_id = null;
+    }
   });
 
   await test('notifyMatchLiveScore: no-ops without DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL', async () => {

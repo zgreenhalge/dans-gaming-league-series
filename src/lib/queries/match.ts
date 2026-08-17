@@ -63,9 +63,12 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
 
 /** One rostered player's box-score line — kept to just the columns a compact scoreboard needs
  *  (not the full `PlayerMatchStat` row). `adr` is the stored per-match whole number, not the
- *  recomputed aggregate float `overall_adr` uses elsewhere. */
+ *  recomputed aggregate float `overall_adr` uses elsewhere. `discordNameRoleId` is the player's
+ *  personal name-color role (`players.discord_name_role_id`, #405) — `null` for a player who hasn't
+ *  linked Discord/gotten one yet, in which case a caller falls back to `name`. */
 export interface MatchBoxScorePlayer {
   name: string;
+  discordNameRoleId: string | null;
   kills: number;
   assists: number;
   deaths: number;
@@ -83,15 +86,17 @@ export interface MatchTeamNames {
   skinNames: string;
 }
 
-/** Resolves a set of player ids to names in one query — shared by `getMatchTeamNames()` and
- *  `getMatchBoxScore()`, which each need to label a small, disjoint set of columns from
- *  `player_match_stats` by rostered player name. */
-async function resolvePlayerNames(playerIds: number[]): Promise<Map<number, string>> {
-  const names: Map<number, string> = new Map();
-  if (playerIds.length === 0) return names;
-  const { data: players } = await supabase.from('players').select('id, name').in('id', playerIds);
-  for (const p of (players ?? []) as Pick<Player, 'id' | 'name'>[]) names.set(p.id, p.name);
-  return names;
+/** Resolves a set of player ids to their name + Discord name-color role in one query — shared by
+ *  `getMatchTeamNames()` and `getMatchBoxScore()`, which each need to label a small, disjoint set of
+ *  columns from `player_match_stats` by rostered player. */
+async function resolvePlayers(playerIds: number[]): Promise<Map<number, { name: string; discordNameRoleId: string | null }>> {
+  const players: Map<number, { name: string; discordNameRoleId: string | null }> = new Map();
+  if (playerIds.length === 0) return players;
+  const { data } = await supabase.from('players').select('id, name, discord_name_role_id').in('id', playerIds);
+  for (const p of (data ?? []) as Pick<Player, 'id' | 'name' | 'discord_name_role_id'>[]) {
+    players.set(p.id, { name: p.name, discordNameRoleId: p.discord_name_role_id });
+  }
+  return players;
 }
 
 /** A match's display title ("Season · Week N · Match M") and its rostered players joined per side
@@ -132,10 +137,10 @@ export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames
   const shirtIds = playerRows.filter((p) => p.faction === 'SHIRTS').map((p) => p.player_id);
   const skinIds = playerRows.filter((p) => p.faction === 'SKINS').map((p) => p.player_id);
 
-  const names = await resolvePlayerNames([...shirtIds, ...skinIds]);
+  const players = await resolvePlayers([...shirtIds, ...skinIds]);
 
-  const shirtNames = shirtIds.map((id) => names.get(id) ?? '?').join(' & ');
-  const skinNames = skinIds.map((id) => names.get(id) ?? '?').join(' & ');
+  const shirtNames = shirtIds.map((id) => players.get(id)?.name ?? '?').join(' & ');
+  const skinNames = skinIds.map((id) => players.get(id)?.name ?? '?').join(' & ');
 
   return { title, seasonName, weekMatchLabel, shirtNames, skinNames };
 }
@@ -158,10 +163,11 @@ export async function getMatchBoxScore(matchId: number): Promise<{ shirts: Match
   const shirtRows = playerRows.filter((p) => p.faction === 'SHIRTS');
   const skinRows = playerRows.filter((p) => p.faction === 'SKINS');
 
-  const names = await resolvePlayerNames(playerRows.map((p) => p.player_id));
+  const players = await resolvePlayers(playerRows.map((p) => p.player_id));
 
   const toBoxRow = (p: (typeof playerRows)[number]): MatchBoxScorePlayer => ({
-    name: names.get(p.player_id) ?? '?',
+    name: players.get(p.player_id)?.name ?? '?',
+    discordNameRoleId: players.get(p.player_id)?.discordNameRoleId ?? null,
     kills: p.kills,
     assists: p.assists,
     deaths: p.deaths,
