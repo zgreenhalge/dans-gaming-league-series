@@ -83,6 +83,17 @@ export interface MatchTeamNames {
   skinNames: string;
 }
 
+/** Resolves a set of player ids to names in one query — shared by `getMatchTeamNames()` and
+ *  `getMatchBoxScore()`, which each need to label a small, disjoint set of columns from
+ *  `player_match_stats` by rostered player name. */
+async function resolvePlayerNames(playerIds: number[]): Promise<Map<number, string>> {
+  const names: Map<number, string> = new Map();
+  if (playerIds.length === 0) return names;
+  const { data: players } = await supabase.from('players').select('id, name').in('id', playerIds);
+  for (const p of (players ?? []) as Pick<Player, 'id' | 'name'>[]) names.set(p.id, p.name);
+  return names;
+}
+
 /** A match's display title ("Season · Week N · Match M") and its rostered players joined per side
  *  ("Player A & Player B") — shared by `getMatchMeta` (OG/meta tags) and `getLiveTickerMatch` (the
  *  site-wide live ticker) so the season/week/roster lookup lives in exactly one place. Deliberately
@@ -121,12 +132,7 @@ export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames
   const shirtIds = playerRows.filter((p) => p.faction === 'SHIRTS').map((p) => p.player_id);
   const skinIds = playerRows.filter((p) => p.faction === 'SKINS').map((p) => p.player_id);
 
-  const names: Map<number, string> = new Map();
-  const allIds = [...shirtIds, ...skinIds];
-  if (allIds.length > 0) {
-    const { data: players } = await supabase.from('players').select('id, name').in('id', allIds);
-    for (const p of (players ?? []) as Pick<Player, 'id' | 'name'>[]) names.set(p.id, p.name);
-  }
+  const names = await resolvePlayerNames([...shirtIds, ...skinIds]);
 
   const shirtNames = shirtIds.map((id) => names.get(id) ?? '?').join(' & ');
   const skinNames = skinIds.map((id) => names.get(id) ?? '?').join(' & ');
@@ -138,7 +144,11 @@ export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames
  *  `getMatchTeamNames()`, since only the post-match Discord notification (`notifyMatchScoreReported()`)
  *  needs it; `getMatchTeamNames()`'s other callers (OG cards, meta tags, and especially the live
  *  ticker, which re-reads every round) would otherwise pay for a `player_match_stats` read and a
- *  box-score derivation they never use. */
+ *  box-score derivation they never use. This does mean `notifyMatchScoreReported()` itself now makes
+ *  two `player_match_stats` reads (one here, one inside `getMatchTeamNames()`) where a single combined
+ *  query used to suffice — an accepted tradeoff since it fires once per match, unlike the live-score
+ *  path this split was written to stop wasting work on every round. Don't re-merge the two without
+ *  re-checking that tradeoff. */
 export async function getMatchBoxScore(matchId: number): Promise<{ shirts: MatchBoxScorePlayer[]; skins: MatchBoxScorePlayer[] }> {
   const { data: stats } = await supabase
     .from('player_match_stats')
@@ -148,12 +158,7 @@ export async function getMatchBoxScore(matchId: number): Promise<{ shirts: Match
   const shirtRows = playerRows.filter((p) => p.faction === 'SHIRTS');
   const skinRows = playerRows.filter((p) => p.faction === 'SKINS');
 
-  const names: Map<number, string> = new Map();
-  const allIds = playerRows.map((p) => p.player_id);
-  if (allIds.length > 0) {
-    const { data: players } = await supabase.from('players').select('id, name').in('id', allIds);
-    for (const p of (players ?? []) as Pick<Player, 'id' | 'name'>[]) names.set(p.id, p.name);
-  }
+  const names = await resolvePlayerNames(playerRows.map((p) => p.player_id));
 
   const toBoxRow = (p: (typeof playerRows)[number]): MatchBoxScorePlayer => ({
     name: names.get(p.player_id) ?? '?',
