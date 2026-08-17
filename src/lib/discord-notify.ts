@@ -25,16 +25,26 @@
 // one. If there's no stored message id — notifications were off when the server went live, that
 // call failed, or the message was deleted out from under the bot — it falls back to posting a new
 // message so the score still gets announced.
+//
+// `notifyMatchLiveScore()` edits the same message again on every `going_live`/`round_end` MatchZy
+// event (wired from the `matchzy-log` ingest route, the same place `putLiveScoreEvent()` writes
+// `live_match_score` — the table the site's own live ticker/`MatchScoreHero` subscribe to via
+// Realtime) so the running score stays current on the one message instead of the channel getting a
+// new post per round. Unlike the other two notifications it never posts a fresh message on failure —
+// a missed round's edit just means the next one tries again, not that the channel needs spam.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getMatchMeta } from './seo/og';
 import type { MatchBoxScorePlayer } from './queries/match';
+import { getLiveScore } from './demo/liveScore';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { SITE_URL } from './seo/site';
 
-const COLOR_LIVE = 0x57f287; // Discord's "green"
-const COLOR_SCORE = 0x5865f2; // Discord's "blurple"
+const COLOR_SERVER_LIVE = 0x57f287; // Discord's "green" — server provisioned, nothing played yet
+const COLOR_LIVE_SCORE = 0xed4245; // Discord's "red" — a round is actually in progress
+const COLOR_SCORE = 0x5865f2; // Discord's "blurple" — final result
 const OPERATION_SERVER_LIVE = 'discord_notify_server_live';
+const OPERATION_LIVE_SCORE = 'discord_notify_live_score';
 const OPERATION_SCORE = 'discord_notify_score';
 
 type EmbedField = { name: string; value: string; inline?: boolean };
@@ -181,12 +191,49 @@ export async function notifyMatchServerLive(supabaseAdmin: SupabaseClient, match
     shirtNames: meta.shirtNames,
     skinNames: meta.skinNames,
     map: meta.mapName,
-    color: COLOR_LIVE,
+    color: COLOR_SERVER_LIVE,
     matchUrl: `${SITE_URL}/matches/${matchId}`,
     thumbnailUrl: meta.image ? `${SITE_URL}${meta.image}` : null,
   });
   const messageId = await postNewEmbed(supabaseAdmin, matchId, OPERATION_SERVER_LIVE, webhookUrl, embed);
   if (messageId) await rememberNotificationMessage(supabaseAdmin, matchId, messageId);
+}
+
+/** Posted on every `going_live`/`round_end` MatchZy event — edits the notification message in place
+ *  with the running score, mirroring what `MatchScoreHero`/`LiveMatchTicker` already show from the
+ *  same `live_match_score` row. No-ops (silently — there's nothing to fix by posting a fresh message
+ *  mid-match) if `notifyMatchServerLive()` never left a message on record for this match. */
+export async function notifyMatchLiveScore(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
+  const webhookUrl = process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
+  if (!webhookUrl) return; // Not configured — skip before doing any DB work.
+
+  const { data: discordState } = await supabaseAdmin
+    .from('match_discord_state')
+    .select('notification_message_id')
+    .eq('match_id', matchId)
+    .maybeSingle();
+  const existingMessageId = (discordState as { notification_message_id: string | null } | null)?.notification_message_id;
+  if (!existingMessageId) return;
+
+  const [meta, liveScore] = await Promise.all([
+    getMatchMeta(matchId).catch(() => null),
+    getLiveScore(supabaseAdmin, matchId).catch(() => null),
+  ]);
+  if (!meta || !liveScore) return;
+
+  const roundLabel = liveScore.round != null ? ` · Round ${liveScore.round}` : '';
+  const embed = buildMatchEmbed({
+    seasonName: meta.seasonName,
+    weekMatchLabel: meta.weekMatchLabel,
+    statusLine: `🔴 **LIVE**\n**${liveScore.shirts}-${liveScore.skins}**${roundLabel}`,
+    shirtNames: meta.shirtNames,
+    skinNames: meta.skinNames,
+    map: meta.mapName,
+    color: COLOR_LIVE_SCORE,
+    matchUrl: `${SITE_URL}/matches/${matchId}`,
+    thumbnailUrl: meta.image ? `${SITE_URL}${meta.image}` : null,
+  });
+  await editEmbed(supabaseAdmin, matchId, OPERATION_LIVE_SCORE, webhookUrl, existingMessageId, embed);
 }
 
 /** Posted once a match's final score is committed (`PATCH /api/matches/[id]/score`). Callers should

@@ -18,7 +18,7 @@ const fakeDb = buildFakeDb();
 const adminClient = createFakeSupabaseClient(fakeDb);
 __setTestClient(adminClient);
 
-import { notifyMatchServerLive, notifyMatchScoreReported } from './discord-notify';
+import { notifyMatchServerLive, notifyMatchScoreReported, notifyMatchLiveScore } from './discord-notify';
 import { test, report } from './test-support/miniTest';
 
 interface FetchCall {
@@ -59,6 +59,11 @@ function liveOpsErrors(matchId: number, operation: string): Row[] {
 
 function discordState(matchId: number): Row | undefined {
   return (fakeDb.match_discord_state ?? []).find((r) => r.match_id === matchId);
+}
+
+function setLiveScore(matchId: number, shirts: number, skins: number, round: number | null): void {
+  fakeDb.live_match_score = (fakeDb.live_match_score ?? []).filter((r) => r.match_id !== matchId);
+  fakeDb.live_match_score.push({ match_id: matchId, shirts_score: shirts, skins_score: skins, round, updated_at: new Date().toISOString() });
 }
 
 function resetDiscordState(matchId: number): void {
@@ -128,6 +133,57 @@ async function main() {
     assert.match(skins!.value, /Dave\s+12\/6\/20/);
 
     assert.equal(discordState(100)?.notification_message_id, 'stub-msg-1');
+  });
+
+  await test('notifyMatchLiveScore: no-ops without DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL', async () => {
+    delete process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
+    const { calls } = stubFetch();
+    await notifyMatchLiveScore(adminClient, 100);
+    assert.equal(calls.length, 0);
+  });
+
+  await test('notifyMatchLiveScore: no-ops (never posts a fresh message) when nothing is on record yet', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(100);
+    setLiveScore(100, 7, 5, 13);
+    const { calls } = stubFetch();
+    await notifyMatchLiveScore(adminClient, 100);
+    assert.equal(calls.length, 0);
+  });
+
+  await test('notifyMatchLiveScore: edits the server-live message with the running score', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(100);
+    stubFetch();
+    await notifyMatchServerLive(adminClient, 100);
+    const liveMessageId = discordState(100)?.notification_message_id;
+    assert.ok(liveMessageId, 'precondition: server-live left a message id on record');
+
+    setLiveScore(100, 7, 5, 13);
+    const { calls } = stubFetch();
+    await notifyMatchLiveScore(adminClient, 100);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'PATCH');
+    assert.equal(calls[0].url, `https://discord.example/webhook/messages/${liveMessageId}`);
+    const embed = calls[0].body.embeds[0];
+    assert.equal(embed.title, 'Week 1 · Match 1', 'title stays Week/Match through a live tick');
+    assert.match(embed.description, /LIVE\*\*\n\*\*7-5.*Round 13/);
+    assert.equal(embed.fields, undefined, 'no box score mid-match — player stats land only once the match is scored');
+    assert.equal(discordState(100)?.notification_message_id, liveMessageId, 'still the same source-of-truth message');
+  });
+
+  await test('notifyMatchLiveScore: a going_live tick with no round number omits "Round"', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(100);
+    stubFetch();
+    await notifyMatchServerLive(adminClient, 100);
+
+    setLiveScore(100, 0, 0, null);
+    const { calls } = stubFetch();
+    await notifyMatchLiveScore(adminClient, 100);
+    const embed = calls[0].body.embeds[0];
+    assert.match(embed.description, /LIVE\*\*\n\*\*0-0\*\*/);
+    assert.doesNotMatch(embed.description, /Round/);
   });
 
   await test('notifyMatchScoreReported: edits the server-live message in place instead of posting a new one', async () => {

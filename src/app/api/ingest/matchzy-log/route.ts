@@ -19,6 +19,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { parseMapResultEvent, putMapResult } from '@/lib/demo/mapResult';
 import { parseMatchzyEventIdentity, putMatchzyContact } from '@/lib/demo/matchzyContact';
 import { putLiveScoreEvent } from '@/lib/demo/liveScore';
+import { notifyMatchLiveScore } from '@/lib/discord-notify';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
 import { advanceJobStatus, dispatchAndRecordFailure, matchJobKey } from '@/lib/background-jobs';
 import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
@@ -160,8 +161,10 @@ export async function POST(req: NextRequest) {
   // Best-effort and deferred: this fires on every event MatchZy sends, including high-frequency ones
   // like round_end, so none of this adds latency to the ack MatchZy is waiting on. Covers map_result
   // too (parseMatchzyEventIdentity/putLiveScoreEvent both recognize it), so there's no separate path
-  // needed for the final score. Both writes are independent, so one `after()` runs them concurrently
-  // rather than paying for two separate registrations on this route's highest-frequency path.
+  // needed for the final score. The Discord live-score edit runs after (not concurrent with) the
+  // live-score write it reads back, and only for going_live/round_end — map_result's score gets
+  // superseded moments later by notifyMatchScoreReported() once the score route confirms the result,
+  // so editing here for it too would just flicker.
   const identity = parseMatchzyEventIdentity(body);
   if (identity) {
     afterBestEffort(`matchzy-log: per-event side effects for match ${identity.matchid}`, async () => {
@@ -174,6 +177,8 @@ export async function POST(req: NextRequest) {
       }
       if (liveScore.status === 'rejected') {
         console.error(`matchzy-log: record live score for match ${identity.matchid} failed:`, liveScore.reason);
+      } else if (identity.event === 'going_live' || identity.event === 'round_end') {
+        await notifyMatchLiveScore(supabaseAdmin, identity.matchid);
       }
     });
   }
