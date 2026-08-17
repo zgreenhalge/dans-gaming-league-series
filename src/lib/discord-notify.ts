@@ -89,17 +89,19 @@ function boxScoreBlock(players: MatchBoxScorePlayer[]): string {
  *  line (Discord's small "eyebrow" text above the title — the same role it plays for real
  *  sports/esports score bots), the title is just "Week N · Match M" (short enough to never wrap
  *  oddly, and doubles as a clickable link to the match page via `url`) — the description doesn't
- *  repeat that link, since the title already carries it. A post-match box score, when given, becomes
- *  two full-width (non-inline) fields, Shirts then Skins stacked — inline (side-by-side) halves the
- *  available width, which wraps the fixed-width `Player  K/A/D  ADR` table mid-column on anything
- *  narrower than a desktop client. `matchUrl`/the thumbnail are derived here (from `matchId`/`image`)
- *  rather than by each caller, since all three need the same ones. */
+ *  repeat that link, since the title already carries it. The description leads with the roster/map
+ *  line, then the status block, so the "who's playing" context reads before the (more changeable,
+ *  edited-in-place) status. A post-match box score, when given, becomes two full-width (non-inline)
+ *  fields, Shirts then Skins stacked — inline (side-by-side) halves the available width, which wraps
+ *  the fixed-width `Player  K/A/D  ADR` table mid-column on anything narrower than a desktop client.
+ *  `matchUrl`/the thumbnail are derived here (from `matchId`/`image`) rather than by each caller,
+ *  since all three need the same ones. */
 function buildMatchEmbed(parts: MatchEmbedParts): Embed {
   const matchUrl = `${SITE_URL}/matches/${parts.matchId}`;
   const roster = `${parts.shirtNames} vs ${parts.skinNames}${parts.map ? ` on ${parts.map}` : ''}`;
   const embed: Embed = {
     title: parts.weekMatchLabel,
-    description: `${parts.statusLine}\n\n${roster}`,
+    description: `${roster}\n\n${parts.statusLine}`,
     color: parts.color,
     url: matchUrl,
     author: { name: parts.seasonName },

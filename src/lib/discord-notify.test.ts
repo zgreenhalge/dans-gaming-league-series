@@ -100,6 +100,11 @@ async function main() {
     assert.equal(embed.author.name, 'Season 5');
     assert.match(embed.description, /Server is live/);
     assert.match(embed.description, /Alice & Bob vs Carol & Dave on Foroglio/);
+    assert.equal(
+      embed.description,
+      'Alice & Bob vs Carol & Dave on Foroglio\n\n🟢 **Server is live**',
+      'roster/map line comes first, then the status block',
+    );
     assert.doesNotMatch(embed.description, /\/matches\//, 'no link line — the title is already the link');
     assert.equal(embed.url, `https://dans-gaming-league-series.vercel.app/matches/100`, 'the title carries the link via embed.url');
     assert.match(embed.thumbnail?.url ?? '', /\/maps\/foroglio\.jpg$/);
@@ -121,6 +126,11 @@ async function main() {
     assert.match(embed.description, /Match complete\*\*\n\*\*Final: 13-9/, '"Final: 13-9" is on its own line — descriptions support \\n, unlike titles');
     // Match 100's shirts_pick ('Foroglio') is the effective played map, not picked_map alone.
     assert.match(embed.description, /Alice & Bob vs Carol & Dave on Foroglio/);
+    assert.equal(
+      embed.description,
+      'Alice & Bob vs Carol & Dave on Foroglio\n\n🏁 **Match complete**\n**Final: 13-9**',
+      'roster/map line comes first, then the status block',
+    );
     assert.doesNotMatch(embed.description, /\/matches\//, 'no link line — the title is already the link');
 
     assert.equal(embed.fields?.length, 2);
