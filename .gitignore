@@ -50,3 +50,12 @@ yarn-error.log*
 .vercel
 *.tsbuildinfo
 next-env.d.ts
+
+# Playwright
+/playwright-report/
+/test-results/
+/blob-report/
+
+# Supabase CLI local state
+/supabase/.branches
+/supabase/.temp
