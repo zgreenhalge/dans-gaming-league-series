@@ -126,7 +126,7 @@ export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames
       .select('match_number, weeks(week_number, seasons(name, is_gauntlet))')
       .eq('id', matchId)
       .maybeSingle(),
-    supabase.from('player_match_stats').select('player_id, faction').eq('match_id', matchId),
+    supabase.from('player_match_stats').select('player_id, faction').eq('match_id', matchId).order('player_id'),
   ]);
   if (!match) return null;
   // Supabase types embedded to-one relations as arrays, but returns objects at runtime — cast through
@@ -163,16 +163,19 @@ export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames
  *  `getMatchTeamNames()`, since only the post-match Discord notification (`notifyMatchScoreReported()`)
  *  needs it; `getMatchTeamNames()`'s other callers (OG cards, meta tags, and especially the live
  *  ticker, which re-reads every round) would otherwise pay for a `player_match_stats` read and a
- *  box-score derivation they never use. This does mean `notifyMatchScoreReported()` itself now makes
- *  two `player_match_stats` reads (one here, one inside `getMatchTeamNames()`) where a single combined
- *  query used to suffice — an accepted tradeoff since it fires once per match, unlike the live-score
- *  path this split was written to stop wasting work on every round. Don't re-merge the two without
- *  re-checking that tradeoff. */
+ *  box-score derivation they never use. `notifyMatchScoreReported()` pays for two separate
+ *  `player_match_stats` reads (one here, one inside `getMatchTeamNames()`) as an accepted tradeoff,
+ *  since it fires once per match, unlike the live-score path this split exists to keep cheap on every
+ *  round. Don't merge the two without re-checking that tradeoff. Ordered by `player_id`, same as
+ *  `getMatchTeamNames()`'s roster query, so the two independent reads list a match's players in the
+ *  same order — the Discord notification tags them via `getMatchTeamNames()` in its message content
+ *  and lists them via this function in its embed, and the two should read as the same lineup. */
 export async function getMatchBoxScore(matchId: number): Promise<{ shirts: MatchBoxScorePlayer[]; skins: MatchBoxScorePlayer[] }> {
   const { data: stats } = await supabase
     .from('player_match_stats')
     .select('player_id, faction, kills, assists, deaths, adr')
-    .eq('match_id', matchId);
+    .eq('match_id', matchId)
+    .order('player_id');
   const playerRows = (stats ?? []) as Pick<PlayerMatchStat, 'player_id' | 'faction' | 'kills' | 'assists' | 'deaths' | 'adr'>[];
   const shirtRows = playerRows.filter((p) => p.faction === 'SHIRTS');
   const skinRows = playerRows.filter((p) => p.faction === 'SKINS');

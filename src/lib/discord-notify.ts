@@ -260,7 +260,10 @@ export async function notifyMatchServerLive(supabaseAdmin: SupabaseClient, match
  *  later by `notifyMatchScoreReported()` once the score route confirms the result — editing here too
  *  would just flicker), and `liveScore` to avoid a redundant read of the row the caller just wrote.
  *  No-ops (silently — there's nothing to fix by posting a fresh message mid-match) for any other
- *  event, for a `null` row, or if `notifyMatchServerLive()` never left a message on record. */
+ *  event, for a `null` row, if `notifyMatchServerLive()` never left a message on record, or if the
+ *  match already has a final score on record — a delayed/retried `round_end` delivery arriving after
+ *  `notifyMatchScoreReported()` has already edited the message to its final box score must not
+ *  regress it back to "LIVE", the same race `map_result` is guarded against above. */
 export async function notifyMatchLiveScore(
   supabaseAdmin: SupabaseClient,
   matchId: number,
@@ -277,6 +280,7 @@ export async function notifyMatchLiveScore(
 
   const meta = await getMatchMeta(matchId).catch(() => null);
   if (!meta) return;
+  if (meta.score) return; // Already scored — a late round_end must not overwrite the final result.
 
   const roundLabel = liveScore.round != null ? ` · Round ${liveScore.round}` : '';
   const { content, embed } = buildMatchMessage(matchId, meta, {

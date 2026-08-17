@@ -211,35 +211,51 @@ async function main() {
 
   await test('notifyMatchLiveScore: edits the server-live message with the running score', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
-    resetDiscordState(100);
+    // Match 101 (unlike 100) has no final_score yet — a genuinely in-progress match, which
+    // notifyMatchLiveScore()'s "already scored" guard requires.
+    resetDiscordState(101);
     stubFetch();
-    await notifyMatchServerLive(adminClient, 100);
-    const liveMessageId = discordState(100)?.notification_message_id;
+    await notifyMatchServerLive(adminClient, 101);
+    const liveMessageId = discordState(101)?.notification_message_id;
     assert.ok(liveMessageId, 'precondition: server-live left a message id on record');
 
     const { calls } = stubFetch();
-    await notifyMatchLiveScore(adminClient, 100, 'round_end', liveScore(100, 7, 5, 13));
+    await notifyMatchLiveScore(adminClient, 101, 'round_end', liveScore(101, 7, 5, 13));
     assert.equal(calls.length, 1);
     assert.equal(calls[0].method, 'PATCH');
     assert.equal(calls[0].url, `https://discord.example/webhook/messages/${liveMessageId}`);
     const embed = calls[0].body.embeds[0];
-    assert.equal(embed.title, 'Week 1 · Match 1', 'title stays Week/Match through a live tick');
+    assert.equal(embed.title, 'Week 1 · Match 2', 'title stays Week/Match through a live tick');
     assert.match(embed.description, /LIVE\*\*\n\*\*7-5.*Round 13/);
     assert.equal(embed.fields, undefined, 'no box score mid-match — player stats land only once the match is scored');
-    assert.equal(discordState(100)?.notification_message_id, liveMessageId, 'still the same source-of-truth message');
+    assert.equal(discordState(101)?.notification_message_id, liveMessageId, 'still the same source-of-truth message');
   });
 
   await test('notifyMatchLiveScore: a going_live tick with no round number omits "Round"', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
-    resetDiscordState(100);
+    resetDiscordState(101);
     stubFetch();
-    await notifyMatchServerLive(adminClient, 100);
+    await notifyMatchServerLive(adminClient, 101);
 
     const { calls } = stubFetch();
-    await notifyMatchLiveScore(adminClient, 100, 'going_live', liveScore(100, 0, 0, null));
+    await notifyMatchLiveScore(adminClient, 101, 'going_live', liveScore(101, 0, 0, null));
     const embed = calls[0].body.embeds[0];
     assert.match(embed.description, /LIVE\*\*\n\*\*0-0\*\*/);
     assert.doesNotMatch(embed.description, /Round/);
+  });
+
+  await test('notifyMatchLiveScore: no-ops (doesn\'t regress the message) once the match already has a final score', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(100);
+    stubFetch();
+    await notifyMatchScoreReported(adminClient, 100);
+    const finalMessageId = discordState(100)?.notification_message_id;
+    assert.ok(finalMessageId, 'precondition: the match already has a final score and a posted message');
+
+    const { calls } = stubFetch();
+    // A delayed/retried round_end arriving after the score was already reported and confirmed.
+    await notifyMatchLiveScore(adminClient, 100, 'round_end', liveScore(100, 13, 9, 22));
+    assert.equal(calls.length, 0, 'must not overwrite the final box-score message with a stale LIVE state');
   });
 
   await test('notifyMatchScoreReported: edits the server-live message in place instead of posting a new one', async () => {
