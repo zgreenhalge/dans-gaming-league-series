@@ -35,7 +35,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getMatchMeta } from './seo/og';
-import { getMatchBoxScore, type MatchBoxScorePlayer } from './queries/match';
+import { getMatchBoxScore, type MatchBoxScorePlayer, type MatchDiscordPlayer } from './queries/match';
 import type { LiveScoreRow } from './demo/liveScore';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { SITE_URL } from './seo/site';
@@ -63,8 +63,8 @@ interface MatchEmbedParts {
   seasonName: string;
   weekMatchLabel: string;
   statusLine: string;
-  shirtNames: string;
-  skinNames: string;
+  shirtPlayers: MatchDiscordPlayer[];
+  skinPlayers: MatchDiscordPlayer[];
   map?: string | null;
   color: number;
   image?: string | null;
@@ -73,18 +73,28 @@ interface MatchEmbedParts {
 
 /** A player's name-color role mention (`<@&roleId>`) when they have one, else their plain name
  *  bolded — the same "tag if linked, else plain name" fallback `discord-threads.ts`'s `openingPost()`
- *  uses for user mentions. Role mentions only render as a clickable, colored tag in normal message
- *  text; Discord does not parse mentions inside a code block, which is why the box score below isn't
- *  fenced/column-aligned the way it used to be. */
-function playerTag(player: Pick<MatchBoxScorePlayer, 'name' | 'discordNameRoleId'>): string {
+ *  uses for user mentions. Only usable in a webhook message's `content`: Discord does not render
+ *  mentions typed inside an embed (title, description, or field values) as tags at all — they show as
+ *  literal `<@&...>` text there — so this is for the roster line in `buildMatchContent()` below, never
+ *  for the box score, which lives in an embed field. */
+function playerTag(player: MatchDiscordPlayer): string {
   return player.discordNameRoleId ? `<@&${player.discordNameRoleId}>` : `**${player.name}**`;
 }
 
-/** Renders a team's box score as one line per player — name-color role tag (or bolded name, for
- *  anyone not yet linked), then K/A/D and ADR. Not a column-aligned table: role mentions don't render
- *  inside a code block, so each line is self-labeled instead of relying on a shared header row. */
+/** The webhook message's plain `content`, sent alongside the embed — a "Shirts vs Skins" roster line
+ *  tagging each player by their name-color role (or bolding their name, for anyone not yet linked).
+ *  This is the one place in the message mentions actually render as tags; the embed itself (title,
+ *  description, fields) never parses them. Present on all three notification kinds, since it's the
+ *  only place players are named once the box score drops the roster from the description below. */
+function buildMatchContent(shirtPlayers: MatchDiscordPlayer[], skinPlayers: MatchDiscordPlayer[]): string {
+  return `${shirtPlayers.map(playerTag).join(' & ')} vs ${skinPlayers.map(playerTag).join(' & ')}`;
+}
+
+/** Renders a team's box score as one line per player — bolded name, then K/A/D and ADR. Plain names
+ *  only: embed field values don't render mentions as tags (see `playerTag()`), so there's no role-tag
+ *  path here — the roster line in `content` (`buildMatchContent()`) is where players get tagged. */
 function boxScoreLines(players: MatchBoxScorePlayer[]): string {
-  return players.map((p) => `${playerTag(p)} — ${p.kills}/${p.assists}/${p.deaths} K/A/D · ${p.adr} ADR`).join('\n');
+  return players.map((p) => `**${p.name}** — ${p.kills}/${p.assists}/${p.deaths} K/A/D · ${p.adr} ADR`).join('\n');
 }
 
 /** Shared embed layout for all three notification kinds. The season name is the embed's `author`
@@ -94,21 +104,16 @@ function boxScoreLines(players: MatchBoxScorePlayer[]): string {
  *  repeat that link, since the title already carries it. `matchUrl`/the thumbnail are derived here
  *  (from `matchId`/`image`) rather than by each caller, since all three need the same ones.
  *
- *  A post-match box score, when given, becomes two full-width (non-inline) fields, Shirts then Skins
- *  stacked, each player tagged by their name-color role — and the roster/map line is dropped from the
- *  description entirely, since the box score already names every player; only the map name survives,
- *  folded onto the score line. Without a box score (server-live, live-score), the roster/map line is
- *  the only place players are named, so it stays, leading the description with the status block
- *  after it. */
+ *  Players are never named in the embed itself — the roster line in the message's `content`
+ *  (`buildMatchContent()`) is the one place mentions render as tags, so the description is just the
+ *  map (if known) then the status block. A post-match box score, when given, becomes two full-width
+ *  (non-inline) fields, Shirts then Skins stacked. */
 function buildMatchEmbed(parts: MatchEmbedParts): Embed {
   const matchUrl = `${SITE_URL}/matches/${parts.matchId}`;
-  const mapSuffix = parts.map ? ` on ${parts.map}` : '';
-  const description = parts.boxScore
-    ? `${parts.statusLine}${mapSuffix}`
-    : `${parts.shirtNames} vs ${parts.skinNames}${mapSuffix}\n\n${parts.statusLine}`;
+  const mapLine = parts.map ? `on ${parts.map}\n\n` : '';
   const embed: Embed = {
     title: parts.weekMatchLabel,
-    description,
+    description: `${mapLine}${parts.statusLine}`,
     color: parts.color,
     url: matchUrl,
     author: { name: parts.seasonName },
@@ -131,13 +136,14 @@ async function postNewEmbed(
   matchId: number,
   operation: string,
   webhookUrl: string,
+  content: string,
   embed: Embed,
 ): Promise<string | null> {
   try {
     const res = await fetch(`${webhookUrl}?wait=true`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ embeds: [embed] }),
+      body: JSON.stringify({ content, embeds: [embed] }),
     });
     if (!res.ok) {
       await recordOpsError(supabaseAdmin, 'match', matchId, operation, `Webhook post returned ${res.status}`);
@@ -160,13 +166,14 @@ async function editEmbed(
   operation: string,
   webhookUrl: string,
   messageId: string,
+  content: string,
   embed: Embed,
 ): Promise<boolean> {
   try {
     const res = await fetch(`${webhookUrl}/messages/${messageId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ embeds: [embed] }),
+      body: JSON.stringify({ content, embeds: [embed] }),
     });
     if (!res.ok) {
       await recordOpsError(supabaseAdmin, 'match', matchId, operation, `Webhook edit returned ${res.status}`);
@@ -212,13 +219,14 @@ export async function notifyMatchServerLive(supabaseAdmin: SupabaseClient, match
     seasonName: meta.seasonName,
     weekMatchLabel: meta.weekMatchLabel,
     statusLine: '🟢 **Server is live**',
-    shirtNames: meta.shirtNames,
-    skinNames: meta.skinNames,
+    shirtPlayers: meta.shirtPlayers,
+    skinPlayers: meta.skinPlayers,
     map: meta.mapName,
     color: COLOR_SERVER_LIVE,
     image: meta.image,
   });
-  const messageId = await postNewEmbed(supabaseAdmin, matchId, OPERATION_SERVER_LIVE, webhookUrl, embed);
+  const content = buildMatchContent(meta.shirtPlayers, meta.skinPlayers);
+  const messageId = await postNewEmbed(supabaseAdmin, matchId, OPERATION_SERVER_LIVE, webhookUrl, content, embed);
   if (messageId) await rememberNotificationMessage(supabaseAdmin, matchId, messageId);
 }
 
@@ -254,13 +262,14 @@ export async function notifyMatchLiveScore(
     seasonName: meta.seasonName,
     weekMatchLabel: meta.weekMatchLabel,
     statusLine: `🔴 **LIVE**\n**${liveScore.shirts}-${liveScore.skins}**${roundLabel}`,
-    shirtNames: meta.shirtNames,
-    skinNames: meta.skinNames,
+    shirtPlayers: meta.shirtPlayers,
+    skinPlayers: meta.skinPlayers,
     map: meta.mapName,
     color: COLOR_LIVE_SCORE,
     image: meta.image,
   });
-  await editEmbed(supabaseAdmin, matchId, OPERATION_LIVE_SCORE, webhookUrl, existingMessageId, embed);
+  const content = buildMatchContent(meta.shirtPlayers, meta.skinPlayers);
+  await editEmbed(supabaseAdmin, matchId, OPERATION_LIVE_SCORE, webhookUrl, existingMessageId, content, embed);
 }
 
 /** Posted once a match's final score is committed (`PATCH /api/matches/[id]/score`). Callers should
@@ -284,17 +293,18 @@ export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, ma
     seasonName: meta.seasonName,
     weekMatchLabel: meta.weekMatchLabel,
     statusLine: `🏁 **Match complete**\n**Final: ${meta.score.shirts}-${meta.score.skins}**`,
-    shirtNames: meta.shirtNames,
-    skinNames: meta.skinNames,
+    shirtPlayers: meta.shirtPlayers,
+    skinPlayers: meta.skinPlayers,
     map: meta.mapName,
     color: COLOR_SCORE,
     image: meta.image,
     boxScore: boxScore ?? undefined,
   });
+  const content = buildMatchContent(meta.shirtPlayers, meta.skinPlayers);
 
-  if (existingMessageId && await editEmbed(supabaseAdmin, matchId, OPERATION_SCORE, webhookUrl, existingMessageId, embed)) {
+  if (existingMessageId && await editEmbed(supabaseAdmin, matchId, OPERATION_SCORE, webhookUrl, existingMessageId, content, embed)) {
     return;
   }
-  const messageId = await postNewEmbed(supabaseAdmin, matchId, OPERATION_SCORE, webhookUrl, embed);
+  const messageId = await postNewEmbed(supabaseAdmin, matchId, OPERATION_SCORE, webhookUrl, content, embed);
   if (messageId) await rememberNotificationMessage(supabaseAdmin, matchId, messageId);
 }

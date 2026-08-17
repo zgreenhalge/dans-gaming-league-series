@@ -61,14 +61,18 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   return { match: m, week: weekRow as Week, season, stats: statRows };
 }
 
-/** One rostered player's box-score line — kept to just the columns a compact scoreboard needs
- *  (not the full `PlayerMatchStat` row). `adr` is the stored per-match whole number, not the
- *  recomputed aggregate float `overall_adr` uses elsewhere. `discordNameRoleId` is the player's
- *  personal name-color role (`players.discord_name_role_id`, #405) — `null` for a player who hasn't
- *  linked Discord/gotten one yet, in which case a caller falls back to `name`. */
-export interface MatchBoxScorePlayer {
+/** A rostered player's name plus their personal Discord name-color role
+ *  (`players.discord_name_role_id`, #405) — `null` for a player who hasn't linked Discord/gotten one
+ *  yet, in which case a caller falls back to `name`. */
+export interface MatchDiscordPlayer {
   name: string;
   discordNameRoleId: string | null;
+}
+
+/** One rostered player's box-score line — kept to just the columns a compact scoreboard needs
+ *  (not the full `PlayerMatchStat` row). `adr` is the stored per-match whole number, not the
+ *  recomputed aggregate float `overall_adr` uses elsewhere. */
+export interface MatchBoxScorePlayer extends MatchDiscordPlayer {
   kills: number;
   assists: number;
   deaths: number;
@@ -84,13 +88,17 @@ export interface MatchTeamNames {
   weekMatchLabel: string;
   shirtNames: string;
   skinNames: string;
+  /** Same rosters as `shirtNames`/`skinNames`, unjoined — for callers (Discord notifications) that
+   *  tag each player individually rather than rendering one joined string. */
+  shirtPlayers: MatchDiscordPlayer[];
+  skinPlayers: MatchDiscordPlayer[];
 }
 
 /** Resolves a set of player ids to their name + Discord name-color role in one query — shared by
  *  `getMatchTeamNames()` and `getMatchBoxScore()`, which each need to label a small, disjoint set of
  *  columns from `player_match_stats` by rostered player. */
-async function resolvePlayers(playerIds: number[]): Promise<Map<number, { name: string; discordNameRoleId: string | null }>> {
-  const players: Map<number, { name: string; discordNameRoleId: string | null }> = new Map();
+async function resolvePlayers(playerIds: number[]): Promise<Map<number, MatchDiscordPlayer>> {
+  const players: Map<number, MatchDiscordPlayer> = new Map();
   if (playerIds.length === 0) return players;
   const { data } = await supabase.from('players').select('id, name, discord_name_role_id').in('id', playerIds);
   for (const p of (data ?? []) as Pick<Player, 'id' | 'name' | 'discord_name_role_id'>[]) {
@@ -138,11 +146,14 @@ export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames
   const skinIds = playerRows.filter((p) => p.faction === 'SKINS').map((p) => p.player_id);
 
   const players = await resolvePlayers([...shirtIds, ...skinIds]);
+  const fallback: MatchDiscordPlayer = { name: '?', discordNameRoleId: null };
 
-  const shirtNames = shirtIds.map((id) => players.get(id)?.name ?? '?').join(' & ');
-  const skinNames = skinIds.map((id) => players.get(id)?.name ?? '?').join(' & ');
+  const shirtPlayers = shirtIds.map((id) => players.get(id) ?? fallback);
+  const skinPlayers = skinIds.map((id) => players.get(id) ?? fallback);
+  const shirtNames = shirtPlayers.map((p) => p.name).join(' & ');
+  const skinNames = skinPlayers.map((p) => p.name).join(' & ');
 
-  return { title, seasonName, weekMatchLabel, shirtNames, skinNames };
+  return { title, seasonName, weekMatchLabel, shirtNames, skinNames, shirtPlayers, skinPlayers };
 }
 
 /** Per-player box score for a match, split by faction — its own query rather than folded into
@@ -166,8 +177,7 @@ export async function getMatchBoxScore(matchId: number): Promise<{ shirts: Match
   const players = await resolvePlayers(playerRows.map((p) => p.player_id));
 
   const toBoxRow = (p: (typeof playerRows)[number]): MatchBoxScorePlayer => ({
-    name: players.get(p.player_id)?.name ?? '?',
-    discordNameRoleId: players.get(p.player_id)?.discordNameRoleId ?? null,
+    ...(players.get(p.player_id) ?? { name: '?', discordNameRoleId: null }),
     kills: p.kills,
     assists: p.assists,
     deaths: p.deaths,
