@@ -100,8 +100,8 @@ async function main() {
     assert.equal(embed.author.name, 'Season 5');
     assert.match(embed.description, /Server is live/);
     assert.match(embed.description, /Alice & Bob vs Carol & Dave on Foroglio/);
-    assert.match(embed.description, /\/matches\/100$/);
-    assert.equal(embed.url, embed.description.split('\n').pop());
+    assert.doesNotMatch(embed.description, /\/matches\//, 'no link line — the title is already the link');
+    assert.equal(embed.url, `https://dans-gaming-league-series.vercel.app/matches/100`, 'the title carries the link via embed.url');
     assert.match(embed.thumbnail?.url ?? '', /\/maps\/foroglio\.jpg$/);
     assert.equal(embed.fields, undefined, 'no stats exist yet when the server goes live');
     assert.equal(discordState(100)?.notification_message_id, 'stub-msg-1');
@@ -121,12 +121,12 @@ async function main() {
     assert.match(embed.description, /Match complete\*\*\n\*\*Final: 13-9/, '"Final: 13-9" is on its own line — descriptions support \\n, unlike titles');
     // Match 100's shirts_pick ('Foroglio') is the effective played map, not picked_map alone.
     assert.match(embed.description, /Alice & Bob vs Carol & Dave on Foroglio/);
-    assert.match(embed.description, /\/matches\/100$/);
+    assert.doesNotMatch(embed.description, /\/matches\//, 'no link line — the title is already the link');
 
     assert.equal(embed.fields?.length, 2);
-    const shirts = embed.fields?.find((f) => /Shirts/.test(f.name));
-    const skins = embed.fields?.find((f) => /Skins/.test(f.name));
-    assert.ok(shirts?.inline && skins?.inline, 'box score fields sit side by side');
+    const shirts = embed.fields?.find((f) => f.name === 'Shirts');
+    const skins = embed.fields?.find((f) => f.name === 'Skins');
+    assert.ok(!shirts?.inline && !skins?.inline, 'box score fields stack full-width, not side by side');
     assert.match(shirts!.value, /Alice\s+20\/3\/15/);
     assert.match(shirts!.value, /Bob\s+18\/5\/16/);
     assert.match(skins!.value, /Carol\s+14\/4\/19/);
