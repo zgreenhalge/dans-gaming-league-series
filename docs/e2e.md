@@ -42,14 +42,22 @@ schema would make E2E runs silently stop testing what the app actually does.
 
 ```
 supabase start   # once per session — brings up the local stack, applies migrations + seed.sql
+export NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+export NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjIxNDU5MTY4MDB9.SD8OGMUA7SztCSQyoNK_up2hNla9czXlhL7RvNeh1kw
+export SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MjE0NTkxNjgwMH0.Q_XOunt2yFrXAkYRNeh5JgAO_M_zLBEh7OwNnfEJjXU
 npm run test:e2e
 ```
 
 `playwright.config.ts`'s `webServer` starts `next dev` itself (port `3100` by default, override with
 `PLAYWRIGHT_PORT`) and waits for it to come up — no separate `npm run dev` needed. It inherits
 `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` from the shell
-environment; point those at `supabase status`'s `API_URL`/`ANON_KEY`/`SERVICE_ROLE_KEY` output for
-the local stack, not production's values. Run `supabase stop` when done.
+environment. The anon/service_role values above are **fixed, local-dev-only demo JWTs** derived from
+`supabase/config.toml`'s pinned `auth.jwt_secret` (role `anon`/`service_role`, `iss: supabase-demo`)
+— not real secrets, and not something you look up from `supabase status`: recent Supabase CLI
+releases stopped reliably printing them from `status`/`start` output (a known upstream regression,
+[supabase/cli#4211](https://github.com/supabase/cli/issues/4211)), and since they're fully
+determined by the pinned secret there's nothing to look up anyway — they'll be identical every time
+you `supabase start` this repo. Run `supabase stop` when done.
 
 ## Auth: dev-mode mock providers, not real Steam OAuth
 
@@ -76,8 +84,11 @@ database itself is disposable.
 `.github/workflows/e2e.yml` is a separate workflow from `ci.yml`, **not** run on every PR — the
 `next dev` startup and local-Supabase-stack cost is too slow/heavy to gate every push on. Trigger it
 manually (`workflow_dispatch`) or by adding the `run-e2e` label to a PR. It installs the Supabase CLI
-(`supabase/setup-cli`), runs `supabase start`, maps `supabase status -o env`'s output to the app's
-expected env var names, runs the suite, then `supabase stop`.
+(`supabase/setup-cli`), runs `supabase start`, pulls `NEXT_PUBLIC_SUPABASE_URL` from `supabase status
+-o env`'s `API_URL` (the one value that CLI output has reliably carried), sets the anon/service_role
+keys from the same fixed JWTs documented above (job-level `env:`, not parsed from CLI output — see
+the "Running locally" section for why), verifies none of the three ended up empty before running
+anything, runs the suite, then `supabase stop`.
 
 ## Adding a new flow
 
