@@ -88,17 +88,20 @@ function boxScoreBlock(players: MatchBoxScorePlayer[]): string {
 /** Shared embed layout for all three notification kinds. The season name is the embed's `author`
  *  line (Discord's small "eyebrow" text above the title — the same role it plays for real
  *  sports/esports score bots), the title is just "Week N · Match M" (short enough to never wrap
- *  oddly, and doubles as a clickable link to the match page via `url`), and the description carries
- *  the (bold, single-line) status, the roster + map, and an explicit link line for clients that don't
- *  make a bolded embed title read as clickable at a glance. A post-match box score, when given,
- *  becomes two inline fields so Shirts/Skins sit side by side. `matchUrl`/the thumbnail are derived
- *  here (from `matchId`/`image`) rather than by each caller, since all three need the same ones. */
+ *  oddly, and doubles as a clickable link to the match page via `url`) — the description doesn't
+ *  repeat that link, since the title already carries it. The description leads with the roster/map
+ *  line, then the status block, so the "who's playing" context reads before the (more changeable,
+ *  edited-in-place) status. A post-match box score, when given, becomes two full-width (non-inline)
+ *  fields, Shirts then Skins stacked — inline (side-by-side) halves the available width, which wraps
+ *  the fixed-width `Player  K/A/D  ADR` table mid-column on anything narrower than a desktop client.
+ *  `matchUrl`/the thumbnail are derived here (from `matchId`/`image`) rather than by each caller,
+ *  since all three need the same ones. */
 function buildMatchEmbed(parts: MatchEmbedParts): Embed {
   const matchUrl = `${SITE_URL}/matches/${parts.matchId}`;
   const roster = `${parts.shirtNames} vs ${parts.skinNames}${parts.map ? ` on ${parts.map}` : ''}`;
   const embed: Embed = {
     title: parts.weekMatchLabel,
-    description: `${parts.statusLine}\n\n${roster}\n${matchUrl}`,
+    description: `${roster}\n\n${parts.statusLine}`,
     color: parts.color,
     url: matchUrl,
     author: { name: parts.seasonName },
@@ -106,8 +109,8 @@ function buildMatchEmbed(parts: MatchEmbedParts): Embed {
   if (parts.image) embed.thumbnail = { url: `${SITE_URL}${parts.image}` };
   if (parts.boxScore) {
     const fields: EmbedField[] = [];
-    if (parts.boxScore.shirts.length > 0) fields.push({ name: '🎽 Shirts', value: boxScoreBlock(parts.boxScore.shirts), inline: true });
-    if (parts.boxScore.skins.length > 0) fields.push({ name: '💀 Skins', value: boxScoreBlock(parts.boxScore.skins), inline: true });
+    if (parts.boxScore.shirts.length > 0) fields.push({ name: 'Shirts', value: boxScoreBlock(parts.boxScore.shirts) });
+    if (parts.boxScore.skins.length > 0) fields.push({ name: 'Skins', value: boxScoreBlock(parts.boxScore.skins) });
     if (fields.length > 0) embed.fields = fields;
   }
   return embed;
