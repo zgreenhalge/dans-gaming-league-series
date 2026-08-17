@@ -24,7 +24,17 @@ import { test, report } from './test-support/miniTest';
 interface FetchCall {
   url: string;
   method: string;
-  body: { embeds: [{ title: string; description: string; color: number; url: string }] };
+  body: {
+    embeds: [{
+      title: string;
+      description: string;
+      color: number;
+      url: string;
+      author: { name: string };
+      thumbnail?: { url: string };
+      fields?: { name: string; value: string; inline?: boolean }[];
+    }];
+  };
 }
 
 /** Stubs `fetch` for one webhook call sequence. Every `ok` response carries a `.json()` resolving to
@@ -70,7 +80,7 @@ async function main() {
     assert.equal(calls.length, 0);
   });
 
-  await test('notifyMatchServerLive: posts an embed naming both rosters and remembers the message id', async () => {
+  await test('notifyMatchServerLive: posts a "Week N · Match M" title with the season as author, no box score', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
     resetDiscordState(100);
     const { calls } = stubFetch();
@@ -80,16 +90,19 @@ async function main() {
     // ?wait=true is the only way a webhook POST returns the created message's id.
     assert.equal(calls[0].url, 'https://discord.example/webhook?wait=true');
     const embed = calls[0].body.embeds[0];
-    assert.match(embed.title, /Server is live/);
+    assert.equal(embed.title, 'Week 1 · Match 1');
     assert.doesNotMatch(embed.title, /\n/, 'embed titles do not reliably support line breaks');
-    assert.match(embed.description, /Week|Round/);
-    assert.match(embed.description, /Alice & Bob vs Carol & Dave/);
+    assert.equal(embed.author.name, 'Season 5');
+    assert.match(embed.description, /Server is live/);
+    assert.match(embed.description, /Alice & Bob vs Carol & Dave on Foroglio/);
     assert.match(embed.description, /\/matches\/100$/);
     assert.equal(embed.url, embed.description.split('\n').pop());
+    assert.match(embed.thumbnail?.url ?? '', /\/maps\/foroglio\.jpg$/);
+    assert.equal(embed.fields, undefined, 'no stats exist yet when the server goes live');
     assert.equal(discordState(100)?.notification_message_id, 'stub-msg-1');
   });
 
-  await test('notifyMatchScoreReported: posts a new embed when no prior message is on record', async () => {
+  await test('notifyMatchScoreReported: posts a box score alongside the final result', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
     resetDiscordState(100);
     const { calls } = stubFetch();
@@ -98,12 +111,23 @@ async function main() {
     assert.equal(calls[0].method, 'POST');
     assert.equal(calls[0].url, 'https://discord.example/webhook?wait=true');
     const embed = calls[0].body.embeds[0];
-    assert.match(embed.title, /13-9/);
-    assert.doesNotMatch(embed.title, /\n/, 'embed titles do not reliably support line breaks');
-    assert.match(embed.description, /Week|Round/);
+    assert.equal(embed.title, 'Week 1 · Match 1');
+    assert.equal(embed.author.name, 'Season 5');
+    assert.match(embed.description, /Match complete/);
+    assert.match(embed.description, /13-9/);
     // Match 100's shirts_pick ('Foroglio') is the effective played map, not picked_map alone.
     assert.match(embed.description, /Alice & Bob vs Carol & Dave on Foroglio/);
     assert.match(embed.description, /\/matches\/100$/);
+
+    assert.equal(embed.fields?.length, 2);
+    const shirts = embed.fields?.find((f) => /Shirts/.test(f.name));
+    const skins = embed.fields?.find((f) => /Skins/.test(f.name));
+    assert.ok(shirts?.inline && skins?.inline, 'box score fields sit side by side');
+    assert.match(shirts!.value, /Alice\s+20\/3\/15/);
+    assert.match(shirts!.value, /Bob\s+18\/5\/16/);
+    assert.match(skins!.value, /Carol\s+14\/4\/19/);
+    assert.match(skins!.value, /Dave\s+12\/6\/20/);
+
     assert.equal(discordState(100)?.notification_message_id, 'stub-msg-1');
   });
 
@@ -120,7 +144,9 @@ async function main() {
     assert.equal(calls.length, 1, 'edits in place — no second message posted');
     assert.equal(calls[0].method, 'PATCH');
     assert.equal(calls[0].url, `https://discord.example/webhook/messages/${liveMessageId}`);
-    assert.match(calls[0].body.embeds[0].title, /13-9/);
+    const embed = calls[0].body.embeds[0];
+    assert.match(embed.description, /13-9/);
+    assert.equal(embed.fields?.length, 2, 'the edit carries the box score the original live post never had');
     assert.equal(discordState(100)?.notification_message_id, liveMessageId, 'the source-of-truth message id is unchanged');
   });
 

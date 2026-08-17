@@ -61,6 +61,17 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   return { match: m, week: weekRow as Week, season, stats: statRows };
 }
 
+/** One rostered player's box-score line — kept to just the columns a compact scoreboard needs
+ *  (not the full `PlayerMatchStat` row). `adr` is the stored per-match whole number, not the
+ *  recomputed aggregate float `overall_adr` uses elsewhere. */
+export interface MatchBoxScorePlayer {
+  name: string;
+  kills: number;
+  assists: number;
+  deaths: number;
+  adr: number;
+}
+
 export interface MatchTeamNames {
   title: string;
   /** Just the season name half of `title` (e.g. "Season 3 Regular Season") — for callers like
@@ -70,11 +81,15 @@ export interface MatchTeamNames {
   weekMatchLabel: string;
   shirtNames: string;
   skinNames: string;
+  /** Per-player box score, same faction split/order as `shirtNames`/`skinNames`. */
+  shirtsBox: MatchBoxScorePlayer[];
+  skinsBox: MatchBoxScorePlayer[];
 }
 
-/** A match's display title ("Season · Week N · Match M") and its rostered players joined per side
- *  ("Player A & Player B") — shared by `getMatchMeta` (OG/meta tags) and `getLiveTickerMatch` (the
- *  site-wide live ticker) so the season/week/roster lookup lives in exactly one place. */
+/** A match's display title ("Season · Week N · Match M"), its rostered players joined per side
+ *  ("Player A & Player B"), and their box-score lines — shared by `getMatchMeta` (OG/meta tags) and
+ *  `getLiveTickerMatch` (the site-wide live ticker) so the season/week/roster lookup lives in
+ *  exactly one place. */
 export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames | null> {
   // Match/week/season collapse into one embedded select (same pattern as `getOtherScheduledMatches`
   // below), run in parallel with the roster fetch rather than chained after it — the roster only
@@ -85,7 +100,7 @@ export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames
       .select('match_number, weeks(week_number, seasons(name, is_gauntlet))')
       .eq('id', matchId)
       .maybeSingle(),
-    supabase.from('player_match_stats').select('player_id, faction').eq('match_id', matchId),
+    supabase.from('player_match_stats').select('player_id, faction, kills, assists, deaths, adr').eq('match_id', matchId),
   ]);
   if (!match) return null;
   // Supabase types embedded to-one relations as arrays, but returns objects at runtime — cast through
@@ -106,21 +121,36 @@ export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames
   // "weekLabel · Match M" half on its own for callers that render the two on separate lines.
   const weekMatchLabel = title.slice(seasonName.length + ' · '.length);
 
-  const playerRows = (stats ?? []) as Pick<PlayerMatchStat, 'player_id' | 'faction'>[];
-  const shirtIds = playerRows.filter((p) => p.faction === 'SHIRTS').map((p) => p.player_id);
-  const skinIds = playerRows.filter((p) => p.faction === 'SKINS').map((p) => p.player_id);
+  const playerRows = (stats ?? []) as Pick<PlayerMatchStat, 'player_id' | 'faction' | 'kills' | 'assists' | 'deaths' | 'adr'>[];
+  const shirtRows = playerRows.filter((p) => p.faction === 'SHIRTS');
+  const skinRows = playerRows.filter((p) => p.faction === 'SKINS');
 
   const names: Map<number, string> = new Map();
-  const allIds = [...shirtIds, ...skinIds];
+  const allIds = playerRows.map((p) => p.player_id);
   if (allIds.length > 0) {
     const { data: players } = await supabase.from('players').select('id, name').in('id', allIds);
     for (const p of (players ?? []) as Pick<Player, 'id' | 'name'>[]) names.set(p.id, p.name);
   }
 
-  const shirtNames = shirtIds.map((id) => names.get(id) ?? '?').join(' & ');
-  const skinNames = skinIds.map((id) => names.get(id) ?? '?').join(' & ');
+  const shirtNames = shirtRows.map((p) => names.get(p.player_id) ?? '?').join(' & ');
+  const skinNames = skinRows.map((p) => names.get(p.player_id) ?? '?').join(' & ');
+  const toBoxRow = (p: (typeof playerRows)[number]): MatchBoxScorePlayer => ({
+    name: names.get(p.player_id) ?? '?',
+    kills: p.kills,
+    assists: p.assists,
+    deaths: p.deaths,
+    adr: p.adr,
+  });
 
-  return { title, seasonName, weekMatchLabel, shirtNames, skinNames };
+  return {
+    title,
+    seasonName,
+    weekMatchLabel,
+    shirtNames,
+    skinNames,
+    shirtsBox: shirtRows.map(toBoxRow),
+    skinsBox: skinRows.map(toBoxRow),
+  };
 }
 
 /** Whichever match is currently live, with no `matchId` known ahead of time — the first step of

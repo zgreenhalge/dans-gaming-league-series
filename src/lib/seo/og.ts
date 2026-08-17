@@ -98,7 +98,7 @@ export async function getMatchMeta(matchId: number) {
   ]);
   if (!teams || !match) return null;
   const m = match as Pick<Match, 'final_score' | 'picked_map' | 'shirts_pick' | 'scheduled_at'>;
-  const { title, shirtNames, skinNames } = teams;
+  const { title, seasonName, weekMatchLabel, shirtNames, skinNames, shirtsBox, skinsBox } = teams;
 
   const map = m.shirts_pick ?? m.picked_map;
   const mapName = map ? toSentenceCase(map) : null;
@@ -130,7 +130,10 @@ export async function getMatchMeta(matchId: number) {
   const mapLookup = await getMapLookup();
   const image = map ? mapImageFor(map, mapLookup) ?? null : null;
 
-  return { title, description, image, shirtNames, skinNames, score, mapName, scheduledAt };
+  return {
+    title, seasonName, weekMatchLabel, description, image,
+    shirtNames, skinNames, shirtsBox, skinsBox, score, mapName, scheduledAt,
+  };
 }
 
 type SeasonLeaderboardMeta = {
