@@ -350,16 +350,19 @@ export type Database = {
       match_discord_state: {
         Row: {
           match_id: number
+          notification_message_id: string | null
           reminder_sent_at: string | null
           thread_id: string | null
         }
         Insert: {
           match_id: number
+          notification_message_id?: string | null
           reminder_sent_at?: string | null
           thread_id?: string | null
         }
         Update: {
           match_id?: number
+          notification_message_id?: string | null
           reminder_sent_at?: string | null
           thread_id?: string | null
         }
