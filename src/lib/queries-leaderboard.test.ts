@@ -19,7 +19,7 @@ import { getSeasonLeaderboard, getCareerLeaderboard, getAllLeaderboards } from '
 import { test, report } from './test-support/miniTest';
 
 function assertCanonicallySorted(
-  rows: { player_name: string; win_rate_percentage: number; rwr_percentage: number; overall_adr: number }[],
+  rows: { player_name: string; matches_won: number; rwr_percentage: number; overall_adr: number }[],
   label: string,
 ) {
   for (let i = 1; i < rows.length; i++) {

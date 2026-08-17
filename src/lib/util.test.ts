@@ -81,22 +81,22 @@ test('extractSeasonNumber: no number returns null', () => {
   assert.equal(extractSeasonNumber('Preseason'), null);
 });
 
-// --- canonicalSort: WR% → RWR% → ADR, all descending ---
-const row = (wr: number, rwr: number, adr: number) => ({
-  win_rate_percentage: wr,
+// --- canonicalSort: Wins → RWR% → ADR, all descending ---
+const row = (wins: number, rwr: number, adr: number) => ({
+  matches_won: wins,
   rwr_percentage: rwr,
   overall_adr: adr,
 });
-test('canonicalSort: orders by WR% desc first', () => {
-  const sorted = [row(50, 99, 99), row(80, 1, 1)].sort(canonicalSort);
-  assert.equal(sorted[0].win_rate_percentage, 80);
+test('canonicalSort: orders by wins desc first', () => {
+  const sorted = [row(5, 99, 99), row(8, 1, 1)].sort(canonicalSort);
+  assert.equal(sorted[0].matches_won, 8);
 });
-test('canonicalSort: breaks WR% ties with RWR% desc', () => {
-  const sorted = [row(50, 40, 99), row(50, 60, 1)].sort(canonicalSort);
+test('canonicalSort: breaks wins ties with RWR% desc', () => {
+  const sorted = [row(5, 40, 99), row(5, 60, 1)].sort(canonicalSort);
   assert.equal(sorted[0].rwr_percentage, 60);
 });
-test('canonicalSort: breaks WR%+RWR% ties with ADR desc (never ADR alone)', () => {
-  const sorted = [row(50, 50, 70), row(50, 50, 90)].sort(canonicalSort);
+test('canonicalSort: breaks wins+RWR% ties with ADR desc (never ADR alone)', () => {
+  const sorted = [row(5, 50, 70), row(5, 50, 90)].sort(canonicalSort);
   assert.equal(sorted[0].overall_adr, 90);
 });
 
