@@ -91,11 +91,20 @@ function buildMatchContent(shirtPlayers: MatchDiscordPlayer[], skinPlayers: Matc
   return `${shirtPlayers.map(playerTag).join(' & ')} vs ${skinPlayers.map(playerTag).join(' & ')}`;
 }
 
-/** Renders a team's box score as one line per player — bolded name, then K/A/D and ADR. Plain names
- *  only: embed field values don't render mentions as tags (see `playerTag()`), so there's no role-tag
- *  path here — the roster line in `content` (`buildMatchContent()`) is where players get tagged. */
-function boxScoreLines(players: MatchBoxScorePlayer[]): string {
-  return players.map((p) => `**${p.name}** — ${p.kills}/${p.assists}/${p.deaths} K/A/D · ${p.adr} ADR`).join('\n');
+/** Renders a team's box score as a fixed-width `Player  K/A/D  ADR` table inside a code block —
+ *  embed field values render in Discord's default (non-monospace) font otherwise, so alignment needs
+ *  the fence. Plain names, not tags: players are already tagged once in the roster line in `content`
+ *  (`buildMatchContent()`), and Discord doesn't parse mentions (or any markdown, including bold) inside
+ *  a code block anyway. Column widths are computed from this team's own rows, not shared across both
+ *  fields, since the two are independent fields with no visual alignment between them. */
+function boxScoreTable(players: MatchBoxScorePlayer[]): string {
+  const rows = players.map((p) => ({ name: p.name, kad: `${p.kills}/${p.assists}/${p.deaths}`, adr: String(p.adr) }));
+  const nameWidth = Math.max('Player'.length, ...rows.map((r) => r.name.length));
+  const kadWidth = Math.max('K/A/D'.length, ...rows.map((r) => r.kad.length));
+  const adrWidth = Math.max('ADR'.length, ...rows.map((r) => r.adr.length));
+  const line = (name: string, kad: string, adr: string) =>
+    `${name.padEnd(nameWidth)}  ${kad.padStart(kadWidth)}  ${adr.padStart(adrWidth)}`;
+  return ['```', line('Player', 'K/A/D', 'ADR'), ...rows.map((r) => line(r.name, r.kad, r.adr)), '```'].join('\n');
 }
 
 /** Shared embed layout for all three notification kinds. The season name is the embed's `author`
@@ -122,8 +131,8 @@ function buildMatchEmbed(parts: MatchEmbedParts): Embed {
   if (parts.image) embed.thumbnail = { url: `${SITE_URL}${parts.image}` };
   if (parts.boxScore) {
     const fields: EmbedField[] = [];
-    if (parts.boxScore.shirts.length > 0) fields.push({ name: 'Shirts', value: boxScoreLines(parts.boxScore.shirts) });
-    if (parts.boxScore.skins.length > 0) fields.push({ name: 'Skins', value: boxScoreLines(parts.boxScore.skins) });
+    if (parts.boxScore.shirts.length > 0) fields.push({ name: 'Shirts', value: boxScoreTable(parts.boxScore.shirts) });
+    if (parts.boxScore.skins.length > 0) fields.push({ name: 'Skins', value: boxScoreTable(parts.boxScore.skins) });
     if (fields.length > 0) embed.fields = fields;
   }
   return embed;

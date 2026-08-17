@@ -141,13 +141,17 @@ async function main() {
     const shirts = embed.fields?.find((f) => f.name === 'Shirts');
     const skins = embed.fields?.find((f) => f.name === 'Skins');
     assert.ok(!shirts?.inline && !skins?.inline, 'box score fields stack full-width, not side by side');
-    assert.equal(shirts!.value, '**Alice** — 20/3/15 K/A/D · 85.5 ADR\n**Bob** — 18/5/16 K/A/D · 78.18 ADR', 'plain bolded names — embed fields never render mentions as tags');
-    assert.equal(skins!.value, '**Carol** — 14/4/19 K/A/D · 65 ADR\n**Dave** — 12/6/20 K/A/D · 60.09 ADR');
+    assert.match(shirts!.value, /^```\nPlayer\s+K\/A\/D\s+ADR\n/, 'a fixed-width table inside a code block — plain names, not tags: mentions/markdown don\'t render inside one anyway');
+    assert.match(shirts!.value, /Alice\s+20\/3\/15\s+85\.5/);
+    assert.match(shirts!.value, /Bob\s+18\/5\/16\s+78\.18/);
+    assert.match(shirts!.value, /```$/);
+    assert.match(skins!.value, /Carol\s+14\/4\/19\s+65\b/);
+    assert.match(skins!.value, /Dave\s+12\/6\/20\s+60\.09/);
 
     assert.equal(discordState(100)?.notification_message_id, 'stub-msg-1');
   });
 
-  await test('notifyMatchScoreReported: tags a player with a linked name-color role in the content roster line', async () => {
+  await test('notifyMatchScoreReported: tags a player with a linked name-color role in the content roster line, but never in the box score table', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
     resetDiscordState(100);
     const alice = fakeDb.players.find((p) => p.id === 1)!;
@@ -161,7 +165,8 @@ async function main() {
         'a linked player is a role mention in content; an unlinked one still falls back to their bolded name',
       );
       const shirts = calls[0].body.embeds[0].fields?.find((f) => f.name === 'Shirts');
-      assert.equal(shirts!.value, '**Alice** — 20/3/15 K/A/D · 85.5 ADR\n**Bob** — 18/5/16 K/A/D · 78.18 ADR', 'the box score never tags — even a linked player shows their plain bolded name there');
+      assert.match(shirts!.value, /Alice\s+20\/3\/15\s+85\.5/, 'the box score never tags — even a linked player shows their plain name there');
+      assert.doesNotMatch(shirts!.value, /<@&/, 'no role mention syntax inside the code block — it would render as literal text');
     } finally {
       alice.discord_name_role_id = null;
     }
