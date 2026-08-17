@@ -207,7 +207,7 @@ export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, ma
   const embed = buildMatchEmbed({
     seasonName: meta.seasonName,
     weekMatchLabel: meta.weekMatchLabel,
-    statusLine: `🏁 **Match complete — Final: ${meta.score.shirts}-${meta.score.skins}**`,
+    statusLine: `🏁 **Match complete**\n**Final: ${meta.score.shirts}-${meta.score.skins}**`,
     shirtNames: meta.shirtNames,
     skinNames: meta.skinNames,
     map: meta.mapName,

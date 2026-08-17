@@ -113,8 +113,7 @@ async function main() {
     const embed = calls[0].body.embeds[0];
     assert.equal(embed.title, 'Week 1 · Match 1');
     assert.equal(embed.author.name, 'Season 5');
-    assert.match(embed.description, /Match complete/);
-    assert.match(embed.description, /13-9/);
+    assert.match(embed.description, /Match complete\*\*\n\*\*Final: 13-9/, '"Final: 13-9" is on its own line — descriptions support \\n, unlike titles');
     // Match 100's shirts_pick ('Foroglio') is the effective played map, not picked_map alone.
     assert.match(embed.description, /Alice & Bob vs Carol & Dave on Foroglio/);
     assert.match(embed.description, /\/matches\/100$/);
