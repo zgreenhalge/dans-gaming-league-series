@@ -17,6 +17,12 @@ port = 54323
 
 [auth]
 enabled = false
+# Pinned explicitly rather than left to the CLI default: PostgREST/Kong validate the anon/
+# service_role JWTs against this secret independent of whether GoTrue (the `enabled` flag above)
+# is running, and recent Supabase CLI releases stopped reliably printing the derived keys from
+# `supabase status`/`start` (a known upstream regression, supabase/cli#4211) — pinning the secret
+# lets docs/e2e.md hardcode the two JWTs it derives instead of depending on that flaky output.
+jwt_secret = "super-secret-jwt-token-with-at-least-32-characters-long"
 
 [storage]
 enabled = false
