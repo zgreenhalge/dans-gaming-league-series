@@ -120,10 +120,15 @@ jobs:
       - name: Start local Supabase (applies supabase/migrations + supabase/seed.sql)
         run: supabase start
 
-      - name: Export the local API URL
-        run: |
-          supabase status -o env >> "$GITHUB_ENV"
-          echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
+      - name: Export local Supabase connection env vars
+        run: supabase status -o env >> "$GITHUB_ENV"
+
+      # `$GITHUB_ENV` writes only become real env vars starting the *next* step, not later in the
+      # same script that wrote them — this has to be its own step, not folded into the one above,
+      # or $API_URL reads back empty even though the write succeeded (regression from #418: it was
+      # briefly a single step and silently broke this exact way — see #420 CI run 32058589313).
+      - name: Map to the app's expected env var name
+        run: echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
 
       - name: Verify the env vars the app needs are actually set
         run: |
