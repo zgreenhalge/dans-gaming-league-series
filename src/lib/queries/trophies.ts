@@ -39,7 +39,7 @@ function toTrophyStats(r: LeaderboardRowWithId): TrophyStatLine {
 
 /**
  * All podium finishes (gold/silver/bronze) across every season, keyed by player_id.
- * Regular seasons: ARCHIVED only, ranked by canonical order (WR% -> RWR% -> ADR),
+ * Regular seasons: ARCHIVED only, ranked by canonical order (Wins -> RWR% -> ADR),
  * matching LeaderboardTable's medal logic. Gauntlets: champion + runners-up from
  * a fully-played final round, matching GauntletStandings.
  */
@@ -53,7 +53,7 @@ export async function getAllSeasonMedalists(): Promise<Map<number, TrophyEntry[]
     out.set(playerId, list);
   };
 
-  // Regular seasons: ARCHIVED only, canonical rank WR% -> RWR% -> ADR, top 3
+  // Regular seasons: ARCHIVED only, canonical rank Wins -> RWR% -> ADR, top 3
   for (const season of seasons) {
     if (season.is_gauntlet || season.status !== 'ARCHIVED') continue;
     const rows = leaderboards.get(season.id) ?? [];
