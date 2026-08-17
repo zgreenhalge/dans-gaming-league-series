@@ -5,6 +5,13 @@
  * the invariants: y-flip, aspect-preserved auto-fit, the calibrated radar transform,
  * frame interpolation, angular wrap, and the event/grenade time windows.
  *
+ * `extract.ts`'s `buildReplay()` itself is out of scope here, same as `demoOrchestrator.ts`/
+ * `demoParser.ts`: it calls `@laihoe/demoparser2`'s `parseEvent`/`parseTicks`/`parseGrenades`
+ * directly on the demo buffer, with no separable pure logic pulled out of the collectors — per
+ * `docs/patterns.md`'s "test external IO by extracting the logic around it" convention, that's a
+ * fixture-backed (real/mocked `.dem`) problem, not a unit test. `freezeDeadPositions()`, the one
+ * piece of `extract.ts` that IS pure, is covered below.
+ *
  * Assertions are plain node:assert, no matcher library (mirrors util.test.ts). Run:
  *   npx vitest run src/lib/replay/replay.test.ts
  */
@@ -28,6 +35,14 @@ import {
   hurtAt,
   viewStateAt,
   roundTickRange,
+  grenadeEffectRadius,
+  ticksSince,
+  formatClock,
+  roundClockSeconds,
+  lerpAngle,
+  lerp,
+  bracketBy,
+  sideOfPlayer,
 } from './playback';
 import { buildHeatmapPoints } from './heatmap';
 import { extractPlayerTrace, traceStateAt, maxDurationTicks, buildMatchTraces } from './aggregate';
@@ -668,6 +683,88 @@ test('workshopIdFromUrl: pulls the id from ?id= and from a bare digit run', () =
   assert.equal(workshopIdFromUrl('https://steamcommunity.com/sharedfiles/filedetails/?id=3070284539'), '3070284539');
   assert.equal(workshopIdFromUrl('steam://url/CommunityFilePage/3070284539'), '3070284539');
   assert.equal(workshopIdFromUrl(null), null);
+});
+
+// --- grenadeEffectRadius: per-type AoE radius, world units ---
+test('grenadeEffectRadius: incendiary covers a larger area than molotov, both wider than nothing', () => {
+  assert.ok(grenadeEffectRadius('incendiary') > grenadeEffectRadius('molotov'));
+  assert.ok(grenadeEffectRadius('smoke') > grenadeEffectRadius('molotov'));
+  assert.ok(grenadeEffectRadius('he') > 0);
+});
+
+// --- ticksSince: elapsed ticks from a reference point, floored at 0 ---
+test('ticksSince: elapsed ticks after the reference, and clamped to 0 before it', () => {
+  assert.equal(ticksSince(150, 100), 50);
+  assert.equal(ticksSince(100, 100), 0);
+  assert.equal(ticksSince(50, 100), 0); // before reference — never negative
+});
+
+// --- formatClock: seconds -> m:ss ---
+test('formatClock: formats whole seconds as m:ss, flooring fractions and padding seconds', () => {
+  assert.equal(formatClock(95), '1:35');
+  assert.equal(formatClock(95.9), '1:35'); // floors, not rounds
+  assert.equal(formatClock(65), '1:05'); // seconds padded to 2 digits
+  assert.equal(formatClock(0), '0:00');
+  assert.equal(formatClock(-5), '0:00'); // clamped to 0
+});
+
+// --- roundClockSeconds: elapsed seconds since freeze-end (or startTick fallback) ---
+test('roundClockSeconds: elapsed seconds since freezeEndTick, at the given tick rate', () => {
+  const r = round({ startTick: 0, freezeEndTick: 64 });
+  approx(roundClockSeconds(r, 64 + 128, 64), 2); // 128 ticks at 64 tick/s = 2s
+});
+
+test('roundClockSeconds: falls back to startTick when freezeEndTick is missing (old payload)', () => {
+  const r = round({ startTick: 100, freezeEndTick: undefined as unknown as number });
+  approx(roundClockSeconds(r, 100 + 64, 64), 1);
+});
+
+// --- lerpAngle: shortest angular path ---
+test('lerpAngle: interpolates the short way around 0/360, not the long way', () => {
+  approx(lerpAngle(10, 350, 0.5), 0); // -20° turn through 0, midpoint 0
+  approx(lerpAngle(0, 90, 0.5), 45); // no wraparound needed
+  approx(lerpAngle(350, 10, 0.5), 360); // +20° turn through 0, midpoint 360 (unnormalized, same angle as 0)
+});
+
+// --- lerp: plain linear interpolation ---
+test('lerp: linear interpolation between two values', () => {
+  approx(lerp(0, 100, 0.25), 25);
+  approx(lerp(10, 20, 0), 10);
+  approx(lerp(10, 20, 1), 20);
+});
+
+// --- bracketBy: generic tick-bracketing + interpolation fraction ---
+test('bracketBy: brackets two items and computes the fraction between them', () => {
+  const items = [{ t: 0, v: 'a' }, { t: 10, v: 'b' }, { t: 20, v: 'c' }];
+  const b = bracketBy(items, (i) => i.t, 5)!;
+  assert.equal(b.lo.v, 'a');
+  assert.equal(b.hi.v, 'b');
+  approx(b.t, 0.5);
+});
+
+test('bracketBy: clamps to the first/last item outside the range, with fraction 0', () => {
+  const items = [{ t: 0, v: 'a' }, { t: 10, v: 'b' }];
+  const before = bracketBy(items, (i) => i.t, -5)!;
+  assert.equal(before.lo.v, 'a');
+  assert.equal(before.hi.v, 'a');
+  approx(before.t, 0);
+  const after = bracketBy(items, (i) => i.t, 999)!;
+  assert.equal(after.lo.v, 'b');
+  assert.equal(after.hi.v, 'b');
+  approx(after.t, 0);
+});
+
+test('bracketBy: null for an empty list', () => {
+  assert.equal(bracketBy([], (i: { t: number }) => i.t, 5), null);
+});
+
+// --- sideOfPlayer: faction -> this round's side ---
+test('sideOfPlayer: resolves a faction to its side for this round, null with no faction', () => {
+  const r = round({ sideByFaction: { SHIRTS: 'CT', SKINS: 'T' } });
+  assert.equal(sideOfPlayer(r, 'SHIRTS'), 'CT');
+  assert.equal(sideOfPlayer(r, 'SKINS'), 'T');
+  assert.equal(sideOfPlayer(r, null), null);
+  assert.equal(sideOfPlayer(r, undefined), null);
 });
 
 // --- report ---

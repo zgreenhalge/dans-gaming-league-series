@@ -58,6 +58,24 @@ Read-only tools — `list_tables`, `get_logs`, `get_advisors`, `search_docs`, `l
 `get_edge_function`, `generate_typescript_types`, and `execute_sql` for a plain `SELECT` — can be
 used freely for investigation without asking first.
 
+# Merging a PR requires its own live approval
+
+Opening a PR, pushing fixes to a PR you opened, and merging a PR are three different levels of
+authorization — never conflate them. Merging always needs an explicit go-ahead given **for that PR,
+at that moment.** An approval for an earlier PR does not carry over, no matter how closely related
+the two are — a precursor PR and its own follow-up fix are still two separate approvals, not one
+approval covering the pair. "Drive a PR you own to green" (fixing CI failures, responding to review
+comments) is not the same permission as "merge it once it's green" — treat merge as always requiring
+its own ask unless the user's message about *that specific PR* says otherwise.
+
+This holds even when merging looks obviously correct — CI is green, the change is small, the user
+approved the general direction earlier, or an almost-identical PR was already approved in this same
+conversation. Describe which PR you'd be merging and wait for a yes before running it.
+
+Opening a PR is a lower-stakes action than merging but still isn't free: don't open one speculatively
+just because a natural next step suggests it (e.g. splitting a change into a precursor + follow-up).
+If the user hasn't asked for a PR, say what you'd open and why, and let them confirm first.
+
 # Local `*_handoff/` dirs are gitignored scratch
 
 Directories matching `*_handoff/` (e.g. `dathost_handoff/`, `ehog_handoff/`) hold planning and
