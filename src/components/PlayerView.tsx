@@ -157,7 +157,7 @@ export default function PlayerView({
   const [filter, setFilter] = useState<Filter>('career');
   const [tab, setTab] = useState<PlayerTab>('stats');
   const [matchesSubTab, setMatchesSubTab] = useState<MatchesSubTab>('history');
-  const [mapSort, setMapSort] = useState<MapSortCol>('wr');
+  const [mapSort, setMapSort] = useState<MapSortCol>('record');
   const [mapAsc, setMapAsc] = useState(false);
 
   function toggleRegular() { baseToggleRegular(); setFilter('career'); }
@@ -599,7 +599,7 @@ export default function PlayerView({
                       let v = 0;
                       switch (mapSort) {
                         case 'map':    v = a.map.localeCompare(b.map); break;
-                        case 'record': v = b.wins - a.wins || a.losses - b.losses; break;
+                        case 'record': v = b.wins - a.wins || b.rwr - a.rwr || b.adr - a.adr; break;
                         case 'wr':     v = b.wr - a.wr; break;
                         case 'rwr':    v = b.rwr - a.rwr; break;
                         case 'adr':    v = b.adr - a.adr; break;

@@ -70,7 +70,7 @@ test('aggregatePlayerStats: splits kills/deaths into in-wins vs in-losses bucket
   assert.equal(a.deaths_in_losses, 18);
 });
 
-test('aggregatePlayerStatsByMap: buckets by map (groupByMap normalization) and sorts by WR% -> RWR% -> ADR desc', () => {
+test('aggregatePlayerStatsByMap: buckets by map (groupByMap normalization) and sorts by Wins -> RWR% -> ADR desc', () => {
   const rows = [
     playerRow({ map: 'de dust 2', is_win: true, rounds_won: 13, rounds_played: 22, damage: 2200 }),
     playerRow({ map: 'de-dust-2', is_win: false, rounds_won: 9, rounds_played: 22, damage: 1800 }),
@@ -78,7 +78,7 @@ test('aggregatePlayerStatsByMap: buckets by map (groupByMap normalization) and s
   ];
   const out = aggregatePlayerStatsByMap(rows);
   assert.equal(out.length, 2); // "de dust 2" and "de-dust-2" merge into one bucket
-  assert.equal(out[0].map, 'Vertigo'); // 100% WR beats Dust 2's 50%
+  assert.equal(out[0].map, 'Vertigo'); // tied 1-1 win with Dust 2, Vertigo's higher RWR% (65% vs 50%) breaks the tie
   const dust2 = out.find((m) => m.map === 'de dust 2');
   assert.ok(dust2);
   assert.equal(dust2!.wins, 1);

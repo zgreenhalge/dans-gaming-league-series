@@ -12,7 +12,7 @@ import {
   type GauntletSummary,
 } from '@/lib/queries';
 import type { LeaderboardRowWithId, Season } from '@/lib/types';
-import { seasonTitle, extractSeasonNumber } from '@/lib/util';
+import { seasonTitle, extractSeasonNumber, canonicalSort } from '@/lib/util';
 
 export const revalidate = 60;
 export const metadata = {
@@ -21,11 +21,7 @@ export const metadata = {
 };
 
 function podiumSort(rows: LeaderboardRowWithId[]): LeaderboardRowWithId[] {
-  return [...rows].sort(
-    (a, b) =>
-      b.win_rate_percentage - a.win_rate_percentage ||
-      b.rwr_percentage - a.rwr_percentage,
-  );
+  return [...rows].sort(canonicalSort);
 }
 
 function Stat({ v, l }: { v: string; l: string }) {

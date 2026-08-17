@@ -100,7 +100,7 @@ export interface PlayerMapAggregateStats {
 /**
  * Buckets a player's rows by map (via `groupByMap`, so differently-punctuated names for the
  * same map never split into separate rows) and aggregates each bucket with `aggregatePlayerStats`,
- * sorted by the canonical WR% → RWR% → ADR order (descending). Maps with zero played matches in
+ * sorted by the canonical Wins → RWR% → ADR order (descending). Maps with zero played matches in
  * this scope are dropped rather than shown as an empty row.
  */
 export function aggregatePlayerStatsByMap(rows: PlayerAggregateRow[]): PlayerMapAggregateStats[] {
@@ -111,5 +111,5 @@ export function aggregatePlayerStatsByMap(rows: PlayerAggregateRow[]): PlayerMap
     if (a.matches === 0) continue;
     out.push({ map: display, wins: a.wins, losses: a.losses, wr: a.wr, rwr: a.rwr, adr: a.adr });
   }
-  return out.sort((a, b) => b.wr - a.wr || b.rwr - a.rwr || b.adr - a.adr);
+  return out.sort((a, b) => b.wins - a.wins || b.rwr - a.rwr || b.adr - a.adr);
 }
