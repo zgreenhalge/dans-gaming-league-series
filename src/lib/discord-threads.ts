@@ -52,8 +52,8 @@ interface DiscordChannel {
 
 /** Formats a non-ok Discord response as `"{prefix} returned {status}: {message}"` — the one shared
  *  shape every Discord call in this file uses to describe a failure, both for an `ops_errors` message
- *  and a result's own `detail`. */
-async function discordErrorDetail(prefix: string, res: Response): Promise<string> {
+ *  and a result's own `detail`; also used by `discord-notify.ts`. */
+export async function discordErrorDetail(prefix: string, res: Response): Promise<string> {
   const body = (await res.json().catch(() => null)) as { message?: string } | null;
   return `${prefix} returned ${res.status}${body?.message ? `: ${body.message}` : ''}`;
 }

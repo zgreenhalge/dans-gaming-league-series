@@ -39,6 +39,9 @@ import { getMatchBoxScore, type MatchBoxScorePlayer, type MatchDiscordPlayer } f
 import type { LiveScoreRow } from './demo/liveScore';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { SITE_URL } from './seo/site';
+import { discordErrorDetail } from './discord-threads';
+
+type MatchMeta = NonNullable<Awaited<ReturnType<typeof getMatchMeta>>>;
 
 const COLOR_SERVER_LIVE = 0x57f287; // Discord's "green" — server provisioned, nothing played yet
 const COLOR_LIVE_SCORE = 0xed4245; // Discord's "red" — a round is actually in progress
@@ -63,8 +66,6 @@ interface MatchEmbedParts {
   seasonName: string;
   weekMatchLabel: string;
   statusLine: string;
-  shirtPlayers: MatchDiscordPlayer[];
-  skinPlayers: MatchDiscordPlayer[];
   map?: string | null;
   color: number;
   image?: string | null;
@@ -128,6 +129,29 @@ function buildMatchEmbed(parts: MatchEmbedParts): Embed {
   return embed;
 }
 
+/** Builds a notification's `content` (roster line) and `embed` together from `getMatchMeta()`'s
+ *  result — the one assembly step all three notification kinds share, so each just supplies what
+ *  actually varies between them (`statusLine`/`color`/`boxScore`). */
+function buildMatchMessage(
+  matchId: number,
+  meta: MatchMeta,
+  opts: { statusLine: string; color: number; boxScore?: { shirts: MatchBoxScorePlayer[]; skins: MatchBoxScorePlayer[] } },
+): { content: string; embed: Embed } {
+  return {
+    content: buildMatchContent(meta.shirtPlayers, meta.skinPlayers),
+    embed: buildMatchEmbed({
+      matchId,
+      seasonName: meta.seasonName,
+      weekMatchLabel: meta.weekMatchLabel,
+      statusLine: opts.statusLine,
+      map: meta.mapName,
+      color: opts.color,
+      image: meta.image,
+      boxScore: opts.boxScore,
+    }),
+  };
+}
+
 /** Posts a new message and returns its id (via `?wait=true`, the only way a webhook POST returns
  *  one) so a later call can edit it in place — `null` if unconfigured, if the post failed, or if
  *  Discord's response didn't parse. */
@@ -146,7 +170,7 @@ async function postNewEmbed(
       body: JSON.stringify({ content, embeds: [embed] }),
     });
     if (!res.ok) {
-      await recordOpsError(supabaseAdmin, 'match', matchId, operation, `Webhook post returned ${res.status}`);
+      await recordOpsError(supabaseAdmin, 'match', matchId, operation, await discordErrorDetail('Webhook post', res));
       return null;
     }
     await clearOpsError(supabaseAdmin, 'match', matchId, operation);
@@ -176,7 +200,7 @@ async function editEmbed(
       body: JSON.stringify({ content, embeds: [embed] }),
     });
     if (!res.ok) {
-      await recordOpsError(supabaseAdmin, 'match', matchId, operation, `Webhook edit returned ${res.status}`);
+      await recordOpsError(supabaseAdmin, 'match', matchId, operation, await discordErrorDetail('Webhook edit', res));
       return false;
     }
     await clearOpsError(supabaseAdmin, 'match', matchId, operation);
@@ -214,18 +238,7 @@ export async function notifyMatchServerLive(supabaseAdmin: SupabaseClient, match
 
   const meta = await getMatchMeta(matchId).catch(() => null);
   if (!meta) return;
-  const embed = buildMatchEmbed({
-    matchId,
-    seasonName: meta.seasonName,
-    weekMatchLabel: meta.weekMatchLabel,
-    statusLine: '🟢 **Server is live**',
-    shirtPlayers: meta.shirtPlayers,
-    skinPlayers: meta.skinPlayers,
-    map: meta.mapName,
-    color: COLOR_SERVER_LIVE,
-    image: meta.image,
-  });
-  const content = buildMatchContent(meta.shirtPlayers, meta.skinPlayers);
+  const { content, embed } = buildMatchMessage(matchId, meta, { statusLine: '🟢 **Server is live**', color: COLOR_SERVER_LIVE });
   const messageId = await postNewEmbed(supabaseAdmin, matchId, OPERATION_SERVER_LIVE, webhookUrl, content, embed);
   if (messageId) await rememberNotificationMessage(supabaseAdmin, matchId, messageId);
 }
@@ -257,18 +270,10 @@ export async function notifyMatchLiveScore(
   if (!meta) return;
 
   const roundLabel = liveScore.round != null ? ` · Round ${liveScore.round}` : '';
-  const embed = buildMatchEmbed({
-    matchId,
-    seasonName: meta.seasonName,
-    weekMatchLabel: meta.weekMatchLabel,
+  const { content, embed } = buildMatchMessage(matchId, meta, {
     statusLine: `🔴 **LIVE**\n**${liveScore.shirts}-${liveScore.skins}**${roundLabel}`,
-    shirtPlayers: meta.shirtPlayers,
-    skinPlayers: meta.skinPlayers,
-    map: meta.mapName,
     color: COLOR_LIVE_SCORE,
-    image: meta.image,
   });
-  const content = buildMatchContent(meta.shirtPlayers, meta.skinPlayers);
   await editEmbed(supabaseAdmin, matchId, OPERATION_LIVE_SCORE, webhookUrl, existingMessageId, content, embed);
 }
 
@@ -288,19 +293,11 @@ export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, ma
   ]);
   if (!meta || !meta.score) return;
 
-  const embed = buildMatchEmbed({
-    matchId,
-    seasonName: meta.seasonName,
-    weekMatchLabel: meta.weekMatchLabel,
+  const { content, embed } = buildMatchMessage(matchId, meta, {
     statusLine: `🏁 **Match complete**\n**Final: ${meta.score.shirts}-${meta.score.skins}**`,
-    shirtPlayers: meta.shirtPlayers,
-    skinPlayers: meta.skinPlayers,
-    map: meta.mapName,
     color: COLOR_SCORE,
-    image: meta.image,
     boxScore: boxScore ?? undefined,
   });
-  const content = buildMatchContent(meta.shirtPlayers, meta.skinPlayers);
 
   if (existingMessageId && await editEmbed(supabaseAdmin, matchId, OPERATION_SCORE, webhookUrl, existingMessageId, content, embed)) {
     return;

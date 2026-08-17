@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import type { Match, Week, Season, Player, PlayerMatchStat, PlayerMatchSabremetrics, Faction } from '../types';
+import type { Match, Week, Season, PlayerMatchStat, PlayerMatchSabremetrics, Faction } from '../types';
 import { isPlayedScore, avgOf, compareMatchRefDesc, extractSeasonNumber, matchLabel, matchWeekLabel } from '../util';
 import { mapSlug } from '../maps';
 import type { ScheduledMatchRef } from '../server-schedule-collision';
@@ -94,15 +94,18 @@ export interface MatchTeamNames {
   skinPlayers: MatchDiscordPlayer[];
 }
 
-/** Resolves a set of player ids to their name + Discord name-color role in one query — shared by
+/** Resolves a set of player ids to their name + Discord name-color role — shared by
  *  `getMatchTeamNames()` and `getMatchBoxScore()`, which each need to label a small, disjoint set of
- *  columns from `player_match_stats` by rostered player. */
+ *  columns from `player_match_stats` by rostered player. Built from `getPlayersById()` (same
+ *  "the whole table is cheap" reasoning `findPlayerByName()` already relies on) rather than a second,
+ *  separately-scoped `players` query. */
 async function resolvePlayers(playerIds: number[]): Promise<Map<number, MatchDiscordPlayer>> {
   const players: Map<number, MatchDiscordPlayer> = new Map();
   if (playerIds.length === 0) return players;
-  const { data } = await supabase.from('players').select('id, name, discord_name_role_id').in('id', playerIds);
-  for (const p of (data ?? []) as Pick<Player, 'id' | 'name' | 'discord_name_role_id'>[]) {
-    players.set(p.id, { name: p.name, discordNameRoleId: p.discord_name_role_id });
+  const allPlayers = await getPlayersById();
+  for (const id of playerIds) {
+    const p = allPlayers.get(id);
+    if (p) players.set(id, { name: p.name, discordNameRoleId: p.discord_name_role_id });
   }
   return players;
 }
