@@ -7,18 +7,22 @@ so you don't have to reverse-engineer them from scratch each time.
 ## League format & domain terms
 
 - **Individual Rotating Mixer** — the league format. Teammates change every week (randomly drawn),
-  so traditional W-L records say more about your draw than your skill. This is *why* the whole site
-  is built around rate-based stats instead of win totals.
+  so match outcomes are partly a function of your draw, not just your skill. RWR% and ADR are
+  rate-normalized stats that help correct for that when breaking ties in the canonical leaderboard
+  sort.
 - **ADR (Average Damage per Round)** — the platform's primary individual skill metric; the
-  *tertiary* tiebreaker in the canonical leaderboard sort (WR% → RWR% → ADR). Never sort by ADR
+  *tertiary* tiebreaker in the canonical leaderboard sort (Wins → RWR% → ADR). Never sort by ADR
   alone — always apply `canonicalSort()` from `src/lib/util.ts`.
-- **WR% (Win Rate)** — `wins / games_played`; the *primary* sort key in the canonical leaderboard
-  sort. Stored as `total_wins / total_games` on `player_season_leaderboard`.
+- **Wins (match wins)** — `matches_won`; the *primary* sort key in the canonical leaderboard sort —
+  a raw win count, not rate-normalized.
+- **WR% (Win Rate)** — `wins / games_played`; displayed alongside the win/loss record but not
+  itself a key in the canonical leaderboard sort. Stored as `total_wins / total_games` on
+  `player_season_leaderboard`.
 - **RWR% (Round Win Rate)** — `total_rounds_won / total_rounds_played`; the *secondary* sort key in
   the canonical leaderboard sort. Derived, not stored; see `LeaderboardRow.rwr_percentage` in
   `src/lib/types.ts`.
 - **Canonical sort (regular season)** — the standard leaderboard sort order for regular-season and
-  career views: **WR% → RWR% → ADR**, all descending. Implemented by `canonicalSort()` in
+  career views: **Wins → RWR% → ADR**, all descending. Implemented by `canonicalSort()` in
   `src/lib/util.ts`; see
   [`calculations.md`](./calculations.md#canonical-regular-season-ranking)
   for the full rationale. Not to be confused with the canonical *gauntlet* ranking below.

@@ -338,7 +338,7 @@ Setup Rating = 1.00
 
 ## Canonical Regular Season Ranking
 
-The default sort order for every regular-season and career leaderboard: **WR% → RWR% → ADR**,
+The default sort order for every regular-season and career leaderboard: **Wins → RWR% → ADR**,
 all descending. Applying all three keys in sequence avoids overweighting any single metric and
 produces a stable, consistent ordering across views.
 
