@@ -26,6 +26,7 @@ interface FetchCall {
   url: string;
   method: string;
   body: {
+    content: string;
     embeds: [{
       title: string;
       description: string;
@@ -99,16 +100,20 @@ async function main() {
     assert.doesNotMatch(embed.title, /\n/, 'embed titles do not reliably support line breaks');
     assert.equal(embed.author.name, 'Season 5');
     assert.match(embed.description, /Server is live/);
-    assert.match(embed.description, /Alice & Bob vs Carol & Dave on Foroglio/);
     assert.equal(
       embed.description,
-      'Alice & Bob vs Carol & Dave on Foroglio\n\n🟢 **Server is live**',
-      'roster/map line comes first, then the status block',
+      'on Foroglio\n\n🟢 **Server is live**',
+      'map line comes first, then the status block — no roster here, since it lives in content',
     );
     assert.doesNotMatch(embed.description, /\/matches\//, 'no link line — the title is already the link');
     assert.equal(embed.url, `https://dans-gaming-league-series.vercel.app/matches/100`, 'the title carries the link via embed.url');
     assert.match(embed.thumbnail?.url ?? '', /\/maps\/foroglio\.jpg$/);
     assert.equal(embed.fields, undefined, 'no stats exist yet when the server goes live');
+    assert.equal(
+      calls[0].body.content,
+      '**Alice** & **Bob** vs **Carol** & **Dave**',
+      'the roster line lives in content, not the embed, since only content renders mentions as tags',
+    );
     assert.equal(discordState(100)?.notification_message_id, 'stub-msg-1');
   });
 
@@ -125,11 +130,10 @@ async function main() {
     assert.equal(embed.author.name, 'Season 5');
     assert.match(embed.description, /Match complete\*\*\n\*\*Final: 13-9/, '"Final: 13-9" is on its own line — descriptions support \\n, unlike titles');
     // Match 100's shirts_pick ('Foroglio') is the effective played map, not picked_map alone.
-    assert.match(embed.description, /Alice & Bob vs Carol & Dave on Foroglio/);
     assert.equal(
       embed.description,
-      'Alice & Bob vs Carol & Dave on Foroglio\n\n🏁 **Match complete**\n**Final: 13-9**',
-      'roster/map line comes first, then the status block',
+      'on Foroglio\n\n🏁 **Match complete**\n**Final: 13-9**',
+      'no roster line — the box score below already names every player, and the roster tag line lives in content anyway',
     );
     assert.doesNotMatch(embed.description, /\/matches\//, 'no link line — the title is already the link');
 
@@ -137,12 +141,35 @@ async function main() {
     const shirts = embed.fields?.find((f) => f.name === 'Shirts');
     const skins = embed.fields?.find((f) => f.name === 'Skins');
     assert.ok(!shirts?.inline && !skins?.inline, 'box score fields stack full-width, not side by side');
-    assert.match(shirts!.value, /Alice\s+20\/3\/15/);
-    assert.match(shirts!.value, /Bob\s+18\/5\/16/);
-    assert.match(skins!.value, /Carol\s+14\/4\/19/);
-    assert.match(skins!.value, /Dave\s+12\/6\/20/);
+    assert.match(shirts!.value, /^```\nPlayer\s+K\/A\/D\s+ADR\n/, 'a fixed-width table inside a code block — plain names, not tags: mentions/markdown don\'t render inside one anyway');
+    assert.match(shirts!.value, /Alice\s+20\/3\/15\s+85\.5/);
+    assert.match(shirts!.value, /Bob\s+18\/5\/16\s+78\.18/);
+    assert.match(shirts!.value, /```$/);
+    assert.match(skins!.value, /Carol\s+14\/4\/19\s+65\b/);
+    assert.match(skins!.value, /Dave\s+12\/6\/20\s+60\.09/);
 
     assert.equal(discordState(100)?.notification_message_id, 'stub-msg-1');
+  });
+
+  await test('notifyMatchScoreReported: tags a player with a linked name-color role in the content roster line, but never in the box score table', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(100);
+    const alice = fakeDb.players.find((p) => p.id === 1)!;
+    alice.discord_name_role_id = '123456789012345678';
+    try {
+      const { calls } = stubFetch();
+      await notifyMatchScoreReported(adminClient, 100);
+      assert.equal(
+        calls[0].body.content,
+        '<@&123456789012345678> & **Bob** vs **Carol** & **Dave**',
+        'a linked player is a role mention in content; an unlinked one still falls back to their bolded name',
+      );
+      const shirts = calls[0].body.embeds[0].fields?.find((f) => f.name === 'Shirts');
+      assert.match(shirts!.value, /Alice\s+20\/3\/15\s+85\.5/, 'the box score never tags — even a linked player shows their plain name there');
+      assert.doesNotMatch(shirts!.value, /<@&/, 'no role mention syntax inside the code block — it would render as literal text');
+    } finally {
+      alice.discord_name_role_id = null;
+    }
   });
 
   await test('notifyMatchLiveScore: no-ops without DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL', async () => {
@@ -184,35 +211,51 @@ async function main() {
 
   await test('notifyMatchLiveScore: edits the server-live message with the running score', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
-    resetDiscordState(100);
+    // Match 101 (unlike 100) has no final_score yet — a genuinely in-progress match, which
+    // notifyMatchLiveScore()'s "already scored" guard requires.
+    resetDiscordState(101);
     stubFetch();
-    await notifyMatchServerLive(adminClient, 100);
-    const liveMessageId = discordState(100)?.notification_message_id;
+    await notifyMatchServerLive(adminClient, 101);
+    const liveMessageId = discordState(101)?.notification_message_id;
     assert.ok(liveMessageId, 'precondition: server-live left a message id on record');
 
     const { calls } = stubFetch();
-    await notifyMatchLiveScore(adminClient, 100, 'round_end', liveScore(100, 7, 5, 13));
+    await notifyMatchLiveScore(adminClient, 101, 'round_end', liveScore(101, 7, 5, 13));
     assert.equal(calls.length, 1);
     assert.equal(calls[0].method, 'PATCH');
     assert.equal(calls[0].url, `https://discord.example/webhook/messages/${liveMessageId}`);
     const embed = calls[0].body.embeds[0];
-    assert.equal(embed.title, 'Week 1 · Match 1', 'title stays Week/Match through a live tick');
+    assert.equal(embed.title, 'Week 1 · Match 2', 'title stays Week/Match through a live tick');
     assert.match(embed.description, /LIVE\*\*\n\*\*7-5.*Round 13/);
     assert.equal(embed.fields, undefined, 'no box score mid-match — player stats land only once the match is scored');
-    assert.equal(discordState(100)?.notification_message_id, liveMessageId, 'still the same source-of-truth message');
+    assert.equal(discordState(101)?.notification_message_id, liveMessageId, 'still the same source-of-truth message');
   });
 
   await test('notifyMatchLiveScore: a going_live tick with no round number omits "Round"', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
-    resetDiscordState(100);
+    resetDiscordState(101);
     stubFetch();
-    await notifyMatchServerLive(adminClient, 100);
+    await notifyMatchServerLive(adminClient, 101);
 
     const { calls } = stubFetch();
-    await notifyMatchLiveScore(adminClient, 100, 'going_live', liveScore(100, 0, 0, null));
+    await notifyMatchLiveScore(adminClient, 101, 'going_live', liveScore(101, 0, 0, null));
     const embed = calls[0].body.embeds[0];
     assert.match(embed.description, /LIVE\*\*\n\*\*0-0\*\*/);
     assert.doesNotMatch(embed.description, /Round/);
+  });
+
+  await test('notifyMatchLiveScore: no-ops (doesn\'t regress the message) once the match already has a final score', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(100);
+    stubFetch();
+    await notifyMatchScoreReported(adminClient, 100);
+    const finalMessageId = discordState(100)?.notification_message_id;
+    assert.ok(finalMessageId, 'precondition: the match already has a final score and a posted message');
+
+    const { calls } = stubFetch();
+    // A delayed/retried round_end arriving after the score was already reported and confirmed.
+    await notifyMatchLiveScore(adminClient, 100, 'round_end', liveScore(100, 13, 9, 22));
+    assert.equal(calls.length, 0, 'must not overwrite the final box-score message with a stale LIVE state');
   });
 
   await test('notifyMatchScoreReported: edits the server-live message in place instead of posting a new one', async () => {

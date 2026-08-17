@@ -37,9 +37,9 @@ async function main() {
     assert.equal(box.shirts.length, 2);
     assert.equal(box.skins.length, 2);
     const alice = box.shirts.find((p) => p.name === 'Alice');
-    assert.deepEqual(alice, { name: 'Alice', kills: 20, assists: 3, deaths: 15, adr: 85.5 });
+    assert.deepEqual(alice, { name: 'Alice', discordNameRoleId: null, kills: 20, assists: 3, deaths: 15, adr: 85.5 });
     const dave = box.skins.find((p) => p.name === 'Dave');
-    assert.deepEqual(dave, { name: 'Dave', kills: 12, assists: 6, deaths: 20, adr: 60.09 });
+    assert.deepEqual(dave, { name: 'Dave', discordNameRoleId: null, kills: 12, assists: 6, deaths: 20, adr: 60.09 });
   });
 
   await test('getMatchBoxScore(101) — pre-staged roster with zero stats still returns a row per player', async () => {

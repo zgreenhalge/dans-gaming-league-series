@@ -88,17 +88,18 @@ export const getPlayerMeta = cache(async (playerId: number) => {
 });
 
 export async function getMatchMeta(matchId: number) {
-  const [teams, { data: match }] = await Promise.all([
+  const [teams, { data: match }, mapLookup] = await Promise.all([
     getMatchTeamNames(matchId),
     supabase
       .from('matches')
       .select('final_score, picked_map, shirts_pick, scheduled_at')
       .eq('id', matchId)
       .maybeSingle(),
+    getMapLookup(),
   ]);
   if (!teams || !match) return null;
   const m = match as Pick<Match, 'final_score' | 'picked_map' | 'shirts_pick' | 'scheduled_at'>;
-  const { title, seasonName, weekMatchLabel, shirtNames, skinNames } = teams;
+  const { title, seasonName, weekMatchLabel, shirtNames, skinNames, shirtPlayers, skinPlayers } = teams;
 
   const map = m.shirts_pick ?? m.picked_map;
   const mapName = map ? toSentenceCase(map) : null;
@@ -127,12 +128,11 @@ export async function getMatchMeta(matchId: number) {
   }
   const description = descParts.join(' · ');
 
-  const mapLookup = await getMapLookup();
   const image = map ? mapImageFor(map, mapLookup) ?? null : null;
 
   return {
     title, seasonName, weekMatchLabel, description, image,
-    shirtNames, skinNames, score, mapName, scheduledAt,
+    shirtNames, skinNames, shirtPlayers, skinPlayers, score, mapName, scheduledAt,
   };
 }
 

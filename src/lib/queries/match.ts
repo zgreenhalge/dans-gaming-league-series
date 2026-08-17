@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import type { Match, Week, Season, Player, PlayerMatchStat, PlayerMatchSabremetrics, Faction } from '../types';
+import type { Match, Week, Season, PlayerMatchStat, PlayerMatchSabremetrics, Faction } from '../types';
 import { isPlayedScore, avgOf, compareMatchRefDesc, extractSeasonNumber, matchLabel, matchWeekLabel } from '../util';
 import { mapSlug } from '../maps';
 import type { ScheduledMatchRef } from '../server-schedule-collision';
@@ -61,11 +61,18 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
   return { match: m, week: weekRow as Week, season, stats: statRows };
 }
 
+/** A rostered player's name plus their personal Discord name-color role
+ *  (`players.discord_name_role_id`, #405) — `null` for a player who hasn't linked Discord/gotten one
+ *  yet, in which case a caller falls back to `name`. */
+export interface MatchDiscordPlayer {
+  name: string;
+  discordNameRoleId: string | null;
+}
+
 /** One rostered player's box-score line — kept to just the columns a compact scoreboard needs
  *  (not the full `PlayerMatchStat` row). `adr` is the stored per-match whole number, not the
  *  recomputed aggregate float `overall_adr` uses elsewhere. */
-export interface MatchBoxScorePlayer {
-  name: string;
+export interface MatchBoxScorePlayer extends MatchDiscordPlayer {
   kills: number;
   assists: number;
   deaths: number;
@@ -81,17 +88,26 @@ export interface MatchTeamNames {
   weekMatchLabel: string;
   shirtNames: string;
   skinNames: string;
+  /** Same rosters as `shirtNames`/`skinNames`, unjoined — for callers (Discord notifications) that
+   *  tag each player individually rather than rendering one joined string. */
+  shirtPlayers: MatchDiscordPlayer[];
+  skinPlayers: MatchDiscordPlayer[];
 }
 
-/** Resolves a set of player ids to names in one query — shared by `getMatchTeamNames()` and
- *  `getMatchBoxScore()`, which each need to label a small, disjoint set of columns from
- *  `player_match_stats` by rostered player name. */
-async function resolvePlayerNames(playerIds: number[]): Promise<Map<number, string>> {
-  const names: Map<number, string> = new Map();
-  if (playerIds.length === 0) return names;
-  const { data: players } = await supabase.from('players').select('id, name').in('id', playerIds);
-  for (const p of (players ?? []) as Pick<Player, 'id' | 'name'>[]) names.set(p.id, p.name);
-  return names;
+/** Resolves a set of player ids to their name + Discord name-color role — shared by
+ *  `getMatchTeamNames()` and `getMatchBoxScore()`, which each need to label a small, disjoint set of
+ *  columns from `player_match_stats` by rostered player. Built from `getPlayersById()` (same
+ *  "the whole table is cheap" reasoning `findPlayerByName()` already relies on) rather than a second,
+ *  separately-scoped `players` query. */
+async function resolvePlayers(playerIds: number[]): Promise<Map<number, MatchDiscordPlayer>> {
+  const players: Map<number, MatchDiscordPlayer> = new Map();
+  if (playerIds.length === 0) return players;
+  const allPlayers = await getPlayersById();
+  for (const id of playerIds) {
+    const p = allPlayers.get(id);
+    if (p) players.set(id, { name: p.name, discordNameRoleId: p.discord_name_role_id });
+  }
+  return players;
 }
 
 /** A match's display title ("Season · Week N · Match M") and its rostered players joined per side
@@ -110,7 +126,7 @@ export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames
       .select('match_number, weeks(week_number, seasons(name, is_gauntlet))')
       .eq('id', matchId)
       .maybeSingle(),
-    supabase.from('player_match_stats').select('player_id, faction').eq('match_id', matchId),
+    supabase.from('player_match_stats').select('player_id, faction').eq('match_id', matchId).order('player_id'),
   ]);
   if (!match) return null;
   // Supabase types embedded to-one relations as arrays, but returns objects at runtime — cast through
@@ -132,36 +148,42 @@ export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames
   const shirtIds = playerRows.filter((p) => p.faction === 'SHIRTS').map((p) => p.player_id);
   const skinIds = playerRows.filter((p) => p.faction === 'SKINS').map((p) => p.player_id);
 
-  const names = await resolvePlayerNames([...shirtIds, ...skinIds]);
+  const players = await resolvePlayers([...shirtIds, ...skinIds]);
+  const fallback: MatchDiscordPlayer = { name: '?', discordNameRoleId: null };
 
-  const shirtNames = shirtIds.map((id) => names.get(id) ?? '?').join(' & ');
-  const skinNames = skinIds.map((id) => names.get(id) ?? '?').join(' & ');
+  const shirtPlayers = shirtIds.map((id) => players.get(id) ?? fallback);
+  const skinPlayers = skinIds.map((id) => players.get(id) ?? fallback);
+  const shirtNames = shirtPlayers.map((p) => p.name).join(' & ');
+  const skinNames = skinPlayers.map((p) => p.name).join(' & ');
 
-  return { title, seasonName, weekMatchLabel, shirtNames, skinNames };
+  return { title, seasonName, weekMatchLabel, shirtNames, skinNames, shirtPlayers, skinPlayers };
 }
 
 /** Per-player box score for a match, split by faction — its own query rather than folded into
  *  `getMatchTeamNames()`, since only the post-match Discord notification (`notifyMatchScoreReported()`)
  *  needs it; `getMatchTeamNames()`'s other callers (OG cards, meta tags, and especially the live
  *  ticker, which re-reads every round) would otherwise pay for a `player_match_stats` read and a
- *  box-score derivation they never use. This does mean `notifyMatchScoreReported()` itself now makes
- *  two `player_match_stats` reads (one here, one inside `getMatchTeamNames()`) where a single combined
- *  query used to suffice — an accepted tradeoff since it fires once per match, unlike the live-score
- *  path this split was written to stop wasting work on every round. Don't re-merge the two without
- *  re-checking that tradeoff. */
+ *  box-score derivation they never use. `notifyMatchScoreReported()` pays for two separate
+ *  `player_match_stats` reads (one here, one inside `getMatchTeamNames()`) as an accepted tradeoff,
+ *  since it fires once per match, unlike the live-score path this split exists to keep cheap on every
+ *  round. Don't merge the two without re-checking that tradeoff. Ordered by `player_id`, same as
+ *  `getMatchTeamNames()`'s roster query, so the two independent reads list a match's players in the
+ *  same order — the Discord notification tags them via `getMatchTeamNames()` in its message content
+ *  and lists them via this function in its embed, and the two should read as the same lineup. */
 export async function getMatchBoxScore(matchId: number): Promise<{ shirts: MatchBoxScorePlayer[]; skins: MatchBoxScorePlayer[] }> {
   const { data: stats } = await supabase
     .from('player_match_stats')
     .select('player_id, faction, kills, assists, deaths, adr')
-    .eq('match_id', matchId);
+    .eq('match_id', matchId)
+    .order('player_id');
   const playerRows = (stats ?? []) as Pick<PlayerMatchStat, 'player_id' | 'faction' | 'kills' | 'assists' | 'deaths' | 'adr'>[];
   const shirtRows = playerRows.filter((p) => p.faction === 'SHIRTS');
   const skinRows = playerRows.filter((p) => p.faction === 'SKINS');
 
-  const names = await resolvePlayerNames(playerRows.map((p) => p.player_id));
+  const players = await resolvePlayers(playerRows.map((p) => p.player_id));
 
   const toBoxRow = (p: (typeof playerRows)[number]): MatchBoxScorePlayer => ({
-    name: names.get(p.player_id) ?? '?',
+    ...(players.get(p.player_id) ?? { name: '?', discordNameRoleId: null }),
     kills: p.kills,
     assists: p.assists,
     deaths: p.deaths,
