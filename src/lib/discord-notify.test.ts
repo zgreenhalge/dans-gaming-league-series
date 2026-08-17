@@ -20,7 +20,7 @@ import { test, report } from './test-support/miniTest';
 
 interface FetchCall {
   url: string;
-  body: { embeds: [{ title: string; description?: string; color: number }] };
+  body: { embeds: [{ title: string; description: string; color: number; url: string }] };
 }
 
 function stubFetch(status = 200): { calls: FetchCall[] } {
@@ -60,8 +60,11 @@ async function main() {
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url, 'https://discord.example/webhook');
     const embed = calls[0].body.embeds[0];
-    assert.match(embed.title, /Server is live/);
-    assert.equal(embed.description, 'Alice & Bob vs Carol & Dave');
+    assert.match(embed.title, /Week|Round/);
+    assert.match(embed.description, /Server is live/);
+    assert.match(embed.description, /Alice & Bob vs Carol & Dave/);
+    assert.match(embed.description, /\/matches\/100$/);
+    assert.equal(embed.url, embed.description.split('\n').pop());
   });
 
   await test('notifyMatchScoreReported: posts the final score and effective map', async () => {
@@ -70,9 +73,11 @@ async function main() {
     await notifyMatchScoreReported(adminClient, 100);
     assert.equal(calls.length, 1);
     const embed = calls[0].body.embeds[0];
-    assert.match(embed.title, /13-9/);
+    assert.match(embed.title, /Week|Round/);
+    assert.match(embed.description, /13-9/);
     // Match 100's shirts_pick ('Foroglio') is the effective played map, not picked_map alone.
-    assert.equal(embed.description, 'Alice & Bob vs Carol & Dave on Foroglio');
+    assert.match(embed.description, /Alice & Bob vs Carol & Dave on Foroglio/);
+    assert.match(embed.description, /\/matches\/100$/);
   });
 
   await test('notifyMatchScoreReported: no-ops for an unplayed match (final_score null)', async () => {

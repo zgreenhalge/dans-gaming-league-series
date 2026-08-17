@@ -63,6 +63,11 @@ export async function getMatch(matchId: number): Promise<MatchDetail | null> {
 
 export interface MatchTeamNames {
   title: string;
+  /** Just the season name half of `title` (e.g. "Season 3 Regular Season") — for callers like
+   *  Discord notifications that render the season and week/match on separate lines. */
+  seasonName: string;
+  /** The week/round + match half of `title` (e.g. "Week 11 · Match 1"). */
+  weekMatchLabel: string;
   shirtNames: string;
   skinNames: string;
 }
@@ -90,12 +95,16 @@ export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames
   };
   if (!m.weeks || !m.weeks.seasons) return null;
 
+  const seasonName = m.weeks.seasons.name;
   const title = matchTitle({
-    seasonName: m.weeks.seasons.name,
+    seasonName,
     weekNumber: m.weeks.week_number,
     matchNumber: m.match_number,
     isGauntlet: m.weeks.seasons.is_gauntlet,
   });
+  // matchTitle() joins "seasonName · weekLabel · Match M" — strip the season prefix to get the
+  // "weekLabel · Match M" half on its own for callers that render the two on separate lines.
+  const weekMatchLabel = title.slice(seasonName.length + ' · '.length);
 
   const playerRows = (stats ?? []) as Pick<PlayerMatchStat, 'player_id' | 'faction'>[];
   const shirtIds = playerRows.filter((p) => p.faction === 'SHIRTS').map((p) => p.player_id);
@@ -111,7 +120,7 @@ export async function getMatchTeamNames(matchId: number): Promise<MatchTeamNames
   const shirtNames = shirtIds.map((id) => names.get(id) ?? '?').join(' & ');
   const skinNames = skinIds.map((id) => names.get(id) ?? '?').join(' & ');
 
-  return { title, shirtNames, skinNames };
+  return { title, seasonName, weekMatchLabel, shirtNames, skinNames };
 }
 
 /** Whichever match is currently live, with no `matchId` known ahead of time — the first step of
