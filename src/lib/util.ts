@@ -269,16 +269,16 @@ export function winRateColor(winRate: number): string {
 }
 
 /**
- * Canonical leaderboard sort: WR% → RWR% → ADR (all descending).
+ * Canonical leaderboard sort: Wins → RWR% → ADR (all descending).
  * Use this wherever player rows are ranked — never sort by ADR alone.
  * For gauntlet season pages, use canonicalGauntletRankMap (gauntlet-ranking.ts) instead.
  */
 export function canonicalSort(
-  a: { win_rate_percentage: number; rwr_percentage: number; overall_adr: number },
-  b: { win_rate_percentage: number; rwr_percentage: number; overall_adr: number },
+  a: { matches_won: number; rwr_percentage: number; overall_adr: number },
+  b: { matches_won: number; rwr_percentage: number; overall_adr: number },
 ): number {
   return (
-    b.win_rate_percentage - a.win_rate_percentage ||
+    b.matches_won - a.matches_won ||
     b.rwr_percentage - a.rwr_percentage ||
     b.overall_adr - a.overall_adr
   );
@@ -299,14 +299,15 @@ export function deriveAdr(totals: { total_rounds_played: number; total_damage: n
 }
 
 /**
- * Derives the four canonical leaderboard rates (the exact `canonicalSort` keys) from summed totals —
- * `rwr_percentage`/`overall_adr` via `deriveRwr()`/`deriveAdr()` above (the real implementations),
- * `win_rate_percentage`/`kd_ratio` computed directly here. Every place that aggregates per-match
- * stats into a leaderboard row must derive these the same way — keep this the single source so the
- * rankings can't drift between the player, career, and map views. Callers do their own summation
- * (input shapes differ); this only does the division + zero-guards. A caller with only round/damage
- * totals in scope (not the full set below) should call `deriveRwr()`/`deriveAdr()` directly instead
- * of fabricating the other fields to satisfy this signature.
+ * Derives the four canonical leaderboard rates from summed totals — `rwr_percentage`/`overall_adr`
+ * (two of the three `canonicalSort` keys, alongside `matches_won` from the raw totals) via
+ * `deriveRwr()`/`deriveAdr()` above (the real implementations), `win_rate_percentage`/`kd_ratio`
+ * computed directly here. Every place that aggregates per-match stats into a leaderboard row must
+ * derive these the same way — keep this the single source so the rankings can't drift between the
+ * player, career, and map views. Callers do their own summation (input shapes differ); this only
+ * does the division + zero-guards. A caller with only round/damage totals in scope (not the full set
+ * below) should call `deriveRwr()`/`deriveAdr()` directly instead of fabricating the other fields to
+ * satisfy this signature.
  */
 export function deriveRates(totals: {
   matches_played: number;

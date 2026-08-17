@@ -160,6 +160,7 @@ async function getRegularSeasonMeta(seasonId: number): Promise<SeasonLeaderboard
     player_id: number;
     player_name: string;
     win_rate_percentage: number;
+    matches_won: number;
     kd_ratio: number;
     total_damage: number;
     total_rounds_played: number;
@@ -175,7 +176,7 @@ async function getRegularSeasonMeta(seasonId: number): Promise<SeasonLeaderboard
   const [{ data: lbRows }, { data: matchStats }] = await Promise.all([
     supabase
       .from('player_season_leaderboard')
-      .select('player_id, player_name, win_rate_percentage, kd_ratio, total_damage, total_rounds_played')
+      .select('player_id, player_name, win_rate_percentage, matches_won, kd_ratio, total_damage, total_rounds_played')
       .eq('season_id', seasonId)
       .gt('total_rounds_played', 0),
     matchIds.length > 0
@@ -197,6 +198,7 @@ async function getRegularSeasonMeta(seasonId: number): Promise<SeasonLeaderboard
       return {
         player_name: r.player_name,
         win_rate_percentage: r.win_rate_percentage,
+        matches_won: r.matches_won,
         rwr_percentage: deriveRwr({ total_rounds_played: rwr?.played ?? 0, total_rounds_won: rwr?.won ?? 0 }),
         overall_adr: deriveAdr({ total_rounds_played: r.total_rounds_played, total_damage: r.total_damage }),
         kd_ratio: r.kd_ratio,

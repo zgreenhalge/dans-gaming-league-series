@@ -52,7 +52,11 @@ function compare(
         b.rwr_percentage - a.rwr_percentage
       );
     case 'record':
-      return b.matches_won - a.matches_won || a.matches_lost - b.matches_lost;
+      return (
+        b.matches_won - a.matches_won ||
+        b.rwr_percentage - a.rwr_percentage ||
+        b.overall_adr - a.overall_adr
+      );
     case 'rwr':
       return b.rwr_percentage - a.rwr_percentage;
     case 'roundsRecord':
@@ -132,7 +136,7 @@ export default function LeaderboardTable({
   const { data: session } = useSession();
   const myPlayerId = session?.user?.playerId ?? null;
 
-  const defaultSort: SortCol = trophyCounts ? 'gold' : canonicalRanking ? 'rank' : 'wr';
+  const defaultSort: SortCol = trophyCounts ? 'gold' : canonicalRanking ? 'rank' : 'record';
   const [sortCol, setSortCol] = useState<SortCol>(defaultSort);
   const [asc, setAsc] = useState(false);
 
@@ -157,7 +161,7 @@ export default function LeaderboardTable({
   });
 
   // Canonical rank for the # column: use the provided gauntlet ranking when available,
-  // otherwise fall back to WR% → RWR% → ADR.
+  // otherwise fall back to Wins → RWR% → ADR.
   const canonicalRankOf: Map<number, number> = canonicalRanking
     ? canonicalRanking
     : new Map([...rows].sort(canonicalSort).map((r, i) => [r.player_id, i + 1]));

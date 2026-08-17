@@ -338,7 +338,7 @@ Setup Rating = 1.00
 
 ## Canonical Regular Season Ranking
 
-The default sort order for every regular-season and career leaderboard: **WR% → RWR% → ADR**,
+The default sort order for every regular-season and career leaderboard: **Wins → RWR% → ADR**,
 all descending. Applying all three keys in sequence avoids overweighting any single metric and
 produces a stable, consistent ordering across views.
 
@@ -356,7 +356,7 @@ gauntlet season pages and matches the podium displayed by `GauntletStandings`.
 | 2nd   | 1-1 in the final round, higher RWR% (then ADR) across all final-round matches |
 | 3rd   | 1-1 in the final round, lower RWR% (then ADR) across all final-round matches |
 | 4th   | 0-2 in the final round |
-| 5th+  | Eliminated before the final round; sorted by latest round reached (higher = better rank), tiebreak by wins in that round, then RWR%, then ADR in that round (all descending) |
+| 5th+  | Eliminated before the final round; sorted by latest round reached (higher = better rank), tiebreak by win rate in that round, then RWR%, then ADR in that round (all descending) |
 
 Round reached is the primary axis: a player who advanced further always outranks one eliminated
 earlier. The stat tiebreaks (RWR% then ADR) only order players *within* the same round, and are

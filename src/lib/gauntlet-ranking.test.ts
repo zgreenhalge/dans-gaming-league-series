@@ -94,4 +94,52 @@ test('canonicalGauntletRankMap: final-round wins rank above ties, RWR% breaks ti
   assert.ok((rank.get(9) as number) < (rank.get(8) as number));
 });
 
+test('canonicalGauntletRankMap: within a round, win rate outranks a higher raw win count from more matches played', () => {
+  const rounds = [
+    // Round 1 (non-final, a pod): p20 goes 2-1 (67% win rate) across three matches; p21 goes
+    // 1-0 (100% win rate) in a single match. p20 has more raw wins but the lower win rate.
+    {
+      round_number: 1,
+      matches: [
+        {
+          final_score: '13-9',
+          shirts_stats: [gp(20, 'SHIRTS', true, 80)],
+          skins_stats: [gp(30, 'SKINS', false, 80)],
+        },
+        {
+          final_score: '13-9',
+          shirts_stats: [gp(20, 'SHIRTS', true, 80)],
+          skins_stats: [gp(31, 'SKINS', false, 80)],
+        },
+        {
+          final_score: '9-13',
+          shirts_stats: [gp(20, 'SHIRTS', false, 80)],
+          skins_stats: [gp(32, 'SKINS', true, 80)],
+        },
+        {
+          final_score: '9-13',
+          shirts_stats: [gp(33, 'SHIRTS', false, 80)],
+          skins_stats: [gp(21, 'SKINS', true, 80)],
+        },
+      ],
+    },
+    // Round 2 (final): a single 1v1 to complete the gauntlet.
+    {
+      round_number: 2,
+      matches: [
+        {
+          final_score: '13-9',
+          shirts_stats: [gp(1, 'SHIRTS', true, 80)],
+          skins_stats: [gp(2, 'SKINS', false, 80)],
+        },
+      ],
+    },
+  ];
+
+  const rank = canonicalGauntletRankMap(rounds);
+
+  // p21 (1-0, 100% win rate) outranks p20 (2-1, 67% win rate) despite p20's higher raw win count.
+  assert.ok((rank.get(21) as number) < (rank.get(20) as number));
+});
+
 report();
