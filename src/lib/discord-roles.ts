@@ -159,21 +159,14 @@ async function getBotTopRolePosition(guildId: string, token: string): Promise<nu
 /** Creates this player's cosmetic name-color role — named after their current DGLS name, mentionable
  *  by anyone in the server, positioned directly below the bot's own top role, and assigned to their
  *  Discord member — storing its id in `players.discord_name_role_id`. No-ops without full config,
- *  without a `discordId`, or if the player already has a role recorded (idempotent, so a retry or a
- *  repeat backfill pass can't create duplicates). Call this after writing a new (non-null)
- *  `discord_id` — self-service OAuth link or an admin override — same trigger point as
- *  `syncParticipantRoleForPlayer`.
- *
- *  `topPosition` lets a caller resolving several players in one batch (`backfillNameRoles()`) pass in
- *  the bot's top-role position once for the whole batch instead of every call re-resolving the same
- *  guild-wide, per-player-invariant value — pass it explicit `undefined` (the default) to have this
- *  function resolve it itself, for a standalone call. */
+ *  without a `discordId`, or if the player already has a role recorded (idempotent, so a retry can't
+ *  create duplicates). Call this after writing a new (non-null) `discord_id` — self-service OAuth link
+ *  or an admin override — same trigger point as `syncParticipantRoleForPlayer`. */
 export async function createNameRole(
   supabaseAdmin: SupabaseClient,
   playerId: number,
   discordId: string | null,
   playerName: string,
-  topPosition?: number | null,
 ): Promise<void> {
   if (!discordId) return;
   const token = process.env.DISCORD_BOT_TOKEN;
@@ -199,12 +192,12 @@ export async function createNameRole(
 
   // Best-effort: a failed reposition still leaves a usable (if potentially low-priority) role rather
   // than losing the role entirely, so it doesn't gate the rest of this function.
-  const resolvedTopPosition = topPosition !== undefined ? topPosition : await getBotTopRolePosition(guildId, token);
-  if (resolvedTopPosition != null && resolvedTopPosition > 0) {
+  const topPosition = await getBotTopRolePosition(guildId, token);
+  if (topPosition != null && topPosition > 0) {
     await discordApiCall(
       supabaseAdmin, playerId, NAME_ROLE_OPERATION, 'role reposition',
       `https://discord.com/api/v10/guilds/${guildId}/roles`,
-      { method: 'PATCH', headers, body: JSON.stringify([{ id: role.id, position: Math.max(1, resolvedTopPosition - 1) }]) },
+      { method: 'PATCH', headers, body: JSON.stringify([{ id: role.id, position: Math.max(1, topPosition - 1) }]) },
     );
   }
 
@@ -221,7 +214,7 @@ export async function createNameRole(
 }
 
 /** Renames this player's name-color role to match a new DGLS name. No-op without full config or a
- *  `roleId` (never linked, or linked before this feature existed and not yet backfilled). */
+ *  `roleId` (never linked, or linked before this feature existed). */
 export async function renameNameRole(
   supabaseAdmin: SupabaseClient,
   playerId: number,
@@ -300,40 +293,3 @@ export async function setDiscordRoleColor(roleId: string, color: number): Promis
   }
 }
 
-export interface NameRoleBackfillResult {
-  attempted: number;
-}
-
-/** Creates name-color roles for every linked player who doesn't have one yet — the catch-up pass for
- *  players who linked Discord before this feature existed (`createNameRole()` only ever fires from
- *  the link flow itself, so it was a no-op for everyone who linked earlier). Safe to re-run: only
- *  players with `discord_id` set and `discord_name_role_id` still null are selected, and
- *  `createNameRole()` itself is idempotent. */
-export async function backfillNameRoles(supabaseAdmin: SupabaseClient): Promise<NameRoleBackfillResult> {
-  const { data, error } = await supabaseAdmin
-    .from('players')
-    .select('id, name, discord_id')
-    .not('discord_id', 'is', null)
-    .is('discord_name_role_id', null);
-  if (error) throw error;
-
-  const players = (data ?? []) as { id: number; name: string; discord_id: string }[];
-
-  // The bot's top-role position is guild-wide, not per-player -- resolve it once for the whole batch
-  // rather than have every createNameRole() call redo the same three-request lookup.
-  const token = process.env.DISCORD_BOT_TOKEN;
-  const guildId = process.env.DISCORD_GUILD_ID;
-  const topPosition = token && guildId ? await getBotTopRolePosition(guildId, token) : null;
-
-  // Sequential, not Promise.all: every player in the batch requests the same "just below the bot"
-  // target position, and Discord's reposition endpoint resolves each request against whatever the
-  // guild's role order already is -- it has no visibility into other in-flight requests. Firing them
-  // concurrently races multiple roles for the same slot, so the final order depends on network timing
-  // instead of every role landing directly under the bot as intended. Awaiting each one in turn lets
-  // Discord's order settle before the next request reads it, so each new role correctly stacks in
-  // just below the bot, pushing the previous batch entries (and everything below them) down by one.
-  for (const p of players) {
-    await createNameRole(supabaseAdmin, p.id, p.discord_id, p.name, topPosition);
-  }
-  return { attempted: players.length };
-}

@@ -148,7 +148,7 @@ export async function handleNameColorCommand(interaction: DiscordInteraction) {
   }
   if (!player.discord_name_role_id) {
     return messageResponse(
-      "You don't have a name role yet — ask an admin to run the Discord name-role backfill, or unlink and re-link your Discord account.",
+      "You don't have a name role yet — try unlinking and re-linking your Discord account on your profile.",
       true,
     );
   }
