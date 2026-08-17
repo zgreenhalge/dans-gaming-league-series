@@ -161,10 +161,9 @@ export async function POST(req: NextRequest) {
   // Best-effort and deferred: this fires on every event MatchZy sends, including high-frequency ones
   // like round_end, so none of this adds latency to the ack MatchZy is waiting on. Covers map_result
   // too (parseMatchzyEventIdentity/putLiveScoreEvent both recognize it), so there's no separate path
-  // needed for the final score. The Discord live-score edit runs after (not concurrent with) the
-  // live-score write it reads back, and only for going_live/round_end — map_result's score gets
-  // superseded moments later by notifyMatchScoreReported() once the score route confirms the result,
-  // so editing here for it too would just flicker.
+  // needed for the final score. notifyMatchLiveScore() is called unconditionally, same as the other
+  // two writes — it decides for itself (by event name) whether going_live/round_end is worth an edit,
+  // so this route doesn't need to know Discord's own notification-cadence rules.
   const identity = parseMatchzyEventIdentity(body);
   if (identity) {
     afterBestEffort(`matchzy-log: per-event side effects for match ${identity.matchid}`, async () => {
@@ -177,8 +176,8 @@ export async function POST(req: NextRequest) {
       }
       if (liveScore.status === 'rejected') {
         console.error(`matchzy-log: record live score for match ${identity.matchid} failed:`, liveScore.reason);
-      } else if (identity.event === 'going_live' || identity.event === 'round_end') {
-        await notifyMatchLiveScore(supabaseAdmin, identity.matchid);
+      } else {
+        await notifyMatchLiveScore(supabaseAdmin, identity.matchid, identity.event, liveScore.value);
       }
     });
   }

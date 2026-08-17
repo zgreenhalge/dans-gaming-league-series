@@ -3,40 +3,40 @@
 // failure never throws, matching the rest of this codebase's best-effort hooks (ops-errors.ts, the
 // score route's post-commit hooks via afterBestEffort()). A real failure (the webhook itself
 // erroring, not just being unconfigured) is recorded to ops_errors — entity 'match', operation
-// 'discord_notify_server_live'/'discord_notify_score' — so it's visible in the admin console's
-// Activity feed instead of only a Vercel function log nobody's tailing; cleared automatically the
-// next notification of that same kind that succeeds. The two notifications use distinct operation
-// keys (not a shared 'discord_notify') so a live-notification failure and a score-notification
-// failure for the same match can't clear each other out — see ops-errors.ts's own docstring on why
-// `operation` is part of the key.
+// 'discord_notify_server_live'/'discord_notify_live_score'/'discord_notify_score' — so it's visible
+// in the admin console's Activity feed instead of only a Vercel function log nobody's tailing;
+// cleared automatically the next notification of that same kind that succeeds. The three
+// notifications use distinct operation keys (not a shared 'discord_notify') so one kind's failure
+// can't clear another's still-live one — see ops-errors.ts's own docstring on why `operation` is
+// part of the key.
 //
-// Both notifications are built from `getMatchMeta()` (seo/og.ts) — the same data the site's own
-// link-preview OG card and meta description use when a match URL is unfurled — rather than
-// re-deriving the title/roster/score/map/box-score here. `cache()`-wrapped functions like it are
-// already called from route handlers elsewhere in this codebase (session.ts's `requireSession()`);
-// outside a React Server Component render `cache()` just degrades to a plain call, no memoization,
-// no error.
+// All three are built from `getMatchMeta()` (seo/og.ts) — the same data the site's own link-preview
+// OG card and meta description use when a match URL is unfurled — rather than re-deriving the
+// title/roster/map here.
 //
 // One message is the source of truth per match: `notifyMatchServerLive()` posts with `?wait=true`
 // (the only way a webhook POST returns the created message's id) and stores it in
 // `match_discord_state.notification_message_id`, the same per-match Discord state table
-// `discord-threads.ts` already keys its `thread_id` off of. `notifyMatchScoreReported()` then edits
-// that message in place via Discord's webhook-message PATCH endpoint instead of posting a second
-// one. If there's no stored message id — notifications were off when the server went live, that
-// call failed, or the message was deleted out from under the bot — it falls back to posting a new
-// message so the score still gets announced.
+// `discord-threads.ts` already keys its `thread_id` off of. `notifyMatchLiveScore()` and
+// `notifyMatchScoreReported()` then edit that message in place via Discord's webhook-message PATCH
+// endpoint instead of posting a second one.
 //
-// `notifyMatchLiveScore()` edits the same message again on every `going_live`/`round_end` MatchZy
-// event (wired from the `matchzy-log` ingest route, the same place `putLiveScoreEvent()` writes
-// `live_match_score` — the table the site's own live ticker/`MatchScoreHero` subscribe to via
-// Realtime) so the running score stays current on the one message instead of the channel getting a
-// new post per round. Unlike the other two notifications it never posts a fresh message on failure —
-// a missed round's edit just means the next one tries again, not that the channel needs spam.
+// `notifyMatchLiveScore()` fires on every `going_live`/`round_end` MatchZy event (wired from the
+// `matchzy-log` ingest route, right after `putLiveScoreEvent()` writes `live_match_score` — the same
+// table the site's own live ticker/`MatchScoreHero` subscribe to via Realtime) so the running score
+// stays current on the one message instead of the channel getting a new post per round. It takes the
+// event name and the row `putLiveScoreEvent()` already wrote as parameters rather than re-reading
+// them, and never falls back to posting a fresh message on failure — a missed round's edit just
+// means the next one tries again, not that the channel needs spam.
+//
+// `notifyMatchScoreReported()` falls back to posting a new message if there's nothing to edit yet —
+// notifications were off when the server went live, that post failed, or the message was deleted out
+// from under the bot.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getMatchMeta } from './seo/og';
-import type { MatchBoxScorePlayer } from './queries/match';
-import { getLiveScore } from './demo/liveScore';
+import { getMatchBoxScore, type MatchBoxScorePlayer } from './queries/match';
+import type { LiveScoreRow } from './demo/liveScore';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { SITE_URL } from './seo/site';
 
@@ -59,6 +59,7 @@ type Embed = {
 };
 
 interface MatchEmbedParts {
+  matchId: number;
   seasonName: string;
   weekMatchLabel: string;
   statusLine: string;
@@ -66,8 +67,7 @@ interface MatchEmbedParts {
   skinNames: string;
   map?: string | null;
   color: number;
-  matchUrl: string;
-  thumbnailUrl?: string | null;
+  image?: string | null;
   boxScore?: { shirts: MatchBoxScorePlayer[]; skins: MatchBoxScorePlayer[] };
 }
 
@@ -85,23 +85,25 @@ function boxScoreBlock(players: MatchBoxScorePlayer[]): string {
   return ['```', line('Player', 'K/A/D', 'ADR'), ...rows.map((r) => line(r.name, r.kad, r.adr)), '```'].join('\n');
 }
 
-/** Shared embed layout for both notification kinds. The season name is the embed's `author` line
- *  (Discord's small "eyebrow" text above the title — the same role it plays for real sports/esports
- *  score bots), the title is just "Week N · Match M" (short enough to never wrap oddly, and doubles
- *  as a clickable link to the match page via `url`), and the description carries the (bold, single-
- *  line) status, the roster + map, and an explicit link line for clients that don't make a bolded
- *  embed title read as clickable at a glance. A post-match box score, when given, becomes two inline
- *  fields so Shirts/Skins sit side by side. */
+/** Shared embed layout for all three notification kinds. The season name is the embed's `author`
+ *  line (Discord's small "eyebrow" text above the title — the same role it plays for real
+ *  sports/esports score bots), the title is just "Week N · Match M" (short enough to never wrap
+ *  oddly, and doubles as a clickable link to the match page via `url`), and the description carries
+ *  the (bold, single-line) status, the roster + map, and an explicit link line for clients that don't
+ *  make a bolded embed title read as clickable at a glance. A post-match box score, when given,
+ *  becomes two inline fields so Shirts/Skins sit side by side. `matchUrl`/the thumbnail are derived
+ *  here (from `matchId`/`image`) rather than by each caller, since all three need the same ones. */
 function buildMatchEmbed(parts: MatchEmbedParts): Embed {
+  const matchUrl = `${SITE_URL}/matches/${parts.matchId}`;
   const roster = `${parts.shirtNames} vs ${parts.skinNames}${parts.map ? ` on ${parts.map}` : ''}`;
   const embed: Embed = {
     title: parts.weekMatchLabel,
-    description: `${parts.statusLine}\n\n${roster}\n${parts.matchUrl}`,
+    description: `${parts.statusLine}\n\n${roster}\n${matchUrl}`,
     color: parts.color,
-    url: parts.matchUrl,
+    url: matchUrl,
     author: { name: parts.seasonName },
   };
-  if (parts.thumbnailUrl) embed.thumbnail = { url: parts.thumbnailUrl };
+  if (parts.image) embed.thumbnail = { url: `${SITE_URL}${parts.image}` };
   if (parts.boxScore) {
     const fields: EmbedField[] = [];
     if (parts.boxScore.shirts.length > 0) fields.push({ name: '🎽 Shirts', value: boxScoreBlock(parts.boxScore.shirts), inline: true });
@@ -168,6 +170,17 @@ async function editEmbed(
   }
 }
 
+/** The message a notification for this match should edit in place, if one's on record yet — reads
+ *  `match_discord_state` the same way `rememberNotificationMessage()` below writes it. */
+async function getStoredMessageId(supabaseAdmin: SupabaseClient, matchId: number): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from('match_discord_state')
+    .select('notification_message_id')
+    .eq('match_id', matchId)
+    .maybeSingle();
+  return (data as { notification_message_id: string | null } | null)?.notification_message_id ?? null;
+}
+
 /** Stores the message a later notification for this match should edit in place, keyed the same way
  *  `discord-threads.ts` keys `match_discord_state.thread_id`. */
 async function rememberNotificationMessage(supabaseAdmin: SupabaseClient, matchId: number, messageId: string): Promise<void> {
@@ -185,6 +198,7 @@ export async function notifyMatchServerLive(supabaseAdmin: SupabaseClient, match
   const meta = await getMatchMeta(matchId).catch(() => null);
   if (!meta) return;
   const embed = buildMatchEmbed({
+    matchId,
     seasonName: meta.seasonName,
     weekMatchLabel: meta.weekMatchLabel,
     statusLine: '🟢 **Server is live**',
@@ -192,8 +206,7 @@ export async function notifyMatchServerLive(supabaseAdmin: SupabaseClient, match
     skinNames: meta.skinNames,
     map: meta.mapName,
     color: COLOR_SERVER_LIVE,
-    matchUrl: `${SITE_URL}/matches/${matchId}`,
-    thumbnailUrl: meta.image ? `${SITE_URL}${meta.image}` : null,
+    image: meta.image,
   });
   const messageId = await postNewEmbed(supabaseAdmin, matchId, OPERATION_SERVER_LIVE, webhookUrl, embed);
   if (messageId) await rememberNotificationMessage(supabaseAdmin, matchId, messageId);
@@ -201,28 +214,33 @@ export async function notifyMatchServerLive(supabaseAdmin: SupabaseClient, match
 
 /** Posted on every `going_live`/`round_end` MatchZy event — edits the notification message in place
  *  with the running score, mirroring what `MatchScoreHero`/`LiveMatchTicker` already show from the
- *  same `live_match_score` row. No-ops (silently — there's nothing to fix by posting a fresh message
- *  mid-match) if `notifyMatchServerLive()` never left a message on record for this match. */
-export async function notifyMatchLiveScore(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
+ *  same `live_match_score` row. `event` and `liveScore` come from the caller's own
+ *  `putLiveScoreEvent()` call rather than being re-read here: `event` because `map_result` also
+ *  writes a `live_match_score` row but shouldn't trigger this (its score gets superseded moments
+ *  later by `notifyMatchScoreReported()` once the score route confirms the result — editing here too
+ *  would just flicker), and `liveScore` to avoid a redundant read of the row the caller just wrote.
+ *  No-ops (silently — there's nothing to fix by posting a fresh message mid-match) for any other
+ *  event, for a `null` row, or if `notifyMatchServerLive()` never left a message on record. */
+export async function notifyMatchLiveScore(
+  supabaseAdmin: SupabaseClient,
+  matchId: number,
+  event: string,
+  liveScore: LiveScoreRow | null,
+): Promise<void> {
+  if (event !== 'going_live' && event !== 'round_end') return;
+  if (!liveScore) return;
   const webhookUrl = process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.
 
-  const { data: discordState } = await supabaseAdmin
-    .from('match_discord_state')
-    .select('notification_message_id')
-    .eq('match_id', matchId)
-    .maybeSingle();
-  const existingMessageId = (discordState as { notification_message_id: string | null } | null)?.notification_message_id;
+  const existingMessageId = await getStoredMessageId(supabaseAdmin, matchId);
   if (!existingMessageId) return;
 
-  const [meta, liveScore] = await Promise.all([
-    getMatchMeta(matchId).catch(() => null),
-    getLiveScore(supabaseAdmin, matchId).catch(() => null),
-  ]);
-  if (!meta || !liveScore) return;
+  const meta = await getMatchMeta(matchId).catch(() => null);
+  if (!meta) return;
 
   const roundLabel = liveScore.round != null ? ` · Round ${liveScore.round}` : '';
   const embed = buildMatchEmbed({
+    matchId,
     seasonName: meta.seasonName,
     weekMatchLabel: meta.weekMatchLabel,
     statusLine: `🔴 **LIVE**\n**${liveScore.shirts}-${liveScore.skins}**${roundLabel}`,
@@ -230,8 +248,7 @@ export async function notifyMatchLiveScore(supabaseAdmin: SupabaseClient, matchI
     skinNames: meta.skinNames,
     map: meta.mapName,
     color: COLOR_LIVE_SCORE,
-    matchUrl: `${SITE_URL}/matches/${matchId}`,
-    thumbnailUrl: meta.image ? `${SITE_URL}${meta.image}` : null,
+    image: meta.image,
   });
   await editEmbed(supabaseAdmin, matchId, OPERATION_LIVE_SCORE, webhookUrl, existingMessageId, embed);
 }
@@ -245,13 +262,15 @@ export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, ma
   const webhookUrl = process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.
 
-  const [meta, { data: discordState }] = await Promise.all([
+  const [meta, boxScore, existingMessageId] = await Promise.all([
     getMatchMeta(matchId).catch(() => null),
-    supabaseAdmin.from('match_discord_state').select('notification_message_id').eq('match_id', matchId).maybeSingle(),
+    getMatchBoxScore(matchId).catch(() => null),
+    getStoredMessageId(supabaseAdmin, matchId),
   ]);
   if (!meta || !meta.score) return;
 
   const embed = buildMatchEmbed({
+    matchId,
     seasonName: meta.seasonName,
     weekMatchLabel: meta.weekMatchLabel,
     statusLine: `🏁 **Match complete**\n**Final: ${meta.score.shirts}-${meta.score.skins}**`,
@@ -259,12 +278,10 @@ export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, ma
     skinNames: meta.skinNames,
     map: meta.mapName,
     color: COLOR_SCORE,
-    matchUrl: `${SITE_URL}/matches/${matchId}`,
-    thumbnailUrl: meta.image ? `${SITE_URL}${meta.image}` : null,
-    boxScore: { shirts: meta.shirtsBox, skins: meta.skinsBox },
+    image: meta.image,
+    boxScore: boxScore ?? undefined,
   });
 
-  const existingMessageId = (discordState as { notification_message_id: string | null } | null)?.notification_message_id;
   if (existingMessageId && await editEmbed(supabaseAdmin, matchId, OPERATION_SCORE, webhookUrl, existingMessageId, embed)) {
     return;
   }

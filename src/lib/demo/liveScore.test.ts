@@ -51,23 +51,29 @@ test('createLiveScoreGuard: an update for a different match is always accepted',
 
 // --- putLiveScoreEvent / getLiveScore: parse + upsert round trip ---
 async function main() {
-  await test('putLiveScoreEvent: going_live seeds the row at 0-0 with no round', async () => {
+  await test('putLiveScoreEvent: going_live seeds the row at 0-0 with no round, and returns it', async () => {
     const db: FakeDb = { live_match_score: [] };
     const supabase = createFakeSupabaseClient(db);
-    await putLiveScoreEvent(supabase, { event: 'going_live', matchid: MATCH_ID });
+    const written = await putLiveScoreEvent(supabase, { event: 'going_live', matchid: MATCH_ID });
+    assert.equal(written!.shirts, 0);
+    assert.equal(written!.skins, 0);
+    assert.equal(written!.round, null);
     const row = await getLiveScore(supabase, MATCH_ID);
     assert.equal(row!.shirts, 0);
     assert.equal(row!.skins, 0);
     assert.equal(row!.round, null);
   });
 
-  await test('putLiveScoreEvent: round_end upserts the running score and round number', async () => {
+  await test('putLiveScoreEvent: round_end upserts the running score and round number, and returns it', async () => {
     const db: FakeDb = { live_match_score: [] };
     const supabase = createFakeSupabaseClient(db);
-    await putLiveScoreEvent(supabase, {
+    const written = await putLiveScoreEvent(supabase, {
       event: 'round_end', matchid: MATCH_ID, round_number: 5,
       team1: { score: 3 }, team2: { score: 2 },
     });
+    assert.equal(written!.shirts, 3);
+    assert.equal(written!.skins, 2);
+    assert.equal(written!.round, 5);
     const row = await getLiveScore(supabase, MATCH_ID);
     assert.equal(row!.shirts, 3);
     assert.equal(row!.skins, 2);
@@ -92,10 +98,11 @@ async function main() {
     assert.equal((await getLiveScore(supabase, MATCH_ID))!.shirts, 1);
   });
 
-  await test('putLiveScoreEvent: an unrelated event type is a no-op', async () => {
+  await test('putLiveScoreEvent: an unrelated event type is a no-op and returns null', async () => {
     const db: FakeDb = { live_match_score: [] };
     const supabase = createFakeSupabaseClient(db);
-    await putLiveScoreEvent(supabase, { event: 'series_start', matchid: MATCH_ID });
+    const written = await putLiveScoreEvent(supabase, { event: 'series_start', matchid: MATCH_ID });
+    assert.equal(written, null);
     assert.equal(db.live_match_score!.length, 0);
   });
 

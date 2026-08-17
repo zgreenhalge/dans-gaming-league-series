@@ -166,6 +166,18 @@ export function matchLabel(opts: {
   return parts.length ? parts.join(' · ') : `Match #${opts.matchId}`;
 }
 
+/** "Week N · Match M" (gauntlets say "Round N" instead of "Week N") — the half of `matchTitle()`'s
+ *  output that excludes the season name, for callers that render the season and week/match on
+ *  separate lines (e.g. Discord notification embeds). */
+export function matchWeekLabel(opts: {
+  weekNumber: number;
+  matchNumber: number;
+  isGauntlet: boolean;
+}): string {
+  const weekLabel = opts.isGauntlet ? `Round ${opts.weekNumber}` : `Week ${opts.weekNumber}`;
+  return `${weekLabel} · Match ${opts.matchNumber}`;
+}
+
 /** Canonical match title: "Season · Week N · Match M" (gauntlets say "Round N" instead of "Week N"). */
 export function matchTitle(opts: {
   seasonName: string;
@@ -173,8 +185,7 @@ export function matchTitle(opts: {
   matchNumber: number;
   isGauntlet: boolean;
 }): string {
-  const weekLabel = opts.isGauntlet ? `Round ${opts.weekNumber}` : `Week ${opts.weekNumber}`;
-  return `${opts.seasonName} · ${weekLabel} · Match ${opts.matchNumber}`;
+  return `${opts.seasonName} · ${matchWeekLabel(opts)}`;
 }
 
 export function weekWindow(

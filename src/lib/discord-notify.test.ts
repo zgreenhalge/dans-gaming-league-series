@@ -19,6 +19,7 @@ const adminClient = createFakeSupabaseClient(fakeDb);
 __setTestClient(adminClient);
 
 import { notifyMatchServerLive, notifyMatchScoreReported, notifyMatchLiveScore } from './discord-notify';
+import type { LiveScoreRow } from './demo/liveScore';
 import { test, report } from './test-support/miniTest';
 
 interface FetchCall {
@@ -61,9 +62,8 @@ function discordState(matchId: number): Row | undefined {
   return (fakeDb.match_discord_state ?? []).find((r) => r.match_id === matchId);
 }
 
-function setLiveScore(matchId: number, shirts: number, skins: number, round: number | null): void {
-  fakeDb.live_match_score = (fakeDb.live_match_score ?? []).filter((r) => r.match_id !== matchId);
-  fakeDb.live_match_score.push({ match_id: matchId, shirts_score: shirts, skins_score: skins, round, updated_at: new Date().toISOString() });
+function liveScore(matchId: number, shirts: number, skins: number, round: number | null): LiveScoreRow {
+  return { matchId, shirts, skins, round, updatedAt: new Date().toISOString() };
 }
 
 function resetDiscordState(matchId: number): void {
@@ -138,16 +138,37 @@ async function main() {
   await test('notifyMatchLiveScore: no-ops without DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL', async () => {
     delete process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
     const { calls } = stubFetch();
-    await notifyMatchLiveScore(adminClient, 100);
+    await notifyMatchLiveScore(adminClient, 100, 'round_end', liveScore(100, 7, 5, 13));
+    assert.equal(calls.length, 0);
+  });
+
+  await test('notifyMatchLiveScore: ignores an event it wasn\'t called for, e.g. map_result', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(100);
+    stubFetch();
+    await notifyMatchServerLive(adminClient, 100);
+
+    const { calls } = stubFetch();
+    await notifyMatchLiveScore(adminClient, 100, 'map_result', liveScore(100, 13, 9, null));
+    assert.equal(calls.length, 0, 'map_result\'s score is superseded by notifyMatchScoreReported() moments later, so editing here would just flicker');
+  });
+
+  await test('notifyMatchLiveScore: no-ops for a null live score row', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(100);
+    stubFetch();
+    await notifyMatchServerLive(adminClient, 100);
+
+    const { calls } = stubFetch();
+    await notifyMatchLiveScore(adminClient, 100, 'round_end', null);
     assert.equal(calls.length, 0);
   });
 
   await test('notifyMatchLiveScore: no-ops (never posts a fresh message) when nothing is on record yet', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
     resetDiscordState(100);
-    setLiveScore(100, 7, 5, 13);
     const { calls } = stubFetch();
-    await notifyMatchLiveScore(adminClient, 100);
+    await notifyMatchLiveScore(adminClient, 100, 'round_end', liveScore(100, 7, 5, 13));
     assert.equal(calls.length, 0);
   });
 
@@ -159,9 +180,8 @@ async function main() {
     const liveMessageId = discordState(100)?.notification_message_id;
     assert.ok(liveMessageId, 'precondition: server-live left a message id on record');
 
-    setLiveScore(100, 7, 5, 13);
     const { calls } = stubFetch();
-    await notifyMatchLiveScore(adminClient, 100);
+    await notifyMatchLiveScore(adminClient, 100, 'round_end', liveScore(100, 7, 5, 13));
     assert.equal(calls.length, 1);
     assert.equal(calls[0].method, 'PATCH');
     assert.equal(calls[0].url, `https://discord.example/webhook/messages/${liveMessageId}`);
@@ -178,9 +198,8 @@ async function main() {
     stubFetch();
     await notifyMatchServerLive(adminClient, 100);
 
-    setLiveScore(100, 0, 0, null);
     const { calls } = stubFetch();
-    await notifyMatchLiveScore(adminClient, 100);
+    await notifyMatchLiveScore(adminClient, 100, 'going_live', liveScore(100, 0, 0, null));
     const embed = calls[0].body.embeds[0];
     assert.match(embed.description, /LIVE\*\*\n\*\*0-0\*\*/);
     assert.doesNotMatch(embed.description, /Round/);
