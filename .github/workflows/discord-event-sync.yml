@@ -1,9 +1,10 @@
 # discord-event-sync (#398)
 #
-# Polls Discord's guild-scheduled-events REST API and writes any matching match's start time into
-# `matches.scheduled_at` — see `scripts/discord-event-sync.ts` / `src/lib/discord-event-sync.ts` for
-# the title-based correlation and idempotency rules. No gateway bot needed, just a periodic poll
-# against whichever regular season is currently `ACTIVE`.
+# Watches each unplayed match's own Discord thread for the earliest scheduled-event share link
+# (Discord's own "Share to Channel" action posts `discord.com/events/{guild}/{event}`) and writes
+# that event's start time into `matches.scheduled_at` — see `scripts/discord-event-sync.ts` /
+# `src/lib/discord-event-sync.ts` for the correlation and idempotency rules. No gateway bot needed,
+# just a periodic poll against whichever regular season is currently `ACTIVE`.
 
 name: discord-event-sync
 
