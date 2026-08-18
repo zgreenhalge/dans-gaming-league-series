@@ -89,12 +89,18 @@ export async function PATCH(
   afterBestEffort(
     `discord-schedule-reminder: match ${matchId}`,
     async () => {
-      const { error: rpcError } = await supabaseAdmin.rpc('schedule_match_reminder', {
+      const { data: scheduled, error: rpcError } = await supabaseAdmin.rpc('schedule_match_reminder', {
         p_match_id: matchId,
         p_scheduled_at: scheduled_at,
       });
       if (rpcError) throw rpcError;
-      await clearOpsError(supabaseAdmin, 'match', matchId, 'discord_schedule_reminder');
+      // `false` means schedule_match_reminder()'s own unconditional cleanup ran but scheduling
+      // itself stopped early (e.g. a missing Vault secret) — it already recorded its own specific
+      // ops_errors row for that in the same call, so this leaves it alone rather than clearing (or
+      // overwriting with a vaguer message) an error it was just told about.
+      if (scheduled) {
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'discord_schedule_reminder');
+      }
     },
     async (err) => {
       await recordOpsError(supabaseAdmin, 'match', matchId, 'discord_schedule_reminder', `Failed to schedule reminder: ${(err as Error).message}`);

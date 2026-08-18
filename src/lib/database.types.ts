@@ -1381,7 +1381,10 @@ export type Database = {
           p_match_id: number
           p_scheduled_at: string | null
         }
-        Returns: undefined
+        // true = fully scheduled (or intentionally unscheduled); false = the function's
+        // unconditional cleanup ran but scheduling itself stopped early (e.g. a missing Vault
+        // secret, which it records to ops_errors itself) — see the migration for detail.
+        Returns: boolean
       }
     }
     Enums: {

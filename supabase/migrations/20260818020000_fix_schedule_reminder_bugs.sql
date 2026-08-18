@@ -1,19 +1,27 @@
--- schedule_match_reminder()'s "Vault secret missing" case previously recorded under
--- 'discord_notify_reminder' — the same operation key notifyMatchReminder() uses for a real webhook
--- delivery failure. Those are different failures with different fixes (a missing Vault secret is a
--- config problem fixed by re-running the one-time vault.create_secret step; a webhook failure is a
--- Discord/network problem), and ops_errors keys by (entity_type, entity_id, operation) specifically
--- so one's success can't silently clear the other's still-live error for the same match — see
--- ops-errors.ts's own docstring. Moved to 'discord_schedule_reminder', matching the key
--- PATCH /api/matches/[id]/schedule/route.ts now uses for its own scheduling-side RPC failures.
+-- Schedules (or cancels/reschedules) the one-shot Discord "1 hour out" reminder for a match — see
+-- the original definition's comment for the full design. This redefinition fixes two bugs in that
+-- version:
 --
--- Everything else about schedule_match_reminder() is unchanged from the original migration — this
--- is a `create or replace`, not a new function, so no re-grant/re-enable step is needed.
+-- 1. The cron-expression builder used to_char's 'HH' (12-hour clock, 01-12) instead of 'HH24'
+--    (00-23), so a reminder time in the afternoon/evening/midnight UTC hour was scheduled 12 hours
+--    off from the intended minute.
+-- 2. Returns `boolean` (true = fully scheduled or intentionally unscheduled; false = the unconditional
+--    cleanup ran but scheduling itself stopped early, e.g. a missing Vault secret) instead of `void`.
+--    The caller (PATCH /api/matches/[id]/schedule/route.ts) needs to distinguish "the RPC call
+--    didn't error" from "scheduling actually succeeded" — a `void`-returning function that records
+--    its own ops_errors row on the Vault-secret-missing path but still returns normally left the
+--    caller with no way to avoid immediately clearing that same error it was just told about.
+--
+-- Vault-secret-missing (and any other stop-early case) records under 'discord_schedule_reminder' —
+-- distinct from notifyMatchReminder()'s 'discord_notify_reminder' — since a failure to *schedule*
+-- the reminder and a failure to *deliver* it are different problems with different fixes, and
+-- ops_errors keys by (entity_type, entity_id, operation) specifically so one's success can't
+-- silently clear the other's still-live error for the same match.
 create or replace function public.schedule_match_reminder(
   p_match_id integer,
   p_scheduled_at timestamptz
 )
-returns void
+returns boolean
 language plpgsql
 as $function$
 declare
@@ -34,7 +42,7 @@ begin
   on conflict (match_id) do update set reminder_sent_at = null;
 
   if p_scheduled_at is null then
-    return; -- unscheduled — nothing further to do
+    return true; -- unscheduled — nothing further to do
   end if;
 
   v_reminder_at := p_scheduled_at - interval '1 hour';
@@ -50,7 +58,7 @@ begin
             'Vault secret "cron_secret" is not configured — cannot schedule match reminder', now(), null)
     on conflict (entity_type, entity_id, operation)
     do update set message = excluded.message, occurred_at = excluded.occurred_at, dismissed_at = null;
-    return;
+    return false;
   end if;
 
   if v_reminder_at <= now() then
@@ -59,13 +67,13 @@ begin
       headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_cron_secret),
       body := jsonb_build_object('matchId', p_match_id)
     );
-    return;
+    return true;
   end if;
 
-  -- 5-field cron expr for one exact minute this year: "MI HH DD MM *". No year field exists in
+  -- 5-field cron expr for one exact minute this year: "MI HH24 DD MM *". No year field exists in
   -- cron syntax, so the job's own command unschedules itself right after firing (below) — otherwise
   -- it would silently recur on the same day/month every year.
-  v_cron_expr := to_char(v_reminder_at at time zone 'utc', 'MI HH DD MM') || ' *';
+  v_cron_expr := to_char(v_reminder_at at time zone 'utc', 'MI HH24 DD MM') || ' *';
 
   perform cron.schedule(
     v_job_name,
@@ -85,5 +93,6 @@ begin
       v_job_name
     )
   );
+  return true;
 end;
 $function$;

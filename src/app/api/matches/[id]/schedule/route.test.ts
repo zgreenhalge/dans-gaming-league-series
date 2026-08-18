@@ -36,12 +36,13 @@ function call(matchId: number | string, sessionPlayerId: number | null, body: un
   return PATCH(jsonRequest(url(matchId), 'PATCH', body), { params: Promise.resolve({ id: String(matchId) }) });
 }
 
-/** Records every call into the returned array — `schedule_match_reminder()`'s real implementation
- * is a Postgres function; this file only needs to prove the route calls it with the right args, not
- * re-implement its scheduling logic (see supabase/migrations for the real one). */
+/** Records every call into the returned array and reports success (`true`), matching the real
+ * `schedule_match_reminder()`'s Postgres return shape for the "fully scheduled" case — this file
+ * only needs to prove the route calls it with the right args and reacts correctly to its return
+ * value, not re-implement its scheduling logic (see supabase/migrations for the real one). */
 function recordingRpc(): { calls: Record<string, unknown>[]; handler: RpcHandler } {
   const calls: Record<string, unknown>[] = [];
-  return { calls, handler: (args) => { calls.push(args); return null; } };
+  return { calls, handler: (args) => { calls.push(args); return true; } };
 }
 
 async function main() {
@@ -134,7 +135,7 @@ async function main() {
 
   await test('PATCH — a successful reschedule clears a prior scheduling failure for the same match', async () => {
     __setTestAfterMode(true);
-    const db = installFixture({ schedule_match_reminder: () => null });
+    const db = installFixture({ schedule_match_reminder: () => true });
     db.ops_errors.push({
       id: 1, entity_type: 'match', entity_id: MATCH_ID, operation: 'discord_schedule_reminder',
       message: 'Failed to schedule reminder: vault secret missing', occurred_at: new Date().toISOString(), dismissed_at: null,
@@ -146,6 +147,32 @@ async function main() {
     assert.ok(
       !db.ops_errors.some((e) => e.entity_type === 'match' && e.entity_id === MATCH_ID && e.operation === 'discord_schedule_reminder' && e.dismissed_at === null),
       'the earlier scheduling failure no longer shows as live once scheduling succeeds',
+    );
+    __setTestAfterMode(false);
+  });
+
+  await test('PATCH — schedule_match_reminder() reporting false (e.g. Vault secret missing) does not clear the error it just recorded itself', async () => {
+    __setTestAfterMode(true);
+    // Mirrors the real function: records its own specific ops_errors row, then reports false —
+    // the route must not treat "the RPC call didn't throw" as "scheduling succeeded".
+    const db = installFixture({
+      schedule_match_reminder: (_args, fakeDb) => {
+        (fakeDb.ops_errors ??= []).push({
+          id: 1, entity_type: 'match', entity_id: MATCH_ID, operation: 'discord_schedule_reminder',
+          message: 'Vault secret "cron_secret" is not configured — cannot schedule match reminder',
+          occurred_at: new Date().toISOString(), dismissed_at: null,
+        });
+        return false;
+      },
+    });
+
+    const res = await call(MATCH_ID, ADMIN_ID, { scheduled_at: '2026-09-01T18:00:00.000Z' });
+    assert.equal(res.status, 200);
+
+    await __flushTestAfter();
+    assert.ok(
+      db.ops_errors.some((e) => e.entity_type === 'match' && e.entity_id === MATCH_ID && e.operation === 'discord_schedule_reminder' && e.dismissed_at === null),
+      'the Vault-secret-missing error is still live — the route must not have cleared it',
     );
     __setTestAfterMode(false);
   });
