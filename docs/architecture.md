@@ -401,7 +401,7 @@ Wired into twenty-five operations today:
 | `discord_notify_server_live` | `match` | `notifyMatchServerLive()` (`discord-notify.ts`, #395) — a real webhook failure, not just the channel being unconfigured |
 | `discord_notify_live_score` | `match` | `notifyMatchLiveScore()` (`discord-notify.ts`, #395) — a real webhook failure editing the notification message with the running score, on a `going_live`/`round_end` MatchZy event. Never falls back to posting a new message, so a live match with a stuck error here just retries on the next round |
 | `discord_notify_score` | `match` | `notifyMatchScoreReported()` (`discord-notify.ts`, #395) — a real webhook failure, not just the channel being unconfigured. A distinct operation from `discord_notify_server_live`/`discord_notify_live_score` (not a shared `discord_notify`) so a failure from one notification can't be silently cleared by an unrelated success of another for the same match |
-| `discord_schedule_reminder` | `match` | A failure to *schedule* the 1-hour-out reminder: `PATCH /api/matches/[id]/schedule` recording that the `schedule_match_reminder` RPC call itself errored or threw, or `schedule_match_reminder()` (Postgres function) recording that the `cron_secret` Vault secret is missing. Cleared when a later reschedule for the same match succeeds |
+| `discord_schedule_reminder` | `match` | A failure to *schedule* the 1-hour-out reminder: `PATCH /api/matches/[id]/schedule` or `discord-event-sync.ts`'s `syncMatchScheduledEvent()` (#398) — the two writers of `matches.scheduled_at` — recording that the `schedule_match_reminder` RPC call itself errored or threw, or `schedule_match_reminder()` (Postgres function) recording that the `cron_secret` Vault secret is missing. Cleared when a later reschedule for the same match succeeds |
 | `discord_notify_reminder` | `match` | A failure to *deliver* the already-scheduled 1-hour-out reminder — `notifyMatchReminder()` (`discord-notify.ts`, #395) recording a real webhook failure. Kept distinct from `discord_schedule_reminder` (a config/scheduling problem, fixed differently than a delivery problem) so one's success can't silently clear the other's still-live error for the same match |
 | `discord_role_sync` | `player`, or `season` (regular) for a roster-fetch failure | `discord-roles.ts` (#397)'s `setGuildMemberRole()` for the per-player case — a real Discord API failure, not just the role sync being unconfigured or the player having no `discord_id`; `season-lifecycle.ts`'s `syncParticipantRoleForRoster()` for the season-level case, when fetching the roster itself fails ahead of the (never-throwing) per-player grant/revoke pass |
 | `discord_link` | `player`, or `system` (id `0`) for a config failure | `GET /api/auth/discord/callback` (#394) — a genuine failure (bad response from Discord, an unhandled exception, missing `DISCORD_CLIENT_ID`/`SECRET`), not the expected "denied"/"taken" outcomes, which redirect the one affected player but aren't logged |
@@ -455,8 +455,10 @@ Vercel auto-detects the Next.js project from the repo root. Set all env vars in 
 - **Python function** — `api/ehog/recompute.py` is deployed on the `@vercel/python` runtime with `ehog/**` bundled via `includeFiles`. It runs the EHOG full recompute after a score is submitted. See [`ehog.md`](./ehog.md).
 
 The 1-hour-out match reminder is scheduled a different way, deliberately not through `vercel.json` —
-`PATCH /api/matches/[id]/schedule` calls the `schedule_match_reminder()` Postgres function (via
-`pg_cron`/`pg_net`, enabled on the Supabase project) whenever a match's `scheduled_at` changes. That
+both writers of `matches.scheduled_at` (`PATCH /api/matches/[id]/schedule` for a human editing it by
+hand, and `discord-event-sync.ts`'s `syncMatchScheduledEvent()` for a time sourced from a linked
+Discord Scheduled Event, #398) call the `schedule_match_reminder()` Postgres function (via
+`pg_cron`/`pg_net`, enabled on the Supabase project) right after their own write commits. That
 function schedules (or cancels/reschedules) a one-shot `pg_cron` job for the exact minute
 `scheduled_at - 1h` falls on, which `pg_net.http_post`s `POST /api/cron/match-reminder` and then
 unschedules itself — precise per-match timing instead of a polling window, and no Vercel cron
