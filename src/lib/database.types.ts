@@ -1372,6 +1372,11 @@ export type Database = {
         Returns: Json
       }
       schedule_match_reminder: {
+        // p_scheduled_at is `string` (no `| null`) in raw `generate_typescript_types` output —
+        // Postgres doesn't track per-parameter nullability for a plpgsql function the way it does
+        // column NOT NULL, so the generator has no signal here; kept as `string | null` by hand
+        // since the function explicitly accepts and branches on a null p_scheduled_at (clearing a
+        // match's schedule), and PATCH /api/matches/[id]/schedule/route.ts passes exactly that.
         Args: {
           p_match_id: number
           p_scheduled_at: string | null
