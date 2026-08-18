@@ -20,18 +20,35 @@
 // once — after that it's just a cheap id lookup against the already-fetched events list), and
 // `message_checkpoint` lets a match still waiting on one resume scanning from where the last poll left
 // off (`after=<checkpoint>`) instead of re-walking the whole thread. Only a match seen for the very
-// first time (no checkpoint yet) pays the full backward-walk cost, once.
+// first time (no checkpoint yet) pays the full backward-walk cost, once — unless its cached event later
+// goes stale (see below), which pays it again since a cheap resume can't be trusted to still be correct.
 //
-// "Earliest" means earliest by post time, not most recent: the first-time scan walks a thread's
-// message history backward to its actual start (Discord returns newest-first) rather than stopping at
-// the first page, so a stale link left behind by an early false start can't beat out whatever the
-// players actually settled on later in the same thread. Once that first pass is done, only genuinely
-// new messages (after the checkpoint) are ever looked at again — anything already scanned, matched or
-// not, is never revisited. Only unplayed matches (`isPlayedScore()`) are scanned, so a completed
-// match's slot is never touched. A match with no thread yet, or a thread with nothing shared in it
-// yet, is not a failure — most matches won't have either until players get around to it — so it's
-// reported `no_thread`/`no_event` but never recorded to `ops_errors`; only a genuine Discord API
-// failure or a write failure updating `match_discord_state`/`matches.scheduled_at` is.
+// "Earliest" means earliest *live* share by post time, not most recent: the first-time scan walks a
+// thread's message history backward to its actual start (Discord returns newest-first) rather than
+// stopping at the first page, and only ever considers a message whose linked event is in this poll's
+// freshly-fetched, still-live events list — so a stale link left behind by an early false start can't
+// beat out whatever the players actually settled on later in the same thread. Once that first pass is
+// done, only genuinely new messages (after the checkpoint) are ever looked at again — anything already
+// scanned, matched or not, is never revisited *unless* the cached event itself later turns out
+// canceled/deleted. That needs both halves of the fix, not just one: a cheap `after=<checkpoint>`
+// resume alone can only ever find something *newer* than what's already been ruled out, but the real
+// earliest-still-live share could be an *older* message this match's first scan already saw and
+// correctly rejected in favor of the (now-invalid) one that won at the time — so a stale-event clear
+// resets the checkpoint too, forcing one more full walk. And that walk only helps because it's
+// live-aware: without also skipping already-known-invalid ids, a plain text rescan would just
+// rediscover the exact same "earliest mention" and reject it all over again, since canceling an event
+// doesn't change which message mentions it first. Together they make a stale clear self-correcting
+// without needing to remember every runner-up a scan ever discarded — a rare event, worth paying for.
+//
+// Only unplayed matches (`isPlayedScore()`) are scanned, so a completed match's slot is never touched.
+// A match with no thread yet, or a thread with nothing shared in it yet, is not a failure — most
+// matches won't have either until players get around to it — so it's reported `no_thread`/`no_event`
+// but never recorded to `ops_errors`; only a genuine Discord API failure or a write failure updating
+// `match_discord_state`/`matches.scheduled_at` is, and each is cleared the moment its own step next
+// succeeds (a scan failure by the next clean scan, a write failure by the next successful write) rather
+// than waiting on some later, unrelated step. Each unplayed match's thread lives on its own Discord
+// channel, so unlike `publishWeekThreads()`'s deliberately sequential thread *creation* (rate-limited
+// on one shared per-channel route), scanning them is independent per match and safe to run concurrently.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSeason, getSeasonSchedule } from './queries';
@@ -66,7 +83,6 @@ interface DiscordMessage {
 
 interface MatchDiscordState {
   match_id: number;
-  thread_id: string | null;
   event_id: string | null;
   message_checkpoint: string | null;
 }
@@ -83,20 +99,41 @@ export interface SyncSeasonEventsResult {
   matches: EventSyncResult[];
 }
 
-async function listGuildScheduledEvents(
-  guildId: string,
-  token: string,
-): Promise<DiscordScheduledEvent[] | { error: string }> {
+/** One Discord GET, normalized to either its parsed JSON or a labeled `{ error }` — the shared shell
+ *  every read in this file uses, so a thrown fetch and a non-ok response are only ever handled once. */
+async function fetchDiscordJson<T>(url: string, token: string, label: string): Promise<T | { error: string }> {
   let res: Response;
   try {
-    res = await fetch(`https://discord.com/api/v10/guilds/${guildId}/scheduled-events`, {
-      headers: { Authorization: `Bot ${token}` },
-    });
+    res = await fetch(url, { headers: { Authorization: `Bot ${token}` } });
   } catch (e) {
-    return { error: `Listing scheduled events failed: ${(e as Error).message}` };
+    return { error: `${label} failed: ${(e as Error).message}` };
   }
-  if (!res.ok) return { error: await discordErrorDetail('Listing scheduled events', res) };
-  return (await res.json()) as DiscordScheduledEvent[];
+  if (!res.ok) return { error: await discordErrorDetail(label, res) };
+  return (await res.json()) as T;
+}
+
+function listGuildScheduledEvents(guildId: string, token: string): Promise<DiscordScheduledEvent[] | { error: string }> {
+  return fetchDiscordJson<DiscordScheduledEvent[]>(
+    `https://discord.com/api/v10/guilds/${guildId}/scheduled-events`,
+    token,
+    'Listing scheduled events',
+  );
+}
+
+/** One page of a thread's messages, in Discord's native newest-first order. `cursor` selects which
+ *  page — `before` walks backward toward the thread's start, `after` walks forward from a checkpoint
+ *  toward "now"; omit for the most recent page. */
+function fetchMessagesPage(
+  threadId: string,
+  token: string,
+  cursor?: { before: string } | { after: string },
+): Promise<DiscordMessage[] | { error: string }> {
+  const cursorParam = cursor ? (('before' in cursor) ? `&before=${cursor.before}` : `&after=${cursor.after}`) : '';
+  return fetchDiscordJson<DiscordMessage[]>(
+    `https://discord.com/api/v10/channels/${threadId}/messages?limit=${MESSAGE_PAGE_SIZE}${cursorParam}`,
+    token,
+    'Listing thread messages',
+  );
 }
 
 /** Pulls the event id out of a message's `/events/{guild}/{event}` link, checking both the raw
@@ -118,38 +155,33 @@ interface ThreadScan {
   newestMessageId: string | null;
 }
 
-/** A thread's full history, walked backward from its most recent message to its start (Discord
- *  returns newest-first) — the one-time cost paid the first time a match's thread is seen, before it
- *  has a `message_checkpoint` yet. Keeps overwriting its running answer with each *older* match it
- *  finds, so a stale early link can't beat out whatever players actually settled on later, and the
- *  true earliest survives the walk. */
+/** A thread's full history, walked backward from its most recent message to its start — the one-time
+ *  cost paid the first time a match's thread is seen (or re-paid after a stale-event reset, see this
+ *  file's header). Keeps overwriting its running answer with each *older* match it finds, so a stale
+ *  early link can't beat out whatever players actually settled on later, and the true earliest
+ *  survives the walk. Only ever considers a message whose linked id is in `liveEventIds` (this poll's
+ *  freshly-fetched, still-live events) — otherwise a rescan forced by a canceled cached event would
+ *  just rediscover that same canceled event's mention as "earliest" and go nowhere. */
 async function scanThreadHistory(
   threadId: string,
   guildId: string,
   token: string,
+  liveEventIds: ReadonlySet<string>,
 ): Promise<ThreadScan | { error: string }> {
   let before: string | undefined;
   let earliest: string | null = null;
   let newest: string | null = null;
 
   for (let page = 0; page < MAX_MESSAGE_PAGES; page++) {
-    const url = `https://discord.com/api/v10/channels/${threadId}/messages?limit=${MESSAGE_PAGE_SIZE}${before ? `&before=${before}` : ''}`;
-    let res: Response;
-    try {
-      res = await fetch(url, { headers: { Authorization: `Bot ${token}` } });
-    } catch (e) {
-      return { error: `Listing thread messages failed: ${(e as Error).message}` };
-    }
-    if (!res.ok) return { error: await discordErrorDetail('Listing thread messages', res) };
-
-    const messages = (await res.json()) as DiscordMessage[];
+    const messages = await fetchMessagesPage(threadId, token, before ? { before } : undefined);
+    if ('error' in messages) return messages;
     if (messages.length === 0) break;
     if (newest === null) newest = messages[0].id; // first page's first entry is the thread's current head
     // Newest-first within the page; iterating forward means the last match found here is this
     // page's own oldest, so it correctly overwrites a newer match found earlier in the same pass.
     for (const message of messages) {
       const eventId = extractEventId(message, guildId);
-      if (eventId) earliest = eventId;
+      if (eventId && liveEventIds.has(eventId)) earliest = eventId;
     }
     if (messages.length < MESSAGE_PAGE_SIZE) break; // fewer than a full page — reached the thread's start
     before = messages[messages.length - 1].id;
@@ -164,34 +196,28 @@ async function scanThreadHistory(
  *  be newer), so the first page containing one settles it; pagination continues regardless, bounded
  *  by the same cap as the full scan, purely to advance the checkpoint as close to "now" as this poll
  *  can manage — an edge case in practice, since these threads see nowhere near 100 new messages
- *  between two ~15-minute polls. */
+ *  between two ~15-minute polls. Same `liveEventIds` filter as `scanThreadHistory()`, for the same
+ *  reason. */
 async function scanThreadSince(
   threadId: string,
   guildId: string,
   token: string,
   checkpoint: string,
+  liveEventIds: ReadonlySet<string>,
 ): Promise<ThreadScan | { error: string }> {
   let after = checkpoint;
   let earliest: string | null = null;
   let newest: string | null = null;
 
   for (let page = 0; page < MAX_MESSAGE_PAGES; page++) {
-    const url = `https://discord.com/api/v10/channels/${threadId}/messages?limit=${MESSAGE_PAGE_SIZE}&after=${after}`;
-    let res: Response;
-    try {
-      res = await fetch(url, { headers: { Authorization: `Bot ${token}` } });
-    } catch (e) {
-      return { error: `Listing thread messages failed: ${(e as Error).message}` };
-    }
-    if (!res.ok) return { error: await discordErrorDetail('Listing thread messages', res) };
-
-    const messages = (await res.json()) as DiscordMessage[];
+    const messages = await fetchMessagesPage(threadId, token, { after });
+    if ('error' in messages) return messages;
     if (messages.length === 0) break;
     newest = messages[0].id; // this page's newest — the closer to "now" this poll reaches, the better
     if (!earliest) {
       for (let i = messages.length - 1; i >= 0; i--) {
         const eventId = extractEventId(messages[i], guildId);
-        if (eventId) {
+        if (eventId && liveEventIds.has(eventId)) {
           earliest = eventId;
           break;
         }
@@ -202,6 +228,79 @@ async function scanThreadSince(
   }
 
   return { eventId: earliest, newestMessageId: newest ?? checkpoint };
+}
+
+/** One unplayed match's outcome: finds (or reuses a cached) scheduled-event id and syncs
+ *  `matches.scheduled_at` to it. Independent of every other match — safe to run concurrently with
+ *  them (see this file's header) since it only ever touches this match's own thread and rows. */
+async function syncMatchScheduledEvent(
+  supabaseAdmin: SupabaseClient,
+  guildId: string,
+  token: string,
+  title: string,
+  match: { id: number; scheduled_at: string | null },
+  threadId: string | undefined,
+  state: MatchDiscordState | undefined,
+  eventsById: Map<string, DiscordScheduledEvent>,
+): Promise<EventSyncResult> {
+  if (!threadId) {
+    return { matchId: match.id, title, status: 'no_thread', detail: 'No Discord thread found yet' };
+  }
+
+  let eventId = state?.event_id ?? null;
+
+  if (!eventId) {
+    const liveEventIds = new Set(eventsById.keys());
+    const scan = state?.message_checkpoint
+      ? await scanThreadSince(threadId, guildId, token, state.message_checkpoint, liveEventIds)
+      : await scanThreadHistory(threadId, guildId, token, liveEventIds);
+    if ('error' in scan) {
+      await recordOpsError(supabaseAdmin, 'match', match.id, EVENT_SYNC_OPERATION, scan.error);
+      return { matchId: match.id, title, status: 'failed', detail: scan.error };
+    }
+    await clearOpsError(supabaseAdmin, 'match', match.id, EVENT_SYNC_OPERATION);
+
+    // Persisted regardless of whether this scan found anything, so the next poll only ever looks at
+    // what's new from here rather than re-covering ground already ruled out.
+    await supabaseAdmin.from('match_discord_state').upsert(
+      {
+        match_id: match.id,
+        thread_id: threadId,
+        event_id: scan.eventId,
+        message_checkpoint: scan.newestMessageId ?? state?.message_checkpoint ?? null,
+      },
+      { onConflict: 'match_id' },
+    );
+    eventId = scan.eventId;
+  }
+
+  if (!eventId) {
+    return { matchId: match.id, title, status: 'no_event', detail: 'No scheduled event shared in the thread yet' };
+  }
+
+  const event = eventsById.get(eventId);
+  if (!event) {
+    // The cached event vanished or is no longer live. Also resets the checkpoint, forcing a full
+    // rescan next time rather than a cheap resume — see this file's header for why a resume alone
+    // can't be trusted to find whatever's actually earliest now.
+    await supabaseAdmin.from('match_discord_state').update({ event_id: null, message_checkpoint: null }).eq('match_id', match.id);
+    return { matchId: match.id, title, status: 'no_event', detail: `Shared event ${eventId} is no longer scheduled` };
+  }
+
+  const currentMs = match.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
+  const eventMs = new Date(event.scheduled_start_time).getTime();
+  if (currentMs === eventMs) {
+    return { matchId: match.id, title, status: 'unchanged', detail: `Already synced to ${event.scheduled_start_time}` };
+  }
+
+  const { error } = await supabaseAdmin.from('matches').update({ scheduled_at: event.scheduled_start_time }).eq('id', match.id);
+  if (error) {
+    const detail = `Writing scheduled_at failed: ${error.message}`;
+    await recordOpsError(supabaseAdmin, 'match', match.id, EVENT_SYNC_OPERATION, detail);
+    return { matchId: match.id, title, status: 'failed', detail };
+  }
+  await clearOpsError(supabaseAdmin, 'match', match.id, EVENT_SYNC_OPERATION);
+  return { matchId: match.id, title, status: 'synced', detail: `Synced to ${event.scheduled_start_time}` };
 }
 
 /** Syncs one regular season's unplayed matches against events shared in their Discord threads.
@@ -230,107 +329,42 @@ export async function syncSeasonScheduledEvents(
   }
   if (unplayedByTitle.size === 0) return { seasonName: season.name, matches: [] };
 
-  const channel = await resolveSeasonForumChannel(guildId, token, season.name);
-  if ('error' in channel) {
-    await recordOpsError(supabaseAdmin, 'season', seasonId, EVENT_SYNC_OPERATION, channel.error);
-    return { error: channel.error };
-  }
+  const matchIds = [...unplayedByTitle.values()].map((m) => m.id);
+  // The channel→threads lookup is a real dependency chain; listing the guild's events and this
+  // season's already-known match_discord_state rows are independent of it and of each other, so all
+  // three run concurrently rather than as one long sequential chain.
+  const [channelThreadsResult, eventsResult, stateRowsResult] = await Promise.all([
+    resolveSeasonForumChannel(guildId, token, season.name).then((channel) =>
+      'error' in channel ? channel : listChannelThreads(guildId, channel.channelId, token),
+    ),
+    listGuildScheduledEvents(guildId, token),
+    supabaseAdmin.from('match_discord_state').select('match_id, event_id, message_checkpoint').in('match_id', matchIds),
+  ]);
 
-  const threads = await listChannelThreads(guildId, channel.channelId, token);
-  if ('error' in threads) {
-    await recordOpsError(supabaseAdmin, 'season', seasonId, EVENT_SYNC_OPERATION, threads.error);
-    return { error: threads.error };
+  if ('error' in channelThreadsResult) {
+    await recordOpsError(supabaseAdmin, 'season', seasonId, EVENT_SYNC_OPERATION, channelThreadsResult.error);
+    return { error: channelThreadsResult.error };
   }
-
-  const events = await listGuildScheduledEvents(guildId, token);
-  if ('error' in events) {
-    await recordOpsError(supabaseAdmin, 'season', seasonId, EVENT_SYNC_OPERATION, events.error);
-    return { error: events.error };
+  if ('error' in eventsResult) {
+    await recordOpsError(supabaseAdmin, 'season', seasonId, EVENT_SYNC_OPERATION, eventsResult.error);
+    return { error: eventsResult.error };
   }
   await clearOpsError(supabaseAdmin, 'season', seasonId, EVENT_SYNC_OPERATION);
 
-  const threadIdByTitle = new Map(threads.map((t) => [t.name, t.id]));
-  const eventsById = new Map(events.filter((e) => LIVE_EVENT_STATUSES.has(e.status)).map((e) => [e.id, e]));
-
-  const matchIds = [...unplayedByTitle.values()].map((m) => m.id);
-  const { data: stateRows } = await supabaseAdmin
-    .from('match_discord_state')
-    .select('match_id, thread_id, event_id, message_checkpoint')
-    .in('match_id', matchIds);
+  const threadIdByTitle = new Map(channelThreadsResult.map((t) => [t.name, t.id]));
+  const eventsById = new Map(eventsResult.filter((e) => LIVE_EVENT_STATUSES.has(e.status)).map((e) => [e.id, e]));
   const stateByMatchId = new Map(
-    ((stateRows ?? []) as MatchDiscordState[]).map((r) => [r.match_id, r]),
+    ((stateRowsResult.data ?? []) as MatchDiscordState[]).map((r) => [r.match_id, r]),
   );
 
-  const results: EventSyncResult[] = [];
-  for (const [title, match] of unplayedByTitle) {
-    const threadId = threadIdByTitle.get(title);
-    if (!threadId) {
-      results.push({ matchId: match.id, title, status: 'no_thread', detail: 'No Discord thread found yet' });
-      continue;
-    }
-
-    const state = stateByMatchId.get(match.id);
-    let eventId = state?.event_id ?? null;
-
-    if (!eventId) {
-      const scan = state?.message_checkpoint
-        ? await scanThreadSince(threadId, guildId, token, state.message_checkpoint)
-        : await scanThreadHistory(threadId, guildId, token);
-      if ('error' in scan) {
-        await recordOpsError(supabaseAdmin, 'match', match.id, EVENT_SYNC_OPERATION, scan.error);
-        results.push({ matchId: match.id, title, status: 'failed', detail: scan.error });
-        continue;
-      }
-
-      // Persisted regardless of whether this scan found anything, so the next poll only ever looks
-      // at what's new from here rather than re-covering ground already ruled out.
-      await supabaseAdmin.from('match_discord_state').upsert(
-        {
-          match_id: match.id,
-          thread_id: threadId,
-          event_id: scan.eventId,
-          message_checkpoint: scan.newestMessageId ?? state?.message_checkpoint ?? null,
-        },
-        { onConflict: 'match_id' },
-      );
-      eventId = scan.eventId;
-    }
-
-    if (!eventId) {
-      results.push({ matchId: match.id, title, status: 'no_event', detail: 'No scheduled event shared in the thread yet' });
-      continue;
-    }
-
-    const event = eventsById.get(eventId);
-    if (!event) {
-      // The cached event vanished or is no longer live — clear it so the next poll re-derives
-      // cleanly (from the same checkpoint, so it only looks at whatever's posted since) instead of
-      // permanently trusting a stale id.
-      await supabaseAdmin.from('match_discord_state').update({ event_id: null }).eq('match_id', match.id);
-      results.push({ matchId: match.id, title, status: 'no_event', detail: `Shared event ${eventId} is no longer scheduled` });
-      continue;
-    }
-
-    const currentMs = match.scheduled_at ? new Date(match.scheduled_at).getTime() : null;
-    const eventMs = new Date(event.scheduled_start_time).getTime();
-    if (currentMs === eventMs) {
-      results.push({ matchId: match.id, title, status: 'unchanged', detail: `Already synced to ${event.scheduled_start_time}` });
-      continue;
-    }
-
-    const { error } = await supabaseAdmin
-      .from('matches')
-      .update({ scheduled_at: event.scheduled_start_time })
-      .eq('id', match.id);
-    if (error) {
-      const detail = `Writing scheduled_at failed: ${error.message}`;
-      await recordOpsError(supabaseAdmin, 'match', match.id, EVENT_SYNC_OPERATION, detail);
-      results.push({ matchId: match.id, title, status: 'failed', detail });
-      continue;
-    }
-    await clearOpsError(supabaseAdmin, 'match', match.id, EVENT_SYNC_OPERATION);
-    results.push({ matchId: match.id, title, status: 'synced', detail: `Synced to ${event.scheduled_start_time}` });
-  }
+  const results = await Promise.all(
+    [...unplayedByTitle.entries()].map(([title, match]) =>
+      syncMatchScheduledEvent(
+        supabaseAdmin, guildId, token, title, match,
+        threadIdByTitle.get(title), stateByMatchId.get(match.id), eventsById,
+      ),
+    ),
+  );
 
   return { seasonName: season.name, matches: results };
 }
