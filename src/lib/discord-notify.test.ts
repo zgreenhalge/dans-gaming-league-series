@@ -18,7 +18,7 @@ const fakeDb = buildFakeDb();
 const adminClient = createFakeSupabaseClient(fakeDb);
 __setTestClient(adminClient);
 
-import { notifyMatchServerLive, notifyMatchScoreReported, notifyMatchLiveScore } from './discord-notify';
+import { notifyMatchServerLive, notifyMatchScoreReported, notifyMatchLiveScore, notifyMatchReminder } from './discord-notify';
 import type { LiveScoreRow } from './demo/liveScore';
 import { test, report } from './test-support/miniTest';
 
@@ -69,6 +69,19 @@ function liveScore(matchId: number, shirts: number, skins: number, round: number
 
 function resetDiscordState(matchId: number): void {
   fakeDb.match_discord_state = (fakeDb.match_discord_state ?? []).filter((r) => r.match_id !== matchId);
+}
+
+/** Mutates a fixture match's `scheduled_at` directly — `notifyMatchReminder()`'s eligibility window
+ * is relative to `Date.now()` at test-run time, so the fixtures' own static timestamps can't exercise
+ * the "eligible" case; this puts a match's schedule wherever a given test needs it. */
+function setScheduledAt(matchId: number, iso: string | null): void {
+  const match = fakeDb.matches.find((m) => m.id === matchId);
+  if (match) match.scheduled_at = iso;
+}
+
+function setFinalScore(matchId: number, score: string | null): void {
+  const match = fakeDb.matches.find((m) => m.id === matchId);
+  if (match) match.final_score = score;
 }
 
 async function main() {
@@ -361,6 +374,98 @@ async function main() {
     await notifyMatchScoreReported(adminClient, 100);
     assert.equal(liveOpsErrors(100, 'discord_notify_score').length, 0, 'score-reported succeeded');
     assert.equal(liveOpsErrors(100, 'discord_notify_server_live').length, 1, 'the unrelated server-live failure is still live');
+  });
+
+  await test('notifyMatchReminder: no-ops without DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL', async () => {
+    delete process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
+    const { calls } = stubFetch();
+    await notifyMatchReminder(adminClient, 101);
+    assert.equal(calls.length, 0);
+  });
+
+  await test('notifyMatchReminder: posts a new "starting in 1 hour" message for an unplayed, imminently-scheduled match', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(101);
+    setScheduledAt(101, new Date(Date.now() + 55 * 60 * 1000).toISOString());
+
+    const { calls } = stubFetch();
+    await notifyMatchReminder(adminClient, 101);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'POST', 'a new message, not an edit of the server-live/live-score/score-reported lineage');
+    assert.equal(calls[0].url, 'https://discord.example/webhook?wait=true');
+    const embed = calls[0].body.embeds[0];
+    assert.equal(embed.title, 'Week 1 · Match 2');
+    assert.equal(embed.color, 0xfee75c, 'the reminder color is distinct from the other three notification kinds');
+    assert.match(embed.description, /Starting in 1 hour/);
+    assert.equal(embed.fields, undefined, 'no box score — the match hasn\'t been played yet');
+    assert.ok(discordState(101)?.reminder_sent_at, 'reminder_sent_at is claimed once posted');
+    assert.equal(discordState(101)?.notification_message_id, undefined, 'a separate message lineage — does not touch notification_message_id');
+  });
+
+  await test('notifyMatchReminder: no-ops if reminder_sent_at is already set (idempotent)', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(101);
+    setScheduledAt(101, new Date(Date.now() + 55 * 60 * 1000).toISOString());
+    fakeDb.match_discord_state.push({ match_id: 101, notification_message_id: null, thread_id: null, reminder_sent_at: new Date().toISOString() });
+
+    const { calls } = stubFetch();
+    await notifyMatchReminder(adminClient, 101);
+    assert.equal(calls.length, 0);
+  });
+
+  await test('notifyMatchReminder: no-ops once the match already has a final score', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(101);
+    setScheduledAt(101, new Date(Date.now() + 55 * 60 * 1000).toISOString());
+    setFinalScore(101, '13-9');
+    try {
+      const { calls } = stubFetch();
+      await notifyMatchReminder(adminClient, 101);
+      assert.equal(calls.length, 0);
+    } finally {
+      setFinalScore(101, null);
+    }
+  });
+
+  await test('notifyMatchReminder: no-ops when scheduled_at has been cleared since the job was queued', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(101);
+    setScheduledAt(101, null);
+
+    const { calls } = stubFetch();
+    await notifyMatchReminder(adminClient, 101);
+    assert.equal(calls.length, 0);
+  });
+
+  await test('notifyMatchReminder: no-ops when scheduled_at is already in the past', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(101);
+    setScheduledAt(101, new Date(Date.now() - 5 * 60 * 1000).toISOString());
+
+    const { calls } = stubFetch();
+    await notifyMatchReminder(adminClient, 101);
+    assert.equal(calls.length, 0);
+  });
+
+  await test('notifyMatchReminder: no-ops when scheduled_at is well outside the reminder window (rescheduled away from this job\'s target)', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(101);
+    setScheduledAt(101, new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString());
+
+    const { calls } = stubFetch();
+    await notifyMatchReminder(adminClient, 101);
+    assert.equal(calls.length, 0);
+  });
+
+  await test('notifyMatchReminder: two back-to-back calls for the same match only post once', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(101);
+    setScheduledAt(101, new Date(Date.now() + 55 * 60 * 1000).toISOString());
+
+    const { calls } = stubFetch();
+    await notifyMatchReminder(adminClient, 101);
+    await notifyMatchReminder(adminClient, 101);
+    assert.equal(calls.length, 1, 'the atomic claim on reminder_sent_at stops the second call from posting a duplicate');
   });
 
   delete process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;

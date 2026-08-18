@@ -3,14 +3,14 @@
 // failure never throws, matching the rest of this codebase's best-effort hooks (ops-errors.ts, the
 // score route's post-commit hooks via afterBestEffort()). A real failure (the webhook itself
 // erroring, not just being unconfigured) is recorded to ops_errors — entity 'match', operation
-// 'discord_notify_server_live'/'discord_notify_live_score'/'discord_notify_score' — so it's visible
-// in the admin console's Activity feed instead of only a Vercel function log nobody's tailing;
-// cleared automatically the next notification of that same kind that succeeds. The three
-// notifications use distinct operation keys (not a shared 'discord_notify') so one kind's failure
-// can't clear another's still-live one — see ops-errors.ts's own docstring on why `operation` is
-// part of the key.
+// 'discord_notify_server_live'/'discord_notify_live_score'/'discord_notify_score'/'discord_notify_reminder'
+// — so it's visible in the admin console's Activity feed instead of only a Vercel function log
+// nobody's tailing; cleared automatically the next notification of that same kind that succeeds.
+// Each notification kind uses a distinct operation key (not a shared 'discord_notify') so one kind's
+// failure can't clear another's still-live one — see ops-errors.ts's own docstring on why `operation`
+// is part of the key.
 //
-// All three are built from `getMatchMeta()` (seo/og.ts) — the same data the site's own link-preview
+// All four are built from `getMatchMeta()` (seo/og.ts) — the same data the site's own link-preview
 // OG card and meta description use when a match URL is unfurled — rather than re-deriving the
 // title/roster/map here.
 //
@@ -32,6 +32,15 @@
 // `notifyMatchScoreReported()` falls back to posting a new message if there's nothing to edit yet —
 // notifications were off when the server went live, that post failed, or the message was deleted out
 // from under the bot.
+//
+// `notifyMatchReminder()` posts a separate message (not an edit of the tracked
+// notification_message_id lineage above) roughly an hour before a scheduled match, called from
+// `POST /api/cron/match-reminder` — itself invoked once, per match, by a Postgres pg_cron job that
+// `schedule_match_reminder()` schedules for the exact minute whenever a match's `scheduled_at` is
+// set (see `src/app/api/matches/[id]/schedule/route.ts`). There is no polling and no retry: the
+// pg_cron job is one-shot and self-unschedules once it fires, so a failed post here has nothing
+// re-triggering it — `match_discord_state.reminder_sent_at` is claimed atomically before posting to
+// guard against a duplicate rather than a missed one.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getMatchMeta } from './seo/og';
@@ -46,9 +55,15 @@ type MatchMeta = NonNullable<Awaited<ReturnType<typeof getMatchMeta>>>;
 const COLOR_SERVER_LIVE = 0x57f287; // Discord's "green" — server provisioned, nothing played yet
 const COLOR_LIVE_SCORE = 0xed4245; // Discord's "red" — a round is actually in progress
 const COLOR_SCORE = 0x5865f2; // Discord's "blurple" — final result
+const COLOR_REMINDER = 0xfee75c; // Discord's "yellow" — distinct from the other three
 const OPERATION_SERVER_LIVE = 'discord_notify_server_live';
 const OPERATION_LIVE_SCORE = 'discord_notify_live_score';
 const OPERATION_SCORE = 'discord_notify_score';
+const OPERATION_REMINDER = 'discord_notify_reminder';
+// A pg_cron job fires this ~1h before scheduled_at by construction; this window just tolerates
+// clock skew/pg_net delivery lag while still catching the real failure mode it guards against — the
+// match having been rescheduled away from the time the job was originally queued for.
+const REMINDER_WINDOW_MS = 2 * 60 * 60 * 1000;
 
 type EmbedField = { name: string; value: string; inline?: boolean };
 type Embed = {
@@ -317,4 +332,55 @@ export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, ma
   }
   const messageId = await postNewEmbed(supabaseAdmin, matchId, OPERATION_SCORE, webhookUrl, content, embed);
   if (messageId) await rememberNotificationMessage(supabaseAdmin, matchId, messageId);
+}
+
+/** Posted by `POST /api/cron/match-reminder`, itself fired once by a one-shot Postgres pg_cron job
+ *  `schedule_match_reminder()` schedules for `scheduled_at - 1h` whenever a match is (re)scheduled.
+ *  `scheduled_at` is re-read here rather than trusted from the job's queue-time snapshot — a
+ *  reschedule/unschedule between queueing and firing must not post a stale reminder, which is also
+ *  why this checks a window around "now" rather than assuming the job fired exactly on time.
+ *
+ *  Claims `match_discord_state.reminder_sent_at` atomically (an `UPDATE ... WHERE reminder_sent_at
+ *  IS NULL`) before posting, not after — two racing calls for the same match must never both post,
+ *  which matters more here than the alternative failure mode it accepts: a webhook failure at the
+ *  exact moment of the claim leaves the reminder marked sent with nothing actually posted, and
+ *  nothing retries it, since the pg_cron job that triggered this is already consumed. That failure
+ *  is still recorded to ops_errors like any other, just without a second attempt — this notification
+ *  kind is inherently single-shot, unlike `notifyMatchLiveScore()`, which gets another try next
+ *  round. */
+export async function notifyMatchReminder(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
+  const webhookUrl = process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
+  if (!webhookUrl) return; // Not configured — skip before doing any DB work.
+
+  const { data: matchRow } = await supabaseAdmin.from('matches').select('scheduled_at').eq('id', matchId).maybeSingle();
+  const scheduledAt = (matchRow as { scheduled_at: string | null } | null)?.scheduled_at ?? null;
+  if (!scheduledAt) return; // Unscheduled since the job was queued.
+
+  const msUntilMatch = new Date(scheduledAt).getTime() - Date.now();
+  if (msUntilMatch <= 0 || msUntilMatch > REMINDER_WINDOW_MS) return; // Rescheduled away from this job's target time.
+
+  const meta = await getMatchMeta(matchId).catch(() => null);
+  if (!meta) return;
+  if (meta.score) return; // Already played.
+
+  // schedule_match_reminder() always upserts a match_discord_state row before this ever fires, but
+  // this doesn't rely on that invariant holding across the DB/app boundary — ON CONFLICT DO NOTHING
+  // first guarantees a row to claim, without ever clobbering an already-set reminder_sent_at.
+  await supabaseAdmin
+    .from('match_discord_state')
+    .upsert({ match_id: matchId, reminder_sent_at: null }, { onConflict: 'match_id', ignoreDuplicates: true });
+
+  const { data: claimed } = await supabaseAdmin
+    .from('match_discord_state')
+    .update({ reminder_sent_at: new Date().toISOString() })
+    .eq('match_id', matchId)
+    .is('reminder_sent_at', null)
+    .select('match_id');
+  if (!claimed || claimed.length === 0) return; // Already sent, or lost the race to a concurrent call.
+
+  const { content, embed } = buildMatchMessage(matchId, meta, {
+    statusLine: `⏰ **Starting in 1 hour**${meta.scheduledAt ? `\n${meta.scheduledAt}` : ''}`,
+    color: COLOR_REMINDER,
+  });
+  await postNewEmbed(supabaseAdmin, matchId, OPERATION_REMINDER, webhookUrl, content, embed);
 }

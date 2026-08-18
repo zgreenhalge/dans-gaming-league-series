@@ -1371,6 +1371,13 @@ export type Database = {
         }
         Returns: Json
       }
+      schedule_match_reminder: {
+        Args: {
+          p_match_id: number
+          p_scheduled_at: string | null
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       faction_side_type: "SHIRTS" | "SKINS"

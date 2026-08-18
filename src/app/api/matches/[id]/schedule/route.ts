@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { recordOpsError } from '@/lib/ops-errors';
 
 export async function PATCH(
   req: NextRequest,
@@ -71,6 +72,23 @@ export async function PATCH(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Best-effort: (re)schedules the 1-hour-out Discord reminder's one-shot pg_cron job for this
+  // match's new scheduled_at (or unschedules it if scheduled_at was cleared). Failure here must not
+  // fail the request — scheduled_at itself already committed, which is what the caller asked for.
+  // Wrapped in try/catch, not just an `.error` check, since an RPC call can also throw outright
+  // (a malformed args shape, a client-level error) rather than resolving with one.
+  try {
+    const { error: rpcError } = await supabaseAdmin.rpc('schedule_match_reminder', {
+      p_match_id: matchId,
+      p_scheduled_at: scheduled_at,
+    });
+    if (rpcError) {
+      await recordOpsError(supabaseAdmin, 'match', matchId, 'discord_notify_reminder', `Failed to schedule reminder: ${rpcError.message}`);
+    }
+  } catch (e) {
+    await recordOpsError(supabaseAdmin, 'match', matchId, 'discord_notify_reminder', `Failed to schedule reminder: ${(e as Error).message}`);
   }
 
   return NextResponse.json({ ok: true });
