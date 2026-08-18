@@ -15,7 +15,7 @@
 
 import assert from 'node:assert/strict';
 import { __setTestClient } from './supabase';
-import { createFakeSupabaseClient, type Row } from './test-support/fakeSupabase';
+import { createFakeSupabaseClient, type Row, type RpcHandler } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 
 const fakeDb = buildFakeDb();
@@ -379,6 +379,70 @@ async function main() {
     const result = await syncSeasonScheduledEvents(adminClient, 1);
     assert.ok(!('error' in result));
     assert.equal(liveOpsErrors('season', 1, 'discord_event_sync').length, 0);
+  });
+
+  // ─── schedule_match_reminder — the other write path for matches.scheduled_at ───────────────────
+  // Match 101 is already cached to event '3333...' by this point (see the forced-rescan test above),
+  // so reusing that same event id with a new start time exercises a genuine reschedule — a `synced`
+  // write — without needing to stub any thread messages. Both tests restore `matches.scheduled_at`
+  // afterward since the fixture's match rows are shared objects, not copies.
+
+  await test('syncSeasonScheduledEvents: a "synced" write also calls schedule_match_reminder — this is the other write path for matches.scheduled_at, not just the manual schedule route', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = GUILD_ID;
+    const match101 = fakeDb.matches.find((m) => m.id === 101)!;
+    const originalScheduledAt = match101.scheduled_at;
+    const rpcCalls: Record<string, unknown>[] = [];
+    const rpcHandlers: Record<string, RpcHandler> = {
+      schedule_match_reminder: (args) => { rpcCalls.push(args); return true; },
+    };
+    const clientWithRpc = createFakeSupabaseClient(fakeDb, rpcHandlers);
+
+    stubDiscord({
+      threads: [{ id: 'thread-101', name: 'Week 1 Game 2', parent_id: 'channel-season-5' }],
+      events: [{ id: '3333333333333333333', scheduled_start_time: '2026-01-29T18:00:00.000Z', status: 1 }],
+    });
+    try {
+      const result = await syncSeasonScheduledEvents(clientWithRpc, 1);
+      assert.ok(!('error' in result));
+      const ok = result as Exclude<typeof result, { error: string }>;
+      const m101 = ok.matches.find((m) => m.matchId === 101)!;
+      assert.equal(m101.status, 'synced');
+
+      assert.equal(rpcCalls.length, 1);
+      assert.deepEqual(rpcCalls[0], { p_match_id: 101, p_scheduled_at: '2026-01-29T18:00:00.000Z' });
+    } finally {
+      match101.scheduled_at = originalScheduledAt;
+    }
+  });
+
+  await test('syncSeasonScheduledEvents: a "synced" write is best-effort against a schedule_match_reminder failure — the sync itself still reports success', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = GUILD_ID;
+    const match101 = fakeDb.matches.find((m) => m.id === 101)!;
+    const originalScheduledAt = match101.scheduled_at;
+    const clientWithFailingRpc = createFakeSupabaseClient(fakeDb, {
+      schedule_match_reminder: () => { throw new Error('vault secret missing'); },
+    });
+
+    stubDiscord({
+      threads: [{ id: 'thread-101', name: 'Week 1 Game 2', parent_id: 'channel-season-5' }],
+      events: [{ id: '3333333333333333333', scheduled_start_time: '2026-02-01T18:00:00.000Z', status: 1 }],
+    });
+    try {
+      const result = await syncSeasonScheduledEvents(clientWithFailingRpc, 1);
+      assert.ok(!('error' in result));
+      const ok = result as Exclude<typeof result, { error: string }>;
+      const m101 = ok.matches.find((m) => m.matchId === 101)!;
+      assert.equal(m101.status, 'synced', 'the scheduled_at sync itself is unaffected by a reminder-scheduling failure');
+
+      assert.ok(
+        fakeDb.ops_errors.some((e) => e.entity_type === 'match' && e.entity_id === 101 && e.operation === 'discord_schedule_reminder' && e.dismissed_at === null),
+        'the reminder-scheduling failure is still recorded',
+      );
+    } finally {
+      match101.scheduled_at = originalScheduledAt;
+    }
   });
 
   delete process.env.DISCORD_BOT_TOKEN;
