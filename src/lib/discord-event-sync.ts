@@ -341,6 +341,26 @@ async function syncMatchScheduledEvent(
     return { matchId: match.id, title, status: 'failed', detail };
   }
   await clearOpsError(supabaseAdmin, 'match', match.id, EVENT_SYNC_OPERATION);
+
+  // Best-effort, mirroring PATCH /api/matches/[id]/schedule/route.ts's own call: this is the other
+  // write path for matches.scheduled_at (the route only covers a human editing it by hand), and the
+  // 1-hour reminder's one-shot pg_cron job needs (re)scheduling here too, or a match whose time only
+  // ever comes from Discord event sync would never get a reminder scheduled at all. No afterBestEffort()
+  // here — this file runs as a standalone script (scripts/discord-event-sync.ts, via GitHub Actions),
+  // not a Next.js request, so there's no response to defer past.
+  try {
+    const { data: scheduled, error: rpcError } = await supabaseAdmin.rpc('schedule_match_reminder', {
+      p_match_id: match.id,
+      p_scheduled_at: event.scheduled_start_time,
+    });
+    if (rpcError) throw rpcError;
+    if (scheduled) {
+      await clearOpsError(supabaseAdmin, 'match', match.id, 'discord_schedule_reminder');
+    }
+  } catch (e) {
+    await recordOpsError(supabaseAdmin, 'match', match.id, 'discord_schedule_reminder', `Failed to schedule reminder: ${(e as Error).message}`);
+  }
+
   return { matchId: match.id, title, status: 'synced', detail: `Synced to ${event.scheduled_start_time}` };
 }
 

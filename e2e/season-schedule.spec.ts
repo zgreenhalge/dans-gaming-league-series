@@ -27,7 +27,10 @@ test('generating a schedule, then confirming it, materializes real weeks and mat
   await loginAs(page, 'Zach'); // the seeded admin
 
   await page.goto(`/admin/seasons/schedule/${season.seasonId}`);
-  await expect(page.getByText(/No schedule yet/i)).toBeVisible();
+  // .first(): same reasoning as the `Match 1` locator below — CI's cold-start `next dev` compile
+  // of this not-yet-visited route can paint the empty-state text twice before settling, same
+  // symptom class Playwright strict mode would otherwise fail on.
+  await expect(page.getByText(/No schedule yet/i).first()).toBeVisible();
 
   await page.getByRole('button', { name: 'Generate Schedule' }).click();
   // Regenerates the page's server data via router.refresh() — wait for the draft's weeks to render.

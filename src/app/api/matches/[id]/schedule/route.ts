@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
+import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
+import { afterBestEffort } from '@/lib/after';
 
 export async function PATCH(
   req: NextRequest,
@@ -72,6 +74,38 @@ export async function PATCH(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Best-effort, deferred past the response (same afterBestEffort() shape score/route.ts uses for
+  // its own post-commit side effects): (re)schedules the 1-hour-out Discord reminder's one-shot
+  // pg_cron job for this match's new scheduled_at (or unschedules it if scheduled_at was cleared).
+  // Failure here must not fail the request — scheduled_at itself already committed, which is what
+  // the caller asked for.
+  //
+  // Recorded under 'discord_schedule_reminder', distinct from notifyMatchReminder()'s own
+  // 'discord_notify_reminder' — a failure to *schedule* the reminder (this RPC, or the SQL
+  // function's own Vault-secret-missing case) and a failure to *deliver* it (a real webhook error)
+  // are different failures with different fixes, and ops_errors keys them by operation specifically
+  // so one's success can't silently clear the other's still-live error for the same match.
+  afterBestEffort(
+    `discord-schedule-reminder: match ${matchId}`,
+    async () => {
+      const { data: scheduled, error: rpcError } = await supabaseAdmin.rpc('schedule_match_reminder', {
+        p_match_id: matchId,
+        p_scheduled_at: scheduled_at,
+      });
+      if (rpcError) throw rpcError;
+      // `false` means schedule_match_reminder()'s own unconditional cleanup ran but scheduling
+      // itself stopped early (e.g. a missing Vault secret) — it already recorded its own specific
+      // ops_errors row for that in the same call, so this leaves it alone rather than clearing (or
+      // overwriting with a vaguer message) an error it was just told about.
+      if (scheduled) {
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'discord_schedule_reminder');
+      }
+    },
+    async (err) => {
+      await recordOpsError(supabaseAdmin, 'match', matchId, 'discord_schedule_reminder', `Failed to schedule reminder: ${(err as Error).message}`);
+    },
+  );
 
   return NextResponse.json({ ok: true });
 }

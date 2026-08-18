@@ -96,6 +96,14 @@ jobs:
       # pinned jwt_secret, there's nothing to "look up" at runtime anyway.
       NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjIxNDU5MTY4MDB9.SD8OGMUA7SztCSQyoNK_up2hNla9czXlhL7RvNeh1kw
       SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MjE0NTkxNjgwMH0.Q_XOunt2yFrXAkYRNeh5JgAO_M_zLBEh7OwNnfEJjXU
+      # NextAuth reads its signing secret from `NEXTAUTH_SECRET` when `authOptions.js` doesn't pass
+      # one explicitly. Left unset, it falls back to a random per-instantiation secret — `next dev`
+      # re-instantiates the auth route's module on recompiles, so a session cookie encrypted before
+      # a recompile fails to decrypt after ("JWEDecryptionFailed"), breaking any test that logs in
+      # via the dev-mock providers and then navigates. Fixed values, same pattern as the demo JWTs
+      # above; NEXTAUTH_URL matches playwright.config.ts's baseURL (PLAYWRIGHT_PORT, default 3100).
+      NEXTAUTH_SECRET: e2e-test-secret-do-not-use-in-prod
+      NEXTAUTH_URL: http://localhost:3100
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -121,7 +129,10 @@ jobs:
         run: supabase start
 
       - name: Export local Supabase connection env vars
-        run: supabase status -o env >> "$GITHUB_ENV"
+        # `-o env` quotes every value (`API_URL="http://..."`). `$GITHUB_ENV` isn't shell-parsed —
+        # it takes everything after the first `=` as the literal value, so those quotes would
+        # otherwise end up embedded in the env var itself and fail URL validation downstream.
+        run: supabase status -o env | sed -E 's/^([A-Za-z_][A-Za-z0-9_]*)="(.*)"$/\1=\2/' >> "$GITHUB_ENV"
 
       # `$GITHUB_ENV` writes only become real env vars starting the *next* step, not later in the
       # same script that wrote them — this has to be its own step, not folded into the one above,
