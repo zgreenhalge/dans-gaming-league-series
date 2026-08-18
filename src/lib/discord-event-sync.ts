@@ -172,10 +172,9 @@ function fetchMessagesPage(
  *  link to an unrelated server's event from ever being picked up. */
 function extractEventId(message: DiscordMessage): string | null {
   const haystack = [message.content, ...(message.embeds ?? []).map((e) => e.url ?? '')].join(' ');
-  const direct = haystack.match(/discord\.com\/events\/[^/\s]+\/(\d+)/);
-  if (direct) return direct[1];
-  const invite = haystack.match(/discord\.(?:gg|com\/invite)\/\S+?\?event=(\d+)/);
-  return invite?.[1] ?? null;
+  const direct = haystack.match(/discord\.com\/events\/[^/\s]+\/(\d+)/)?.[1];
+  const invite = haystack.match(/discord\.(?:gg|com\/invite)\/\S+?\?event=(\d+)/)?.[1];
+  return direct ?? invite ?? null;
 }
 
 interface ThreadScan {
