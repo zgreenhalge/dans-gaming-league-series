@@ -91,7 +91,10 @@ async function resolveSeasonForumChannel(
   return { channelId: channel.id };
 }
 
-function threadTitle(weekNumber: number, matchNumber: number): string {
+/** The naming convention shared by a match's Discord thread and the scheduled event players create
+ *  in it — `discord-event-sync.ts`'s only correlation between the two, since Discord's scheduled-
+ *  event API carries no structural link to a forum thread. */
+export function threadTitle(weekNumber: number, matchNumber: number): string {
   return `Week ${weekNumber} Game ${matchNumber}`;
 }
 
