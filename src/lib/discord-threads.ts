@@ -61,8 +61,9 @@ export async function discordErrorDetail(prefix: string, res: Response): Promise
 /** Resolves a season's forum channel by its `season-{N}` name — Discord's thread-creation endpoint
  *  needs a channel id, not a name, and there's no lookup-by-name API. Distinguishes "no such channel"
  *  from "wrong channel type" in its error, since a misnamed or non-forum channel is a plausible
- *  first-attempt setup mistake distinct from a permissions problem. */
-async function resolveSeasonForumChannel(
+ *  first-attempt setup mistake distinct from a permissions problem. Also the entry point
+ *  `discord-event-sync.ts` uses to find a season's threads in the first place. */
+export async function resolveSeasonForumChannel(
   guildId: string,
   token: string,
   seasonName: string,
@@ -91,11 +92,14 @@ async function resolveSeasonForumChannel(
   return { channelId: channel.id };
 }
 
-function threadTitle(weekNumber: number, matchNumber: number): string {
+/** A match's Discord thread title, "Week N Game M" — also how `discord-event-sync.ts` finds a
+ *  match's thread in the first place (via `listChannelThreads()`'s title match), independently of
+ *  `match_discord_state`. */
+export function threadTitle(weekNumber: number, matchNumber: number): string {
   return `Week ${weekNumber} Game ${matchNumber}`;
 }
 
-interface DiscordThread {
+export interface DiscordThread {
   id: string;
   name: string;
   parent_id?: string | null;
@@ -106,8 +110,9 @@ interface DiscordThread {
  *  threads. The active-threads endpoint is guild-wide (Discord has no per-channel version), hence the
  *  `parent_id` filter; the archived one is already channel-scoped. Read once per `publishWeekThreads()`
  *  call and matched by title against every match in the target week, rather than trusting
- *  `match_discord_state` — see this file's header. */
-async function listChannelThreads(
+ *  `match_discord_state` — see this file's header. `discord-event-sync.ts` reuses this same
+ *  title-matched lookup to find each match's thread id before scanning it for a shared event. */
+export async function listChannelThreads(
   guildId: string,
   channelId: string,
   token: string,

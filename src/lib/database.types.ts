@@ -349,19 +349,25 @@ export type Database = {
       }
       match_discord_state: {
         Row: {
+          event_id: string | null
           match_id: number
+          message_checkpoint: string | null
           notification_message_id: string | null
           reminder_sent_at: string | null
           thread_id: string | null
         }
         Insert: {
+          event_id?: string | null
           match_id: number
+          message_checkpoint?: string | null
           notification_message_id?: string | null
           reminder_sent_at?: string | null
           thread_id?: string | null
         }
         Update: {
+          event_id?: string | null
           match_id?: number
+          message_checkpoint?: string | null
           notification_message_id?: string | null
           reminder_sent_at?: string | null
           thread_id?: string | null

@@ -282,7 +282,9 @@ create table public.match_discord_state (
   match_id bigint primary key,
   reminder_sent_at timestamptz,
   thread_id text,
-  notification_message_id text
+  notification_message_id text,
+  event_id text,
+  message_checkpoint text
 );
 
 create table public.match_server_state (

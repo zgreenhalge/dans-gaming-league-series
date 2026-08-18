@@ -1,0 +1,46 @@
+# discord-event-sync (#398)
+#
+# Watches each unplayed match's own Discord thread for the earliest scheduled-event share link
+# (Discord's own "Share to Channel" action posts `discord.com/events/{guild}/{event}`) and writes
+# that event's start time into `matches.scheduled_at` — see `scripts/discord-event-sync.ts` /
+# `src/lib/discord-event-sync.ts` for the correlation and idempotency rules. No gateway bot needed,
+# just a periodic poll against whichever regular season is currently `ACTIVE`.
+
+name: discord-event-sync
+
+on:
+  schedule:
+    - cron: '*/15 * * * *' # every 15 minutes, so a newly created event shows up on the site promptly
+  workflow_dispatch: {}
+
+concurrency:
+  group: discord-event-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+      DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync Discord scheduled-event times
+        run: npx tsx scripts/discord-event-sync.ts

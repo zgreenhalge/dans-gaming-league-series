@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { Player, Season, Match, PlayerMatchStat, ReplayStatus } from '../types';
 import { extractSeasonNumber, compareMatchRefDesc } from '../util';
@@ -57,8 +58,11 @@ export async function getPlayerNameHistory(playerId: number): Promise<PlayerName
   return (data ?? []) as PlayerNameChange[];
 }
 
-export async function getPlayersById(): Promise<Map<number, Player>> {
-  const { data, error } = await supabase.from('players').select('*');
+/** `client` defaults to the app's anon-key client but accepts an admin client for callers running
+ *  outside a Next.js request (a GitHub Actions script, which has no `NEXT_PUBLIC_SUPABASE_ANON_KEY`) —
+ *  same opt-in pattern as `getMatchIdsForMap()` (`maps.ts`). */
+export async function getPlayersById(client: SupabaseClient = supabase): Promise<Map<number, Player>> {
+  const { data, error } = await client.from('players').select('*');
   if (error) throw error;
   const map = new Map<number, Player>();
   for (const p of (data ?? []) as Player[]) map.set(p.id, p);
