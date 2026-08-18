@@ -17,6 +17,11 @@
 -- the reminder and a failure to *deliver* it are different problems with different fixes, and
 -- ops_errors keys by (entity_type, entity_id, operation) specifically so one's success can't
 -- silently clear the other's still-live error for the same match.
+--
+-- Postgres can't change a function's return type in place (void -> boolean), so the prior
+-- definition has to be dropped first.
+drop function if exists public.schedule_match_reminder(integer, timestamptz);
+
 create or replace function public.schedule_match_reminder(
   p_match_id integer,
   p_scheduled_at timestamptz
