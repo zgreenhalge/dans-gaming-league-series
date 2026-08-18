@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { Player, Season } from '../types';
 import { extractSeasonNumber } from '../util';
@@ -10,8 +11,11 @@ export interface SeasonRosterEntry {
   discord_id: string | null;
 }
 
-export async function getSeasons(): Promise<Season[]> {
-  const { data, error } = await supabase
+/** `client` defaults to the app's anon-key client but accepts an admin client for callers running
+ *  outside a Next.js request (a GitHub Actions script, which has no `NEXT_PUBLIC_SUPABASE_ANON_KEY`) —
+ *  same opt-in pattern as `getMatchIdsForMap()` (`maps.ts`). */
+export async function getSeasons(client: SupabaseClient = supabase): Promise<Season[]> {
+  const { data, error } = await client
     .from('seasons')
     .select('*')
     .order('id');
@@ -24,13 +28,13 @@ export async function getSeasons(): Promise<Season[]> {
  *  architecture.md's season status lifecycle), so this always excludes gauntlets rather than
  *  picking whichever `ACTIVE` row sorts first. Ties (more than one `ACTIVE` regular season) resolve
  *  to the lowest id, same as the home page's own `active[0]` — not expected in practice. */
-export async function getActiveRegularSeason(): Promise<Season | null> {
-  const seasons = await getSeasons();
+export async function getActiveRegularSeason(client: SupabaseClient = supabase): Promise<Season | null> {
+  const seasons = await getSeasons(client);
   return seasons.find((s) => !s.is_gauntlet && s.status === 'ACTIVE') ?? null;
 }
 
-export async function getSeason(id: number): Promise<Season | null> {
-  const { data, error } = await supabase
+export async function getSeason(id: number, client: SupabaseClient = supabase): Promise<Season | null> {
+  const { data, error } = await client
     .from('seasons')
     .select('*')
     .eq('id', id)

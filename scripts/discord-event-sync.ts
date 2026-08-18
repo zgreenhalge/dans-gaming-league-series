@@ -11,13 +11,14 @@ import { syncSeasonScheduledEvents } from '../src/lib/discord-event-sync';
 import { getAdminClient } from '../src/lib/supabase-admin';
 
 async function main() {
-  const season = await getActiveRegularSeason();
+  const admin = getAdminClient();
+  const season = await getActiveRegularSeason(admin);
   if (!season) {
     console.log('No ACTIVE regular season — nothing to sync.');
     return;
   }
 
-  const result = await syncSeasonScheduledEvents(getAdminClient(), season.id);
+  const result = await syncSeasonScheduledEvents(admin, season.id);
   if ('error' in result) {
     console.error(`✖ ${result.error}`);
     process.exit(1);

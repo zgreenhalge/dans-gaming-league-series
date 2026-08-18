@@ -52,18 +52,21 @@ function buildRosterStats(roster: RosterStatRow[], faction: Faction, players: Ma
 
 /** Weeks + matches + per-match Shirts/Skins rosters (from player_match_stats) — one embedded
  *  query (weeks -> matches -> player_match_stats) instead of three sequential round trips, each
- *  depending on the previous one's ids. */
+ *  depending on the previous one's ids. `client` defaults to the app's anon-key client but accepts
+ *  an admin client for callers running outside a Next.js request (a GitHub Actions script, which has
+ *  no `NEXT_PUBLIC_SUPABASE_ANON_KEY`) — same opt-in pattern as `getMatchIdsForMap()` (`maps.ts`). */
 export async function getSeasonSchedule(
   seasonId: number,
+  client: SupabaseClient = supabase,
 ): Promise<WeekWithMatches[]> {
   const [{ data: weeks, error: wErr }, players] = await Promise.all([
-    supabase
+    client
       .from('weeks')
       .select('*, matches(*, player_match_stats(*))')
       .eq('season_id', seasonId)
       .order('week_number')
       .order('match_number', { referencedTable: 'matches' }),
-    getPlayersById(),
+    getPlayersById(client),
   ]);
   if (wErr) throw wErr;
   // Supabase types embedded to-many relations as arrays already, so no unwrap needed at that

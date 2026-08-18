@@ -48,7 +48,8 @@
 // succeeds (a scan failure by the next clean scan, a write failure by the next successful write) rather
 // than waiting on some later, unrelated step. Each unplayed match's thread lives on its own Discord
 // channel, so unlike `publishWeekThreads()`'s deliberately sequential thread *creation* (rate-limited
-// on one shared per-channel route), scanning them is independent per match and safe to run concurrently.
+// on one shared per-channel route), scanning them is independent per match and runs concurrently, just
+// bounded (`SCAN_CONCURRENCY`) rather than fully unbounded — see its own comment for why.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSeason, getSeasonSchedule } from './queries';
@@ -57,6 +58,14 @@ import { discordErrorDetail, resolveSeasonForumChannel, listChannelThreads, thre
 import { recordOpsError, clearOpsError } from './ops-errors';
 
 const EVENT_SYNC_OPERATION = 'discord_event_sync';
+// Caps how many matches scan their thread concurrently. Each match's thread is on its own per-channel
+// rate-limit bucket, so this isn't `publishWeekThreads()`'s reason for going fully sequential (one
+// shared thread-creation route) — but a season with many matches all needing a first-time scan at
+// once (e.g. right after this feature first goes live against an already-in-progress season) could
+// still burst past Discord's global per-bot rate limit if every match's up-to-`MAX_MESSAGE_PAGES`
+// walk fired in the same instant. A small concurrency cap bounds that worst case while leaving the
+// steady-state case (a handful of matches, almost all cache hits) effectively as parallel as before.
+const SCAN_CONCURRENCY = 5;
 const MESSAGE_PAGE_SIZE = 100;
 // Bounds the worst case for an unexpectedly long-lived thread's first-time scan — 10 pages
 // comfortably covers any realistic weekly match thread, which these are meant to be short-lived by
@@ -97,6 +106,22 @@ export interface EventSyncResult {
 export interface SyncSeasonEventsResult {
   seasonName: string;
   matches: EventSyncResult[];
+}
+
+/** Runs `fn` over `items` with at most `limit` in flight at once, preserving input order in the
+ *  returned array regardless of which one finishes first — see `SCAN_CONCURRENCY`'s comment for why
+ *  the per-match scan loop needs a cap instead of a single unbounded `Promise.all`. */
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }
 
 /** One Discord GET, normalized to either its parsed JSON or a labeled `{ error }` — the shared shell
@@ -262,7 +287,7 @@ async function syncMatchScheduledEvent(
 
     // Persisted regardless of whether this scan found anything, so the next poll only ever looks at
     // what's new from here rather than re-covering ground already ruled out.
-    await supabaseAdmin.from('match_discord_state').upsert(
+    const { error: stateError } = await supabaseAdmin.from('match_discord_state').upsert(
       {
         match_id: match.id,
         thread_id: threadId,
@@ -271,6 +296,11 @@ async function syncMatchScheduledEvent(
       },
       { onConflict: 'match_id' },
     );
+    if (stateError) {
+      const detail = `Writing match_discord_state failed: ${stateError.message}`;
+      await recordOpsError(supabaseAdmin, 'match', match.id, EVENT_SYNC_OPERATION, detail);
+      return { matchId: match.id, title, status: 'failed', detail };
+    }
     eventId = scan.eventId;
   }
 
@@ -283,7 +313,15 @@ async function syncMatchScheduledEvent(
     // The cached event vanished or is no longer live. Also resets the checkpoint, forcing a full
     // rescan next time rather than a cheap resume — see this file's header for why a resume alone
     // can't be trusted to find whatever's actually earliest now.
-    await supabaseAdmin.from('match_discord_state').update({ event_id: null, message_checkpoint: null }).eq('match_id', match.id);
+    const { error: clearError } = await supabaseAdmin
+      .from('match_discord_state')
+      .update({ event_id: null, message_checkpoint: null })
+      .eq('match_id', match.id);
+    if (clearError) {
+      const detail = `Clearing the stale cached event failed: ${clearError.message}`;
+      await recordOpsError(supabaseAdmin, 'match', match.id, EVENT_SYNC_OPERATION, detail);
+      return { matchId: match.id, title, status: 'failed', detail };
+    }
     return { matchId: match.id, title, status: 'no_event', detail: `Shared event ${eventId} is no longer scheduled` };
   }
 
@@ -311,7 +349,7 @@ export async function syncSeasonScheduledEvents(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
 ): Promise<SyncSeasonEventsResult | { error: string }> {
-  const season = await getSeason(seasonId);
+  const season = await getSeason(seasonId, supabaseAdmin);
   if (!season) return { error: 'Season not found' };
   if (season.is_gauntlet) return { error: 'Gauntlet seasons do not use weekly match threads' };
 
@@ -319,7 +357,7 @@ export async function syncSeasonScheduledEvents(
   const guildId = process.env.DISCORD_GUILD_ID;
   if (!token || !guildId) return { error: 'Discord is not configured (DISCORD_BOT_TOKEN / DISCORD_GUILD_ID)' };
 
-  const schedule = await getSeasonSchedule(seasonId);
+  const schedule = await getSeasonSchedule(seasonId, supabaseAdmin);
   const unplayedByTitle = new Map<string, { id: number; scheduled_at: string | null }>();
   for (const week of schedule) {
     for (const match of week.matches) {
@@ -357,13 +395,14 @@ export async function syncSeasonScheduledEvents(
     ((stateRowsResult.data ?? []) as MatchDiscordState[]).map((r) => [r.match_id, r]),
   );
 
-  const results = await Promise.all(
-    [...unplayedByTitle.entries()].map(([title, match]) =>
+  const results = await mapWithConcurrency(
+    [...unplayedByTitle.entries()],
+    SCAN_CONCURRENCY,
+    ([title, match]) =>
       syncMatchScheduledEvent(
         supabaseAdmin, guildId, token, title, match,
         threadIdByTitle.get(title), stateByMatchId.get(match.id), eventsById,
       ),
-    ),
   );
 
   return { seasonName: season.name, matches: results };
