@@ -159,6 +159,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | Discord slash commands (`/leaderboard`, `/scheduled`, `/player`, `/name-color`) | `src/lib/discordInteractions.ts` (Ed25519 verification, response shapes), `src/lib/discord-commands.ts` (handlers), `src/app/api/discord/interactions/route.ts`, `scripts/register-discord-commands.ts` (registers the command *definitions*, separate from serving them) |
 | Discord weekly match-thread publish (`season-{N}` forum channel, `match_discord_state.thread_id`) | `src/lib/discord-threads.ts` (`publishWeekThreads()`), `src/app/api/seasons/[id]/discord-threads/route.ts`, `src/components/DiscordThreadPublisher.tsx` (admin console → Manage → Season) |
 | Discord match-thread close on score report | `src/lib/discord-threads.ts` (`closeMatchThread()`), hooked from `src/app/api/matches/[id]/score/route.ts` alongside `notifyMatchScoreReported()` |
+| Discord scheduled-event time sync-back (title-matched to a match's thread, no `match_discord_state` dependency) | `src/lib/discord-event-sync.ts` (`syncSeasonScheduledEvents()`), `scripts/discord-event-sync.ts`, `.github/workflows/discord-event-sync.yml` (cron) |
 
 ## Conventions to know before reading the query layer
 
