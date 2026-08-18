@@ -84,6 +84,17 @@ function setFinalScore(matchId: number, score: string | null): void {
   if (match) match.final_score = score;
 }
 
+/** Shared setup+assertion for the several notifyMatchReminder() cases that differ only in what
+ * scheduled_at is set to before the call — all of them expect the same "didn't post" outcome. */
+async function assertReminderNoOp(scheduledAt: string | null, why: string): Promise<void> {
+  process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+  resetDiscordState(101);
+  setScheduledAt(101, scheduledAt);
+  const { calls } = stubFetch();
+  await notifyMatchReminder(adminClient, 101);
+  assert.equal(calls.length, 0, why);
+}
+
 async function main() {
   await test('notifyMatchServerLive: no-ops without DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL', async () => {
     delete process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
@@ -427,35 +438,14 @@ async function main() {
     }
   });
 
-  await test('notifyMatchReminder: no-ops when scheduled_at has been cleared since the job was queued', async () => {
-    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
-    resetDiscordState(101);
-    setScheduledAt(101, null);
+  await test('notifyMatchReminder: no-ops when scheduled_at has been cleared since the job was queued', () =>
+    assertReminderNoOp(null, 'unscheduled since the job was queued'));
 
-    const { calls } = stubFetch();
-    await notifyMatchReminder(adminClient, 101);
-    assert.equal(calls.length, 0);
-  });
+  await test('notifyMatchReminder: no-ops when scheduled_at is already in the past', () =>
+    assertReminderNoOp(new Date(Date.now() - 5 * 60 * 1000).toISOString(), 'already past'));
 
-  await test('notifyMatchReminder: no-ops when scheduled_at is already in the past', async () => {
-    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
-    resetDiscordState(101);
-    setScheduledAt(101, new Date(Date.now() - 5 * 60 * 1000).toISOString());
-
-    const { calls } = stubFetch();
-    await notifyMatchReminder(adminClient, 101);
-    assert.equal(calls.length, 0);
-  });
-
-  await test('notifyMatchReminder: no-ops when scheduled_at is well outside the reminder window (rescheduled away from this job\'s target)', async () => {
-    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
-    resetDiscordState(101);
-    setScheduledAt(101, new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString());
-
-    const { calls } = stubFetch();
-    await notifyMatchReminder(adminClient, 101);
-    assert.equal(calls.length, 0);
-  });
+  await test('notifyMatchReminder: no-ops when scheduled_at is well outside the reminder window (rescheduled away from this job\'s target)', () =>
+    assertReminderNoOp(new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(), 'outside the eligibility window'));
 
   await test('notifyMatchReminder: two back-to-back calls for the same match only post once', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';

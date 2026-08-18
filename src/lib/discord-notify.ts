@@ -352,16 +352,17 @@ export async function notifyMatchReminder(supabaseAdmin: SupabaseClient, matchId
   const webhookUrl = process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.
 
-  const { data: matchRow } = await supabaseAdmin.from('matches').select('scheduled_at').eq('id', matchId).maybeSingle();
-  const scheduledAt = (matchRow as { scheduled_at: string | null } | null)?.scheduled_at ?? null;
-  if (!scheduledAt) return; // Unscheduled since the job was queued.
-
-  const msUntilMatch = new Date(scheduledAt).getTime() - Date.now();
-  if (msUntilMatch <= 0 || msUntilMatch > REMINDER_WINDOW_MS) return; // Rescheduled away from this job's target time.
-
+  // A single getMatchMeta() read covers everything below (scheduledAtRaw, score) — no separate
+  // matches pre-check, since the eligibility window rarely excludes anything in practice (the
+  // pg_cron job that calls this already computed the right fire time; only a reschedule in the gap
+  // makes it miss) and a pre-check would just add a redundant round trip to the common case.
   const meta = await getMatchMeta(matchId).catch(() => null);
   if (!meta) return;
+  if (!meta.scheduledAtRaw) return; // Unscheduled since the job was queued.
   if (meta.score) return; // Already played.
+
+  const msUntilMatch = new Date(meta.scheduledAtRaw).getTime() - Date.now();
+  if (msUntilMatch <= 0 || msUntilMatch > REMINDER_WINDOW_MS) return; // Rescheduled away from this job's target time.
 
   // schedule_match_reminder() always upserts a match_discord_state row before this ever fires, but
   // this doesn't rely on that invariant holding across the DB/app boundary — ON CONFLICT DO NOTHING

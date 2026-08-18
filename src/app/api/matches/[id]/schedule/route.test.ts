@@ -10,6 +10,7 @@
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
+import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
 import { createFakeSupabaseClient, type RpcHandler } from '@/lib/test-support/fakeSupabase';
 import { buildFakeDb } from '@/lib/test-support/fixtures';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
@@ -81,6 +82,7 @@ async function main() {
   });
 
   await test('PATCH — schedules the match and calls schedule_match_reminder with the new time', async () => {
+    __setTestAfterMode(true);
     const { calls, handler } = recordingRpc();
     const db = installFixture({ schedule_match_reminder: handler });
     const iso = '2026-09-01T18:00:00.000Z';
@@ -88,11 +90,15 @@ async function main() {
     const res = await call(MATCH_ID, ADMIN_ID, { scheduled_at: iso });
     assert.equal(res.status, 200);
     assert.equal(db.matches.find((m) => m.id === MATCH_ID)?.scheduled_at, iso);
+
+    await __flushTestAfter();
     assert.equal(calls.length, 1);
     assert.deepEqual(calls[0], { p_match_id: MATCH_ID, p_scheduled_at: iso });
+    __setTestAfterMode(false);
   });
 
   await test('PATCH — clearing scheduled_at (null) also calls schedule_match_reminder, with null', async () => {
+    __setTestAfterMode(true);
     const { calls, handler } = recordingRpc();
     const db = installFixture({ schedule_match_reminder: handler });
     db.matches.find((m) => m.id === MATCH_ID)!.scheduled_at = '2026-09-01T18:00:00.000Z';
@@ -100,11 +106,15 @@ async function main() {
     const res = await call(MATCH_ID, ADMIN_ID, { scheduled_at: null });
     assert.equal(res.status, 200);
     assert.equal(db.matches.find((m) => m.id === MATCH_ID)?.scheduled_at, null);
+
+    await __flushTestAfter();
     assert.equal(calls.length, 1);
     assert.deepEqual(calls[0], { p_match_id: MATCH_ID, p_scheduled_at: null });
+    __setTestAfterMode(false);
   });
 
-  await test('PATCH — an RPC failure is best-effort: the request still succeeds and it\'s recorded to ops_errors', async () => {
+  await test('PATCH — an RPC failure is best-effort: the request still succeeds and it\'s recorded to ops_errors under its own operation key', async () => {
+    __setTestAfterMode(true);
     const db = installFixture({
       schedule_match_reminder: () => {
         throw new Error('vault secret missing');
@@ -113,10 +123,31 @@ async function main() {
 
     const res = await call(MATCH_ID, ADMIN_ID, { scheduled_at: '2026-09-01T18:00:00.000Z' });
     assert.equal(res.status, 200, 'scheduled_at already committed — an RPC failure must not fail the request');
+
+    await __flushTestAfter();
     assert.ok(
-      db.ops_errors.some((e) => e.entity_type === 'match' && e.entity_id === MATCH_ID && e.operation === 'discord_notify_reminder'),
+      db.ops_errors.some((e) => e.entity_type === 'match' && e.entity_id === MATCH_ID && e.operation === 'discord_schedule_reminder'),
       'the failure is still visible in the admin console\'s Activity feed',
     );
+    __setTestAfterMode(false);
+  });
+
+  await test('PATCH — a successful reschedule clears a prior scheduling failure for the same match', async () => {
+    __setTestAfterMode(true);
+    const db = installFixture({ schedule_match_reminder: () => null });
+    db.ops_errors.push({
+      id: 1, entity_type: 'match', entity_id: MATCH_ID, operation: 'discord_schedule_reminder',
+      message: 'Failed to schedule reminder: vault secret missing', occurred_at: new Date().toISOString(), dismissed_at: null,
+    });
+
+    await call(MATCH_ID, ADMIN_ID, { scheduled_at: '2026-09-01T18:00:00.000Z' });
+    await __flushTestAfter();
+
+    assert.ok(
+      !db.ops_errors.some((e) => e.entity_type === 'match' && e.entity_id === MATCH_ID && e.operation === 'discord_schedule_reminder' && e.dismissed_at === null),
+      'the earlier scheduling failure no longer shows as live once scheduling succeeds',
+    );
+    __setTestAfterMode(false);
   });
 
   __setTestSession(undefined);

@@ -133,6 +133,10 @@ export async function getMatchMeta(matchId: number) {
   return {
     title, seasonName, weekMatchLabel, description, image,
     shirtNames, skinNames, shirtPlayers, skinPlayers, score, mapName, scheduledAt,
+    // The raw ISO timestamp, distinct from the formatted-for-display `scheduledAt` above (which is
+    // also gated on `!played` and thus null once a match is scored) — notifyMatchReminder() needs an
+    // exact, parseable time to compute its eligibility window, not a display string.
+    scheduledAtRaw: m.scheduled_at,
   };
 }
 
