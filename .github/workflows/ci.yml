@@ -121,7 +121,10 @@ jobs:
         run: supabase start
 
       - name: Export local Supabase connection env vars
-        run: supabase status -o env >> "$GITHUB_ENV"
+        # `-o env` quotes every value (`API_URL="http://..."`). `$GITHUB_ENV` isn't shell-parsed —
+        # it takes everything after the first `=` as the literal value, so those quotes would
+        # otherwise end up embedded in the env var itself and fail URL validation downstream.
+        run: supabase status -o env | sed -E 's/^([A-Za-z_][A-Za-z0-9_]*)="(.*)"$/\1=\2/' >> "$GITHUB_ENV"
 
       # `$GITHUB_ENV` writes only become real env vars starting the *next* step, not later in the
       # same script that wrote them — this has to be its own step, not folded into the one above,
