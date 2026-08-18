@@ -76,6 +76,21 @@ Opening a PR is a lower-stakes action than merging but still isn't free: don't o
 just because a natural next step suggests it (e.g. splitting a change into a precursor + follow-up).
 If the user hasn't asked for a PR, say what you'd open and why, and let them confirm first.
 
+# Don't self-schedule reminders or event subscriptions
+
+Agent sessions on this repo have access to tools that create standing follow-up work without a human
+watching in the moment — scheduled wakeups/check-ins, `send_later`, trigger/Routine creation, and PR
+activity subscriptions (`subscribe_pr_activity` and equivalents). Do not reach for any of these on
+your own initiative. The user checks back on long-running work manually; a self-scheduled reminder or
+subscription burns their tokens on a cadence they didn't ask for and aren't necessarily watching.
+
+Only use these tools when the user's current message explicitly asks for that behavior — "watch this
+PR," "check back in an hour," "remind me later," "babysit this," or similar. A task being long-running,
+async, or "the kind of thing you'd normally follow up on" is not itself a request — if the user hasn't
+asked, finish the turn and let them check back or ask you to watch it. This includes follow-up
+check-ins on a PR you just opened yourself: don't subscribe or schedule a reminder unless asked, even
+though the PR workflow above describes what to do *if* you are watching one.
+
 # Local `*_handoff/` dirs are gitignored scratch
 
 Directories matching `*_handoff/` (e.g. `dathost_handoff/`, `ehog_handoff/`) hold planning and
