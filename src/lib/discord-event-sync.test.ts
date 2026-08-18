@@ -2,9 +2,12 @@
  * Unit tests for discord-event-sync.ts: `syncSeasonScheduledEvents()`'s correlation between a
  * season's unplayed matches and Discord scheduled events, via the earliest event-share link
  * (`discord.com/events/{guild}/{event}`) found in each match's own thread (#398) — thread discovery
- * by title (independent of `match_discord_state`), writing a matched event's start time into
- * `matches.scheduled_at`, idempotency once already in sync, `no_thread`/`no_event` for a match
- * nothing has been threaded/shared for yet, and the ops_errors trail for a real API failure.
+ * by title (independent of `match_discord_state`), the checkpointed scan (a full backward walk only
+ * the first time a thread is seen, an `after=<checkpoint>` catch-up on every poll after that, and no
+ * message fetch at all once an event is cached), writing a matched event's start time into
+ * `matches.scheduled_at`, idempotency once already in sync, `no_thread`/`no_event` for a match nothing
+ * has been threaded/shared for yet, a stale cached event getting cleared, and the ops_errors trail for
+ * a real API failure.
  *
  * Run:  npx vitest run src/lib/discord-event-sync.test.ts
  */
@@ -38,19 +41,27 @@ interface StubMessage {
   content: string;
 }
 
+interface StubEvent {
+  id: string;
+  scheduled_start_time: string;
+  status: number;
+}
+
 function shareLink(eventId: string): string {
   return `https://discord.com/events/${GUILD_ID}/${eventId}`;
 }
 
 /** Stubs the guild-channels lookup, thread listing, scheduled-events listing, and per-thread message
- *  history — `messagesByThread` holds each thread's messages oldest-first (as authored); the stub
- *  serves them back newest-first, one page at a time, matching Discord's real ordering and pagination
- *  (`before` cursor), so `findFirstSharedEventId()`'s backward walk is exercised for real. */
+ *  history — `messagesByThread` holds each thread's *entire* message set to date, oldest-first (as
+ *  authored); the stub serves it back newest-first, filtered by whatever `before`/`after` cursor the
+ *  code under test sends, exactly like real Discord. Passing the full growing history on each call
+ *  (rather than just what's "new") lets a test simulate successive polls realistically: the code's own
+ *  `after=<checkpoint>` should only ever see the messages actually posted since. Also records every
+ *  fetched url so a test can assert whether a message fetch happened at all (a cache hit never should). */
 function stubDiscord(opts: {
   threads?: StubThread[];
-  events?: { id: string; scheduled_start_time: string; status: number }[];
+  events?: StubEvent[];
   messagesByThread?: Record<string, StubMessage[]>;
-  eventsStatus?: number;
 } = {}): { calls: string[] } {
   const calls: string[] = [];
   const threads = opts.threads ?? [];
@@ -69,29 +80,54 @@ function stubDiscord(opts: {
       return { ok: true, status: 200, json: async () => ({ threads: [] }) } as unknown as Response;
     }
     if (url.includes('/scheduled-events')) {
-      const status = opts.eventsStatus ?? 200;
-      const ok = status >= 200 && status < 300;
-      if (!ok) return { ok, status, json: async () => ({ message: 'Missing Access' }) } as unknown as Response;
-      return { ok, status, json: async () => events } as unknown as Response;
+      return { ok: true, status: 200, json: async () => events } as unknown as Response;
     }
     const messagesMatch = url.match(/\/channels\/([^/]+)\/messages/);
     if (messagesMatch) {
       const threadId = messagesMatch[1];
       const all = [...(messagesByThread[threadId] ?? [])].reverse(); // newest-first, like real Discord
-      const beforeId = new URL(url).searchParams.get('before');
-      const startIndex = beforeId ? all.findIndex((m) => m.id === beforeId) + 1 : 0;
-      const page = all.slice(startIndex, startIndex + 100);
-      return { ok: true, status: 200, json: async () => page } as unknown as Response;
+      const params = new URL(url).searchParams;
+      const beforeId = params.get('before');
+      const afterId = params.get('after');
+      let page = all;
+      if (beforeId) {
+        const idx = all.findIndex((m) => m.id === beforeId);
+        page = all.slice(idx + 1);
+      } else if (afterId) {
+        const idx = all.findIndex((m) => m.id === afterId);
+        page = idx === -1 ? [] : all.slice(0, idx); // everything newer than afterId, still newest-first
+      }
+      return { ok: true, status: 200, json: async () => page.slice(0, 100) } as unknown as Response;
     }
     throw new Error(`unexpected fetch to ${url}`);
   }) as typeof fetch;
   return { calls };
 }
 
+function stubMessagesFailure(threads: StubThread[], status: number, body: unknown): void {
+  (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string) => {
+    if (url.endsWith('/channels')) return { ok: true, status: 200, json: async () => GUILD_CHANNELS } as unknown as Response;
+    if (url.endsWith('/threads/active')) return { ok: true, status: 200, json: async () => ({ threads }) } as unknown as Response;
+    if (url.includes('/threads/archived/public')) return { ok: true, status: 200, json: async () => ({ threads: [] }) } as unknown as Response;
+    if (url.includes('/scheduled-events')) return { ok: true, status: 200, json: async () => [] } as unknown as Response;
+    if (url.includes('/messages')) return { ok: false, status, json: async () => body } as unknown as Response;
+    throw new Error(`unexpected fetch to ${url}`);
+  }) as typeof fetch;
+}
+
 function liveOpsErrors(entityType: string, entityId: number, operation: string): Row[] {
   return fakeDb.ops_errors.filter(
     (r) => r.entity_type === entityType && r.entity_id === entityId && r.operation === operation && r.dismissed_at === null,
   );
+}
+
+async function discordState(matchId: number): Promise<Row | null> {
+  const { data } = await adminClient
+    .from('match_discord_state')
+    .select('thread_id, event_id, message_checkpoint')
+    .eq('match_id', matchId)
+    .maybeSingle();
+  return data as Row | null;
 }
 
 async function main() {
@@ -123,75 +159,22 @@ async function main() {
     process.env.DISCORD_GUILD_ID = GUILD_ID;
     // Season 1 ("Season 5"): match 101 (week 1, unplayed) and 102 (week 2, unplayed "0-0") — neither
     // has a Discord thread in this scenario.
-    stubDiscord({ events: [] });
+    const { calls } = stubDiscord({ events: [] });
     const result = await syncSeasonScheduledEvents(adminClient, 1);
     assert.ok(!('error' in result));
     const ok = result as Exclude<typeof result, { error: string }>;
     assert.equal(ok.matches.length, 2);
     assert.ok(ok.matches.every((m) => m.status === 'no_thread'));
+    assert.ok(!calls.some((c) => c.includes('/messages')));
   });
 
-  await test('syncSeasonScheduledEvents: a threaded match with nothing shared yet reports "no_event"', async () => {
-    process.env.DISCORD_BOT_TOKEN = 'bot-token';
-    process.env.DISCORD_GUILD_ID = GUILD_ID;
-    stubDiscord({
-      threads: [{ id: 'thread-101', name: 'Week 1 Game 2', parent_id: 'channel-season-5' }],
-      events: [],
-      messagesByThread: { 'thread-101': [{ id: 'm1', content: 'anyone free this weekend?' }] },
-    });
-    const result = await syncSeasonScheduledEvents(adminClient, 1);
-    assert.ok(!('error' in result));
-    const ok = result as Exclude<typeof result, { error: string }>;
-    const m101 = ok.matches.find((m) => m.matchId === 101)!;
-    assert.equal(m101.status, 'no_event');
-  });
+  // ─── Match 101: a first-time scan that finds its event immediately ─────────────────────────────
 
-  await test('syncSeasonScheduledEvents: finds a shared event link and syncs scheduled_at', async () => {
-    process.env.DISCORD_BOT_TOKEN = 'bot-token';
-    process.env.DISCORD_GUILD_ID = GUILD_ID;
-    stubDiscord({
-      threads: [{ id: 'thread-101', name: 'Week 1 Game 2', parent_id: 'channel-season-5' }],
-      events: [{ id: '1111111111111111111', scheduled_start_time: '2026-01-20T20:00:00.000Z', status: 1 }],
-      messagesByThread: {
-        'thread-101': [
-          { id: 'm1', content: 'setting this up' },
-          { id: 'm2', content: `here's the event: ${shareLink('1111111111111111111')}` },
-        ],
-      },
-    });
-    const result = await syncSeasonScheduledEvents(adminClient, 1);
-    assert.ok(!('error' in result));
-    const ok = result as Exclude<typeof result, { error: string }>;
-    const m101 = ok.matches.find((m) => m.matchId === 101)!;
-    assert.equal(m101.status, 'synced');
-
-    const { data } = await adminClient.from('matches').select('scheduled_at').eq('id', 101).maybeSingle();
-    assert.equal((data as { scheduled_at: string }).scheduled_at, '2026-01-20T20:00:00.000Z');
-  });
-
-  await test('syncSeasonScheduledEvents: a re-sync against the same shared event reports "unchanged" and writes nothing', async () => {
-    process.env.DISCORD_BOT_TOKEN = 'bot-token';
-    process.env.DISCORD_GUILD_ID = GUILD_ID;
-    // Match 101's scheduled_at is now '2026-01-20T20:00:00.000Z' from the previous test.
-    stubDiscord({
-      threads: [{ id: 'thread-101', name: 'Week 1 Game 2', parent_id: 'channel-season-5' }],
-      events: [{ id: '1111111111111111111', scheduled_start_time: '2026-01-20T20:00:00.000Z', status: 1 }],
-      messagesByThread: {
-        'thread-101': [{ id: 'm2', content: `here's the event: ${shareLink('1111111111111111111')}` }],
-      },
-    });
-    const result = await syncSeasonScheduledEvents(adminClient, 1);
-    assert.ok(!('error' in result));
-    const ok = result as Exclude<typeof result, { error: string }>;
-    const m101 = ok.matches.find((m) => m.matchId === 101)!;
-    assert.equal(m101.status, 'unchanged');
-  });
-
-  await test('syncSeasonScheduledEvents: takes the earliest shared event, not a later re-share, across paginated history', async () => {
+  await test('syncSeasonScheduledEvents: first-time scan takes the earliest shared event across paginated history, and caches it', async () => {
     process.env.DISCORD_BOT_TOKEN = 'bot-token';
     process.env.DISCORD_GUILD_ID = GUILD_ID;
     // A first page's worth of unrelated chatter, an early (correct) share, then more chatter and a
-    // second share later — the earliest one must win even though it's on the older page.
+    // later re-share — the earliest one must win even though it's on the older (further-back) page.
     const filler = Array.from({ length: 99 }, (_, i) => ({ id: `f${i}`, content: 'gg' }));
     stubDiscord({
       threads: [{ id: 'thread-101', name: 'Week 1 Game 2', parent_id: 'channel-season-5' }],
@@ -213,21 +196,112 @@ async function main() {
     const m101 = ok.matches.find((m) => m.matchId === 101)!;
     assert.equal(m101.status, 'synced');
     assert.match(m101.detail, /2026-01-18/);
+
+    const state = await discordState(101);
+    assert.equal(state?.event_id, '2222222222222222222');
+    assert.equal(state?.message_checkpoint, 'm-last'); // the thread's current newest message
   });
 
-  await test('syncSeasonScheduledEvents: ignores a CANCELED event with a shared link', async () => {
+  await test('syncSeasonScheduledEvents: a cached event id skips scanning messages entirely', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = GUILD_ID;
+    const { calls } = stubDiscord({
+      threads: [{ id: 'thread-101', name: 'Week 1 Game 2', parent_id: 'channel-season-5' }],
+      events: [{ id: '2222222222222222222', scheduled_start_time: '2026-01-18T18:00:00.000Z', status: 1 }],
+      // No messagesByThread entry — if the code tried to fetch messages for thread-101, the stub
+      // would throw on `unexpected fetch`.
+    });
+    const result = await syncSeasonScheduledEvents(adminClient, 1);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    const m101 = ok.matches.find((m) => m.matchId === 101)!;
+    assert.equal(m101.status, 'unchanged');
+    assert.ok(!calls.some((c) => c.includes('/messages')));
+  });
+
+  await test('syncSeasonScheduledEvents: a canceled cached event is cleared and re-reported as "no_event"', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = GUILD_ID;
+    stubDiscord({
+      threads: [{ id: 'thread-101', name: 'Week 1 Game 2', parent_id: 'channel-season-5' }],
+      events: [{ id: '2222222222222222222', scheduled_start_time: '2026-01-18T18:00:00.000Z', status: 4 }], // CANCELED
+    });
+    const result = await syncSeasonScheduledEvents(adminClient, 1);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    const m101 = ok.matches.find((m) => m.matchId === 101)!;
+    assert.equal(m101.status, 'no_event');
+    assert.match(m101.detail, /no longer scheduled/);
+
+    const state = await discordState(101);
+    assert.equal(state?.event_id, null);
+    assert.equal(state?.message_checkpoint, 'm-last'); // untouched — no re-scan needed to clear a stale id
+  });
+
+  // ─── Match 102: a first-time scan that finds nothing, then a later poll picks up a new share ────
+
+  await test('syncSeasonScheduledEvents: first-time scan with nothing shared reports "no_event" and still checkpoints', async () => {
     process.env.DISCORD_BOT_TOKEN = 'bot-token';
     process.env.DISCORD_GUILD_ID = GUILD_ID;
     stubDiscord({
       threads: [{ id: 'thread-102', name: 'Week 2 Game 1', parent_id: 'channel-season-5' }],
-      events: [{ id: '4444444444444444444', scheduled_start_time: '2026-02-01T18:00:00.000Z', status: 4 }],
-      messagesByThread: { 'thread-102': [{ id: 'm1', content: shareLink('4444444444444444444') }] },
+      events: [],
+      messagesByThread: { 'thread-102': [{ id: 'm1', content: 'anyone free this weekend?' }] },
     });
     const result = await syncSeasonScheduledEvents(adminClient, 1);
     assert.ok(!('error' in result));
     const ok = result as Exclude<typeof result, { error: string }>;
     const m102 = ok.matches.find((m) => m.matchId === 102)!;
     assert.equal(m102.status, 'no_event');
+
+    const state = await discordState(102);
+    assert.equal(state?.event_id, null);
+    assert.equal(state?.message_checkpoint, 'm1');
+  });
+
+  await test('syncSeasonScheduledEvents: a later poll only fetches messages after the checkpoint, and picks up a newly shared event', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = GUILD_ID;
+    // The thread's full history now includes m1 (already scanned) plus a new share posted since.
+    const { calls } = stubDiscord({
+      threads: [{ id: 'thread-102', name: 'Week 2 Game 1', parent_id: 'channel-season-5' }],
+      events: [{ id: '5555555555555555555', scheduled_start_time: '2026-02-05T19:00:00.000Z', status: 1 }],
+      messagesByThread: {
+        'thread-102': [
+          { id: 'm1', content: 'anyone free this weekend?' },
+          { id: 'm2', content: `here's the event: ${shareLink('5555555555555555555')}` },
+        ],
+      },
+    });
+    const result = await syncSeasonScheduledEvents(adminClient, 1);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    const m102 = ok.matches.find((m) => m.matchId === 102)!;
+    assert.equal(m102.status, 'synced');
+
+    const messageCall = calls.find((c) => c.includes('/messages'))!;
+    assert.match(messageCall, /after=m1/);
+    assert.ok(!messageCall.includes('before='));
+
+    const state = await discordState(102);
+    assert.equal(state?.event_id, '5555555555555555555');
+    assert.equal(state?.message_checkpoint, 'm2');
+  });
+
+  await test('syncSeasonScheduledEvents: a Discord API failure scanning a thread is recorded per-match', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = GUILD_ID;
+    // Clear match 102's cached event so this poll goes through the scan path again.
+    await adminClient.from('match_discord_state').update({ event_id: null, message_checkpoint: null }).eq('match_id', 102);
+    stubMessagesFailure([{ id: 'thread-102', name: 'Week 2 Game 1', parent_id: 'channel-season-5' }], 403, { message: 'Missing Access' });
+    const result = await syncSeasonScheduledEvents(adminClient, 1);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    const m102 = ok.matches.find((m) => m.matchId === 102)!;
+    assert.equal(m102.status, 'failed');
+    assert.match(m102.detail, /403/);
+    const rows = liveOpsErrors('match', 102, 'discord_event_sync');
+    assert.equal(rows.length, 1);
   });
 
   await test('syncSeasonScheduledEvents: a season with no unplayed matches returns an empty result without calling Discord', async () => {
