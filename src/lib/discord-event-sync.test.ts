@@ -1,7 +1,8 @@
 /**
  * Unit tests for discord-event-sync.ts: `syncSeasonScheduledEvents()`'s correlation between a
  * season's unplayed matches and Discord scheduled events, via the earliest *live* event-share link
- * (`discord.com/events/{guild}/{event}`) found in each match's own thread (#398) — thread discovery
+ * (either Discord's actual invite-link share form, `discord.gg/{code}?event={id}`, or the direct
+ * `discord.com/events/{guild}/{event}` form) found in each match's own thread (#398) — thread discovery
  * by title (independent of `match_discord_state`), the checkpointed scan (a full backward walk only
  * the first time a thread is seen, an `after=<checkpoint>` catch-up on every poll after that, and no
  * message fetch at all once an event is cached), writing a matched event's start time into
@@ -50,6 +51,13 @@ interface StubEvent {
 
 function shareLink(eventId: string): string {
   return `https://discord.com/events/${GUILD_ID}/${eventId}`;
+}
+
+/** Discord's actual "Share to Channel" action posts this invite-link form, not `shareLink()`'s direct
+ *  `discord.com/events/{guild}/{event}` form — the event id rides along as an `?event=` query param
+ *  on an ordinary invite link instead. */
+function inviteShareLink(eventId: string): string {
+  return `https://discord.gg/QH7j9a7fn?event=${eventId}`;
 }
 
 /** Stubs the guild-channels lookup, thread listing, scheduled-events listing, and per-thread message
@@ -338,6 +346,24 @@ async function main() {
     assert.match(m102.detail, /403/);
     const rows = liveOpsErrors('match', 102, 'discord_event_sync');
     assert.equal(rows.length, 1);
+  });
+
+  await test('syncSeasonScheduledEvents: matches Discord\'s actual invite-link share form (discord.gg/{code}?event={id}), not just the direct events/ link', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = GUILD_ID;
+    stubDiscord({
+      threads: [{ id: 'thread-400', name: 'Week 1 Game 1', parent_id: 'channel-season-6' }],
+      events: [{ id: '4444444444444444444', scheduled_start_time: '2026-04-05T20:00:00.000Z', status: 1 }],
+      messagesByThread: {
+        'thread-400': [{ id: 'm1', content: `here's the event: ${inviteShareLink('4444444444444444444')}` }],
+      },
+    });
+    const result = await syncSeasonScheduledEvents(adminClient, 3);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    const m400 = ok.matches.find((m) => m.matchId === 400)!;
+    assert.equal(m400.status, 'synced');
+    assert.match(m400.detail, /2026-04-05/);
   });
 
   await test('syncSeasonScheduledEvents: a season with no unplayed matches returns an empty result without calling Discord', async () => {

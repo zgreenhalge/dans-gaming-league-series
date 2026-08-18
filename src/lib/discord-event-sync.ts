@@ -2,8 +2,10 @@
 // a player to name their Discord Scheduled Event to match the site's own "Week N Game M" convention
 // (easy to typo, retype wrong, or just not bother with), this watches each match's own thread for
 // Discord's own "Share to Channel" action on an event — which posts an ordinary message containing
-// the event's `discord.com/events/{guild}/{event}` link. That link *is* the correlation: an exact
-// event id, sourced from the platform itself, not a freeform string two humans have to agree on.
+// an invite link carrying the event's id as an `?event=` query param (`discord.gg/{code}?event={id}`),
+// or the direct `discord.com/events/{guild}/{event}` form for a manually pasted link. Either way
+// that id *is* the correlation: an exact event id, sourced from the platform itself, not a freeform
+// string two humans have to agree on.
 //
 // Threads are found the same title-matched way `publishWeekThreads()` finds them
 // (`resolveSeasonForumChannel()` + `listChannelThreads()`, both exported from `discord-threads.ts`)
@@ -161,14 +163,19 @@ function fetchMessagesPage(
   );
 }
 
-/** Pulls the event id out of a message's `/events/{guild}/{event}` link, checking both the raw
- *  content (what a manual paste, or Discord's own share action, posts as text) and any embed url
- *  (in case the message itself is otherwise empty and Discord's auto-unfurl is all that carries it).
- *  Scoped to our own guild id so a stray link to an unrelated server's event is never picked up. */
-function extractEventId(message: DiscordMessage, guildId: string): string | null {
-  const re = new RegExp(`discord\\.com/events/${guildId}/(\\d+)`);
+/** Pulls the event id out of a message's shared-event link, checking both the raw content (what a
+ *  manual paste, or Discord's own share action, posts as text) and any embed url (in case the message
+ *  itself is otherwise empty and Discord's auto-unfurl is all that carries it). Discord's "Share to
+ *  Channel" action posts an invite link with an `?event=` query param (`discord.gg/{code}?event={id}`)
+ *  rather than the direct `discord.com/events/{guild}/{event}` form, so both are matched; the invite
+ *  form carries no guild id of its own; `liveEventIds` (checked by every caller) is what keeps a stray
+ *  link to an unrelated server's event from ever being picked up. */
+function extractEventId(message: DiscordMessage): string | null {
   const haystack = [message.content, ...(message.embeds ?? []).map((e) => e.url ?? '')].join(' ');
-  return haystack.match(re)?.[1] ?? null;
+  const direct = haystack.match(/discord\.com\/events\/[^/\s]+\/(\d+)/);
+  if (direct) return direct[1];
+  const invite = haystack.match(/discord\.(?:gg|com\/invite)\/\S+?\?event=(\d+)/);
+  return invite?.[1] ?? null;
 }
 
 interface ThreadScan {
@@ -189,7 +196,6 @@ interface ThreadScan {
  *  just rediscover that same canceled event's mention as "earliest" and go nowhere. */
 async function scanThreadHistory(
   threadId: string,
-  guildId: string,
   token: string,
   liveEventIds: ReadonlySet<string>,
 ): Promise<ThreadScan | { error: string }> {
@@ -205,7 +211,7 @@ async function scanThreadHistory(
     // Newest-first within the page; iterating forward means the last match found here is this
     // page's own oldest, so it correctly overwrites a newer match found earlier in the same pass.
     for (const message of messages) {
-      const eventId = extractEventId(message, guildId);
+      const eventId = extractEventId(message);
       if (eventId && liveEventIds.has(eventId)) earliest = eventId;
     }
     if (messages.length < MESSAGE_PAGE_SIZE) break; // fewer than a full page — reached the thread's start
@@ -225,7 +231,6 @@ async function scanThreadHistory(
  *  reason. */
 async function scanThreadSince(
   threadId: string,
-  guildId: string,
   token: string,
   checkpoint: string,
   liveEventIds: ReadonlySet<string>,
@@ -241,7 +246,7 @@ async function scanThreadSince(
     newest = messages[0].id; // this page's newest — the closer to "now" this poll reaches, the better
     if (!earliest) {
       for (let i = messages.length - 1; i >= 0; i--) {
-        const eventId = extractEventId(messages[i], guildId);
+        const eventId = extractEventId(messages[i]);
         if (eventId && liveEventIds.has(eventId)) {
           earliest = eventId;
           break;
@@ -260,7 +265,6 @@ async function scanThreadSince(
  *  them (see this file's header) since it only ever touches this match's own thread and rows. */
 async function syncMatchScheduledEvent(
   supabaseAdmin: SupabaseClient,
-  guildId: string,
   token: string,
   title: string,
   match: { id: number; scheduled_at: string | null },
@@ -277,8 +281,8 @@ async function syncMatchScheduledEvent(
   if (!eventId) {
     const liveEventIds = new Set(eventsById.keys());
     const scan = state?.message_checkpoint
-      ? await scanThreadSince(threadId, guildId, token, state.message_checkpoint, liveEventIds)
-      : await scanThreadHistory(threadId, guildId, token, liveEventIds);
+      ? await scanThreadSince(threadId, token, state.message_checkpoint, liveEventIds)
+      : await scanThreadHistory(threadId, token, liveEventIds);
     if ('error' in scan) {
       await recordOpsError(supabaseAdmin, 'match', match.id, EVENT_SYNC_OPERATION, scan.error);
       return { matchId: match.id, title, status: 'failed', detail: scan.error };
@@ -400,7 +404,7 @@ export async function syncSeasonScheduledEvents(
     SCAN_CONCURRENCY,
     ([title, match]) =>
       syncMatchScheduledEvent(
-        supabaseAdmin, guildId, token, title, match,
+        supabaseAdmin, token, title, match,
         threadIdByTitle.get(title), stateByMatchId.get(match.id), eventsById,
       ),
   );
