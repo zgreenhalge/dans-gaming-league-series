@@ -187,13 +187,17 @@ team1 = SHIRTS / team2 = SKINS, so it's a direct equality, no side remapping). `
 gathers the inputs, calls it after quarantine, and logs the verdict either way.
 
 `AUTO_COMMIT_ENABLED` (a repo Actions variable) gates the write on an eligible verdict: unset (or
-anything but `false`) calls the shared `writeMatchScore()` (`src/lib/matchScore.ts`) directly, marks
-the job `confirmed`, and deletes the staged `demoResultKey` and `mapResultKey` artifacts — this is the
-default. `false` is the **manual override**: the predicate is still evaluated and logged (`::notice::`)
-but the result is always staged for manual confirm instead of written, for incident response (e.g.
-investigating a parser issue) without needing a code change. An ineligible verdict — including a
-disagreement between the demo score and `map_result`, or an already-confirmed match — always falls
-back to the staged-result review, regardless of the flag.
+anything but `false`) calls the shared `writeMatchScore()` (`src/lib/matchScore.ts`) directly, fires
+the same `notifyMatchScoreReported()` / `closeMatchThread()` Discord hooks the interactive route fires
+on its own transition into "played" (`src/lib/discord-notify.ts` / `src/lib/discord-threads.ts` —
+`demo-ingest.yml` carries its own copies of `DISCORD_BOT_TOKEN` /
+`DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL` for this), marks the job `confirmed`, and deletes the staged
+`demoResultKey` and `mapResultKey` artifacts — this is the default. `false` is the **manual override**:
+the predicate is still evaluated and logged (`::notice::`) but the result is always staged for manual
+confirm instead of written, for incident response (e.g. investigating a parser issue) without needing
+a code change. An ineligible verdict — including a disagreement between the demo score and
+`map_result`, or an already-confirmed match — always falls back to the staged-result review,
+regardless of the flag.
 
 `writeMatchScore()` is the single write path for a match score (validation, `matches.final_score` +
 `player_match_stats`, sabremetrics, rating recompute, gauntlet-propagate-or-season-completion, and
@@ -433,7 +437,10 @@ it's public, unlike the rest of this list), and `RECOMPUTE_SECRET` (repo **secre
 outside Vercel and have no other way to reach the app's recompute endpoint. `AUTO_COMMIT_ENABLED` (repo
 variable) gates trusted auto-commit (#138) — unset (or anything but `false`) writes an eligible
 verdict directly; `false` is the manual override (evaluated + logged, still staged for manual
-confirm).
+confirm). demo-ingest additionally needs its own copies of `DISCORD_BOT_TOKEN` and
+`DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL` (both repo **secrets**) — an auto-commit fires the same
+Discord score-announcement + thread-close hooks the interactive route fires, and each hook no-ops
+quietly if its own var is unset rather than failing the job.
 
 ## Key files
 
