@@ -6,6 +6,14 @@
 // of who triggers it. This is the only place any of those hooks fire from; a caller never fires them
 // itself, so a future caller can't forget to.
 //
+// The Discord hooks fire unconditionally on every write, not just a match's first score — an admin
+// correcting an already-played match's score or stats has genuinely changed what the announcement
+// message should show, and `notifyMatchScoreReported()` just edits that message in place from current
+// truth, so a correction that changes nothing produces an identical edit, not a duplicate post.
+// `closeMatchThread()` archiving/locking an already-archived thread is likewise a harmless no-op on
+// Discord's side. Neither hook throws internally, so a Discord-side failure here never blocks or
+// rolls back the score write itself.
+//
 // Has no dependency on `next/server` — the demo-ingest Action runs this outside any request scope, so
 // `after()` isn't available there. Pass `opts.after` (the route's own `after` import) to defer the
 // hooks past the HTTP response; omit it to await them directly, which the Action needs since its
@@ -24,7 +32,6 @@ import { advanceJobStatus, matchJobKey } from './background-jobs';
 import { DEMO_INGEST_JOB_TYPE } from './demo/ingestResult';
 import { notifyMatchScoreReported } from './discord-notify';
 import { closeMatchThread } from './discord-threads';
-import { isPlayedScore } from './util';
 import type { DemoSabremetricStat, DemoWeaponStat, RoundHistoryEntry } from './types';
 
 type PlayerStatInput = {
@@ -210,19 +217,12 @@ export async function writeMatchScore(
 
   const { data: matchRow } = await supabaseAdmin
     .from('matches')
-    .select('id, final_score, weeks(season_id, seasons(is_gauntlet))')
+    .select('id, weeks(season_id, seasons(is_gauntlet))')
     .eq('id', matchId)
     .maybeSingle();
   if (!matchRow) return { ok: false, error: 'Match not found', status: 404 };
-  const m = matchRow as unknown as {
-    final_score: string | null;
-    weeks: { season_id: number; seasons: { is_gauntlet: boolean } };
-  };
+  const m = matchRow as unknown as { weeks: { season_id: number; seasons: { is_gauntlet: boolean } } };
   const isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
-  // Computed from the score as it stood before this write — an admin correcting an already-played
-  // match must not re-fire the score-reported Discord hooks below (re-announcing a final result, or
-  // re-attempting to close a thread that's presumably already closed).
-  const alreadyPlayed = isPlayedScore(m.final_score);
 
   const { data: matchStats } = await supabaseAdmin
     .from('player_match_stats')
@@ -378,8 +378,8 @@ export async function writeMatchScore(
   // Independent hooks — run concurrently (each already isolates its own failure) rather than
   // serializing behind the recompute's fetch, which never gates the others. The gauntlet branch is
   // itself an ordered two-step pipeline (see runGauntletCompletionPipeline). The Discord
-  // score-announcement + thread-close hooks (both already best-effort/never-throwing internally) only
-  // fire on the transition into "played" — see `alreadyPlayed` above.
+  // score-announcement + thread-close hooks fire unconditionally on every write — see this file's
+  // header for why that's correct rather than spammy.
   const runHooks = async (): Promise<void> => {
     await Promise.all([
       triggerRatingRecompute(supabaseAdmin, { jobKey: matchJobKey(matchId) }),
@@ -387,9 +387,8 @@ export async function writeMatchScore(
         ? runGauntletCompletionPipeline(supabaseAdmin, matchId, m.weeks.season_id)
         : runSeasonCompletionCheck(supabaseAdmin, m.weeks.season_id),
       runSteamIdLearningHook(supabaseAdmin, matchId, opts.learnSteamIds, warnings),
-      alreadyPlayed
-        ? Promise.resolve()
-        : Promise.all([notifyMatchScoreReported(supabaseAdmin, matchId), closeMatchThread(supabaseAdmin, matchId)]),
+      notifyMatchScoreReported(supabaseAdmin, matchId),
+      closeMatchThread(supabaseAdmin, matchId),
     ]);
   };
 

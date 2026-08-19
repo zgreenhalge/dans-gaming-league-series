@@ -8,7 +8,7 @@
 // permission overwrite is the likeliest first-attempt failure and needs to be visible immediately in
 // the admin console, not only in the Activity feed on a later page load. `closeMatchThread()` is the
 // other half — archives + locks one match's thread once it has nothing left to coordinate, called
-// from `PATCH /api/matches/[id]/score`'s best-effort hooks on the transition into "played" (same spot
+// from `writeMatchScore()`'s (`matchScore.ts`) best-effort hooks on every score write (same spot
 // `notifyMatchScoreReported()` fires from), not from `publishWeekThreads()`.
 //
 // Idempotency is checked against Discord itself, not `match_discord_state` — an admin can create a
@@ -202,12 +202,13 @@ function resolveTargetWeek(schedule: WeekWithMatches[], startDate: string | null
   return week === 'next' ? findCurrentWeek(schedule, startDate) : schedule.find((w) => w.week_number === week) ?? null;
 }
 
-/** Archives + locks a single match's Discord thread, if it has one — the score route's best-effort
- *  hook, called only on the transition into "played" (an admin correcting an already-played score
- *  shouldn't re-attempt closing a thread that's presumably already closed). No-ops without
- *  `DISCORD_BOT_TOKEN` or without a recorded `match_discord_state.thread_id` — most matches were
- *  never threaded in the first place. Archiving/locking an already-archived thread is a harmless
- *  no-op on Discord's side, so a retry (or an admin re-editing a score) can't double-fail. */
+/** Archives + locks a single match's Discord thread, if it has one — `writeMatchScore()`'s
+ *  (`matchScore.ts`) best-effort hook, called unconditionally on every score write, including an
+ *  admin's later correction. No-ops without `DISCORD_BOT_TOKEN` or without a recorded
+ *  `match_discord_state.thread_id` — most matches were never threaded in the first place.
+ *  Archiving/locking an already-archived thread is a harmless no-op on Discord's side, so a retry (or
+ *  a repeat call on a match that's already closed) can't double-fail — there's no need to gate this
+ *  on a first-time score. */
 export async function closeMatchThread(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
   const token = process.env.DISCORD_BOT_TOKEN;
   if (!token) return;

@@ -199,11 +199,14 @@ back to the staged-result review, regardless of the flag.
 hook fires from — validation, `matches.final_score` + `player_match_stats`, sabremetrics, rating
 recompute, gauntlet-propagate-or-season-completion, admin-gated steam-id learning, and the Discord
 `notifyMatchScoreReported()` / `closeMatchThread()` pair (`src/lib/discord-notify.ts` /
-`src/lib/discord-threads.ts`), all gated on the *write's own* before-vs-after `final_score` check
-(`alreadyPlayed`) rather than on anything the caller computed. The interactive
-`PATCH /api/matches/[id]/score` route and the demo-ingest Action both just call it — neither fires any
-hook itself, so the two paths can't drift apart the way a duplicated call site could.
-`demo-ingest.yml` carries its own copies of `DISCORD_BOT_TOKEN` /
+`src/lib/discord-threads.ts`). The Discord pair fires on *every* write, not just a match's first score:
+`notifyMatchScoreReported()` edits the tracked announcement message in place from current truth, so an
+admin's later correction is reflected rather than left stale, and a no-op resubmit just re-writes the
+same content; `closeMatchThread()` archiving/locking an already-archived thread is a harmless no-op on
+Discord's side. Neither hook throws internally, so a Discord-side failure never blocks or rolls back
+the score write. The interactive `PATCH /api/matches/[id]/score` route and the demo-ingest Action both
+just call `writeMatchScore()` — neither fires any hook itself, so the two paths can't drift apart the
+way a duplicated call site could. `demo-ingest.yml` carries its own copies of `DISCORD_BOT_TOKEN` /
 `DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL` (alongside `RECOMPUTE_SECRET` etc.) so those hooks work from
 inside the Action too. `writeMatchScore()` has no `next/server` dependency: the route defers every hook
 (run concurrently, since none gates another) past the response via its own `after()` (passed in as

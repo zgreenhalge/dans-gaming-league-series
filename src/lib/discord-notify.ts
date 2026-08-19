@@ -1,7 +1,7 @@
 // Best-effort Discord webhook notifications for #match-notifications (#395). Every export here is
 // safe to call unconditionally — a missing DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL or a webhook
-// failure never throws, matching the rest of this codebase's best-effort hooks (ops-errors.ts, the
-// score route's post-commit hooks via afterBestEffort()). A real failure (the webhook itself
+// failure never throws, matching the rest of this codebase's best-effort hooks (ops-errors.ts,
+// afterBestEffort()). A real failure (the webhook itself
 // erroring, not just being unconfigured) is recorded to ops_errors — entity 'match', operation
 // 'discord_notify_server_live'/'discord_notify_live_score'/'discord_notify_score'/'discord_notify_reminder'
 // — so it's visible in the admin console's Activity feed instead of only a Vercel function log
@@ -305,11 +305,14 @@ export async function notifyMatchLiveScore(
   await editEmbed(supabaseAdmin, matchId, OPERATION_LIVE_SCORE, webhookUrl, existingMessageId, content, embed);
 }
 
-/** Posted once a match's final score is committed (`PATCH /api/matches/[id]/score`). Callers should
- *  only invoke this on the transition into "played" — an admin correcting an already-played score
- *  should not re-fire it. `meta.score` is only populated for a genuinely played match (gated on
- *  `isPlayedScore()` inside `getMatchMeta()`), which also excludes S3's pre-staged `"0-0"` rows —
- *  see the glossary on why `null` alone was never a sufficient played check. */
+/** Posted (or, once one exists, edited in place) every time a match's score is written —
+ *  `writeMatchScore()` (`matchScore.ts`) calls this unconditionally, including an admin's later
+ *  correction, so the message stays in sync with whatever `matches.final_score`/box score actually
+ *  are rather than going stale after a fix. Editing in place means a correction that changes nothing
+ *  just re-writes the same content, not a duplicate post. `meta.score` is only populated for a
+ *  genuinely played match (gated on `isPlayedScore()` inside `getMatchMeta()`), which also excludes
+ *  S3's pre-staged `"0-0"` rows — see the glossary on why `null` alone was never a sufficient played
+ *  check; a call on a not-yet-played match is a no-op below rather than posting a premature result. */
 export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
   const webhookUrl = process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.

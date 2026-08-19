@@ -122,8 +122,9 @@ export async function PATCH(
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  // writeMatchScore() itself fires the Discord score-announcement + thread-close hooks (deferred via
-  // the `after` passed in above) on the transition into "played" — nothing extra to do here.
+  // writeMatchScore() itself fires the Discord score-announcement + thread-close hooks on every write
+  // (deferred via the `after` passed in above), including an admin's later correction — nothing extra
+  // to do here.
 
   // Score reported → schedule the match server's teardown (reuse model = stop, never delete), same
   // AUTO_TEARDOWN_DELAY_MS grace period as the map_result path. Best-effort; skipped when hosting
