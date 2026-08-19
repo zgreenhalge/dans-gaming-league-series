@@ -10,9 +10,9 @@
 # Actions. AUTO_COMMIT_ENABLED is a repo Actions variable, adjustable without editing this file: unset
 # (or anything but "false") auto-commits an eligible verdict; "false" is the manual override, staging
 # every match for manual confirm regardless of how cleanly it parses. An auto-commit fires the same
-# Discord score-announcement + thread-close hooks a human confirm fires from the site, so it needs
-# DISCORD_BOT_TOKEN / DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL alongside the app's own copies of those
-# secrets.
+# Discord score-announcement + thread-close hooks a human confirm fires from the site, so it needs its
+# own copies of DISCORD_BOT_TOKEN (repo secret) / DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL (repo
+# variable).
 
 name: demo-ingest
 
@@ -54,7 +54,7 @@ jobs:
       APP_BASE_URL: ${{ vars.APP_BASE_URL }}
       RECOMPUTE_SECRET: ${{ secrets.RECOMPUTE_SECRET }}
       DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-      DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL: ${{ secrets.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL }}
+      DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL: ${{ vars.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

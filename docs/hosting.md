@@ -440,10 +440,10 @@ it's public, unlike the rest of this list), and `RECOMPUTE_SECRET` (repo **secre
 outside Vercel and have no other way to reach the app's recompute endpoint. `AUTO_COMMIT_ENABLED` (repo
 variable) gates trusted auto-commit (#138) — unset (or anything but `false`) writes an eligible
 verdict directly; `false` is the manual override (evaluated + logged, still staged for manual
-confirm). demo-ingest additionally needs its own copies of `DISCORD_BOT_TOKEN` and
-`DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL` (both repo **secrets**) — an auto-commit fires the same
-Discord score-announcement + thread-close hooks the interactive route fires, and each hook no-ops
-quietly if its own var is unset rather than failing the job.
+confirm). demo-ingest additionally needs its own copies of `DISCORD_BOT_TOKEN` (repo **secret**) and
+`DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL` (repo **variable**) — an auto-commit fires the same Discord
+score-announcement + thread-close hooks the interactive route fires, and each hook no-ops quietly if
+its own var is unset rather than failing the job.
 
 ## Key files
 
