@@ -187,25 +187,28 @@ team1 = SHIRTS / team2 = SKINS, so it's a direct equality, no side remapping). `
 gathers the inputs, calls it after quarantine, and logs the verdict either way.
 
 `AUTO_COMMIT_ENABLED` (a repo Actions variable) gates the write on an eligible verdict: unset (or
-anything but `false`) calls the shared `writeMatchScore()` (`src/lib/matchScore.ts`) directly, fires
-the same `notifyMatchScoreReported()` / `closeMatchThread()` Discord hooks the interactive route fires
-on its own transition into "played" (`src/lib/discord-notify.ts` / `src/lib/discord-threads.ts` —
-`demo-ingest.yml` carries its own copies of `DISCORD_BOT_TOKEN` /
-`DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL` for this), marks the job `confirmed`, and deletes the staged
-`demoResultKey` and `mapResultKey` artifacts — this is the default. `false` is the **manual override**:
-the predicate is still evaluated and logged (`::notice::`) but the result is always staged for manual
-confirm instead of written, for incident response (e.g. investigating a parser issue) without needing
-a code change. An ineligible verdict — including a disagreement between the demo score and
-`map_result`, or an already-confirmed match — always falls back to the staged-result review,
-regardless of the flag.
+anything but `false`) calls the shared `writeMatchScore()` (`src/lib/matchScore.ts`) directly, marks
+the job `confirmed`, and deletes the staged `demoResultKey` and `mapResultKey` artifacts — this is the
+default. `false` is the **manual override**: the predicate is still evaluated and logged (`::notice::`)
+but the result is always staged for manual confirm instead of written, for incident response (e.g.
+investigating a parser issue) without needing a code change. An ineligible verdict — including a
+disagreement between the demo score and `map_result`, or an already-confirmed match — always falls
+back to the staged-result review, regardless of the flag.
 
-`writeMatchScore()` is the single write path for a match score (validation, `matches.final_score` +
-`player_match_stats`, sabremetrics, rating recompute, gauntlet-propagate-or-season-completion, and
-admin-gated steam-id learning) — the interactive `PATCH /api/matches/[id]/score` route and the
-demo-ingest Action both call it, so the write behaves identically either way. It has no `next/server`
-dependency: the route defers its recompute/completion/steam-id hooks (run concurrently, since none
-gates another) past the response via its own `after()` (passed in as `opts.after`); the Action, which
-has no request scope and exits once `main()` returns, awaits them directly instead.
+`writeMatchScore()` is the single write path for a match score, and the single place every post-write
+hook fires from — validation, `matches.final_score` + `player_match_stats`, sabremetrics, rating
+recompute, gauntlet-propagate-or-season-completion, admin-gated steam-id learning, and the Discord
+`notifyMatchScoreReported()` / `closeMatchThread()` pair (`src/lib/discord-notify.ts` /
+`src/lib/discord-threads.ts`), all gated on the *write's own* before-vs-after `final_score` check
+(`alreadyPlayed`) rather than on anything the caller computed. The interactive
+`PATCH /api/matches/[id]/score` route and the demo-ingest Action both just call it — neither fires any
+hook itself, so the two paths can't drift apart the way a duplicated call site could.
+`demo-ingest.yml` carries its own copies of `DISCORD_BOT_TOKEN` /
+`DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL` (alongside `RECOMPUTE_SECRET` etc.) so those hooks work from
+inside the Action too. `writeMatchScore()` has no `next/server` dependency: the route defers every hook
+(run concurrently, since none gates another) past the response via its own `after()` (passed in as
+`opts.after`); the Action, which has no request scope and exits once `main()` returns, awaits them
+directly instead.
 
 Reparsing an already-**confirmed** match (e.g. to backfill a newly added sabremetric) never goes
 through auto-commit — a score-unchanged reparse upserts sabremetrics directly (the shortcut above the
