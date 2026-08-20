@@ -2,8 +2,10 @@
 
 // Manage -> Season's Discord match-thread publisher (#398) — admin-triggered only, since a season's
 // start_date is often arbitrary and so is when an admin actually wants a week's threads posted.
-// "Publish Next Week" resolves "next" the same way the home page and `/scheduled` do
-// (`findCurrentWeek()`, server-side in `publishWeekThreads()`); the week-number field covers
+// "Publish Next Week" resolves "next" as the first week with no played matches yet
+// (`findNextUnplayedWeek()`, server-side in `publishWeekThreads()`) — deliberately not the home
+// page / `/scheduled` calendar-current week, since out-of-order match entry can put those on a
+// different week than the one that still needs threads. The week-number field covers
 // publishing an arbitrary past/future week by hand. Results render per match immediately — a channel
 // permission overwrite is the likeliest first-attempt failure and needs to be visible right here, not
 // only in the Activity feed on a later page load. Closing a match's thread once it's been played

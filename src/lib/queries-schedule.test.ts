@@ -13,7 +13,7 @@ import { matchesSnapshot } from './test-support/snapshot';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getSeasonSchedule, getOtherScheduledMatches, findCurrentWeek, weekWindowMs, type WeekWithMatches } from './queries';
+import { getSeasonSchedule, getOtherScheduledMatches, findCurrentWeek, findNextUnplayedWeek, weekWindowMs, type WeekWithMatches } from './queries';
 import { test, report } from './test-support/miniTest';
 
 /** Minimal WeekWithMatches stand-ins — findCurrentWeek/weekWindowMs only read week_number and
@@ -26,6 +26,14 @@ function week(weekNumber: number, hasMatches = true): WeekWithMatches {
     bye_player_id: null,
     bye_player_name: null,
     matches: hasMatches ? [{} as WeekWithMatches['matches'][number]] : [],
+  };
+}
+
+/** A week stand-in for findNextUnplayedWeek — only final_score is read. */
+function weekWithScores(weekNumber: number, finalScores: (string | null)[]): WeekWithMatches {
+  return {
+    ...week(weekNumber, false),
+    matches: finalScores.map((final_score) => ({ final_score }) as WeekWithMatches['matches'][number]),
   };
 }
 
@@ -96,6 +104,30 @@ async function main() {
     const startDate = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
     const schedule = [week(1), week(2)];
     assert.equal(findCurrentWeek(schedule, startDate)?.week_number, 2);
+  });
+
+  await test('findNextUnplayedWeek: empty schedule returns null', () => {
+    assert.equal(findNextUnplayedWeek([]), null);
+  });
+
+  await test('findNextUnplayedWeek: skips a partially-played week for a fully-unplayed one', () => {
+    // Week 10 has one played match and one unplayed one (out-of-order entry); week 11 hasn't
+    // started at all — "next" for thread-publishing purposes is week 11, not week 10.
+    const schedule = [
+      weekWithScores(10, ['13-9', null]),
+      weekWithScores(11, [null, null]),
+    ];
+    assert.equal(findNextUnplayedWeek(schedule)?.week_number, 11);
+  });
+
+  await test('findNextUnplayedWeek: treats a pre-staged "0-0" score as unplayed', () => {
+    const schedule = [weekWithScores(10, ['0-0'])];
+    assert.equal(findNextUnplayedWeek(schedule)?.week_number, 10);
+  });
+
+  await test('findNextUnplayedWeek: every week already has a played match falls back to the last week', () => {
+    const schedule = [weekWithScores(10, ['13-9']), weekWithScores(11, ['13-5'])];
+    assert.equal(findNextUnplayedWeek(schedule)?.week_number, 11);
   });
 
   report();

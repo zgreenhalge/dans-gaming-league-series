@@ -21,7 +21,7 @@
 // the match is played.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getSeason, getSeasonSchedule, findCurrentWeek, getPlayersById } from './queries';
+import { getSeason, getSeasonSchedule, findNextUnplayedWeek, getPlayersById } from './queries';
 import type { WeekWithMatches, MatchWithRoster } from './queries/schedule';
 import { extractSeasonNumber } from './util';
 import { recordOpsError, clearOpsError } from './ops-errors';
@@ -198,8 +198,8 @@ async function publishMatchThread(
   }
 }
 
-function resolveTargetWeek(schedule: WeekWithMatches[], startDate: string | null, week: number | 'next'): WeekWithMatches | null {
-  return week === 'next' ? findCurrentWeek(schedule, startDate) : schedule.find((w) => w.week_number === week) ?? null;
+function resolveTargetWeek(schedule: WeekWithMatches[], week: number | 'next'): WeekWithMatches | null {
+  return week === 'next' ? findNextUnplayedWeek(schedule) : schedule.find((w) => w.week_number === week) ?? null;
 }
 
 /** Archives + locks a single match's Discord thread, if it has one — `writeMatchScore()`'s
@@ -241,9 +241,10 @@ export async function closeMatchThread(supabaseAdmin: SupabaseClient, matchId: n
 }
 
 /** Publishes one week's match threads for a regular season. `week` is either an explicit week number
- *  or `'next'`, resolved via `findCurrentWeek()` — the same helper the home page and the `/scheduled`
- *  Discord command use — so "publish next week" can never disagree with what the rest of the site
- *  calls "next week." Threads are created one at a time rather than in parallel, out of caution around
+ *  or `'next'`, resolved via `findNextUnplayedWeek()` — the first week with no played matches yet,
+ *  not the calendar-current week `findCurrentWeek()` gives the home page and `/scheduled` — since
+ *  out-of-order match entry means those can disagree on which week still needs threads. Threads are
+ *  created one at a time rather than in parallel, out of caution around
  *  Discord's per-route rate limits on forum thread creation. Returns `{ error }` for a season-level
  *  failure (bad season, unconfigured Discord, channel not found/wrong type, no such week) before any
  *  match is attempted; otherwise every match's own outcome, whether or not some of them failed. */
@@ -261,7 +262,7 @@ export async function publishWeekThreads(
   if (!token || !guildId) return { error: 'Discord is not configured (DISCORD_BOT_TOKEN / DISCORD_GUILD_ID)' };
 
   const schedule = await getSeasonSchedule(seasonId);
-  const targetWeek = resolveTargetWeek(schedule, season.start_date, week);
+  const targetWeek = resolveTargetWeek(schedule, week);
   if (!targetWeek) return { error: week === 'next' ? 'No upcoming week found' : `Week ${week} not found` };
   if (targetWeek.matches.length === 0) return { error: `Week ${targetWeek.week_number} has no matches` };
 
