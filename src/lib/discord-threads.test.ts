@@ -208,16 +208,27 @@ async function main() {
     assert.match(rows[0].message as string, /already exists in the channel/);
   });
 
-  await test('publishWeekThreads: "next" resolves the same way findCurrentWeek does', async () => {
+  await test('publishWeekThreads: "next" resolves to the first week with no played matches', async () => {
     process.env.DISCORD_BOT_TOKEN = 'bot-token';
     process.env.DISCORD_GUILD_ID = 'guild-1';
     stubDiscord();
-    // Season 3 ("Season 6"), week 13 (week_number 1) is its only week — "next" must resolve to it
-    // even though season 3's fixture matches (400) have no scheduled_at, same as findCurrentWeek's
-    // no-start_date fallback (though season 3 does have a start_date; either way there's one week).
+    // Season 3 ("Season 6"), week 13 (week_number 1) is its only week, with match 400 unplayed
+    // (final_score: null) — "next" must resolve to it regardless of the season's start_date.
     const result = await publishWeekThreads(adminClient, 3, 'next');
     assert.ok(!('error' in result));
     assert.equal((result as { weekNumber: number }).weekNumber, 1);
+  });
+
+  await test('publishWeekThreads: "next" skips a partially-played week for a fully-unplayed one', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    stubDiscord();
+    // Season 1's week_number 1 already has match 100 played (out-of-order entry); week_number 2 has
+    // only match 102, staged as "0-0" — unplayed. "next" must land on week_number 2, not 1, even
+    // though week 1 isn't fully played either.
+    const result = await publishWeekThreads(adminClient, 1, 'next');
+    assert.ok(!('error' in result));
+    assert.equal((result as { weekNumber: number }).weekNumber, 2);
   });
 
   await test('publishWeekThreads: a channel resolution failure is recorded to ops_errors (entity season) and returned directly', async () => {

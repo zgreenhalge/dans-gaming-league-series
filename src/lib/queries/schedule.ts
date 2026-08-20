@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { Week, Match, Faction } from '../types';
-import { allMatchesPlayed, weekWindow } from '../util';
+import { allMatchesPlayed, isPlayedScore, weekWindow } from '../util';
 import { getPlayersById } from './player';
 
 
@@ -149,6 +149,18 @@ export function findCurrentWeek(schedule: WeekWithMatches[], startDate: string |
   }
 
   return schedule[0];
+}
+
+/** The first week (by `week_number`) with no played matches yet — what "publish next week's match
+ *  threads" (`publishWeekThreads()`, `discord-threads.ts`) means by "next", deliberately independent
+ *  of `findCurrentWeek()`'s calendar window. Matches often get entered out of chronological order
+ *  (`docs/patterns.md`), so the calendar-current week can already be fully or partially played while
+ *  a later week hasn't started — threads belong on that untouched week, not on one that's mid-play.
+ *  Falls back to the last week if every week already has at least one played match. */
+export function findNextUnplayedWeek(schedule: WeekWithMatches[]): WeekWithMatches | null {
+  if (schedule.length === 0) return null;
+  const untouched = schedule.find((w) => !w.matches.some((m) => isPlayedScore(m.final_score)));
+  return untouched ?? schedule[schedule.length - 1];
 }
 
 /** True if the given week exists, has at least one match, and every match in it has a final,
