@@ -1,8 +1,18 @@
 // Core of a match score write — validates the payload, writes `matches.final_score` +
 // `player_match_stats`, persists sabremetrics, and runs the rating-recompute + gauntlet-or-season
-// completion + steam-id-learning hooks. Shared by the session-gated
-// `PATCH /api/matches/[id]/score` route (human confirm) and the demo-ingest Action's trusted
-// auto-commit (#138), so the write behaves identically regardless of who triggers it.
+// completion + steam-id-learning + Discord score-announcement/thread-close hooks. Shared by the
+// session-gated `PATCH /api/matches/[id]/score` route (human confirm) and the demo-ingest Action's
+// trusted auto-commit (#138), so the write — and every hook it fires — behaves identically regardless
+// of who triggers it. This is the only place any of those hooks fire from; a caller never fires them
+// itself, so a future caller can't forget to.
+//
+// The Discord hooks fire unconditionally on every write, not just a match's first score — an admin
+// correcting an already-played match's score or stats has genuinely changed what the announcement
+// message should show, and `notifyMatchScoreReported()` just edits that message in place from current
+// truth, so a correction that changes nothing produces an identical edit, not a duplicate post.
+// `closeMatchThread()` archiving/locking an already-archived thread is likewise a harmless no-op on
+// Discord's side. Neither hook throws internally, so a Discord-side failure here never blocks or
+// rolls back the score write itself.
 //
 // Has no dependency on `next/server` — the demo-ingest Action runs this outside any request scope, so
 // `after()` isn't available there. Pass `opts.after` (the route's own `after` import) to defer the
@@ -20,6 +30,8 @@ import { checkSeasonCompletion, checkGauntletCompletion } from './season-lifecyc
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { advanceJobStatus, matchJobKey } from './background-jobs';
 import { DEMO_INGEST_JOB_TYPE } from './demo/ingestResult';
+import { notifyMatchScoreReported } from './discord-notify';
+import { closeMatchThread } from './discord-threads';
 import type { DemoSabremetricStat, DemoWeaponStat, RoundHistoryEntry } from './types';
 
 type PlayerStatInput = {
@@ -365,7 +377,9 @@ export async function writeMatchScore(
 
   // Independent hooks — run concurrently (each already isolates its own failure) rather than
   // serializing behind the recompute's fetch, which never gates the others. The gauntlet branch is
-  // itself an ordered two-step pipeline (see runGauntletCompletionPipeline).
+  // itself an ordered two-step pipeline (see runGauntletCompletionPipeline). The Discord
+  // score-announcement + thread-close hooks fire unconditionally on every write — see this file's
+  // header for why that's correct rather than spammy.
   const runHooks = async (): Promise<void> => {
     await Promise.all([
       triggerRatingRecompute(supabaseAdmin, { jobKey: matchJobKey(matchId) }),
@@ -373,6 +387,8 @@ export async function writeMatchScore(
         ? runGauntletCompletionPipeline(supabaseAdmin, matchId, m.weeks.season_id)
         : runSeasonCompletionCheck(supabaseAdmin, m.weeks.season_id),
       runSteamIdLearningHook(supabaseAdmin, matchId, opts.learnSteamIds, warnings),
+      notifyMatchScoreReported(supabaseAdmin, matchId),
+      closeMatchThread(supabaseAdmin, matchId),
     ]);
   };
 

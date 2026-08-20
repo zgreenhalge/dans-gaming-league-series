@@ -195,13 +195,23 @@ investigating a parser issue) without needing a code change. An ineligible verdi
 disagreement between the demo score and `map_result`, or an already-confirmed match — always falls
 back to the staged-result review, regardless of the flag.
 
-`writeMatchScore()` is the single write path for a match score (validation, `matches.final_score` +
-`player_match_stats`, sabremetrics, rating recompute, gauntlet-propagate-or-season-completion, and
-admin-gated steam-id learning) — the interactive `PATCH /api/matches/[id]/score` route and the
-demo-ingest Action both call it, so the write behaves identically either way. It has no `next/server`
-dependency: the route defers its recompute/completion/steam-id hooks (run concurrently, since none
-gates another) past the response via its own `after()` (passed in as `opts.after`); the Action, which
-has no request scope and exits once `main()` returns, awaits them directly instead.
+`writeMatchScore()` is the single write path for a match score, and the single place every post-write
+hook fires from — validation, `matches.final_score` + `player_match_stats`, sabremetrics, rating
+recompute, gauntlet-propagate-or-season-completion, admin-gated steam-id learning, and the Discord
+`notifyMatchScoreReported()` / `closeMatchThread()` pair (`src/lib/discord-notify.ts` /
+`src/lib/discord-threads.ts`). The Discord pair fires on *every* write, not just a match's first score:
+`notifyMatchScoreReported()` edits the tracked announcement message in place from current truth, so an
+admin's later correction is reflected rather than left stale, and a no-op resubmit just re-writes the
+same content; `closeMatchThread()` archiving/locking an already-archived thread is a harmless no-op on
+Discord's side. Neither hook throws internally, so a Discord-side failure never blocks or rolls back
+the score write. The interactive `PATCH /api/matches/[id]/score` route and the demo-ingest Action both
+just call `writeMatchScore()` — neither fires any hook itself, so the two paths can't drift apart the
+way a duplicated call site could. `demo-ingest.yml` carries its own copies of `DISCORD_BOT_TOKEN` /
+`DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL` (alongside `RECOMPUTE_SECRET` etc.) so those hooks work from
+inside the Action too. `writeMatchScore()` has no `next/server` dependency: the route defers every hook
+(run concurrently, since none gates another) past the response via its own `after()` (passed in as
+`opts.after`); the Action, which has no request scope and exits once `main()` returns, awaits them
+directly instead.
 
 Reparsing an already-**confirmed** match (e.g. to backfill a newly added sabremetric) never goes
 through auto-commit — a score-unchanged reparse upserts sabremetrics directly (the shortcut above the
@@ -433,7 +443,10 @@ it's public, unlike the rest of this list), and `RECOMPUTE_SECRET` (repo **secre
 outside Vercel and have no other way to reach the app's recompute endpoint. `AUTO_COMMIT_ENABLED` (repo
 variable) gates trusted auto-commit (#138) — unset (or anything but `false`) writes an eligible
 verdict directly; `false` is the manual override (evaluated + logged, still staged for manual
-confirm).
+confirm). demo-ingest additionally needs its own copies of `DISCORD_BOT_TOKEN` (repo **secret**) and
+`DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL` (repo **variable**) — an auto-commit fires the same Discord
+score-announcement + thread-close hooks the interactive route fires, and each hook no-ops quietly if
+its own var is unset rather than failing the job.
 
 ## Key files
 

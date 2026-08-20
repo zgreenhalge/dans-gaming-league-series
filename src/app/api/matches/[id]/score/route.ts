@@ -8,8 +8,6 @@ import { writeMatchScore } from '@/lib/matchScore';
 import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import type { DemoSabremetricStat, DemoWeaponStat } from '@/lib/types';
 import { after, afterBestEffort } from '@/lib/after';
-import { notifyMatchScoreReported } from '@/lib/discord-notify';
-import { closeMatchThread } from '@/lib/discord-threads';
 
 type MatchRow = {
   id: number;
@@ -124,18 +122,9 @@ export async function PATCH(
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  // Discord notification + match-thread close, only on the transition into "played" — an admin
-  // correcting an already-played score (alreadyPlayed was computed before writeMatchScore() above)
-  // shouldn't re-post a "Final:" announcement or re-attempt closing a thread that's presumably
-  // already closed for the same match.
-  if (!alreadyPlayed) {
-    afterBestEffort(`discord-notify: score reported for match ${matchId}`, () =>
-      notifyMatchScoreReported(supabaseAdmin, matchId),
-    );
-    afterBestEffort(`discord-threads: close thread for match ${matchId}`, () =>
-      closeMatchThread(supabaseAdmin, matchId),
-    );
-  }
+  // writeMatchScore() itself fires the Discord score-announcement + thread-close hooks on every write
+  // (deferred via the `after` passed in above), including an admin's later correction — nothing extra
+  // to do here.
 
   // Score reported → schedule the match server's teardown (reuse model = stop, never delete), same
   // AUTO_TEARDOWN_DELAY_MS grace period as the map_result path. Best-effort; skipped when hosting
