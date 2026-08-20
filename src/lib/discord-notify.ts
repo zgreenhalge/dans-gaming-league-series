@@ -236,14 +236,20 @@ async function editEmbed(
 }
 
 /** The message a notification for this match should edit in place, if one's on record yet — reads
- *  `match_discord_state` the same way `rememberNotificationMessage()` below writes it. */
+ *  `match_discord_state` the same way `rememberNotificationMessage()` below writes it. Never throws
+ *  (a transient Supabase failure is treated as "nothing to edit yet", same as a genuinely empty row) —
+ *  every exported notify function here relies on that to keep its own no-throw guarantee. */
 async function getStoredMessageId(supabaseAdmin: SupabaseClient, matchId: number): Promise<string | null> {
-  const { data } = await supabaseAdmin
-    .from('match_discord_state')
-    .select('notification_message_id')
-    .eq('match_id', matchId)
-    .maybeSingle();
-  return (data as { notification_message_id: string | null } | null)?.notification_message_id ?? null;
+  try {
+    const { data } = await supabaseAdmin
+      .from('match_discord_state')
+      .select('notification_message_id')
+      .eq('match_id', matchId)
+      .maybeSingle();
+    return (data as { notification_message_id: string | null } | null)?.notification_message_id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Stores the message a later notification for this match should edit in place, keyed the same way
@@ -312,7 +318,8 @@ export async function notifyMatchLiveScore(
  *  just re-writes the same content, not a duplicate post. `meta.score` is only populated for a
  *  genuinely played match (gated on `isPlayedScore()` inside `getMatchMeta()`), which also excludes
  *  S3's pre-staged `"0-0"` rows — see the glossary on why `null` alone was never a sufficient played
- *  check; a call on a not-yet-played match is a no-op below rather than posting a premature result. */
+ *  check; a call on a not-yet-played match is a no-op below rather than posting a premature result.
+ *  Never throws — `writeMatchScore()` relies on that to call it unguarded inside its own `Promise.all`. */
 export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
   const webhookUrl = process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.
