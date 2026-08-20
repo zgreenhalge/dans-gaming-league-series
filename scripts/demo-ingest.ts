@@ -18,10 +18,10 @@
 // The write itself is gated on `AUTO_COMMIT_ENABLED !== 'false'` — auto-commit is on by default;
 // setting the repo Actions variable to `false` is the manual override, forcing every eligible match
 // through the staged-result review instead (e.g. while investigating a parser issue). `writeMatchScore()`
-// (`src/lib/matchScore.ts`) itself fires every post-write hook — rating recompute, gauntlet-or-season
-// completion, steam-id learning, and the Discord score-announcement/thread-close pair — on the
-// transition into "played", so a successful auto-commit here gets exactly the same hooks a human
-// confirm gets from `PATCH /api/matches/[id]/score`, with nothing extra to call from this script.
+// (`src/lib/matchScore.ts`) itself fires every post-write hook on this write — rating recompute,
+// gauntlet-or-season completion, steam-id learning, and the Discord score-announcement/thread-close
+// pair — so a successful auto-commit here gets exactly the same hooks a human confirm gets from
+// `PATCH /api/matches/[id]/score`, with nothing extra to call from this script.
 //
 // Reparsing an already-confirmed match (e.g. to backfill fields from a newly added collector) skips
 // both auto-commit and the staged-review step: when the freshly derived score matches the match's
@@ -188,8 +188,7 @@ async function main() {
       });
       if (written.ok) {
         // writeMatchScore() itself fires the rating-recompute/gauntlet-or-season-completion/steam-id
-        // and Discord score-announcement/thread-close hooks on this transition into "played" — nothing
-        // extra to do here.
+        // and Discord score-announcement/thread-close hooks on this write — nothing extra to do here.
         await Promise.all([deleteR2Object(demoResultKey(matchId)), deleteR2Object(mapResultKey(matchId))]);
         await setJob({
           status: 'confirmed',

@@ -253,11 +253,18 @@ async function getStoredMessageId(supabaseAdmin: SupabaseClient, matchId: number
 }
 
 /** Stores the message a later notification for this match should edit in place, keyed the same way
- *  `discord-threads.ts` keys `match_discord_state.thread_id`. */
+ *  `discord-threads.ts` keys `match_discord_state.thread_id`. Never throws — a failed write here just
+ *  means the next notification for this match won't find an id to edit and posts a fresh message
+ *  instead of updating in place, which is a worse UX but not a reason to break the caller's own
+ *  no-throw guarantee. */
 async function rememberNotificationMessage(supabaseAdmin: SupabaseClient, matchId: number, messageId: string): Promise<void> {
-  await supabaseAdmin
-    .from('match_discord_state')
-    .upsert({ match_id: matchId, notification_message_id: messageId }, { onConflict: 'match_id' });
+  try {
+    await supabaseAdmin
+      .from('match_discord_state')
+      .upsert({ match_id: matchId, notification_message_id: messageId }, { onConflict: 'match_id' });
+  } catch (e) {
+    console.error(`rememberNotificationMessage(${matchId}) failed (non-fatal):`, e);
+  }
 }
 
 /** Posted once a match's server transitions to `live` (provisionMatchServer()). Connect info is

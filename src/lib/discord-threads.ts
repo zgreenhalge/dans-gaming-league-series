@@ -208,28 +208,22 @@ function resolveTargetWeek(schedule: WeekWithMatches[], startDate: string | null
  *  `match_discord_state.thread_id` — most matches were never threaded in the first place.
  *  Archiving/locking an already-archived thread is a harmless no-op on Discord's side, so a retry (or
  *  a repeat call on a match that's already closed) can't double-fail — there's no need to gate this
- *  on a first-time score. Never throws: both the `match_discord_state` read and the Discord call are
- *  their own try/catch, recording a real failure to `ops_errors` rather than letting it propagate into
+ *  on a first-time score. Never throws: the `match_discord_state` read and the Discord call share one
+ *  try/catch, recording a real failure to `ops_errors` rather than letting it propagate into
  *  `writeMatchScore()`'s `Promise.all`. */
 export async function closeMatchThread(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
   const token = process.env.DISCORD_BOT_TOKEN;
   if (!token) return;
 
-  let threadId: string | null;
   try {
     const { data } = await supabaseAdmin
       .from('match_discord_state')
       .select('thread_id')
       .eq('match_id', matchId)
       .maybeSingle();
-    threadId = (data as { thread_id: string | null } | null)?.thread_id ?? null;
-  } catch (e) {
-    await recordOpsError(supabaseAdmin, 'match', matchId, THREAD_CLOSE_OPERATION, `Reading thread id failed: ${(e as Error).message}`);
-    return;
-  }
-  if (!threadId) return;
+    const threadId = (data as { thread_id: string | null } | null)?.thread_id ?? null;
+    if (!threadId) return;
 
-  try {
     const res = await fetch(`https://discord.com/api/v10/channels/${threadId}`, {
       method: 'PATCH',
       headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
