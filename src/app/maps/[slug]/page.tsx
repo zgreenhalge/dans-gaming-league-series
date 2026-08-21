@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
@@ -163,7 +164,9 @@ export default async function MapPage({
       </div>
 
       <main className="max-w-[1080px] mx-auto px-6 pb-16 mt-8">
-        <MapDetailView detail={detail} players={players} />
+        <Suspense>
+          <MapDetailView detail={detail} players={players} />
+        </Suspense>
       </main>
     </div>
   );

@@ -7,6 +7,7 @@ import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
 import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type MatchPickBanInput } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import { tabCls } from '@/lib/util';
+import { useTabState } from './useTabState';
 import EmptyState from './EmptyState';
 import Th from './Th';
 
@@ -612,13 +613,22 @@ function MapsAndSidesSection({
 
 type BasicStatsTab = 'basic' | 'kills' | 'games' | 'averages' | 'sides';
 
+// Every possible sub-tab, for `useTabState`'s own missing/invalid-param fallback — the `tabs.some`
+// check below still hides "Maps & Sides" when there's no per-match data to show there.
+const BASIC_STATS_TABS: readonly BasicStatsTab[] = ['basic', 'kills', 'games', 'averages', 'sides'];
+
 /**
  * The site's baseline K/D/A/ADR-family stats — named to stay distinct from the demo-derived
  * "Advanced Stats" tab (SabremetricsLeaderboardView), which this predates and is unrelated to.
+ *
+ * Rendered from three different "Stats" tabs (season hub, map detail, career stats page), each of
+ * which already owns its own outer `tab` param — this sub-tab reads/writes a `stab` param (distinct
+ * from `tab`) directly, with no controlled/uncontrolled duality needed: exactly one `BasicStatsView`
+ * is ever mounted at a time, unlike `SeasonTabView`'s two parallel regular/gauntlet instances.
  */
 export function BasicStatsView({ rows, matches, singleMap = false }: { rows: LeaderboardRowWithId[]; matches?: MatchPickBanInput[]; singleMap?: boolean }) {
   const data = useMemo(() => rows.map((row) => ({ row, stats: computeAdvancedStats(row) })), [rows]);
-  const [tab, setTab] = useState<BasicStatsTab>('basic');
+  const [rawTab, setTab] = useTabState(BASIC_STATS_TABS, 'basic', 'stab');
 
   const mapPickBanStats = useMemo<MapPickBanStat[]>(
     () => (matches && !singleMap ? aggregateMapPickBanStats(matches) : []),
@@ -642,6 +652,9 @@ export function BasicStatsView({ rows, matches, singleMap = false }: { rows: Lea
     { key: 'averages', label: 'Averages' },
     ...(matches ? [{ key: 'sides' as const, label: 'Maps & Sides' }] : []),
   ];
+  // Falls back to the first surviving tab when `stab` names one this call site has hidden (e.g.
+  // `stab=sides` on a view with no per-match data) — same fallback shape as `SeasonTabView`'s `tab`.
+  const tab = tabs.some((t) => t.key === rawTab) ? rawTab : (tabs[0]?.key ?? rawTab);
 
   return (
     <div className="space-y-4">
