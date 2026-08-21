@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import EmptyState from './EmptyState';
 import LeaderboardTable from './LeaderboardTable';
 import { MatchCard } from './MatchCard';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
+import { useTabState } from './useTabState';
 import TabBar from './TabBar';
 import { BasicStatsView } from './BasicStatsView';
 import { tabCls, canonicalSort, deriveRates } from '@/lib/util';
@@ -15,6 +16,8 @@ import H2HSection from './H2HSection';
 import MapHeatmap from './MapHeatmap';
 
 type Tab = 'leaderboard' | 'stats' | 'matches' | 'h2h' | 'heatmap';
+
+const MAP_TABS: readonly Tab[] = ['leaderboard', 'stats', 'matches', 'h2h', 'heatmap'];
 
 function toRosterStat(s: MapPlayerStat) {
   return {
@@ -109,8 +112,11 @@ export default function MapDetailView({
   detail: MapDetail;
   players: { id: number; name: string; steam_avatar_url: string | null }[];
 }) {
+  // No `resetSeasonOnToggle` — this view relies on `SeasonFilter`'s own effect (wired through the
+  // `onSeasonChange` prop below) to reset `selectedSeason` only when it actually becomes invalid
+  // after a regular/gauntlet toggle, rather than unconditionally resetting to "all" every time.
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter();
-  const [tab, setTab] = useState<Tab>('leaderboard');
+  const [tab, setTab] = useTabState(MAP_TABS, 'leaderboard');
 
   const uniqueSeasons = useMemo(() => {
     const seen = new Map<number, { id: number; name: string; is_gauntlet: boolean }>();
