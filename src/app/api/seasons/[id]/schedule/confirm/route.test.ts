@@ -11,6 +11,7 @@ import { __setTestSession } from '@/lib/session';
 import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
+import { makeSeasonScheduleDraftRpcHandlers } from '@/lib/test-support/seasonScheduleDraftRpc';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
 import { test, report } from '@/lib/test-support/miniTest';
 import { buildRosterSchedule } from '@/lib/season-schedule-engine';
@@ -65,11 +66,11 @@ function makeDb(): FakeDb {
       ...ROSTER.filter((id) => id !== ADMIN_ID && id !== PLAYER_ID).map((id) => ({ id, is_admin: false, name: `Player ${id}` })),
     ],
     seasons: [
-      { id: NO_DRAFT_SEASON_ID, name: 'Season 20', status: 'UPCOMING', is_gauntlet: false, schedule_draft_locked_at: null, target_win_rounds: 13 },
-      { id: READY_DRAFT_SEASON_ID, name: 'Season 21', status: 'UPCOMING', is_gauntlet: false, schedule_draft_locked_at: null, target_win_rounds: 13 },
-      { id: INCOMPLETE_DRAFT_SEASON_ID, name: 'Season 22', status: 'UPCOMING', is_gauntlet: false, schedule_draft_locked_at: null, target_win_rounds: 13 },
-      { id: ALREADY_MATERIALIZED_SEASON_ID, name: 'Season 23', status: 'UPCOMING', is_gauntlet: false, schedule_draft_locked_at: null, target_win_rounds: 13 },
-      { id: ACTIVE_SEASON_ID, name: 'Season 24', status: 'ACTIVE', is_gauntlet: false, schedule_draft_locked_at: null, target_win_rounds: 13 },
+      { id: NO_DRAFT_SEASON_ID, name: 'Season 20', status: 'UPCOMING', is_gauntlet: false, target_win_rounds: 13 },
+      { id: READY_DRAFT_SEASON_ID, name: 'Season 21', status: 'UPCOMING', is_gauntlet: false, target_win_rounds: 13 },
+      { id: INCOMPLETE_DRAFT_SEASON_ID, name: 'Season 22', status: 'UPCOMING', is_gauntlet: false, target_win_rounds: 13 },
+      { id: ALREADY_MATERIALIZED_SEASON_ID, name: 'Season 23', status: 'UPCOMING', is_gauntlet: false, target_win_rounds: 13 },
+      { id: ACTIVE_SEASON_ID, name: 'Season 24', status: 'ACTIVE', is_gauntlet: false, target_win_rounds: 13 },
     ],
     season_players: [
       ...ROSTER.map((id, i) => ({ id: i + 1, season_id: READY_DRAFT_SEASON_ID, player_id: id })),
@@ -87,7 +88,7 @@ function makeDb(): FakeDb {
 
 function installFixture(): FakeDb {
   const db = makeDb();
-  const client = createFakeSupabaseClient(db);
+  const client = createFakeSupabaseClient(db, makeSeasonScheduleDraftRpcHandlers());
   __setTestClient(client);
   __setTestAdminClient(client);
   return db;

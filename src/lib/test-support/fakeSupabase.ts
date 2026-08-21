@@ -185,7 +185,7 @@ function matchFilter(row: Row, f: Filter): boolean {
 
 /** Shared by `.or()` clauses (e.g. `col.lte.val`) — a separate, slightly wider operator set than
  * `matchFilter`'s since `.or()` expressions this codebase builds mix comparators freely
- * (`schedule_draft_locked_at.is.null,schedule_draft_locked_at.lte.${cutoff}`). */
+ * (`name_changed_at.is.null,name_changed_at.lte.${cutoff}`). */
 function matchOrClause(row: Row, c: OrClause): boolean {
   const rv = row[c.col];
   switch (c.op) {
