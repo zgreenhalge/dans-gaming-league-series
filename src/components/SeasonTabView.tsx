@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useTabState } from './useTabState';
+import { useTabState, resolveTab } from './useTabState';
 import { useUrlState, useSetUrlParams } from './useUrlState';
 import LeaderboardTable from './LeaderboardTable';
 import ScheduleList from './ScheduleList';
@@ -66,7 +66,7 @@ type GauntletMode = {
 export type { Tab as SeasonTab };
 
 // Every possible tab key, for `useTabState`'s own missing/invalid-param fallback. This is broader
-// than what's actually shown for a given season — the `tabs.some(...)` check further down still
+// than what's actually shown for a given season — the `resolveTab(...)` call further down still
 // hides tabs with no data behind them — but `useTabState` needs a fixed list to validate against.
 // Exported so `CombinedSeasonTabView`'s own `subTab` (shared between this component's regular and
 // gauntlet instances) validates against the same list instead of a second, driftable copy.
@@ -332,7 +332,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   ];
   // Falls back to the first surviving tab when the caller-controlled `tab` (shared between the
   // regular and gauntlet sub-views in `CombinedSeasonTabView`) points at one this side has hidden.
-  const tab = tabs.some((t) => t.key === rawTab) ? rawTab : (tabs[0]?.key ?? rawTab);
+  const tab = resolveTab(rawTab, tabs);
 
   const scheduleControls = tab === 'schedule' && (
     <>

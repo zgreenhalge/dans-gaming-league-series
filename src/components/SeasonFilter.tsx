@@ -93,22 +93,24 @@ export function useSeasonFilter(options?: { resetSeasonOnToggle?: boolean }): Se
   const includeGauntlet = gntRaw !== '0';
   const selectedSeason: number | 'all' = seasonRaw === 'all' ? 'all' : Number(seasonRaw);
 
-  function toggleRegular() {
-    if (includeRegular && !includeGauntlet) return;
+  // Shared by `toggleRegular`/`toggleGauntlet` below — same guard (don't allow turning off the last
+  // remaining filter) and the same `resetSeasonOnToggle` branch, differing only in which of `reg`/
+  // `gnt` is being flipped.
+  function toggle(mine: boolean, other: boolean, key: 'reg' | 'gnt', setRaw: (next: '0' | '1') => void) {
+    if (mine && !other) return;
     if (options?.resetSeasonOnToggle) {
-      setUrlParams({ reg: includeRegular ? '0' : undefined, season: undefined });
+      setUrlParams({ [key]: mine ? '0' : undefined, season: undefined });
     } else {
-      setRegRaw(includeRegular ? '0' : '1');
+      setRaw(mine ? '0' : '1');
     }
   }
 
+  function toggleRegular() {
+    toggle(includeRegular, includeGauntlet, 'reg', setRegRaw);
+  }
+
   function toggleGauntlet() {
-    if (includeGauntlet && !includeRegular) return;
-    if (options?.resetSeasonOnToggle) {
-      setUrlParams({ gnt: includeGauntlet ? '0' : undefined, season: undefined });
-    } else {
-      setGntRaw(includeGauntlet ? '0' : '1');
-    }
+    toggle(includeGauntlet, includeRegular, 'gnt', setGntRaw);
   }
 
   function setSelectedSeason(s: number | 'all') {

@@ -14,7 +14,7 @@ import EmptyState from './EmptyState';
 import { MatchCard } from './MatchCard';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
-import { useTabState } from './useTabState';
+import { useTabState, resolveTab } from './useTabState';
 import Sparkline from './Sparkline';
 import { CountdownTimer } from './CountdownTimer';
 import MatchupsTab from './MatchupsTab';
@@ -25,7 +25,6 @@ import StatTileGrid from './StatTileGrid';
 import TabBar from './TabBar';
 import Th from './Th';
 
-type Filter = 'career' | number;
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
 type PlayerTab = 'stats' | 'matches' | 'advanced' | 'trophies' | 'matchups' | 'trails';
 type MatchesSubTab = 'history' | 'upcoming';
@@ -158,14 +157,9 @@ export default function PlayerView({
   }, [history]);
 
   // `resetSeasonOnToggle: true` — toggling regular/gauntlet here always resets the season selector
-  // back to career, matching this page's existing behavior (see useSeasonFilter's docstring for why
-  // that differs from MapDetailView, which doesn't opt in).
+  // back to "all" (this page's "Career"), matching this page's existing behavior (see
+  // useSeasonFilter's docstring for why that differs from MapDetailView, which doesn't opt in).
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ resetSeasonOnToggle: true });
-  // "Career" is this page's own vocabulary for useSeasonFilter's "all" — kept local so the existing
-  // UI copy ("Career stats", the "Career" <option>) doesn't have to change; both mean the same thing
-  // and share the same `season` URL param underneath.
-  const filter: Filter = selectedSeason === 'all' ? 'career' : selectedSeason;
-  function setFilter(next: Filter) { setSelectedSeason(next === 'career' ? 'all' : next); }
 
   const [rawTab, setTab] = useTabState(PLAYER_TABS, 'stats');
   const [rawMatchesSubTab, setMatchesSubTab] = useTabState(MATCHES_SUB_TABS, 'history', 'msub');
@@ -193,47 +187,47 @@ export default function PlayerView({
   }
 
   const filtered = useMemo(() => {
-    const base = filter === 'career'
+    const base = selectedSeason === 'all'
       ? history
       : (() => {
-          const pairedGntId = regularToGauntlet.get(filter);
+          const pairedGntId = regularToGauntlet.get(selectedSeason);
           return history.filter((r) =>
-            r.season_id === filter ||
+            r.season_id === selectedSeason ||
             (pairedGntId != null && r.season_id === pairedGntId),
           );
         })();
     return base.filter((r) =>
       r.is_gauntlet ? includeGauntlet : includeRegular,
     );
-  }, [filter, history, includeRegular, includeGauntlet, regularToGauntlet]);
+  }, [selectedSeason, history, includeRegular, includeGauntlet, regularToGauntlet]);
 
   const last5 = useMemo(() => filtered.filter(isPlayed).slice(0, 5), [filtered]);
 
   const filteredTrophies = useMemo(() => {
-    const base = filter === 'career'
+    const base = selectedSeason === 'all'
       ? trophies
       : (() => {
-          const pairedGntId = regularToGauntlet.get(filter);
+          const pairedGntId = regularToGauntlet.get(selectedSeason);
           return trophies.filter((t) =>
-            t.season_id === filter ||
+            t.season_id === selectedSeason ||
             (pairedGntId != null && t.season_id === pairedGntId),
           );
         })();
     return base.filter((t) => (t.is_gauntlet ? includeGauntlet : includeRegular));
-  }, [filter, trophies, includeRegular, includeGauntlet, regularToGauntlet]);
+  }, [selectedSeason, trophies, includeRegular, includeGauntlet, regularToGauntlet]);
 
   const filteredEhog = useMemo(() => {
-    const base = filter === 'career'
+    const base = selectedSeason === 'all'
       ? ehogHistory
       : (() => {
-          const sel = regularSeasons.find((s) => s.id === filter);
+          const sel = regularSeasons.find((s) => s.id === selectedSeason);
           const sn = sel ? extractSeasonNumber(sel.name) : null;
           return ehogHistory.filter((h) => h.seasonNumber === sn);
         })();
     return base.filter((h) =>
       h.isGauntlet ? includeGauntlet : includeRegular,
     );
-  }, [filter, ehogHistory, includeRegular, includeGauntlet, regularSeasons]);
+  }, [selectedSeason, ehogHistory, includeRegular, includeGauntlet, regularSeasons]);
 
   const agg = aggregatePlayerStats(filtered);
   const peakEhog = useMemo(() => {
@@ -268,7 +262,7 @@ export default function PlayerView({
     };
   }, [careerLeaderboard, agg]);
 
-  const isCareer = filter === 'career';
+  const isCareer = selectedSeason === 'all';
 
   const medalCounts = useMemo(() => {
     const counts: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 };
@@ -279,19 +273,19 @@ export default function PlayerView({
   // League-wide sabremetric rows under the active season filter — used as the
   // baseline for the player's Plus stats (player per-round value vs. league avg).
   const filteredLeagueSabremetrics = useMemo(() => {
-    const base = filter === 'career'
+    const base = selectedSeason === 'all'
       ? sabremetrics
       : (() => {
-          const pairedGntId = regularToGauntlet.get(filter);
+          const pairedGntId = regularToGauntlet.get(selectedSeason);
           return sabremetrics.filter((r) =>
-            r.season_id === filter ||
+            r.season_id === selectedSeason ||
             (pairedGntId != null && r.season_id === pairedGntId),
           );
         })();
     return base.filter((r) =>
       r.is_gauntlet ? includeGauntlet : includeRegular,
     );
-  }, [filter, sabremetrics, includeRegular, includeGauntlet, regularToGauntlet]);
+  }, [selectedSeason, sabremetrics, includeRegular, includeGauntlet, regularToGauntlet]);
 
   const filteredPlayerSabremetrics = useMemo(
     () => filteredLeagueSabremetrics.filter((r) => r.player_id === playerId),
@@ -318,9 +312,8 @@ export default function PlayerView({
     playerTabs.push({ key: 'trophies', label: `Trophy Case${filteredTrophies.length > 0 ? ` (${filteredTrophies.length})` : ''}` });
   }
   // Falls back to the first surviving tab when `tab` names one this player doesn't have (e.g. a
-  // stale `?tab=trails` link for a player with no ready replay) — same shape as SeasonTabView's and
-  // BasicStatsView's fallback.
-  const tab = playerTabs.some((t) => t.key === rawTab) ? rawTab : (playerTabs[0]?.key ?? rawTab);
+  // stale `?tab=trails` link for a player with no ready replay).
+  const tab = resolveTab(rawTab, playerTabs);
 
   return (
     <>
@@ -396,14 +389,14 @@ export default function PlayerView({
               showGauntlet={gauntletSeasons.length > 0}
             />
             <select
-              value={String(filter)}
+              value={String(selectedSeason)}
               onChange={(e) => {
                 const v = e.target.value;
-                setFilter(v === 'career' ? 'career' : Number(v));
+                setSelectedSeason(v === 'all' ? 'all' : Number(v));
               }}
               className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
             >
-              <option value="career">Career</option>
+              <option value="all">Career</option>
               {activeSeasons.map((s) => (
                 <option key={s.id} value={s.id}>
                   {seasonTitle(s.name)}

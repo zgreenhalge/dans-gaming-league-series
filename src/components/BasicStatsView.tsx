@@ -7,7 +7,7 @@ import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
 import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type MatchPickBanInput } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import { tabCls } from '@/lib/util';
-import { useTabState } from './useTabState';
+import { useTabState, resolveTab } from './useTabState';
 import EmptyState from './EmptyState';
 import Th from './Th';
 
@@ -613,8 +613,8 @@ function MapsAndSidesSection({
 
 type BasicStatsTab = 'basic' | 'kills' | 'games' | 'averages' | 'sides';
 
-// Every possible sub-tab, for `useTabState`'s own missing/invalid-param fallback — the `tabs.some`
-// check below still hides "Maps & Sides" when there's no per-match data to show there.
+// Every possible sub-tab, for `useTabState`'s own missing/invalid-param fallback — the
+// `resolveTab(...)` call below still hides "Maps & Sides" when there's no per-match data to show there.
 const BASIC_STATS_TABS: readonly BasicStatsTab[] = ['basic', 'kills', 'games', 'averages', 'sides'];
 
 /**
@@ -653,8 +653,8 @@ export function BasicStatsView({ rows, matches, singleMap = false }: { rows: Lea
     ...(matches ? [{ key: 'sides' as const, label: 'Maps & Sides' }] : []),
   ];
   // Falls back to the first surviving tab when `stab` names one this call site has hidden (e.g.
-  // `stab=sides` on a view with no per-match data) — same fallback shape as `SeasonTabView`'s `tab`.
-  const tab = tabs.some((t) => t.key === rawTab) ? rawTab : (tabs[0]?.key ?? rawTab);
+  // `stab=sides` on a view with no per-match data).
+  const tab = resolveTab(rawTab, tabs);
 
   return (
     <div className="space-y-4">
