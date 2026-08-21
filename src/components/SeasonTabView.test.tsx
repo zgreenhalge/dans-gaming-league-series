@@ -15,6 +15,7 @@ import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
 import { createNextAuthMock } from '@/lib/test-support/mockNextAuth';
 import { leaderboardRow, EMPTY_H2H } from '@/lib/test-support/leaderboardFixtures';
+import { h2hDataWithDuo } from '@/lib/test-support/h2hFixtures';
 import SeasonTabView from './SeasonTabView';
 import type { WeekWithMatches, GauntletRound } from '@/lib/queries';
 
@@ -264,4 +265,25 @@ describe('SeasonTabView — week/round deep link', () => {
     expect(screen.getByRole('button', { name: /Round 3/ })).toHaveAttribute('aria-expanded', 'true');
   });
 
+});
+
+describe('SeasonTabView — H2H pair writes to the URL', () => {
+  test('clicking a duo row writes `a`/`b` (and omits the default `type`)', async () => {
+    nextNavigationMock.setSearchParams('tab=h2h');
+    render(
+      <SeasonTabView
+        kind="regular"
+        leaderboard={[leaderboardRow()]}
+        schedule={[week(1, 1)]}
+        seasonStartDate={null}
+        seasonStatus="ACTIVE"
+        currentPlayerId={null}
+        h2hData={h2hDataWithDuo()}
+      />,
+    );
+    await userEvent.click(screen.getAllByText('Alice & Bob')[0]);
+
+    expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
+    expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/seasons/1?tab=h2h&a=Alice&b=Bob');
+  });
 });

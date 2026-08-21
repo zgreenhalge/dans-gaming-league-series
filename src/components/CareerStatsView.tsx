@@ -6,7 +6,8 @@ import EmptyState from './EmptyState';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import { useTabState } from './useTabState';
-import H2HSection from './H2HSection';
+import { useSetUrlParams } from './useUrlState';
+import H2HSection, { parseH2HPairFromParams, h2hPairToParams } from './H2HSection';
 import { BasicStatsView } from './BasicStatsView';
 import { buildRegularToGauntletMap, deriveRates, extractSeasonNumber, seasonTitle, tabCls } from '@/lib/util';
 import { computeH2H, mapMatchRowsToH2HInput } from '@/lib/h2h';
@@ -84,22 +85,20 @@ export default function CareerStatsView({
   const [tab, setTab] = useTabState(CAREER_TABS, 'leaderboard');
   const [hoveredPlayerId, setHoveredPlayerId] = useState<number | null>(null);
 
-  // Read-only for now — `H2HSection` has no write-back (`onPairChange`) yet; that's a separate,
-  // cross-cutting change touching all three of its call sites, not specific to this view. A single
-  // `useSearchParams()` read (rather than three separate `useUrlState` calls) since nothing here is
-  // written back — each `useUrlState` call would otherwise mount its own unused write plumbing.
+  // A single `useSearchParams()` read for the initial pair (rather than going through `useUrlState`)
+  // since the read side alone needs no write plumbing of its own — `setUrlParams` below covers the
+  // one atomic write `onPairChange` needs.
   const searchParams = useSearchParams();
+  const setUrlParams = useSetUrlParams();
 
-  const urlInitialPair = useMemo<H2HPair | null>(() => {
-    const aName = searchParams.get('a');
-    const bName = searchParams.get('b');
-    const type = searchParams.get('type') === 'opponent' ? 'opponent' : 'partner';
-    if (!aName || !bName) return null;
-    const a = players.find((p) => p.name.toLowerCase() === aName.toLowerCase());
-    const b = players.find((p) => p.name.toLowerCase() === bName.toLowerCase());
-    if (!a || !b) return null;
-    return { a: a.id, b: b.id, type };
-  }, [searchParams, players]);
+  const urlInitialPair = useMemo<H2HPair | null>(
+    () => parseH2HPairFromParams(searchParams, players),
+    [searchParams, players],
+  );
+
+  function handleH2HPairChange(pair: H2HPair) {
+    setUrlParams(h2hPairToParams(pair, players));
+  }
 
   // Map regular season ID → paired gauntlet season ID (matched by season number)
   const regularToGauntlet = useMemo(
@@ -279,7 +278,7 @@ export default function CareerStatsView({
       )}
 
       {tab === 'h2h' && (
-        <H2HSection data={h2hData} initialPair={urlInitialPair} />
+        <H2HSection data={h2hData} initialPair={urlInitialPair} onPairChange={handleH2HPairChange} />
       )}
     </>
   );

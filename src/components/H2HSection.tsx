@@ -11,6 +11,37 @@ import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdow
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
 
+/** Resolves an `H2HPair` (by player id) from `a`/`b`/`type` URL params (`a`/`b` are player names,
+ * matched case-insensitively — the same encoding `h2hPairToParams` writes). `null` if either name is
+ * absent or doesn't match a known player. */
+export function parseH2HPairFromParams(
+  searchParams: URLSearchParams,
+  players: { id: number; name: string }[],
+): H2HPair | null {
+  const aName = searchParams.get('a');
+  const bName = searchParams.get('b');
+  if (!aName || !bName) return null;
+  const a = players.find((p) => p.name.toLowerCase() === aName.toLowerCase());
+  const b = players.find((p) => p.name.toLowerCase() === bName.toLowerCase());
+  if (!a || !b) return null;
+  const type = searchParams.get('type') === 'opponent' ? 'opponent' : 'partner';
+  return { a: a.id, b: b.id, type };
+}
+
+/** The inverse of `parseH2HPairFromParams` — an `H2HSection` `onPairChange` handler's pair (by
+ * player id) into the `a`/`b`/`type` patch to hand `useSetUrlParams()`. `type` omits itself for the
+ * default `'partner'`, matching this codebase's "writing the default removes the param" convention. */
+export function h2hPairToParams(
+  pair: H2HPair,
+  players: { id: number; name: string }[],
+): { a?: string; b?: string; type?: string } {
+  return {
+    a: players.find((p) => p.id === pair.a)?.name,
+    b: players.find((p) => p.id === pair.b)?.name,
+    type: pair.type === 'opponent' ? 'opponent' : undefined,
+  };
+}
+
 function LeagueAvgCircle({ value, colorStart, colorEnd, title }: { value: number; colorStart: string; colorEnd: string; title?: string }) {
   return (
     <div className="flex items-center gap-2">
@@ -21,8 +52,19 @@ function LeagueAvgCircle({ value, colorStart, colorEnd, title }: { value: number
 }
 
 /** Cards, matrix, and detail panels for a set of head-to-head data — shared between the
- * career statistics page and per-season hubs (regular season and gauntlet). */
-export default function H2HSection({ data, initialPair }: { data: H2HData; initialPair?: H2HPair | null }) {
+ * career statistics page and per-season hubs (regular season and gauntlet). `onPairChange`, if
+ * given, is called with every explicit selection (a row click, a matrix cell click, a flip button —
+ * never a hover preview), so a parent can mirror the active pair into its own URL state without this
+ * component knowing anything about routing. */
+export default function H2HSection({
+  data,
+  initialPair,
+  onPairChange,
+}: {
+  data: H2HData;
+  initialPair?: H2HPair | null;
+  onPairChange?: (pair: H2HPair) => void;
+}) {
   const { duos, rivals, players } = data;
 
   const playersById = useMemo(() => {
@@ -37,9 +79,14 @@ export default function H2HSection({ data, initialPair }: { data: H2HData; initi
     return null;
   }, [duos, rivals]);
 
-  const [sel, setSel] = useState<H2HPair | null>(initialPair ?? defaultPair);
+  const [sel, setSelRaw] = useState<H2HPair | null>(initialPair ?? defaultPair);
   const [hover, setHover] = useState<H2HPair | null>(null);
   const active = hover ?? sel ?? defaultPair;
+
+  function setSel(pair: H2HPair) {
+    setSelRaw(pair);
+    onPairChange?.(pair);
+  }
 
   // See "Blended score" in docs/glossary.md. Scorer factories normalise against the full set
   // so the top-5 ranking and matrix gradient stay derived from the same formula.

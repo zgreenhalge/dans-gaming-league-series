@@ -12,8 +12,9 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
+import { H2H_PLAYERS } from '@/lib/test-support/h2hFixtures';
 import MapDetailView from './MapDetailView';
-import type { MapMatchRow, MapDetail } from '@/lib/queries';
+import type { MapMatchRow, MapDetail, MapPlayerStat } from '@/lib/queries';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
 
@@ -57,6 +58,23 @@ function baseDetail(overrides: Partial<MapDetail> = {}): MapDetail {
     seasons: [{ id: 1, name: 'Season 1', is_gauntlet: false }],
     matches: [matchRow()],
     playerStats: [],
+    ...overrides,
+  };
+}
+
+function playerStat(overrides: Partial<MapPlayerStat> = {}): MapPlayerStat {
+  return {
+    player_id: 1,
+    player_name: 'Alice',
+    faction: 'SHIRTS',
+    kills: 20,
+    assists: 5,
+    deaths: 15,
+    adr: 75,
+    damage: 1000,
+    rounds_played: 13,
+    rounds_won: 8,
+    is_win: true,
     ...overrides,
   };
 }
@@ -111,5 +129,26 @@ describe('MapDetailView — season filter', () => {
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
     expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/maps/de_dust2?season=1&reg=0');
+  });
+});
+
+describe('MapDetailView — H2H pair writes to the URL', () => {
+  test('clicking a duo row writes `a`/`b` (and omits the default `type`)', async () => {
+    nextNavigationMock.setSearchParams('tab=h2h');
+    const detail = baseDetail({
+      matches: [
+        matchRow({
+          shirts_stats: [
+            playerStat({ player_id: 1, player_name: 'Alice' }),
+            playerStat({ player_id: 2, player_name: 'Bob' }),
+          ],
+        }),
+      ],
+    });
+    render(<MapDetailView detail={detail} players={H2H_PLAYERS} />);
+    await userEvent.click(screen.getAllByText('Alice & Bob')[0]);
+
+    expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
+    expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/maps/de_dust2?tab=h2h&a=Alice&b=Bob');
   });
 });

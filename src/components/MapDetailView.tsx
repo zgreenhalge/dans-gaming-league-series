@@ -1,18 +1,21 @@
 'use client';
 
 import { useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import EmptyState from './EmptyState';
 import LeaderboardTable from './LeaderboardTable';
 import { MatchCard } from './MatchCard';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import { useTabState } from './useTabState';
+import { useSetUrlParams } from './useUrlState';
 import TabBar from './TabBar';
 import { BasicStatsView } from './BasicStatsView';
 import { tabCls, canonicalSort, deriveRates } from '@/lib/util';
 import { computeH2H, mapMatchRowsToH2HInput } from '@/lib/h2h';
 import type { MapMatchRow, MapDetail, MapPlayerStat } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import H2HSection from './H2HSection';
+import H2HSection, { parseH2HPairFromParams, h2hPairToParams } from './H2HSection';
+import type { H2HPair } from './H2HMatrix';
 import MapHeatmap from './MapHeatmap';
 
 type Tab = 'leaderboard' | 'stats' | 'matches' | 'h2h' | 'heatmap';
@@ -117,6 +120,8 @@ export default function MapDetailView({
   // after a regular/gauntlet toggle, rather than unconditionally resetting to "all" every time.
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter();
   const [tab, setTab] = useTabState(MAP_TABS, 'leaderboard');
+  const searchParams = useSearchParams();
+  const setUrlParams = useSetUrlParams();
 
   const uniqueSeasons = useMemo(() => {
     const seen = new Map<number, { id: number; name: string; is_gauntlet: boolean }>();
@@ -146,6 +151,15 @@ export default function MapDetailView({
     () => computeH2H(mapMatchRowsToH2HInput(filteredMatches), playersById),
     [filteredMatches, playersById],
   );
+
+  const urlInitialPair = useMemo<H2HPair | null>(
+    () => parseH2HPairFromParams(searchParams, players),
+    [searchParams, players],
+  );
+
+  function handleH2HPairChange(pair: H2HPair) {
+    setUrlParams(h2hPairToParams(pair, players));
+  }
 
   // Stable list of every match id for this map — the Heatmap tab fetches its artifacts
   // lazily for these (memoized so the fetch effect doesn't re-run on every render).
@@ -229,7 +243,7 @@ export default function MapDetailView({
         )
       )}
 
-      {tab === 'h2h' && <H2HSection data={h2hData} />}
+      {tab === 'h2h' && <H2HSection data={h2hData} initialPair={urlInitialPair} onPairChange={handleH2HPairChange} />}
 
       {tab === 'heatmap' && (
         <MapHeatmap
