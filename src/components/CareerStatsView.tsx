@@ -1,10 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import EmptyState from './EmptyState';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
-import { useUrlState } from './useUrlState';
 import { useTabState } from './useTabState';
 import H2HSection from './H2HSection';
 import { BasicStatsView } from './BasicStatsView';
@@ -85,20 +85,21 @@ export default function CareerStatsView({
   const [hoveredPlayerId, setHoveredPlayerId] = useState<number | null>(null);
 
   // Read-only for now — `H2HSection` has no write-back (`onPairChange`) yet; that's a separate,
-  // cross-cutting change touching all three of its call sites, not specific to this view.
-  const [aRaw] = useUrlState<string>('a', '');
-  const [bRaw] = useUrlState<string>('b', '');
-  const [typeRaw] = useUrlState<'partner' | 'opponent'>('type', 'partner', {
-    parse: (raw) => (raw === 'opponent' ? 'opponent' : 'partner'),
-  });
+  // cross-cutting change touching all three of its call sites, not specific to this view. A single
+  // `useSearchParams()` read (rather than three separate `useUrlState` calls) since nothing here is
+  // written back — each `useUrlState` call would otherwise mount its own unused write plumbing.
+  const searchParams = useSearchParams();
 
   const urlInitialPair = useMemo<H2HPair | null>(() => {
-    if (!aRaw || !bRaw) return null;
-    const a = players.find((p) => p.name.toLowerCase() === aRaw.toLowerCase());
-    const b = players.find((p) => p.name.toLowerCase() === bRaw.toLowerCase());
+    const aName = searchParams.get('a');
+    const bName = searchParams.get('b');
+    const type = searchParams.get('type') === 'opponent' ? 'opponent' : 'partner';
+    if (!aName || !bName) return null;
+    const a = players.find((p) => p.name.toLowerCase() === aName.toLowerCase());
+    const b = players.find((p) => p.name.toLowerCase() === bName.toLowerCase());
     if (!a || !b) return null;
-    return { a: a.id, b: b.id, type: typeRaw };
-  }, [aRaw, bRaw, typeRaw, players]);
+    return { a: a.id, b: b.id, type };
+  }, [searchParams, players]);
 
   // Map regular season ID → paired gauntlet season ID (matched by season number)
   const regularToGauntlet = useMemo(
