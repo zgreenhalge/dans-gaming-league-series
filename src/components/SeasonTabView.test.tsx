@@ -64,9 +64,9 @@ describe('SeasonTabView — tab state', () => {
     );
     await userEvent.click(screen.getByRole('tab', { name: 'Schedule' }));
 
-    expect(nextNavigationMock.push).toHaveBeenCalledTimes(1);
-    expect(nextNavigationMock.replace).not.toHaveBeenCalled();
-    expect(nextNavigationMock.push.mock.calls[0][0]).toBe('/seasons/1?tab=schedule');
+    expect(nextNavigationMock.pushState).toHaveBeenCalledTimes(1);
+    expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
+    expect(nextNavigationMock.pushState.mock.calls[0][2]).toBe('/seasons/1?tab=schedule');
   });
 });
 

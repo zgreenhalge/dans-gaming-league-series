@@ -50,8 +50,8 @@ describe('CombinedSeasonTabView — top tab (`view`) and sub tab (`tab`)', () =>
     render(<CombinedSeasonTabView {...baseProps()} />);
     await userEvent.click(screen.getByRole('tab', { name: 'Gauntlet' }));
 
-    expect(nextNavigationMock.push).toHaveBeenCalledTimes(1);
-    expect(nextNavigationMock.push.mock.calls[0][0]).toBe('/seasons/1?view=gauntlet');
+    expect(nextNavigationMock.pushState).toHaveBeenCalledTimes(1);
+    expect(nextNavigationMock.pushState.mock.calls[0][2]).toBe('/seasons/1?view=gauntlet');
   });
 
   test('switching `view` preserves an existing `tab` param instead of dropping it', async () => {
@@ -60,6 +60,6 @@ describe('CombinedSeasonTabView — top tab (`view`) and sub tab (`tab`)', () =>
     expect(screen.getAllByRole('tab', { name: 'Stats' })[0]).toHaveAttribute('aria-selected', 'true');
 
     await userEvent.click(screen.getByRole('tab', { name: 'Gauntlet' }));
-    expect(nextNavigationMock.push.mock.calls[0][0]).toBe('/seasons/1?tab=stats&view=gauntlet');
+    expect(nextNavigationMock.pushState.mock.calls[0][2]).toBe('/seasons/1?tab=stats&view=gauntlet');
   });
 });

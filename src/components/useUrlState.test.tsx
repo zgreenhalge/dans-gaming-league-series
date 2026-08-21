@@ -5,6 +5,10 @@
  * removes the param" behavior, push-vs-replace, `useSetUrlParams`'s atomic multi-key writes, and the
  * returned setters' stable identity across unrelated URL changes.
  *
+ * Writes go through `window.history.pushState`/`replaceState`, not `useRouter()` — see
+ * `useSetUrlParams`'s docstring for why. `history.pushState(state, unused, url)` puts the URL in the
+ * *third* argument, so assertions below read `.mock.calls[0][2]`, not `[0]`.
+ *
  * Run:  npx vitest run src/components/useUrlState.test.tsx
  */
 
@@ -44,9 +48,9 @@ describe('useUrlState', () => {
     const { result } = renderHook(() => useUrlState<'leaderboard' | 'h2h'>('tab', 'leaderboard'));
     act(() => result.current[1]('h2h'));
 
-    expect(nextNavigationMock.replace).toHaveBeenCalledTimes(1);
-    expect(nextNavigationMock.push).not.toHaveBeenCalled();
-    const [href] = nextNavigationMock.replace.mock.calls[0];
+    expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
+    expect(nextNavigationMock.pushState).not.toHaveBeenCalled();
+    const href = nextNavigationMock.replaceState.mock.calls[0][2];
     expect(href).toBe('/example?other=1&tab=h2h');
   });
 
@@ -54,8 +58,8 @@ describe('useUrlState', () => {
     const { result } = renderHook(() => useUrlState<'leaderboard' | 'h2h'>('tab', 'leaderboard', { push: true }));
     act(() => result.current[1]('h2h'));
 
-    expect(nextNavigationMock.push).toHaveBeenCalledTimes(1);
-    expect(nextNavigationMock.replace).not.toHaveBeenCalled();
+    expect(nextNavigationMock.pushState).toHaveBeenCalledTimes(1);
+    expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
   });
 
   test('setValue(defaultValue) removes the param instead of writing it', () => {
@@ -63,7 +67,7 @@ describe('useUrlState', () => {
     const { result } = renderHook(() => useUrlState('tab', 'leaderboard'));
     act(() => result.current[1]('leaderboard'));
 
-    const [href] = nextNavigationMock.replace.mock.calls[0];
+    const href = nextNavigationMock.replaceState.mock.calls[0][2];
     expect(href).toBe('/example');
   });
 
@@ -84,7 +88,7 @@ describe('useSetUrlParams', () => {
     const { result } = renderHook(() => useSetUrlParams());
     act(() => result.current({ season: undefined }));
 
-    const [href] = nextNavigationMock.replace.mock.calls[0];
+    const href = nextNavigationMock.replaceState.mock.calls[0][2];
     expect(href).toBe('/example?tab=h2h');
   });
 
@@ -93,8 +97,8 @@ describe('useSetUrlParams', () => {
     const { result } = renderHook(() => useSetUrlParams());
     act(() => result.current({ filter: undefined, reg: '0' }));
 
-    expect(nextNavigationMock.replace).toHaveBeenCalledTimes(1);
-    const [href] = nextNavigationMock.replace.mock.calls[0];
+    expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
+    const href = nextNavigationMock.replaceState.mock.calls[0][2];
     expect(href).toBe('/example?reg=0');
   });
 
@@ -102,8 +106,8 @@ describe('useSetUrlParams', () => {
     const { result } = renderHook(() => useSetUrlParams());
     act(() => result.current({ tab: 'h2h' }, { push: true }));
 
-    expect(nextNavigationMock.push).toHaveBeenCalledTimes(1);
-    expect(nextNavigationMock.replace).not.toHaveBeenCalled();
+    expect(nextNavigationMock.pushState).toHaveBeenCalledTimes(1);
+    expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
   });
 
   test('identity is stable across renders caused by an unrelated URL change', () => {
