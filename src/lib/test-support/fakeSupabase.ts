@@ -185,7 +185,7 @@ function matchFilter(row: Row, f: Filter): boolean {
 
 /** Shared by `.or()` clauses (e.g. `col.lte.val`) — a separate, slightly wider operator set than
  * `matchFilter`'s since `.or()` expressions this codebase builds mix comparators freely
- * (`schedule_draft_locked_at.is.null,schedule_draft_locked_at.lte.${cutoff}`). */
+ * (`name_changed_at.is.null,name_changed_at.lte.${cutoff}`). */
 function matchOrClause(row: Row, c: OrClause): boolean {
   const rv = row[c.col];
   switch (c.op) {
@@ -228,8 +228,10 @@ function sortRows(rows: Row[], specs: OrderSpec[]): Row[] {
 
 /** Assigns the next auto-increment id for a table (current max numeric `id` + 1, or 1 if empty) —
  * mirrors a real serial primary key closely enough for `.insert(...).select('id').single()` chains
- * to read back a generated id, without modeling actual sequence/gap semantics. */
-function nextId(rows: Row[]): number {
+ * to read back a generated id, without modeling actual sequence/gap semantics. Exported for RPC
+ * fakes (e.g. `seasonScheduleDraftRpc.ts`) that mint their own rows the same way `.insert()` does
+ * here, rather than reimplementing this. */
+export function nextId(rows: Row[]): number {
   let max = 0;
   for (const r of rows) {
     if (typeof r.id === 'number' && r.id > max) max = r.id;

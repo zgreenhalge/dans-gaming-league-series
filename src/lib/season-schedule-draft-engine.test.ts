@@ -1,14 +1,15 @@
 /**
  * Coverage for the DB-touching counterpart to season-schedule-engine.ts's pure planning:
  * generateSeasonScheduleDraft()/deleteSeasonScheduleDraft()/saveSeasonScheduleDraft()/
- * confirmSeasonScheduleDraft(), their shared schedule_draft_locked_at locking
- * (claimScheduleDraftLock()/withScheduleDraftLock()), the already-materialized guard
- * (assertScheduleNotYetMaterialized()), and mapScheduleDraftError()'s error-code mapping (#380).
+ * confirmSeasonScheduleDraft()/rollbackSeasonScheduleDraft(), the already-materialized guard each
+ * one's underlying RPC enforces, and mapScheduleDraftError()'s error-code mapping (#320, #380).
  *
  * Both this file's functions (via their `supabaseAdmin` parameter) and the `./queries` helpers they
  * call into (`getSeasonRoster`, `getSeasonScheduleDraft`, both built on the module-level `supabase`
  * singleton) must point at the same fake db — hence wiring both `__setTestClient()` and passing the
- * fake as `supabaseAdmin` in every test below.
+ * fake as `supabaseAdmin` in every test below. The five `*_season_schedule_draft` RPCs this file's
+ * functions call have no generic in-memory equivalent (arbitrary PL/pgSQL) — see
+ * `test-support/seasonScheduleDraftRpc.ts`'s fakes, registered on every fixture below.
  *
  * Run:  npx vitest run src/lib/season-schedule-draft-engine.test.ts
  */
@@ -16,6 +17,7 @@
 import assert from 'node:assert/strict';
 import { __setTestClient } from './supabase';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
+import { makeSeasonScheduleDraftRpcHandlers } from './test-support/seasonScheduleDraftRpc';
 import { test, report } from './test-support/miniTest';
 import { buildRosterSchedule } from './season-schedule-engine';
 import {
@@ -23,8 +25,8 @@ import {
   deleteSeasonScheduleDraft,
   saveSeasonScheduleDraft,
   confirmSeasonScheduleDraft,
+  rollbackSeasonScheduleDraft,
   mapScheduleDraftError,
-  ScheduleDraftLockedError,
   ScheduleAlreadyMaterializedError,
 } from './season-schedule-draft-engine';
 import type { DraftScheduleWeek } from './season-schedule-validation';
@@ -34,7 +36,7 @@ const ROSTER = [1, 2, 3, 4, 5, 6, 7];
 
 function makeDb(): FakeDb {
   return {
-    seasons: [{ id: SEASON_ID, name: 'Season 20', status: 'UPCOMING', is_gauntlet: false, schedule_draft_locked_at: null, target_win_rounds: 13 }],
+    seasons: [{ id: SEASON_ID, name: 'Season 20', status: 'UPCOMING', is_gauntlet: false, target_win_rounds: 13 }],
     weeks: [],
     matches: [],
     player_match_stats: [],
@@ -47,7 +49,7 @@ function makeDb(): FakeDb {
 }
 
 function installFixture(db: FakeDb): ReturnType<typeof createFakeSupabaseClient> {
-  const client = createFakeSupabaseClient(db);
+  const client = createFakeSupabaseClient(db, makeSeasonScheduleDraftRpcHandlers());
   __setTestClient(client);
   return client;
 }
@@ -240,34 +242,64 @@ async function main() {
     assert.deepEqual(again, { status: 'already-materialized' });
   });
 
-  // ─── locking ──────────────────────────────────────────────────────────────
+  // ─── rollbackSeasonScheduleDraft ──────────────────────────────────────────────
 
-  await test('the schedule draft lock rejects a concurrent operation and is released after success', async () => {
+  await test('rollbackSeasonScheduleDraft: not-materialized when the season has no real schedule', async () => {
     const db = makeDb();
-    db.seasons[0].schedule_draft_locked_at = new Date().toISOString(); // fresh lock, still held
     const client = installFixture(db);
-    await assert.rejects(() => generateSeasonScheduleDraft(client as never, SEASON_ID, ROSTER), ScheduleDraftLockedError);
-
-    db.seasons[0].schedule_draft_locked_at = null;
-    await generateSeasonScheduleDraft(client as never, SEASON_ID, ROSTER); // now succeeds
-    assert.equal(db.seasons[0].schedule_draft_locked_at, null, 'the lock must be released after the operation completes');
+    const result = await rollbackSeasonScheduleDraft(client as never, SEASON_ID);
+    assert.deepEqual(result, { status: 'not-materialized' });
   });
 
-  await test('a stale lock (older than the staleness window) is treated as free', async () => {
+  await test('rollbackSeasonScheduleDraft: deletes every unplayed week, cascading its matches/stats', async () => {
     const db = makeDb();
-    db.seasons[0].schedule_draft_locked_at = new Date(Date.now() - 120_000).toISOString(); // 2 minutes ago
     const client = installFixture(db);
-    await generateSeasonScheduleDraft(client as never, SEASON_ID, ROSTER); // must not throw
-    assert.equal(draftWeeksOf(db).length, expectedWeekCount);
+    await generateSeasonScheduleDraft(client as never, SEASON_ID, ROSTER);
+    await confirmSeasonScheduleDraft(client as never, SEASON_ID);
+    assert.ok(db.weeks.length > 0);
+
+    const result = await rollbackSeasonScheduleDraft(client as never, SEASON_ID);
+    assert.deepEqual(result, { status: 'rolled-back', weeksDeleted: expectedWeekCount, protectedWeekNumbers: [] });
+    assert.equal(db.weeks.length, 0);
+    assert.equal(db.matches.length, 0);
+    assert.equal(db.player_match_stats.length, 0);
+  });
+
+  await test('rollbackSeasonScheduleDraft: a week with a played match is protected from deletion', async () => {
+    const db = makeDb();
+    const client = installFixture(db);
+    await generateSeasonScheduleDraft(client as never, SEASON_ID, ROSTER);
+    await confirmSeasonScheduleDraft(client as never, SEASON_ID);
+    const week1 = db.weeks.find((w) => w.week_number === 1)!;
+    const week1Match = db.matches.find((m) => m.week_id === week1.id)!;
+    week1Match.final_score = '13-9';
+
+    const result = await rollbackSeasonScheduleDraft(client as never, SEASON_ID);
+    assert.equal(result.status, 'rolled-back');
+    assert.ok(result.status === 'rolled-back' && result.protectedWeekNumbers.includes(1));
+    assert.ok(db.weeks.some((w) => w.id === week1.id), 'the played week must survive rollback');
+    assert.ok(db.matches.some((m) => m.id === week1Match.id), "the played week's match must survive rollback");
+    // Every other (unplayed) week must still be gone.
+    assert.ok(db.weeks.every((w) => w.week_number === 1));
+  });
+
+  await test("rollbackSeasonScheduleDraft: a pre-staged S3 '0-0' score does not count as played", async () => {
+    const db = makeDb();
+    const client = installFixture(db);
+    await generateSeasonScheduleDraft(client as never, SEASON_ID, ROSTER);
+    await confirmSeasonScheduleDraft(client as never, SEASON_ID);
+    const week1 = db.weeks.find((w) => w.week_number === 1)!;
+    const week1Match = db.matches.find((m) => m.week_id === week1.id)!;
+    week1Match.final_score = '0-0';
+
+    const result = await rollbackSeasonScheduleDraft(client as never, SEASON_ID);
+    assert.deepEqual(result, { status: 'rolled-back', weeksDeleted: expectedWeekCount, protectedWeekNumbers: [] });
+    assert.equal(db.weeks.length, 0);
   });
 
   // ─── mapScheduleDraftError ───────────────────────────────────────────────────
 
-  await test('mapScheduleDraftError: lock and materialized errors map to 409, everything else to 500', async () => {
-    assert.deepEqual(mapScheduleDraftError(new ScheduleDraftLockedError(SEASON_ID)), {
-      error: `Another schedule draft operation is already in progress for season ${SEASON_ID} — try again shortly`,
-      status: 409,
-    });
+  await test('mapScheduleDraftError: an already-materialized error maps to 409, everything else to 500', async () => {
     assert.deepEqual(mapScheduleDraftError(new ScheduleAlreadyMaterializedError(SEASON_ID)), {
       error: `Season ${SEASON_ID}'s schedule has already been confirmed — its draft can no longer be edited`,
       status: 409,
