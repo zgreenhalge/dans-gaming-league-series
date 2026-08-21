@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useSetUrlParams } from './useUrlState';
 import type { H2HPair } from './H2HMatrix';
@@ -63,9 +63,15 @@ export function useH2HPairUrlState(
     [aRaw, bRaw, typeRaw, players],
   );
 
-  function onPairChange(pair: H2HPair) {
-    setUrlParams(h2hPairToParams(pair, players));
-  }
+  // Stable identity across unrelated re-renders, matching `useSetUrlParams`'s own callback and
+  // `useUrlState`'s `setValue` — so a consumer can safely put this in its own `useEffect`/`useMemo`
+  // deps or hand it to a memoized child without it changing on every render.
+  const onPairChange = useCallback(
+    (pair: H2HPair) => {
+      setUrlParams(h2hPairToParams(pair, players));
+    },
+    [setUrlParams, players],
+  );
 
   return { initialPair, onPairChange };
 }
