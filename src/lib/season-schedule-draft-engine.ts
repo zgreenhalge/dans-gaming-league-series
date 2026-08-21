@@ -9,8 +9,8 @@
  * (`generate_season_schedule_draft()` etc., `supabase/migrations/`) that does the whole
  * delete/insert-or-update sequence in one DB transaction — a mid-operation failure rolls back
  * cleanly with no partial state, with no JS-side compensating cleanup needed. Each function also
- * takes a real Postgres row lock on the season
- * (`select ... for update`) as its first statement, serializing concurrent
+ * takes a real Postgres row lock on the season (`select ... for update`, via the shared
+ * `lock_and_check_season_materialized()` SQL helper) as its first statement, serializing concurrent
  * generate/save/delete/confirm/rollback calls for the same season at the database level, and runs
  * its own "is this season already materialized?" check after acquiring that lock — so two
  * concurrent calls (e.g. a generate and a confirm) can't interleave; whichever acquires the lock
@@ -62,7 +62,16 @@ export function mapScheduleDraftError(err: unknown): { error: string; status: nu
   return { error: (err as Error).message, status: 500 };
 }
 
-type DraftWeeksRpcStatus = { status: 'ok' | 'already-materialized' };
+type WriteRpcResult = { status: 'ok' } | { status: 'already-materialized' };
+
+/** Throws `ScheduleAlreadyMaterializedError` if `result` reports the season already materialized —
+ * the shared branch behind generateSeasonScheduleDraft()/saveSeasonScheduleDraft()/
+ * deleteSeasonScheduleDraft(), which otherwise all repeat the same `if (status === …) throw …`. */
+function assertNotMaterialized(result: WriteRpcResult, seasonId: number): void {
+  if (result.status === 'already-materialized') {
+    throw new ScheduleAlreadyMaterializedError(seasonId);
+  }
+}
 
 function toDraftWeeksPayload(weeks: DraftScheduleWeek[]) {
   return weeks.map((w) => ({
@@ -104,13 +113,17 @@ export async function generateSeasonScheduleDraft(
     }
   }
 
-  const payload = toDraftWeeksPayload(
-    plan.map((week) => ({
-      week_number: week.week,
-      bye_player_id: week.byePlayerIds[0] ?? null,
-      matches: week.matches.map((m, i) => ({ match_number: i + 1, shirts: m.shirts, skins: m.skins })),
+  const payload = plan.map((week) => ({
+    week_number: week.week,
+    bye_player_id: week.byePlayerIds[0] ?? null,
+    matches: week.matches.map((m, i) => ({
+      match_number: i + 1,
+      shirts_player1_id: m.shirts[0],
+      shirts_player2_id: m.shirts[1],
+      skins_player1_id: m.skins[0],
+      skins_player2_id: m.skins[1],
     })),
-  );
+  }));
 
   const { data, error } = await supabaseAdmin.rpc('generate_season_schedule_draft', {
     p_season_id: seasonId,
@@ -120,9 +133,7 @@ export async function generateSeasonScheduleDraft(
     await recordOpsError(supabaseAdmin, 'season', seasonId, 'schedule_generate', `Schedule generate failed: ${error.message}`);
     throw error;
   }
-  if ((data as DraftWeeksRpcStatus).status === 'already-materialized') {
-    throw new ScheduleAlreadyMaterializedError(seasonId);
-  }
+  assertNotMaterialized(data as WriteRpcResult, seasonId);
   await clearOpsError(supabaseAdmin, 'season', seasonId, 'schedule_generate');
 }
 
@@ -133,9 +144,7 @@ export async function generateSeasonScheduleDraft(
 export async function deleteSeasonScheduleDraft(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
   const { data, error } = await supabaseAdmin.rpc('delete_season_schedule_draft', { p_season_id: seasonId });
   if (error) throw error;
-  if ((data as DraftWeeksRpcStatus).status === 'already-materialized') {
-    throw new ScheduleAlreadyMaterializedError(seasonId);
-  }
+  assertNotMaterialized(data as WriteRpcResult, seasonId);
 }
 
 export type SaveDraftResult = { ok: true } | { ok: false; issues: ValidationIssue[] };
@@ -168,9 +177,7 @@ export async function saveSeasonScheduleDraft(
     p_weeks: toDraftWeeksPayload(weeks),
   });
   if (error) throw error;
-  if ((data as DraftWeeksRpcStatus).status === 'already-materialized') {
-    throw new ScheduleAlreadyMaterializedError(seasonId);
-  }
+  assertNotMaterialized(data as WriteRpcResult, seasonId);
 
   return { ok: true };
 }
@@ -186,6 +193,10 @@ export type ConfirmResult =
     }
   | { status: 'confirmed'; weeksCreated: number; matchesCreated: number };
 
+type ConfirmRpcResult =
+  | { status: 'already-materialized' }
+  | { status: 'confirmed'; weeks_created: number; matches_created: number };
+
 /** Materializes a season's draft into real `weeks`/`matches`/`player_match_stats` rows, via the
  * `confirm_season_schedule_draft()` DB function — `player_match_stats` gets zero-value placeholder
  * rows per participant, same as `materializePod()` does for a gauntlet match before it's played.
@@ -200,9 +211,12 @@ export type ConfirmResult =
  * otherwise a concurrent `saveSeasonScheduleDraft()` landing between this function's validation and
  * its RPC call could change what's persisted in those tables without changing what was actually
  * validated, and the RPC would materialize that unvalidated edit. Passing the validated snapshot
- * itself closes that gap: whatever gets materialized is always exactly what passed
- * `validateDraftIntegrity()`/`validateDraftCompleteness()` here, regardless of what else happens to
- * the draft tables concurrently.
+ * guarantees whatever gets materialized always passed validation here. It does NOT guarantee the
+ * newest edit wins: a concurrent save committing in that same window is simply never reflected in
+ * this confirm (the row lock only serializes the two DB functions' own SQL against each other, not
+ * this function's JS-side read/validate step, which runs before either is called) — accepted rather
+ * than closed with an optimistic-concurrency check, since it can only ever discard a valid,
+ * already-persisted edit, never corrupt data or double-materialize.
  *
  * The `hasMaterializedSchedule()` read below is a non-transactional pre-check, not the actual
  * guard (the DB function re-checks atomically under its own row lock) — it exists only so
@@ -247,16 +261,20 @@ export async function confirmSeasonScheduleDraft(supabaseAdmin: SupabaseClient, 
     throw error;
   }
 
-  const result = data as { status: 'already-materialized' | 'confirmed'; weeks_created?: number; matches_created?: number };
+  const result = data as ConfirmRpcResult;
   if (result.status === 'already-materialized') return { status: 'already-materialized' };
 
   await clearOpsError(supabaseAdmin, 'season', seasonId, 'schedule_confirm');
-  return { status: 'confirmed', weeksCreated: result.weeks_created!, matchesCreated: result.matches_created! };
+  return { status: 'confirmed', weeksCreated: result.weeks_created, matchesCreated: result.matches_created };
 }
 
 export type RollbackResult =
   | { status: 'not-materialized' }
   | { status: 'rolled-back'; weeksDeleted: number; protectedWeekNumbers: number[] };
+
+type RollbackRpcResult =
+  | { status: 'not-materialized' }
+  | { status: 'rolled-back'; weeks_deleted: number; protected_week_numbers: number[] };
 
 /** Un-confirms a season's real schedule via the `rollback_season_schedule_draft()` DB function:
  * deletes `weeks` (cascading `matches`/`player_match_stats`, all `on delete cascade`) restricted to
@@ -271,11 +289,7 @@ export async function rollbackSeasonScheduleDraft(supabaseAdmin: SupabaseClient,
   const { data, error } = await supabaseAdmin.rpc('rollback_season_schedule_draft', { p_season_id: seasonId });
   if (error) throw error;
 
-  const result = data as { status: 'not-materialized' | 'rolled-back'; weeks_deleted?: number; protected_week_numbers?: number[] };
+  const result = data as RollbackRpcResult;
   if (result.status === 'not-materialized') return { status: 'not-materialized' };
-  return {
-    status: 'rolled-back',
-    weeksDeleted: result.weeks_deleted ?? 0,
-    protectedWeekNumbers: result.protected_week_numbers ?? [],
-  };
+  return { status: 'rolled-back', weeksDeleted: result.weeks_deleted, protectedWeekNumbers: result.protected_week_numbers };
 }

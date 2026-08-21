@@ -12,7 +12,7 @@
  * shape the real cascade would produce.
  */
 
-import type { FakeDb, RpcHandler } from './fakeSupabase';
+import { nextId, type FakeDb, type Row, type RpcHandler } from './fakeSupabase';
 import { isPlayedScore } from '../util';
 
 type RpcWeek = {
@@ -37,12 +37,6 @@ const ZERO_MATCH_STATS = {
   rounds_won: 0,
   is_win: false,
 };
-
-function nextId(rows: Row[]): number {
-  return 1 + Math.max(0, ...rows.map((r) => (typeof r.id === 'number' ? r.id : 0)));
-}
-
-type Row = Record<string, unknown>;
 
 function isMaterialized(db: FakeDb, seasonId: number): boolean {
   return (db.weeks ?? []).some((w) => w.season_id === seasonId);

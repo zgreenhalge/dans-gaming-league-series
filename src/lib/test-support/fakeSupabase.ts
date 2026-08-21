@@ -228,8 +228,10 @@ function sortRows(rows: Row[], specs: OrderSpec[]): Row[] {
 
 /** Assigns the next auto-increment id for a table (current max numeric `id` + 1, or 1 if empty) —
  * mirrors a real serial primary key closely enough for `.insert(...).select('id').single()` chains
- * to read back a generated id, without modeling actual sequence/gap semantics. */
-function nextId(rows: Row[]): number {
+ * to read back a generated id, without modeling actual sequence/gap semantics. Exported for RPC
+ * fakes (e.g. `seasonScheduleDraftRpc.ts`) that mint their own rows the same way `.insert()` does
+ * here, rather than reimplementing this. */
+export function nextId(rows: Row[]): number {
   let max = 0;
   for (const r of rows) {
     if (typeof r.id === 'number' && r.id > max) max = r.id;

@@ -2,16 +2,17 @@
 -- sequences (#320), mirroring the reconcile_gauntlet_draft() pattern: each whole
 -- delete/insert-or-update sequence runs as one Postgres transaction instead of several separate
 -- Supabase REST calls, so a mid-operation failure rolls back cleanly with no partial state. Every
--- function takes `select 1 from seasons where id = p_season_id for update` as its first statement
--- — a real row lock that serializes concurrent generate/save/delete/confirm/rollback calls for the
--- same season at the database level, superseding the polled `seasons.schedule_draft_locked_at`
--- column (no application code reads or writes it anymore as of this migration, but it's left in
--- place rather than dropped here — an unused nullable column costs nothing to leave, and keeping it
--- means this migration is purely additive, with nothing destructive to undo if one of the five
--- functions below needs a fix once this is live; dropping it is a candidate for a later, separate
--- migration once these functions have been running cleanly in production for a while). A caller
--- blocks until the other transaction commits rather than getting an immediate "locked" error; every
--- one of these operations is fast, so that wait is negligible in practice.
+-- write function opens by calling `lock_and_check_season_materialized()`, which itself takes
+-- `select 1 from seasons where id = p_season_id for update` as its first statement — a real row
+-- lock that serializes concurrent generate/save/delete/confirm/rollback calls for the same season
+-- at the database level, superseding the polled `seasons.schedule_draft_locked_at` column (no
+-- application code reads or writes it anymore as of this migration, but it's left in place rather
+-- than dropped here — an unused nullable column costs nothing to leave, and keeping it means this
+-- migration is purely additive, with nothing destructive to undo if one of these functions needs a
+-- fix once this is live; dropping it is a candidate for a later, separate migration once these
+-- functions have been running cleanly in production for a while). A caller blocks until the other
+-- transaction commits rather than getting an immediate "locked" error; every one of these
+-- operations is fast, so that wait is negligible in practice.
 --
 -- Each already-materialized check runs after acquiring that lock, inside the same transaction as
 -- the write it guards, so two concurrent calls (e.g. a generate and a confirm) can't interleave —
@@ -20,8 +21,36 @@
 --
 -- Rollback plan if any of these functions misbehaves once live: every one is `create or replace`,
 -- so re-running this migration's old version (or `drop function public.<name>(...)`) is a single
--- statement with nothing else to unwind. None of the five drops or alters an existing table/column,
--- so there is no schema state to restore either way.
+-- statement with nothing else to unwind. None of them drops or alters an existing table/column, so
+-- there is no schema state to restore either way.
+
+-- Locks the season row and reports whether it already has a real schedule (`weeks`) — shared by
+-- every function below (negated for rollback_season_schedule_draft(), which wants the opposite
+-- condition) so the lock-then-check idiom exists in exactly one place rather than being repeated,
+-- with the exact definition of "materialized" copy-pasted, in each caller.
+create or replace function public.lock_and_check_season_materialized(p_season_id integer)
+returns boolean
+language plpgsql
+as $function$
+begin
+  perform 1 from seasons where id = p_season_id for update;
+  return exists (select 1 from weeks where season_id = p_season_id);
+end;
+$function$;
+
+-- Deletes a season's entire draft (matches before weeks, for the FK) — shared by
+-- generate_season_schedule_draft() (which always fully replaces the draft) and
+-- delete_season_schedule_draft() (which is exactly this and nothing else).
+create or replace function public.clear_season_schedule_draft(p_season_id integer)
+returns void
+language plpgsql
+as $function$
+begin
+  delete from season_schedule_draft_matches
+  where draft_week_id in (select id from season_schedule_draft_weeks where season_id = p_season_id);
+  delete from season_schedule_draft_weeks where season_id = p_season_id;
+end;
+$function$;
 
 create or replace function public.generate_season_schedule_draft(
   p_season_id integer,
@@ -35,15 +64,11 @@ declare
   match jsonb;
   new_week_id integer;
 begin
-  perform 1 from seasons where id = p_season_id for update;
-
-  if exists (select 1 from weeks where season_id = p_season_id) then
+  if lock_and_check_season_materialized(p_season_id) then
     return jsonb_build_object('status', 'already-materialized');
   end if;
 
-  delete from season_schedule_draft_matches
-  where draft_week_id in (select id from season_schedule_draft_weeks where season_id = p_season_id);
-  delete from season_schedule_draft_weeks where season_id = p_season_id;
+  perform clear_season_schedule_draft(p_season_id);
 
   for week in select * from jsonb_array_elements(p_weeks)
   loop
@@ -83,9 +108,7 @@ declare
   match jsonb;
   week_id integer;
 begin
-  perform 1 from seasons where id = p_season_id for update;
-
-  if exists (select 1 from weeks where season_id = p_season_id) then
+  if lock_and_check_season_materialized(p_season_id) then
     return jsonb_build_object('status', 'already-materialized');
   end if;
 
@@ -130,15 +153,11 @@ returns jsonb
 language plpgsql
 as $function$
 begin
-  perform 1 from seasons where id = p_season_id for update;
-
-  if exists (select 1 from weeks where season_id = p_season_id) then
+  if lock_and_check_season_materialized(p_season_id) then
     return jsonb_build_object('status', 'already-materialized');
   end if;
 
-  delete from season_schedule_draft_matches
-  where draft_week_id in (select id from season_schedule_draft_weeks where season_id = p_season_id);
-  delete from season_schedule_draft_weeks where season_id = p_season_id;
+  perform clear_season_schedule_draft(p_season_id);
 
   return jsonb_build_object('status', 'ok');
 end;
@@ -150,8 +169,14 @@ $function$;
 -- save_season_schedule_draft() call landing between that validation and this call could otherwise
 -- change what's persisted in those tables without changing what was actually validated, and this
 -- function would materialize that unvalidated edit instead. Materializing the passed snapshot
--- directly means whatever becomes real is always exactly what passed validation, regardless of what
--- else happens to the draft tables concurrently.
+-- directly guarantees whatever becomes real always passed validation. It does NOT guarantee the
+-- newest edit wins: if a concurrent save commits in that same window, this call still materializes
+-- the older (but valid) snapshot it already had in hand, and the save's edit is simply never
+-- reflected in what gets confirmed — the row lock only serializes the two functions' own SQL
+-- against each other, not the JS-side read/validate step that happens before either is called. This
+-- residual window is accepted rather than closed with an optimistic-concurrency/version check: it
+-- can only ever discard a valid, already-persisted edit (never corrupt data or double-materialize),
+-- and this tooling doesn't see concurrent admins editing the same season's draft in practice.
 create or replace function public.confirm_season_schedule_draft(
   p_season_id integer,
   p_weeks jsonb
@@ -167,9 +192,7 @@ declare
   weeks_created integer := 0;
   matches_created integer := 0;
 begin
-  perform 1 from seasons where id = p_season_id for update;
-
-  if exists (select 1 from weeks where season_id = p_season_id) then
+  if lock_and_check_season_materialized(p_season_id) then
     return jsonb_build_object('status', 'already-materialized');
   end if;
 
@@ -226,9 +249,7 @@ declare
   deletable_week_ids integer[];
   protected_week_numbers integer[];
 begin
-  perform 1 from seasons where id = p_season_id for update;
-
-  if not exists (select 1 from weeks where season_id = p_season_id) then
+  if not lock_and_check_season_materialized(p_season_id) then
     return jsonb_build_object('status', 'not-materialized');
   end if;
 
