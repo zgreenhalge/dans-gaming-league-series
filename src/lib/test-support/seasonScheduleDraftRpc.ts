@@ -137,13 +137,14 @@ function makeSave(): RpcHandler {
   };
 }
 
+/** Materializes the exact `p_weeks` payload passed in, mirroring the real function — it never reads
+ * `season_schedule_draft_weeks`/`_matches` itself (see the real function's own comment on why:
+ * confirmSeasonScheduleDraft() validates a snapshot and must materialize that same snapshot, not
+ * whatever the draft tables happen to hold when this call lands). */
 function makeConfirm(): RpcHandler {
   return (args, db) => {
     const seasonId = args.p_season_id as number;
     if (isMaterialized(db, seasonId)) return { status: 'already-materialized' };
-
-    const draftWeeks = draftWeeksOf(db, seasonId).sort((a, b) => (a.week_number as number) - (b.week_number as number));
-    if (draftWeeks.length === 0) return { status: 'no-draft' };
 
     db.weeks ??= [];
     db.matches ??= [];
@@ -151,18 +152,17 @@ function makeConfirm(): RpcHandler {
     let weeksCreated = 0;
     let matchesCreated = 0;
 
-    for (const draftWeek of draftWeeks) {
+    for (const week of args.p_weeks as RpcWeek[]) {
       const weekId = nextId(db.weeks);
-      db.weeks.push({ id: weekId, season_id: seasonId, week_number: draftWeek.week_number, bye_player_id: draftWeek.bye_player_id });
+      db.weeks.push({ id: weekId, season_id: seasonId, week_number: week.week_number, bye_player_id: week.bye_player_id });
       weeksCreated++;
 
-      const draftMatches = draftMatchesOf(db, draftWeek.id).sort((a, b) => (a.match_number as number) - (b.match_number as number));
-      for (const draftMatch of draftMatches) {
+      for (const match of week.matches) {
         const matchId = nextId(db.matches);
         db.matches.push({
           id: matchId,
           week_id: weekId,
-          match_number: draftMatch.match_number,
+          match_number: match.match_number,
           is_playoff_game: false,
           final_score: null,
           picked_map: null,
@@ -176,10 +176,10 @@ function makeConfirm(): RpcHandler {
         matchesCreated++;
 
         db.player_match_stats.push(
-          { id: nextId(db.player_match_stats), match_id: matchId, player_id: draftMatch.shirts_player1_id, faction: 'SHIRTS', ...ZERO_MATCH_STATS },
-          { id: nextId(db.player_match_stats), match_id: matchId, player_id: draftMatch.shirts_player2_id, faction: 'SHIRTS', ...ZERO_MATCH_STATS },
-          { id: nextId(db.player_match_stats), match_id: matchId, player_id: draftMatch.skins_player1_id, faction: 'SKINS', ...ZERO_MATCH_STATS },
-          { id: nextId(db.player_match_stats), match_id: matchId, player_id: draftMatch.skins_player2_id, faction: 'SKINS', ...ZERO_MATCH_STATS },
+          { id: nextId(db.player_match_stats), match_id: matchId, player_id: match.shirts_player1_id, faction: 'SHIRTS', ...ZERO_MATCH_STATS },
+          { id: nextId(db.player_match_stats), match_id: matchId, player_id: match.shirts_player2_id, faction: 'SHIRTS', ...ZERO_MATCH_STATS },
+          { id: nextId(db.player_match_stats), match_id: matchId, player_id: match.skins_player1_id, faction: 'SKINS', ...ZERO_MATCH_STATS },
+          { id: nextId(db.player_match_stats), match_id: matchId, player_id: match.skins_player2_id, faction: 'SKINS', ...ZERO_MATCH_STATS },
         );
       }
     }

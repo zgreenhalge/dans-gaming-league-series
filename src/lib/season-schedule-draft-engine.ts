@@ -8,8 +8,8 @@
  * confirmSeasonScheduleDraft()/rollbackSeasonScheduleDraft() each call one Postgres function
  * (`generate_season_schedule_draft()` etc., `supabase/migrations/`) that does the whole
  * delete/insert-or-update sequence in one DB transaction — a mid-operation failure rolls back
- * cleanly with no partial state, so unlike an earlier version of this file, there's no JS-side
- * compensating cleanup to run. Each function also takes a real Postgres row lock on the season
+ * cleanly with no partial state, with no JS-side compensating cleanup needed. Each function also
+ * takes a real Postgres row lock on the season
  * (`select ... for update`) as its first statement, serializing concurrent
  * generate/save/delete/confirm/rollback calls for the same season at the database level, and runs
  * its own "is this season already materialized?" check after acquiring that lock — so two
@@ -195,6 +195,15 @@ export type ConfirmResult =
  * themselves are left untouched either way, so a rejected confirm can just be re-attempted after
  * more edits.
  *
+ * The DB function materializes the exact `draftWeeks` snapshot validated below (passed as its
+ * `p_weeks` argument), rather than re-reading `season_schedule_draft_weeks`/`_matches` itself —
+ * otherwise a concurrent `saveSeasonScheduleDraft()` landing between this function's validation and
+ * its RPC call could change what's persisted in those tables without changing what was actually
+ * validated, and the RPC would materialize that unvalidated edit. Passing the validated snapshot
+ * itself closes that gap: whatever gets materialized is always exactly what passed
+ * `validateDraftIntegrity()`/`validateDraftCompleteness()` here, regardless of what else happens to
+ * the draft tables concurrently.
+ *
  * The `hasMaterializedSchedule()` read below is a non-transactional pre-check, not the actual
  * guard (the DB function re-checks atomically under its own row lock) — it exists only so
  * "already confirmed" reports ahead of "no draft exists yet" when a season somehow has neither a
@@ -229,15 +238,17 @@ export async function confirmSeasonScheduleDraft(supabaseAdmin: SupabaseClient, 
     };
   }
 
-  const { data, error } = await supabaseAdmin.rpc('confirm_season_schedule_draft', { p_season_id: seasonId });
+  const { data, error } = await supabaseAdmin.rpc('confirm_season_schedule_draft', {
+    p_season_id: seasonId,
+    p_weeks: toDraftWeeksPayload(draftWeeks),
+  });
   if (error) {
     await recordOpsError(supabaseAdmin, 'season', seasonId, 'schedule_confirm', `Schedule confirm failed: ${error.message}`);
     throw error;
   }
 
-  const result = data as { status: 'already-materialized' | 'no-draft' | 'confirmed'; weeks_created?: number; matches_created?: number };
+  const result = data as { status: 'already-materialized' | 'confirmed'; weeks_created?: number; matches_created?: number };
   if (result.status === 'already-materialized') return { status: 'already-materialized' };
-  if (result.status === 'no-draft') return { status: 'no-draft' };
 
   await clearOpsError(supabaseAdmin, 'season', seasonId, 'schedule_confirm');
   return { status: 'confirmed', weeksCreated: result.weeks_created!, matchesCreated: result.matches_created! };

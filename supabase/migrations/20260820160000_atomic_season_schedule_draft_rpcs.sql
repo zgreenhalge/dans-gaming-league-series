@@ -144,15 +144,24 @@ begin
 end;
 $function$;
 
+-- Materializes the exact `p_weeks` snapshot the caller already validated
+-- (validateDraftIntegrity()/validateDraftCompleteness() in season-schedule-draft-engine.ts), rather
+-- than re-reading season_schedule_draft_weeks/_matches itself — a concurrent
+-- save_season_schedule_draft() call landing between that validation and this call could otherwise
+-- change what's persisted in those tables without changing what was actually validated, and this
+-- function would materialize that unvalidated edit instead. Materializing the passed snapshot
+-- directly means whatever becomes real is always exactly what passed validation, regardless of what
+-- else happens to the draft tables concurrently.
 create or replace function public.confirm_season_schedule_draft(
-  p_season_id integer
+  p_season_id integer,
+  p_weeks jsonb
 )
 returns jsonb
 language plpgsql
 as $function$
 declare
-  draft_week record;
-  draft_match record;
+  week jsonb;
+  match jsonb;
   new_week_id integer;
   new_match_id integer;
   weeks_created integer := 0;
@@ -164,27 +173,21 @@ begin
     return jsonb_build_object('status', 'already-materialized');
   end if;
 
-  if not exists (select 1 from season_schedule_draft_weeks where season_id = p_season_id) then
-    return jsonb_build_object('status', 'no-draft');
-  end if;
-
-  for draft_week in
-    select * from season_schedule_draft_weeks where season_id = p_season_id order by week_number
+  for week in select * from jsonb_array_elements(p_weeks)
   loop
     insert into weeks (season_id, week_number, bye_player_id)
-    values (p_season_id, draft_week.week_number, draft_week.bye_player_id)
+    values (p_season_id, (week->>'week_number')::integer, (week->>'bye_player_id')::integer)
     returning id into new_week_id;
     weeks_created := weeks_created + 1;
 
-    for draft_match in
-      select * from season_schedule_draft_matches where draft_week_id = draft_week.id order by match_number
+    for match in select * from jsonb_array_elements(week->'matches')
     loop
       insert into matches (
         week_id, match_number, is_playoff_game, final_score, picked_map,
         shirts_ban, shirts_ban2, skins_ban1, skins_ban2, shirts_pick, skins_starting_side
       )
       values (
-        new_week_id, draft_match.match_number, false, null, null,
+        new_week_id, (match->>'match_number')::integer, false, null, null,
         null, null, null, null, null, null
       )
       returning id into new_match_id;
@@ -194,10 +197,10 @@ begin
         match_id, player_id, faction, kills, assists, deaths, damage, adr, rounds_played, rounds_won, is_win
       )
       values
-        (new_match_id, draft_match.shirts_player1_id, 'SHIRTS', 0, 0, 0, 0, 0, 0, 0, false),
-        (new_match_id, draft_match.shirts_player2_id, 'SHIRTS', 0, 0, 0, 0, 0, 0, 0, false),
-        (new_match_id, draft_match.skins_player1_id, 'SKINS', 0, 0, 0, 0, 0, 0, 0, false),
-        (new_match_id, draft_match.skins_player2_id, 'SKINS', 0, 0, 0, 0, 0, 0, 0, false);
+        (new_match_id, (match->>'shirts_player1_id')::integer, 'SHIRTS', 0, 0, 0, 0, 0, 0, 0, false),
+        (new_match_id, (match->>'shirts_player2_id')::integer, 'SHIRTS', 0, 0, 0, 0, 0, 0, 0, false),
+        (new_match_id, (match->>'skins_player1_id')::integer, 'SKINS', 0, 0, 0, 0, 0, 0, 0, false),
+        (new_match_id, (match->>'skins_player2_id')::integer, 'SKINS', 0, 0, 0, 0, 0, 0, 0, false);
     end loop;
   end loop;
 
