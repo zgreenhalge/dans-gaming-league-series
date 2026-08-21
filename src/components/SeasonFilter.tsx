@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { seasonTitle } from '@/lib/util';
+import { useUrlState, useSetUrlParams } from './useUrlState';
 
 // ─── Checkbox ────────────────────────────────────────────────────────────────
 
@@ -64,19 +65,54 @@ export interface SeasonFilterState {
   setSelectedSeason: (s: number | 'all') => void;
 }
 
-export function useSeasonFilter(): SeasonFilterState {
-  const [includeRegular, setIncludeRegular] = useState(true);
-  const [includeGauntlet, setIncludeGauntlet] = useState(true);
-  const [selectedSeason, setSelectedSeason] = useState<number | 'all'>('all');
+/**
+ * URL-backed season filter — `reg`/`gnt` (`'0'` = off, omitted = on, the default) and `season`
+ * (`'all'`, omitted, or a season id). Shared by every view that filters by season
+ * (`CareerStatsView`, `PlayerView`, `MapDetailView`), so migrating it here fixes all of them at once
+ * rather than requiring a separate migration per view.
+ *
+ * `resetSeasonOnToggle` — some call sites (`PlayerView`, `CareerStatsView`) unconditionally reset
+ * their own season selection back to "all/career" whenever regular/gauntlet is toggled; others
+ * (`MapDetailView`) don't — they rely on `SeasonFilter`'s own effect below, which only resets when
+ * the *current* selection actually becomes invalid after the toggle, a more precise correction.
+ * Both are real, pre-existing, intentionally different behaviors — not something this migration
+ * should unify. Toggling `reg`/`gnt` and resetting `season` in the same click must land in one
+ * navigation (`useSetUrlParams`, not two separate per-key writes): a second `useUrlState` setter
+ * call in the same handler wouldn't see the first one's write yet and would silently drop it — see
+ * `useSetUrlParams`'s docstring.
+ */
+export function useSeasonFilter(options?: { resetSeasonOnToggle?: boolean }): SeasonFilterState {
+  const [regRaw, setRegRaw] = useUrlState<'0' | '1'>('reg', '1');
+  const [gntRaw, setGntRaw] = useUrlState<'0' | '1'>('gnt', '1');
+  const [seasonRaw, setSeasonRaw] = useUrlState('season', 'all', {
+    parse: (raw) => (raw === 'all' || /^\d+$/.test(raw) ? raw : undefined),
+  });
+  const setUrlParams = useSetUrlParams();
+
+  const includeRegular = regRaw !== '0';
+  const includeGauntlet = gntRaw !== '0';
+  const selectedSeason: number | 'all' = seasonRaw === 'all' ? 'all' : Number(seasonRaw);
 
   function toggleRegular() {
     if (includeRegular && !includeGauntlet) return;
-    setIncludeRegular((v) => !v);
+    if (options?.resetSeasonOnToggle) {
+      setUrlParams({ reg: includeRegular ? '0' : undefined, season: undefined });
+    } else {
+      setRegRaw(includeRegular ? '0' : '1');
+    }
   }
 
   function toggleGauntlet() {
     if (includeGauntlet && !includeRegular) return;
-    setIncludeGauntlet((v) => !v);
+    if (options?.resetSeasonOnToggle) {
+      setUrlParams({ gnt: includeGauntlet ? '0' : undefined, season: undefined });
+    } else {
+      setGntRaw(includeGauntlet ? '0' : '1');
+    }
+  }
+
+  function setSelectedSeason(s: number | 'all') {
+    setSeasonRaw(s === 'all' ? 'all' : String(s));
   }
 
   return { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason };

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { PlayerHistoryRow, TrophyEntry, H2HData, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
@@ -14,6 +14,7 @@ import EmptyState from './EmptyState';
 import { MatchCard } from './MatchCard';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
+import { useTabState } from './useTabState';
 import Sparkline from './Sparkline';
 import { CountdownTimer } from './CountdownTimer';
 import MatchupsTab from './MatchupsTab';
@@ -28,6 +29,9 @@ type Filter = 'career' | number;
 type MapSortCol = 'map' | 'record' | 'wr' | 'rwr' | 'adr';
 type PlayerTab = 'stats' | 'matches' | 'advanced' | 'trophies' | 'matchups' | 'trails';
 type MatchesSubTab = 'history' | 'upcoming';
+
+const PLAYER_TABS: readonly PlayerTab[] = ['stats', 'matches', 'advanced', 'trophies', 'matchups', 'trails'];
+const MATCHES_SUB_TABS: readonly MatchesSubTab[] = ['history', 'upcoming'];
 
 const MEDAL_COLORS: Record<1 | 2 | 3, string> = {
   1: '#f5c542',
@@ -153,15 +157,20 @@ export default function PlayerView({
     return { regularSeasons: reg, gauntletSeasons: gnt, regularToGauntlet: r2g };
   }, [history]);
 
-  const { includeRegular, includeGauntlet, toggleRegular: baseToggleRegular, toggleGauntlet: baseToggleGauntlet } = useSeasonFilter();
-  const [filter, setFilter] = useState<Filter>('career');
-  const [tab, setTab] = useState<PlayerTab>('stats');
-  const [matchesSubTab, setMatchesSubTab] = useState<MatchesSubTab>('history');
+  // `resetSeasonOnToggle: true` — toggling regular/gauntlet here always resets the season selector
+  // back to career, matching this page's existing behavior (see useSeasonFilter's docstring for why
+  // that differs from MapDetailView, which doesn't opt in).
+  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ resetSeasonOnToggle: true });
+  // "Career" is this page's own vocabulary for useSeasonFilter's "all" — kept local so the existing
+  // UI copy ("Career stats", the "Career" <option>) doesn't have to change; both mean the same thing
+  // and share the same `season` URL param underneath.
+  const filter: Filter = selectedSeason === 'all' ? 'career' : selectedSeason;
+  function setFilter(next: Filter) { setSelectedSeason(next === 'career' ? 'all' : next); }
+
+  const [rawTab, setTab] = useTabState(PLAYER_TABS, 'stats');
+  const [rawMatchesSubTab, setMatchesSubTab] = useTabState(MATCHES_SUB_TABS, 'history', 'msub');
   const [mapSort, setMapSort] = useState<MapSortCol>('record');
   const [mapAsc, setMapAsc] = useState(false);
-
-  function toggleRegular() { baseToggleRegular(); setFilter('career'); }
-  function toggleGauntlet() { baseToggleGauntlet(); setFilter('career'); }
 
   const activeSeasons = useMemo(() => {
     const seen = new Set<string>();
@@ -236,11 +245,11 @@ export default function PlayerView({
   const playerSideStats = aggregatePlayerSideStats(filtered);
   const playedHistory = filtered.filter(isPlayed);
   const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
-  useEffect(() => {
-    if (upcomingHistory.length > 0) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMatchesSubTab('history');
-  }, [upcomingHistory.length]);
+  // Falls back to "history" when the URL says "upcoming" but there's nothing upcoming under the
+  // current season filter (e.g. an old link, or the filter just changed) — a derived read, not a
+  // written-back correction, so toggling the filter back and forth doesn't lose an explicit
+  // "upcoming" choice the way an imperative reset would.
+  const matchesSubTab = rawMatchesSubTab === 'upcoming' && upcomingHistory.length === 0 ? 'history' : rawMatchesSubTab;
 
   // Chronological ADR series (history is sorted newest-first; reverse for the sparkline).
   const adrSeries = useMemo(
@@ -308,6 +317,10 @@ export default function PlayerView({
   if (trophies.length > 0) {
     playerTabs.push({ key: 'trophies', label: `Trophy Case${filteredTrophies.length > 0 ? ` (${filteredTrophies.length})` : ''}` });
   }
+  // Falls back to the first surviving tab when `tab` names one this player doesn't have (e.g. a
+  // stale `?tab=trails` link for a player with no ready replay) — same shape as SeasonTabView's and
+  // BasicStatsView's fallback.
+  const tab = playerTabs.some((t) => t.key === rawTab) ? rawTab : (playerTabs[0]?.key ?? rawTab);
 
   return (
     <>

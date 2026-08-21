@@ -1,15 +1,26 @@
 // @vitest-environment jsdom
 /**
- * Component tests for `Checkbox`/`SeasonFilter` (`SeasonFilter.tsx`) — the harness prototype for
- * issue #414: click/keyboard toggling, `aria-checked` state, season-title dedup, and dropdown
- * suppression at ≤1 unique season. Run:
- *   npx vitest run src/components/SeasonFilter.test.tsx
+ * Component tests for `Checkbox`/`SeasonFilter` (`SeasonFilter.tsx`) — click/keyboard toggling,
+ * `aria-checked` state, season-title dedup, and dropdown suppression at ≤1 unique season — plus unit
+ * tests for `useSeasonFilter()`'s URL state: `reg`/`gnt`/`season` reads and writes, the
+ * "don't allow turning off the last remaining filter" guard, and the `resetSeasonOnToggle` option's
+ * atomic multi-key write (`PlayerView`/`CareerStatsView` opt in; `MapDetailView` doesn't).
+ *
+ * Run:  npx vitest run src/components/SeasonFilter.test.tsx
  */
 
-import { describe, expect, test } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { act, render, renderHook, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Checkbox, SeasonFilter, type SeasonFilterState } from './SeasonFilter';
+import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
+import { Checkbox, SeasonFilter, useSeasonFilter, type SeasonFilterState } from './SeasonFilter';
+
+vi.mock('next/navigation', () => createNextNavigationMock());
+
+beforeEach(() => {
+  resetNextNavigationMock();
+  nextNavigationMock.setPathname('/players/1');
+});
 
 function baseFilter(overrides: Partial<SeasonFilterState> = {}): Pick<
   SeasonFilterState,
@@ -72,5 +83,63 @@ describe('SeasonFilter', () => {
       <SeasonFilter filter={baseFilter()} seasons={seasons} onSeasonChange={() => {}} />,
     );
     expect(screen.queryByRole('combobox')).toBeNull();
+  });
+});
+
+describe('useSeasonFilter', () => {
+  test('defaults to both filters on and "all" seasons when no params are set', () => {
+    const { result } = renderHook(() => useSeasonFilter());
+    expect(result.current.includeRegular).toBe(true);
+    expect(result.current.includeGauntlet).toBe(true);
+    expect(result.current.selectedSeason).toBe('all');
+  });
+
+  test('reads `reg=0`/`gnt=0`/`season=<id>` from the URL', () => {
+    nextNavigationMock.setSearchParams('reg=0&gnt=0&season=5');
+    const { result } = renderHook(() => useSeasonFilter());
+    expect(result.current.includeRegular).toBe(false);
+    expect(result.current.includeGauntlet).toBe(false);
+    expect(result.current.selectedSeason).toBe(5);
+  });
+
+  test('toggleRegular writes `reg=0` and replaces (not pushes)', () => {
+    const { result } = renderHook(() => useSeasonFilter());
+    act(() => result.current.toggleRegular());
+
+    expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
+    expect(nextNavigationMock.pushState).not.toHaveBeenCalled();
+    expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/players/1?reg=0');
+  });
+
+  test('toggleRegular refuses to turn off the last remaining filter', () => {
+    nextNavigationMock.setSearchParams('gnt=0');
+    const { result } = renderHook(() => useSeasonFilter());
+    act(() => result.current.toggleRegular());
+
+    expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
+  });
+
+  test('setSelectedSeason writes `season`', () => {
+    const { result } = renderHook(() => useSeasonFilter());
+    act(() => result.current.setSelectedSeason(7));
+
+    expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/players/1?season=7');
+  });
+
+  test('without `resetSeasonOnToggle`, toggling leaves `season` untouched', () => {
+    nextNavigationMock.setSearchParams('season=5');
+    const { result } = renderHook(() => useSeasonFilter());
+    act(() => result.current.toggleRegular());
+
+    expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/players/1?season=5&reg=0');
+  });
+
+  test('with `resetSeasonOnToggle: true`, toggling resets `season` atomically, in one navigation', () => {
+    nextNavigationMock.setSearchParams('season=5');
+    const { result } = renderHook(() => useSeasonFilter({ resetSeasonOnToggle: true }));
+    act(() => result.current.toggleRegular());
+
+    expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
+    expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/players/1?reg=0');
   });
 });
