@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 type Patch = Record<string, string | undefined>;
 
 function withPatch(current: URLSearchParams, patch: Patch): string {
-  const next = new URLSearchParams(current.toString());
+  const next = new URLSearchParams(current);
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) next.delete(key);
     else next.set(key, value);
@@ -17,23 +17,34 @@ function withPatch(current: URLSearchParams, patch: Patch): string {
 
 /**
  * Navigate the current pathname to a patched query string — the shared primitive every other hook
- * in this file is built on. Multiple keys in one `patch` land in a single navigation, so a change
- * that must reset a sibling param (e.g. toggling a filter also resets an unrelated season-select)
- * never produces two history entries or a lost write.
+ * in this file is built on, and the one to reach for directly when one interaction must change more
+ * than one param at once (e.g. a season-filter toggle that also resets an unrelated season-select
+ * back to its "all" default) — writing them via separate calls would clobber whichever lands second,
+ * since each starts from the same pre-write `searchParams` snapshot.
+ *
+ * Keeps `router`/`pathname`/`searchParams` in a ref synced after each commit (never mutated during
+ * render, per this codebase's `react-hooks/refs` rule) rather than in the returned callback's
+ * `useCallback` deps, so the callback's identity stays stable across navigations instead of changing
+ * whenever *any* URL param changes (Next.js hands back a new `searchParams` object on every
+ * navigation) — a consumer that puts this setter in its own `useEffect`/`useMemo` deps or hands it
+ * to a memoized child won't re-run/re-render on unrelated URL changes.
  */
 export function useSetUrlParams(): (patch: Patch, options?: { push?: boolean }) => void {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  return useCallback(
-    (patch, options) => {
-      const href = pathname + withPatch(searchParams, patch);
-      if (options?.push) router.push(href, { scroll: false });
-      else router.replace(href, { scroll: false });
-    },
-    [router, pathname, searchParams],
-  );
+  const latest = useRef({ router, pathname, searchParams });
+  useEffect(() => {
+    latest.current = { router, pathname, searchParams };
+  });
+
+  return useCallback((patch, options) => {
+    const { router, pathname, searchParams } = latest.current;
+    const href = pathname + withPatch(searchParams, patch);
+    if (options?.push) router.push(href, { scroll: false });
+    else router.replace(href, { scroll: false });
+  }, []);
 }
 
 /**
@@ -65,17 +76,4 @@ export function useUrlState<T extends string>(
   );
 
   return [value, setValue];
-}
-
-/**
- * Multiple URL-backed keys written atomically in one navigation. Use this instead of several
- * `useUrlState` calls whenever one interaction must change more than one param at once (e.g. a
- * season-filter toggle that also resets a season-select back to its "all" default) — writing them
- * separately would clobber whichever call lands second, since each starts from the same pre-write
- * `searchParams` snapshot.
- */
-export function useUrlStateGroup(options?: { push?: boolean }): (patch: Patch) => void {
-  const setParams = useSetUrlParams();
-  const push = options?.push;
-  return useCallback((patch) => setParams(patch, { push }), [setParams, push]);
 }

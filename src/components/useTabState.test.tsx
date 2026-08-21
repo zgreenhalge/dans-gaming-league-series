@@ -9,30 +9,16 @@
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
+import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
 import { useTabState } from './useTabState';
 
-const { pushMock, replaceMock, getSearchParams, setSearchParams } = vi.hoisted(() => {
-  let searchParams = new URLSearchParams('');
-  return {
-    pushMock: vi.fn(),
-    replaceMock: vi.fn(),
-    getSearchParams: () => searchParams,
-    setSearchParams: (qs: string) => { searchParams = new URLSearchParams(qs); },
-  };
-});
-
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: pushMock, replace: replaceMock }),
-  usePathname: () => '/seasons/3',
-  useSearchParams: () => getSearchParams(),
-}));
+vi.mock('next/navigation', () => createNextNavigationMock());
 
 const TABS = ['leaderboard', 'schedule', 'h2h'] as const;
 
 beforeEach(() => {
-  pushMock.mockReset();
-  replaceMock.mockReset();
-  setSearchParams('');
+  resetNextNavigationMock();
+  nextNavigationMock.setPathname('/seasons/3');
 });
 
 describe('useTabState', () => {
@@ -42,13 +28,13 @@ describe('useTabState', () => {
   });
 
   test('falls back to defaultTab when the URL names a tab that is not in the list', () => {
-    setSearchParams('tab=advanced');
+    nextNavigationMock.setSearchParams('tab=advanced');
     const { result } = renderHook(() => useTabState(TABS, 'leaderboard'));
     expect(result.current[0]).toBe('leaderboard');
   });
 
   test('reads a valid tab from the URL', () => {
-    setSearchParams('tab=h2h');
+    nextNavigationMock.setSearchParams('tab=h2h');
     const { result } = renderHook(() => useTabState(TABS, 'leaderboard'));
     expect(result.current[0]).toBe('h2h');
   });
@@ -57,17 +43,17 @@ describe('useTabState', () => {
     const { result } = renderHook(() => useTabState(TABS, 'leaderboard'));
     act(() => result.current[1]('schedule'));
 
-    expect(pushMock).toHaveBeenCalledTimes(1);
-    expect(replaceMock).not.toHaveBeenCalled();
-    expect(pushMock.mock.calls[0][0]).toBe('/seasons/3?tab=schedule');
+    expect(nextNavigationMock.push).toHaveBeenCalledTimes(1);
+    expect(nextNavigationMock.replace).not.toHaveBeenCalled();
+    expect(nextNavigationMock.push.mock.calls[0][0]).toBe('/seasons/3?tab=schedule');
   });
 
   test('supports a custom param name for co-existing tab bars (e.g. `view` + `tab`)', () => {
-    setSearchParams('view=gauntlet');
+    nextNavigationMock.setSearchParams('view=gauntlet');
     const { result } = renderHook(() => useTabState(['regular', 'gauntlet'] as const, 'regular', 'view'));
     expect(result.current[0]).toBe('gauntlet');
 
     act(() => result.current[1]('regular'));
-    expect(pushMock.mock.calls[0][0]).toBe('/seasons/3');
+    expect(nextNavigationMock.push.mock.calls[0][0]).toBe('/seasons/3');
   });
 });
