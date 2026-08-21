@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getMapIndex } from '@/lib/queries';
 import MapIndexView from '@/components/MapIndexView';
@@ -27,7 +28,9 @@ export default async function MapsPage() {
         {maps.length === 0 ? (
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No maps found.</div>
         ) : (
-          <MapIndexView maps={maps} />
+          <Suspense>
+            <MapIndexView maps={maps} />
+          </Suspense>
         )}
       </main>
     </div>

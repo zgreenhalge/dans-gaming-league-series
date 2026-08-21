@@ -68,17 +68,17 @@ export interface SeasonFilterState {
 /**
  * URL-backed season filter — `reg`/`gnt` (`'0'` = off, omitted = on, the default) and `season`
  * (`'all'`, omitted, or a season id). Shared by every view that filters by season
- * (`CareerStatsView`, `PlayerView`, `MapDetailView`), so migrating it here fixes all of them at once
- * rather than requiring a separate migration per view.
+ * (`CareerStatsView`, `PlayerView`, `MapDetailView`), so `reg`/`gnt` are URL-backed for all of them
+ * through this one hook rather than a separate migration per view.
  *
- * `resetSeasonOnToggle` — some call sites (`PlayerView`, `CareerStatsView`) unconditionally reset
- * their own season selection back to "all/career" whenever regular/gauntlet is toggled; others
- * (`MapDetailView`) don't — they rely on `SeasonFilter`'s own effect below, which only resets when
- * the *current* selection actually becomes invalid after the toggle, a more precise correction.
- * Both are real, pre-existing, intentionally different behaviors — not something this migration
- * should unify. Toggling `reg`/`gnt` and resetting `season` in the same click must land in one
- * navigation (`useSetUrlParams`, not two separate per-key writes): a second `useUrlState` setter
- * call in the same handler wouldn't see the first one's write yet and would silently drop it — see
+ * `resetSeasonOnToggle` — an opt-in for call sites (currently `PlayerView`) that want toggling
+ * regular/gauntlet to unconditionally reset their own season selection back to "all" in the same
+ * navigation. `MapDetailView` doesn't opt in — it relies on `SeasonFilter`'s own effect below, which
+ * only resets when the *current* selection actually becomes invalid after the toggle, a more precise
+ * correction; that behavior is intentionally different, not something this option should unify away.
+ * Toggling `reg`/`gnt` and resetting `season` in the same click must land in one navigation
+ * (`useSetUrlParams`, not two separate per-key writes): a second `useUrlState` setter call in the
+ * same handler wouldn't see the first one's write yet and would silently drop it — see
  * `useSetUrlParams`'s docstring.
  */
 export function useSeasonFilter(options?: { resetSeasonOnToggle?: boolean }): SeasonFilterState {
