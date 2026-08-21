@@ -387,3 +387,16 @@ export function parseScore(
   if (!m) return null;
   return { shirts: Number(m[1]), skins: Number(m[2]) };
 }
+
+/** DOM id for a schedule week's row container — the `?week=<id>` deep-link scroll target
+ * (`SeasonTabView`'s deep-link handling reads it back via `getElementById`). Shared between
+ * `ScheduleList` (which sets it) and `SeasonTabView` (which reads it) so the two can't drift. */
+export function weekAnchorId(weekId: number): string {
+  return `week-${weekId}`;
+}
+
+/** DOM id for a gauntlet round's row container — the `?round=<n>` deep-link scroll target, same
+ * shared-contract reasoning as `weekAnchorId`. */
+export function roundAnchorId(roundNumber: number): string {
+  return `round-${roundNumber}`;
+}

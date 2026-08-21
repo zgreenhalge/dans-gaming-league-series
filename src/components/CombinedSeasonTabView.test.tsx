@@ -11,45 +11,17 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
+import { createNextAuthMock } from '@/lib/test-support/mockNextAuth';
+import { leaderboardRow, EMPTY_H2H } from '@/lib/test-support/leaderboardFixtures';
 import CombinedSeasonTabView from './CombinedSeasonTabView';
-import type { H2HData } from '@/lib/queries';
-import type { LeaderboardRowWithId } from '@/lib/types';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
-vi.mock('next-auth/react', () => ({ useSession: () => ({ data: null }) }));
+vi.mock('next-auth/react', () => createNextAuthMock());
 
 beforeEach(() => {
   resetNextNavigationMock();
   nextNavigationMock.setPathname('/seasons/1');
 });
-
-const EMPTY_H2H: H2HData = { duos: [], rivals: [], players: [] };
-
-function leaderboardRow(overrides: Partial<LeaderboardRowWithId> = {}): LeaderboardRowWithId {
-  return {
-    season_id: 1,
-    player_id: 1,
-    player_name: 'Alice',
-    matches_played: 1,
-    matches_won: 1,
-    matches_lost: 0,
-    win_rate_percentage: 100,
-    total_kills: 10,
-    total_assists: 2,
-    total_deaths: 5,
-    kd_ratio: 2,
-    total_damage: 500,
-    total_rounds_played: 13,
-    total_rounds_won: 8,
-    rwr_percentage: 61.5,
-    overall_adr: 38.46,
-    kills_in_wins: 10,
-    deaths_in_wins: 5,
-    kills_in_losses: 0,
-    deaths_in_losses: 0,
-    ...overrides,
-  };
-}
 
 function baseProps() {
   return {

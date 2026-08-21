@@ -3,7 +3,7 @@
 import EmptyState from './EmptyState';
 import { MatchCard, type MatchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
-import { isPlayedScore, fmtWindowDate, weekWindow } from '@/lib/util';
+import { isPlayedScore, fmtWindowDate, weekWindow, weekAnchorId } from '@/lib/util';
 import type { WeekWithMatches } from '@/lib/queries';
 
 
@@ -22,7 +22,7 @@ function WeekBlock({
 }) {
   const win = weekWindow(seasonStartDate, week.week_number);
   return (
-    <div id={`week-${week.id}`} className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
+    <div id={weekAnchorId(week.id)} className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
       <button
         onClick={onToggle}
         className="lift-row w-full px-4 py-2.5 flex items-center gap-3 border-b border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-left"

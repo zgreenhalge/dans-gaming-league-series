@@ -15,7 +15,7 @@ import TabBar from './TabBar';
 import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { MatchPickBanInput } from '@/lib/mapSideStats';
-import { isPlayedScore, tabCls } from '@/lib/util';
+import { isPlayedScore, tabCls, weekAnchorId, roundAnchorId } from '@/lib/util';
 import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
 import { projectGauntletSeeding, seedPlacementsByPlayer, type SeedPlacement } from '@/lib/gauntlet-bracket';
 
@@ -189,8 +189,8 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
 
   useEffect(() => {
     if (deepLinkId == null) return;
-    const prefix = isGauntlet ? 'round' : 'week';
-    document.getElementById(`${prefix}-${deepLinkId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const anchorId = isGauntlet ? roundAnchorId(deepLinkId) : weekAnchorId(deepLinkId);
+    document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [deepLinkId, isGauntlet]);
 
   const mySchedule = useMemo(
