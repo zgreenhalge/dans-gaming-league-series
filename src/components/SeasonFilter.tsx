@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { seasonTitle } from '@/lib/util';
+import { useUrlState, useSetUrlParams } from './useUrlState';
 
 // ─── Checkbox ────────────────────────────────────────────────────────────────
 
@@ -64,19 +65,56 @@ export interface SeasonFilterState {
   setSelectedSeason: (s: number | 'all') => void;
 }
 
-export function useSeasonFilter(): SeasonFilterState {
-  const [includeRegular, setIncludeRegular] = useState(true);
-  const [includeGauntlet, setIncludeGauntlet] = useState(true);
-  const [selectedSeason, setSelectedSeason] = useState<number | 'all'>('all');
+/**
+ * URL-backed season filter — `reg`/`gnt` (`'0'` = off, omitted = on, the default) and `season`
+ * (`'all'`, omitted, or a season id). Shared by every view that filters by season
+ * (`CareerStatsView`, `PlayerView`, `MapDetailView`), so `reg`/`gnt` are URL-backed for all of them
+ * through this one hook rather than a separate migration per view.
+ *
+ * `resetSeasonOnToggle` — an opt-in for call sites (currently `PlayerView`) that want toggling
+ * regular/gauntlet to unconditionally reset their own season selection back to "all" in the same
+ * navigation. `MapDetailView` doesn't opt in — it relies on `SeasonFilter`'s own effect below, which
+ * only resets when the *current* selection actually becomes invalid after the toggle, a more precise
+ * correction; that behavior is intentionally different, not something this option should unify away.
+ * Toggling `reg`/`gnt` and resetting `season` in the same click must land in one navigation
+ * (`useSetUrlParams`, not two separate per-key writes): a second `useUrlState` setter call in the
+ * same handler wouldn't see the first one's write yet and would silently drop it — see
+ * `useSetUrlParams`'s docstring.
+ */
+export function useSeasonFilter(options?: { resetSeasonOnToggle?: boolean }): SeasonFilterState {
+  const [regRaw, setRegRaw] = useUrlState<'0' | '1'>('reg', '1');
+  const [gntRaw, setGntRaw] = useUrlState<'0' | '1'>('gnt', '1');
+  const [seasonRaw, setSeasonRaw] = useUrlState('season', 'all', {
+    parse: (raw) => (raw === 'all' || /^\d+$/.test(raw) ? raw : undefined),
+  });
+  const setUrlParams = useSetUrlParams();
+
+  const includeRegular = regRaw !== '0';
+  const includeGauntlet = gntRaw !== '0';
+  const selectedSeason: number | 'all' = seasonRaw === 'all' ? 'all' : Number(seasonRaw);
+
+  // Shared by `toggleRegular`/`toggleGauntlet` below — same guard (don't allow turning off the last
+  // remaining filter) and the same `resetSeasonOnToggle` branch, differing only in which of `reg`/
+  // `gnt` is being flipped.
+  function toggle(mine: boolean, other: boolean, key: 'reg' | 'gnt', setRaw: (next: '0' | '1') => void) {
+    if (mine && !other) return;
+    if (options?.resetSeasonOnToggle) {
+      setUrlParams({ [key]: mine ? '0' : undefined, season: undefined });
+    } else {
+      setRaw(mine ? '0' : '1');
+    }
+  }
 
   function toggleRegular() {
-    if (includeRegular && !includeGauntlet) return;
-    setIncludeRegular((v) => !v);
+    toggle(includeRegular, includeGauntlet, 'reg', setRegRaw);
   }
 
   function toggleGauntlet() {
-    if (includeGauntlet && !includeRegular) return;
-    setIncludeGauntlet((v) => !v);
+    toggle(includeGauntlet, includeRegular, 'gnt', setGntRaw);
+  }
+
+  function setSelectedSeason(s: number | 'all') {
+    setSeasonRaw(s === 'all' ? 'all' : String(s));
   }
 
   return { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason };

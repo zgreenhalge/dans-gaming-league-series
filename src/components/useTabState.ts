@@ -22,3 +22,13 @@ export function useTabState<T extends string>(
   const value = tabs.includes(raw) ? raw : defaultTab;
   return [value, setRaw];
 }
+
+/**
+ * Falls back to the first entry in `available` when `raw` (from `useTabState`) doesn't name one of
+ * them — the second-stage check every tab bar needs once its tab list is computed dynamically (e.g.
+ * hidden until data exists for this viewer), since `useTabState`'s own validity check only knows the
+ * full static key list, not which of those keys currently has something to show.
+ */
+export function resolveTab<T extends string>(raw: T, available: readonly { key: T }[]): T {
+  return available.some((t) => t.key === raw) ? raw : (available[0]?.key ?? raw);
+}

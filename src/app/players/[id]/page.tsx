@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
@@ -145,16 +146,18 @@ export default async function PlayerPage({
             <EhogBadge rating={ehog.currentRating} />
           )}
         </div>
-        <PlayerView
-          playerId={detail.player.id}
-          history={detail.history}
-          trophies={detail.trophies}
-          careerLeaderboard={careerLeaderboard}
-          h2hData={h2hData}
-          ehogHistory={ehog.history}
-          matchDeltas={matchDeltas}
-          sabremetrics={leagueSabremetrics}
-        />
+        <Suspense>
+          <PlayerView
+            playerId={detail.player.id}
+            history={detail.history}
+            trophies={detail.trophies}
+            careerLeaderboard={careerLeaderboard}
+            h2hData={h2hData}
+            ehogHistory={ehog.history}
+            matchDeltas={matchDeltas}
+            sabremetrics={leagueSabremetrics}
+          />
+        </Suspense>
       </main>
     </div>
   );
