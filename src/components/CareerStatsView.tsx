@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import EmptyState from './EmptyState';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
+import { useTabState } from './useTabState';
 import H2HSection from './H2HSection';
 import { BasicStatsView } from './BasicStatsView';
 import { buildRegularToGauntletMap, deriveRates, extractSeasonNumber, seasonTitle, tabCls } from '@/lib/util';
@@ -16,8 +17,9 @@ import EhogTierBar from './EhogTierBar';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import TabBar from './TabBar';
 
-type Filter = 'career' | number;
 type Tab = 'leaderboard' | 'stats' | 'advanced' | 'h2h';
+
+const CAREER_TABS: readonly Tab[] = ['leaderboard', 'stats', 'advanced', 'h2h'];
 
 function mergeRows(
   a: LeaderboardRowWithId[],
@@ -76,11 +78,17 @@ export default function CareerStatsView({
   ehogSnapshots?: EhogSnapshotRow[];
   allSabremetrics?: SabremetricMatchRow[];
 }) {
-  const searchParams = useSearchParams();
-  const { includeRegular, includeGauntlet, toggleRegular: baseToggleRegular, toggleGauntlet: baseToggleGauntlet } = useSeasonFilter();
-  const [filter, setFilter] = useState<Filter>('career');
-  const [tab, setTab] = useState<Tab>(searchParams.get('tab') === 'h2h' ? 'h2h' : 'leaderboard');
+  // `resetSeasonOnToggle: true` — matches `PlayerView`'s behavior: toggling regular/gauntlet
+  // unconditionally resets the season selector back to "all" (this page's "Career").
+  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ resetSeasonOnToggle: true });
+  const [tab, setTab] = useTabState(CAREER_TABS, 'leaderboard');
   const [hoveredPlayerId, setHoveredPlayerId] = useState<number | null>(null);
+
+  // Read-only for now — `H2HSection` has no write-back (`onPairChange`) yet; that's a separate,
+  // cross-cutting change touching all three of its call sites, not specific to this view. A single
+  // `useSearchParams()` read (rather than three separate `useUrlState` calls) since nothing here is
+  // written back — each `useUrlState` call would otherwise mount its own unused write plumbing.
+  const searchParams = useSearchParams();
 
   const urlInitialPair = useMemo<H2HPair | null>(() => {
     const aName = searchParams.get('a');
@@ -92,9 +100,6 @@ export default function CareerStatsView({
     if (!a || !b) return null;
     return { a: a.id, b: b.id, type };
   }, [searchParams, players]);
-
-  function toggleRegular() { baseToggleRegular(); setFilter('career'); }
-  function toggleGauntlet() { baseToggleGauntlet(); setFilter('career'); }
 
   // Map regular season ID → paired gauntlet season ID (matched by season number)
   const regularToGauntlet = useMemo(
@@ -117,31 +122,31 @@ export default function CareerStatsView({
   }, [includeRegular, includeGauntlet, regularSeasons, gauntletSeasons]);
 
   const rows = useMemo<LeaderboardRowWithId[]>(() => {
-    if (filter === 'career') {
+    if (selectedSeason === 'all') {
       if (includeRegular && includeGauntlet) return mergeRows(careerRows, gauntletCareerRows);
       if (includeRegular) return careerRows;
       return gauntletCareerRows;
     }
-    const reg = includeRegular ? (bySeason[filter] ?? []) : [];
-    const pairedGntId = regularToGauntlet.get(filter);
+    const reg = includeRegular ? (bySeason[selectedSeason] ?? []) : [];
+    const pairedGntId = regularToGauntlet.get(selectedSeason);
     const gnt = includeGauntlet
-      ? (pairedGntId ? gauntletBySeason[pairedGntId] : gauntletBySeason[filter]) ?? []
+      ? (pairedGntId ? gauntletBySeason[pairedGntId] : gauntletBySeason[selectedSeason]) ?? []
       : [];
     if (reg.length > 0 && gnt.length > 0) return mergeRows(reg, gnt);
     return reg.length > 0 ? reg : gnt;
-  }, [filter, includeRegular, includeGauntlet, careerRows, gauntletCareerRows, bySeason, gauntletBySeason, regularToGauntlet]);
+  }, [selectedSeason, includeRegular, includeGauntlet, careerRows, gauntletCareerRows, bySeason, gauntletBySeason, regularToGauntlet]);
 
   const filteredMatches = useMemo<MapMatchRow[]>(() => {
-    if (filter === 'career') {
+    if (selectedSeason === 'all') {
       return allMatches.filter((m) => m.is_gauntlet ? includeGauntlet : includeRegular);
     }
-    const pairedGntId = regularToGauntlet.get(filter);
+    const pairedGntId = regularToGauntlet.get(selectedSeason);
     return allMatches.filter((m) => {
-      if (m.season_id === filter) return m.is_gauntlet ? includeGauntlet : includeRegular;
+      if (m.season_id === selectedSeason) return m.is_gauntlet ? includeGauntlet : includeRegular;
       if (pairedGntId != null && m.season_id === pairedGntId) return includeGauntlet;
       return false;
     });
-  }, [filter, allMatches, includeRegular, includeGauntlet, regularToGauntlet]);
+  }, [selectedSeason, allMatches, includeRegular, includeGauntlet, regularToGauntlet]);
 
   const playersById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
 
@@ -151,37 +156,37 @@ export default function CareerStatsView({
   );
 
   const filteredSabremetrics = useMemo(() => {
-    if (filter === 'career') {
+    if (selectedSeason === 'all') {
       return allSabremetrics.filter((r) => r.is_gauntlet ? includeGauntlet : includeRegular);
     }
-    const pairedGntId = regularToGauntlet.get(filter);
+    const pairedGntId = regularToGauntlet.get(selectedSeason);
     return allSabremetrics.filter((r) => {
-      if (r.season_id === filter) return r.is_gauntlet ? includeGauntlet : includeRegular;
+      if (r.season_id === selectedSeason) return r.is_gauntlet ? includeGauntlet : includeRegular;
       if (pairedGntId != null && r.season_id === pairedGntId) return includeGauntlet;
       return false;
     });
-  }, [filter, allSabremetrics, includeRegular, includeGauntlet, regularToGauntlet]);
+  }, [selectedSeason, allSabremetrics, includeRegular, includeGauntlet, regularToGauntlet]);
 
   const trophyCounts = useMemo(() => {
     const counts = new Map<number, Record<1 | 2 | 3, number>>();
     for (const [pidStr, entries] of Object.entries(trophiesByPlayer)) {
-      const pairedGntId = filter === 'career' ? null : regularToGauntlet.get(filter);
-      const inSelection = filter === 'career'
+      const pairedGntId = selectedSeason === 'all' ? null : regularToGauntlet.get(selectedSeason);
+      const inSelection = selectedSeason === 'all'
         ? entries
-        : entries.filter((t) => t.season_id === filter || (pairedGntId != null && t.season_id === pairedGntId));
+        : entries.filter((t) => t.season_id === selectedSeason || (pairedGntId != null && t.season_id === pairedGntId));
       const matching = inSelection.filter((t) => (t.is_gauntlet ? includeGauntlet : includeRegular));
       const c: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 };
       for (const t of matching) c[t.rank]++;
       counts.set(Number(pidStr), c);
     }
     return counts;
-  }, [trophiesByPlayer, filter, includeRegular, includeGauntlet, regularToGauntlet]);
+  }, [trophiesByPlayer, selectedSeason, includeRegular, includeGauntlet, regularToGauntlet]);
 
   const ehogRatings = useMemo<Record<number, number>>(() => {
-    const filtered = filter === 'career'
+    const filtered = selectedSeason === 'all'
       ? ehogSnapshots.filter((s) => s.isGauntlet ? includeGauntlet : includeRegular)
       : (() => {
-          const sel = regularSeasons.find((rs) => rs.id === filter);
+          const sel = regularSeasons.find((rs) => rs.id === selectedSeason);
           const sn = sel ? extractSeasonNumber(sel.name) : null;
           return ehogSnapshots.filter((s) => s.seasonNumber === sn && (s.isGauntlet ? includeGauntlet : includeRegular));
         })();
@@ -195,7 +200,7 @@ export default function CareerStatsView({
     const result: Record<number, number> = {};
     for (const [pid, val] of Object.entries(latest)) result[Number(pid)] = val.rating;
     return result;
-  }, [ehogSnapshots, filter, includeRegular, includeGauntlet, regularSeasons]);
+  }, [ehogSnapshots, selectedSeason, includeRegular, includeGauntlet, regularSeasons]);
 
   return (
     <>
@@ -211,14 +216,14 @@ export default function CareerStatsView({
                 showGauntlet={gauntletSeasons.length > 0}
               />
               <select
-                value={String(filter)}
+                value={String(selectedSeason)}
                 onChange={(e) => {
                   const v = e.target.value;
-                  setFilter(v === 'career' ? 'career' : Number(v));
+                  setSelectedSeason(v === 'all' ? 'all' : Number(v));
                 }}
                 className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
               >
-                <option value="career">Career</option>
+                <option value="all">Career</option>
                 {activeSeasons.map((s) => (
                   <option key={s.id} value={s.id}>
                     {seasonTitle(s.name)}

@@ -19,3 +19,14 @@ afterEach(() => {
 if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
+
+// jsdom doesn't implement `ResizeObserver` either, so any component measuring its own container
+// (e.g. a chart that lays out relative to its rendered width) needs a stub under jsdom's `.test.tsx`
+// suites. Same `typeof` guard as above, for the same reason.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
