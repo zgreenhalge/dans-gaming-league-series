@@ -3,7 +3,7 @@
 import EmptyState from './EmptyState';
 import { MatchCard } from './MatchCard';
 import { PlayerName } from './PlayerName';
-import { allMatchesPlayed, isPlayedScore, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
+import { allMatchesPlayed, isPlayedScore, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
 import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
 import type { GauntletRound, GauntletMatch } from '@/lib/queries';
 
@@ -87,7 +87,7 @@ function GauntletRoundCard({
   }
 
   return (
-    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
+    <div id={roundAnchorId(round.round_number)} className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
       <button
         onClick={onToggle}
         className="lift-row w-full px-4 py-2.5 flex items-center gap-3 border-b border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-left"

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
@@ -196,17 +197,19 @@ export default async function SeasonPage({
               />
             </div>
           </div>
-          <SeasonTabView
-            kind="gauntlet"
-            rounds={rounds}
-            bracketShape={bracketShape}
-            leaderboard={leaderboard}
-            seasonStatus={season.status}
-            currentPlayerId={currentPlayerId}
-            h2hData={h2hData}
-            ehogRatings={ehogRatings}
-            sabremetrics={sabremetrics}
-          />
+          <Suspense>
+            <SeasonTabView
+              kind="gauntlet"
+              rounds={rounds}
+              bracketShape={bracketShape}
+              leaderboard={leaderboard}
+              seasonStatus={season.status}
+              currentPlayerId={currentPlayerId}
+              h2hData={h2hData}
+              ehogRatings={ehogRatings}
+              sabremetrics={sabremetrics}
+            />
+          </Suspense>
         </main>
       </div>
     );
@@ -294,47 +297,49 @@ export default async function SeasonPage({
             {isAdmin && <SeasonScheduleEntryPoint seasonId={season.id} hasSchedule={hasSchedule} />}
           </div>
         )}
-        {linkedGauntlet &&
-        gauntletRounds &&
-        gauntletBracketShape &&
-        gauntletLeaderboard &&
-        gauntletH2hData &&
-        // The Gauntlet tab is only worth showing once there's something to see in it — a paired
-        // gauntlet season row can exist with no bracket shape yet (manual shell) and no rounds
-        // (unseeded), in which case it's indistinguishable from having no gauntlet at all.
-        (gauntletBracketShape.length > 0 || gauntletRounds.length > 0) ? (
-          <CombinedSeasonTabView
-            leaderboard={leaderboard}
-            schedule={schedule}
-            seasonStartDate={season.start_date}
-            seasonStatus={season.status}
-            mapPool={season.map_pool}
-            gauntletRounds={gauntletRounds}
-            gauntletBracketShape={gauntletBracketShape}
-            gauntletLeaderboard={gauntletLeaderboard}
-            gauntletStatus={linkedGauntlet.status}
-            currentPlayerId={currentPlayerId}
-            h2hData={h2hData}
-            gauntletH2hData={gauntletH2hData}
-            ehogRatings={ehogRatings}
-            gauntletEhogRatings={gauntletEhogRatings ?? undefined}
-            sabremetrics={sabremetrics}
-            gauntletSabremetrics={gauntletSabremetrics}
-          />
-        ) : (
-          <SeasonTabView
-            kind="regular"
-            leaderboard={leaderboard}
-            schedule={schedule}
-            seasonStartDate={season.start_date}
-            seasonStatus={season.status}
-            mapPool={season.map_pool}
-            currentPlayerId={currentPlayerId}
-            h2hData={h2hData}
-            ehogRatings={ehogRatings}
-            sabremetrics={sabremetrics}
-          />
-        )}
+        <Suspense>
+          {linkedGauntlet &&
+          gauntletRounds &&
+          gauntletBracketShape &&
+          gauntletLeaderboard &&
+          gauntletH2hData &&
+          // The Gauntlet tab is only worth showing once there's something to see in it — a paired
+          // gauntlet season row can exist with no bracket shape yet (manual shell) and no rounds
+          // (unseeded), in which case it's indistinguishable from having no gauntlet at all.
+          (gauntletBracketShape.length > 0 || gauntletRounds.length > 0) ? (
+            <CombinedSeasonTabView
+              leaderboard={leaderboard}
+              schedule={schedule}
+              seasonStartDate={season.start_date}
+              seasonStatus={season.status}
+              mapPool={season.map_pool}
+              gauntletRounds={gauntletRounds}
+              gauntletBracketShape={gauntletBracketShape}
+              gauntletLeaderboard={gauntletLeaderboard}
+              gauntletStatus={linkedGauntlet.status}
+              currentPlayerId={currentPlayerId}
+              h2hData={h2hData}
+              gauntletH2hData={gauntletH2hData}
+              ehogRatings={ehogRatings}
+              gauntletEhogRatings={gauntletEhogRatings ?? undefined}
+              sabremetrics={sabremetrics}
+              gauntletSabremetrics={gauntletSabremetrics}
+            />
+          ) : (
+            <SeasonTabView
+              kind="regular"
+              leaderboard={leaderboard}
+              schedule={schedule}
+              seasonStartDate={season.start_date}
+              seasonStatus={season.status}
+              mapPool={season.map_pool}
+              currentPlayerId={currentPlayerId}
+              h2hData={h2hData}
+              ehogRatings={ehogRatings}
+              sabremetrics={sabremetrics}
+            />
+          )}
+        </Suspense>
       </main>
     </div>
   );

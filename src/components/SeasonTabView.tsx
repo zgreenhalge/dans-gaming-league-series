@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useTabState } from './useTabState';
+import { useUrlState, useSetUrlParams } from './useUrlState';
 import LeaderboardTable from './LeaderboardTable';
 import ScheduleList from './ScheduleList';
 import GauntletStandings from './GauntletStandings';
@@ -13,7 +16,7 @@ import TabBar from './TabBar';
 import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { MatchPickBanInput } from '@/lib/mapSideStats';
-import { isPlayedScore, tabCls } from '@/lib/util';
+import { isPlayedScore, tabCls, weekAnchorId, roundAnchorId } from '@/lib/util';
 import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
 import { projectGauntletSeeding, seedPlacementsByPlayer, type SeedPlacement } from '@/lib/gauntlet-bracket';
 
@@ -27,6 +30,17 @@ function playerInMatch(
     match.shirts_stats.some((p) => p.player_id === playerId) ||
     match.skins_stats.some((p) => p.player_id === playerId)
   );
+}
+
+// The `week`/`round` param's id-set encoding: a comma-separated list of ids ("1,3,5"). An explicit
+// empty string means "the user collapsed everything, open nothing" — distinct from the param being
+// absent, which `useUrlState` already resolves to the default-open heuristic on its own.
+function idsFromRawOpen(raw: string): number[] {
+  return raw === '' ? [] : raw.split(',').map(Number);
+}
+
+function serializeIdSet(ids: Set<number>): string {
+  return [...ids].sort((a, b) => a - b).join(',');
 }
 
 type RegularMode = {
@@ -50,6 +64,13 @@ type GauntletMode = {
 };
 
 export type { Tab as SeasonTab };
+
+// Every possible tab key, for `useTabState`'s own missing/invalid-param fallback. This is broader
+// than what's actually shown for a given season — the `tabs.some(...)` check further down still
+// hides tabs with no data behind them — but `useTabState` needs a fixed list to validate against.
+// Exported so `CombinedSeasonTabView`'s own `subTab` (shared between this component's regular and
+// gauntlet instances) validates against the same list instead of a second, driftable copy.
+export const SEASON_TABS: readonly Tab[] = ['leaderboard', 'stats', 'advanced', 'h2h', 'schedule'];
 
 // Stable empty-array fallbacks so `schedule`/`rounds` keep a consistent identity across
 // renders when the season is the other kind — a fresh `[]` literal here would break the
@@ -138,7 +159,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     return new Set();
   }, [isGauntlet, rounds, schedule]);
 
-  const [localTab, setLocalTab] = useState<Tab>('leaderboard');
+  const [localTab, setLocalTab] = useTabState(SEASON_TABS, 'leaderboard');
   const rawTab = props.tab ?? localTab;
   const setTab = props.onTabChange ?? setLocalTab;
 
@@ -154,8 +175,65 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const hasStats = leaderboard.length > 0 && !notRealStandingsYet;
   const hasH2H = h2hData.players.length > 0 && (h2hData.duos.length > 0 || h2hData.rivals.length > 0);
   const hasSchedule = isGauntlet ? bracketShape.length > 0 || rounds.length > 0 : schedule.length > 0;
-  const [myGamesOnly, setMyGamesOnly] = useState(false);
-  const [openItems, setOpenItems] = useState<Set<number>>(defaultOpenSet);
+
+  // "My games" is URL state too (`mine=1`, omitted when off) — not just for its own sake, but
+  // because it changes what a shared `week`/`round` link *means*: those ids are drawn from the
+  // "my games"-filtered week/round list while it's active (see `toggleMyGames` below), so a link
+  // that carries the ids without also carrying `mine=1` would show a teammate a schedule with the
+  // wrong weeks pre-expanded and no visible reason why.
+  const [myGamesRaw] = useUrlState<'0' | '1'>('mine', '0');
+  const myGamesOnly = myGamesRaw === '1';
+
+  // Which weeks/rounds are expanded is itself URL state (issue #90's "the exact view can be easily
+  // shared" ask) — `?week=<ids>` (regular season) or `?round=<ids>` (gauntlet), a comma-separated id
+  // list, replacing (not pushing — expand/collapse shouldn't spam the back button) on every toggle.
+  // Built on `useUrlState` rather than hand-rolled: its `parse` option both validates each id against
+  // this season's actual weeks/rounds (dropping ones that don't exist) *and* signals "fall back to
+  // `defaultOpenSet`" by returning `undefined` when every id in a non-empty override turns out
+  // invalid (a stale or hand-edited link) — that's different from an explicit empty string, which
+  // `useUrlState` passes through untouched as "the user collapsed everything, open nothing." Writing
+  // a set that serializes to the same string as `defaultOpenSet` omits the param entirely, via
+  // `useUrlState`'s own "writing the default removes the param" behavior — no separate comparison
+  // needed here.
+  const searchParams = useSearchParams();
+  const setUrlParams = useSetUrlParams();
+  const openParam = isGauntlet ? 'round' : 'week';
+  const itemExists = (id: number) => (isGauntlet ? rounds.some((r) => r.round_number === id) : schedule.some((w) => w.id === id));
+
+  const [rawOpen, setRawOpen] = useUrlState(openParam, serializeIdSet(defaultOpenSet), {
+    parse: (raw) => {
+      if (raw === '') return raw;
+      const valid = serializeIdSet(new Set(idsFromRawOpen(raw).filter((id) => Number.isFinite(id) && itemExists(id))));
+      return valid === '' ? undefined : valid;
+    },
+  });
+
+  const openItems = useMemo<Set<number>>(() => new Set(idsFromRawOpen(rawOpen)), [rawOpen]);
+
+  function writeOpenItems(next: Set<number>) {
+    setRawOpen(serializeIdSet(next));
+  }
+
+  // Scrolls to the lowest explicitly-open id from a shared link, once on mount — not on every
+  // `openItems` change, which would yank the page around on every expand/collapse click.
+  // Re-validates the *raw* param itself rather than reading `rawOpen` (which is always a resolved
+  // string — the default-open fallback included, once `useUrlState`'s `parse` rejects an all-invalid
+  // override) — otherwise a stale/typo'd link like `?week=999` would still scroll to wherever the
+  // default happened to land, an unsolicited jump on what's otherwise a plain page load. Pair
+  // `week`/`round` with `tab=schedule` in a shared link so the Schedule tab is already showing when
+  // this fires; this alone doesn't switch tabs.
+  const [scrollTargetId] = useState<number | null>(() => {
+    const raw = searchParams.get(openParam);
+    if (raw == null || raw === '') return null;
+    const ids = idsFromRawOpen(raw).filter((id) => Number.isFinite(id) && itemExists(id));
+    return ids.length > 0 ? Math.min(...ids) : null;
+  });
+
+  useEffect(() => {
+    if (scrollTargetId == null) return;
+    const anchorId = isGauntlet ? roundAnchorId(scrollTargetId) : weekAnchorId(scrollTargetId);
+    document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [scrollTargetId, isGauntlet]);
 
   const mySchedule = useMemo(
     () =>
@@ -213,36 +291,36 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     : displaySchedule.length > 0 && displaySchedule.every((w) => openItems.has(w.id));
 
   function toggleItem(id: number) {
-    setOpenItems((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const next = new Set(openItems);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    writeOpenItems(next);
   }
 
   function toggleAll() {
     if (allOpen) {
-      setOpenItems(new Set());
+      writeOpenItems(new Set());
     } else if (isGauntlet) {
-      setOpenItems(new Set(displayRounds.map((r) => r.round_number)));
+      writeOpenItems(new Set(displayRounds.map((r) => r.round_number)));
     } else {
-      setOpenItems(new Set(displaySchedule.map((w) => w.id)));
+      writeOpenItems(new Set(displaySchedule.map((w) => w.id)));
     }
   }
 
   function toggleMyGames() {
+    // Writes `mine` and the open-items param atomically (via `setUrlParams`, not the `useUrlState`
+    // setter above) — two separate URL writes in one handler would clobber each other, since the
+    // second call's `useSetUrlParams` snapshot doesn't see the first call's change until the next
+    // render (see that hook's docstring on why it keeps a post-commit-synced ref).
     const next = !myGamesOnly;
-    setMyGamesOnly(next);
-    if (next && currentPlayerId) {
-      setOpenItems(
-        isGauntlet
-          ? new Set(myRounds.map((r) => r.round_number))
-          : new Set(mySchedule.map((w) => w.id)),
-      );
-    } else {
-      setOpenItems(defaultOpenSet);
-    }
+    const nextOpen = next && currentPlayerId
+      ? (isGauntlet ? new Set(myRounds.map((r) => r.round_number)) : new Set(mySchedule.map((w) => w.id)))
+      : defaultOpenSet;
+    const serializedOpen = serializeIdSet(nextOpen);
+    setUrlParams({
+      mine: next ? '1' : undefined,
+      [openParam]: serializedOpen === serializeIdSet(defaultOpenSet) ? undefined : serializedOpen,
+    });
   }
 
   const tabs: { key: Tab; label: string }[] = [

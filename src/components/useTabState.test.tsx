@@ -43,9 +43,9 @@ describe('useTabState', () => {
     const { result } = renderHook(() => useTabState(TABS, 'leaderboard'));
     act(() => result.current[1]('schedule'));
 
-    expect(nextNavigationMock.push).toHaveBeenCalledTimes(1);
-    expect(nextNavigationMock.replace).not.toHaveBeenCalled();
-    expect(nextNavigationMock.push.mock.calls[0][0]).toBe('/seasons/3?tab=schedule');
+    expect(nextNavigationMock.pushState).toHaveBeenCalledTimes(1);
+    expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
+    expect(nextNavigationMock.pushState.mock.calls[0][2]).toBe('/seasons/3?tab=schedule');
   });
 
   test('supports a custom param name for co-existing tab bars (e.g. `view` + `tab`)', () => {
@@ -54,6 +54,6 @@ describe('useTabState', () => {
     expect(result.current[0]).toBe('gauntlet');
 
     act(() => result.current[1]('regular'));
-    expect(nextNavigationMock.push.mock.calls[0][0]).toBe('/seasons/3');
+    expect(nextNavigationMock.pushState.mock.calls[0][2]).toBe('/seasons/3');
   });
 });
