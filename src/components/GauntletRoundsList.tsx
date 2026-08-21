@@ -87,7 +87,7 @@ function GauntletRoundCard({
   }
 
   return (
-    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
+    <div id={`round-${round.round_number}`} className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] mb-4 last:mb-0">
       <button
         onClick={onToggle}
         className="lift-row w-full px-4 py-2.5 flex items-center gap-3 border-b border-[var(--color-border-primary)] bg-[var(--color-bg-secondary)] text-left"

@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useTabState } from './useTabState';
 import LeaderboardTable from './LeaderboardTable';
 import ScheduleList from './ScheduleList';
 import GauntletStandings from './GauntletStandings';
@@ -50,6 +52,13 @@ type GauntletMode = {
 };
 
 export type { Tab as SeasonTab };
+
+// Every possible tab key, for `useTabState`'s own missing/invalid-param fallback. This is broader
+// than what's actually shown for a given season — the `tabs.some(...)` check further down still
+// hides tabs with no data behind them — but `useTabState` needs a fixed list to validate against.
+// Exported so `CombinedSeasonTabView`'s own `subTab` (shared between this component's regular and
+// gauntlet instances) validates against the same list instead of a second, driftable copy.
+export const SEASON_TABS: readonly Tab[] = ['leaderboard', 'stats', 'advanced', 'h2h', 'schedule'];
 
 // Stable empty-array fallbacks so `schedule`/`rounds` keep a consistent identity across
 // renders when the season is the other kind — a fresh `[]` literal here would break the
@@ -138,7 +147,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     return new Set();
   }, [isGauntlet, rounds, schedule]);
 
-  const [localTab, setLocalTab] = useState<Tab>('leaderboard');
+  const [localTab, setLocalTab] = useTabState(SEASON_TABS, 'leaderboard');
   const rawTab = props.tab ?? localTab;
   const setTab = props.onTabChange ?? setLocalTab;
 
@@ -155,7 +164,34 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const hasH2H = h2hData.players.length > 0 && (h2hData.duos.length > 0 || h2hData.rivals.length > 0);
   const hasSchedule = isGauntlet ? bracketShape.length > 0 || rounds.length > 0 : schedule.length > 0;
   const [myGamesOnly, setMyGamesOnly] = useState(false);
-  const [openItems, setOpenItems] = useState<Set<number>>(defaultOpenSet);
+
+  // Deep-link a shared URL straight to one week/round (issue #90's "link people directly to these
+  // sections" ask): `?round=<n>` (gauntlet) or `?week=<id>` (regular season) forces that one item
+  // open in addition to whatever `defaultOpenSet` already opens. Resolved once via a `useState` lazy
+  // initializer — not a `useMemo` off `searchParams`, which would silently re-resolve (and reopen a
+  // week/round using whatever the URL happens to say *then*) if `rounds`/`schedule` ever changed
+  // identity later in this instance's lifetime. Toggling collapse state afterward stays ephemeral,
+  // same as before. Pair this with `tab=schedule` in the shared link so the Schedule tab is what's
+  // showing when the scroll effect below fires — this id alone doesn't switch tabs.
+  const searchParams = useSearchParams();
+  const [deepLinkId] = useState<number | null>(() => {
+    const raw = isGauntlet ? searchParams.get('round') : searchParams.get('week');
+    if (raw == null) return null;
+    const id = Number(raw);
+    if (!Number.isFinite(id)) return null;
+    const exists = isGauntlet ? rounds.some((r) => r.round_number === id) : schedule.some((w) => w.id === id);
+    return exists ? id : null;
+  });
+
+  const [openItems, setOpenItems] = useState<Set<number>>(() =>
+    deepLinkId == null ? defaultOpenSet : new Set([...defaultOpenSet, deepLinkId]),
+  );
+
+  useEffect(() => {
+    if (deepLinkId == null) return;
+    const prefix = isGauntlet ? 'round' : 'week';
+    document.getElementById(`${prefix}-${deepLinkId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [deepLinkId, isGauntlet]);
 
   const mySchedule = useMemo(
     () =>

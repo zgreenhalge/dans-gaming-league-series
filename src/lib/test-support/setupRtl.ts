@@ -11,3 +11,11 @@ import '@testing-library/jest-dom/vitest';
 afterEach(() => {
   cleanup();
 });
+
+// jsdom doesn't implement `Element.scrollIntoView` (throws "not a function" if called), so any
+// component using it — e.g. a deep-link scroll-to-section — needs a stub under jsdom's `.test.tsx`
+// suites. Guarded behind `typeof Element` since this file also runs for plain-`node`-environment
+// `.test.ts` files, which have no DOM globals at all.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
