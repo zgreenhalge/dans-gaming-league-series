@@ -118,7 +118,6 @@ export default function MapDetailView({
   // after a regular/gauntlet toggle, rather than unconditionally resetting to "all" every time.
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter();
   const [tab, setTab] = useTabState(MAP_TABS, 'leaderboard');
-  const { initialPair: urlInitialPair, onPairChange: handleH2HPairChange } = useH2HPairUrlState(players);
 
   const uniqueSeasons = useMemo(() => {
     const seen = new Map<number, { id: number; name: string; is_gauntlet: boolean }>();
@@ -148,6 +147,12 @@ export default function MapDetailView({
     () => computeH2H(mapMatchRowsToH2HInput(filteredMatches), playersById),
     [filteredMatches, playersById],
   );
+
+  // `h2hData.players`, not the `players` prop — `computeH2H` includes a synthetic fallback entry
+  // for any match-referenced player id absent from `playersById`, so it's a superset of `players`
+  // and the same list `H2HSection` itself resolves its clickable rows against; a narrower list here
+  // could produce an unresolved id on write.
+  const { initialPair: urlInitialPair, onPairChange: handleH2HPairChange } = useH2HPairUrlState(h2hData.players);
 
   // Stable list of every match id for this map — the Heatmap tab fetches its artifacts
   // lazily for these (memoized so the fetch effect doesn't re-run on every render).

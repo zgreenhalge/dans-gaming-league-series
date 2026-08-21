@@ -83,8 +83,6 @@ export default function CareerStatsView({
   const [tab, setTab] = useTabState(CAREER_TABS, 'leaderboard');
   const [hoveredPlayerId, setHoveredPlayerId] = useState<number | null>(null);
 
-  const { initialPair: urlInitialPair, onPairChange: handleH2HPairChange } = useH2HPairUrlState(players);
-
   // Map regular season ID → paired gauntlet season ID (matched by season number)
   const regularToGauntlet = useMemo(
     () => buildRegularToGauntletMap(regularSeasons, gauntletSeasons),
@@ -138,6 +136,12 @@ export default function CareerStatsView({
     () => computeH2H(mapMatchRowsToH2HInput(filteredMatches), playersById),
     [filteredMatches, playersById],
   );
+
+  // `h2hData.players`, not the `players` prop — `computeH2H` includes a synthetic fallback entry
+  // for any match-referenced player id absent from `playersById`, so it's a superset of `players`
+  // and the same list `H2HSection` itself resolves its clickable rows against; a narrower list here
+  // could produce an unresolved id on write.
+  const { initialPair: urlInitialPair, onPairChange: handleH2HPairChange } = useH2HPairUrlState(h2hData.players);
 
   const filteredSabremetrics = useMemo(() => {
     if (selectedSeason === 'all') {
