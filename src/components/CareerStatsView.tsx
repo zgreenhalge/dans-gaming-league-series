@@ -1,19 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import EmptyState from './EmptyState';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import { useTabState } from './useTabState';
-import { useSetUrlParams } from './useUrlState';
-import H2HSection, { parseH2HPairFromParams, h2hPairToParams } from './H2HSection';
+import { useH2HPairUrlState } from './useH2HPairUrlState';
+import H2HSection from './H2HSection';
 import { BasicStatsView } from './BasicStatsView';
 import { buildRegularToGauntletMap, deriveRates, extractSeasonNumber, seasonTitle, tabCls } from '@/lib/util';
 import { computeH2H, mapMatchRowsToH2HInput } from '@/lib/h2h';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { TrophyEntry, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow } from '@/lib/queries';
-import type { H2HPair } from './H2HMatrix';
 import EhogTierBar from './EhogTierBar';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import TabBar from './TabBar';
@@ -85,20 +83,7 @@ export default function CareerStatsView({
   const [tab, setTab] = useTabState(CAREER_TABS, 'leaderboard');
   const [hoveredPlayerId, setHoveredPlayerId] = useState<number | null>(null);
 
-  // A single `useSearchParams()` read for the initial pair (rather than going through `useUrlState`)
-  // since the read side alone needs no write plumbing of its own — `setUrlParams` below covers the
-  // one atomic write `onPairChange` needs.
-  const searchParams = useSearchParams();
-  const setUrlParams = useSetUrlParams();
-
-  const urlInitialPair = useMemo<H2HPair | null>(
-    () => parseH2HPairFromParams(searchParams, players),
-    [searchParams, players],
-  );
-
-  function handleH2HPairChange(pair: H2HPair) {
-    setUrlParams(h2hPairToParams(pair, players));
-  }
+  const { initialPair: urlInitialPair, onPairChange: handleH2HPairChange } = useH2HPairUrlState(players);
 
   // Map regular season ID → paired gauntlet season ID (matched by season number)
   const regularToGauntlet = useMemo(

@@ -12,9 +12,9 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
-import { H2H_PLAYERS } from '@/lib/test-support/h2hFixtures';
+import { H2H_PLAYERS, h2hPlayerStat } from '@/lib/test-support/h2hFixtures';
 import MapDetailView from './MapDetailView';
-import type { MapMatchRow, MapDetail, MapPlayerStat } from '@/lib/queries';
+import type { MapMatchRow, MapDetail } from '@/lib/queries';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
 
@@ -58,23 +58,6 @@ function baseDetail(overrides: Partial<MapDetail> = {}): MapDetail {
     seasons: [{ id: 1, name: 'Season 1', is_gauntlet: false }],
     matches: [matchRow()],
     playerStats: [],
-    ...overrides,
-  };
-}
-
-function playerStat(overrides: Partial<MapPlayerStat> = {}): MapPlayerStat {
-  return {
-    player_id: 1,
-    player_name: 'Alice',
-    faction: 'SHIRTS',
-    kills: 20,
-    assists: 5,
-    deaths: 15,
-    adr: 75,
-    damage: 1000,
-    rounds_played: 13,
-    rounds_won: 8,
-    is_win: true,
     ...overrides,
   };
 }
@@ -139,8 +122,8 @@ describe('MapDetailView — H2H pair writes to the URL', () => {
       matches: [
         matchRow({
           shirts_stats: [
-            playerStat({ player_id: 1, player_name: 'Alice' }),
-            playerStat({ player_id: 2, player_name: 'Bob' }),
+            h2hPlayerStat({ player_id: 1, player_name: 'Alice' }),
+            h2hPlayerStat({ player_id: 2, player_name: 'Bob' }),
           ],
         }),
       ],

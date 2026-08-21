@@ -14,9 +14,9 @@ import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
 import { createNextAuthMock } from '@/lib/test-support/mockNextAuth';
 import { leaderboardRow } from '@/lib/test-support/leaderboardFixtures';
-import { H2H_PLAYERS } from '@/lib/test-support/h2hFixtures';
+import { H2H_PLAYERS, h2hPlayerStat, h2hMatchRow } from '@/lib/test-support/h2hFixtures';
 import CareerStatsView from './CareerStatsView';
-import type { MapMatchRow, MapPlayerStat } from '@/lib/queries';
+import type { MapMatchRow } from '@/lib/queries';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
 vi.mock('next-auth/react', () => createNextAuthMock());
@@ -25,48 +25,6 @@ beforeEach(() => {
   resetNextNavigationMock();
   nextNavigationMock.setPathname('/statistics');
 });
-
-function playerStat(overrides: Partial<MapPlayerStat> = {}): MapPlayerStat {
-  return {
-    player_id: 1,
-    player_name: 'Alice',
-    faction: 'SHIRTS',
-    kills: 20,
-    assists: 5,
-    deaths: 15,
-    adr: 75,
-    damage: 1000,
-    rounds_played: 13,
-    rounds_won: 8,
-    is_win: true,
-    ...overrides,
-  };
-}
-
-function matchRow(overrides: Partial<MapMatchRow> = {}): MapMatchRow {
-  return {
-    match_id: 1,
-    match_number: 1,
-    week_number: 1,
-    season_id: 1,
-    season_number: 1,
-    season_name: 'Season 1',
-    is_gauntlet: false,
-    is_playoff_game: false,
-    final_score: '13-9',
-    shirts_stats: [],
-    skins_stats: [],
-    picked_map: null,
-    shirts_pick: null,
-    skins_starting_side: null,
-    shirts_ban: null,
-    shirts_ban2: null,
-    skins_ban1: null,
-    skins_ban2: null,
-    map_pool: null,
-    ...overrides,
-  };
-}
 
 function baseProps(overrides: {
   players?: { id: number; name: string; steam_avatar_url: string | null }[];
@@ -138,10 +96,10 @@ describe('CareerStatsView — H2H initial pair', () => {
         {...baseProps({
           players: H2H_PLAYERS,
           allMatches: [
-            matchRow({
+            h2hMatchRow({
               shirts_stats: [
-                playerStat({ player_id: 1, player_name: 'Alice' }),
-                playerStat({ player_id: 2, player_name: 'Bob' }),
+                h2hPlayerStat({ player_id: 1, player_name: 'Alice' }),
+                h2hPlayerStat({ player_id: 2, player_name: 'Bob' }),
               ],
             }),
           ],
