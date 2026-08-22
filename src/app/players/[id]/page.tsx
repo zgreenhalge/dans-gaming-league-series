@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getPlayer, getCareerLeaderboard, getH2HData, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory } from '@/lib/queries';
+import { getPlayer, getCareerLeaderboard, getPlayersById, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory } from '@/lib/queries';
 import { getPlayerMeta } from '@/lib/seo/og';
 import { isPlayedScore } from '@/lib/util';
 import { buildPlayerJsonLd } from '@/lib/seo/structured-data';
@@ -54,11 +54,11 @@ export default async function PlayerPage({
   const { discord: discordFeedback } = await searchParams;
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
-  const [session, detail, careerLeaderboard, h2hData, ehog, leagueSabremetrics, nameHistory, playerMeta] = await Promise.all([
+  const [session, detail, careerLeaderboard, playersById, ehog, leagueSabremetrics, nameHistory, playerMeta] = await Promise.all([
     getServerSession(authOptions),
     getPlayer(playerId),
     getCareerLeaderboard(),
-    getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
+    getPlayersById(),
     getPlayerEhogRating(playerId),
     // League-wide, per-season totals so the Advanced tab can compute Plus stats (player vs.
     // league avg) without shipping every match row to the client.
@@ -68,6 +68,15 @@ export default async function PlayerPage({
   ]);
   const isSelf = session?.user?.playerId === playerId;
   if (!detail) notFound();
+
+  // H2H is computed client-side (see PlayerView) so its Matchups tab honors the season filter —
+  // only the id/name/avatar players need for it are passed down (same shape the Statistics page's
+  // CareerStatsView already uses).
+  const players = Array.from(playersById.values()).map((p) => ({
+    id: p.id,
+    name: p.name,
+    steam_avatar_url: p.steam_avatar_url,
+  }));
 
   const playedMatchIds = detail.history
     .filter((h) => isPlayedScore(h.final_score) && h.rounds_played > 0)
@@ -152,7 +161,7 @@ export default async function PlayerPage({
             history={detail.history}
             trophies={detail.trophies}
             careerLeaderboard={careerLeaderboard}
-            h2hData={h2hData}
+            players={players}
             ehogHistory={ehog.history}
             matchDeltas={matchDeltas}
             sabremetrics={leagueSabremetrics}

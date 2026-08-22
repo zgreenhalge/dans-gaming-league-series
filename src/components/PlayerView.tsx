@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import type { PlayerHistoryRow, TrophyEntry, H2HData, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
+import type { PlayerHistoryRow, TrophyEntry, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
+import { computeH2H, mapMatchRowsToH2HInput } from '@/lib/h2h';
 import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerStats, aggregatePlayerStatsByMap } from '@/lib/player-stats';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
@@ -111,7 +112,7 @@ export default function PlayerView({
   history,
   trophies,
   careerLeaderboard,
-  h2hData,
+  players,
   ehogHistory,
   matchDeltas,
   sabremetrics = [],
@@ -120,7 +121,10 @@ export default function PlayerView({
   history: PlayerHistoryRow[];
   trophies: TrophyEntry[];
   careerLeaderboard: LeaderboardRowWithId[];
-  h2hData: H2HData;
+  /** id/name/avatar for every player — the Matchups tab's H2H data is computed client-side from
+   *  this player's own (season-filtered) `history`, same pattern as `CareerStatsView`/`MapDetailView`,
+   *  so it honors the season filter shown on this page instead of a frozen career-wide snapshot. */
+  players: { id: number; name: string; steam_avatar_url: string | null }[];
   ehogHistory: EhogRatingPoint[];
   matchDeltas: Record<number, Record<number, number>>;
   /** League-wide sabremetric rows (all players) — the player's own rows and the
@@ -223,6 +227,12 @@ export default function PlayerView({
   const playerSideStats = aggregatePlayerSideStats(filtered);
   const playedHistory = filtered.filter(isPlayed);
   const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
+
+  const playersById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
+  const h2hData = useMemo(
+    () => computeH2H(mapMatchRowsToH2HInput(playedHistory), playersById),
+    [playedHistory, playersById],
+  );
   // Falls back to "history" when the URL says "upcoming" but there's nothing upcoming under the
   // current season filter (e.g. an old link, or the filter just changed) — a derived read, not a
   // written-back correction, so toggling the filter back and forth doesn't lose an explicit

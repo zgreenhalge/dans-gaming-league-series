@@ -15,7 +15,6 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
 import { createNextAuthMock } from '@/lib/test-support/mockNextAuth';
-import { EMPTY_H2H } from '@/lib/test-support/leaderboardFixtures';
 import PlayerView from './PlayerView';
 import type { PlayerHistoryRow } from '@/lib/queries';
 
@@ -74,7 +73,7 @@ function baseProps(overrides: { history?: PlayerHistoryRow[] } = {}) {
     history: overrides.history ?? [historyRow()],
     trophies: [],
     careerLeaderboard: [],
-    h2hData: EMPTY_H2H,
+    players: [],
     ehogHistory: [],
     matchDeltas: {},
   };
