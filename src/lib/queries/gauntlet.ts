@@ -211,6 +211,8 @@ export interface GauntletPlayerStat {
   deaths: number;
   adr: number;
   is_win: boolean;
+  rounds_won: number;
+  rounds_played: number;
 }
 
 export interface GauntletMatch {
@@ -486,7 +488,7 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
   const [{ data: stats, error: sErr }, players, { data: pods, error: pErr }] = await Promise.all([
     supabase
       .from('player_match_stats')
-      .select('match_id, player_id, faction, kills, assists, deaths, adr, is_win')
+      .select('match_id, player_id, faction, kills, assists, deaths, adr, is_win, rounds_won, rounds_played')
       .in('match_id', matchIds),
     getPlayersById(),
     supabase
@@ -514,6 +516,8 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
     deaths: number;
     adr: number;
     is_win: boolean;
+    rounds_won: number;
+    rounds_played: number;
   };
 
   const statsByMatch = new Map<number, GauntletPlayerStat[]>();
@@ -529,6 +533,8 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
       deaths: s.deaths,
       adr: s.adr,
       is_win: s.is_win,
+      rounds_won: s.rounds_won,
+      rounds_played: s.rounds_played,
     });
     statsByMatch.set(s.match_id, list);
   }
