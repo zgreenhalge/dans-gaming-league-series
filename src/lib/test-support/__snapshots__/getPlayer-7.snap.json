@@ -65,7 +65,9 @@
           "assists": 0,
           "deaths": 0,
           "adr": 0,
-          "is_win": false
+          "is_win": false,
+          "rounds_won": 0,
+          "rounds_played": 0
         },
         {
           "match_id": 400,
@@ -76,7 +78,9 @@
           "assists": 0,
           "deaths": 0,
           "adr": 0,
-          "is_win": false
+          "is_win": false,
+          "rounds_won": 0,
+          "rounds_played": 0
         }
       ],
       "skins_stats": [
@@ -89,7 +93,9 @@
           "assists": 0,
           "deaths": 0,
           "adr": 0,
-          "is_win": false
+          "is_win": false,
+          "rounds_won": 0,
+          "rounds_played": 0
         },
         {
           "match_id": 400,
@@ -100,7 +106,9 @@
           "assists": 0,
           "deaths": 0,
           "adr": 0,
-          "is_win": false
+          "is_win": false,
+          "rounds_won": 0,
+          "rounds_played": 0
         }
       ],
       "picked_map": null,
@@ -168,7 +176,9 @@
           "assists": 0,
           "deaths": 0,
           "adr": 0,
-          "is_win": false
+          "is_win": false,
+          "rounds_won": 0,
+          "rounds_played": 0
         },
         {
           "match_id": 101,
@@ -179,7 +189,9 @@
           "assists": 0,
           "deaths": 0,
           "adr": 0,
-          "is_win": false
+          "is_win": false,
+          "rounds_won": 0,
+          "rounds_played": 0
         }
       ],
       "skins_stats": [
@@ -192,7 +204,9 @@
           "assists": 0,
           "deaths": 0,
           "adr": 0,
-          "is_win": false
+          "is_win": false,
+          "rounds_won": 0,
+          "rounds_played": 0
         },
         {
           "match_id": 101,
@@ -203,7 +217,9 @@
           "assists": 0,
           "deaths": 0,
           "adr": 0,
-          "is_win": false
+          "is_win": false,
+          "rounds_won": 0,
+          "rounds_played": 0
         }
       ],
       "picked_map": null,
@@ -273,7 +289,9 @@
           "assists": 1,
           "deaths": 10,
           "adr": 95,
-          "is_win": true
+          "is_win": true,
+          "rounds_won": 13,
+          "rounds_played": 18
         },
         {
           "match_id": 300,
@@ -284,7 +302,9 @@
           "assists": 3,
           "deaths": 11,
           "adr": 88,
-          "is_win": true
+          "is_win": true,
+          "rounds_won": 13,
+          "rounds_played": 18
         }
       ],
       "skins_stats": [
@@ -297,7 +317,9 @@
           "assists": 2,
           "deaths": 16,
           "adr": 45,
-          "is_win": false
+          "is_win": false,
+          "rounds_won": 5,
+          "rounds_played": 18
         },
         {
           "match_id": 300,
@@ -308,7 +330,9 @@
           "assists": 1,
           "deaths": 17,
           "adr": 40,
-          "is_win": false
+          "is_win": false,
+          "rounds_won": 5,
+          "rounds_played": 18
         }
       ],
       "picked_map": "Vertigo",

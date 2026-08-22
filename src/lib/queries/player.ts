@@ -154,6 +154,8 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
     deaths: number;
     adr: number;
     is_win: boolean;
+    rounds_won: number;
+    rounds_played: number;
   };
 
   const rosterByMatch = new Map<
@@ -178,6 +180,8 @@ export async function getPlayer(playerId: number): Promise<PlayerDetail | null> 
       deaths: st.deaths,
       adr: st.adr ?? 0,
       is_win: !!st.is_win,
+      rounds_won: st.rounds_won,
+      rounds_played: st.rounds_played,
     };
 
     if (st.faction === 'SHIRTS') {
