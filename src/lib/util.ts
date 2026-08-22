@@ -232,6 +232,30 @@ export function buildRegularToGauntletMap(
 }
 
 /**
+ * Regular and/or gauntlet seasons (gated by the include flags), deduplicated by `seasonTitle()` so a
+ * regular+gauntlet pair sharing the same season number appears once — the season list a "Career"
+ * season-select offers.
+ */
+export function dedupeVisibleSeasons(
+  regularSeasons: { id: number; name: string }[],
+  gauntletSeasons: { id: number; name: string }[],
+  includeRegular: boolean,
+  includeGauntlet: boolean,
+): { id: number; name: string }[] {
+  const seen = new Set<string>();
+  const all = [
+    ...(includeRegular ? regularSeasons : []),
+    ...(includeGauntlet ? gauntletSeasons : []),
+  ];
+  return all.filter((s) => {
+    const title = seasonTitle(s.name);
+    if (seen.has(title)) return false;
+    seen.add(title);
+    return true;
+  });
+}
+
+/**
  * Shared tab button class — matches the bordered-underline tab pattern used throughout the app.
  * `compact` is for smaller sub-navigation tabs; `accent` uses the site accent color for the
  * active border instead of the primary text color (paired with `compact` in season sub-tabs).

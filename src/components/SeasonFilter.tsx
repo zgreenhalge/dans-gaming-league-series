@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import { seasonTitle } from '@/lib/util';
+import { dedupeVisibleSeasons, seasonTitle } from '@/lib/util';
 import { useUrlState, useSetUrlParams } from './useUrlState';
 
 // ─── Checkbox ────────────────────────────────────────────────────────────────
@@ -190,5 +190,72 @@ export function SeasonFilter({
         </select>
       )}
     </div>
+  );
+}
+
+// ─── Career-vocabulary variant ─────────────────────────────────────────────────
+
+/**
+ * `SeasonFilter`'s checkboxes plus a season `<select>` labeled "Career" (not "All seasons") for the
+ * aggregate option, for the two views (`PlayerView`, `CareerStatsView`) that use "Career" as their
+ * own vocabulary for `useSeasonFilter`'s `'all'`. `MapDetailView` doesn't need this variant — it uses
+ * `SeasonFilter`'s own built-in `seasons`/`onSeasonChange` dropdown directly, and "All seasons" is the
+ * right copy there.
+ *
+ * Bundles `dedupeVisibleSeasons()` (the "filter by include flags, dedupe by `seasonTitle()`" logic
+ * `SeasonFilter`'s own dropdown also does, independently, since the two dropdowns take different input
+ * shapes — this one takes already-split `regularSeasons`/`gauntletSeasons`, not a single flagged list)
+ * so call sites don't each recompute it themselves just for this control; a call site that also needs
+ * the deduplicated list for something else (`PlayerView`'s season recap) computes its own copy via the
+ * same `dedupeVisibleSeasons()` — cheap enough that having two independently-memoized copies isn't
+ * worth threading through as a prop.
+ */
+export function CareerSeasonControls({
+  includeRegular,
+  includeGauntlet,
+  toggleRegular,
+  toggleGauntlet,
+  regularSeasons,
+  gauntletSeasons,
+  selectedSeason,
+  setSelectedSeason,
+}: {
+  includeRegular: boolean;
+  includeGauntlet: boolean;
+  toggleRegular: () => void;
+  toggleGauntlet: () => void;
+  regularSeasons: { id: number; name: string }[];
+  gauntletSeasons: { id: number; name: string }[];
+  selectedSeason: number | 'all';
+  setSelectedSeason: (s: number | 'all') => void;
+}) {
+  const activeSeasons = useMemo(
+    () => dedupeVisibleSeasons(regularSeasons, gauntletSeasons, includeRegular, includeGauntlet),
+    [regularSeasons, gauntletSeasons, includeRegular, includeGauntlet],
+  );
+
+  return (
+    <>
+      <SeasonFilter
+        filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }}
+        showRegular={regularSeasons.length > 0}
+        showGauntlet={gauntletSeasons.length > 0}
+      />
+      <select
+        value={String(selectedSeason)}
+        onChange={(e) => {
+          const v = e.target.value;
+          setSelectedSeason(v === 'all' ? 'all' : Number(v));
+        }}
+        className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
+      >
+        <option value="all">Career</option>
+        {activeSeasons.map((s) => (
+          <option key={s.id} value={s.id}>
+            {seasonTitle(s.name)}
+          </option>
+        ))}
+      </select>
+    </>
   );
 }

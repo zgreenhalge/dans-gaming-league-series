@@ -3,12 +3,12 @@
 import { useMemo, useState } from 'react';
 import EmptyState from './EmptyState';
 import LeaderboardTable from './LeaderboardTable';
-import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
+import { useSeasonFilter, CareerSeasonControls } from './SeasonFilter';
 import { useTabState } from './useTabState';
 import { useH2HPairUrlState } from './useH2HPairUrlState';
 import H2HSection from './H2HSection';
 import { BasicStatsView } from './BasicStatsView';
-import { buildRegularToGauntletMap, deriveRates, extractSeasonNumber, seasonTitle, tabCls } from '@/lib/util';
+import { buildRegularToGauntletMap, deriveRates, extractSeasonNumber, tabCls } from '@/lib/util';
 import { computeH2H, mapMatchRowsToH2HInput } from '@/lib/h2h';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { TrophyEntry, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow } from '@/lib/queries';
@@ -88,20 +88,6 @@ export default function CareerStatsView({
     () => buildRegularToGauntletMap(regularSeasons, gauntletSeasons),
     [regularSeasons, gauntletSeasons],
   );
-
-  const activeSeasons = useMemo(() => {
-    const seen = new Set<string>();
-    const all = [
-      ...(includeRegular ? regularSeasons : []),
-      ...(includeGauntlet ? gauntletSeasons : []),
-    ];
-    return all.filter((s) => {
-      const title = seasonTitle(s.name);
-      if (seen.has(title)) return false;
-      seen.add(title);
-      return true;
-    });
-  }, [includeRegular, includeGauntlet, regularSeasons, gauntletSeasons]);
 
   const rows = useMemo<LeaderboardRowWithId[]>(() => {
     if (selectedSeason === 'all') {
@@ -197,28 +183,16 @@ export default function CareerStatsView({
         className="mb-3"
         controls={
           (tab === 'leaderboard' || tab === 'stats' || tab === 'advanced' || tab === 'h2h') ? (
-            <>
-              <SeasonFilter
-                filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }}
-                showRegular={regularSeasons.length > 0}
-                showGauntlet={gauntletSeasons.length > 0}
-              />
-              <select
-                value={String(selectedSeason)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setSelectedSeason(v === 'all' ? 'all' : Number(v));
-                }}
-                className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
-              >
-                <option value="all">Career</option>
-                {activeSeasons.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {seasonTitle(s.name)}
-                  </option>
-                ))}
-              </select>
-            </>
+            <CareerSeasonControls
+              includeRegular={includeRegular}
+              includeGauntlet={includeGauntlet}
+              toggleRegular={toggleRegular}
+              toggleGauntlet={toggleGauntlet}
+              regularSeasons={regularSeasons}
+              gauntletSeasons={gauntletSeasons}
+              selectedSeason={selectedSeason}
+              setSelectedSeason={setSelectedSeason}
+            />
           ) : undefined
         }
       >
