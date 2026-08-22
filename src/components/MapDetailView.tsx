@@ -6,6 +6,7 @@ import LeaderboardTable from './LeaderboardTable';
 import { MatchCard } from './MatchCard';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import { useTabState } from './useTabState';
+import { useH2HPairUrlState } from './useH2HPairUrlState';
 import TabBar from './TabBar';
 import { BasicStatsView } from './BasicStatsView';
 import { tabCls, canonicalSort, deriveRates } from '@/lib/util';
@@ -147,6 +148,12 @@ export default function MapDetailView({
     [filteredMatches, playersById],
   );
 
+  // `h2hData.players`, not the `players` prop — `computeH2H` includes a synthetic fallback entry
+  // for any match-referenced player id absent from `playersById`, so it's a superset of `players`
+  // and the same list `H2HSection` itself resolves its clickable rows against; a narrower list here
+  // could produce an unresolved id on write.
+  const { initialPair: urlInitialPair, onPairChange: handleH2HPairChange } = useH2HPairUrlState(h2hData.players);
+
   // Stable list of every match id for this map — the Heatmap tab fetches its artifacts
   // lazily for these (memoized so the fetch effect doesn't re-run on every render).
   const allMatchIds = useMemo(() => detail.matches.map((m) => m.match_id), [detail.matches]);
@@ -229,7 +236,7 @@ export default function MapDetailView({
         )
       )}
 
-      {tab === 'h2h' && <H2HSection data={h2hData} />}
+      {tab === 'h2h' && <H2HSection data={h2hData} initialPair={urlInitialPair} onPairChange={handleH2HPairChange} />}
 
       {tab === 'heatmap' && (
         <MapHeatmap

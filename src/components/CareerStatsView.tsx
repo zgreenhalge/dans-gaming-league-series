@@ -1,18 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import EmptyState from './EmptyState';
 import LeaderboardTable from './LeaderboardTable';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import { useTabState } from './useTabState';
+import { useH2HPairUrlState } from './useH2HPairUrlState';
 import H2HSection from './H2HSection';
 import { BasicStatsView } from './BasicStatsView';
 import { buildRegularToGauntletMap, deriveRates, extractSeasonNumber, seasonTitle, tabCls } from '@/lib/util';
 import { computeH2H, mapMatchRowsToH2HInput } from '@/lib/h2h';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { TrophyEntry, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow } from '@/lib/queries';
-import type { H2HPair } from './H2HMatrix';
 import EhogTierBar from './EhogTierBar';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import TabBar from './TabBar';
@@ -84,23 +83,6 @@ export default function CareerStatsView({
   const [tab, setTab] = useTabState(CAREER_TABS, 'leaderboard');
   const [hoveredPlayerId, setHoveredPlayerId] = useState<number | null>(null);
 
-  // Read-only for now — `H2HSection` has no write-back (`onPairChange`) yet; that's a separate,
-  // cross-cutting change touching all three of its call sites, not specific to this view. A single
-  // `useSearchParams()` read (rather than three separate `useUrlState` calls) since nothing here is
-  // written back — each `useUrlState` call would otherwise mount its own unused write plumbing.
-  const searchParams = useSearchParams();
-
-  const urlInitialPair = useMemo<H2HPair | null>(() => {
-    const aName = searchParams.get('a');
-    const bName = searchParams.get('b');
-    const type = searchParams.get('type') === 'opponent' ? 'opponent' : 'partner';
-    if (!aName || !bName) return null;
-    const a = players.find((p) => p.name.toLowerCase() === aName.toLowerCase());
-    const b = players.find((p) => p.name.toLowerCase() === bName.toLowerCase());
-    if (!a || !b) return null;
-    return { a: a.id, b: b.id, type };
-  }, [searchParams, players]);
-
   // Map regular season ID → paired gauntlet season ID (matched by season number)
   const regularToGauntlet = useMemo(
     () => buildRegularToGauntletMap(regularSeasons, gauntletSeasons),
@@ -154,6 +136,12 @@ export default function CareerStatsView({
     () => computeH2H(mapMatchRowsToH2HInput(filteredMatches), playersById),
     [filteredMatches, playersById],
   );
+
+  // `h2hData.players`, not the `players` prop — `computeH2H` includes a synthetic fallback entry
+  // for any match-referenced player id absent from `playersById`, so it's a superset of `players`
+  // and the same list `H2HSection` itself resolves its clickable rows against; a narrower list here
+  // could produce an unresolved id on write.
+  const { initialPair: urlInitialPair, onPairChange: handleH2HPairChange } = useH2HPairUrlState(h2hData.players);
 
   const filteredSabremetrics = useMemo(() => {
     if (selectedSeason === 'all') {
@@ -279,7 +267,7 @@ export default function CareerStatsView({
       )}
 
       {tab === 'h2h' && (
-        <H2HSection data={h2hData} initialPair={urlInitialPair} />
+        <H2HSection data={h2hData} initialPair={urlInitialPair} onPairChange={handleH2HPairChange} />
       )}
     </>
   );

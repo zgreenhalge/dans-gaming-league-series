@@ -10,6 +10,7 @@ import GauntletStandings from './GauntletStandings';
 import GauntletRoundsList from './GauntletRoundsList';
 import { GauntletBracketDiagram } from './GauntletBracketDiagram';
 import H2HSection from './H2HSection';
+import { useH2HPairUrlState } from './useH2HPairUrlState';
 import { BasicStatsView } from './BasicStatsView';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import TabBar from './TabBar';
@@ -197,6 +198,8 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   // needed here.
   const searchParams = useSearchParams();
   const setUrlParams = useSetUrlParams();
+  const { initialPair: urlInitialPair, onPairChange: handleH2HPairChange } = useH2HPairUrlState(h2hData.players);
+
   const openParam = isGauntlet ? 'round' : 'week';
   const itemExists = (id: number) => (isGauntlet ? rounds.some((r) => r.round_number === id) : schedule.some((w) => w.id === id));
 
@@ -434,7 +437,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
         <SabremetricsLeaderboardView rows={sabremetrics!} />
       )}
 
-      {tab === 'h2h' && hasH2H && <H2HSection data={h2hData} />}
+      {tab === 'h2h' && hasH2H && <H2HSection data={h2hData} initialPair={urlInitialPair} onPairChange={handleH2HPairChange} />}
     </>
   );
 }

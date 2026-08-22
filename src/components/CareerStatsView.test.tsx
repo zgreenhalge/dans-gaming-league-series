@@ -3,8 +3,7 @@
  * Component tests for `CareerStatsView.tsx`'s URL state: the tab bar reads from/writes to `tab`
  * (all four tabs, not just `h2h`), the season filter — via `useSeasonFilter({ resetSeasonOnToggle:
  * true })` — reads from/writes to `reg`/`gnt`/`season` and atomically resets `season` on a
- * regular/gauntlet toggle, and the H2H initial pair is read (read-only, no write-back yet) from
- * `a`/`b`/`type`.
+ * regular/gauntlet toggle, and the H2H pair reads from and writes back to `a`/`b`/`type`.
  *
  * Run:  npx vitest run src/components/CareerStatsView.test.tsx
  */
@@ -15,7 +14,9 @@ import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
 import { createNextAuthMock } from '@/lib/test-support/mockNextAuth';
 import { leaderboardRow } from '@/lib/test-support/leaderboardFixtures';
+import { H2H_PLAYERS, h2hPlayerStat, h2hMatchRow } from '@/lib/test-support/h2hFixtures';
 import CareerStatsView from './CareerStatsView';
+import type { MapMatchRow } from '@/lib/queries';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
 vi.mock('next-auth/react', () => createNextAuthMock());
@@ -25,7 +26,10 @@ beforeEach(() => {
   nextNavigationMock.setPathname('/statistics');
 });
 
-function baseProps(overrides: { players?: { id: number; name: string; steam_avatar_url: string | null }[] } = {}) {
+function baseProps(overrides: {
+  players?: { id: number; name: string; steam_avatar_url: string | null }[];
+  allMatches?: MapMatchRow[];
+} = {}) {
   return {
     regularSeasons: [{ id: 1, name: 'Season 1' }],
     gauntletSeasons: [{ id: 2, name: 'Season 1 Gauntlet' }],
@@ -38,6 +42,7 @@ function baseProps(overrides: { players?: { id: number; name: string; steam_avat
       { id: 1, name: 'Alice', steam_avatar_url: null },
       { id: 2, name: 'Bob', steam_avatar_url: null },
     ],
+    allMatches: overrides.allMatches ?? [],
   };
 }
 
@@ -82,5 +87,28 @@ describe('CareerStatsView — H2H initial pair', () => {
     // Renders without throwing — urlInitialPair falls back to null.
     render(<CareerStatsView {...baseProps()} />);
     expect(screen.getByRole('tab', { name: 'H2H' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('clicking a duo row writes `a`/`b` (and omits the default `type`)', async () => {
+    nextNavigationMock.setSearchParams('tab=h2h');
+    render(
+      <CareerStatsView
+        {...baseProps({
+          players: H2H_PLAYERS,
+          allMatches: [
+            h2hMatchRow({
+              shirts_stats: [
+                h2hPlayerStat({ player_id: 1, player_name: 'Alice' }),
+                h2hPlayerStat({ player_id: 2, player_name: 'Bob' }),
+              ],
+            }),
+          ],
+        })}
+      />,
+    );
+    await userEvent.click(screen.getAllByText('Alice & Bob')[0]);
+
+    expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
+    expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/statistics?tab=h2h&a=Alice&b=Bob');
   });
 });

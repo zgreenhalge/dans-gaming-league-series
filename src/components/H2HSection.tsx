@@ -21,8 +21,19 @@ function LeagueAvgCircle({ value, colorStart, colorEnd, title }: { value: number
 }
 
 /** Cards, matrix, and detail panels for a set of head-to-head data — shared between the
- * career statistics page and per-season hubs (regular season and gauntlet). */
-export default function H2HSection({ data, initialPair }: { data: H2HData; initialPair?: H2HPair | null }) {
+ * career statistics page and per-season hubs (regular season and gauntlet). `onPairChange`, if
+ * given, is called with every explicit selection (a row click, a matrix cell click, a flip button —
+ * never a hover preview), so a parent can mirror the active pair into its own URL state without this
+ * component knowing anything about routing. */
+export default function H2HSection({
+  data,
+  initialPair,
+  onPairChange,
+}: {
+  data: H2HData;
+  initialPair?: H2HPair | null;
+  onPairChange?: (pair: H2HPair) => void;
+}) {
   const { duos, rivals, players } = data;
 
   const playersById = useMemo(() => {
@@ -37,9 +48,14 @@ export default function H2HSection({ data, initialPair }: { data: H2HData; initi
     return null;
   }, [duos, rivals]);
 
-  const [sel, setSel] = useState<H2HPair | null>(initialPair ?? defaultPair);
+  const [sel, setSelRaw] = useState<H2HPair | null>(initialPair ?? defaultPair);
   const [hover, setHover] = useState<H2HPair | null>(null);
   const active = hover ?? sel ?? defaultPair;
+
+  function setSel(pair: H2HPair) {
+    setSelRaw(pair);
+    onPairChange?.(pair);
+  }
 
   // See "Blended score" in docs/glossary.md. Scorer factories normalise against the full set
   // so the top-5 ranking and matrix gradient stay derived from the same formula.
