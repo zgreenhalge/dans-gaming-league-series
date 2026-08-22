@@ -9,7 +9,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { computeH2H, findDuo, findRival, mapMatchRowsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './h2h';
+import { computeH2H, findDuo, findRival, mapMatchRowsToH2HInput, scheduleToH2HInput, gauntletRoundsToH2HInput, type H2HMatchInput, type H2HRosterRow } from './h2h';
 import { test, report } from './test-support/miniTest';
 
 const players = new Map<number, { name: string; steam_avatar_url: string | null }>([
@@ -370,6 +370,68 @@ test('findDuo/findRival return undefined for a pair that never played together',
   const result = computeH2H([match({ matchId: 1, roster })], players);
   assert.equal(findDuo(result.duos, 1, 999), undefined);
   assert.equal(findRival(result.rivals, 1, 999), undefined);
+});
+
+// --- scheduleToH2HInput / gauntletRoundsToH2HInput (season-page adapters) ---
+function seasonSourceMatch(overrides: {
+  id: number;
+  match_number?: number;
+  final_score?: string | null;
+  shirts_stats?: H2HRosterRow[];
+  skins_stats?: H2HRosterRow[];
+}) {
+  return {
+    id: overrides.id,
+    match_number: overrides.match_number ?? 1,
+    final_score: overrides.final_score !== undefined ? overrides.final_score : '13-9',
+    picked_map: null,
+    shirts_pick: 'de_test',
+    skins_starting_side: null as 'CT' | 'T' | null,
+    shirts_stats: overrides.shirts_stats ?? [],
+    skins_stats: overrides.skins_stats ?? [],
+  };
+}
+
+test('scheduleToH2HInput drops unplayed matches and stamps week/season number, isGauntlet false', () => {
+  const roster = [stat({ player_id: 1, faction: 'SHIRTS' }), stat({ player_id: 2, faction: 'SKINS', is_win: false })];
+  const weeks = [
+    {
+      week_number: 3,
+      matches: [
+        seasonSourceMatch({ id: 10, shirts_stats: [roster[0]], skins_stats: [roster[1]] }),
+        seasonSourceMatch({ id: 11, final_score: null }), // unplayed — dropped
+      ],
+    },
+  ];
+  const inputs = scheduleToH2HInput(weeks, 5);
+  assert.equal(inputs.length, 1, 'unplayed match filtered out');
+  assert.equal(inputs[0].matchId, 10);
+  assert.equal(inputs[0].weekNumber, 3);
+  assert.equal(inputs[0].seasonNumber, 5);
+  assert.equal(inputs[0].isGauntlet, false);
+
+  const result = computeH2H(inputs, players);
+  assert.equal(result.duos.length, 0, 'partnered players are on opposite factions here, not duos');
+  assert.equal(result.rivals.length, 1);
+});
+
+test('gauntletRoundsToH2HInput drops unplayed matches and stamps round/season number, isGauntlet true', () => {
+  const roster = [stat({ player_id: 1, faction: 'SHIRTS' }), stat({ player_id: 2, faction: 'SKINS', is_win: false })];
+  const rounds = [
+    {
+      round_number: 2,
+      matches: [
+        seasonSourceMatch({ id: 20, shirts_stats: [roster[0]], skins_stats: [roster[1]] }),
+        seasonSourceMatch({ id: 21, final_score: null }), // unplayed — dropped
+      ],
+    },
+  ];
+  const inputs = gauntletRoundsToH2HInput(rounds, 5);
+  assert.equal(inputs.length, 1, 'unplayed match filtered out');
+  assert.equal(inputs[0].matchId, 20);
+  assert.equal(inputs[0].weekNumber, 2, 'round_number maps into weekNumber');
+  assert.equal(inputs[0].seasonNumber, 5);
+  assert.equal(inputs[0].isGauntlet, true);
 });
 
 report();
