@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache';
 import { supabase } from '../supabase';
 import {
   extractSeasonNumber,
@@ -248,3 +249,17 @@ export async function getH2HData(selection: H2HSeasonSelection): Promise<H2HData
 
   return computeH2H(matchInputs, players);
 }
+
+/**
+ * `getH2HData({filter: 'career', includeRegular: true, includeGauntlet: true})`, cached and shared
+ * across every request for 60s — matching the match page's own `revalidate = 60` staleness budget.
+ * Every match page's scouting report calls this identical selection (its Friendship/Rivalry ratings
+ * need the true league-wide `duos`/`rivals` to normalize against, not a per-match subset — see
+ * `duoBlendedScorer`/`rivalBlendedScorer` below), so this is one canonical computation shared across
+ * every match page load instead of a fresh full-league scan on each one.
+ */
+export const getCareerH2HDataCached = unstable_cache(
+  () => getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true }),
+  ['h2h-career'],
+  { revalidate: 60 },
+);
