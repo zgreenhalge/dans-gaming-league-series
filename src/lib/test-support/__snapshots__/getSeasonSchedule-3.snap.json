@@ -56,7 +56,9 @@
             "assists": 0,
             "deaths": 0,
             "adr": 0,
-            "is_win": false
+            "is_win": false,
+            "rounds_won": 0,
+            "rounds_played": 0
           },
           {
             "match_id": 400,
@@ -67,7 +69,9 @@
             "assists": 0,
             "deaths": 0,
             "adr": 0,
-            "is_win": false
+            "is_win": false,
+            "rounds_won": 0,
+            "rounds_played": 0
           }
         ],
         "skins_stats": [
@@ -80,7 +84,9 @@
             "assists": 0,
             "deaths": 0,
             "adr": 0,
-            "is_win": false
+            "is_win": false,
+            "rounds_won": 0,
+            "rounds_played": 0
           },
           {
             "match_id": 400,
@@ -91,7 +97,9 @@
             "assists": 0,
             "deaths": 0,
             "adr": 0,
-            "is_win": false
+            "is_win": false,
+            "rounds_won": 0,
+            "rounds_played": 0
           }
         ]
       }

@@ -15,6 +15,8 @@ export interface RosterStat {
   deaths: number;
   adr: number;
   is_win: boolean;
+  rounds_won: number;
+  rounds_played: number;
 }
 
 export interface MatchWithRoster extends Match {
@@ -47,6 +49,8 @@ function buildRosterStats(roster: RosterStatRow[], faction: Faction, players: Ma
       deaths: r.deaths,
       adr: r.adr,
       is_win: !!r.is_win,
+      rounds_won: r.rounds_won,
+      rounds_played: r.rounds_played,
     }));
 }
 
