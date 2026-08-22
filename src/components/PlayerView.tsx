@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { PlayerHistoryRow, TrophyEntry, H2HData, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
+import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerStats, aggregatePlayerStatsByMap } from '@/lib/player-stats';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
@@ -13,7 +13,7 @@ import DevGate from './DevGate';
 import EmptyState from './EmptyState';
 import { MatchCard } from './MatchCard';
 import LeaderboardTable from './LeaderboardTable';
-import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
+import { useSeasonFilter, CareerSeasonControls } from './SeasonFilter';
 import { useTabState, resolveTab } from './useTabState';
 import Sparkline from './Sparkline';
 import { CountdownTimer } from './CountdownTimer';
@@ -146,14 +146,7 @@ export default function PlayerView({
     }
     const reg = Array.from(regMap.values()).sort((a, b) => a.id - b.id);
     const gnt = Array.from(gntMap.values()).sort((a, b) => a.id - b.id);
-    const r2g = new Map<number, number>();
-    for (const r of reg) {
-      const n = extractSeasonNumber(r.name);
-      if (n == null) continue;
-      const g = gnt.find((s) => extractSeasonNumber(s.name) === n);
-      if (g) r2g.set(r.id, g.id);
-    }
-    return { regularSeasons: reg, gauntletSeasons: gnt, regularToGauntlet: r2g };
+    return { regularSeasons: reg, gauntletSeasons: gnt, regularToGauntlet: buildRegularToGauntletMap(reg, gnt) };
   }, [history]);
 
   // `resetSeasonOnToggle: true` — toggling regular/gauntlet here always resets the season selector
@@ -166,19 +159,10 @@ export default function PlayerView({
   const [mapSort, setMapSort] = useState<MapSortCol>('record');
   const [mapAsc, setMapAsc] = useState(false);
 
-  const activeSeasons = useMemo(() => {
-    const seen = new Set<string>();
-    const all = [
-      ...(includeRegular ? regularSeasons : []),
-      ...(includeGauntlet ? gauntletSeasons : []),
-    ];
-    return all.filter((s) => {
-      const title = seasonTitle(s.name);
-      if (seen.has(title)) return false;
-      seen.add(title);
-      return true;
-    });
-  }, [includeRegular, includeGauntlet, regularSeasons, gauntletSeasons]);
+  const activeSeasons = useMemo(
+    () => dedupeVisibleSeasons(regularSeasons, gauntletSeasons, includeRegular, includeGauntlet),
+    [regularSeasons, gauntletSeasons, includeRegular, includeGauntlet],
+  );
 
   function clickMapSort(col: string) {
     const c = col as MapSortCol;
@@ -382,28 +366,16 @@ export default function PlayerView({
         bordered
         className="mb-6"
         controls={
-          <>
-            <SeasonFilter
-              filter={{ includeRegular, includeGauntlet, toggleRegular, toggleGauntlet, selectedSeason: 'all' }}
-              showRegular={regularSeasons.length > 0}
-              showGauntlet={gauntletSeasons.length > 0}
-            />
-            <select
-              value={String(selectedSeason)}
-              onChange={(e) => {
-                const v = e.target.value;
-                setSelectedSeason(v === 'all' ? 'all' : Number(v));
-              }}
-              className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
-            >
-              <option value="all">Career</option>
-              {activeSeasons.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {seasonTitle(s.name)}
-                </option>
-              ))}
-            </select>
-          </>
+          <CareerSeasonControls
+            includeRegular={includeRegular}
+            includeGauntlet={includeGauntlet}
+            toggleRegular={toggleRegular}
+            toggleGauntlet={toggleGauntlet}
+            regularSeasons={regularSeasons}
+            gauntletSeasons={gauntletSeasons}
+            selectedSeason={selectedSeason}
+            setSelectedSeason={setSelectedSeason}
+          />
         }
       >
         {playerTabs.map((t) => (
