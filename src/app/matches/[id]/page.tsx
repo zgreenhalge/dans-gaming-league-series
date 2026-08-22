@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getH2HData, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, isWeekComplete, isMatchCurrentlyLive } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, isWeekComplete, isMatchCurrentlyLive } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/seo/og';
 import { buildMatchJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
@@ -133,9 +133,9 @@ export default async function MatchPage({
 
   const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, previousWeekComplete, isLiveNow] = await Promise.all([
     showScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
-    showScouting
-      ? getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true })
-      : Promise.resolve(null),
+    // Cached and shared across every match page (see #441 item 3) rather than a fresh
+    // full-league computeH2H() scan on each load.
+    showScouting ? getCareerH2HDataCached() : Promise.resolve(null),
     r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }))
       .then(() =>
         getSignedUrl(r2, new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }), {
