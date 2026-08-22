@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import type { PlayerHistoryRow, TrophyEntry, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import { computeH2H, mapMatchRowsToH2HInput } from '@/lib/h2h';
+import { useLiveH2HData } from './useLiveH2HData';
 import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerStats, aggregatePlayerStatsByMap } from '@/lib/player-stats';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
@@ -225,14 +225,10 @@ export default function PlayerView({
   const maps = aggregatePlayerStatsByMap(filtered);
   const playerMapStats = aggregatePlayerMapStats(filtered);
   const playerSideStats = aggregatePlayerSideStats(filtered);
-  const playedHistory = filtered.filter(isPlayed);
+  const playedHistory = useMemo(() => filtered.filter(isPlayed), [filtered]);
   const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
 
-  const playersById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
-  const h2hData = useMemo(
-    () => computeH2H(mapMatchRowsToH2HInput(playedHistory), playersById),
-    [playedHistory, playersById],
-  );
+  const h2hData = useLiveH2HData(playedHistory, players);
   // Falls back to "history" when the URL says "upcoming" but there's nothing upcoming under the
   // current season filter (e.g. an old link, or the filter just changed) — a derived read, not a
   // written-back correction, so toggling the filter back and forth doesn't lose an explicit

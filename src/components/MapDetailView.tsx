@@ -7,10 +7,10 @@ import { MatchCard } from './MatchCard';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import { useTabState } from './useTabState';
 import { useH2HPairUrlState } from './useH2HPairUrlState';
+import { useLiveH2HData } from './useLiveH2HData';
 import TabBar from './TabBar';
 import { BasicStatsView } from './BasicStatsView';
 import { tabCls, canonicalSort, deriveRates } from '@/lib/util';
-import { computeH2H, mapMatchRowsToH2HInput } from '@/lib/h2h';
 import type { MapMatchRow, MapDetail, MapPlayerStat } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import H2HSection from './H2HSection';
@@ -141,15 +141,10 @@ export default function MapDetailView({
     [filteredMatches],
   );
 
-  const playersById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
-
-  const h2hData = useMemo(
-    () => computeH2H(mapMatchRowsToH2HInput(filteredMatches), playersById),
-    [filteredMatches, playersById],
-  );
+  const h2hData = useLiveH2HData(filteredMatches, players);
 
   // `h2hData.players`, not the `players` prop — `computeH2H` includes a synthetic fallback entry
-  // for any match-referenced player id absent from `playersById`, so it's a superset of `players`
+  // for any match-referenced player id absent from `players`, so it's a superset of `players`
   // and the same list `H2HSection` itself resolves its clickable rows against; a narrower list here
   // could produce an unresolved id on write.
   const { initialPair: urlInitialPair, onPairChange: handleH2HPairChange } = useH2HPairUrlState(h2hData.players);
