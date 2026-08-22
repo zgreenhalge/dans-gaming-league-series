@@ -1,4 +1,4 @@
-import { parseScore, compareMatchRefDesc } from './util';
+import { parseScore, compareMatchRefDesc, isPlayedScore } from './util';
 
 // ─── H2H aggregation ─────────────────────────────────────────────────────────
 //
@@ -553,4 +553,72 @@ export function mapMatchRowsToH2HInput(matches: _H2HSourceMatch[]): H2HMatchInpu
     finalScore: m.final_score,
     roster: [...m.shirts_stats, ...m.skins_stats],
   }));
+}
+
+// Minimal shape shared by `scheduleToH2HInput`/`gauntletRoundsToH2HInput` — mirrors
+// `MatchWithRoster`/`GauntletMatch` (queries/schedule.ts, queries/gauntlet.ts) without importing
+// them, so this file stays supabase-free.
+interface _SeasonSourceMatch {
+  id: number;
+  match_number: number;
+  final_score: string | null;
+  picked_map: string | null;
+  shirts_pick: string | null;
+  skins_starting_side: 'CT' | 'T' | null;
+  shirts_stats: _H2HSourceStat[];
+  skins_stats: _H2HSourceStat[];
+}
+
+function seasonMatchToH2HInput(
+  m: _SeasonSourceMatch,
+  weekOrRoundNumber: number,
+  seasonNumber: number | null,
+  isGauntlet: boolean,
+): H2HMatchInput {
+  return {
+    matchId: m.id,
+    weekNumber: weekOrRoundNumber,
+    matchNumber: m.match_number,
+    seasonNumber,
+    isGauntlet,
+    map: m.shirts_pick ?? m.picked_map,
+    pickedBy: resolveH2HPickedBy(m.shirts_pick, m.picked_map),
+    startingSide: m.skins_starting_side,
+    finalScore: m.final_score,
+    roster: [...m.shirts_stats, ...m.skins_stats],
+  };
+}
+
+/**
+ * Adapts a single regular season's already-fetched schedule (`WeekWithMatches[]` in
+ * queries/schedule.ts — used by the season page for its own Schedule tab) into `computeH2H`'s
+ * input shape, for the season page's own H2H tab. Every match here belongs to the same season, so
+ * `seasonNumber` is passed once rather than resolved per match the way `mapMatchRowsToH2HInput`
+ * does for callers spanning several seasons. Unlike `mapMatchRowsToH2HInput`, filters to played
+ * matches internally (via `isPlayedScore`) rather than requiring the caller to pre-filter — the
+ * nested week/match shape makes external filtering awkward, and a season page never wants
+ * unplayed matches in its own H2H tab.
+ */
+export function scheduleToH2HInput(
+  weeks: { week_number: number; matches: _SeasonSourceMatch[] }[],
+  seasonNumber: number | null,
+): H2HMatchInput[] {
+  return weeks.flatMap((w) =>
+    w.matches
+      .filter((m) => isPlayedScore(m.final_score))
+      .map((m) => seasonMatchToH2HInput(m, w.week_number, seasonNumber, false)),
+  );
+}
+
+/** The gauntlet-rounds counterpart of `scheduleToH2HInput` — adapts `GauntletRound[]`
+ *  (queries/gauntlet.ts) for a gauntlet season's own H2H tab. */
+export function gauntletRoundsToH2HInput(
+  rounds: { round_number: number; matches: _SeasonSourceMatch[] }[],
+  seasonNumber: number | null,
+): H2HMatchInput[] {
+  return rounds.flatMap((r) =>
+    r.matches
+      .filter((m) => isPlayedScore(m.final_score))
+      .map((m) => seasonMatchToH2HInput(m, r.round_number, seasonNumber, true)),
+  );
 }

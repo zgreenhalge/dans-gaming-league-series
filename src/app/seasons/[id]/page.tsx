@@ -15,12 +15,12 @@ import {
   getGauntletSeasonLeaderboard,
   getLinkedGauntlet,
   getLinkedRegularSeason,
-  getH2HData,
   getSeasonEhogRatings,
   getAllSabremetrics,
   type WeekWithMatches,
   type GauntletRound,
 } from '@/lib/queries';
+import { computeH2H, scheduleToH2HInput, gauntletRoundsToH2HInput } from '@/lib/h2h';
 import SeasonTabView from '@/components/SeasonTabView';
 import CombinedSeasonTabView from '@/components/CombinedSeasonTabView';
 import type { Season } from '@/lib/types';
@@ -30,7 +30,7 @@ import { SeasonRosterPanel } from '@/components/SeasonRosterPanel';
 import { SeasonScheduleEntryPoint } from '@/components/SeasonScheduleEntryPoint';
 import { authOptions } from '@/lib/authOptions';
 import { supabase } from '@/lib/supabase';
-import { seasonTitle, weekWindow, matchTitle } from '@/lib/util';
+import { seasonTitle, weekWindow, matchTitle, extractSeasonNumber } from '@/lib/util';
 import { buildSeasonJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 
@@ -149,14 +149,17 @@ export default async function SeasonPage({
     if (linked) redirect(`/seasons/${linked.id}`);
 
     // Orphan gauntlet with no paired regular season — render standalone
-    const [rounds, bracketShape, leaderboard, h2hData, ehogRatings, sabremetrics] = await Promise.all([
+    const [rounds, bracketShape, leaderboard, playersById, ehogRatings, sabremetrics] = await Promise.all([
       getGauntletRounds(seasonId),
       getGauntletBracketShape(seasonId),
       getGauntletSeasonLeaderboard(seasonId),
-      getH2HData({ filter: seasonId, includeRegular: false, includeGauntlet: true }),
+      getPlayersById(),
       getSeasonEhogRatings(seasonId),
       getAllSabremetrics(seasonId),
     ]);
+    // Computed from `rounds` — already fetched above for the Rounds tab — instead of a second,
+    // redundant getH2HData() round-trip over the same matches (see #441).
+    const h2hData = computeH2H(gauntletRoundsToH2HInput(rounds, extractSeasonNumber(season.name)), playersById);
     const matchCount = countGauntletMatches(rounds);
     const finalRound = rounds.length > 0 ? rounds[rounds.length - 1].round_number : null;
     const seasonJsonLd = buildSeasonJsonLd({
@@ -220,26 +223,29 @@ export default async function SeasonPage({
 
   const isUpcoming = season.status === 'UPCOMING';
 
-  const [leaderboard, schedule, gauntletRounds, gauntletBracketShape, gauntletLeaderboard, h2hData, gauntletH2hData, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics, playersById, hasSchedule] = await Promise.all([
+  const [leaderboard, schedule, gauntletRounds, gauntletBracketShape, gauntletLeaderboard, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics, playersById, hasSchedule] = await Promise.all([
     getSeasonLeaderboard(seasonId),
     getSeasonSchedule(seasonId),
     linkedGauntlet ? getGauntletRounds(linkedGauntlet.id) : Promise.resolve(null),
     linkedGauntlet ? getGauntletBracketShape(linkedGauntlet.id) : Promise.resolve(null),
     linkedGauntlet ? getGauntletSeasonLeaderboard(linkedGauntlet.id) : Promise.resolve(null),
-    getH2HData({ filter: seasonId, includeRegular: true, includeGauntlet: false }),
-    linkedGauntlet
-      ? getH2HData({ filter: seasonId, includeRegular: false, includeGauntlet: true })
-      : Promise.resolve(null),
     getSeasonEhogRatings(seasonId),
     linkedGauntlet ? getSeasonEhogRatings(linkedGauntlet.id) : Promise.resolve(null),
     getAllSabremetrics(seasonId),
     linkedGauntlet ? getAllSabremetrics(linkedGauntlet.id) : Promise.resolve([]),
-    isUpcoming ? getPlayersById() : Promise.resolve(null),
+    getPlayersById(),
     isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
   ]);
+  // Computed from `schedule`/`gauntletRounds` — already fetched above for the Schedule/Rounds tabs
+  // — instead of two more redundant getH2HData() round-trips over the same matches (see #441).
+  const seasonNumber = extractSeasonNumber(season.name);
+  const h2hData = computeH2H(scheduleToH2HInput(schedule, seasonNumber), playersById);
+  const gauntletH2hData = linkedGauntlet && gauntletRounds
+    ? computeH2H(gauntletRoundsToH2HInput(gauntletRounds, seasonNumber), playersById)
+    : null;
   // getSeasonRoster() needs playersById too — pass the copy just fetched above instead of letting
   // it do its own redundant full players-table read.
-  const roster = isUpcoming && playersById ? await getSeasonRoster(seasonId, playersById) : [];
+  const roster = isUpcoming ? await getSeasonRoster(seasonId, playersById) : [];
   const matchCount = countMatches(schedule);
   const finalWeek = schedule.length > 0 ? schedule[schedule.length - 1].week_number : null;
   const seasonJsonLd = buildSeasonJsonLd({
@@ -285,7 +291,7 @@ export default async function SeasonPage({
             />
           </div>
         </div>
-        {isUpcoming && playersById && (
+        {isUpcoming && (
           <div className="mb-10 flex flex-col gap-3">
             <SeasonRosterPanel
               seasonId={season.id}
