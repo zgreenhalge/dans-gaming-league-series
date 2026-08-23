@@ -35,14 +35,19 @@ function ChevronDown({ open }: { open: boolean }) {
 function NavLink({
   href,
   prefetch,
+  exact,
   children,
 }: {
   href: string;
   prefetch?: boolean;
+  /** Match only the exact path — for a link whose href is a prefix of a sibling link's href. */
+  exact?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const active = pathname === href || (href !== '/' && pathname.startsWith(href));
+  const active = exact
+    ? pathname === href
+    : pathname === href || (href !== '/' && pathname.startsWith(href));
   return (
     <Link
       href={href}
@@ -59,9 +64,16 @@ function NavLink({
   );
 }
 
+const DOCS_LINKS = [
+  { href: '/docs', label: 'About' },
+  { href: '/docs/faq', label: 'FAQ' },
+  { href: '/docs/for-nerds', label: 'For Nerds' },
+];
+
 export function SideNav({ seasons }: Props) {
   const { desktopOpen, mobileOpen, setMobileOpen } = useNav();
   const [seasonsOpen, toggleSeasons] = usePersistedToggle('sidenav-seasons-open', true);
+  const [docsOpen, toggleDocs] = usePersistedToggle('sidenav-docs-open', false);
   const pathname = usePathname();
 
   // Close mobile drawer on navigation
@@ -121,6 +133,35 @@ export function SideNav({ seasons }: Props) {
           <ScrimNavStatus />
         </span>
       </NavLink>
+
+      <div>
+        <div className="flex items-center">
+          <Link
+            href="/docs"
+            className="flex-1 px-3 py-1.5 tracked text-[11px] font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors"
+          >
+            Docs
+          </Link>
+          <button
+            type="button"
+            onClick={toggleDocs}
+            aria-expanded={docsOpen}
+            aria-label="Toggle docs"
+            className="px-2 py-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+          >
+            <ChevronDown open={docsOpen} />
+          </button>
+        </div>
+        {docsOpen && (
+          <div className="ml-3 border-l border-[var(--color-border-tertiary)] pl-2 mt-0.5 mb-0.5 flex flex-col gap-0">
+            {DOCS_LINKS.map((l) => (
+              <NavLink key={l.href} href={l.href} exact={l.href === '/docs'}>
+                {l.label}
+              </NavLink>
+            ))}
+          </div>
+        )}
+      </div>
     </nav>
   );
 
