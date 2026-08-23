@@ -11,6 +11,7 @@
  */
 
 import assert from 'node:assert/strict';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { __setTestClient } from './supabase';
 import { createFakeSupabaseClient, type Row } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
@@ -66,6 +67,24 @@ function discordState(matchId: number): Row | undefined {
 
 function liveScore(matchId: number, shirts: number, skins: number, round: number | null): LiveScoreRow {
   return { matchId, shirts, skins, round, updatedAt: new Date().toISOString() };
+}
+
+/** A client that throws for one specific table, delegating to `adminClient` for every other —
+ * simulates the kind of unexpected failure `fetchMatchMeta()` (discord-notify.ts) now has to
+ * distinguish from `getMatchMeta()`'s own legitimate "match not found" `null`: a query that blows up
+ * (a broken client, a real Postgres error), not one that just finds nothing. `getMapLookup()`'s
+ * `maps` read is a clean point to break, since it's the one table nothing else in the same call
+ * touches — `ops_errors`/`match_discord_state`/`matches`/`player_match_stats` all keep working, so
+ * the failure surfaces exactly like a real one would: everything else about the call succeeds except
+ * the metadata fetch. Only `.from()` needs stubbing — `getMatchMeta()`'s whole call chain never
+ * touches any other client method. */
+function clientThrowingOn(table: string): SupabaseClient {
+  return {
+    from: (t: string) => {
+      if (t === table) throw new Error(`simulated ${table} read failure`);
+      return adminClient.from(t);
+    },
+  } as unknown as SupabaseClient;
 }
 
 function resetDiscordState(matchId: number): void {
@@ -338,6 +357,17 @@ async function main() {
     const { calls } = stubFetch();
     await notifyMatchServerLive(adminClient, 9999);
     assert.equal(calls.length, 0);
+  });
+
+  await test('notifyMatchServerLive: an unexpected getMatchMeta() failure is recorded to ops_errors, not swallowed like "not found"', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    const { calls } = stubFetch();
+    await notifyMatchServerLive(clientThrowingOn('maps'), 100);
+    assert.equal(calls.length, 0, 'no message posted — there is no data to build one from');
+    const rows = liveOpsErrors(100, 'discord_notify_server_live');
+    assert.equal(rows.length, 1, 'unlike a genuinely nonexistent match, this must not vanish silently');
+    assert.match(rows[0].message as string, /Failed to load match data/);
+    assert.match(rows[0].message as string, /simulated maps read failure/);
   });
 
   await test('notifyMatchServerLive: swallows a webhook failure rather than throwing', async () => {
