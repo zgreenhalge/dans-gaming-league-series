@@ -142,6 +142,14 @@ describe('useSeasonFilter', () => {
     expect(result.current.selectedSeason).toBe(5);
   });
 
+  test('an options object with neither list set also reads the raw URL value uncorrected', () => {
+    // Distinct from omitting `options` entirely — passing `{}` must not force-clamp to 'all' just
+    // because an options object exists.
+    nextNavigationMock.setSearchParams('reg=0&season=5');
+    const { result } = renderHook(() => useSeasonFilter({}));
+    expect(result.current.selectedSeason).toBe(5);
+  });
+
   test('clamps `selectedSeason` to \'all\' when the raw id names no season in the valid lists', () => {
     nextNavigationMock.setSearchParams('season=99');
     const { result } = renderHook(() =>

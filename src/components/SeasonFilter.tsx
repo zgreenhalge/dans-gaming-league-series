@@ -93,9 +93,10 @@ export function useSeasonFilter(options?: {
   const includeGauntlet = gntRaw !== '0';
   const rawSelectedSeason: number | 'all' = seasonRaw === 'all' ? 'all' : Number(seasonRaw);
 
+  const hasValidityInput = options?.regularSeasons !== undefined || options?.gauntletSeasons !== undefined;
   const inScope = seasonsInScope(options?.regularSeasons ?? [], options?.gauntletSeasons ?? [], includeRegular, includeGauntlet);
   const selectedSeason: number | 'all' =
-    options && rawSelectedSeason !== 'all' && !inScope.some((s) => s.id === rawSelectedSeason)
+    hasValidityInput && rawSelectedSeason !== 'all' && !inScope.some((s) => s.id === rawSelectedSeason)
       ? 'all'
       : rawSelectedSeason;
 
