@@ -106,7 +106,11 @@ so you don't have to reverse-engineer them from scratch each time.
   that pair's own match history — not from either player's individual career map stats.
 - **Blended score** (H2H rankings) — how the "Best Friends"/"Closest Rivals" cards
   (`topDuos`/`topRivals` in `H2HSection.tsx`) rank pairs, and how the `H2HMatrix` colors
-  its cells. Shared via `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/queries/h2h.ts`.
+  its cells. Shared via `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/queries/h2h.ts`,
+  which each compute the league-wide maxes once (`computeDuoMaxes`/`computeRivalMaxes`) and
+  apply them through the primitive formula functions `friendsScore`/`rivalScore` — the same
+  primitives the For Nerds calculator (`/docs/for-nerds`, `FriendsRivalCalculator.tsx`) calls
+  directly with a visitor's own hypothetical inputs against those same real maxes.
   Each metric that feeds the score (games played, wins, round win rate, meetings,
   win-difference) lives on its own scale — raw counts can run into the dozens, rates top
   out at 100, differences shrink toward 0 as a rivalry gets closer. To combine them into

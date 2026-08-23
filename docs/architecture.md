@@ -26,6 +26,9 @@ For domain vocabulary see [`glossary.md`](./glossary.md); for stat formulas see
 | `/statistics` | Cross-season career leaderboard + gauntlet stats |
 | `/maps` | Map index — pick/ban/skip counts per map |
 | `/maps/[slug]` | Map detail — match history + per-player stats on that map |
+| `/docs` | About the league — manifest, format overview, season history, charter |
+| `/docs/faq` | FAQ — joining a match, Discord linking, rotating mixer/gauntlet mechanics, subs |
+| `/docs/for-nerds` | For Nerds — Friends/Rival Rating and EHOG formulas, with live calculators |
 | `/admin` | Unified admin console (linked from the Topbar when `session.user.isAdmin`) — a standalone Server panel (shared DatHost server status/controls, see [`hosting.md`](./hosting.md)), an Activity feed (every `background_jobs` row across all three pipelines plus live `ops_errors`, tiered Errored / In Progress / Completed / History), and Manage (Match/Player/Season — reschedule/veto/feature-toggle, rename/admin/Steam-link/EHOG recompute, season creation + gauntlet build/seed/reset + "go live"). The former separate admin pages (`jobs`, `matches`, `players`, `servers`, `ops-errors`, `seasons/new`, `seasons/gauntlet`) now redirect here via `?section=`/`&type=` |
 | `/admin/seasons/gauntlet/manual/[id]` | Manual gauntlet pod editor — a full drag/pick/validate/save flow, kept as its own route rather than folded into the console |
 | `/admin/seasons/schedule/[id]` | Regular-season Schedule Editor — hand-edit any match slot, then confirm. Generation itself happens on `/seasons/[id]` (`SeasonScheduleEntryPoint`, shown to admins while `UPCOMING`): if no schedule draft exists yet, that's where the doubleheader-policy choice and "Generate Schedule" live, landing here immediately after; once one exists, that same spot is just an "Edit Schedule" link here |
