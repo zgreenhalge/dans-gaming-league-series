@@ -410,7 +410,47 @@ async function main() {
     assert.match(embed.description, /Starting in 5[45]m/, 'the actual time until the match, not a static "1 hour"');
     assert.equal(embed.fields, undefined, 'no box score — the match hasn\'t been played yet');
     assert.ok(discordState(101)?.reminder_sent_at, 'reminder_sent_at is claimed once posted');
-    assert.equal(discordState(101)?.notification_message_id, undefined, 'a separate message lineage — does not touch notification_message_id');
+    assert.equal(discordState(101)?.notification_message_id, 'stub-msg-1', 'stored so a later server-live/live-score/score-reported edits this message instead of posting a new one');
+  });
+
+  await test('notifyMatchServerLive: edits the reminder message in place instead of posting a new one', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(101);
+    setScheduledAt(101, new Date(Date.now() + 55 * 60 * 1000).toISOString());
+    stubFetch();
+    await notifyMatchReminder(adminClient, 101);
+    const reminderMessageId = discordState(101)?.notification_message_id;
+    assert.ok(reminderMessageId, 'precondition: the reminder left a message id on record');
+
+    const { calls } = stubFetch();
+    await notifyMatchServerLive(adminClient, 101);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'PATCH', 'edits the reminder message rather than posting a second one');
+    assert.equal(calls[0].url, `https://discord.example/webhook/messages/${reminderMessageId}`);
+    const embed = calls[0].body.embeds[0];
+    assert.match(embed.description, /Server is live/);
+    assert.equal(discordState(101)?.notification_message_id, reminderMessageId, 'still the same source-of-truth message');
+  });
+
+  await test('notifyMatchReminder: edits the server-live message in place instead of posting a new one', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    // The server going live well before the ~1h reminder window is the edge case that flips the
+    // usual order — notifyMatchServerLive() leaves the message on record first here.
+    resetDiscordState(101);
+    stubFetch();
+    await notifyMatchServerLive(adminClient, 101);
+    const liveMessageId = discordState(101)?.notification_message_id;
+    assert.ok(liveMessageId, 'precondition: server-live left a message id on record');
+    setScheduledAt(101, new Date(Date.now() + 55 * 60 * 1000).toISOString());
+
+    const { calls } = stubFetch();
+    await notifyMatchReminder(adminClient, 101);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'PATCH', 'edits the server-live message rather than posting a second one');
+    assert.equal(calls[0].url, `https://discord.example/webhook/messages/${liveMessageId}`);
+    const embed = calls[0].body.embeds[0];
+    assert.match(embed.description, /Starting in 5[45]m/);
+    assert.equal(discordState(101)?.notification_message_id, liveMessageId, 'still the same source-of-truth message');
   });
 
   await test('notifyMatchReminder: no-ops if reminder_sent_at is already set (idempotent)', async () => {
