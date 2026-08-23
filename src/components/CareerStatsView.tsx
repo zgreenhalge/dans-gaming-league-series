@@ -11,7 +11,7 @@ import { BasicStatsView } from './BasicStatsView';
 import { buildRegularToGauntletMap, deriveRates, extractSeasonNumber, tabCls } from '@/lib/util';
 import { useLiveH2HData } from './useLiveH2HData';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import type { TrophyEntry, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow } from '@/lib/queries';
+import type { TrophyEntry, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow, MatchRoundRow } from '@/lib/queries';
 import EhogTierBar from './EhogTierBar';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import TabBar from './TabBar';
@@ -64,6 +64,7 @@ export default function CareerStatsView({
   allMatches = [],
   ehogSnapshots = [],
   allSabremetrics = [],
+  allMatchRounds = [],
 }: {
   regularSeasons: { id: number; name: string }[];
   gauntletSeasons: { id: number; name: string }[];
@@ -76,6 +77,7 @@ export default function CareerStatsView({
   allMatches?: MapMatchRow[];
   ehogSnapshots?: EhogSnapshotRow[];
   allSabremetrics?: SabremetricMatchRow[];
+  allMatchRounds?: MatchRoundRow[];
 }) {
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
   const [tab, setTab] = useTabState(CAREER_TABS, 'leaderboard');
@@ -113,6 +115,11 @@ export default function CareerStatsView({
       return false;
     });
   }, [selectedSeason, allMatches, includeRegular, includeGauntlet, regularToGauntlet]);
+
+  const filteredRounds = useMemo(() => {
+    const matchIds = new Set(filteredMatches.map((m) => m.match_id));
+    return allMatchRounds.filter((r) => matchIds.has(r.match_id));
+  }, [filteredMatches, allMatchRounds]);
 
   const h2hData = useLiveH2HData(filteredMatches, players);
 
@@ -225,7 +232,7 @@ export default function CareerStatsView({
         rows.length === 0 ? (
           <EmptyState message="No data for this selection." />
         ) : (
-          <BasicStatsView rows={rows} matches={filteredMatches} />
+          <BasicStatsView rows={rows} matches={filteredMatches} rounds={filteredRounds} />
         )
       )}
 

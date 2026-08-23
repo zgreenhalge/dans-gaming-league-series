@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import type { PlayerHistoryRow, TrophyEntry, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
+import { groupRoundsByMatch, aggregateWeaponKillStats, favoriteWeapon, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { useLiveH2HData } from './useLiveH2HData';
 import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
@@ -116,6 +116,8 @@ export default function PlayerView({
   ehogHistory,
   matchDeltas,
   sabremetrics = [],
+  matchRounds = [],
+  matchKills = [],
 }: {
   playerId: number;
   history: PlayerHistoryRow[];
@@ -130,6 +132,13 @@ export default function PlayerView({
   /** League-wide sabremetric rows (all players) — the player's own rows and the
    *  Plus-stat baseline are both derived from these under the active season filter. */
   sabremetrics?: SabremetricMatchRow[];
+  /** This player's demo-derived round outcomes (all seasons — filtered client-side alongside
+   *  `history`) — feeds the Side stats tab's RWR% with a real per-round split instead of the
+   *  whole-match-on-starting-side approximation. */
+  matchRounds?: MatchRoundRow[];
+  /** This player's demo-derived kills (all seasons — filtered client-side alongside `history`) —
+   *  feeds the Weapons section's favorite-weapon/kills-by-weapon breakdown. */
+  matchKills?: MatchKillRow[];
 }) {
   const { data: session } = useSession();
   const loggedInPlayerId = session?.user?.playerId ?? null;
@@ -221,7 +230,15 @@ export default function PlayerView({
   }, [filteredEhog]);
   const maps = aggregatePlayerStatsByMap(filtered);
   const playerMapStats = aggregatePlayerMapStats(filtered);
-  const playerSideStats = aggregatePlayerSideStats(filtered);
+  const roundsByMatch = useMemo(() => groupRoundsByMatch(matchRounds), [matchRounds]);
+  const playerSideStats = aggregatePlayerSideStats(filtered, roundsByMatch);
+
+  const weaponKillStats = useMemo(() => {
+    const matchIds = new Set(filtered.map((r) => r.match_id));
+    const filteredKills = matchKills.filter((k) => matchIds.has(k.match_id));
+    return aggregateWeaponKillStats(filteredKills, playerId);
+  }, [filtered, matchKills, playerId]);
+  const topWeapon = favoriteWeapon(weaponKillStats);
   const playedHistory = useMemo(() => filtered.filter(isPlayed), [filtered]);
   const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
 
@@ -604,6 +621,33 @@ export default function PlayerView({
                 </tbody>
               </table>
             </div>
+          )}
+
+          {weaponKillStats.length > 0 && (
+            <>
+              <SectionLabel>Weapons</SectionLabel>
+              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-2">
+                {topWeapon && topWeapon.kills > 0 && (
+                  <div className="flex items-baseline justify-between mb-1 pb-2 border-b border-[var(--color-border-tertiary)]">
+                    <span className="tracked text-[9px] text-[var(--color-text-secondary)]">Favorite weapon</span>
+                    <span className="font-mono text-[11px] text-[var(--color-text-primary)] font-semibold">
+                      {topWeapon.weapon} ({topWeapon.kills} kills)
+                    </span>
+                  </div>
+                )}
+                {weaponKillStats
+                  .filter((s) => s.kills > 0)
+                  .slice(0, 8)
+                  .map((s) => (
+                    <PctRow
+                      key={s.weapon}
+                      label={s.weapon}
+                      pct={weaponKillStats[0].kills > 0 ? (s.kills / weaponKillStats[0].kills) * 100 : 0}
+                      value={String(s.kills)}
+                    />
+                  ))}
+              </div>
+            </>
           )}
 
           {adrSeries.length > 1 && (

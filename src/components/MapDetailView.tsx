@@ -11,7 +11,7 @@ import { useLiveH2HData } from './useLiveH2HData';
 import TabBar from './TabBar';
 import { BasicStatsView } from './BasicStatsView';
 import { tabCls, canonicalSort, deriveRates, splitSeasonsByGauntlet } from '@/lib/util';
-import type { MapMatchRow, MapDetail, MapPlayerStat } from '@/lib/queries';
+import type { MapMatchRow, MapDetail, MapPlayerStat, MatchRoundRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import H2HSection from './H2HSection';
 import MapHeatmap from './MapHeatmap';
@@ -109,9 +109,11 @@ function aggregatePlayerStats(matches: MapMatchRow[]): LeaderboardRowWithId[] {
 export default function MapDetailView({
   detail,
   players,
+  matchRounds = [],
 }: {
   detail: MapDetail;
   players: { id: number; name: string; steam_avatar_url: string | null }[];
+  matchRounds?: MatchRoundRow[];
 }) {
   const uniqueSeasons = useMemo(() => {
     const seen = new Map<number, { id: number; name: string; is_gauntlet: boolean }>();
@@ -141,6 +143,11 @@ export default function MapDetailView({
     () => aggregatePlayerStats(filteredMatches),
     [filteredMatches],
   );
+
+  const filteredRounds = useMemo(() => {
+    const matchIds = new Set(filteredMatches.map((m) => m.match_id));
+    return matchRounds.filter((r) => matchIds.has(r.match_id));
+  }, [filteredMatches, matchRounds]);
 
   const h2hData = useLiveH2HData(filteredMatches, players);
 
@@ -201,7 +208,7 @@ export default function MapDetailView({
         filteredPlayerStats.length === 0 ? (
           <EmptyState message="No data for this selection." />
         ) : (
-          <BasicStatsView rows={filteredPlayerStats} matches={filteredMatches} singleMap />
+          <BasicStatsView rows={filteredPlayerStats} matches={filteredMatches} rounds={filteredRounds} singleMap />
         )
       )}
 

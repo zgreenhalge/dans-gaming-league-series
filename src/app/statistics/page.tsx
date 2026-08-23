@@ -10,6 +10,7 @@ import {
   getAllMatchesWithPickBan,
   getAllEhogSnapshots,
   getSabremetricSeasonTotals,
+  getAllMatchRounds,
 } from '@/lib/queries';
 import CareerStatsView from '@/components/CareerStatsView';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
@@ -24,7 +25,7 @@ export const metadata = {
 };
 
 export default async function StatisticsPage() {
-  const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, playersById, allMatches, ehogSnapshots, allSabremetrics] =
+  const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, playersById, allMatches, ehogSnapshots, allSabremetrics, allMatchRounds] =
     await Promise.all([
       getCareerLeaderboard(),
       getAllLeaderboards(),
@@ -35,6 +36,7 @@ export default async function StatisticsPage() {
       getAllMatchesWithPickBan(),
       getAllEhogSnapshots(),
       getSabremetricSeasonTotals(),
+      getAllMatchRounds(),
     ]);
 
   // H2H is computed client-side (see CareerStatsView) so its tab can honor the
@@ -87,6 +89,7 @@ export default async function StatisticsPage() {
               allMatches={allMatches}
               ehogSnapshots={ehogSnapshots}
               allSabremetrics={allSabremetrics}
+              allMatchRounds={allMatchRounds}
             />
           </UrlStateProvider>
         </Suspense>

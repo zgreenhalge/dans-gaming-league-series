@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import SeasonTabView, { SEASON_TABS } from './SeasonTabView';
 import { useTabState } from './useTabState';
 import { tabCls } from '@/lib/util';
-import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow } from '@/lib/queries';
+import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow, MatchRoundRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 
 type TopTab = 'regular' | 'gauntlet';
@@ -49,6 +49,8 @@ export default function CombinedSeasonTabView({
   gauntletEhogRatings,
   sabremetrics,
   gauntletSabremetrics,
+  matchRounds,
+  gauntletMatchRounds,
 }: {
   leaderboard: LeaderboardRowWithId[];
   schedule: WeekWithMatches[];
@@ -67,6 +69,8 @@ export default function CombinedSeasonTabView({
   gauntletEhogRatings?: Record<number, number>;
   sabremetrics?: SabremetricMatchRow[];
   gauntletSabremetrics?: SabremetricMatchRow[];
+  matchRounds?: MatchRoundRow[];
+  gauntletMatchRounds?: MatchRoundRow[];
 }) {
   const [topTab, setTopTab] = useTabState(TOP_TABS, 'regular', 'view');
   const [subTab, setSubTab] = useTabState(SEASON_TABS, 'leaderboard');
@@ -99,6 +103,7 @@ export default function CombinedSeasonTabView({
           onTabChange={setSubTab}
           ehogRatings={ehogRatings}
           sabremetrics={sabremetrics}
+          matchRounds={matchRounds}
         />
       )}
 
@@ -117,6 +122,7 @@ export default function CombinedSeasonTabView({
           onTabChange={setSubTab}
           ehogRatings={gauntletEhogRatings}
           sabremetrics={gauntletSabremetrics}
+          matchRounds={gauntletMatchRounds}
         />
       )}
     </>
