@@ -79,64 +79,110 @@ function resolveH2HSeasonIds(
   return ids;
 }
 
+/** League-wide normalisation anchors for the "Best Friends" formula — see `computeDuoMaxes()`. */
+export interface DuoScoreMaxes {
+  maxGames: number;
+  maxWinRate: number;
+  maxRwr: number;
+}
+
+/** League-wide normalisation anchors for the "Closest Rivals" formula — see `computeRivalMaxes()`. */
+export interface RivalScoreMaxes {
+  maxMeetings: number;
+  maxWinDiff: number;
+  maxRoundDiff: number;
+}
+
+/** Computes the "Best Friends" normalisation anchors once across every eligible duo in the league. */
+export function computeDuoMaxes(duos: DuoStats[]): DuoScoreMaxes {
+  const eligible = duos.filter((d) => d.gamesPlayed > 0);
+  return {
+    maxGames: Math.max(1, ...eligible.map((d) => d.gamesPlayed)),
+    maxWinRate: Math.max(1, ...eligible.map((d) => d.wins / d.gamesPlayed)),
+    maxRwr: Math.max(1, ...eligible.map((d) => winRatePct(d.roundsWon, d.roundsPlayed))),
+  };
+}
+
+/** Computes the "Closest Rivals" normalisation anchors once across every eligible rivalry in the league. */
+export function computeRivalMaxes(rivals: H2HStats[]): RivalScoreMaxes {
+  const eligible = rivals.filter((r) => r.meetings > 0);
+  return {
+    maxMeetings: Math.max(1, ...eligible.map((r) => r.meetings)),
+    maxWinDiff: Math.max(1, ...eligible.map((r) => Math.abs(r.aWins - r.bWins))),
+    maxRoundDiff: Math.max(1, ...eligible.map((r) => Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings)),
+  };
+}
+
+/**
+ * The "Best Friends" formula (see "Friends Rating" in docs/calculations.md) applied to a duo's raw
+ * inputs against already-computed league maxes — the primitive form `duoBlendedScorer`,
+ * `duoBreakdownScorer`, and the For Nerds calculator (`FriendsRivalCalculator.tsx`) all share.
+ * IMPORTANT: if you change these weights, update the hover `title` in H2HSection.tsx ("Best Friends")
+ * and docs/calculations.md.
+ */
+export function friendsScore(gamesPlayed: number, wins: number, roundsWon: number, roundsPlayed: number, maxes: DuoScoreMaxes): number {
+  if (gamesPlayed <= 0) return 0;
+  return (
+    0.5 * (gamesPlayed / maxes.maxGames) ** 2 +
+    0.3 * ((wins / gamesPlayed) / maxes.maxWinRate) ** 2 +
+    0.2 * (winRatePct(roundsWon, roundsPlayed) / maxes.maxRwr) ** 2
+  );
+}
+
+/**
+ * The "Closest Rivals" formula (see "Rival Rating" in docs/calculations.md) applied to a rivalry's
+ * raw inputs against already-computed league maxes — the primitive form `rivalBlendedScorer`,
+ * `rivalBreakdownScorer`, and the For Nerds calculator (`FriendsRivalCalculator.tsx`) all share.
+ * IMPORTANT: if you change these weights, update the hover `title` in H2HSection.tsx ("Closest
+ * Rivals" and "Best Friends") and docs/calculations.md.
+ */
+export function rivalScore(meetings: number, aWins: number, bWins: number, aRoundsWon: number, bRoundsWon: number, maxes: RivalScoreMaxes): number {
+  if (meetings <= 0) return 0;
+  return (
+    0.5 * (meetings / maxes.maxMeetings) ** 2 +
+    0.3 * (1 - Math.abs(aWins - bWins) / maxes.maxWinDiff) ** 2 +
+    0.2 * (1 - (Math.abs(aRoundsWon - bRoundsWon) / meetings) / maxes.maxRoundDiff) ** 2
+  );
+}
+
 /**
  * Returns a scorer for the "Best Friends" blended metric — see "Blended score" in docs/glossary.md.
  * Computes normalisation maxes once across `duos` then returns a closure. Shared by
  * `H2HSection` (ranking) and `H2HMatrix` (cell coloring) so both use the same formula.
- * IMPORTANT: if you change weights here, update the hover `title` in H2HSection.tsx ("Best Friends").
  */
 export function duoBlendedScorer(duos: DuoStats[]): (d: DuoStats) => number {
-  const eligible = duos.filter((d) => d.gamesPlayed > 0);
-  const maxGames = Math.max(1, ...eligible.map((d) => d.gamesPlayed));
-  const maxWinRate = Math.max(1, ...eligible.map((d) => d.wins / d.gamesPlayed));
-  const maxRwr = Math.max(1, ...eligible.map((d) => winRatePct(d.roundsWon, d.roundsPlayed)));
-  return (d) =>
-    0.5 * (d.gamesPlayed / maxGames) ** 2 +
-    0.3 * ((d.wins / d.gamesPlayed) / maxWinRate) ** 2 +
-    0.2 * (winRatePct(d.roundsWon, d.roundsPlayed) / maxRwr) ** 2;
+  const maxes = computeDuoMaxes(duos);
+  return (d) => friendsScore(d.gamesPlayed, d.wins, d.roundsWon, d.roundsPlayed, maxes);
 }
 
 /**
  * Returns a scorer for the "Closest Rivals" blended metric — see "Blended score" in docs/glossary.md.
  * Computes normalisation maxes once across `rivals` then returns a closure. Shared by
  * `H2HSection` (ranking) and `H2HMatrix` (cell coloring) so both use the same formula.
- * IMPORTANT: if you change weights here, update the hover `title` in H2HSection.tsx ("Closest Rivals" and "Best Friends").
  */
 export function rivalBlendedScorer(rivals: H2HStats[]): (r: H2HStats) => number {
-  const eligible = rivals.filter((r) => r.meetings > 0);
-  const maxMeetings = Math.max(1, ...eligible.map((r) => r.meetings));
-  const maxWinDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aWins - r.bWins)));
-  const maxRoundDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings));
-  return (r) =>
-    0.5 * (r.meetings / maxMeetings) ** 2 +
-    0.3 * (1 - Math.abs(r.aWins - r.bWins) / maxWinDiff) ** 2 +
-    0.2 * (1 - (Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings) / maxRoundDiff) ** 2;
+  const maxes = computeRivalMaxes(rivals);
+  return (r) => rivalScore(r.meetings, r.aWins, r.bWins, r.aStats.roundsWon, r.bStats.roundsWon, maxes);
 }
 
 /** Returns a closure that formats the per-component breakdown of the friend score as a tooltip string. */
 export function duoBreakdownScorer(duos: DuoStats[]): (d: DuoStats) => string {
-  const eligible = duos.filter((d) => d.gamesPlayed > 0);
-  const maxGames = Math.max(1, ...eligible.map((d) => d.gamesPlayed));
-  const maxWinRate = Math.max(1, ...eligible.map((d) => d.wins / d.gamesPlayed));
-  const maxRwr = Math.max(1, ...eligible.map((d) => winRatePct(d.roundsWon, d.roundsPlayed)));
+  const maxes = computeDuoMaxes(duos);
   return (d) => {
-    const games   = Math.round(0.5 * (d.gamesPlayed / maxGames) ** 2 * 100);
-    const winRate = Math.round(0.3 * ((d.wins / d.gamesPlayed) / maxWinRate) ** 2 * 100);
-    const rwr     = Math.round(0.2 * (winRatePct(d.roundsWon, d.roundsPlayed) / maxRwr) ** 2 * 100);
+    const games   = Math.round(0.5 * (d.gamesPlayed / maxes.maxGames) ** 2 * 100);
+    const winRate = Math.round(0.3 * ((d.wins / d.gamesPlayed) / maxes.maxWinRate) ** 2 * 100);
+    const rwr     = Math.round(0.2 * (winRatePct(d.roundsWon, d.roundsPlayed) / maxes.maxRwr) ** 2 * 100);
     return `Games ${games}/50 · Win rate ${winRate}/30 · Rounds ${rwr}/20`;
   };
 }
 
 /** Returns a closure that formats the per-component breakdown of the rival score as a tooltip string. */
 export function rivalBreakdownScorer(rivals: H2HStats[]): (r: H2HStats) => string {
-  const eligible = rivals.filter((r) => r.meetings > 0);
-  const maxMeetings = Math.max(1, ...eligible.map((r) => r.meetings));
-  const maxWinDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aWins - r.bWins)));
-  const maxRoundDiff = Math.max(1, ...eligible.map((r) => Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings));
+  const maxes = computeRivalMaxes(rivals);
   return (r) => {
-    const meetings  = Math.round(0.5 * (r.meetings / maxMeetings) ** 2 * 100);
-    const closeness = Math.round(0.3 * (1 - Math.abs(r.aWins - r.bWins) / maxWinDiff) ** 2 * 100);
-    const rounds    = Math.round(0.2 * (1 - (Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings) / maxRoundDiff) ** 2 * 100);
+    const meetings  = Math.round(0.5 * (r.meetings / maxes.maxMeetings) ** 2 * 100);
+    const closeness = Math.round(0.3 * (1 - Math.abs(r.aWins - r.bWins) / maxes.maxWinDiff) ** 2 * 100);
+    const rounds    = Math.round(0.2 * (1 - (Math.abs(r.aStats.roundsWon - r.bStats.roundsWon) / r.meetings) / maxes.maxRoundDiff) ** 2 * 100);
     return `Meetings ${meetings}/50 · Closeness ${closeness}/30 · Rounds ${rounds}/20`;
   };
 }

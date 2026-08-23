@@ -21,6 +21,10 @@ import {
   rivalBlendedScorer,
   duoBreakdownScorer,
   rivalBreakdownScorer,
+  computeDuoMaxes,
+  computeRivalMaxes,
+  friendsScore,
+  rivalScore,
 } from './queries';
 
 async function main() {
@@ -36,14 +40,35 @@ async function main() {
   await test('scorer closures applied to real H2H output, snapshot', async () => {
     const { duos, rivals } = await getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true });
     const duoScore = duoBlendedScorer(duos);
-    const rivalScore = rivalBlendedScorer(rivals);
+    const rivalBlended = rivalBlendedScorer(rivals);
     const duoBreakdown = duoBreakdownScorer(duos);
     const rivalBreakdown = rivalBreakdownScorer(rivals);
 
     matchesSnapshot('h2h-scorers', {
       duoScores: duos.map((d) => ({ pair: [d.playerA, d.playerB], score: duoScore(d), breakdown: duoBreakdown(d) })),
-      rivalScores: rivals.map((r) => ({ pair: [r.playerA, r.playerB], score: rivalScore(r), breakdown: rivalBreakdown(r) })),
+      rivalScores: rivals.map((r) => ({ pair: [r.playerA, r.playerB], score: rivalBlended(r), breakdown: rivalBreakdown(r) })),
     });
+  });
+
+  await test('friendsScore/rivalScore primitives agree with the closures over the same real duos/rivals', async () => {
+    const { duos, rivals } = await getH2HData({ filter: 'career', includeRegular: true, includeGauntlet: true });
+    const duoScore = duoBlendedScorer(duos);
+    const rivalBlended = rivalBlendedScorer(rivals);
+    const duoMaxes = computeDuoMaxes(duos);
+    const rivalMaxes = computeRivalMaxes(rivals);
+
+    for (const d of duos) {
+      const primitive = friendsScore(d.gamesPlayed, d.wins, d.roundsWon, d.roundsPlayed, duoMaxes);
+      if (Math.abs(primitive - duoScore(d)) > 1e-9) {
+        throw new Error(`friendsScore diverged from duoBlendedScorer for pair [${d.playerA}, ${d.playerB}]`);
+      }
+    }
+    for (const r of rivals) {
+      const primitive = rivalScore(r.meetings, r.aWins, r.bWins, r.aStats.roundsWon, r.bStats.roundsWon, rivalMaxes);
+      if (Math.abs(primitive - rivalBlended(r)) > 1e-9) {
+        throw new Error(`rivalScore diverged from rivalBlendedScorer for pair [${r.playerA}, ${r.playerB}]`);
+      }
+    }
   });
 
   report();
