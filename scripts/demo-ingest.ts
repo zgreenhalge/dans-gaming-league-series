@@ -129,11 +129,17 @@ async function main() {
     existing.shirts === parsed.shirts_score &&
     existing.skins === parsed.skins_score
   ) {
-    await persistSabremetrics(matchId, sab.sabremetrics);
-    await persistWeaponStats(matchId, sab.weaponStats);
-    await persistMatchKills(matchId, sab.matchKills);
-    await persistMatchRounds(matchId, sab.matchRounds);
-    await deleteR2Object(demoResultKey(matchId));
+    // Five independent operations (different tables/objects, no data dependency between them) —
+    // run concurrently, matching matchScore.ts's score-confirm path. setJob() stays sequenced
+    // after: it marks the job confirmed, which should only happen once persistence has actually
+    // landed.
+    await Promise.all([
+      persistSabremetrics(matchId, sab.sabremetrics),
+      persistWeaponStats(matchId, sab.weaponStats),
+      persistMatchKills(matchId, sab.matchKills),
+      persistMatchRounds(matchId, sab.matchRounds),
+      deleteR2Object(demoResultKey(matchId)),
+    ]);
     await setJob({
       status: 'confirmed',
       stage: 'confirmed',

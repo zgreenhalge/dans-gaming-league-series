@@ -83,13 +83,28 @@ export interface RoundOutcome {
   shirts_side: 'CT' | 'T';
 }
 
+/** Narrows a league/season-wide round list down to the rounds belonging to `matches` — the
+ *  cross-season views (career, map detail) fetch round outcomes unscoped, then filter to whatever
+ *  season/side selection the caller already applied to `matches`. */
+export function filterRoundsByMatches<R extends { match_id: number }>(
+  rounds: R[],
+  matches: { match_id: number }[],
+): R[] {
+  const matchIds = new Set(matches.map((m) => m.match_id));
+  return rounds.filter((r) => matchIds.has(r.match_id));
+}
+
 /** Round win/loss counts for CT and T, computed directly from round outcomes — symmetric per
  *  round (shirts win a round iff `winner_side === shirts_side`; skins get the complement), so no
  *  roster/pick resolution is needed the way match-level `wins`/`losses` above requires. */
+function oppositeSide(side: 'CT' | 'T'): 'CT' | 'T' {
+  return side === 'CT' ? 'T' : 'CT';
+}
+
 function tallyRoundsBySide(rounds: RoundOutcome[]): Record<'CT' | 'T', { won: number; played: number }> {
   const tally = { CT: { won: 0, played: 0 }, T: { won: 0, played: 0 } };
   for (const r of rounds) {
-    const skinsSide: 'CT' | 'T' = r.shirts_side === 'CT' ? 'T' : 'CT';
+    const skinsSide = oppositeSide(r.shirts_side);
     tally[r.shirts_side].played++;
     tally[skinsSide].played++;
     if (r.winner_side === r.shirts_side) tally[r.shirts_side].won++;
@@ -108,7 +123,7 @@ function tallyPlayerRoundsBySide(
 ): Record<'CT' | 'T', { won: number; played: number }> {
   const tally = { CT: { won: 0, played: 0 }, T: { won: 0, played: 0 } };
   for (const r of rounds) {
-    const playerSide: 'CT' | 'T' = faction === 'SHIRTS' ? r.shirts_side : (r.shirts_side === 'CT' ? 'T' : 'CT');
+    const playerSide: 'CT' | 'T' = faction === 'SHIRTS' ? r.shirts_side : oppositeSide(r.shirts_side);
     tally[playerSide].played++;
     if (r.winner_side === playerSide) tally[playerSide].won++;
   }

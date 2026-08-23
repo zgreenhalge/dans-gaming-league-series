@@ -55,11 +55,15 @@ export default async function PlayerPage({
   const { discord: discordFeedback } = await searchParams;
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
+  // Shared with getAllMatchKills() below (same in-flight promise, not a second fetch) — it
+  // resolves player names for match_kills' attacker/victim/assister without a redundant
+  // full `players` table read.
+  const playersByIdPromise = getPlayersById();
   const [session, detail, careerLeaderboard, playersById, ehog, leagueSabremetrics, nameHistory, playerMeta, matchRounds, matchKills] = await Promise.all([
     getServerSession(authOptions),
     getPlayer(playerId),
     getCareerLeaderboard(),
-    getPlayersById(),
+    playersByIdPromise,
     getPlayerEhogRating(playerId),
     // League-wide, per-season totals so the Advanced tab can compute Plus stats (player vs.
     // league avg) without shipping every match row to the client.
@@ -67,7 +71,7 @@ export default async function PlayerPage({
     getPlayerNameHistory(playerId),
     getPlayerMeta(playerId),
     getAllMatchRounds(),
-    getAllMatchKills(),
+    getAllMatchKills(undefined, playersByIdPromise),
   ]);
   const isSelf = session?.user?.playerId === playerId;
   if (!detail) notFound();
