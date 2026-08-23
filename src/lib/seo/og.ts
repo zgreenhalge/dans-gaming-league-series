@@ -1,4 +1,5 @@
 import { cache } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { isPlayedScore, parseScore, canonicalSort, deriveRates, deriveRwr, deriveAdr } from '@/lib/util';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
@@ -87,15 +88,15 @@ export const getPlayerMeta = cache(async (playerId: number) => {
   };
 });
 
-export async function getMatchMeta(matchId: number) {
+export async function getMatchMeta(matchId: number, client: SupabaseClient = supabase) {
   const [teams, { data: match }, mapLookup] = await Promise.all([
-    getMatchTeamNames(matchId),
-    supabase
+    getMatchTeamNames(matchId, client),
+    client
       .from('matches')
       .select('final_score, picked_map, shirts_pick, scheduled_at')
       .eq('id', matchId)
       .maybeSingle(),
-    getMapLookup(),
+    getMapLookup(client),
   ]);
   if (!teams || !match) return null;
   const m = match as Pick<Match, 'final_score' | 'picked_map' | 'shirts_pick' | 'scheduled_at'>;

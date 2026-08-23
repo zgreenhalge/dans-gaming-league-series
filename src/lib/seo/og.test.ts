@@ -2,7 +2,8 @@
  * Regression harness for og.ts's leaderboard-rate call sites — getPlayerMeta and
  * getSeasonMetaLeaderboard (gauntlet branch). Both derive win rate / K-D / RWR / ADR from raw
  * totals and must match `deriveRates()` (util.ts) for the same input, so a duplicate inline
- * reimplementation can't silently reappear.
+ * reimplementation can't silently reappear. Also covers getMatchMeta()'s injectable-client param —
+ * see that test's own comment for why.
  *
  * Run:  npx vitest run src/lib/seo/og.test.ts
  */
@@ -14,9 +15,10 @@ import { buildFakeDb } from '../test-support/fixtures';
 import { deriveRates } from '../util';
 import { test, report } from '../test-support/miniTest';
 
-__setTestClient(createFakeSupabaseClient(buildFakeDb()));
+const fakeClient = createFakeSupabaseClient(buildFakeDb());
+__setTestClient(fakeClient);
 
-import { getPlayerMeta, getSeasonMetaLeaderboard } from './og';
+import { getPlayerMeta, getSeasonMetaLeaderboard, getMatchMeta } from './og';
 
 function approx(actual: number, expected: number, msg?: string) {
   assert.ok(Math.abs(actual - expected) < 1e-9, msg ?? `expected ~${expected}, got ${actual}`);
@@ -62,6 +64,22 @@ async function main() {
     approx(alice!.kd_ratio, rates.kd_ratio);
     approx(alice!.rwr_percentage, rates.rwr_percentage);
     approx(alice!.overall_adr, rates.overall_adr);
+  });
+
+  await test('getMatchMeta(): works with an explicit client even when the anon singleton is unconfigured', async () => {
+    // discord-notify.ts's notify functions pass their own supabaseAdmin here rather than relying on
+    // the default — scripts/demo-ingest.ts (the GH Action that auto-commits a demo-derived score)
+    // runs as a standalone script with no NEXT_PUBLIC_SUPABASE_ANON_KEY, where the anon singleton
+    // can't construct at all. __setTestClient(undefined) simulates exactly that: it stops swapping in
+    // a fake client, so any code path that still falls through to the real singleton throws (this
+    // process has no Supabase env vars set either). getMatchMeta() must not depend on it.
+    __setTestClient(undefined);
+    try {
+      const meta = await getMatchMeta(100, fakeClient);
+      assert.notEqual(meta, null);
+    } finally {
+      __setTestClient(fakeClient);
+    }
   });
 
   report();

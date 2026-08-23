@@ -567,8 +567,8 @@ export type MapRow = {
   image_url: string | null;
 };
 
-export async function getMapLookup(): Promise<Record<string, { image_url: string | null; workshop_url: string | null }>> {
-  const { data, error } = await supabase.from('maps').select('*');
+export async function getMapLookup(client: SupabaseClient = supabase): Promise<Record<string, { image_url: string | null; workshop_url: string | null }>> {
+  const { data, error } = await client.from('maps').select('*');
   if (error) throw error;
   const lookup: Record<string, { image_url: string | null; workshop_url: string | null }> = {};
   for (const row of (data ?? []) as MapRow[]) {
