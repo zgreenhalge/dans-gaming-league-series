@@ -153,10 +153,7 @@ export default function PlayerView({
     return { regularSeasons: reg, gauntletSeasons: gnt, regularToGauntlet: buildRegularToGauntletMap(reg, gnt) };
   }, [history]);
 
-  // `resetSeasonOnToggle: true` — toggling regular/gauntlet here always resets the season selector
-  // back to "all" (this page's "Career"), matching this page's existing behavior (see
-  // useSeasonFilter's docstring for why that differs from MapDetailView, which doesn't opt in).
-  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ resetSeasonOnToggle: true });
+  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
 
   const [rawTab, setTab] = useTabState(PLAYER_TABS, 'stats');
   const [rawMatchesSubTab, setMatchesSubTab] = useTabState(MATCHES_SUB_TABS, 'history', 'msub');

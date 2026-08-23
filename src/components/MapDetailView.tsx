@@ -10,7 +10,7 @@ import { useH2HPairUrlState } from './useH2HPairUrlState';
 import { useLiveH2HData } from './useLiveH2HData';
 import TabBar from './TabBar';
 import { BasicStatsView } from './BasicStatsView';
-import { tabCls, canonicalSort, deriveRates } from '@/lib/util';
+import { tabCls, canonicalSort, deriveRates, splitSeasonsByGauntlet } from '@/lib/util';
 import type { MapMatchRow, MapDetail, MapPlayerStat } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import H2HSection from './H2HSection';
@@ -113,12 +113,6 @@ export default function MapDetailView({
   detail: MapDetail;
   players: { id: number; name: string; steam_avatar_url: string | null }[];
 }) {
-  // No `resetSeasonOnToggle` — this view relies on `SeasonFilter`'s own effect (wired through the
-  // `onSeasonChange` prop below) to reset `selectedSeason` only when it actually becomes invalid
-  // after a regular/gauntlet toggle, rather than unconditionally resetting to "all" every time.
-  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter();
-  const [tab, setTab] = useTabState(MAP_TABS, 'leaderboard');
-
   const uniqueSeasons = useMemo(() => {
     const seen = new Map<number, { id: number; name: string; is_gauntlet: boolean }>();
     for (const m of detail.matches) {
@@ -127,6 +121,13 @@ export default function MapDetailView({
     }
     return Array.from(seen.values()).sort((a, b) => a.id - b.id);
   }, [detail.matches]);
+
+  // Split for `useSeasonFilter`'s validity check below — it needs regular/gauntlet apart, not the
+  // single flagged list `SeasonFilter`'s own dropdown takes.
+  const { regularSeasons, gauntletSeasons } = useMemo(() => splitSeasonsByGauntlet(uniqueSeasons), [uniqueSeasons]);
+
+  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
+  const [tab, setTab] = useTabState(MAP_TABS, 'leaderboard');
 
   const filteredMatches = useMemo<MapMatchRow[]>(() => {
     return detail.matches.filter((m) => {

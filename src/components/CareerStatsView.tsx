@@ -77,9 +77,7 @@ export default function CareerStatsView({
   ehogSnapshots?: EhogSnapshotRow[];
   allSabremetrics?: SabremetricMatchRow[];
 }) {
-  // `resetSeasonOnToggle: true` — matches `PlayerView`'s behavior: toggling regular/gauntlet
-  // unconditionally resets the season selector back to "all" (this page's "Career").
-  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ resetSeasonOnToggle: true });
+  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
   const [tab, setTab] = useTabState(CAREER_TABS, 'leaderboard');
   const [hoveredPlayerId, setHoveredPlayerId] = useState<number | null>(null);
 
