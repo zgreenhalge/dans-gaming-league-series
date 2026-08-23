@@ -11,9 +11,10 @@
  */
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
+import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
 import { H2H_PLAYERS, h2hPlayerStat } from '@/lib/test-support/h2hFixtures';
 import MapDetailView from './MapDetailView';
 import type { MapMatchRow, MapDetail } from '@/lib/queries';
@@ -69,12 +70,12 @@ const players: { id: number; name: string; steam_avatar_url: string | null }[] =
 describe('MapDetailView — tab state', () => {
   test('reads the active tab from the URL', () => {
     nextNavigationMock.setSearchParams('tab=matches');
-    render(<MapDetailView detail={baseDetail()} players={players} />);
+    renderWithUrlState(<MapDetailView detail={baseDetail()} players={players} />);
     expect(screen.getByRole('tab', { name: /Matches/ })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('clicking a tab pushes the URL', async () => {
-    render(<MapDetailView detail={baseDetail()} players={players} />);
+    renderWithUrlState(<MapDetailView detail={baseDetail()} players={players} />);
     await userEvent.click(screen.getByRole('tab', { name: 'Stats' }));
 
     expect(nextNavigationMock.pushState).toHaveBeenCalledTimes(1);
@@ -93,7 +94,7 @@ describe('MapDetailView — season filter', () => {
       ],
       matches: [matchRow({ season_id: 1 }), matchRow({ match_id: 2, season_id: 2, season_name: 'Season 2' })],
     });
-    render(<MapDetailView detail={detail} players={players} />);
+    renderWithUrlState(<MapDetailView detail={detail} players={players} />);
     expect(screen.getByRole('tab', { name: /Matches/ }).textContent).toContain('(1)');
   });
 
@@ -109,7 +110,7 @@ describe('MapDetailView — season filter', () => {
       ],
       matches: [matchRow({ season_id: 1 }), matchRow({ match_id: 2, season_id: 2, season_name: 'Season 2' })],
     });
-    render(<MapDetailView detail={detail} players={players} />);
+    renderWithUrlState(<MapDetailView detail={detail} players={players} />);
     await userEvent.click(screen.getByText('Regular Season'));
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
@@ -124,7 +125,7 @@ describe('MapDetailView — season filter', () => {
         matchRow({ match_id: 2, season_id: 2, season_name: 'Season 1 Gauntlet', is_gauntlet: true }),
       ],
     });
-    render(<MapDetailView detail={detail} players={players} />);
+    renderWithUrlState(<MapDetailView detail={detail} players={players} />);
     expect(screen.getByRole('tab', { name: /Matches/ }).textContent).toContain('(1)');
     expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
   });
@@ -140,7 +141,7 @@ describe('MapDetailView — season filter', () => {
         matchRow({ match_id: 3, season_id: 3, season_name: 'Season 2 Gauntlet', is_gauntlet: true }),
       ],
     });
-    render(<MapDetailView detail={detail} players={players} />);
+    renderWithUrlState(<MapDetailView detail={detail} players={players} />);
     expect(screen.getByRole('combobox')).toHaveValue('all');
     expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
     expect(nextNavigationMock.pushState).not.toHaveBeenCalled();
@@ -160,7 +161,7 @@ describe('MapDetailView — H2H pair writes to the URL', () => {
         }),
       ],
     });
-    render(<MapDetailView detail={detail} players={H2H_PLAYERS} />);
+    renderWithUrlState(<MapDetailView detail={detail} players={H2H_PLAYERS} />);
     await userEvent.click(screen.getAllByText('Alice & Bob')[0]);
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);

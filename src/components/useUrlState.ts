@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { useCallback } from 'react';
+import { useUrlStateContext } from './UrlStateProvider';
 
 type Patch = Record<string, string | undefined>;
 
@@ -33,28 +33,22 @@ function withPatch(current: URLSearchParams, patch: Patch): string {
  * `usePathname`/`useSearchParams` (both hooks pick up the change reactively), just without asking
  * the server to re-render anything.
  *
- * Keeps `pathname`/`searchParams` in a ref synced after each commit (never mutated during render,
- * per this codebase's `react-hooks/refs` rule) rather than in the returned callback's `useCallback`
- * deps, so the callback's identity stays stable across navigations instead of changing whenever *any*
- * URL param changes (Next.js hands back a new `searchParams` object on every navigation) — a
- * consumer that puts this setter in its own `useEffect`/`useMemo` deps or hands it to a memoized
- * child won't re-run/re-render on unrelated URL changes.
+ * Reads `pathname`/`searchParams` from `UrlStateProvider`'s post-commit-synced ref (see
+ * `UrlStateProvider.tsx`) rather than the returned callback's `useCallback` deps, so the callback's
+ * identity stays stable across navigations instead of changing whenever *any* URL param changes
+ * (Next.js hands back a new `searchParams` object on every navigation) — a consumer that puts this
+ * setter in its own `useEffect`/`useMemo` deps or hands it to a memoized child won't re-run/re-render
+ * on unrelated URL changes.
  */
 export function useSetUrlParams(): (patch: Patch, options?: { push?: boolean }) => void {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const latest = useRef({ pathname, searchParams });
-  useEffect(() => {
-    latest.current = { pathname, searchParams };
-  });
+  const { latestRef } = useUrlStateContext();
 
   return useCallback((patch, options) => {
-    const { pathname, searchParams } = latest.current;
+    const { pathname, searchParams } = latestRef.current;
     const href = pathname + withPatch(searchParams, patch);
     if (options?.push) window.history.pushState(null, '', href);
     else window.history.replaceState(null, '', href);
-  }, []);
+  }, [latestRef]);
 }
 
 /**
@@ -72,7 +66,7 @@ export function useUrlState<T extends string>(
   defaultValue: T,
   options?: { push?: boolean; parse?: (raw: string) => T | undefined },
 ): [T, (next: T) => void] {
-  const searchParams = useSearchParams();
+  const { searchParams } = useUrlStateContext();
   const setParams = useSetUrlParams();
   const raw = searchParams.get(key);
   const parsed = raw == null ? undefined : (options?.parse ? options.parse(raw) : (raw as T));

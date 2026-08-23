@@ -12,9 +12,10 @@
  */
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
+import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
 import { createNextAuthMock } from '@/lib/test-support/mockNextAuth';
 import PlayerView from './PlayerView';
 import type { PlayerHistoryRow } from '@/lib/queries';
@@ -83,12 +84,12 @@ function baseProps(overrides: { history?: PlayerHistoryRow[] } = {}) {
 describe('PlayerView — tab state', () => {
   test('reads the active tab from the URL', () => {
     nextNavigationMock.setSearchParams('tab=matches');
-    render(<PlayerView {...baseProps()} />);
+    renderWithUrlState(<PlayerView {...baseProps()} />);
     expect(screen.getByRole('tab', { name: /Matches/ })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('clicking a tab pushes the URL', async () => {
-    render(<PlayerView {...baseProps()} />);
+    renderWithUrlState(<PlayerView {...baseProps()} />);
     await userEvent.click(screen.getByRole('tab', { name: /Matches/ }));
 
     expect(nextNavigationMock.pushState).toHaveBeenCalledTimes(1);
@@ -99,7 +100,7 @@ describe('PlayerView — tab state', () => {
   test('falls back to the first tab when `tab` names one this player does not have', () => {
     // No trophies and no ready-replay match in this fixture, so "trophies"/"trails" don't exist.
     nextNavigationMock.setSearchParams('tab=trophies');
-    render(<PlayerView {...baseProps()} />);
+    renderWithUrlState(<PlayerView {...baseProps()} />);
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
   });
 });
@@ -107,7 +108,7 @@ describe('PlayerView — tab state', () => {
 describe('PlayerView — matches sub-tab', () => {
   test('reads `msub=upcoming` when there is an upcoming match', () => {
     nextNavigationMock.setSearchParams('tab=matches&msub=upcoming');
-    render(
+    renderWithUrlState(
       <PlayerView
         {...baseProps({
           history: [historyRow({ id: 2, final_score: null, scheduled_at: '2030-01-01T00:00:00Z' })],
@@ -119,7 +120,7 @@ describe('PlayerView — matches sub-tab', () => {
 
   test('falls back to "history" when `msub=upcoming` but nothing is upcoming, without rewriting the URL', () => {
     nextNavigationMock.setSearchParams('tab=matches&msub=upcoming');
-    render(<PlayerView {...baseProps()} />);
+    renderWithUrlState(<PlayerView {...baseProps()} />);
     // No upcoming-match sub-tab bar renders at all when there's nothing upcoming.
     expect(screen.queryByRole('tab', { name: /Upcoming/ })).not.toBeInTheDocument();
     expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
@@ -130,12 +131,12 @@ describe('PlayerView — matches sub-tab', () => {
 describe('PlayerView — season filter', () => {
   test('reads a specific `season` id', () => {
     nextNavigationMock.setSearchParams('season=1');
-    render(<PlayerView {...baseProps()} />);
+    renderWithUrlState(<PlayerView {...baseProps()} />);
     expect(screen.getByText('Season stats')).toBeInTheDocument();
   });
 
   test('defaults to career when `season` is absent', () => {
-    render(<PlayerView {...baseProps()} />);
+    renderWithUrlState(<PlayerView {...baseProps()} />);
     expect(screen.getByText('Career stats')).toBeInTheDocument();
   });
 
@@ -144,7 +145,7 @@ describe('PlayerView — season filter', () => {
     // pre-existing gap, not introduced here) — its label text is a separate sibling with its own
     // onClick, so click that directly instead of querying by role.
     nextNavigationMock.setSearchParams('tab=stats&season=1');
-    render(<PlayerView {...baseProps()} />);
+    renderWithUrlState(<PlayerView {...baseProps()} />);
     await userEvent.click(screen.getByText('Regular Season'));
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
@@ -158,7 +159,7 @@ describe('PlayerView — season filter', () => {
     // `season=1` names a regular season, but `reg=0` excludes regular seasons — the selection
     // should read as "Career" on this very render, not just after a follow-up navigation.
     nextNavigationMock.setSearchParams('reg=0&season=1');
-    render(<PlayerView {...baseProps()} />);
+    renderWithUrlState(<PlayerView {...baseProps()} />);
     expect(screen.getByText('Career stats')).toBeInTheDocument();
     expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
     expect(nextNavigationMock.pushState).not.toHaveBeenCalled();

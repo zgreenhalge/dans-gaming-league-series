@@ -10,9 +10,10 @@
  */
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
+import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
 import { createNextAuthMock } from '@/lib/test-support/mockNextAuth';
 import { leaderboardRow, EMPTY_H2H } from '@/lib/test-support/leaderboardFixtures';
 import { h2hDataWithDuo } from '@/lib/test-support/h2hFixtures';
@@ -38,7 +39,7 @@ function round(n: number): GauntletRound {
 describe('SeasonTabView — tab state', () => {
   test('reads the active tab from the URL', () => {
     nextNavigationMock.setSearchParams('tab=schedule');
-    render(
+    renderWithUrlState(
       <SeasonTabView
         kind="regular"
         leaderboard={[leaderboardRow()]}
@@ -53,7 +54,7 @@ describe('SeasonTabView — tab state', () => {
   });
 
   test('clicking a tab pushes the URL (not replace)', async () => {
-    render(
+    renderWithUrlState(
       <SeasonTabView
         kind="regular"
         leaderboard={[leaderboardRow()]}
@@ -77,7 +78,7 @@ describe('SeasonTabView — expand/collapse writes to the URL', () => {
     // No override present: defaultOpenSet is the last week (id 2), since neither week has an
     // unplayed match in this fixture.
     nextNavigationMock.setSearchParams('tab=schedule');
-    render(
+    renderWithUrlState(
       <SeasonTabView
         kind="regular"
         leaderboard={[leaderboardRow()]}
@@ -97,7 +98,7 @@ describe('SeasonTabView — expand/collapse writes to the URL', () => {
 
   test('collapsing the only open (default) week writes an explicit empty value, not an absent param', async () => {
     nextNavigationMock.setSearchParams('tab=schedule');
-    render(
+    renderWithUrlState(
       <SeasonTabView
         kind="regular"
         leaderboard={[leaderboardRow()]}
@@ -117,7 +118,7 @@ describe('SeasonTabView — expand/collapse writes to the URL', () => {
     // Override has weeks 1 and 3 open; defaultOpenSet is week 3 (the last one). Closing week 1
     // lands exactly back on the default, so the param should disappear rather than spell it out.
     nextNavigationMock.setSearchParams('tab=schedule&week=1,3');
-    render(
+    renderWithUrlState(
       <SeasonTabView
         kind="regular"
         leaderboard={[leaderboardRow()]}
@@ -135,7 +136,7 @@ describe('SeasonTabView — expand/collapse writes to the URL', () => {
 
   test('"Expand all" writes every id', async () => {
     nextNavigationMock.setSearchParams('tab=schedule');
-    render(
+    renderWithUrlState(
       <SeasonTabView
         kind="regular"
         leaderboard={[leaderboardRow()]}
@@ -152,7 +153,7 @@ describe('SeasonTabView — expand/collapse writes to the URL', () => {
 
   test('"Collapse all", starting from everything open, writes the empty value', async () => {
     nextNavigationMock.setSearchParams('tab=schedule&week=1,2,3');
-    render(
+    renderWithUrlState(
       <SeasonTabView
         kind="regular"
         leaderboard={[leaderboardRow()]}
@@ -171,7 +172,7 @@ describe('SeasonTabView — expand/collapse writes to the URL', () => {
     // Regression: writing them as two separate URL updates would clobber each other, since the
     // second call's snapshot of the URL doesn't see the first call's change until the next render.
     nextNavigationMock.setSearchParams('tab=schedule');
-    render(
+    renderWithUrlState(
       <SeasonTabView
         kind="regular"
         leaderboard={[leaderboardRow()]}
@@ -195,7 +196,7 @@ describe('SeasonTabView — expand/collapse writes to the URL', () => {
     // doesn't exist, which should fall back to the default rather than collapsing to "nothing open"
     // — collapsing is only what an *explicit* empty string means.
     nextNavigationMock.setSearchParams('tab=schedule&week=999');
-    render(
+    renderWithUrlState(
       <SeasonTabView
         kind="regular"
         leaderboard={[leaderboardRow()]}
@@ -215,7 +216,7 @@ describe('SeasonTabView — expand/collapse writes to the URL', () => {
     // stale/typo'd link that resolves the same way.
     const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
     nextNavigationMock.setSearchParams('tab=schedule&week=999');
-    render(
+    renderWithUrlState(
       <SeasonTabView
         kind="regular"
         leaderboard={[leaderboardRow()]}
@@ -234,7 +235,7 @@ describe('SeasonTabView — expand/collapse writes to the URL', () => {
 describe('SeasonTabView — week/round deep link', () => {
   test('`week=<id>` opens that week when the Schedule tab is shown', () => {
     nextNavigationMock.setSearchParams('tab=schedule&week=2');
-    render(
+    renderWithUrlState(
       <SeasonTabView
         kind="regular"
         leaderboard={[leaderboardRow()]}
@@ -251,7 +252,7 @@ describe('SeasonTabView — week/round deep link', () => {
 
   test('`round=<n>` opens that round in gauntlet mode', () => {
     nextNavigationMock.setSearchParams('tab=schedule&round=3');
-    render(
+    renderWithUrlState(
       <SeasonTabView
         kind="gauntlet"
         rounds={[round(1), round(2), round(3)]}
@@ -270,7 +271,7 @@ describe('SeasonTabView — week/round deep link', () => {
 describe('SeasonTabView — H2H pair writes to the URL', () => {
   test('clicking a duo row writes `a`/`b` (and omits the default `type`)', async () => {
     nextNavigationMock.setSearchParams('tab=h2h');
-    render(
+    renderWithUrlState(
       <SeasonTabView
         kind="regular"
         leaderboard={[leaderboardRow()]}

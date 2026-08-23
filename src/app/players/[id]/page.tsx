@@ -12,6 +12,7 @@ import { buildPlayerJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 import { maybeRefreshSteamProfile } from '@/lib/steam';
 import PlayerView from '@/components/PlayerView';
+import { UrlStateProvider } from '@/components/UrlStateProvider';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import EhogBadge from '@/components/EhogBadge';
 import PlayerNameEditor from '@/components/PlayerNameEditor';
@@ -156,16 +157,18 @@ export default async function PlayerPage({
           )}
         </div>
         <Suspense>
-          <PlayerView
-            playerId={detail.player.id}
-            history={detail.history}
-            trophies={detail.trophies}
-            careerLeaderboard={careerLeaderboard}
-            players={players}
-            ehogHistory={ehog.history}
-            matchDeltas={matchDeltas}
-            sabremetrics={leagueSabremetrics}
-          />
+          <UrlStateProvider>
+            <PlayerView
+              playerId={detail.player.id}
+              history={detail.history}
+              trophies={detail.trophies}
+              careerLeaderboard={careerLeaderboard}
+              players={players}
+              ehogHistory={ehog.history}
+              matchDeltas={matchDeltas}
+              sabremetrics={leagueSabremetrics}
+            />
+          </UrlStateProvider>
         </Suspense>
       </main>
     </div>

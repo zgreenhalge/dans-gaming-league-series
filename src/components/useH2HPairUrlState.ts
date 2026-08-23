@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { useSetUrlParams } from './useUrlState';
+import { useUrlStateContext } from './UrlStateProvider';
 import type { H2HPair } from './H2HMatrix';
 
 /** Resolves an `H2HPair` (by player id) from `a`/`b`/`type` URL params (`a`/`b` are player names,
@@ -49,7 +49,7 @@ export function h2hPairToParams(
 export function useH2HPairUrlState(
   players: { id: number; name: string }[],
 ): { initialPair: H2HPair | null; onPairChange: (pair: H2HPair) => void } {
-  const searchParams = useSearchParams();
+  const { searchParams } = useUrlStateContext();
   const setUrlParams = useSetUrlParams();
   const aRaw = searchParams.get('a');
   const bRaw = searchParams.get('b');

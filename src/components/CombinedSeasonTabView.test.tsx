@@ -8,9 +8,10 @@
  */
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
+import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
 import { createNextAuthMock } from '@/lib/test-support/mockNextAuth';
 import { leaderboardRow, EMPTY_H2H } from '@/lib/test-support/leaderboardFixtures';
 import CombinedSeasonTabView from './CombinedSeasonTabView';
@@ -42,12 +43,12 @@ function baseProps() {
 describe('CombinedSeasonTabView — top tab (`view`) and sub tab (`tab`)', () => {
   test('reads the active top tab from `view`', () => {
     nextNavigationMock.setSearchParams('view=gauntlet');
-    render(<CombinedSeasonTabView {...baseProps()} />);
+    renderWithUrlState(<CombinedSeasonTabView {...baseProps()} />);
     expect(screen.getByRole('tab', { name: 'Gauntlet' })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('clicking the top tab pushes `view`, not `tab`', async () => {
-    render(<CombinedSeasonTabView {...baseProps()} />);
+    renderWithUrlState(<CombinedSeasonTabView {...baseProps()} />);
     await userEvent.click(screen.getByRole('tab', { name: 'Gauntlet' }));
 
     expect(nextNavigationMock.pushState).toHaveBeenCalledTimes(1);
@@ -56,7 +57,7 @@ describe('CombinedSeasonTabView — top tab (`view`) and sub tab (`tab`)', () =>
 
   test('switching `view` preserves an existing `tab` param instead of dropping it', async () => {
     nextNavigationMock.setSearchParams('tab=stats');
-    render(<CombinedSeasonTabView {...baseProps()} />);
+    renderWithUrlState(<CombinedSeasonTabView {...baseProps()} />);
     expect(screen.getAllByRole('tab', { name: 'Stats' })[0]).toHaveAttribute('aria-selected', 'true');
 
     await userEvent.click(screen.getByRole('tab', { name: 'Gauntlet' }));

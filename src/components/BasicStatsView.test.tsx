@@ -9,9 +9,10 @@
  */
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
+import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
 import { leaderboardRow } from '@/lib/test-support/leaderboardFixtures';
 import { BasicStatsView } from './BasicStatsView';
 
@@ -25,7 +26,7 @@ beforeEach(() => {
 describe('BasicStatsView — sub-tab state', () => {
   test('reads the active sub-tab from `stab`', () => {
     nextNavigationMock.setSearchParams('tab=stats&stab=games');
-    render(<BasicStatsView rows={[leaderboardRow()]} />);
+    renderWithUrlState(<BasicStatsView rows={[leaderboardRow()]} />);
     expect(screen.getByRole('tab', { name: 'Game Stats' })).toHaveAttribute('aria-selected', 'true');
   });
 
@@ -33,7 +34,7 @@ describe('BasicStatsView — sub-tab state', () => {
     // `stab` is a tab switch too, so it pushes (creates a history entry) same as any other tab bar
     // built on `useTabState` — not a replace.
     nextNavigationMock.setSearchParams('tab=stats');
-    render(<BasicStatsView rows={[leaderboardRow()]} />);
+    renderWithUrlState(<BasicStatsView rows={[leaderboardRow()]} />);
     await userEvent.click(screen.getByRole('tab', { name: 'Game Stats' }));
 
     expect(nextNavigationMock.pushState).toHaveBeenCalledTimes(1);
@@ -44,14 +45,14 @@ describe('BasicStatsView — sub-tab state', () => {
   test('falls back to the first tab when `stab` names one this call site does not show', () => {
     // "Maps & Sides" only renders when `matches` is passed; without it, `stab=sides` doesn't exist.
     nextNavigationMock.setSearchParams('tab=stats&stab=sides');
-    render(<BasicStatsView rows={[leaderboardRow()]} />);
+    renderWithUrlState(<BasicStatsView rows={[leaderboardRow()]} />);
     expect(screen.getByRole('tab', { name: 'Basic Stats' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('tab', { name: 'Maps & Sides' })).not.toBeInTheDocument();
   });
 
   test('shows "Maps & Sides" and honors `stab=sides` when `matches` is passed', () => {
     nextNavigationMock.setSearchParams('tab=stats&stab=sides');
-    render(<BasicStatsView rows={[leaderboardRow()]} matches={[]} />);
+    renderWithUrlState(<BasicStatsView rows={[leaderboardRow()]} matches={[]} />);
     expect(screen.getByRole('tab', { name: 'Maps & Sides' })).toHaveAttribute('aria-selected', 'true');
   });
 });

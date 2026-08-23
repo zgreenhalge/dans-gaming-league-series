@@ -12,6 +12,7 @@ import {
   getSabremetricSeasonTotals,
 } from '@/lib/queries';
 import CareerStatsView from '@/components/CareerStatsView';
+import { UrlStateProvider } from '@/components/UrlStateProvider';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { TrophyEntry } from '@/lib/queries';
 
@@ -73,19 +74,21 @@ export default async function StatisticsPage() {
           </div>
         </div>
         <Suspense>
-          <CareerStatsView
-            regularSeasons={regularSeasons.map((s) => ({ id: s.id, name: s.name }))}
-            gauntletSeasons={gauntletSeasons.map((s) => ({ id: s.id, name: s.name }))}
-            careerRows={careerRows}
-            bySeason={bySeason}
-            gauntletCareerRows={gauntletStats.career}
-            gauntletBySeason={gauntletStats.bySeason}
-            trophiesByPlayer={trophiesByPlayer}
-            players={players}
-            allMatches={allMatches}
-            ehogSnapshots={ehogSnapshots}
-            allSabremetrics={allSabremetrics}
-          />
+          <UrlStateProvider>
+            <CareerStatsView
+              regularSeasons={regularSeasons.map((s) => ({ id: s.id, name: s.name }))}
+              gauntletSeasons={gauntletSeasons.map((s) => ({ id: s.id, name: s.name }))}
+              careerRows={careerRows}
+              bySeason={bySeason}
+              gauntletCareerRows={gauntletStats.career}
+              gauntletBySeason={gauntletStats.bySeason}
+              trophiesByPlayer={trophiesByPlayer}
+              players={players}
+              allMatches={allMatches}
+              ehogSnapshots={ehogSnapshots}
+              allSabremetrics={allSabremetrics}
+            />
+          </UrlStateProvider>
         </Suspense>
       </main>
     </div>
