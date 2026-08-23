@@ -113,12 +113,6 @@ export default function MapDetailView({
   detail: MapDetail;
   players: { id: number; name: string; steam_avatar_url: string | null }[];
 }) {
-  // No `resetSeasonOnToggle` — this view relies on `SeasonFilter`'s own effect (wired through the
-  // `onSeasonChange` prop below) to reset `selectedSeason` only when it actually becomes invalid
-  // after a regular/gauntlet toggle, rather than unconditionally resetting to "all" every time.
-  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter();
-  const [tab, setTab] = useTabState(MAP_TABS, 'leaderboard');
-
   const uniqueSeasons = useMemo(() => {
     const seen = new Map<number, { id: number; name: string; is_gauntlet: boolean }>();
     for (const m of detail.matches) {
@@ -127,6 +121,16 @@ export default function MapDetailView({
     }
     return Array.from(seen.values()).sort((a, b) => a.id - b.id);
   }, [detail.matches]);
+
+  // Split for `useSeasonFilter`'s validity check below — it needs regular/gauntlet apart, not the
+  // single flagged list `SeasonFilter`'s own dropdown takes.
+  const { regularSeasons, gauntletSeasons } = useMemo(() => ({
+    regularSeasons: uniqueSeasons.filter((s) => !s.is_gauntlet),
+    gauntletSeasons: uniqueSeasons.filter((s) => s.is_gauntlet),
+  }), [uniqueSeasons]);
+
+  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
+  const [tab, setTab] = useTabState(MAP_TABS, 'leaderboard');
 
   const filteredMatches = useMemo<MapMatchRow[]>(() => {
     return detail.matches.filter((m) => {

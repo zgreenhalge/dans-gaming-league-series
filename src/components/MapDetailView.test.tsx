@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 /**
  * Component tests for `MapDetailView.tsx`'s URL state: the tab bar reads from/writes to `tab`, and
- * the season filter — via the shared `useSeasonFilter()` — reads from/writes to `reg`/`gnt`/`season`
- * without resetting `season` on a regular/gauntlet toggle (unlike `PlayerView`, this view doesn't opt
- * into `resetSeasonOnToggle`; it relies on `SeasonFilter`'s own conditional-reset effect instead).
+ * the season filter — via `useSeasonFilter({ regularSeasons, gauntletSeasons })`, both derived from
+ * `detail.matches` split by `is_gauntlet` — reads from/writes to `reg`/`gnt`/`season`. Toggling
+ * regular/gauntlet writes only its own key, never touching `season`; a `season` selection that's no
+ * longer valid under the current include-flags self-corrects to "all" at read time, on the very same
+ * render as the toggle, with no write-back to the URL.
  *
  * Run:  npx vitest run src/components/MapDetailView.test.tsx
  */
@@ -95,7 +97,7 @@ describe('MapDetailView — season filter', () => {
     expect(screen.getByRole('tab', { name: /Matches/ }).textContent).toContain('(1)');
   });
 
-  test('toggling regular/gauntlet does not touch `season` (no resetSeasonOnToggle)', async () => {
+  test('toggling regular/gauntlet does not touch `season`', async () => {
     // Two seasons sharing a title so the dropdown renders (SeasonFilter hides it at <=1 unique
     // season) — the Checkbox's label span has its own onClick, so click that directly (a
     // pre-existing a11y gap, not introduced here — see SeasonFilter.test.tsx).
@@ -112,6 +114,36 @@ describe('MapDetailView — season filter', () => {
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
     expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/maps/de_dust2?season=1&reg=0');
+  });
+
+  test('a regular-season selection stays selected when gauntlet is toggled off', () => {
+    nextNavigationMock.setSearchParams('season=1&gnt=0');
+    const detail = baseDetail({
+      matches: [
+        matchRow({ match_id: 1, season_id: 1, season_name: 'Season 1', is_gauntlet: false }),
+        matchRow({ match_id: 2, season_id: 2, season_name: 'Season 1 Gauntlet', is_gauntlet: true }),
+      ],
+    });
+    render(<MapDetailView detail={detail} players={players} />);
+    expect(screen.getByRole('tab', { name: /Matches/ }).textContent).toContain('(1)');
+    expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
+  });
+
+  test('a `season` id no longer valid under the current include-flags clamps to "all" on this render', () => {
+    // season=1 names a regular season; `reg=0` excludes regular seasons, but two gauntlet seasons
+    // stay in scope so the dropdown itself is still shown (SeasonFilter hides it at <=1 option).
+    nextNavigationMock.setSearchParams('season=1&reg=0');
+    const detail = baseDetail({
+      matches: [
+        matchRow({ match_id: 1, season_id: 1, season_name: 'Season 1', is_gauntlet: false }),
+        matchRow({ match_id: 2, season_id: 2, season_name: 'Season 1 Gauntlet', is_gauntlet: true }),
+        matchRow({ match_id: 3, season_id: 3, season_name: 'Season 2 Gauntlet', is_gauntlet: true }),
+      ],
+    });
+    render(<MapDetailView detail={detail} players={players} />);
+    expect(screen.getByRole('combobox')).toHaveValue('all');
+    expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
+    expect(nextNavigationMock.pushState).not.toHaveBeenCalled();
   });
 });
 

@@ -28,8 +28,6 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
   const [tab, setTab] = useState<'tiles' | 'stats'>('tiles');
   const [sortKey, setSortKey] = useState<SortKey>('pickCount');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter();
-
   const allSeasons = useMemo(() => {
     const seen = new Map<number, { id: number; name: string; is_gauntlet: boolean }>();
     for (const map of maps) {
@@ -39,6 +37,15 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
     }
     return Array.from(seen.values()).sort((a, b) => a.id - b.id);
   }, [maps]);
+
+  // Split for `useSeasonFilter`'s validity check below — it needs regular/gauntlet apart, not the
+  // single flagged list `SeasonFilter`'s own dropdown takes.
+  const { regularSeasons, gauntletSeasons } = useMemo(() => ({
+    regularSeasons: allSeasons.filter((s) => !s.is_gauntlet),
+    gauntletSeasons: allSeasons.filter((s) => s.is_gauntlet),
+  }), [allSeasons]);
+
+  const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
 
   // Per-map filtered stats, rolled up from statsBySeason.
   const displayStats = useMemo(
