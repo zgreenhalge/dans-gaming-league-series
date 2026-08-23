@@ -83,9 +83,9 @@ recorded score.
 | `smokes.ts` | CT-side smokes interfering with pushes, from `smokegrenade_detonate`/`_expired` + sampled enemy positions |
 | `unusedUtility.ts` | Buy-menu value of grenades held at death (`Unused Util/Death`) |
 | `reload.ts` | Rounds dropped on reload, read from the discrete `weapon_reload` event (`Rounds Dropped/Reload`) |
-| `weaponClasses.ts` | CS2 weapon → category (pistol/smg/rifle/sniper/shotgun) allowlist; also the gun/non-gun source of truth for `accuracy.ts`, shared with `weaponStats.ts` |
+| `weaponClasses.ts` | CS2 weapon → category (pistol/smg/rifle/sniper/shotgun) allowlist; also the gun/non-gun source of truth for `accuracy.ts`, shared with `weaponStats.ts`. `killWeaponCategory()` is the separate, wider mapping used for kills — it covers every kill weapon (melee/utility/other, not just guns) and must not be used for the accuracy allowlist |
 | `economy.ts` | Per-round eco/force-buy/full-buy classification from `CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` at each round's freeze-time-end |
-| `weaponStats.ts` | Per-weapon-category and per-round-economy shot/accuracy/damage/rounds breakdowns |
+| `weaponStats.ts` | Per-weapon-category and per-round-economy shot/accuracy/damage/rounds breakdowns, plus `collectMatchKills()` — flat per-kill fact rows for `match_kills` (see "Kill and round fact tables" below) |
 
 ## Weapon-class and round-economy breakdowns
 
@@ -103,6 +103,31 @@ of distinct live rounds in which the player fired that category at least once �
 as `shots_fired`/`shots_hit`. For economy, it's seeded directly from the round's own eco/force/full
 classification, independent of whether the player fired a shot that round — an eco round the player
 never fired in still counts as an eco round played.
+
+## Kill and round fact tables
+
+`match_kills` and `match_rounds` (see [`architecture.md`](./architecture.md)) are granular per-event
+fact tables, not per-player pre-aggregates — one row per kill and one row per round, with aggregation
+(kills-by-weapon, killed-by-weapon, category rollups, favorite weapon, round-win-%-by-side) done at
+query time rather than baked into the persisted shape. This is a deliberate departure from the
+`player_match_weapon_stats`-style pattern above: a new derived stat is a query change, not a new table.
+
+- `collectMatchKills()` (`weaponStats.ts`) reads `player_death` events (parsed with a `weapon` field,
+  unlike every other consumer of that event) and emits one `KillFactRow` per kill: round, attacker/
+  victim/assister steamid, weapon, headshot, and whether it was a teamkill. It's simpler than the
+  bucketed collectors above — a `player_death` row already carries both attacker and victim, so there's
+  no fire/hurt reconciliation. Self-kills and teamkills are kept (not filtered out) so the table stays
+  a genuine fact table; consuming queries decide whether to exclude them.
+- `match_rounds` needs no new collector at all — `buildRoundSides()` (`roundSides.ts`) already computes
+  `{ roundNumber, winnerSide, shirtsSide, winReason }` per live round for the CT/T sabremetric splits;
+  `demoOrchestrator.ts` just maps `context.rounds` straight into `DemoMatchRound[]`. `winReason` comes
+  from `round_end`'s `reason` field via `reasonToCondition()` (`roundSides.ts`), shared with the replay
+  pipeline (`replay/extract.ts`) rather than each defining its own copy.
+- `src/lib/demo/matchKills.ts` / `matchRounds.ts` persist via `replaceMatchRows()`
+  (`src/lib/demo/factTables.ts`) — one generic delete-then-insert helper shared by both tables (and any
+  future fact table), rather than each reimplementing the pattern `weaponStats.ts` established.
+- Wired into the same two call sites as every other demo-derived stat: `matchScore.ts`'s
+  `Promise.all` (score confirm) and `scripts/demo-ingest.ts`'s reparse fast path.
 
 ## Match start (skipping warmup and stray knife rounds)
 
