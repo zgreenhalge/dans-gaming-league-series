@@ -16,11 +16,12 @@
 //
 // One message is the source of truth per match, in `match_discord_state.notification_message_id` —
 // the same per-match Discord state table `discord-threads.ts` already keys its `thread_id` off of.
-// Whichever of `notifyMatchReminder()` or `notifyMatchServerLive()` fires first posts it (with
-// `?wait=true`, the only way a webhook POST returns the created message's id) and stores its id
-// there; `notifyMatchLiveScore()` and `notifyMatchScoreReported()` — and whichever of the reminder/
-// server-live pair fires second — then edit that message in place via Discord's webhook-message
-// PATCH endpoint instead of posting a second one.
+// `notifyMatchReminder()` posts it first, if it fires (with `?wait=true`, the only way a webhook
+// POST returns the created message's id), and stores its id there; `notifyMatchServerLive()` reuses
+// that message if the reminder already left one on record, else posts its own and stores that
+// instead. `notifyMatchLiveScore()` and `notifyMatchScoreReported()` then edit whichever message
+// ended up on record in place via Discord's webhook-message PATCH endpoint instead of posting a
+// second one.
 //
 // `notifyMatchLiveScore()` fires on every `going_live`/`round_end` MatchZy event (wired from the
 // `matchzy-log` ingest route, right after `putLiveScoreEvent()` writes `live_match_score` — the same
@@ -34,9 +35,8 @@
 // notifications were off when the server went live, that post failed, or the message was deleted out
 // from under the bot.
 //
-// `notifyMatchReminder()` posts (or, if `notifyMatchServerLive()` already left a message on record,
-// edits) roughly an hour before a scheduled match, called from `POST /api/cron/match-reminder` —
-// itself invoked once, per match, by a Postgres pg_cron job that
+// `notifyMatchReminder()` posts roughly an hour before a scheduled match, called from
+// `POST /api/cron/match-reminder` — itself invoked once, per match, by a Postgres pg_cron job that
 // `schedule_match_reminder()` schedules for the exact minute whenever a match's `scheduled_at` is
 // set (see `src/app/api/matches/[id]/schedule/route.ts`). There is no polling and no retry: the
 // pg_cron job is one-shot and self-unschedules once it fires, so a failed post here has nothing
@@ -377,10 +377,10 @@ export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, ma
  *  kind is inherently single-shot, unlike `notifyMatchLiveScore()`, which gets another try next
  *  round.
  *
- *  Edits `notifyMatchServerLive()`'s message in place if that already posted one (the server going
- *  live earlier than usual, well outside the ~1h reminder window) — same "reuse the tracked message
- *  if one exists, else post and record a fresh one" pattern `notifyMatchScoreReported()` uses above —
- *  rather than adding a second message to the channel for the same match. */
+ *  Always posts a fresh message rather than checking for one to edit — the reminder fires first in
+ *  every real case (the server doesn't go live until closer to `scheduled_at`), so there's never
+ *  anything on record yet to reuse. It does record the message id it posts, though, so
+ *  `notifyMatchServerLive()` can edit this message in place instead of posting its own. */
 export async function notifyMatchReminder(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
   const webhookUrl = process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL;
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.
@@ -412,15 +412,10 @@ export async function notifyMatchReminder(supabaseAdmin: SupabaseClient, matchId
     .select('match_id');
   if (!claimed || claimed.length === 0) return; // Already sent, or lost the race to a concurrent call.
 
-  const existingMessageId = await getStoredMessageId(supabaseAdmin, matchId);
   const { content, embed } = buildMatchMessage(matchId, meta, {
     statusLine: `⏰ **Starting in ${formatDuration(msUntilMatch)}**${meta.scheduledAt ? `\n${meta.scheduledAt}` : ''}`,
     color: COLOR_REMINDER,
   });
-
-  if (existingMessageId && await editEmbed(supabaseAdmin, matchId, OPERATION_REMINDER, webhookUrl, existingMessageId, content, embed)) {
-    return;
-  }
   const messageId = await postNewEmbed(supabaseAdmin, matchId, OPERATION_REMINDER, webhookUrl, content, embed);
   if (messageId) await rememberNotificationMessage(supabaseAdmin, matchId, messageId);
 }

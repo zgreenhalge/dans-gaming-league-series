@@ -177,12 +177,9 @@ function matchFilter(row: Row, f: Filter): boolean {
     case 'in':
       return (f.val as unknown[]).includes(rv);
     case 'is':
-      // A column absent from a row (never set by an insert/upsert that didn't mention it) reads back
-      // as `undefined` here, but is NULL in real Postgres for any nullable column without a non-null
-      // default — `.is(col, null)` must match that row the same way `col IS NULL` would.
-      return (rv ?? null) === f.val;
+      return rv === f.val;
     case 'not_is':
-      return f.val === null ? (rv ?? null) !== null : rv !== f.val;
+      return f.val === null ? rv !== null : rv !== f.val;
   }
 }
 
