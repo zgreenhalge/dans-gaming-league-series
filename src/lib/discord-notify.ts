@@ -12,7 +12,11 @@
 //
 // All four are built from `getMatchMeta()` (seo/og.ts) — the same data the site's own link-preview
 // OG card and meta description use when a match URL is unfurled — rather than re-deriving the
-// title/roster/map here.
+// title/roster/map here. Passed `supabaseAdmin` explicitly (as is `getMatchBoxScore()`, `seo/og.ts`'s
+// `getMatchTeamNames()`/`getMapLookup()` underneath it): every caller here already has an admin
+// client on hand, and some — `scripts/demo-ingest.ts`'s auto-commit path chief among them — run as a
+// standalone script outside any Next.js request, where the anon `supabase` singleton these functions
+// default to can't construct (no `NEXT_PUBLIC_SUPABASE_ANON_KEY` in that environment).
 //
 // One message is the source of truth per match, in `match_discord_state.notification_message_id` —
 // the same per-match Discord state table `discord-threads.ts` already keys its `thread_id` off of.
@@ -278,7 +282,7 @@ export async function notifyMatchServerLive(supabaseAdmin: SupabaseClient, match
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.
 
   const [meta, existingMessageId] = await Promise.all([
-    getMatchMeta(matchId).catch(() => null),
+    getMatchMeta(matchId, supabaseAdmin).catch(() => null),
     getStoredMessageId(supabaseAdmin, matchId),
   ]);
   if (!meta) return;
@@ -317,7 +321,7 @@ export async function notifyMatchLiveScore(
   const existingMessageId = await getStoredMessageId(supabaseAdmin, matchId);
   if (!existingMessageId) return;
 
-  const meta = await getMatchMeta(matchId).catch(() => null);
+  const meta = await getMatchMeta(matchId, supabaseAdmin).catch(() => null);
   if (!meta) return;
   if (meta.score) return; // Already scored — a late round_end must not overwrite the final result.
 
@@ -343,8 +347,8 @@ export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, ma
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.
 
   const [meta, boxScore, existingMessageId] = await Promise.all([
-    getMatchMeta(matchId).catch(() => null),
-    getMatchBoxScore(matchId).catch(() => null),
+    getMatchMeta(matchId, supabaseAdmin).catch(() => null),
+    getMatchBoxScore(matchId, supabaseAdmin).catch(() => null),
     getStoredMessageId(supabaseAdmin, matchId),
   ]);
   if (!meta || !meta.score) return;
@@ -389,7 +393,7 @@ export async function notifyMatchReminder(supabaseAdmin: SupabaseClient, matchId
   // matches pre-check, since the eligibility window rarely excludes anything in practice (the
   // pg_cron job that calls this already computed the right fire time; only a reschedule in the gap
   // makes it miss) and a pre-check would just add a redundant round trip to the common case.
-  const meta = await getMatchMeta(matchId).catch(() => null);
+  const meta = await getMatchMeta(matchId, supabaseAdmin).catch(() => null);
   if (!meta) return;
   if (!meta.scheduledAtRaw) return; // Unscheduled since the job was queued.
   if (meta.score) return; // Already played.
