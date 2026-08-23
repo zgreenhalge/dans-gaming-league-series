@@ -2,9 +2,10 @@
  * Unit tests for discord-notify.ts's best-effort #match-notifications webhook posts (#395),
  * including the ops_errors observability retrofit — a real webhook failure must be visible in the
  * admin console's Activity feed, not just a Vercel function log — and the single-message-per-match
- * behavior: `notifyMatchServerLive()` posts with `?wait=true` and remembers the message id in
- * `match_discord_state`, and `notifyMatchScoreReported()` edits that same message in place rather
- * than posting a second one, falling back to a new post only when there's nothing to edit.
+ * behavior: `notifyMatchReminder()`/`notifyMatchServerLive()` post with `?wait=true` and remember the
+ * message id in `match_discord_state`, and `notifyMatchServerLive()`/`notifyMatchScoreReported()`
+ * edit that same message in place rather than posting a second one, falling back to a new post only
+ * when there's nothing to edit yet.
  *
  * Run:  npx vitest run src/lib/discord-notify.test.ts
  */
@@ -410,7 +411,26 @@ async function main() {
     assert.match(embed.description, /Starting in 5[45]m/, 'the actual time until the match, not a static "1 hour"');
     assert.equal(embed.fields, undefined, 'no box score — the match hasn\'t been played yet');
     assert.ok(discordState(101)?.reminder_sent_at, 'reminder_sent_at is claimed once posted');
-    assert.equal(discordState(101)?.notification_message_id, undefined, 'a separate message lineage — does not touch notification_message_id');
+    assert.equal(discordState(101)?.notification_message_id, 'stub-msg-1', 'stored so a later server-live/live-score/score-reported edits this message instead of posting a new one');
+  });
+
+  await test('notifyMatchServerLive: edits the reminder message in place instead of posting a new one', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(101);
+    setScheduledAt(101, new Date(Date.now() + 55 * 60 * 1000).toISOString());
+    stubFetch();
+    await notifyMatchReminder(adminClient, 101);
+    const reminderMessageId = discordState(101)?.notification_message_id;
+    assert.ok(reminderMessageId, 'precondition: the reminder left a message id on record');
+
+    const { calls } = stubFetch();
+    await notifyMatchServerLive(adminClient, 101);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].method, 'PATCH', 'edits the reminder message rather than posting a second one');
+    assert.equal(calls[0].url, `https://discord.example/webhook/messages/${reminderMessageId}`);
+    const embed = calls[0].body.embeds[0];
+    assert.match(embed.description, /Server is live/);
+    assert.equal(discordState(101)?.notification_message_id, reminderMessageId, 'still the same source-of-truth message');
   });
 
   await test('notifyMatchReminder: no-ops if reminder_sent_at is already set (idempotent)', async () => {
