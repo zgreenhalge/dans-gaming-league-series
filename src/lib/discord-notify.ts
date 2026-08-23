@@ -119,7 +119,7 @@ function boxScoreTable(players: MatchBoxScorePlayer[]): string {
   const adrWidth = Math.max('ADR'.length, ...rows.map((r) => r.adr.length));
   const line = (name: string, kad: string, adr: string) =>
     `${name.padEnd(nameWidth)}  ${kad.padStart(kadWidth)}  ${adr.padStart(adrWidth)}`;
-  return ['```', line('Player', 'K/A/D', 'ADR'), ...rows.map((r) => line(r.name, r.kad, r.adr)), '```'].join('\n');
+  return ['```', line('Player', 'K/A/D', 'ADR'), '', ...rows.map((r) => line(r.name, r.kad, r.adr)), '```'].join('\n');
 }
 
 /** Shared embed layout for all three notification kinds. The season name is the embed's `author`
