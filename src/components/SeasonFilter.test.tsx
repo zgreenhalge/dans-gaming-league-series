@@ -14,7 +14,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { act, render, renderHook, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
-import { urlStateWrapper } from '@/lib/test-support/renderWithUrlState';
+import { UrlStateProvider } from '@/components/UrlStateProvider';
 import { Checkbox, SeasonFilter, useSeasonFilter, type SeasonFilterState } from './SeasonFilter';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
@@ -90,7 +90,7 @@ describe('SeasonFilter', () => {
 
 describe('useSeasonFilter', () => {
   test('defaults to both filters on and "all" seasons when no params are set', () => {
-    const { result } = renderHook(() => useSeasonFilter(), { wrapper: urlStateWrapper });
+    const { result } = renderHook(() => useSeasonFilter(), { wrapper: UrlStateProvider });
     expect(result.current.includeRegular).toBe(true);
     expect(result.current.includeGauntlet).toBe(true);
     expect(result.current.selectedSeason).toBe('all');
@@ -98,14 +98,14 @@ describe('useSeasonFilter', () => {
 
   test('reads `reg=0`/`gnt=0`/`season=<id>` from the URL', () => {
     nextNavigationMock.setSearchParams('reg=0&gnt=0&season=5');
-    const { result } = renderHook(() => useSeasonFilter(), { wrapper: urlStateWrapper });
+    const { result } = renderHook(() => useSeasonFilter(), { wrapper: UrlStateProvider });
     expect(result.current.includeRegular).toBe(false);
     expect(result.current.includeGauntlet).toBe(false);
     expect(result.current.selectedSeason).toBe(5);
   });
 
   test('toggleRegular writes `reg=0` and replaces (not pushes)', () => {
-    const { result } = renderHook(() => useSeasonFilter(), { wrapper: urlStateWrapper });
+    const { result } = renderHook(() => useSeasonFilter(), { wrapper: UrlStateProvider });
     act(() => result.current.toggleRegular());
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
@@ -115,14 +115,14 @@ describe('useSeasonFilter', () => {
 
   test('toggleRegular refuses to turn off the last remaining filter', () => {
     nextNavigationMock.setSearchParams('gnt=0');
-    const { result } = renderHook(() => useSeasonFilter(), { wrapper: urlStateWrapper });
+    const { result } = renderHook(() => useSeasonFilter(), { wrapper: UrlStateProvider });
     act(() => result.current.toggleRegular());
 
     expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
   });
 
   test('setSelectedSeason writes `season`', () => {
-    const { result } = renderHook(() => useSeasonFilter(), { wrapper: urlStateWrapper });
+    const { result } = renderHook(() => useSeasonFilter(), { wrapper: UrlStateProvider });
     act(() => result.current.setSelectedSeason(7));
 
     expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/players/1?season=7');
@@ -130,7 +130,7 @@ describe('useSeasonFilter', () => {
 
   test('toggling always writes a single key, leaving `season` untouched in the URL', () => {
     nextNavigationMock.setSearchParams('season=5');
-    const { result } = renderHook(() => useSeasonFilter({ regularSeasons: [{ id: 5 }], gauntletSeasons: [] }), { wrapper: urlStateWrapper });
+    const { result } = renderHook(() => useSeasonFilter({ regularSeasons: [{ id: 5 }], gauntletSeasons: [] }), { wrapper: UrlStateProvider });
     act(() => result.current.toggleRegular());
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
@@ -139,7 +139,7 @@ describe('useSeasonFilter', () => {
 
   test('without `regularSeasons`/`gauntletSeasons`, `selectedSeason` reads the raw URL value uncorrected', () => {
     nextNavigationMock.setSearchParams('reg=0&season=5');
-    const { result } = renderHook(() => useSeasonFilter(), { wrapper: urlStateWrapper });
+    const { result } = renderHook(() => useSeasonFilter(), { wrapper: UrlStateProvider });
     expect(result.current.selectedSeason).toBe(5);
   });
 
@@ -147,7 +147,7 @@ describe('useSeasonFilter', () => {
     // Distinct from omitting `options` entirely — passing `{}` must not force-clamp to 'all' just
     // because an options object exists.
     nextNavigationMock.setSearchParams('reg=0&season=5');
-    const { result } = renderHook(() => useSeasonFilter({}), { wrapper: urlStateWrapper });
+    const { result } = renderHook(() => useSeasonFilter({}), { wrapper: UrlStateProvider });
     expect(result.current.selectedSeason).toBe(5);
   });
 
@@ -155,7 +155,7 @@ describe('useSeasonFilter', () => {
     nextNavigationMock.setSearchParams('season=99');
     const { result } = renderHook(
       () => useSeasonFilter({ regularSeasons: [{ id: 1 }, { id: 2 }], gauntletSeasons: [{ id: 3 }] }),
-      { wrapper: urlStateWrapper },
+      { wrapper: UrlStateProvider },
     );
     expect(result.current.selectedSeason).toBe('all');
   });
@@ -164,7 +164,7 @@ describe('useSeasonFilter', () => {
     nextNavigationMock.setSearchParams('season=3');
     const { result } = renderHook(
       () => useSeasonFilter({ regularSeasons: [{ id: 1 }, { id: 2 }], gauntletSeasons: [{ id: 3 }] }),
-      { wrapper: urlStateWrapper },
+      { wrapper: UrlStateProvider },
     );
     expect(result.current.selectedSeason).toBe(3);
   });
@@ -173,7 +173,7 @@ describe('useSeasonFilter', () => {
     nextNavigationMock.setSearchParams('reg=0&season=1');
     const { result } = renderHook(
       () => useSeasonFilter({ regularSeasons: [{ id: 1 }], gauntletSeasons: [{ id: 2 }] }),
-      { wrapper: urlStateWrapper },
+      { wrapper: UrlStateProvider },
     );
     expect(result.current.selectedSeason).toBe('all');
   });
@@ -182,7 +182,7 @@ describe('useSeasonFilter', () => {
     nextNavigationMock.setSearchParams('gnt=0&season=1');
     const { result } = renderHook(
       () => useSeasonFilter({ regularSeasons: [{ id: 1 }], gauntletSeasons: [{ id: 2 }] }),
-      { wrapper: urlStateWrapper },
+      { wrapper: UrlStateProvider },
     );
     expect(result.current.selectedSeason).toBe(1);
   });
