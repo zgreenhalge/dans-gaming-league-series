@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 
 interface UrlStateContextValue {
@@ -32,11 +32,13 @@ export function UrlStateProvider({ children }: { children: ReactNode }) {
     latestRef.current = { pathname, searchParams };
   });
 
-  return (
-    <UrlStateContext.Provider value={{ pathname, searchParams, latestRef }}>
-      {children}
-    </UrlStateContext.Provider>
-  );
+  // `usePathname`/`useSearchParams` re-run on every render of this component, not just on
+  // navigation — without memoizing, every consumer below would re-render on every commit here
+  // (a brand-new context value each time), the exact per-hook-instance waste this provider exists
+  // to collapse away.
+  const value = useMemo(() => ({ pathname, searchParams, latestRef }), [pathname, searchParams]);
+
+  return <UrlStateContext.Provider value={value}>{children}</UrlStateContext.Provider>;
 }
 
 /** Throws when called outside a `<UrlStateProvider>` — every URL-backed hook needs one ancestor. */
