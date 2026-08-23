@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { useTabState, resolveTab } from './useTabState';
 import { useUrlState, useSetUrlParams } from './useUrlState';
+import { useUrlStateContext } from './UrlStateProvider';
 import LeaderboardTable from './LeaderboardTable';
 import ScheduleList from './ScheduleList';
 import GauntletStandings from './GauntletStandings';
@@ -196,7 +196,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   // a set that serializes to the same string as `defaultOpenSet` omits the param entirely, via
   // `useUrlState`'s own "writing the default removes the param" behavior — no separate comparison
   // needed here.
-  const searchParams = useSearchParams();
+  const { searchParams } = useUrlStateContext();
   const setUrlParams = useSetUrlParams();
   const { initialPair: urlInitialPair, onPairChange: handleH2HPairChange } = useH2HPairUrlState(h2hData.players);
 
