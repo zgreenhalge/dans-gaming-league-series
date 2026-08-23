@@ -3,8 +3,9 @@
  * Component tests for `Checkbox`/`SeasonFilter` (`SeasonFilter.tsx`) — click/keyboard toggling,
  * `aria-checked` state, season-title dedup, and dropdown suppression at ≤1 unique season — plus unit
  * tests for `useSeasonFilter()`'s URL state: `reg`/`gnt`/`season` reads and writes, the
- * "don't allow turning off the last remaining filter" guard, and the `resetSeasonOnToggle` option's
- * atomic multi-key write (`PlayerView`/`CareerStatsView` opt in; `MapDetailView` doesn't).
+ * "don't allow turning off the last remaining filter" guard, and the `regularSeasons`/
+ * `gauntletSeasons` validity clamp (a pure derive-at-read fallback to `'all'`, the same shape as
+ * `resolveTab()` in `useTabState.ts`).
  *
  * Run:  npx vitest run src/components/SeasonFilter.test.tsx
  */
@@ -126,20 +127,50 @@ describe('useSeasonFilter', () => {
     expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/players/1?season=7');
   });
 
-  test('without `resetSeasonOnToggle`, toggling leaves `season` untouched', () => {
+  test('toggling always writes a single key, leaving `season` untouched in the URL', () => {
     nextNavigationMock.setSearchParams('season=5');
-    const { result } = renderHook(() => useSeasonFilter());
-    act(() => result.current.toggleRegular());
-
-    expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/players/1?season=5&reg=0');
-  });
-
-  test('with `resetSeasonOnToggle: true`, toggling resets `season` atomically, in one navigation', () => {
-    nextNavigationMock.setSearchParams('season=5');
-    const { result } = renderHook(() => useSeasonFilter({ resetSeasonOnToggle: true }));
+    const { result } = renderHook(() => useSeasonFilter({ regularSeasons: [{ id: 5 }], gauntletSeasons: [] }));
     act(() => result.current.toggleRegular());
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
-    expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/players/1?reg=0');
+    expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/players/1?season=5&reg=0');
+  });
+
+  test('without `regularSeasons`/`gauntletSeasons`, `selectedSeason` reads the raw URL value uncorrected', () => {
+    nextNavigationMock.setSearchParams('reg=0&season=5');
+    const { result } = renderHook(() => useSeasonFilter());
+    expect(result.current.selectedSeason).toBe(5);
+  });
+
+  test('clamps `selectedSeason` to \'all\' when the raw id names no season in the valid lists', () => {
+    nextNavigationMock.setSearchParams('season=99');
+    const { result } = renderHook(() =>
+      useSeasonFilter({ regularSeasons: [{ id: 1 }, { id: 2 }], gauntletSeasons: [{ id: 3 }] }),
+    );
+    expect(result.current.selectedSeason).toBe('all');
+  });
+
+  test('keeps `selectedSeason` when the raw id is in the valid regular or gauntlet list', () => {
+    nextNavigationMock.setSearchParams('season=3');
+    const { result } = renderHook(() =>
+      useSeasonFilter({ regularSeasons: [{ id: 1 }, { id: 2 }], gauntletSeasons: [{ id: 3 }] }),
+    );
+    expect(result.current.selectedSeason).toBe(3);
+  });
+
+  test('clamps a regular-season selection to \'all\' once `reg=0` excludes its list', () => {
+    nextNavigationMock.setSearchParams('reg=0&season=1');
+    const { result } = renderHook(() =>
+      useSeasonFilter({ regularSeasons: [{ id: 1 }], gauntletSeasons: [{ id: 2 }] }),
+    );
+    expect(result.current.selectedSeason).toBe('all');
+  });
+
+  test('a selection from the still-included list survives the other flag being off', () => {
+    nextNavigationMock.setSearchParams('gnt=0&season=1');
+    const { result } = renderHook(() =>
+      useSeasonFilter({ regularSeasons: [{ id: 1 }], gauntletSeasons: [{ id: 2 }] }),
+    );
+    expect(result.current.selectedSeason).toBe(1);
   });
 });

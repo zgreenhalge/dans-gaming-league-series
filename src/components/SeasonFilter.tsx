@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { dedupeVisibleSeasons, seasonTitle } from '@/lib/util';
-import { useUrlState, useSetUrlParams } from './useUrlState';
+import { useUrlState } from './useUrlState';
 
 // ─── Checkbox ────────────────────────────────────────────────────────────────
 
@@ -68,49 +68,49 @@ export interface SeasonFilterState {
 /**
  * URL-backed season filter — `reg`/`gnt` (`'0'` = off, omitted = on, the default) and `season`
  * (`'all'`, omitted, or a season id). Shared by every view that filters by season
- * (`CareerStatsView`, `PlayerView`, `MapDetailView`), so `reg`/`gnt` are URL-backed for all of them
- * through this one hook rather than a separate migration per view.
+ * (`CareerStatsView`, `PlayerView`, `MapDetailView`, `MapIndexView`), so `reg`/`gnt` are URL-backed
+ * for all of them through this one hook rather than a separate migration per view.
  *
- * `resetSeasonOnToggle` — an opt-in for call sites (currently `PlayerView`) that want toggling
- * regular/gauntlet to unconditionally reset their own season selection back to "all" in the same
- * navigation. `MapDetailView` doesn't opt in — it relies on `SeasonFilter`'s own effect below, which
- * only resets when the *current* selection actually becomes invalid after the toggle, a more precise
- * correction; that behavior is intentionally different, not something this option should unify away.
- * Toggling `reg`/`gnt` and resetting `season` in the same click must land in one navigation
- * (`useSetUrlParams`, not two separate per-key writes): a second `useUrlState` setter call in the
- * same handler wouldn't see the first one's write yet and would silently drop it — see
- * `useSetUrlParams`'s docstring.
+ * `regularSeasons`/`gauntletSeasons` — a caller's full season lists (unfiltered by `reg`/`gnt`).
+ * When given, `selectedSeason` clamps to `'all'` on every read whenever the raw URL value doesn't
+ * name an id from whichever of these lists this hook's own `includeRegular`/`includeGauntlet` flags
+ * currently have in scope — a pure derive-at-read fallback, the same shape as `resolveTab()`
+ * (`useTabState.ts`). The filtering happens inside the hook (not the caller) specifically so there's
+ * no circular dependency on `includeRegular`/`includeGauntlet` — callers just pass their raw lists.
+ * Toggling `reg`/`gnt` needs no special-casing of `season`: the very next render's include-flags
+ * already reflect the toggle, so a selection that's no longer in scope self-corrects with no effect
+ * and no second navigation.
  */
-export function useSeasonFilter(options?: { resetSeasonOnToggle?: boolean }): SeasonFilterState {
+export function useSeasonFilter(options?: {
+  regularSeasons?: { id: number }[];
+  gauntletSeasons?: { id: number }[];
+}): SeasonFilterState {
   const [regRaw, setRegRaw] = useUrlState<'0' | '1'>('reg', '1');
   const [gntRaw, setGntRaw] = useUrlState<'0' | '1'>('gnt', '1');
   const [seasonRaw, setSeasonRaw] = useUrlState('season', 'all', {
     parse: (raw) => (raw === 'all' || /^\d+$/.test(raw) ? raw : undefined),
   });
-  const setUrlParams = useSetUrlParams();
 
   const includeRegular = regRaw !== '0';
   const includeGauntlet = gntRaw !== '0';
-  const selectedSeason: number | 'all' = seasonRaw === 'all' ? 'all' : Number(seasonRaw);
+  const rawSelectedSeason: number | 'all' = seasonRaw === 'all' ? 'all' : Number(seasonRaw);
 
-  // Shared by `toggleRegular`/`toggleGauntlet` below — same guard (don't allow turning off the last
-  // remaining filter) and the same `resetSeasonOnToggle` branch, differing only in which of `reg`/
-  // `gnt` is being flipped.
-  function toggle(mine: boolean, other: boolean, key: 'reg' | 'gnt', setRaw: (next: '0' | '1') => void) {
-    if (mine && !other) return;
-    if (options?.resetSeasonOnToggle) {
-      setUrlParams({ [key]: mine ? '0' : undefined, season: undefined });
-    } else {
-      setRaw(mine ? '0' : '1');
-    }
-  }
+  const hasValidityInput = options?.regularSeasons !== undefined || options?.gauntletSeasons !== undefined;
+  const inScope =
+    rawSelectedSeason !== 'all' &&
+    ((includeRegular && (options?.regularSeasons ?? []).some((s) => s.id === rawSelectedSeason)) ||
+      (includeGauntlet && (options?.gauntletSeasons ?? []).some((s) => s.id === rawSelectedSeason)));
+  const selectedSeason: number | 'all' =
+    hasValidityInput && rawSelectedSeason !== 'all' && !inScope ? 'all' : rawSelectedSeason;
 
   function toggleRegular() {
-    toggle(includeRegular, includeGauntlet, 'reg', setRegRaw);
+    if (includeRegular && !includeGauntlet) return;
+    setRegRaw(includeRegular ? '0' : '1');
   }
 
   function toggleGauntlet() {
-    toggle(includeGauntlet, includeRegular, 'gnt', setGntRaw);
+    if (includeGauntlet && !includeRegular) return;
+    setGntRaw(includeGauntlet ? '0' : '1');
   }
 
   function setSelectedSeason(s: number | 'all') {
@@ -160,18 +160,6 @@ export function SeasonFilter({
       return true;
     });
   }, [visibleSeasons]);
-
-  // Reset to 'all' if the selected season is no longer visible
-  useEffect(() => {
-    if (
-      selectedSeason !== 'all' &&
-      onSeasonChange &&
-      uniqueSeasons &&
-      !uniqueSeasons.some((s) => s.id === selectedSeason)
-    ) {
-      onSeasonChange('all');
-    }
-  }, [selectedSeason, uniqueSeasons, onSeasonChange]);
 
   return (
     <div className={className}>
