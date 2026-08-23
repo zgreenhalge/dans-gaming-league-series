@@ -623,18 +623,16 @@ export default function PlayerView({
             </div>
           )}
 
-          {weaponKillStats.length > 0 && (
+          {topWeapon && topWeapon.kills > 0 && (
             <>
               <SectionLabel>Weapons</SectionLabel>
               <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-2">
-                {topWeapon && topWeapon.kills > 0 && (
-                  <div className="flex items-baseline justify-between mb-1 pb-2 border-b border-[var(--color-border-tertiary)]">
-                    <span className="tracked text-[9px] text-[var(--color-text-secondary)]">Favorite weapon</span>
-                    <span className="font-mono text-[11px] text-[var(--color-text-primary)] font-semibold">
-                      {topWeapon.weapon} ({topWeapon.kills} kills)
-                    </span>
-                  </div>
-                )}
+                <div className="flex items-baseline justify-between mb-1 pb-2 border-b border-[var(--color-border-tertiary)]">
+                  <span className="tracked text-[9px] text-[var(--color-text-secondary)]">Favorite weapon</span>
+                  <span className="font-mono text-[11px] text-[var(--color-text-primary)] font-semibold">
+                    {topWeapon.weapon} ({topWeapon.kills} kills)
+                  </span>
+                </div>
                 {weaponKillStats
                   .filter((s) => s.kills > 0)
                   .slice(0, 8)

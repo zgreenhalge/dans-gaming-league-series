@@ -1,3 +1,8 @@
+// Generated from the live Supabase schema via `generate_typescript_types`. Checks every query's
+// table/column shape at compile time — regenerate after a migration changes the schema (via the
+// Supabase MCP `generate_typescript_types` tool, or `npx supabase gen types typescript`) rather
+// than hand-editing this file.
+
 export type Json =
   | string
   | number
@@ -1503,7 +1508,12 @@ export type Database = {
         Returns: Json
       }
       schedule_match_reminder: {
-        Args: { p_match_id: number; p_scheduled_at: string }
+        // p_scheduled_at is `string` (no `| null`) in raw `generate_typescript_types` output —
+        // Postgres doesn't track per-parameter nullability for a plpgsql function the way it does
+        // column NOT NULL, so the generator has no signal here; kept as `string | null` by hand
+        // since the function explicitly accepts and branches on a null p_scheduled_at (clearing a
+        // match's schedule), and PATCH /api/matches/[id]/schedule/route.ts passes exactly that.
+        Args: { p_match_id: number; p_scheduled_at: string | null }
         Returns: boolean
       }
     }
