@@ -15,6 +15,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
+import { urlStateWrapper } from '@/lib/test-support/renderWithUrlState';
 import { useSetUrlParams, useUrlState } from './useUrlState';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
@@ -23,29 +24,31 @@ beforeEach(resetNextNavigationMock);
 
 describe('useUrlState', () => {
   test('falls back to defaultValue when the param is missing', () => {
-    const { result } = renderHook(() => useUrlState('tab', 'leaderboard'));
+    const { result } = renderHook(() => useUrlState('tab', 'leaderboard'), { wrapper: urlStateWrapper });
     expect(result.current[0]).toBe('leaderboard');
   });
 
   test('reads the current value from the URL', () => {
     nextNavigationMock.setSearchParams('tab=h2h');
-    const { result } = renderHook(() => useUrlState('tab', 'leaderboard'));
+    const { result } = renderHook(() => useUrlState('tab', 'leaderboard'), { wrapper: urlStateWrapper });
     expect(result.current[0]).toBe('h2h');
   });
 
   test('falls back to defaultValue when `parse` rejects the raw value', () => {
     nextNavigationMock.setSearchParams('season=not-a-number');
-    const { result } = renderHook(() =>
-      useUrlState('season', 'all', {
-        parse: (raw) => (raw === 'all' ? 'all' : (/^\d+$/.test(raw) ? raw : undefined)),
-      }),
+    const { result } = renderHook(
+      () =>
+        useUrlState('season', 'all', {
+          parse: (raw) => (raw === 'all' ? 'all' : (/^\d+$/.test(raw) ? raw : undefined)),
+        }),
+      { wrapper: urlStateWrapper },
     );
     expect(result.current[0]).toBe('all');
   });
 
   test('setValue replaces (not pushes) by default, patching only its own key', () => {
     nextNavigationMock.setSearchParams('other=1');
-    const { result } = renderHook(() => useUrlState<'leaderboard' | 'h2h'>('tab', 'leaderboard'));
+    const { result } = renderHook(() => useUrlState<'leaderboard' | 'h2h'>('tab', 'leaderboard'), { wrapper: urlStateWrapper });
     act(() => result.current[1]('h2h'));
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
@@ -55,7 +58,7 @@ describe('useUrlState', () => {
   });
 
   test('setValue pushes when `push: true` is passed', () => {
-    const { result } = renderHook(() => useUrlState<'leaderboard' | 'h2h'>('tab', 'leaderboard', { push: true }));
+    const { result } = renderHook(() => useUrlState<'leaderboard' | 'h2h'>('tab', 'leaderboard', { push: true }), { wrapper: urlStateWrapper });
     act(() => result.current[1]('h2h'));
 
     expect(nextNavigationMock.pushState).toHaveBeenCalledTimes(1);
@@ -64,7 +67,7 @@ describe('useUrlState', () => {
 
   test('setValue(defaultValue) removes the param instead of writing it', () => {
     nextNavigationMock.setSearchParams('tab=h2h');
-    const { result } = renderHook(() => useUrlState('tab', 'leaderboard'));
+    const { result } = renderHook(() => useUrlState('tab', 'leaderboard'), { wrapper: urlStateWrapper });
     act(() => result.current[1]('leaderboard'));
 
     const href = nextNavigationMock.replaceState.mock.calls[0][2];
@@ -72,7 +75,7 @@ describe('useUrlState', () => {
   });
 
   test("setValue's identity is stable across renders caused by an unrelated URL change", () => {
-    const { result, rerender } = renderHook(() => useUrlState('tab', 'leaderboard'));
+    const { result, rerender } = renderHook(() => useUrlState('tab', 'leaderboard'), { wrapper: urlStateWrapper });
     const first = result.current[1];
 
     nextNavigationMock.setSearchParams('other=1');
@@ -85,7 +88,7 @@ describe('useUrlState', () => {
 describe('useSetUrlParams', () => {
   test('deletes a key when its patch value is undefined', () => {
     nextNavigationMock.setSearchParams('tab=h2h&season=3');
-    const { result } = renderHook(() => useSetUrlParams());
+    const { result } = renderHook(() => useSetUrlParams(), { wrapper: urlStateWrapper });
     act(() => result.current({ season: undefined }));
 
     const href = nextNavigationMock.replaceState.mock.calls[0][2];
@@ -94,7 +97,7 @@ describe('useSetUrlParams', () => {
 
   test('writes multiple keys in a single navigation', () => {
     nextNavigationMock.setSearchParams('filter=3');
-    const { result } = renderHook(() => useSetUrlParams());
+    const { result } = renderHook(() => useSetUrlParams(), { wrapper: urlStateWrapper });
     act(() => result.current({ filter: undefined, reg: '0' }));
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
@@ -103,7 +106,7 @@ describe('useSetUrlParams', () => {
   });
 
   test('pushes when `push: true` is passed', () => {
-    const { result } = renderHook(() => useSetUrlParams());
+    const { result } = renderHook(() => useSetUrlParams(), { wrapper: urlStateWrapper });
     act(() => result.current({ tab: 'h2h' }, { push: true }));
 
     expect(nextNavigationMock.pushState).toHaveBeenCalledTimes(1);
@@ -111,7 +114,7 @@ describe('useSetUrlParams', () => {
   });
 
   test('identity is stable across renders caused by an unrelated URL change', () => {
-    const { result, rerender } = renderHook(() => useSetUrlParams());
+    const { result, rerender } = renderHook(() => useSetUrlParams(), { wrapper: urlStateWrapper });
     const first = result.current;
 
     nextNavigationMock.setSearchParams('other=1');
