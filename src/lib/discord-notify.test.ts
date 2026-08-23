@@ -394,7 +394,7 @@ async function main() {
     assert.equal(calls.length, 0);
   });
 
-  await test('notifyMatchReminder: posts a new "starting in 1 hour" message for an unplayed, imminently-scheduled match', async () => {
+  await test('notifyMatchReminder: posts a new "starting in <time until match>" message for an unplayed, imminently-scheduled match', async () => {
     process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
     resetDiscordState(101);
     setScheduledAt(101, new Date(Date.now() + 55 * 60 * 1000).toISOString());
@@ -407,7 +407,7 @@ async function main() {
     const embed = calls[0].body.embeds[0];
     assert.equal(embed.title, 'Week 1 · Match 2');
     assert.equal(embed.color, 0xfee75c, 'the reminder color is distinct from the other three notification kinds');
-    assert.match(embed.description, /Starting in 1 hour/);
+    assert.match(embed.description, /Starting in 5[45]m/, 'the actual time until the match, not a static "1 hour"');
     assert.equal(embed.fields, undefined, 'no box score — the match hasn\'t been played yet');
     assert.ok(discordState(101)?.reminder_sent_at, 'reminder_sent_at is claimed once posted');
     assert.equal(discordState(101)?.notification_message_id, undefined, 'a separate message lineage — does not touch notification_message_id');

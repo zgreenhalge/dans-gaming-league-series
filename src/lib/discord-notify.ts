@@ -49,6 +49,7 @@ import type { LiveScoreRow } from './demo/liveScore';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { SITE_URL } from './seo/site';
 import { discordErrorDetail } from './discord-threads';
+import { formatDuration } from './util';
 
 type MatchMeta = NonNullable<Awaited<ReturnType<typeof getMatchMeta>>>;
 
@@ -397,7 +398,7 @@ export async function notifyMatchReminder(supabaseAdmin: SupabaseClient, matchId
   if (!claimed || claimed.length === 0) return; // Already sent, or lost the race to a concurrent call.
 
   const { content, embed } = buildMatchMessage(matchId, meta, {
-    statusLine: `⏰ **Starting in 1 hour**${meta.scheduledAt ? `\n${meta.scheduledAt}` : ''}`,
+    statusLine: `⏰ **Starting in ${formatDuration(msUntilMatch)}**${meta.scheduledAt ? `\n${meta.scheduledAt}` : ''}`,
     color: COLOR_REMINDER,
   });
   await postNewEmbed(supabaseAdmin, matchId, OPERATION_REMINDER, webhookUrl, content, embed);
