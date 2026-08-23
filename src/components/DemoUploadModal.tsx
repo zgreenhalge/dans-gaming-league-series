@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import SabremetricsTable from '@/components/SabremetricsTable';
 import { useHasMounted } from './useHasMounted';
 import Modal from './Modal';
-import type { SabFields, RoundHistoryEntry, DemoWeaponStat } from '@/lib/types';
+import type { SabFields, RoundHistoryEntry, DemoWeaponStat, DemoMatchKill, DemoMatchRound } from '@/lib/types';
 type Faction = 'CT' | 'T' | null;
 
 interface MatchPlayer {
@@ -39,6 +39,8 @@ interface ParsedResult {
   warnings: string[];
   sabremetrics?: SabremetricStat[];
   weaponStats?: DemoWeaponStat[];
+  matchKills?: DemoMatchKill[];
+  matchRounds?: DemoMatchRound[];
   round_history?: RoundHistoryEntry[] | null;
 }
 
@@ -317,6 +319,8 @@ export default function DemoUploadModal({
           player_stats,
           sabremetrics: parsed.sabremetrics,
           weaponStats: parsed.weaponStats,
+          matchKills: parsed.matchKills,
+          matchRounds: parsed.matchRounds,
           round_history: parsed.round_history ?? null,
           // Forward warnings so the score route can learn steam ids from elimination matches.
           warnings: parsed.warnings,

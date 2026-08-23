@@ -1,9 +1,10 @@
-// Generated from the live Supabase schema via `generate_typescript_types`. Checks every query's
-// table/column shape at compile time — regenerate after a migration changes the schema (via the
-// Supabase MCP `generate_typescript_types` tool, or `npx supabase gen types typescript`) rather
-// than hand-editing this file.
-
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
@@ -377,6 +378,109 @@ export type Database = {
             foreignKeyName: "match_discord_state_match_id_fkey"
             columns: ["match_id"]
             isOneToOne: true
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_kills: {
+        Row: {
+          assister_player_match_stats_id: number | null
+          attacker_player_match_stats_id: number | null
+          headshot: boolean
+          id: number
+          is_teamkill: boolean
+          match_id: number
+          round_number: number
+          tick: number
+          victim_player_match_stats_id: number
+          weapon: string
+        }
+        Insert: {
+          assister_player_match_stats_id?: number | null
+          attacker_player_match_stats_id?: number | null
+          headshot?: boolean
+          id?: never
+          is_teamkill?: boolean
+          match_id: number
+          round_number: number
+          tick: number
+          victim_player_match_stats_id: number
+          weapon: string
+        }
+        Update: {
+          assister_player_match_stats_id?: number | null
+          attacker_player_match_stats_id?: number | null
+          headshot?: boolean
+          id?: never
+          is_teamkill?: boolean
+          match_id?: number
+          round_number?: number
+          tick?: number
+          victim_player_match_stats_id?: number
+          weapon?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_kills_assister_fkey"
+            columns: ["assister_player_match_stats_id"]
+            isOneToOne: false
+            referencedRelation: "player_match_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_kills_attacker_fkey"
+            columns: ["attacker_player_match_stats_id"]
+            isOneToOne: false
+            referencedRelation: "player_match_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_kills_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_kills_victim_fkey"
+            columns: ["victim_player_match_stats_id"]
+            isOneToOne: false
+            referencedRelation: "player_match_stats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_rounds: {
+        Row: {
+          id: number
+          match_id: number
+          round_number: number
+          shirts_side: string
+          win_reason: string | null
+          winner_side: string
+        }
+        Insert: {
+          id?: never
+          match_id: number
+          round_number: number
+          shirts_side: string
+          win_reason?: string | null
+          winner_side: string
+        }
+        Update: {
+          id?: never
+          match_id?: number
+          round_number?: number
+          shirts_side?: string
+          win_reason?: string | null
+          winner_side?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_rounds_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
             referencedRelation: "matches"
             referencedColumns: ["id"]
           },
@@ -1361,6 +1465,25 @@ export type Database = {
       }
     }
     Functions: {
+      clear_season_schedule_draft: {
+        Args: { p_season_id: number }
+        Returns: undefined
+      }
+      confirm_season_schedule_draft:
+        | { Args: { p_season_id: number }; Returns: Json }
+        | { Args: { p_season_id: number; p_weeks: Json }; Returns: Json }
+      delete_season_schedule_draft: {
+        Args: { p_season_id: number }
+        Returns: Json
+      }
+      generate_season_schedule_draft: {
+        Args: { p_season_id: number; p_weeks: Json }
+        Returns: Json
+      }
+      lock_and_check_season_materialized: {
+        Args: { p_season_id: number }
+        Returns: boolean
+      }
       reconcile_gauntlet_draft: {
         Args: {
           p_delete_pod_ids: number[]
@@ -1371,19 +1494,16 @@ export type Database = {
         }
         Returns: Json
       }
+      rollback_season_schedule_draft: {
+        Args: { p_season_id: number }
+        Returns: Json
+      }
+      save_season_schedule_draft: {
+        Args: { p_season_id: number; p_weeks: Json }
+        Returns: Json
+      }
       schedule_match_reminder: {
-        // p_scheduled_at is `string` (no `| null`) in raw `generate_typescript_types` output —
-        // Postgres doesn't track per-parameter nullability for a plpgsql function the way it does
-        // column NOT NULL, so the generator has no signal here; kept as `string | null` by hand
-        // since the function explicitly accepts and branches on a null p_scheduled_at (clearing a
-        // match's schedule), and PATCH /api/matches/[id]/schedule/route.ts passes exactly that.
-        Args: {
-          p_match_id: number
-          p_scheduled_at: string | null
-        }
-        // true = fully scheduled (or intentionally unscheduled); false = the function's
-        // unconditional cleanup ran but scheduling itself stopped early (e.g. a missing Vault
-        // secret, which it records to ops_errors itself) — see the migration for detail.
+        Args: { p_match_id: number; p_scheduled_at: string }
         Returns: boolean
       }
     }

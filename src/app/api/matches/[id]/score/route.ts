@@ -6,7 +6,7 @@ import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifec
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { writeMatchScore } from '@/lib/matchScore';
 import { isVetoComplete, type VetoFields } from '@/lib/veto';
-import type { DemoSabremetricStat, DemoWeaponStat } from '@/lib/types';
+import type { DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound } from '@/lib/types';
 import { after, afterBestEffort } from '@/lib/after';
 
 type MatchRow = {
@@ -94,12 +94,14 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
-  const { shirts, skins, player_stats, sabremetrics, weaponStats, round_history, warnings } = body as {
+  const { shirts, skins, player_stats, sabremetrics, weaponStats, matchKills, matchRounds, round_history, warnings } = body as {
     shirts: unknown;
     skins: unknown;
     player_stats: unknown;
     sabremetrics?: DemoSabremetricStat[];
     weaponStats?: DemoWeaponStat[];
+    matchKills?: DemoMatchKill[];
+    matchRounds?: DemoMatchRound[];
     round_history?: unknown;
     warnings?: unknown; // parser warnings forwarded from the confirm — used to learn steam ids
   };
@@ -113,6 +115,8 @@ export async function PATCH(
       player_stats,
       sabremetrics,
       weaponStats,
+      matchKills,
+      matchRounds,
       round_history,
       warnings: Array.isArray(warnings) ? (warnings as string[]) : undefined,
     },

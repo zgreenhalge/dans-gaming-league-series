@@ -86,6 +86,8 @@ export async function POST(
     ...result,
     sabremetrics: sabremetricsResult.sabremetrics,
     weaponStats: sabremetricsResult.weaponStats,
+    matchKills: sabremetricsResult.matchKills,
+    matchRounds: sabremetricsResult.matchRounds,
     warnings: [...new Set([...result.warnings, ...sabremetricsResult.warnings])],
   });
 }
