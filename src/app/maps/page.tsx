@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { TopbarShell } from '@/components/TopbarShell';
 import { getMapIndex } from '@/lib/queries';
 import MapIndexView from '@/components/MapIndexView';
+import { UrlStateProvider } from '@/components/UrlStateProvider';
 
 export const revalidate = 60;
 export const metadata = {
@@ -29,7 +30,9 @@ export default async function MapsPage() {
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">No maps found.</div>
         ) : (
           <Suspense>
-            <MapIndexView maps={maps} />
+            <UrlStateProvider>
+              <MapIndexView maps={maps} />
+            </UrlStateProvider>
           </Suspense>
         )}
       </main>

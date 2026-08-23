@@ -8,6 +8,7 @@ import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
 import { extractSeasonNumber } from '@/lib/util';
 import MapDetailView from '@/components/MapDetailView';
+import { UrlStateProvider } from '@/components/UrlStateProvider';
 
 export const revalidate = 60;
 
@@ -165,7 +166,9 @@ export default async function MapPage({
 
       <main className="max-w-[1080px] mx-auto px-6 pb-16 mt-8">
         <Suspense>
-          <MapDetailView detail={detail} players={players} />
+          <UrlStateProvider>
+            <MapDetailView detail={detail} players={players} />
+          </UrlStateProvider>
         </Suspense>
       </main>
     </div>

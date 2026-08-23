@@ -23,6 +23,7 @@ import {
 import { computeH2H, scheduleToH2HInput, gauntletRoundsToH2HInput } from '@/lib/h2h';
 import SeasonTabView from '@/components/SeasonTabView';
 import CombinedSeasonTabView from '@/components/CombinedSeasonTabView';
+import { UrlStateProvider } from '@/components/UrlStateProvider';
 import type { Season } from '@/lib/types';
 import SeasonStartDateButton from '@/components/SeasonStartDateButton';
 import MarkSeasonActiveButton from '@/components/MarkSeasonActiveButton';
@@ -201,17 +202,19 @@ export default async function SeasonPage({
             </div>
           </div>
           <Suspense>
-            <SeasonTabView
-              kind="gauntlet"
-              rounds={rounds}
-              bracketShape={bracketShape}
-              leaderboard={leaderboard}
-              seasonStatus={season.status}
-              currentPlayerId={currentPlayerId}
-              h2hData={h2hData}
-              ehogRatings={ehogRatings}
-              sabremetrics={sabremetrics}
-            />
+            <UrlStateProvider>
+              <SeasonTabView
+                kind="gauntlet"
+                rounds={rounds}
+                bracketShape={bracketShape}
+                leaderboard={leaderboard}
+                seasonStatus={season.status}
+                currentPlayerId={currentPlayerId}
+                h2hData={h2hData}
+                ehogRatings={ehogRatings}
+                sabremetrics={sabremetrics}
+              />
+            </UrlStateProvider>
           </Suspense>
         </main>
       </div>
@@ -304,47 +307,49 @@ export default async function SeasonPage({
           </div>
         )}
         <Suspense>
-          {linkedGauntlet &&
-          gauntletRounds &&
-          gauntletBracketShape &&
-          gauntletLeaderboard &&
-          gauntletH2hData &&
-          // The Gauntlet tab is only worth showing once there's something to see in it — a paired
-          // gauntlet season row can exist with no bracket shape yet (manual shell) and no rounds
-          // (unseeded), in which case it's indistinguishable from having no gauntlet at all.
-          (gauntletBracketShape.length > 0 || gauntletRounds.length > 0) ? (
-            <CombinedSeasonTabView
-              leaderboard={leaderboard}
-              schedule={schedule}
-              seasonStartDate={season.start_date}
-              seasonStatus={season.status}
-              mapPool={season.map_pool}
-              gauntletRounds={gauntletRounds}
-              gauntletBracketShape={gauntletBracketShape}
-              gauntletLeaderboard={gauntletLeaderboard}
-              gauntletStatus={linkedGauntlet.status}
-              currentPlayerId={currentPlayerId}
-              h2hData={h2hData}
-              gauntletH2hData={gauntletH2hData}
-              ehogRatings={ehogRatings}
-              gauntletEhogRatings={gauntletEhogRatings ?? undefined}
-              sabremetrics={sabremetrics}
-              gauntletSabremetrics={gauntletSabremetrics}
-            />
-          ) : (
-            <SeasonTabView
-              kind="regular"
-              leaderboard={leaderboard}
-              schedule={schedule}
-              seasonStartDate={season.start_date}
-              seasonStatus={season.status}
-              mapPool={season.map_pool}
-              currentPlayerId={currentPlayerId}
-              h2hData={h2hData}
-              ehogRatings={ehogRatings}
-              sabremetrics={sabremetrics}
-            />
-          )}
+          <UrlStateProvider>
+            {linkedGauntlet &&
+            gauntletRounds &&
+            gauntletBracketShape &&
+            gauntletLeaderboard &&
+            gauntletH2hData &&
+            // The Gauntlet tab is only worth showing once there's something to see in it — a paired
+            // gauntlet season row can exist with no bracket shape yet (manual shell) and no rounds
+            // (unseeded), in which case it's indistinguishable from having no gauntlet at all.
+            (gauntletBracketShape.length > 0 || gauntletRounds.length > 0) ? (
+              <CombinedSeasonTabView
+                leaderboard={leaderboard}
+                schedule={schedule}
+                seasonStartDate={season.start_date}
+                seasonStatus={season.status}
+                mapPool={season.map_pool}
+                gauntletRounds={gauntletRounds}
+                gauntletBracketShape={gauntletBracketShape}
+                gauntletLeaderboard={gauntletLeaderboard}
+                gauntletStatus={linkedGauntlet.status}
+                currentPlayerId={currentPlayerId}
+                h2hData={h2hData}
+                gauntletH2hData={gauntletH2hData}
+                ehogRatings={ehogRatings}
+                gauntletEhogRatings={gauntletEhogRatings ?? undefined}
+                sabremetrics={sabremetrics}
+                gauntletSabremetrics={gauntletSabremetrics}
+              />
+            ) : (
+              <SeasonTabView
+                kind="regular"
+                leaderboard={leaderboard}
+                schedule={schedule}
+                seasonStartDate={season.start_date}
+                seasonStatus={season.status}
+                mapPool={season.map_pool}
+                currentPlayerId={currentPlayerId}
+                h2hData={h2hData}
+                ehogRatings={ehogRatings}
+                sabremetrics={sabremetrics}
+              />
+            )}
+          </UrlStateProvider>
         </Suspense>
       </main>
     </div>
