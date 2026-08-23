@@ -10,7 +10,7 @@ import { useH2HPairUrlState } from './useH2HPairUrlState';
 import { useLiveH2HData } from './useLiveH2HData';
 import TabBar from './TabBar';
 import { BasicStatsView } from './BasicStatsView';
-import { tabCls, canonicalSort, deriveRates } from '@/lib/util';
+import { tabCls, canonicalSort, deriveRates, splitSeasonsByGauntlet } from '@/lib/util';
 import type { MapMatchRow, MapDetail, MapPlayerStat } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import H2HSection from './H2HSection';
@@ -124,10 +124,7 @@ export default function MapDetailView({
 
   // Split for `useSeasonFilter`'s validity check below — it needs regular/gauntlet apart, not the
   // single flagged list `SeasonFilter`'s own dropdown takes.
-  const { regularSeasons, gauntletSeasons } = useMemo(() => ({
-    regularSeasons: uniqueSeasons.filter((s) => !s.is_gauntlet),
-    gauntletSeasons: uniqueSeasons.filter((s) => s.is_gauntlet),
-  }), [uniqueSeasons]);
+  const { regularSeasons, gauntletSeasons } = useMemo(() => splitSeasonsByGauntlet(uniqueSeasons), [uniqueSeasons]);
 
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
   const [tab, setTab] = useTabState(MAP_TABS, 'leaderboard');

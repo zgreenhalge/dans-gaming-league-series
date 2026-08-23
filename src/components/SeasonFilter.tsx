@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { dedupeVisibleSeasons, seasonTitle } from '@/lib/util';
+import { dedupeVisibleSeasons, seasonTitle, seasonsInScope } from '@/lib/util';
 import { useUrlState } from './useUrlState';
 
 // ─── Checkbox ────────────────────────────────────────────────────────────────
@@ -73,10 +73,8 @@ export interface SeasonFilterState {
  *
  * `regularSeasons`/`gauntletSeasons` — a caller's full season lists (unfiltered by `reg`/`gnt`).
  * When given, `selectedSeason` clamps to `'all'` on every read whenever the raw URL value doesn't
- * name an id from whichever of these lists this hook's own `includeRegular`/`includeGauntlet` flags
- * currently have in scope — a pure derive-at-read fallback, the same shape as `resolveTab()`
- * (`useTabState.ts`). The filtering happens inside the hook (not the caller) specifically so there's
- * no circular dependency on `includeRegular`/`includeGauntlet` — callers just pass their raw lists.
+ * name an id currently `seasonsInScope()` of this hook's own `includeRegular`/`includeGauntlet`
+ * flags — a pure derive-at-read fallback, the same shape as `resolveTab()` (`useTabState.ts`).
  * Toggling `reg`/`gnt` needs no special-casing of `season`: the very next render's include-flags
  * already reflect the toggle, so a selection that's no longer in scope self-corrects with no effect
  * and no second navigation.
@@ -95,13 +93,11 @@ export function useSeasonFilter(options?: {
   const includeGauntlet = gntRaw !== '0';
   const rawSelectedSeason: number | 'all' = seasonRaw === 'all' ? 'all' : Number(seasonRaw);
 
-  const hasValidityInput = options?.regularSeasons !== undefined || options?.gauntletSeasons !== undefined;
-  const inScope =
-    rawSelectedSeason !== 'all' &&
-    ((includeRegular && (options?.regularSeasons ?? []).some((s) => s.id === rawSelectedSeason)) ||
-      (includeGauntlet && (options?.gauntletSeasons ?? []).some((s) => s.id === rawSelectedSeason)));
+  const inScope = seasonsInScope(options?.regularSeasons ?? [], options?.gauntletSeasons ?? [], includeRegular, includeGauntlet);
   const selectedSeason: number | 'all' =
-    hasValidityInput && rawSelectedSeason !== 'all' && !inScope ? 'all' : rawSelectedSeason;
+    options && rawSelectedSeason !== 'all' && !inScope.some((s) => s.id === rawSelectedSeason)
+      ? 'all'
+      : rawSelectedSeason;
 
   function toggleRegular() {
     if (includeRegular && !includeGauntlet) return;

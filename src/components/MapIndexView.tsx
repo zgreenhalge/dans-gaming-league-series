@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
-import { extractSeasonNumber, tabCls } from '@/lib/util';
+import { extractSeasonNumber, tabCls, splitSeasonsByGauntlet } from '@/lib/util';
 import { aggregateMapIndexStats } from '@/lib/mapSideStats';
 import { useSeasonFilter, SeasonFilter } from './SeasonFilter';
 import TabBar from './TabBar';
@@ -40,10 +40,7 @@ export default function MapIndexView({ maps }: { maps: MapIndexEntry[] }) {
 
   // Split for `useSeasonFilter`'s validity check below — it needs regular/gauntlet apart, not the
   // single flagged list `SeasonFilter`'s own dropdown takes.
-  const { regularSeasons, gauntletSeasons } = useMemo(() => ({
-    regularSeasons: allSeasons.filter((s) => !s.is_gauntlet),
-    gauntletSeasons: allSeasons.filter((s) => s.is_gauntlet),
-  }), [allSeasons]);
+  const { regularSeasons, gauntletSeasons } = useMemo(() => splitSeasonsByGauntlet(allSeasons), [allSeasons]);
 
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
 

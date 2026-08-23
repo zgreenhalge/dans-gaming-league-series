@@ -232,6 +232,26 @@ export function buildRegularToGauntletMap(
 }
 
 /**
+ * Concatenates whichever of `regularSeasons`/`gauntletSeasons` the include flags currently admit —
+ * the "which seasons are in scope" rule shared by `dedupeVisibleSeasons()` below and
+ * `useSeasonFilter()`'s own season-validity clamp (`SeasonFilter.tsx`). Kept undeduplicated (unlike
+ * `dedupeVisibleSeasons()`) so a caller checking *membership* of a specific id isn't tripped up by
+ * `dedupeVisibleSeasons()`'s title-based dedup silently dropping the second of a same-titled
+ * regular+gauntlet pair.
+ */
+export function seasonsInScope<T>(
+  regularSeasons: T[],
+  gauntletSeasons: T[],
+  includeRegular: boolean,
+  includeGauntlet: boolean,
+): T[] {
+  return [
+    ...(includeRegular ? regularSeasons : []),
+    ...(includeGauntlet ? gauntletSeasons : []),
+  ];
+}
+
+/**
  * Regular and/or gauntlet seasons (gated by the include flags), deduplicated by `seasonTitle()` so a
  * regular+gauntlet pair sharing the same season number appears once — the season list a "Career"
  * season-select offers.
@@ -243,16 +263,27 @@ export function dedupeVisibleSeasons(
   includeGauntlet: boolean,
 ): { id: number; name: string }[] {
   const seen = new Set<string>();
-  const all = [
-    ...(includeRegular ? regularSeasons : []),
-    ...(includeGauntlet ? gauntletSeasons : []),
-  ];
-  return all.filter((s) => {
+  return seasonsInScope(regularSeasons, gauntletSeasons, includeRegular, includeGauntlet).filter((s) => {
     const title = seasonTitle(s.name);
     if (seen.has(title)) return false;
     seen.add(title);
     return true;
   });
+}
+
+/**
+ * Splits a flat season list into `regularSeasons`/`gauntletSeasons` by `is_gauntlet` — the shape
+ * `useSeasonFilter()`'s season-validity option takes, for callers (`MapDetailView`, `MapIndexView`)
+ * that only have a single flagged list rather than already-split ones (`PlayerView`,
+ * `CareerStatsView` build theirs directly from per-season source rows instead).
+ */
+export function splitSeasonsByGauntlet<T extends { is_gauntlet: boolean }>(
+  seasons: T[],
+): { regularSeasons: T[]; gauntletSeasons: T[] } {
+  return {
+    regularSeasons: seasons.filter((s) => !s.is_gauntlet),
+    gauntletSeasons: seasons.filter((s) => s.is_gauntlet),
+  };
 }
 
 /**
