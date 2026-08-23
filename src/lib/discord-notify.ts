@@ -1,14 +1,18 @@
 // Best-effort Discord webhook notifications for #match-notifications (#395). Every export here is
-// safe to call unconditionally — a missing DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL or a webhook
-// failure never throws, matching the rest of this codebase's best-effort hooks (ops-errors.ts,
-// afterBestEffort()). A real failure (the webhook itself
-// erroring, not just being unconfigured) is recorded to ops_errors — entity 'match', operation
+// safe to call unconditionally — a missing DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL never throws, and
+// neither does a real failure, matching the rest of this codebase's best-effort hooks (ops-errors.ts,
+// afterBestEffort()). A real failure — the webhook itself erroring, or `fetchMatchMeta()` below
+// failing to even load the match data a message is built from — is recorded to ops_errors — entity
+// 'match', operation
 // 'discord_notify_server_live'/'discord_notify_live_score'/'discord_notify_score'/'discord_notify_reminder'
 // — so it's visible in the admin console's Activity feed instead of only a Vercel function log
 // nobody's tailing; cleared automatically the next notification of that same kind that succeeds.
 // Each notification kind uses a distinct operation key (not a shared 'discord_notify') so one kind's
 // failure can't clear another's still-live one — see ops-errors.ts's own docstring on why `operation`
-// is part of the key.
+// is part of the key. `fetchMatchMeta()` deliberately shares its caller's operation key rather than
+// getting its own — an unexpected metadata-fetch failure and a webhook failure are both just "this
+// notification kind didn't go out for this match," and the next successful post/edit for that kind
+// clears whichever one was live.
 //
 // All four are built from `getMatchMeta()` (seo/og.ts) — the same data the site's own link-preview
 // OG card and meta description use when a match URL is unfurled — rather than re-deriving the
@@ -273,6 +277,22 @@ async function rememberNotificationMessage(supabaseAdmin: SupabaseClient, matchI
   }
 }
 
+/** Wraps `getMatchMeta()` so an unexpected failure (a thrown Postgres error, a client that can't
+ *  construct — see this file's header on why one's threaded through explicitly) is recorded to
+ *  ops_errors under the caller's own operation key, same as a webhook failure below, instead of
+ *  silently collapsing into the same `null` `getMatchMeta()` already returns for its own legitimate
+ *  "match not found" case. Every caller already no-ops on a `null` return, so this keeps that
+ *  contract — the only change is that an unexpected failure now leaves a trail instead of vanishing
+ *  without one. */
+async function fetchMatchMeta(supabaseAdmin: SupabaseClient, matchId: number, operation: string): Promise<MatchMeta | null> {
+  try {
+    return await getMatchMeta(matchId, supabaseAdmin);
+  } catch (e) {
+    await recordOpsError(supabaseAdmin, 'match', matchId, operation, `Failed to load match data: ${(e as Error).message}`);
+    return null;
+  }
+}
+
 /** Posted once a match's server transitions to `live` (provisionMatchServer()) — or, if
  *  `notifyMatchReminder()` already posted this match's reminder, edited into that message in place
  *  rather than posting a second one, the same reuse `notifyMatchScoreReported()` does below. Connect
@@ -282,7 +302,7 @@ export async function notifyMatchServerLive(supabaseAdmin: SupabaseClient, match
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.
 
   const [meta, existingMessageId] = await Promise.all([
-    getMatchMeta(matchId, supabaseAdmin).catch(() => null),
+    fetchMatchMeta(supabaseAdmin, matchId, OPERATION_SERVER_LIVE),
     getStoredMessageId(supabaseAdmin, matchId),
   ]);
   if (!meta) return;
@@ -321,7 +341,7 @@ export async function notifyMatchLiveScore(
   const existingMessageId = await getStoredMessageId(supabaseAdmin, matchId);
   if (!existingMessageId) return;
 
-  const meta = await getMatchMeta(matchId, supabaseAdmin).catch(() => null);
+  const meta = await fetchMatchMeta(supabaseAdmin, matchId, OPERATION_LIVE_SCORE);
   if (!meta) return;
   if (meta.score) return; // Already scored — a late round_end must not overwrite the final result.
 
@@ -347,8 +367,13 @@ export async function notifyMatchScoreReported(supabaseAdmin: SupabaseClient, ma
   if (!webhookUrl) return; // Not configured — skip before doing any DB work.
 
   const [meta, boxScore, existingMessageId] = await Promise.all([
-    getMatchMeta(matchId, supabaseAdmin).catch(() => null),
-    getMatchBoxScore(matchId, supabaseAdmin).catch(() => null),
+    fetchMatchMeta(supabaseAdmin, matchId, OPERATION_SCORE),
+    getMatchBoxScore(matchId, supabaseAdmin).catch((e) => {
+      // Non-fatal: the score itself still posts/edits without a box score table, same as a
+      // genuinely empty one — but a real failure here shouldn't vanish without a trace either.
+      console.error(`getMatchBoxScore(${matchId}) failed (non-fatal — posting without a box score):`, e);
+      return null;
+    }),
     getStoredMessageId(supabaseAdmin, matchId),
   ]);
   if (!meta || !meta.score) return;
@@ -393,7 +418,7 @@ export async function notifyMatchReminder(supabaseAdmin: SupabaseClient, matchId
   // matches pre-check, since the eligibility window rarely excludes anything in practice (the
   // pg_cron job that calls this already computed the right fire time; only a reschedule in the gap
   // makes it miss) and a pre-check would just add a redundant round trip to the common case.
-  const meta = await getMatchMeta(matchId, supabaseAdmin).catch(() => null);
+  const meta = await fetchMatchMeta(supabaseAdmin, matchId, OPERATION_REMINDER);
   if (!meta) return;
   if (!meta.scheduledAtRaw) return; // Unscheduled since the job was queued.
   if (meta.score) return; // Already played.
