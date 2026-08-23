@@ -3,9 +3,10 @@
  * Component tests for `PlayerView.tsx`'s URL state: the tab bar reads from/writes to `tab`, the
  * matches sub-tab reads from/writes to `msub` (falling back to "history" when there's nothing
  * upcoming under the current filter, without rewriting the URL), and the season filter — via the
- * now URL-backed `useSeasonFilter()` — reads from/writes to `reg`/`gnt`/`season`, resetting `season`
- * atomically when regular/gauntlet is toggled (this page opts into that reset; `MapDetailView`
- * doesn't).
+ * now URL-backed `useSeasonFilter()` — reads from/writes to `reg`/`gnt`/`season`. Toggling
+ * regular/gauntlet writes only its own key; a `season` selection that's no longer valid under the
+ * new include-flags self-corrects to "Career" at read time (`useSeasonFilter`'s
+ * `regularSeasons`/`gauntletSeasons` clamp), with no write-back to the URL.
  *
  * Run:  npx vitest run src/components/PlayerView.test.tsx
  */
@@ -138,7 +139,7 @@ describe('PlayerView — season filter', () => {
     expect(screen.getByText('Career stats')).toBeInTheDocument();
   });
 
-  test('toggling regular/gauntlet atomically resets `season`, in one navigation', async () => {
+  test('toggling regular/gauntlet writes only `reg`/`gnt`, in one navigation, leaving `season` in the URL', async () => {
     // The Checkbox component's role="checkbox" span has no accessible name of its own (a
     // pre-existing gap, not introduced here) — its label text is a separate sibling with its own
     // onClick, so click that directly instead of querying by role.
@@ -148,6 +149,18 @@ describe('PlayerView — season filter', () => {
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
     expect(nextNavigationMock.pushState).not.toHaveBeenCalled();
-    expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/players/1?tab=stats&reg=0');
+    // `season=1` is left in place — a stale value there self-corrects at read time on the next
+    // render (via `useSeasonFilter`'s `regularSeasons` clamp) instead of being written back out.
+    expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/players/1?tab=stats&season=1&reg=0');
+  });
+
+  test('a `season` id no longer valid under the current include-flags falls back to "Career" without rewriting the URL', () => {
+    // `season=1` names a regular season, but `reg=0` excludes regular seasons — the selection
+    // should read as "Career" on this very render, not just after a follow-up navigation.
+    nextNavigationMock.setSearchParams('reg=0&season=1');
+    render(<PlayerView {...baseProps()} />);
+    expect(screen.getByText('Career stats')).toBeInTheDocument();
+    expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
+    expect(nextNavigationMock.pushState).not.toHaveBeenCalled();
   });
 });

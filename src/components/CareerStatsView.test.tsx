@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 /**
  * Component tests for `CareerStatsView.tsx`'s URL state: the tab bar reads from/writes to `tab`
- * (all four tabs, not just `h2h`), the season filter — via `useSeasonFilter({ resetSeasonOnToggle:
- * true })` — reads from/writes to `reg`/`gnt`/`season` and atomically resets `season` on a
- * regular/gauntlet toggle, and the H2H pair reads from and writes back to `a`/`b`/`type`.
+ * (all four tabs, not just `h2h`), the season filter — via `useSeasonFilter({ regularSeasons,
+ * gauntletSeasons })` — reads from/writes to `reg`/`gnt`/`season`, self-correcting a `season`
+ * selection that's no longer valid under the current include-flags at read time rather than writing
+ * it back out, and the H2H pair reads from and writes back to `a`/`b`/`type`.
  *
  * Run:  npx vitest run src/components/CareerStatsView.test.tsx
  */
@@ -64,14 +65,25 @@ describe('CareerStatsView — tab state', () => {
 });
 
 describe('CareerStatsView — season filter', () => {
-  test('toggling regular/gauntlet atomically resets `season`, in one navigation', async () => {
+  test('toggling regular/gauntlet writes only `reg`/`gnt`, in one navigation, leaving `season` in the URL', async () => {
     nextNavigationMock.setSearchParams('tab=leaderboard&season=1');
     render(<CareerStatsView {...baseProps()} />);
     await userEvent.click(screen.getByText('Regular Season'));
 
     expect(nextNavigationMock.replaceState).toHaveBeenCalledTimes(1);
     expect(nextNavigationMock.pushState).not.toHaveBeenCalled();
-    expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/statistics?tab=leaderboard&reg=0');
+    // `season=1` is left in place — a stale value there self-corrects at read time on the next
+    // render (via `useSeasonFilter`'s `regularSeasons` clamp) instead of being written back out.
+    expect(nextNavigationMock.replaceState.mock.calls[0][2]).toBe('/statistics?tab=leaderboard&season=1&reg=0');
+  });
+
+  test('a `season` id no longer valid under the current include-flags falls back to "Career" without rewriting the URL', () => {
+    // `season=1` names a regular season, but `reg=0` excludes regular seasons.
+    nextNavigationMock.setSearchParams('tab=leaderboard&reg=0&season=1');
+    render(<CareerStatsView {...baseProps()} />);
+    expect(screen.getByRole('combobox')).toHaveValue('all');
+    expect(nextNavigationMock.replaceState).not.toHaveBeenCalled();
+    expect(nextNavigationMock.pushState).not.toHaveBeenCalled();
   });
 });
 
