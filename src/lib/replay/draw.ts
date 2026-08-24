@@ -43,6 +43,17 @@ export interface Ctx2D {
 /** Anything Canvas2D can `drawImage` (DOM HTMLImageElement, napi-rs Image, …). */
 export type DrawableImage = unknown;
 
+/** A loaded icon, plus its natural pixel size — every icon in `public/{weapon,grenade,
+ *  round}-icons/` is a landscape (or square) silhouette at a fixed source height with varying
+ *  width, so drawing at a fixed size in both dimensions would squash it. Callers fit to one
+ *  target dimension (usually height) and derive the other from `width / height` themselves;
+ *  `draw.ts` stays agnostic to *how* a renderer decoded the image, only its resulting size. */
+export interface IconSprite {
+  image: DrawableImage;
+  width: number;
+  height: number;
+}
+
 export interface ReplayTheme {
   bg: string;
   grid: string;
@@ -91,7 +102,7 @@ export interface DrawSceneArgs {
    *  renderer with no synchronous image cache to offer (e.g. a future non-browser Action), which
    *  gets the same fallback rendering unconditionally. See `useIconSprites` for why this can't
    *  just be a file path drawImage() reads directly. */
-  getIconSprite?: (src: string, color: string) => DrawableImage | null;
+  getIconSprite?: (src: string, color: string) => IconSprite | null;
 }
 
 const TWO_PI = Math.PI * 2;
@@ -300,14 +311,15 @@ function drawC4(
   tick: number,
   tickRate: number,
   opts: { blink: boolean; alpha?: number; half?: number } = { blink: true },
-  getIconSprite?: (src: string, color: string) => DrawableImage | null,
+  getIconSprite?: (src: string, color: string) => IconSprite | null,
 ): void {
   const s = opts.half ?? 5;
   const a = opts.alpha ?? 1;
   ctx.globalAlpha = a;
   const sprite = getIconSprite?.(BOMB_ICON_SRC, theme.bomb) ?? null;
   if (sprite) {
-    ctx.drawImage(sprite, p.x - s, p.y - s, s * 2, s * 2);
+    // bomb.svg's source is square, so a fixed square box doesn't distort it.
+    ctx.drawImage(sprite.image, p.x - s, p.y - s, s * 2, s * 2);
   } else {
     ctx.fillStyle = theme.bomb;
     ctx.fillRect(p.x - s, p.y - s, s * 2, s * 2);
@@ -555,8 +567,10 @@ function drawScore(ctx: Ctx2D, width: number, banner: BannerInfo, theme: ReplayT
   ctx.fillText(String(banner.tScore), cx + 28, 8);
 }
 
-/** Icon square side, in canvas px — sits between the attacker and victim names. */
-const KILL_FEED_ICON_SIZE = 12;
+/** Icon target height, in canvas px — width follows the sprite's own aspect ratio (weapon icons
+ *  are landscape, not square) rather than being squashed to match. Sits between the attacker and
+ *  victim names. */
+const KILL_FEED_ICON_HEIGHT = 12;
 
 function drawKillFeed(
   ctx: Ctx2D,
@@ -565,7 +579,7 @@ function drawKillFeed(
   nameById: ReadonlyMap<number, ReplayPlayerMeta>,
   round: ReplayRound,
   theme: ReplayTheme,
-  getIconSprite?: (src: string, color: string) => DrawableImage | null,
+  getIconSprite?: (src: string, color: string) => IconSprite | null,
 ): void {
   ctx.textAlign = 'right';
   ctx.textBaseline = 'top';
@@ -596,8 +610,10 @@ function drawKillFeed(
     const iconSrc = weaponIconSrc(label);
     const sprite = iconSrc ? (getIconSprite?.(iconSrc, aColor) ?? null) : null;
     if (sprite) {
-      cursor -= KILL_FEED_ICON_SIZE;
-      ctx.drawImage(sprite, cursor, y - 1, KILL_FEED_ICON_SIZE, KILL_FEED_ICON_SIZE);
+      const h = KILL_FEED_ICON_HEIGHT;
+      const w = h * (sprite.width / sprite.height);
+      cursor -= w;
+      ctx.drawImage(sprite.image, cursor, y - 1, w, h);
       cursor -= 4;
     } else {
       const text = `${label}  `;

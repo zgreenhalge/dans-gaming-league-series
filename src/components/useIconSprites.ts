@@ -1,16 +1,19 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import type { IconSprite } from '@/lib/replay/draw';
 
 /**
- * Preloads and caches CS2 icon SVGs as tinted, `ctx.drawImage()`-ready `HTMLImageElement`s, for
- * the 2D Replay canvas's kill feed and bomb marker. `draw.ts` runs inside a `requestAnimationFrame`
+ * Preloads and caches CS2 icon SVGs as tinted, `ctx.drawImage()`-ready sprites, for the 2D
+ * Replay canvas's kill feed and bomb marker. `draw.ts` runs inside a `requestAnimationFrame`
  * loop calling raw `CanvasRenderingContext2D` methods — it can't reference a static file URL the
  * way a DOM icon component does, and even if it could, a plain `<img>`/`fetch`'d SVG has no CSS
  * context for `currentColor` to resolve against, so every icon in `public/{weapon,grenade,
  * round}-icons/` would render solid black. This bakes the desired color directly into the SVG text
  * (a simple string replace — every icon in this codebase uses `currentColor` as its only fill) and
- * loads the result as a data-URI image, once per (src, color) pair, cached for reuse.
+ * loads the result as a data-URI image, once per (src, color) pair, cached for reuse. Each
+ * sprite's natural pixel size is read off the loaded bitmap (same convention as `useMapRadar`'s
+ * radar image) so callers — weapon icons are landscape, not square — can fit it without distortion.
  *
  * `get()` returns `null` immediately for a pair that hasn't finished loading (or hasn't been
  * requested before) rather than blocking the draw call — callers fall back to their existing
@@ -20,18 +23,18 @@ import { useCallback, useRef, useState } from 'react';
  * picks up the icon once it's ready instead of showing the fallback forever.
  */
 export function useIconSprites(): {
-  get: (src: string, color: string) => HTMLImageElement | null;
+  get: (src: string, color: string) => IconSprite | null;
   generation: number;
 } {
   const rawText = useRef(new Map<string, string>());
   const rawPending = useRef(new Set<string>());
-  const images = useRef(new Map<string, HTMLImageElement>());
+  const sprites = useRef(new Map<string, IconSprite>());
   const imagePending = useRef(new Set<string>());
   const [generation, setGeneration] = useState(0);
 
-  const get = useCallback((src: string, color: string): HTMLImageElement | null => {
+  const get = useCallback((src: string, color: string): IconSprite | null => {
     const key = `${src}::${color}`;
-    const cached = images.current.get(key);
+    const cached = sprites.current.get(key);
     if (cached) return cached;
 
     const text = rawText.current.get(src);
@@ -57,7 +60,7 @@ export function useIconSprites(): {
       const tinted = text.replaceAll('currentColor', color);
       const img = new Image();
       img.onload = () => {
-        images.current.set(key, img);
+        sprites.current.set(key, { image: img, width: img.naturalWidth, height: img.naturalHeight });
         imagePending.current.delete(key);
         setGeneration((g) => g + 1);
       };
