@@ -296,6 +296,7 @@ function drawExplosion(
 }
 
 const BOMB_ICON_SRC = '/round-icons/bomb.svg';
+const HEADSHOT_ICON_SRC = '/kill-icons/headshot.svg';
 
 /**
  * A C4 glyph: the real bomb icon once its sprite is loaded (falls back to a small filled square
@@ -598,11 +599,25 @@ function drawKillFeed(
     ctx.fillText(vName, x, y);
     let cursor = x - measureApprox(vName);
 
-    // headshot marker, if any (text — see #465 for a real icon here too)
-    const hsGlyph = k.headshot ? ' ⊙ ' : '  ';
-    ctx.fillStyle = theme.textDim;
-    ctx.fillText(hsGlyph, cursor, y);
-    cursor -= measureApprox(hsGlyph);
+    // headshot marker, if any — headshot.svg's source is square, so a fixed square box
+    // doesn't distort it, same as the bomb marker.
+    if (k.headshot) {
+      const hsSprite = getIconSprite?.(HEADSHOT_ICON_SRC, theme.textDim) ?? null;
+      cursor -= 2;
+      if (hsSprite) {
+        const h = KILL_FEED_ICON_HEIGHT;
+        cursor -= h;
+        ctx.drawImage(hsSprite.image, cursor, y - 1, h, h);
+      } else {
+        const glyph = '⊙';
+        ctx.fillStyle = theme.textDim;
+        ctx.fillText(glyph, cursor, y);
+        cursor -= measureApprox(glyph);
+      }
+      cursor -= 2;
+    } else {
+      cursor -= 4;
+    }
 
     // weapon: the real icon once its sprite is loaded, else the text label it replaces —
     // same molotov-vs-incendiary resolution the text label always used (killWeaponLabel).
