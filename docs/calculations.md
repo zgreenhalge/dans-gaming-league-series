@@ -316,6 +316,12 @@ since every kill weapon needs a bucket but only guns count toward accuracy.
 
 **Favorite weapon** (`favoriteWeapon()`) is simply the weapon with the most credited kills in scope.
 
+The Weapons sub-tab shows one weapon's row per player at a time, picked by a favorite-or-specific
+filter (`resolveWeaponStat()`): the favorite (`weapon = null`) or one weapon applied to every row,
+chosen from `allWeaponsWithKills()` — every weapon with at least one credited kill in the current
+scope, sorted by total kills descending. A specific-weapon selection a player has no kills/deaths with
+still renders a zeroed row rather than being hidden, so the filter always shows every player.
+
 ### Player Rating (not yet implemented)
 
 A weighted sabremetric composite for individual performance. Independent from the
