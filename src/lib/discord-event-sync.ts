@@ -58,6 +58,7 @@ import { getSeason, getSeasonSchedule } from './queries';
 import { isPlayedScore } from './util';
 import { discordErrorDetail, resolveSeasonForumChannel, listChannelThreads, threadTitle } from './discord-threads';
 import { recordOpsError, clearOpsError } from './ops-errors';
+import { scheduleMatchReminder } from './discord-notify';
 
 const EVENT_SYNC_OPERATION = 'discord_event_sync';
 // Caps how many matches scan their thread concurrently. Each match's thread is on its own per-channel
@@ -342,24 +343,13 @@ async function syncMatchScheduledEvent(
   }
   await clearOpsError(supabaseAdmin, 'match', match.id, EVENT_SYNC_OPERATION);
 
-  // Best-effort, mirroring PATCH /api/matches/[id]/schedule/route.ts's own call: this is the other
-  // write path for matches.scheduled_at (the route only covers a human editing it by hand), and the
-  // 1-hour reminder's one-shot pg_cron job needs (re)scheduling here too, or a match whose time only
-  // ever comes from Discord event sync would never get a reminder scheduled at all. No afterBestEffort()
-  // here — this file runs as a standalone script (scripts/discord-event-sync.ts, via GitHub Actions),
-  // not a Next.js request, so there's no response to defer past.
-  try {
-    const { data: scheduled, error: rpcError } = await supabaseAdmin.rpc('schedule_match_reminder', {
-      p_match_id: match.id,
-      p_scheduled_at: event.scheduled_start_time,
-    });
-    if (rpcError) throw rpcError;
-    if (scheduled) {
-      await clearOpsError(supabaseAdmin, 'match', match.id, 'discord_schedule_reminder');
-    }
-  } catch (e) {
-    await recordOpsError(supabaseAdmin, 'match', match.id, 'discord_schedule_reminder', `Failed to schedule reminder: ${(e as Error).message}`);
-  }
+  // This is the other write path for matches.scheduled_at (PATCH /api/matches/[id]/schedule only
+  // covers a human editing it by hand) — scheduleMatchReminder() (re)schedules the 1-hour reminder's
+  // one-shot pg_cron job here too, or a match whose time only ever comes from Discord event sync
+  // would never get a reminder scheduled at all. Awaited directly (not deferred) since this file runs
+  // as a standalone script (scripts/discord-event-sync.ts, via GitHub Actions), not a Next.js
+  // request, so there's no response to defer past.
+  await scheduleMatchReminder(supabaseAdmin, match.id, event.scheduled_start_time);
 
   return { matchId: match.id, title, status: 'synced', detail: `Synced to ${event.scheduled_start_time}` };
 }

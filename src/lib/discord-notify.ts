@@ -70,6 +70,7 @@ const OPERATION_SERVER_LIVE = 'discord_notify_server_live';
 const OPERATION_LIVE_SCORE = 'discord_notify_live_score';
 const OPERATION_SCORE = 'discord_notify_score';
 const OPERATION_REMINDER = 'discord_notify_reminder';
+const OPERATION_SCHEDULE_REMINDER = 'discord_schedule_reminder';
 // A pg_cron job fires this ~1h before scheduled_at by construction; this window just tolerates
 // clock skew/pg_net delivery lag while still catching the real failure mode it guards against — the
 // match having been rescheduled away from the time the job was originally queued for.
@@ -447,4 +448,42 @@ export async function notifyMatchReminder(supabaseAdmin: SupabaseClient, matchId
   });
   const messageId = await postNewEmbed(supabaseAdmin, matchId, OPERATION_REMINDER, webhookUrl, content, embed);
   if (messageId) await rememberNotificationMessage(supabaseAdmin, matchId, messageId);
+}
+
+/** (Re)schedules, reschedules, or unschedules a match's one-shot `pg_cron` reminder job by calling
+ *  the `schedule_match_reminder()` Postgres function — the one place that actually touches
+ *  `cron.schedule`/`cron.unschedule` (see that function's own comment in `supabase/migrations/`).
+ *  Shared by every writer of `matches.scheduled_at` (`PATCH /api/matches/[id]/schedule` for a human
+ *  edit, `discord-event-sync.ts`'s `syncMatchScheduledEvent()` for a time sourced from a linked
+ *  Discord Scheduled Event) plus the admin "Retry" action on a live `discord_schedule_reminder`/
+ *  `discord_notify_reminder` ops-errors row (`POST /api/matches/[id]/schedule/retry-reminder`), so
+ *  all three record/clear the same `discord_schedule_reminder` operation identically instead of
+ *  drifting apart. Retrying this way also re-resolves a stale `discord_notify_reminder` delivery
+ *  failure when the reminder window has already passed: `schedule_match_reminder()` always resets
+ *  `match_discord_state.reminder_sent_at` before anything else, so the earlier failed attempt's claim
+ *  can't suppress the retry, and a past-due reminder time fires `notifyMatchReminder()` immediately
+ *  rather than scheduling a job for the past.
+ *
+ *  Never throws — a failure here is recorded to ops_errors instead, since none of its callers should
+ *  fail their own primary action (the `scheduled_at` write, or an admin's retry click) over this.
+ *  `schedule_match_reminder()` itself already records its own specific error (e.g. a missing Vault
+ *  secret) and reports `false` on that path, so this only clears the error on a confirmed `true`,
+ *  leaving whatever the function itself already recorded alone otherwise. */
+export async function scheduleMatchReminder(
+  supabaseAdmin: SupabaseClient,
+  matchId: number,
+  scheduledAt: string | null,
+): Promise<void> {
+  try {
+    const { data: scheduled, error: rpcError } = await supabaseAdmin.rpc('schedule_match_reminder', {
+      p_match_id: matchId,
+      p_scheduled_at: scheduledAt,
+    });
+    if (rpcError) throw rpcError;
+    if (scheduled) {
+      await clearOpsError(supabaseAdmin, 'match', matchId, OPERATION_SCHEDULE_REMINDER);
+    }
+  } catch (e) {
+    await recordOpsError(supabaseAdmin, 'match', matchId, OPERATION_SCHEDULE_REMINDER, `Failed to schedule reminder: ${(e as Error).message}`);
+  }
 }

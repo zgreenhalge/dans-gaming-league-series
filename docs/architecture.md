@@ -77,6 +77,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `PATCH` | `/api/seasons/[id]/status` | Transition a regular season `UPCOMING` → `ACTIVE` ("go live"); best-effort builds its gauntlet shape (admin only) |
 | `DELETE` | `/api/seasons/[id]` | Delete an `UPCOMING` regular season outright — refuses if it already has real `weeks`, otherwise clears its `season_players` roster and schedule draft first (admin only) |
 | `DELETE` | `/api/ops-errors/[id]` | Dismiss an `ops_errors` row, any entity type (admin only) |
+| `POST` | `/api/matches/[id]/schedule/retry-reminder` | Retry a live `discord_schedule_reminder`/`discord_notify_reminder` ops-errors row for one match (admin only) — the "Retry" action `OpsErrorList`/`AdminActivityFeed` show on those rows |
 | `POST` | `/api/seasons/[id]/gauntlet/preview` | Compute what building would produce — qualifier count, games, rounds, pod/slot shape — without writing anything (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet` | Create the paired gauntlet season for an active regular season and build its bracket *shape* — unseeded, nothing materialized (admin only) |
 | `POST` | `/api/seasons/[id]/gauntlet/seed` | Seed an existing shape from the season's current leaderboard order and materialize round 1 (admin only) |
@@ -402,8 +403,8 @@ Wired into twenty-seven operations today:
 | `discord_notify_server_live` | `match` | `notifyMatchServerLive()` (`discord-notify.ts`, #395) — a real webhook failure, not just the channel being unconfigured |
 | `discord_notify_live_score` | `match` | `notifyMatchLiveScore()` (`discord-notify.ts`, #395) — a real webhook failure editing the notification message with the running score, on a `going_live`/`round_end` MatchZy event. Never falls back to posting a new message, so a live match with a stuck error here just retries on the next round |
 | `discord_notify_score` | `match` | `notifyMatchScoreReported()` (`discord-notify.ts`, #395) — a real webhook failure, not just the channel being unconfigured. A distinct operation from `discord_notify_server_live`/`discord_notify_live_score` (not a shared `discord_notify`) so a failure from one notification can't be silently cleared by an unrelated success of another for the same match. Fired by `writeMatchScore()` (`matchScore.ts`) itself on every score write — including an admin's later correction, so the message stays in sync — the same call regardless of whether it was reached via `PATCH /api/matches/[id]/score` (human confirm) or `scripts/demo-ingest.ts`'s trusted auto-commit (#138) |
-| `discord_schedule_reminder` | `match` | A failure to *schedule* the 1-hour-out reminder: `PATCH /api/matches/[id]/schedule` or `discord-event-sync.ts`'s `syncMatchScheduledEvent()` (#398) — the two writers of `matches.scheduled_at` — recording that the `schedule_match_reminder` RPC call itself errored or threw, or `schedule_match_reminder()` (Postgres function) recording that the `cron_secret` Vault secret is missing. Cleared when a later reschedule for the same match succeeds |
-| `discord_notify_reminder` | `match` | A failure to *deliver* the already-scheduled 1-hour-out reminder — `notifyMatchReminder()` (`discord-notify.ts`, #395) recording a real webhook failure. Kept distinct from `discord_schedule_reminder` (a config/scheduling problem, fixed differently than a delivery problem) so one's success can't silently clear the other's still-live error for the same match |
+| `discord_schedule_reminder` | `match` | A failure to *schedule* the 1-hour-out reminder, recorded by the shared `scheduleMatchReminder()` helper (`discord-notify.ts`) that `PATCH /api/matches/[id]/schedule`, `discord-event-sync.ts`'s `syncMatchScheduledEvent()` (#398), and the admin "Retry" action (`POST /api/matches/[id]/schedule/retry-reminder`) all call — the `schedule_match_reminder` RPC call itself errored or threw, or `schedule_match_reminder()` (Postgres function) recorded that the `cron_secret` Vault secret is missing. Cleared when a later reschedule (or retry) for the same match succeeds; the row itself carries a "Retry" button (`retryEndpointFor()`, `OpsErrorList.tsx`) that re-runs `scheduleMatchReminder()` against the match's current `scheduled_at` |
+| `discord_notify_reminder` | `match` | A failure to *deliver* the already-scheduled 1-hour-out reminder — `notifyMatchReminder()` (`discord-notify.ts`, #395) recording a real webhook failure. Kept distinct from `discord_schedule_reminder` (a config/scheduling problem, fixed differently than a delivery problem) so one's success can't silently clear the other's still-live error for the same match. Also carries a "Retry" button pointed at the same `retry-reminder` route — since `schedule_match_reminder()` always resets `match_discord_state.reminder_sent_at` before anything else, retrying re-fires delivery immediately when the reminder window has already passed |
 | `discord_role_sync` | `player`, or `season` (regular) for a roster-fetch failure | `discord-roles.ts` (#397)'s `setGuildMemberRole()` for the per-player case — a real Discord API failure, not just the role sync being unconfigured or the player having no `discord_id`; `season-lifecycle.ts`'s `syncParticipantRoleForRoster()` for the season-level case, when fetching the roster itself fails ahead of the (never-throwing) per-player grant/revoke pass |
 | `discord_link` | `player`, or `system` (id `0`) for a config failure | `GET /api/auth/discord/callback` (#394) — a genuine failure (bad response from Discord, an unhandled exception, missing `DISCORD_CLIENT_ID`/`SECRET`), not the expected "denied"/"taken" outcomes, which redirect the one affected player but aren't logged |
 | `discord_thread_publish` | `season` (regular) | `publishWeekThreads()` (`discord-threads.ts`, #398) — the season-level forum channel couldn't be resolved (missing/misnamed/wrong-type `season-{N}` channel, or the guild-channels listing call itself failed), before any per-match thread is attempted |
@@ -457,15 +458,18 @@ Vercel auto-detects the Next.js project from the repo root. Set all env vars in 
 The 1-hour-out match reminder is scheduled a different way, deliberately not through `vercel.json` —
 both writers of `matches.scheduled_at` (`PATCH /api/matches/[id]/schedule` for a human editing it by
 hand, and `discord-event-sync.ts`'s `syncMatchScheduledEvent()` for a time sourced from a linked
-Discord Scheduled Event, #398) call the `schedule_match_reminder()` Postgres function (via
-`pg_cron`/`pg_net`, enabled on the Supabase project) right after their own write commits. That
-function schedules (or cancels/reschedules) a one-shot `pg_cron` job for the exact minute
-`scheduled_at - 1h` falls on, which `pg_net.http_post`s `POST /api/cron/match-reminder` and then
-unschedules itself — precise per-match timing instead of a polling window, and no Vercel cron
-involved (Vercel Cron only issues `GET`; this is `POST`, invoked ad hoc). The endpoint is
-`CRON_SECRET`-bearer-gated the same way `refresh-steam` is, but since a Postgres function can't read
-Vercel's env vars, the same secret is also stored in Supabase Vault under the name `cron_secret` —
-kept in sync with the Vercel `CRON_SECRET` value by hand; see the README's env var table.
+Discord Scheduled Event, #398), plus the admin "Retry" action on a live `discord_schedule_reminder`/
+`discord_notify_reminder` ops-errors row (`POST /api/matches/[id]/schedule/retry-reminder`), call the
+shared `scheduleMatchReminder()` helper (`discord-notify.ts`), which calls the
+`schedule_match_reminder()` Postgres function (via `pg_cron`/`pg_net`, enabled on the Supabase
+project) and records/clears the `discord_schedule_reminder` ops-errors row around it. That function
+schedules (or cancels/reschedules) a one-shot `pg_cron` job for the exact minute `scheduled_at - 1h`
+falls on, which `pg_net.http_post`s `POST /api/cron/match-reminder` and then unschedules itself —
+precise per-match timing instead of a polling window, and no Vercel cron involved (Vercel Cron only
+issues `GET`; this is `POST`, invoked ad hoc). The endpoint is `CRON_SECRET`-bearer-gated the same
+way `refresh-steam` is, but since a Postgres function can't read Vercel's env vars, the same secret is
+also stored in Supabase Vault under the name `cron_secret` — kept in sync with the Vercel
+`CRON_SECRET` value by hand; see the README's env var table.
 
 ### CI
 
