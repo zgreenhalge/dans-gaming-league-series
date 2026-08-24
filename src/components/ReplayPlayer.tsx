@@ -5,12 +5,15 @@ import { Play, Pause, ChevronLeft, ChevronRight, Rewind, Pencil, Square, Eraser,
 import type { ReplayPayload, ReplayPlayerMeta } from '@/lib/replay/types';
 import type { Faction } from '@/lib/types';
 import { mapSlug } from '@/lib/maps';
+import { iconAspect } from '@/lib/iconAspect';
 import { isAbortError } from '@/lib/util';
 import { projectorFor, type Projector } from '@/lib/replay/project';
 import { viewStateAt, roundTickRange, grenadeEffectRadius, roundClockSeconds, formatClock } from '@/lib/replay/playback';
 import { drawScene, type Ctx2D, type ReplayTheme, type BannerInfo } from '@/lib/replay/draw';
 import { readTheme, STICKER_COLORS } from './replayTheme';
+import { MaskedIcon } from './icons/MaskedIcon';
 import { useMapRadar } from './useMapRadar';
+import { useIconSprites } from './useIconSprites';
 import { applyCanvasSize, useCanvasSize } from './useCanvasSize';
 import { useReplayClock } from './useReplayClock';
 
@@ -29,6 +32,17 @@ const PEN_LINE_WIDTH = 3;
 const STICKER_RING_WIDTH = 2;
 const STICKER_FILL_ALPHA = 0.3;
 type StickerKind = keyof typeof STICKER_COLORS;
+
+/** Real CS2 buy-menu icons (via github.com/Juknum/counter-strike-icons) for the sticker
+ *  toolbar below, tinted via `MaskedIcon` instead of inlined JSX — `he.svg`'s detailed
+ *  grenade-body path is tens of KB, too large to embed as a component like the round-result
+ *  icons are, and a mask keeps rendering consistent across all three sticker kinds. */
+const STICKER_ICON_SRC: Record<StickerKind, string> = {
+  smoke: '/grenade-icons/smoke.svg',
+  molotov: '/grenade-icons/molotov.svg',
+  he: '/grenade-icons/he.svg',
+};
+
 /** Fraction of the board's side a pointer must land within a stroke to erase it. */
 const ERASE_TOLERANCE = 0.03;
 /** Fraction of the board's side a dragged box's diagonal must reach to be kept. */
@@ -186,6 +200,9 @@ export default function ReplayPlayer({
   // The map's radar calibration + image (shared with the heatmap via useMapRadar).
   // Null calibration = uncalibrated map (auto-fit grid).
   const { calibration, radarImage } = useMapRadar(payload ? mapSlug(payload.map) : null);
+  // Tinted/decoded weapon+bomb icon sprites for the canvas kill feed and bomb marker — see
+  // useIconSprites' doc comment for why draw.ts can't just reference a file URL directly.
+  const { get: getIconSprite, generation: spriteGeneration } = useIconSprites();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -275,6 +292,7 @@ export default function ReplayPlayer({
       theme,
       banner,
       radar,
+      getIconSprite,
     });
     // Reflect playback position on the (uncontrolled) scrubber/clock without re-rendering.
     if (scrubRef.current) scrubRef.current.value = String(tickRef.current);
@@ -282,7 +300,16 @@ export default function ReplayPlayer({
       clockRef.current.textContent = formatClock(roundClockSeconds(round, tickRef.current, payload.tickRate));
     }
     onPosition?.(round.round, tickRef.current);
-  }, [payload, roundIdx, calibration, radarImage, metaById, banner, onPosition]);
+  }, [payload, roundIdx, calibration, radarImage, metaById, banner, onPosition, getIconSprite]);
+
+  // A paused frame's RAF loop (useReplayClock) only calls draw() once, not every frame, so a
+  // weapon/bomb icon sprite that finishes loading after that wouldn't otherwise repaint until
+  // something else does (a scrub, a resize, ...). Redraw once per newly-loaded sprite instead —
+  // only while paused, since the RAF loop already redraws every frame during playback and would
+  // pick up the same sprite on its very next frame regardless.
+  useEffect(() => {
+    if (!playing) draw();
+  }, [spriteGeneration, draw, playing]);
 
   // --- step the clock back without leaving the current round ---
   const rewind = useCallback(() => {
@@ -669,16 +696,20 @@ export default function ReplayPlayer({
                 key={kind}
                 type="button"
                 onClick={() => setTool((cur) => (cur === kind ? null : kind))}
-                className="border px-1.5 py-1 font-mono"
+                className="border p-1.5"
                 style={{
                   borderColor: tool === kind ? STICKER_COLORS[kind] : 'var(--color-border-primary)',
-                  color: tool === kind ? STICKER_COLORS[kind] : 'var(--color-text-secondary)',
                 }}
                 aria-pressed={tool === kind}
                 aria-label={`${label} sticker (true size)`}
                 title={`${label} sticker — true size`}
               >
-                {label}
+                <MaskedIcon
+                  src={STICKER_ICON_SRC[kind]}
+                  size={14}
+                  width={14 * iconAspect(STICKER_ICON_SRC[kind])}
+                  style={{ color: tool === kind ? STICKER_COLORS[kind] : 'var(--color-text-secondary)' }}
+                />
               </button>
             ))}
           </div>

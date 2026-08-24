@@ -1,5 +1,5 @@
-import { Skull, Bomb, Scissors, Clock } from 'lucide-react';
 import type { RoundCondition, RoundHistoryEntry } from '@/lib/types';
+import { CONDITION_ICON } from './icons/ConditionIcons';
 
 type Side = 'CT' | 'T';
 
@@ -14,13 +14,6 @@ type Side = 'CT' | 'T';
  * Dividers mark every side-swap / phase boundary (halftime, then each overtime
  * half) and carry a running score callout, scaling to any number of overtimes.
  */
-
-const CONDITION_ICON: Record<RoundCondition, typeof Skull> = {
-  elim: Skull,
-  bomb: Bomb,
-  defuse: Scissors,
-  time: Clock,
-};
 
 const CONDITION_LABEL: Record<RoundCondition, string> = {
   elim: 'elimination',
@@ -128,7 +121,7 @@ function RoundTile({
         borderColor: `color-mix(in srgb, ${color} 45%, transparent)`,
       }}
     >
-      <Icon size={15} strokeWidth={2.25} style={{ color }} />
+      <Icon size={15} style={{ color }} />
       {/* Accent bar on the edge facing the center spine */}
       <span
         className={`absolute inset-x-0 h-[2px] ${onTop ? 'bottom-0' : 'top-0'}`}
