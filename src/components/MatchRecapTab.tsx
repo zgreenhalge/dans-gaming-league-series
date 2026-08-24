@@ -163,9 +163,10 @@ function PlayerName({ id, nameOf, sideOf }: { id: number | null; nameOf: (id: nu
 /** The icon + text for one event, keyed by event type. */
 function eventContent(ev: ReplayEvent, name: (id: number | null) => React.ReactNode): React.ReactNode {
   if (ev.type === 'kill') {
+    const hasWeaponIcon = weaponIconSrc(ev.weapon) !== null;
     return (
       <>
-        {weaponIconSrc(ev.weapon) ? (
+        {hasWeaponIcon ? (
           <WeaponIcon weapon={ev.weapon} size={13} className="text-[var(--color-text-secondary)] shrink-0" />
         ) : (
           <Crosshair size={13} className="text-[var(--color-text-secondary)] shrink-0" />
@@ -177,9 +178,11 @@ function eventContent(ev: ReplayEvent, name: (id: number | null) => React.ReactN
             {name(ev.assisterId)}
           </>
         )}
-        <span className="text-[var(--color-text-secondary)] font-mono text-[11px]">
-          {weaponLabel(ev.weapon)}
-        </span>
+        {!hasWeaponIcon && (
+          <span className="text-[var(--color-text-secondary)] font-mono text-[11px]">
+            {weaponLabel(ev.weapon)}
+          </span>
+        )}
         {ev.headshot && (
           <span title="Headshot" className="inline-flex shrink-0">
             <HeadshotIcon size={11} className="text-[var(--color-text-secondary)]" />
