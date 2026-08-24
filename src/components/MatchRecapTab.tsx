@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { Skull, Bomb, Scissors, Clock, Crosshair } from 'lucide-react';
+import { Crosshair } from 'lucide-react';
 import { tabCls } from '@/lib/util';
 import { mapSlug } from '@/lib/maps';
 import MapHeatmap from './MapHeatmap';
 import MatchPlayerTrails from './MatchPlayerTrails';
 import DevGate from './DevGate';
 import { RecordingViewer, RecordingUrlForm } from './RecordingViewer';
+import { BombIcon, DefuseIcon, CONDITION_ICON } from './icons/ConditionIcons';
+import { SIDE_ICON } from './icons/SideIcons';
+import { HeadshotIcon } from './icons/KillModifierIcons';
 import type { ReplayJobState, ReplayEventsView } from '@/lib/queries';
 import type { ReplayEvent } from '@/lib/replay/types';
 import type { Faction } from '@/lib/types';
@@ -171,7 +174,11 @@ function eventContent(ev: ReplayEvent, name: (id: number | null) => React.ReactN
         <span className="text-[var(--color-text-secondary)] font-mono text-[11px]">
           {weaponLabel(ev.weapon)}
         </span>
-        {ev.headshot && <span title="Headshot" className="text-[var(--color-text-secondary)]">⊙</span>}
+        {ev.headshot && (
+          <span title="Headshot" className="inline-flex shrink-0">
+            <HeadshotIcon size={11} className="text-[var(--color-text-secondary)]" />
+          </span>
+        )}
         {name(ev.victimId)}
       </>
     );
@@ -179,7 +186,7 @@ function eventContent(ev: ReplayEvent, name: (id: number | null) => React.ReactN
   if (ev.type === 'plant') {
     return (
       <>
-        <Bomb size={13} className="text-[var(--color-text-secondary)] shrink-0" />
+        <BombIcon size={13} className="text-[var(--color-text-secondary)] shrink-0" />
         {name(ev.playerId)}
         <span className="text-[var(--color-text-secondary)]">
           planted the bomb{ev.site ? ` on ${ev.site}` : ''}
@@ -190,19 +197,20 @@ function eventContent(ev: ReplayEvent, name: (id: number | null) => React.ReactN
   if (ev.type === 'defuse') {
     return (
       <>
-        <Scissors size={13} className="text-[var(--color-text-secondary)] shrink-0" />
+        <DefuseIcon size={13} className="text-[var(--color-text-secondary)] shrink-0" />
         {name(ev.playerId)}
         <span className="text-[var(--color-text-secondary)]">defused the bomb</span>
       </>
     );
   }
   // round_end
-  const Icon =
-    ev.condition === 'bomb' ? Bomb : ev.condition === 'defuse' ? Scissors : ev.condition === 'time' ? Clock : Skull;
+  const Icon = CONDITION_ICON[ev.condition];
+  const SideBadge = ev.winnerSide ? SIDE_ICON[ev.winnerSide] : null;
   return (
     <>
       <Icon size={13} className="text-[var(--color-text-secondary)] shrink-0" />
       <span className="text-[var(--color-text-secondary)]">Round won by</span>
+      {SideBadge && <SideBadge size={13} style={{ color: sideColor(ev.winnerSide) }} className="shrink-0" />}
       <span className="font-semibold" style={{ color: sideColor(ev.winnerSide) }}>
         {ev.winnerFaction ?? ev.winnerSide}
       </span>
