@@ -98,25 +98,37 @@ before running anything, runs the suite, then `supabase stop`.
 
 ## Claude Code sessions
 
-A Claude Code web session starts with no `.env.local` — no real Supabase project credentials are
-ever placed in an agent sandbox — so a plain `npm run dev`/`npm run build`/`npm test` would otherwise
-fail immediately with `src/lib/supabase.ts`'s "Missing Supabase env vars" error, since several routes
-(`seasons/page.tsx`, `maps/page.tsx`, `statistics/page.tsx`, and others using
-`export const revalidate = 60`) fetch from Supabase during prerendering, not just at request time.
+`npm test` (Vitest) never depends on any of this — every query test runs against the
+`fakeSupabase`/`src/lib/test-support/` harness, not a live database, so it (along with `npm run
+lint`/`npm run typecheck`) works in any agent session with no setup at all.
+
+`npm run build`/`npm run dev` are different: several routes (`seasons/page.tsx`, `maps/page.tsx`,
+`statistics/page.tsx`, and others using `export const revalidate = 60`) fetch from Supabase during
+prerendering, not just at request time, and a Claude Code web session starts with no `.env.local` —
+no real Supabase project credentials are ever placed in an agent sandbox — so without a Supabase
+connection these fail immediately with `src/lib/supabase.ts`'s "Missing Supabase env vars" error.
 
 `.claude/hooks/session-start.sh` (registered as a `SessionStart` hook in `.claude/settings.json`)
-closes that gap using the same local stack this doc already describes: it runs `npm install`, then —
-unless a real `.env.local` is already present — brings up the local Supabase stack (`npm run
-db:start`) and exports `supabase/local.env`'s three fixed values into the session's environment. This
-gives the agent a real, schema-accurate (if data-empty beyond `seed.sql`'s baseline players/maps)
-Supabase connection for exactly the kind of build/type-check verification `CLAUDE.md` asks agents to
-do — never for testing real match content, which still requires the real project.
+attempts to close that gap using the same local stack this doc already describes: it runs `npm
+install`, then — unless a real `.env.local` is already present — tries to bring up the local Supabase
+stack (`npm run db:start`) and export `supabase/local.env`'s three fixed values into the session's
+environment. **This depends on two things an agent sandbox doesn't reliably provide: a running Docker
+daemon, and outbound network access to pull the Postgres/PostgREST/Realtime images.** Neither is
+guaranteed — in this repo's own sandbox, the Docker daemon isn't running by default and the outbound
+proxy blocks Docker Hub/CloudFront pulls, so the local stack never actually comes up there, and
+`build`/`dev`/`test:e2e` fail in that sandbox exactly as they did before this hook existed. Every step
+is independent and best-effort: a missing Docker daemon, a sandbox whose network policy blocks the
+image pulls, or an already-configured `.env.local` are all handled by skipping the remaining steps
+(with a bounded timeout on the image-pull attempt) rather than hanging or failing the session start.
+`.claude/session-start.log` records exactly which step ran, skipped, or failed, so a session missing
+its local stack is diagnosable without re-running anything by hand — grep that file first.
 
-Every step is independent and best-effort — a missing Docker daemon, a sandbox whose network policy
-blocks pulling the Postgres/PostgREST/Realtime images, or an already-configured `.env.local` are all
-handled by skipping the remaining steps rather than failing the session start. `.claude/session-start.log`
-records exactly which step ran, skipped, or failed, so a session missing its local stack is
-diagnosable without re-running anything by hand — grep that file first.
+Where the daemon and network access are both available, this gives the agent a real, schema-accurate
+(if data-empty beyond `seed.sql`'s baseline players/maps) Supabase connection for exactly the kind of
+build/type-check verification `CLAUDE.md` asks agents to do — never for testing real match content,
+which still requires the real project. Where they aren't, treat `npm test`/`npm run
+lint`/`npm run typecheck` as the reliable verification path and expect `build`/`dev`/`test:e2e` to
+need a real `.env.local` or a sandbox with working Docker + registry access.
 
 ## Adding a new flow
 
