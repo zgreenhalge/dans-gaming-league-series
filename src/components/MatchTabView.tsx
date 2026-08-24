@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/SeasonFilter';
 import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import Th from '@/components/Th';
-import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow } from '@/lib/queries';
+import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow } from '@/lib/queries';
 import type { SabFields } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
 import { roundsPlayedBySide } from '@/lib/parsers/roundSides';
@@ -326,6 +326,7 @@ export default function MatchTabView({
   targetWinRounds,
   skinsSide,
   sabremetrics = [],
+  matchKills = [],
   ehog,
   scouting,
   mapInfo,
@@ -347,6 +348,8 @@ export default function MatchTabView({
   targetWinRounds: number;
   skinsSide: 'CT' | 'T' | null;
   sabremetrics?: MatchSabremetricsRow[];
+  /** This match's demo-derived kills, one row per kill — feeds the Advanced tab's Weapons table. */
+  matchKills?: MatchKillRow[];
   /** EHOG skill-rating inputs: this match's rating deltas, pre-match projections, and each
    *  player's current rating. */
   ehog: {
@@ -548,7 +551,7 @@ export default function MatchTabView({
       )}
 
       {tab === 'advanced' && statsRecorded && (
-        <SabremetricsLeaderboardView rows={advancedStatRows} teamGroups={advancedStatTeams} showPlusStats={false} />
+        <SabremetricsLeaderboardView rows={advancedStatRows} teamGroups={advancedStatTeams} showPlusStats={false} kills={matchKills} />
       )}
 
       {tab === 'scouting' && (

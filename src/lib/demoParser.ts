@@ -137,6 +137,7 @@ export function parseDemoFile(
       total_rounds_played: e.round,
       winner: e.winner,
       is_warmup_period: false,
+      reason: null,
     })),
     effectiveSide,
     targetWinRounds,

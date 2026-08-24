@@ -13,9 +13,9 @@ import {
   findMatchStartTick,
   type PlayerDeathRow,
 } from '../parsers/matchContext';
-import { sideForFaction, type RoundEndRow } from '../parsers/roundSides';
+import { sideForFaction, reasonToCondition, type RoundEndRow } from '../parsers/roundSides';
 import type { RosterEntry } from '../demoParser';
-import type { RoundCondition, Faction } from '../types';
+import type { Faction } from '../types';
 import {
   REPLAY_SCHEMA_VERSION,
   type ReplayPayload,
@@ -44,21 +44,6 @@ const PRE_LIVE_SECONDS = 1;
  * back into the (trimmed) freeze time of the following round.
  */
 const POST_ROUND_SECONDS = 7;
-
-/** Map a CS2 round_end `reason` to the win-condition icon bucket (mirrors demoParser). */
-function reasonToCondition(reason: string | null): RoundCondition {
-  switch (reason) {
-    case 'bomb_exploded':
-      return 'bomb';
-    case 'bomb_defused':
-      return 'defuse';
-    case 'time_ran_out':
-    case 't_saved':
-      return 'time';
-    default:
-      return 'elim';
-  }
-}
 
 /** Read the first present key from a parser row (field names vary across props). */
 function pick<T>(row: Record<string, unknown>, keys: string[]): T | null {
@@ -161,7 +146,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     'round_end',
     [],
     ['total_rounds_played', 'winner', 'reason', 'is_warmup_period'],
-  ) as (RoundEndRow & { reason: string | null })[];
+  ) as RoundEndRow[];
 
   const deathRows = parseEvent(
     demoBuffer,

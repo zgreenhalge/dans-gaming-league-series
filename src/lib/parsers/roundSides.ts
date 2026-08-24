@@ -1,8 +1,11 @@
+import type { RoundCondition } from '../types';
+
 export interface RoundEndRow {
   tick: number;
   total_rounds_played: number;
   winner: string | null;
   is_warmup_period: boolean | number;
+  reason: string | null;
 }
 
 export interface RoundSideInfo {
@@ -10,6 +13,24 @@ export interface RoundSideInfo {
   endTick: number;
   winnerSide: 'CT' | 'T' | null;
   shirtsSide: 'CT' | 'T';
+  winReason: RoundCondition;
+}
+
+/** Maps a CS2 round_end `reason` to the win-condition icon bucket. The one place this mapping is
+ *  defined — both the replay pipeline (`extract.ts`) and round persistence (`buildRoundSides`) import
+ *  it from here so they can't drift apart. */
+export function reasonToCondition(reason: string | null): RoundCondition {
+  switch (reason) {
+    case 'bomb_exploded':
+      return 'bomb';
+    case 'bomb_defused':
+      return 'defuse';
+    case 'time_ran_out':
+    case 't_saved':
+      return 'time';
+    default:
+      return 'elim';
+  }
 }
 
 /**
@@ -78,6 +99,7 @@ export function buildRoundSides(
       endTick: e.tick,
       winnerSide: e.winner as 'CT' | 'T' | null,
       shirtsSide: sideForRealRound(realRoundNumber, shirtsStartSide, targetWinRounds),
+      winReason: reasonToCondition(e.reason),
     };
   });
 }

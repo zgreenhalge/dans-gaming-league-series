@@ -50,6 +50,7 @@ export interface PlayerDeathRow {
   user_steamid: string | null;
   headshot: boolean;
   assister_steamid: string | null;
+  weapon: string;
 }
 
 export interface PlayerHurtRow {

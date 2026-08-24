@@ -1,6 +1,9 @@
 import { parseEvent, parseTicks } from '@laihoe/demoparser2';
 import type { RosterEntry } from './demoParser';
-import type { SabFields, DemoSabremetricStat, DemoWeaponStat, ParsedDemoSabremetricsResult } from './types';
+import type {
+  SabFields, DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
+  ParsedDemoSabremetricsResult,
+} from './types';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
 import { buildMatchContext, findMatchStartTick, type PlayerDeathRow, type PlayerHurtRow } from './parsers/matchContext';
 import type { RoundEndRow } from './parsers/roundSides';
@@ -32,7 +35,7 @@ import {
 import {
   classifyRoundEconomy, neededEconomyTicks, type RoundFreezeEndRow, type PlayerEquipmentRow,
 } from './parsers/economy';
-import { collectWeaponClassStats, collectEconomyStats } from './parsers/weaponStats';
+import { collectWeaponClassStats, collectEconomyStats, collectMatchKills } from './parsers/weaponStats';
 
 const ZERO: SabFields = {
   kills_ct: 0, kills_t: 0,
@@ -97,12 +100,12 @@ export function parseDemoSabremetrics(
 
   // 2. Parse events (single pass each)
   const roundEndEvents = parseEvent(
-    demoBuffer, 'round_end', [], ['total_rounds_played', 'winner', 'is_warmup_period'],
+    demoBuffer, 'round_end', [], ['total_rounds_played', 'winner', 'is_warmup_period', 'reason'],
   ) as RoundEndRow[];
 
   const deathEvents = parseEvent(
     demoBuffer, 'player_death', [],
-    ['total_rounds_played', 'is_warmup_period', 'headshot', 'assister_steamid'],
+    ['total_rounds_played', 'is_warmup_period', 'headshot', 'assister_steamid', 'weapon'],
   ) as PlayerDeathRow[];
 
   const blindEvents = parseEvent(
@@ -156,7 +159,10 @@ export function parseDemoSabremetrics(
   warnings.push(...context.warnings);
 
   if (context.rounds.length === 0) {
-    return { sabremetrics: [], weaponStats: [], warnings: [...warnings, 'No live rounds found in demo.'] };
+    return {
+      sabremetrics: [], weaponStats: [], matchKills: [], matchRounds: [],
+      warnings: [...warnings, 'No live rounds found in demo.'],
+    };
   }
 
   // 4. Accumulator-based stats (split basic + headshots + unsplit utility/flashed)
@@ -315,6 +321,27 @@ export function parseDemoSabremetrics(
   const weaponClassStats = collectWeaponClassStats(fireEvents, hurtEvents, context, steamIds);
   const economyStats = collectEconomyStats(fireEvents, hurtEvents, roundEconomy, context, steamIds);
 
+  // Per-kill and per-round fact rows (#452/#453) — flat event rows, not per-player aggregates.
+  const killFacts = collectMatchKills(deathEvents, context, steamIds);
+  const playerIdOf = (steamId: string | null): number | null =>
+    steamId ? (steamToPlayer.get(steamId)?.player_id ?? null) : null;
+  const matchKills: DemoMatchKill[] = killFacts.map((k) => ({
+    round_number: k.round_number,
+    attacker_player_id: playerIdOf(k.attacker_steamid),
+    victim_player_id: playerIdOf(k.victim_steamid)!,
+    assister_player_id: playerIdOf(k.assister_steamid),
+    weapon: k.weapon,
+    headshot: k.headshot,
+    is_teamkill: k.is_teamkill,
+    tick: k.tick,
+  }));
+  const matchRounds: DemoMatchRound[] = context.rounds.map((r) => ({
+    round_number: r.roundNumber,
+    winner_side: r.winnerSide!, // buildRoundSides only returns rounds with a known winner
+    shirts_side: r.shirtsSide,
+    win_reason: r.winReason,
+  }));
+
   // 6. Merge with zero defaults
   const sabremetrics: DemoSabremetricStat[] = steamIds.map((steamId) => ({
     player_id: steamToPlayer.get(steamId)!.player_id,
@@ -362,5 +389,5 @@ export function parseDemoSabremetrics(
   // Deduplicate warnings
   const uniqueWarnings = [...new Set(warnings)];
 
-  return { sabremetrics, weaponStats, warnings: uniqueWarnings };
+  return { sabremetrics, weaponStats, matchKills, matchRounds, warnings: uniqueWarnings };
 }

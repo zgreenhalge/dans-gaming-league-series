@@ -17,3 +17,5 @@ export * from './sabremetrics';
 export * from './replay';
 export * from './ops';
 export * from './weaponStats';
+export * from './kills';
+export * from './rounds';

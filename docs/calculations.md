@@ -79,10 +79,21 @@ Implemented in `src/lib/parsers/roundSides.ts` (side map) and `src/lib/parsers/a
 **ADR by side** divides the side-filtered damage (`damage_ct`/`damage_t`) by the rounds *played on
 that side*, not the player's total rounds played — `roundsPlayedBySide()` in `roundSides.ts` derives
 that count from the same starting-side/half/OT schedule as the side map above, given only a rounds-played
-total and `target_win_rounds` (no per-round breakdown is stored per player). The match scoreboard
-(`MatchTabView.tsx`'s `Scoreboard`) is the one place stats are side-filterable; every other ADR/damage-
-per-round figure on the site (season/career/gauntlet aggregates, sabremetrics `ADR+`, per-match rows)
-always divides total damage by total rounds, with no side filter to narrow the denominator.
+total and `target_win_rounds`, with no per-round breakdown. The match scoreboard
+(`MatchTabView.tsx`'s `Scoreboard`) is the one place stats are side-filterable this way; every other
+ADR/damage-per-round figure on the site (season/career/gauntlet aggregates, sabremetrics `ADR+`,
+per-match rows) always divides total damage by total rounds, with no side filter to narrow the
+denominator.
+
+**Round win % by side** — unlike ADR-by-side, this *is* backed by a real per-round breakdown:
+`match_rounds` stores `winner_side`/`shirts_side` per round for every demo-parsed match (see
+[`architecture.md`](./architecture.md)). `aggregatePerSideStats()`/`aggregatePlayerSideStats()`
+(`src/lib/mapSideStats.ts`) tally round wins/losses for CT and T directly from these rows — a round
+counts for whichever side actually played it, correctly splitting across the halftime side swap,
+rather than crediting a whole match to the side a team started on. `aggregatePlayerSideStats()` still
+falls back to the coarser whole-match `rounds_won`/`rounds_played`-on-starting-side approximation for
+a match with no parsed demo (no `match_rounds` rows). Surfaced as "Round Win%"/"RWR%" on the
+season/career/map Maps & Sides tab and the player page's Side stats table.
 
 ## Sabremetrics
 
@@ -283,6 +294,27 @@ section, sliced a different way. Stored in their own tables (`player_match_weapo
   `Rounds Played` for a tier is seeded directly from this classification, independent of whether the
   player fired a shot that round, unlike the weapon-class breakdown above — an eco round with zero
   shots fired still counts as an eco round played.
+
+### Kills by Weapon
+
+Unlike the breakdowns above, kills-by-weapon is bucketed by *individual weapon* (`ak47`, `awp`,
+`knife`, …), not category, and isn't pre-aggregated at all — `match_kills` (see
+[`architecture.md`](./architecture.md)) stores one row per kill, and `Kills`/`Headshot Kills`/`Deaths`
+per weapon are grouped from those rows at query time (`aggregateWeaponKillStats()`,
+`src/lib/queries/kills.ts`). A kill only counts toward `Kills`/`Headshot Kills` when the attacker is a
+known roster player, the attacker isn't the victim, and it isn't a teamkill (`is_teamkill = false`);
+`Deaths` counts every recorded death to that weapon regardless, including self-kills and teamkills, so
+the victim side of the breakdown always reflects what actually killed the player.
+
+**Category rollup** (`aggregateKillCategoryStats()`) sums individual-weapon rows up by the same
+category `killWeaponCategory()` (`src/lib/parsers/weaponClasses.ts`) resolves each weapon to — reusing
+the weapon-class breakdown's category set for guns (`pistol`/`smg`/`rifle`/`sniper`/`shotgun`) plus
+`melee` (knife), `utility` (grenades, molotov/incendiary, taser), and `other` for anything else
+(bomb/world). This is a distinct, wider mapping from `WEAPON_CATEGORY` (guns-only, used by
+`accuracy.ts`'s shots-fired/hit gating) — `killWeaponCategory()` must never be used for that gate,
+since every kill weapon needs a bucket but only guns count toward accuracy.
+
+**Favorite weapon** (`favoriteWeapon()`) is simply the weapon with the most credited kills in scope.
 
 ### Player Rating (not yet implemented)
 

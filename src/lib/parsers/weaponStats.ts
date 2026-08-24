@@ -1,4 +1,4 @@
-import type { MatchContext, PlayerHurtRow } from './matchContext';
+import type { MatchContext, PlayerDeathRow, PlayerHurtRow } from './matchContext';
 import { isTeamKill } from './matchContext';
 import type { WeaponFireRow } from './utility';
 import { WEAPON_CATEGORY, stripWeaponPrefix } from './weaponClasses';
@@ -150,4 +150,57 @@ export function collectEconomyStats(
   );
 
   return flattenBuckets(perPlayer);
+}
+
+export interface KillFactRow {
+  round_number: number;
+  attacker_steamid: string | null;
+  victim_steamid: string;
+  assister_steamid: string | null;
+  weapon: string;
+  headshot: boolean;
+  is_teamkill: boolean;
+  tick: number;
+}
+
+/**
+ * One row per kill event — a `match_kills` fact table row, not a per-player aggregate (unlike
+ * every other collector in this file). Kept flat so downstream queries decide at read time what
+ * counts as a "kill" (attacker known, not a self-kill, not a teamkill) rather than baking those
+ * judgment calls into the collector. `attacker_steamid`/`assister_steamid` are nulled out when
+ * they're not a known roster player (world/environment kills, e.g. fall damage), matching the
+ * `steamSet` gating every other collector in this file applies.
+ */
+export function collectMatchKills(
+  deathEvents: PlayerDeathRow[],
+  context: MatchContext,
+  steamIds: string[],
+): KillFactRow[] {
+  const steamSet = new Set(steamIds);
+  const rows: KillFactRow[] = [];
+
+  for (const d of deathEvents) {
+    const round = roundOf(d, context.liveRounds);
+    if (round == null) continue;
+
+    const victim = d.user_steamid;
+    if (!victim || !steamSet.has(victim)) continue;
+
+    const attacker = d.attacker_steamid && steamSet.has(d.attacker_steamid) ? d.attacker_steamid : null;
+    const assister = d.assister_steamid && steamSet.has(d.assister_steamid) ? d.assister_steamid : null;
+    const isTk = attacker != null && attacker !== victim && isTeamKill(attacker, victim, context);
+
+    rows.push({
+      round_number: round,
+      attacker_steamid: attacker,
+      victim_steamid: victim,
+      assister_steamid: assister,
+      weapon: d.weapon,
+      headshot: d.headshot,
+      is_teamkill: isTk,
+      tick: d.tick,
+    });
+  }
+
+  return rows;
 }

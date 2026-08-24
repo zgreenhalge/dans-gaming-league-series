@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { LeaderboardRowWithId } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
-import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type MatchPickBanInput } from '@/lib/mapSideStats';
+import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import { tabCls } from '@/lib/util';
 import { useTabState, resolveTab } from './useTabState';
@@ -490,8 +490,8 @@ function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
       {dist.total === 0 ? (
         <EmptyState message="No match data." />
       ) : (
-        <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
-          <table className="w-full border-collapse text-[12px]">
+        <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
+          <table className="w-full min-w-max border-collapse text-[12px]">
             <thead>
               <tr className="bg-[var(--color-bg-secondary)]">
                 <Th align="left">Category</Th>
@@ -532,8 +532,11 @@ function MapsAndSidesSection({
   perSideStats: PerSideStat[];
 }) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Score Distribution (singleMap) or Map Pick/Ban Stats (multi-map) */}
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Score Distribution sits in the 2-col row on a single map page (paired with per-side
+          stats); on a multi-map page it moves to its own full-width row below, alongside the
+          pick/ban table here, so three panels don't fight for two columns. */}
       {singleMap && scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
       {!singleMap && <div>
         <div className="flex items-baseline justify-between mb-3">
@@ -542,8 +545,8 @@ function MapsAndSidesSection({
         {mapPickBanStats.length === 0 ? (
           <EmptyState message="No map data." />
         ) : (
-          <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
-            <table className="w-full border-collapse text-[12px]">
+          <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
+            <table className="w-full min-w-max border-collapse text-[12px]">
               <thead>
                 <tr className="bg-[var(--color-bg-secondary)]">
                   <Th align="left">Map</Th>
@@ -585,13 +588,14 @@ function MapsAndSidesSection({
         {perSideStats.length === 0 ? (
           <EmptyState message="No side data." />
         ) : (
-          <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-hidden">
-            <table className="w-full border-collapse text-[12px]">
+          <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
+            <table className="w-full min-w-max border-collapse text-[12px]">
               <thead>
                 <tr className="bg-[var(--color-bg-secondary)]">
                   <Th align="left">Side</Th>
                   <Th align="right">Times Picked</Th>
                   <Th align="right">W-L</Th>
+                  <Th align="right">Round Win%</Th>
                 </tr>
               </thead>
               <tbody>
@@ -599,7 +603,10 @@ function MapsAndSidesSection({
                   <tr key={s.side} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
                     <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{s.side}</td>
                     <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.numTimesPicked}</td>
-                    <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{s.wins}-{s.losses}</td>
+                    <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">
+                      {s.roundsPlayed > 0 ? `${((s.roundsWon / s.roundsPlayed) * 100).toFixed(0)}%` : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -607,6 +614,8 @@ function MapsAndSidesSection({
           </div>
         )}
       </div>
+      </div>
+      {!singleMap && scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
     </div>
   );
 }
@@ -626,7 +635,7 @@ const BASIC_STATS_TABS: readonly BasicStatsTab[] = ['basic', 'kills', 'games', '
  * from `tab`) directly, with no controlled/uncontrolled duality needed: exactly one `BasicStatsView`
  * is ever mounted at a time, unlike `SeasonTabView`'s two parallel regular/gauntlet instances.
  */
-export function BasicStatsView({ rows, matches, singleMap = false }: { rows: LeaderboardRowWithId[]; matches?: MatchPickBanInput[]; singleMap?: boolean }) {
+export function BasicStatsView({ rows, matches, rounds, singleMap = false }: { rows: LeaderboardRowWithId[]; matches?: MatchPickBanInput[]; rounds?: RoundOutcome[]; singleMap?: boolean }) {
   const data = useMemo(() => rows.map((row) => ({ row, stats: computeAdvancedStats(row) })), [rows]);
   const [rawTab, setTab] = useTabState(BASIC_STATS_TABS, 'basic', 'stab');
 
@@ -636,13 +645,13 @@ export function BasicStatsView({ rows, matches, singleMap = false }: { rows: Lea
   );
 
   const perSideStats = useMemo<PerSideStat[]>(
-    () => (matches ? aggregatePerSideStats(matches) : []),
-    [matches],
+    () => (matches ? aggregatePerSideStats(matches, rounds ?? []) : []),
+    [matches, rounds],
   );
 
   const scoreDistribution = useMemo<ScoreDistribution | null>(
-    () => (matches && singleMap ? aggregateScoreDistribution(matches) : null),
-    [matches, singleMap],
+    () => (matches ? aggregateScoreDistribution(matches) : null),
+    [matches],
   );
 
   const tabs: { key: BasicStatsTab; label: string }[] = [

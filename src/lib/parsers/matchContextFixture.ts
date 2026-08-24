@@ -21,6 +21,7 @@ export function makeContext(opts: {
     endTick: r.endTick ?? r.roundNumber * 1000,
     winnerSide: r.winnerSide,
     shirtsSide: 'CT', // not consulted by collectors — they read playerSides directly
+    winReason: 'elim', // not consulted by collectors
   }));
 
   const liveRounds = new Set(rounds.map((r) => r.roundNumber));
@@ -68,6 +69,7 @@ export function death(opts: {
   attacker?: string | null;
   assister?: string | null;
   headshot?: boolean;
+  weapon?: string;
 }): PlayerDeathRow {
   return {
     tick: opts.tick,
@@ -76,6 +78,7 @@ export function death(opts: {
     attacker_steamid: opts.attacker ?? null,
     assister_steamid: opts.assister ?? null,
     headshot: opts.headshot ?? false,
+    weapon: opts.weapon ?? '',
   };
 }
 

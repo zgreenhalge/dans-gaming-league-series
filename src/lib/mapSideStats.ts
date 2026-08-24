@@ -73,6 +73,50 @@ export interface PerSideStat {
   numTimesPicked: number;
   wins: number;
   losses: number;
+  roundsWon: number;
+  roundsPlayed: number;
+}
+
+/** A `match_rounds` row (or the subset of it round-win-by-side aggregation needs). */
+export interface RoundOutcome {
+  winner_side: 'CT' | 'T';
+  shirts_side: 'CT' | 'T';
+}
+
+/** Round win/loss counts for CT and T, computed directly from round outcomes — symmetric per
+ *  round (shirts win a round iff `winner_side === shirts_side`; skins get the complement), so no
+ *  roster/pick resolution is needed the way match-level `wins`/`losses` above requires. */
+function oppositeSide(side: 'CT' | 'T'): 'CT' | 'T' {
+  return side === 'CT' ? 'T' : 'CT';
+}
+
+function tallyRoundsBySide(rounds: RoundOutcome[]): Record<'CT' | 'T', { won: number; played: number }> {
+  const tally = { CT: { won: 0, played: 0 }, T: { won: 0, played: 0 } };
+  for (const r of rounds) {
+    const skinsSide = oppositeSide(r.shirts_side);
+    tally[r.shirts_side].played++;
+    tally[skinsSide].played++;
+    if (r.winner_side === r.shirts_side) tally[r.shirts_side].won++;
+    else tally[skinsSide].won++;
+  }
+  return tally;
+}
+
+/** Round win/loss counts for CT and T, from *one player's* perspective — unlike
+ *  `tallyRoundsBySide()` (which pools both teams' performance per round symmetrically), this
+ *  resolves the player's own side each round via their roster `faction` and only counts rounds
+ *  their team won. */
+function tallyPlayerRoundsBySide(
+  rounds: RoundOutcome[],
+  faction: 'SHIRTS' | 'SKINS',
+): Record<'CT' | 'T', { won: number; played: number }> {
+  const tally = { CT: { won: 0, played: 0 }, T: { won: 0, played: 0 } };
+  for (const r of rounds) {
+    const playerSide: 'CT' | 'T' = faction === 'SHIRTS' ? r.shirts_side : oppositeSide(r.shirts_side);
+    tally[playerSide].played++;
+    if (r.winner_side === playerSide) tally[playerSide].won++;
+  }
+  return tally;
 }
 
 function getWinningFaction(m: MatchPickBanInput): 'SHIRTS' | 'SKINS' | null {
@@ -177,7 +221,10 @@ export function aggregateScoreDistribution(matches: MatchPickBanInput[]): ScoreD
   return out;
 }
 
-export function aggregatePerSideStats(matches: MatchPickBanInput[]): PerSideStat[] {
+export function aggregatePerSideStats(
+  matches: MatchPickBanInput[],
+  rounds: RoundOutcome[] = [],
+): PerSideStat[] {
   const ct = { wins: 0, losses: 0 };
   const t = { wins: 0, losses: 0 };
 
@@ -201,15 +248,24 @@ export function aggregatePerSideStats(matches: MatchPickBanInput[]): PerSideStat
     else if (winner) bucket.losses++;
   }
 
+  const roundTally = tallyRoundsBySide(rounds);
+
   return [
-    { side: 'CT', numTimesPicked: ct.wins + ct.losses, wins: ct.wins, losses: ct.losses },
-    { side: 'T', numTimesPicked: t.wins + t.losses, wins: t.wins, losses: t.losses },
+    {
+      side: 'CT', numTimesPicked: ct.wins + ct.losses, wins: ct.wins, losses: ct.losses,
+      roundsWon: roundTally.CT.won, roundsPlayed: roundTally.CT.played,
+    },
+    {
+      side: 'T', numTimesPicked: t.wins + t.losses, wins: t.wins, losses: t.losses,
+      roundsWon: roundTally.T.won, roundsPlayed: roundTally.T.played,
+    },
   ];
 }
 
 // ─── Player-perspective stat interfaces & aggregators ───────────────────────
 
 export interface PlayerMatchInput extends VetoFields {
+  match_id: number;
   map: string | null;
   faction: 'SHIRTS' | 'SKINS';
   skins_starting_side: 'CT' | 'T' | null;
@@ -313,7 +369,18 @@ export function aggregatePlayerMapStats(matches: PlayerMatchInput[]): PlayerMapS
     .sort((a, b) => b.games - a.games);
 }
 
-export function aggregatePlayerSideStats(matches: PlayerMatchInput[]): PlayerSideStat[] {
+/**
+ * `roundsByMatch` (from `match_rounds`, demo-derived) gives a real round-by-round
+ * `roundsWon`/`roundsPlayed` split: a match with a demo credits each round to whichever side the
+ * player's team actually played it on, correctly splitting across the halftime side swap. A match
+ * with no entry in `roundsByMatch` (no demo parsed) falls back to crediting the player's whole
+ * `rounds_won`/`rounds_played` to the side they *started* on — an approximation (see
+ * `roundsPlayedBySide()` in `roundSides.ts`), but the only one possible without round-level data.
+ */
+export function aggregatePlayerSideStats(
+  matches: PlayerMatchInput[],
+  roundsByMatch?: Map<number, RoundOutcome[]>,
+): PlayerSideStat[] {
   const ct = { played: 0, numTimesPicked: 0, wins: 0, losses: 0, roundsWon: 0, roundsPlayed: 0 };
   const t = { played: 0, numTimesPicked: 0, wins: 0, losses: 0, roundsWon: 0, roundsPlayed: 0 };
 
@@ -322,10 +389,20 @@ export function aggregatePlayerSideStats(matches: PlayerMatchInput[]): PlayerSid
     const playerSide = m.faction === 'SKINS' ? m.skins_starting_side : (m.skins_starting_side === 'CT' ? 'T' : 'CT');
     const bucket = playerSide === 'CT' ? ct : t;
     bucket.played++;
-    bucket.roundsWon += m.rounds_won;
-    bucket.roundsPlayed += m.rounds_played;
     if (m.is_win) bucket.wins++;
     else bucket.losses++;
+
+    const matchRounds = roundsByMatch?.get(m.match_id);
+    if (matchRounds && matchRounds.length > 0) {
+      const roundTally = tallyPlayerRoundsBySide(matchRounds, m.faction);
+      ct.roundsWon += roundTally.CT.won;
+      ct.roundsPlayed += roundTally.CT.played;
+      t.roundsWon += roundTally.T.won;
+      t.roundsPlayed += roundTally.T.played;
+    } else {
+      bucket.roundsWon += m.rounds_won;
+      bucket.roundsPlayed += m.rounds_played;
+    }
 
     const playerTeamChoseSide = m.faction === 'SHIRTS' ? m.picked_map != null : m.shirts_pick != null;
     if (playerTeamChoseSide) bucket.numTimesPicked++;

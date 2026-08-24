@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getMapDetail, getPlayersById } from '@/lib/queries';
+import { getMapDetail, getPlayersById, getAllMatchRounds } from '@/lib/queries';
 import { mapImageFor, toSentenceCase } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
 import { extractSeasonNumber } from '@/lib/util';
@@ -89,10 +89,11 @@ export default async function MapPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [detail, playersById, mapLookup] = await Promise.all([
+  const [detail, playersById, mapLookup, matchRounds] = await Promise.all([
     getMapDetail(slug),
     getPlayersById(),
     getMapLookup(),
+    getAllMatchRounds(),
   ]);
   if (!detail) notFound();
 
@@ -167,7 +168,7 @@ export default async function MapPage({
       <main className="max-w-[1080px] mx-auto px-6 pb-16 mt-8">
         <Suspense>
           <UrlStateProvider>
-            <MapDetailView detail={detail} players={players} />
+            <MapDetailView detail={detail} players={players} matchRounds={matchRounds} />
           </UrlStateProvider>
         </Suspense>
       </main>

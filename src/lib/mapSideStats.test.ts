@@ -155,6 +155,7 @@ test('classifyMatchVeto: an unplayed match classifies as empty even with bans/po
 
 function playerMatch(opts: Partial<PlayerMatchInput>): PlayerMatchInput {
   return {
+    match_id: 0,
     final_score: '13-9',
     map: null,
     faction: 'SHIRTS',
