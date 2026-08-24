@@ -576,16 +576,18 @@ const KILL_FEED_ICON_HEIGHT = 14;
 
 /** Draws one right-aligned kill-feed glyph ending at `cursor` — the real icon sprite if loaded
  *  (fit to `KILL_FEED_ICON_HEIGHT`, width from its own aspect ratio), else `fallbackText` in
- *  `theme.textDim` — with `pad` px of empty space on either side of whatever it drew. Returns the
+ *  `fallbackColor` — with `pad` px of empty space on either side of whatever it drew. Returns the
  *  new cursor position for the next glyph to its left. Shared by the kill feed's headshot marker
- *  and weapon icon, which differ only in their sprite source and fallback text. */
+ *  and weapon icon, which differ only in their sprite source and fallback text/color.
+ *  `fallbackColor` should match the color `sprite` was requested in (via `getIconSprite`), so the
+ *  glyph doesn't visibly recolor once the sprite finishes loading in place of the fallback text. */
 function drawFeedGlyph(
   ctx: Ctx2D,
   cursor: number,
   y: number,
-  theme: ReplayTheme,
   sprite: IconSprite | null,
   fallbackText: string,
+  fallbackColor: string,
   pad: { before?: number; after?: number } = {},
 ): number {
   let x = cursor - (pad.before ?? 0);
@@ -595,7 +597,7 @@ function drawFeedGlyph(
     x -= w;
     ctx.drawImage(sprite.image, x, y - 1, w, h);
   } else {
-    ctx.fillStyle = theme.textDim;
+    ctx.fillStyle = fallbackColor;
     ctx.fillText(fallbackText, x, y);
     x -= measureApprox(fallbackText);
   }
@@ -632,7 +634,7 @@ function drawKillFeed(
     // doesn't distort it, same as the bomb marker.
     if (k.headshot) {
       const hsSprite = getIconSprite?.(HEADSHOT_ICON_SRC, theme.textDim) ?? null;
-      cursor = drawFeedGlyph(ctx, cursor, y, theme, hsSprite, '⊙', { before: 2, after: 2 });
+      cursor = drawFeedGlyph(ctx, cursor, y, hsSprite, '⊙', theme.textDim, { before: 2, after: 2 });
     } else {
       cursor -= 4;
     }
@@ -642,7 +644,7 @@ function drawKillFeed(
     const label = killWeaponLabel(round, k);
     const iconSrc = weaponIconSrc(label);
     const sprite = iconSrc ? (getIconSprite?.(iconSrc, aColor) ?? null) : null;
-    cursor = drawFeedGlyph(ctx, cursor, y, theme, sprite, label, { after: 4 });
+    cursor = drawFeedGlyph(ctx, cursor, y, sprite, label, aColor, { after: 4 });
 
     // attacker
     ctx.fillStyle = aColor;
