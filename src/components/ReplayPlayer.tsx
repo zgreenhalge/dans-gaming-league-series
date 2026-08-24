@@ -10,6 +10,7 @@ import { projectorFor, type Projector } from '@/lib/replay/project';
 import { viewStateAt, roundTickRange, grenadeEffectRadius, roundClockSeconds, formatClock } from '@/lib/replay/playback';
 import { drawScene, type Ctx2D, type ReplayTheme, type BannerInfo } from '@/lib/replay/draw';
 import { readTheme, STICKER_COLORS } from './replayTheme';
+import { MaskedIcon } from './icons/MaskedIcon';
 import { useMapRadar } from './useMapRadar';
 import { applyCanvasSize, useCanvasSize } from './useCanvasSize';
 import { useReplayClock } from './useReplayClock';
@@ -31,7 +32,7 @@ const STICKER_FILL_ALPHA = 0.3;
 type StickerKind = keyof typeof STICKER_COLORS;
 
 /** Real CS2 buy-menu icons (via github.com/Juknum/counter-strike-icons) for the sticker
- *  toolbar below, tinted with a CSS mask instead of inlined JSX — `he.svg`'s detailed
+ *  toolbar below, tinted via `MaskedIcon` instead of inlined JSX — `he.svg`'s detailed
  *  grenade-body path is tens of KB, too large to embed as a component like the round-result
  *  icons are, and a mask keeps rendering consistent across all three sticker kinds. */
 const STICKER_ICON_SRC: Record<StickerKind, string> = {
@@ -688,20 +689,10 @@ export default function ReplayPlayer({
                 aria-label={`${label} sticker (true size)`}
                 title={`${label} sticker — true size`}
               >
-                <span
-                  aria-hidden
-                  className="block h-3.5 w-3.5"
-                  style={{
-                    backgroundColor: tool === kind ? STICKER_COLORS[kind] : 'var(--color-text-secondary)',
-                    WebkitMaskImage: `url(${STICKER_ICON_SRC[kind]})`,
-                    maskImage: `url(${STICKER_ICON_SRC[kind]})`,
-                    WebkitMaskRepeat: 'no-repeat',
-                    maskRepeat: 'no-repeat',
-                    WebkitMaskPosition: 'center',
-                    maskPosition: 'center',
-                    WebkitMaskSize: 'contain',
-                    maskSize: 'contain',
-                  }}
+                <MaskedIcon
+                  src={STICKER_ICON_SRC[kind]}
+                  size={14}
+                  style={{ color: tool === kind ? STICKER_COLORS[kind] : 'var(--color-text-secondary)' }}
                 />
               </button>
             ))}
