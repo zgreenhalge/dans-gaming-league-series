@@ -174,10 +174,10 @@ function eventContent(ev: ReplayEvent, name: (id: number | null) => React.ReactN
           </>
         )}
         {hasWeaponIcon ? (
-          <WeaponIcon weapon={ev.weapon} size={13} className="text-[var(--color-text-secondary)] shrink-0" />
+          <WeaponIcon weapon={ev.weapon} size={16} className="text-[var(--color-text-secondary)] shrink-0" />
         ) : (
           <>
-            <Crosshair size={13} className="text-[var(--color-text-secondary)] shrink-0" />
+            <Crosshair size={16} className="text-[var(--color-text-secondary)] shrink-0" />
             <span className="text-[var(--color-text-secondary)] font-mono text-[11px]">
               {weaponLabel(ev.weapon)}
             </span>
@@ -185,7 +185,7 @@ function eventContent(ev: ReplayEvent, name: (id: number | null) => React.ReactN
         )}
         {ev.headshot && (
           <span title="Headshot" className="inline-flex shrink-0">
-            <HeadshotIcon size={11} className="text-[var(--color-text-secondary)]" />
+            <HeadshotIcon size={14} className="text-[var(--color-text-secondary)]" />
           </span>
         )}
         {name(ev.victimId)}

@@ -7,15 +7,22 @@ import type { CSSProperties } from 'react';
  * losing per-shape control (fine for a flat silhouette icon). Tint follows `currentColor` exactly
  * like the inlined icon components (`ConditionIcons`, `SideIcons`) — set `color` via `className`
  * or `style` on this element or an ancestor.
+ *
+ * `size` sets the box height and, by default, its width too (square — right for the near-square
+ * icons this was originally built for). Pass `width` explicitly to fit a landscape icon — e.g.
+ * `WeaponIcon` derives it from the source SVG's own aspect ratio — so `mask-size: contain` has a
+ * correctly-proportioned box to fill instead of letterboxing the icon down to fit a square one.
  */
 export function MaskedIcon({
   src,
   size,
+  width,
   className,
   style,
 }: {
   src: string;
   size: number;
+  width?: number;
   className?: string;
   style?: CSSProperties;
 }) {
@@ -25,7 +32,7 @@ export function MaskedIcon({
       className={className}
       style={{
         display: 'inline-block',
-        width: size,
+        width: width ?? size,
         height: size,
         backgroundColor: 'currentColor',
         WebkitMaskImage: `url(${src})`,

@@ -571,7 +571,7 @@ function drawScore(ctx: Ctx2D, width: number, banner: BannerInfo, theme: ReplayT
 /** Icon target height, in canvas px — width follows the sprite's own aspect ratio (weapon icons
  *  are landscape, not square) rather than being squashed to match. Sits between the attacker and
  *  victim names. */
-const KILL_FEED_ICON_HEIGHT = 12;
+const KILL_FEED_ICON_HEIGHT = 14;
 
 function drawKillFeed(
   ctx: Ctx2D,
