@@ -83,17 +83,6 @@ export interface RoundOutcome {
   shirts_side: 'CT' | 'T';
 }
 
-/** Narrows a league/season-wide round list down to the rounds belonging to `matches` — the
- *  cross-season views (career, map detail) fetch round outcomes unscoped, then filter to whatever
- *  season/side selection the caller already applied to `matches`. */
-export function filterRoundsByMatches<R extends { match_id: number }>(
-  rounds: R[],
-  matches: { match_id: number }[],
-): R[] {
-  const matchIds = new Set(matches.map((m) => m.match_id));
-  return rounds.filter((r) => matchIds.has(r.match_id));
-}
-
 /** Round win/loss counts for CT and T, computed directly from round outcomes — symmetric per
  *  round (shirts win a round iff `winner_side === shirts_side`; skins get the complement), so no
  *  roster/pick resolution is needed the way match-level `wins`/`losses` above requires. */

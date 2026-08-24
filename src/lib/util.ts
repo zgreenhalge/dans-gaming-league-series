@@ -455,3 +455,15 @@ export function weekAnchorId(weekId: number): string {
 export function roundAnchorId(roundNumber: number): string {
   return `round-${roundNumber}`;
 }
+
+/** Narrows a league/season-wide match-scoped row list (round outcomes, kills, ...) down to the
+ *  rows belonging to `matches` — the cross-season views (career, map detail, player) fetch such
+ *  data unscoped, then filter to whatever season/side selection the caller already applied to
+ *  `matches`. */
+export function filterByMatchIds<R extends { match_id: number }>(
+  rows: R[],
+  matches: { match_id: number }[],
+): R[] {
+  const matchIds = new Set(matches.map((m) => m.match_id));
+  return rows.filter((r) => matchIds.has(r.match_id));
+}

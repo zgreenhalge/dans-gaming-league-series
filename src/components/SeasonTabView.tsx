@@ -14,7 +14,7 @@ import { useH2HPairUrlState } from './useH2HPairUrlState';
 import { BasicStatsView } from './BasicStatsView';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import TabBar from './TabBar';
-import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow, MatchRoundRow } from '@/lib/queries';
+import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow, MatchRoundRow, MatchKillRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { MatchPickBanInput } from '@/lib/mapSideStats';
 import { isPlayedScore, tabCls, weekAnchorId, roundAnchorId } from '@/lib/util';
@@ -95,10 +95,13 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
   /** This season's demo-derived round outcomes — feeds the Maps & Sides tab's round-win-%-by-side
    *  column. Empty for matches with no parsed demo. */
   matchRounds?: MatchRoundRow[];
+  /** This season's demo-derived kills — feeds the Advanced tab's Weapons sub-tab. Empty for
+   *  matches with no parsed demo. */
+  matchKills?: MatchKillRow[];
 };
 
 export default function SeasonTabView(props: SeasonTabViewProps) {
-  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings, sabremetrics, matchRounds } = props;
+  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings, sabremetrics, matchRounds, matchKills } = props;
   const hasSab = !!sabremetrics && sabremetrics.length > 0;
   const isGauntlet = props.kind === 'gauntlet';
   const schedule = props.kind === 'regular' ? props.schedule : EMPTY_SCHEDULE;
@@ -437,7 +440,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
       {tab === 'stats' && hasStats && <BasicStatsView rows={leaderboard} matches={allMatches} rounds={matchRounds} />}
 
       {tab === 'advanced' && hasSab && (
-        <SabremetricsLeaderboardView rows={sabremetrics!} />
+        <SabremetricsLeaderboardView rows={sabremetrics!} kills={matchKills} />
       )}
 
       {tab === 'h2h' && hasH2H && <H2HSection data={h2hData} initialPair={urlInitialPair} onPairChange={handleH2HPairChange} />}

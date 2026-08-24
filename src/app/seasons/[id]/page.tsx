@@ -18,6 +18,7 @@ import {
   getSeasonEhogRatings,
   getAllSabremetrics,
   getAllMatchRounds,
+  getAllMatchKills,
   type WeekWithMatches,
   type GauntletRound,
 } from '@/lib/queries';
@@ -151,7 +152,7 @@ export default async function SeasonPage({
     if (linked) redirect(`/seasons/${linked.id}`);
 
     // Orphan gauntlet with no paired regular season — render standalone
-    const [rounds, bracketShape, leaderboard, playersById, ehogRatings, sabremetrics, matchRounds] = await Promise.all([
+    const [rounds, bracketShape, leaderboard, playersById, ehogRatings, sabremetrics, matchRounds, matchKills] = await Promise.all([
       getGauntletRounds(seasonId),
       getGauntletBracketShape(seasonId),
       getGauntletSeasonLeaderboard(seasonId),
@@ -159,6 +160,7 @@ export default async function SeasonPage({
       getSeasonEhogRatings(seasonId),
       getAllSabremetrics(seasonId),
       getAllMatchRounds(seasonId),
+      getAllMatchKills(seasonId),
     ]);
     // Computed from `rounds` — already fetched above for the Rounds tab — instead of a second,
     // redundant getH2HData() round-trip over the same matches (see #441).
@@ -216,6 +218,7 @@ export default async function SeasonPage({
                 ehogRatings={ehogRatings}
                 sabremetrics={sabremetrics}
                 matchRounds={matchRounds}
+                matchKills={matchKills}
               />
             </UrlStateProvider>
           </Suspense>
@@ -229,7 +232,7 @@ export default async function SeasonPage({
 
   const isUpcoming = season.status === 'UPCOMING';
 
-  const [leaderboard, schedule, gauntletRounds, gauntletBracketShape, gauntletLeaderboard, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics, playersById, hasSchedule, matchRounds, gauntletMatchRounds] = await Promise.all([
+  const [leaderboard, schedule, gauntletRounds, gauntletBracketShape, gauntletLeaderboard, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics, playersById, hasSchedule, matchRounds, gauntletMatchRounds, matchKills, gauntletMatchKills] = await Promise.all([
     getSeasonLeaderboard(seasonId),
     getSeasonSchedule(seasonId),
     linkedGauntlet ? getGauntletRounds(linkedGauntlet.id) : Promise.resolve(null),
@@ -243,6 +246,8 @@ export default async function SeasonPage({
     isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
     getAllMatchRounds(seasonId),
     linkedGauntlet ? getAllMatchRounds(linkedGauntlet.id) : Promise.resolve([]),
+    getAllMatchKills(seasonId),
+    linkedGauntlet ? getAllMatchKills(linkedGauntlet.id) : Promise.resolve([]),
   ]);
   // Computed from `schedule`/`gauntletRounds` — already fetched above for the Schedule/Rounds tabs
   // — instead of two more redundant getH2HData() round-trips over the same matches (see #441).
@@ -341,6 +346,8 @@ export default async function SeasonPage({
                 gauntletSabremetrics={gauntletSabremetrics}
                 matchRounds={matchRounds}
                 gauntletMatchRounds={gauntletMatchRounds}
+                matchKills={matchKills}
+                gauntletMatchKills={gauntletMatchKills}
               />
             ) : (
               <SeasonTabView
@@ -355,6 +362,7 @@ export default async function SeasonPage({
                 ehogRatings={ehogRatings}
                 sabremetrics={sabremetrics}
                 matchRounds={matchRounds}
+                matchKills={matchKills}
               />
             )}
           </UrlStateProvider>

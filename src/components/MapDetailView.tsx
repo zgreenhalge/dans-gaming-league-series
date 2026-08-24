@@ -10,8 +10,7 @@ import { useH2HPairUrlState } from './useH2HPairUrlState';
 import { useLiveH2HData } from './useLiveH2HData';
 import TabBar from './TabBar';
 import { BasicStatsView } from './BasicStatsView';
-import { tabCls, canonicalSort, deriveRates, splitSeasonsByGauntlet } from '@/lib/util';
-import { filterRoundsByMatches } from '@/lib/mapSideStats';
+import { tabCls, canonicalSort, deriveRates, splitSeasonsByGauntlet, filterByMatchIds } from '@/lib/util';
 import type { MapMatchRow, MapDetail, MapPlayerStat, MatchRoundRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import H2HSection from './H2HSection';
@@ -146,7 +145,7 @@ export default function MapDetailView({
   );
 
   const filteredRounds = useMemo(
-    () => filterRoundsByMatches(matchRounds, filteredMatches),
+    () => filterByMatchIds(matchRounds, filteredMatches),
     [filteredMatches, matchRounds],
   );
 

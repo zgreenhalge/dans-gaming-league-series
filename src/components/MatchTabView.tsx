@@ -14,7 +14,6 @@ import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import Th from '@/components/Th';
 import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow } from '@/lib/queries';
-import MatchWeaponsTable from '@/components/MatchWeaponsTable';
 import type { SabFields } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
 import { roundsPlayedBySide } from '@/lib/parsers/roundSides';
@@ -552,14 +551,7 @@ export default function MatchTabView({
       )}
 
       {tab === 'advanced' && statsRecorded && (
-        <>
-          <SabremetricsLeaderboardView rows={advancedStatRows} teamGroups={advancedStatTeams} showPlusStats={false} />
-          {matchKills.length > 0 && (
-            <div className="mt-6">
-              <MatchWeaponsTable kills={matchKills} players={matchPlayers} />
-            </div>
-          )}
-        </>
+        <SabremetricsLeaderboardView rows={advancedStatRows} teamGroups={advancedStatTeams} showPlusStats={false} kills={matchKills} />
       )}
 
       {tab === 'scouting' && (

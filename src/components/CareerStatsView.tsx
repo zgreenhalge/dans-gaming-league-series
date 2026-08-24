@@ -8,11 +8,10 @@ import { useTabState } from './useTabState';
 import { useH2HPairUrlState } from './useH2HPairUrlState';
 import H2HSection from './H2HSection';
 import { BasicStatsView } from './BasicStatsView';
-import { buildRegularToGauntletMap, deriveRates, extractSeasonNumber, tabCls } from '@/lib/util';
+import { buildRegularToGauntletMap, deriveRates, extractSeasonNumber, tabCls, filterByMatchIds } from '@/lib/util';
 import { useLiveH2HData } from './useLiveH2HData';
-import { filterRoundsByMatches } from '@/lib/mapSideStats';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import type { TrophyEntry, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow, MatchRoundRow } from '@/lib/queries';
+import type { TrophyEntry, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow, MatchRoundRow, MatchKillRow } from '@/lib/queries';
 import EhogTierBar from './EhogTierBar';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import TabBar from './TabBar';
@@ -66,6 +65,7 @@ export default function CareerStatsView({
   ehogSnapshots = [],
   allSabremetrics = [],
   allMatchRounds = [],
+  allMatchKills = [],
 }: {
   regularSeasons: { id: number; name: string }[];
   gauntletSeasons: { id: number; name: string }[];
@@ -79,6 +79,7 @@ export default function CareerStatsView({
   ehogSnapshots?: EhogSnapshotRow[];
   allSabremetrics?: SabremetricMatchRow[];
   allMatchRounds?: MatchRoundRow[];
+  allMatchKills?: MatchKillRow[];
 }) {
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
   const [tab, setTab] = useTabState(CAREER_TABS, 'leaderboard');
@@ -118,8 +119,13 @@ export default function CareerStatsView({
   }, [selectedSeason, allMatches, includeRegular, includeGauntlet, regularToGauntlet]);
 
   const filteredRounds = useMemo(
-    () => filterRoundsByMatches(allMatchRounds, filteredMatches),
+    () => filterByMatchIds(allMatchRounds, filteredMatches),
     [filteredMatches, allMatchRounds],
+  );
+
+  const filteredKills = useMemo(
+    () => filterByMatchIds(allMatchKills, filteredMatches),
+    [filteredMatches, allMatchKills],
   );
 
   const h2hData = useLiveH2HData(filteredMatches, players);
@@ -238,7 +244,7 @@ export default function CareerStatsView({
       )}
 
       {tab === 'advanced' && (
-        <SabremetricsLeaderboardView rows={filteredSabremetrics} />
+        <SabremetricsLeaderboardView rows={filteredSabremetrics} kills={filteredKills} />
       )}
 
       {tab === 'h2h' && (

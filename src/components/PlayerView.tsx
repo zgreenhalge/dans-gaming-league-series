@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { groupRoundsByMatch, aggregateWeaponKillStats, favoriteWeapon, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow } from '@/lib/queries';
+import { groupRoundsByMatch, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { useLiveH2HData } from './useLiveH2HData';
-import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
+import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, filterByMatchIds, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerStats, aggregatePlayerStatsByMap } from '@/lib/player-stats';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
@@ -233,12 +233,9 @@ export default function PlayerView({
   const roundsByMatch = useMemo(() => groupRoundsByMatch(matchRounds), [matchRounds]);
   const playerSideStats = aggregatePlayerSideStats(filtered, roundsByMatch);
 
-  const weaponKillStats = useMemo(() => {
-    const matchIds = new Set(filtered.map((r) => r.match_id));
-    const filteredKills = matchKills.filter((k) => matchIds.has(k.match_id));
-    return aggregateWeaponKillStats(filteredKills, playerId);
-  }, [filtered, matchKills, playerId]);
-  const topWeapon = favoriteWeapon(weaponKillStats);
+  // Passed to SabremetricsLeaderboardView's Weapons sub-tab (Advanced tab) — see kills.ts's
+  // aggregateWeaponKillStats()/favoriteWeapon() for how it's turned into per-weapon breakdowns.
+  const filteredKills = useMemo(() => filterByMatchIds(matchKills, filtered), [filtered, matchKills]);
   const playedHistory = useMemo(() => filtered.filter(isPlayed), [filtered]);
   const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
 
@@ -623,31 +620,6 @@ export default function PlayerView({
             </div>
           )}
 
-          {topWeapon && topWeapon.kills > 0 && (
-            <>
-              <SectionLabel>Weapons</SectionLabel>
-              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-2">
-                <div className="flex items-baseline justify-between mb-1 pb-2 border-b border-[var(--color-border-tertiary)]">
-                  <span className="tracked text-[9px] text-[var(--color-text-secondary)]">Favorite weapon</span>
-                  <span className="font-mono text-[11px] text-[var(--color-text-primary)] font-semibold">
-                    {topWeapon.weapon} ({topWeapon.kills} kills)
-                  </span>
-                </div>
-                {weaponKillStats
-                  .filter((s) => s.kills > 0)
-                  .slice(0, 8)
-                  .map((s) => (
-                    <PctRow
-                      key={s.weapon}
-                      label={s.weapon}
-                      pct={weaponKillStats[0].kills > 0 ? (s.kills / weaponKillStats[0].kills) * 100 : 0}
-                      value={String(s.kills)}
-                    />
-                  ))}
-              </div>
-            </>
-          )}
-
           {adrSeries.length > 1 && (
           <DevGate className="mt-10">
               <div className="flex items-baseline justify-between mb-3">
@@ -750,7 +722,7 @@ export default function PlayerView({
 
       {/* Advanced Stats tab */}
       {tab === 'advanced' && (
-        <SabremetricsLeaderboardView rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} singlePlayer />
+        <SabremetricsLeaderboardView rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} singlePlayer kills={filteredKills} />
       )}
 
       {/* Matchups tab */}
