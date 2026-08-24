@@ -41,23 +41,26 @@ schema would make E2E runs silently stop testing what the app actually does.
 ## Running locally
 
 ```
-supabase start   # once per session — brings up the local stack, applies migrations + seed.sql
-export NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-export NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjIxNDU5MTY4MDB9.SD8OGMUA7SztCSQyoNK_up2hNla9czXlhL7RvNeh1kw
-export SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MjE0NTkxNjgwMH0.Q_XOunt2yFrXAkYRNeh5JgAO_M_zLBEh7OwNnfEJjXU
+supabase start                        # once per session — brings up the local stack, applies migrations + seed.sql
+set -a; source supabase/local.env; set +a
 npm run test:e2e
 ```
 
 `playwright.config.ts`'s `webServer` starts `next dev` itself (port `3100` by default, override with
 `PLAYWRIGHT_PORT`) and waits for it to come up — no separate `npm run dev` needed. It inherits
 `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` from the shell
-environment. The anon/service_role values above are **fixed, local-dev-only demo JWTs** derived from
-`supabase/config.toml`'s pinned `auth.jwt_secret` (role `anon`/`service_role`, `iss: supabase-demo`)
-— not real secrets, and not something you look up from `supabase status`: recent Supabase CLI
-releases stopped reliably printing them from `status`/`start` output (a known upstream regression,
-[supabase/cli#4211](https://github.com/supabase/cli/issues/4211)), and since they're fully
-determined by the pinned secret there's nothing to look up anyway — they'll be identical every time
-you `supabase start` this repo. Run `supabase stop` when done.
+environment. `supabase/local.env` is the single source of truth for those three values — the URL is
+`config.toml`'s pinned `api.port`, and the anon/service_role values are **fixed, local-dev-only demo
+JWTs** derived from `config.toml`'s pinned `auth.jwt_secret` (role `anon`/`service_role`,
+`iss: supabase-demo`) — not real secrets, and not something you look up from `supabase status`:
+recent Supabase CLI releases stopped reliably printing them from `status`/`start` output (a known
+upstream regression, [supabase/cli#4211](https://github.com/supabase/cli/issues/4211)), and since
+they're fully determined by the pinned secret there's nothing to look up anyway — they'll be
+identical every time you `supabase start` this repo. Run `supabase stop` when done.
+
+In a Claude Code web session, `.claude/hooks/session-start.sh` does the `supabase start` +
+`source supabase/local.env` sequence above automatically whenever no real `.env.local` is present —
+see "Claude Code sessions" below.
 
 ## Auth: dev-mode mock providers, not real Steam OAuth
 
@@ -89,9 +92,31 @@ provision per run, no state-pollution risk against a shared project, and the who
 `supabase start`, Playwright browsers, the suite itself) runs in a couple of minutes. It installs the
 Supabase CLI (`supabase/setup-cli`), runs `supabase start`, pulls `NEXT_PUBLIC_SUPABASE_URL` from
 `supabase status -o env`'s `API_URL` (the one value that CLI output has reliably carried), sets the
-anon/service_role keys from the same fixed JWTs documented above (job-level `env:`, not parsed from
-CLI output — see the "Running locally" section for why), verifies none of the three ended up empty
+anon/service_role keys by sourcing `supabase/local.env` into `$GITHUB_ENV` (not parsed from CLI
+output — see the "Running locally" section for why), verifies none of the three ended up empty
 before running anything, runs the suite, then `supabase stop`.
+
+## Claude Code sessions
+
+A Claude Code web session starts with no `.env.local` — no real Supabase project credentials are
+ever placed in an agent sandbox — so a plain `npm run dev`/`npm run build`/`npm test` would otherwise
+fail immediately with `src/lib/supabase.ts`'s "Missing Supabase env vars" error, since several routes
+(`seasons/page.tsx`, `maps/page.tsx`, `statistics/page.tsx`, and others using
+`export const revalidate = 60`) fetch from Supabase during prerendering, not just at request time.
+
+`.claude/hooks/session-start.sh` (registered as a `SessionStart` hook in `.claude/settings.json`)
+closes that gap using the same local stack this doc already describes: it runs `npm install`, then —
+unless a real `.env.local` is already present — brings up the local Supabase stack (`npm run
+db:start`) and exports `supabase/local.env`'s three fixed values into the session's environment. This
+gives the agent a real, schema-accurate (if data-empty beyond `seed.sql`'s baseline players/maps)
+Supabase connection for exactly the kind of build/type-check verification `CLAUDE.md` asks agents to
+do — never for testing real match content, which still requires the real project.
+
+Every step is independent and best-effort — a missing Docker daemon, a sandbox whose network policy
+blocks pulling the Postgres/PostgREST/Realtime images, or an already-configured `.env.local` are all
+handled by skipping the remaining steps rather than failing the session start. `.claude/session-start.log`
+records exactly which step ran, skipped, or failed, so a session missing its local stack is
+diagnosable without re-running anything by hand — grep that file first.
 
 ## Adding a new flow
 

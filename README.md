@@ -40,7 +40,9 @@ npm run lint    # ESLint
 
 ## Environment Variables
 
-Create `.env.local` at the repo root:
+Create `.env.local` at the repo root. (In a Claude Code web session, skip this — a `SessionStart`
+hook auto-provisions a local Supabase stack instead when `.env.local` is absent; see
+[`docs/e2e.md`](./docs/e2e.md)'s "Claude Code sessions" section.)
 
 | Variable | Purpose |
 |---|---|
