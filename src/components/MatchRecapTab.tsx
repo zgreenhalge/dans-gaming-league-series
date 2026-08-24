@@ -13,6 +13,7 @@ import { RecordingViewer, RecordingUrlForm } from './RecordingViewer';
 import { BombIcon, DefuseIcon, CONDITION_ICON } from './icons/ConditionIcons';
 import { SIDE_ICON } from './icons/SideIcons';
 import { HeadshotIcon } from './icons/KillModifierIcons';
+import { WeaponIcon, weaponIconSrc } from './icons/WeaponIcon';
 import type { ReplayJobState, ReplayEventsView } from '@/lib/queries';
 import type { ReplayEvent } from '@/lib/replay/types';
 import type { Faction } from '@/lib/types';
@@ -163,7 +164,11 @@ function eventContent(ev: ReplayEvent, name: (id: number | null) => React.ReactN
   if (ev.type === 'kill') {
     return (
       <>
-        <Crosshair size={13} className="text-[var(--color-text-secondary)] shrink-0" />
+        {weaponIconSrc(ev.weapon) ? (
+          <WeaponIcon weapon={ev.weapon} size={13} className="text-[var(--color-text-secondary)] shrink-0" />
+        ) : (
+          <Crosshair size={13} className="text-[var(--color-text-secondary)] shrink-0" />
+        )}
         {name(ev.attackerId)}
         {ev.assisterId !== null && (
           <>

@@ -17,6 +17,7 @@ import {
 import { tabCls } from '@/lib/util';
 import EmptyState from './EmptyState';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
+import { WeaponIcon } from './icons/WeaponIcon';
 
 // Side-tint helper (CT/T, not SHIRTS/SKINS) — matches MatchTabView.tsx's own factionClass(),
 // duplicated locally per this codebase's existing pattern of small per-file copies (also
@@ -359,6 +360,18 @@ function resolvePlayerWeaponRow(
   };
 }
 
+/** Icon + weapon name — shared by the WeaponsTable column and the single-player Weapon tile
+ *  (`buildWeaponTiles()`); kills live in their own "Kills With" column/tile next to it. */
+function WeaponLabel({ weapon }: { weapon: string | null }) {
+  if (!weapon) return <>—</>;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <WeaponIcon weapon={weapon} size={13} />
+      {weapon}
+    </span>
+  );
+}
+
 function WeaponsTable({ aggregated, kills, selectedWeapon, singlePlayer, showHeading = true }: {
   aggregated: AggregatedSab[];
   kills: MatchKillRow[];
@@ -411,7 +424,7 @@ function WeaponsTable({ aggregated, kills, selectedWeapon, singlePlayer, showHea
             {sorted.map((r) => (
               <tr key={r.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                 {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
-                <td className="px-3 py-2 text-left">{r.weapon ?? '—'}</td>
+                <td className="px-3 py-2 text-left"><WeaponLabel weapon={r.weapon} /></td>
                 <td className={tdRight}>{r.kills}</td>
                 <td className={tdRight}>{pct(r.headshotKills, r.kills)}</td>
                 <td className={tdRight}>{r.deaths}</td>
@@ -428,7 +441,10 @@ function WeaponBar({ weapon, kills, maxKills }: { weapon: string; kills: number;
   const pctWidth = maxKills > 0 ? Math.max(0, Math.min(100, (kills / maxKills) * 100)) : 0;
   return (
     <div className="grid grid-cols-[100px_1fr_40px] items-center gap-2.5 py-1.5">
-      <span className="tracked text-[9px] text-[var(--color-text-secondary)]">{weapon}</span>
+      <span className="tracked text-[9px] text-[var(--color-text-secondary)] inline-flex items-center gap-1.5">
+        <WeaponIcon weapon={weapon} size={11} />
+        {weapon}
+      </span>
       <span className="block h-[6px] w-full bg-[rgba(255,255,255,0.08)]">
         <span className="block h-full bg-[var(--color-site-accent)]" style={{ width: `${pctWidth}%` }} />
       </span>
@@ -818,7 +834,7 @@ function buildWeaponTiles(weaponStats: WeaponKillStat[], selectedWeapon: string 
   const stat = resolveWeaponStat(weaponStats, selectedWeapon);
   const titleSuffix = selectedWeapon == null ? "this player's favorite weapon" : selectedWeapon;
   return [
-    { label: 'Weapon', title: 'The weapon these stats are for', value: stat?.weapon ?? '—' },
+    { label: 'Weapon', title: 'The weapon these stats are for', value: <WeaponLabel weapon={stat?.weapon ?? null} /> },
     { label: 'Kills With', title: `Credited kills with ${titleSuffix} (excludes self-kills and teamkills)`, value: stat?.kills ?? 0 },
     { label: 'HS% With', title: `Headshot kills / kills with ${titleSuffix}`, value: pct(stat?.headshotKills ?? 0, stat?.kills ?? 0) },
     { label: 'Deaths To', title: `Deaths to ${titleSuffix}`, value: stat?.deaths ?? 0 },
