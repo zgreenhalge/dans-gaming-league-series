@@ -907,6 +907,21 @@ export default function SabremetricsLeaderboardView({
    *  single-player tile view) share one selection and one dropdown. */
   const [weaponFilter, setWeaponFilter] = useState<string | null>(null);
 
+  // Memoized (not called inline in the singlePlayer branch below) so picking a different weapon
+  // filter — which only ever changes buildWeaponTiles()'s cheap lookup — doesn't also re-run
+  // buildSinglePlayerTiles()'s full aggregateWeaponKillStats() scan over `kills` plus every other
+  // tile section. Computed unconditionally (hooks can't be called only when singlePlayer is true)
+  // but short-circuits to null outside single-player mode, so the multi-player render path never
+  // pays for it.
+  const singlePlayerTiles = useMemo(
+    () => (singlePlayer && aggregated.length > 0 ? buildSinglePlayerTiles(aggregated[0], leagueAggregated, kills) : null),
+    [singlePlayer, aggregated, leagueAggregated, kills],
+  );
+  const singlePlayerWeaponTiles = useMemo(
+    () => buildWeaponTiles(singlePlayerTiles?.weaponStats ?? [], weaponFilter),
+    [singlePlayerTiles, weaponFilter],
+  );
+
   if (aggregated.length === 0) {
     return <EmptyState message="No sabremetric data available. Upload demos on match pages to populate advanced stats." />;
   }
@@ -922,7 +937,7 @@ export default function SabremetricsLeaderboardView({
   );
 
   if (singlePlayer) {
-    const tiles = buildSinglePlayerTiles(aggregated[0], leagueAggregated, kills);
+    const tiles = singlePlayerTiles!;
     return (
       <div className="space-y-4">
         {tabBar}
@@ -932,7 +947,7 @@ export default function SabremetricsLeaderboardView({
         {sub === 'weapons' && (
           <div className="space-y-4">
             <WeaponFilterSelect kills={kills} value={weaponFilter} onChange={setWeaponFilter} />
-            <StatTileGrid heading="Weapons" tiles={buildWeaponTiles(tiles.weaponStats, weaponFilter)} />
+            <StatTileGrid heading="Weapons" tiles={singlePlayerWeaponTiles} />
             {tiles.topWeapons.length > 0 && (
               <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-2">
                 {tiles.topWeapons.map((w) => (

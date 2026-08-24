@@ -105,6 +105,41 @@ export function buildRoundDeaths(
 }
 
 /**
+ * Drops any `player_death` event landing on the same (round, victim) as an earlier one — a player
+ * can die at most once in a live round, so a second event there is always a genuine anomaly (e.g.
+ * a duplicated event from the parser itself), not something any downstream collector should
+ * double-count. Applied once, right after `buildMatchContext()`, so every consumer of
+ * `deathEvents` (KAST, trades, multikills, teamkills, clutches, utility, `match_kills`, ...) sees
+ * the same deduped stream — the same reasoning that put the tick-liveness check in `roundOf()`
+ * itself rather than in one collector: a shared invariant belongs at the shared choke point, not
+ * re-guarded per caller. Recorded to `context.warnings` (gates auto-commit — see
+ * `evaluateAutoCommit()`) so the match routes to manual review instead of confirming with
+ * silently-dropped events. Events outside a live round are left in place — `buildRoundDeaths()`
+ * (which already ran, since it needs the *raw* stream before `context` exists) collapses
+ * duplicates into a `Set` on its own, so running this afterward doesn't change its result.
+ */
+export function dedupeDeathEvents(deathEvents: PlayerDeathRow[], context: MatchContext): PlayerDeathRow[] {
+  const seenRoundVictims = new Set<string>();
+  const result: PlayerDeathRow[] = [];
+  for (const d of deathEvents) {
+    const round = roundOf(d, context);
+    const victim = d.user_steamid;
+    if (round != null && victim) {
+      const key = `${round}::${victim}`;
+      if (seenRoundVictims.has(key)) {
+        context.warnings.push(
+          `Duplicate player_death for ${victim} in round ${round} — kept the first, dropped the rest.`,
+        );
+        continue;
+      }
+      seenRoundVictims.add(key);
+    }
+    result.push(d);
+  }
+  return result;
+}
+
+/**
  * True when `a` and `b` are on the same roster faction (SHIRTS/SKINS). Compares
  * `context.factionOf` — a fixed roster fact populated unconditionally in `buildMatchContext()` —
  * rather than `context.playerSides`, which is only populated when the starting side resolves

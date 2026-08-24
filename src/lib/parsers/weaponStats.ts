@@ -171,16 +171,12 @@ export interface KillFactRow {
  * they're not a known roster player (world/environment kills, e.g. fall damage), matching the
  * `steamSet` gating every other collector in this file applies.
  *
- * A player can die at most once in a live round, so `match_kills` enforces `unique (round,
- * victim)`. `roundOf()` (`_shared.ts`) already excludes warmup/pre-match-start events by tick, not
- * just by round-number offset — the actual bug that surfaced this constraint originally (a
- * warmup-period death whose `total_rounds_played` coincidentally matched a live round number) is
- * fixed there, for every collector, not band-aided here. If two events still land on the same
- * (round, victim) after that, it's a genuine anomaly (e.g. a duplicated `player_death` from
- * demoparser2 itself) worth a human look, not something to paper over silently: it's recorded to
- * `context.warnings` (which gates auto-commit — see `evaluateAutoCommit()` — so the match routes
- * to manual review instead of confirming with a quietly-dropped kill) and only the first event is
- * kept, since the table's constraint still requires exactly one row.
+ * Expects `deathEvents` already deduped to at most one event per (round, victim) —
+ * `dedupeDeathEvents()` (`matchContext.ts`), applied once upstream to every event-based collector's
+ * shared `deathEvents` stream, not re-guarded here. A player can die at most once in a live round,
+ * so `match_kills` enforces `unique (round, victim)`; without that upstream dedup this collector
+ * would be the only one of ~10 sharing `deathEvents` that noticed a duplicate, and every other
+ * consumer (KAST, trades, multikills, ...) would silently double-count it instead.
  */
 export function collectMatchKills(
   deathEvents: PlayerDeathRow[],
@@ -189,7 +185,6 @@ export function collectMatchKills(
 ): KillFactRow[] {
   const steamSet = new Set(steamIds);
   const rows: KillFactRow[] = [];
-  const seenRoundVictims = new Set<string>();
 
   for (const d of deathEvents) {
     const round = roundOf(d, context);
@@ -197,15 +192,6 @@ export function collectMatchKills(
 
     const victim = d.user_steamid;
     if (!victim || !steamSet.has(victim)) continue;
-
-    const dedupeKey = `${round}::${victim}`;
-    if (seenRoundVictims.has(dedupeKey)) {
-      context.warnings.push(
-        `Duplicate player_death for ${victim} in round ${round} — kept the first, dropped the rest.`,
-      );
-      continue;
-    }
-    seenRoundVictims.add(dedupeKey);
 
     const attacker = d.attacker_steamid && steamSet.has(d.attacker_steamid) ? d.attacker_steamid : null;
     const assister = d.assister_steamid && steamSet.has(d.assister_steamid) ? d.assister_steamid : null;

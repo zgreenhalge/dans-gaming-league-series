@@ -129,6 +129,14 @@ export interface WeaponKillStat {
   deaths: number;
 }
 
+/** A `WeaponKillStat` with every count at zero — the shape a weapon starts at before any kill/death
+ *  is tallied into it (`aggregateWeaponKillStats()`), and the same shape `resolveWeaponStat()`
+ *  falls back to for a weapon with no kills/deaths in scope, so both call sites build one from the
+ *  same place instead of duplicating the field list. */
+function zeroWeaponStat(weapon: string): WeaponKillStat {
+  return { weapon, category: killWeaponCategory(weapon), kills: 0, headshotKills: 0, deaths: 0 };
+}
+
 /** Kills-with / headshot-kills-with / deaths-to, bucketed by individual weapon, for one player
  *  over whatever `kills` scope the caller already filtered (a season, a match, career). Self-kills
  *  and teamkills don't count toward `kills`/`headshotKills` (they're not a credited kill) but do
@@ -138,7 +146,7 @@ export function aggregateWeaponKillStats(kills: MatchKillRow[], playerId: number
   const getBucket = (weapon: string): WeaponKillStat => {
     let b = buckets.get(weapon);
     if (!b) {
-      b = { weapon, category: killWeaponCategory(weapon), kills: 0, headshotKills: 0, deaths: 0 };
+      b = zeroWeaponStat(weapon);
       buckets.set(weapon, b);
     }
     return b;
@@ -184,10 +192,7 @@ export function allWeaponsWithKills(kills: MatchKillRow[]): string[] {
  *  Weapons sub-tab's filter contract. */
 export function resolveWeaponStat(stats: WeaponKillStat[], weapon: string | null): WeaponKillStat | null {
   if (weapon == null) return favoriteWeapon(stats);
-  return (
-    stats.find((s) => s.weapon === weapon) ??
-    { weapon, category: killWeaponCategory(weapon), kills: 0, headshotKills: 0, deaths: 0 }
-  );
+  return stats.find((s) => s.weapon === weapon) ?? zeroWeaponStat(weapon);
 }
 
 export interface WeaponCategoryKillStat {
