@@ -15,6 +15,9 @@ export function makeContext(opts: {
   tickRate?: number;
   hasSides?: boolean;
   warnings?: string[];
+  /** Defaults to 0 ("no tick filtering") — tests that don't care about warmup-tick filtering can
+   *  omit this and every fixture tick (typically `round * 1000`+) still counts as live. */
+  matchStartTick?: number;
 }): MatchContext {
   const rounds: RoundSideInfo[] = opts.rounds.map((r) => ({
     roundNumber: r.roundNumber,
@@ -25,6 +28,7 @@ export function makeContext(opts: {
   }));
 
   const liveRounds = new Set(rounds.map((r) => r.roundNumber));
+  const matchStartTick = opts.matchStartTick ?? 0;
   // Mirrors buildMatchContext: playerSides is only populated when sides are actually known.
   const hasSides = opts.hasSides ?? true;
 
@@ -40,7 +44,7 @@ export function makeContext(opts: {
     }
   }
 
-  const roundDeaths = buildRoundDeaths(opts.deaths ?? [], liveRounds, (sid) => sid in opts.sides);
+  const roundDeaths = buildRoundDeaths(opts.deaths ?? [], { liveRounds, matchStartTick }, (sid) => sid in opts.sides);
 
   // Faction is a fixed roster fact, independent of per-round side. Fixtures don't model side
   // switches across a match, so a player's opts.sides entry maps 1:1 to a faction here.
@@ -52,6 +56,7 @@ export function makeContext(opts: {
   return {
     rounds,
     liveRounds,
+    matchStartTick,
     roundEndTicks: Int32Array.from(rounds.map((r) => r.endTick)),
     tickRate: opts.tickRate ?? 64,
     playerSides,

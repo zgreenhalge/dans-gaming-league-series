@@ -40,7 +40,7 @@ export function collectUtility(
   // Build death lookup: steamId → [{tick, round}]
   const deathLookup = new Map<string, { tick: number; round: number; attacker: string | null }[]>();
   for (const d of deathEvents) {
-    const round = roundOf(d, context.liveRounds);
+    const round = roundOf(d, context);
     if (round == null) continue;
     const victim = d.user_steamid;
     if (!victim || !steamSet.has(victim)) continue;
@@ -54,7 +54,7 @@ export function collectUtility(
   const flashGroups = new Map<string, number[]>();
 
   for (const b of blindEvents) {
-    const round = roundOf(b, context.liveRounds);
+    const round = roundOf(b, context);
     if (round == null) continue;
 
     const flasher = b.attacker_steamid;
@@ -130,7 +130,7 @@ export function collectUtility(
   // --- Flashes thrown ---
   for (const f of fireEvents) {
     if (f.weapon !== 'weapon_flashbang') continue;
-    if (roundOf(f, context.liveRounds) == null) continue;
+    if (roundOf(f, context) == null) continue;
     const thrower = f.user_steamid;
     if (!thrower || !steamSet.has(thrower)) continue;
     const p = out.get(thrower)!;

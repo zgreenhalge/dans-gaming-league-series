@@ -1,6 +1,6 @@
 import { parseEvent, parseHeader } from '@laihoe/demoparser2';
 import { buildRoundSides, sideForFaction, type RoundEndRow, type RoundSideInfo } from './roundSides';
-import { roundOf } from './_shared';
+import { roundOf, type RoundBounds } from './_shared';
 
 /**
  * Tick the live match starts at — the last `begin_new_match`. MatchZy fires it on every warmup
@@ -66,6 +66,10 @@ export interface PlayerHurtRow {
 export interface MatchContext {
   rounds: RoundSideInfo[];
   liveRounds: Set<number>;
+  /** Tick the live match begins at — see `RoundBounds`/`roundOf()`. `MatchContext` satisfies
+   *  `RoundBounds` structurally (this field plus `liveRounds`), so any collector with `context` in
+   *  scope passes `context` itself to `roundOf()`/`groupByRound()`. */
+  matchStartTick: number;
   roundEndTicks: Int32Array;
   tickRate: number;
   /** Per-round CT/T side, only populated when the starting side resolves (see `hasSides`). Needed
@@ -85,12 +89,12 @@ export interface MatchContext {
  */
 export function buildRoundDeaths(
   deathEvents: PlayerDeathRow[],
-  liveRounds: Set<number>,
+  bounds: RoundBounds,
   isKnownPlayer: (steamId: string) => boolean,
 ): Map<string, Set<number>> {
   const roundDeaths = new Map<string, Set<number>>();
   for (const d of deathEvents) {
-    const roundNumber = roundOf(d, liveRounds);
+    const roundNumber = roundOf(d, bounds);
     if (roundNumber == null) continue;
     const victim = d.user_steamid;
     if (!victim || !isKnownPlayer(victim)) continue;
@@ -98,6 +102,41 @@ export function buildRoundDeaths(
     roundDeaths.get(victim)!.add(roundNumber);
   }
   return roundDeaths;
+}
+
+/**
+ * Drops any `player_death` event landing on the same (round, victim) as an earlier one — a player
+ * can die at most once in a live round, so a second event there is always a genuine anomaly (e.g.
+ * a duplicated event from the parser itself), not something any downstream collector should
+ * double-count. Applied once, right after `buildMatchContext()`, so every consumer of
+ * `deathEvents` (KAST, trades, multikills, teamkills, clutches, utility, `match_kills`, ...) sees
+ * the same deduped stream — the same reasoning that put the tick-liveness check in `roundOf()`
+ * itself rather than in one collector: a shared invariant belongs at the shared choke point, not
+ * re-guarded per caller. Recorded to `context.warnings` (gates auto-commit — see
+ * `evaluateAutoCommit()`) so the match routes to manual review instead of confirming with
+ * silently-dropped events. Events outside a live round are left in place — `buildRoundDeaths()`
+ * (which already ran, since it needs the *raw* stream before `context` exists) collapses
+ * duplicates into a `Set` on its own, so running this afterward doesn't change its result.
+ */
+export function dedupeDeathEvents(deathEvents: PlayerDeathRow[], context: MatchContext): PlayerDeathRow[] {
+  const seenRoundVictims = new Set<string>();
+  const result: PlayerDeathRow[] = [];
+  for (const d of deathEvents) {
+    const round = roundOf(d, context);
+    const victim = d.user_steamid;
+    if (round != null && victim) {
+      const key = `${round}::${victim}`;
+      if (seenRoundVictims.has(key)) {
+        context.warnings.push(
+          `Duplicate player_death for ${victim} in round ${round} — kept the first, dropped the rest.`,
+        );
+        continue;
+      }
+      seenRoundVictims.add(key);
+    }
+    result.push(d);
+  }
+  return result;
 }
 
 /**
@@ -167,11 +206,16 @@ export function buildMatchContext(
     }
   }
 
-  const roundDeaths = buildRoundDeaths(deathEvents, liveRounds, (steamId) => steamToPlayer.has(steamId));
+  const roundDeaths = buildRoundDeaths(
+    deathEvents,
+    { liveRounds, matchStartTick },
+    (steamId) => steamToPlayer.has(steamId),
+  );
 
   return {
     rounds,
     liveRounds,
+    matchStartTick,
     roundEndTicks,
     tickRate,
     playerSides,

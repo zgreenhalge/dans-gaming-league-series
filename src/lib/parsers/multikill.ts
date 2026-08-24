@@ -10,7 +10,7 @@ export function collectMultikill(
   steamIds: string[],
 ): CollectorOut {
   const { out } = initCollector<SabFields>(steamIds);
-  const deathsByRound = groupByRound(deathEvents, context.liveRounds);
+  const deathsByRound = groupByRound(deathEvents, context);
 
   // Faction (and so who's an enemy) is fixed for the whole match — compute it once per player
   // rather than re-deriving it every round.

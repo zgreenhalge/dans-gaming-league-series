@@ -5,7 +5,7 @@ import type {
   ParsedDemoSabremetricsResult,
 } from './types';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
-import { buildMatchContext, findMatchStartTick, type PlayerDeathRow, type PlayerHurtRow } from './parsers/matchContext';
+import { buildMatchContext, dedupeDeathEvents, findMatchStartTick, type PlayerDeathRow, type PlayerHurtRow } from './parsers/matchContext';
 import type { RoundEndRow } from './parsers/roundSides';
 import { inferSkinsStartingSide, resolveEffectiveSide } from './parsers/sideInference';
 import { collectAccumulators } from './parsers/accumulators';
@@ -156,14 +156,20 @@ export function parseDemoSabremetrics(
     demoBuffer, roundEndEvents, deathEvents,
     steamToPlayer, effectiveSide, targetWinRounds,
   );
-  warnings.push(...context.warnings);
 
   if (context.rounds.length === 0) {
+    warnings.push(...context.warnings);
     return {
       sabremetrics: [], weaponStats: [], matchKills: [], matchRounds: [],
       warnings: [...warnings, 'No live rounds found in demo.'],
     };
   }
+
+  // Deduped once here, not per collector — every event-based collector below reads this, not the
+  // raw `deathEvents` (buildMatchContext's own buildRoundDeaths() already ran on the raw stream;
+  // see dedupeDeathEvents()'s own doc comment for why that's fine).
+  const liveDeathEvents = dedupeDeathEvents(deathEvents, context);
+  warnings.push(...context.warnings);
 
   // 4. Accumulator-based stats (split basic + headshots + unsplit utility/flashed)
   const accStats = collectAccumulators(demoBuffer, context, steamIds);
@@ -172,7 +178,7 @@ export function parseDemoSabremetrics(
   // "alive and on the same side, but across the map" — fetched early and reduced to a single
   // opportunities result since both collectKast's "Traded" qualifier and collectTrades() below
   // need to agree on exactly who had a real trade opportunity.
-  const tradeTicks = neededTradeTicks(deathEvents, context);
+  const tradeTicks = neededTradeTicks(liveDeathEvents, context);
   let tradePositionRows: PlayerPositionRow[] = [];
   if (tradeTicks.length > 0) {
     const rawTradeRows = parseTicks(demoBuffer, ['X', 'Y'], tradeTicks) as Record<string, unknown>[];
@@ -183,15 +189,15 @@ export function parseDemoSabremetrics(
       y: Number(r.Y ?? 0),
     }));
   }
-  const tradeOpportunities = computeTradeOpportunities(deathEvents, tradePositionRows, context, steamIds);
+  const tradeOpportunities = computeTradeOpportunities(liveDeathEvents, tradePositionRows, context, steamIds);
 
   // 5. Event-based collectors
-  const entryStats = collectEntry(deathEvents, context, steamIds);
-  const kastStats = collectKast(deathEvents, context, steamIds, tradeOpportunities);
-  const multikillStats = collectMultikill(deathEvents, context, steamIds);
-  const teamkillStats = collectTeamkill(deathEvents, context, steamIds);
-  const clutchStats = collectClutch(deathEvents, context, steamIds);
-  const utilityStats = collectUtility(blindEvents, deathEvents, fireEvents, context, steamIds);
+  const entryStats = collectEntry(liveDeathEvents, context, steamIds);
+  const kastStats = collectKast(liveDeathEvents, context, steamIds, tradeOpportunities);
+  const multikillStats = collectMultikill(liveDeathEvents, context, steamIds);
+  const teamkillStats = collectTeamkill(liveDeathEvents, context, steamIds);
+  const clutchStats = collectClutch(liveDeathEvents, context, steamIds);
+  const utilityStats = collectUtility(blindEvents, liveDeathEvents, fireEvents, context, steamIds);
   const objectiveStats = collectObjectives(plantEvents, defuseEvents, context, steamIds);
   const heStats = collectHeGrenades(fireEvents, hurtEvents, context, steamIds);
   const accuracyStats = collectAccuracy(fireEvents, hurtEvents, context, steamIds);
@@ -199,7 +205,7 @@ export function parseDemoSabremetrics(
   // Counter-strafe needs per-tick position/duck-state reads (not a plain event stream), so it
   // fetches its own tick list — same shape as accumulators.ts's round-end reads, but keyed to
   // rifle weapon_fire ticks instead.
-  const csTicks = neededCounterStrafeTicks(fireEvents, context.liveRounds);
+  const csTicks = neededCounterStrafeTicks(fireEvents, context);
   let csTickRows: PlayerTickRow[] = [];
   if (csTicks.length > 0) {
     const rawTickRows = parseTicks(
@@ -240,12 +246,12 @@ export function parseDemoSabremetrics(
     smokeDetonateEvents, smokeExpireEvents, smokePositionRows, context, steamIds,
   );
 
-  const tradeStats = collectTrades(deathEvents, hurtEvents, tradeOpportunities, context, steamIds);
+  const tradeStats = collectTrades(liveDeathEvents, hurtEvents, tradeOpportunities, context, steamIds);
 
   // Unused Utility on Death reads demoparser2's "inventory" tick field (see unusedUtility.ts) —
   // wrapped so a future parser change to that field zeroes out just this stat instead of failing
   // every collector.
-  const inventoryTicks = neededInventoryTicks(deathEvents, context);
+  const inventoryTicks = neededInventoryTicks(liveDeathEvents, context);
   let inventoryRows: PlayerInventoryRow[] = [];
   if (inventoryTicks.length > 0) {
     try {
@@ -261,7 +267,7 @@ export function parseDemoSabremetrics(
       );
     }
   }
-  const unusedUtilStats = collectUnusedUtility(deathEvents, inventoryRows, context, steamIds);
+  const unusedUtilStats = collectUnusedUtility(liveDeathEvents, inventoryRows, context, steamIds);
 
   // Rounds dropped on reload (#212): weapon_reload is a discrete game event (confirmed against a
   // real DGLS demo, unlike most CS2 actions), so this reads Weapon.m_iClip1/Weapon.m_bInReload at
@@ -272,7 +278,7 @@ export function parseDemoSabremetrics(
   const reloadEvents = parseEvent(
     demoBuffer, 'weapon_reload', [], ['total_rounds_played'],
   ) as WeaponReloadRow[];
-  const reloadTicks = neededReloadTicks(reloadEvents, context.liveRounds);
+  const reloadTicks = neededReloadTicks(reloadEvents, context);
   let reloadStateRows: PlayerReloadStateRow[] = [];
   if (reloadTicks.length > 0) {
     try {
@@ -297,7 +303,7 @@ export function parseDemoSabremetrics(
   // CCSPlayerPawn.m_unFreezetimeEndEquipmentValue at each round's freeze-time-end, sampled once
   // per round (not per shot) — same single-anchor-read shape as sideInference.ts. Wrapped
   // defensively like the reload/inventory tick reads above.
-  const economyTicks = neededEconomyTicks(freezeEndEvents, context.liveRounds);
+  const economyTicks = neededEconomyTicks(freezeEndEvents, context);
   let equipmentRows: PlayerEquipmentRow[] = [];
   if (economyTicks.length > 0) {
     try {
@@ -322,7 +328,7 @@ export function parseDemoSabremetrics(
   const economyStats = collectEconomyStats(fireEvents, hurtEvents, roundEconomy, context, steamIds);
 
   // Per-kill and per-round fact rows (#452/#453) — flat event rows, not per-player aggregates.
-  const killFacts = collectMatchKills(deathEvents, context, steamIds);
+  const killFacts = collectMatchKills(liveDeathEvents, context, steamIds);
   const playerIdOf = (steamId: string | null): number | null =>
     steamId ? (steamToPlayer.get(steamId)?.player_id ?? null) : null;
   const matchKills: DemoMatchKill[] = killFacts.map((k) => ({

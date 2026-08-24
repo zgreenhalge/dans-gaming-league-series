@@ -21,7 +21,7 @@ export function collectClutch(
   steamIds: string[],
 ): CollectorOut {
   const { out, steamSet } = initCollector<SabFields>(steamIds);
-  const deathsByRound = groupByRound(deathEvents, context.liveRounds);
+  const deathsByRound = groupByRound(deathEvents, context);
 
   for (const round of context.liveRounds) {
     const deaths = (deathsByRound.get(round) ?? []).sort((a, b) => a.tick - b.tick);

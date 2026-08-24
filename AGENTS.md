@@ -35,6 +35,30 @@ caller interpret the results for their situation. A tool written for "verify X f
 rots into a single-use script; the same tool written as "inspect X" stays reusable. Put the
 task-specific interpretation in the conversation, the PR, or a doc — not in the tool.
 
+# Never swallow a write's outcome
+
+Any code that performs a write — a Supabase insert/update/delete, an R2 object write, a GitHub API
+call, a background_jobs status write, any mutation at all — must check that operation's own success
+signal and propagate failure to the caller, never discard it silently. This applies with particular
+force to the Supabase JS client: `.insert()`/`.update()`/`.delete()`/`.upsert()` return `{ data,
+error }` rather than throwing, so code that awaits the call without inspecting `error` looks
+identical whether the write landed or not — and every reviewer since has to notice that gap by eye
+rather than have it fail loudly.
+
+A write that "succeeds" without actually landing is worse than one that visibly fails: a visible
+failure gets investigated immediately, at the moment it happens, with full context. A silently
+dropped one accumulates as missing or wrong data, surfaces later completely disconnected from its
+cause, and gets misdiagnosed as something else entirely (a UI bug, "the demo must not have parsed
+cleanly", a gap in the data model) instead of the actual missing write.
+
+This holds even inside a job that already has its own outer failure handling (e.g. a GitHub Actions
+script's `main().catch(fail)`, or `matchScore.ts`'s per-write `try/catch` → `recordOpsError()`) — an
+inner `await` that discards its own result silently defeats that outer handler, which only ever sees
+what actually gets thrown to it. Every genuinely new write path (a new table, a new external call) is
+also, by construction, code with no production track record yet — treat the first real run as the
+test the write path never got in isolation, and make sure a failure there is loud rather than a
+quiet no-op the next person has to rediscover from a data anomaly.
+
 # Supabase changes require live, per-operation approval
 
 A Supabase MCP connector is available in agent sessions working on this repo, with tools that

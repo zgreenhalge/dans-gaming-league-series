@@ -137,6 +137,22 @@ it is warmup or a knife round and is dropped by tick. This matters when a knife 
 **erroneously recorded as a live round** — the engine counts it as `total_rounds_played = 1` and
 never resets its counter, so the real rounds carry numbers 2..N.
 
+Every other per-tick event (`player_death`, `player_hurt`, `weapon_fire`, ...) resolves its round the
+same tick-gated way, not just `round_end`: `roundOf()`/`groupByRound()` (`parsers/_shared.ts`) reject
+an event whose tick is before `matchStartTick`, in addition to checking its `total_rounds_played`
+offset against the live rounds. The tick check matters on its own — MatchZy's round counter isn't
+guaranteed to reset at `begin_new_match`, so a warmup-period event's offset can coincidentally match a
+live round number and, without the tick check, get counted as that round's data by every collector
+that reads it (`MatchContext` carries `matchStartTick` alongside `liveRounds` for exactly this).
+
+A player can die at most once in a live round — `match_kills` enforces `unique (round, victim)` — so
+`dedupeDeathEvents()` (`parsers/matchContext.ts`) drops any second `player_death` landing on the same
+(round, victim) before any event-based collector sees the stream (`demoOrchestrator.ts` calls it once,
+right after `buildMatchContext()`). A genuine duplicate there (as opposed to warmup noise, which the
+tick check above already excludes) is a real anomaly — e.g. a duplicated event from the parser itself
+— so it's recorded to `context.warnings`, which gates auto-commit (`evaluateAutoCommit()`), routing the
+match to manual review instead of confirming with silently-dropped or double-counted events.
+
 Survivors keep their engine `total_rounds_played` as their round identity — they are **not**
 renumbered to 1..N — since round-death/hurt events and accumulator ticks are keyed by that same
 number. The half-swap boundary, however, is computed relative to the *first surviving round*
