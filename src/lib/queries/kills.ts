@@ -129,6 +129,14 @@ export interface WeaponKillStat {
   deaths: number;
 }
 
+/** A `WeaponKillStat` with every count at zero — the shape a weapon starts at before any kill/death
+ *  is tallied into it (`aggregateWeaponKillStats()`), and the same shape `resolveWeaponStat()`
+ *  falls back to for a weapon with no kills/deaths in scope, so both call sites build one from the
+ *  same place instead of duplicating the field list. */
+function zeroWeaponStat(weapon: string): WeaponKillStat {
+  return { weapon, category: killWeaponCategory(weapon), kills: 0, headshotKills: 0, deaths: 0 };
+}
+
 /** Kills-with / headshot-kills-with / deaths-to, bucketed by individual weapon, for one player
  *  over whatever `kills` scope the caller already filtered (a season, a match, career). Self-kills
  *  and teamkills don't count toward `kills`/`headshotKills` (they're not a credited kill) but do
@@ -138,7 +146,7 @@ export function aggregateWeaponKillStats(kills: MatchKillRow[], playerId: number
   const getBucket = (weapon: string): WeaponKillStat => {
     let b = buckets.get(weapon);
     if (!b) {
-      b = { weapon, category: killWeaponCategory(weapon), kills: 0, headshotKills: 0, deaths: 0 };
+      b = zeroWeaponStat(weapon);
       buckets.set(weapon, b);
     }
     return b;
@@ -163,6 +171,28 @@ export function aggregateWeaponKillStats(kills: MatchKillRow[], playerId: number
 /** The weapon a player has the most kills with, or `null` when they have none in scope. */
 export function favoriteWeapon(stats: WeaponKillStat[]): WeaponKillStat | null {
   return stats.reduce<WeaponKillStat | null>((best, s) => (!best || s.kills > best.kills ? s : best), null);
+}
+
+/** Every distinct weapon with at least one credited kill (excludes self-kills/teamkills) across
+ *  `kills`, sorted by total kill count descending — the option list for a "pick a specific weapon"
+ *  filter (e.g. the Weapons sub-tab's weapon selector). */
+export function allWeaponsWithKills(kills: MatchKillRow[]): string[] {
+  const counts = new Map<string, number>();
+  for (const k of kills) {
+    if (k.attacker_player_id == null || k.attacker_player_id === k.victim_player_id || k.is_teamkill) continue;
+    counts.set(k.weapon, (counts.get(k.weapon) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([w]) => w);
+}
+
+/** Resolves which of a player's `WeaponKillStat[]` a "favorite vs specific weapon" filter should
+ *  show: `weapon === null` picks their favorite (`favoriteWeapon()`); a specific weapon name looks
+ *  it up, falling back to a zeroed stat (rather than `null`) when the player has no kills/deaths
+ *  with it — so a specific-weapon selection always renders a row for every player, per the
+ *  Weapons sub-tab's filter contract. */
+export function resolveWeaponStat(stats: WeaponKillStat[], weapon: string | null): WeaponKillStat | null {
+  if (weapon == null) return favoriteWeapon(stats);
+  return stats.find((s) => s.weapon === weapon) ?? zeroWeaponStat(weapon);
 }
 
 export interface WeaponCategoryKillStat {

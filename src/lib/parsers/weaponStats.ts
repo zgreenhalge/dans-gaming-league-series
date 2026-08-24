@@ -52,7 +52,7 @@ function accumulateHurtDamage(
   getBucket: (h: PlayerHurtRow, round: number) => string | undefined,
 ): void {
   for (const h of hurtEvents) {
-    const round = roundOf(h, context.liveRounds);
+    const round = roundOf(h, context);
     if (round == null) continue;
 
     const attacker = h.attacker_steamid;
@@ -91,7 +91,7 @@ export function collectWeaponClassStats(
   for (const f of fireEvents) {
     const category = WEAPON_CATEGORY[stripWeaponPrefix(f.weapon)];
     if (!category) continue;
-    const round = roundOf(f, context.liveRounds);
+    const round = roundOf(f, context);
     if (round == null) continue;
     const shooter = f.user_steamid;
     if (!shooter || !steamSet.has(shooter)) continue;
@@ -134,7 +134,7 @@ export function collectEconomyStats(
   }
 
   for (const f of fireEvents) {
-    const round = roundOf(f, context.liveRounds);
+    const round = roundOf(f, context);
     if (round == null) continue;
     const shooter = f.user_steamid;
     if (!shooter || !steamSet.has(shooter)) continue;
@@ -170,6 +170,13 @@ export interface KillFactRow {
  * judgment calls into the collector. `attacker_steamid`/`assister_steamid` are nulled out when
  * they're not a known roster player (world/environment kills, e.g. fall damage), matching the
  * `steamSet` gating every other collector in this file applies.
+ *
+ * Expects `deathEvents` already deduped to at most one event per (round, victim) —
+ * `dedupeDeathEvents()` (`matchContext.ts`), applied once upstream to every event-based collector's
+ * shared `deathEvents` stream, not re-guarded here. A player can die at most once in a live round,
+ * so `match_kills` enforces `unique (round, victim)`; without that upstream dedup this collector
+ * would be the only one of ~10 sharing `deathEvents` that noticed a duplicate, and every other
+ * consumer (KAST, trades, multikills, ...) would silently double-count it instead.
  */
 export function collectMatchKills(
   deathEvents: PlayerDeathRow[],
@@ -180,7 +187,7 @@ export function collectMatchKills(
   const rows: KillFactRow[] = [];
 
   for (const d of deathEvents) {
-    const round = roundOf(d, context.liveRounds);
+    const round = roundOf(d, context);
     if (round == null) continue;
 
     const victim = d.user_steamid;

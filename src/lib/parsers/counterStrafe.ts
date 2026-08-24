@@ -1,7 +1,7 @@
 import type { SabFields } from '../types';
 import type { MatchContext } from './matchContext';
 import type { WeaponFireRow } from './utility';
-import { initCollector, roundOf } from './_shared';
+import { initCollector, roundOf, type RoundBounds } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -31,11 +31,11 @@ export interface PlayerTickRow {
 
 /** Tick list demoOrchestrator.ts needs to fetch (via parseTicks) for collectCounterStrafe:
  *  each qualifying rifle fire's own tick plus SPEED_TICK_WINDOW ticks earlier. */
-export function neededCounterStrafeTicks(fireEvents: WeaponFireRow[], liveRounds: Set<number>): number[] {
+export function neededCounterStrafeTicks(fireEvents: WeaponFireRow[], bounds: RoundBounds): number[] {
   const ticks = new Set<number>();
   for (const f of fireEvents) {
     if (!RIFLE_WEAPONS.has(f.weapon)) continue;
-    if (roundOf(f, liveRounds) == null) continue;
+    if (roundOf(f, bounds) == null) continue;
     ticks.add(f.tick);
     ticks.add(f.tick - SPEED_TICK_WINDOW);
   }
@@ -55,7 +55,7 @@ export function collectCounterStrafe(
 
   for (const f of fireEvents) {
     if (!RIFLE_WEAPONS.has(f.weapon)) continue;
-    if (roundOf(f, context.liveRounds) == null) continue;
+    if (roundOf(f, context) == null) continue;
     const shooter = f.user_steamid;
     if (!shooter || !steamSet.has(shooter)) continue;
 

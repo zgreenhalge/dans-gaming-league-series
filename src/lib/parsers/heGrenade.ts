@@ -25,7 +25,7 @@ export function collectHeGrenades(
 
   for (const f of fireEvents) {
     if (f.weapon !== HE_FIRE_WEAPON) continue;
-    if (roundOf(f, context.liveRounds) == null) continue;
+    if (roundOf(f, context) == null) continue;
     const thrower = f.user_steamid;
     if (!thrower || !steamSet.has(thrower)) continue;
     const p = out.get(thrower)!;
@@ -34,7 +34,7 @@ export function collectHeGrenades(
 
   for (const h of hurtEvents) {
     if (h.weapon !== HE_HURT_WEAPON) continue;
-    if (roundOf(h, context.liveRounds) == null) continue;
+    if (roundOf(h, context) == null) continue;
 
     const attacker = h.attacker_steamid;
     const victim = h.user_steamid;

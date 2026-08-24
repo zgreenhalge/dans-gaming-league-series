@@ -1,5 +1,5 @@
 import type { MatchContext } from './matchContext';
-import { roundOf } from './_shared';
+import { roundOf, type RoundBounds } from './_shared';
 
 export type EconomyType = 'eco' | 'force_buy' | 'full_buy';
 
@@ -28,10 +28,10 @@ export function classifyEconomy(equipmentValue: number): EconomyType {
 
 /** Tick list demoOrchestrator.ts needs to fetch (via parseTicks, all players): one per live
  *  round's freeze-time-end. */
-export function neededEconomyTicks(freezeEndEvents: RoundFreezeEndRow[], liveRounds: Set<number>): number[] {
+export function neededEconomyTicks(freezeEndEvents: RoundFreezeEndRow[], bounds: RoundBounds): number[] {
   const ticks = new Set<number>();
   for (const e of freezeEndEvents) {
-    if (roundOf(e, liveRounds) == null) continue;
+    if (roundOf(e, bounds) == null) continue;
     ticks.add(e.tick);
   }
   return [...ticks];
@@ -57,7 +57,7 @@ export function classifyRoundEconomy(
   for (const r of equipmentRows) rowLookup.set(`${r.steamid}::${r.tick}`, r);
 
   for (const e of freezeEndEvents) {
-    const round = roundOf(e, context.liveRounds);
+    const round = roundOf(e, context);
     if (round == null) continue;
 
     for (const sid of steamIds) {
