@@ -15,7 +15,11 @@ type FactTableName = keyof Database['public']['Tables'] & (`match_${string}`);
  *  The `.from(table)` calls below go through an untyped view of the client: PostgREST's generated
  *  client can't resolve its per-table overloads from a generic `Table` type parameter, only a
  *  string literal. Callers stay fully typed (`table`/`rows` are checked against `Table`'s real
- *  `Insert` shape by the signature above) — only this function's internals lose that checking. */
+ *  `Insert` shape by the signature above) — only this function's internals lose that checking.
+ *
+ *  Supabase's `.delete()`/`.insert()` return `{ error }` rather than throwing, so both are checked
+ *  and thrown here — otherwise a failed insert (e.g. a unique-constraint violation) leaves the
+ *  table silently empty for that match while the caller's job still reports success. */
 export async function replaceMatchRows<Table extends FactTableName>(
   table: Table,
   matchId: number,
@@ -23,12 +27,18 @@ export async function replaceMatchRows<Table extends FactTableName>(
 ): Promise<void> {
   const supabaseAdmin = getAdminClient() as unknown as {
     from(table: string): {
-      delete(): { eq(column: string, value: number): Promise<unknown> };
-      insert(rows: unknown[]): Promise<unknown>;
+      delete(): { eq(column: string, value: number): Promise<{ error: { message: string } | null }> };
+      insert(rows: unknown[]): Promise<{ error: { message: string } | null }>;
     };
   };
-  await supabaseAdmin.from(table).delete().eq('match_id', matchId);
+  const { error: deleteError } = await supabaseAdmin.from(table).delete().eq('match_id', matchId);
+  if (deleteError) {
+    throw new Error(`replaceMatchRows(${table}, ${matchId}) delete failed: ${deleteError.message}`);
+  }
   if (rows.length > 0) {
-    await supabaseAdmin.from(table).insert(rows);
+    const { error: insertError } = await supabaseAdmin.from(table).insert(rows);
+    if (insertError) {
+      throw new Error(`replaceMatchRows(${table}, ${matchId}) insert failed: ${insertError.message}`);
+    }
   }
 }

@@ -40,7 +40,7 @@ export function collectSprayAccuracy(
   const shotsByKey = new Map<string, number[]>();
   for (const f of fireEvents) {
     if (!RIFLE_WEAPONS.has(f.weapon)) continue;
-    const round = roundOf(f, context.liveRounds);
+    const round = roundOf(f, context);
     if (round == null) continue;
     const shooter = f.user_steamid;
     if (!shooter || !steamSet.has(shooter)) continue;
@@ -53,7 +53,7 @@ export function collectSprayAccuracy(
   const hurtTicksByKey = new Map<string, number[]>();
   for (const h of hurtEvents) {
     if (!RIFLE_HURT_WEAPONS.has(h.weapon)) continue;
-    const round = roundOf(h, context.liveRounds);
+    const round = roundOf(h, context);
     if (round == null) continue;
     const attacker = h.attacker_steamid;
     const victim = h.user_steamid;

@@ -31,7 +31,7 @@ const PRE_DEATH_TICK_OFFSET = 1;
 export function neededInventoryTicks(deathEvents: PlayerDeathRow[], context: MatchContext): number[] {
   const ticks = new Set<number>();
   for (const d of deathEvents) {
-    if (roundOf(d, context.liveRounds) == null) continue;
+    if (roundOf(d, context) == null) continue;
     ticks.add(d.tick - PRE_DEATH_TICK_OFFSET);
   }
   return [...ticks];
@@ -59,7 +59,7 @@ export function collectUnusedUtility(
   }
 
   for (const d of deathEvents) {
-    if (roundOf(d, context.liveRounds) == null) continue;
+    if (roundOf(d, context) == null) continue;
     const victim = d.user_steamid;
     if (!victim || !steamSet.has(victim)) continue;
 

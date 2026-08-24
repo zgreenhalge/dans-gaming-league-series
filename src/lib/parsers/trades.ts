@@ -51,7 +51,7 @@ function isTradeOpportunity(
 export function neededTradeTicks(deathEvents: PlayerDeathRow[], context: MatchContext): number[] {
   const ticks = new Set<number>();
   for (const d of deathEvents) {
-    if (roundOf(d, context.liveRounds) == null) continue;
+    if (roundOf(d, context) == null) continue;
     ticks.add(d.tick);
   }
   return [...ticks];
@@ -81,7 +81,7 @@ export function computeTradeOpportunities(
   const positionIndex = new Map<string, { x: number; y: number }>();
   for (const p of positionRows) positionIndex.set(tradeOpportunityKey(p.tick, p.steamid), { x: p.x, y: p.y });
 
-  const deathsByRound = groupByRound(deathEvents, context.liveRounds);
+  const deathsByRound = groupByRound(deathEvents, context);
 
   const opportunities: TradeOpportunities = new Map();
 
@@ -143,8 +143,8 @@ export function collectTrades(
 
   const tradeWindow = Math.round(TRADE_WINDOW_SECONDS * context.tickRate);
 
-  const deathsByRound = groupByRound(deathEvents, context.liveRounds);
-  const hurtsByRound = groupByRound(hurtEvents, context.liveRounds);
+  const deathsByRound = groupByRound(deathEvents, context);
+  const hurtsByRound = groupByRound(hurtEvents, context);
 
   for (const round of context.liveRounds) {
     const deaths = deathsByRound.get(round) ?? [];

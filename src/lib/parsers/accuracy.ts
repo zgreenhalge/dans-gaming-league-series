@@ -33,7 +33,7 @@ export function collectAccuracy(
 
   for (const f of fireEvents) {
     if (!WEAPON_CATEGORY[stripWeaponPrefix(f.weapon)]) continue;
-    if (roundOf(f, context.liveRounds) == null) continue;
+    if (roundOf(f, context) == null) continue;
     const shooter = f.user_steamid;
     if (!shooter || !steamSet.has(shooter)) continue;
     const p = out.get(shooter)!;
@@ -42,7 +42,7 @@ export function collectAccuracy(
 
   for (const h of hurtEvents) {
     if (!WEAPON_CATEGORY[h.weapon]) continue;
-    if (roundOf(h, context.liveRounds) == null) continue;
+    if (roundOf(h, context) == null) continue;
 
     const attacker = h.attacker_steamid;
     const victim = h.user_steamid;
