@@ -103,9 +103,11 @@ jobs:
       # supabase/local.env carries the fixed anon/service_role JWTs shared with docs/e2e.md's manual
       # setup and .claude/hooks/session-start.sh's automatic bootstrap — one place to update if
       # supabase/config.toml's pinned jwt_secret ever changes. NEXT_PUBLIC_SUPABASE_URL is excluded
-      # here since it's derived dynamically below instead (see that step for why).
+      # here since it's derived dynamically below instead (see that step for why). $GITHUB_ENV's file
+      # command requires strict KEY=VALUE lines — supabase/local.env's leading comment block would
+      # otherwise be read as an invalid line, so this greps down to actual assignments first.
       - name: Export local Supabase demo JWTs
-        run: grep -v '^NEXT_PUBLIC_SUPABASE_URL=' supabase/local.env >> "$GITHUB_ENV"
+        run: grep -E '^[A-Za-z_][A-Za-z0-9_]*=' supabase/local.env | grep -v '^NEXT_PUBLIC_SUPABASE_URL=' >> "$GITHUB_ENV"
 
       - name: Setup Node
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
