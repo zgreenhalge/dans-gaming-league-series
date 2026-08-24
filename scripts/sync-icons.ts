@@ -36,6 +36,7 @@ import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { recordOpsError, clearOpsError } from '../src/lib/ops-errors';
 import { WEAPON_CATEGORY } from '../src/lib/parsers/weaponClasses';
+import { iconAspect } from '../src/lib/iconAspect';
 
 const UPSTREAM_OWNER = 'Juknum';
 const UPSTREAM_REPO = 'counter-strike-icons';
@@ -80,8 +81,16 @@ const MANIFEST: IconEntry[] = [
 const SHAPE_TAGS = new Set(['path', 'polygon', 'rect', 'circle']);
 const ATTR_ORDER = ['cx', 'cy', 'r', 'x', 'y', 'width', 'height', 'transform', 'points', 'd', 'fill-rule', 'clip-rule', 'fill'];
 
-/** Re-emits `rawSvg` as a minimal, `currentColor`-tintable SVG — see the file header for why. */
-function extractRecolorableSvg(rawSvg: string): string {
+interface ExtractedSvg {
+  svg: string;
+  width: number;
+  height: number;
+}
+
+/** Re-emits `rawSvg` as a minimal, `currentColor`-tintable SVG — see the file header for why —
+ *  alongside its `viewBox` width/height, so callers can cross-check `src/lib/iconAspect.ts`'s
+ *  hand-copied aspect-ratio table against the real, current upstream shape. */
+function extractRecolorableSvg(rawSvg: string): ExtractedSvg {
   const dom = new JSDOM(rawSvg, { contentType: 'image/svg+xml' });
   const doc = dom.window.document;
   if (doc.querySelector('parsererror')) throw new Error('upstream file is not valid SVG/XML');
@@ -124,12 +133,13 @@ function extractRecolorableSvg(rawSvg: string): string {
     return `<${tag} ${ordered.join(' ')}/>`;
   });
 
-  return [
+  const svg = [
     `<svg width="${width}" height="${height}" viewBox="${viewBox}" fill="none" xmlns="http://www.w3.org/2000/svg">`,
     ...lines,
     `</svg>`,
     '',
   ].join('\n');
+  return { svg, width: Number(width), height: Number(height) };
 }
 
 async function fetchUpstream(sourcePath: string): Promise<string> {
@@ -144,6 +154,10 @@ interface EntryResult {
   status: 'unchanged' | 'changed' | 'problem';
   detail?: string;
   newContent?: string;
+  /** The upstream shape's real `viewBox` width/height, present whenever extraction succeeded
+   *  (changed or not) — used to cross-check `iconAspect.ts` for drift. */
+  width?: number;
+  height?: number;
 }
 
 async function resolveEntry(entry: IconEntry): Promise<EntryResult> {
@@ -154,24 +168,44 @@ async function resolveEntry(entry: IconEntry): Promise<EntryResult> {
     return { entry, status: 'problem', detail: `fetch failed: ${(err as Error).message}` };
   }
 
-  let svg: string;
+  let extracted: ExtractedSvg;
   try {
-    svg = extractRecolorableSvg(raw);
+    extracted = extractRecolorableSvg(raw);
   } catch (err) {
     return { entry, status: 'problem', detail: `extraction failed: ${(err as Error).message}` };
   }
+  const { svg, width, height } = extracted;
 
   const destPath = path.join(REPO_ROOT, 'public', entry.dest);
   const current = existsSync(destPath) ? readFileSync(destPath, 'utf8') : null;
-  if (current === svg) return { entry, status: 'unchanged' };
-  return { entry, status: 'changed', newContent: svg };
+  if (current === svg) return { entry, status: 'unchanged', width, height };
+  return { entry, status: 'changed', newContent: svg, width, height };
+}
+
+/** Cross-checks `src/lib/iconAspect.ts`'s hand-copied width/height ratios (needed by DOM icon
+ *  renderers, which can't read a bitmap's natural size the way the 2D Replay canvas does — see
+ *  that file's header) against the shape actually fetched this run, for every entry it covers.
+ *  Returns a human-readable line per icon whose real aspect ratio has drifted from the table. */
+function findAspectDrift(results: EntryResult[]): string[] {
+  const drift: string[] = [];
+  for (const r of results) {
+    if (r.status === 'problem' || r.width === undefined || r.height === undefined) continue;
+    const src = `/${r.entry.dest}`;
+    const recorded = iconAspect(src);
+    if (recorded === 1) continue; // not covered by the table (square, or not a weapon/grenade icon)
+    const actual = r.width / r.height;
+    if (Math.abs(actual - recorded) > 0.01) {
+      drift.push(`${src}: iconAspect.ts says ${recorded.toFixed(3)}, upstream is now ${actual.toFixed(3)} — update src/lib/iconAspect.ts`);
+    }
+  }
+  return drift;
 }
 
 function git(...args: string[]): string {
   return execFileSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
 }
 
-async function openOrUpdatePr(changed: EntryResult[], problems: EntryResult[]): Promise<string> {
+async function openOrUpdatePr(changed: EntryResult[], problems: EntryResult[], aspectDrift: string[]): Promise<string> {
   const token = process.env.GITHUB_TOKEN;
   const repoSlug = process.env.GITHUB_REPOSITORY;
   if (!token || !repoSlug) throw new Error('GITHUB_TOKEN / GITHUB_REPOSITORY not set — cannot open a PR');
@@ -218,6 +252,13 @@ async function openOrUpdatePr(changed: EntryResult[], problems: EntryResult[]): 
       '',
     );
   }
+  if (aspectDrift.length > 0) {
+    bodyLines.push(
+      "**`src/lib/iconAspect.ts` may be out of date** (the icon's shape changed; its hand-copied aspect ratio didn't):",
+      ...aspectDrift.map((line) => `- ${line}`),
+      '',
+    );
+  }
   bodyLines.push(
     '## Test plan',
     '',
@@ -255,10 +296,12 @@ async function main() {
   const results = await Promise.all(MANIFEST.map(resolveEntry));
   const changed = results.filter((r) => r.status === 'changed');
   const problems = results.filter((r) => r.status === 'problem');
+  const aspectDrift = findAspectDrift(results);
 
   console.log(`icon-sync: ${results.length} entries — ${changed.length} changed, ${problems.length} problem(s), ${results.length - changed.length - problems.length} unchanged`);
   for (const r of changed) console.log(`  changed:  public/${r.entry.dest}`);
   for (const r of problems) console.log(`::warning::icon-sync problem for public/${r.entry.dest}: ${r.detail}`);
+  for (const line of aspectDrift) console.log(`::warning::icon-sync aspect drift: ${line}`);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -270,7 +313,7 @@ async function main() {
   }
 
   if (changed.length > 0) {
-    const prUrl = await openOrUpdatePr(changed, problems);
+    const prUrl = await openOrUpdatePr(changed, problems, aspectDrift);
     console.log(`::notice::icon-sync PR: ${prUrl}`);
   }
 
@@ -278,8 +321,11 @@ async function main() {
     console.warn('icon-sync: Supabase creds not set — skipping ops_errors reporting');
     return;
   }
-  if (problems.length > 0) {
-    const message = problems.map((r) => `${r.entry.dest}: ${r.detail}`).join('; ');
+  if (problems.length > 0 || aspectDrift.length > 0) {
+    const message = [
+      ...problems.map((r) => `${r.entry.dest}: ${r.detail}`),
+      ...aspectDrift,
+    ].join('; ');
     await recordOpsError(supabaseAdmin, 'system', 0, OPERATION, message);
   } else {
     await clearOpsError(supabaseAdmin, 'system', 0, OPERATION);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { IconSprite } from '@/lib/replay/draw';
 
 /**
@@ -15,6 +15,11 @@ import type { IconSprite } from '@/lib/replay/draw';
  * sprite's natural pixel size is read off the loaded bitmap (same convention as `useMapRadar`'s
  * radar image) so callers — weapon icons are landscape, not square — can fit it without distortion.
  *
+ * The caches live at module scope, not in a ref, so they survive `ReplayPlayer` unmounting —
+ * switching to the heatmap/trails/recording sub-tab and back would otherwise re-fetch, re-tint,
+ * and re-decode every icon from scratch even though they're static assets that never change
+ * within a session.
+ *
  * `get()` returns `null` immediately for a pair that hasn't finished loading (or hasn't been
  * requested before) rather than blocking the draw call — callers fall back to their existing
  * shape/text rendering for that frame. `generation` increments each time a new sprite finishes
@@ -22,55 +27,56 @@ import type { IconSprite } from '@/lib/replay/draw';
  * draw])`) so a *paused* frame — whose RAF loop only calls `draw()` once, not every frame — still
  * picks up the icon once it's ready instead of showing the fallback forever.
  */
+const rawText = new Map<string, string>();
+const rawPending = new Set<string>();
+const sprites = new Map<string, IconSprite>();
+const imagePending = new Set<string>();
+
 export function useIconSprites(): {
   get: (src: string, color: string) => IconSprite | null;
   generation: number;
 } {
-  const rawText = useRef(new Map<string, string>());
-  const rawPending = useRef(new Set<string>());
-  const sprites = useRef(new Map<string, IconSprite>());
-  const imagePending = useRef(new Set<string>());
   const [generation, setGeneration] = useState(0);
 
   const get = useCallback((src: string, color: string): IconSprite | null => {
     const key = `${src}::${color}`;
-    const cached = sprites.current.get(key);
+    const cached = sprites.get(key);
     if (cached) return cached;
 
-    const text = rawText.current.get(src);
+    const text = rawText.get(src);
     if (text === undefined) {
-      if (!rawPending.current.has(src)) {
-        rawPending.current.add(src);
+      if (!rawPending.has(src)) {
+        rawPending.add(src);
         fetch(src)
           .then((res) => res.text())
           .then((t) => {
-            rawText.current.set(src, t);
-            rawPending.current.delete(src);
+            rawText.set(src, t);
+            rawPending.delete(src);
             setGeneration((g) => g + 1);
           })
           .catch(() => {
-            rawPending.current.delete(src);
+            rawPending.delete(src);
           });
       }
       return null;
     }
 
-    if (!imagePending.current.has(key)) {
-      imagePending.current.add(key);
+    if (!imagePending.has(key)) {
+      imagePending.add(key);
       const tinted = text.replaceAll('currentColor', color);
       const img = new Image();
       img.onload = () => {
-        sprites.current.set(key, { image: img, width: img.naturalWidth, height: img.naturalHeight });
-        imagePending.current.delete(key);
+        sprites.set(key, { image: img, width: img.naturalWidth, height: img.naturalHeight });
+        imagePending.delete(key);
         setGeneration((g) => g + 1);
       };
       img.onerror = () => {
-        imagePending.current.delete(key);
+        imagePending.delete(key);
       };
       img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(tinted)}`;
     }
     return null;
-    // Reads/writes only refs (always current) and the stable setState setter — no external values
+    // Reads/writes only module-scope caches and the stable setState setter — no external values
     // to depend on, so this never needs recreating.
   }, []);
 

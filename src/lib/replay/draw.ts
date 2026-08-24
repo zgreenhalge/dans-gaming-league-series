@@ -574,6 +574,34 @@ function drawScore(ctx: Ctx2D, width: number, banner: BannerInfo, theme: ReplayT
  *  victim names. */
 const KILL_FEED_ICON_HEIGHT = 14;
 
+/** Draws one right-aligned kill-feed glyph ending at `cursor` — the real icon sprite if loaded
+ *  (fit to `KILL_FEED_ICON_HEIGHT`, width from its own aspect ratio), else `fallbackText` in
+ *  `theme.textDim` — with `pad` px of empty space on either side of whatever it drew. Returns the
+ *  new cursor position for the next glyph to its left. Shared by the kill feed's headshot marker
+ *  and weapon icon, which differ only in their sprite source and fallback text. */
+function drawFeedGlyph(
+  ctx: Ctx2D,
+  cursor: number,
+  y: number,
+  theme: ReplayTheme,
+  sprite: IconSprite | null,
+  fallbackText: string,
+  pad: { before?: number; after?: number } = {},
+): number {
+  let x = cursor - (pad.before ?? 0);
+  if (sprite) {
+    const h = KILL_FEED_ICON_HEIGHT;
+    const w = h * (sprite.width / sprite.height);
+    x -= w;
+    ctx.drawImage(sprite.image, x, y - 1, w, h);
+  } else {
+    ctx.fillStyle = theme.textDim;
+    ctx.fillText(fallbackText, x, y);
+    x -= measureApprox(fallbackText);
+  }
+  return x - (pad.after ?? 0);
+}
+
 function drawKillFeed(
   ctx: Ctx2D,
   width: number,
@@ -604,18 +632,7 @@ function drawKillFeed(
     // doesn't distort it, same as the bomb marker.
     if (k.headshot) {
       const hsSprite = getIconSprite?.(HEADSHOT_ICON_SRC, theme.textDim) ?? null;
-      cursor -= 2;
-      if (hsSprite) {
-        const h = KILL_FEED_ICON_HEIGHT;
-        cursor -= h;
-        ctx.drawImage(hsSprite.image, cursor, y - 1, h, h);
-      } else {
-        const glyph = '⊙';
-        ctx.fillStyle = theme.textDim;
-        ctx.fillText(glyph, cursor, y);
-        cursor -= measureApprox(glyph);
-      }
-      cursor -= 2;
+      cursor = drawFeedGlyph(ctx, cursor, y, theme, hsSprite, '⊙', { before: 2, after: 2 });
     } else {
       cursor -= 4;
     }
@@ -625,18 +642,7 @@ function drawKillFeed(
     const label = killWeaponLabel(round, k);
     const iconSrc = weaponIconSrc(label);
     const sprite = iconSrc ? (getIconSprite?.(iconSrc, aColor) ?? null) : null;
-    if (sprite) {
-      const h = KILL_FEED_ICON_HEIGHT;
-      const w = h * (sprite.width / sprite.height);
-      cursor -= w;
-      ctx.drawImage(sprite.image, cursor, y - 1, w, h);
-      cursor -= 4;
-    } else {
-      const text = `${label}  `;
-      ctx.fillStyle = theme.textDim;
-      ctx.fillText(text, cursor, y);
-      cursor -= measureApprox(text);
-    }
+    cursor = drawFeedGlyph(ctx, cursor, y, theme, sprite, label, { after: 4 });
 
     // attacker
     ctx.fillStyle = aColor;

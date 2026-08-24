@@ -304,10 +304,12 @@ export default function ReplayPlayer({
 
   // A paused frame's RAF loop (useReplayClock) only calls draw() once, not every frame, so a
   // weapon/bomb icon sprite that finishes loading after that wouldn't otherwise repaint until
-  // something else does (a scrub, a resize, ...). Redraw once per newly-loaded sprite instead.
+  // something else does (a scrub, a resize, ...). Redraw once per newly-loaded sprite instead —
+  // only while paused, since the RAF loop already redraws every frame during playback and would
+  // pick up the same sprite on its very next frame regardless.
   useEffect(() => {
-    draw();
-  }, [spriteGeneration, draw]);
+    if (!playing) draw();
+  }, [spriteGeneration, draw, playing]);
 
   // --- step the clock back without leaving the current round ---
   const rewind = useCallback(() => {
