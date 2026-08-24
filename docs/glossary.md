@@ -49,9 +49,11 @@ so you don't have to reverse-engineer them from scratch each time.
   - **Who picked** is determined by `shirts_pick != null` (shirts picked) vs `shirts_pick == null`
     (skins picked). Do **not** compare `shirts_pick === picked_map` — they are never equal because
     only one is populated per match.
-  - **Gauntlet matches lack pick/ban data** entirely (`GauntletMatch` has no veto fields). Veto
-    aggregations must be guarded with `is_gauntlet` checks or by only operating on the structures
-    that carry veto fields (`Match`, `MatchWithRoster`, `MapMatchRow`).
+  - **`GauntletMatch`** (`src/lib/queries/gauntlet.ts`, the bracket-display read shape) surfaces only
+    `picked_map`/`shirts_pick`/`skins_starting_side` — never the four ban fields. It is not the same
+    struct as the underlying `matches` row, which stores the full gauntlet ban history like any other
+    match (see below). Veto aggregations over ban data must be guarded with `is_gauntlet` checks or
+    operate on structures that carry all veto fields (`Match`, `MatchWithRoster`, `MapMatchRow`).
 - **Gauntlet** — a season format (`is_gauntlet = true`) that runs as a single-elimination bracket
   instead of round-robin weeks. **Gauntlet = playoffs**: there is no separate non-gauntlet "playoff"
   format anywhere in the app, and `is_gauntlet` (season) is the flag code should prefer for picking a
@@ -65,8 +67,18 @@ so you don't have to reverse-engineer them from scratch each time.
   live veto submission (`/api/matches/[id]/veto`) still keys off `is_gauntlet` alone since only
   already-played CSV imports can hit the mismatch.
   - `weeks` rows represent **bracket rounds**, not calendar weeks
-  - Veto is simultaneous (each side submits 2 bans at once, no turn order); 4 bans total auto-picks
-    the remaining map
+  - **Ban phase** — each of the 4 rostered players bans one map from the season's 5-map `map_pool`,
+    into their own fixed slot (`shirts_ban`/`shirts_ban2` for SHIRTS, `skins_ban1`/`skins_ban2` for
+    SKINS, assigned by ascending `player_id` within the faction). All 4 bans are submitted
+    simultaneously — there's no turn order between or within factions. Once all 4 slots are filled,
+    the one map neither side banned is auto-picked into `shirts_pick` (`/api/matches/[id]/veto`).
+  - **No side pick** — gauntlet matches never set `skins_starting_side`; the veto route rejects it as
+    an invalid gauntlet field. Instead the server always plays a knife round
+    (`matchzy_knife_enabled_default true` in the golden config) and its winner picks their starting
+    side — `mapSides()` (`src/lib/matchzy.ts`) falls back to `["knife"]` whenever
+    `skins_starting_side` is unset at config-build time, rather than forcing a side. Demo ingestion
+    then infers which side was actually played from the first live round instead of trusting a stored
+    value — see [`demo-ingestion.md`](./demo-ingestion.md#starting-side-inference).
   - **All gauntlet matches are stored with `is_playoff_game = true`**, so the regular
     `player_season_leaderboard` view excludes them entirely — gauntlet stats must be computed
     directly from `player_match_stats` (`getGauntletStats`, `getGauntletSeasonLeaderboard`,
