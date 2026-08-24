@@ -88,14 +88,6 @@ jobs:
     timeout-minutes: 20
     env:
       CI: true
-      # Fixed local-dev-only demo JWTs derived from supabase/config.toml's pinned `auth.jwt_secret`
-      # (role: anon / service_role, iss: supabase-demo) — not real secrets, just deterministic
-      # values for a throwaway local Postgres. Hardcoded rather than parsed from `supabase status`:
-      # recent Supabase CLI releases stopped reliably printing these from `status`/`start` output
-      # (a known upstream regression, supabase/cli#4211), and since they're fully determined by the
-      # pinned jwt_secret, there's nothing to "look up" at runtime anyway.
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjIxNDU5MTY4MDB9.SD8OGMUA7SztCSQyoNK_up2hNla9czXlhL7RvNeh1kw
-      SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MjE0NTkxNjgwMH0.Q_XOunt2yFrXAkYRNeh5JgAO_M_zLBEh7OwNnfEJjXU
       # NextAuth reads its signing secret from `NEXTAUTH_SECRET` when `authOptions.js` doesn't pass
       # one explicitly. Left unset, it falls back to a random per-instantiation secret — `next dev`
       # re-instantiates the auth route's module on recompiles, so a session cookie encrypted before
@@ -107,6 +99,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # supabase/local.env carries the fixed anon/service_role JWTs shared with docs/e2e.md's manual
+      # setup and .claude/hooks/session-start.sh's automatic bootstrap — one place to update if
+      # supabase/config.toml's pinned jwt_secret ever changes. NEXT_PUBLIC_SUPABASE_URL is excluded
+      # here since it's derived dynamically below instead (see that step for why). $GITHUB_ENV's file
+      # command requires strict KEY=VALUE lines — supabase/local.env's leading comment block would
+      # otherwise be read as an invalid line, so this greps down to actual assignments first.
+      - name: Export local Supabase demo JWTs
+        run: grep -E '^[A-Za-z_][A-Za-z0-9_]*=' supabase/local.env | grep -v '^NEXT_PUBLIC_SUPABASE_URL=' >> "$GITHUB_ENV"
 
       - name: Setup Node
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0

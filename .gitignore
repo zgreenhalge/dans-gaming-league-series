@@ -24,6 +24,9 @@ __pycache__/
 # Claude Code agent worktrees (runtime-managed, not part of the repo)
 .claude/worktrees/
 
+# SessionStart hook output (runtime-generated, not part of the repo)
+.claude/session-start.log
+
 # Whatever this windows shit is
 *:Zone.Identifier
 
