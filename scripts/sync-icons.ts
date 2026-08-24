@@ -65,6 +65,7 @@ const WEAPON_ENTRIES: IconEntry[] = [
 const MANIFEST: IconEntry[] = [
   { source: 'cs2/panorama/images/icons/ui/kill.svg', dest: 'round-icons/skull.svg' },
   { source: 'cs2/panorama/images/icons/ui/bomb.svg', dest: 'round-icons/bomb.svg' },
+  { source: 'cs2/panorama/images/icons/equipment/c4.svg', dest: 'round-icons/c4.svg' },
   { source: 'cs2/panorama/images/icons/ui/defuser_white.svg', dest: 'round-icons/defuse.svg' },
   { source: 'cs2/panorama/images/icons/ui/clock.svg', dest: 'round-icons/clock.svg' },
   { source: 'cs2/panorama/images/icons/equipment/smokegrenade.svg', dest: 'grenade-icons/smoke.svg' },

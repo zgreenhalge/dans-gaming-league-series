@@ -295,15 +295,16 @@ function drawExplosion(
   ctx.globalAlpha = 1;
 }
 
-const BOMB_ICON_SRC = '/round-icons/bomb.svg';
+const C4_ICON_SRC = '/round-icons/c4.svg';
 const HEADSHOT_ICON_SRC = '/kill-icons/headshot.svg';
 
 /**
- * A C4 glyph: the real bomb icon once its sprite is loaded (falls back to a small filled square
- * meanwhile), plus a red arming light on top — the icon alone can't show the live planted/armed
- * state, so the light stays regardless of which body renders under it. `blink` arms the light
- * (planted); `alpha` dims it (dropped on the ground); `half` sizes it (a smaller badge when
- * riding a carrier).
+ * A C4 glyph: the real bomb-device icon once its sprite is loaded (falls back to a small filled
+ * square meanwhile), plus a red arming light on top — the icon alone can't show the live
+ * planted/armed state, so the light stays regardless of which body renders under it. `blink` arms
+ * the light (planted); `alpha` dims it (dropped on the ground); `half` sizes it (a smaller badge
+ * when riding a carrier). This is the physical device on the map, not a detonation — round-won-
+ * by-bomb uses the separate explosion icon (`CONDITION_ICON.bomb` / `BombIcon`).
  */
 function drawC4(
   ctx: Ctx2D,
@@ -317,9 +318,9 @@ function drawC4(
   const s = opts.half ?? 5;
   const a = opts.alpha ?? 1;
   ctx.globalAlpha = a;
-  const sprite = getIconSprite?.(BOMB_ICON_SRC, theme.bomb) ?? null;
+  const sprite = getIconSprite?.(C4_ICON_SRC, theme.bomb) ?? null;
   if (sprite) {
-    // bomb.svg's source is square, so a fixed square box doesn't distort it.
+    // c4.svg's source is square, so a fixed square box doesn't distort it.
     ctx.drawImage(sprite.image, p.x - s, p.y - s, s * 2, s * 2);
   } else {
     ctx.fillStyle = theme.bomb;

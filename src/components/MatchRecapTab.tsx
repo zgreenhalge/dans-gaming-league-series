@@ -10,7 +10,7 @@ import MapHeatmap from './MapHeatmap';
 import MatchPlayerTrails from './MatchPlayerTrails';
 import DevGate from './DevGate';
 import { RecordingViewer, RecordingUrlForm } from './RecordingViewer';
-import { BombIcon, DefuseIcon, CONDITION_ICON } from './icons/ConditionIcons';
+import { C4Icon, DefuseIcon, CONDITION_ICON } from './icons/ConditionIcons';
 import { SIDE_ICON } from './icons/SideIcons';
 import { HeadshotIcon } from './icons/KillModifierIcons';
 import { WeaponIcon } from './icons/WeaponIcon';
@@ -195,7 +195,7 @@ function eventContent(ev: ReplayEvent, name: (id: number | null) => React.ReactN
   if (ev.type === 'plant') {
     return (
       <>
-        <BombIcon size={13} className="text-[var(--color-text-secondary)] shrink-0" />
+        <C4Icon size={13} className="text-[var(--color-text-secondary)] shrink-0" />
         {name(ev.playerId)}
         <span className="text-[var(--color-text-secondary)]">
           planted the bomb{ev.site ? ` on ${ev.site}` : ''}
