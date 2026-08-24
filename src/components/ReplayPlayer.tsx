@@ -12,6 +12,7 @@ import { drawScene, type Ctx2D, type ReplayTheme, type BannerInfo } from '@/lib/
 import { readTheme, STICKER_COLORS } from './replayTheme';
 import { MaskedIcon } from './icons/MaskedIcon';
 import { useMapRadar } from './useMapRadar';
+import { useIconSprites } from './useIconSprites';
 import { applyCanvasSize, useCanvasSize } from './useCanvasSize';
 import { useReplayClock } from './useReplayClock';
 
@@ -198,6 +199,9 @@ export default function ReplayPlayer({
   // The map's radar calibration + image (shared with the heatmap via useMapRadar).
   // Null calibration = uncalibrated map (auto-fit grid).
   const { calibration, radarImage } = useMapRadar(payload ? mapSlug(payload.map) : null);
+  // Tinted/decoded weapon+bomb icon sprites for the canvas kill feed and bomb marker — see
+  // useIconSprites' doc comment for why draw.ts can't just reference a file URL directly.
+  const { get: getIconSprite, generation: spriteGeneration } = useIconSprites();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -287,6 +291,7 @@ export default function ReplayPlayer({
       theme,
       banner,
       radar,
+      getIconSprite,
     });
     // Reflect playback position on the (uncontrolled) scrubber/clock without re-rendering.
     if (scrubRef.current) scrubRef.current.value = String(tickRef.current);
@@ -294,7 +299,14 @@ export default function ReplayPlayer({
       clockRef.current.textContent = formatClock(roundClockSeconds(round, tickRef.current, payload.tickRate));
     }
     onPosition?.(round.round, tickRef.current);
-  }, [payload, roundIdx, calibration, radarImage, metaById, banner, onPosition]);
+  }, [payload, roundIdx, calibration, radarImage, metaById, banner, onPosition, getIconSprite]);
+
+  // A paused frame's RAF loop (useReplayClock) only calls draw() once, not every frame, so a
+  // weapon/bomb icon sprite that finishes loading after that wouldn't otherwise repaint until
+  // something else does (a scrub, a resize, ...). Redraw once per newly-loaded sprite instead.
+  useEffect(() => {
+    draw();
+  }, [spriteGeneration, draw]);
 
   // --- step the clock back without leaving the current round ---
   const rewind = useCallback(() => {

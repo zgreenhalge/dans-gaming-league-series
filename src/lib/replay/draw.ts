@@ -12,6 +12,7 @@ import type { Faction } from '../types';
 import { drawRadarBackground, type Projector, type RadarCalibration } from './project';
 import type { ViewState, ViewPlayer } from './playback';
 import { sideOfPlayer } from './playback';
+import { weaponIconSrc } from '../weaponIcons';
 
 /** The slice of CanvasRenderingContext2D `drawScene` actually uses. */
 export interface Ctx2D {
@@ -84,6 +85,13 @@ export interface DrawSceneArgs {
   banner: BannerInfo;
   /** Optional real radar background (Phase 3); falls back to a grid when absent. */
   radar?: { image: DrawableImage; calibration: RadarCalibration } | null;
+  /** Looks up a pre-tinted, pre-decoded icon sprite by (file path under `public/`, CSS color),
+   *  returning `null` if it isn't loaded (or doesn't exist) yet — the kill feed and bomb marker
+   *  fall back to their plain text/shape rendering in that case. Omitted entirely by any
+   *  renderer with no synchronous image cache to offer (e.g. a future non-browser Action), which
+   *  gets the same fallback rendering unconditionally. See `useIconSprites` for why this can't
+   *  just be a file path drawImage() reads directly. */
+  getIconSprite?: (src: string, color: string) => DrawableImage | null;
 }
 
 const TWO_PI = Math.PI * 2;
@@ -276,10 +284,14 @@ function drawExplosion(
   ctx.globalAlpha = 1;
 }
 
+const BOMB_ICON_SRC = '/round-icons/bomb.svg';
+
 /**
- * A C4 glyph: a small body with a red light — clearly not a nade. `blink` arms the
- * light (planted); `alpha` dims it (dropped on the ground); `half` sizes it (a smaller
- * badge when riding a carrier).
+ * A C4 glyph: the real bomb icon once its sprite is loaded (falls back to a small filled square
+ * meanwhile), plus a red arming light on top — the icon alone can't show the live planted/armed
+ * state, so the light stays regardless of which body renders under it. `blink` arms the light
+ * (planted); `alpha` dims it (dropped on the ground); `half` sizes it (a smaller badge when
+ * riding a carrier).
  */
 function drawC4(
   ctx: Ctx2D,
@@ -288,15 +300,21 @@ function drawC4(
   tick: number,
   tickRate: number,
   opts: { blink: boolean; alpha?: number; half?: number } = { blink: true },
+  getIconSprite?: (src: string, color: string) => DrawableImage | null,
 ): void {
   const s = opts.half ?? 5;
   const a = opts.alpha ?? 1;
   ctx.globalAlpha = a;
-  ctx.fillStyle = theme.bomb;
-  ctx.fillRect(p.x - s, p.y - s, s * 2, s * 2);
-  ctx.strokeStyle = theme.bg;
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(p.x - s, p.y - s, s * 2, s * 2);
+  const sprite = getIconSprite?.(BOMB_ICON_SRC, theme.bomb) ?? null;
+  if (sprite) {
+    ctx.drawImage(sprite, p.x - s, p.y - s, s * 2, s * 2);
+  } else {
+    ctx.fillStyle = theme.bomb;
+    ctx.fillRect(p.x - s, p.y - s, s * 2, s * 2);
+    ctx.strokeStyle = theme.bg;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(p.x - s, p.y - s, s * 2, s * 2);
+  }
   // Arming light: blinks when planted, ~0.5s on/off in wall-clock time regardless of the
   // demo's tick rate (tick is monotonic engine ticks, so the half-period scales with it).
   const halfPeriodTicks = Math.max(1, C4_BLINK_HALF_SECONDS * tickRate);
@@ -310,7 +328,7 @@ function drawC4(
 }
 
 export function drawScene(args: DrawSceneArgs): void {
-  const { ctx, width, height, projector, state, round, metaById, tickRate, theme, radar } = args;
+  const { ctx, width, height, projector, state, round, metaById, tickRate, theme, radar, getIconSprite } = args;
 
   // --- background ---
   ctx.fillStyle = theme.bg;
@@ -388,11 +406,11 @@ export function drawScene(args: DrawSceneArgs): void {
       drawC4(ctx, { x: bp.x + DOT_RADIUS + 3, y: bp.y - DOT_RADIUS - 1 }, theme, state.tick, tickRate, {
         blink: false,
         half: 3.5,
-      });
+      }, getIconSprite);
     } else if (state.bomb.planted) {
-      drawC4(ctx, bp, theme, state.tick, tickRate, { blink: true });
+      drawC4(ctx, bp, theme, state.tick, tickRate, { blink: true }, getIconSprite);
     } else {
-      drawC4(ctx, bp, theme, state.tick, tickRate, { blink: false, alpha: 0.6 });
+      drawC4(ctx, bp, theme, state.tick, tickRate, { blink: false, alpha: 0.6 }, getIconSprite);
     }
   }
 
@@ -409,7 +427,7 @@ export function drawScene(args: DrawSceneArgs): void {
 
   // --- overlays ---
   drawScore(ctx, width, args.banner, theme);
-  drawKillFeed(ctx, width, state, metaById, round, theme);
+  drawKillFeed(ctx, width, state, metaById, round, theme, getIconSprite);
 }
 
 function drawGrid(ctx: Ctx2D, width: number, height: number, color: string): void {
@@ -537,6 +555,9 @@ function drawScore(ctx: Ctx2D, width: number, banner: BannerInfo, theme: ReplayT
   ctx.fillText(String(banner.tScore), cx + 28, 8);
 }
 
+/** Icon square side, in canvas px — sits between the attacker and victim names. */
+const KILL_FEED_ICON_SIZE = 12;
+
 function drawKillFeed(
   ctx: Ctx2D,
   width: number,
@@ -544,6 +565,7 @@ function drawKillFeed(
   nameById: ReadonlyMap<number, ReplayPlayerMeta>,
   round: ReplayRound,
   theme: ReplayTheme,
+  getIconSprite?: (src: string, color: string) => DrawableImage | null,
 ): void {
   ctx.textAlign = 'right';
   ctx.textBaseline = 'top';
@@ -555,16 +577,39 @@ function drawKillFeed(
     const vColor = factionColor(theme, round, victim?.faction);
     const aColor = attacker ? factionColor(theme, round, attacker.faction) : theme.textDim;
     const x = width - 8;
+
     // victim (rightmost)
     ctx.fillStyle = vColor;
     const vName = victim?.name ?? `#${k.victimId}`;
     ctx.fillText(vName, x, y);
-    // separator + attacker
+    let cursor = x - measureApprox(vName);
+
+    // headshot marker, if any (text — see #465 for a real icon here too)
+    const hsGlyph = k.headshot ? ' ⊙ ' : '  ';
     ctx.fillStyle = theme.textDim;
-    const sep = `  ${killWeaponLabel(round, k)}${k.headshot ? ' ⊙' : ''}  `;
-    // crude right-to-left layout: draw attacker further left by a fixed gutter
+    ctx.fillText(hsGlyph, cursor, y);
+    cursor -= measureApprox(hsGlyph);
+
+    // weapon: the real icon once its sprite is loaded, else the text label it replaces —
+    // same molotov-vs-incendiary resolution the text label always used (killWeaponLabel).
+    const label = killWeaponLabel(round, k);
+    const iconSrc = weaponIconSrc(label);
+    const sprite = iconSrc ? (getIconSprite?.(iconSrc, aColor) ?? null) : null;
+    if (sprite) {
+      cursor -= KILL_FEED_ICON_SIZE;
+      ctx.drawImage(sprite, cursor, y - 1, KILL_FEED_ICON_SIZE, KILL_FEED_ICON_SIZE);
+      cursor -= 4;
+    } else {
+      const text = `${label}  `;
+      ctx.fillStyle = theme.textDim;
+      ctx.fillText(text, cursor, y);
+      cursor -= measureApprox(text);
+    }
+
+    // attacker
     ctx.fillStyle = aColor;
-    ctx.fillText(`${attacker?.name ?? 'world'}${sep}`, x - measureApprox(vName), y);
+    ctx.fillText(attacker?.name ?? 'world', cursor, y);
+
     y += 16;
   }
 }
