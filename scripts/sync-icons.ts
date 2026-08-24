@@ -5,14 +5,15 @@
 // upstream source we originally sourced it from (see #103/#464's session history for how each
 // pick was chosen). A file appearing upstream that isn't in MANIFEST is never pulled in.
 //
-// For each manifest entry: fetch the raw upstream SVG, extract its real shape elements (path/
-// polygon/rect/circle — skipping anything nested inside an unused `<symbol>`, a leftover artifact
-// Source2Viewer bakes into many of these exports), and re-emit a minimal SVG with every shape's
-// fill forced to `currentColor` so it stays tintable exactly like every other icon in this
-// codebase. This is the same transform applied by hand while sourcing the original set, now
-// codified so a future upstream change (asset renamed/redrawn) doesn't need someone to redo that
-// by hand — it's diffed against what's currently committed, and only entries that actually changed
-// go into the PR this opens.
+// For each manifest entry: fetch the raw upstream SVG and run it through
+// `extractRecolorableSvg()` (`src/lib/svgExtract.ts`), which extracts its real shape elements
+// (path/polygon/rect/circle — skipping anything nested inside an unused `<symbol>`, a leftover
+// artifact Source2Viewer bakes into many of these exports) and re-emits a minimal SVG with every
+// shape's fill forced to `currentColor` so it stays tintable exactly like every other icon in this
+// codebase. Every file under `public/{round,grenade,side,kill,weapon}-icons/` is exactly that
+// function's own output — never hand-edited afterward — so diffing a fresh extraction against
+// what's committed means "the upstream shape changed," and only entries that actually changed go
+// into the PR this opens.
 //
 // A manifest entry that 404s or whose upstream file no longer parses into any shapes (structure
 // changed enough that this script's extraction can't follow) is never silently skipped — it's
@@ -29,7 +30,6 @@
 // The workflow (.github/workflows/icon-sync.yml) runs this weekly; DRY_RUN is only ever true on a
 // manual workflow_dispatch preview, same convention as scripts/dathost-cleanup.ts.
 
-import { JSDOM } from 'jsdom';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
@@ -37,6 +37,7 @@ import { createClient } from '@supabase/supabase-js';
 import { recordOpsError, clearOpsError } from '../src/lib/ops-errors';
 import { WEAPON_CATEGORY } from '../src/lib/parsers/weaponClasses';
 import { iconAspect } from '../src/lib/iconAspect';
+import { extractRecolorableSvg, type ExtractedSvg } from '../src/lib/svgExtract';
 
 const UPSTREAM_OWNER = 'Juknum';
 const UPSTREAM_REPO = 'counter-strike-icons';
@@ -77,70 +78,6 @@ const MANIFEST: IconEntry[] = [
   { source: 'cs2/panorama/images/hud/deathnotice/icon_headshot.svg', dest: 'kill-icons/headshot.svg' },
   ...WEAPON_ENTRIES,
 ];
-
-const SHAPE_TAGS = new Set(['path', 'polygon', 'rect', 'circle']);
-const ATTR_ORDER = ['cx', 'cy', 'r', 'x', 'y', 'width', 'height', 'transform', 'points', 'd', 'fill-rule', 'clip-rule', 'fill'];
-
-interface ExtractedSvg {
-  svg: string;
-  width: number;
-  height: number;
-}
-
-/** Re-emits `rawSvg` as a minimal, `currentColor`-tintable SVG — see the file header for why —
- *  alongside its `viewBox` width/height, so callers can cross-check `src/lib/iconAspect.ts`'s
- *  hand-copied aspect-ratio table against the real, current upstream shape. */
-function extractRecolorableSvg(rawSvg: string): ExtractedSvg {
-  const dom = new JSDOM(rawSvg, { contentType: 'image/svg+xml' });
-  const doc = dom.window.document;
-  if (doc.querySelector('parsererror')) throw new Error('upstream file is not valid SVG/XML');
-
-  const root = doc.documentElement;
-  const viewBox = root.getAttribute('viewBox');
-  if (!viewBox) throw new Error('upstream <svg> has no viewBox');
-  const dims = viewBox.trim().split(/\s+/);
-  const width = dims[2];
-  const height = dims[3];
-
-  const shapes: Element[] = [];
-  const walk = (el: Element, insideSymbol: boolean) => {
-    const tag = el.tagName?.toLowerCase() ?? '';
-    if (tag === 'symbol') insideSymbol = true;
-    if (SHAPE_TAGS.has(tag) && !insideSymbol) shapes.push(el);
-    for (const child of Array.from(el.children)) walk(child, insideSymbol);
-  };
-  walk(root, false);
-  if (shapes.length === 0) throw new Error('no path/polygon/rect/circle shapes found');
-
-  const lines = shapes.map((el) => {
-    const tag = el.tagName.toLowerCase();
-    const attrs: Record<string, string> = {};
-    const style = el.getAttribute('style');
-    if (style) {
-      for (const decl of style.split(';')) {
-        const idx = decl.indexOf(':');
-        if (idx === -1) continue;
-        attrs[decl.slice(0, idx).trim()] = decl.slice(idx + 1).trim();
-      }
-    }
-    for (const name of ATTR_ORDER) {
-      if (name === 'fill') continue;
-      const v = el.getAttribute(name);
-      if (v !== null) attrs[name] = v;
-    }
-    attrs.fill = 'currentColor';
-    const ordered = ATTR_ORDER.filter((k) => k in attrs).map((k) => `${k}="${attrs[k]}"`);
-    return `<${tag} ${ordered.join(' ')}/>`;
-  });
-
-  const svg = [
-    `<svg width="${width}" height="${height}" viewBox="${viewBox}" fill="none" xmlns="http://www.w3.org/2000/svg">`,
-    ...lines,
-    `</svg>`,
-    '',
-  ].join('\n');
-  return { svg, width: Number(width), height: Number(height) };
-}
 
 async function fetchUpstream(sourcePath: string): Promise<string> {
   const url = `https://raw.githubusercontent.com/${UPSTREAM_OWNER}/${UPSTREAM_REPO}/${UPSTREAM_BRANCH}/${sourcePath}`;
@@ -332,13 +269,17 @@ async function main() {
   }
 }
 
-main().catch(async (err) => {
-  console.error('icon-sync failed:', err);
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (supabaseUrl && serviceKey) {
-    const supabaseAdmin = createClient(supabaseUrl, serviceKey);
-    await recordOpsError(supabaseAdmin, 'system', 0, OPERATION, `sync script crashed: ${(err as Error).message}`);
-  }
-  process.exit(1);
-});
+// Guarded so importing this module (e.g. extractRecolorableSvg() from a test) never triggers a
+// live run of the script itself.
+if (require.main === module) {
+  main().catch(async (err) => {
+    console.error('icon-sync failed:', err);
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (supabaseUrl && serviceKey) {
+      const supabaseAdmin = createClient(supabaseUrl, serviceKey);
+      await recordOpsError(supabaseAdmin, 'system', 0, OPERATION, `sync script crashed: ${(err as Error).message}`);
+    }
+    process.exit(1);
+  });
+}
