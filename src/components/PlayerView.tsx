@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import type { PlayerHistoryRow, TrophyEntry, EhogRatingPoint, SabremetricMatchRow } from '@/lib/queries';
+import { groupRoundsByMatch, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { useLiveH2HData } from './useLiveH2HData';
-import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
+import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, filterByMatchIds, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
 import { aggregatePlayerStats, aggregatePlayerStatsByMap } from '@/lib/player-stats';
 import { aggregatePlayerMapStats, aggregatePlayerSideStats } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
@@ -116,6 +116,8 @@ export default function PlayerView({
   ehogHistory,
   matchDeltas,
   sabremetrics = [],
+  matchRounds = [],
+  matchKills = [],
 }: {
   playerId: number;
   history: PlayerHistoryRow[];
@@ -130,6 +132,13 @@ export default function PlayerView({
   /** League-wide sabremetric rows (all players) — the player's own rows and the
    *  Plus-stat baseline are both derived from these under the active season filter. */
   sabremetrics?: SabremetricMatchRow[];
+  /** This player's demo-derived round outcomes (all seasons — filtered client-side alongside
+   *  `history`) — feeds the Side stats tab's RWR% with a real per-round split instead of the
+   *  whole-match-on-starting-side approximation. */
+  matchRounds?: MatchRoundRow[];
+  /** This player's demo-derived kills (all seasons — filtered client-side alongside `history`) —
+   *  feeds the Weapons section's favorite-weapon/kills-by-weapon breakdown. */
+  matchKills?: MatchKillRow[];
 }) {
   const { data: session } = useSession();
   const loggedInPlayerId = session?.user?.playerId ?? null;
@@ -221,7 +230,12 @@ export default function PlayerView({
   }, [filteredEhog]);
   const maps = aggregatePlayerStatsByMap(filtered);
   const playerMapStats = aggregatePlayerMapStats(filtered);
-  const playerSideStats = aggregatePlayerSideStats(filtered);
+  const roundsByMatch = useMemo(() => groupRoundsByMatch(matchRounds), [matchRounds]);
+  const playerSideStats = aggregatePlayerSideStats(filtered, roundsByMatch);
+
+  // Passed to SabremetricsLeaderboardView's Weapons sub-tab (Advanced tab) — see kills.ts's
+  // aggregateWeaponKillStats()/favoriteWeapon() for how it's turned into per-weapon breakdowns.
+  const filteredKills = useMemo(() => filterByMatchIds(matchKills, filtered), [filtered, matchKills]);
   const playedHistory = useMemo(() => filtered.filter(isPlayed), [filtered]);
   const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
 
@@ -708,7 +722,7 @@ export default function PlayerView({
 
       {/* Advanced Stats tab */}
       {tab === 'advanced' && (
-        <SabremetricsLeaderboardView rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} singlePlayer />
+        <SabremetricsLeaderboardView rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} singlePlayer kills={filteredKills} />
       )}
 
       {/* Matchups tab */}

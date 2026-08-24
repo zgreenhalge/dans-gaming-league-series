@@ -262,8 +262,32 @@ export interface DemoWeaponStat {
   economyStats: (WeaponStatFields & { economy_type: string })[];
 }
 
+// `match_kills`/`match_rounds`: one row per kill/round event (not a per-player aggregate like
+// the stat shapes above) — see docs/architecture.md. Identity is `player_id`, resolved to
+// `player_match_stats_id` at persistence time via `resolvePlayerMatchStatsIds()`, matching
+// `DemoWeaponStat`'s convention.
+export interface DemoMatchKill {
+  round_number: number;
+  attacker_player_id: number | null;
+  victim_player_id: number;
+  assister_player_id: number | null;
+  weapon: string;
+  headshot: boolean;
+  is_teamkill: boolean;
+  tick: number;
+}
+
+export interface DemoMatchRound {
+  round_number: number;
+  winner_side: 'CT' | 'T';
+  shirts_side: 'CT' | 'T';
+  win_reason: RoundCondition;
+}
+
 export interface ParsedDemoSabremetricsResult {
   sabremetrics: DemoSabremetricStat[];
   weaponStats: DemoWeaponStat[];
+  matchKills: DemoMatchKill[];
+  matchRounds: DemoMatchRound[];
   warnings: string[];
 }

@@ -12,7 +12,7 @@ import { buildRoundSides, sideForFaction, roundsPlayedBySide, type RoundEndRow }
 import { test, report } from '../test-support/miniTest';
 
 function round(n: number, winner: 'CT' | 'T' | null = 'CT', warmup = false): RoundEndRow {
-  return { tick: n * 1000, total_rounds_played: n, winner, is_warmup_period: warmup };
+  return { tick: n * 1000, total_rounds_played: n, winner, is_warmup_period: warmup, reason: null };
 }
 
 // MR12 (targetWinRounds = 13): 12 rounds per regulation half.
@@ -55,8 +55,8 @@ test('buildRoundSides: OT alternates every 3 rounds, starting with the "other" s
 
 test('buildRoundSides: warmup and rounds with no winner are excluded', () => {
   const events: RoundEndRow[] = [
-    { tick: 100, total_rounds_played: 0, winner: null, is_warmup_period: true },
-    { tick: 200, total_rounds_played: 0, winner: null, is_warmup_period: false }, // total_rounds_played 0 also excluded
+    { tick: 100, total_rounds_played: 0, winner: null, is_warmup_period: true, reason: null },
+    { tick: 200, total_rounds_played: 0, winner: null, is_warmup_period: false, reason: null }, // total_rounds_played 0 also excluded
     round(1),
   ];
   const sides = buildRoundSides(events, 'CT', 13);
@@ -73,7 +73,7 @@ test('buildRoundSides: a pre-match round (erroneous knife round) is excluded by 
   // The engine counted an erroneous knife round as total_rounds_played 1, then never reset its
   // counter, so the real rounds carry numbers 2..14. matchStartTick sits between the knife
   // round_end and the first real round_end, so the knife round is dropped by TICK.
-  const knife: RoundEndRow = { tick: 100, total_rounds_played: 1, winner: 'T', is_warmup_period: false };
+  const knife: RoundEndRow = { tick: 100, total_rounds_played: 1, winner: 'T', is_warmup_period: false, reason: null };
   const real = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map((n) => round(n));
   const sides = buildRoundSides([knife, ...real], 'CT', 13, 500);
 
@@ -86,7 +86,7 @@ test('buildRoundSides: half-swap boundary tracks the first surviving round, not 
   // The knife round shifted every real round's engine number up by 1 (real round 1 = engine 2,
   // ..., real round 13 = engine 14). The half swap still lands after 12 *real* rounds — i.e. at
   // engine round 14 (real round 13) — not at engine round 13, which is still real round 12.
-  const knife: RoundEndRow = { tick: 100, total_rounds_played: 1, winner: 'T', is_warmup_period: false };
+  const knife: RoundEndRow = { tick: 100, total_rounds_played: 1, winner: 'T', is_warmup_period: false, reason: null };
   const real = [2, 12, 13, 14].map((n) => round(n));
   const sides = buildRoundSides([knife, ...real], 'CT', 13, 500);
 
@@ -103,7 +103,7 @@ test('buildRoundSides: matchStartTick defaults to 0 (no tick filtering) for demo
 });
 
 test('sideForFaction: SHIRTS returns the round shirts side, SKINS returns the opposite', () => {
-  const info = { roundNumber: 1, endTick: 0, winnerSide: 'CT' as const, shirtsSide: 'T' as const };
+  const info = { roundNumber: 1, endTick: 0, winnerSide: 'CT' as const, shirtsSide: 'T' as const, winReason: 'elim' as const };
   assert.equal(sideForFaction(info, 'SHIRTS'), 'T');
   assert.equal(sideForFaction(info, 'SKINS'), 'CT');
 });

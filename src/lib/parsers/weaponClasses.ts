@@ -34,3 +34,23 @@ export const WEAPON_CATEGORY: Record<string, WeaponCategory> = {
 export function stripWeaponPrefix(classname: string): string {
   return classname.startsWith('weapon_') ? classname.slice('weapon_'.length) : classname;
 }
+
+/**
+ * Category bucket for a *kill* weapon — every `player_death.weapon` value resolves to one of
+ * these, unlike `WEAPON_CATEGORY` (guns only, deliberately left as an allowlist for
+ * `accuracy.ts`'s shots-fired/hit gating). Reuses `WEAPON_CATEGORY` for guns rather than
+ * duplicating that roster, and substring-matches non-gun kill weapons the same way
+ * `replay/extract.ts`'s `isBulletWeapon()` already does — CS2 reports several knife-skin
+ * classnames (e.g. `bayonet`, `knife_karambit`), not one fixed string, so an allowlist would
+ * miss variants.
+ */
+export type KillWeaponCategory = WeaponCategory | 'melee' | 'utility' | 'other';
+
+export function killWeaponCategory(weapon: string): KillWeaponCategory {
+  const stripped = stripWeaponPrefix(weapon).toLowerCase();
+  const gunCategory = WEAPON_CATEGORY[stripped];
+  if (gunCategory) return gunCategory;
+  if (/knife|bayonet/.test(stripped)) return 'melee';
+  if (/grenade|molotov|incgren|inferno|taser/.test(stripped)) return 'utility';
+  return 'other';
+}

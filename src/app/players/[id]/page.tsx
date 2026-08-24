@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getPlayer, getCareerLeaderboard, getPlayersById, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory } from '@/lib/queries';
+import { getPlayer, getCareerLeaderboard, getPlayersById, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory, getAllMatchRounds, getAllMatchKills } from '@/lib/queries';
 import { getPlayerMeta } from '@/lib/seo/og';
 import { isPlayedScore } from '@/lib/util';
 import { buildPlayerJsonLd } from '@/lib/seo/structured-data';
@@ -55,17 +55,23 @@ export default async function PlayerPage({
   const { discord: discordFeedback } = await searchParams;
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
-  const [session, detail, careerLeaderboard, playersById, ehog, leagueSabremetrics, nameHistory, playerMeta] = await Promise.all([
+  // Shared with getAllMatchKills() below (same in-flight promise, not a second fetch) — it
+  // resolves player names for match_kills' attacker/victim/assister without a redundant
+  // full `players` table read.
+  const playersByIdPromise = getPlayersById();
+  const [session, detail, careerLeaderboard, playersById, ehog, leagueSabremetrics, nameHistory, playerMeta, matchRounds, matchKills] = await Promise.all([
     getServerSession(authOptions),
     getPlayer(playerId),
     getCareerLeaderboard(),
-    getPlayersById(),
+    playersByIdPromise,
     getPlayerEhogRating(playerId),
     // League-wide, per-season totals so the Advanced tab can compute Plus stats (player vs.
     // league avg) without shipping every match row to the client.
     getSabremetricSeasonTotals(),
     getPlayerNameHistory(playerId),
     getPlayerMeta(playerId),
+    getAllMatchRounds(),
+    getAllMatchKills(undefined, playersByIdPromise),
   ]);
   const isSelf = session?.user?.playerId === playerId;
   if (!detail) notFound();
@@ -167,6 +173,8 @@ export default async function PlayerPage({
               ehogHistory={ehog.history}
               matchDeltas={matchDeltas}
               sabremetrics={leagueSabremetrics}
+              matchRounds={matchRounds}
+              matchKills={matchKills}
             />
           </UrlStateProvider>
         </Suspense>

@@ -6,8 +6,12 @@ import {
   aggregateRows,
   computeLeagueAverages,
   computePlusStats,
+  aggregateWeaponKillStats,
+  favoriteWeapon,
   type AggregatedSab,
   type SabremetricStatRow,
+  type MatchKillRow,
+  type WeaponKillStat,
 } from '@/lib/queries';
 import { tabCls } from '@/lib/util';
 import EmptyState from './EmptyState';
@@ -294,6 +298,101 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
   );
 }
 
+// --- Weapon Stats (#452) ---
+//
+// Unlike every table above, per-player weapon breakdown isn't part of `AggregatedSab`/`SabFields`
+// — it's derived from raw `match_kills` rows (`aggregateWeaponKillStats()`/`favoriteWeapon()`,
+// `src/lib/queries/kills.ts`) instead. `kills` may be empty (no demo reparsed since #452 added
+// this table) — the row/tile values just come back honestly zeroed rather than hiding the tab.
+
+interface PlayerWeaponSummary {
+  player_id: number;
+  player_name: string;
+  favorite: WeaponKillStat | null;
+  totalKills: number;
+  totalHeadshotKills: number;
+  totalDeaths: number;
+}
+
+function summarizePlayerWeapons(playerId: number, playerName: string, kills: MatchKillRow[]): PlayerWeaponSummary {
+  const stats = aggregateWeaponKillStats(kills, playerId);
+  return {
+    player_id: playerId,
+    player_name: playerName,
+    favorite: favoriteWeapon(stats),
+    totalKills: stats.reduce((s, w) => s + w.kills, 0),
+    totalHeadshotKills: stats.reduce((s, w) => s + w.headshotKills, 0),
+    totalDeaths: stats.reduce((s, w) => s + w.deaths, 0),
+  };
+}
+
+function WeaponsTable({ aggregated, kills, singlePlayer, showHeading = true }: { aggregated: AggregatedSab[]; kills: MatchKillRow[]; singlePlayer: boolean; showHeading?: boolean }) {
+  const [sort, toggleSort] = useSortState('kills');
+
+  const rows = useMemo(
+    () => aggregated.map((a) => summarizePlayerWeapons(a.player_id, a.player_name, kills)),
+    [aggregated, kills],
+  );
+
+  const sorted = useMemo(() => {
+    const copy = [...rows];
+    copy.sort((a, b) => {
+      let aVal: number, bVal: number;
+      switch (sort.col) {
+        case 'kills': aVal = a.totalKills; bVal = b.totalKills; break;
+        case 'hs': aVal = a.totalHeadshotKills / (a.totalKills || 1); bVal = b.totalHeadshotKills / (b.totalKills || 1); break;
+        case 'deaths': aVal = a.totalDeaths; bVal = b.totalDeaths; break;
+        default: return 0;
+      }
+      return sort.asc ? aVal - bVal : bVal - aVal;
+    });
+    return copy;
+  }, [rows, sort]);
+
+  return (
+    <div className="my-6">
+      {showHeading && <h3 className="text-sm font-semibold mb-3">Weapons</h3>}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-max border-collapse text-xs">
+          <thead>
+            <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
+              {!singlePlayer && <th className={playerThCls}>Player</th>}
+              <th className="px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]" title="The weapon with the most credited kills">Favorite Weapon</th>
+              <SortableTh label="Kills" title="Credited kills with all weapons (excludes self-kills and teamkills)" sortKey="kills" state={sort} onClick={toggleSort} />
+              <SortableTh label="HS%" title="Headshot kills / kills, all weapons" sortKey="hs" state={sort} onClick={toggleSort} />
+              <SortableTh label="Deaths" title="Deaths to any weapon, including self-kills/teamkills" sortKey="deaths" state={sort} onClick={toggleSort} />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((r) => (
+              <tr key={r.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
+                <td className="px-3 py-2 text-left">{r.favorite ? `${r.favorite.weapon} (${r.favorite.kills})` : '—'}</td>
+                <td className={tdRight}>{r.totalKills}</td>
+                <td className={tdRight}>{pct(r.totalHeadshotKills, r.totalKills)}</td>
+                <td className={tdRight}>{r.totalDeaths}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function WeaponBar({ weapon, kills, maxKills }: { weapon: string; kills: number; maxKills: number }) {
+  const pctWidth = maxKills > 0 ? Math.max(0, Math.min(100, (kills / maxKills) * 100)) : 0;
+  return (
+    <div className="grid grid-cols-[100px_1fr_40px] items-center gap-2.5 py-1.5">
+      <span className="tracked text-[9px] text-[var(--color-text-secondary)]">{weapon}</span>
+      <span className="block h-[6px] w-full bg-[rgba(255,255,255,0.08)]">
+        <span className="block h-full bg-[var(--color-site-accent)]" style={{ width: `${pctWidth}%` }} />
+      </span>
+      <span className="font-mono text-[10px] text-right text-[var(--color-text-primary)]">{kills}</span>
+    </div>
+  );
+}
+
 // --- Trade Stats ---
 
 function TradesTable({ aggregated, singlePlayer, showHeading = true }: { aggregated: AggregatedSab[]; singlePlayer: boolean; showHeading?: boolean }) {
@@ -571,12 +670,16 @@ interface SinglePlayerTiles {
   impact: StatTile[];
   duels: StatTile[];
   mechanics: StatTile[];
+  weapons: StatTile[];
+  /** Rendered as `WeaponBar`s below the weapons tiles — a ranked list, not a fixed small set of
+   *  named metrics, so it doesn't fit the tile grid's label/value shape. */
+  topWeapons: WeaponKillStat[];
   trades: StatTile[];
   utility: StatTile[];
   plus: StatTile[];
 }
 
-function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: AggregatedSab[]): SinglePlayerTiles {
+function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: AggregatedSab[], kills: MatchKillRow[]): SinglePlayerTiles {
   const rp = agg.rounds_played || 1;
   const totalDuels = agg.opening_kills + agg.opening_deaths;
   const clutchAttempts = agg.clutch_1v1_attempts + agg.clutch_1v2_attempts;
@@ -656,7 +759,20 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Spray+', title: 'Spray Accuracy vs league avg (1.00 = avg)', value: fmtNum(plus.spray, 2), valueStyle: plusStyle(plus.spray) },
   ] : [];
 
-  return { impact, duels, mechanics, trades, utility, plus: plusTiles };
+  const weaponStats = aggregateWeaponKillStats(kills, agg.player_id);
+  const fav = favoriteWeapon(weaponStats);
+  const totalKills = weaponStats.reduce((s, w) => s + w.kills, 0);
+  const totalHeadshotKills = weaponStats.reduce((s, w) => s + w.headshotKills, 0);
+  const totalDeaths = weaponStats.reduce((s, w) => s + w.deaths, 0);
+  const weapons: StatTile[] = [
+    { label: 'Favorite Weapon', title: 'The weapon with the most credited kills', value: fav ? `${fav.weapon} (${fav.kills})` : '—' },
+    { label: 'Kills', title: 'Credited kills with all weapons (excludes self-kills and teamkills)', value: totalKills },
+    { label: 'HS%', title: 'Headshot kills / kills, all weapons', value: pct(totalHeadshotKills, totalKills) },
+    { label: 'Deaths', title: 'Deaths to any weapon, including self-kills/teamkills', value: totalDeaths },
+  ];
+  const topWeapons = weaponStats.filter((w) => w.kills > 0).slice(0, 8);
+
+  return { impact, duels, mechanics, weapons, topWeapons, trades, utility, plus: plusTiles };
 }
 
 // --- Sub-tabs ---
@@ -665,13 +781,15 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
 // single-player tile grids) — see the Impact/Mechanics/Trades split above. One tab state drives
 // both render paths so they never drift out of sync with each other.
 
-type SubTab = 'impact' | 'duels' | 'mechanics' | 'trades' | 'utility' | 'plus';
+type SubTab = 'impact' | 'duels' | 'mechanics' | 'weapons' | 'trades' | 'utility' | 'plus';
 
 // Ordered to roughly match Leetify's match-page grouping (Aim, then situational Duels/Trades,
-// then Impact, then Utility) — see #173's Leetify-parity discussion. Stats Plus has no Leetify
-// analog (it's DGLS's own league-relative composite), so it stays last.
+// then Impact, then Utility) — see #173's Leetify-parity discussion. Weapons sits right after Aim
+// (#452) since both are gun-choice/precision stats. Stats Plus has no Leetify analog (it's DGLS's
+// own league-relative composite), so it stays last.
 const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'mechanics', label: 'Aim' },
+  { key: 'weapons', label: 'Weapons' },
   { key: 'duels', label: 'Opening Duels' },
   { key: 'trades', label: 'Trades' },
   { key: 'impact', label: 'Impact' },
@@ -713,6 +831,7 @@ export default function SabremetricsLeaderboardView({
   singlePlayer = false,
   teamGroups,
   showPlusStats = true,
+  kills = [],
 }: {
   rows: SabremetricStatRow[];
   /** League-wide rows used as the Plus-stat baseline in single-player mode. Defaults to `rows`. */
@@ -724,6 +843,10 @@ export default function SabremetricsLeaderboardView({
   /** Plus stats compare a player to a league-wide baseline — not meaningful over just the
    *  handful of players in one match, so match-page callers should pass `false`. */
   showPlusStats?: boolean;
+  /** Kill rows behind the Weapons sub-tab (#452) — same scope as `rows` (one match, one player,
+   *  or league-wide). Empty is fine; the tab still renders, just with zeroed/dash values, until a
+   *  demo is (re)parsed with `match_kills` populated. */
+  kills?: MatchKillRow[];
 }) {
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);
   const leagueAggregated = useMemo(() => aggregateRows(leagueRows ?? rows), [leagueRows, rows]);
@@ -745,13 +868,25 @@ export default function SabremetricsLeaderboardView({
   );
 
   if (singlePlayer) {
-    const tiles = buildSinglePlayerTiles(aggregated[0], leagueAggregated);
+    const tiles = buildSinglePlayerTiles(aggregated[0], leagueAggregated, kills);
     return (
       <div className="space-y-4">
         {tabBar}
         {sub === 'impact' && <StatTileGrid heading="Impact" tiles={tiles.impact} />}
         {sub === 'duels' && <StatTileGrid heading="Opening Duels" tiles={tiles.duels} />}
         {sub === 'mechanics' && <StatTileGrid heading="Mechanics" tiles={tiles.mechanics} />}
+        {sub === 'weapons' && (
+          <div className="space-y-4">
+            <StatTileGrid heading="Weapons" tiles={tiles.weapons} />
+            {tiles.topWeapons.length > 0 && (
+              <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-2">
+                {tiles.topWeapons.map((w) => (
+                  <WeaponBar key={w.weapon} weapon={w.weapon} kills={w.kills} maxKills={tiles.topWeapons[0].kills} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {sub === 'trades' && <StatTileGrid heading="Trades" tiles={tiles.trades} />}
         {sub === 'utility' && <StatTileGrid heading="Utility" tiles={tiles.utility} />}
         {sub === 'plus' && tiles.plus.length > 0 && (
@@ -779,6 +914,11 @@ export default function SabremetricsLeaderboardView({
       {sub === 'mechanics' && (
         <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
           <MechanicsTable aggregated={agg} singlePlayer={singlePlayer} showHeading={showHeading} />
+        )} />
+      )}
+      {sub === 'weapons' && (
+        <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
+          <WeaponsTable aggregated={agg} kills={kills} singlePlayer={singlePlayer} showHeading={showHeading} />
         )} />
       )}
       {sub === 'trades' && (

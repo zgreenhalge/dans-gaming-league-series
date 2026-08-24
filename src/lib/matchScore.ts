@@ -24,6 +24,8 @@ import { triggerRatingRecompute } from './ehog-recompute';
 import { parseEliminationWarning } from './parsers/rosterResolver';
 import { persistSabremetrics, clearSabremetrics } from './demo/sabremetrics';
 import { persistWeaponStats, clearWeaponStats } from './demo/weaponStats';
+import { persistMatchKills, clearMatchKills } from './demo/matchKills';
+import { persistMatchRounds, clearMatchRounds } from './demo/matchRounds';
 import { clearLiveScoreBestEffort } from './demo/liveScore';
 import { resolveAndPropagate } from './gauntlet-engine';
 import { checkSeasonCompletion, checkGauntletCompletion } from './season-lifecycle';
@@ -32,7 +34,7 @@ import { advanceJobStatus, matchJobKey } from './background-jobs';
 import { DEMO_INGEST_JOB_TYPE } from './demo/ingestResult';
 import { notifyMatchScoreReported } from './discord-notify';
 import { closeMatchThread } from './discord-threads';
-import type { DemoSabremetricStat, DemoWeaponStat, RoundHistoryEntry } from './types';
+import type { DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound, RoundHistoryEntry } from './types';
 
 type PlayerStatInput = {
   player_id: number;
@@ -123,6 +125,8 @@ export interface WriteMatchScoreInput {
   player_stats: unknown;
   sabremetrics?: DemoSabremetricStat[];
   weaponStats?: DemoWeaponStat[];
+  matchKills?: DemoMatchKill[];
+  matchRounds?: DemoMatchRound[];
   round_history?: unknown;
   /** Parser warnings, forwarded so a single elimination-resolved match can learn a steam id. Only
    *  applied when `opts.learnSteamIds` is set. */
@@ -203,7 +207,7 @@ export async function writeMatchScore(
   input: WriteMatchScoreInput,
   opts: WriteMatchScoreOptions = {},
 ): Promise<WriteMatchScoreResult> {
-  const { shirts, skins, player_stats, sabremetrics, weaponStats, round_history, warnings } = input;
+  const { shirts, skins, player_stats, sabremetrics, weaponStats, matchKills, matchRounds, round_history, warnings } = input;
 
   if (typeof shirts !== 'number' || typeof skins !== 'number' || !Number.isInteger(shirts) || !Number.isInteger(skins)) {
     return { ok: false, error: 'shirts and skins must be integers', status: 400 };
@@ -371,6 +375,32 @@ export async function writeMatchScore(
       } catch (e) {
         console.error('Weapon stats write/delete failed (non-fatal):', e);
         await recordOpsError(supabaseAdmin, 'match', matchId, 'weapon_stats_persist', `Weapon stats write failed: ${(e as Error).message}`);
+      }
+    })(),
+    (async () => {
+      try {
+        if (matchKills && matchKills.length > 0) {
+          await persistMatchKills(matchId, matchKills);
+        } else {
+          await clearMatchKills(matchId);
+        }
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'match_kills_persist');
+      } catch (e) {
+        console.error('Match kills write/delete failed (non-fatal):', e);
+        await recordOpsError(supabaseAdmin, 'match', matchId, 'match_kills_persist', `Match kills write failed: ${(e as Error).message}`);
+      }
+    })(),
+    (async () => {
+      try {
+        if (matchRounds && matchRounds.length > 0) {
+          await persistMatchRounds(matchId, matchRounds);
+        } else {
+          await clearMatchRounds(matchId);
+        }
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'match_rounds_persist');
+      } catch (e) {
+        console.error('Match rounds write/delete failed (non-fatal):', e);
+        await recordOpsError(supabaseAdmin, 'match', matchId, 'match_rounds_persist', `Match rounds write failed: ${(e as Error).message}`);
       }
     })(),
   ]);
