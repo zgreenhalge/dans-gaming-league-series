@@ -6,8 +6,8 @@
  */
 
 import assert from 'node:assert/strict';
-import { collectWeaponClassStats, collectEconomyStats, type WeaponBreakdownRow } from './weaponStats';
-import { makeContext, hurt } from './matchContextFixture';
+import { collectWeaponClassStats, collectEconomyStats, collectMatchKills, type WeaponBreakdownRow } from './weaponStats';
+import { makeContext, hurt, death } from './matchContextFixture';
 import type { WeaponFireRow } from './utility';
 import type { EconomyType } from './economy';
 import { test, report } from '../test-support/miniTest';
@@ -92,6 +92,73 @@ test('collectEconomyStats: shots/hits/damage bucket into the round\'s own econom
   assert.equal(eco?.shots_fired, 1);
   assert.equal(eco?.shots_hit, 1);
   assert.equal(eco?.damage_dealt, 25);
+});
+
+test('collectMatchKills: one row per death, with resolved attacker/victim/assister/weapon', () => {
+  const deaths = [death({ round: 1, tick: 105, victim: 'c', attacker: 'a', assister: 'b', headshot: true, weapon: 'ak47' })];
+  const ctx = makeContext({ rounds, sides, deaths });
+  const out = collectMatchKills(deaths, ctx, ids);
+  assert.equal(out.length, 1);
+  assert.deepEqual(out[0], {
+    round_number: 1,
+    attacker_steamid: 'a',
+    victim_steamid: 'c',
+    assister_steamid: 'b',
+    weapon: 'ak47',
+    headshot: true,
+    is_teamkill: false,
+    tick: 105,
+  });
+});
+
+test('collectMatchKills: a second death event for the same victim in the same round is dropped', () => {
+  // demoparser2 can emit more than one player_death for the same victim/round (e.g. a
+  // warmup-period death whose total_rounds_played offset collides with a live round) — only
+  // the first is kept, matching match_kills's (round, victim) unique constraint.
+  const deaths = [
+    death({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47' }),
+    death({ round: 1, tick: 950, victim: 'c', attacker: 'b', weapon: 'usp_silencer' }),
+  ];
+  const ctx = makeContext({ rounds, sides, deaths });
+  const out = collectMatchKills(deaths, ctx, ids);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].attacker_steamid, 'a');
+  assert.equal(out[0].weapon, 'ak47');
+});
+
+test('collectMatchKills: the same victim dying in different rounds produces separate rows', () => {
+  const deaths = [
+    death({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47' }),
+    death({ round: 2, tick: 1105, victim: 'c', attacker: 'b', weapon: 'usp_silencer' }),
+  ];
+  const ctx = makeContext({ rounds, sides, deaths });
+  const out = collectMatchKills(deaths, ctx, ids);
+  assert.equal(out.length, 2);
+  assert.deepEqual(out.map((r) => r.round_number), [1, 2]);
+});
+
+test('collectMatchKills: a death outside any live round is dropped', () => {
+  const deaths = [death({ round: 99, tick: 50, victim: 'c', attacker: 'a', weapon: 'ak47' })];
+  const ctx = makeContext({ rounds, sides, deaths });
+  const out = collectMatchKills(deaths, ctx, ids);
+  assert.equal(out.length, 0);
+});
+
+test('collectMatchKills: an unresolved attacker (world kill) is nulled, not dropped', () => {
+  const deaths = [death({ round: 1, tick: 105, victim: 'c', attacker: null, weapon: 'world' })];
+  const ctx = makeContext({ rounds, sides, deaths });
+  const out = collectMatchKills(deaths, ctx, ids);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].attacker_steamid, null);
+  assert.equal(out[0].is_teamkill, false);
+});
+
+test('collectMatchKills: a same-faction kill is flagged is_teamkill', () => {
+  const deaths = [death({ round: 1, tick: 105, victim: 'b', attacker: 'a', weapon: 'ak47' })];
+  const ctx = makeContext({ rounds, sides, deaths });
+  const out = collectMatchKills(deaths, ctx, ids);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].is_teamkill, true);
 });
 
 report();

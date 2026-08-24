@@ -170,6 +170,13 @@ export interface KillFactRow {
  * judgment calls into the collector. `attacker_steamid`/`assister_steamid` are nulled out when
  * they're not a known roster player (world/environment kills, e.g. fall damage), matching the
  * `steamSet` gating every other collector in this file applies.
+ *
+ * A player can die at most once in a live round, so `(round, victim)` is deduplicated — keeping
+ * the first event seen — to match `match_kills`'s unique constraint. demoparser2 can emit more
+ * than one `player_death` for the same victim in a round (e.g. a warmup-period death whose
+ * `total_rounds_played` happens to land on a live round number via the same `roundOf()` offset
+ * every other collector in this file uses); without this guard that second row makes the whole
+ * match's bulk insert fail.
  */
 export function collectMatchKills(
   deathEvents: PlayerDeathRow[],
@@ -178,6 +185,7 @@ export function collectMatchKills(
 ): KillFactRow[] {
   const steamSet = new Set(steamIds);
   const rows: KillFactRow[] = [];
+  const seenRoundVictims = new Set<string>();
 
   for (const d of deathEvents) {
     const round = roundOf(d, context.liveRounds);
@@ -185,6 +193,10 @@ export function collectMatchKills(
 
     const victim = d.user_steamid;
     if (!victim || !steamSet.has(victim)) continue;
+
+    const dedupeKey = `${round}::${victim}`;
+    if (seenRoundVictims.has(dedupeKey)) continue;
+    seenRoundVictims.add(dedupeKey);
 
     const attacker = d.attacker_steamid && steamSet.has(d.attacker_steamid) ? d.attacker_steamid : null;
     const assister = d.assister_steamid && steamSet.has(d.assister_steamid) ? d.assister_steamid : null;
