@@ -33,6 +33,9 @@ export function retryEndpointFor(item: Pick<OpsErrorItem, 'operation' | 'entityI
       return '/api/ehog/recompute/trigger';
     case 'server_provision':
       return `/api/matches/${item.entityId}/server/provision`;
+    case 'discord_schedule_reminder':
+    case 'discord_notify_reminder':
+      return `/api/matches/${item.entityId}/schedule/retry-reminder`;
     default:
       return null;
   }
