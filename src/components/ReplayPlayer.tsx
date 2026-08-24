@@ -29,6 +29,17 @@ const PEN_LINE_WIDTH = 3;
 const STICKER_RING_WIDTH = 2;
 const STICKER_FILL_ALPHA = 0.3;
 type StickerKind = keyof typeof STICKER_COLORS;
+
+/** Real CS2 buy-menu icons (via github.com/Juknum/counter-strike-icons) for the sticker
+ *  toolbar below, tinted with a CSS mask instead of inlined JSX — `he.svg`'s detailed
+ *  grenade-body path is tens of KB, too large to embed as a component like the round-result
+ *  icons are, and a mask keeps rendering consistent across all three sticker kinds. */
+const STICKER_ICON_SRC: Record<StickerKind, string> = {
+  smoke: '/grenade-icons/smoke.svg',
+  molotov: '/grenade-icons/molotov.svg',
+  he: '/grenade-icons/he.svg',
+};
+
 /** Fraction of the board's side a pointer must land within a stroke to erase it. */
 const ERASE_TOLERANCE = 0.03;
 /** Fraction of the board's side a dragged box's diagonal must reach to be kept. */
@@ -669,16 +680,29 @@ export default function ReplayPlayer({
                 key={kind}
                 type="button"
                 onClick={() => setTool((cur) => (cur === kind ? null : kind))}
-                className="border px-1.5 py-1 font-mono"
+                className="border p-1.5"
                 style={{
                   borderColor: tool === kind ? STICKER_COLORS[kind] : 'var(--color-border-primary)',
-                  color: tool === kind ? STICKER_COLORS[kind] : 'var(--color-text-secondary)',
                 }}
                 aria-pressed={tool === kind}
                 aria-label={`${label} sticker (true size)`}
                 title={`${label} sticker — true size`}
               >
-                {label}
+                <span
+                  aria-hidden
+                  className="block h-3.5 w-3.5"
+                  style={{
+                    backgroundColor: tool === kind ? STICKER_COLORS[kind] : 'var(--color-text-secondary)',
+                    WebkitMaskImage: `url(${STICKER_ICON_SRC[kind]})`,
+                    maskImage: `url(${STICKER_ICON_SRC[kind]})`,
+                    WebkitMaskRepeat: 'no-repeat',
+                    maskRepeat: 'no-repeat',
+                    WebkitMaskPosition: 'center',
+                    maskPosition: 'center',
+                    WebkitMaskSize: 'contain',
+                    maskSize: 'contain',
+                  }}
+                />
               </button>
             ))}
           </div>
