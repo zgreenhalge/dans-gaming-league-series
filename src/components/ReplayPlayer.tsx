@@ -5,6 +5,7 @@ import { Play, Pause, ChevronLeft, ChevronRight, Rewind, Pencil, Square, Eraser,
 import type { ReplayPayload, ReplayPlayerMeta } from '@/lib/replay/types';
 import type { Faction } from '@/lib/types';
 import { mapSlug } from '@/lib/maps';
+import { iconAspect } from '@/lib/iconAspect';
 import { isAbortError } from '@/lib/util';
 import { projectorFor, type Projector } from '@/lib/replay/project';
 import { viewStateAt, roundTickRange, grenadeEffectRadius, roundClockSeconds, formatClock } from '@/lib/replay/playback';
@@ -704,6 +705,7 @@ export default function ReplayPlayer({
                 <MaskedIcon
                   src={STICKER_ICON_SRC[kind]}
                   size={14}
+                  width={14 * iconAspect(STICKER_ICON_SRC[kind])}
                   style={{ color: tool === kind ? STICKER_COLORS[kind] : 'var(--color-text-secondary)' }}
                 />
               </button>
