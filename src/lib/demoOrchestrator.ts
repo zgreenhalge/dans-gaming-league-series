@@ -199,7 +199,7 @@ export function parseDemoSabremetrics(
   // Counter-strafe needs per-tick position/duck-state reads (not a plain event stream), so it
   // fetches its own tick list — same shape as accumulators.ts's round-end reads, but keyed to
   // rifle weapon_fire ticks instead.
-  const csTicks = neededCounterStrafeTicks(fireEvents, context.liveRounds);
+  const csTicks = neededCounterStrafeTicks(fireEvents, context);
   let csTickRows: PlayerTickRow[] = [];
   if (csTicks.length > 0) {
     const rawTickRows = parseTicks(
@@ -272,7 +272,7 @@ export function parseDemoSabremetrics(
   const reloadEvents = parseEvent(
     demoBuffer, 'weapon_reload', [], ['total_rounds_played'],
   ) as WeaponReloadRow[];
-  const reloadTicks = neededReloadTicks(reloadEvents, context.liveRounds);
+  const reloadTicks = neededReloadTicks(reloadEvents, context);
   let reloadStateRows: PlayerReloadStateRow[] = [];
   if (reloadTicks.length > 0) {
     try {
@@ -297,7 +297,7 @@ export function parseDemoSabremetrics(
   // CCSPlayerPawn.m_unFreezetimeEndEquipmentValue at each round's freeze-time-end, sampled once
   // per round (not per shot) — same single-anchor-read shape as sideInference.ts. Wrapped
   // defensively like the reload/inventory tick reads above.
-  const economyTicks = neededEconomyTicks(freezeEndEvents, context.liveRounds);
+  const economyTicks = neededEconomyTicks(freezeEndEvents, context);
   let equipmentRows: PlayerEquipmentRow[] = [];
   if (economyTicks.length > 0) {
     try {

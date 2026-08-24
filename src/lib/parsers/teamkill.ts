@@ -14,7 +14,7 @@ export function collectTeamkill(
   const { out, steamSet } = initCollector<SabFields>(steamIds);
 
   for (const d of deathEvents) {
-    if (roundOf(d, context.liveRounds) == null) continue;
+    if (roundOf(d, context) == null) continue;
 
     const attacker = d.attacker_steamid;
     const victim = d.user_steamid;

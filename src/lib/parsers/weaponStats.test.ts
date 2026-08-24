@@ -111,10 +111,10 @@ test('collectMatchKills: one row per death, with resolved attacker/victim/assist
   });
 });
 
-test('collectMatchKills: a second death event for the same victim in the same round is dropped', () => {
-  // demoparser2 can emit more than one player_death for the same victim/round (e.g. a
-  // warmup-period death whose total_rounds_played offset collides with a live round) — only
-  // the first is kept, matching match_kills's (round, victim) unique constraint.
+test('collectMatchKills: a genuine duplicate death for the same (round, victim) keeps the first and warns', () => {
+  // Both events are post-match-start and in-round here — this isn't the warmup-collision case
+  // (see the dedicated test below), it's a demoparser2-level duplicate. That's a real anomaly, so
+  // it must be visible (context.warnings, which gates auto-commit), not silently dropped.
   const deaths = [
     death({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47' }),
     death({ round: 1, tick: 950, victim: 'c', attacker: 'b', weapon: 'usp_silencer' }),
@@ -124,6 +124,25 @@ test('collectMatchKills: a second death event for the same victim in the same ro
   assert.equal(out.length, 1);
   assert.equal(out[0].attacker_steamid, 'a');
   assert.equal(out[0].weapon, 'ak47');
+  assert.equal(ctx.warnings.length, 1);
+  assert.match(ctx.warnings[0], /Duplicate player_death for c in round 1/);
+});
+
+test('collectMatchKills: a warmup-period death is excluded by tick even when its round offset collides with a live round', () => {
+  // The actual bug behind #452's missing match_kills rows: a warmup death with
+  // total_rounds_played=0 (so total_rounds_played+1 === 1, a real live round number) landing
+  // before matchStartTick. roundOf() now excludes it by tick, so it never reaches the
+  // (round, victim) dedupe/warning path at all — there is exactly one real kill, no anomaly.
+  const deaths = [
+    death({ round: 1, tick: 50, victim: 'c', attacker: 'b', weapon: 'glock' }), // warmup, tick < matchStartTick
+    death({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47' }), // the real round-1 kill
+  ];
+  const ctx = makeContext({ rounds, sides, deaths, matchStartTick: 100 });
+  const out = collectMatchKills(deaths, ctx, ids);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].attacker_steamid, 'a');
+  assert.equal(out[0].weapon, 'ak47');
+  assert.equal(ctx.warnings.length, 0);
 });
 
 test('collectMatchKills: the same victim dying in different rounds produces separate rows', () => {

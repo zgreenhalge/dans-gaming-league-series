@@ -19,7 +19,7 @@ export function collectObjectives(
   const { out, steamSet } = initCollector<SabFields>(steamIds);
 
   for (const p of plantEvents) {
-    if (roundOf(p, context.liveRounds) == null) continue;
+    if (roundOf(p, context) == null) continue;
     const planter = p.user_steamid;
     if (!planter || !steamSet.has(planter)) continue;
     const row = out.get(planter)!;
@@ -27,7 +27,7 @@ export function collectObjectives(
   }
 
   for (const d of defuseEvents) {
-    if (roundOf(d, context.liveRounds) == null) continue;
+    if (roundOf(d, context) == null) continue;
     const defuser = d.user_steamid;
     if (!defuser || !steamSet.has(defuser)) continue;
     const row = out.get(defuser)!;

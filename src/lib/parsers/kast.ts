@@ -14,7 +14,7 @@ export function collectKast(
 ): CollectorOut {
   const { out } = initCollector<SabFields>(steamIds);
   const tradeWindow = Math.round(TRADE_WINDOW_SECONDS * context.tickRate);
-  const deathsByRound = groupByRound(deathEvents, context.liveRounds);
+  const deathsByRound = groupByRound(deathEvents, context);
 
   for (const round of context.liveRounds) {
     const deaths = deathsByRound.get(round) ?? [];

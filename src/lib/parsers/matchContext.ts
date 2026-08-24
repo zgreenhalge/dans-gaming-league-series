@@ -1,6 +1,6 @@
 import { parseEvent, parseHeader } from '@laihoe/demoparser2';
 import { buildRoundSides, sideForFaction, type RoundEndRow, type RoundSideInfo } from './roundSides';
-import { roundOf } from './_shared';
+import { roundOf, type RoundBounds } from './_shared';
 
 /**
  * Tick the live match starts at — the last `begin_new_match`. MatchZy fires it on every warmup
@@ -66,6 +66,10 @@ export interface PlayerHurtRow {
 export interface MatchContext {
   rounds: RoundSideInfo[];
   liveRounds: Set<number>;
+  /** Tick the live match begins at — see `RoundBounds`/`roundOf()`. `MatchContext` satisfies
+   *  `RoundBounds` structurally (this field plus `liveRounds`), so any collector with `context` in
+   *  scope passes `context` itself to `roundOf()`/`groupByRound()`. */
+  matchStartTick: number;
   roundEndTicks: Int32Array;
   tickRate: number;
   /** Per-round CT/T side, only populated when the starting side resolves (see `hasSides`). Needed
@@ -85,12 +89,12 @@ export interface MatchContext {
  */
 export function buildRoundDeaths(
   deathEvents: PlayerDeathRow[],
-  liveRounds: Set<number>,
+  bounds: RoundBounds,
   isKnownPlayer: (steamId: string) => boolean,
 ): Map<string, Set<number>> {
   const roundDeaths = new Map<string, Set<number>>();
   for (const d of deathEvents) {
-    const roundNumber = roundOf(d, liveRounds);
+    const roundNumber = roundOf(d, bounds);
     if (roundNumber == null) continue;
     const victim = d.user_steamid;
     if (!victim || !isKnownPlayer(victim)) continue;
@@ -167,11 +171,16 @@ export function buildMatchContext(
     }
   }
 
-  const roundDeaths = buildRoundDeaths(deathEvents, liveRounds, (steamId) => steamToPlayer.has(steamId));
+  const roundDeaths = buildRoundDeaths(
+    deathEvents,
+    { liveRounds, matchStartTick },
+    (steamId) => steamToPlayer.has(steamId),
+  );
 
   return {
     rounds,
     liveRounds,
+    matchStartTick,
     roundEndTicks,
     tickRate,
     playerSides,

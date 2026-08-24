@@ -51,7 +51,7 @@ function buildSmokeLives(
 ): SmokeLife[] {
   const expireByKey = new Map<string, number>();
   for (const e of expireEvents) {
-    const round = roundOf(e, context.liveRounds);
+    const round = roundOf(e, context);
     if (round == null) continue;
     expireByKey.set(`${round}::${e.entityid}`, e.tick);
   }
@@ -61,7 +61,7 @@ function buildSmokeLives(
 
   const lives: SmokeLife[] = [];
   for (const d of detonateEvents) {
-    const round = roundOf(d, context.liveRounds);
+    const round = roundOf(d, context);
     if (round == null) continue;
     const thrower = d.user_steamid;
     if (!thrower) continue;

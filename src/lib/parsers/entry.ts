@@ -10,7 +10,7 @@ export function collectEntry(
   steamIds: string[],
 ): CollectorOut {
   const { out, steamSet } = initCollector<SabFields>(steamIds);
-  const deathsByRound = groupByRound(deathEvents, context.liveRounds);
+  const deathsByRound = groupByRound(deathEvents, context);
 
   for (const [, deaths] of deathsByRound) {
     deaths.sort((a, b) => a.tick - b.tick);

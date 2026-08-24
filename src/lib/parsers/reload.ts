@@ -1,6 +1,6 @@
 import type { SabFields } from '../types';
 import type { MatchContext } from './matchContext';
-import { initCollector, roundOf } from './_shared';
+import { initCollector, roundOf, type RoundBounds } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
 
@@ -19,10 +19,10 @@ export interface PlayerReloadStateRow {
 
 /** Tick list demoOrchestrator.ts needs to fetch (via parseTicks, all players): one per
  *  weapon_reload event, in a live round. */
-export function neededReloadTicks(reloadEvents: WeaponReloadRow[], liveRounds: Set<number>): number[] {
+export function neededReloadTicks(reloadEvents: WeaponReloadRow[], bounds: RoundBounds): number[] {
   const ticks = new Set<number>();
   for (const r of reloadEvents) {
-    if (roundOf(r, liveRounds) == null) continue;
+    if (roundOf(r, bounds) == null) continue;
     ticks.add(r.tick);
   }
   return [...ticks];
@@ -48,7 +48,7 @@ export function collectRoundsDropped(
   for (const r of tickRows) rowLookup.set(`${r.steamid}::${r.tick}`, r);
 
   for (const reload of reloadEvents) {
-    if (roundOf(reload, context.liveRounds) == null) continue;
+    if (roundOf(reload, context) == null) continue;
     const shooter = reload.user_steamid;
     if (!shooter || !steamSet.has(shooter)) continue;
 
