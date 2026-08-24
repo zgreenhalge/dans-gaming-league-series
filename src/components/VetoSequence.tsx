@@ -7,6 +7,7 @@ import { getBrowserClient } from '@/lib/supabase-browser';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { isPlayedScore } from '@/lib/util';
 import { useMapLookup } from './MapContext';
+import { SIDE_ICON } from './icons/SideIcons';
 import type { Match } from '@/lib/types';
 
 const REGULAR_STEPS = [
@@ -303,7 +304,7 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
                         </span>
                       )}
                     </div>
-                    <div className="val font-display text-[14px] font-semibold leading-tight">
+                    <div className="val font-display text-[14px] font-semibold leading-tight flex items-center gap-1">
                       {val && !canVeto && s.type !== 'side' ? (
                         <Link
                           href={`/maps/${mapSlug(val)}`}
@@ -312,7 +313,17 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
                         >
                           {toSentenceCase(val)}
                         </Link>
-                      ) : val ? (s.type === 'side' ? val : toSentenceCase(val)) : '—'}
+                      ) : val && s.type === 'side' && (val === 'CT' || val === 'T') ? (
+                        (() => {
+                          const SideIcon = SIDE_ICON[val];
+                          return (
+                            <>
+                              <SideIcon size={12} />
+                              {val}
+                            </>
+                          );
+                        })()
+                      ) : val ? toSentenceCase(val) : '—'}
                     </div>
                   </div>
                 </div>
@@ -383,20 +394,24 @@ export default function VetoSequence({ match, mapPool, canVeto, isGauntlet, play
 
           {activeField === 'skins_starting_side' ? (
             <div className="flex gap-2">
-              {(['CT', 'T'] as const).map((side) => (
-                <button
-                  key={side}
-                  disabled={isPending}
-                  onClick={() => submitVeto('skins_starting_side', side)}
-                  className={`flex-1 py-3 border font-display font-semibold text-[15px] transition-colors disabled:opacity-50 ${
-                    side === 'CT'
-                      ? 'bg-[var(--color-accent-blue-bg)] border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-strong)] hover:bg-[var(--color-accent-blue-border)]'
-                      : 'bg-[var(--color-accent-amber-bg)] border-[var(--color-accent-amber-border)] text-[var(--color-accent-amber-strong)] hover:bg-[var(--color-accent-amber-border)]'
-                  }`}
-                >
-                  {side}
-                </button>
-              ))}
+              {(['CT', 'T'] as const).map((side) => {
+                const SideIcon = SIDE_ICON[side];
+                return (
+                  <button
+                    key={side}
+                    disabled={isPending}
+                    onClick={() => submitVeto('skins_starting_side', side)}
+                    className={`flex-1 py-3 border font-display font-semibold text-[15px] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
+                      side === 'CT'
+                        ? 'bg-[var(--color-accent-blue-bg)] border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-strong)] hover:bg-[var(--color-accent-blue-border)]'
+                        : 'bg-[var(--color-accent-amber-bg)] border-[var(--color-accent-amber-border)] text-[var(--color-accent-amber-strong)] hover:bg-[var(--color-accent-amber-border)]'
+                    }`}
+                  >
+                    <SideIcon size={18} />
+                    {side}
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <div className="flex gap-2 flex-wrap">
