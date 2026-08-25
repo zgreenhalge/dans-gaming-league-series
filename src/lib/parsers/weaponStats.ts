@@ -162,6 +162,7 @@ export interface KillFactRow {
   noscope: boolean;
   wallbang: boolean;
   blind_kill: boolean;
+  midair: boolean;
   is_teamkill: boolean;
   tick: number;
 }
@@ -185,6 +186,9 @@ export function collectMatchKills(
   deathEvents: PlayerDeathRow[],
   context: MatchContext,
   steamIds: string[],
+  /** `${tick}:${attackerSteamId}` → was the attacker airborne — see `collectMidairAttackers()`
+   *  (`matchContext.ts`). */
+  midairByTickSteam: Map<string, boolean>,
 ): KillFactRow[] {
   const steamSet = new Set(steamIds);
   const rows: KillFactRow[] = [];
@@ -210,6 +214,7 @@ export function collectMatchKills(
       noscope: d.noscope,
       wallbang: d.penetrated > 0,
       blind_kill: d.attackerblind,
+      midair: d.attacker_steamid ? (midairByTickSteam.get(`${d.tick}:${d.attacker_steamid}`) ?? false) : false,
       is_teamkill: isTk,
       tick: d.tick,
     });

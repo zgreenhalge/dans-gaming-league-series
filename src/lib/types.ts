@@ -276,6 +276,7 @@ export interface DemoMatchKill {
   noscope: boolean;
   wallbang: boolean;
   blind_kill: boolean;
+  midair: boolean;
   is_teamkill: boolean;
   tick: number;
 }

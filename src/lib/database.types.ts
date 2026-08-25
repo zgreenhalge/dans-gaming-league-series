@@ -397,6 +397,7 @@ export type Database = {
           id: number
           is_teamkill: boolean
           match_id: number
+          midair: boolean
           noscope: boolean
           round_number: number
           tick: number
@@ -412,6 +413,7 @@ export type Database = {
           id?: never
           is_teamkill?: boolean
           match_id: number
+          midair?: boolean
           noscope?: boolean
           round_number: number
           tick: number
@@ -427,6 +429,7 @@ export type Database = {
           id?: never
           is_teamkill?: boolean
           match_id?: number
+          midair?: boolean
           noscope?: boolean
           round_number?: number
           tick?: number

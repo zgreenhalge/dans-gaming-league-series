@@ -9,6 +9,7 @@ import { parseEvent, parseTicks, parseGrenades } from '@laihoe/demoparser2';
 import { readDemoPlayers, resolveRoster } from '../parsers/rosterResolver';
 import {
   buildMatchContext,
+  collectMidairAttackers,
   findKnifePhaseStartTick,
   findMatchStartTick,
   type PlayerDeathRow,
@@ -157,6 +158,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
       'noscope', 'penetrated', 'attackerblind',
     ],
   ) as (PlayerDeathRow & Record<string, unknown>)[];
+  const midairByTickSteam = collectMidairAttackers(demoBuffer, deathRows);
 
   const context = buildMatchContext(
     demoBuffer,
@@ -336,7 +338,7 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
   freezeDeadPositions(framesByTick, roundBounds);
 
   // --- Events + grenades + shots, bucketed per round ---
-  const eventsByRound = collectEvents(demoBuffer, deathRows, contextForEvents, playerIdOf, reasonByRound, roundBounds);
+  const eventsByRound = collectEvents(demoBuffer, deathRows, contextForEvents, playerIdOf, reasonByRound, roundBounds, midairByTickSteam);
   const grenadesByRound = collectGrenades(demoBuffer, contextForEvents, roundBounds, playerIdOf, interval);
   const shotsByRound = collectShots(demoBuffer, contextForEvents, playerIdOf);
   const blindsByRound = collectBlinds(demoBuffer, contextForEvents, playerIdOf);
@@ -424,6 +426,7 @@ function collectEvents(
   playerIdOf: (s: string | null | undefined) => number | null,
   reasonByRound: Map<number, string | null>,
   roundBounds: { round: number; startTick: number; frameEndTick: number }[],
+  midairByTickSteam: Map<string, boolean>,
 ): Map<number, ReplayEvent[]> {
   const byRound = new Map<number, ReplayEvent[]>();
   const push = (round: number, ev: ReplayEvent) => {
@@ -465,6 +468,7 @@ function collectEvents(
       noscope: Boolean(d.noscope),
       wallbang: Number(pick<number>(d, ['penetrated']) ?? 0) > 0,
       blindKill: Boolean(d.attackerblind),
+      midair: d.attacker_steamid ? (midairByTickSteam.get(`${d.tick}:${d.attacker_steamid}`) ?? false) : false,
       attacker: ax !== null && ay !== null ? { x: Number(ax), y: Number(ay) } : null,
       victim: vx !== null && vy !== null ? { x: Number(vx), y: Number(vy) } : null,
     });

@@ -300,6 +300,7 @@ const HEADSHOT_ICON_SRC = '/kill-icons/headshot.svg';
 const NOSCOPE_ICON_SRC = '/kill-icons/noscope.svg';
 const WALLBANG_ICON_SRC = '/kill-icons/wallbang.svg';
 const BLIND_KILL_ICON_SRC = '/kill-icons/blindkill.svg';
+const MIDAIR_KILL_ICON_SRC = '/kill-icons/midairkill.svg';
 
 /**
  * A C4 glyph: the real bomb-device icon once its sprite is loaded (falls back to a small filled
@@ -633,8 +634,12 @@ function drawKillFeed(
     ctx.fillText(vName, x, y);
     let cursor = x - measureApprox(vName);
 
-    // Modifier markers, if any — headshot/noscope/wallbang/blind-kill, same square-source
-    // sprite handling as the bomb marker, drawn right-to-left in DOM panel order.
+    // Modifier markers, if any — headshot/noscope/wallbang/blind-kill/mid-air, same
+    // square-source sprite handling as the bomb marker, drawn right-to-left in DOM panel order.
+    if (k.midair) {
+      const sprite = getIconSprite?.(MIDAIR_KILL_ICON_SRC, theme.textDim) ?? null;
+      cursor = drawFeedGlyph(ctx, cursor, y, sprite, '', theme.textDim, { before: 2, after: 2 });
+    }
     if (k.blindKill) {
       const sprite = getIconSprite?.(BLIND_KILL_ICON_SRC, theme.textDim) ?? null;
       cursor = drawFeedGlyph(ctx, cursor, y, sprite, '', theme.textDim, { before: 2, after: 2 });

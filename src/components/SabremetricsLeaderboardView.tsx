@@ -346,6 +346,7 @@ interface PlayerWeaponRow {
   noscopeKills: number;
   wallbangKills: number;
   blindKills: number;
+  midairKills: number;
   deaths: number;
 }
 
@@ -365,6 +366,7 @@ function resolvePlayerWeaponRow(
     noscopeKills: resolved?.noscopeKills ?? 0,
     wallbangKills: resolved?.wallbangKills ?? 0,
     blindKills: resolved?.blindKills ?? 0,
+    midairKills: resolved?.midairKills ?? 0,
     deaths: resolved?.deaths ?? 0,
   };
 }
@@ -406,6 +408,7 @@ function WeaponsTable({ aggregated, kills, selectedWeapon, singlePlayer, showHea
         case 'ns': aVal = a.noscopeKills; bVal = b.noscopeKills; break;
         case 'wb': aVal = a.wallbangKills; bVal = b.wallbangKills; break;
         case 'blind': aVal = a.blindKills; bVal = b.blindKills; break;
+        case 'midair': aVal = a.midairKills; bVal = b.midairKills; break;
         case 'deaths': aVal = a.deaths; bVal = b.deaths; break;
         default: return 0;
       }
@@ -432,6 +435,7 @@ function WeaponsTable({ aggregated, kills, selectedWeapon, singlePlayer, showHea
               <SortableTh label="NS With" title="No-scope kills with this weapon" sortKey="ns" state={sort} onClick={toggleSort} />
               <SortableTh label="WB With" title="Wallbang kills with this weapon" sortKey="wb" state={sort} onClick={toggleSort} />
               <SortableTh label="Blind With" title="Kills scored while the attacker was flashed, with this weapon" sortKey="blind" state={sort} onClick={toggleSort} />
+              <SortableTh label="Midair With" title="Mid-air kills (attacker was airborne) with this weapon" sortKey="midair" state={sort} onClick={toggleSort} />
               <SortableTh label="Deaths To" title="Deaths to this weapon" sortKey="deaths" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
@@ -445,6 +449,7 @@ function WeaponsTable({ aggregated, kills, selectedWeapon, singlePlayer, showHea
                 <td className={tdRight}>{r.noscopeKills}</td>
                 <td className={tdRight}>{r.wallbangKills}</td>
                 <td className={tdRight}>{r.blindKills}</td>
+                <td className={tdRight}>{r.midairKills}</td>
                 <td className={tdRight}>{r.deaths}</td>
               </tr>
             ))}
@@ -492,6 +497,7 @@ function FlairTable({ aggregated, kills, singlePlayer, showHeading = true }: {
         case 'noscope': aVal = a.flair.noscopeKills; bVal = b.flair.noscopeKills; break;
         case 'wallbang': aVal = a.flair.wallbangKills; bVal = b.flair.wallbangKills; break;
         case 'blind': aVal = a.flair.blindKills; bVal = b.flair.blindKills; break;
+        case 'midair': aVal = a.flair.midairKills; bVal = b.flair.midairKills; break;
         case 'knife': aVal = a.flair.knifeKills; bVal = b.flair.knifeKills; break;
         default: return 0;
       }
@@ -511,6 +517,7 @@ function FlairTable({ aggregated, kills, singlePlayer, showHeading = true }: {
               <SortableTh label="No-scope" title="No-scope kills, across every weapon" sortKey="noscope" state={sort} onClick={toggleSort} />
               <SortableTh label="Wallbang" title="Wallbang kills (bullet penetrated a surface), across every weapon" sortKey="wallbang" state={sort} onClick={toggleSort} />
               <SortableTh label="Blind" title="Kills scored while the attacker was flashed, across every weapon" sortKey="blind" state={sort} onClick={toggleSort} />
+              <SortableTh label="Midair" title="Mid-air kills (attacker was airborne), across every weapon" sortKey="midair" state={sort} onClick={toggleSort} />
               <SortableTh label="Knife" title="Knife kills" sortKey="knife" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
@@ -521,6 +528,7 @@ function FlairTable({ aggregated, kills, singlePlayer, showHeading = true }: {
                 <td className={tdRight}>{r.flair.noscopeKills}</td>
                 <td className={tdRight}>{r.flair.wallbangKills}</td>
                 <td className={tdRight}>{r.flair.blindKills}</td>
+                <td className={tdRight}>{r.flair.midairKills}</td>
                 <td className={tdRight}>{r.flair.knifeKills}</td>
               </tr>
             ))}
@@ -912,6 +920,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'No-scope', title: 'No-scope kills, across every weapon', value: flairStat.noscopeKills },
     { label: 'Wallbang', title: 'Wallbang kills (bullet penetrated a surface), across every weapon', value: flairStat.wallbangKills },
     { label: 'Blind', title: 'Kills scored while the attacker was flashed, across every weapon', value: flairStat.blindKills },
+    { label: 'Midair', title: 'Mid-air kills (attacker was airborne), across every weapon', value: flairStat.midairKills },
     { label: 'Knife', title: 'Knife kills', value: flairStat.knifeKills },
   ];
 
@@ -930,6 +939,7 @@ function buildWeaponTiles(weaponStats: WeaponKillStat[], selectedWeapon: string 
     { label: 'NS With', title: `No-scope kills with ${titleSuffix}`, value: stat?.noscopeKills ?? 0 },
     { label: 'WB With', title: `Wallbang kills with ${titleSuffix}`, value: stat?.wallbangKills ?? 0 },
     { label: 'Blind With', title: `Kills scored while flashed, with ${titleSuffix}`, value: stat?.blindKills ?? 0 },
+    { label: 'Midair With', title: `Mid-air kills with ${titleSuffix}`, value: stat?.midairKills ?? 0 },
     { label: 'Deaths To', title: `Deaths to ${titleSuffix}`, value: stat?.deaths ?? 0 },
   ];
 }

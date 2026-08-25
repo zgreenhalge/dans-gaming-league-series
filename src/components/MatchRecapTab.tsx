@@ -13,7 +13,7 @@ import DevGate from './DevGate';
 import { RecordingViewer, RecordingUrlForm } from './RecordingViewer';
 import { C4Icon, DefuseIcon, CONDITION_ICON } from './icons/ConditionIcons';
 import { SIDE_ICON } from './icons/SideIcons';
-import { HeadshotIcon, NoscopeIcon, WallbangIcon, BlindKillIcon } from './icons/KillModifierIcons';
+import { HeadshotIcon, NoscopeIcon, WallbangIcon, BlindKillIcon, MidairKillIcon } from './icons/KillModifierIcons';
 import { WeaponIcon } from './icons/WeaponIcon';
 import { weaponIconSrc } from '@/lib/weaponIcons';
 import type { ReplayJobState, ReplayEventsView } from '@/lib/queries';
@@ -202,6 +202,11 @@ function eventContent(ev: ReplayEvent, name: (id: number | null) => React.ReactN
         {ev.blindKill && (
           <span title="Blind kill" className="inline-flex shrink-0">
             <BlindKillIcon size={14} className="text-[var(--color-text-secondary)]" />
+          </span>
+        )}
+        {ev.midair && (
+          <span title="Mid-air kill" className="inline-flex shrink-0">
+            <MidairKillIcon size={14} className="text-[var(--color-text-secondary)]" />
           </span>
         )}
         {name(ev.victimId)}

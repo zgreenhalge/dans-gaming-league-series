@@ -18,6 +18,7 @@ export interface MatchKillRow {
   noscope: boolean;
   wallbang: boolean;
   blind_kill: boolean;
+  midair: boolean;
   is_teamkill: boolean;
 }
 
@@ -32,6 +33,7 @@ type RawKillRow = {
   noscope: boolean;
   wallbang: boolean;
   blind_kill: boolean;
+  midair: boolean;
   is_teamkill: boolean;
 };
 
@@ -81,6 +83,7 @@ function joinKillRows(
       noscope: k.noscope,
       wallbang: k.wallbang,
       blind_kill: k.blind_kill,
+      midair: k.midair,
       is_teamkill: k.is_teamkill,
     });
   }
@@ -138,6 +141,7 @@ export interface WeaponKillStat {
   noscopeKills: number;
   wallbangKills: number;
   blindKills: number;
+  midairKills: number;
   deaths: number;
 }
 
@@ -154,6 +158,7 @@ function zeroWeaponStat(weapon: string): WeaponKillStat {
     noscopeKills: 0,
     wallbangKills: 0,
     blindKills: 0,
+    midairKills: 0,
     deaths: 0,
   };
 }
@@ -161,7 +166,8 @@ function zeroWeaponStat(weapon: string): WeaponKillStat {
 /** Kills-with / headshot-kills-with / deaths-to, bucketed by individual weapon, for one player
  *  over whatever `kills` scope the caller already filtered (a season, a match, career). Self-kills
  *  and teamkills don't count toward `kills`/`headshotKills`/`noscopeKills`/`wallbangKills`/
- *  `blindKills` (they're not a credited kill) but do still count as a death for the victim side. */
+ *  `blindKills`/`midairKills` (they're not a credited kill) but do still count as a death for the
+ *  victim side. */
 export function aggregateWeaponKillStats(kills: MatchKillRow[], playerId: number): WeaponKillStat[] {
   const buckets = new Map<string, WeaponKillStat>();
   const getBucket = (weapon: string): WeaponKillStat => {
@@ -183,6 +189,7 @@ export function aggregateWeaponKillStats(kills: MatchKillRow[], playerId: number
       if (k.noscope) b.noscopeKills += 1;
       if (k.wallbang) b.wallbangKills += 1;
       if (k.blind_kill) b.blindKills += 1;
+      if (k.midair) b.midairKills += 1;
     }
     if (k.victim_player_id === playerId) {
       getBucket(k.weapon).deaths += 1;
@@ -226,6 +233,7 @@ export interface WeaponCategoryKillStat {
   noscopeKills: number;
   wallbangKills: number;
   blindKills: number;
+  midairKills: number;
   deaths: number;
 }
 
@@ -243,6 +251,7 @@ export function aggregateKillCategoryStats(stats: WeaponKillStat[]): WeaponCateg
         noscopeKills: 0,
         wallbangKills: 0,
         blindKills: 0,
+        midairKills: 0,
         deaths: 0,
       };
       buckets.set(s.category, b);
@@ -252,6 +261,7 @@ export function aggregateKillCategoryStats(stats: WeaponKillStat[]): WeaponCateg
     b.noscopeKills += s.noscopeKills;
     b.wallbangKills += s.wallbangKills;
     b.blindKills += s.blindKills;
+    b.midairKills += s.midairKills;
     b.deaths += s.deaths;
   }
   return [...buckets.values()].sort((a, b) => b.kills - a.kills);
@@ -261,14 +271,15 @@ export interface FlairKillStat {
   noscopeKills: number;
   wallbangKills: number;
   blindKills: number;
+  midairKills: number;
   knifeKills: number;
 }
 
 /** "Flair" kills — the off-meta kill counts worth showing off on their own, summed across every
  *  weapon rather than broken out per-weapon like `aggregateWeaponKillStats()`. `noscopeKills`/
- *  `wallbangKills`/`blindKills` total the same-named `WeaponKillStat` counters across every
- *  weapon a player has kills with; `knifeKills` reuses `aggregateKillCategoryStats()`'s `melee`
- *  category total (knives/bayonets) rather than reclassifying weapons itself. */
+ *  `wallbangKills`/`blindKills`/`midairKills` total the same-named `WeaponKillStat` counters
+ *  across every weapon a player has kills with; `knifeKills` reuses `aggregateKillCategoryStats()`'s
+ *  `melee` category total (knives/bayonets) rather than reclassifying weapons itself. */
 export function aggregateFlairKillStats(kills: MatchKillRow[], playerId: number): FlairKillStat {
   const stats = aggregateWeaponKillStats(kills, playerId);
   const knifeKills = aggregateKillCategoryStats(stats).find((c) => c.category === 'melee')?.kills ?? 0;
@@ -276,6 +287,7 @@ export function aggregateFlairKillStats(kills: MatchKillRow[], playerId: number)
     noscopeKills: stats.reduce((n, s) => n + s.noscopeKills, 0),
     wallbangKills: stats.reduce((n, s) => n + s.wallbangKills, 0),
     blindKills: stats.reduce((n, s) => n + s.blindKills, 0),
+    midairKills: stats.reduce((n, s) => n + s.midairKills, 0),
     knifeKills,
   };
 }

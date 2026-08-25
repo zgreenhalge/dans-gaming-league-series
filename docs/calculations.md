@@ -300,18 +300,27 @@ section, sliced a different way. Stored in their own tables (`player_match_weapo
 Unlike the breakdowns above, kills-by-weapon is bucketed by *individual weapon* (`ak47`, `awp`,
 `knife`, …), not category, and isn't pre-aggregated at all — `match_kills` (see
 [`architecture.md`](./architecture.md)) stores one row per kill, and
-`Kills`/`Headshot Kills`/`No-scope Kills`/`Wallbang Kills`/`Blind Kills`/`Deaths` per weapon are
-grouped from those rows at query time (`aggregateWeaponKillStats()`, `src/lib/queries/kills.ts`). A
-kill only counts toward `Kills` and its modifier counts when the attacker is a known roster player,
-the attacker isn't the victim, and it isn't a teamkill (`is_teamkill = false`); `Deaths` counts every
-recorded death to that weapon regardless, including self-kills and teamkills, so the victim side of
-the breakdown always reflects what actually killed the player.
+`Kills`/`Headshot Kills`/`No-scope Kills`/`Wallbang Kills`/`Blind Kills`/`Midair Kills`/`Deaths` per
+weapon are grouped from those rows at query time (`aggregateWeaponKillStats()`,
+`src/lib/queries/kills.ts`). A kill only counts toward `Kills` and its modifier counts when the
+attacker is a known roster player, the attacker isn't the victim, and it isn't a teamkill
+(`is_teamkill = false`); `Deaths` counts every recorded death to that weapon regardless, including
+self-kills and teamkills, so the victim side of the breakdown always reflects what actually killed
+the player.
 
 `No-scope Kills` is a sniper-rifle kill fired without the scope up (`noscope`); `Wallbang Kills` is a
 kill whose bullet penetrated a surface — wall, door, etc. — before landing (`wallbang`, derived from
 the demo's `penetrated` surface count); `Blind Kills` is a kill where the attacker was flashed at the
 moment of the kill (`blind_kill`). All three are booleans read straight off the CS2 `player_death`
 event, same as `headshot`.
+
+`Midair Kills` (`midair`) is a kill where the attacker was airborne — jumping, not touching a
+surface — at the moment of the kill. Unlike the other modifiers, this isn't a `player_death` field:
+`collectMidairAttackers()` (`src/lib/parsers/matchContext.ts`) reads the attacker's own
+`is_airborne` tick state at the kill's exact tick via one `parseTicks()` call, since a kill's tick
+isn't guaranteed to land on any other already-sampled tick set. Shared by the stats path
+(`collectMatchKills()`) and the replay path (`extract.ts`'s `collectEvents()`) so it's computed
+identically in both.
 
 **Category rollup** (`aggregateKillCategoryStats()`) sums individual-weapon rows up by the same
 category `killWeaponCategory()` (`src/lib/parsers/weaponClasses.ts`) resolves each weapon to — reusing
@@ -333,8 +342,8 @@ still renders a zeroed row rather than being hidden, so the filter always shows 
 
 The Flair sub-tab surfaces the off-meta kill counts on their own, totaled across every weapon rather
 than broken out per-weapon like the Weapons sub-tab (`aggregateFlairKillStats()`,
-`src/lib/queries/kills.ts`): `No-scope`, `Wallbang`, and `Blind` sum the same-named counters from
-`aggregateWeaponKillStats()` across all of a player's weapons; `Knife` is
+`src/lib/queries/kills.ts`): `No-scope`, `Wallbang`, `Blind`, and `Midair` sum the same-named
+counters from `aggregateWeaponKillStats()` across all of a player's weapons; `Knife` is
 `aggregateKillCategoryStats()`'s `melee` category total (knives/bayonets), not a separate collector.
 
 ### Player Rating (not yet implemented)
