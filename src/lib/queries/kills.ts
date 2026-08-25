@@ -256,3 +256,26 @@ export function aggregateKillCategoryStats(stats: WeaponKillStat[]): WeaponCateg
   }
   return [...buckets.values()].sort((a, b) => b.kills - a.kills);
 }
+
+export interface FlairKillStat {
+  noscopeKills: number;
+  wallbangKills: number;
+  blindKills: number;
+  knifeKills: number;
+}
+
+/** "Flair" kills — the off-meta kill counts worth showing off on their own, summed across every
+ *  weapon rather than broken out per-weapon like `aggregateWeaponKillStats()`. `noscopeKills`/
+ *  `wallbangKills`/`blindKills` total the same-named `WeaponKillStat` counters across every
+ *  weapon a player has kills with; `knifeKills` reuses `aggregateKillCategoryStats()`'s `melee`
+ *  category total (knives/bayonets) rather than reclassifying weapons itself. */
+export function aggregateFlairKillStats(kills: MatchKillRow[], playerId: number): FlairKillStat {
+  const stats = aggregateWeaponKillStats(kills, playerId);
+  const knifeKills = aggregateKillCategoryStats(stats).find((c) => c.category === 'melee')?.kills ?? 0;
+  return {
+    noscopeKills: stats.reduce((n, s) => n + s.noscopeKills, 0),
+    wallbangKills: stats.reduce((n, s) => n + s.wallbangKills, 0),
+    blindKills: stats.reduce((n, s) => n + s.blindKills, 0),
+    knifeKills,
+  };
+}
