@@ -476,7 +476,7 @@ function AverageGameStatsTable({ data }: { data: RowWithStats[] }) {
 
 function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
   const buckets = [
-    { label: 'Crushed',     count: dist.crushed,     note: '13–3 or worse' },
+    { label: 'Crushing',    count: dist.crushed,     note: '13–3 or worse' },
     { label: 'Convincing',  count: dist.convincing,  note: '13–4 to 13–6' },
     { label: 'Competitive', count: dist.competitive, note: '13–7 to 13–9' },
     { label: 'Close',       count: dist.close,       note: '13–10 or 13–11' },
