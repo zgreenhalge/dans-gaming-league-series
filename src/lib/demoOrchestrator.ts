@@ -5,7 +5,7 @@ import type {
   ParsedDemoSabremetricsResult,
 } from './types';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
-import { buildMatchContext, dedupeDeathEvents, findMatchStartTick, type PlayerDeathRow, type PlayerHurtRow } from './parsers/matchContext';
+import { buildMatchContext, collectMidairAttackers, dedupeDeathEvents, findMatchStartTick, type PlayerDeathRow, type PlayerHurtRow } from './parsers/matchContext';
 import type { RoundEndRow } from './parsers/roundSides';
 import { inferSkinsStartingSide, resolveEffectiveSide } from './parsers/sideInference';
 import { collectAccumulators } from './parsers/accumulators';
@@ -110,6 +110,7 @@ export function parseDemoSabremetrics(
       'noscope', 'penetrated', 'attackerblind',
     ],
   ) as PlayerDeathRow[];
+  const midairByTickSteam = collectMidairAttackers(demoBuffer, deathEvents);
 
   const blindEvents = parseEvent(
     demoBuffer, 'player_blind', [], ['total_rounds_played', 'blind_duration'],
@@ -331,7 +332,7 @@ export function parseDemoSabremetrics(
   const economyStats = collectEconomyStats(fireEvents, hurtEvents, roundEconomy, context, steamIds);
 
   // Per-kill and per-round fact rows (#452/#453) — flat event rows, not per-player aggregates.
-  const killFacts = collectMatchKills(liveDeathEvents, context, steamIds);
+  const killFacts = collectMatchKills(liveDeathEvents, context, steamIds, midairByTickSteam);
   const playerIdOf = (steamId: string | null): number | null =>
     steamId ? (steamToPlayer.get(steamId)?.player_id ?? null) : null;
   const matchKills: DemoMatchKill[] = killFacts.map((k) => ({
@@ -344,6 +345,7 @@ export function parseDemoSabremetrics(
     noscope: k.noscope,
     wallbang: k.wallbang,
     blind_kill: k.blind_kill,
+    midair: k.midair,
     is_teamkill: k.is_teamkill,
     tick: k.tick,
   }));

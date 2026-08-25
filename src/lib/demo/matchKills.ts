@@ -32,6 +32,7 @@ export async function persistMatchKills(matchId: number, kills: DemoMatchKill[])
       noscope: k.noscope,
       wallbang: k.wallbang,
       blind_kill: k.blind_kill,
+      midair: k.midair,
       is_teamkill: k.is_teamkill,
       tick: k.tick,
     });

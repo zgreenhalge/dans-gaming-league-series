@@ -1,4 +1,4 @@
-import { parseEvent, parseHeader } from '@laihoe/demoparser2';
+import { parseEvent, parseHeader, parseTicks } from '@laihoe/demoparser2';
 import { buildRoundSides, sideForFaction, type RoundEndRow, type RoundSideInfo } from './roundSides';
 import { roundOf, type RoundBounds } from './_shared';
 
@@ -41,6 +41,34 @@ export function findKnifePhaseStartTick(demoBuffer: Buffer): number {
     return 0;
   }
   return ticks.length < 2 ? 0 : ticks[ticks.length - 2];
+}
+
+/**
+ * Whether the attacker was airborne (mid-air, not touching a surface) at the exact tick of each
+ * kill. Unlike `headshot`/`noscope`/`penetrated`/`attackerblind`, this isn't a field on
+ * `player_death` itself — it's the attacker's own `is_airborne` tick state (derived from
+ * `m_hGroundEntity`), read via one `parseTicks()` call over just the kill ticks, since a kill's
+ * exact tick isn't guaranteed to land on any other already-sampled tick set (frame downsampling,
+ * round boundaries, ...). Keyed by `${tick}:${attackerSteamId}` since `parseTicks()` returns
+ * every player's row at each requested tick, not just the attacker's. Shared by the stats path
+ * (`weaponStats.ts`'s `collectMatchKills()`) and the replay path (`extract.ts`'s
+ * `collectEvents()`) so "was this a mid-air kill" is computed identically in both.
+ */
+export function collectMidairAttackers(
+  demoBuffer: Buffer,
+  deathEvents: { tick: number; attacker_steamid: string | null }[],
+): Map<string, boolean> {
+  const ticks = [...new Set(deathEvents.filter((d) => d.attacker_steamid).map((d) => d.tick))];
+  const map = new Map<string, boolean>();
+  if (ticks.length === 0) return map;
+  const rows = parseTicks(demoBuffer, ['is_airborne'], ticks) as Record<string, unknown>[];
+  for (const row of rows) {
+    const tick = Number(row.tick ?? -1);
+    const steamid = (row.steamid ?? row.steamID) as string | undefined;
+    if (tick < 0 || !steamid) continue;
+    map.set(`${tick}:${steamid}`, Boolean(row.is_airborne));
+  }
+  return map;
 }
 
 export interface PlayerDeathRow {

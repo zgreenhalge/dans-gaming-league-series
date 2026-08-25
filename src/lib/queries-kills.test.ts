@@ -26,6 +26,7 @@ function kill(opts: {
   noscope?: boolean;
   wallbang?: boolean;
   blindKill?: boolean;
+  midair?: boolean;
   isTeamkill?: boolean;
 }): MatchKillRow {
   return {
@@ -42,6 +43,7 @@ function kill(opts: {
     noscope: opts.noscope ?? false,
     wallbang: opts.wallbang ?? false,
     blind_kill: opts.blindKill ?? false,
+    midair: opts.midair ?? false,
     is_teamkill: opts.isTeamkill ?? false,
   };
 }
@@ -125,15 +127,17 @@ test('resolveWeaponStat: null selection returns the favorite; a named selection 
     noscopeKills: 0,
     wallbangKills: 0,
     blindKills: 0,
+    midairKills: 0,
     deaths: 0,
   });
 });
 
-test('aggregateWeaponKillStats: buckets noscope/wallbang/blind kills per weapon for one player', () => {
+test('aggregateWeaponKillStats: buckets noscope/wallbang/blind/midair kills per weapon for one player', () => {
   const kills = [
     kill({ attacker: 1, victim: 2, weapon: 'awp', noscope: true }),
     kill({ attacker: 1, victim: 3, weapon: 'ak47', wallbang: true }),
     kill({ attacker: 1, victim: 4, weapon: 'ak47', blindKill: true }),
+    kill({ attacker: 1, victim: 5, weapon: 'deagle', midair: true }),
   ];
   const stats = aggregateWeaponKillStats(kills, 1);
   const awp = stats.find((s) => s.weapon === 'awp');
@@ -141,20 +145,23 @@ test('aggregateWeaponKillStats: buckets noscope/wallbang/blind kills per weapon 
   const ak = stats.find((s) => s.weapon === 'ak47');
   assert.equal(ak?.wallbangKills, 1);
   assert.equal(ak?.blindKills, 1);
+  const deagle = stats.find((s) => s.weapon === 'deagle');
+  assert.equal(deagle?.midairKills, 1);
 });
 
-test('aggregateFlairKillStats: totals noscope/wallbang/blind across every weapon, plus knife kills', () => {
+test('aggregateFlairKillStats: totals noscope/wallbang/blind/midair across every weapon, plus knife kills', () => {
   const kills = [
     kill({ attacker: 1, victim: 2, weapon: 'awp', noscope: true }),
     kill({ attacker: 1, victim: 3, weapon: 'deagle', noscope: true }),
     kill({ attacker: 1, victim: 4, weapon: 'ak47', wallbang: true }),
     kill({ attacker: 1, victim: 5, weapon: 'usp_silencer', blindKill: true }),
+    kill({ attacker: 1, victim: 8, weapon: 'deagle', midair: true }),
     kill({ attacker: 1, victim: 6, weapon: 'knife' }),
     kill({ attacker: 1, victim: 7, weapon: 'knife' }),
     kill({ attacker: 2, victim: 1, weapon: 'knife' }),
   ];
   const flair = aggregateFlairKillStats(kills, 1);
-  assert.deepEqual(flair, { noscopeKills: 2, wallbangKills: 1, blindKills: 1, knifeKills: 2 });
+  assert.deepEqual(flair, { noscopeKills: 2, wallbangKills: 1, blindKills: 1, midairKills: 1, knifeKills: 2 });
 });
 
 report();
