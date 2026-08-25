@@ -26,17 +26,8 @@ import {
   computePlusStats,
   type SabremetricStatRow,
 } from './queries';
-import { zeroSabFields as zeroSab } from './test-support/sabFields';
+import { zeroSabFields as zeroSab, sabremetricStatRow as row } from './test-support/sabFields';
 import { test, report } from './test-support/miniTest';
-
-function row(overrides: Partial<SabremetricStatRow> & { player_id: number; match_id: number }): SabremetricStatRow {
-  return {
-    player_name: `#${overrides.player_id}`,
-    rounds_played: 24,
-    sab: zeroSab(),
-    ...overrides,
-  };
-}
 
 async function main() {
   // --- aggregateRows: sums raw sab fields across a player's matches, unions ct/t splits ---
