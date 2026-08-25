@@ -646,6 +646,15 @@ function drawKillFeed(
     const sprite = iconSrc ? (getIconSprite?.(iconSrc, aColor) ?? null) : null;
     cursor = drawFeedGlyph(ctx, cursor, y, sprite, label, aColor, { after: 4 });
 
+    // assist, if any — sits between the weapon and the attacker, same order as the docked
+    // events panel's "attacker + assister" convention.
+    if (k.assisterId !== null) {
+      const assister = nameById.get(k.assisterId);
+      const asColor = assister ? factionColor(theme, round, assister.faction) : theme.textDim;
+      cursor = drawFeedGlyph(ctx, cursor, y, null, assister?.name ?? `#${k.assisterId}`, asColor, { after: 2 });
+      cursor = drawFeedGlyph(ctx, cursor, y, null, '+', theme.textDim, { after: 2 });
+    }
+
     // attacker
     ctx.fillStyle = aColor;
     ctx.fillText(attacker?.name ?? 'world', cursor, y);
