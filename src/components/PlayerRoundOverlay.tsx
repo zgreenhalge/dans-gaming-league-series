@@ -18,6 +18,9 @@ import EmptyState from './EmptyState';
 
 const SPEEDS = [0.5, 1, 2, 4];
 const MAX_SIDE = 520;
+/** Overlaid rounds are capped to their opening seconds — where common paths/executes read as
+ *  density — rather than playing out to each round's own (often much longer) natural end. */
+const PATHING_CAP_SECONDS = 15;
 /** Dot radius in canvas px — alive full color, dead dimmed (mirrors ReplayPlayer's convention). */
 const DOT_RADIUS = 4;
 const DEAD_ALPHA = 0.3;
@@ -63,7 +66,10 @@ export default function PlayerRoundOverlay({
   const sizeRef = useRef(0);
 
   const bounds = useMemo(() => boundsOfPoints(traces.flatMap((t) => t.frames)), [traces]);
-  const duration = useMemo(() => maxDurationTicks(traces), [traces]);
+  const duration = useMemo(
+    () => Math.min(maxDurationTicks(traces), PATHING_CAP_SECONDS * (tickRate > 0 ? tickRate : 64)),
+    [traces, tickRate],
+  );
   const visible = useMemo(
     () => (side === 'all' ? traces : traces.filter((t) => t.side === side)),
     [traces, side],
