@@ -15,6 +15,9 @@ export interface MatchKillRow {
   assister_player_id: number | null;
   weapon: string;
   headshot: boolean;
+  noscope: boolean;
+  wallbang: boolean;
+  blind_kill: boolean;
   is_teamkill: boolean;
 }
 
@@ -26,6 +29,9 @@ type RawKillRow = {
   assister_player_match_stats_id: number | null;
   weapon: string;
   headshot: boolean;
+  noscope: boolean;
+  wallbang: boolean;
+  blind_kill: boolean;
   is_teamkill: boolean;
 };
 
@@ -72,6 +78,9 @@ function joinKillRows(
       assister_player_id: assisterPms?.player_id ?? null,
       weapon: k.weapon,
       headshot: k.headshot,
+      noscope: k.noscope,
+      wallbang: k.wallbang,
+      blind_kill: k.blind_kill,
       is_teamkill: k.is_teamkill,
     });
   }
@@ -126,6 +135,9 @@ export interface WeaponKillStat {
   category: KillWeaponCategory;
   kills: number;
   headshotKills: number;
+  noscopeKills: number;
+  wallbangKills: number;
+  blindKills: number;
   deaths: number;
 }
 
@@ -134,13 +146,22 @@ export interface WeaponKillStat {
  *  falls back to for a weapon with no kills/deaths in scope, so both call sites build one from the
  *  same place instead of duplicating the field list. */
 function zeroWeaponStat(weapon: string): WeaponKillStat {
-  return { weapon, category: killWeaponCategory(weapon), kills: 0, headshotKills: 0, deaths: 0 };
+  return {
+    weapon,
+    category: killWeaponCategory(weapon),
+    kills: 0,
+    headshotKills: 0,
+    noscopeKills: 0,
+    wallbangKills: 0,
+    blindKills: 0,
+    deaths: 0,
+  };
 }
 
 /** Kills-with / headshot-kills-with / deaths-to, bucketed by individual weapon, for one player
  *  over whatever `kills` scope the caller already filtered (a season, a match, career). Self-kills
- *  and teamkills don't count toward `kills`/`headshotKills` (they're not a credited kill) but do
- *  still count as a death for the victim side. */
+ *  and teamkills don't count toward `kills`/`headshotKills`/`noscopeKills`/`wallbangKills`/
+ *  `blindKills` (they're not a credited kill) but do still count as a death for the victim side. */
 export function aggregateWeaponKillStats(kills: MatchKillRow[], playerId: number): WeaponKillStat[] {
   const buckets = new Map<string, WeaponKillStat>();
   const getBucket = (weapon: string): WeaponKillStat => {
@@ -159,6 +180,9 @@ export function aggregateWeaponKillStats(kills: MatchKillRow[], playerId: number
       const b = getBucket(k.weapon);
       b.kills += 1;
       if (k.headshot) b.headshotKills += 1;
+      if (k.noscope) b.noscopeKills += 1;
+      if (k.wallbang) b.wallbangKills += 1;
+      if (k.blind_kill) b.blindKills += 1;
     }
     if (k.victim_player_id === playerId) {
       getBucket(k.weapon).deaths += 1;
@@ -199,6 +223,9 @@ export interface WeaponCategoryKillStat {
   category: KillWeaponCategory;
   kills: number;
   headshotKills: number;
+  noscopeKills: number;
+  wallbangKills: number;
+  blindKills: number;
   deaths: number;
 }
 
@@ -209,11 +236,22 @@ export function aggregateKillCategoryStats(stats: WeaponKillStat[]): WeaponCateg
   for (const s of stats) {
     let b = buckets.get(s.category);
     if (!b) {
-      b = { category: s.category, kills: 0, headshotKills: 0, deaths: 0 };
+      b = {
+        category: s.category,
+        kills: 0,
+        headshotKills: 0,
+        noscopeKills: 0,
+        wallbangKills: 0,
+        blindKills: 0,
+        deaths: 0,
+      };
       buckets.set(s.category, b);
     }
     b.kills += s.kills;
     b.headshotKills += s.headshotKills;
+    b.noscopeKills += s.noscopeKills;
+    b.wallbangKills += s.wallbangKills;
+    b.blindKills += s.blindKills;
     b.deaths += s.deaths;
   }
   return [...buckets.values()].sort((a, b) => b.kills - a.kills);

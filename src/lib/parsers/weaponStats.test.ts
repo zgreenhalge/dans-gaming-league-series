@@ -106,9 +106,29 @@ test('collectMatchKills: one row per death, with resolved attacker/victim/assist
     assister_steamid: 'b',
     weapon: 'ak47',
     headshot: true,
+    noscope: false,
+    wallbang: false,
+    blind_kill: false,
     is_teamkill: false,
     tick: 105,
   });
+});
+
+test('collectMatchKills: wallbang is true when the bullet penetrated a surface', () => {
+  const deaths = [death({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', penetrated: 1 })];
+  const ctx = makeContext({ rounds, sides, deaths });
+  const out = collectMatchKills(deaths, ctx, ids);
+  assert.equal(out[0].wallbang, true);
+});
+
+test('collectMatchKills: noscope and blind_kill pass through from the death event', () => {
+  const deaths = [
+    death({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'awp', noscope: true, attackerblind: true }),
+  ];
+  const ctx = makeContext({ rounds, sides, deaths });
+  const out = collectMatchKills(deaths, ctx, ids);
+  assert.equal(out[0].noscope, true);
+  assert.equal(out[0].blind_kill, true);
 });
 
 test('collectMatchKills: trusts its input for (round, victim) uniqueness — dedup is dedupeDeathEvents()\'s job, not this collector\'s', () => {

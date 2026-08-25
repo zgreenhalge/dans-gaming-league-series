@@ -22,6 +22,9 @@ function kill(opts: {
   victim: number;
   weapon: string;
   headshot?: boolean;
+  noscope?: boolean;
+  wallbang?: boolean;
+  blindKill?: boolean;
   isTeamkill?: boolean;
 }): MatchKillRow {
   return {
@@ -35,6 +38,9 @@ function kill(opts: {
     assister_player_id: null,
     weapon: opts.weapon,
     headshot: opts.headshot ?? false,
+    noscope: opts.noscope ?? false,
+    wallbang: opts.wallbang ?? false,
+    blind_kill: opts.blindKill ?? false,
     is_teamkill: opts.isTeamkill ?? false,
   };
 }
@@ -50,6 +56,9 @@ test('aggregateWeaponKillStats: buckets kills/headshots/deaths per weapon for on
   const ak = stats.find((s) => s.weapon === 'ak47');
   assert.equal(ak?.kills, 2);
   assert.equal(ak?.headshotKills, 1);
+  assert.equal(ak?.noscopeKills, 0);
+  assert.equal(ak?.wallbangKills, 0);
+  assert.equal(ak?.blindKills, 0);
   const usp = stats.find((s) => s.weapon === 'usp_silencer');
   assert.equal(usp?.kills, 1);
   const deagle = stats.find((s) => s.weapon === 'deagle');
@@ -107,7 +116,30 @@ test('resolveWeaponStat: null selection returns the favorite; a named selection 
   assert.equal(named?.kills, 2);
 
   const absent = resolveWeaponStat(stats, 'usp_silencer');
-  assert.deepEqual(absent, { weapon: 'usp_silencer', category: 'pistol', kills: 0, headshotKills: 0, deaths: 0 });
+  assert.deepEqual(absent, {
+    weapon: 'usp_silencer',
+    category: 'pistol',
+    kills: 0,
+    headshotKills: 0,
+    noscopeKills: 0,
+    wallbangKills: 0,
+    blindKills: 0,
+    deaths: 0,
+  });
+});
+
+test('aggregateWeaponKillStats: buckets noscope/wallbang/blind kills per weapon for one player', () => {
+  const kills = [
+    kill({ attacker: 1, victim: 2, weapon: 'awp', noscope: true }),
+    kill({ attacker: 1, victim: 3, weapon: 'ak47', wallbang: true }),
+    kill({ attacker: 1, victim: 4, weapon: 'ak47', blindKill: true }),
+  ];
+  const stats = aggregateWeaponKillStats(kills, 1);
+  const awp = stats.find((s) => s.weapon === 'awp');
+  assert.equal(awp?.noscopeKills, 1);
+  const ak = stats.find((s) => s.weapon === 'ak47');
+  assert.equal(ak?.wallbangKills, 1);
+  assert.equal(ak?.blindKills, 1);
 });
 
 report();

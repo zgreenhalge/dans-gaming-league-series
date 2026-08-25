@@ -105,7 +105,10 @@ export function parseDemoSabremetrics(
 
   const deathEvents = parseEvent(
     demoBuffer, 'player_death', [],
-    ['total_rounds_played', 'is_warmup_period', 'headshot', 'assister_steamid', 'weapon'],
+    [
+      'total_rounds_played', 'is_warmup_period', 'headshot', 'assister_steamid', 'weapon',
+      'noscope', 'penetrated', 'attackerblind',
+    ],
   ) as PlayerDeathRow[];
 
   const blindEvents = parseEvent(
@@ -338,6 +341,9 @@ export function parseDemoSabremetrics(
     assister_player_id: playerIdOf(k.assister_steamid),
     weapon: k.weapon,
     headshot: k.headshot,
+    noscope: k.noscope,
+    wallbang: k.wallbang,
+    blind_kill: k.blind_kill,
     is_teamkill: k.is_teamkill,
     tick: k.tick,
   }));
