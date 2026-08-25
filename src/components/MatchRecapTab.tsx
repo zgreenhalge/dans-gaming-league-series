@@ -13,7 +13,7 @@ import DevGate from './DevGate';
 import { RecordingViewer, RecordingUrlForm } from './RecordingViewer';
 import { C4Icon, DefuseIcon, CONDITION_ICON } from './icons/ConditionIcons';
 import { SIDE_ICON } from './icons/SideIcons';
-import { HeadshotIcon } from './icons/KillModifierIcons';
+import { HeadshotIcon, NoscopeIcon, WallbangIcon, BlindKillIcon } from './icons/KillModifierIcons';
 import { WeaponIcon } from './icons/WeaponIcon';
 import { weaponIconSrc } from '@/lib/weaponIcons';
 import type { ReplayJobState, ReplayEventsView } from '@/lib/queries';
@@ -187,6 +187,21 @@ function eventContent(ev: ReplayEvent, name: (id: number | null) => React.ReactN
         {ev.headshot && (
           <span title="Headshot" className="inline-flex shrink-0">
             <HeadshotIcon size={14} className="text-[var(--color-text-secondary)]" />
+          </span>
+        )}
+        {ev.noscope && (
+          <span title="No-scope" className="inline-flex shrink-0">
+            <NoscopeIcon size={14} className="text-[var(--color-text-secondary)]" />
+          </span>
+        )}
+        {ev.wallbang && (
+          <span title="Wallbang" className="inline-flex shrink-0">
+            <WallbangIcon size={14} className="text-[var(--color-text-secondary)]" />
+          </span>
+        )}
+        {ev.blindKill && (
+          <span title="Blind kill" className="inline-flex shrink-0">
+            <BlindKillIcon size={14} className="text-[var(--color-text-secondary)]" />
           </span>
         )}
         {name(ev.victimId)}

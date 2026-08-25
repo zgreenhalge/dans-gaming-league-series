@@ -392,37 +392,46 @@ export type Database = {
         Row: {
           assister_player_match_stats_id: number | null
           attacker_player_match_stats_id: number | null
+          blind_kill: boolean
           headshot: boolean
           id: number
           is_teamkill: boolean
           match_id: number
+          noscope: boolean
           round_number: number
           tick: number
           victim_player_match_stats_id: number
+          wallbang: boolean
           weapon: string
         }
         Insert: {
           assister_player_match_stats_id?: number | null
           attacker_player_match_stats_id?: number | null
+          blind_kill?: boolean
           headshot?: boolean
           id?: never
           is_teamkill?: boolean
           match_id: number
+          noscope?: boolean
           round_number: number
           tick: number
           victim_player_match_stats_id: number
+          wallbang?: boolean
           weapon: string
         }
         Update: {
           assister_player_match_stats_id?: number | null
           attacker_player_match_stats_id?: number | null
+          blind_kill?: boolean
           headshot?: boolean
           id?: never
           is_teamkill?: boolean
           match_id?: number
+          noscope?: boolean
           round_number?: number
           tick?: number
           victim_player_match_stats_id?: number
+          wallbang?: boolean
           weapon?: string
         }
         Relationships: [

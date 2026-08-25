@@ -152,7 +152,10 @@ export function buildReplay(input: BuildReplayInput): BuildReplayResult {
     demoBuffer,
     'player_death',
     ['X', 'Y'],
-    ['total_rounds_played', 'is_warmup_period', 'headshot', 'weapon', 'assister_steamid'],
+    [
+      'total_rounds_played', 'is_warmup_period', 'headshot', 'weapon', 'assister_steamid',
+      'noscope', 'penetrated', 'attackerblind',
+    ],
   ) as (PlayerDeathRow & Record<string, unknown>)[];
 
   const context = buildMatchContext(
@@ -459,6 +462,9 @@ function collectEvents(
       assisterId: playerIdOf(d.assister_steamid),
       weapon: pick<string>(d, ['weapon']),
       headshot: Boolean(d.headshot),
+      noscope: Boolean(d.noscope),
+      wallbang: Number(pick<number>(d, ['penetrated']) ?? 0) > 0,
+      blindKill: Boolean(d.attackerblind),
       attacker: ax !== null && ay !== null ? { x: Number(ax), y: Number(ay) } : null,
       victim: vx !== null && vy !== null ? { x: Number(vx), y: Number(vy) } : null,
     });

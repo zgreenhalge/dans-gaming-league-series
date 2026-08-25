@@ -273,6 +273,9 @@ export interface DemoMatchKill {
   assister_player_id: number | null;
   weapon: string;
   headshot: boolean;
+  noscope: boolean;
+  wallbang: boolean;
+  blind_kill: boolean;
   is_teamkill: boolean;
   tick: number;
 }

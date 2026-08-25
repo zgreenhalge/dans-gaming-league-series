@@ -74,6 +74,9 @@ export function death(opts: {
   attacker?: string | null;
   assister?: string | null;
   headshot?: boolean;
+  noscope?: boolean;
+  penetrated?: number;
+  attackerblind?: boolean;
   weapon?: string;
 }): PlayerDeathRow {
   return {
@@ -83,6 +86,9 @@ export function death(opts: {
     attacker_steamid: opts.attacker ?? null,
     assister_steamid: opts.assister ?? null,
     headshot: opts.headshot ?? false,
+    noscope: opts.noscope ?? false,
+    penetrated: opts.penetrated ?? 0,
+    attackerblind: opts.attackerblind ?? false,
     weapon: opts.weapon ?? '',
   };
 }

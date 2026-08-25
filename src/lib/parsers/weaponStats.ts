@@ -159,6 +159,9 @@ export interface KillFactRow {
   assister_steamid: string | null;
   weapon: string;
   headshot: boolean;
+  noscope: boolean;
+  wallbang: boolean;
+  blind_kill: boolean;
   is_teamkill: boolean;
   tick: number;
 }
@@ -204,6 +207,9 @@ export function collectMatchKills(
       assister_steamid: assister,
       weapon: d.weapon,
       headshot: d.headshot,
+      noscope: d.noscope,
+      wallbang: d.penetrated > 0,
+      blind_kill: d.attackerblind,
       is_teamkill: isTk,
       tick: d.tick,
     });

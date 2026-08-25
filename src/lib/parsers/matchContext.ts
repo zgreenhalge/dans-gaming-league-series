@@ -49,6 +49,12 @@ export interface PlayerDeathRow {
   attacker_steamid: string | null;
   user_steamid: string | null;
   headshot: boolean;
+  /** Attacker was scoped out (sniper rifles only) when the shot was fired. */
+  noscope: boolean;
+  /** Count of surfaces (wall/door/etc.) the bullet penetrated before landing the kill. */
+  penetrated: number;
+  /** Attacker was blinded by a flash at the moment of the kill. */
+  attackerblind: boolean;
   assister_steamid: string | null;
   weapon: string;
 }

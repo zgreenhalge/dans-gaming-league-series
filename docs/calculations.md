@@ -299,12 +299,19 @@ section, sliced a different way. Stored in their own tables (`player_match_weapo
 
 Unlike the breakdowns above, kills-by-weapon is bucketed by *individual weapon* (`ak47`, `awp`,
 `knife`, …), not category, and isn't pre-aggregated at all — `match_kills` (see
-[`architecture.md`](./architecture.md)) stores one row per kill, and `Kills`/`Headshot Kills`/`Deaths`
-per weapon are grouped from those rows at query time (`aggregateWeaponKillStats()`,
-`src/lib/queries/kills.ts`). A kill only counts toward `Kills`/`Headshot Kills` when the attacker is a
-known roster player, the attacker isn't the victim, and it isn't a teamkill (`is_teamkill = false`);
-`Deaths` counts every recorded death to that weapon regardless, including self-kills and teamkills, so
-the victim side of the breakdown always reflects what actually killed the player.
+[`architecture.md`](./architecture.md)) stores one row per kill, and
+`Kills`/`Headshot Kills`/`No-scope Kills`/`Wallbang Kills`/`Blind Kills`/`Deaths` per weapon are
+grouped from those rows at query time (`aggregateWeaponKillStats()`, `src/lib/queries/kills.ts`). A
+kill only counts toward `Kills` and its modifier counts when the attacker is a known roster player,
+the attacker isn't the victim, and it isn't a teamkill (`is_teamkill = false`); `Deaths` counts every
+recorded death to that weapon regardless, including self-kills and teamkills, so the victim side of
+the breakdown always reflects what actually killed the player.
+
+`No-scope Kills` is a sniper-rifle kill fired without the scope up (`noscope`); `Wallbang Kills` is a
+kill whose bullet penetrated a surface — wall, door, etc. — before landing (`wallbang`, derived from
+the demo's `penetrated` surface count); `Blind Kills` is a kill where the attacker was flashed at the
+moment of the kill (`blind_kill`). All three are booleans read straight off the CS2 `player_death`
+event, same as `headshot`.
 
 **Category rollup** (`aggregateKillCategoryStats()`) sums individual-weapon rows up by the same
 category `killWeaponCategory()` (`src/lib/parsers/weaponClasses.ts`) resolves each weapon to — reusing

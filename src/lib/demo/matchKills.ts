@@ -29,6 +29,9 @@ export async function persistMatchKills(matchId: number, kills: DemoMatchKill[])
         k.assister_player_id != null ? (pmsById.get(k.assister_player_id) ?? null) : null,
       weapon: k.weapon,
       headshot: k.headshot,
+      noscope: k.noscope,
+      wallbang: k.wallbang,
+      blind_kill: k.blind_kill,
       is_teamkill: k.is_teamkill,
       tick: k.tick,
     });

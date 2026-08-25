@@ -16,7 +16,7 @@ export type Side = 'CT' | 'T';
  * Bump when the shape changes incompatibly. The player reads this and refuses
  * payloads it doesn't understand instead of mis-rendering.
  */
-export const REPLAY_SCHEMA_VERSION = 3;
+export const REPLAY_SCHEMA_VERSION = 4;
 
 /** A 2D world position, in CS2 world units (not yet projected to a radar). */
 export interface Point {
@@ -165,6 +165,12 @@ export interface ReplayKillEvent extends ReplayEventBase {
   assisterId: number | null;
   weapon: string | null;
   headshot: boolean;
+  /** Attacker was scoped out (sniper rifles only) when the shot was fired. */
+  noscope: boolean;
+  /** Bullet penetrated a surface (wall/door/etc.) before landing the kill. */
+  wallbang: boolean;
+  /** Attacker was blinded by a flash at the moment of the kill. */
+  blindKill: boolean;
   /** Positions power the kill-feed tracer; attacker may be unknown. */
   attacker: Point | null;
   victim: Point | null;

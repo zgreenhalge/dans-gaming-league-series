@@ -114,10 +114,12 @@ query time rather than baked into the persisted shape. This is a deliberate depa
 
 - `collectMatchKills()` (`weaponStats.ts`) reads `player_death` events (parsed with a `weapon` field,
   unlike every other consumer of that event) and emits one `KillFactRow` per kill: round, attacker/
-  victim/assister steamid, weapon, headshot, and whether it was a teamkill. It's simpler than the
-  bucketed collectors above — a `player_death` row already carries both attacker and victim, so there's
-  no fire/hurt reconciliation. Self-kills and teamkills are kept (not filtered out) so the table stays
-  a genuine fact table; consuming queries decide whether to exclude them.
+  victim/assister steamid, weapon, headshot/noscope/wallbang/blind-kill modifier flags, and whether it
+  was a teamkill. `wallbang` is derived from the event's `penetrated` surface count (`penetrated > 0`);
+  `headshot`/`noscope`/`blind_kill` (from `attackerblind`) are read straight off the event, same as
+  `weapon`. It's simpler than the bucketed collectors above — a `player_death` row already carries both
+  attacker and victim, so there's no fire/hurt reconciliation. Self-kills and teamkills are kept (not
+  filtered out) so the table stays a genuine fact table; consuming queries decide whether to exclude them.
 - `match_rounds` needs no new collector at all — `buildRoundSides()` (`roundSides.ts`) already computes
   `{ roundNumber, winnerSide, shirtsSide, winReason }` per live round for the CT/T sabremetric splits;
   `demoOrchestrator.ts` just maps `context.rounds` straight into `DemoMatchRound[]`. `winReason` comes

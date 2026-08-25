@@ -260,8 +260,8 @@ test('killFeed: only kills within the recent window, newest first', () => {
   const tickRate = 64;
   const r = round({
     events: [
-      { type: 'kill', tick: 100, attackerId: 1, victimId: 2, assisterId: null, weapon: 'weapon_ak47', headshot: false, attacker: { x: 0, y: 0 }, victim: { x: 1, y: 1 } },
-      { type: 'kill', tick: 500, attackerId: 3, victimId: 4, assisterId: null, weapon: 'weapon_awp', headshot: true, attacker: { x: 2, y: 2 }, victim: { x: 3, y: 3 } },
+      { type: 'kill', tick: 100, attackerId: 1, victimId: 2, assisterId: null, weapon: 'weapon_ak47', headshot: false, noscope: false, wallbang: false, blindKill: false, attacker: { x: 0, y: 0 }, victim: { x: 1, y: 1 } },
+      { type: 'kill', tick: 500, attackerId: 3, victimId: 4, assisterId: null, weapon: 'weapon_awp', headshot: true, noscope: false, wallbang: false, blindKill: false, attacker: { x: 2, y: 2 }, victim: { x: 3, y: 3 } },
     ],
   });
   // At tick 520, the older kill (tick 100) is >6s old and drops out.
@@ -274,7 +274,7 @@ test('tracers: fade from 1 to 0 across the tracer window, then disappear', () =>
   const tickRate = 64;
   const r = round({
     events: [
-      { type: 'kill', tick: 100, attackerId: 1, victimId: 2, assisterId: null, weapon: null, headshot: false, attacker: { x: 0, y: 0 }, victim: { x: 10, y: 0 } },
+      { type: 'kill', tick: 100, attackerId: 1, victimId: 2, assisterId: null, weapon: null, headshot: false, noscope: false, wallbang: false, blindKill: false, attacker: { x: 0, y: 0 }, victim: { x: 10, y: 0 } },
     ],
   });
   approx(tracersAt(r, 100, tickRate)[0].alpha, 1); // at the kill
@@ -399,6 +399,9 @@ test('heatmap: a kill yields a death point (victim) and a kill point (attacker),
             assisterId: null,
             weapon: 'weapon_ak47',
             headshot: false,
+            noscope: false,
+            wallbang: false,
+            blindKill: false,
             attacker: { x: 10, y: 20 },
             victim: { x: 30, y: 40 },
           },
