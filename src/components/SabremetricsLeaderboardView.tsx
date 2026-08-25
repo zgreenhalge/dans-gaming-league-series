@@ -400,9 +400,9 @@ function WeaponsTable({ aggregated, kills, selectedWeapon, singlePlayer, showHea
       switch (sort.col) {
         case 'kills': aVal = a.kills; bVal = b.kills; break;
         case 'hs': aVal = a.headshotKills / (a.kills || 1); bVal = b.headshotKills / (b.kills || 1); break;
-        case 'ns': aVal = a.noscopeKills / (a.kills || 1); bVal = b.noscopeKills / (b.kills || 1); break;
-        case 'wb': aVal = a.wallbangKills / (a.kills || 1); bVal = b.wallbangKills / (b.kills || 1); break;
-        case 'blind': aVal = a.blindKills / (a.kills || 1); bVal = b.blindKills / (b.kills || 1); break;
+        case 'ns': aVal = a.noscopeKills; bVal = b.noscopeKills; break;
+        case 'wb': aVal = a.wallbangKills; bVal = b.wallbangKills; break;
+        case 'blind': aVal = a.blindKills; bVal = b.blindKills; break;
         case 'deaths': aVal = a.deaths; bVal = b.deaths; break;
         default: return 0;
       }
@@ -426,9 +426,9 @@ function WeaponsTable({ aggregated, kills, selectedWeapon, singlePlayer, showHea
               <th className="px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]" title={weaponColTitle}>Weapon</th>
               <SortableTh label="Kills With" title="Credited kills with this weapon (excludes self-kills and teamkills)" sortKey="kills" state={sort} onClick={toggleSort} />
               <SortableTh label="HS% With" title="Headshot kills / kills with this weapon" sortKey="hs" state={sort} onClick={toggleSort} />
-              <SortableTh label="NS% With" title="No-scope kills / kills with this weapon" sortKey="ns" state={sort} onClick={toggleSort} />
-              <SortableTh label="WB% With" title="Wallbang kills / kills with this weapon" sortKey="wb" state={sort} onClick={toggleSort} />
-              <SortableTh label="Blind% With" title="Kills scored while the attacker was flashed / kills with this weapon" sortKey="blind" state={sort} onClick={toggleSort} />
+              <SortableTh label="NS With" title="No-scope kills with this weapon" sortKey="ns" state={sort} onClick={toggleSort} />
+              <SortableTh label="WB With" title="Wallbang kills with this weapon" sortKey="wb" state={sort} onClick={toggleSort} />
+              <SortableTh label="Blind With" title="Kills scored while the attacker was flashed, with this weapon" sortKey="blind" state={sort} onClick={toggleSort} />
               <SortableTh label="Deaths To" title="Deaths to this weapon" sortKey="deaths" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
@@ -439,9 +439,9 @@ function WeaponsTable({ aggregated, kills, selectedWeapon, singlePlayer, showHea
                 <td className="px-3 py-2 text-left"><WeaponLabel weapon={r.weapon} /></td>
                 <td className={tdRight}>{r.kills}</td>
                 <td className={tdRight}>{pct(r.headshotKills, r.kills)}</td>
-                <td className={tdRight}>{pct(r.noscopeKills, r.kills)}</td>
-                <td className={tdRight}>{pct(r.wallbangKills, r.kills)}</td>
-                <td className={tdRight}>{pct(r.blindKills, r.kills)}</td>
+                <td className={tdRight}>{r.noscopeKills}</td>
+                <td className={tdRight}>{r.wallbangKills}</td>
+                <td className={tdRight}>{r.blindKills}</td>
                 <td className={tdRight}>{r.deaths}</td>
               </tr>
             ))}
@@ -838,9 +838,9 @@ function buildWeaponTiles(weaponStats: WeaponKillStat[], selectedWeapon: string 
     { label: 'Weapon', title: 'The weapon these stats are for', value: <WeaponLabel weapon={stat?.weapon ?? null} /> },
     { label: 'Kills With', title: `Credited kills with ${titleSuffix} (excludes self-kills and teamkills)`, value: stat?.kills ?? 0 },
     { label: 'HS% With', title: `Headshot kills / kills with ${titleSuffix}`, value: pct(stat?.headshotKills ?? 0, stat?.kills ?? 0) },
-    { label: 'NS% With', title: `No-scope kills / kills with ${titleSuffix}`, value: pct(stat?.noscopeKills ?? 0, stat?.kills ?? 0) },
-    { label: 'WB% With', title: `Wallbang kills / kills with ${titleSuffix}`, value: pct(stat?.wallbangKills ?? 0, stat?.kills ?? 0) },
-    { label: 'Blind% With', title: `Kills scored while flashed / kills with ${titleSuffix}`, value: pct(stat?.blindKills ?? 0, stat?.kills ?? 0) },
+    { label: 'NS With', title: `No-scope kills with ${titleSuffix}`, value: stat?.noscopeKills ?? 0 },
+    { label: 'WB With', title: `Wallbang kills with ${titleSuffix}`, value: stat?.wallbangKills ?? 0 },
+    { label: 'Blind With', title: `Kills scored while flashed, with ${titleSuffix}`, value: stat?.blindKills ?? 0 },
     { label: 'Deaths To', title: `Deaths to ${titleSuffix}`, value: stat?.deaths ?? 0 },
   ];
 }
