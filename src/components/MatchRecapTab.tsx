@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Crosshair } from 'lucide-react';
 import { tabCls } from '@/lib/util';
 import { mapSlug } from '@/lib/maps';
+import { ticksSince, formatClock } from '@/lib/replay/playback';
 import MapHeatmap from './MapHeatmap';
 import MatchPlayerTrails from './MatchPlayerTrails';
 import DevGate from './DevGate';
@@ -233,6 +234,8 @@ function EventRow({
   sideOf,
   onClick,
   active,
+  freezeEndTick,
+  tickRate,
 }: {
   ev: ReplayEvent;
   nameOf: (id: number | null) => string;
@@ -241,14 +244,21 @@ function EventRow({
   onClick: () => void;
   /** Highlights the row as the one at the synced 2D replay's current tick. */
   active: boolean;
+  /** This event's round clock zero point — with `tickRate`, powers its in-round timestamp. */
+  freezeEndTick: number;
+  tickRate: number;
 }) {
   const name = (id: number | null) => <PlayerName id={id} nameOf={nameOf} sideOf={sideOf} />;
   const tint = ev.type === 'round_end' ? rowTint(ev.winnerSide) : { className: '' };
   const activeCls = active ? 'bg-[var(--color-bg-tertiary)] border-l-2 border-l-[var(--color-site-accent)]' : '';
+  const clock = formatClock(ticksSince(ev.tick, freezeEndTick) / tickRate);
 
   return (
     <li className={`${tint.className} ${activeCls}`} style={tint.style}>
       <button type="button" onClick={onClick} className={`${ROW_BASE} lift-row w-full text-left`}>
+        <span className="font-mono text-[10px] tabular-nums text-[var(--color-text-secondary)] shrink-0 w-8">
+          {clock}
+        </span>
         {eventContent(ev, name)}
       </button>
     </li>
@@ -382,6 +392,8 @@ function SyncedEventsPanel({
                     sideOf={sideOf}
                     active={active?.round === round.round && active.index === i}
                     onClick={() => onSeek(round.round, ev.tick)}
+                    freezeEndTick={round.freezeEndTick}
+                    tickRate={events.tickRate}
                   />
                 ))}
               </ul>

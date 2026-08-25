@@ -210,10 +210,12 @@ describe('SeasonTabView — expand/collapse writes to the URL', () => {
     expect(screen.getByRole('button', { name: /Week 1/ })).toHaveAttribute('aria-expanded', 'true');
   });
 
-  test('an all-invalid override does not trigger the deep-link scroll, even though it falls back to the default', () => {
+  test('an all-invalid override falls back to scrolling to the default week, not the (nonexistent) invalid one', () => {
     // The fallback above must not be read as "a valid deep link that happens to resolve to the
-    // default week" — a plain page load (no override) shouldn't scroll, and neither should a
-    // stale/typo'd link that resolves the same way.
+    // default week" — `scrollTargetId` (keyed off the *raw* override) stays null here, same as a
+    // plain page load. But the Schedule tab is showing either way, so the separate default-open
+    // scroll still fires, landing on the week that's actually open rather than leaving the page
+    // wherever it was.
     const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
     nextNavigationMock.setSearchParams('tab=schedule&week=999');
     renderWithUrlState(
@@ -227,7 +229,7 @@ describe('SeasonTabView — expand/collapse writes to the URL', () => {
         h2hData={EMPTY_H2H}
       />,
     );
-    expect(scrollSpy).not.toHaveBeenCalled();
+    expect(scrollSpy).toHaveBeenCalledTimes(1);
     scrollSpy.mockRestore();
   });
 });

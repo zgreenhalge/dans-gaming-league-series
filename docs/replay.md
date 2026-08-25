@@ -71,12 +71,12 @@ the roster/sides/target-rounds/map from the DB and is shared by the dispatch pat
 script, mirroring the roster assembly in `POST /api/matches/[id]/demo/parse`.
 
 > **Round numbering gotcha:** `round_end` events carry `total_rounds_played` as the round that *just
-> ended* (1-based), while mid-round events (`bomb_planted`, `bomb_defused`) carry rounds *completed so
-> far*, so their round number is `total_rounds_played + 1`. The extract honors this split (same as the
-> stats collectors). **Kills are the exception:** a `player_death` can land in the post-round window
-> *after* `round_end` has already bumped the counter, so the `+1` math would misfile it into the next
-> round (where its tick precedes the live frames and the kill feed never shows it). Kills are therefore
-> bucketed by **tick** into the round whose playback window (incl. the post-round span) covers them.
+> ended* (1-based). Every other in-round event — kills, plants, defuses — is bucketed by **tick** into
+> the round whose playback window (incl. the post-round span) covers it, rather than derived from
+> `total_rounds_played + 1`: any of them can land in the post-round window *after* `round_end` has
+> already bumped the counter, where the `+1` math would misfile it into the next round (whose tick
+> precedes the live frames, so it'd never show — or, for a plant, read as happening before that round's
+> own action has started).
 
 **Knife round (gauntlet/knife matches only):** regular-season matches pre-decide sides via the
 map-ban/pick draft, so any knife round the server still plays is vestigial and stays excluded from the

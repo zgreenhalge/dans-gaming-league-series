@@ -67,11 +67,15 @@ export interface ReplayEventsRound {
   isKnifeRound?: boolean;
   sideByFaction: Record<Faction, 'CT' | 'T'>;
   events: ReplayEvent[];
+  /** The round clock's zero point — see `ReplayRound.freezeEndTick`. Powers each event's in-round timestamp. */
+  freezeEndTick: number;
 }
 
 export interface ReplayEventsView {
   players: ReplayPlayerMeta[];
   rounds: ReplayEventsRound[];
+  /** Engine ticks per second — pairs with each round's `freezeEndTick` to compute an in-round timestamp. */
+  tickRate: number;
 }
 
 /**
@@ -92,11 +96,13 @@ export async function getReplayEventsView(matchId: number): Promise<ReplayEvents
   }
   return {
     players: payload.players,
+    tickRate: payload.tickRate,
     rounds: payload.rounds.map((r) => ({
       round: r.round,
       isKnifeRound: r.isKnifeRound,
       sideByFaction: r.sideByFaction,
       events: r.events,
+      freezeEndTick: r.freezeEndTick,
     })),
   };
 }

@@ -343,6 +343,18 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   // regular and gauntlet sub-views in `CombinedSeasonTabView`) points at one this side has hidden.
   const tab = resolveTab(rawTab, tabs);
 
+  // Scrolls to the default-open week/round whenever the Schedule/Rounds tab becomes active with no
+  // explicit `week`/`round` override (that case already scrolls via `scrollTargetId` above) — without
+  // this, switching to the tab expands the current week but leaves the page wherever it already was,
+  // which can be well above it in a season with many played weeks.
+  useEffect(() => {
+    if (tab !== 'schedule' || scrollTargetId != null) return;
+    const [firstDefault] = defaultOpenSet;
+    if (firstDefault == null) return;
+    const anchorId = isGauntlet ? roundAnchorId(firstDefault) : weekAnchorId(firstDefault);
+    document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [tab, scrollTargetId, isGauntlet, defaultOpenSet]);
+
   const scheduleControls = tab === 'schedule' && (
     <>
       {currentPlayerId !== null && (

@@ -539,10 +539,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
         case 'ef': aVal = a.enemies_flashed; bVal = b.enemies_flashed; break;
         case 'pl': aVal = a.plants; bVal = b.plants; break;
         case 'df': aVal = a.defuses; bVal = b.defuses; break;
-        case 'ud_r': aVal = a.utility_damage / (a.rounds_played || 1); bVal = b.utility_damage / (b.rounds_played || 1); break;
-        case 'fa_r': aVal = a.flash_assists / (a.rounds_played || 1); bVal = b.flash_assists / (b.rounds_played || 1); break;
         case 'fltk': aVal = a.flashes_leading_to_kill; bVal = b.flashes_leading_to_kill; break;
-        case 'ef_r': aVal = a.enemies_flashed / (a.rounds_played || 1); bVal = b.enemies_flashed / (b.rounds_played || 1); break;
         case 'ef_flash':
           aVal = a.enemies_flashed / (a.flashes_thrown || 1);
           bVal = b.enemies_flashed / (b.flashes_thrown || 1);
@@ -581,13 +578,10 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
             <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
               <SortableTh label="Utility Damage" title="Damage dealt with grenades (HE, molotov, incendiary) — sourced from CS2's own m_iUtilityDamage engine accumulator, which combines both" sortKey="ud" state={sort} onClick={toggleSort} />
-              <SortableTh label="Util Dmg/Round" title="Utility damage per round" sortKey="ud_r" state={sort} onClick={toggleSort} />
               <SortableTh label="Teamflash Duration" title="Total seconds spent blinding teammates — subtracted from Utility Score" sortKey="tf" state={sort} onClick={toggleSort} />
               <SortableTh label="Flash Assists" title="Kills by a teammate on an enemy you flashbanged" sortKey="fa" state={sort} onClick={toggleSort} />
-              <SortableTh label="Flash Assists/Round" title="Flash assists per round" sortKey="fa_r" state={sort} onClick={toggleSort} />
               <SortableTh label="Flashes → Kill" title="Enemies killed by anyone (including you) while still blinded by your flash — Leetify's flash-effectiveness definition" sortKey="fltk" state={sort} onClick={toggleSort} />
               <SortableTh label="Enemies Flashed" title="Enemy players blinded by your flashbangs" sortKey="ef" state={sort} onClick={toggleSort} />
-              <SortableTh label="Enemies Flashed/Round" title="Enemies flashed per round" sortKey="ef_r" state={sort} onClick={toggleSort} />
               <SortableTh label="Enemies Flashed/Flash" title="Enemies flashed (1.1s+) per flashbang thrown" sortKey="ef_flash" state={sort} onClick={toggleSort} />
               <SortableTh label="Avg Blind/Flash" title="Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+" sortKey="blind_flash" state={sort} onClick={toggleSort} />
               <SortableTh label="Plants" title="Bomb plants" sortKey="pl" state={sort} onClick={toggleSort} />
@@ -601,18 +595,14 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
           </thead>
           <tbody>
             {sorted.map((a) => {
-              const rp = a.rounds_played || 1;
               return (
                 <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                   {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
                   <td className={tdRight}>{a.utility_damage}</td>
-                  <td className={tdRight}>{fmtNum(a.utility_damage / rp, 1)}</td>
                   <td className={tdRight}>{fmtNum(a.teamflash_duration, 1)}</td>
                   <td className={tdRight}>{a.flash_assists}</td>
-                  <td className={tdRight}>{fmtNum(a.flash_assists / rp, 2)}</td>
                   <td className={tdRight}>{a.flashes_leading_to_kill}</td>
                   <td className={tdRight}>{a.enemies_flashed}</td>
-                  <td className={tdRight}>{fmtNum(a.enemies_flashed / rp, 2)}</td>
                   <td className={tdRight}>{fmtNum(a.enemies_flashed / (a.flashes_thrown || 1), 2)}</td>
                   <td className={tdRight}>{fmtNum(a.blind_duration_max_sum / (a.effective_flashes || 1), 2)}</td>
                   <td className={tdRight}>{a.plants}</td>
@@ -743,7 +733,6 @@ interface SinglePlayerTiles {
 }
 
 function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: AggregatedSab[], kills: MatchKillRow[]): SinglePlayerTiles {
-  const rp = agg.rounds_played || 1;
   const totalDuels = agg.opening_kills + agg.opening_deaths;
   const clutchAttempts = agg.clutch_1v1_attempts + agg.clutch_1v2_attempts;
   const clutchWins = agg.clutch_1v1_wins + agg.clutch_1v2_wins;
@@ -783,13 +772,10 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
 
   const utility: StatTile[] = [
     { label: 'Utility Damage', title: 'Damage dealt with grenades (HE, molotov, incendiary) — sourced from CS2\'s own m_iUtilityDamage engine accumulator, which combines both', value: agg.utility_damage },
-    { label: 'Util Dmg/Round', title: 'Utility damage per round', value: fmtNum(agg.utility_damage / rp, 1) },
     { label: 'Teamflash Duration', title: 'Total seconds spent blinding teammates — subtracted from Utility Score', value: fmtNum(agg.teamflash_duration, 1) },
     { label: 'Flash Assists', title: 'Kills by a teammate on an enemy you flashbanged', value: agg.flash_assists },
-    { label: 'Flash Assists/Round', title: 'Flash assists per round', value: fmtNum(agg.flash_assists / rp, 2) },
     { label: 'Flashes → Kill', title: 'Enemies killed by anyone (including you) while still blinded by your flash — Leetify\'s flash-effectiveness definition', value: agg.flashes_leading_to_kill },
     { label: 'Enemies Flashed', title: 'Enemy players blinded by your flashbangs', value: agg.enemies_flashed },
-    { label: 'Enemies Flashed/Round', title: 'Enemies flashed per round', value: fmtNum(agg.enemies_flashed / rp, 2) },
     { label: 'Enemies Flashed/Flash', title: 'Enemies flashed (1.1s+) per flashbang thrown', value: fmtNum(agg.enemies_flashed / (agg.flashes_thrown || 1), 2) },
     { label: 'Avg Blind/Flash', title: 'Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+', value: fmtNum(agg.blind_duration_max_sum / (agg.effective_flashes || 1), 2) },
     { label: 'Plants', title: 'Bomb plants', value: agg.plants },
