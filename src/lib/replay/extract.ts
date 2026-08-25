@@ -464,19 +464,23 @@ function collectEvents(
     });
   }
 
-  // Bomb plants / defuses
+  // Bomb plants / defuses — bucketed by tick (like kills above), not `total_rounds_played + 1`:
+  // a plant/defuse whose tick falls after that round's own `round_end` has the counter already
+  // incremented, so the round-counter math would misfile it into the next round, where it reads
+  // as happening before that round's own action has even started.
   const plantRows = parseEvent(demoBuffer, 'bomb_planted', ['X', 'Y'], [
     'total_rounds_played',
     'site',
   ]) as Record<string, unknown>[];
   for (const p of plantRows) {
-    const round = Number(p.total_rounds_played ?? -1) + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const tick = Number(p.tick ?? 0);
+    const round = roundForTick(tick);
+    if (round === null || !context.liveRounds.has(round)) continue;
     const siteRaw = pick<unknown>(p, ['site']);
     const site = siteRaw === 0 || siteRaw === 'A' ? 'A' : siteRaw === 1 || siteRaw === 'B' ? 'B' : null;
     push(round, {
       type: 'plant',
-      tick: Number(p.tick ?? 0),
+      tick,
       playerId: playerIdOf(pick<string>(p, ['user_steamid'])),
       site,
       x: Number(pick<number>(p, ['user_X', 'X']) ?? 0),
@@ -488,11 +492,12 @@ function collectEvents(
     'total_rounds_played',
   ]) as Record<string, unknown>[];
   for (const d of defuseRows) {
-    const round = Number(d.total_rounds_played ?? -1) + 1;
-    if (!context.liveRounds.has(round)) continue;
+    const tick = Number(d.tick ?? 0);
+    const round = roundForTick(tick);
+    if (round === null || !context.liveRounds.has(round)) continue;
     push(round, {
       type: 'defuse',
-      tick: Number(d.tick ?? 0),
+      tick,
       playerId: playerIdOf(pick<string>(d, ['user_steamid'])),
       x: Number(pick<number>(d, ['user_X', 'X']) ?? 0),
       y: Number(pick<number>(d, ['user_Y', 'Y']) ?? 0),
