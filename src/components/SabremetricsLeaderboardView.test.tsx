@@ -11,9 +11,8 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
 import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
-import { zeroSabFields } from '@/lib/test-support/sabFields';
+import { sabremetricStatRow } from '@/lib/test-support/sabFields';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
-import type { SabremetricStatRow } from '@/lib/queries';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
 
@@ -22,15 +21,8 @@ beforeEach(() => {
   nextNavigationMock.setPathname('/players/1');
 });
 
-function row(overrides: Partial<SabremetricStatRow> = {}): SabremetricStatRow {
-  return {
-    player_id: 1,
-    player_name: 'Alice',
-    match_id: 1,
-    rounds_played: 20,
-    sab: zeroSabFields(),
-    ...overrides,
-  };
+function row() {
+  return sabremetricStatRow({ player_id: 1, match_id: 1 });
 }
 
 describe('SabremetricsLeaderboardView — sub-tab URL state', () => {

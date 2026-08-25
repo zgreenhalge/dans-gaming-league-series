@@ -1,4 +1,5 @@
 import type { SabFields } from '../types';
+import type { SabremetricStatRow } from '../queries';
 
 /** A zeroed `SabFields`, overridable per test — the shared "override-style" fixture builder for
  *  every test suite that needs a sabremetrics row (`queries-sabremetrics.test.ts`,
@@ -20,6 +21,20 @@ export function zeroSabFields(overrides: Partial<SabFields> = {}): SabFields {
     spray_shots_fired: 0, spray_shots_hit: 0, smokes_blocking_push: 0, ct_smokes_thrown: 0,
     unused_util_value_on_death_total: 0,
     rounds_dropped_on_reload_total: 0, reloads_total: 0,
+    ...overrides,
+  };
+}
+
+/** A default `SabremetricStatRow` for one player/match, overridable — shared by
+ *  `queries-sabremetrics.test.ts` and `SabremetricsLeaderboardView.test.tsx` so both build the same
+ *  shape instead of two independent copies that can drift. */
+export function sabremetricStatRow(
+  overrides: Partial<SabremetricStatRow> & { player_id: number; match_id: number },
+): SabremetricStatRow {
+  return {
+    player_name: `#${overrides.player_id}`,
+    rounds_played: 24,
+    sab: zeroSabFields(),
     ...overrides,
   };
 }
