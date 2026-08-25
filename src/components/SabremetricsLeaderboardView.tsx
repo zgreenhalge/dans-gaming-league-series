@@ -20,7 +20,7 @@ import { tabCls } from '@/lib/util';
 import EmptyState from './EmptyState';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
 import { WeaponIcon } from './icons/WeaponIcon';
-import { resolveTab, useTabState } from './useTabState';
+import { useTabState } from './useTabState';
 
 // Side-tint helper (CT/T, not SHIRTS/SKINS) — matches MatchTabView.tsx's own factionClass(),
 // duplicated locally per this codebase's existing pattern of small per-file copies (also
@@ -958,7 +958,6 @@ const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'utility', label: 'Utility' },
   { key: 'plus', label: 'Stats Plus' },
 ];
-const ALL_SUB_TAB_KEYS: SubTab[] = ALL_SUB_TABS.map((t) => t.key);
 
 /** Renders `render(agg)` once per `groups`, filtered to that group's `playerIds` and wrapped in
  *  its `header` (typically a `<TeamHeader>`, supplied by the caller) and side tint — the
@@ -1013,12 +1012,11 @@ export default function SabremetricsLeaderboardView({
 }) {
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);
   const leagueAggregated = useMemo(() => aggregateRows(leagueRows ?? rows), [leagueRows, rows]);
+  // `showPlusStats` is a static prop, not data that arrives after this first render, so `subTabs`
+  // is already the right key list to validate against — no second `resolveTab` stage needed (unlike
+  // `SeasonTabView`, which filters its tab list on data that isn't known until render).
   const subTabs = showPlusStats ? ALL_SUB_TABS : ALL_SUB_TABS.filter((t) => t.key !== 'plus');
-  // Full static key list here (not `subTabs`, which drops 'plus' when `showPlusStats` is false) —
-  // `resolveTab` below does the second-stage fallback against whichever subset is actually shown,
-  // same two-stage pattern as `SeasonTabView`'s own tab bar.
-  const [rawSub, setSub] = useTabState(ALL_SUB_TAB_KEYS, 'mechanics', 'sub');
-  const sub = resolveTab(rawSub, subTabs);
+  const [sub, setSub] = useTabState(subTabs.map((t) => t.key), 'mechanics', 'sub');
   /** `null` = each player's favorite weapon (default); a weapon name = that weapon for everyone.
    *  Lives here, not inside `WeaponsTable`, so a match page's two team tables (and the
    *  single-player tile view) share one selection and one dropdown. */
