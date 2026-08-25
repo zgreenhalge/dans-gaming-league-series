@@ -329,6 +329,14 @@ chosen from `allWeaponsWithKills()` — every weapon with at least one credited 
 scope, sorted by total kills descending. A specific-weapon selection a player has no kills/deaths with
 still renders a zeroed row rather than being hidden, so the filter always shows every player.
 
+### Flair
+
+The Flair sub-tab surfaces the off-meta kill counts on their own, totaled across every weapon rather
+than broken out per-weapon like the Weapons sub-tab (`aggregateFlairKillStats()`,
+`src/lib/queries/kills.ts`): `No-scope`, `Wallbang`, and `Blind` sum the same-named counters from
+`aggregateWeaponKillStats()` across all of a player's weapons; `Knife` is
+`aggregateKillCategoryStats()`'s `melee` category total (knives/bayonets), not a separate collector.
+
 ### Player Rating (not yet implemented)
 
 A weighted sabremetric composite for individual performance. Independent from the

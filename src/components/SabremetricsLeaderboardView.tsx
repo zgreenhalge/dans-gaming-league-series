@@ -7,12 +7,14 @@ import {
   computeLeagueAverages,
   computePlusStats,
   aggregateWeaponKillStats,
+  aggregateFlairKillStats,
   allWeaponsWithKills,
   resolveWeaponStat,
   type AggregatedSab,
   type SabremetricStatRow,
   type MatchKillRow,
   type WeaponKillStat,
+  type FlairKillStat,
 } from '@/lib/queries';
 import { tabCls } from '@/lib/util';
 import EmptyState from './EmptyState';
@@ -452,6 +454,82 @@ function WeaponsTable({ aggregated, kills, selectedWeapon, singlePlayer, showHea
   );
 }
 
+// --- Flair ---
+//
+// Off-meta kill counts worth showing off on their own — no-scope/wallbang/blind/knife kills,
+// totaled across every weapon (`aggregateFlairKillStats()`) rather than broken out per-weapon
+// like the Weapons sub-tab above.
+
+interface PlayerFlairRow {
+  player_id: number;
+  player_name: string;
+  flair: FlairKillStat;
+}
+
+function FlairTable({ aggregated, kills, singlePlayer, showHeading = true }: {
+  aggregated: AggregatedSab[];
+  kills: MatchKillRow[];
+  singlePlayer: boolean;
+  showHeading?: boolean;
+}) {
+  const [sort, toggleSort] = useSortState('noscope');
+
+  const rows = useMemo<PlayerFlairRow[]>(
+    () => aggregated.map((a) => ({
+      player_id: a.player_id,
+      player_name: a.player_name,
+      flair: aggregateFlairKillStats(kills, a.player_id),
+    })),
+    [aggregated, kills],
+  );
+
+  const sorted = useMemo(() => {
+    const copy = [...rows];
+    copy.sort((a, b) => {
+      let aVal: number, bVal: number;
+      switch (sort.col) {
+        case 'noscope': aVal = a.flair.noscopeKills; bVal = b.flair.noscopeKills; break;
+        case 'wallbang': aVal = a.flair.wallbangKills; bVal = b.flair.wallbangKills; break;
+        case 'blind': aVal = a.flair.blindKills; bVal = b.flair.blindKills; break;
+        case 'knife': aVal = a.flair.knifeKills; bVal = b.flair.knifeKills; break;
+        default: return 0;
+      }
+      return sort.asc ? aVal - bVal : bVal - aVal;
+    });
+    return copy;
+  }, [rows, sort]);
+
+  return (
+    <div className="my-6">
+      {showHeading && <h3 className="text-sm font-semibold mb-3">Flair</h3>}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-max border-collapse text-xs">
+          <thead>
+            <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
+              {!singlePlayer && <th className={playerThCls}>Player</th>}
+              <SortableTh label="No-scope" title="No-scope kills, across every weapon" sortKey="noscope" state={sort} onClick={toggleSort} />
+              <SortableTh label="Wallbang" title="Wallbang kills (bullet penetrated a surface), across every weapon" sortKey="wallbang" state={sort} onClick={toggleSort} />
+              <SortableTh label="Blind" title="Kills scored while the attacker was flashed, across every weapon" sortKey="blind" state={sort} onClick={toggleSort} />
+              <SortableTh label="Knife" title="Knife kills" sortKey="knife" state={sort} onClick={toggleSort} />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((r) => (
+              <tr key={r.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
+                <td className={tdRight}>{r.flair.noscopeKills}</td>
+                <td className={tdRight}>{r.flair.wallbangKills}</td>
+                <td className={tdRight}>{r.flair.blindKills}</td>
+                <td className={tdRight}>{r.flair.knifeKills}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function WeaponBar({ weapon, kills, maxKills }: { weapon: string; kills: number; maxKills: number }) {
   const pctWidth = maxKills > 0 ? Math.max(0, Math.min(100, (kills / maxKills) * 100)) : 0;
   return (
@@ -742,6 +820,8 @@ interface SinglePlayerTiles {
   /** Rendered as `WeaponBar`s below the weapons tiles — a ranked list, not a fixed small set of
    *  named metrics, so it doesn't fit the tile grid's label/value shape. */
   topWeapons: WeaponKillStat[];
+  /** No-scope/wallbang/blind/knife kills, totaled across every weapon — see `FlairTable`. */
+  flair: StatTile[];
   trades: StatTile[];
   utility: StatTile[];
   plus: StatTile[];
@@ -826,7 +906,15 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   const weaponStats = aggregateWeaponKillStats(kills, agg.player_id);
   const topWeapons = weaponStats.filter((w) => w.kills > 0).slice(0, 8);
 
-  return { impact, duels, mechanics, weaponStats, topWeapons, trades, utility, plus: plusTiles };
+  const flairStat = aggregateFlairKillStats(kills, agg.player_id);
+  const flair: StatTile[] = [
+    { label: 'No-scope', title: 'No-scope kills, across every weapon', value: flairStat.noscopeKills },
+    { label: 'Wallbang', title: 'Wallbang kills (bullet penetrated a surface), across every weapon', value: flairStat.wallbangKills },
+    { label: 'Blind', title: 'Kills scored while the attacker was flashed, across every weapon', value: flairStat.blindKills },
+    { label: 'Knife', title: 'Knife kills', value: flairStat.knifeKills },
+  ];
+
+  return { impact, duels, mechanics, weaponStats, topWeapons, flair, trades, utility, plus: plusTiles };
 }
 
 /** The single-player counterpart of `resolvePlayerWeaponRow()`'s table cells — same resolved
@@ -851,15 +939,18 @@ function buildWeaponTiles(weaponStats: WeaponKillStat[], selectedWeapon: string 
 // single-player tile grids) — see the Impact/Mechanics/Trades split above. One tab state drives
 // both render paths so they never drift out of sync with each other.
 
-type SubTab = 'impact' | 'duels' | 'mechanics' | 'weapons' | 'trades' | 'utility' | 'plus';
+type SubTab = 'impact' | 'duels' | 'mechanics' | 'weapons' | 'flair' | 'trades' | 'utility' | 'plus';
 
 // Ordered to roughly match Leetify's match-page grouping (Aim, then situational Duels/Trades,
 // then Impact, then Utility) — see #173's Leetify-parity discussion. Weapons sits right after Aim
-// (#452) since both are gun-choice/precision stats. Stats Plus has no Leetify analog (it's DGLS's
-// own league-relative composite), so it stays last.
+// (#452) since both are gun-choice/precision stats; Flair sits right after Weapons (#465) since
+// it's the same per-weapon kill data rolled up into all-weapons totals instead of broken out by
+// gun. Stats Plus has no Leetify analog (it's DGLS's own league-relative composite), so it stays
+// last.
 const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'mechanics', label: 'Aim' },
   { key: 'weapons', label: 'Weapons' },
+  { key: 'flair', label: 'Flair' },
   { key: 'duels', label: 'Opening Duels' },
   { key: 'trades', label: 'Trades' },
   { key: 'impact', label: 'Impact' },
@@ -977,6 +1068,7 @@ export default function SabremetricsLeaderboardView({
             )}
           </div>
         )}
+        {sub === 'flair' && <StatTileGrid heading="Flair" tiles={tiles.flair} />}
         {sub === 'trades' && <StatTileGrid heading="Trades" tiles={tiles.trades} />}
         {sub === 'utility' && <StatTileGrid heading="Utility" tiles={tiles.utility} />}
         {sub === 'plus' && tiles.plus.length > 0 && (
@@ -1013,6 +1105,11 @@ export default function SabremetricsLeaderboardView({
             <WeaponsTable aggregated={agg} kills={kills} selectedWeapon={weaponFilter} singlePlayer={singlePlayer} showHeading={showHeading} />
           )} />
         </div>
+      )}
+      {sub === 'flair' && (
+        <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
+          <FlairTable aggregated={agg} kills={kills} singlePlayer={singlePlayer} showHeading={showHeading} />
+        )} />
       )}
       {sub === 'trades' && (
         <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (

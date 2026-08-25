@@ -10,6 +10,7 @@
 import assert from 'node:assert/strict';
 import {
   aggregateWeaponKillStats,
+  aggregateFlairKillStats,
   favoriteWeapon,
   allWeaponsWithKills,
   resolveWeaponStat,
@@ -140,6 +141,20 @@ test('aggregateWeaponKillStats: buckets noscope/wallbang/blind kills per weapon 
   const ak = stats.find((s) => s.weapon === 'ak47');
   assert.equal(ak?.wallbangKills, 1);
   assert.equal(ak?.blindKills, 1);
+});
+
+test('aggregateFlairKillStats: totals noscope/wallbang/blind across every weapon, plus knife kills', () => {
+  const kills = [
+    kill({ attacker: 1, victim: 2, weapon: 'awp', noscope: true }),
+    kill({ attacker: 1, victim: 3, weapon: 'deagle', noscope: true }),
+    kill({ attacker: 1, victim: 4, weapon: 'ak47', wallbang: true }),
+    kill({ attacker: 1, victim: 5, weapon: 'usp_silencer', blindKill: true }),
+    kill({ attacker: 1, victim: 6, weapon: 'knife' }),
+    kill({ attacker: 1, victim: 7, weapon: 'knife' }),
+    kill({ attacker: 2, victim: 1, weapon: 'knife' }),
+  ];
+  const flair = aggregateFlairKillStats(kills, 1);
+  assert.deepEqual(flair, { noscopeKills: 2, wallbangKills: 1, blindKills: 1, knifeKills: 2 });
 });
 
 report();
