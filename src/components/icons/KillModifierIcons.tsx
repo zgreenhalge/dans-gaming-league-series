@@ -56,3 +56,98 @@ export function HeadshotIcon({ size, ...props }: KillModifierIconProps) {
     </svg>
   );
 }
+
+/** No-scope kill badge (sniper fired unscoped), from `noscope.svg` in the same asset set. */
+export function NoscopeIcon({ size, ...props }: KillModifierIconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32.074 32.074" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path
+        d="M27.366,15.763c-0.083,1.883-0.603,3.655-1.495,5.194l0.726,0.735c1.144-1.875,1.803-4.077,1.803-6.429     c0-6.829-5.557-12.385-12.386-12.385c-2.343,0-4.535,0.654-6.406,1.788l0.73,0.73c1.535-0.886,3.3-1.402,5.176-1.485l1-0.008     c5.879,0.257,10.603,4.982,10.86,10.859L27.366,15.763z"
+        fill="currentColor"
+      />
+      <polygon points="26.406,15.763 20.7,15.763 19.69,14.763 26.395,14.763" fill="currentColor" />
+      <polygon points="16.514,4.874 16.514,11.549 15.514,10.598 15.514,4.874" fill="currentColor" />
+      <polygon points="5.611,15.763 12.443,15.763 11.448,14.763 5.622,14.763" fill="currentColor" />
+      <path
+        d="M16.514,26.615c1.907-0.084,3.699-0.616,5.252-1.529l0.728,0.728c-1.886,1.163-4.106,1.834-6.48,1.834     c-6.829,0-12.386-5.557-12.386-12.386c0-2.371,0.67-4.589,1.83-6.474L6.173,9.54c-0.903,1.546-1.429,3.328-1.512,5.223l-0.008,1     c0.257,5.879,4.982,10.603,10.86,10.86L16.514,26.615z"
+        fill="currentColor"
+      />
+      <polygon points="16.514,25.647 16.514,19.806 15.514,18.841 15.514,25.647" fill="currentColor" />
+      <rect
+        x="14.022"
+        y="-1.261"
+        width="3.827"
+        height="32.765"
+        transform="matrix(0.707 -0.7072 0.7072 0.707 -6.0247 15.7014)"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/** Wallbang (penetration) kill badge, from `penetrate.svg` in the same asset set. */
+export function WallbangIcon({ size, ...props }: KillModifierIconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path
+        d="M2.416,3.535v24.786l11.387,2.847V0.604L2.416,3.535z M7.73,15.129c-1.271,0-2.302-1.855-2.302-4.144     c0-2.289,1.031-4.144,2.302-4.144c1.271,0,2.301,1.855,2.301,4.144C10.031,13.273,9,15.129,7.73,15.129z"
+        fill="currentColor"
+      />
+      <rect x="27.349" y="10.765" width="2.591" height="0.709" fill="currentColor" />
+      <rect
+        x="26.598"
+        y="9.023"
+        width="2.057"
+        height="0.707"
+        transform="matrix(0.7026 -0.7116 0.7116 0.7026 1.5438 22.4478)"
+        fill="currentColor"
+      />
+      <rect
+        x="27.492"
+        y="11.916"
+        width="0.707"
+        height="2.058"
+        transform="matrix(0.7032 -0.711 0.711 0.7032 -0.9388 23.6404)"
+        fill="currentColor"
+      />
+      <rect
+        x="26.058"
+        y="12.806"
+        width="0.708"
+        height="1.371"
+        transform="matrix(0.9028 -0.43 0.43 0.9028 -3.2349 12.6689)"
+        fill="currentColor"
+      />
+      <rect
+        x="25.674"
+        y="8.355"
+        width="1.371"
+        height="0.707"
+        transform="matrix(0.5382 -0.8428 0.8428 0.5382 4.8332 26.2376)"
+        fill="currentColor"
+      />
+      <path d="M16.362,12.138l7.997,0.004l2.054-1.137l-2.164-1.042h-7.887V12.138z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Blind-kill badge (attacker was flashed when they got the kill), from `blind_kill.svg` in the
+ *  same asset set. */
+export function BlindKillIcon({ size, ...props }: KillModifierIconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32.074 32.074" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path
+        d="M24.653,20.562c3.162-2.137,4.701-4.76,4.701-4.76s-4.11-7.656-13.544-7.656     c-1.136,0-2.206,0.131-3.208,0.358l2.968,2.973c0.089-0.006,0.178-0.008,0.269-0.008c2.337,0,4.239,1.902,4.239,4.239     c0,0.104-0.004,0.207-0.011,0.309l1.686,1.681c0.211-0.625,0.325-1.294,0.325-1.99c0-2.104-1.045-3.961-2.64-5.091     c4.001,1.063,6.428,3.69,7.502,5.141c-0.697,0.879-1.926,2.203-3.697,3.333L24.653,20.562z M15.689,19.943     c-2.196-0.076-3.973-1.831-4.085-4.019c-0.004-0.072-0.006-0.145-0.006-0.217l-1.776-1.659c-0.146,0.528-0.224,1.084-0.224,1.659     c0,2.046,0.989,3.856,2.51,4.993c-3.536-1.093-6.071-3.513-7.314-4.927c0.732-0.869,1.927-2.111,3.537-3.207l-1.43-1.46     c-3.027,2.154-4.637,4.695-4.637,4.695s4.986,7.467,13.544,7.467c1.061,0,2.059-0.1,2.992-0.277     C18.802,22.991,15.739,19.945,15.689,19.943z"
+        fill="currentColor"
+      />
+      <rect
+        x="13.776"
+        y="-0.676"
+        width="3.827"
+        height="32.765"
+        transform="matrix(0.707 -0.7072 0.7072 0.707 -6.5109 15.6986)"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
