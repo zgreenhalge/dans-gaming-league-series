@@ -69,6 +69,20 @@ export async function getPlayersById(client: SupabaseClient = supabase): Promise
   return map;
 }
 
+/** `players` keyed by Steam ID (`players.steam_id`) instead of the internal id — for a caller
+ *  matching a player by the game server's own identifier (MatchZy's live remote-log events, e.g.)
+ *  rather than a DB-known roster. Built from `getPlayersById()` rather than a second, separately-
+ *  scoped query, same "the whole table is cheap" reasoning that function already relies on. A player
+ *  with no `steam_id` on file is skipped — it's never a valid key. */
+export async function getPlayersBySteamId(client: SupabaseClient = supabase): Promise<Map<string, Player>> {
+  const players = await getPlayersById(client);
+  const map = new Map<string, Player>();
+  for (const p of players.values()) {
+    if (p.steam_id) map.set(p.steam_id, p);
+  }
+  return map;
+}
+
 /** Resolves a linked Discord user id (`players.discord_id`) to its player row — the "me" lookup
  *  behind Discord slash commands (#396). `null` for an unlinked/unknown id. */
 export async function getPlayerByDiscordId(discordId: string): Promise<Player | null> {

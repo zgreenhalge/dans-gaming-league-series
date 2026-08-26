@@ -21,7 +21,7 @@ const adminClient = createFakeSupabaseClient(fakeDb);
 __setTestClient(adminClient);
 
 import { notifyMatchServerLive, notifyMatchScoreReported, notifyMatchLiveScore, notifyMatchReminder } from './discord-notify';
-import type { LiveScoreRow } from './demo/liveScore';
+import type { LiveScoreRow, LiveRoundPlayerStat } from './demo/liveScore';
 import { test, report } from './test-support/miniTest';
 
 interface FetchCall {
@@ -65,8 +65,18 @@ function discordState(matchId: number): Row | undefined {
   return (fakeDb.match_discord_state ?? []).find((r) => r.match_id === matchId);
 }
 
-function liveScore(matchId: number, shirts: number, skins: number, round: number | null): LiveScoreRow {
-  return { matchId, shirts, skins, round, updatedAt: new Date().toISOString() };
+function liveScore(
+  matchId: number,
+  shirts: number,
+  skins: number,
+  round: number | null,
+  players: { shirts: LiveRoundPlayerStat[]; skins: LiveRoundPlayerStat[] } | null = null,
+): LiveScoreRow {
+  return { matchId, shirts, skins, round, players, updatedAt: new Date().toISOString() };
+}
+
+function livePlayerStat(steamId: string, name: string, kills: number, deaths: number, assists: number, damage: number, roundsPlayed: number): LiveRoundPlayerStat {
+  return { steamId, name, kills, deaths, assists, damage, roundsPlayed };
 }
 
 /** A client that throws for one specific table, delegating to `adminClient` for every other —
@@ -271,8 +281,72 @@ async function main() {
     const embed = calls[0].body.embeds[0];
     assert.equal(embed.title, 'Week 1 · Match 2', 'title stays Week/Match through a live tick');
     assert.match(embed.description, /LIVE\*\*\n\*\*7-5.*Round 13/);
-    assert.equal(embed.fields, undefined, 'no box score mid-match — player stats land only once the match is scored');
+    assert.equal(embed.fields, undefined, 'no box score when the round_end event itself carried no player stats');
     assert.equal(discordState(101)?.notification_message_id, liveMessageId, 'still the same source-of-truth message');
+  });
+
+  await test('notifyMatchLiveScore: renders a live per-player box score once round_end reports player stats, falling back to the event\'s own name for an unrecognized steamid', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(101);
+    stubFetch();
+    await notifyMatchServerLive(adminClient, 101);
+
+    const { calls } = stubFetch();
+    const players = {
+      shirts: [
+        livePlayerStat('999999999999999901', 'ErinIGN', 10, 5, 2, 900, 10),
+        livePlayerStat('999999999999999902', 'FrankIGN', 8, 6, 1, 700, 10),
+      ],
+      skins: [livePlayerStat('999999999999999903', 'GraceIGN', 5, 10, 3, 500, 10)],
+    };
+    await notifyMatchLiveScore(adminClient, 101, 'round_end', liveScore(101, 7, 5, 13, players));
+    const embed = calls[0].body.embeds[0];
+    assert.equal(embed.fields?.length, 2, 'a live box score, same as the final one, is two full-width fields');
+    const shirts = embed.fields?.find((f) => f.name === 'Shirts');
+    const skins = embed.fields?.find((f) => f.name === 'Skins');
+    // None of match 101's rostered players (Erin/Frank/Grace/Heidi) have a steam_id on file — every
+    // one of these steamids is unrecognized, so each falls back to the event's own in-game name.
+    assert.match(shirts!.value, /ErinIGN\s+10\/2\/5\s+90\b/, 'ADR is damage/rounds_played so far (900/10), rounded');
+    assert.match(shirts!.value, /FrankIGN\s+8\/1\/6\s+70\b/);
+    assert.match(skins!.value, /GraceIGN\s+5\/3\/10\s+50\b/);
+  });
+
+  await test('notifyMatchLiveScore: resolves a rostered player by steam_id instead of falling back to the event\'s own name', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(101);
+    stubFetch();
+    await notifyMatchServerLive(adminClient, 101);
+
+    const erin = fakeDb.players.find((p) => p.id === 5)!; // rostered SHIRTS on match 101
+    erin.steam_id = '999999999999999901';
+    try {
+      const { calls } = stubFetch();
+      await notifyMatchLiveScore(adminClient, 101, 'round_end', liveScore(101, 7, 5, 13, {
+        shirts: [livePlayerStat('999999999999999901', 'ErinIGN', 10, 5, 2, 900, 10)],
+        skins: [],
+      }));
+      const shirts = calls[0].body.embeds[0].fields?.find((f) => f.name === 'Shirts');
+      assert.match(shirts!.value, /\bErin\s+10\/2\/5\s+90\b/, 'the roster name wins over the event\'s in-game name once steam_id matches');
+      assert.doesNotMatch(shirts!.value, /ErinIGN/);
+    } finally {
+      erin.steam_id = null;
+    }
+  });
+
+  await test('notifyMatchLiveScore: no box score fields when round_end reports player stats for one side only', async () => {
+    process.env.DISCORD_MATCH_NOTIFICATIONS_WEBHOOK_URL = 'https://discord.example/webhook';
+    resetDiscordState(101);
+    stubFetch();
+    await notifyMatchServerLive(adminClient, 101);
+
+    const { calls } = stubFetch();
+    await notifyMatchLiveScore(adminClient, 101, 'round_end', liveScore(101, 1, 0, 1, {
+      shirts: [livePlayerStat('999999999999999901', 'ErinIGN', 1, 0, 0, 90, 1)],
+      skins: [],
+    }));
+    const embed = calls[0].body.embeds[0];
+    assert.equal(embed.fields?.length, 1, 'buildMatchEmbed() only emits a field for a non-empty side, same as the final box score');
+    assert.equal(embed.fields?.[0].name, 'Shirts');
   });
 
   await test('notifyMatchLiveScore: a going_live tick with no round number omits "Round"', async () => {

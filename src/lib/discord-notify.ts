@@ -33,11 +33,12 @@
 //
 // `notifyMatchLiveScore()` fires on every `going_live`/`round_end` MatchZy event (wired from the
 // `matchzy-log` ingest route, right after `putLiveScoreEvent()` writes `live_match_score` — the same
-// table the site's own live ticker/`MatchScoreHero` subscribe to via Realtime) so the running score
-// stays current on the one message instead of the channel getting a new post per round. It takes the
-// event name and the row `putLiveScoreEvent()` already wrote as parameters rather than re-reading
-// them, and never falls back to posting a fresh message on failure — a missed round's edit just
-// means the next one tries again, not that the channel needs spam.
+// table the site's own live ticker/`MatchScoreHero` subscribe to via Realtime) so the running score,
+// plus a live per-player box score once `round_end` starts reporting one, stays current on the one
+// message instead of the channel getting a new post per round. It takes the event name and the row
+// `putLiveScoreEvent()` already wrote as parameters rather than re-reading them, and never falls back
+// to posting a fresh message on failure — a missed round's edit just means the next one tries again,
+// not that the channel needs spam.
 //
 // `notifyMatchScoreReported()` falls back to posting a new message if there's nothing to edit yet —
 // notifications were off when the server went live, that post failed, or the message was deleted out
@@ -54,7 +55,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getMatchMeta } from './seo/og';
 import { getMatchBoxScore, type MatchBoxScorePlayer, type MatchDiscordPlayer } from './queries/match';
-import type { LiveScoreRow } from './demo/liveScore';
+import { getPlayersBySteamId } from './queries/player';
+import type { LiveScoreRow, LiveRoundPlayerStat } from './demo/liveScore';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { SITE_URL } from './seo/site';
 import { discordErrorDetail } from './discord-threads';
@@ -131,6 +133,41 @@ function boxScoreTable(players: MatchBoxScorePlayer[]): string {
   const line = (name: string, kad: string, adr: string) =>
     `${name.padEnd(nameWidth)}  ${kad.padStart(kadWidth)}  ${adr.padStart(adrWidth)}`;
   return ['```', line('Player', 'K/A/D', 'ADR'), '', ...rows.map((r) => line(r.name, r.kad, r.adr)), '```'].join('\n');
+}
+
+/** Turns one side's `LiveRoundPlayerStat[]` (MatchZy's own running per-match numbers, keyed by
+ *  `steamid`) into the same `MatchBoxScorePlayer[]` shape `getMatchBoxScore()` produces from the DB,
+ *  so `boxScoreTable()`/`buildMatchEmbed()` render a live and a final box score identically. `adr` is
+ *  damage/rounds-played so far, rounded to match the whole-number convention `player_match_stats.adr`
+ *  already uses — 0 for a player with no rounds played yet (mid-round-1) rather than dividing by zero.
+ *  A `steamId` with no roster match (an unlinked sub, e.g.) falls back to the event's own `name`
+ *  instead of the `'?'` `getMatchBoxScore()` uses for that case there — the raw name is more useful
+ *  here than a placeholder, since there's no post-match roster lookup this could later self-correct
+ *  from. */
+function liveBoxScoreRow(stat: LiveRoundPlayerStat, playersBySteamId: Map<string, { name: string; discord_name_role_id: string | null }>): MatchBoxScorePlayer {
+  const player = playersBySteamId.get(stat.steamId);
+  return {
+    name: player?.name ?? stat.name,
+    discordNameRoleId: player?.discord_name_role_id ?? null,
+    kills: stat.kills,
+    assists: stat.assists,
+    deaths: stat.deaths,
+    adr: stat.roundsPlayed > 0 ? Math.round(stat.damage / stat.roundsPlayed) : 0,
+  };
+}
+
+/** Resolves `notifyMatchLiveScore()`'s `LiveScoreRow.players` (raw `steamid`-keyed stats) to a
+ *  roster-labeled box score in one query — `getPlayersBySteamId()` reads the whole `players` table
+ *  once and both sides look their players up in the same map. */
+async function buildLiveBoxScore(
+  supabaseAdmin: SupabaseClient,
+  players: { shirts: LiveRoundPlayerStat[]; skins: LiveRoundPlayerStat[] },
+): Promise<{ shirts: MatchBoxScorePlayer[]; skins: MatchBoxScorePlayer[] }> {
+  const bySteamId = await getPlayersBySteamId(supabaseAdmin);
+  return {
+    shirts: players.shirts.map((p) => liveBoxScoreRow(p, bySteamId)),
+    skins: players.skins.map((p) => liveBoxScoreRow(p, bySteamId)),
+  };
 }
 
 /** Shared embed layout for all three notification kinds. The season name is the embed's `author`
@@ -318,16 +355,19 @@ export async function notifyMatchServerLive(supabaseAdmin: SupabaseClient, match
 
 /** Posted on every `going_live`/`round_end` MatchZy event — edits the notification message in place
  *  with the running score, mirroring what `MatchScoreHero`/`LiveMatchTicker` already show from the
- *  same `live_match_score` row. `event` and `liveScore` come from the caller's own
- *  `putLiveScoreEvent()` call rather than being re-read here: `event` because `map_result` also
- *  writes a `live_match_score` row but shouldn't trigger this (its score gets superseded moments
- *  later by `notifyMatchScoreReported()` once the score route confirms the result — editing here too
- *  would just flicker), and `liveScore` to avoid a redundant read of the row the caller just wrote.
- *  No-ops (silently — there's nothing to fix by posting a fresh message mid-match) for any other
- *  event, for a `null` row, if neither `notifyMatchReminder()` nor `notifyMatchServerLive()` has left
- *  a message on record yet, or if the match already has a final score on record — a delayed/retried `round_end` delivery arriving after
- *  `notifyMatchScoreReported()` has already edited the message to its final box score must not
- *  regress it back to "LIVE", the same race `map_result` is guarded against above. */
+ *  same `live_match_score` row, plus a running per-player box score once `round_end` starts carrying
+ *  one (`liveScore.players` — always `null` for `going_live`, since no round has finished yet). `event`
+ *  and `liveScore` come from the caller's own `putLiveScoreEvent()` call rather than being re-read
+ *  here: `event` because `map_result` also writes a `live_match_score` row but shouldn't trigger this
+ *  (its score gets superseded moments later by `notifyMatchScoreReported()` once the score route
+ *  confirms the result — editing here too would just flicker), and `liveScore` to avoid a redundant
+ *  read of the row (and a redundant re-parse of the event body for its `players`) the caller just
+ *  computed. No-ops (silently — there's nothing to fix by posting a fresh message mid-match) for any
+ *  other event, for a `null` row, if neither `notifyMatchReminder()` nor `notifyMatchServerLive()` has
+ *  left a message on record yet, or if the match already has a final score on record — a
+ *  delayed/retried `round_end` delivery arriving after `notifyMatchScoreReported()` has already edited
+ *  the message to its final box score must not regress it back to "LIVE", the same race `map_result`
+ *  is guarded against above. */
 export async function notifyMatchLiveScore(
   supabaseAdmin: SupabaseClient,
   matchId: number,
@@ -342,7 +382,10 @@ export async function notifyMatchLiveScore(
   const existingMessageId = await getStoredMessageId(supabaseAdmin, matchId);
   if (!existingMessageId) return;
 
-  const meta = await fetchMatchMeta(supabaseAdmin, matchId, OPERATION_LIVE_SCORE);
+  const [meta, boxScore] = await Promise.all([
+    fetchMatchMeta(supabaseAdmin, matchId, OPERATION_LIVE_SCORE),
+    liveScore.players ? buildLiveBoxScore(supabaseAdmin, liveScore.players) : Promise.resolve(undefined),
+  ]);
   if (!meta) return;
   if (meta.score) return; // Already scored — a late round_end must not overwrite the final result.
 
@@ -350,6 +393,7 @@ export async function notifyMatchLiveScore(
   const { content, embed } = buildMatchMessage(matchId, meta, {
     statusLine: `🔴 **LIVE**\n**${liveScore.shirts}-${liveScore.skins}**${roundLabel}`,
     color: COLOR_LIVE_SCORE,
+    boxScore,
   });
   await editEmbed(supabaseAdmin, matchId, OPERATION_LIVE_SCORE, webhookUrl, existingMessageId, content, embed);
 }
