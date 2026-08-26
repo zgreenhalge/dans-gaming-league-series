@@ -60,7 +60,8 @@ import type { LiveScoreRow, LiveRoundPlayerStat } from './demo/liveScore';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { SITE_URL } from './seo/site';
 import { discordErrorDetail } from './discord-threads';
-import { formatDuration } from './util';
+import { formatDuration, deriveAdr } from './util';
+import type { Player } from './types';
 
 type MatchMeta = NonNullable<Awaited<ReturnType<typeof getMatchMeta>>>;
 
@@ -137,14 +138,14 @@ function boxScoreTable(players: MatchBoxScorePlayer[]): string {
 
 /** Turns one side's `LiveRoundPlayerStat[]` (MatchZy's own running per-match numbers, keyed by
  *  `steamid`) into the same `MatchBoxScorePlayer[]` shape `getMatchBoxScore()` produces from the DB,
- *  so `boxScoreTable()`/`buildMatchEmbed()` render a live and a final box score identically. `adr` is
- *  damage/rounds-played so far, rounded to match the whole-number convention `player_match_stats.adr`
- *  already uses — 0 for a player with no rounds played yet (mid-round-1) rather than dividing by zero.
- *  A `steamId` with no roster match (an unlinked sub, e.g.) falls back to the event's own `name`
- *  instead of the `'?'` `getMatchBoxScore()` uses for that case there — the raw name is more useful
- *  here than a placeholder, since there's no post-match roster lookup this could later self-correct
- *  from. */
-function liveBoxScoreRow(stat: LiveRoundPlayerStat, playersBySteamId: Map<string, { name: string; discord_name_role_id: string | null }>): MatchBoxScorePlayer {
+ *  so `boxScoreTable()`/`buildMatchEmbed()` render a live and a final box score identically. `adr`
+ *  goes through the same `deriveAdr()` (`util.ts`) every other damage/rounds-played ADR in the
+ *  codebase does, rounded to 2 decimals to match how a recomputed (rather than demo-stored) ADR is
+ *  always displayed. A `steamId` with no roster match (an unlinked sub, e.g.) falls back to the
+ *  event's own `name` instead of the `'?'` `getMatchBoxScore()` uses for that case there — the raw
+ *  name is more useful here than a placeholder, since there's no post-match roster lookup this could
+ *  later self-correct from. */
+function liveBoxScoreRow(stat: LiveRoundPlayerStat, playersBySteamId: Map<string, Player>): MatchBoxScorePlayer {
   const player = playersBySteamId.get(stat.steamId);
   return {
     name: player?.name ?? stat.name,
@@ -152,18 +153,21 @@ function liveBoxScoreRow(stat: LiveRoundPlayerStat, playersBySteamId: Map<string
     kills: stat.kills,
     assists: stat.assists,
     deaths: stat.deaths,
-    adr: stat.roundsPlayed > 0 ? Math.round(stat.damage / stat.roundsPlayed) : 0,
+    adr: Number(deriveAdr({ total_rounds_played: stat.roundsPlayed, total_damage: stat.damage }).toFixed(2)),
   };
 }
 
 /** Resolves `notifyMatchLiveScore()`'s `LiveScoreRow.players` (raw `steamid`-keyed stats) to a
- *  roster-labeled box score in one query — `getPlayersBySteamId()` reads the whole `players` table
- *  once and both sides look their players up in the same map. */
+ *  roster-labeled box score in one query, scoped to just the `steamid`s this event actually reported
+ *  (`round_end` fires on every round of a live match, so unlike the codebase's other "the whole table
+ *  is cheap" reads — e.g. `resolvePlayers()`, once per finished match — this one repeats often enough
+ *  per match to be worth not scanning every rostered player for it). */
 async function buildLiveBoxScore(
   supabaseAdmin: SupabaseClient,
   players: { shirts: LiveRoundPlayerStat[]; skins: LiveRoundPlayerStat[] },
 ): Promise<{ shirts: MatchBoxScorePlayer[]; skins: MatchBoxScorePlayer[] }> {
-  const bySteamId = await getPlayersBySteamId(supabaseAdmin);
+  const steamIds = [...players.shirts, ...players.skins].map((p) => p.steamId);
+  const bySteamId = await getPlayersBySteamId(steamIds, supabaseAdmin);
   return {
     shirts: players.shirts.map((p) => liveBoxScoreRow(p, bySteamId)),
     skins: players.skins.map((p) => liveBoxScoreRow(p, bySteamId)),
@@ -382,13 +386,11 @@ export async function notifyMatchLiveScore(
   const existingMessageId = await getStoredMessageId(supabaseAdmin, matchId);
   if (!existingMessageId) return;
 
-  const [meta, boxScore] = await Promise.all([
-    fetchMatchMeta(supabaseAdmin, matchId, OPERATION_LIVE_SCORE),
-    liveScore.players ? buildLiveBoxScore(supabaseAdmin, liveScore.players) : Promise.resolve(undefined),
-  ]);
+  const meta = await fetchMatchMeta(supabaseAdmin, matchId, OPERATION_LIVE_SCORE);
   if (!meta) return;
   if (meta.score) return; // Already scored — a late round_end must not overwrite the final result.
 
+  const boxScore = liveScore.players ? await buildLiveBoxScore(supabaseAdmin, liveScore.players) : undefined;
   const roundLabel = liveScore.round != null ? ` · Round ${liveScore.round}` : '';
   const { content, embed } = buildMatchMessage(matchId, meta, {
     statusLine: `🔴 **LIVE**\n**${liveScore.shirts}-${liveScore.skins}**${roundLabel}`,
