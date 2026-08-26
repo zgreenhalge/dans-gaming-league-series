@@ -19,19 +19,32 @@
 // fallback, for the rare case a score gets confirmed with no demo ever pulled (e.g. a manual override
 // after a failed DatHost pull) — by the time any demo-backed score lands, this has always already run.
 //
-// Field names for `round_end`'s payload are inferred from `map_result`'s confirmed shape (`matchid`,
-// `team1.score`/`team2.score` — `buildMatchzyConfig` fixes team1 = SHIRTS, team2 = SKINS) since
-// MatchZy's docs site couldn't be reached to confirm it directly. `parseLiveScoreEvent` fails soft
-// (returns `null`) on an unrecognized shape rather than throwing, so a wrong guess here just means the
-// live display doesn't update for that event — verify against a real match's captured payload and
-// adjust the accepted round-number keys below if needed. `map_result` reuses the same `team1`/`team2`
-// reader as `round_end` (it's the same shape, just with no round number).
+// Field names for `round_end`'s payload match `map_result`'s confirmed shape (`matchid`,
+// `team1.score`/`team2.score` — `buildMatchzyConfig` fixes team1 = SHIRTS, team2 = SKINS), plus a
+// `team1.players[]`/`team2.players[]` per-player stats list (`steamid`, `name`,
+// `stats.{kills,deaths,assists,damage,rounds_played,...}`) that both events also carry.
+// `parseLiveScoreEvent` fails soft (returns `null`) on an unrecognized shape rather than throwing, so
+// a wrong guess here just means the live display doesn't update for that event. `map_result` reuses
+// the same `team1`/`team2` reader as `round_end` (it's the same shape, just with no round number).
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ensureDemoInR2 } from './fetchFromDathost';
 import { recordOpsError, clearOpsError } from '../ops-errors';
 
 const LIVE_SCORE_CLEAR_OP = 'live_score_clear';
+
+/** One player's running per-match stats as of a `round_end`/`map_result` event — MatchZy's own
+ *  `name` is kept alongside `steamId` so a caller resolving to a rostered player can still show
+ *  *something* readable for a steam_id it doesn't recognize (an unlinked sub, e.g.). */
+export interface LiveRoundPlayerStat {
+  steamId: string;
+  name: string;
+  kills: number;
+  deaths: number;
+  assists: number;
+  damage: number;
+  roundsPlayed: number;
+}
 
 export interface LiveScoreRow {
   matchId: number;
@@ -40,6 +53,14 @@ export interface LiveScoreRow {
   /** Rounds completed so far, or `null` when not reported (`going_live`, or `map_result`, which
    *  doesn't carry a round number). */
   round: number | null;
+  /** Per-player running stats, split by side (team1 = shirts, team2 = skins) — present only for a
+   *  `round_end`/`map_result` event whose payload actually carried a `players[]` list (`going_live`
+   *  never does, since no round has happened yet). This is derived from the event body at parse time,
+   *  not a `live_match_score` column — nothing reads it back from the DB, so it's never persisted;
+   *  it exists purely for a same-request consumer (`notifyMatchLiveScore()`) to build a live box score
+   *  without a second pass over the raw body. Always `null` on a row read back via `getLiveScore()`/
+   *  `rowToLiveScore()` for that reason. */
+  players: { shirts: LiveRoundPlayerStat[]; skins: LiveRoundPlayerStat[] } | null;
   /** When this row was last written — lets a consumer that reads from more than one source (an
    *  initial GET racing a Realtime subscription, e.g. `MatchScoreHero`/`LiveMatchTicker`) tell which
    *  one is newer instead of trusting arrival order. */
@@ -57,7 +78,7 @@ export interface LiveScoreDbRow {
 }
 
 export function rowToLiveScore(matchId: number, row: LiveScoreDbRow): LiveScoreRow {
-  return { matchId, shirts: row.shirts_score, skins: row.skins_score, round: row.round, updatedAt: row.updated_at };
+  return { matchId, shirts: row.shirts_score, skins: row.skins_score, round: row.round, players: null, updatedAt: row.updated_at };
 }
 
 /** A live-score update's position in time for a given match — its `updated_at`, or `'deleted'` once
@@ -96,10 +117,38 @@ interface ParsedLiveScoreEvent {
   shirts: number;
   skins: number;
   round: number | null;
+  players: { shirts: LiveRoundPlayerStat[]; skins: LiveRoundPlayerStat[] } | null;
 }
 
-/** `going_live` seeds the display at 0-0; `round_end`/`map_result` carry the running/final score.
- *  Anything else returns `null`. */
+/** Reads one side's `players[]` list off a `round_end`/`map_result` team object, skipping any entry
+ *  missing a `steamid` or `stats` block rather than failing the whole parse over one bad entry.
+ *  Returns `[]` (not `null`) when `team.players` is absent entirely — the caller decides what an empty
+ *  list on both sides means. */
+function parsePlayerStats(team: Record<string, unknown> | undefined): LiveRoundPlayerStat[] {
+  const rawPlayers = Array.isArray(team?.players) ? team.players : [];
+  const players: LiveRoundPlayerStat[] = [];
+  for (const raw of rawPlayers) {
+    if (!raw || typeof raw !== 'object') continue;
+    const p = raw as Record<string, unknown>;
+    const steamId = String(p.steamid ?? '');
+    const stats = p.stats as Record<string, unknown> | undefined;
+    if (!steamId || !stats) continue;
+    players.push({
+      steamId,
+      name: String(p.name ?? ''),
+      kills: Number(stats.kills) || 0,
+      deaths: Number(stats.deaths) || 0,
+      assists: Number(stats.assists) || 0,
+      damage: Number(stats.damage) || 0,
+      roundsPlayed: Number(stats.rounds_played) || 0,
+    });
+  }
+  return players;
+}
+
+/** `going_live` seeds the display at 0-0 with no players yet; `round_end`/`map_result` carry the
+ *  running/final score plus each side's `players[]` list, when the payload includes one. Anything
+ *  else returns `null`. */
 function parseLiveScoreEvent(body: unknown): ParsedLiveScoreEvent | null {
   if (!body || typeof body !== 'object') return null;
   const b = body as Record<string, unknown>;
@@ -107,7 +156,7 @@ function parseLiveScoreEvent(body: unknown): ParsedLiveScoreEvent | null {
   if (!Number.isInteger(matchId) || matchId <= 0) return null;
 
   if (b.event === 'going_live') {
-    return { matchId, shirts: 0, skins: 0, round: null };
+    return { matchId, shirts: 0, skins: 0, round: null, players: null };
   }
 
   if (b.event === 'round_end' || b.event === 'map_result') {
@@ -118,17 +167,26 @@ function parseLiveScoreEvent(body: unknown): ParsedLiveScoreEvent | null {
     if (!Number.isInteger(shirts) || !Number.isInteger(skins) || shirts < 0 || skins < 0) return null;
     const roundRaw = b.round_number ?? b.roundnumber ?? b.round;
     const round = Number(roundRaw);
-    return { matchId, shirts, skins, round: Number.isInteger(round) && round >= 0 ? round : null };
+    const shirtsPlayers = parsePlayerStats(team1);
+    const skinsPlayers = parsePlayerStats(team2);
+    return {
+      matchId,
+      shirts,
+      skins,
+      round: Number.isInteger(round) && round >= 0 ? round : null,
+      players: shirtsPlayers.length > 0 || skinsPlayers.length > 0 ? { shirts: shirtsPlayers, skins: skinsPlayers } : null,
+    };
   }
 
   return null;
 }
 
 /** Parse a raw remote-log body and upsert it if it's a live-score-relevant event; a no-op (returning
- *  `null`) for any other event type. Returns the row it just wrote — not just `void` — so a caller
+ *  `null`) for any other event type. Returns the row it just wrote, plus that same event's parsed
+ *  `players` (see `LiveScoreRow.players` — never itself written to `live_match_score`) — so a caller
  *  that also needs to react to the new score (`matchzy-log`'s route, feeding `notifyMatchLiveScore()`)
- *  doesn't have to pay for a second `live_match_score` read to get back what this function already
- *  computed and wrote a moment earlier. */
+ *  doesn't have to pay for a second pass over the raw body to get back what this function already
+ *  parsed a moment earlier. */
 export async function putLiveScoreEvent(admin: SupabaseClient, body: unknown): Promise<LiveScoreRow | null> {
   const row = parseLiveScoreEvent(body);
   if (!row) return null;
@@ -143,7 +201,7 @@ export async function putLiveScoreEvent(admin: SupabaseClient, body: unknown): P
     },
     { onConflict: 'match_id' },
   );
-  return { matchId: row.matchId, shirts: row.shirts, skins: row.skins, round: row.round, updatedAt };
+  return { matchId: row.matchId, shirts: row.shirts, skins: row.skins, round: row.round, players: row.players, updatedAt };
 }
 
 export async function getLiveScore(admin: SupabaseClient, matchId: number): Promise<LiveScoreRow | null> {

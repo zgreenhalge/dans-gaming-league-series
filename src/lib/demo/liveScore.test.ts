@@ -25,7 +25,7 @@ const MATCH_ID = 100;
 // --- rowToLiveScore: snake_case DB row -> camelCase ---
 test('rowToLiveScore: maps DB columns to the camelCase shape', () => {
   const row = rowToLiveScore(MATCH_ID, { shirts_score: 5, skins_score: 3, round: 8, updated_at: '2026-01-01T00:00:00.000Z' });
-  assert.deepEqual(row, { matchId: MATCH_ID, shirts: 5, skins: 3, round: 8, updatedAt: '2026-01-01T00:00:00.000Z' });
+  assert.deepEqual(row, { matchId: MATCH_ID, shirts: 5, skins: 3, round: 8, players: null, updatedAt: '2026-01-01T00:00:00.000Z' });
 });
 
 // --- createLiveScoreGuard: out-of-order update protection ---
@@ -78,6 +78,69 @@ async function main() {
     assert.equal(row!.shirts, 3);
     assert.equal(row!.skins, 2);
     assert.equal(row!.round, 5);
+  });
+
+  await test('putLiveScoreEvent: round_end with a players[] list returns per-player stats split by side, but doesn\'t persist them', async () => {
+    const db: FakeDb = { live_match_score: [] };
+    const supabase = createFakeSupabaseClient(db);
+    const written = await putLiveScoreEvent(supabase, {
+      event: 'round_end', matchid: MATCH_ID, round_number: 17,
+      team1: {
+        score: 13,
+        players: [
+          { steamid: '76561198047509293', name: 'oof', stats: { kills: 16, deaths: 12, assists: 3, damage: 1743, rounds_played: 17 } },
+          { steamid: '76561197989938638', name: 'smigel', stats: { kills: 11, deaths: 7, assists: 2, damage: 1178, rounds_played: 17 } },
+        ],
+      },
+      team2: {
+        score: 4,
+        players: [
+          { steamid: '76561198032737314', name: 'kingfisher', stats: { kills: 10, deaths: 14, assists: 3, damage: 1133, rounds_played: 17 } },
+        ],
+      },
+    });
+    assert.deepEqual(written!.players, {
+      shirts: [
+        { steamId: '76561198047509293', name: 'oof', kills: 16, deaths: 12, assists: 3, damage: 1743, roundsPlayed: 17 },
+        { steamId: '76561197989938638', name: 'smigel', kills: 11, deaths: 7, assists: 2, damage: 1178, roundsPlayed: 17 },
+      ],
+      skins: [
+        { steamId: '76561198032737314', name: 'kingfisher', kills: 10, deaths: 14, assists: 3, damage: 1133, roundsPlayed: 17 },
+      ],
+    });
+    // Not a live_match_score column — only score/round land there.
+    const row = await getLiveScore(supabase, MATCH_ID);
+    assert.equal(row!.players, null);
+  });
+
+  await test('putLiveScoreEvent: going_live has no players[] to report', async () => {
+    const db: FakeDb = { live_match_score: [] };
+    const supabase = createFakeSupabaseClient(db);
+    const written = await putLiveScoreEvent(supabase, { event: 'going_live', matchid: MATCH_ID });
+    assert.equal(written!.players, null);
+  });
+
+  await test('putLiveScoreEvent: round_end with an empty/absent players[] on both sides reports no players', async () => {
+    const db: FakeDb = { live_match_score: [] };
+    const supabase = createFakeSupabaseClient(db);
+    const written = await putLiveScoreEvent(supabase, {
+      event: 'round_end', matchid: MATCH_ID, round_number: 1, team1: { score: 1 }, team2: { score: 0 },
+    });
+    assert.equal(written!.players, null);
+  });
+
+  await test('putLiveScoreEvent: a players[] entry missing steamid or stats is skipped, not fatal', async () => {
+    const db: FakeDb = { live_match_score: [] };
+    const supabase = createFakeSupabaseClient(db);
+    const written = await putLiveScoreEvent(supabase, {
+      event: 'round_end', matchid: MATCH_ID, round_number: 1,
+      team1: { score: 1, players: [{ name: 'no steamid', stats: { kills: 1 } }, { steamid: '111' }] },
+      team2: { score: 0, players: [{ steamid: '222', name: 'valid', stats: { kills: 5, deaths: 1, assists: 0, damage: 400, rounds_played: 1 } }] },
+    });
+    assert.deepEqual(written!.players, {
+      shirts: [],
+      skins: [{ steamId: '222', name: 'valid', kills: 5, deaths: 1, assists: 0, damage: 400, roundsPlayed: 1 }],
+    });
   });
 
   await test('putLiveScoreEvent: map_result upserts the final score (no round number)', async () => {
