@@ -140,8 +140,11 @@ function boxScoreTable(players: MatchBoxScorePlayer[]): string {
  *  `steamid`) into the same `MatchBoxScorePlayer[]` shape `getMatchBoxScore()` produces from the DB,
  *  so `boxScoreTable()`/`buildMatchEmbed()` render a live and a final box score identically. `adr`
  *  goes through the same `deriveAdr()` (`util.ts`) every other damage/rounds-played ADR in the
- *  codebase does, rounded to 2 decimals to match how a recomputed (rather than demo-stored) ADR is
- *  always displayed. A `steamId` with no roster match (an unlinked sub, e.g.) falls back to the
+ *  codebase does, capped to 2 decimal places of precision (a repeating-decimal `damage/rounds`
+ *  otherwise renders as an ugly long float) — `boxScoreTable()` still prints it with a bare
+ *  `String()`, same as the demo-stored per-match `adr` it renders for a final box score, so a value
+ *  that rounds to a whole number still shows with no trailing zeros. A `steamId` with no roster match
+ *  (an unlinked sub, e.g.) falls back to the
  *  event's own `name` instead of the `'?'` `getMatchBoxScore()` uses for that case there — the raw
  *  name is more useful here than a placeholder, since there's no post-match roster lookup this could
  *  later self-correct from. */
