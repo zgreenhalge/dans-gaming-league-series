@@ -12,7 +12,6 @@
 //
 // Auth: shared secret in `x-matchzy-token`, constant-time compared against `INGEST_REMOTE_LOG_SECRET`.
 
-import { gzipSync } from 'node:zlib';
 import { NextRequest, NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { machineSecretGuard } from '@/lib/machine-auth';
@@ -28,7 +27,6 @@ import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
 import { DEMO_INGEST_JOB_TYPE } from '@/lib/demo/ingestResult';
 import { REPLAY_EXTRACT_JOB_TYPE } from '@/lib/jobs';
 import { afterBestEffort } from '@/lib/after';
-import { putR2Object } from '@/lib/r2';
 
 /** Claims the demo-ingest job atomically before dispatching — a plain check-then-act (SELECT to see
  *  if a job's already in flight, then upsert) can't tell two concurrent map_result deliveries for the
@@ -180,19 +178,6 @@ export async function POST(req: NextRequest) {
         console.error(`matchzy-log: record live score for match ${identity.matchid} failed:`, liveScore.reason);
       } else {
         await notifyMatchLiveScore(supabaseAdmin, identity.matchid, identity.event, liveScore.value);
-      }
-
-      // Temporary diagnostic: captures one real round_end payload to a fixed debug key so its exact
-      // per-player stats shape (MatchZy's own source implies team1/team2.players[].stats.{kills,
-      // deaths, assists, damage, ...}) can be inspected before a parser is built around it. Delete
-      // this block, and the R2 object at 'debug/matchzy-round-end-sample.json', once a sample has
-      // been captured.
-      if (identity.event === 'round_end') {
-        await putR2Object(
-          'debug/matchzy-round-end-sample.json',
-          gzipSync(Buffer.from(JSON.stringify(body))),
-          { contentType: 'application/json', contentEncoding: 'gzip' },
-        ).catch((e) => console.error(`matchzy-log: debug round_end capture for match ${identity.matchid} failed:`, e));
       }
     });
   }
