@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
@@ -16,6 +17,7 @@ import MatchServerPanel from '@/components/MatchServerPanel';
 import MatchDemoReviewBlock from '@/components/MatchDemoReviewBlock';
 import MatchScoreHero from '@/components/MatchScoreHero';
 import MatchTabView from '@/components/MatchTabView';
+import { UrlStateProvider } from '@/components/UrlStateProvider';
 import RoundHistoryStrip from '@/components/RoundHistoryStrip';
 import { WinProbabilityBar } from '@/components/WinProbabilityBar';
 import { authOptions } from '@/lib/authOptions';
@@ -389,33 +391,37 @@ export default async function MatchPage({
           />
         )}
 
-        <MatchTabView
-          shirts={shirts}
-          skins={skins}
-          score={score}
-          shirtsWon={shirtsWon}
-          shirtsF={shirtsF}
-          skinsF={skinsF}
-          mvpPlayerId={mvpPlayerId}
-          currentPlayerId={currentPlayerId}
-          played={played}
-          canEnterResults={canEnterResults}
-          isCurrentUserAdmin={isCurrentUserAdmin}
-          matchId={match.id}
-          matchPlayers={stats.map((s) => ({
-            player_id: s.player_id,
-            player_name: s.player_name,
-            faction: s.faction as 'SHIRTS' | 'SKINS',
-          }))}
-          targetWinRounds={season.target_win_rounds}
-          skinsSide={match.skins_starting_side}
-          sabremetrics={sabremetrics}
-          matchKills={matchKills}
-          ehog={{ deltas: ratingDeltas, projections: ratingProjections, current: ratingCurrent }}
-          scouting={{ data: scoutingData, h2h: scoutingH2H }}
-          mapInfo={{ map, matchIds: mapMatchIds, pool: season.map_pool }}
-          recap={{ demoDownloadUrl, job: replayJob, events: replayEvents, recordingURL: match.recording_url }}
-        />
+        <Suspense>
+          <UrlStateProvider>
+            <MatchTabView
+              shirts={shirts}
+              skins={skins}
+              score={score}
+              shirtsWon={shirtsWon}
+              shirtsF={shirtsF}
+              skinsF={skinsF}
+              mvpPlayerId={mvpPlayerId}
+              currentPlayerId={currentPlayerId}
+              played={played}
+              canEnterResults={canEnterResults}
+              isCurrentUserAdmin={isCurrentUserAdmin}
+              matchId={match.id}
+              matchPlayers={stats.map((s) => ({
+                player_id: s.player_id,
+                player_name: s.player_name,
+                faction: s.faction as 'SHIRTS' | 'SKINS',
+              }))}
+              targetWinRounds={season.target_win_rounds}
+              skinsSide={match.skins_starting_side}
+              sabremetrics={sabremetrics}
+              matchKills={matchKills}
+              ehog={{ deltas: ratingDeltas, projections: ratingProjections, current: ratingCurrent }}
+              scouting={{ data: scoutingData, h2h: scoutingH2H }}
+              mapInfo={{ map, matchIds: mapMatchIds, pool: season.map_pool }}
+              recap={{ demoDownloadUrl, job: replayJob, events: replayEvents, recordingURL: match.recording_url }}
+            />
+          </UrlStateProvider>
+        </Suspense>
       </main>
     </div>
   );
