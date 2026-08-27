@@ -1,8 +1,3 @@
-// Generated from the live Supabase schema via `generate_typescript_types`. Checks every query's
-// table/column shape at compile time — regenerate after a migration changes the schema (via the
-// Supabase MCP `generate_typescript_types` tool, or `npx supabase gen types typescript`) rather
-// than hand-editing this file.
-
 export type Json =
   | string
   | number
@@ -15,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -468,6 +463,48 @@ export type Database = {
           },
         ]
       }
+      match_round_economy: {
+        Row: {
+          economy_type: string
+          equipment_value: number
+          id: number
+          match_id: number
+          player_match_stats_id: number
+          round_number: number
+        }
+        Insert: {
+          economy_type: string
+          equipment_value: number
+          id?: never
+          match_id: number
+          player_match_stats_id: number
+          round_number: number
+        }
+        Update: {
+          economy_type?: string
+          equipment_value?: number
+          id?: never
+          match_id?: number
+          player_match_stats_id?: number
+          round_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_round_economy_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_round_economy_player_fkey"
+            columns: ["player_match_stats_id"]
+            isOneToOne: false
+            referencedRelation: "player_match_stats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_rounds: {
         Row: {
           id: number
@@ -533,6 +570,58 @@ export type Database = {
             foreignKeyName: "match_server_state_match_id_fkey"
             columns: ["match_id"]
             isOneToOne: true
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_utility_throws: {
+        Row: {
+          blind_duration: number
+          blinded_player_match_stats_id: number
+          flasher_player_match_stats_id: number
+          id: number
+          match_id: number
+          round_number: number
+          tick: number
+        }
+        Insert: {
+          blind_duration: number
+          blinded_player_match_stats_id: number
+          flasher_player_match_stats_id: number
+          id?: never
+          match_id: number
+          round_number: number
+          tick: number
+        }
+        Update: {
+          blind_duration?: number
+          blinded_player_match_stats_id?: number
+          flasher_player_match_stats_id?: number
+          id?: never
+          match_id?: number
+          round_number?: number
+          tick?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_utility_throws_blinded_fkey"
+            columns: ["blinded_player_match_stats_id"]
+            isOneToOne: false
+            referencedRelation: "player_match_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_utility_throws_flasher_fkey"
+            columns: ["flasher_player_match_stats_id"]
+            isOneToOne: false
+            referencedRelation: "player_match_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_utility_throws_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
             referencedRelation: "matches"
             referencedColumns: ["id"]
           },
@@ -681,6 +770,7 @@ export type Database = {
           economy_type: string
           headshot_hits: number
           id: number
+          match_id: number
           player_match_stats_id: number
           rounds_played: number
           shots_fired: number
@@ -691,6 +781,7 @@ export type Database = {
           economy_type: string
           headshot_hits?: number
           id?: never
+          match_id: number
           player_match_stats_id: number
           rounds_played?: number
           shots_fired?: number
@@ -701,12 +792,20 @@ export type Database = {
           economy_type?: string
           headshot_hits?: number
           id?: never
+          match_id?: number
           player_match_stats_id?: number
           rounds_played?: number
           shots_fired?: number
           shots_hit?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "player_match_economy_stats_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "player_match_economy_stats_player_match_stats_id_fkey"
             columns: ["player_match_stats_id"]
@@ -973,6 +1072,7 @@ export type Database = {
           damage_dealt: number
           headshot_hits: number
           id: number
+          match_id: number
           player_match_stats_id: number
           rounds_played: number
           shots_fired: number
@@ -983,6 +1083,7 @@ export type Database = {
           damage_dealt?: number
           headshot_hits?: number
           id?: never
+          match_id: number
           player_match_stats_id: number
           rounds_played?: number
           shots_fired?: number
@@ -993,6 +1094,7 @@ export type Database = {
           damage_dealt?: number
           headshot_hits?: number
           id?: never
+          match_id?: number
           player_match_stats_id?: number
           rounds_played?: number
           shots_fired?: number
@@ -1000,6 +1102,13 @@ export type Database = {
           weapon_category?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "player_match_weapon_stats_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "player_match_weapon_stats_player_match_stats_id_fkey"
             columns: ["player_match_stats_id"]
@@ -1520,12 +1629,7 @@ export type Database = {
         Returns: Json
       }
       schedule_match_reminder: {
-        // p_scheduled_at is `string` (no `| null`) in raw `generate_typescript_types` output —
-        // Postgres doesn't track per-parameter nullability for a plpgsql function the way it does
-        // column NOT NULL, so the generator has no signal here; kept as `string | null` by hand
-        // since the function explicitly accepts and branches on a null p_scheduled_at (clearing a
-        // match's schedule), and PATCH /api/matches/[id]/schedule/route.ts passes exactly that.
-        Args: { p_match_id: number; p_scheduled_at: string | null }
+        Args: { p_match_id: number; p_scheduled_at: string }
         Returns: boolean
       }
     }
