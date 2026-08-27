@@ -26,6 +26,8 @@ import { persistSabremetrics, clearSabremetrics } from './demo/sabremetrics';
 import { persistWeaponStats, clearWeaponStats } from './demo/weaponStats';
 import { persistMatchKills, clearMatchKills } from './demo/matchKills';
 import { persistMatchRounds, clearMatchRounds } from './demo/matchRounds';
+import { persistMatchUtilityThrows, clearMatchUtilityThrows } from './demo/matchUtilityThrows';
+import { persistMatchRoundEconomy, clearMatchRoundEconomy } from './demo/matchRoundEconomy';
 import { clearLiveScoreBestEffort } from './demo/liveScore';
 import { resolveAndPropagate } from './gauntlet-engine';
 import { checkSeasonCompletion, checkGauntletCompletion } from './season-lifecycle';
@@ -34,7 +36,10 @@ import { advanceJobStatus, matchJobKey } from './background-jobs';
 import { DEMO_INGEST_JOB_TYPE } from './demo/ingestResult';
 import { notifyMatchScoreReported } from './discord-notify';
 import { closeMatchThread } from './discord-threads';
-import type { DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound, RoundHistoryEntry } from './types';
+import type {
+  DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
+  DemoMatchUtilityThrow, DemoMatchRoundEconomy, RoundHistoryEntry,
+} from './types';
 
 type PlayerStatInput = {
   player_id: number;
@@ -127,6 +132,8 @@ export interface WriteMatchScoreInput {
   weaponStats?: DemoWeaponStat[];
   matchKills?: DemoMatchKill[];
   matchRounds?: DemoMatchRound[];
+  matchUtilityThrows?: DemoMatchUtilityThrow[];
+  matchRoundEconomy?: DemoMatchRoundEconomy[];
   round_history?: unknown;
   /** Parser warnings, forwarded so a single elimination-resolved match can learn a steam id. Only
    *  applied when `opts.learnSteamIds` is set. */
@@ -207,7 +214,10 @@ export async function writeMatchScore(
   input: WriteMatchScoreInput,
   opts: WriteMatchScoreOptions = {},
 ): Promise<WriteMatchScoreResult> {
-  const { shirts, skins, player_stats, sabremetrics, weaponStats, matchKills, matchRounds, round_history, warnings } = input;
+  const {
+    shirts, skins, player_stats, sabremetrics, weaponStats, matchKills, matchRounds,
+    matchUtilityThrows, matchRoundEconomy, round_history, warnings,
+  } = input;
 
   if (typeof shirts !== 'number' || typeof skins !== 'number' || !Number.isInteger(shirts) || !Number.isInteger(skins)) {
     return { ok: false, error: 'shirts and skins must be integers', status: 400 };
@@ -401,6 +411,32 @@ export async function writeMatchScore(
       } catch (e) {
         console.error('Match rounds write/delete failed (non-fatal):', e);
         await recordOpsError(supabaseAdmin, 'match', matchId, 'match_rounds_persist', `Match rounds write failed: ${(e as Error).message}`);
+      }
+    })(),
+    (async () => {
+      try {
+        if (matchUtilityThrows && matchUtilityThrows.length > 0) {
+          await persistMatchUtilityThrows(matchId, matchUtilityThrows);
+        } else {
+          await clearMatchUtilityThrows(matchId);
+        }
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'match_utility_throws_persist');
+      } catch (e) {
+        console.error('Match utility throws write/delete failed (non-fatal):', e);
+        await recordOpsError(supabaseAdmin, 'match', matchId, 'match_utility_throws_persist', `Match utility throws write failed: ${(e as Error).message}`);
+      }
+    })(),
+    (async () => {
+      try {
+        if (matchRoundEconomy && matchRoundEconomy.length > 0) {
+          await persistMatchRoundEconomy(matchId, matchRoundEconomy);
+        } else {
+          await clearMatchRoundEconomy(matchId);
+        }
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'match_round_economy_persist');
+      } catch (e) {
+        console.error('Match round economy write/delete failed (non-fatal):', e);
+        await recordOpsError(supabaseAdmin, 'match', matchId, 'match_round_economy_persist', `Match round economy write failed: ${(e as Error).message}`);
       }
     })(),
   ]);

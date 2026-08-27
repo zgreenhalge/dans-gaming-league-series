@@ -288,10 +288,34 @@ export interface DemoMatchRound {
   win_reason: RoundCondition;
 }
 
+// `match_utility_throws`: one row per `player_blind` event — the primitive that makes "which flash
+// led to this kill/assist" queryable, not because any single flash is browsable on its own. Self-
+// flashes (flasher === blinded) are kept, not filtered — same "downstream queries decide" convention
+// `DemoMatchKill` follows for teamkills.
+export interface DemoMatchUtilityThrow {
+  round_number: number;
+  flasher_player_id: number;
+  blinded_player_id: number;
+  blind_duration: number;
+  tick: number;
+}
+
+// `match_round_economy`: one row per (round, player) — round-grain, not shot-grain, since
+// `economy_type` is seeded from the round's own eco/force/full classification independent of
+// whether the player fired a shot that round (see docs/demo-ingestion.md).
+export interface DemoMatchRoundEconomy {
+  round_number: number;
+  player_id: number;
+  economy_type: string;
+  equipment_value: number;
+}
+
 export interface ParsedDemoSabremetricsResult {
   sabremetrics: DemoSabremetricStat[];
   weaponStats: DemoWeaponStat[];
   matchKills: DemoMatchKill[];
   matchRounds: DemoMatchRound[];
+  matchUtilityThrows: DemoMatchUtilityThrow[];
+  matchRoundEconomy: DemoMatchRoundEconomy[];
   warnings: string[];
 }

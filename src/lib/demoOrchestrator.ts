@@ -2,7 +2,7 @@ import { parseEvent, parseTicks } from '@laihoe/demoparser2';
 import type { RosterEntry } from './demoParser';
 import type {
   SabFields, DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
-  ParsedDemoSabremetricsResult,
+  DemoMatchUtilityThrow, DemoMatchRoundEconomy, ParsedDemoSabremetricsResult,
 } from './types';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
 import { buildMatchContext, collectMidairAttackers, dedupeDeathEvents, findMatchStartTick, type PlayerDeathRow, type PlayerHurtRow } from './parsers/matchContext';
@@ -14,7 +14,9 @@ import { collectKast } from './parsers/kast';
 import { collectMultikill } from './parsers/multikill';
 import { collectTeamkill } from './parsers/teamkill';
 import { collectClutch } from './parsers/clutch';
-import { collectUtility, type PlayerBlindRow, type WeaponFireRow } from './parsers/utility';
+import {
+  collectUtility, collectMatchUtilityThrows, type PlayerBlindRow, type WeaponFireRow,
+} from './parsers/utility';
 import { collectObjectives, type BombEventRow } from './parsers/objectives';
 import { collectTrades, computeTradeOpportunities, neededTradeTicks } from './parsers/trades';
 import { collectHeGrenades } from './parsers/heGrenade';
@@ -33,7 +35,8 @@ import {
   collectRoundsDropped, neededReloadTicks, type WeaponReloadRow, type PlayerReloadStateRow,
 } from './parsers/reload';
 import {
-  classifyRoundEconomy, neededEconomyTicks, type RoundFreezeEndRow, type PlayerEquipmentRow,
+  classifyRoundEconomy, collectMatchRoundEconomy, neededEconomyTicks,
+  type RoundFreezeEndRow, type PlayerEquipmentRow,
 } from './parsers/economy';
 import { collectWeaponClassStats, collectEconomyStats, collectMatchKills } from './parsers/weaponStats';
 
@@ -165,6 +168,7 @@ export function parseDemoSabremetrics(
     warnings.push(...context.warnings);
     return {
       sabremetrics: [], weaponStats: [], matchKills: [], matchRounds: [],
+      matchUtilityThrows: [], matchRoundEconomy: [],
       warnings: [...warnings, 'No live rounds found in demo.'],
     };
   }
@@ -356,6 +360,23 @@ export function parseDemoSabremetrics(
     win_reason: r.winReason,
   }));
 
+  const utilityThrowFacts = collectMatchUtilityThrows(blindEvents, context, steamIds);
+  const matchUtilityThrows: DemoMatchUtilityThrow[] = utilityThrowFacts.map((u) => ({
+    round_number: u.round_number,
+    flasher_player_id: playerIdOf(u.flasher_steamid)!,
+    blinded_player_id: playerIdOf(u.blinded_steamid)!,
+    blind_duration: u.blind_duration,
+    tick: u.tick,
+  }));
+
+  const roundEconomyFacts = collectMatchRoundEconomy(freezeEndEvents, equipmentRows, context, steamIds);
+  const matchRoundEconomy: DemoMatchRoundEconomy[] = roundEconomyFacts.map((e) => ({
+    round_number: e.round_number,
+    player_id: playerIdOf(e.player_steamid)!,
+    economy_type: e.economy_type,
+    equipment_value: e.equipment_value,
+  }));
+
   // 6. Merge with zero defaults
   const sabremetrics: DemoSabremetricStat[] = steamIds.map((steamId) => ({
     player_id: steamToPlayer.get(steamId)!.player_id,
@@ -403,5 +424,8 @@ export function parseDemoSabremetrics(
   // Deduplicate warnings
   const uniqueWarnings = [...new Set(warnings)];
 
-  return { sabremetrics, weaponStats, matchKills, matchRounds, warnings: uniqueWarnings };
+  return {
+    sabremetrics, weaponStats, matchKills, matchRounds, matchUtilityThrows, matchRoundEconomy,
+    warnings: uniqueWarnings,
+  };
 }

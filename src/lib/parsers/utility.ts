@@ -19,6 +19,50 @@ export interface WeaponFireRow {
   weapon: string;
 }
 
+export interface UtilityThrowFactRow {
+  round_number: number;
+  flasher_steamid: string;
+  blinded_steamid: string;
+  blind_duration: number;
+  tick: number;
+}
+
+/**
+ * One row per `player_blind` event — a `match_utility_throws` fact table row, not a per-player
+ * aggregate (unlike `collectUtility()` below). Kept flat so downstream queries decide at read time
+ * which flashes "count" (e.g. led to a kill/assist within some window) rather than baking that
+ * judgment into the collector — same convention `collectMatchKills()` (`weaponStats.ts`) follows
+ * for teamkills. Self-flashes (flasher === blinded) are kept too, for the same reason.
+ */
+export function collectMatchUtilityThrows(
+  blindEvents: PlayerBlindRow[],
+  context: MatchContext,
+  steamIds: string[],
+): UtilityThrowFactRow[] {
+  const steamSet = new Set(steamIds);
+  const rows: UtilityThrowFactRow[] = [];
+
+  for (const b of blindEvents) {
+    const round = roundOf(b, context);
+    if (round == null) continue;
+
+    const flasher = b.attacker_steamid;
+    const blinded = b.user_steamid;
+    if (!flasher || !steamSet.has(flasher)) continue;
+    if (!blinded || !steamSet.has(blinded)) continue;
+
+    rows.push({
+      round_number: round,
+      flasher_steamid: flasher,
+      blinded_steamid: blinded,
+      blind_duration: b.blind_duration ?? 0,
+      tick: b.tick,
+    });
+  }
+
+  return rows;
+}
+
 export function collectUtility(
   blindEvents: PlayerBlindRow[],
   deathEvents: PlayerDeathRow[],

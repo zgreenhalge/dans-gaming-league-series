@@ -26,6 +26,51 @@ export function classifyEconomy(equipmentValue: number): EconomyType {
   return 'full_buy';
 }
 
+export interface RoundEconomyFactRow {
+  round_number: number;
+  player_steamid: string;
+  economy_type: EconomyType;
+  equipment_value: number;
+}
+
+/**
+ * One row per (round, player) — a `match_round_economy` fact table row, round-grain like
+ * `match_rounds` rather than shot-grain, since a round with zero shots fired still counts toward
+ * its economy tier (see `classifyRoundEconomy()` below and docs/demo-ingestion.md). A round with no
+ * matching tick-state row (parser miss) is left out entirely, same as `classifyRoundEconomy()`.
+ */
+export function collectMatchRoundEconomy(
+  freezeEndEvents: RoundFreezeEndRow[],
+  equipmentRows: PlayerEquipmentRow[],
+  context: MatchContext,
+  steamIds: string[],
+): RoundEconomyFactRow[] {
+  const steamSet = new Set(steamIds);
+  const rows: RoundEconomyFactRow[] = [];
+
+  const rowLookup = new Map<string, PlayerEquipmentRow>();
+  for (const r of equipmentRows) rowLookup.set(`${r.steamid}::${r.tick}`, r);
+
+  for (const e of freezeEndEvents) {
+    const round = roundOf(e, context);
+    if (round == null) continue;
+
+    for (const sid of steamIds) {
+      if (!steamSet.has(sid)) continue;
+      const row = rowLookup.get(`${sid}::${e.tick}`);
+      if (!row) continue;
+      rows.push({
+        round_number: round,
+        player_steamid: sid,
+        economy_type: classifyEconomy(row.equipmentValue),
+        equipment_value: row.equipmentValue,
+      });
+    }
+  }
+
+  return rows;
+}
+
 /** Tick list demoOrchestrator.ts needs to fetch (via parseTicks, all players): one per live
  *  round's freeze-time-end. */
 export function neededEconomyTicks(freezeEndEvents: RoundFreezeEndRow[], bounds: RoundBounds): number[] {

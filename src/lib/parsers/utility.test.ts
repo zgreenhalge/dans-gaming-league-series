@@ -11,7 +11,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { collectUtility, type PlayerBlindRow, type WeaponFireRow } from './utility';
+import { collectUtility, collectMatchUtilityThrows, type PlayerBlindRow, type WeaponFireRow } from './utility';
 import { makeContext, death } from './matchContextFixture';
 import { test, report } from '../test-support/miniTest';
 
@@ -172,6 +172,48 @@ test('collectUtility: flashes_thrown counts only weapon_flashbang fire events', 
   const ctx = makeContext({ rounds, sides, tickRate });
   const out = collectUtility([], [], fires, ctx, ids);
   assert.equal(out.get('a')?.flashes_thrown, 2);
+});
+
+test('collectMatchUtilityThrows: one row per blind event, with resolved flasher/blinded/duration/tick', () => {
+  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 1.5 })];
+  const ctx = makeContext({ rounds, sides, tickRate });
+  const out = collectMatchUtilityThrows(blinds, ctx, ids);
+  assert.deepEqual(out, [
+    { round_number: 1, flasher_steamid: 'a', blinded_steamid: 'c', blind_duration: 1.5, tick: 100 },
+  ]);
+});
+
+test('collectMatchUtilityThrows: a sub-threshold or teammate flash is still a row — no judgment calls baked in', () => {
+  const blinds = [
+    blind({ round: 1, tick: 100, attacker: 'a', user: 'c', duration: 0.3 }), // sub-threshold
+    blind({ round: 1, tick: 200, attacker: 'a', user: 'b', duration: 2 }), // teammate (a, b both CT)
+  ];
+  const ctx = makeContext({ rounds, sides, tickRate });
+  const out = collectMatchUtilityThrows(blinds, ctx, ids);
+  assert.equal(out.length, 2);
+});
+
+test('collectMatchUtilityThrows: a self-flash is kept, not filtered', () => {
+  const blinds = [blind({ round: 1, tick: 100, attacker: 'a', user: 'a', duration: 1 })];
+  const ctx = makeContext({ rounds, sides, tickRate });
+  const out = collectMatchUtilityThrows(blinds, ctx, ids);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].flasher_steamid, 'a');
+  assert.equal(out[0].blinded_steamid, 'a');
+});
+
+test('collectMatchUtilityThrows: a blind outside any live round is dropped', () => {
+  const blinds = [blind({ round: 99, tick: 50, attacker: 'a', user: 'c', duration: 1 })];
+  const ctx = makeContext({ rounds, sides, tickRate });
+  const out = collectMatchUtilityThrows(blinds, ctx, ids);
+  assert.equal(out.length, 0);
+});
+
+test('collectMatchUtilityThrows: a blind with no attacker (world/unknown) is dropped', () => {
+  const blinds = [blind({ round: 1, tick: 100, attacker: null, user: 'c', duration: 1 })];
+  const ctx = makeContext({ rounds, sides, tickRate });
+  const out = collectMatchUtilityThrows(blinds, ctx, ids);
+  assert.equal(out.length, 0);
 });
 
 report();

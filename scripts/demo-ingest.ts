@@ -59,6 +59,8 @@ import { persistSabremetrics } from '../src/lib/demo/sabremetrics';
 import { persistWeaponStats } from '../src/lib/demo/weaponStats';
 import { persistMatchKills } from '../src/lib/demo/matchKills';
 import { persistMatchRounds } from '../src/lib/demo/matchRounds';
+import { persistMatchUtilityThrows } from '../src/lib/demo/matchUtilityThrows';
+import { persistMatchRoundEconomy } from '../src/lib/demo/matchRoundEconomy';
 import { writeMatchScore } from '../src/lib/matchScore';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '../src/lib/demo/ingestResult';
 import { matchJobKey } from '../src/lib/background-jobs';
@@ -138,6 +140,8 @@ async function main() {
       persistWeaponStats(matchId, sab.weaponStats),
       persistMatchKills(matchId, sab.matchKills),
       persistMatchRounds(matchId, sab.matchRounds),
+      persistMatchUtilityThrows(matchId, sab.matchUtilityThrows),
+      persistMatchRoundEconomy(matchId, sab.matchRoundEconomy),
       deleteR2Object(demoResultKey(matchId)),
     ]);
     await setJob({
@@ -171,6 +175,8 @@ async function main() {
           weaponStats: sab.weaponStats,
           matchKills: sab.matchKills,
           matchRounds: sab.matchRounds,
+          matchUtilityThrows: sab.matchUtilityThrows,
+          matchRoundEconomy: sab.matchRoundEconomy,
           round_history: parsed.round_history,
         }
       : null;
@@ -198,6 +204,8 @@ async function main() {
         weaponStats: payload.weaponStats,
         matchKills: payload.matchKills,
         matchRounds: payload.matchRounds,
+        matchUtilityThrows: payload.matchUtilityThrows,
+        matchRoundEconomy: payload.matchRoundEconomy,
         round_history: payload.round_history,
       });
       if (written.ok) {
