@@ -95,8 +95,9 @@ several bucketed rows per player (one per weapon category, or one per economy ti
 their own tables — `player_match_weapon_stats` and `player_match_economy_stats` — rather than
 `player_match_sabremetrics`. `demoOrchestrator.ts` returns them as `ParsedDemoSabremetricsResult`'s
 `weaponStats` field, alongside (not merged into) `sabremetrics`; `src/lib/demo/weaponStats.ts`
-mirrors `demo/sabremetrics.ts`'s upsert-or-clear persistence shape, keyed the same way off
-`player_match_stats_id` plus the bucket column (`weapon_category`/`economy_type`).
+persists them via `replaceMatchRows()` (`factTables.ts`), the same match-scoped delete-then-insert
+every other fact table uses, keyed off `player_match_stats_id` plus the bucket column
+(`weapon_category`/`economy_type`).
 
 `rounds_played` means something different for the two breakdowns. For weapon class, it's the count
 of distinct live rounds in which the player fired that category at least once — shot-triggered, same
@@ -130,8 +131,9 @@ query time rather than baked into the persisted shape. This is a deliberate depa
   from `round_end`'s `reason` field via `reasonToCondition()` (`roundSides.ts`), shared with the replay
   pipeline (`replay/extract.ts`) rather than each defining its own copy.
 - `src/lib/demo/matchKills.ts` / `matchRounds.ts` persist via `replaceMatchRows()`
-  (`src/lib/demo/factTables.ts`) — one generic delete-then-insert helper shared by both tables (and any
-  future fact table), rather than each reimplementing the pattern `weaponStats.ts` established.
+  (`src/lib/demo/factTables.ts`) — one generic delete-then-insert helper for every table keyed by a
+  `match_id` column, shared with `weaponStats.ts`'s bucketed tables rather than each reimplementing
+  the same delete/insert pair.
 - Wired into the same two call sites as every other demo-derived stat: `matchScore.ts`'s
   `Promise.all` (score confirm) and `scripts/demo-ingest.ts`'s reparse fast path.
 

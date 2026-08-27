@@ -1,13 +1,21 @@
-// Shared persistence for per-match-event fact tables (`match_kills`, `match_rounds`, and any future
-// one-row-per-event table) — delete-then-insert, not upsert, since a reparse can produce a different
-// row *count* than the previous parse (e.g. fewer kills, a different round count), and upsert has no
-// "this row wasn't in the new parse" signal to act on. Mirrors `weaponStats.ts`'s persistence pattern,
-// generalized so each fact table doesn't reimplement the same delete/insert pair.
+// Shared persistence for any table keyed by a `match_id` column and populated fresh on every parse
+// (`match_kills`, `match_rounds`, `match_utility_throws`, `match_round_economy`,
+// `player_match_weapon_stats`, `player_match_economy_stats`, ...) — delete-then-insert, not upsert,
+// since a reparse can produce a different row *count* than the previous parse (e.g. fewer kills, a
+// different round count), and upsert has no "this row wasn't in the new parse" signal to act on.
+// One shared implementation so no fact table reimplements the same delete/insert pair by hand.
 
 import { getAdminClient } from '../supabase-admin';
 import type { Database } from '../database.types';
 
-type FactTableName = keyof Database['public']['Tables'] & (`match_${string}`);
+// The real invariant this function needs is "has a match_id column" — checked structurally against
+// each table's Row shape rather than inferred from a naming convention, so any table gains this
+// helper for free the moment it has that column, regardless of what it's called.
+type FactTableName = {
+  [K in keyof Database['public']['Tables']]: Database['public']['Tables'][K]['Row'] extends { match_id: number }
+    ? K
+    : never;
+}[keyof Database['public']['Tables']];
 
 /** Replace every row for `matchId` in `table` with `rows`. A no-op insert (but still deletes stale
  *  rows) when `rows` is empty, so clearing a match's fact rows is just calling this with `[]`.
