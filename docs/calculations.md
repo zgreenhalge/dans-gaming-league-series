@@ -347,19 +347,23 @@ since every kill weapon needs a bucket but only guns count toward accuracy.
 **Favorite weapon** (`favoriteWeapon()`) is simply the weapon with the most credited kills in scope.
 
 The Weapons sub-tab shows one filter selection's row per player at a time, picked by
-`resolveWeaponFilterStat()`: each player's own favorite (`filter = null`), one specific weapon
-(chosen from `allWeaponsWithKills()` — every weapon with at least one credited kill in the current
-scope, sorted by total kills descending, already grouped so knives appear once), or a whole category
-(one of `KILL_WEAPON_CATEGORIES`, encoded via `categoryFilterValue()`/decoded via
-`parseCategoryFilter()`) rolled up through `aggregateKillCategoryStats()`. A specific-weapon or
-category selection with no kills/deaths in scope still renders a zeroed row rather than being hidden,
-so the filter always shows every player.
+`resolveWeaponFilterStat()` against a `WeaponFilter` — a real 3-way union (`kills.ts`), not an
+encoded string: each player's own favorite (`{kind: 'favorite'}`), one specific weapon (`{kind:
+'weapon', weapon}`, chosen from `allWeaponsWithKills()` — every weapon with at least one credited
+kill in the current scope, sorted by total kills descending, already grouped so knives appear
+once), or a whole category (`{kind: 'category', category}`, one of `KILL_WEAPON_CATEGORIES`,
+rolled up through `aggregateKillCategoryStats()`). Only the filter `<select>` itself
+(`WeaponFilterSelect`, `SabremetricsLeaderboardView.tsx`) ever encodes a `WeaponFilter` to a string,
+to satisfy the HTML control's own string-valued API — every other consumer works with the union
+directly. A specific-weapon or category selection with no kills/deaths in scope still renders a
+zeroed row rather than being hidden, so the filter always shows every player.
 
 Selecting one of the five gun categories (`pistol`/`smg`/`rifle`/`sniper`/`shotgun` — the same set
 `WEAPON_CATEGORIES` names) also surfaces the Weapon-Class Breakdown's `Shots Fired`/`Accuracy`/`Head
 Accuracy`/`Damage per Round`/`Rounds Played` for that category alongside the kill counts
-(`aggregateWeaponClassStat()`, `src/lib/queries/weaponStats.ts`) — melee/utility/other categories have
-no such breakdown, since `player_match_weapon_stats` only buckets guns.
+(`groupWeaponClassStatsByPlayer()`/`aggregateWeaponClassStat()`, `src/lib/queries/weaponStats.ts`) —
+melee/utility/other categories have no such breakdown, since `player_match_weapon_stats` only
+buckets guns.
 
 ### Flair
 

@@ -72,7 +72,7 @@ export default async function PlayerPage({
     getPlayerMeta(playerId),
     getAllMatchRounds(),
     getAllMatchKills(undefined, playersByIdPromise),
-    getAllWeaponClassStats(),
+    getAllWeaponClassStats(undefined, playersByIdPromise),
   ]);
   const isSelf = session?.user?.playerId === playerId;
   if (!detail) notFound();

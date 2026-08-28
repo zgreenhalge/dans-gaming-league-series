@@ -1,8 +1,9 @@
 /**
- * Unit tests for queries/kills.ts's pure aggregation helpers (#452) — aggregateWeaponKillStats,
- * favoriteWeapon, allWeaponsWithKills, resolveWeaponStat. These operate on already-joined
- * `MatchKillRow[]` in memory, so no fake-DB harness is needed (contrast queries-weaponStats.test.ts,
- * which exercises an actual Supabase join).
+ * Unit tests for queries/kills.ts's pure aggregation helpers (#452, #474) —
+ * aggregateWeaponKillStats, favoriteWeapon, allWeaponsWithKills, resolveWeaponStat,
+ * resolveWeaponFilterStat. These operate on already-joined `MatchKillRow[]` in memory, so no
+ * fake-DB harness is needed (contrast queries-weaponStats.test.ts, which exercises an actual
+ * Supabase join).
  *
  * Run:  npx vitest run src/lib/queries-kills.test.ts
  */
@@ -15,8 +16,7 @@ import {
   allWeaponsWithKills,
   resolveWeaponStat,
   resolveWeaponFilterStat,
-  categoryFilterValue,
-  parseCategoryFilter,
+  FAVORITE_WEAPON_FILTER,
   deriveHeadshotAndTeamkillCounts,
   deriveOpeningDuelCounts,
   deriveTwoKRoundCounts,
@@ -169,28 +169,27 @@ test('aggregateWeaponKillStats/allWeaponsWithKills: every knife/bayonet variant 
   assert.deepEqual(allWeaponsWithKills(kills), ['knife']);
 });
 
-test('resolveWeaponFilterStat: null selection resolves the favorite weapon\'s display label', () => {
+test('resolveWeaponFilterStat: a favorite-kind filter resolves the favorite weapon\'s display label', () => {
   const kills = [
     kill({ attacker: 1, victim: 2, weapon: 'ak47' }),
     kill({ attacker: 1, victim: 3, weapon: 'ak47' }),
   ];
   const stats = aggregateWeaponKillStats(kills, 1);
-  const resolved = resolveWeaponFilterStat(stats, null);
+  const resolved = resolveWeaponFilterStat(stats, FAVORITE_WEAPON_FILTER);
   assert.equal(resolved.weapon, 'ak47');
   assert.equal(resolved.label, 'AK-47');
   assert.equal(resolved.kills, 2);
 });
 
-test('resolveWeaponFilterStat: a category filter rolls up every weapon in that category, with no single weapon', () => {
+test('resolveWeaponFilterStat: a category-kind filter rolls up every weapon in that category, with no single weapon', () => {
   const kills = [
     kill({ attacker: 1, victim: 2, weapon: 'ak47', headshot: true }),
     kill({ attacker: 1, victim: 3, weapon: 'm4a1_silencer' }),
     kill({ attacker: 1, victim: 4, weapon: 'deagle' }), // pistol, not rifle
   ];
   const stats = aggregateWeaponKillStats(kills, 1);
-  const resolved = resolveWeaponFilterStat(stats, categoryFilterValue('rifle'));
+  const resolved = resolveWeaponFilterStat(stats, { kind: 'category', category: 'rifle' });
   assert.equal(resolved.weapon, null);
-  assert.equal(resolved.category, 'rifle');
   assert.equal(resolved.label, 'Rifles');
   assert.equal(resolved.kills, 2);
   assert.equal(resolved.headshotKills, 1);
@@ -198,15 +197,17 @@ test('resolveWeaponFilterStat: a category filter rolls up every weapon in that c
 
 test('resolveWeaponFilterStat: a category with no kills in scope still resolves a zeroed row, not null', () => {
   const stats = aggregateWeaponKillStats([kill({ attacker: 1, victim: 2, weapon: 'deagle' })], 1);
-  const resolved = resolveWeaponFilterStat(stats, categoryFilterValue('sniper'));
+  const resolved = resolveWeaponFilterStat(stats, { kind: 'category', category: 'sniper' });
   assert.equal(resolved.kills, 0);
-  assert.equal(resolved.category, 'sniper');
 });
 
-test('parseCategoryFilter: round-trips categoryFilterValue(), and returns null for a plain weapon key or favorite', () => {
-  assert.equal(parseCategoryFilter(categoryFilterValue('rifle')), 'rifle');
-  assert.equal(parseCategoryFilter('ak47'), null);
-  assert.equal(parseCategoryFilter(null), null);
+test('resolveWeaponFilterStat: a weapon-kind filter resolves that specific weapon', () => {
+  const kills = [kill({ attacker: 1, victim: 2, weapon: 'usp_silencer' })];
+  const stats = aggregateWeaponKillStats(kills, 1);
+  const resolved = resolveWeaponFilterStat(stats, { kind: 'weapon', weapon: 'usp_silencer' });
+  assert.equal(resolved.weapon, 'usp_silencer');
+  assert.equal(resolved.label, 'USP-S');
+  assert.equal(resolved.kills, 1);
 });
 
 test('aggregateWeaponKillStats: buckets noscope/wallbang/blind/midair kills per weapon for one player', () => {

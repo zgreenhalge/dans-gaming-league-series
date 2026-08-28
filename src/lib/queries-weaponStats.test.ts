@@ -1,8 +1,8 @@
 /**
  * Regression harness for queries/weaponStats.ts (#279, #474) — getAllWeaponClassStats,
- * getAllEconomyStats, getMatchWeaponClassStats, aggregateWeaponClassStat. Exercises the
- * player_match_stats -> matches -> weeks -> seasons join and the season_id filter against the
- * fixture DB's match-100 rows (week 10 -> season 1).
+ * getAllEconomyStats, getMatchWeaponClassStats, groupWeaponClassStatsByPlayer,
+ * aggregateWeaponClassStat. Exercises the player_match_stats -> matches -> weeks -> seasons join
+ * and the season_id filter against the fixture DB's match-100 rows (week 10 -> season 1).
  *
  * Run:  npx vitest run src/lib/queries-weaponStats.test.ts
  */
@@ -14,7 +14,7 @@ import { buildFakeDb } from './test-support/fixtures';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getAllWeaponClassStats, getAllEconomyStats, getMatchWeaponClassStats, aggregateWeaponClassStat } from './queries';
+import { getAllWeaponClassStats, getAllEconomyStats, getMatchWeaponClassStats, aggregateWeaponClassStat, groupWeaponClassStatsByPlayer } from './queries';
 import { test, report } from './test-support/miniTest';
 
 async function main() {
@@ -53,6 +53,15 @@ async function main() {
 
     const noShotgun = aggregateWeaponClassStat(rows, 1, 'shotgun');
     assert.deepEqual(noShotgun, { shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0 });
+  });
+
+  await test('groupWeaponClassStatsByPlayer: sums every player\'s rows for one category in a single pass (#474)', async () => {
+    const rows = await getAllWeaponClassStats();
+    const grouped = groupWeaponClassStatsByPlayer(rows, 'rifle');
+    assert.deepEqual(grouped.get(1), { shots_fired: 90, shots_hit: 40, headshot_hits: 18, damage_dealt: 3200, rounds_played: 20 });
+    assert.deepEqual(grouped.get(2), { shots_fired: 85, shots_hit: 32, headshot_hits: 12, damage_dealt: 2600, rounds_played: 19 });
+    assert.equal(grouped.has(3), false); // player 3 has a sniper row, not rifle
+    assert.deepEqual(aggregateWeaponClassStat(rows, 1, 'rifle'), grouped.get(1));
   });
 
   await test('getAllEconomyStats: resolves player/match/season and returns one row per tier', async () => {

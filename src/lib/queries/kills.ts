@@ -721,22 +721,19 @@ export function resolveWeaponStat(stats: WeaponKillStat[], weapon: string | null
   return stats.find((s) => s.weapon === key) ?? zeroWeaponStat(key);
 }
 
-const CATEGORY_FILTER_PREFIX = 'category:';
+/** The Weapons sub-tab's filter selection, as a real discriminated union rather than an encoded
+ *  string (#474) — `favorite` picks each player's own favorite weapon; `weapon` scopes to one
+ *  specific weapon (grouped via `weaponGroupKey()`); `category` scopes to every weapon in a whole
+ *  `KillWeaponCategory`, rolled up via `aggregateKillCategoryStats()`. `WeaponFilterSelect`
+ *  (`SabremetricsLeaderboardView.tsx`) is the only place that needs a string form of this, to
+ *  satisfy the HTML `<select>` API — it encodes/decodes locally rather than a string encoding
+ *  leaking out to every other consumer of the selection. */
+export type WeaponFilter =
+  | { kind: 'favorite' }
+  | { kind: 'weapon'; weapon: string }
+  | { kind: 'category'; category: KillWeaponCategory };
 
-/** Encodes a category as the Weapons sub-tab filter's `<select>` value — the counterpart
- *  `parseCategoryFilter()` decodes (#474). Namespaced with a prefix even though no individual
- *  weapon key collides with a category name, so the two selection modes stay visibly distinct in
- *  the value itself rather than relying on callers knowing the category name list by heart. */
-export function categoryFilterValue(category: KillWeaponCategory): string {
-  return `${CATEGORY_FILTER_PREFIX}${category}`;
-}
-
-/** Decodes a Weapons sub-tab filter value into the category it selects, or `null` when `filter` is
- *  `null` (favorite) or a specific weapon key instead of a category. */
-export function parseCategoryFilter(filter: string | null): KillWeaponCategory | null {
-  if (filter == null || !filter.startsWith(CATEGORY_FILTER_PREFIX)) return null;
-  return filter.slice(CATEGORY_FILTER_PREFIX.length) as KillWeaponCategory;
-}
+export const FAVORITE_WEAPON_FILTER: WeaponFilter = { kind: 'favorite' };
 
 /** One filter-resolved row's worth of kill stats plus the display label to show for it — the
  *  common shape `resolveWeaponFilterStat()` returns whether the Weapons sub-tab filter picked a
@@ -748,7 +745,6 @@ export interface WeaponFilterStat {
    *  no favorite to show) — lets the UI render a weapon icon only when there's one specific weapon
    *  to show it for. */
   weapon: string | null;
-  category: KillWeaponCategory | null;
   kills: number;
   headshotKills: number;
   noscopeKills: number;
@@ -758,42 +754,39 @@ export interface WeaponFilterStat {
   deaths: number;
 }
 
-/** Resolves a player's `WeaponKillStat[]` against the Weapons sub-tab's three-mode filter: `null`
- *  (favorite weapon), a specific weapon key (`resolveWeaponStat()`), or a whole category
- *  (`categoryFilterValue()`-encoded, rolled up via `aggregateKillCategoryStats()`) — #474. A
- *  category with no kills/deaths in scope still resolves to a zeroed row (matching
+/** Builds a `WeaponFilterStat` from a resolved count source (a `WeaponKillStat` or
+ *  `WeaponCategoryKillStat`, both share the same six count fields) — the one place
+ *  `resolveWeaponFilterStat()`'s weapon and category branches both build their result, instead of
+ *  each restating the same six `?? 0` defaults. */
+function toFilterStat(
+  label: string,
+  weapon: string | null,
+  stat?: { kills: number; headshotKills: number; noscopeKills: number; wallbangKills: number; blindKills: number; midairKills: number; deaths: number },
+): WeaponFilterStat {
+  return {
+    label,
+    weapon,
+    kills: stat?.kills ?? 0,
+    headshotKills: stat?.headshotKills ?? 0,
+    noscopeKills: stat?.noscopeKills ?? 0,
+    wallbangKills: stat?.wallbangKills ?? 0,
+    blindKills: stat?.blindKills ?? 0,
+    midairKills: stat?.midairKills ?? 0,
+    deaths: stat?.deaths ?? 0,
+  };
+}
+
+/** Resolves a player's `WeaponKillStat[]` against the Weapons sub-tab's three-mode `WeaponFilter`
+ *  (#474). A category with no kills/deaths in scope still resolves to a zeroed row (matching
  *  `resolveWeaponStat()`'s own no-kills fallback) rather than `null`, so a category selection also
  *  always renders a row for every player. */
-export function resolveWeaponFilterStat(stats: WeaponKillStat[], filter: string | null): WeaponFilterStat {
-  const category = parseCategoryFilter(filter);
-  if (category != null) {
-    const catStat = aggregateKillCategoryStats(stats).find((c) => c.category === category);
-    return {
-      label: KILL_WEAPON_CATEGORY_LABEL[category],
-      weapon: null,
-      category,
-      kills: catStat?.kills ?? 0,
-      headshotKills: catStat?.headshotKills ?? 0,
-      noscopeKills: catStat?.noscopeKills ?? 0,
-      wallbangKills: catStat?.wallbangKills ?? 0,
-      blindKills: catStat?.blindKills ?? 0,
-      midairKills: catStat?.midairKills ?? 0,
-      deaths: catStat?.deaths ?? 0,
-    };
+export function resolveWeaponFilterStat(stats: WeaponKillStat[], filter: WeaponFilter): WeaponFilterStat {
+  if (filter.kind === 'category') {
+    const catStat = aggregateKillCategoryStats(stats).find((c) => c.category === filter.category);
+    return toFilterStat(KILL_WEAPON_CATEGORY_LABEL[filter.category], null, catStat);
   }
-  const resolved = resolveWeaponStat(stats, filter);
-  return {
-    label: resolved ? weaponDisplayName(resolved.weapon) : '—',
-    weapon: resolved?.weapon ?? null,
-    category: resolved?.category ?? null,
-    kills: resolved?.kills ?? 0,
-    headshotKills: resolved?.headshotKills ?? 0,
-    noscopeKills: resolved?.noscopeKills ?? 0,
-    wallbangKills: resolved?.wallbangKills ?? 0,
-    blindKills: resolved?.blindKills ?? 0,
-    midairKills: resolved?.midairKills ?? 0,
-    deaths: resolved?.deaths ?? 0,
-  };
+  const resolved = resolveWeaponStat(stats, filter.kind === 'weapon' ? filter.weapon : null);
+  return toFilterStat(resolved ? weaponDisplayName(resolved.weapon) : '—', resolved?.weapon ?? null, resolved ?? undefined);
 }
 
 export interface WeaponCategoryKillStat {

@@ -78,10 +78,11 @@ export const KILL_WEAPON_CATEGORY_LABEL: Record<KillWeaponCategory, string> = {
  *  kills-by-weapon breakdowns (`aggregateWeaponKillStats()`, the Weapons sub-tab's per-weapon
  *  filter) show one combined "Knife" row instead of splitting an equivalent kill across a dozen
  *  cosmetically-different skin names (#474). Every other weapon keeps its own stripped, lowercased
- *  classname as its own key. */
+ *  classname as its own key. Defers to `killWeaponCategory()`'s own `melee` detection rather than
+ *  re-matching the knife/bayonet pattern here, so the variant list has one source of truth. */
 export function weaponGroupKey(weapon: string): string {
   const stripped = stripWeaponPrefix(weapon).toLowerCase();
-  return /knife|bayonet/.test(stripped) ? 'knife' : stripped;
+  return killWeaponCategory(weapon) === 'melee' ? 'knife' : stripped;
 }
 
 /** Display name for a weapon's grouped identity (`weaponGroupKey()`) — the CS2 buy-menu name

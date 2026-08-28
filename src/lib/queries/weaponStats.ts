@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import type { PlayerMatchWeaponStat, PlayerMatchEconomyStat, WeaponStatFields, Player } from '../types';
 import { getPlayersById } from './player';
-import { resolveMatchSeasons, fetchAllPages, asPage } from './_shared';
+import { resolveMatchSeasons, fetchAllPages, fetchPmsLookup, asPage } from './_shared';
 import type { WeaponCategory } from '../parsers/weaponClasses';
 
 export interface WeaponClassMatchRow extends WeaponStatFields {
@@ -30,13 +30,15 @@ interface BreakdownRow extends WeaponStatFields {
 
 /** Shared by `getAllWeaponClassStats()`/`getAllEconomyStats()` — same join and season-scoping,
  *  differing only in which table/bucket column is read. `seasonId` filters to a single season the
- *  same way `getAllSabremetrics()` does. */
+ *  same way `getAllSabremetrics()` does. Pass `playersById` when the caller already fetched it
+ *  (e.g. alongside `getAllMatchKills()`) to skip a redundant full `players` table read. */
 async function getAllBreakdownStats(
   table: 'player_match_weapon_stats' | 'player_match_economy_stats',
   bucketColumn: 'weapon_category' | 'economy_type',
   seasonId?: number,
+  playersById?: Map<number, Player> | Promise<Map<number, Player>>,
 ): Promise<BreakdownRow[]> {
-  const [rows, pmsRows, matchSeason, playersById] = await Promise.all([
+  const [rows, pmsRows, matchSeason, resolvedPlayersById] = await Promise.all([
     fetchAllPages<PlayerMatchWeaponStat | PlayerMatchEconomyStat>((from, to) =>
       supabase.from(table).select('*').range(from, to),
     ),
@@ -44,7 +46,7 @@ async function getAllBreakdownStats(
       asPage(supabase.from('player_match_stats').select('id, player_id, match_id').range(from, to)),
     ),
     resolveMatchSeasons(),
-    getPlayersById(),
+    playersById ? Promise.resolve(playersById) : getPlayersById(),
   ]);
 
   const pmsLookup = new Map<number, { player_id: number; match_id: number }>();
@@ -57,7 +59,7 @@ async function getAllBreakdownStats(
     const sid = matchSeason.get(pms.match_id);
     if (sid == null) continue;
     if (seasonId != null && sid !== seasonId) continue;
-    const player = playersById.get(pms.player_id);
+    const player = resolvedPlayersById.get(pms.player_id);
     result.push({
       player_id: pms.player_id,
       player_name: player?.name ?? `#${pms.player_id}`,
@@ -75,9 +77,13 @@ async function getAllBreakdownStats(
 }
 
 /** Per-weapon-category shot/accuracy/damage/rounds breakdown (#279), one row per (player, match,
- *  weapon_category). */
-export async function getAllWeaponClassStats(seasonId?: number): Promise<WeaponClassMatchRow[]> {
-  const rows = await getAllBreakdownStats('player_match_weapon_stats', 'weapon_category', seasonId);
+ *  weapon_category). Pass `playersById` when the caller already fetched it (e.g. shared with an
+ *  adjacent `getAllMatchKills()` call) to skip a redundant full `players` table read. */
+export async function getAllWeaponClassStats(
+  seasonId?: number,
+  playersById?: Map<number, Player> | Promise<Map<number, Player>>,
+): Promise<WeaponClassMatchRow[]> {
+  const rows = await getAllBreakdownStats('player_match_weapon_stats', 'weapon_category', seasonId, playersById);
   return rows.map(({ bucket, ...r }) => ({ ...r, weapon_category: bucket }));
 }
 
@@ -97,18 +103,13 @@ export async function getMatchWeaponClassStats(
   matchId: number,
   playersById?: Map<number, Player> | Promise<Map<number, Player>>,
 ): Promise<WeaponClassMatchRow[]> {
-  const [rows, pmsRows, resolvedPlayersById] = await Promise.all([
+  const [rows, pmsLookup, resolvedPlayersById] = await Promise.all([
     fetchAllPages<PlayerMatchWeaponStat>((from, to) =>
       supabase.from('player_match_weapon_stats').select('*').eq('match_id', matchId).range(from, to),
     ),
-    fetchAllPages<{ id: number; player_id: number; match_id: number }>((from, to) =>
-      asPage(supabase.from('player_match_stats').select('id, player_id, match_id').eq('match_id', matchId).range(from, to)),
-    ),
+    fetchPmsLookup(matchId),
     playersById ? Promise.resolve(playersById) : getPlayersById(),
   ]);
-
-  const pmsLookup = new Map<number, { player_id: number; match_id: number }>();
-  for (const r of pmsRows) pmsLookup.set(r.id, r);
 
   const result: WeaponClassMatchRow[] = [];
   for (const raw of rows) {
@@ -131,38 +132,56 @@ export async function getMatchWeaponClassStats(
   return result;
 }
 
-export interface WeaponClassAggregateStat {
-  shots_fired: number;
-  shots_hit: number;
-  headshot_hits: number;
-  damage_dealt: number;
-  rounds_played: number;
-}
+/** Same 5 fields as `WeaponStatFields` — aliased under its own name since this one is always a
+ *  cross-match *sum* (`groupWeaponClassStatsByPlayer()`/`aggregateWeaponClassStat()`'s result),
+ *  never a single stored row, but the shape is identical so there's no reason to redeclare it. */
+export type WeaponClassAggregateStat = WeaponStatFields;
 
-const ZERO_WEAPON_CLASS_STAT: WeaponClassAggregateStat = {
+/** The zeroed shape a player with no rows for a category falls back to — exported so
+ *  `WeaponClassBreakdownTable` (`SabremetricsLeaderboardView.tsx`) can default a
+ *  `groupWeaponClassStatsByPlayer()` miss to the same shape `aggregateWeaponClassStat()` does. */
+export const ZERO_WEAPON_CLASS_STAT: WeaponClassAggregateStat = {
   shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0,
 };
 
-/** Sums one player's `WeaponClassMatchRow`s for one gun category across every match in whatever
- *  scope the caller already fetched `rows` for (a season, career) — `getAllWeaponClassStats()`
- *  returns one row per (player, match, category), not pre-aggregated across matches, so the
- *  Weapons sub-tab's category breakdown (#474) needs this rollup the same way `aggregateWeaponKillStats()`
- *  rolls up per-match `match_kills` rows for the kills side of that same tab. */
+/** Sums every player's `WeaponClassMatchRow`s for one gun category across every match in whatever
+ *  scope the caller already fetched `rows` for (a season, career) in a single pass — the group-then-
+ *  sum counterpart of `aggregateWeaponKillStats()`'s per-weapon buckets, but grouped by player
+ *  instead so a multi-player table (`WeaponClassBreakdownTable`) can look each row up in O(1)
+ *  rather than rescanning all of `rows` once per player (#474). Players with no rows for `category`
+ *  are simply absent from the map — callers fall back to a zeroed stat via `aggregateWeaponClassStat()`
+ *  or their own default. */
+export function groupWeaponClassStatsByPlayer(
+  rows: WeaponClassMatchRow[],
+  category: WeaponCategory,
+): Map<number, WeaponClassAggregateStat> {
+  const out = new Map<number, WeaponClassAggregateStat>();
+  for (const r of rows) {
+    if (r.weapon_category !== category) continue;
+    let c = out.get(r.player_id);
+    if (!c) {
+      c = { ...ZERO_WEAPON_CLASS_STAT };
+      out.set(r.player_id, c);
+    }
+    c.shots_fired += r.shots_fired;
+    c.shots_hit += r.shots_hit;
+    c.headshot_hits += r.headshot_hits;
+    c.damage_dealt += r.damage_dealt;
+    c.rounds_played += r.rounds_played;
+  }
+  return out;
+}
+
+/** One player's rollup from `groupWeaponClassStatsByPlayer()`, zeroed when they have no rows for
+ *  `category` in scope — the single-player convenience wrapper (`buildWeaponClassTiles()`'s only
+ *  caller); a multi-player table should call `groupWeaponClassStatsByPlayer()` once itself instead
+ *  of calling this per player. */
 export function aggregateWeaponClassStat(
   rows: WeaponClassMatchRow[],
   playerId: number,
   category: WeaponCategory,
 ): WeaponClassAggregateStat {
-  const out = { ...ZERO_WEAPON_CLASS_STAT };
-  for (const r of rows) {
-    if (r.player_id !== playerId || r.weapon_category !== category) continue;
-    out.shots_fired += r.shots_fired;
-    out.shots_hit += r.shots_hit;
-    out.headshot_hits += r.headshot_hits;
-    out.damage_dealt += r.damage_dealt;
-    out.rounds_played += r.rounds_played;
-  }
-  return out;
+  return groupWeaponClassStatsByPlayer(rows, category).get(playerId) ?? { ...ZERO_WEAPON_CLASS_STAT };
 }
 
 export interface AccuracyTotals {

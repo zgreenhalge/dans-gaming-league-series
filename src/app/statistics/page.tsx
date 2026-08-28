@@ -42,7 +42,7 @@ export default async function StatisticsPage() {
       getSabremetricSeasonTotals(),
       getAllMatchRounds(),
       getAllMatchKills(undefined, playersByIdPromise),
-      getAllWeaponClassStats(),
+      getAllWeaponClassStats(undefined, playersByIdPromise),
     ]);
 
   // H2H is computed client-side (see CareerStatsView) so its tab can honor the
