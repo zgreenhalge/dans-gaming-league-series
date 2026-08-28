@@ -20,6 +20,7 @@ export interface MatchKillRow {
   blind_kill: boolean;
   midair: boolean;
   is_teamkill: boolean;
+  tick: number;
 }
 
 type RawKillRow = {
@@ -35,6 +36,7 @@ type RawKillRow = {
   blind_kill: boolean;
   midair: boolean;
   is_teamkill: boolean;
+  tick: number;
 };
 
 type PmsRow = { id: number; player_id: number; match_id: number };
@@ -85,6 +87,7 @@ function joinKillRows(
       blind_kill: k.blind_kill,
       midair: k.midair,
       is_teamkill: k.is_teamkill,
+      tick: k.tick,
     });
   }
   return result;
@@ -221,11 +224,13 @@ export interface HeadshotTeamkillCounts {
   teamkills: number;
 }
 
-/** The subset of a kill row `deriveHeadshotAndTeamkillCounts()` actually needs — narrower than
+/** The subset of a kill row every `derive*()` function in this file needs — narrower than
  *  `MatchKillRow` so a pre-persistence caller (the demo-upload preview, working from `DemoMatchKill[]`
  *  before any `match_id` exists) can use it too, not just already-joined `match_kills` reads. */
 export interface KillCreditFlags {
   match_id: number;
+  round_number: number;
+  tick: number;
   attacker_player_id: number | null;
   victim_player_id: number;
   headshot: boolean;
@@ -255,6 +260,75 @@ export function deriveHeadshotAndTeamkillCounts(kills: KillCreditFlags[]): Map<s
     }
     if (k.is_teamkill) c.teamkills += 1;
     else if (k.headshot) c.headshot_kills += 1;
+  }
+  return out;
+}
+
+export interface OpeningDuelCounts {
+  opening_kills: number;
+  opening_deaths: number;
+}
+
+/**
+ * Per (match, player) opening-kill/opening-death counts, derived from `match_kills` — the
+ * query-time replacement for the `opening_kills`/`opening_deaths` columns
+ * `player_match_sabremetrics` used to store directly (both were computable from `match_kills` alone,
+ * needing no side/faction data at all). The earliest death by tick in each round always credits its
+ * victim an opening death; the attacker credits an opening kill unless there wasn't one (a
+ * world/environment death) or it was a teamkill. Keyed by `` `${match_id}:${player_id}` ``.
+ */
+export function deriveOpeningDuelCounts(kills: KillCreditFlags[]): Map<string, OpeningDuelCounts> {
+  const byRound = new Map<string, KillCreditFlags[]>();
+  for (const k of kills) {
+    const key = `${k.match_id}:${k.round_number}`;
+    const group = byRound.get(key);
+    if (group) group.push(k);
+    else byRound.set(key, [k]);
+  }
+
+  const out = new Map<string, OpeningDuelCounts>();
+  const bump = (matchId: number, playerId: number, field: keyof OpeningDuelCounts): void => {
+    const key = `${matchId}:${playerId}`;
+    let c = out.get(key);
+    if (!c) {
+      c = { opening_kills: 0, opening_deaths: 0 };
+      out.set(key, c);
+    }
+    c[field] += 1;
+  };
+
+  for (const roundKills of byRound.values()) {
+    const first = roundKills.reduce((a, b) => (a.tick <= b.tick ? a : b));
+    bump(first.match_id, first.victim_player_id, 'opening_deaths');
+    if (first.attacker_player_id != null && !first.is_teamkill) {
+      bump(first.match_id, first.attacker_player_id, 'opening_kills');
+    }
+  }
+  return out;
+}
+
+/**
+ * Per (match, attacker) count of rounds where they killed both opponents — the query-time
+ * replacement for `player_match_sabremetrics.two_k_rounds`. Derived from `match_kills` alone, no
+ * roster/faction data needed: in 2v2 Wingman a player has exactly one teammate and two opponents,
+ * `match_kills` enforces at most one kill per (round, victim), and a teamkill is already flagged —
+ * so two non-teamkill kills by the same attacker in the same round can only be both opponents,
+ * without needing to resolve who those enemies are from roster/faction data.
+ */
+export function deriveTwoKRoundCounts(kills: KillCreditFlags[]): Map<string, number> {
+  const perRound = new Map<string, number>();
+  for (const k of kills) {
+    if (k.attacker_player_id == null || k.is_teamkill) continue;
+    const key = `${k.match_id}:${k.round_number}:${k.attacker_player_id}`;
+    perRound.set(key, (perRound.get(key) ?? 0) + 1);
+  }
+
+  const out = new Map<string, number>();
+  for (const [key, count] of perRound) {
+    if (count !== 2) continue;
+    const [matchId, , attacker] = key.split(':');
+    const outKey = `${matchId}:${attacker}`;
+    out.set(outKey, (out.get(outKey) ?? 0) + 1);
   }
   return out;
 }

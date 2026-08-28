@@ -86,3 +86,60 @@ export async function getAllEconomyStats(seasonId?: number): Promise<EconomyMatc
   const rows = await getAllBreakdownStats('player_match_economy_stats', 'economy_type', seasonId);
   return rows.map(({ bucket, ...r }) => ({ ...r, economy_type: bucket }));
 }
+
+export interface AccuracyTotals {
+  shots_fired: number;
+  shots_hit: number;
+  headshot_hits: number;
+}
+
+/**
+ * Per (match, player) `shots_fired`/`shots_hit`/`headshot_hits` totals, summed from
+ * `player_match_weapon_stats` — the query-time replacement for the same-named flat columns
+ * `player_match_sabremetrics` used to store directly. Both are computed from the identical gated
+ * event set: `collectAccuracy()` (`parsers/accuracy.ts`) and `collectWeaponClassStats()`
+ * (`parsers/weaponStats.ts`) apply the same `WEAPON_CATEGORY` allowlist and self-kill/teamkill
+ * exclusion — `collectAccuracy()`'s totals just don't bucket by category the way the weapon-class
+ * breakdown does — so summing every `weapon_category` row for a player+match reproduces the flat
+ * total exactly. (`player_match_economy_stats` does *not* match: its inclusion isn't gated by
+ * `WEAPON_CATEGORY` at all, so it counts non-gun weapons `collectAccuracy()` excludes.) Keyed by
+ * `` `${match_id}:${player_id}` ``. Pass `matchId` to scope both queries to one match — the
+ * match-page caller (`getMatchSabremetrics()`) doesn't need a full-table fetch just to look up one
+ * match's totals, the same way `getMatchKills(matchId)` scopes its own `match_kills` read.
+ */
+export async function deriveAccuracyTotals(matchId?: number): Promise<Map<string, AccuracyTotals>> {
+  const [rows, pmsRows] = await Promise.all([
+    fetchAllPages<{ player_match_stats_id: number; shots_fired: number; shots_hit: number; headshot_hits: number }>(
+      (from, to) => {
+        let q = supabase.from('player_match_weapon_stats')
+          .select('player_match_stats_id, shots_fired, shots_hit, headshot_hits');
+        if (matchId != null) q = q.eq('match_id', matchId);
+        return asPage(q.range(from, to));
+      },
+    ),
+    fetchAllPages<{ id: number; player_id: number; match_id: number }>((from, to) => {
+      let q = supabase.from('player_match_stats').select('id, player_id, match_id');
+      if (matchId != null) q = q.eq('match_id', matchId);
+      return asPage(q.range(from, to));
+    }),
+  ]);
+
+  const pmsLookup = new Map<number, { player_id: number; match_id: number }>();
+  for (const r of pmsRows) pmsLookup.set(r.id, r);
+
+  const out = new Map<string, AccuracyTotals>();
+  for (const r of rows) {
+    const pms = pmsLookup.get(r.player_match_stats_id);
+    if (!pms) continue;
+    const key = `${pms.match_id}:${pms.player_id}`;
+    let c = out.get(key);
+    if (!c) {
+      c = { shots_fired: 0, shots_hit: 0, headshot_hits: 0 };
+      out.set(key, c);
+    }
+    c.shots_fired += r.shots_fired;
+    c.shots_hit += r.shots_hit;
+    c.headshot_hits += r.headshot_hits;
+  }
+  return out;
+}

@@ -2,7 +2,10 @@ import { supabase } from '../supabase';
 import type { SabFieldsWithDerived, PlayerMatchSabremetrics } from '../types';
 import { getPlayersById } from './player';
 import { resolveMatchSeasons, fetchAllPages, asPage } from './_shared';
-import { getAllMatchKills, deriveHeadshotAndTeamkillCounts } from './kills';
+import {
+  getAllMatchKills, deriveHeadshotAndTeamkillCounts, deriveOpeningDuelCounts, deriveTwoKRoundCounts,
+} from './kills';
+import { deriveAccuracyTotals } from './weaponStats';
 
 
 export interface SabremetricMatchRow {
@@ -18,9 +21,11 @@ export interface SabremetricMatchRow {
 /** All sabremetrics, or (with `seasonId`) just one season's — same join, filtered at the end so
  *  season-scoped callers (the season page) can't drift from the career-wide one.
  *
- *  `headshot_kills`/`teamkills` are overwritten with `deriveHeadshotAndTeamkillCounts()`'s result
- *  rather than read off the stored `player_match_sabremetrics` row — both were exact duplicates of
- *  `match_kills` data, so `match_kills` is now the source of truth for them (#457). */
+ *  `headshot_kills`, `teamkills`, `opening_kills`, `opening_deaths`, `two_k_rounds`, `shots_fired`,
+ *  `shots_hit`, and `headshot_hits` are overwritten with the `derive*()` helpers' results rather
+ *  than read off the stored `player_match_sabremetrics` row — all eight were exact duplicates of
+ *  data `match_kills`/`player_match_weapon_stats` already carry, so those are now the source of
+ *  truth for them (#457). */
 export async function getAllSabremetrics(seasonId?: number): Promise<SabremetricMatchRow[]> {
   // Shared as one promise (not two `getPlayersById()` calls) so getAllMatchKills()'s own internal
   // name resolution doesn't duplicate the `players` table fetch below already needs.
@@ -33,6 +38,7 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     matchSeason,
     playersById,
     kills,
+    accuracyTotals,
   ] = await Promise.all([
     fetchAllPages<PlayerMatchSabremetrics>((from, to) =>
       supabase.from('player_match_sabremetrics').select('*').range(from, to),
@@ -44,6 +50,7 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     resolveMatchSeasons(),
     playersByIdPromise,
     getAllMatchKills(undefined, playersByIdPromise),
+    deriveAccuracyTotals(),
   ]);
   if (seasonErr) throw seasonErr;
 
@@ -55,6 +62,8 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
   for (const r of pmsRows) pmsLookup.set(r.id, r);
 
   const hsTk = deriveHeadshotAndTeamkillCounts(kills);
+  const openingDuels = deriveOpeningDuelCounts(kills);
+  const twoKRounds = deriveTwoKRoundCounts(kills);
 
   const result: SabremetricMatchRow[] = [];
   for (const raw of sabRows) {
@@ -66,11 +75,20 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     const player = playersById.get(pms.player_id);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { player_match_stats_id: _, ...rest } = raw;
-    const counts = hsTk.get(`${pms.match_id}:${pms.player_id}`);
+    const key = `${pms.match_id}:${pms.player_id}`;
+    const hsTkCounts = hsTk.get(key);
+    const opening = openingDuels.get(key);
+    const accuracy = accuracyTotals.get(key);
     const sab: SabFieldsWithDerived = {
       ...rest,
-      headshot_kills: counts?.headshot_kills ?? 0,
-      teamkills: counts?.teamkills ?? 0,
+      headshot_kills: hsTkCounts?.headshot_kills ?? 0,
+      teamkills: hsTkCounts?.teamkills ?? 0,
+      opening_kills: opening?.opening_kills ?? 0,
+      opening_deaths: opening?.opening_deaths ?? 0,
+      two_k_rounds: twoKRounds.get(key) ?? 0,
+      shots_fired: accuracy?.shots_fired ?? 0,
+      shots_hit: accuracy?.shots_hit ?? 0,
+      headshot_hits: accuracy?.headshot_hits ?? 0,
     };
     result.push({
       player_id: pms.player_id,

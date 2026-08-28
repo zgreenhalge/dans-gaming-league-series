@@ -32,7 +32,10 @@
 import { readFileSync } from 'node:fs';
 import { parseDemoFile, type RosterEntry, type DemoPlayerStat } from '../src/lib/demoParser';
 import { parseDemoSabremetrics } from '../src/lib/demoOrchestrator';
-import { deriveHeadshotAndTeamkillCounts, type KillCreditFlags } from '../src/lib/queries';
+import {
+  deriveHeadshotAndTeamkillCounts, deriveOpeningDuelCounts, deriveTwoKRoundCounts,
+  type KillCreditFlags,
+} from '../src/lib/queries';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { demoKey } from '../src/lib/r2';
@@ -172,26 +175,34 @@ async function main() {
   );
   console.log(`Rounds in history: ${result.round_history?.length ?? 0}`);
 
-  // Sabremetrics: compact per-player line; full detail via --json. headshot_kills isn't part of
-  // the parsed sabremetrics payload anymore (derived from match_kills at query time, #457) —
-  // derived here the same way from this run's own matchKills.
+  // Sabremetrics: compact per-player line; full detail via --json. headshot_kills/opening_kills/
+  // opening_deaths/two_k_rounds aren't part of the parsed sabremetrics payload anymore (all
+  // derived at query time once confirmed, #457) — derived here the same way from this run's own
+  // matchKills.
   const nameOf = new Map(roster.map((r) => [r.player_id, r.name]));
   const killFlags: KillCreditFlags[] = sabre.matchKills.map((k) => ({
     match_id: 0,
+    round_number: k.round_number,
+    tick: k.tick,
     attacker_player_id: k.attacker_player_id,
     victim_player_id: k.victim_player_id,
     headshot: k.headshot,
     is_teamkill: k.is_teamkill,
   }));
   const hsTk = deriveHeadshotAndTeamkillCounts(killFlags);
+  const openingDuels = deriveOpeningDuelCounts(killFlags);
+  const twoKRounds = deriveTwoKRoundCounts(killFlags);
   console.log('\nSabremetrics (compact — use --json for all fields):');
   for (const s of sabre.sabremetrics) {
     const name = nameOf.get(s.player_id) ?? `#${s.player_id}`;
     const f = s.sabremetrics;
-    const headshotKills = hsTk.get(`0:${s.player_id}`)?.headshot_kills ?? 0;
+    const key = `0:${s.player_id}`;
+    const headshotKills = hsTk.get(key)?.headshot_kills ?? 0;
+    const opening = openingDuels.get(key);
+    const twoK = twoKRounds.get(key) ?? 0;
     console.log(
-      `   ${pad(name, 16)} HS:${padL(headshotKills, 3)}  OPEN k/d:${padL(f.opening_kills, 2)}/${padL(f.opening_deaths, 2)}` +
-        `  KAST rnds:${padL(f.kast_rounds, 3)}  2K:${padL(f.two_k_rounds, 2)}  UtilDmg:${padL(f.utility_damage, 5)}` +
+      `   ${pad(name, 16)} HS:${padL(headshotKills, 3)}  OPEN k/d:${padL(opening?.opening_kills ?? 0, 2)}/${padL(opening?.opening_deaths ?? 0, 2)}` +
+        `  KAST rnds:${padL(f.kast_rounds, 3)}  2K:${padL(twoK, 2)}  UtilDmg:${padL(f.utility_damage, 5)}` +
         `  plants:${padL(f.plants, 2)} defuses:${padL(f.defuses, 2)}`,
     );
   }

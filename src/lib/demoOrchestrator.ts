@@ -9,9 +9,7 @@ import { buildMatchContext, collectMidairAttackers, dedupeDeathEvents, findMatch
 import type { RoundEndRow } from './parsers/roundSides';
 import { inferSkinsStartingSide, resolveEffectiveSide } from './parsers/sideInference';
 import { collectAccumulators } from './parsers/accumulators';
-import { collectEntry } from './parsers/entry';
 import { collectKast } from './parsers/kast';
-import { collectMultikill } from './parsers/multikill';
 import { collectClutch } from './parsers/clutch';
 import {
   collectUtility, collectMatchUtilityThrows, type PlayerBlindRow, type WeaponFireRow,
@@ -45,7 +43,6 @@ const ZERO: SabFields = {
   assists_ct: 0, assists_t: 0,
   damage_ct: 0, damage_t: 0,
   headshot_kills_ct: 0, headshot_kills_t: 0,
-  opening_kills: 0, opening_deaths: 0,
   kast_rounds: 0,
   clutch_1v1_attempts: 0, clutch_1v1_wins: 0,
   clutch_1v2_attempts: 0, clutch_1v2_wins: 0,
@@ -59,7 +56,6 @@ const ZERO: SabFields = {
   teamflash_duration: 0,
   plants: 0,
   defuses: 0,
-  two_k_rounds: 0,
   trade_kill_opportunities: 0,
   trade_kill_attempts: 0,
   trade_kill_successes: 0,
@@ -70,9 +66,6 @@ const ZERO: SabFields = {
   he_damage: 0,
   blind_duration_max_sum: 0,
   effective_flashes: 0,
-  shots_fired: 0,
-  shots_hit: 0,
-  headshot_hits: 0,
   shots_hit_no_awp: 0,
   headshot_hits_no_awp: 0,
   counter_strafe_shots: 0,
@@ -198,14 +191,12 @@ export function parseDemoSabremetrics(
   const tradeOpportunities = computeTradeOpportunities(liveDeathEvents, tradePositionRows, context, steamIds);
 
   // 5. Event-based collectors
-  const entryStats = collectEntry(liveDeathEvents, context, steamIds);
   const kastStats = collectKast(liveDeathEvents, context, steamIds, tradeOpportunities);
-  const multikillStats = collectMultikill(liveDeathEvents, context, steamIds);
   const clutchStats = collectClutch(liveDeathEvents, context, steamIds);
   const utilityStats = collectUtility(blindEvents, liveDeathEvents, fireEvents, context, steamIds);
   const objectiveStats = collectObjectives(plantEvents, defuseEvents, context, steamIds);
   const heStats = collectHeGrenades(fireEvents, hurtEvents, context, steamIds);
-  const accuracyStats = collectAccuracy(fireEvents, hurtEvents, context, steamIds);
+  const accuracyStats = collectAccuracy(hurtEvents, context, steamIds);
 
   // Counter-strafe needs per-tick position/duck-state reads (not a plain event stream), so it
   // fetches its own tick list — same shape as accumulators.ts's round-end reads, but keyed to
@@ -380,9 +371,7 @@ export function parseDemoSabremetrics(
     sabremetrics: {
       ...ZERO,
       ...accStats.get(steamId),
-      ...entryStats.get(steamId),
       ...kastStats.get(steamId),
-      ...multikillStats.get(steamId),
       ...clutchStats.get(steamId),
       ...utilityStats.get(steamId),
       ...objectiveStats.get(steamId),

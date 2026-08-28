@@ -9,7 +9,10 @@ import type {
   SabFields, SabFieldsWithDerived, RoundHistoryEntry, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
   DemoMatchUtilityThrow, DemoMatchRoundEconomy,
 } from '@/lib/types';
-import { deriveHeadshotAndTeamkillCounts, type KillCreditFlags } from '@/lib/queries';
+import {
+  deriveHeadshotAndTeamkillCounts, deriveOpeningDuelCounts, deriveTwoKRoundCounts,
+  type KillCreditFlags,
+} from '@/lib/queries';
 type Faction = 'CT' | 'T' | null;
 
 interface MatchPlayer {
@@ -608,26 +611,47 @@ export default function DemoUploadModal({
 
                 {parsed.sabremetrics && parsed.sabremetrics.length > 0 && (() => {
                   const allPlayers = [...shirtsPlayers, ...skinsPlayers];
-                  // headshot_kills/teamkills aren't part of the parsed sabremetrics payload anymore
-                  // (derived from match_kills at query time, #457) — derived here the same way from
-                  // this preview's own parsed.matchKills, using match_id 0 since there's only one
-                  // match in scope, so the preview shows the same numbers confirming will persist.
+                  // headshot_kills/teamkills/opening_kills/opening_deaths/two_k_rounds/shots_fired/
+                  // shots_hit/headshot_hits aren't part of the parsed sabremetrics payload anymore
+                  // (all derived at query time once confirmed, #457) — derived here the same way
+                  // from this preview's own parsed.matchKills/weaponStats, using match_id 0 since
+                  // there's only one match in scope, so the preview shows the same numbers
+                  // confirming will persist.
                   const killFlags: KillCreditFlags[] = (parsed.matchKills ?? []).map((k) => ({
                     match_id: 0,
+                    round_number: k.round_number,
+                    tick: k.tick,
                     attacker_player_id: k.attacker_player_id,
                     victim_player_id: k.victim_player_id,
                     headshot: k.headshot,
                     is_teamkill: k.is_teamkill,
                   }));
                   const hsTk = deriveHeadshotAndTeamkillCounts(killFlags);
+                  const openingDuels = deriveOpeningDuelCounts(killFlags);
+                  const twoKRounds = deriveTwoKRoundCounts(killFlags);
                   const sabPlayers = parsed.sabremetrics!.map((s) => {
                     const mp = allPlayers.find((p) => p.player_id === s.player_id);
                     const stat = statMap.get(s.player_id);
-                    const counts = hsTk.get(`0:${s.player_id}`);
+                    const key = `0:${s.player_id}`;
+                    const counts = hsTk.get(key);
+                    const opening = openingDuels.get(key);
+                    const weaponStats = parsed.weaponStats?.find((w) => w.player_id === s.player_id);
+                    const accuracy = (weaponStats?.weaponStats ?? []).reduce(
+                      (acc, w) => ({
+                        shots_fired: acc.shots_fired + w.shots_fired,
+                        shots_hit: acc.shots_hit + w.shots_hit,
+                        headshot_hits: acc.headshot_hits + w.headshot_hits,
+                      }),
+                      { shots_fired: 0, shots_hit: 0, headshot_hits: 0 },
+                    );
                     const sabremetrics: SabFieldsWithDerived = {
                       ...(s.sabremetrics as SabFields),
                       headshot_kills: counts?.headshot_kills ?? 0,
                       teamkills: counts?.teamkills ?? 0,
+                      opening_kills: opening?.opening_kills ?? 0,
+                      opening_deaths: opening?.opening_deaths ?? 0,
+                      two_k_rounds: twoKRounds.get(key) ?? 0,
+                      ...accuracy,
                     };
                     return {
                       player_id: s.player_id,
