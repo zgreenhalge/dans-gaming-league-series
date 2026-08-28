@@ -1,15 +1,14 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+import { getAdminClient } from "@/lib/supabase-admin";
 
 export async function GET(request) {
   const auth = request.headers.get("authorization");
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Resolved per-request, not at module scope, so a test can inject a fresh fake client and so a
+  // sandbox with no Supabase credentials falls back to fixture data (see dev-fallback-supabase.ts).
+  const supabase = getAdminClient();
 
   const { data: players, error: fetchError } = await supabase
     .from("players")
