@@ -817,18 +817,12 @@ export type Database = {
       }
       player_match_sabremetrics: {
         Row: {
-          blind_duration_dealt: number
-          blind_duration_max_sum: number
           counter_strafe_good_shots: number
           counter_strafe_shots: number
           ct_smokes_thrown: number
           damage_ct: number
           damage_t: number
           defuses: number
-          effective_flashes: number
-          enemies_flashed: number
-          flash_assists: number
-          flashes_leading_to_kill: number
           flashes_thrown: number
           he_damage: number
           he_thrown: number
@@ -842,7 +836,6 @@ export type Database = {
           smokes_blocking_push: number
           spray_shots_fired: number
           spray_shots_hit: number
-          teamflash_duration: number
           trade_kill_attempts: number
           trade_kill_opportunities: number
           trade_kill_successes: number
@@ -853,18 +846,12 @@ export type Database = {
           utility_damage: number
         }
         Insert: {
-          blind_duration_dealt?: number
-          blind_duration_max_sum?: number
           counter_strafe_good_shots?: number
           counter_strafe_shots?: number
           ct_smokes_thrown?: number
           damage_ct?: number
           damage_t?: number
           defuses?: number
-          effective_flashes?: number
-          enemies_flashed?: number
-          flash_assists?: number
-          flashes_leading_to_kill?: number
           flashes_thrown?: number
           he_damage?: number
           he_thrown?: number
@@ -878,7 +865,6 @@ export type Database = {
           smokes_blocking_push?: number
           spray_shots_fired?: number
           spray_shots_hit?: number
-          teamflash_duration?: number
           trade_kill_attempts?: number
           trade_kill_opportunities?: number
           trade_kill_successes?: number
@@ -889,18 +875,12 @@ export type Database = {
           utility_damage?: number
         }
         Update: {
-          blind_duration_dealt?: number
-          blind_duration_max_sum?: number
           counter_strafe_good_shots?: number
           counter_strafe_shots?: number
           ct_smokes_thrown?: number
           damage_ct?: number
           damage_t?: number
           defuses?: number
-          effective_flashes?: number
-          enemies_flashed?: number
-          flash_assists?: number
-          flashes_leading_to_kill?: number
           flashes_thrown?: number
           he_damage?: number
           he_thrown?: number
@@ -914,7 +894,6 @@ export type Database = {
           smokes_blocking_push?: number
           spray_shots_fired?: number
           spray_shots_hit?: number
-          teamflash_duration?: number
           trade_kill_attempts?: number
           trade_kill_opportunities?: number
           trade_kill_successes?: number
