@@ -1,9 +1,10 @@
 /**
  * Unit tests for queries/kills.ts's pure aggregation helpers (#452, #474) —
- * aggregateWeaponKillStats, favoriteWeapon, allWeaponsWithKills, resolveWeaponStat,
- * resolveWeaponFilterStat. These operate on already-joined `MatchKillRow[]` in memory, so no
- * fake-DB harness is needed (contrast queries-weaponStats.test.ts, which exercises an actual
- * Supabase join).
+ * aggregateWeaponKillStats, favoriteWeapon, allWeaponsWithKills, resolveWeaponFilterStat
+ * (`resolveWeaponStat()` is an unexported internal the `weapon`/`favorite` branches of
+ * `resolveWeaponFilterStat()` delegate to, so it's covered indirectly rather than tested on its
+ * own). These operate on already-joined `MatchKillRow[]` in memory, so no fake-DB harness is
+ * needed (contrast queries-weaponStats.test.ts, which exercises an actual Supabase join).
  *
  * Run:  npx vitest run src/lib/queries-kills.test.ts
  */
@@ -14,7 +15,6 @@ import {
   aggregateFlairKillStats,
   favoriteWeapon,
   allWeaponsWithKills,
-  resolveWeaponStat,
   resolveWeaponFilterStat,
   FAVORITE_WEAPON_FILTER,
   deriveHeadshotAndTeamkillCounts,
@@ -128,32 +128,6 @@ test('allWeaponsWithKills: distinct credited-kill weapons, sorted by total kills
   assert.deepEqual(allWeaponsWithKills(kills), ['ak47', 'usp_silencer']);
 });
 
-test('resolveWeaponStat: null selection returns the favorite; a named selection returns that weapon zeroed if absent', () => {
-  const kills = [
-    kill({ attacker: 1, victim: 2, weapon: 'ak47' }),
-    kill({ attacker: 1, victim: 3, weapon: 'ak47' }),
-  ];
-  const stats = aggregateWeaponKillStats(kills, 1);
-
-  assert.equal(resolveWeaponStat(stats, null)?.weapon, 'ak47');
-
-  const named = resolveWeaponStat(stats, 'ak47');
-  assert.equal(named?.kills, 2);
-
-  const absent = resolveWeaponStat(stats, 'usp_silencer');
-  assert.deepEqual(absent, {
-    weapon: 'usp_silencer',
-    category: 'pistol',
-    kills: 0,
-    headshotKills: 0,
-    noscopeKills: 0,
-    wallbangKills: 0,
-    blindKills: 0,
-    midairKills: 0,
-    deaths: 0,
-  });
-});
-
 test('aggregateWeaponKillStats/allWeaponsWithKills: every knife/bayonet variant merges into one "knife" bucket (#474)', () => {
   const kills = [
     kill({ attacker: 1, victim: 2, weapon: 'knife_karambit' }),
@@ -208,6 +182,23 @@ test('resolveWeaponFilterStat: a weapon-kind filter resolves that specific weapo
   assert.equal(resolved.weapon, 'usp_silencer');
   assert.equal(resolved.label, 'USP-S');
   assert.equal(resolved.kills, 1);
+});
+
+test('resolveWeaponFilterStat: a weapon-kind filter for a weapon the player has no kills/deaths with still resolves a zeroed row', () => {
+  const kills = [kill({ attacker: 1, victim: 2, weapon: 'ak47' })];
+  const stats = aggregateWeaponKillStats(kills, 1);
+  const resolved = resolveWeaponFilterStat(stats, { kind: 'weapon', weapon: 'deagle' });
+  assert.deepEqual(resolved, {
+    label: 'Desert Eagle',
+    weapon: 'deagle',
+    kills: 0,
+    headshotKills: 0,
+    noscopeKills: 0,
+    wallbangKills: 0,
+    blindKills: 0,
+    midairKills: 0,
+    deaths: 0,
+  });
 });
 
 test('aggregateWeaponKillStats: buckets noscope/wallbang/blind/midair kills per weapon for one player', () => {

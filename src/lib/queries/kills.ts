@@ -714,8 +714,10 @@ export function lookupDerivedSabFields(
  *  it up (grouped via `weaponGroupKey()`, so a raw skin name still finds its `knife` bucket),
  *  falling back to a zeroed stat (rather than `null`) when the player has no kills/deaths with it —
  *  so a specific-weapon selection always renders a row for every player, per the Weapons sub-tab's
- *  filter contract. */
-export function resolveWeaponStat(stats: WeaponKillStat[], weapon: string | null): WeaponKillStat | null {
+ *  filter contract. Not exported — `resolveWeaponFilterStat()` is the only caller (its `favorite`/
+ *  `weapon` branches delegate here; its `category` branch bypasses it entirely), and every UI
+ *  consumer goes through that wider three-mode resolver instead. */
+function resolveWeaponStat(stats: WeaponKillStat[], weapon: string | null): WeaponKillStat | null {
   if (weapon == null) return favoriteWeapon(stats);
   const key = weaponGroupKey(weapon);
   return stats.find((s) => s.weapon === key) ?? zeroWeaponStat(key);
