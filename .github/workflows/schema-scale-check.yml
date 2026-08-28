@@ -1,0 +1,43 @@
+# schema-scale-check
+#
+# Warns (via ops_errors, surfaced on the admin console) when a career-wide fact-table query's row
+# count crosses the scale threshold established by #487's benchmark — see
+# scripts/schema-scale-check.ts for the full mechanism and reasoning. Runs weekly since these
+# tables grow with match history, not in real time.
+
+name: schema-scale-check
+
+on:
+  schedule:
+    - cron: '0 13 * * 1' # every Monday at 13:00 UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: schema-scale-check
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check career-wide fact-table row counts against the #487 scale threshold
+        run: npx tsx scripts/schema-scale-check.ts

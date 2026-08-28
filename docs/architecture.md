@@ -370,8 +370,9 @@ drift) records it in the generic `ops_errors` table via `recordOpsError()` / `cl
 an admin deciding what to do next. Rows are keyed by `(entity_type, entity_id, operation)`, not just
 `entity_id`, since more than one operation can attach to the same entity (a match's steam-id
 learning and its server teardown, for instance) — without `operation` in the key, one operation's
-success would clear an unrelated operation's still-live failure. `entity_id` is `0` for the one
-operation with no single entity (the site-wide EHOG recompute), using `entity_type = 'system'`.
+success would clear an unrelated operation's still-live failure. `entity_id` is `0` for operations
+with no single entity (the site-wide EHOG recompute, the weekly schema-scale check), using
+`entity_type = 'system'`.
 
 Rows are never hard-deleted. `dismissed_at` marks a row no-longer-live — set when an admin dismisses
 it (`DELETE /api/ops-errors/[id]`) or when a later attempt at the same `(entity_type, entity_id,
@@ -381,7 +382,7 @@ NULL`; `getOpsErrorHistory()` reads every row from the last 8 weeks regardless o
 grouped into a flat `(operation, week)` failure count, for the admin console's Activity → History
 tab.
 
-Wired into twenty-seven operations today:
+Wired into twenty-eight operations today:
 
 | Operation | Entity | Recorded from |
 |---|---|---|
@@ -399,6 +400,7 @@ Wired into twenty-seven operations today:
 | `live_score_clear` | `match` | `clearLiveScoreBestEffort()` (`liveScore.ts`), called by `pullDemoAndClearLiveScore()` and by `writeMatchScore()`'s fallback |
 | `name_history_log` | `player` | `recordNameChange()` (`src/lib/player-name-history.ts`), from both `PATCH /api/players/[id]` and `PATCH /api/players/me/name` — also recorded directly if the admin route can't even read the player's prior name to log a "from" |
 | `ehog_recompute` | `system` (id `0`) | `triggerRatingRecompute()` |
+| `schema_scale_<table>` | `system` (id `0`) | `scripts/schema-scale-check.ts`'s weekly cron — one operation per career-wide fact table it watches (`match_kills`, `match_rounds`, `match_utility_throws`, `player_match_weapon_stats`, `player_match_economy_stats`, `player_rating_history`, `player_season_leaderboard`), recorded when that table's row count crosses the query-scale threshold a local-Postgres benchmark established (#487) |
 | `schedule_generate` | `season` (regular) | `generateSeasonScheduleDraft()`'s (`season-schedule-draft-engine.ts`) `generate_season_schedule_draft()` RPC call erroring |
 | `schedule_confirm` | `season` (regular) | `confirmSeasonScheduleDraft()`'s (`season-schedule-draft-engine.ts`) `confirm_season_schedule_draft()` RPC call erroring |
 | `discord_notify_server_live` | `match` | `notifyMatchServerLive()` (`discord-notify.ts`, #395) — a real webhook failure, not just the channel being unconfigured |
