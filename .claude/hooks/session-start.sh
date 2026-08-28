@@ -63,6 +63,9 @@ has_real_env_local() {
 # whose network policy blocks the image registry (a separate failure `start_local_supabase`'s own
 # timeout already handles) — it only removes the "nobody ever ran dockerd" case.
 start_dockerd() {
+  if docker info >/dev/null 2>&1; then
+    return 0
+  fi
   if ! command -v dockerd >/dev/null 2>&1; then
     log "dockerd binary not found — cannot start the Docker daemon."
     return 1
@@ -74,12 +77,12 @@ start_dockerd() {
   log "docker daemon not running — starting dockerd..."
   nohup dockerd >>"$STATUS_LOG" 2>&1 &
   local waited=0
-  while [ "$waited" -lt 15 ]; do
+  while [ "$waited" -lt 30 ]; do
     if docker info >/dev/null 2>&1; then
       log "dockerd started."
       return 0
     fi
-    sleep 1
+    sleep 0.5
     waited=$((waited + 1))
   done
   log "dockerd didn't come up within 15s — giving up on it."
@@ -91,9 +94,6 @@ docker_available() {
   if ! command -v docker >/dev/null 2>&1; then
     log "docker CLI not found — skipping local Supabase bootstrap."
     return 1
-  fi
-  if docker info >/dev/null 2>&1; then
-    return 0
   fi
   if ! start_dockerd; then
     log "docker daemon not reachable — skipping local Supabase bootstrap."
@@ -142,6 +142,8 @@ export_local_env() {
 
 # --- Run ---------------------------------------------------------------------------------------
 
+NO_LOCAL_STACK_MSG="No local Supabase stack this session — npm run build/dev/test will use src/lib/dev-fallback-supabase.ts's in-memory fixture data instead. Set NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY manually (see README.md's Environment Variables table) for a real connection."
+
 install_deps
 
 if has_real_env_local; then
@@ -150,12 +152,12 @@ if has_real_env_local; then
 fi
 
 if ! docker_available; then
-  log "No local Supabase stack this session — npm run build/dev/test will use src/lib/dev-fallback-supabase.ts's in-memory fixture data instead. Set NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY manually (see README.md's Environment Variables table) for a real connection."
+  log "$NO_LOCAL_STACK_MSG"
   exit 0
 fi
 
 if ! start_local_supabase; then
-  log "No local Supabase stack this session — npm run build/dev/test will use src/lib/dev-fallback-supabase.ts's in-memory fixture data instead. Set NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY manually (see README.md's Environment Variables table) for a real connection."
+  log "$NO_LOCAL_STACK_MSG"
   exit 0
 fi
 
