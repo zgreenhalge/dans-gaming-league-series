@@ -25,26 +25,30 @@ async function assertNoErrorBoundary(page: Page): Promise<void> {
   await expect(page.getByText('Something went wrong')).toHaveCount(0);
 }
 
-/** Clicks every `role="tab"` button on the page, including ones that only appear once an earlier
- *  tab has been selected (e.g. Advanced Stats' own side/sub-tab bar) — repeats until a pass finds
- *  nothing new to click. Keyed by visible label text, so a same-labeled tab under a different
- *  parent won't get a second click; harmless for a smoke pass that just needs every tab reached
- *  once. */
+/** Clicks every tab in every `role="tablist"` on the page, including a sub-tab bar that only
+ *  mounts once its parent tab is selected (e.g. Advanced Stats' own sub-tabs) — repeats until a
+ *  pass finds nothing new, which is what reaches those. Tracked as `` `${tablist index}:${tab
+ *  index}` `` rather than visible label text, so two tab bars that happen to share a label (e.g. a
+ *  season's own tabs and its linked gauntlet's) can't cause one to be skipped in place of the
+ *  other — each tablist's own tab buttons are a fixed set for the page's lifetime (only the
+ *  selected content pane changes), so a position within one stays valid across rounds. */
 async function clickThroughTabs(page: Page): Promise<void> {
   const clicked = new Set<string>();
   for (let round = 0; round < 8; round++) {
-    const tabs = page.getByRole('tab');
-    const count = await tabs.count();
+    const tablists = page.getByRole('tablist');
+    const tablistCount = await tablists.count();
     let clickedThisRound = false;
-    for (let i = 0; i < count; i++) {
-      const tab = tabs.nth(i);
-      if (!(await tab.isVisible())) continue;
-      const label = (await tab.textContent())?.trim() || `tab-${i}`;
-      if (clicked.has(label)) continue;
-      clicked.add(label);
-      clickedThisRound = true;
-      await tab.click();
-      await assertNoErrorBoundary(page);
+    for (let t = 0; t < tablistCount; t++) {
+      const tabs = tablists.nth(t).getByRole('tab');
+      const tabCount = await tabs.count();
+      for (let i = 0; i < tabCount; i++) {
+        const key = `${t}:${i}`;
+        if (clicked.has(key)) continue;
+        clicked.add(key);
+        clickedThisRound = true;
+        await tabs.nth(i).click();
+        await assertNoErrorBoundary(page);
+      }
     }
     if (!clickedThisRound) break;
   }
