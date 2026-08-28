@@ -11,8 +11,9 @@ const NS = 'CCSPlayerController.CCSPlayerController_ActionTrackingServices';
 // (deriveSideSplitCounts() in queries/kills.ts, #488). m_iDamage stays: damage_ct/_t isn't a clean
 // duplicate of any existing fact table (#491), so it's still collected live.
 export const SPLIT_PROPS = ['m_iDamage'] as const;
-// m_iEnemiesFlashed is not read here: enemies_flashed is computed in utility.ts from
-// player_blind events so it can apply the half-blind (1.1s) threshold.
+// m_iEnemiesFlashed is not read here: enemies_flashed is derived at query time from
+// match_utility_throws (queries/utility.ts's deriveUtilityCounts(), #489), which applies the
+// half-blind (1.1s) threshold the engine's ungated netprop doesn't.
 export const UNSPLIT_PROPS = ['m_iUtilityDamage'] as const;
 
 export const SPLIT_FIELDS: Record<string, { ct: keyof SabFields; t: keyof SabFields }> = {
