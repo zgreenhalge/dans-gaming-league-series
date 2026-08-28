@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import { extractSeasonNumber } from '../util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG, fromEhog } from '../ehog';
-import { batchedIn, SUPABASE_IN_BATCH, getWeekLookup } from './_shared';
+import { batchedIn, SUPABASE_IN_BATCH, getWeekLookup, fetchAllPages, asPage } from './_shared';
 
 
 // ---------------------------------------------------------------------------
@@ -112,13 +112,22 @@ export interface EhogSnapshotRow {
 }
 
 export async function getAllEhogSnapshots(): Promise<EhogSnapshotRow[]> {
-  const { data, error } = await supabase
-    .from('player_rating_history')
-    .select('player_id, ehog_rating, sequence_index, match_id')
-    .eq('formula_version', 'ehog_v1')
-    .order('sequence_index', { ascending: true });
-  if (error) throw error;
-  if (!data || data.length === 0) return [];
+  // fetchAllPages()'d rather than a plain `.select()` — this table grows one row per player per
+  // match, so it's already the fastest-growing table in the schema and would be the first to
+  // silently truncate against PostgREST's default 1000-row response cap.
+  const data = await fetchAllPages<{
+    player_id: number; ehog_rating: number; sequence_index: number; match_id: number;
+  }>((from, to) =>
+    asPage(
+      supabase
+        .from('player_rating_history')
+        .select('player_id, ehog_rating, sequence_index, match_id')
+        .eq('formula_version', 'ehog_v1')
+        .order('sequence_index', { ascending: true })
+        .range(from, to),
+    ),
+  );
+  if (data.length === 0) return [];
 
   const matchIds = Array.from(new Set(data.map((r) => r.match_id)));
   const ctx = await resolveMatchContext(matchIds);

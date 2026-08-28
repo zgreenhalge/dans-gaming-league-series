@@ -337,17 +337,20 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
 export async function getAllLeaderboards(): Promise<
   Map<number, LeaderboardRowWithId[]>
 > {
-  const [{ data: rows, error }, playersById, { perPlayerStats: perPlayer, rosterBySeason }] = await Promise.all([
-    supabase
-      .from('player_season_leaderboard')
-      .select('*'),
+  const [rows, playersById, { perPlayerStats: perPlayer, rosterBySeason }] = await Promise.all([
+    // fetchAllPages()'d, not a plain `.select()` — unlike getLeaderboard()'s season-scoped read
+    // above, this one has no `.eq('season_id', …)` filter, so its row count grows with total
+    // seasons × roster size rather than staying bounded to one season, and would silently truncate
+    // against PostgREST's default 1000-row response cap once the league has enough season history.
+    fetchAllPages<LeaderboardRow>((from, to) =>
+      asPage(supabase.from('player_season_leaderboard').select('*').range(from, to)),
+    ),
     getPlayersById(),
     getSeasonBaseData(),
   ]);
-  if (error) throw error;
 
   const out = new Map<number, LeaderboardRowWithId[]>();
-  for (const r of (rows ?? []) as LeaderboardRow[]) {
+  for (const r of rows) {
     const ps = perPlayer.get(`${r.season_id}:${r.player_id}`);
     const total_rounds_played = n(r.total_rounds_played);
     const total_rounds_won = ps?.rounds_won ?? 0;
