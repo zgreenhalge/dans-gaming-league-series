@@ -10,7 +10,8 @@
 // current volume (8,700 matches, ~400k match_kills rows) — the real cost driver at scale is round
 // trips: `fetchAllPages()` fetches `SUPABASE_PAGE_SIZE` (1,000) rows per PostgREST request, so a
 // table crossing THRESHOLD rows needs 50+ sequential round trips for one full read. See
-// docs/github-actions.md and the #487 PR description for the full benchmark writeup.
+// docs/architecture.md's "Surfacing best-effort failures" section for how this feeds `ops_errors`,
+// and the #487 PR description for the full benchmark writeup.
 //
 //   set -a; . ./.env.local; set +a
 //   npx tsx scripts/schema-scale-check.ts
@@ -30,6 +31,8 @@ const HEAVY_TABLES = [
   'match_kills',
   'match_rounds',
   'match_utility_throws',
+  'player_match_stats',
+  'player_match_sabremetrics',
   'player_match_weapon_stats',
   'player_match_economy_stats',
   'player_rating_history',

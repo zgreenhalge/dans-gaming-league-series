@@ -342,8 +342,18 @@ export async function getAllLeaderboards(): Promise<
     // above, this one has no `.eq('season_id', …)` filter, so its row count grows with total
     // seasons × roster size rather than staying bounded to one season, and would silently truncate
     // against PostgREST's default 1000-row response cap once the league has enough season history.
+    // `.order()` is required, not cosmetic: each `.range()` page is its own query execution, and
+    // without a deterministic order Postgres gives no guarantee two separate executions return
+    // rows in the same order — a row could land on neither page (dropped) or both (duplicated).
     fetchAllPages<LeaderboardRow>((from, to) =>
-      asPage(supabase.from('player_season_leaderboard').select('*').range(from, to)),
+      asPage(
+        supabase
+          .from('player_season_leaderboard')
+          .select('*')
+          .order('season_id', { ascending: true })
+          .order('player_id', { ascending: true })
+          .range(from, to),
+      ),
     ),
     getPlayersById(),
     getSeasonBaseData(),
