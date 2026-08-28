@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, isWeekComplete, isMatchCurrentlyLive, getMatchKills } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, isWeekComplete, isMatchCurrentlyLive, getMatchKills, getMatchWeaponClassStats } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/seo/og';
 import { buildMatchJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
@@ -133,7 +133,7 @@ export default async function MatchPage({
   const needsPreviousWeekCheck =
     !played && showScouting && week.week_number > 1 && matchWindow != null && today < matchWindow.weekStart;
 
-  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, previousWeekComplete, isLiveNow, matchKills] = await Promise.all([
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, previousWeekComplete, isLiveNow, matchKills, matchWeaponClassStats] = await Promise.all([
     showScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     // Cached and shared across every match page (see #441 item 3) rather than a fresh
     // full-league computeH2H() scan on each load.
@@ -154,6 +154,7 @@ export default async function MatchPage({
     // Drives the `--ticker-h` override below — only an unplayed match can ever be the live one.
     played ? Promise.resolve(false) : isMatchCurrentlyLive(matchId),
     played ? getMatchKills(matchId) : Promise.resolve([]),
+    played ? getMatchWeaponClassStats(matchId) : Promise.resolve([]),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
 
@@ -415,6 +416,7 @@ export default async function MatchPage({
               skinsSide={match.skins_starting_side}
               sabremetrics={sabremetrics}
               matchKills={matchKills}
+              matchWeaponClassStats={matchWeaponClassStats}
               ehog={{ deltas: ratingDeltas, projections: ratingProjections, current: ratingCurrent }}
               scouting={{ data: scoutingData, h2h: scoutingH2H }}
               mapInfo={{ map, matchIds: mapMatchIds, pool: season.map_pool }}
