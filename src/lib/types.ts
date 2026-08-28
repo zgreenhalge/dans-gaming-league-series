@@ -173,19 +173,13 @@ export interface PlayerMatchSabremetrics {
   damage_ct: number;
   damage_t: number;
   // headshot_kills/teamkills/opening_kills/opening_deaths/two_k_rounds/shots_fired/shots_hit/
-  // headshot_hits/kills_ct/_t/deaths_ct/_t/assists_ct/_t/headshot_kills_ct/_t are all derived at
-  // query time (#457/#488), not stored — see queries/kills.ts's
+  // headshot_hits/kills_ct/_t/deaths_ct/_t/assists_ct/_t/headshot_kills_ct/_t/clutch_1v1/1v2/2v1_
+  // attempts/wins are all derived at query time (#457/#488), not stored — see queries/kills.ts's
   // deriveHeadshotAndTeamkillCounts()/deriveOpeningDuelCounts()/deriveTwoKRoundCounts()/
-  // deriveSideSplitCounts() and queries/weaponStats.ts's deriveAccuracyTotals(). damage_ct/_t and
-  // the clutch_* fields stay stored for now — damage_ct/_t isn't a clean duplicate of any existing
-  // fact table (#491), and the clutch fields are pending query-time reconstruction (#488).
+  // deriveSideSplitCounts()/deriveClutchCounts() and queries/weaponStats.ts's
+  // deriveAccuracyTotals(). damage_ct/_t stays stored — it isn't a clean duplicate of any existing
+  // fact table (#491).
   kast_rounds: number;
-  clutch_1v1_attempts: number;
-  clutch_1v1_wins: number;
-  clutch_1v2_attempts: number;
-  clutch_1v2_wins: number;
-  clutch_2v1_attempts: number;
-  clutch_2v1_wins: number;
   flash_assists: number;
   flashes_leading_to_kill: number;
   utility_damage: number;
@@ -242,6 +236,12 @@ export type SabFieldsWithDerived = SabFields & {
   assists_t: number;
   headshot_kills_ct: number;
   headshot_kills_t: number;
+  clutch_1v1_attempts: number;
+  clutch_1v1_wins: number;
+  clutch_1v2_attempts: number;
+  clutch_1v2_wins: number;
+  clutch_2v1_attempts: number;
+  clutch_2v1_wins: number;
 };
 
 export interface DemoSabremetricStat {

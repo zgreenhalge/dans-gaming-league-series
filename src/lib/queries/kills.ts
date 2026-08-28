@@ -5,6 +5,7 @@ import { killWeaponCategory, type KillWeaponCategory } from '../parsers/weaponCl
 import type { Player, Faction } from '../types';
 import type { AccuracyTotals } from './weaponStats';
 import { oppositeSide } from '../mapSideStats';
+import type { RoundSideInfo } from './rounds';
 
 export interface MatchKillRow {
   match_id: number;
@@ -351,7 +352,7 @@ export interface SideSplitCounts {
  */
 export function deriveSideSplitCounts(
   kills: KillCreditFlags[],
-  roundSides: Map<string, 'CT' | 'T'>,
+  roundSides: Map<string, RoundSideInfo>,
   playerFactions: Map<string, Faction>,
 ): Map<string, SideSplitCounts> {
   const out = new Map<string, SideSplitCounts>();
@@ -373,8 +374,9 @@ export function deriveSideSplitCounts(
   };
 
   for (const k of kills) {
-    const shirtsSide = roundSides.get(`${k.match_id}:${k.round_number}`);
-    if (shirtsSide == null) continue;
+    const roundInfo = roundSides.get(`${k.match_id}:${k.round_number}`);
+    if (roundInfo == null) continue;
+    const shirtsSide = roundInfo.shirtsSide;
 
     const victimSide = sideOf(k.match_id, k.victim_player_id, shirtsSide);
     if (victimSide != null) bump(k.match_id, k.victim_player_id, victimSide === 'CT' ? 'deaths_ct' : 'deaths_t');
@@ -394,6 +396,144 @@ export function deriveSideSplitCounts(
       if (assisterSide != null) bump(k.match_id, k.assister_player_id, assisterSide === 'CT' ? 'assists_ct' : 'assists_t');
     }
   }
+  return out;
+}
+
+export interface ClutchCounts {
+  clutch_1v1_attempts: number;
+  clutch_1v1_wins: number;
+  clutch_1v2_attempts: number;
+  clutch_1v2_wins: number;
+  clutch_2v1_attempts: number;
+  clutch_2v1_wins: number;
+}
+
+type ClutchCategory = '1v1' | '1v2';
+
+function bumpClutch(
+  out: Map<string, ClutchCounts>,
+  matchId: number,
+  playerId: number,
+  attemptsKey: keyof ClutchCounts,
+  winsKey: keyof ClutchCounts,
+  won: boolean,
+): void {
+  const key = `${matchId}:${playerId}`;
+  let c = out.get(key);
+  if (!c) {
+    c = {
+      clutch_1v1_attempts: 0, clutch_1v1_wins: 0,
+      clutch_1v2_attempts: 0, clutch_1v2_wins: 0,
+      clutch_2v1_attempts: 0, clutch_2v1_wins: 0,
+    };
+    out.set(key, c);
+  }
+  c[attemptsKey] += 1;
+  if (won) c[winsKey] += 1;
+}
+
+/**
+ * Per (match, player) clutch attempt/win counts — the query-time replacement for
+ * `clutch_1v1`/`1v2`/`2v1_attempts`/`wins` on `player_match_sabremetrics`, ported faithfully from
+ * `parsers/clutch.ts`'s live per-round alive-count state machine rather than redesigned: for each
+ * round, replay its kills in tick order against both sides' starting alive sets (every roster
+ * player, resolved to CT/T via `resolvePlayerSide()`), crediting whoever's side drops to 1 facing
+ * 1-2 enemies (1v1/1v2), and crediting a 2-alive side facing exactly 1 enemy a shared 2v1 advantage
+ * (the choke-score numerator). A player who reaches a 1v2 and later narrows to a 1v1 (their
+ * remaining teammate's death cut the enemy count further) gets credited both — the original 1v2
+ * attempt/win stands, and a separate 1v1 attempt/win is added for the narrower phase.
+ *
+ * `roundSides`/`playerFactions` are the same maps `deriveSideSplitCounts()` takes. `rosterByMatch`
+ * (every roster `player_id` per `match_id`, from `player_match_stats`) is the one extra input this
+ * needs beyond a kill's own participants — clutch state depends on the *whole* alive roster each
+ * round, not just who's involved in a given kill.
+ *
+ * A round absent from `kills` (nobody died) is skipped entirely rather than replayed with zero
+ * deaths — equivalent, since a round where every roster player survives never moves either side's
+ * alive count off its starting value, so it can never trigger a clutch/2v1 credit either way.
+ */
+export function deriveClutchCounts(
+  kills: KillCreditFlags[],
+  roundSides: Map<string, RoundSideInfo>,
+  playerFactions: Map<string, Faction>,
+  rosterByMatch: Map<number, number[]>,
+): Map<string, ClutchCounts> {
+  const out = new Map<string, ClutchCounts>();
+
+  const byRound = new Map<string, KillCreditFlags[]>();
+  for (const k of kills) {
+    const key = `${k.match_id}:${k.round_number}`;
+    const group = byRound.get(key);
+    if (group) group.push(k);
+    else byRound.set(key, [k]);
+  }
+
+  for (const roundKills of byRound.values()) {
+    const matchId = roundKills[0].match_id;
+    const roundNumber = roundKills[0].round_number;
+    const roundInfo = roundSides.get(`${matchId}:${roundNumber}`);
+    if (roundInfo == null) continue;
+    const roster = rosterByMatch.get(matchId);
+    if (roster == null) continue;
+
+    const ctAlive = new Set<number>();
+    const tAlive = new Set<number>();
+    for (const playerId of roster) {
+      const faction = playerFactions.get(`${matchId}:${playerId}`);
+      if (faction == null) continue;
+      const side = resolvePlayerSide(roundInfo.shirtsSide, faction);
+      (side === 'CT' ? ctAlive : tAlive).add(playerId);
+    }
+
+    const deaths = [...roundKills].sort((a, b) => a.tick - b.tick);
+    const clutchState = new Map<'CT' | 'T', { playerId: number; category: ClutchCategory }>();
+    const advantageRecorded = new Set<'CT' | 'T'>();
+
+    for (const death of deaths) {
+      const victim = death.victim_player_id;
+      ctAlive.delete(victim);
+      tAlive.delete(victim);
+
+      for (const side of ['CT', 'T'] as const) {
+        const myAlive = side === 'CT' ? ctAlive : tAlive;
+        const enemyAlive = side === 'CT' ? tAlive : ctAlive;
+        if (enemyAlive.size === 0) continue;
+
+        const won = roundInfo.winnerSide === side;
+
+        if (myAlive.size === 1) {
+          const clutcher = [...myAlive][0];
+          const enemyCount = enemyAlive.size;
+          const existing = clutchState.get(side);
+
+          if (existing?.playerId === clutcher) {
+            if (existing.category === '1v2' && enemyCount === 1) {
+              bumpClutch(out, matchId, clutcher, 'clutch_1v1_attempts', 'clutch_1v1_wins', won);
+            }
+            continue;
+          }
+
+          if (enemyCount > 2) continue;
+
+          const category: ClutchCategory = enemyCount === 1 ? '1v1' : '1v2';
+          clutchState.set(side, { playerId: clutcher, category });
+          if (category === '1v1') {
+            bumpClutch(out, matchId, clutcher, 'clutch_1v1_attempts', 'clutch_1v1_wins', won);
+          } else {
+            bumpClutch(out, matchId, clutcher, 'clutch_1v2_attempts', 'clutch_1v2_wins', won);
+          }
+        } else if (myAlive.size === 2 && enemyAlive.size === 1) {
+          if (advantageRecorded.has(side)) continue;
+          advantageRecorded.add(side);
+
+          for (const teammate of myAlive) {
+            bumpClutch(out, matchId, teammate, 'clutch_2v1_attempts', 'clutch_2v1_wins', won);
+          }
+        }
+      }
+    }
+  }
+
   return out;
 }
 
@@ -513,6 +653,12 @@ export interface DerivedSabFields {
   assists_t: number;
   headshot_kills_ct: number;
   headshot_kills_t: number;
+  clutch_1v1_attempts: number;
+  clutch_1v1_wins: number;
+  clutch_1v2_attempts: number;
+  clutch_1v2_wins: number;
+  clutch_2v1_attempts: number;
+  clutch_2v1_wins: number;
 }
 
 const ZERO_SIDE_SPLIT: SideSplitCounts = {
@@ -520,22 +666,31 @@ const ZERO_SIDE_SPLIT: SideSplitCounts = {
   assists_ct: 0, assists_t: 0, headshot_kills_ct: 0, headshot_kills_t: 0,
 };
 
+const ZERO_CLUTCH: ClutchCounts = {
+  clutch_1v1_attempts: 0, clutch_1v1_wins: 0,
+  clutch_1v2_attempts: 0, clutch_1v2_wins: 0,
+  clutch_2v1_attempts: 0, clutch_2v1_wins: 0,
+};
+
 /** Looks up one `` `${match_id}:${player_id}` `` key across `deriveKillCreditCounts()`'s three maps,
- *  a `deriveAccuracyTotals()`-shaped accuracy map, and a `deriveSideSplitCounts()`-shaped side-split
- *  map, defaulting every field to 0 when a player has no credited rows in a given map (never played
- *  a round, never fired a gun, side unresolved, etc.) — the shared merge every `SabFieldsWithDerived`
- *  builder (`getAllSabremetrics()`, `getMatchSabremetrics()`, the demo-upload preview) applies
- *  identically over the stored `player_match_sabremetrics` row. */
+ *  a `deriveAccuracyTotals()`-shaped accuracy map, a `deriveSideSplitCounts()`-shaped side-split map,
+ *  and a `deriveClutchCounts()`-shaped clutch map, defaulting every field to 0 when a player has no
+ *  credited rows in a given map (never played a round, never fired a gun, side unresolved, etc.) —
+ *  the shared merge every `SabFieldsWithDerived` builder (`getAllSabremetrics()`,
+ *  `getMatchSabremetrics()`, the demo-upload preview) applies identically over the stored
+ *  `player_match_sabremetrics` row. */
 export function lookupDerivedSabFields(
   key: string,
   counts: KillCreditCounts,
   accuracy: Map<string, AccuracyTotals>,
   sideSplit: Map<string, SideSplitCounts>,
+  clutch: Map<string, ClutchCounts>,
 ): DerivedSabFields {
   const hsTkCounts = counts.hsTk.get(key);
   const opening = counts.openingDuels.get(key);
   const acc = accuracy.get(key);
   const split = sideSplit.get(key) ?? ZERO_SIDE_SPLIT;
+  const clutchCounts = clutch.get(key) ?? ZERO_CLUTCH;
   return {
     headshot_kills: hsTkCounts?.headshot_kills ?? 0,
     teamkills: hsTkCounts?.teamkills ?? 0,
@@ -546,6 +701,7 @@ export function lookupDerivedSabFields(
     shots_hit: acc?.shots_hit ?? 0,
     headshot_hits: acc?.headshot_hits ?? 0,
     ...split,
+    ...clutchCounts,
   };
 }
 

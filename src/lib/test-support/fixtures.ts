@@ -171,17 +171,17 @@ function sab(overrides: Partial<SabFields> & { player_match_stats_id: number }):
 }
 
 export const PLAYER_MATCH_SABREMETRICS: Row[] = [
-  sab({ player_match_stats_id: 1000, damage_ct: 1020, damage_t: 861, kast_rounds: 17, clutch_1v1_attempts: 2, clutch_1v1_wins: 1, flash_assists: 2, enemies_flashed: 6, flashes_thrown: 8, plants: 3, trade_kill_opportunities: 5, trade_kill_attempts: 4, trade_kill_successes: 3 }),
+  sab({ player_match_stats_id: 1000, damage_ct: 1020, damage_t: 861, kast_rounds: 17, flash_assists: 2, enemies_flashed: 6, flashes_thrown: 8, plants: 3, trade_kill_opportunities: 5, trade_kill_attempts: 4, trade_kill_successes: 3 }),
   sab({ player_match_stats_id: 1001, damage_ct: 940, damage_t: 780, kast_rounds: 15, flash_assists: 3, enemies_flashed: 7, flashes_thrown: 9, defuses: 1, trade_kill_opportunities: 4, trade_kill_attempts: 3, trade_kill_successes: 2 }),
   sab({ player_match_stats_id: 1002, damage_ct: 720, damage_t: 710, kast_rounds: 12, flash_assists: 1, enemies_flashed: 4, flashes_thrown: 5, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
   sab({ player_match_stats_id: 1003, damage_ct: 670, damage_t: 652, kast_rounds: 11, flash_assists: 2, enemies_flashed: 5, flashes_thrown: 6, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
 
-  sab({ player_match_stats_id: 1012, damage_ct: 1150, damage_t: 962, kast_rounds: 19, clutch_1v2_attempts: 1, clutch_1v2_wins: 1, flash_assists: 1, enemies_flashed: 5, flashes_thrown: 7, plants: 2, trade_kill_opportunities: 6, trade_kill_attempts: 5, trade_kill_successes: 4 }),
+  sab({ player_match_stats_id: 1012, damage_ct: 1150, damage_t: 962, kast_rounds: 19, flash_assists: 1, enemies_flashed: 5, flashes_thrown: 7, plants: 2, trade_kill_opportunities: 6, trade_kill_attempts: 5, trade_kill_successes: 4 }),
   sab({ player_match_stats_id: 1013, damage_ct: 1000, damage_t: 920, kast_rounds: 17, flash_assists: 3, enemies_flashed: 6, flashes_thrown: 8, defuses: 1, trade_kill_opportunities: 5, trade_kill_attempts: 4, trade_kill_successes: 3 }),
   sab({ player_match_stats_id: 1014, damage_ct: 880, damage_t: 800, kast_rounds: 14, flash_assists: 1, enemies_flashed: 4, flashes_thrown: 5, trade_kill_opportunities: 4, trade_kill_attempts: 3, trade_kill_successes: 2 }),
   sab({ player_match_stats_id: 1015, damage_ct: 820, damage_t: 740, kast_rounds: 12, flash_assists: 2, enemies_flashed: 5, flashes_thrown: 6, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
 
-  sab({ player_match_stats_id: 1016, damage_ct: 900, damage_t: 810, kast_rounds: 15, clutch_1v1_attempts: 1, clutch_1v1_wins: 1, flash_assists: 1, enemies_flashed: 3, flashes_thrown: 4, plants: 2, trade_kill_opportunities: 4, trade_kill_attempts: 4, trade_kill_successes: 3 }),
+  sab({ player_match_stats_id: 1016, damage_ct: 900, damage_t: 810, kast_rounds: 15, flash_assists: 1, enemies_flashed: 3, flashes_thrown: 4, plants: 2, trade_kill_opportunities: 4, trade_kill_attempts: 4, trade_kill_successes: 3 }),
   sab({ player_match_stats_id: 1017, damage_ct: 820, damage_t: 764, kast_rounds: 13, flash_assists: 2, enemies_flashed: 4, flashes_thrown: 5, defuses: 1, trade_kill_opportunities: 3, trade_kill_attempts: 3, trade_kill_successes: 2 }),
   sab({ player_match_stats_id: 1018, damage_ct: 400, damage_t: 410, kast_rounds: 6, trade_kill_opportunities: 2, trade_kill_attempts: 1, trade_kill_successes: 0 }),
   sab({ player_match_stats_id: 1019, damage_ct: 350, damage_t: 370, kast_rounds: 5, trade_kill_opportunities: 2, trade_kill_attempts: 1, trade_kill_successes: 0 }),

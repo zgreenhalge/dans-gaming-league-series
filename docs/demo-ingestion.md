@@ -69,7 +69,6 @@ recorded score.
 | `roundSides.ts` | Which side (CT/T) each faction is on each round — see "Side splits" below |
 | `accumulators.ts` | Per-side damage deltas from round-end accumulator ticks (`damage_ct`/`damage_t`) — K/A/D/headshot splits aren't collected here; they're derived at query time from `match_kills` (`deriveSideSplitCounts()` in `queries/kills.ts`) |
 | `kast.ts` | KAST rounds + trade tracking (`KAST+`) |
-| `clutch.ts` | 1vN attempts/wins and 2v1 numbers-advantage attempts/wins (`Clutch+`, `Choke+`) |
 | `utility.ts` | Flash assists, utility damage, teamflash/self-flash (`Utility+`) |
 | `objectives.ts` | Bomb plants/defuses (`Objective+`) |
 | `trades.ts` | Trade-kill/traded-death opportunity/attempt/success counts, sharing `kast.ts`'s trade window (`Trade+`) |
@@ -142,6 +141,13 @@ query time rather than baked into the persisted shape. This is a deliberate depa
   derived at query time (`deriveSideSplitCounts()` in `queries/kills.ts`), but do need a side lookup —
   `resolvePlayerSide()` combines `match_rounds.shirts_side` for that round with the player's fixed
   match `faction` from `player_match_stats`.
+- `clutch_1v1`/`1v2`/`2v1_attempts`/`wins` are derived at query time too (`deriveClutchCounts()` in
+  `queries/kills.ts`) — a faithful port of the live per-round alive-count state machine
+  `parsers/clutch.ts` used to run during parsing, replayed instead against `match_kills` ordered by
+  `tick`: both sides' starting alive sets come from every roster player's resolved side that round
+  (`resolvePlayerSide()`), then each kill in the round updates the alive sets the same way, crediting
+  a clutch when a side drops to a lone survivor and a 2v1 advantage when a side keeps 2 alive against
+  a lone enemy.
 
 ## Match start (skipping warmup and stray knife rounds)
 

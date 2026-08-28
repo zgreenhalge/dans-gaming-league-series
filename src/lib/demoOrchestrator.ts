@@ -10,7 +10,6 @@ import type { RoundEndRow } from './parsers/roundSides';
 import { inferSkinsStartingSide, resolveEffectiveSide } from './parsers/sideInference';
 import { collectAccumulators } from './parsers/accumulators';
 import { collectKast } from './parsers/kast';
-import { collectClutch } from './parsers/clutch';
 import {
   collectUtility, collectMatchUtilityThrows, type PlayerBlindRow, type WeaponFireRow,
 } from './parsers/utility';
@@ -40,9 +39,6 @@ import { collectWeaponClassStats, collectEconomyStats, collectMatchKills } from 
 const ZERO: SabFields = {
   damage_ct: 0, damage_t: 0,
   kast_rounds: 0,
-  clutch_1v1_attempts: 0, clutch_1v1_wins: 0,
-  clutch_1v2_attempts: 0, clutch_1v2_wins: 0,
-  clutch_2v1_attempts: 0, clutch_2v1_wins: 0,
   flash_assists: 0,
   flashes_leading_to_kill: 0,
   utility_damage: 0,
@@ -188,7 +184,6 @@ export function parseDemoSabremetrics(
 
   // 5. Event-based collectors
   const kastStats = collectKast(liveDeathEvents, context, steamIds, tradeOpportunities);
-  const clutchStats = collectClutch(liveDeathEvents, context, steamIds);
   const utilityStats = collectUtility(blindEvents, liveDeathEvents, fireEvents, context, steamIds);
   const objectiveStats = collectObjectives(plantEvents, defuseEvents, context, steamIds);
   const heStats = collectHeGrenades(fireEvents, hurtEvents, context, steamIds);
@@ -368,7 +363,6 @@ export function parseDemoSabremetrics(
       ...ZERO,
       ...accStats.get(steamId),
       ...kastStats.get(steamId),
-      ...clutchStats.get(steamId),
       ...utilityStats.get(steamId),
       ...objectiveStats.get(steamId),
       ...tradeStats.get(steamId),

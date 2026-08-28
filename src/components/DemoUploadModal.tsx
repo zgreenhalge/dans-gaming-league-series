@@ -10,8 +10,8 @@ import type {
   DemoMatchUtilityThrow, DemoMatchRoundEconomy,
 } from '@/lib/types';
 import {
-  deriveKillCreditCounts, deriveSideSplitCounts, lookupDerivedSabFields, sumAccuracyTotals,
-  type KillCreditFlags,
+  deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts, lookupDerivedSabFields,
+  sumAccuracyTotals, type KillCreditFlags,
 } from '@/lib/queries';
 type Faction = 'CT' | 'T' | null;
 
@@ -635,19 +635,24 @@ export default function DemoUploadModal({
                     ),
                   );
                   const roundSides = new Map(
-                    (parsed.matchRounds ?? []).map((r) => [`0:${r.round_number}`, r.shirts_side]),
+                    (parsed.matchRounds ?? []).map((r) => [
+                      `0:${r.round_number}`,
+                      { shirtsSide: r.shirts_side, winnerSide: r.winner_side },
+                    ]),
                   );
                   const playerFactions = new Map(
                     allPlayers.map((p) => [`0:${p.player_id}`, p.faction]),
                   );
+                  const rosterByMatch = new Map([[0, allPlayers.map((p) => p.player_id)]]);
                   const sideSplitCounts = deriveSideSplitCounts(killFlags, roundSides, playerFactions);
+                  const clutchCounts = deriveClutchCounts(killFlags, roundSides, playerFactions, rosterByMatch);
                   const sabPlayers = parsed.sabremetrics!.map((s) => {
                     const mp = allPlayers.find((p) => p.player_id === s.player_id);
                     const stat = statMap.get(s.player_id);
                     const key = `0:${s.player_id}`;
                     const sabremetrics: SabFieldsWithDerived = {
                       ...(s.sabremetrics as SabFields),
-                      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals, sideSplitCounts),
+                      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals, sideSplitCounts, clutchCounts),
                     };
                     return {
                       player_id: s.player_id,
