@@ -6,9 +6,10 @@ import SabremetricsTable from '@/components/SabremetricsTable';
 import { useHasMounted } from './useHasMounted';
 import Modal from './Modal';
 import type {
-  SabFields, RoundHistoryEntry, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
+  SabFields, SabFieldsWithDerived, RoundHistoryEntry, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
   DemoMatchUtilityThrow, DemoMatchRoundEconomy,
 } from '@/lib/types';
+import { deriveHeadshotAndTeamkillCounts, type KillCreditFlags } from '@/lib/queries';
 type Faction = 'CT' | 'T' | null;
 
 interface MatchPlayer {
@@ -607,15 +608,33 @@ export default function DemoUploadModal({
 
                 {parsed.sabremetrics && parsed.sabremetrics.length > 0 && (() => {
                   const allPlayers = [...shirtsPlayers, ...skinsPlayers];
+                  // headshot_kills/teamkills aren't part of the parsed sabremetrics payload anymore
+                  // (derived from match_kills at query time, #457) — derived here the same way from
+                  // this preview's own parsed.matchKills, using match_id 0 since there's only one
+                  // match in scope, so the preview shows the same numbers confirming will persist.
+                  const killFlags: KillCreditFlags[] = (parsed.matchKills ?? []).map((k) => ({
+                    match_id: 0,
+                    attacker_player_id: k.attacker_player_id,
+                    victim_player_id: k.victim_player_id,
+                    headshot: k.headshot,
+                    is_teamkill: k.is_teamkill,
+                  }));
+                  const hsTk = deriveHeadshotAndTeamkillCounts(killFlags);
                   const sabPlayers = parsed.sabremetrics!.map((s) => {
                     const mp = allPlayers.find((p) => p.player_id === s.player_id);
                     const stat = statMap.get(s.player_id);
+                    const counts = hsTk.get(`0:${s.player_id}`);
+                    const sabremetrics: SabFieldsWithDerived = {
+                      ...(s.sabremetrics as SabFields),
+                      headshot_kills: counts?.headshot_kills ?? 0,
+                      teamkills: counts?.teamkills ?? 0,
+                    };
                     return {
                       player_id: s.player_id,
                       player_name: mp?.player_name ?? `#${s.player_id}`,
                       faction: mp?.faction ?? 'SHIRTS' as const,
                       rounds_played: stat?.rounds_played ?? 0,
-                      sabremetrics: s.sabremetrics as SabFields,
+                      sabremetrics,
                     };
                   });
                   return (

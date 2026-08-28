@@ -14,7 +14,7 @@ import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import Th from '@/components/Th';
 import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow } from '@/lib/queries';
-import type { SabFields } from '@/lib/types';
+import type { SabFields, SabFieldsWithDerived } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
 import { roundsPlayedBySide } from '@/lib/parsers/roundSides';
 
@@ -402,7 +402,7 @@ export default function MatchTabView({
   const allStats = [...shirts, ...skins];
   const statsRecorded = allStats.length > 0;
 
-  const sabMap = new Map<number, SabFields>(
+  const sabMap = new Map<number, SabFieldsWithDerived>(
     sabremetrics.map((s) => [s.player_id, s]),
   );
 

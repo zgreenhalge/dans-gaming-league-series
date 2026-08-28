@@ -14,11 +14,13 @@ import {
   favoriteWeapon,
   allWeaponsWithKills,
   resolveWeaponStat,
+  deriveHeadshotAndTeamkillCounts,
   type MatchKillRow,
 } from './queries/kills';
 import { test, report } from './test-support/miniTest';
 
 function kill(opts: {
+  match?: number;
   attacker: number | null;
   victim: number;
   weapon: string;
@@ -30,7 +32,7 @@ function kill(opts: {
   isTeamkill?: boolean;
 }): MatchKillRow {
   return {
-    match_id: 1,
+    match_id: opts.match ?? 1,
     season_id: 1,
     round_number: 1,
     attacker_player_id: opts.attacker,
@@ -162,6 +164,49 @@ test('aggregateFlairKillStats: totals noscope/wallbang/blind/midair across every
   ];
   const flair = aggregateFlairKillStats(kills, 1);
   assert.deepEqual(flair, { noscopeKills: 2, wallbangKills: 1, blindKills: 1, midairKills: 1, knifeKills: 2 });
+});
+
+test('deriveHeadshotAndTeamkillCounts: counts headshot kills, keyed by match and attacker', () => {
+  const kills = [
+    kill({ attacker: 1, victim: 2, weapon: 'ak47', headshot: true }),
+    kill({ attacker: 1, victim: 3, weapon: 'ak47', headshot: true }),
+    kill({ attacker: 1, victim: 4, weapon: 'ak47' }), // not a headshot
+    kill({ attacker: 2, victim: 1, weapon: 'deagle', headshot: true }),
+  ];
+  const counts = deriveHeadshotAndTeamkillCounts(kills);
+  assert.deepEqual(counts.get('1:1'), { headshot_kills: 2, teamkills: 0 });
+  assert.deepEqual(counts.get('1:2'), { headshot_kills: 1, teamkills: 0 });
+});
+
+test('deriveHeadshotAndTeamkillCounts: a teamkill counts toward teamkills, never headshot_kills, even when headshot', () => {
+  const kills = [
+    kill({ attacker: 1, victim: 2, weapon: 'ak47', headshot: true, isTeamkill: true }),
+  ];
+  const counts = deriveHeadshotAndTeamkillCounts(kills);
+  assert.deepEqual(counts.get('1:1'), { headshot_kills: 0, teamkills: 1 });
+});
+
+test('deriveHeadshotAndTeamkillCounts: a self-kill credits neither', () => {
+  const kills = [kill({ attacker: 1, victim: 1, weapon: 'world', headshot: true })];
+  const counts = deriveHeadshotAndTeamkillCounts(kills);
+  assert.equal(counts.has('1:1'), false);
+});
+
+test('deriveHeadshotAndTeamkillCounts: an unresolved attacker (world kill) is skipped, not thrown on', () => {
+  const kills = [kill({ attacker: null, victim: 1, weapon: 'world' })];
+  const counts = deriveHeadshotAndTeamkillCounts(kills);
+  assert.equal(counts.size, 0);
+});
+
+test('deriveHeadshotAndTeamkillCounts: the same attacker in different matches keys separately', () => {
+  const kills = [
+    kill({ match: 100, attacker: 1, victim: 2, weapon: 'ak47', headshot: true }),
+    kill({ match: 200, attacker: 1, victim: 2, weapon: 'ak47', headshot: true }),
+    kill({ match: 200, attacker: 1, victim: 3, weapon: 'ak47', headshot: true }),
+  ];
+  const counts = deriveHeadshotAndTeamkillCounts(kills);
+  assert.deepEqual(counts.get('100:1'), { headshot_kills: 1, teamkills: 0 });
+  assert.deepEqual(counts.get('200:1'), { headshot_kills: 2, teamkills: 0 });
 });
 
 report();

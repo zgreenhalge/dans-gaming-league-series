@@ -1,7 +1,8 @@
 import { supabase } from '../supabase';
-import type { SabFields, PlayerMatchSabremetrics } from '../types';
+import type { SabFieldsWithDerived, PlayerMatchSabremetrics } from '../types';
 import { getPlayersById } from './player';
 import { resolveMatchSeasons, fetchAllPages, asPage } from './_shared';
+import { getAllMatchKills, deriveHeadshotAndTeamkillCounts } from './kills';
 
 
 export interface SabremetricMatchRow {
@@ -11,18 +12,27 @@ export interface SabremetricMatchRow {
   season_id: number;
   is_gauntlet: boolean;
   rounds_played: number;
-  sab: SabFields;
+  sab: SabFieldsWithDerived;
 }
 
 /** All sabremetrics, or (with `seasonId`) just one season's — same join, filtered at the end so
- *  season-scoped callers (the season page) can't drift from the career-wide one. */
+ *  season-scoped callers (the season page) can't drift from the career-wide one.
+ *
+ *  `headshot_kills`/`teamkills` are overwritten with `deriveHeadshotAndTeamkillCounts()`'s result
+ *  rather than read off the stored `player_match_sabremetrics` row — both were exact duplicates of
+ *  `match_kills` data, so `match_kills` is now the source of truth for them (#457). */
 export async function getAllSabremetrics(seasonId?: number): Promise<SabremetricMatchRow[]> {
+  // Shared as one promise (not two `getPlayersById()` calls) so getAllMatchKills()'s own internal
+  // name resolution doesn't duplicate the `players` table fetch below already needs.
+  const playersByIdPromise = getPlayersById();
+
   const [
     sabRows,
     pmsRows,
     { data: seasonRows, error: seasonErr },
     matchSeason,
     playersById,
+    kills,
   ] = await Promise.all([
     fetchAllPages<PlayerMatchSabremetrics>((from, to) =>
       supabase.from('player_match_sabremetrics').select('*').range(from, to),
@@ -32,7 +42,8 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     ),
     supabase.from('seasons').select('id, is_gauntlet'),
     resolveMatchSeasons(),
-    getPlayersById(),
+    playersByIdPromise,
+    getAllMatchKills(undefined, playersByIdPromise),
   ]);
   if (seasonErr) throw seasonErr;
 
@@ -43,6 +54,8 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
   const pmsLookup = new Map<number, { player_id: number; match_id: number; rounds_played: number }>();
   for (const r of pmsRows) pmsLookup.set(r.id, r);
 
+  const hsTk = deriveHeadshotAndTeamkillCounts(kills);
+
   const result: SabremetricMatchRow[] = [];
   for (const raw of sabRows) {
     const pms = pmsLookup.get(raw.player_match_stats_id);
@@ -52,7 +65,13 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     if (seasonId != null && sid !== seasonId) continue;
     const player = playersById.get(pms.player_id);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { player_match_stats_id: _, ...sab } = raw;
+    const { player_match_stats_id: _, ...rest } = raw;
+    const counts = hsTk.get(`${pms.match_id}:${pms.player_id}`);
+    const sab: SabFieldsWithDerived = {
+      ...rest,
+      headshot_kills: counts?.headshot_kills ?? 0,
+      teamkills: counts?.teamkills ?? 0,
+    };
     result.push({
       player_id: pms.player_id,
       player_name: player?.name ?? `#${pms.player_id}`,
@@ -70,13 +89,13 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
  *  enumeration — the shared accumulation primitive behind every sabremetric total in this
  *  codebase, used directly by `SabremetricsLeaderboardView`'s `aggregateRows()` (one accumulator
  *  per player, mutated per match row) and via `sumSabFields()` below for season/career totals. */
-export function addSabFields(a: SabFields, b: SabFields): void {
-  for (const key of Object.keys(b) as (keyof SabFields)[]) {
+export function addSabFields(a: SabFieldsWithDerived, b: SabFieldsWithDerived): void {
+  for (const key of Object.keys(b) as (keyof SabFieldsWithDerived)[]) {
     a[key] += b[key];
   }
 }
 
-function sumSabFields(a: SabFields, b: SabFields): SabFields {
+function sumSabFields(a: SabFieldsWithDerived, b: SabFieldsWithDerived): SabFieldsWithDerived {
   const result = { ...a };
   addSabFields(result, b);
   return result;
@@ -129,23 +148,23 @@ export interface SabremetricStatRow {
   player_name: string;
   match_id: number;
   rounds_played: number;
-  sab: SabFields;
+  sab: SabFieldsWithDerived;
 }
 
 // Every sabremetric field `AggregatedSab` needs beyond the ct/t split is identical in name and
-// type to its `SabFields` counterpart, so the bulk of the shape is inherited from `SabFields`
-// itself (`Omit`ing the ct/t-split raw fields aggregateRows() unions into `kills`/`deaths`/etc.,
-// plus the three fields this view never reads) rather than re-listing every stat by hand — the
-// single source of truth for "what sabremetrics exist" stays `SabFields` in src/lib/types.ts. A
-// new flat field needs no changes here; a new ct/t-split field needs adding to this list AND to
-// the matching destructure in aggregateRows() below, or it silently lands as two unsummed raw
-// columns instead of a unioned total.
+// type to its `SabFieldsWithDerived` counterpart, so the bulk of the shape is inherited from
+// `SabFieldsWithDerived` itself (`Omit`ing the ct/t-split raw fields aggregateRows() unions into
+// `kills`/`deaths`/etc., plus the three fields this view never reads) rather than re-listing every
+// stat by hand — the single source of truth for "what sabremetrics exist" stays `SabFields`/
+// `SabFieldsWithDerived` in src/lib/types.ts. A new flat field needs no changes here; a new ct/t-split
+// field needs adding to this list AND to the matching destructure in aggregateRows() below, or it
+// silently lands as two unsummed raw columns instead of a unioned total.
 type DerivedRawSabFields =
   | 'kills_ct' | 'kills_t' | 'deaths_ct' | 'deaths_t'
   | 'assists_ct' | 'assists_t' | 'damage_ct' | 'damage_t'
   | 'headshot_kills_ct' | 'headshot_kills_t' | 'blind_duration_dealt';
 
-export interface AggregatedSab extends Omit<SabFields, DerivedRawSabFields> {
+export interface AggregatedSab extends Omit<SabFieldsWithDerived, DerivedRawSabFields> {
   player_id: number;
   player_name: string;
   matches: number;
@@ -169,7 +188,7 @@ interface PlayerMeta {
  *  so the accumulation step needs no field-shape knowledge at all, and only the final flatten
  *  touches `DerivedRawSabFields`. */
 export function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
-  const rawByPlayer = new Map<number, SabFields>();
+  const rawByPlayer = new Map<number, SabFieldsWithDerived>();
   const meta = new Map<number, PlayerMeta>();
 
   for (const r of rows) {

@@ -216,6 +216,49 @@ export function allWeaponsWithKills(kills: MatchKillRow[]): string[] {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([w]) => w);
 }
 
+export interface HeadshotTeamkillCounts {
+  headshot_kills: number;
+  teamkills: number;
+}
+
+/** The subset of a kill row `deriveHeadshotAndTeamkillCounts()` actually needs — narrower than
+ *  `MatchKillRow` so a pre-persistence caller (the demo-upload preview, working from `DemoMatchKill[]`
+ *  before any `match_id` exists) can use it too, not just already-joined `match_kills` reads. */
+export interface KillCreditFlags {
+  match_id: number;
+  attacker_player_id: number | null;
+  victim_player_id: number;
+  headshot: boolean;
+  is_teamkill: boolean;
+}
+
+/**
+ * Per (match, attacker) headshot-kill and teamkill counts, derived from `match_kills` — the
+ * query-time replacement for the `headshot_kills`/`teamkills` columns `player_match_sabremetrics`
+ * used to store directly (both were exact duplicates of data `match_kills` already carries).
+ * Self-kills credit neither. A teamkill never also counts toward `headshot_kills` even when it
+ * landed on the head, matching every other "credited kill" rule in this file
+ * (`aggregateWeaponKillStats()`, `allWeaponsWithKills()`) and the CS2 engine's own `m_iKills`/
+ * `m_iHeadShotKills` action-tracking stats those columns were originally sourced from, which don't
+ * count teamkills either. Keyed by `` `${match_id}:${attacker_player_id}` `` so one map covers a
+ * multi-match caller (`getAllSabremetrics()`) as well as a single-match one.
+ */
+export function deriveHeadshotAndTeamkillCounts(kills: KillCreditFlags[]): Map<string, HeadshotTeamkillCounts> {
+  const out = new Map<string, HeadshotTeamkillCounts>();
+  for (const k of kills) {
+    if (k.attacker_player_id == null || k.attacker_player_id === k.victim_player_id) continue;
+    const key = `${k.match_id}:${k.attacker_player_id}`;
+    let c = out.get(key);
+    if (!c) {
+      c = { headshot_kills: 0, teamkills: 0 };
+      out.set(key, c);
+    }
+    if (k.is_teamkill) c.teamkills += 1;
+    else if (k.headshot) c.headshot_kills += 1;
+  }
+  return out;
+}
+
 /** Resolves which of a player's `WeaponKillStat[]` a "favorite vs specific weapon" filter should
  *  show: `weapon === null` picks their favorite (`favoriteWeapon()`); a specific weapon name looks
  *  it up, falling back to a zeroed stat (rather than `null`) when the player has no kills/deaths

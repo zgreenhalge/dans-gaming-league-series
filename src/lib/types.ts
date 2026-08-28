@@ -178,7 +178,9 @@ export interface PlayerMatchSabremetrics {
   assists_t: number;
   damage_ct: number;
   damage_t: number;
-  headshot_kills: number;
+  // headshot_kills/teamkills are derived from match_kills at query time (#457), not stored — see
+  // deriveHeadshotAndTeamkillCounts() in queries/kills.ts. headshot_kills_ct/_t stay stored for now,
+  // pending a match_rounds-based side-resolution helper to derive those too.
   headshot_kills_ct: number;
   headshot_kills_t: number;
   opening_kills: number;
@@ -190,7 +192,6 @@ export interface PlayerMatchSabremetrics {
   clutch_1v2_wins: number;
   clutch_2v1_attempts: number;
   clutch_2v1_wins: number;
-  teamkills: number;
   flash_assists: number;
   flashes_leading_to_kill: number;
   utility_damage: number;
@@ -228,6 +229,12 @@ export interface PlayerMatchSabremetrics {
 }
 
 export type SabFields = Omit<PlayerMatchSabremetrics, 'player_match_stats_id'>;
+
+/** `SabFields` plus the two fields no longer stored on `player_match_sabremetrics` — derived at
+ *  query time from `match_kills` instead (`deriveHeadshotAndTeamkillCounts()` in
+ *  `queries/kills.ts`), but still carried alongside every other sabremetric so aggregation/display
+ *  code doesn't need a special case for them. */
+export type SabFieldsWithDerived = SabFields & { headshot_kills: number; teamkills: number };
 
 export interface DemoSabremetricStat {
   player_id: number;

@@ -7,6 +7,7 @@ import type { ScheduledMatchRef } from '../server-schedule-collision';
 import { getPlayersById } from './player';
 import { asPage, fetchAllPages, getWeekLookup } from './_shared';
 import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '../demo/liveScore';
+import { getMatchKills, deriveHeadshotAndTeamkillCounts } from './kills';
 
 
 export interface MatchStatRow extends PlayerMatchStat {
@@ -290,8 +291,13 @@ export interface MatchSabremetricsRow extends PlayerMatchSabremetrics {
   player_id: number;
   player_name: string;
   faction: Faction;
+  headshot_kills: number;
+  teamkills: number;
 }
 
+/** `headshot_kills`/`teamkills` are overwritten with `deriveHeadshotAndTeamkillCounts()`'s result
+ *  rather than read off the stored `player_match_sabremetrics` row — both were exact duplicates of
+ *  `match_kills` data, so `match_kills` is now the source of truth for them (#457). */
 export async function getMatchSabremetrics(matchId: number): Promise<MatchSabremetricsRow[]> {
   const { data: pmsRows } = await supabase
     .from('player_match_stats')
@@ -300,21 +306,28 @@ export async function getMatchSabremetrics(matchId: number): Promise<MatchSabrem
   if (!pmsRows || pmsRows.length === 0) return [];
 
   const pmsIds = (pmsRows as { id: number; player_id: number; faction: string }[]).map((r) => r.id);
-  const { data: sabRows } = await supabase
-    .from('player_match_sabremetrics')
-    .select('*')
-    .in('player_match_stats_id', pmsIds);
+  // Shared as one promise (not two `getPlayersById()` calls) so getMatchKills()'s own internal
+  // name resolution doesn't duplicate the `players` table fetch below already needs.
+  const playersByIdPromise = getPlayersById();
+  const [{ data: sabRows }, players, kills] = await Promise.all([
+    supabase.from('player_match_sabremetrics').select('*').in('player_match_stats_id', pmsIds),
+    playersByIdPromise,
+    getMatchKills(matchId, playersByIdPromise),
+  ]);
   if (!sabRows || sabRows.length === 0) return [];
 
-  const players = await getPlayersById();
   const pmsLookup = new Map(
     (pmsRows as { id: number; player_id: number; faction: string }[]).map((r) => [r.id, r]),
   );
+  const hsTk = deriveHeadshotAndTeamkillCounts(kills);
 
   return (sabRows as PlayerMatchSabremetrics[]).map((sab) => {
     const pms = pmsLookup.get(sab.player_match_stats_id)!;
+    const counts = hsTk.get(`${matchId}:${pms.player_id}`);
     return {
       ...sab,
+      headshot_kills: counts?.headshot_kills ?? 0,
+      teamkills: counts?.teamkills ?? 0,
       player_id: pms.player_id,
       player_name: players.get(pms.player_id)?.name ?? `#${pms.player_id}`,
       faction: pms.faction as Faction,

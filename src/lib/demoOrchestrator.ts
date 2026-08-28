@@ -12,7 +12,6 @@ import { collectAccumulators } from './parsers/accumulators';
 import { collectEntry } from './parsers/entry';
 import { collectKast } from './parsers/kast';
 import { collectMultikill } from './parsers/multikill';
-import { collectTeamkill } from './parsers/teamkill';
 import { collectClutch } from './parsers/clutch';
 import {
   collectUtility, collectMatchUtilityThrows, type PlayerBlindRow, type WeaponFireRow,
@@ -45,13 +44,12 @@ const ZERO: SabFields = {
   deaths_ct: 0, deaths_t: 0,
   assists_ct: 0, assists_t: 0,
   damage_ct: 0, damage_t: 0,
-  headshot_kills: 0, headshot_kills_ct: 0, headshot_kills_t: 0,
+  headshot_kills_ct: 0, headshot_kills_t: 0,
   opening_kills: 0, opening_deaths: 0,
   kast_rounds: 0,
   clutch_1v1_attempts: 0, clutch_1v1_wins: 0,
   clutch_1v2_attempts: 0, clutch_1v2_wins: 0,
   clutch_2v1_attempts: 0, clutch_2v1_wins: 0,
-  teamkills: 0,
   flash_assists: 0,
   flashes_leading_to_kill: 0,
   utility_damage: 0,
@@ -203,7 +201,6 @@ export function parseDemoSabremetrics(
   const entryStats = collectEntry(liveDeathEvents, context, steamIds);
   const kastStats = collectKast(liveDeathEvents, context, steamIds, tradeOpportunities);
   const multikillStats = collectMultikill(liveDeathEvents, context, steamIds);
-  const teamkillStats = collectTeamkill(liveDeathEvents, context, steamIds);
   const clutchStats = collectClutch(liveDeathEvents, context, steamIds);
   const utilityStats = collectUtility(blindEvents, liveDeathEvents, fireEvents, context, steamIds);
   const objectiveStats = collectObjectives(plantEvents, defuseEvents, context, steamIds);
@@ -386,7 +383,6 @@ export function parseDemoSabremetrics(
       ...entryStats.get(steamId),
       ...kastStats.get(steamId),
       ...multikillStats.get(steamId),
-      ...teamkillStats.get(steamId),
       ...clutchStats.get(steamId),
       ...utilityStats.get(steamId),
       ...objectiveStats.get(steamId),
