@@ -102,33 +102,42 @@ before running anything, runs the suite, then `supabase stop`.
 `fakeSupabase`/`src/lib/test-support/` harness, not a live database, so it (along with `npm run
 lint`/`npm run typecheck`) works in any agent session with no setup at all.
 
-`npm run build`/`npm run dev` are different: several routes (`seasons/page.tsx`, `maps/page.tsx`,
-`statistics/page.tsx`, and others using `export const revalidate = 60`) fetch from Supabase during
-prerendering, not just at request time, and a Claude Code web session starts with no `.env.local` —
-no real Supabase project credentials are ever placed in an agent sandbox — so without a Supabase
-connection these fail immediately with `src/lib/supabase.ts`'s "Missing Supabase env vars" error.
+`npm run build`/`npm run dev` fetch from Supabase during prerendering too (`seasons/page.tsx`,
+`maps/page.tsx`, `statistics/page.tsx`, and others using `export const revalidate = 60`, plus a few
+API routes touched by `next build`'s page-data collection) — but `src/lib/supabase.ts` and
+`src/lib/supabase-admin.ts` fall back to `src/lib/dev-fallback-supabase.ts` whenever
+`NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` are *all*
+unset, which is exactly the state a Claude Code web session starts in with no `.env.local` and no
+real Supabase project credentials ever placed in the sandbox. That fallback serves the same
+in-memory fixture league the `queries.ts` regression harness runs against
+(`src/lib/test-support/fixtures.ts`) — a real, internally consistent site, just not real match data
+— so `build`/`dev` succeed with no setup at all, the same as `test`/`lint`/`typecheck`. A partial
+env (one or two of the three vars set, not zero) still hits the original "Missing Supabase env vars"
+throw, since that's a real misconfiguration rather than an unconfigured sandbox.
 
 `.claude/hooks/session-start.sh` (registered as a `SessionStart` hook in `.claude/settings.json`)
-attempts to close that gap using the same local stack this doc already describes: it runs `npm
-install`, then — unless a real `.env.local` is already present — tries to bring up the local Supabase
-stack (`npm run db:start`) and export `supabase/local.env`'s three fixed values into the session's
-environment. **This depends on two things an agent sandbox doesn't reliably provide: a running Docker
-daemon, and outbound network access to pull the Postgres/PostgREST/Realtime images.** Neither is
-guaranteed — in this repo's own sandbox, the Docker daemon isn't running by default and the outbound
-proxy blocks Docker Hub/CloudFront pulls, so the local stack never actually comes up there, and
-`build`/`dev`/`test:e2e` fail in that sandbox exactly as they did before this hook existed. Every step
-is independent and best-effort: a missing Docker daemon, a sandbox whose network policy blocks the
-image pulls, or an already-configured `.env.local` are all handled by skipping the remaining steps
-(with a bounded timeout on the image-pull attempt) rather than hanging or failing the session start.
-`.claude/session-start.log` records exactly which step ran, skipped, or failed, so a session missing
-its local stack is diagnosable without re-running anything by hand — grep that file first.
+tries to upgrade that fixture-backed fallback to the real local stack this doc already describes: it
+runs `npm install`, then — unless a real `.env.local` is already present — starts the Docker daemon
+itself if it isn't already running (no init system brings it up automatically in a sandbox
+container), brings up the local Supabase stack (`npm run db:start`), and exports
+`supabase/local.env`'s three fixed values into the session's environment. This still depends on
+outbound network access to pull the Postgres/PostgREST/Realtime images, which isn't guaranteed — in
+this repo's own sandbox, the outbound proxy blocks Docker Hub/CloudFront pulls, so the local stack
+never actually comes up there. Every step is independent and best-effort: a Docker daemon that won't
+start, a sandbox whose network policy blocks the image pulls, or an already-configured `.env.local`
+are all handled by skipping the remaining steps (with a bounded timeout on the image-pull attempt)
+rather than hanging or failing the session start — worst case, `build`/`dev` still work against
+fixture data. `.claude/session-start.log` records exactly which step ran, skipped, or failed, so a
+session missing its local stack is diagnosable without re-running anything by hand — grep that file
+first.
 
-Where the daemon and network access are both available, this gives the agent a real, schema-accurate
-(if data-empty beyond `seed.sql`'s baseline players/maps) Supabase connection for exactly the kind of
-build/type-check verification `CLAUDE.md` asks agents to do — never for testing real match content,
-which still requires the real project. Where they aren't, treat `npm test`/`npm run
-lint`/`npm run typecheck` as the reliable verification path and expect `build`/`dev`/`test:e2e` to
-need a real `.env.local` or a sandbox with working Docker + registry access.
+Where Docker and network access are both available, this gives the agent a real, schema-accurate (if
+data-empty beyond `seed.sql`'s baseline players/maps) Supabase connection — useful for exercising
+real query/RPC behavior, never for testing real match content, which still requires the real
+project. `npm run test:e2e` always needs this real stack (or a real `.env.local`): `e2e/support/db.ts`
+opens its own HTTP connection to `NEXT_PUBLIC_SUPABASE_URL` to seed/tear down fixtures, bypassing the
+app's in-process client entirely, so the in-memory fallback — which only lives inside the `next dev`
+process, with no HTTP surface — can't stand in for it.
 
 ## Adding a new flow
 

@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
 import { getOrCreateSingleton, setSingleton } from './supabase-singleton';
+import { hasNoSupabaseConfig, getDevFallbackSupabaseClient } from './dev-fallback-supabase';
 
 // Server-side Supabase client. Currently uses no-op cookie handlers because
 // there's no auth yet — this keeps pages eligible for ISR (calling cookies()
@@ -13,6 +14,8 @@ import { getOrCreateSingleton, setSingleton } from './supabase-singleton';
 //             — authenticated reads/writes must hit the database per-request).
 //   - browser: createBrowserClient for client components that need auth state.
 function createServerSupabaseClient(): SupabaseClient<Database> {
+  if (hasNoSupabaseConfig()) return getDevFallbackSupabaseClient();
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) {

@@ -3,11 +3,12 @@
 #
 # Bootstraps this repo for an agent session with no `.env.local`: installs npm dependencies, then
 # brings up the throwaway local Supabase stack documented in docs/e2e.md (`supabase start`, Docker
-# required) and exports its fixed connection values (`supabase/local.env`) so `npm run dev` /
-# `npm run build` / `npm test` work without real Supabase credentials. Every step is independent and
-# best-effort: a failure anywhere (no Docker, no network access to pull images, a real `.env.local`
-# already present) is logged and the hook falls back rather than blocking the session — worst case,
-# the app's own `src/lib/supabase.ts` error ("Missing Supabase env vars...") explains what's missing.
+# required — starting the daemon itself if it isn't already running) and exports its fixed
+# connection values (`supabase/local.env`) so `npm run dev`/`npm run build`/`npm test` get a real
+# schema-accurate database instead of `src/lib/dev-fallback-supabase.ts`'s in-memory fixture data.
+# Every step is independent and best-effort: a failure anywhere (no Docker, no network access to
+# pull images, a real `.env.local` already present) is logged and the hook falls back rather than
+# blocking the session — worst case, `npm run build`/`npm run dev` still work against fixture data.
 #
 # All output goes to both stdout (visible in the session start log) and $STATUS_LOG, so a failure
 # here is diagnosable without re-running anything by hand.
@@ -53,14 +54,48 @@ has_real_env_local() {
   [ -f "$REPO_DIR/.env.local" ] && grep -q '^NEXT_PUBLIC_SUPABASE_URL=' "$REPO_DIR/.env.local"
 }
 
-# --- 3. Confirm Docker is actually usable, not just installed --------------------------------
+# --- 3. Confirm Docker is actually usable, starting the daemon ourselves if it's just idle -----
+
+# `docker info` failing only means no daemon has been started yet in this container — dockerd
+# itself is present and startable (confirmed: it comes up in ~5-10s given root, which sandbox
+# containers run as). There's no init system here to have started it automatically, so start it
+# ourselves rather than treating "not running" as "not available". This doesn't help a sandbox
+# whose network policy blocks the image registry (a separate failure `start_local_supabase`'s own
+# timeout already handles) — it only removes the "nobody ever ran dockerd" case.
+start_dockerd() {
+  if docker info >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! command -v dockerd >/dev/null 2>&1; then
+    log "dockerd binary not found — cannot start the Docker daemon."
+    return 1
+  fi
+  if [ "$(id -u)" -ne 0 ]; then
+    log "not running as root — cannot start the Docker daemon ourselves."
+    return 1
+  fi
+  log "docker daemon not running — starting dockerd..."
+  nohup dockerd >>"$STATUS_LOG" 2>&1 &
+  local waited=0
+  while [ "$waited" -lt 30 ]; do
+    if docker info >/dev/null 2>&1; then
+      log "dockerd started."
+      return 0
+    fi
+    sleep 0.5
+    waited=$((waited + 1))
+  done
+  log "dockerd didn't come up within 15s — giving up on it."
+  pkill dockerd >/dev/null 2>&1 || true
+  return 1
+}
 
 docker_available() {
   if ! command -v docker >/dev/null 2>&1; then
     log "docker CLI not found — skipping local Supabase bootstrap."
     return 1
   fi
-  if ! docker info >/dev/null 2>&1; then
+  if ! start_dockerd; then
     log "docker daemon not reachable — skipping local Supabase bootstrap."
     return 1
   fi
@@ -107,6 +142,8 @@ export_local_env() {
 
 # --- Run ---------------------------------------------------------------------------------------
 
+NO_LOCAL_STACK_MSG="No local Supabase stack this session — npm run build/dev/test will use src/lib/dev-fallback-supabase.ts's in-memory fixture data instead. Set NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY manually (see README.md's Environment Variables table) for a real connection."
+
 install_deps
 
 if has_real_env_local; then
@@ -115,12 +152,12 @@ if has_real_env_local; then
 fi
 
 if ! docker_available; then
-  log "No local Supabase stack this session. Set NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY manually (see README.md's Environment Variables table) to build or run the app."
+  log "$NO_LOCAL_STACK_MSG"
   exit 0
 fi
 
 if ! start_local_supabase; then
-  log "No local Supabase stack this session. Set NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY manually (see README.md's Environment Variables table) to build or run the app."
+  log "$NO_LOCAL_STACK_MSG"
   exit 0
 fi
 

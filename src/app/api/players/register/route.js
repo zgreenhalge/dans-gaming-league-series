@@ -1,11 +1,6 @@
 import { requireSession } from "@/lib/session";
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase-admin";
 import { verifyPlayerClaim } from "@/lib/playerClaim";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
 
 function requireUnlinkedSession(session) {
   if (!session?.user?.steamId) return { error: "Not authenticated", status: 401 };
@@ -14,6 +9,10 @@ function requireUnlinkedSession(session) {
 }
 
 export async function POST(request) {
+  // Resolved per-request, not at module scope, so a test can inject a fresh fake client and so a
+  // sandbox with no Supabase credentials falls back to fixture data (see dev-fallback-supabase.ts).
+  const supabase = getAdminClient();
+
   const session = await requireSession();
   const err = requireUnlinkedSession(session);
   if (err) return Response.json({ error: err.error }, { status: err.status });
