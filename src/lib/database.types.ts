@@ -842,35 +842,27 @@ export type Database = {
           flashes_thrown: number
           he_damage: number
           he_thrown: number
-          headshot_hits: number
           headshot_hits_no_awp: number
-          headshot_kills: number
           headshot_kills_ct: number
           headshot_kills_t: number
           kast_rounds: number
           kills_ct: number
           kills_t: number
-          opening_deaths: number
-          opening_kills: number
           plants: number
           player_match_stats_id: number
           reloads_total: number
           rounds_dropped_on_reload_total: number
-          shots_fired: number
-          shots_hit: number
           shots_hit_no_awp: number
           smokes_blocking_push: number
           spray_shots_fired: number
           spray_shots_hit: number
           teamflash_duration: number
-          teamkills: number
           trade_kill_attempts: number
           trade_kill_opportunities: number
           trade_kill_successes: number
           traded_death_attempts: number
           traded_death_opportunities: number
           traded_death_successes: number
-          two_k_rounds: number
           unused_util_value_on_death_total: number
           utility_damage: number
         }
@@ -900,35 +892,27 @@ export type Database = {
           flashes_thrown?: number
           he_damage?: number
           he_thrown?: number
-          headshot_hits?: number
           headshot_hits_no_awp?: number
-          headshot_kills?: number
           headshot_kills_ct?: number
           headshot_kills_t?: number
           kast_rounds?: number
           kills_ct?: number
           kills_t?: number
-          opening_deaths?: number
-          opening_kills?: number
           plants?: number
           player_match_stats_id: number
           reloads_total?: number
           rounds_dropped_on_reload_total?: number
-          shots_fired?: number
-          shots_hit?: number
           shots_hit_no_awp?: number
           smokes_blocking_push?: number
           spray_shots_fired?: number
           spray_shots_hit?: number
           teamflash_duration?: number
-          teamkills?: number
           trade_kill_attempts?: number
           trade_kill_opportunities?: number
           trade_kill_successes?: number
           traded_death_attempts?: number
           traded_death_opportunities?: number
           traded_death_successes?: number
-          two_k_rounds?: number
           unused_util_value_on_death_total?: number
           utility_damage?: number
         }
@@ -958,35 +942,27 @@ export type Database = {
           flashes_thrown?: number
           he_damage?: number
           he_thrown?: number
-          headshot_hits?: number
           headshot_hits_no_awp?: number
-          headshot_kills?: number
           headshot_kills_ct?: number
           headshot_kills_t?: number
           kast_rounds?: number
           kills_ct?: number
           kills_t?: number
-          opening_deaths?: number
-          opening_kills?: number
           plants?: number
           player_match_stats_id?: number
           reloads_total?: number
           rounds_dropped_on_reload_total?: number
-          shots_fired?: number
-          shots_hit?: number
           shots_hit_no_awp?: number
           smokes_blocking_push?: number
           spray_shots_fired?: number
           spray_shots_hit?: number
           teamflash_duration?: number
-          teamkills?: number
           trade_kill_attempts?: number
           trade_kill_opportunities?: number
           trade_kill_successes?: number
           traded_death_attempts?: number
           traded_death_opportunities?: number
           traded_death_successes?: number
-          two_k_rounds?: number
           unused_util_value_on_death_total?: number
           utility_damage?: number
         }

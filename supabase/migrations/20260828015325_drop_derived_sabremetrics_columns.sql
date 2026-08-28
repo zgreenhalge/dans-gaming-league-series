@@ -1,0 +1,9 @@
+alter table public.player_match_sabremetrics
+  drop column headshot_kills,
+  drop column teamkills,
+  drop column opening_kills,
+  drop column opening_deaths,
+  drop column two_k_rounds,
+  drop column shots_fired,
+  drop column shots_hit,
+  drop column headshot_hits;
