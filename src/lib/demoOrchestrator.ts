@@ -38,11 +38,7 @@ import {
 import { collectWeaponClassStats, collectEconomyStats, collectMatchKills } from './parsers/weaponStats';
 
 const ZERO: SabFields = {
-  kills_ct: 0, kills_t: 0,
-  deaths_ct: 0, deaths_t: 0,
-  assists_ct: 0, assists_t: 0,
   damage_ct: 0, damage_t: 0,
-  headshot_kills_ct: 0, headshot_kills_t: 0,
   kast_rounds: 0,
   clutch_1v1_attempts: 0, clutch_1v1_wins: 0,
   clutch_1v2_attempts: 0, clutch_1v2_wins: 0,

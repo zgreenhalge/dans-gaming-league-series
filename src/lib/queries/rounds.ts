@@ -57,3 +57,20 @@ export function groupRoundsByMatch(rounds: MatchRoundRow[]): Map<number, MatchRo
   }
   return byMatch;
 }
+
+/** Every round's `shirts_side`, keyed by `` `${match_id}:${round_number}` `` — the raw ingredient
+ *  `resolvePlayerSide()` (`queries/kills.ts`) needs to resolve which side a player was on a given
+ *  round. No season resolution or `winner_side`/`win_reason` join, unlike `getAllMatchRounds()` —
+ *  side-split derivation doesn't need either, the same reasoning `getAllKillCreditFlags()`
+ *  (`queries/kills.ts`) uses to skip `getAllMatchKills()`'s season/name joins. Pass `matchId` to
+ *  scope to one match. */
+export async function getRoundSides(matchId?: number): Promise<Map<string, 'CT' | 'T'>> {
+  const rows = await fetchAllPages<{ match_id: number; round_number: number; shirts_side: string }>(
+    (from, to) => {
+      let q = supabase.from('match_rounds').select('match_id, round_number, shirts_side');
+      if (matchId != null) q = q.eq('match_id', matchId);
+      return q.range(from, to);
+    },
+  );
+  return new Map(rows.map((r) => [`${r.match_id}:${r.round_number}`, r.shirts_side as 'CT' | 'T']));
+}

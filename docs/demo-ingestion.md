@@ -67,7 +67,7 @@ recorded score.
 | `rosterResolver.ts` | Steam-id → DGLS player + faction resolution |
 | `matchContext.ts` | Per-round/per-death context shared by the collectors |
 | `roundSides.ts` | Which side (CT/T) each faction is on each round — see "Side splits" below |
-| `accumulators.ts` | Per-side K/A/D/damage/headshot deltas from round-end accumulator ticks |
+| `accumulators.ts` | Per-side damage deltas from round-end accumulator ticks (`damage_ct`/`damage_t`) — K/A/D/headshot splits aren't collected here; they're derived at query time from `match_kills` (`deriveSideSplitCounts()` in `queries/kills.ts`) |
 | `kast.ts` | KAST rounds + trade tracking (`KAST+`) |
 | `clutch.ts` | 1vN attempts/wins and 2v1 numbers-advantage attempts/wins (`Clutch+`, `Choke+`) |
 | `utility.ts` | Flash assists, utility damage, teamflash/self-flash (`Utility+`) |
@@ -138,6 +138,10 @@ query time rather than baked into the persisted shape. This is a deliberate depa
   `deriveTwoKRoundCounts()` in `queries/kills.ts`) rather than collected during parsing — DGLS's
   fixed 2v2 Wingman roster means the opening kill of a round is just its minimum-`tick` row, and a
   2-kill round for one attacker is unambiguously a double-kill, with no roster/faction lookup needed.
+- `kills_ct`/`_t`, `deaths_ct`/`_t`, `assists_ct`/`_t`, and `headshot_kills_ct`/`_t` are likewise
+  derived at query time (`deriveSideSplitCounts()` in `queries/kills.ts`), but do need a side lookup —
+  `resolvePlayerSide()` combines `match_rounds.shirts_side` for that round with the player's fixed
+  match `faction` from `player_match_stats`.
 
 ## Match start (skipping warmup and stray knife rounds)
 

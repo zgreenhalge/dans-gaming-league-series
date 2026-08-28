@@ -171,20 +171,20 @@ function sab(overrides: Partial<SabFields> & { player_match_stats_id: number }):
 }
 
 export const PLAYER_MATCH_SABREMETRICS: Row[] = [
-  sab({ player_match_stats_id: 1000, kills_ct: 11, kills_t: 9, deaths_ct: 7, deaths_t: 8, assists_ct: 2, assists_t: 1, damage_ct: 1020, damage_t: 861, kast_rounds: 17, clutch_1v1_attempts: 2, clutch_1v1_wins: 1, flash_assists: 2, enemies_flashed: 6, flashes_thrown: 8, plants: 3, trade_kill_opportunities: 5, trade_kill_attempts: 4, trade_kill_successes: 3 }),
-  sab({ player_match_stats_id: 1001, kills_ct: 10, kills_t: 8, deaths_ct: 8, deaths_t: 8, assists_ct: 3, assists_t: 2, damage_ct: 940, damage_t: 780, kast_rounds: 15, flash_assists: 3, enemies_flashed: 7, flashes_thrown: 9, defuses: 1, trade_kill_opportunities: 4, trade_kill_attempts: 3, trade_kill_successes: 2 }),
-  sab({ player_match_stats_id: 1002, kills_ct: 7, kills_t: 7, deaths_ct: 10, deaths_t: 9, assists_ct: 2, assists_t: 2, damage_ct: 720, damage_t: 710, kast_rounds: 12, flash_assists: 1, enemies_flashed: 4, flashes_thrown: 5, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
-  sab({ player_match_stats_id: 1003, kills_ct: 6, kills_t: 6, deaths_ct: 11, deaths_t: 9, assists_ct: 3, assists_t: 3, damage_ct: 670, damage_t: 652, kast_rounds: 11, flash_assists: 2, enemies_flashed: 5, flashes_thrown: 6, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
+  sab({ player_match_stats_id: 1000, damage_ct: 1020, damage_t: 861, kast_rounds: 17, clutch_1v1_attempts: 2, clutch_1v1_wins: 1, flash_assists: 2, enemies_flashed: 6, flashes_thrown: 8, plants: 3, trade_kill_opportunities: 5, trade_kill_attempts: 4, trade_kill_successes: 3 }),
+  sab({ player_match_stats_id: 1001, damage_ct: 940, damage_t: 780, kast_rounds: 15, flash_assists: 3, enemies_flashed: 7, flashes_thrown: 9, defuses: 1, trade_kill_opportunities: 4, trade_kill_attempts: 3, trade_kill_successes: 2 }),
+  sab({ player_match_stats_id: 1002, damage_ct: 720, damage_t: 710, kast_rounds: 12, flash_assists: 1, enemies_flashed: 4, flashes_thrown: 5, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
+  sab({ player_match_stats_id: 1003, damage_ct: 670, damage_t: 652, kast_rounds: 11, flash_assists: 2, enemies_flashed: 5, flashes_thrown: 6, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
 
-  sab({ player_match_stats_id: 1012, kills_ct: 12, kills_t: 10, deaths_ct: 9, deaths_t: 9, assists_ct: 1, assists_t: 1, damage_ct: 1150, damage_t: 962, kast_rounds: 19, clutch_1v2_attempts: 1, clutch_1v2_wins: 1, flash_assists: 1, enemies_flashed: 5, flashes_thrown: 7, plants: 2, trade_kill_opportunities: 6, trade_kill_attempts: 5, trade_kill_successes: 4 }),
-  sab({ player_match_stats_id: 1013, kills_ct: 10, kills_t: 9, deaths_ct: 9, deaths_t: 10, assists_ct: 2, assists_t: 2, damage_ct: 1000, damage_t: 920, kast_rounds: 17, flash_assists: 3, enemies_flashed: 6, flashes_thrown: 8, defuses: 1, trade_kill_opportunities: 5, trade_kill_attempts: 4, trade_kill_successes: 3 }),
-  sab({ player_match_stats_id: 1014, kills_ct: 9, kills_t: 8, deaths_ct: 11, deaths_t: 10, assists_ct: 2, assists_t: 1, damage_ct: 880, damage_t: 800, kast_rounds: 14, flash_assists: 1, enemies_flashed: 4, flashes_thrown: 5, trade_kill_opportunities: 4, trade_kill_attempts: 3, trade_kill_successes: 2 }),
-  sab({ player_match_stats_id: 1015, kills_ct: 8, kills_t: 7, deaths_ct: 12, deaths_t: 10, assists_ct: 3, assists_t: 2, damage_ct: 820, damage_t: 740, kast_rounds: 12, flash_assists: 2, enemies_flashed: 5, flashes_thrown: 6, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
+  sab({ player_match_stats_id: 1012, damage_ct: 1150, damage_t: 962, kast_rounds: 19, clutch_1v2_attempts: 1, clutch_1v2_wins: 1, flash_assists: 1, enemies_flashed: 5, flashes_thrown: 7, plants: 2, trade_kill_opportunities: 6, trade_kill_attempts: 5, trade_kill_successes: 4 }),
+  sab({ player_match_stats_id: 1013, damage_ct: 1000, damage_t: 920, kast_rounds: 17, flash_assists: 3, enemies_flashed: 6, flashes_thrown: 8, defuses: 1, trade_kill_opportunities: 5, trade_kill_attempts: 4, trade_kill_successes: 3 }),
+  sab({ player_match_stats_id: 1014, damage_ct: 880, damage_t: 800, kast_rounds: 14, flash_assists: 1, enemies_flashed: 4, flashes_thrown: 5, trade_kill_opportunities: 4, trade_kill_attempts: 3, trade_kill_successes: 2 }),
+  sab({ player_match_stats_id: 1015, damage_ct: 820, damage_t: 740, kast_rounds: 12, flash_assists: 2, enemies_flashed: 5, flashes_thrown: 6, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
 
-  sab({ player_match_stats_id: 1016, kills_ct: 9, kills_t: 7, deaths_ct: 5, deaths_t: 5, assists_ct: 1, assists_t: 0, damage_ct: 900, damage_t: 810, kast_rounds: 15, clutch_1v1_attempts: 1, clutch_1v1_wins: 1, flash_assists: 1, enemies_flashed: 3, flashes_thrown: 4, plants: 2, trade_kill_opportunities: 4, trade_kill_attempts: 4, trade_kill_successes: 3 }),
-  sab({ player_match_stats_id: 1017, kills_ct: 8, kills_t: 6, deaths_ct: 6, deaths_t: 5, assists_ct: 2, assists_t: 1, damage_ct: 820, damage_t: 764, kast_rounds: 13, flash_assists: 2, enemies_flashed: 4, flashes_thrown: 5, defuses: 1, trade_kill_opportunities: 3, trade_kill_attempts: 3, trade_kill_successes: 2 }),
-  sab({ player_match_stats_id: 1018, kills_ct: 4, kills_t: 4, deaths_ct: 8, deaths_t: 8, assists_ct: 1, assists_t: 1, damage_ct: 400, damage_t: 410, kast_rounds: 6, trade_kill_opportunities: 2, trade_kill_attempts: 1, trade_kill_successes: 0 }),
-  sab({ player_match_stats_id: 1019, kills_ct: 3, kills_t: 4, deaths_ct: 9, deaths_t: 8, assists_ct: 1, assists_t: 0, damage_ct: 350, damage_t: 370, kast_rounds: 5, trade_kill_opportunities: 2, trade_kill_attempts: 1, trade_kill_successes: 0 }),
+  sab({ player_match_stats_id: 1016, damage_ct: 900, damage_t: 810, kast_rounds: 15, clutch_1v1_attempts: 1, clutch_1v1_wins: 1, flash_assists: 1, enemies_flashed: 3, flashes_thrown: 4, plants: 2, trade_kill_opportunities: 4, trade_kill_attempts: 4, trade_kill_successes: 3 }),
+  sab({ player_match_stats_id: 1017, damage_ct: 820, damage_t: 764, kast_rounds: 13, flash_assists: 2, enemies_flashed: 4, flashes_thrown: 5, defuses: 1, trade_kill_opportunities: 3, trade_kill_attempts: 3, trade_kill_successes: 2 }),
+  sab({ player_match_stats_id: 1018, damage_ct: 400, damage_t: 410, kast_rounds: 6, trade_kill_opportunities: 2, trade_kill_attempts: 1, trade_kill_successes: 0 }),
+  sab({ player_match_stats_id: 1019, damage_ct: 350, damage_t: 370, kast_rounds: 5, trade_kill_opportunities: 2, trade_kill_attempts: 1, trade_kill_successes: 0 }),
 ];
 
 // ─── match_kills ─────────────────────────────────────────────────────────
@@ -244,6 +244,25 @@ export const MATCH_KILLS: Row[] = (() => {
 
   return rows;
 })();
+
+// ─── match_rounds ────────────────────────────────────────────────────────
+// One row per round MATCH_KILLS references above, with a constant shirts_side per match — no
+// halftime swap modeled. deriveSideSplitCounts()'s round-by-round side resolution is already
+// exercised directly by queries-kills.test.ts's unit tests (which do vary shirts_side per round);
+// these rows only need to give query-time derivation a shirts_side to resolve against for every
+// round match_kills uses, and a constant side per match keeps the resulting kills_ct/_t etc.
+// hand-verifiable (every kill by a given attacker lands on the same side for the whole match).
+function roundRows(match: number, count: number, shirtsSide: 'CT' | 'T'): Row[] {
+  return Array.from({ length: count }, (_, i) => ({
+    match_id: match, round_number: i + 1, shirts_side: shirtsSide, winner_side: shirtsSide, win_reason: null,
+  }));
+}
+
+export const MATCH_ROUNDS: Row[] = [
+  ...roundRows(100, 25, 'CT'),
+  ...roundRows(200, 28, 'CT'),
+  ...roundRows(300, 18, 'T'),
+];
 
 // ─── player_match_weapon_stats / player_match_economy_stats ────────────────────────────────
 // Match 100 only (player_match_stats_id 1000-1003) — enough to exercise the season join and the
@@ -404,6 +423,7 @@ export function buildFakeDb(): FakeDb {
     player_match_stats: PLAYER_MATCH_STATS,
     player_match_sabremetrics: PLAYER_MATCH_SABREMETRICS,
     match_kills: MATCH_KILLS,
+    match_rounds: MATCH_ROUNDS,
     player_match_weapon_stats: PLAYER_MATCH_WEAPON_STATS,
     player_match_economy_stats: PLAYER_MATCH_ECONOMY_STATS,
     player_season_leaderboard: PLAYER_SEASON_LEADERBOARD,

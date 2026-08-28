@@ -2,8 +2,9 @@ import { supabase } from '../supabase';
 import { resolveMatchSeasons, fetchAllPages, asPage } from './_shared';
 import { getPlayersById } from './player';
 import { killWeaponCategory, type KillWeaponCategory } from '../parsers/weaponClasses';
-import type { Player } from '../types';
+import type { Player, Faction } from '../types';
 import type { AccuracyTotals } from './weaponStats';
+import { oppositeSide } from '../mapSideStats';
 
 export interface MatchKillRow {
   match_id: number;
@@ -168,12 +169,15 @@ export async function getAllKillCreditFlags(
     if (!victimPms) continue;
     const attackerPms =
       k.attacker_player_match_stats_id != null ? pmsLookup.get(k.attacker_player_match_stats_id) : undefined;
+    const assisterPms =
+      k.assister_player_match_stats_id != null ? pmsLookup.get(k.assister_player_match_stats_id) : undefined;
     out.push({
       match_id: k.match_id,
       round_number: k.round_number,
       tick: k.tick,
       attacker_player_id: attackerPms?.player_id ?? null,
       victim_player_id: victimPms.player_id,
+      assister_player_id: assisterPms?.player_id ?? null,
       headshot: k.headshot,
       is_teamkill: k.is_teamkill,
     });
@@ -278,6 +282,7 @@ export interface KillCreditFlags {
   tick: number;
   attacker_player_id: number | null;
   victim_player_id: number;
+  assister_player_id: number | null;
   headshot: boolean;
   is_teamkill: boolean;
 }
@@ -305,6 +310,89 @@ export function deriveHeadshotAndTeamkillCounts(kills: KillCreditFlags[]): Map<s
     }
     if (k.is_teamkill) c.teamkills += 1;
     else if (k.headshot) c.headshot_kills += 1;
+  }
+  return out;
+}
+
+/** A player's side (CT/T) for one round, from their fixed match `faction` and that round's
+ *  `shirts_side` — the same formula `tallyPlayerRoundsBySide()` (`mapSideStats.ts`) already uses
+ *  for round win/loss, reused here rather than redefined. */
+export function resolvePlayerSide(shirtsSide: 'CT' | 'T', faction: Faction): 'CT' | 'T' {
+  return faction === 'SHIRTS' ? shirtsSide : oppositeSide(shirtsSide);
+}
+
+export interface SideSplitCounts {
+  kills_ct: number;
+  kills_t: number;
+  deaths_ct: number;
+  deaths_t: number;
+  assists_ct: number;
+  assists_t: number;
+  headshot_kills_ct: number;
+  headshot_kills_t: number;
+}
+
+/**
+ * Per (match, player) kills/deaths/assists/headshot-kills split by the side they were on that
+ * round — the query-time replacement for the same-named columns `player_match_sabremetrics` used
+ * to store directly (all were exact duplicates of `match_kills` combined with side data, unlike
+ * `headshot_kills`/`opening_kills`/`two_k_rounds`, which needed no side/faction lookup at all).
+ * `roundSides` (`getRoundSides()`, `queries/rounds.ts`) and `playerFactions` are both keyed the same
+ * way their source tables are: `` `${match_id}:${round_number}` `` and `` `${match_id}:${player_id}` ``
+ * respectively. A round or player missing from either map (never resolved a side/faction) is
+ * skipped rather than guessed at.
+ *
+ * Deaths always credit the victim's side, matching CS2's own unconditional `m_iDeaths` — a
+ * self-kill or teamkill still ends the victim's round. Kills and headshot-kills use the same
+ * "credited kill" exclusion as `deriveHeadshotAndTeamkillCounts()` (no self-kill, no teamkill).
+ * Assists are credited whenever `match_kills.assister_player_match_stats_id` is set, with no
+ * further exclusion — the parser (`collectMatchKills()`, `parsers/weaponStats.ts`) already only
+ * ever records a real assister there, matching how CS2 itself never awards a friendly-fire assist.
+ */
+export function deriveSideSplitCounts(
+  kills: KillCreditFlags[],
+  roundSides: Map<string, 'CT' | 'T'>,
+  playerFactions: Map<string, Faction>,
+): Map<string, SideSplitCounts> {
+  const out = new Map<string, SideSplitCounts>();
+  const bump = (matchId: number, playerId: number, field: keyof SideSplitCounts): void => {
+    const key = `${matchId}:${playerId}`;
+    let c = out.get(key);
+    if (!c) {
+      c = {
+        kills_ct: 0, kills_t: 0, deaths_ct: 0, deaths_t: 0,
+        assists_ct: 0, assists_t: 0, headshot_kills_ct: 0, headshot_kills_t: 0,
+      };
+      out.set(key, c);
+    }
+    c[field] += 1;
+  };
+  const sideOf = (matchId: number, playerId: number, shirtsSide: 'CT' | 'T'): 'CT' | 'T' | undefined => {
+    const faction = playerFactions.get(`${matchId}:${playerId}`);
+    return faction == null ? undefined : resolvePlayerSide(shirtsSide, faction);
+  };
+
+  for (const k of kills) {
+    const shirtsSide = roundSides.get(`${k.match_id}:${k.round_number}`);
+    if (shirtsSide == null) continue;
+
+    const victimSide = sideOf(k.match_id, k.victim_player_id, shirtsSide);
+    if (victimSide != null) bump(k.match_id, k.victim_player_id, victimSide === 'CT' ? 'deaths_ct' : 'deaths_t');
+
+    if (k.attacker_player_id != null && k.attacker_player_id !== k.victim_player_id && !k.is_teamkill) {
+      const attackerSide = sideOf(k.match_id, k.attacker_player_id, shirtsSide);
+      if (attackerSide != null) {
+        bump(k.match_id, k.attacker_player_id, attackerSide === 'CT' ? 'kills_ct' : 'kills_t');
+        if (k.headshot) {
+          bump(k.match_id, k.attacker_player_id, attackerSide === 'CT' ? 'headshot_kills_ct' : 'headshot_kills_t');
+        }
+      }
+    }
+
+    if (k.assister_player_id != null) {
+      const assisterSide = sideOf(k.match_id, k.assister_player_id, shirtsSide);
+      if (assisterSide != null) bump(k.match_id, k.assister_player_id, assisterSide === 'CT' ? 'assists_ct' : 'assists_t');
+    }
   }
   return out;
 }
@@ -417,21 +505,37 @@ export interface DerivedSabFields {
   shots_fired: number;
   shots_hit: number;
   headshot_hits: number;
+  kills_ct: number;
+  kills_t: number;
+  deaths_ct: number;
+  deaths_t: number;
+  assists_ct: number;
+  assists_t: number;
+  headshot_kills_ct: number;
+  headshot_kills_t: number;
 }
 
-/** Looks up one `` `${match_id}:${player_id}` `` key across `deriveKillCreditCounts()`'s three maps
- *  plus a `deriveAccuracyTotals()`-shaped accuracy map, defaulting every field to 0 when a player has
- *  no credited rows in a given map (never played a round, never fired a gun, etc.) — the shared merge
- *  every `SabFieldsWithDerived` builder (`getAllSabremetrics()`, `getMatchSabremetrics()`, the
- *  demo-upload preview) applies identically over the stored `player_match_sabremetrics` row. */
+const ZERO_SIDE_SPLIT: SideSplitCounts = {
+  kills_ct: 0, kills_t: 0, deaths_ct: 0, deaths_t: 0,
+  assists_ct: 0, assists_t: 0, headshot_kills_ct: 0, headshot_kills_t: 0,
+};
+
+/** Looks up one `` `${match_id}:${player_id}` `` key across `deriveKillCreditCounts()`'s three maps,
+ *  a `deriveAccuracyTotals()`-shaped accuracy map, and a `deriveSideSplitCounts()`-shaped side-split
+ *  map, defaulting every field to 0 when a player has no credited rows in a given map (never played
+ *  a round, never fired a gun, side unresolved, etc.) — the shared merge every `SabFieldsWithDerived`
+ *  builder (`getAllSabremetrics()`, `getMatchSabremetrics()`, the demo-upload preview) applies
+ *  identically over the stored `player_match_sabremetrics` row. */
 export function lookupDerivedSabFields(
   key: string,
   counts: KillCreditCounts,
   accuracy: Map<string, AccuracyTotals>,
+  sideSplit: Map<string, SideSplitCounts>,
 ): DerivedSabFields {
   const hsTkCounts = counts.hsTk.get(key);
   const opening = counts.openingDuels.get(key);
   const acc = accuracy.get(key);
+  const split = sideSplit.get(key) ?? ZERO_SIDE_SPLIT;
   return {
     headshot_kills: hsTkCounts?.headshot_kills ?? 0,
     teamkills: hsTkCounts?.teamkills ?? 0,
@@ -441,6 +545,7 @@ export function lookupDerivedSabFields(
     shots_fired: acc?.shots_fired ?? 0,
     shots_hit: acc?.shots_hit ?? 0,
     headshot_hits: acc?.headshot_hits ?? 0,
+    ...split,
   };
 }
 

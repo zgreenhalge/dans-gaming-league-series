@@ -17,6 +17,8 @@ import {
   deriveHeadshotAndTeamkillCounts,
   deriveOpeningDuelCounts,
   deriveTwoKRoundCounts,
+  resolvePlayerSide,
+  deriveSideSplitCounts,
   type MatchKillRow,
 } from './queries/kills';
 import { test, report } from './test-support/miniTest';
@@ -28,6 +30,7 @@ function kill(opts: {
   attacker: number | null;
   victim: number;
   weapon: string;
+  assister?: number | null;
   headshot?: boolean;
   noscope?: boolean;
   wallbang?: boolean;
@@ -43,7 +46,7 @@ function kill(opts: {
     attacker_name: opts.attacker != null ? `p${opts.attacker}` : null,
     victim_player_id: opts.victim,
     victim_name: `p${opts.victim}`,
-    assister_player_id: null,
+    assister_player_id: opts.assister ?? null,
     weapon: opts.weapon,
     headshot: opts.headshot ?? false,
     noscope: opts.noscope ?? false,
@@ -299,6 +302,80 @@ test('deriveTwoKRoundCounts: 2k rounds accumulate across multiple rounds', () =>
   ];
   const counts = deriveTwoKRoundCounts(kills);
   assert.equal(counts.get('1:1'), 2);
+});
+
+test('resolvePlayerSide: SHIRTS takes the round\'s shirts_side, SKINS takes the opposite', () => {
+  assert.equal(resolvePlayerSide('CT', 'SHIRTS'), 'CT');
+  assert.equal(resolvePlayerSide('CT', 'SKINS'), 'T');
+  assert.equal(resolvePlayerSide('T', 'SHIRTS'), 'T');
+  assert.equal(resolvePlayerSide('T', 'SKINS'), 'CT');
+});
+
+test('deriveSideSplitCounts: a credited kill splits by each participant\'s own resolved side', () => {
+  const roundSides = new Map([['1:1', 'CT' as const]]);
+  const playerFactions = new Map([['1:1', 'SHIRTS' as const], ['1:2', 'SKINS' as const]]);
+  const kills = [kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47' })];
+  const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  assert.equal(counts.get('1:1')?.kills_ct, 1);
+  assert.equal(counts.get('1:1')?.kills_t, 0);
+  assert.equal(counts.get('1:2')?.deaths_t, 1);
+  assert.equal(counts.get('1:2')?.deaths_ct, 0);
+});
+
+test('deriveSideSplitCounts: a headshot kill credits both kills and headshot_kills on the same side', () => {
+  const roundSides = new Map([['1:1', 'T' as const]]);
+  const playerFactions = new Map([['1:1', 'SKINS' as const], ['1:2', 'SHIRTS' as const]]);
+  const kills = [kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47', headshot: true })];
+  const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  // SKINS on a T round resolves to CT.
+  assert.equal(counts.get('1:1')?.kills_ct, 1);
+  assert.equal(counts.get('1:1')?.headshot_kills_ct, 1);
+});
+
+test('deriveSideSplitCounts: a self-kill credits only a death, no kill', () => {
+  const roundSides = new Map([['1:1', 'CT' as const]]);
+  const playerFactions = new Map([['1:1', 'SHIRTS' as const]]);
+  const kills = [kill({ round: 1, attacker: 1, victim: 1, weapon: 'world' })];
+  const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  assert.equal(counts.get('1:1')?.deaths_ct, 1);
+  assert.equal(counts.get('1:1')?.kills_ct ?? 0, 0);
+  assert.equal(counts.get('1:1')?.kills_t ?? 0, 0);
+});
+
+test('deriveSideSplitCounts: a teamkill credits only a death, no kill or headshot', () => {
+  const roundSides = new Map([['1:1', 'CT' as const]]);
+  const playerFactions = new Map([['1:1', 'SHIRTS' as const], ['1:2', 'SHIRTS' as const]]);
+  const kills = [kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47', headshot: true, isTeamkill: true })];
+  const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  assert.equal(counts.get('1:2')?.deaths_ct, 1);
+  assert.equal(counts.has('1:1'), false);
+});
+
+test('deriveSideSplitCounts: an assist credits the assister\'s own resolved side', () => {
+  const roundSides = new Map([['1:1', 'CT' as const]]);
+  const playerFactions = new Map([
+    ['1:1', 'SHIRTS' as const], ['1:2', 'SKINS' as const], ['1:3', 'SHIRTS' as const],
+  ]);
+  const kills = [kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47', assister: 3 })];
+  const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  assert.equal(counts.get('1:3')?.assists_ct, 1);
+});
+
+test('deriveSideSplitCounts: a round with no resolved shirts_side is skipped entirely', () => {
+  const roundSides = new Map<string, 'CT' | 'T'>();
+  const playerFactions = new Map([['1:1', 'SHIRTS' as const], ['1:2', 'SKINS' as const]]);
+  const kills = [kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47' })];
+  const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  assert.equal(counts.size, 0);
+});
+
+test('deriveSideSplitCounts: a player with no resolved faction is skipped, other participants unaffected', () => {
+  const roundSides = new Map([['1:1', 'CT' as const]]);
+  const playerFactions = new Map([['1:2', 'SKINS' as const]]); // attacker (player 1) missing
+  const kills = [kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47' })];
+  const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  assert.equal(counts.has('1:1'), false);
+  assert.equal(counts.get('1:2')?.deaths_t, 1);
 });
 
 report();

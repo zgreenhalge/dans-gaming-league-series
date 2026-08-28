@@ -170,22 +170,15 @@ export interface MapIndexEntry {
 
 export interface PlayerMatchSabremetrics {
   player_match_stats_id: number;
-  kills_ct: number;
-  kills_t: number;
-  deaths_ct: number;
-  deaths_t: number;
-  assists_ct: number;
-  assists_t: number;
   damage_ct: number;
   damage_t: number;
   // headshot_kills/teamkills/opening_kills/opening_deaths/two_k_rounds/shots_fired/shots_hit/
-  // headshot_hits are all derived at query time (#457), not stored — see queries/kills.ts's
-  // deriveHeadshotAndTeamkillCounts()/deriveOpeningDuelCounts()/deriveTwoKRoundCounts() and
-  // queries/weaponStats.ts's deriveAccuracyTotals(). headshot_kills_ct/_t, kills_ct/_t,
-  // deaths_ct/_t, assists_ct/_t, and the clutch_*/damage_ct/_t fields stay stored for now, pending a
-  // match_rounds-based side-resolution helper to derive the side-split ones too.
-  headshot_kills_ct: number;
-  headshot_kills_t: number;
+  // headshot_hits/kills_ct/_t/deaths_ct/_t/assists_ct/_t/headshot_kills_ct/_t are all derived at
+  // query time (#457/#488), not stored — see queries/kills.ts's
+  // deriveHeadshotAndTeamkillCounts()/deriveOpeningDuelCounts()/deriveTwoKRoundCounts()/
+  // deriveSideSplitCounts() and queries/weaponStats.ts's deriveAccuracyTotals(). damage_ct/_t and
+  // the clutch_* fields stay stored for now — damage_ct/_t isn't a clean duplicate of any existing
+  // fact table (#491), and the clutch fields are pending query-time reconstruction (#488).
   kast_rounds: number;
   clutch_1v1_attempts: number;
   clutch_1v1_wins: number;
@@ -229,9 +222,9 @@ export type SabFields = Omit<PlayerMatchSabremetrics, 'player_match_stats_id'>;
 
 /** `SabFields` plus the fields no longer stored on `player_match_sabremetrics` — derived at query
  *  time instead (`queries/kills.ts`'s `deriveHeadshotAndTeamkillCounts()`/
- *  `deriveOpeningDuelCounts()`/`deriveTwoKRoundCounts()`, `queries/weaponStats.ts`'s
- *  `deriveAccuracyTotals()`), but still carried alongside every other sabremetric so
- *  aggregation/display code doesn't need a special case for them. */
+ *  `deriveOpeningDuelCounts()`/`deriveTwoKRoundCounts()`/`deriveSideSplitCounts()`,
+ *  `queries/weaponStats.ts`'s `deriveAccuracyTotals()`), but still carried alongside every other
+ *  sabremetric so aggregation/display code doesn't need a special case for them. */
 export type SabFieldsWithDerived = SabFields & {
   headshot_kills: number;
   teamkills: number;
@@ -241,6 +234,14 @@ export type SabFieldsWithDerived = SabFields & {
   shots_fired: number;
   shots_hit: number;
   headshot_hits: number;
+  kills_ct: number;
+  kills_t: number;
+  deaths_ct: number;
+  deaths_t: number;
+  assists_ct: number;
+  assists_t: number;
+  headshot_kills_ct: number;
+  headshot_kills_t: number;
 };
 
 export interface DemoSabremetricStat {

@@ -86,7 +86,7 @@ export interface RoundOutcome {
 /** Round win/loss counts for CT and T, computed directly from round outcomes — symmetric per
  *  round (shirts win a round iff `winner_side === shirts_side`; skins get the complement), so no
  *  roster/pick resolution is needed the way match-level `wins`/`losses` above requires. */
-function oppositeSide(side: 'CT' | 'T'): 'CT' | 'T' {
+export function oppositeSide(side: 'CT' | 'T'): 'CT' | 'T' {
   return side === 'CT' ? 'T' : 'CT';
 }
 

@@ -10,7 +10,8 @@ import type {
   DemoMatchUtilityThrow, DemoMatchRoundEconomy,
 } from '@/lib/types';
 import {
-  deriveKillCreditCounts, lookupDerivedSabFields, sumAccuracyTotals, type KillCreditFlags,
+  deriveKillCreditCounts, deriveSideSplitCounts, lookupDerivedSabFields, sumAccuracyTotals,
+  type KillCreditFlags,
 } from '@/lib/queries';
 type Faction = 'CT' | 'T' | null;
 
@@ -611,17 +612,19 @@ export default function DemoUploadModal({
                 {parsed.sabremetrics && parsed.sabremetrics.length > 0 && (() => {
                   const allPlayers = [...shirtsPlayers, ...skinsPlayers];
                   // headshot_kills/teamkills/opening_kills/opening_deaths/two_k_rounds/shots_fired/
-                  // shots_hit/headshot_hits aren't part of the parsed sabremetrics payload anymore
-                  // (all derived at query time once confirmed, #457) — derived here the same way
-                  // from this preview's own parsed.matchKills/weaponStats, using match_id 0 since
-                  // there's only one match in scope, so the preview shows the same numbers
-                  // confirming will persist.
+                  // shots_hit/headshot_hits/kills_ct/_t/deaths_ct/_t/assists_ct/_t/
+                  // headshot_kills_ct/_t aren't part of the parsed sabremetrics payload anymore (all
+                  // derived at query time once confirmed, #457/#488) — derived here the same way
+                  // from this preview's own parsed.matchKills/weaponStats/matchRounds, using
+                  // match_id 0 since there's only one match in scope, so the preview shows the same
+                  // numbers confirming will persist.
                   const killFlags: KillCreditFlags[] = (parsed.matchKills ?? []).map((k) => ({
                     match_id: 0,
                     round_number: k.round_number,
                     tick: k.tick,
                     attacker_player_id: k.attacker_player_id,
                     victim_player_id: k.victim_player_id,
+                    assister_player_id: k.assister_player_id,
                     headshot: k.headshot,
                     is_teamkill: k.is_teamkill,
                   }));
@@ -631,13 +634,20 @@ export default function DemoUploadModal({
                       w.weaponStats.map((ws) => ({ match_id: 0, player_id: w.player_id, ...ws })),
                     ),
                   );
+                  const roundSides = new Map(
+                    (parsed.matchRounds ?? []).map((r) => [`0:${r.round_number}`, r.shirts_side]),
+                  );
+                  const playerFactions = new Map(
+                    allPlayers.map((p) => [`0:${p.player_id}`, p.faction]),
+                  );
+                  const sideSplitCounts = deriveSideSplitCounts(killFlags, roundSides, playerFactions);
                   const sabPlayers = parsed.sabremetrics!.map((s) => {
                     const mp = allPlayers.find((p) => p.player_id === s.player_id);
                     const stat = statMap.get(s.player_id);
                     const key = `0:${s.player_id}`;
                     const sabremetrics: SabFieldsWithDerived = {
                       ...(s.sabremetrics as SabFields),
-                      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals),
+                      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals, sideSplitCounts),
                     };
                     return {
                       player_id: s.player_id,
