@@ -171,18 +171,18 @@ function sab(overrides: Partial<SabFields> & { player_match_stats_id: number }):
 }
 
 export const PLAYER_MATCH_SABREMETRICS: Row[] = [
-  sab({ player_match_stats_id: 1000, damage_ct: 1020, damage_t: 861, kast_rounds: 17, flash_assists: 2, enemies_flashed: 6, flashes_thrown: 8, plants: 3, trade_kill_opportunities: 5, trade_kill_attempts: 4, trade_kill_successes: 3 }),
-  sab({ player_match_stats_id: 1001, damage_ct: 940, damage_t: 780, kast_rounds: 15, flash_assists: 3, enemies_flashed: 7, flashes_thrown: 9, defuses: 1, trade_kill_opportunities: 4, trade_kill_attempts: 3, trade_kill_successes: 2 }),
-  sab({ player_match_stats_id: 1002, damage_ct: 720, damage_t: 710, kast_rounds: 12, flash_assists: 1, enemies_flashed: 4, flashes_thrown: 5, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
-  sab({ player_match_stats_id: 1003, damage_ct: 670, damage_t: 652, kast_rounds: 11, flash_assists: 2, enemies_flashed: 5, flashes_thrown: 6, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
+  sab({ player_match_stats_id: 1000, damage_ct: 1020, damage_t: 861, kast_rounds: 17, flashes_thrown: 8, plants: 3, trade_kill_opportunities: 5, trade_kill_attempts: 4, trade_kill_successes: 3 }),
+  sab({ player_match_stats_id: 1001, damage_ct: 940, damage_t: 780, kast_rounds: 15, flashes_thrown: 9, defuses: 1, trade_kill_opportunities: 4, trade_kill_attempts: 3, trade_kill_successes: 2 }),
+  sab({ player_match_stats_id: 1002, damage_ct: 720, damage_t: 710, kast_rounds: 12, flashes_thrown: 5, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
+  sab({ player_match_stats_id: 1003, damage_ct: 670, damage_t: 652, kast_rounds: 11, flashes_thrown: 6, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
 
-  sab({ player_match_stats_id: 1012, damage_ct: 1150, damage_t: 962, kast_rounds: 19, flash_assists: 1, enemies_flashed: 5, flashes_thrown: 7, plants: 2, trade_kill_opportunities: 6, trade_kill_attempts: 5, trade_kill_successes: 4 }),
-  sab({ player_match_stats_id: 1013, damage_ct: 1000, damage_t: 920, kast_rounds: 17, flash_assists: 3, enemies_flashed: 6, flashes_thrown: 8, defuses: 1, trade_kill_opportunities: 5, trade_kill_attempts: 4, trade_kill_successes: 3 }),
-  sab({ player_match_stats_id: 1014, damage_ct: 880, damage_t: 800, kast_rounds: 14, flash_assists: 1, enemies_flashed: 4, flashes_thrown: 5, trade_kill_opportunities: 4, trade_kill_attempts: 3, trade_kill_successes: 2 }),
-  sab({ player_match_stats_id: 1015, damage_ct: 820, damage_t: 740, kast_rounds: 12, flash_assists: 2, enemies_flashed: 5, flashes_thrown: 6, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
+  sab({ player_match_stats_id: 1012, damage_ct: 1150, damage_t: 962, kast_rounds: 19, flashes_thrown: 7, plants: 2, trade_kill_opportunities: 6, trade_kill_attempts: 5, trade_kill_successes: 4 }),
+  sab({ player_match_stats_id: 1013, damage_ct: 1000, damage_t: 920, kast_rounds: 17, flashes_thrown: 8, defuses: 1, trade_kill_opportunities: 5, trade_kill_attempts: 4, trade_kill_successes: 3 }),
+  sab({ player_match_stats_id: 1014, damage_ct: 880, damage_t: 800, kast_rounds: 14, flashes_thrown: 5, trade_kill_opportunities: 4, trade_kill_attempts: 3, trade_kill_successes: 2 }),
+  sab({ player_match_stats_id: 1015, damage_ct: 820, damage_t: 740, kast_rounds: 12, flashes_thrown: 6, trade_kill_opportunities: 3, trade_kill_attempts: 2, trade_kill_successes: 1 }),
 
-  sab({ player_match_stats_id: 1016, damage_ct: 900, damage_t: 810, kast_rounds: 15, flash_assists: 1, enemies_flashed: 3, flashes_thrown: 4, plants: 2, trade_kill_opportunities: 4, trade_kill_attempts: 4, trade_kill_successes: 3 }),
-  sab({ player_match_stats_id: 1017, damage_ct: 820, damage_t: 764, kast_rounds: 13, flash_assists: 2, enemies_flashed: 4, flashes_thrown: 5, defuses: 1, trade_kill_opportunities: 3, trade_kill_attempts: 3, trade_kill_successes: 2 }),
+  sab({ player_match_stats_id: 1016, damage_ct: 900, damage_t: 810, kast_rounds: 15, flashes_thrown: 4, plants: 2, trade_kill_opportunities: 4, trade_kill_attempts: 4, trade_kill_successes: 3 }),
+  sab({ player_match_stats_id: 1017, damage_ct: 820, damage_t: 764, kast_rounds: 13, flashes_thrown: 5, defuses: 1, trade_kill_opportunities: 3, trade_kill_attempts: 3, trade_kill_successes: 2 }),
   sab({ player_match_stats_id: 1018, damage_ct: 400, damage_t: 410, kast_rounds: 6, trade_kill_opportunities: 2, trade_kill_attempts: 1, trade_kill_successes: 0 }),
   sab({ player_match_stats_id: 1019, damage_ct: 350, damage_t: 370, kast_rounds: 5, trade_kill_opportunities: 2, trade_kill_attempts: 1, trade_kill_successes: 0 }),
 ];
@@ -262,6 +262,34 @@ export const MATCH_ROUNDS: Row[] = [
   ...roundRows(100, 25, 'CT'),
   ...roundRows(200, 28, 'CT'),
   ...roundRows(300, 18, 'T'),
+];
+
+// ─── match_utility_throws ────────────────────────────────────────────────
+// Match 100 only (player_match_stats_id 1000-1003) — enough to exercise deriveUtilityCounts()'s
+// merge into getAllSabremetrics()/getMatchSabremetrics(), same reasoning
+// PLAYER_MATCH_WEAPON_STATS/PLAYER_MATCH_ECONOMY_STATS below give for stopping at one match. Each
+// row below is its own independent, hand-verifiable scenario (one throw per round, ticks well
+// clear of round boundaries) rather than a dense reconstruction of a real game:
+// - round 1: Bob(1001) flashes Carol(1002, enemy) for 1.5s at tick 900; round 1's existing kill
+//   (Alice(1000) kills Carol(1002) at tick 1000, MATCH_KILLS above) lands inside both the
+//   flashes_leading_to_kill window (900-1044) and the flash-assist window (900-1188), and Alice is
+//   Bob's SHIRTS teammate — so this one throw drives enemies_flashed/effective_flashes/
+//   blind_duration_dealt/blind_duration_max_sum/flashes_leading_to_kill/flash_assists all at once
+//   for Bob.
+// - round 2: Carol(1002) flashes teammate Dave(1003, both SKINS) for 2.0s — teamflash_duration
+//   only.
+// - round 3: Dave(1003) flashes Bob(1001, enemy) for 0.5s — below the 1.1s half-blind threshold,
+//   so only the raw blind_duration_dealt exposure counts.
+// - round 4: Alice(1000) flashes herself for 1.0s — a self-flash, ignored entirely.
+// - round 5: Bob(1001) flashes Dave(1003, enemy) for 1.3s; round 5's kill is Alice killing Carol
+//   (not Dave), so no death lands in this flash's window — a "clean" effective-flash with no
+//   assist/kill credit.
+export const MATCH_UTILITY_THROWS: Row[] = [
+  { match_id: 100, round_number: 1, tick: 900, flasher_player_match_stats_id: 1001, blinded_player_match_stats_id: 1002, blind_duration: 1.5 },
+  { match_id: 100, round_number: 2, tick: 1900, flasher_player_match_stats_id: 1002, blinded_player_match_stats_id: 1003, blind_duration: 2.0 },
+  { match_id: 100, round_number: 3, tick: 2900, flasher_player_match_stats_id: 1003, blinded_player_match_stats_id: 1001, blind_duration: 0.5 },
+  { match_id: 100, round_number: 4, tick: 3900, flasher_player_match_stats_id: 1000, blinded_player_match_stats_id: 1000, blind_duration: 1.0 },
+  { match_id: 100, round_number: 5, tick: 4900, flasher_player_match_stats_id: 1001, blinded_player_match_stats_id: 1003, blind_duration: 1.3 },
 ];
 
 // ─── player_match_weapon_stats / player_match_economy_stats ────────────────────────────────
@@ -424,6 +452,7 @@ export function buildFakeDb(): FakeDb {
     player_match_sabremetrics: PLAYER_MATCH_SABREMETRICS,
     match_kills: MATCH_KILLS,
     match_rounds: MATCH_ROUNDS,
+    match_utility_throws: MATCH_UTILITY_THROWS,
     player_match_weapon_stats: PLAYER_MATCH_WEAPON_STATS,
     player_match_economy_stats: PLAYER_MATCH_ECONOMY_STATS,
     player_season_leaderboard: PLAYER_SEASON_LEADERBOARD,

@@ -1,5 +1,5 @@
 import type { SabFields } from '../types';
-import { isTeamKill, type MatchContext, type PlayerDeathRow } from './matchContext';
+import type { MatchContext } from './matchContext';
 import { initCollector, roundOf } from './_shared';
 
 type CollectorOut = Map<string, Partial<SabFields>>;
@@ -63,115 +63,21 @@ export function collectMatchUtilityThrows(
   return rows;
 }
 
+/**
+ * Flashes thrown per player — the one utility stat that stays live-collected rather than derived
+ * from `match_utility_throws` at query time, since it needs `weapon_fire` events (no fact table
+ * carries them). Every other flash stat (`flash_assists`, `teamflash_duration`, `enemies_flashed`,
+ * `flashes_leading_to_kill`, `effective_flashes`, `blind_duration_dealt`, `blind_duration_max_sum`)
+ * is `queries/utility.ts`'s `deriveUtilityCounts()`, reading `match_utility_throws` instead
+ * (#489).
+ */
 export function collectUtility(
-  blindEvents: PlayerBlindRow[],
-  deathEvents: PlayerDeathRow[],
   fireEvents: WeaponFireRow[],
   context: MatchContext,
   steamIds: string[],
 ): CollectorOut {
   const { out, steamSet } = initCollector<SabFields>(steamIds);
 
-  const flashAssistWindow = Math.round(3 * context.tickRate);
-
-  // Leetify excludes "half-blind" exposure (< 1.1s) from flash effectiveness stats
-  // (enemies_flashed, flash assists). blind_duration_dealt/teamflash_duration stay
-  // ungated — they're raw exposure measures, not effectiveness measures.
-  const HALF_BLIND_THRESHOLD = 1.1;
-
-  // --- Flash assists, blind_duration_dealt, teamflash_duration ---
-
-  // Build death lookup: steamId → [{tick, round}]
-  const deathLookup = new Map<string, { tick: number; round: number; attacker: string | null }[]>();
-  for (const d of deathEvents) {
-    const round = roundOf(d, context);
-    if (round == null) continue;
-    const victim = d.user_steamid;
-    if (!victim || !steamSet.has(victim)) continue;
-    if (!deathLookup.has(victim)) deathLookup.set(victim, []);
-    deathLookup.get(victim)!.push({ tick: d.tick, round, attacker: d.attacker_steamid });
-  }
-
-  // All enemies blinded by the same flashbang detonate at the same tick — there's no explicit
-  // flash-entity id on this event, so (flasher, tick) reconstructs "one flash" for the per-flash
-  // averages below (0.3). Only durations >=1.1s go in, matching the half-blind gate.
-  const flashGroups = new Map<string, number[]>();
-
-  for (const b of blindEvents) {
-    const round = roundOf(b, context);
-    if (round == null) continue;
-
-    const flasher = b.attacker_steamid;
-    const blinded = b.user_steamid;
-    if (!flasher || !steamSet.has(flasher)) continue;
-    if (!blinded || !steamSet.has(blinded)) continue;
-    if (flasher === blinded) continue; // self-flash ignored for all stats
-
-    const isTeammate = isTeamKill(flasher, blinded, context);
-    const isEnemy = !isTeammate;
-    const duration = b.blind_duration ?? 0;
-
-    const p = out.get(flasher)!;
-
-    if (isEnemy) {
-      p.blind_duration_dealt = ((p.blind_duration_dealt as number) ?? 0) + duration;
-
-      if (duration >= HALF_BLIND_THRESHOLD) {
-        p.enemies_flashed = ((p.enemies_flashed as number) ?? 0) + 1;
-
-        const flashKey = `${flasher}::${round}::${b.tick}`;
-        if (!flashGroups.has(flashKey)) flashGroups.set(flashKey, []);
-        flashGroups.get(flashKey)!.push(duration);
-
-        const blindExpireTick = b.tick + Math.round(duration * context.tickRate);
-        // Leetify's own wording ("if the flashed player then gets killed") doesn't specify an
-        // exact cutoff, so this stat extends half the flash's own duration past its expiry
-        // rather than stopping the instant the blind ends — a kill immediately after an enemy's
-        // vision clears is still meaningfully attributable to the flash.
-        const ledToKillWindowEnd = blindExpireTick + Math.round((duration / 2) * context.tickRate);
-        const victimDeaths = deathLookup.get(blinded) ?? [];
-
-        // flashes_leading_to_kill (Leetify-style): the victim died within this widened window —
-        // [blind_start_tick, ledToKillWindowEnd] — by anyone, including the flasher's own kill.
-        // Distinct from flash_assists below, which only credits a teammate's kill inside a fixed
-        // window after the blind expires.
-        const ledToKill = victimDeaths.some(
-          (d) => d.round === round && d.tick >= b.tick && d.tick <= ledToKillWindowEnd,
-        );
-        if (ledToKill) {
-          p.flashes_leading_to_kill = ((p.flashes_leading_to_kill as number) ?? 0) + 1;
-        }
-
-        // Flash assist: enemy is killed by a teammate of the flasher
-        // within flashAssistWindow ticks after the blind expires
-        const windowEnd = blindExpireTick + flashAssistWindow;
-        const assisted = victimDeaths.some((d) => {
-          if (d.round !== round) return false;
-          if (d.tick > windowEnd || d.tick < b.tick) return false;
-          // Killed by a teammate of the flasher (not the flasher themselves)
-          if (!d.attacker || d.attacker === flasher) return false;
-          return isTeamKill(d.attacker, flasher, context);
-        });
-        if (assisted) {
-          p.flash_assists = ((p.flash_assists as number) ?? 0) + 1;
-        }
-      }
-    } else if (isTeammate) {
-      p.teamflash_duration = ((p.teamflash_duration as number) ?? 0) + duration;
-    }
-  }
-
-  // --- Per-flash effectiveness averages (0.3) ---
-  // One effective flash per (flasher, round, tick) group; its contribution to the average is
-  // the longest qualifying blind it caused, not the sum across every enemy it hit.
-  for (const [key, durations] of flashGroups) {
-    const flasher = key.split('::')[0];
-    const p = out.get(flasher)!;
-    p.effective_flashes = ((p.effective_flashes as number) ?? 0) + 1;
-    p.blind_duration_max_sum = ((p.blind_duration_max_sum as number) ?? 0) + Math.max(...durations);
-  }
-
-  // --- Flashes thrown ---
   for (const f of fireEvents) {
     if (f.weapon !== 'weapon_flashbang') continue;
     if (roundOf(f, context) == null) continue;

@@ -111,6 +111,53 @@ export function weekRowsFromLookup(lookup: WeekLookup): { id: number; season_id:
 }
 
 /**
+ * Get-or-init a `Map<string, T>` entry (seeded from `zero` on first touch) and add `amount` to one
+ * numeric field — the shared "counter record keyed by `` `${match_id}:${player_id}` `` " primitive
+ * every per-player `derive*()` aggregator in this file's siblings needs (side-split counts, clutch
+ * counts, utility counts), rather than each hand-rolling its own get-or-init-then-increment.
+ */
+export function bumpCounter<T, K extends keyof T>(
+  out: Map<string, T>,
+  key: string,
+  zero: T,
+  field: K,
+  amount = 1,
+): void {
+  let c = out.get(key);
+  if (!c) {
+    c = { ...zero };
+    out.set(key, c);
+  }
+  // `T`'s fields are numeric by every caller's contract (a counts record like `SideSplitCounts`/
+  // `ClutchCounts`/`UtilityCounts`), but a plain `interface` gets no implicit index signature, so
+  // `T` can't be constrained to `Record<string, number>` without breaking every call site — hence
+  // the cast through `unknown` rather than a tighter generic bound.
+  c[field] = ((c[field] as unknown as number) + amount) as unknown as T[K];
+}
+
+export type PmsRow = { id: number; player_id: number; match_id: number };
+
+/** Resolves `player_match_stats.id -> {id, player_id, match_id}` — the FK-to-`player_id` lookup
+ *  every fact-table reader needs (`match_kills`/`match_utility_throws` rows are keyed by
+ *  `player_match_stats_id`, but every `derive*()` consumer works in `player_id`). Pass `rows` when
+ *  the caller already fetched `player_match_stats` (e.g. `getAllSabremetrics()`'s own
+ *  `id, player_id, match_id, rounds_played` read, structurally compatible) to skip a redundant
+ *  full-table fetch; pass `matchId` to scope an actual fetch to one match. */
+export function fetchPmsLookup(
+  matchId?: number,
+  rows?: PmsRow[] | Promise<PmsRow[]>,
+): Promise<Map<number, PmsRow>> {
+  const rowsPromise = rows
+    ? Promise.resolve(rows)
+    : fetchAllPages<PmsRow>((from, to) => {
+        let q = supabase.from('player_match_stats').select('id, player_id, match_id');
+        if (matchId != null) q = q.eq('match_id', matchId);
+        return asPage(q.range(from, to));
+      });
+  return rowsPromise.then((r) => new Map(r.map((x) => [x.id, x])));
+}
+
+/**
  * Resolves `match_id -> season_id` for every played match (`isPlayedScore(final_score)`), via
  * `matches` -> `weeks` -> `seasons` — the join every demo-derived-stat query needs to scope its
  * rows to a season. Shared by `getAllSabremetrics()` and the weapon-class/economy breakdown

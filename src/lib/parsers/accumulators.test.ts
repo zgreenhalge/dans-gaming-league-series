@@ -11,11 +11,13 @@ import assert from 'node:assert/strict';
 import { SPLIT_PROPS, SPLIT_FIELDS, UNSPLIT_PROPS, UNSPLIT_FIELDS } from './accumulators';
 import { test, report } from '../test-support/miniTest';
 
-test('accumulators: enemies_flashed is not read from the engine accumulator', () => {
-  // enemies_flashed must come from utility.ts's half-blind-gated count (0.1), not the engine's
-  // ungated m_iEnemiesFlashed netprop — re-adding it here would silently double-source the stat.
+test('accumulators: the engine\'s ungated m_iEnemiesFlashed accumulator is never read here', () => {
+  // enemies_flashed is derived at query time from match_utility_throws (queries/utility.ts's
+  // deriveUtilityCounts(), #489), which applies the half-blind (1.1s) threshold the engine's own
+  // netprop doesn't — it isn't even a SabFields key anymore, so UNSPLIT_FIELDS mapping it there is
+  // now a type error, not just a runtime bug; this only guards the still-typeable half (collecting
+  // it into UNSPLIT_PROPS with no field mapping, which would be dead weight, not a real regression).
   assert.ok(!UNSPLIT_PROPS.includes('m_iEnemiesFlashed' as never));
-  assert.ok(!Object.values(UNSPLIT_FIELDS).includes('enemies_flashed'));
 });
 
 test('accumulators: UNSPLIT_FIELDS only maps utility_damage', () => {

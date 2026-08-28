@@ -69,7 +69,7 @@ recorded score.
 | `roundSides.ts` | Which side (CT/T) each faction is on each round — see "Side splits" below |
 | `accumulators.ts` | Per-side damage deltas from round-end accumulator ticks (`damage_ct`/`damage_t`) — K/A/D/headshot splits aren't collected here; they're derived at query time from `match_kills` (`deriveSideSplitCounts()` in `queries/kills.ts`) |
 | `kast.ts` | KAST rounds + trade tracking (`KAST+`) |
-| `utility.ts` | Flash assists, utility damage, teamflash/self-flash (`Utility+`) |
+| `utility.ts` | Flashes thrown — the one utility stat still collected here, since it needs `weapon_fire` events no fact table carries. Every other flash stat (flash assists, enemies flashed, teamflash, etc., feeding `Utility+`) is derived at query time from `match_utility_throws` — see "Kill, round, and utility fact tables" below |
 | `objectives.ts` | Bomb plants/defuses (`Objective+`) |
 | `trades.ts` | Trade-kill/traded-death opportunity/attempt/success counts, sharing `kast.ts`'s trade window (`Trade+`) |
 | `heGrenade.ts` | HE grenades thrown and enemy damage dealt (HE Damage/Throw) |
@@ -101,13 +101,14 @@ as `shots_fired`/`shots_hit`. For economy, it's seeded directly from the round's
 classification, independent of whether the player fired a shot that round — an eco round the player
 never fired in still counts as an eco round played.
 
-## Kill and round fact tables
+## Kill, round, and utility fact tables
 
-`match_kills` and `match_rounds` (see [`architecture.md`](./architecture.md)) are granular per-event
-fact tables, not per-player pre-aggregates — one row per kill and one row per round, with aggregation
-(kills-by-weapon, killed-by-weapon, category rollups, favorite weapon, round-win-%-by-side) done at
-query time rather than baked into the persisted shape. This is a deliberate departure from the
-`player_match_weapon_stats`-style pattern above: a new derived stat is a query change, not a new table.
+`match_kills`, `match_rounds`, and `match_utility_throws` (see [`architecture.md`](./architecture.md))
+are granular per-event fact tables, not per-player pre-aggregates — one row per kill, one row per
+round, and one row per flash, with aggregation (kills-by-weapon, killed-by-weapon, category rollups,
+favorite weapon, round-win-%-by-side, flash-effectiveness stats) done at query time rather than baked
+into the persisted shape. This is a deliberate departure from the `player_match_weapon_stats`-style
+pattern above: a new derived stat is a query change, not a new table.
 
 - `collectMatchKills()` (`weaponStats.ts`) reads `player_death` events (parsed with a `weapon` field,
   unlike every other consumer of that event) and emits one `KillFactRow` per kill: round, attacker/
@@ -147,6 +148,22 @@ query time rather than baked into the persisted shape. This is a deliberate depa
   (`resolvePlayerSide()`), then each kill in the round updates the alive sets, crediting a clutch
   when a side drops to a lone survivor and a 2v1 advantage when a side keeps 2 alive against
   a lone enemy.
+- `collectMatchUtilityThrows()` (`utility.ts`) reads `player_blind` events and emits one
+  `UtilityThrowFactRow` per event: round, flasher/blinded steamid, blind duration, tick. Self-flashes
+  (flasher and blinded the same player) and sub-threshold/teammate flashes are all kept — same
+  "downstream queries decide" convention `collectMatchKills()` follows for teamkills.
+  `src/lib/demo/matchUtilityThrows.ts` persists it via `replaceMatchRows()`, resolving both
+  flasher/blinded to `player_match_stats_id`; a throw whose flasher or blinded player has no
+  resolvable row is dropped entirely (unlike `match_kills`, where only the victim is required).
+- `flash_assists`/`teamflash_duration`/`enemies_flashed`/`flashes_leading_to_kill`/
+  `effective_flashes`/`blind_duration_dealt`/`blind_duration_max_sum` are derived at query time from
+  `match_utility_throws` (`deriveUtilityCounts()` in `queries/utility.ts`) — same half-blind (1.1s)
+  threshold, flash-assist window, and flashes-leading-to-kill window as every other derived stat here
+  (see [`calculations.md`](./calculations.md)), resolved from the persisted fact table rather than the
+  demo's raw event stream. Whether a flash hit a teammate or an enemy comes from each player's fixed
+  match `faction` — no side/round lookup needed, since "same team" is a faction question, not a side
+  question the way CT/T-split kill credit is. `flashes_thrown` stays live-collected in `utility.ts`,
+  since it needs `weapon_fire` events no fact table carries.
 
 ## Match start (skipping warmup and stray knife rounds)
 

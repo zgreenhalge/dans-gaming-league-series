@@ -174,19 +174,17 @@ export interface PlayerMatchSabremetrics {
   damage_t: number;
   // headshot_kills/teamkills/opening_kills/opening_deaths/two_k_rounds/shots_fired/shots_hit/
   // headshot_hits/kills_ct/_t/deaths_ct/_t/assists_ct/_t/headshot_kills_ct/_t/clutch_1v1/1v2/2v1_
-  // attempts/wins are all derived at query time (#457/#488), not stored — see queries/kills.ts's
-  // deriveHeadshotAndTeamkillCounts()/deriveOpeningDuelCounts()/deriveTwoKRoundCounts()/
-  // deriveSideSplitCounts()/deriveClutchCounts() and queries/weaponStats.ts's
-  // deriveAccuracyTotals(). damage_ct/_t stays stored — it isn't a clean duplicate of any existing
+  // attempts/wins/flash_assists/teamflash_duration/enemies_flashed/flashes_leading_to_kill/
+  // effective_flashes/blind_duration_dealt/blind_duration_max_sum are all derived at query time
+  // (#457/#488/#489), not stored — see queries/kills.ts's deriveHeadshotAndTeamkillCounts()/
+  // deriveOpeningDuelCounts()/deriveTwoKRoundCounts()/deriveSideSplitCounts()/deriveClutchCounts(),
+  // queries/weaponStats.ts's deriveAccuracyTotals(), and queries/utility.ts's
+  // deriveUtilityCounts(). flashes_thrown stays stored — it needs `weapon_fire` events, which no
+  // fact table carries. damage_ct/_t stays stored too — it isn't a clean duplicate of any existing
   // fact table (#491).
   kast_rounds: number;
-  flash_assists: number;
-  flashes_leading_to_kill: number;
   utility_damage: number;
-  blind_duration_dealt: number;
-  enemies_flashed: number;
   flashes_thrown: number;
-  teamflash_duration: number;
   plants: number;
   defuses: number;
   trade_kill_opportunities: number;
@@ -197,8 +195,6 @@ export interface PlayerMatchSabremetrics {
   traded_death_successes: number;
   he_thrown: number;
   he_damage: number;
-  blind_duration_max_sum: number;
-  effective_flashes: number;
   shots_hit_no_awp: number;
   headshot_hits_no_awp: number;
   counter_strafe_shots: number;
@@ -217,8 +213,9 @@ export type SabFields = Omit<PlayerMatchSabremetrics, 'player_match_stats_id'>;
 /** `SabFields` plus the fields no longer stored on `player_match_sabremetrics` — derived at query
  *  time instead (`queries/kills.ts`'s `deriveHeadshotAndTeamkillCounts()`/
  *  `deriveOpeningDuelCounts()`/`deriveTwoKRoundCounts()`/`deriveSideSplitCounts()`,
- *  `queries/weaponStats.ts`'s `deriveAccuracyTotals()`), but still carried alongside every other
- *  sabremetric so aggregation/display code doesn't need a special case for them. */
+ *  `queries/weaponStats.ts`'s `deriveAccuracyTotals()`, `queries/utility.ts`'s
+ *  `deriveUtilityCounts()`), but still carried alongside every other sabremetric so aggregation/
+ *  display code doesn't need a special case for them. */
 export type SabFieldsWithDerived = SabFields & {
   headshot_kills: number;
   teamkills: number;
@@ -242,6 +239,13 @@ export type SabFieldsWithDerived = SabFields & {
   clutch_1v2_wins: number;
   clutch_2v1_attempts: number;
   clutch_2v1_wins: number;
+  flash_assists: number;
+  teamflash_duration: number;
+  enemies_flashed: number;
+  flashes_leading_to_kill: number;
+  effective_flashes: number;
+  blind_duration_dealt: number;
+  blind_duration_max_sum: number;
 };
 
 export interface DemoSabremetricStat {

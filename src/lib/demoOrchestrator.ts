@@ -39,13 +39,8 @@ import { collectWeaponClassStats, collectEconomyStats, collectMatchKills } from 
 const ZERO: SabFields = {
   damage_ct: 0, damage_t: 0,
   kast_rounds: 0,
-  flash_assists: 0,
-  flashes_leading_to_kill: 0,
   utility_damage: 0,
-  blind_duration_dealt: 0,
-  enemies_flashed: 0,
   flashes_thrown: 0,
-  teamflash_duration: 0,
   plants: 0,
   defuses: 0,
   trade_kill_opportunities: 0,
@@ -56,8 +51,6 @@ const ZERO: SabFields = {
   traded_death_successes: 0,
   he_thrown: 0,
   he_damage: 0,
-  blind_duration_max_sum: 0,
-  effective_flashes: 0,
   shots_hit_no_awp: 0,
   headshot_hits_no_awp: 0,
   counter_strafe_shots: 0,
@@ -184,7 +177,7 @@ export function parseDemoSabremetrics(
 
   // 5. Event-based collectors
   const kastStats = collectKast(liveDeathEvents, context, steamIds, tradeOpportunities);
-  const utilityStats = collectUtility(blindEvents, liveDeathEvents, fireEvents, context, steamIds);
+  const utilityStats = collectUtility(fireEvents, context, steamIds);
   const objectiveStats = collectObjectives(plantEvents, defuseEvents, context, steamIds);
   const heStats = collectHeGrenades(fireEvents, hurtEvents, context, steamIds);
   const accuracyStats = collectAccuracy(hurtEvents, context, steamIds);
