@@ -14,6 +14,9 @@ import {
   favoriteWeapon,
   allWeaponsWithKills,
   resolveWeaponStat,
+  resolveWeaponFilterStat,
+  categoryFilterValue,
+  parseCategoryFilter,
   deriveHeadshotAndTeamkillCounts,
   deriveOpeningDuelCounts,
   deriveTwoKRoundCounts,
@@ -149,6 +152,61 @@ test('resolveWeaponStat: null selection returns the favorite; a named selection 
     midairKills: 0,
     deaths: 0,
   });
+});
+
+test('aggregateWeaponKillStats/allWeaponsWithKills: every knife/bayonet variant merges into one "knife" bucket (#474)', () => {
+  const kills = [
+    kill({ attacker: 1, victim: 2, weapon: 'knife_karambit' }),
+    kill({ attacker: 1, victim: 3, weapon: 'bayonet', headshot: false }),
+    kill({ attacker: 4, victim: 1, weapon: 'knife_m9_bayonet' }),
+  ];
+  const stats = aggregateWeaponKillStats(kills, 1);
+  const knifeEntries = stats.filter((s) => s.weapon === 'knife');
+  assert.equal(knifeEntries.length, 1);
+  assert.equal(knifeEntries[0].kills, 2);
+  assert.equal(knifeEntries[0].deaths, 1);
+
+  assert.deepEqual(allWeaponsWithKills(kills), ['knife']);
+});
+
+test('resolveWeaponFilterStat: null selection resolves the favorite weapon\'s display label', () => {
+  const kills = [
+    kill({ attacker: 1, victim: 2, weapon: 'ak47' }),
+    kill({ attacker: 1, victim: 3, weapon: 'ak47' }),
+  ];
+  const stats = aggregateWeaponKillStats(kills, 1);
+  const resolved = resolveWeaponFilterStat(stats, null);
+  assert.equal(resolved.weapon, 'ak47');
+  assert.equal(resolved.label, 'AK-47');
+  assert.equal(resolved.kills, 2);
+});
+
+test('resolveWeaponFilterStat: a category filter rolls up every weapon in that category, with no single weapon', () => {
+  const kills = [
+    kill({ attacker: 1, victim: 2, weapon: 'ak47', headshot: true }),
+    kill({ attacker: 1, victim: 3, weapon: 'm4a1_silencer' }),
+    kill({ attacker: 1, victim: 4, weapon: 'deagle' }), // pistol, not rifle
+  ];
+  const stats = aggregateWeaponKillStats(kills, 1);
+  const resolved = resolveWeaponFilterStat(stats, categoryFilterValue('rifle'));
+  assert.equal(resolved.weapon, null);
+  assert.equal(resolved.category, 'rifle');
+  assert.equal(resolved.label, 'Rifles');
+  assert.equal(resolved.kills, 2);
+  assert.equal(resolved.headshotKills, 1);
+});
+
+test('resolveWeaponFilterStat: a category with no kills in scope still resolves a zeroed row, not null', () => {
+  const stats = aggregateWeaponKillStats([kill({ attacker: 1, victim: 2, weapon: 'deagle' })], 1);
+  const resolved = resolveWeaponFilterStat(stats, categoryFilterValue('sniper'));
+  assert.equal(resolved.kills, 0);
+  assert.equal(resolved.category, 'sniper');
+});
+
+test('parseCategoryFilter: round-trips categoryFilterValue(), and returns null for a plain weapon key or favorite', () => {
+  assert.equal(parseCategoryFilter(categoryFilterValue('rifle')), 'rifle');
+  assert.equal(parseCategoryFilter('ak47'), null);
+  assert.equal(parseCategoryFilter(null), null);
 });
 
 test('aggregateWeaponKillStats: buckets noscope/wallbang/blind/midair kills per weapon for one player', () => {

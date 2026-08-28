@@ -1,7 +1,8 @@
 /**
- * Regression harness for queries/weaponStats.ts (#279) — getAllWeaponClassStats,
- * getAllEconomyStats. Exercises the player_match_stats -> matches -> weeks -> seasons join and
- * the season_id filter against the fixture DB's match-100 rows (week 10 -> season 1).
+ * Regression harness for queries/weaponStats.ts (#279, #474) — getAllWeaponClassStats,
+ * getAllEconomyStats, getMatchWeaponClassStats, aggregateWeaponClassStat. Exercises the
+ * player_match_stats -> matches -> weeks -> seasons join and the season_id filter against the
+ * fixture DB's match-100 rows (week 10 -> season 1).
  *
  * Run:  npx vitest run src/lib/queries-weaponStats.test.ts
  */
@@ -13,7 +14,7 @@ import { buildFakeDb } from './test-support/fixtures';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getAllWeaponClassStats, getAllEconomyStats } from './queries';
+import { getAllWeaponClassStats, getAllEconomyStats, getMatchWeaponClassStats, aggregateWeaponClassStat } from './queries';
 import { test, report } from './test-support/miniTest';
 
 async function main() {
@@ -32,6 +33,26 @@ async function main() {
   await test('getAllWeaponClassStats: seasonId filters out rows from other seasons', async () => {
     const rows = await getAllWeaponClassStats(2);
     assert.equal(rows.length, 0);
+  });
+
+  await test('getMatchWeaponClassStats: resolves one match\'s rows without a season_id (#474)', async () => {
+    const rows = await getMatchWeaponClassStats(100);
+    const alice = rows.filter((r) => r.player_id === 1);
+    assert.equal(alice.length, 2);
+    const rifle = alice.find((r) => r.weapon_category === 'rifle');
+    assert.equal(rifle?.match_id, 100);
+    assert.equal(rifle?.season_id, -1);
+    assert.equal(rifle?.player_name, 'Alice');
+    assert.equal(rifle?.shots_fired, 90);
+  });
+
+  await test('aggregateWeaponClassStat: sums a player\'s rows for one category, zeroed when absent (#474)', async () => {
+    const rows = await getAllWeaponClassStats();
+    const rifle = aggregateWeaponClassStat(rows, 1, 'rifle');
+    assert.deepEqual(rifle, { shots_fired: 90, shots_hit: 40, headshot_hits: 18, damage_dealt: 3200, rounds_played: 20 });
+
+    const noShotgun = aggregateWeaponClassStat(rows, 1, 'shotgun');
+    assert.deepEqual(noShotgun, { shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0 });
   });
 
   await test('getAllEconomyStats: resolves player/match/season and returns one row per tier', async () => {

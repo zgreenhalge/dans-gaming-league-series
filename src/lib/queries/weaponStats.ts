@@ -1,7 +1,8 @@
 import { supabase } from '../supabase';
-import type { PlayerMatchWeaponStat, PlayerMatchEconomyStat, WeaponStatFields } from '../types';
+import type { PlayerMatchWeaponStat, PlayerMatchEconomyStat, WeaponStatFields, Player } from '../types';
 import { getPlayersById } from './player';
 import { resolveMatchSeasons, fetchAllPages, asPage } from './_shared';
+import type { WeaponCategory } from '../parsers/weaponClasses';
 
 export interface WeaponClassMatchRow extends WeaponStatFields {
   player_id: number;
@@ -85,6 +86,83 @@ export async function getAllWeaponClassStats(seasonId?: number): Promise<WeaponC
 export async function getAllEconomyStats(seasonId?: number): Promise<EconomyMatchRow[]> {
   const rows = await getAllBreakdownStats('player_match_economy_stats', 'economy_type', seasonId);
   return rows.map(({ bucket, ...r }) => ({ ...r, economy_type: bucket }));
+}
+
+/** One match's `player_match_weapon_stats` rows, joined to player names — the match-page-scoped
+ *  counterpart to `getAllWeaponClassStats()` (avoids a full-table fetch for one match's box score,
+ *  same reasoning as `getMatchKills()` vs `getAllMatchKills()` — `kills.ts`). `season_id` is left
+ *  unresolved (`-1`) since a match-page caller already knows its own season and doesn't need it,
+ *  matching `getMatchKills()`'s own convention for the identical reason (#474). */
+export async function getMatchWeaponClassStats(
+  matchId: number,
+  playersById?: Map<number, Player> | Promise<Map<number, Player>>,
+): Promise<WeaponClassMatchRow[]> {
+  const [rows, pmsRows, resolvedPlayersById] = await Promise.all([
+    fetchAllPages<PlayerMatchWeaponStat>((from, to) =>
+      supabase.from('player_match_weapon_stats').select('*').eq('match_id', matchId).range(from, to),
+    ),
+    fetchAllPages<{ id: number; player_id: number; match_id: number }>((from, to) =>
+      asPage(supabase.from('player_match_stats').select('id, player_id, match_id').eq('match_id', matchId).range(from, to)),
+    ),
+    playersById ? Promise.resolve(playersById) : getPlayersById(),
+  ]);
+
+  const pmsLookup = new Map<number, { player_id: number; match_id: number }>();
+  for (const r of pmsRows) pmsLookup.set(r.id, r);
+
+  const result: WeaponClassMatchRow[] = [];
+  for (const raw of rows) {
+    const pms = pmsLookup.get(raw.player_match_stats_id);
+    if (!pms) continue;
+    const player = resolvedPlayersById.get(pms.player_id);
+    result.push({
+      player_id: pms.player_id,
+      player_name: player?.name ?? `#${pms.player_id}`,
+      match_id: pms.match_id,
+      season_id: -1,
+      weapon_category: raw.weapon_category,
+      shots_fired: raw.shots_fired,
+      shots_hit: raw.shots_hit,
+      headshot_hits: raw.headshot_hits,
+      damage_dealt: raw.damage_dealt,
+      rounds_played: raw.rounds_played,
+    });
+  }
+  return result;
+}
+
+export interface WeaponClassAggregateStat {
+  shots_fired: number;
+  shots_hit: number;
+  headshot_hits: number;
+  damage_dealt: number;
+  rounds_played: number;
+}
+
+const ZERO_WEAPON_CLASS_STAT: WeaponClassAggregateStat = {
+  shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0,
+};
+
+/** Sums one player's `WeaponClassMatchRow`s for one gun category across every match in whatever
+ *  scope the caller already fetched `rows` for (a season, career) — `getAllWeaponClassStats()`
+ *  returns one row per (player, match, category), not pre-aggregated across matches, so the
+ *  Weapons sub-tab's category breakdown (#474) needs this rollup the same way `aggregateWeaponKillStats()`
+ *  rolls up per-match `match_kills` rows for the kills side of that same tab. */
+export function aggregateWeaponClassStat(
+  rows: WeaponClassMatchRow[],
+  playerId: number,
+  category: WeaponCategory,
+): WeaponClassAggregateStat {
+  const out = { ...ZERO_WEAPON_CLASS_STAT };
+  for (const r of rows) {
+    if (r.player_id !== playerId || r.weapon_category !== category) continue;
+    out.shots_fired += r.shots_fired;
+    out.shots_hit += r.shots_hit;
+    out.headshot_hits += r.headshot_hits;
+    out.damage_dealt += r.damage_dealt;
+    out.rounds_played += r.rounds_played;
+  }
+  return out;
 }
 
 export interface AccuracyTotals {
