@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { fetchAllPages, fetchPmsLookup, type PmsRow } from './_shared';
+import { fetchAllPages, fetchPmsLookup, bumpCounter, type PmsRow } from './_shared';
 import type { Faction } from '../types';
 import type { KillCreditFlags } from './kills';
 
@@ -83,12 +83,7 @@ const FLASH_ASSIST_WINDOW_SECONDS = 3;
 const TICK_RATE = 64;
 
 function bump(out: Map<string, UtilityCounts>, key: string, field: keyof UtilityCounts, amount = 1): void {
-  let c = out.get(key);
-  if (!c) {
-    c = { ...ZERO_UTILITY };
-    out.set(key, c);
-  }
-  c[field] += amount;
+  bumpCounter(out, key, ZERO_UTILITY, field, amount);
 }
 
 interface FlashGroup {

@@ -317,15 +317,18 @@ export async function getMatchSabremetrics(matchId: number): Promise<MatchSabrem
   const pms = pmsRows as { id: number; player_id: number; faction: Faction }[];
   const pmsIds = pms.map((r) => r.id);
   // Shared as one promise (not two `getPlayersById()` calls) so getMatchKills()'s own internal
-  // name resolution doesn't duplicate the `players` table fetch below already needs.
+  // name resolution doesn't duplicate the `players` table fetch below already needs. Passing `pms`
+  // (already fetched above) into `getAllUtilityThrows()` likewise skips a redundant
+  // `player_match_stats` fetch it would otherwise make internally via `fetchPmsLookup()`.
   const playersByIdPromise = getPlayersById();
+  const pmsForUtility = pms.map((r) => ({ id: r.id, player_id: r.player_id, match_id: matchId }));
   const [{ data: sabRows }, players, kills, accuracyTotals, roundSides, throws] = await Promise.all([
     supabase.from('player_match_sabremetrics').select('*').in('player_match_stats_id', pmsIds),
     playersByIdPromise,
     getMatchKills(matchId, playersByIdPromise),
     deriveAccuracyTotals(matchId),
     getRoundSides(matchId),
-    getAllUtilityThrows(matchId),
+    getAllUtilityThrows(matchId, pmsForUtility),
   ]);
   if (!sabRows || sabRows.length === 0) return [];
 

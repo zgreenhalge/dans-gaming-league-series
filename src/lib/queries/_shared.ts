@@ -110,6 +110,31 @@ export function weekRowsFromLookup(lookup: WeekLookup): { id: number; season_id:
   return Array.from(lookup, ([id, w]) => ({ id, ...w }));
 }
 
+/**
+ * Get-or-init a `Map<string, T>` entry (seeded from `zero` on first touch) and add `amount` to one
+ * numeric field — the shared "counter record keyed by `` `${match_id}:${player_id}` `` " primitive
+ * every per-player `derive*()` aggregator in this file's siblings needs (side-split counts, clutch
+ * counts, utility counts), rather than each hand-rolling its own get-or-init-then-increment.
+ */
+export function bumpCounter<T, K extends keyof T>(
+  out: Map<string, T>,
+  key: string,
+  zero: T,
+  field: K,
+  amount = 1,
+): void {
+  let c = out.get(key);
+  if (!c) {
+    c = { ...zero };
+    out.set(key, c);
+  }
+  // `T`'s fields are numeric by every caller's contract (a counts record like `SideSplitCounts`/
+  // `ClutchCounts`/`UtilityCounts`), but a plain `interface` gets no implicit index signature, so
+  // `T` can't be constrained to `Record<string, number>` without breaking every call site — hence
+  // the cast through `unknown` rather than a tighter generic bound.
+  c[field] = ((c[field] as unknown as number) + amount) as unknown as T[K];
+}
+
 export type PmsRow = { id: number; player_id: number; match_id: number };
 
 /** Resolves `player_match_stats.id -> {id, player_id, match_id}` — the FK-to-`player_id` lookup

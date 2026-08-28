@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { resolveMatchSeasons, fetchAllPages, fetchPmsLookup, type PmsRow } from './_shared';
+import { resolveMatchSeasons, fetchAllPages, fetchPmsLookup, bumpCounter, type PmsRow } from './_shared';
 import { getPlayersById } from './player';
 import { killWeaponCategory, type KillWeaponCategory } from '../parsers/weaponClasses';
 import type { Player, Faction } from '../types';
@@ -380,16 +380,7 @@ export function deriveSideSplitCounts(
 ): Map<string, SideSplitCounts> {
   const out = new Map<string, SideSplitCounts>();
   const bump = (matchId: number, playerId: number, field: keyof SideSplitCounts): void => {
-    const key = `${matchId}:${playerId}`;
-    let c = out.get(key);
-    if (!c) {
-      c = {
-        kills_ct: 0, kills_t: 0, deaths_ct: 0, deaths_t: 0,
-        assists_ct: 0, assists_t: 0, headshot_kills_ct: 0, headshot_kills_t: 0,
-      };
-      out.set(key, c);
-    }
-    c[field] += 1;
+    bumpCounter(out, `${matchId}:${playerId}`, ZERO_SIDE_SPLIT, field);
   };
   const sideOf = (matchId: number, playerId: number, shirtsSide: 'CT' | 'T'): 'CT' | 'T' | undefined => {
     const faction = playerFactions.get(`${matchId}:${playerId}`);
@@ -442,17 +433,8 @@ function bumpClutch(
   won: boolean,
 ): void {
   const key = `${matchId}:${playerId}`;
-  let c = out.get(key);
-  if (!c) {
-    c = {
-      clutch_1v1_attempts: 0, clutch_1v1_wins: 0,
-      clutch_1v2_attempts: 0, clutch_1v2_wins: 0,
-      clutch_2v1_attempts: 0, clutch_2v1_wins: 0,
-    };
-    out.set(key, c);
-  }
-  c[attemptsKey] += 1;
-  if (won) c[winsKey] += 1;
+  bumpCounter(out, key, ZERO_CLUTCH, attemptsKey);
+  if (won) bumpCounter(out, key, ZERO_CLUTCH, winsKey);
 }
 
 /**
