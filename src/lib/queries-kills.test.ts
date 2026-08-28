@@ -20,6 +20,7 @@ import {
   resolvePlayerSide,
   deriveSideSplitCounts,
   deriveClutchCounts,
+  buildPlayerFactionsAndRoster,
   type MatchKillRow,
 } from './queries/kills';
 import type { RoundSideInfo } from './queries/rounds';
@@ -503,6 +504,20 @@ test('deriveClutchCounts: a player outnumbered 3+ is not locked out of a real 1v
 
   assert.equal(counts.get('1:1')?.clutch_1v2_attempts, 1);
   assert.equal(counts.get('1:1')?.clutch_1v2_wins, 1);
+});
+
+test('buildPlayerFactionsAndRoster: builds both maps in one pass, grouping rosters per match', () => {
+  const rows = [
+    { match_id: 1, player_id: 1, faction: 'SHIRTS' as const },
+    { match_id: 1, player_id: 2, faction: 'SKINS' as const },
+    { match_id: 2, player_id: 3, faction: 'SHIRTS' as const },
+  ];
+  const { playerFactions, rosterByMatch } = buildPlayerFactionsAndRoster(rows);
+  assert.equal(playerFactions.get('1:1'), 'SHIRTS');
+  assert.equal(playerFactions.get('1:2'), 'SKINS');
+  assert.equal(playerFactions.get('2:3'), 'SHIRTS');
+  assert.deepEqual(rosterByMatch.get(1), [1, 2]);
+  assert.deepEqual(rosterByMatch.get(2), [3]);
 });
 
 report();

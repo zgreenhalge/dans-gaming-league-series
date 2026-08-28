@@ -4,7 +4,7 @@ import { getPlayersById } from './player';
 import { killWeaponCategory, type KillWeaponCategory } from '../parsers/weaponClasses';
 import type { Player, Faction } from '../types';
 import type { AccuracyTotals } from './weaponStats';
-import { oppositeSide } from '../mapSideStats';
+import { resolveSide } from '../parsers/roundSides';
 import type { RoundSideInfo } from './rounds';
 
 export interface MatchKillRow {
@@ -274,9 +274,10 @@ export interface HeadshotTeamkillCounts {
   teamkills: number;
 }
 
-/** The subset of a kill row every `derive*()` function in this file needs — narrower than
- *  `MatchKillRow` so a pre-persistence caller (the demo-upload preview, working from `DemoMatchKill[]`
- *  before any `match_id` exists) can use it too, not just already-joined `match_kills` reads. */
+/** The subset of a kill row the `derive*()` functions in this file need (not every field is read by
+ *  every function) — narrower than `MatchKillRow` so a pre-persistence caller (the demo-upload
+ *  preview, working from `DemoMatchKill[]` before any `match_id` exists) can use it too, not just
+ *  already-joined `match_kills` reads. */
 export interface KillCreditFlags {
   match_id: number;
   round_number: number;
@@ -286,6 +287,20 @@ export interface KillCreditFlags {
   assister_player_id: number | null;
   headshot: boolean;
   is_teamkill: boolean;
+}
+
+/** Groups kills by `` `${match_id}:${round_number}` `` — the round-grouping pass every per-round
+ *  `derive*()` function (`deriveOpeningDuelCounts()`, `deriveTwoKRoundCounts()`,
+ *  `deriveClutchCounts()`) needs before it can reason about "this round's kills" as a unit. */
+function groupKillsByRound(kills: KillCreditFlags[]): Map<string, KillCreditFlags[]> {
+  const byRound = new Map<string, KillCreditFlags[]>();
+  for (const k of kills) {
+    const key = `${k.match_id}:${k.round_number}`;
+    const group = byRound.get(key);
+    if (group) group.push(k);
+    else byRound.set(key, [k]);
+  }
+  return byRound;
 }
 
 /**
@@ -316,10 +331,36 @@ export function deriveHeadshotAndTeamkillCounts(kills: KillCreditFlags[]): Map<s
 }
 
 /** A player's side (CT/T) for one round, from their fixed match `faction` and that round's
- *  `shirts_side` — the same formula `tallyPlayerRoundsBySide()` (`mapSideStats.ts`) already uses
- *  for round win/loss, reused here rather than redefined. */
-export function resolvePlayerSide(shirtsSide: 'CT' | 'T', faction: Faction): 'CT' | 'T' {
-  return faction === 'SHIRTS' ? shirtsSide : oppositeSide(shirtsSide);
+ *  `shirts_side` — an alias for `resolveSide()` (`parsers/roundSides.ts`), the one place this rule
+ *  is defined (also used by `sideForFaction()` there and `tallyPlayerRoundsBySide()` in
+ *  `mapSideStats.ts`), kept under this name since every caller in this file already uses it. */
+export const resolvePlayerSide = resolveSide;
+
+export interface PlayerFactionsAndRoster {
+  playerFactions: Map<string, Faction>;
+  rosterByMatch: Map<number, number[]>;
+}
+
+/** Builds `deriveSideSplitCounts()`/`deriveClutchCounts()`'s two roster inputs from one pass over a
+ *  `player_match_stats` read — `playerFactions` (`` `${match_id}:${player_id}` `` → `faction`) and
+ *  `rosterByMatch` (every roster `player_id` per `match_id`) — the same construction
+ *  `getAllSabremetrics()`, `getMatchSabremetrics()`, and the demo-upload preview each need from
+ *  their own already-fetched roster rows. */
+export function buildPlayerFactionsAndRoster(
+  rows: { match_id: number; player_id: number; faction: Faction }[],
+): PlayerFactionsAndRoster {
+  const playerFactions = new Map<string, Faction>();
+  const rosterByMatch = new Map<number, number[]>();
+  for (const r of rows) {
+    playerFactions.set(`${r.match_id}:${r.player_id}`, r.faction);
+    let roster = rosterByMatch.get(r.match_id);
+    if (!roster) {
+      roster = [];
+      rosterByMatch.set(r.match_id, roster);
+    }
+    roster.push(r.player_id);
+  }
+  return { playerFactions, rosterByMatch };
 }
 
 export interface SideSplitCounts {
@@ -459,14 +500,7 @@ export function deriveClutchCounts(
   rosterByMatch: Map<number, number[]>,
 ): Map<string, ClutchCounts> {
   const out = new Map<string, ClutchCounts>();
-
-  const byRound = new Map<string, KillCreditFlags[]>();
-  for (const k of kills) {
-    const key = `${k.match_id}:${k.round_number}`;
-    const group = byRound.get(key);
-    if (group) group.push(k);
-    else byRound.set(key, [k]);
-  }
+  const byRound = groupKillsByRound(kills);
 
   for (const roundKills of byRound.values()) {
     const matchId = roundKills[0].match_id;
@@ -551,13 +585,7 @@ export interface OpeningDuelCounts {
  * world/environment death) or it was a teamkill. Keyed by `` `${match_id}:${player_id}` ``.
  */
 export function deriveOpeningDuelCounts(kills: KillCreditFlags[]): Map<string, OpeningDuelCounts> {
-  const byRound = new Map<string, KillCreditFlags[]>();
-  for (const k of kills) {
-    const key = `${k.match_id}:${k.round_number}`;
-    const group = byRound.get(key);
-    if (group) group.push(k);
-    else byRound.set(key, [k]);
-  }
+  const byRound = groupKillsByRound(kills);
 
   const out = new Map<string, OpeningDuelCounts>();
   const bump = (matchId: number, playerId: number, field: keyof OpeningDuelCounts): void => {
@@ -593,20 +621,14 @@ export function deriveOpeningDuelCounts(kills: KillCreditFlags[]): Map<string, O
  * without needing to resolve who those enemies are from roster/faction data.
  */
 export function deriveTwoKRoundCounts(kills: KillCreditFlags[]): Map<string, number> {
-  const byRound = new Map<string, KillCreditFlags[]>();
-  for (const k of kills) {
-    if (k.attacker_player_id == null || k.is_teamkill || k.attacker_player_id === k.victim_player_id) continue;
-    const key = `${k.match_id}:${k.round_number}`;
-    const group = byRound.get(key);
-    if (group) group.push(k);
-    else byRound.set(key, [k]);
-  }
+  const byRound = groupKillsByRound(kills);
 
   const out = new Map<string, number>();
   for (const roundKills of byRound.values()) {
     const perAttacker = new Map<number, number>();
     for (const k of roundKills) {
-      const attackerId = k.attacker_player_id!;
+      if (k.attacker_player_id == null || k.is_teamkill || k.attacker_player_id === k.victim_player_id) continue;
+      const attackerId = k.attacker_player_id;
       perAttacker.set(attackerId, (perAttacker.get(attackerId) ?? 0) + 1);
     }
     for (const [attackerId, count] of perAttacker) {

@@ -8,7 +8,8 @@ import { getPlayersById } from './player';
 import { asPage, fetchAllPages, getWeekLookup } from './_shared';
 import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '../demo/liveScore';
 import {
-  getMatchKills, deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts, lookupDerivedSabFields,
+  getMatchKills, deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts,
+  buildPlayerFactionsAndRoster, lookupDerivedSabFields, type DerivedSabFields,
 } from './kills';
 import { deriveAccuracyTotals } from './weaponStats';
 import { getRoundSides } from './rounds';
@@ -291,32 +292,10 @@ export async function getOtherScheduledMatches(matchId: number): Promise<Schedul
     }));
 }
 
-export interface MatchSabremetricsRow extends PlayerMatchSabremetrics {
+export interface MatchSabremetricsRow extends PlayerMatchSabremetrics, DerivedSabFields {
   player_id: number;
   player_name: string;
   faction: Faction;
-  headshot_kills: number;
-  teamkills: number;
-  opening_kills: number;
-  opening_deaths: number;
-  two_k_rounds: number;
-  shots_fired: number;
-  shots_hit: number;
-  headshot_hits: number;
-  kills_ct: number;
-  kills_t: number;
-  deaths_ct: number;
-  deaths_t: number;
-  assists_ct: number;
-  assists_t: number;
-  headshot_kills_ct: number;
-  headshot_kills_t: number;
-  clutch_1v1_attempts: number;
-  clutch_1v1_wins: number;
-  clutch_1v2_attempts: number;
-  clutch_1v2_wins: number;
-  clutch_2v1_attempts: number;
-  clutch_2v1_wins: number;
 }
 
 /** `headshot_kills`, `teamkills`, `opening_kills`, `opening_deaths`, `two_k_rounds`, `shots_fired`,
@@ -332,7 +311,8 @@ export async function getMatchSabremetrics(matchId: number): Promise<MatchSabrem
     .eq('match_id', matchId);
   if (!pmsRows || pmsRows.length === 0) return [];
 
-  const pmsIds = (pmsRows as { id: number; player_id: number; faction: Faction }[]).map((r) => r.id);
+  const pms = pmsRows as { id: number; player_id: number; faction: Faction }[];
+  const pmsIds = pms.map((r) => r.id);
   // Shared as one promise (not two `getPlayersById()` calls) so getMatchKills()'s own internal
   // name resolution doesn't duplicate the `players` table fetch below already needs.
   const playersByIdPromise = getPlayersById();
@@ -345,15 +325,10 @@ export async function getMatchSabremetrics(matchId: number): Promise<MatchSabrem
   ]);
   if (!sabRows || sabRows.length === 0) return [];
 
-  const pmsLookup = new Map(
-    (pmsRows as { id: number; player_id: number; faction: Faction }[]).map((r) => [r.id, r]),
+  const pmsLookup = new Map(pms.map((r) => [r.id, r]));
+  const { playerFactions, rosterByMatch } = buildPlayerFactionsAndRoster(
+    pms.map((r) => ({ match_id: matchId, player_id: r.player_id, faction: r.faction })),
   );
-  const playerFactions = new Map(
-    (pmsRows as { id: number; player_id: number; faction: Faction }[]).map((r) => [`${matchId}:${r.player_id}`, r.faction]),
-  );
-  const rosterByMatch = new Map([
-    [matchId, (pmsRows as { id: number; player_id: number; faction: Faction }[]).map((r) => r.player_id)],
-  ]);
   const creditCounts = deriveKillCreditCounts(kills);
   const sideSplitCounts = deriveSideSplitCounts(kills, roundSides, playerFactions);
   const clutchCounts = deriveClutchCounts(kills, roundSides, playerFactions, rosterByMatch);

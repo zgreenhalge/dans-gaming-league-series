@@ -4,7 +4,7 @@ import { getPlayersById } from './player';
 import { resolveMatchSeasons, fetchAllPages, asPage } from './_shared';
 import {
   getAllKillCreditFlags, deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts,
-  lookupDerivedSabFields,
+  buildPlayerFactionsAndRoster, lookupDerivedSabFields,
 } from './kills';
 import { deriveAccuracyTotals } from './weaponStats';
 import { getRoundSides } from './rounds';
@@ -74,18 +74,8 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     seasonIsGauntlet.set(s.id, s.is_gauntlet);
 
   const pmsLookup = new Map<number, { player_id: number; match_id: number; rounds_played: number }>();
-  const playerFactions = new Map<string, Faction>();
-  const rosterByMatch = new Map<number, number[]>();
-  for (const r of pmsRows) {
-    pmsLookup.set(r.id, r);
-    playerFactions.set(`${r.match_id}:${r.player_id}`, r.faction);
-    let roster = rosterByMatch.get(r.match_id);
-    if (!roster) {
-      roster = [];
-      rosterByMatch.set(r.match_id, roster);
-    }
-    roster.push(r.player_id);
-  }
+  for (const r of pmsRows) pmsLookup.set(r.id, r);
+  const { playerFactions, rosterByMatch } = buildPlayerFactionsAndRoster(pmsRows);
 
   const creditCounts = deriveKillCreditCounts(kills);
   const sideSplitCounts = deriveSideSplitCounts(kills, roundSides, playerFactions);

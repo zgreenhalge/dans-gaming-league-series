@@ -10,8 +10,8 @@ import type {
   DemoMatchUtilityThrow, DemoMatchRoundEconomy,
 } from '@/lib/types';
 import {
-  deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts, lookupDerivedSabFields,
-  sumAccuracyTotals, type KillCreditFlags,
+  deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts, buildPlayerFactionsAndRoster,
+  lookupDerivedSabFields, sumAccuracyTotals, type KillCreditFlags,
 } from '@/lib/queries';
 type Faction = 'CT' | 'T' | null;
 
@@ -640,10 +640,9 @@ export default function DemoUploadModal({
                       { shirtsSide: r.shirts_side, winnerSide: r.winner_side },
                     ]),
                   );
-                  const playerFactions = new Map(
-                    allPlayers.map((p) => [`0:${p.player_id}`, p.faction]),
+                  const { playerFactions, rosterByMatch } = buildPlayerFactionsAndRoster(
+                    allPlayers.map((p) => ({ match_id: 0, player_id: p.player_id, faction: p.faction })),
                   );
-                  const rosterByMatch = new Map([[0, allPlayers.map((p) => p.player_id)]]);
                   const sideSplitCounts = deriveSideSplitCounts(killFlags, roundSides, playerFactions);
                   const clutchCounts = deriveClutchCounts(killFlags, roundSides, playerFactions, rosterByMatch);
                   const sabPlayers = parsed.sabremetrics!.map((s) => {

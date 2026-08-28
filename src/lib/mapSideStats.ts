@@ -1,5 +1,6 @@
 import { extractSeasonNumber, isPlayedScore, parseScore } from './util';
 import type { MapIndexEntry } from './types';
+import { resolveSide } from './parsers/roundSides';
 
 /**
  * The veto fields needed to classify a match's maps as picked/banned/no-picked — shared by every
@@ -112,7 +113,7 @@ function tallyPlayerRoundsBySide(
 ): Record<'CT' | 'T', { won: number; played: number }> {
   const tally = { CT: { won: 0, played: 0 }, T: { won: 0, played: 0 } };
   for (const r of rounds) {
-    const playerSide: 'CT' | 'T' = faction === 'SHIRTS' ? r.shirts_side : oppositeSide(r.shirts_side);
+    const playerSide = resolveSide(r.shirts_side, faction);
     tally[playerSide].played++;
     if (r.winner_side === playerSide) tally[playerSide].won++;
   }
