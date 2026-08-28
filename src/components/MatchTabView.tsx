@@ -14,7 +14,7 @@ import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import Th from '@/components/Th';
 import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow } from '@/lib/queries';
-import type { SabFields, SabFieldsWithDerived } from '@/lib/types';
+import type { SabFieldsWithDerived } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
 import { roundsPlayedBySide } from '@/lib/parsers/roundSides';
 
@@ -28,9 +28,9 @@ function factionClass(f: Faction): string {
 }
 
 function splitStat(
-  s: SabFields,
-  ct: keyof SabFields,
-  t: keyof SabFields,
+  s: SabFieldsWithDerived,
+  ct: keyof SabFieldsWithDerived,
+  t: keyof SabFieldsWithDerived,
   includeCT: boolean,
   includeT: boolean,
 ): number {
@@ -56,7 +56,7 @@ function Scoreboard({
   faction: Faction;
   currentPlayerId: number | null;
   ratingDeltas: Record<number, number>;
-  sabMap?: Map<number, SabFields>;
+  sabMap?: Map<number, SabFieldsWithDerived>;
   includeCT: boolean;
   includeT: boolean;
   /** The team's starting side (`faction`) plus this determine which rounds were played

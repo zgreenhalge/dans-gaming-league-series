@@ -17,9 +17,20 @@ import {
   deriveHeadshotAndTeamkillCounts,
   deriveOpeningDuelCounts,
   deriveTwoKRoundCounts,
+  resolvePlayerSide,
+  deriveSideSplitCounts,
+  deriveClutchCounts,
+  buildPlayerFactionsAndRoster,
   type MatchKillRow,
 } from './queries/kills';
+import type { RoundSideInfo } from './queries/rounds';
 import { test, report } from './test-support/miniTest';
+
+/** Shorthand for a `RoundSideInfo` test fixture — `winnerSide` defaults to `shirtsSide` (CT wins)
+ *  since most tests here don't exercise the clutch win/loss branch. */
+function ri(shirtsSide: 'CT' | 'T', winnerSide: 'CT' | 'T' = shirtsSide): RoundSideInfo {
+  return { shirtsSide, winnerSide };
+}
 
 function kill(opts: {
   match?: number;
@@ -28,6 +39,7 @@ function kill(opts: {
   attacker: number | null;
   victim: number;
   weapon: string;
+  assister?: number | null;
   headshot?: boolean;
   noscope?: boolean;
   wallbang?: boolean;
@@ -43,7 +55,7 @@ function kill(opts: {
     attacker_name: opts.attacker != null ? `p${opts.attacker}` : null,
     victim_player_id: opts.victim,
     victim_name: `p${opts.victim}`,
-    assister_player_id: null,
+    assister_player_id: opts.assister ?? null,
     weapon: opts.weapon,
     headshot: opts.headshot ?? false,
     noscope: opts.noscope ?? false,
@@ -299,6 +311,213 @@ test('deriveTwoKRoundCounts: 2k rounds accumulate across multiple rounds', () =>
   ];
   const counts = deriveTwoKRoundCounts(kills);
   assert.equal(counts.get('1:1'), 2);
+});
+
+test('resolvePlayerSide: SHIRTS takes the round\'s shirts_side, SKINS takes the opposite', () => {
+  assert.equal(resolvePlayerSide('CT', 'SHIRTS'), 'CT');
+  assert.equal(resolvePlayerSide('CT', 'SKINS'), 'T');
+  assert.equal(resolvePlayerSide('T', 'SHIRTS'), 'T');
+  assert.equal(resolvePlayerSide('T', 'SKINS'), 'CT');
+});
+
+test('deriveSideSplitCounts: a credited kill splits by each participant\'s own resolved side', () => {
+  const roundSides = new Map([['1:1', ri('CT')]]);
+  const playerFactions = new Map([['1:1', 'SHIRTS' as const], ['1:2', 'SKINS' as const]]);
+  const kills = [kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47' })];
+  const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  assert.equal(counts.get('1:1')?.kills_ct, 1);
+  assert.equal(counts.get('1:1')?.kills_t, 0);
+  assert.equal(counts.get('1:2')?.deaths_t, 1);
+  assert.equal(counts.get('1:2')?.deaths_ct, 0);
+});
+
+test('deriveSideSplitCounts: a headshot kill credits both kills and headshot_kills on the same side', () => {
+  const roundSides = new Map([['1:1', ri('T')]]);
+  const playerFactions = new Map([['1:1', 'SKINS' as const], ['1:2', 'SHIRTS' as const]]);
+  const kills = [kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47', headshot: true })];
+  const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  // SKINS on a T round resolves to CT.
+  assert.equal(counts.get('1:1')?.kills_ct, 1);
+  assert.equal(counts.get('1:1')?.headshot_kills_ct, 1);
+});
+
+test('deriveSideSplitCounts: a self-kill credits only a death, no kill', () => {
+  const roundSides = new Map([['1:1', ri('CT')]]);
+  const playerFactions = new Map([['1:1', 'SHIRTS' as const]]);
+  const kills = [kill({ round: 1, attacker: 1, victim: 1, weapon: 'world' })];
+  const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  assert.equal(counts.get('1:1')?.deaths_ct, 1);
+  assert.equal(counts.get('1:1')?.kills_ct ?? 0, 0);
+  assert.equal(counts.get('1:1')?.kills_t ?? 0, 0);
+});
+
+test('deriveSideSplitCounts: a teamkill credits only a death, no kill or headshot', () => {
+  const roundSides = new Map([['1:1', ri('CT')]]);
+  const playerFactions = new Map([['1:1', 'SHIRTS' as const], ['1:2', 'SHIRTS' as const]]);
+  const kills = [kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47', headshot: true, isTeamkill: true })];
+  const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  assert.equal(counts.get('1:2')?.deaths_ct, 1);
+  assert.equal(counts.has('1:1'), false);
+});
+
+test('deriveSideSplitCounts: an assist credits the assister\'s own resolved side', () => {
+  const roundSides = new Map([['1:1', ri('CT')]]);
+  const playerFactions = new Map([
+    ['1:1', 'SHIRTS' as const], ['1:2', 'SKINS' as const], ['1:3', 'SHIRTS' as const],
+  ]);
+  const kills = [kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47', assister: 3 })];
+  const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  assert.equal(counts.get('1:3')?.assists_ct, 1);
+});
+
+test('deriveSideSplitCounts: a round with no resolved shirts_side is skipped entirely', () => {
+  const roundSides = new Map<string, RoundSideInfo>();
+  const playerFactions = new Map([['1:1', 'SHIRTS' as const], ['1:2', 'SKINS' as const]]);
+  const kills = [kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47' })];
+  const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  assert.equal(counts.size, 0);
+});
+
+test('deriveSideSplitCounts: a player with no resolved faction is skipped, other participants unaffected', () => {
+  const roundSides = new Map([['1:1', ri('CT')]]);
+  const playerFactions = new Map([['1:2', 'SKINS' as const]]); // attacker (player 1) missing
+  const kills = [kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47' })];
+  const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  assert.equal(counts.has('1:1'), false);
+  assert.equal(counts.get('1:2')?.deaths_t, 1);
+});
+
+// ─── deriveClutchCounts ─────────────────────────────────────────────────────
+// Ports every scenario from parsers/clutch.test.ts (collectClutch's own unit tests) to prove the
+// query-time reconstruction produces identical results to the live parser it replaces. Player names
+// (a, b, c, ...) map to numeric ids below; every scenario fixes shirts_side to CT for the one round
+// under test and assigns each player's faction so resolvePlayerSide() reproduces the same starting
+// CT/T sides the original tests specify directly.
+const PLAYER_IDS: Record<string, number> = { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8 };
+
+function clutchFixture(sides: Record<string, 'CT' | 'T'>, winnerSide: 'CT' | 'T') {
+  const roundSides = new Map([['1:1', ri('CT', winnerSide)]]);
+  const playerFactions = new Map<string, 'SHIRTS' | 'SKINS'>();
+  const roster: number[] = [];
+  for (const [name, side] of Object.entries(sides)) {
+    const id = PLAYER_IDS[name];
+    roster.push(id);
+    playerFactions.set(`1:${id}`, side === 'CT' ? 'SHIRTS' : 'SKINS');
+  }
+  return { roundSides, playerFactions, rosterByMatch: new Map([[1, roster]]) };
+}
+
+function clutchDeath(tick: number, victim: string): MatchKillRow {
+  return kill({ round: 1, tick, attacker: 999, victim: PLAYER_IDS[victim], weapon: 'ak47' });
+}
+
+test('deriveClutchCounts: a 1v2 clutcher who fights down to a 1v1 keeps the 1v2 credit and also picks up the 1v1', () => {
+  const { roundSides, playerFactions, rosterByMatch } =
+    clutchFixture({ a: 'CT', b: 'CT', c: 'T', d: 'T' }, 'CT');
+  const kills = [clutchDeath(100, 'c'), clutchDeath(200, 'b')];
+  const counts = deriveClutchCounts(kills, roundSides, playerFactions, rosterByMatch);
+
+  assert.equal(counts.get('1:4')?.clutch_1v2_attempts, 1);
+  assert.equal(counts.get('1:4')?.clutch_1v2_wins ?? 0, 0);
+  assert.equal(counts.get('1:4')?.clutch_1v1_attempts, 1);
+  assert.equal(counts.get('1:4')?.clutch_1v1_wins ?? 0, 0);
+  assert.equal(counts.get('1:1')?.clutch_1v1_attempts, 1);
+  assert.equal(counts.get('1:1')?.clutch_1v1_wins, 1);
+});
+
+test('deriveClutchCounts: enemy count > 2 is not tracked at all', () => {
+  const { roundSides, playerFactions, rosterByMatch } =
+    clutchFixture({ a: 'CT', b: 'CT', c: 'CT', d: 'CT', e: 'T', f: 'T', g: 'T', h: 'T' }, 'CT');
+  const kills = [clutchDeath(100, 'f'), clutchDeath(200, 'g'), clutchDeath(300, 'h')];
+  const counts = deriveClutchCounts(kills, roundSides, playerFactions, rosterByMatch);
+
+  assert.equal(counts.get('1:5')?.clutch_1v1_attempts ?? 0, 0);
+  assert.equal(counts.get('1:5')?.clutch_1v2_attempts ?? 0, 0);
+});
+
+test('deriveClutchCounts: a 1v2 that narrows to a 1v1 credits both the 1v2 attempt and the later 1v1', () => {
+  const { roundSides, playerFactions, rosterByMatch } =
+    clutchFixture({ a: 'CT', b: 'CT', c: 'T', d: 'T' }, 'CT');
+  const kills = [clutchDeath(100, 'b'), clutchDeath(200, 'c')];
+  const counts = deriveClutchCounts(kills, roundSides, playerFactions, rosterByMatch);
+
+  assert.equal(counts.get('1:1')?.clutch_1v2_attempts, 1);
+  assert.equal(counts.get('1:1')?.clutch_1v2_wins, 1);
+  assert.equal(counts.get('1:1')?.clutch_1v1_attempts, 1);
+  assert.equal(counts.get('1:1')?.clutch_1v1_wins, 1);
+});
+
+test('deriveClutchCounts: nobody down to a lone survivor yet means no clutch at all', () => {
+  const { roundSides, playerFactions, rosterByMatch } =
+    clutchFixture({ a: 'CT', b: 'CT', c: 'CT', d: 'T', e: 'T', f: 'T' }, 'CT');
+  const kills = [clutchDeath(100, 'f')];
+  const counts = deriveClutchCounts(kills, roundSides, playerFactions, rosterByMatch);
+
+  for (const name of Object.keys(PLAYER_IDS).slice(0, 6)) {
+    const key = `1:${PLAYER_IDS[name]}`;
+    assert.equal(counts.get(key)?.clutch_1v1_attempts ?? 0, 0);
+    assert.equal(counts.get(key)?.clutch_1v2_attempts ?? 0, 0);
+  }
+});
+
+test('deriveClutchCounts: a 2v1 numbers advantage is credited as a loss for both alive teammates when the round is lost', () => {
+  const { roundSides, playerFactions, rosterByMatch } =
+    clutchFixture({ a: 'CT', b: 'CT', c: 'T', d: 'T' }, 'T');
+  const kills = [clutchDeath(100, 'd')];
+  const counts = deriveClutchCounts(kills, roundSides, playerFactions, rosterByMatch);
+
+  assert.equal(counts.get('1:1')?.clutch_2v1_attempts, 1);
+  assert.equal(counts.get('1:1')?.clutch_2v1_wins ?? 0, 0);
+  assert.equal(counts.get('1:2')?.clutch_2v1_attempts, 1);
+  assert.equal(counts.get('1:2')?.clutch_2v1_wins ?? 0, 0);
+});
+
+test('deriveClutchCounts: a 2v1 numbers advantage is credited as a win for both alive teammates when the round is won', () => {
+  const { roundSides, playerFactions, rosterByMatch } =
+    clutchFixture({ a: 'CT', b: 'CT', c: 'T', d: 'T' }, 'CT');
+  const kills = [clutchDeath(100, 'd')];
+  const counts = deriveClutchCounts(kills, roundSides, playerFactions, rosterByMatch);
+
+  assert.equal(counts.get('1:1')?.clutch_2v1_attempts, 1);
+  assert.equal(counts.get('1:1')?.clutch_2v1_wins, 1);
+  assert.equal(counts.get('1:2')?.clutch_2v1_attempts, 1);
+  assert.equal(counts.get('1:2')?.clutch_2v1_wins, 1);
+});
+
+test('deriveClutchCounts: blowing a 2v1 advantage down to a 1v1 credits both the 2v1 attempt and the later 1v1 clutch', () => {
+  const { roundSides, playerFactions, rosterByMatch } =
+    clutchFixture({ a: 'CT', b: 'CT', c: 'T', d: 'T' }, 'CT');
+  const kills = [clutchDeath(100, 'd'), clutchDeath(200, 'b')];
+  const counts = deriveClutchCounts(kills, roundSides, playerFactions, rosterByMatch);
+
+  assert.equal(counts.get('1:1')?.clutch_2v1_attempts, 1);
+  assert.equal(counts.get('1:2')?.clutch_2v1_attempts, 1);
+  assert.equal(counts.get('1:1')?.clutch_1v1_attempts, 1);
+  assert.equal(counts.get('1:1')?.clutch_1v1_wins, 1);
+});
+
+test('deriveClutchCounts: a player outnumbered 3+ is not locked out of a real 1v2 once teammates trim the enemy count', () => {
+  const { roundSides, playerFactions, rosterByMatch } =
+    clutchFixture({ a: 'CT', e: 'T', f: 'T', g: 'T', h: 'T' }, 'CT');
+  const kills = [clutchDeath(100, 'f'), clutchDeath(200, 'g')];
+  const counts = deriveClutchCounts(kills, roundSides, playerFactions, rosterByMatch);
+
+  assert.equal(counts.get('1:1')?.clutch_1v2_attempts, 1);
+  assert.equal(counts.get('1:1')?.clutch_1v2_wins, 1);
+});
+
+test('buildPlayerFactionsAndRoster: builds both maps in one pass, grouping rosters per match', () => {
+  const rows = [
+    { match_id: 1, player_id: 1, faction: 'SHIRTS' as const },
+    { match_id: 1, player_id: 2, faction: 'SKINS' as const },
+    { match_id: 2, player_id: 3, faction: 'SHIRTS' as const },
+  ];
+  const { playerFactions, rosterByMatch } = buildPlayerFactionsAndRoster(rows);
+  assert.equal(playerFactions.get('1:1'), 'SHIRTS');
+  assert.equal(playerFactions.get('1:2'), 'SKINS');
+  assert.equal(playerFactions.get('2:3'), 'SHIRTS');
+  assert.deepEqual(rosterByMatch.get(1), [1, 2]);
+  assert.deepEqual(rosterByMatch.get(2), [3]);
 });
 
 report();

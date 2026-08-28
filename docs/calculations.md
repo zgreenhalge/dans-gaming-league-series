@@ -56,12 +56,11 @@ Raw numbers, direct from the game scoreboard
 
 ## Side Splits
 
-CT/T splits for kills, deaths, assists, damage, and headshot kills are derived deterministically
-from the roster's faction (SHIRTS/SKINS), the starting side, and the round number. The per-round side
-logic never does per-tick `team_num` lookups. The starting-side **anchor** is `skins_starting_side`
-when stored, and is otherwise inferred from a **single** round-1 `team_num` read when it isn't set
-(gauntlet/knife) — stored always wins; see
-[`demo-ingestion.md`](./demo-ingestion.md#starting-side-inference).
+A player's side (CT/T) each round is derived deterministically from the roster's faction
+(SHIRTS/SKINS), the starting side, and the round number. The per-round side logic never does
+per-tick `team_num` lookups. The starting-side **anchor** is `skins_starting_side` when stored, and
+is otherwise inferred from a **single** round-1 `team_num` read when it isn't set (gauntlet/knife) —
+stored always wins; see [`demo-ingestion.md`](./demo-ingestion.md#starting-side-inference).
 
 - **Regulation:** Rounds 1–`regRoundsPerHalf` (= `target_win_rounds - 1`) use starting sides;
   rounds `regRoundsPerHalf + 1`–`regRoundsPerHalf * 2` use swapped sides.
@@ -69,12 +68,19 @@ when stored, and is otherwise inferred from a **single** round-1 `team_num` read
   reg H2 sides, OT half 2 (even) = reg H1 sides.
 - A player's side each round is `sideForFaction(roundSideInfo, faction)`.
 
-Per-round deltas are computed from the engine's `ActionTrackingServices` accumulators at each
-round-end tick: `delta(round R) = value@roundEnd(R) − value@roundEnd(R−1)` (R=1 baseline 0).
-Each delta is attributed to the player's side that round.
+Implemented in `src/lib/parsers/roundSides.ts`, and persisted per round as `match_rounds.shirts_side`
+(`winner_side`/`shirts_side` on that table, see [`architecture.md`](./architecture.md)).
 
-Implemented in `src/lib/parsers/roundSides.ts` (side map) and `src/lib/parsers/accumulators.ts`
-(delta splitter).
+**CT/T splits for kills, deaths, assists, and headshot kills** are derived at query time from
+`match_kills`, resolving each kill's attacker/victim/assister side via `resolvePlayerSide()`
+(`match_rounds.shirts_side` for that round + the player's fixed match `faction`) and summing with
+`deriveSideSplitCounts()` (both `src/lib/queries/kills.ts`) — not collected during parsing.
+
+**CT/T splits for damage** (`damage_ct`/`damage_t`) are still computed from the engine's
+`ActionTrackingServices` accumulators at each round-end tick: `delta(round R) = value@roundEnd(R) −
+value@roundEnd(R−1)` (R=1 baseline 0), each delta attributed to the player's side that round —
+implemented in `src/lib/parsers/accumulators.ts`. Unlike the other split stats, damage has no
+granular per-round per-side fact table to derive from instead.
 
 **ADR by side** divides the side-filtered damage (`damage_ct`/`damage_t`) by the rounds *played on
 that side*, not the player's total rounds played — `roundsPlayedBySide()` in `roundSides.ts` derives

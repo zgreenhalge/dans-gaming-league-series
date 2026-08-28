@@ -6,17 +6,17 @@ type CollectorOut = Map<string, Partial<SabFields>>;
 
 const NS = 'CCSPlayerController.CCSPlayerController_ActionTrackingServices';
 
-export const SPLIT_PROPS = ['m_iKills', 'm_iDeaths', 'm_iAssists', 'm_iDamage', 'm_iHeadShotKills'] as const;
+// m_iKills/m_iDeaths/m_iAssists/m_iHeadShotKills aren't read here — kills_ct/_t, deaths_ct/_t,
+// assists_ct/_t, and headshot_kills_ct/_t are all derived at query time instead
+// (deriveSideSplitCounts() in queries/kills.ts, #488). m_iDamage stays: damage_ct/_t isn't a clean
+// duplicate of any existing fact table (#491), so it's still collected live.
+export const SPLIT_PROPS = ['m_iDamage'] as const;
 // m_iEnemiesFlashed is not read here: enemies_flashed is computed in utility.ts from
 // player_blind events so it can apply the half-blind (1.1s) threshold.
 export const UNSPLIT_PROPS = ['m_iUtilityDamage'] as const;
 
 export const SPLIT_FIELDS: Record<string, { ct: keyof SabFields; t: keyof SabFields }> = {
-  m_iKills: { ct: 'kills_ct', t: 'kills_t' },
-  m_iDeaths: { ct: 'deaths_ct', t: 'deaths_t' },
-  m_iAssists: { ct: 'assists_ct', t: 'assists_t' },
   m_iDamage: { ct: 'damage_ct', t: 'damage_t' },
-  m_iHeadShotKills: { ct: 'headshot_kills_ct', t: 'headshot_kills_t' },
 };
 
 export const UNSPLIT_FIELDS: Record<string, keyof SabFields> = {
@@ -103,7 +103,6 @@ export function collectAccumulators(
   const lastTick = roundList[roundList.length - 1].endTick;
   const lastTickMap = byTickAndSteam.get(lastTick);
 
-  // Also read headshot_kills total from final tick
   for (const sid of steamIds) {
     const row = lastTickMap?.get(sid);
     if (!row) continue;
@@ -112,34 +111,6 @@ export function collectAccumulators(
     for (const prop of UNSPLIT_PROPS) {
       const val = (row[`${NS}.${prop}`] as number) ?? 0;
       partial[UNSPLIT_FIELDS[prop]] = val;
-    }
-
-    // headshot_kills itself isn't stored anymore (derived from match_kills at query time, #457) —
-    // hsTotal is kept only as the reference value for the split-sum sanity check below.
-    const hsTotal = (row[`${NS}.m_iHeadShotKills`] as number) ?? 0;
-
-    // Sanity check: splits must sum to total
-    const killsTotal = (row[`${NS}.m_iKills`] as number) ?? 0;
-    const splitKills = ((partial.kills_ct as number) ?? 0) + ((partial.kills_t as number) ?? 0);
-    if (splitKills !== killsTotal) {
-      context.warnings.push(
-        `Kills split mismatch for ${sid}: ${splitKills} (ct+t) vs ${killsTotal} (total).`,
-      );
-    }
-
-    const deathsTotal = (row[`${NS}.m_iDeaths`] as number) ?? 0;
-    const splitDeaths = ((partial.deaths_ct as number) ?? 0) + ((partial.deaths_t as number) ?? 0);
-    if (splitDeaths !== deathsTotal) {
-      context.warnings.push(
-        `Deaths split mismatch for ${sid}: ${splitDeaths} (ct+t) vs ${deathsTotal} (total).`,
-      );
-    }
-
-    const hsSplit = ((partial.headshot_kills_ct as number) ?? 0) + ((partial.headshot_kills_t as number) ?? 0);
-    if (hsSplit !== hsTotal) {
-      context.warnings.push(
-        `HS kills split mismatch for ${sid}: ${hsSplit} (ct+t) vs ${hsTotal} (total).`,
-      );
     }
   }
 

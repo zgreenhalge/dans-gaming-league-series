@@ -1,5 +1,6 @@
 import { extractSeasonNumber, isPlayedScore, parseScore } from './util';
 import type { MapIndexEntry } from './types';
+import { resolveSide } from './parsers/roundSides';
 
 /**
  * The veto fields needed to classify a match's maps as picked/banned/no-picked — shared by every
@@ -86,7 +87,7 @@ export interface RoundOutcome {
 /** Round win/loss counts for CT and T, computed directly from round outcomes — symmetric per
  *  round (shirts win a round iff `winner_side === shirts_side`; skins get the complement), so no
  *  roster/pick resolution is needed the way match-level `wins`/`losses` above requires. */
-function oppositeSide(side: 'CT' | 'T'): 'CT' | 'T' {
+export function oppositeSide(side: 'CT' | 'T'): 'CT' | 'T' {
   return side === 'CT' ? 'T' : 'CT';
 }
 
@@ -112,7 +113,7 @@ function tallyPlayerRoundsBySide(
 ): Record<'CT' | 'T', { won: number; played: number }> {
   const tally = { CT: { won: 0, played: 0 }, T: { won: 0, played: 0 } };
   for (const r of rounds) {
-    const playerSide: 'CT' | 'T' = faction === 'SHIRTS' ? r.shirts_side : oppositeSide(r.shirts_side);
+    const playerSide = resolveSide(r.shirts_side, faction);
     tally[playerSide].played++;
     if (r.winner_side === playerSide) tally[playerSide].won++;
   }

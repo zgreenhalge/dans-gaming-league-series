@@ -183,6 +183,7 @@ async function main() {
     tick: k.tick,
     attacker_player_id: k.attacker_player_id,
     victim_player_id: k.victim_player_id,
+    assister_player_id: k.assister_player_id,
     headshot: k.headshot,
     is_teamkill: k.is_teamkill,
   }));

@@ -2,8 +2,10 @@ import { supabase } from '../supabase';
 import { resolveMatchSeasons, fetchAllPages, asPage } from './_shared';
 import { getPlayersById } from './player';
 import { killWeaponCategory, type KillWeaponCategory } from '../parsers/weaponClasses';
-import type { Player } from '../types';
+import type { Player, Faction } from '../types';
 import type { AccuracyTotals } from './weaponStats';
+import { resolveSide } from '../parsers/roundSides';
+import type { RoundSideInfo } from './rounds';
 
 export interface MatchKillRow {
   match_id: number;
@@ -168,12 +170,15 @@ export async function getAllKillCreditFlags(
     if (!victimPms) continue;
     const attackerPms =
       k.attacker_player_match_stats_id != null ? pmsLookup.get(k.attacker_player_match_stats_id) : undefined;
+    const assisterPms =
+      k.assister_player_match_stats_id != null ? pmsLookup.get(k.assister_player_match_stats_id) : undefined;
     out.push({
       match_id: k.match_id,
       round_number: k.round_number,
       tick: k.tick,
       attacker_player_id: attackerPms?.player_id ?? null,
       victim_player_id: victimPms.player_id,
+      assister_player_id: assisterPms?.player_id ?? null,
       headshot: k.headshot,
       is_teamkill: k.is_teamkill,
     });
@@ -269,17 +274,33 @@ export interface HeadshotTeamkillCounts {
   teamkills: number;
 }
 
-/** The subset of a kill row every `derive*()` function in this file needs — narrower than
- *  `MatchKillRow` so a pre-persistence caller (the demo-upload preview, working from `DemoMatchKill[]`
- *  before any `match_id` exists) can use it too, not just already-joined `match_kills` reads. */
+/** The subset of a kill row the `derive*()` functions in this file need (not every field is read by
+ *  every function) — narrower than `MatchKillRow` so a pre-persistence caller (the demo-upload
+ *  preview, working from `DemoMatchKill[]` before any `match_id` exists) can use it too, not just
+ *  already-joined `match_kills` reads. */
 export interface KillCreditFlags {
   match_id: number;
   round_number: number;
   tick: number;
   attacker_player_id: number | null;
   victim_player_id: number;
+  assister_player_id: number | null;
   headshot: boolean;
   is_teamkill: boolean;
+}
+
+/** Groups kills by `` `${match_id}:${round_number}` `` — the round-grouping pass every per-round
+ *  `derive*()` function (`deriveOpeningDuelCounts()`, `deriveTwoKRoundCounts()`,
+ *  `deriveClutchCounts()`) needs before it can reason about "this round's kills" as a unit. */
+function groupKillsByRound(kills: KillCreditFlags[]): Map<string, KillCreditFlags[]> {
+  const byRound = new Map<string, KillCreditFlags[]>();
+  for (const k of kills) {
+    const key = `${k.match_id}:${k.round_number}`;
+    const group = byRound.get(key);
+    if (group) group.push(k);
+    else byRound.set(key, [k]);
+  }
+  return byRound;
 }
 
 /**
@@ -309,6 +330,246 @@ export function deriveHeadshotAndTeamkillCounts(kills: KillCreditFlags[]): Map<s
   return out;
 }
 
+/** A player's side (CT/T) for one round, from their fixed match `faction` and that round's
+ *  `shirts_side` — an alias for `resolveSide()` (`parsers/roundSides.ts`), the one place this rule
+ *  is defined (also used by `sideForFaction()` there and `tallyPlayerRoundsBySide()` in
+ *  `mapSideStats.ts`), kept under this name since every caller in this file already uses it. */
+export const resolvePlayerSide = resolveSide;
+
+export interface PlayerFactionsAndRoster {
+  playerFactions: Map<string, Faction>;
+  rosterByMatch: Map<number, number[]>;
+}
+
+/** Builds `deriveSideSplitCounts()`/`deriveClutchCounts()`'s two roster inputs from one pass over a
+ *  `player_match_stats` read — `playerFactions` (`` `${match_id}:${player_id}` `` → `faction`) and
+ *  `rosterByMatch` (every roster `player_id` per `match_id`) — the same construction
+ *  `getAllSabremetrics()`, `getMatchSabremetrics()`, and the demo-upload preview each need from
+ *  their own already-fetched roster rows. */
+export function buildPlayerFactionsAndRoster(
+  rows: { match_id: number; player_id: number; faction: Faction }[],
+): PlayerFactionsAndRoster {
+  const playerFactions = new Map<string, Faction>();
+  const rosterByMatch = new Map<number, number[]>();
+  for (const r of rows) {
+    playerFactions.set(`${r.match_id}:${r.player_id}`, r.faction);
+    let roster = rosterByMatch.get(r.match_id);
+    if (!roster) {
+      roster = [];
+      rosterByMatch.set(r.match_id, roster);
+    }
+    roster.push(r.player_id);
+  }
+  return { playerFactions, rosterByMatch };
+}
+
+export interface SideSplitCounts {
+  kills_ct: number;
+  kills_t: number;
+  deaths_ct: number;
+  deaths_t: number;
+  assists_ct: number;
+  assists_t: number;
+  headshot_kills_ct: number;
+  headshot_kills_t: number;
+}
+
+/**
+ * Per (match, player) kills/deaths/assists/headshot-kills split by the side they were on that
+ * round — the query-time replacement for the same-named columns `player_match_sabremetrics` used
+ * to store directly (all were exact duplicates of `match_kills` combined with side data, unlike
+ * `headshot_kills`/`opening_kills`/`two_k_rounds`, which needed no side/faction lookup at all).
+ * `roundSides` (`getRoundSides()`, `queries/rounds.ts`) and `playerFactions` are both keyed the same
+ * way their source tables are: `` `${match_id}:${round_number}` `` and `` `${match_id}:${player_id}` ``
+ * respectively. A round or player missing from either map (never resolved a side/faction) is
+ * skipped rather than guessed at.
+ *
+ * Deaths always credit the victim's side, matching CS2's own unconditional `m_iDeaths` — a
+ * self-kill or teamkill still ends the victim's round. Kills and headshot-kills use the same
+ * "credited kill" exclusion as `deriveHeadshotAndTeamkillCounts()` (no self-kill, no teamkill).
+ * Assists are credited whenever `match_kills.assister_player_match_stats_id` is set, with no
+ * further exclusion — the parser (`collectMatchKills()`, `parsers/weaponStats.ts`) already only
+ * ever records a real assister there, matching how CS2 itself never awards a friendly-fire assist.
+ */
+export function deriveSideSplitCounts(
+  kills: KillCreditFlags[],
+  roundSides: Map<string, RoundSideInfo>,
+  playerFactions: Map<string, Faction>,
+): Map<string, SideSplitCounts> {
+  const out = new Map<string, SideSplitCounts>();
+  const bump = (matchId: number, playerId: number, field: keyof SideSplitCounts): void => {
+    const key = `${matchId}:${playerId}`;
+    let c = out.get(key);
+    if (!c) {
+      c = {
+        kills_ct: 0, kills_t: 0, deaths_ct: 0, deaths_t: 0,
+        assists_ct: 0, assists_t: 0, headshot_kills_ct: 0, headshot_kills_t: 0,
+      };
+      out.set(key, c);
+    }
+    c[field] += 1;
+  };
+  const sideOf = (matchId: number, playerId: number, shirtsSide: 'CT' | 'T'): 'CT' | 'T' | undefined => {
+    const faction = playerFactions.get(`${matchId}:${playerId}`);
+    return faction == null ? undefined : resolvePlayerSide(shirtsSide, faction);
+  };
+
+  for (const k of kills) {
+    const roundInfo = roundSides.get(`${k.match_id}:${k.round_number}`);
+    if (roundInfo == null) continue;
+    const shirtsSide = roundInfo.shirtsSide;
+
+    const victimSide = sideOf(k.match_id, k.victim_player_id, shirtsSide);
+    if (victimSide != null) bump(k.match_id, k.victim_player_id, victimSide === 'CT' ? 'deaths_ct' : 'deaths_t');
+
+    if (k.attacker_player_id != null && k.attacker_player_id !== k.victim_player_id && !k.is_teamkill) {
+      const attackerSide = sideOf(k.match_id, k.attacker_player_id, shirtsSide);
+      if (attackerSide != null) {
+        bump(k.match_id, k.attacker_player_id, attackerSide === 'CT' ? 'kills_ct' : 'kills_t');
+        if (k.headshot) {
+          bump(k.match_id, k.attacker_player_id, attackerSide === 'CT' ? 'headshot_kills_ct' : 'headshot_kills_t');
+        }
+      }
+    }
+
+    if (k.assister_player_id != null) {
+      const assisterSide = sideOf(k.match_id, k.assister_player_id, shirtsSide);
+      if (assisterSide != null) bump(k.match_id, k.assister_player_id, assisterSide === 'CT' ? 'assists_ct' : 'assists_t');
+    }
+  }
+  return out;
+}
+
+export interface ClutchCounts {
+  clutch_1v1_attempts: number;
+  clutch_1v1_wins: number;
+  clutch_1v2_attempts: number;
+  clutch_1v2_wins: number;
+  clutch_2v1_attempts: number;
+  clutch_2v1_wins: number;
+}
+
+type ClutchCategory = '1v1' | '1v2';
+
+function bumpClutch(
+  out: Map<string, ClutchCounts>,
+  matchId: number,
+  playerId: number,
+  attemptsKey: keyof ClutchCounts,
+  winsKey: keyof ClutchCounts,
+  won: boolean,
+): void {
+  const key = `${matchId}:${playerId}`;
+  let c = out.get(key);
+  if (!c) {
+    c = {
+      clutch_1v1_attempts: 0, clutch_1v1_wins: 0,
+      clutch_1v2_attempts: 0, clutch_1v2_wins: 0,
+      clutch_2v1_attempts: 0, clutch_2v1_wins: 0,
+    };
+    out.set(key, c);
+  }
+  c[attemptsKey] += 1;
+  if (won) c[winsKey] += 1;
+}
+
+/**
+ * Per (match, player) clutch attempt/win counts — the query-time replacement for
+ * `clutch_1v1`/`1v2`/`2v1_attempts`/`wins` on `player_match_sabremetrics`: for each round, replay
+ * its kills in tick order against both sides' starting alive sets (every roster player, resolved to
+ * CT/T via `resolvePlayerSide()`), crediting whoever's side drops to 1 facing
+ * 1-2 enemies (1v1/1v2), and crediting a 2-alive side facing exactly 1 enemy a shared 2v1 advantage
+ * (the choke-score numerator). A player who reaches a 1v2 and later narrows to a 1v1 (their
+ * remaining teammate's death cut the enemy count further) gets credited both — the original 1v2
+ * attempt/win stands, and a separate 1v1 attempt/win is added for the narrower phase.
+ *
+ * `roundSides`/`playerFactions` are the same maps `deriveSideSplitCounts()` takes. `rosterByMatch`
+ * (every roster `player_id` per `match_id`, from `player_match_stats`) is the one extra input this
+ * needs beyond a kill's own participants — clutch state depends on the *whole* alive roster each
+ * round, not just who's involved in a given kill.
+ *
+ * A round absent from `kills` (nobody died) is skipped entirely rather than replayed with zero
+ * deaths — equivalent, since a round where every roster player survives never moves either side's
+ * alive count off its starting value, so it can never trigger a clutch/2v1 credit either way.
+ */
+export function deriveClutchCounts(
+  kills: KillCreditFlags[],
+  roundSides: Map<string, RoundSideInfo>,
+  playerFactions: Map<string, Faction>,
+  rosterByMatch: Map<number, number[]>,
+): Map<string, ClutchCounts> {
+  const out = new Map<string, ClutchCounts>();
+  const byRound = groupKillsByRound(kills);
+
+  for (const roundKills of byRound.values()) {
+    const matchId = roundKills[0].match_id;
+    const roundNumber = roundKills[0].round_number;
+    const roundInfo = roundSides.get(`${matchId}:${roundNumber}`);
+    if (roundInfo == null) continue;
+    const roster = rosterByMatch.get(matchId);
+    if (roster == null) continue;
+
+    const ctAlive = new Set<number>();
+    const tAlive = new Set<number>();
+    for (const playerId of roster) {
+      const faction = playerFactions.get(`${matchId}:${playerId}`);
+      if (faction == null) continue;
+      const side = resolvePlayerSide(roundInfo.shirtsSide, faction);
+      (side === 'CT' ? ctAlive : tAlive).add(playerId);
+    }
+
+    const deaths = [...roundKills].sort((a, b) => a.tick - b.tick);
+    const clutchState = new Map<'CT' | 'T', { playerId: number; category: ClutchCategory }>();
+    const advantageRecorded = new Set<'CT' | 'T'>();
+
+    for (const death of deaths) {
+      const victim = death.victim_player_id;
+      ctAlive.delete(victim);
+      tAlive.delete(victim);
+
+      for (const side of ['CT', 'T'] as const) {
+        const myAlive = side === 'CT' ? ctAlive : tAlive;
+        const enemyAlive = side === 'CT' ? tAlive : ctAlive;
+        if (enemyAlive.size === 0) continue;
+
+        const won = roundInfo.winnerSide === side;
+
+        if (myAlive.size === 1) {
+          const clutcher = [...myAlive][0];
+          const enemyCount = enemyAlive.size;
+          const existing = clutchState.get(side);
+
+          if (existing?.playerId === clutcher) {
+            if (existing.category === '1v2' && enemyCount === 1) {
+              bumpClutch(out, matchId, clutcher, 'clutch_1v1_attempts', 'clutch_1v1_wins', won);
+            }
+            continue;
+          }
+
+          if (enemyCount > 2) continue;
+
+          const category: ClutchCategory = enemyCount === 1 ? '1v1' : '1v2';
+          clutchState.set(side, { playerId: clutcher, category });
+          if (category === '1v1') {
+            bumpClutch(out, matchId, clutcher, 'clutch_1v1_attempts', 'clutch_1v1_wins', won);
+          } else {
+            bumpClutch(out, matchId, clutcher, 'clutch_1v2_attempts', 'clutch_1v2_wins', won);
+          }
+        } else if (myAlive.size === 2 && enemyAlive.size === 1) {
+          if (advantageRecorded.has(side)) continue;
+          advantageRecorded.add(side);
+
+          for (const teammate of myAlive) {
+            bumpClutch(out, matchId, teammate, 'clutch_2v1_attempts', 'clutch_2v1_wins', won);
+          }
+        }
+      }
+    }
+  }
+
+  return out;
+}
+
 export interface OpeningDuelCounts {
   opening_kills: number;
   opening_deaths: number;
@@ -323,13 +584,7 @@ export interface OpeningDuelCounts {
  * world/environment death) or it was a teamkill. Keyed by `` `${match_id}:${player_id}` ``.
  */
 export function deriveOpeningDuelCounts(kills: KillCreditFlags[]): Map<string, OpeningDuelCounts> {
-  const byRound = new Map<string, KillCreditFlags[]>();
-  for (const k of kills) {
-    const key = `${k.match_id}:${k.round_number}`;
-    const group = byRound.get(key);
-    if (group) group.push(k);
-    else byRound.set(key, [k]);
-  }
+  const byRound = groupKillsByRound(kills);
 
   const out = new Map<string, OpeningDuelCounts>();
   const bump = (matchId: number, playerId: number, field: keyof OpeningDuelCounts): void => {
@@ -365,20 +620,14 @@ export function deriveOpeningDuelCounts(kills: KillCreditFlags[]): Map<string, O
  * without needing to resolve who those enemies are from roster/faction data.
  */
 export function deriveTwoKRoundCounts(kills: KillCreditFlags[]): Map<string, number> {
-  const byRound = new Map<string, KillCreditFlags[]>();
-  for (const k of kills) {
-    if (k.attacker_player_id == null || k.is_teamkill || k.attacker_player_id === k.victim_player_id) continue;
-    const key = `${k.match_id}:${k.round_number}`;
-    const group = byRound.get(key);
-    if (group) group.push(k);
-    else byRound.set(key, [k]);
-  }
+  const byRound = groupKillsByRound(kills);
 
   const out = new Map<string, number>();
   for (const roundKills of byRound.values()) {
     const perAttacker = new Map<number, number>();
     for (const k of roundKills) {
-      const attackerId = k.attacker_player_id!;
+      if (k.attacker_player_id == null || k.is_teamkill || k.attacker_player_id === k.victim_player_id) continue;
+      const attackerId = k.attacker_player_id;
       perAttacker.set(attackerId, (perAttacker.get(attackerId) ?? 0) + 1);
     }
     for (const [attackerId, count] of perAttacker) {
@@ -417,21 +666,52 @@ export interface DerivedSabFields {
   shots_fired: number;
   shots_hit: number;
   headshot_hits: number;
+  kills_ct: number;
+  kills_t: number;
+  deaths_ct: number;
+  deaths_t: number;
+  assists_ct: number;
+  assists_t: number;
+  headshot_kills_ct: number;
+  headshot_kills_t: number;
+  clutch_1v1_attempts: number;
+  clutch_1v1_wins: number;
+  clutch_1v2_attempts: number;
+  clutch_1v2_wins: number;
+  clutch_2v1_attempts: number;
+  clutch_2v1_wins: number;
 }
 
-/** Looks up one `` `${match_id}:${player_id}` `` key across `deriveKillCreditCounts()`'s three maps
- *  plus a `deriveAccuracyTotals()`-shaped accuracy map, defaulting every field to 0 when a player has
- *  no credited rows in a given map (never played a round, never fired a gun, etc.) — the shared merge
- *  every `SabFieldsWithDerived` builder (`getAllSabremetrics()`, `getMatchSabremetrics()`, the
- *  demo-upload preview) applies identically over the stored `player_match_sabremetrics` row. */
+const ZERO_SIDE_SPLIT: SideSplitCounts = {
+  kills_ct: 0, kills_t: 0, deaths_ct: 0, deaths_t: 0,
+  assists_ct: 0, assists_t: 0, headshot_kills_ct: 0, headshot_kills_t: 0,
+};
+
+const ZERO_CLUTCH: ClutchCounts = {
+  clutch_1v1_attempts: 0, clutch_1v1_wins: 0,
+  clutch_1v2_attempts: 0, clutch_1v2_wins: 0,
+  clutch_2v1_attempts: 0, clutch_2v1_wins: 0,
+};
+
+/** Looks up one `` `${match_id}:${player_id}` `` key across `deriveKillCreditCounts()`'s three maps,
+ *  a `deriveAccuracyTotals()`-shaped accuracy map, a `deriveSideSplitCounts()`-shaped side-split map,
+ *  and a `deriveClutchCounts()`-shaped clutch map, defaulting every field to 0 when a player has no
+ *  credited rows in a given map (never played a round, never fired a gun, side unresolved, etc.) —
+ *  the shared merge every `SabFieldsWithDerived` builder (`getAllSabremetrics()`,
+ *  `getMatchSabremetrics()`, the demo-upload preview) applies identically over the stored
+ *  `player_match_sabremetrics` row. */
 export function lookupDerivedSabFields(
   key: string,
   counts: KillCreditCounts,
   accuracy: Map<string, AccuracyTotals>,
+  sideSplit: Map<string, SideSplitCounts>,
+  clutch: Map<string, ClutchCounts>,
 ): DerivedSabFields {
   const hsTkCounts = counts.hsTk.get(key);
   const opening = counts.openingDuels.get(key);
   const acc = accuracy.get(key);
+  const split = sideSplit.get(key) ?? ZERO_SIDE_SPLIT;
+  const clutchCounts = clutch.get(key) ?? ZERO_CLUTCH;
   return {
     headshot_kills: hsTkCounts?.headshot_kills ?? 0,
     teamkills: hsTkCounts?.teamkills ?? 0,
@@ -441,6 +721,8 @@ export function lookupDerivedSabFields(
     shots_fired: acc?.shots_fired ?? 0,
     shots_hit: acc?.shots_hit ?? 0,
     headshot_hits: acc?.headshot_hits ?? 0,
+    ...split,
+    ...clutchCounts,
   };
 }
 

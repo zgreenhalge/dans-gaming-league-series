@@ -126,10 +126,18 @@ export function roundsPlayedBySide(
   return { ct, t };
 }
 
+/** A faction's side (CT/T) given the round's `shirtsSide` — the one place this rule is defined;
+ *  `sideForFaction()` below and every other per-round side lookup in the codebase (query-time
+ *  `deriveSideSplitCounts()`/`deriveClutchCounts()` in `queries/kills.ts`, `mapSideStats.ts`'s
+ *  `tallyPlayerRoundsBySide()`) call this rather than re-deriving the SHIRTS/SKINS ternary. */
+export function resolveSide(shirtsSide: 'CT' | 'T', faction: 'SHIRTS' | 'SKINS'): 'CT' | 'T' {
+  if (faction === 'SHIRTS') return shirtsSide;
+  return shirtsSide === 'CT' ? 'T' : 'CT';
+}
+
 export function sideForFaction(
   info: RoundSideInfo,
   faction: 'SHIRTS' | 'SKINS',
 ): 'CT' | 'T' {
-  if (faction === 'SHIRTS') return info.shirtsSide;
-  return info.shirtsSide === 'CT' ? 'T' : 'CT';
+  return resolveSide(info.shirtsSide, faction);
 }

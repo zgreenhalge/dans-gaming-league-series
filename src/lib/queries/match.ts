@@ -7,8 +7,12 @@ import type { ScheduledMatchRef } from '../server-schedule-collision';
 import { getPlayersById } from './player';
 import { asPage, fetchAllPages, getWeekLookup } from './_shared';
 import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '../demo/liveScore';
-import { getMatchKills, deriveKillCreditCounts, lookupDerivedSabFields } from './kills';
+import {
+  getMatchKills, deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts,
+  buildPlayerFactionsAndRoster, lookupDerivedSabFields, type DerivedSabFields,
+} from './kills';
 import { deriveAccuracyTotals } from './weaponStats';
+import { getRoundSides } from './rounds';
 
 
 export interface MatchStatRow extends PlayerMatchStat {
@@ -288,24 +292,18 @@ export async function getOtherScheduledMatches(matchId: number): Promise<Schedul
     }));
 }
 
-export interface MatchSabremetricsRow extends PlayerMatchSabremetrics {
+export interface MatchSabremetricsRow extends PlayerMatchSabremetrics, DerivedSabFields {
   player_id: number;
   player_name: string;
   faction: Faction;
-  headshot_kills: number;
-  teamkills: number;
-  opening_kills: number;
-  opening_deaths: number;
-  two_k_rounds: number;
-  shots_fired: number;
-  shots_hit: number;
-  headshot_hits: number;
 }
 
 /** `headshot_kills`, `teamkills`, `opening_kills`, `opening_deaths`, `two_k_rounds`, `shots_fired`,
- *  `shots_hit`, and `headshot_hits` are overwritten with the `derive*()` helpers' results rather
- *  than read off the stored `player_match_sabremetrics` row — all eight were exact duplicates of
- *  data `match_kills`/`player_match_weapon_stats` already carry (#457). */
+ *  `shots_hit`, `headshot_hits`, `kills_ct`/`_t`, `deaths_ct`/`_t`, `assists_ct`/`_t`,
+ *  `headshot_kills_ct`/`_t`, and `clutch_1v1`/`1v2`/`2v1_attempts`/`wins` are overwritten with the
+ *  `derive*()` helpers' results rather than read off the stored `player_match_sabremetrics` row —
+ *  all were exact duplicates of (or directly reconstructible from) `match_kills`/
+ *  `player_match_weapon_stats`/`match_rounds` (#457/#488). */
 export async function getMatchSabremetrics(matchId: number): Promise<MatchSabremetricsRow[]> {
   const { data: pmsRows } = await supabase
     .from('player_match_stats')
@@ -313,29 +311,34 @@ export async function getMatchSabremetrics(matchId: number): Promise<MatchSabrem
     .eq('match_id', matchId);
   if (!pmsRows || pmsRows.length === 0) return [];
 
-  const pmsIds = (pmsRows as { id: number; player_id: number; faction: string }[]).map((r) => r.id);
+  const pms = pmsRows as { id: number; player_id: number; faction: Faction }[];
+  const pmsIds = pms.map((r) => r.id);
   // Shared as one promise (not two `getPlayersById()` calls) so getMatchKills()'s own internal
   // name resolution doesn't duplicate the `players` table fetch below already needs.
   const playersByIdPromise = getPlayersById();
-  const [{ data: sabRows }, players, kills, accuracyTotals] = await Promise.all([
+  const [{ data: sabRows }, players, kills, accuracyTotals, roundSides] = await Promise.all([
     supabase.from('player_match_sabremetrics').select('*').in('player_match_stats_id', pmsIds),
     playersByIdPromise,
     getMatchKills(matchId, playersByIdPromise),
     deriveAccuracyTotals(matchId),
+    getRoundSides(matchId),
   ]);
   if (!sabRows || sabRows.length === 0) return [];
 
-  const pmsLookup = new Map(
-    (pmsRows as { id: number; player_id: number; faction: string }[]).map((r) => [r.id, r]),
+  const pmsLookup = new Map(pms.map((r) => [r.id, r]));
+  const { playerFactions, rosterByMatch } = buildPlayerFactionsAndRoster(
+    pms.map((r) => ({ match_id: matchId, player_id: r.player_id, faction: r.faction })),
   );
   const creditCounts = deriveKillCreditCounts(kills);
+  const sideSplitCounts = deriveSideSplitCounts(kills, roundSides, playerFactions);
+  const clutchCounts = deriveClutchCounts(kills, roundSides, playerFactions, rosterByMatch);
 
   return (sabRows as PlayerMatchSabremetrics[]).map((sab) => {
     const pms = pmsLookup.get(sab.player_match_stats_id)!;
     const key = `${matchId}:${pms.player_id}`;
     return {
       ...sab,
-      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals),
+      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals, sideSplitCounts, clutchCounts),
       player_id: pms.player_id,
       player_name: players.get(pms.player_id)?.name ?? `#${pms.player_id}`,
       faction: pms.faction as Faction,
