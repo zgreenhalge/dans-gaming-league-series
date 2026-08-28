@@ -13,6 +13,7 @@ import {
 } from './kills';
 import { deriveAccuracyTotals } from './weaponStats';
 import { getRoundSides } from './rounds';
+import { getAllUtilityThrows, deriveUtilityCounts } from './utility';
 
 
 export interface MatchStatRow extends PlayerMatchStat {
@@ -300,10 +301,12 @@ export interface MatchSabremetricsRow extends PlayerMatchSabremetrics, DerivedSa
 
 /** `headshot_kills`, `teamkills`, `opening_kills`, `opening_deaths`, `two_k_rounds`, `shots_fired`,
  *  `shots_hit`, `headshot_hits`, `kills_ct`/`_t`, `deaths_ct`/`_t`, `assists_ct`/`_t`,
- *  `headshot_kills_ct`/`_t`, and `clutch_1v1`/`1v2`/`2v1_attempts`/`wins` are overwritten with the
- *  `derive*()` helpers' results rather than read off the stored `player_match_sabremetrics` row —
- *  all were exact duplicates of (or directly reconstructible from) `match_kills`/
- *  `player_match_weapon_stats`/`match_rounds` (#457/#488). */
+ *  `headshot_kills_ct`/`_t`, `clutch_1v1`/`1v2`/`2v1_attempts`/`wins`, and `flash_assists`/
+ *  `teamflash_duration`/`enemies_flashed`/`flashes_leading_to_kill`/`effective_flashes`/
+ *  `blind_duration_dealt`/`blind_duration_max_sum` are overwritten with the `derive*()` helpers'
+ *  results rather than read off the stored `player_match_sabremetrics` row — all were exact
+ *  duplicates of (or directly reconstructible from) `match_kills`/`player_match_weapon_stats`/
+ *  `match_rounds`/`match_utility_throws` (#457/#488/#489). */
 export async function getMatchSabremetrics(matchId: number): Promise<MatchSabremetricsRow[]> {
   const { data: pmsRows } = await supabase
     .from('player_match_stats')
@@ -316,12 +319,13 @@ export async function getMatchSabremetrics(matchId: number): Promise<MatchSabrem
   // Shared as one promise (not two `getPlayersById()` calls) so getMatchKills()'s own internal
   // name resolution doesn't duplicate the `players` table fetch below already needs.
   const playersByIdPromise = getPlayersById();
-  const [{ data: sabRows }, players, kills, accuracyTotals, roundSides] = await Promise.all([
+  const [{ data: sabRows }, players, kills, accuracyTotals, roundSides, throws] = await Promise.all([
     supabase.from('player_match_sabremetrics').select('*').in('player_match_stats_id', pmsIds),
     playersByIdPromise,
     getMatchKills(matchId, playersByIdPromise),
     deriveAccuracyTotals(matchId),
     getRoundSides(matchId),
+    getAllUtilityThrows(matchId),
   ]);
   if (!sabRows || sabRows.length === 0) return [];
 
@@ -332,13 +336,14 @@ export async function getMatchSabremetrics(matchId: number): Promise<MatchSabrem
   const creditCounts = deriveKillCreditCounts(kills);
   const sideSplitCounts = deriveSideSplitCounts(kills, roundSides, playerFactions);
   const clutchCounts = deriveClutchCounts(kills, roundSides, playerFactions, rosterByMatch);
+  const utilityCounts = deriveUtilityCounts(throws, kills, playerFactions);
 
   return (sabRows as PlayerMatchSabremetrics[]).map((sab) => {
     const pms = pmsLookup.get(sab.player_match_stats_id)!;
     const key = `${matchId}:${pms.player_id}`;
     return {
       ...sab,
-      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals, sideSplitCounts, clutchCounts),
+      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals, sideSplitCounts, clutchCounts, utilityCounts),
       player_id: pms.player_id,
       player_name: players.get(pms.player_id)?.name ?? `#${pms.player_id}`,
       faction: pms.faction as Faction,

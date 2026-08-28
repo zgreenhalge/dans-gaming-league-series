@@ -8,6 +8,7 @@ import {
 } from './kills';
 import { deriveAccuracyTotals } from './weaponStats';
 import { getRoundSides } from './rounds';
+import { getAllUtilityThrows, deriveUtilityCounts } from './utility';
 
 
 export interface SabremetricMatchRow {
@@ -25,11 +26,13 @@ export interface SabremetricMatchRow {
  *
  *  `headshot_kills`, `teamkills`, `opening_kills`, `opening_deaths`, `two_k_rounds`, `shots_fired`,
  *  `shots_hit`, `headshot_hits`, `kills_ct`/`_t`, `deaths_ct`/`_t`, `assists_ct`/`_t`,
- *  `headshot_kills_ct`/`_t`, and `clutch_1v1`/`1v2`/`2v1_attempts`/`wins` are overwritten with the
- *  `derive*()` helpers' results rather than read off the stored `player_match_sabremetrics` row —
- *  all were exact duplicates of (or directly reconstructible from) `match_kills`/
- *  `player_match_weapon_stats`/`match_rounds`, so those are now the source of truth for them
- *  (#457/#488). */
+ *  `headshot_kills_ct`/`_t`, `clutch_1v1`/`1v2`/`2v1_attempts`/`wins`, and `flash_assists`/
+ *  `teamflash_duration`/`enemies_flashed`/`flashes_leading_to_kill`/`effective_flashes`/
+ *  `blind_duration_dealt`/`blind_duration_max_sum` are overwritten with the `derive*()` helpers'
+ *  results rather than read off the stored `player_match_sabremetrics` row — all were exact
+ *  duplicates of (or directly reconstructible from) `match_kills`/`player_match_weapon_stats`/
+ *  `match_rounds`/`match_utility_throws`, so those are now the source of truth for them
+ *  (#457/#488/#489). */
 export async function getAllSabremetrics(seasonId?: number): Promise<SabremetricMatchRow[]> {
   // pmsRows shared as one promise (not fetched again per consumer) so deriveAccuracyTotals()'s and
   // getAllKillCreditFlags()'s own internal `player_match_stats` reads don't duplicate the fetch
@@ -55,6 +58,7 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     kills,
     accuracyTotals,
     roundSides,
+    throws,
   ] = await Promise.all([
     fetchAllPages<PlayerMatchSabremetrics>((from, to) =>
       supabase.from('player_match_sabremetrics').select('*').range(from, to),
@@ -66,6 +70,7 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     getAllKillCreditFlags(pmsRowsPromise),
     deriveAccuracyTotals(undefined, pmsRowsPromise),
     getRoundSides(),
+    getAllUtilityThrows(undefined, pmsRowsPromise),
   ]);
   if (seasonErr) throw seasonErr;
 
@@ -80,6 +85,7 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
   const creditCounts = deriveKillCreditCounts(kills);
   const sideSplitCounts = deriveSideSplitCounts(kills, roundSides, playerFactions);
   const clutchCounts = deriveClutchCounts(kills, roundSides, playerFactions, rosterByMatch);
+  const utilityCounts = deriveUtilityCounts(throws, kills, playerFactions);
 
   const result: SabremetricMatchRow[] = [];
   for (const raw of sabRows) {
@@ -93,7 +99,8 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     const { player_match_stats_id: _, ...rest } = raw;
     const key = `${pms.match_id}:${pms.player_id}`;
     const sab: SabFieldsWithDerived = {
-      ...rest, ...lookupDerivedSabFields(key, creditCounts, accuracyTotals, sideSplitCounts, clutchCounts),
+      ...rest,
+      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals, sideSplitCounts, clutchCounts, utilityCounts),
     };
     result.push({
       player_id: pms.player_id,
