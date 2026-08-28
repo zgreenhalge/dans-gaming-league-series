@@ -2,8 +2,15 @@
 
 `e2e/` holds Playwright coverage for DGLS's highest-risk multi-stage flows — sequences that span
 more than one request/response and can't be locked down by a `queries-*.test.ts`-style unit test
-alone. This is a small, deliberately separate suite from the Vitest unit/component tests in
-`src/**/*.test.ts` — see `docs/patterns.md` for when a change belongs in one vs. the other.
+alone (`season-schedule.spec.ts`) — plus one deliberately shallow smoke spec
+(`page-smoke.spec.ts`) that visits every top-level page type, clicks through each page's tabs, and
+asserts the app never falls back to the route error boundary. The smoke spec exists for a
+different failure mode than the flow specs: a page that forgot to wrap a client component in a
+context provider it needs (e.g. `UrlStateProvider`) only breaks on that exact page, and a unit
+test that renders the component in isolation with the provider already supplied can't see the gap
+between "the component works, given a provider" and "the page actually wires one in." This is a
+small, deliberately separate suite from the Vitest unit/component tests in `src/**/*.test.ts` — see
+`docs/patterns.md` for when a change belongs in one vs. the other.
 
 ## Database isolation: a local Supabase stack, never production
 
