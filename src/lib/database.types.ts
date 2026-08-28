@@ -817,23 +817,13 @@ export type Database = {
       }
       player_match_sabremetrics: {
         Row: {
-          assists_ct: number
-          assists_t: number
           blind_duration_dealt: number
           blind_duration_max_sum: number
-          clutch_1v1_attempts: number
-          clutch_1v1_wins: number
-          clutch_1v2_attempts: number
-          clutch_1v2_wins: number
-          clutch_2v1_attempts: number
-          clutch_2v1_wins: number
           counter_strafe_good_shots: number
           counter_strafe_shots: number
           ct_smokes_thrown: number
           damage_ct: number
           damage_t: number
-          deaths_ct: number
-          deaths_t: number
           defuses: number
           effective_flashes: number
           enemies_flashed: number
@@ -843,11 +833,7 @@ export type Database = {
           he_damage: number
           he_thrown: number
           headshot_hits_no_awp: number
-          headshot_kills_ct: number
-          headshot_kills_t: number
           kast_rounds: number
-          kills_ct: number
-          kills_t: number
           plants: number
           player_match_stats_id: number
           reloads_total: number
@@ -867,23 +853,13 @@ export type Database = {
           utility_damage: number
         }
         Insert: {
-          assists_ct?: number
-          assists_t?: number
           blind_duration_dealt?: number
           blind_duration_max_sum?: number
-          clutch_1v1_attempts?: number
-          clutch_1v1_wins?: number
-          clutch_1v2_attempts?: number
-          clutch_1v2_wins?: number
-          clutch_2v1_attempts?: number
-          clutch_2v1_wins?: number
           counter_strafe_good_shots?: number
           counter_strafe_shots?: number
           ct_smokes_thrown?: number
           damage_ct?: number
           damage_t?: number
-          deaths_ct?: number
-          deaths_t?: number
           defuses?: number
           effective_flashes?: number
           enemies_flashed?: number
@@ -893,11 +869,7 @@ export type Database = {
           he_damage?: number
           he_thrown?: number
           headshot_hits_no_awp?: number
-          headshot_kills_ct?: number
-          headshot_kills_t?: number
           kast_rounds?: number
-          kills_ct?: number
-          kills_t?: number
           plants?: number
           player_match_stats_id: number
           reloads_total?: number
@@ -917,23 +889,13 @@ export type Database = {
           utility_damage?: number
         }
         Update: {
-          assists_ct?: number
-          assists_t?: number
           blind_duration_dealt?: number
           blind_duration_max_sum?: number
-          clutch_1v1_attempts?: number
-          clutch_1v1_wins?: number
-          clutch_1v2_attempts?: number
-          clutch_1v2_wins?: number
-          clutch_2v1_attempts?: number
-          clutch_2v1_wins?: number
           counter_strafe_good_shots?: number
           counter_strafe_shots?: number
           ct_smokes_thrown?: number
           damage_ct?: number
           damage_t?: number
-          deaths_ct?: number
-          deaths_t?: number
           defuses?: number
           effective_flashes?: number
           enemies_flashed?: number
@@ -943,11 +905,7 @@ export type Database = {
           he_damage?: number
           he_thrown?: number
           headshot_hits_no_awp?: number
-          headshot_kills_ct?: number
-          headshot_kills_t?: number
           kast_rounds?: number
-          kills_ct?: number
-          kills_t?: number
           plants?: number
           player_match_stats_id?: number
           reloads_total?: number

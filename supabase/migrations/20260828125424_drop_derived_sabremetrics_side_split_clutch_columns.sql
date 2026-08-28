@@ -1,0 +1,15 @@
+alter table public.player_match_sabremetrics
+  drop column kills_ct,
+  drop column kills_t,
+  drop column deaths_ct,
+  drop column deaths_t,
+  drop column assists_ct,
+  drop column assists_t,
+  drop column headshot_kills_ct,
+  drop column headshot_kills_t,
+  drop column clutch_1v1_attempts,
+  drop column clutch_1v1_wins,
+  drop column clutch_1v2_attempts,
+  drop column clutch_1v2_wins,
+  drop column clutch_2v1_attempts,
+  drop column clutch_2v1_wins;
