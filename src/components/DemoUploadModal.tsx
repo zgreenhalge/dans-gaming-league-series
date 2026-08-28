@@ -5,7 +5,13 @@ import { useRouter } from 'next/navigation';
 import SabremetricsTable from '@/components/SabremetricsTable';
 import { useHasMounted } from './useHasMounted';
 import Modal from './Modal';
-import type { SabFields, RoundHistoryEntry, DemoWeaponStat, DemoMatchKill, DemoMatchRound } from '@/lib/types';
+import type {
+  SabFields, SabFieldsWithDerived, RoundHistoryEntry, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
+  DemoMatchUtilityThrow, DemoMatchRoundEconomy,
+} from '@/lib/types';
+import {
+  deriveKillCreditCounts, lookupDerivedSabFields, sumAccuracyTotals, type KillCreditFlags,
+} from '@/lib/queries';
 type Faction = 'CT' | 'T' | null;
 
 interface MatchPlayer {
@@ -41,6 +47,8 @@ interface ParsedResult {
   weaponStats?: DemoWeaponStat[];
   matchKills?: DemoMatchKill[];
   matchRounds?: DemoMatchRound[];
+  matchUtilityThrows?: DemoMatchUtilityThrow[];
+  matchRoundEconomy?: DemoMatchRoundEconomy[];
   round_history?: RoundHistoryEntry[] | null;
 }
 
@@ -321,6 +329,8 @@ export default function DemoUploadModal({
           weaponStats: parsed.weaponStats,
           matchKills: parsed.matchKills,
           matchRounds: parsed.matchRounds,
+          matchUtilityThrows: parsed.matchUtilityThrows,
+          matchRoundEconomy: parsed.matchRoundEconomy,
           round_history: parsed.round_history ?? null,
           // Forward warnings so the score route can learn steam ids from elimination matches.
           warnings: parsed.warnings,
@@ -600,15 +610,41 @@ export default function DemoUploadModal({
 
                 {parsed.sabremetrics && parsed.sabremetrics.length > 0 && (() => {
                   const allPlayers = [...shirtsPlayers, ...skinsPlayers];
+                  // headshot_kills/teamkills/opening_kills/opening_deaths/two_k_rounds/shots_fired/
+                  // shots_hit/headshot_hits aren't part of the parsed sabremetrics payload anymore
+                  // (all derived at query time once confirmed, #457) — derived here the same way
+                  // from this preview's own parsed.matchKills/weaponStats, using match_id 0 since
+                  // there's only one match in scope, so the preview shows the same numbers
+                  // confirming will persist.
+                  const killFlags: KillCreditFlags[] = (parsed.matchKills ?? []).map((k) => ({
+                    match_id: 0,
+                    round_number: k.round_number,
+                    tick: k.tick,
+                    attacker_player_id: k.attacker_player_id,
+                    victim_player_id: k.victim_player_id,
+                    headshot: k.headshot,
+                    is_teamkill: k.is_teamkill,
+                  }));
+                  const creditCounts = deriveKillCreditCounts(killFlags);
+                  const accuracyTotals = sumAccuracyTotals(
+                    (parsed.weaponStats ?? []).flatMap((w) =>
+                      w.weaponStats.map((ws) => ({ match_id: 0, player_id: w.player_id, ...ws })),
+                    ),
+                  );
                   const sabPlayers = parsed.sabremetrics!.map((s) => {
                     const mp = allPlayers.find((p) => p.player_id === s.player_id);
                     const stat = statMap.get(s.player_id);
+                    const key = `0:${s.player_id}`;
+                    const sabremetrics: SabFieldsWithDerived = {
+                      ...(s.sabremetrics as SabFields),
+                      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals),
+                    };
                     return {
                       player_id: s.player_id,
                       player_name: mp?.player_name ?? `#${s.player_id}`,
                       faction: mp?.faction ?? 'SHIRTS' as const,
                       rounds_played: stat?.rounds_played ?? 0,
-                      sabremetrics: s.sabremetrics as SabFields,
+                      sabremetrics,
                     };
                   });
                   return (

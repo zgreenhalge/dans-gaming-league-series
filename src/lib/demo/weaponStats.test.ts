@@ -63,8 +63,8 @@ async function main() {
   await test('persistWeaponStats: a reparse with a smaller bucket set drops the now-stale bucket (delete-then-insert)', async () => {
     const db = baseDb();
     db.player_match_weapon_stats = [
-      { player_match_stats_id: 1000, weapon_category: 'rifle', ...bucket() },
-      { player_match_stats_id: 1000, weapon_category: 'sniper', ...bucket() }, // no sniper shots this reparse
+      { match_id: MATCH_ID, player_match_stats_id: 1000, weapon_category: 'rifle', ...bucket() },
+      { match_id: MATCH_ID, player_match_stats_id: 1000, weapon_category: 'sniper', ...bucket() }, // no sniper shots this reparse
     ];
     __setTestAdminClient(createFakeSupabaseClient(db));
     const rows: DemoWeaponStat[] = [
@@ -75,6 +75,20 @@ async function main() {
     assert.equal(db.player_match_weapon_stats![0].weapon_category, 'rifle');
   });
 
+  await test('persistWeaponStats: every player unresolved leaves existing rows untouched (does not wipe them)', async () => {
+    const db = baseDb();
+    db.player_match_weapon_stats = [
+      { match_id: MATCH_ID, player_match_stats_id: 1000, weapon_category: 'rifle', ...bucket({ shots_fired: 10 }) },
+    ];
+    __setTestAdminClient(createFakeSupabaseClient(db));
+    const rows: DemoWeaponStat[] = [
+      { player_id: 999, weaponStats: [{ weapon_category: 'rifle', ...bucket() }], economyStats: [] },
+    ];
+    await persistWeaponStats(MATCH_ID, rows);
+    assert.equal(db.player_match_weapon_stats!.length, 1);
+    assert.equal(db.player_match_weapon_stats![0].player_match_stats_id, 1000);
+  });
+
   await test('persistWeaponStats: an empty input is a no-op', async () => {
     const db = baseDb();
     __setTestAdminClient(createFakeSupabaseClient(db));
@@ -83,12 +97,15 @@ async function main() {
   });
 
   await test('clearWeaponStats: deletes weapon + economy rows for this match, leaving other matches untouched', async () => {
+    const OTHER_MATCH_ID = 200;
     const db = baseDb();
     db.player_match_weapon_stats = [
-      { player_match_stats_id: 1000, weapon_category: 'rifle', ...bucket() },
-      { player_match_stats_id: 2000, weapon_category: 'rifle', ...bucket() }, // different match
+      { match_id: MATCH_ID, player_match_stats_id: 1000, weapon_category: 'rifle', ...bucket() },
+      { match_id: OTHER_MATCH_ID, player_match_stats_id: 2000, weapon_category: 'rifle', ...bucket() },
     ];
-    db.player_match_economy_stats = [{ player_match_stats_id: 1000, economy_type: 'full_buy', ...bucket() }];
+    db.player_match_economy_stats = [
+      { match_id: MATCH_ID, player_match_stats_id: 1000, economy_type: 'full_buy', ...bucket() },
+    ];
     __setTestAdminClient(createFakeSupabaseClient(db));
     await clearWeaponStats(MATCH_ID);
     assert.deepEqual(db.player_match_weapon_stats!.map((r) => r.player_match_stats_id), [2000]);

@@ -114,8 +114,9 @@ export function collectAccumulators(
       partial[UNSPLIT_FIELDS[prop]] = val;
     }
 
+    // headshot_kills itself isn't stored anymore (derived from match_kills at query time, #457) —
+    // hsTotal is kept only as the reference value for the split-sum sanity check below.
     const hsTotal = (row[`${NS}.m_iHeadShotKills`] as number) ?? 0;
-    partial.headshot_kills = hsTotal;
 
     // Sanity check: splits must sum to total
     const killsTotal = (row[`${NS}.m_iKills`] as number) ?? 0;

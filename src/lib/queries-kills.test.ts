@@ -14,11 +14,17 @@ import {
   favoriteWeapon,
   allWeaponsWithKills,
   resolveWeaponStat,
+  deriveHeadshotAndTeamkillCounts,
+  deriveOpeningDuelCounts,
+  deriveTwoKRoundCounts,
   type MatchKillRow,
 } from './queries/kills';
 import { test, report } from './test-support/miniTest';
 
 function kill(opts: {
+  match?: number;
+  round?: number;
+  tick?: number;
   attacker: number | null;
   victim: number;
   weapon: string;
@@ -30,9 +36,9 @@ function kill(opts: {
   isTeamkill?: boolean;
 }): MatchKillRow {
   return {
-    match_id: 1,
+    match_id: opts.match ?? 1,
     season_id: 1,
-    round_number: 1,
+    round_number: opts.round ?? 1,
     attacker_player_id: opts.attacker,
     attacker_name: opts.attacker != null ? `p${opts.attacker}` : null,
     victim_player_id: opts.victim,
@@ -45,6 +51,7 @@ function kill(opts: {
     blind_kill: opts.blindKill ?? false,
     midair: opts.midair ?? false,
     is_teamkill: opts.isTeamkill ?? false,
+    tick: opts.tick ?? 100,
   };
 }
 
@@ -162,6 +169,136 @@ test('aggregateFlairKillStats: totals noscope/wallbang/blind/midair across every
   ];
   const flair = aggregateFlairKillStats(kills, 1);
   assert.deepEqual(flair, { noscopeKills: 2, wallbangKills: 1, blindKills: 1, midairKills: 1, knifeKills: 2 });
+});
+
+test('deriveHeadshotAndTeamkillCounts: counts headshot kills, keyed by match and attacker', () => {
+  const kills = [
+    kill({ attacker: 1, victim: 2, weapon: 'ak47', headshot: true }),
+    kill({ attacker: 1, victim: 3, weapon: 'ak47', headshot: true }),
+    kill({ attacker: 1, victim: 4, weapon: 'ak47' }), // not a headshot
+    kill({ attacker: 2, victim: 1, weapon: 'deagle', headshot: true }),
+  ];
+  const counts = deriveHeadshotAndTeamkillCounts(kills);
+  assert.deepEqual(counts.get('1:1'), { headshot_kills: 2, teamkills: 0 });
+  assert.deepEqual(counts.get('1:2'), { headshot_kills: 1, teamkills: 0 });
+});
+
+test('deriveHeadshotAndTeamkillCounts: a teamkill counts toward teamkills, never headshot_kills, even when headshot', () => {
+  const kills = [
+    kill({ attacker: 1, victim: 2, weapon: 'ak47', headshot: true, isTeamkill: true }),
+  ];
+  const counts = deriveHeadshotAndTeamkillCounts(kills);
+  assert.deepEqual(counts.get('1:1'), { headshot_kills: 0, teamkills: 1 });
+});
+
+test('deriveHeadshotAndTeamkillCounts: a self-kill credits neither', () => {
+  const kills = [kill({ attacker: 1, victim: 1, weapon: 'world', headshot: true })];
+  const counts = deriveHeadshotAndTeamkillCounts(kills);
+  assert.equal(counts.has('1:1'), false);
+});
+
+test('deriveHeadshotAndTeamkillCounts: an unresolved attacker (world kill) is skipped, not thrown on', () => {
+  const kills = [kill({ attacker: null, victim: 1, weapon: 'world' })];
+  const counts = deriveHeadshotAndTeamkillCounts(kills);
+  assert.equal(counts.size, 0);
+});
+
+test('deriveHeadshotAndTeamkillCounts: the same attacker in different matches keys separately', () => {
+  const kills = [
+    kill({ match: 100, attacker: 1, victim: 2, weapon: 'ak47', headshot: true }),
+    kill({ match: 200, attacker: 1, victim: 2, weapon: 'ak47', headshot: true }),
+    kill({ match: 200, attacker: 1, victim: 3, weapon: 'ak47', headshot: true }),
+  ];
+  const counts = deriveHeadshotAndTeamkillCounts(kills);
+  assert.deepEqual(counts.get('100:1'), { headshot_kills: 1, teamkills: 0 });
+  assert.deepEqual(counts.get('200:1'), { headshot_kills: 2, teamkills: 0 });
+});
+
+test('deriveOpeningDuelCounts: the earliest death in a round credits the victim an opening death and the attacker an opening kill', () => {
+  const kills = [
+    kill({ round: 1, tick: 500, attacker: 1, victim: 2, weapon: 'ak47' }),
+    kill({ round: 1, tick: 100, attacker: 3, victim: 4, weapon: 'usp_silencer' }), // earliest
+  ];
+  const counts = deriveOpeningDuelCounts(kills);
+  assert.deepEqual(counts.get('1:4'), { opening_kills: 0, opening_deaths: 1 });
+  assert.deepEqual(counts.get('1:3'), { opening_kills: 1, opening_deaths: 0 });
+  assert.equal(counts.has('1:2'), false);
+  assert.equal(counts.has('1:1'), false);
+});
+
+test('deriveOpeningDuelCounts: a teamkill opener credits the opening death but not an opening kill', () => {
+  const kills = [kill({ round: 1, tick: 100, attacker: 1, victim: 2, weapon: 'ak47', isTeamkill: true })];
+  const counts = deriveOpeningDuelCounts(kills);
+  assert.deepEqual(counts.get('1:2'), { opening_kills: 0, opening_deaths: 1 });
+  assert.equal(counts.has('1:1'), false);
+});
+
+test('deriveOpeningDuelCounts: a world/unattributed opener credits only the opening death', () => {
+  const kills = [kill({ round: 1, tick: 100, attacker: null, victim: 2, weapon: 'world' })];
+  const counts = deriveOpeningDuelCounts(kills);
+  assert.deepEqual(counts.get('1:2'), { opening_kills: 0, opening_deaths: 1 });
+});
+
+test('deriveOpeningDuelCounts: a self-kill opener credits the opening death but not an opening kill', () => {
+  const kills = [kill({ round: 1, tick: 100, attacker: 1, victim: 1, weapon: 'world' })];
+  const counts = deriveOpeningDuelCounts(kills);
+  assert.deepEqual(counts.get('1:1'), { opening_kills: 0, opening_deaths: 1 });
+});
+
+test('deriveOpeningDuelCounts: each round is scored independently, and matches key separately', () => {
+  const kills = [
+    kill({ match: 100, round: 1, tick: 100, attacker: 1, victim: 2, weapon: 'ak47' }),
+    kill({ match: 100, round: 2, tick: 100, attacker: 2, victim: 1, weapon: 'ak47' }),
+    kill({ match: 200, round: 1, tick: 100, attacker: 1, victim: 2, weapon: 'ak47' }),
+  ];
+  const counts = deriveOpeningDuelCounts(kills);
+  assert.deepEqual(counts.get('100:1'), { opening_kills: 1, opening_deaths: 1 });
+  assert.deepEqual(counts.get('100:2'), { opening_kills: 1, opening_deaths: 1 });
+  assert.deepEqual(counts.get('200:1'), { opening_kills: 1, opening_deaths: 0 });
+});
+
+test('deriveTwoKRoundCounts: two non-teamkill kills by the same attacker in one round is a 2k round', () => {
+  const kills = [
+    kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47' }),
+    kill({ round: 1, attacker: 1, victim: 3, weapon: 'ak47' }),
+  ];
+  const counts = deriveTwoKRoundCounts(kills);
+  assert.equal(counts.get('1:1'), 1);
+});
+
+test('deriveTwoKRoundCounts: a single kill in a round is not a 2k round', () => {
+  const kills = [kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47' })];
+  const counts = deriveTwoKRoundCounts(kills);
+  assert.equal(counts.has('1:1'), false);
+});
+
+test('deriveTwoKRoundCounts: a teamkill does not count toward the 2k, even alongside a real kill', () => {
+  const kills = [
+    kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47' }),
+    kill({ round: 1, attacker: 1, victim: 3, weapon: 'ak47', isTeamkill: true }),
+  ];
+  const counts = deriveTwoKRoundCounts(kills);
+  assert.equal(counts.has('1:1'), false);
+});
+
+test('deriveTwoKRoundCounts: a self-kill does not count toward the 2k, even alongside a real kill', () => {
+  const kills = [
+    kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47' }),
+    kill({ round: 1, attacker: 1, victim: 1, weapon: 'world' }),
+  ];
+  const counts = deriveTwoKRoundCounts(kills);
+  assert.equal(counts.has('1:1'), false);
+});
+
+test('deriveTwoKRoundCounts: 2k rounds accumulate across multiple rounds', () => {
+  const kills = [
+    kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47' }),
+    kill({ round: 1, attacker: 1, victim: 3, weapon: 'ak47' }),
+    kill({ round: 2, attacker: 1, victim: 2, weapon: 'ak47' }),
+    kill({ round: 2, attacker: 1, victim: 3, weapon: 'ak47' }),
+  ];
+  const counts = deriveTwoKRoundCounts(kills);
+  assert.equal(counts.get('1:1'), 2);
 });
 
 report();

@@ -1,11 +1,11 @@
-import type { SabFields } from '@/lib/types';
+import type { SabFieldsWithDerived } from '@/lib/types';
 
 interface PlayerSabRow {
   player_id: number;
   player_name: string;
   faction: 'SHIRTS' | 'SKINS';
   rounds_played: number;
-  sabremetrics: SabFields;
+  sabremetrics: SabFieldsWithDerived;
 }
 
 export interface SabremetricsTableProps {

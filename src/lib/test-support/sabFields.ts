@@ -1,11 +1,14 @@
-import type { SabFields } from '../types';
+import type { SabFieldsWithDerived } from '../types';
 import type { SabremetricStatRow } from '../queries';
 
-/** A zeroed `SabFields`, overridable per test — the shared "override-style" fixture builder for
- *  every test suite that needs a sabremetrics row (`queries-sabremetrics.test.ts`,
+/** A zeroed `SabFieldsWithDerived`, overridable per test — the shared "override-style" fixture
+ *  builder for every test suite that needs a sabremetrics row (`queries-sabremetrics.test.ts`,
  *  `demo/sabremetrics.test.ts`, `test-support/fixtures.ts`'s own `sab()`), so the full field list
- *  lives in exactly one place. */
-export function zeroSabFields(overrides: Partial<SabFields> = {}): SabFields {
+ *  lives in exactly one place. `headshot_kills`/`teamkills` default to 0 here even though they're
+ *  no longer stored on `player_match_sabremetrics` — callers that need real values (query-layer
+ *  tests) override them directly; `fixtures.ts`'s `sab()` leaves them at 0 since the real source is
+ *  now `MATCH_KILLS`. */
+export function zeroSabFields(overrides: Partial<SabFieldsWithDerived> = {}): SabFieldsWithDerived {
   return {
     kills_ct: 0, kills_t: 0, deaths_ct: 0, deaths_t: 0, assists_ct: 0, assists_t: 0, damage_ct: 0, damage_t: 0,
     headshot_kills: 0, headshot_kills_ct: 0, headshot_kills_t: 0, opening_kills: 0, opening_deaths: 0,
