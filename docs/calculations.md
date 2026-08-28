@@ -314,6 +314,14 @@ attacker is a known roster player, the attacker isn't the victim, and it isn't a
 self-kills and teamkills, so the victim side of the breakdown always reflects what actually killed
 the player.
 
+Grouping is by `weaponGroupKey()` (`src/lib/parsers/weaponClasses.ts`), not the raw
+`match_kills.weapon` string directly — every knife/bayonet skin CS2 reports (`bayonet`,
+`knife_karambit`, `knife_m9_bayonet`, …) collapses to one `knife` bucket, so a player's knife kills
+show as a single combined row instead of splitting across cosmetic skin names. Every other weapon
+keeps its own key. Display text throughout the Weapons sub-tab (`weaponDisplayName()`) maps that key
+to the CS2 buy-menu name players expect (`AK-47`, `USP-S`, `Desert Eagle`, …) rather than the raw
+backend classname; an unrecognized key falls back to a title-cased version of itself.
+
 `No-scope Kills` is a sniper-rifle kill fired without the scope up (`noscope`); `Wallbang Kills` is a
 kill whose bullet penetrated a surface — wall, door, etc. — before landing (`wallbang`, derived from
 the demo's `penetrated` surface count); `Blind Kills` is a kill where the attacker was flashed at the
@@ -338,11 +346,20 @@ since every kill weapon needs a bucket but only guns count toward accuracy.
 
 **Favorite weapon** (`favoriteWeapon()`) is simply the weapon with the most credited kills in scope.
 
-The Weapons sub-tab shows one weapon's row per player at a time, picked by a favorite-or-specific
-filter (`resolveWeaponStat()`): the favorite (`weapon = null`) or one weapon applied to every row,
-chosen from `allWeaponsWithKills()` — every weapon with at least one credited kill in the current
-scope, sorted by total kills descending. A specific-weapon selection a player has no kills/deaths with
-still renders a zeroed row rather than being hidden, so the filter always shows every player.
+The Weapons sub-tab shows one filter selection's row per player at a time, picked by
+`resolveWeaponFilterStat()`: each player's own favorite (`filter = null`), one specific weapon
+(chosen from `allWeaponsWithKills()` — every weapon with at least one credited kill in the current
+scope, sorted by total kills descending, already grouped so knives appear once), or a whole category
+(one of `KILL_WEAPON_CATEGORIES`, encoded via `categoryFilterValue()`/decoded via
+`parseCategoryFilter()`) rolled up through `aggregateKillCategoryStats()`. A specific-weapon or
+category selection with no kills/deaths in scope still renders a zeroed row rather than being hidden,
+so the filter always shows every player.
+
+Selecting one of the five gun categories (`pistol`/`smg`/`rifle`/`sniper`/`shotgun` — the same set
+`WEAPON_CATEGORIES` names) also surfaces the Weapon-Class Breakdown's `Shots Fired`/`Accuracy`/`Head
+Accuracy`/`Damage per Round`/`Rounds Played` for that category alongside the kill counts
+(`aggregateWeaponClassStat()`, `src/lib/queries/weaponStats.ts`) — melee/utility/other categories have
+no such breakdown, since `player_match_weapon_stats` only buckets guns.
 
 ### Flair
 
