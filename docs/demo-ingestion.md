@@ -142,11 +142,10 @@ query time rather than baked into the persisted shape. This is a deliberate depa
   `resolvePlayerSide()` combines `match_rounds.shirts_side` for that round with the player's fixed
   match `faction` from `player_match_stats`.
 - `clutch_1v1`/`1v2`/`2v1_attempts`/`wins` are derived at query time too (`deriveClutchCounts()` in
-  `queries/kills.ts`) — a faithful port of the live per-round alive-count state machine
-  `parsers/clutch.ts` used to run during parsing, replayed instead against `match_kills` ordered by
-  `tick`: both sides' starting alive sets come from every roster player's resolved side that round
-  (`resolvePlayerSide()`), then each kill in the round updates the alive sets the same way, crediting
-  a clutch when a side drops to a lone survivor and a 2v1 advantage when a side keeps 2 alive against
+  `queries/kills.ts`) by replaying each round's `match_kills` in tick order against both sides'
+  starting alive sets: both sets start from every roster player's resolved side that round
+  (`resolvePlayerSide()`), then each kill in the round updates the alive sets, crediting a clutch
+  when a side drops to a lone survivor and a 2v1 advantage when a side keeps 2 alive against
   a lone enemy.
 
 ## Match start (skipping warmup and stray knife rounds)

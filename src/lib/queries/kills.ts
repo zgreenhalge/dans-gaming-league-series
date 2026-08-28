@@ -475,10 +475,9 @@ function bumpClutch(
 
 /**
  * Per (match, player) clutch attempt/win counts — the query-time replacement for
- * `clutch_1v1`/`1v2`/`2v1_attempts`/`wins` on `player_match_sabremetrics`, ported faithfully from
- * `parsers/clutch.ts`'s live per-round alive-count state machine rather than redesigned: for each
- * round, replay its kills in tick order against both sides' starting alive sets (every roster
- * player, resolved to CT/T via `resolvePlayerSide()`), crediting whoever's side drops to 1 facing
+ * `clutch_1v1`/`1v2`/`2v1_attempts`/`wins` on `player_match_sabremetrics`: for each round, replay
+ * its kills in tick order against both sides' starting alive sets (every roster player, resolved to
+ * CT/T via `resolvePlayerSide()`), crediting whoever's side drops to 1 facing
  * 1-2 enemies (1v1/1v2), and crediting a 2-alive side facing exactly 1 enemy a shared 2v1 advantage
  * (the choke-score numerator). A player who reaches a 1v2 and later narrows to a 1v1 (their
  * remaining teammate's death cut the enemy count further) gets credited both — the original 1v2
