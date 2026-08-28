@@ -18,23 +18,32 @@ export function hasNoSupabaseConfig(): boolean {
   );
 }
 
-let fakeClient: SupabaseClient<Database> | undefined;
+// Cached on `globalThis` (not a module-level variable) for the same reason
+// `supabase-singleton.ts` does it: this survives Next.js dev-server hot reloads, which re-evaluate
+// modules but not globalThis. Deliberately its own cache rather than a `getOrCreateSingleton()` key
+// — that function's Vitest guard exists to stop a *real* Supabase client from being built
+// unexpectedly under test, which doesn't apply here since this factory only ever builds the
+// harmless in-memory fixture client.
+type GlobalWithFakeClient = typeof globalThis & {
+  __dgls_dev_fallback_client?: SupabaseClient<Database>;
+};
 
 /**
  * The same in-memory fixture league the `queries.ts` regression harness runs against
  * (`test-support/fixtures.ts`), reused here so `npm run build`/`npm run dev` produce a real,
- * internally-consistent site with no live Supabase connection. Shared (not rebuilt) across
+ * internally-consistent site with no live Supabase connection. Shared — not rebuilt — across
  * `supabase.ts` and `supabase-admin.ts` so a write made through one is visible through the other,
  * same as both pointing at one real database.
  */
 export function getDevFallbackSupabaseClient(): SupabaseClient<Database> {
-  if (!fakeClient) {
+  const g = globalThis as GlobalWithFakeClient;
+  if (!g.__dgls_dev_fallback_client) {
     console.warn(
       '[dgls] No NEXT_PUBLIC_SUPABASE_URL/NEXT_PUBLIC_SUPABASE_ANON_KEY/SUPABASE_SERVICE_ROLE_KEY set — ' +
         'serving in-memory fixture data (src/lib/test-support/fixtures.ts) instead of a real database. ' +
         'Set those in .env.local for a real Supabase connection.',
     );
-    fakeClient = createFakeSupabaseClient(buildFakeDb()) as unknown as SupabaseClient<Database>;
+    g.__dgls_dev_fallback_client = createFakeSupabaseClient(buildFakeDb()) as unknown as SupabaseClient<Database>;
   }
-  return fakeClient;
+  return g.__dgls_dev_fallback_client;
 }

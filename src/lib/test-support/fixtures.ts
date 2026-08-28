@@ -1,7 +1,9 @@
 /**
  * Shared, internally-consistent fixture "league" for the queries.ts regression harness. One graph
  * spans all 16 tables/views so cross-function calls (`getPlayersById()` alone feeds ~17 other
- * exported functions) stay consistent without re-deriving IDs per test file.
+ * exported functions) stay consistent without re-deriving IDs per test file. Also the data
+ * `src/lib/dev-fallback-supabase.ts` serves for `npm run build`/`npm run dev` when no Supabase env
+ * vars are configured — this is real site content in that path, not just test input.
  *
  * Covers the edge cases queries.ts's own code/docs call out as load-bearing:
  * - a paired regular+gauntlet season (id 1 + 2, "Season 5" / "Season 5 Gauntlet") and an orphan

@@ -1,6 +1,8 @@
 /**
  * In-memory Supabase stand-in for testing `src/lib/queries.ts` and route-handler mutations without
- * a live database.
+ * a live database. Also backs `src/lib/dev-fallback-supabase.ts` (serving `npm run build`/`npm run
+ * dev` when no Supabase env vars are configured) — a behavior change here affects that path too,
+ * not just tests.
  *
  * Implements exactly the query-builder surface real call sites use (verified by grep):
  * `.select()`, `.eq()`, `.in()`, `.neq()`, `.gt()`, `.gte()`, `.lte()`, `.is()`, `.not()`, `.or()`,
