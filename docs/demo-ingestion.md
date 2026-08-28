@@ -157,10 +157,9 @@ pattern above: a new derived stat is a query change, not a new table.
   resolvable row is dropped entirely (unlike `match_kills`, where only the victim is required).
 - `flash_assists`/`teamflash_duration`/`enemies_flashed`/`flashes_leading_to_kill`/
   `effective_flashes`/`blind_duration_dealt`/`blind_duration_max_sum` are derived at query time from
-  `match_utility_throws` (`deriveUtilityCounts()` in `queries/utility.ts`), replacing what
-  `collectUtility()` (`utility.ts`) used to compute live from `player_blind`/`player_death` events —
-  same half-blind (1.1s) threshold, flash-assist window, and flashes-leading-to-kill window (see
-  [`calculations.md`](./calculations.md)), just resolved from the persisted fact table instead of the
+  `match_utility_throws` (`deriveUtilityCounts()` in `queries/utility.ts`) — same half-blind (1.1s)
+  threshold, flash-assist window, and flashes-leading-to-kill window as every other derived stat here
+  (see [`calculations.md`](./calculations.md)), resolved from the persisted fact table rather than the
   demo's raw event stream. Whether a flash hit a teammate or an enemy comes from each player's fixed
   match `faction` — no side/round lookup needed, since "same team" is a faction question, not a side
   question the way CT/T-split kill credit is. `flashes_thrown` stays live-collected in `utility.ts`,
