@@ -68,16 +68,14 @@ recorded score.
 | `matchContext.ts` | Per-round/per-death context shared by the collectors |
 | `roundSides.ts` | Which side (CT/T) each faction is on each round — see "Side splits" below |
 | `accumulators.ts` | Per-side K/A/D/damage/headshot deltas from round-end accumulator ticks |
-| `entry.ts` | Opening kills/deaths (`Entry+`) |
 | `kast.ts` | KAST rounds + trade tracking (`KAST+`) |
-| `multikill.ts` | Multikill rounds |
 | `teamkill.ts` | Teamkills committed |
 | `clutch.ts` | 1vN attempts/wins and 2v1 numbers-advantage attempts/wins (`Clutch+`, `Choke+`) |
 | `utility.ts` | Flash assists, utility damage, teamflash/self-flash (`Utility+`) |
 | `objectives.ts` | Bomb plants/defuses (`Objective+`) |
 | `trades.ts` | Trade-kill/traded-death opportunity/attempt/success counts, sharing `kast.ts`'s trade window (`Trade+`) |
 | `heGrenade.ts` | HE grenades thrown and enemy damage dealt (HE Damage/Throw) |
-| `accuracy.ts` | Raw accuracy / head accuracy (AWP-excluded) from `weapon_fire`/`player_hurt` |
+| `accuracy.ts` | AWP-excluded accuracy / head accuracy (`shots_hit_no_awp`/`headshot_hits_no_awp`) from `player_hurt` — raw (AWP-included) `shots_fired`/`shots_hit`/`headshot_hits` aren't collected here; they're derived at query time from `player_match_weapon_stats` (`deriveAccuracyTotals()` in `queries/weaponStats.ts`) |
 | `counterStrafe.ts` | Counter-strafe % from per-tick duck-state/position reads at rifle `weapon_fire` ticks |
 | `sprayAccuracy.ts` | Spray accuracy within sequences of 3+ consecutive rifle shots |
 | `smokes.ts` | CT-side smokes interfering with pushes, from `smokegrenade_detonate`/`_expired` + sampled enemy positions |
@@ -136,6 +134,11 @@ query time rather than baked into the persisted shape. This is a deliberate depa
   the same delete/insert pair.
 - Wired into the same two call sites as every other demo-derived stat: `matchScore.ts`'s
   `Promise.all` (score confirm) and `scripts/demo-ingest.ts`'s reparse fast path.
+- `headshot_kills`/`teamkills`/`opening_kills`/`opening_deaths`/`two_k_rounds` are derived entirely
+  from `match_kills` at query time (`deriveHeadshotAndTeamkillCounts()`/`deriveOpeningDuelCounts()`/
+  `deriveTwoKRoundCounts()` in `queries/kills.ts`) rather than collected during parsing — DGLS's
+  fixed 2v2 Wingman roster means the opening kill of a round is just its minimum-`tick` row, and a
+  2-kill round for one attacker is unambiguously a double-kill, with no roster/faction lookup needed.
 
 ## Match start (skipping warmup and stray knife rounds)
 
