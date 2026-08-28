@@ -3,6 +3,7 @@ import { resolveMatchSeasons, fetchAllPages, asPage } from './_shared';
 import { getPlayersById } from './player';
 import { killWeaponCategory, type KillWeaponCategory } from '../parsers/weaponClasses';
 import type { Player } from '../types';
+import type { AccuracyTotals } from './weaponStats';
 
 export interface MatchKillRow {
   match_id: number;
@@ -41,12 +42,21 @@ type RawKillRow = {
 
 type PmsRow = { id: number; player_id: number; match_id: number };
 
-function fetchPmsLookup(matchId?: number): Promise<Map<number, PmsRow>> {
-  return fetchAllPages<PmsRow>((from, to) => {
-    let q = supabase.from('player_match_stats').select('id, player_id, match_id');
-    if (matchId != null) q = q.eq('match_id', matchId);
-    return asPage(q.range(from, to));
-  }).then((rows) => new Map(rows.map((r) => [r.id, r])));
+/** Pass `rows` when the caller already fetched `player_match_stats` (e.g. `getAllSabremetrics()`'s
+ *  own `id, player_id, match_id, rounds_played` read, structurally compatible) to skip a redundant
+ *  full-table fetch. */
+function fetchPmsLookup(
+  matchId?: number,
+  rows?: PmsRow[] | Promise<PmsRow[]>,
+): Promise<Map<number, PmsRow>> {
+  const rowsPromise = rows
+    ? Promise.resolve(rows)
+    : fetchAllPages<PmsRow>((from, to) => {
+        let q = supabase.from('player_match_stats').select('id, player_id, match_id');
+        if (matchId != null) q = q.eq('match_id', matchId);
+        return asPage(q.range(from, to));
+      });
+  return rowsPromise.then((r) => new Map(r.map((x) => [x.id, x])));
 }
 
 /** Joins raw `match_kills` rows to player names and a per-match season, dropping any kill whose
@@ -116,14 +126,16 @@ export async function getMatchKills(
 /** Every recorded kill (`match_kills`), joined to player names and season. Flat, ungrouped —
  *  callers filter/aggregate from here (kills-by-weapon, killed-by-weapon, favorite weapon, ...),
  *  matching this codebase's fetch-then-aggregate-in-TS query pattern (see `weaponStats.ts`). Pass
- *  `playersById` when the caller already fetched it to skip a redundant full `players` table read. */
+ *  `playersById` when the caller already fetched it to skip a redundant full `players` table read;
+ *  likewise `pmsRows` for an already-fetched `player_match_stats` read. */
 export async function getAllMatchKills(
   seasonId?: number,
   playersById?: Map<number, Player> | Promise<Map<number, Player>>,
+  pmsRows?: PmsRow[] | Promise<PmsRow[]>,
 ): Promise<MatchKillRow[]> {
   const [killRows, pmsLookup, matchSeason, resolvedPlayersById] = await Promise.all([
     fetchAllPages<RawKillRow>((from, to) => supabase.from('match_kills').select('*').range(from, to)),
-    fetchPmsLookup(),
+    fetchPmsLookup(undefined, pmsRows),
     resolveMatchSeasons(),
     playersById ? Promise.resolve(playersById) : getPlayersById(),
   ]);
@@ -134,6 +146,39 @@ export async function getAllMatchKills(
     if (seasonId != null && sid !== seasonId) return null;
     return sid;
   });
+}
+
+/** Every recorded kill (`match_kills`), resolved to `player_id`s only — no season filter, no name
+ *  join. The `deriveKillCreditCounts()` family (headshot/opening-duel/two-K credit) reads nothing
+ *  but `KillCreditFlags`'s fields, so callers deriving those (`getAllSabremetrics()`) don't need
+ *  `getAllMatchKills()`'s heavier season resolution (a `matches`/`weeks` read) or per-kill name
+ *  lookup. Pass `pmsRows` when the caller already fetched `player_match_stats` to skip a redundant
+ *  full-table fetch. */
+export async function getAllKillCreditFlags(
+  pmsRows?: PmsRow[] | Promise<PmsRow[]>,
+): Promise<KillCreditFlags[]> {
+  const [killRows, pmsLookup] = await Promise.all([
+    fetchAllPages<RawKillRow>((from, to) => supabase.from('match_kills').select('*').range(from, to)),
+    fetchPmsLookup(undefined, pmsRows),
+  ]);
+
+  const out: KillCreditFlags[] = [];
+  for (const k of killRows) {
+    const victimPms = pmsLookup.get(k.victim_player_match_stats_id);
+    if (!victimPms) continue;
+    const attackerPms =
+      k.attacker_player_match_stats_id != null ? pmsLookup.get(k.attacker_player_match_stats_id) : undefined;
+    out.push({
+      match_id: k.match_id,
+      round_number: k.round_number,
+      tick: k.tick,
+      attacker_player_id: attackerPms?.player_id ?? null,
+      victim_player_id: victimPms.player_id,
+      headshot: k.headshot,
+      is_teamkill: k.is_teamkill,
+    });
+  }
+  return out;
 }
 
 export interface WeaponKillStat {
@@ -300,7 +345,11 @@ export function deriveOpeningDuelCounts(kills: KillCreditFlags[]): Map<string, O
   for (const roundKills of byRound.values()) {
     const first = roundKills.reduce((a, b) => (a.tick <= b.tick ? a : b));
     bump(first.match_id, first.victim_player_id, 'opening_deaths');
-    if (first.attacker_player_id != null && !first.is_teamkill) {
+    if (
+      first.attacker_player_id != null
+      && first.attacker_player_id !== first.victim_player_id
+      && !first.is_teamkill
+    ) {
       bump(first.match_id, first.attacker_player_id, 'opening_kills');
     }
   }
@@ -316,21 +365,83 @@ export function deriveOpeningDuelCounts(kills: KillCreditFlags[]): Map<string, O
  * without needing to resolve who those enemies are from roster/faction data.
  */
 export function deriveTwoKRoundCounts(kills: KillCreditFlags[]): Map<string, number> {
-  const perRound = new Map<string, number>();
+  const byRound = new Map<string, KillCreditFlags[]>();
   for (const k of kills) {
-    if (k.attacker_player_id == null || k.is_teamkill) continue;
-    const key = `${k.match_id}:${k.round_number}:${k.attacker_player_id}`;
-    perRound.set(key, (perRound.get(key) ?? 0) + 1);
+    if (k.attacker_player_id == null || k.is_teamkill || k.attacker_player_id === k.victim_player_id) continue;
+    const key = `${k.match_id}:${k.round_number}`;
+    const group = byRound.get(key);
+    if (group) group.push(k);
+    else byRound.set(key, [k]);
   }
 
   const out = new Map<string, number>();
-  for (const [key, count] of perRound) {
-    if (count !== 2) continue;
-    const [matchId, , attacker] = key.split(':');
-    const outKey = `${matchId}:${attacker}`;
-    out.set(outKey, (out.get(outKey) ?? 0) + 1);
+  for (const roundKills of byRound.values()) {
+    const perAttacker = new Map<number, number>();
+    for (const k of roundKills) {
+      const attackerId = k.attacker_player_id!;
+      perAttacker.set(attackerId, (perAttacker.get(attackerId) ?? 0) + 1);
+    }
+    for (const [attackerId, count] of perAttacker) {
+      if (count !== 2) continue;
+      const key = `${roundKills[0].match_id}:${attackerId}`;
+      out.set(key, (out.get(key) ?? 0) + 1);
+    }
   }
   return out;
+}
+
+export interface KillCreditCounts {
+  hsTk: Map<string, HeadshotTeamkillCounts>;
+  openingDuels: Map<string, OpeningDuelCounts>;
+  twoKRounds: Map<string, number>;
+}
+
+/** Runs all three `match_kills`-derived counters over one shared `kills` array — every caller that
+ *  needs `headshot_kills`/`teamkills`/`opening_kills`/`opening_deaths`/`two_k_rounds` (the match/
+ *  season/career sabremetric queries, plus the demo-upload preview and `inspect-demo.ts`, which
+ *  derive from their own pre-persistence `matchKills`) needs the same three maps together. */
+export function deriveKillCreditCounts(kills: KillCreditFlags[]): KillCreditCounts {
+  return {
+    hsTk: deriveHeadshotAndTeamkillCounts(kills),
+    openingDuels: deriveOpeningDuelCounts(kills),
+    twoKRounds: deriveTwoKRoundCounts(kills),
+  };
+}
+
+export interface DerivedSabFields {
+  headshot_kills: number;
+  teamkills: number;
+  opening_kills: number;
+  opening_deaths: number;
+  two_k_rounds: number;
+  shots_fired: number;
+  shots_hit: number;
+  headshot_hits: number;
+}
+
+/** Looks up one `` `${match_id}:${player_id}` `` key across `deriveKillCreditCounts()`'s three maps
+ *  plus a `deriveAccuracyTotals()`-shaped accuracy map, defaulting every field to 0 when a player has
+ *  no credited rows in a given map (never played a round, never fired a gun, etc.) — the shared merge
+ *  every `SabFieldsWithDerived` builder (`getAllSabremetrics()`, `getMatchSabremetrics()`, the
+ *  demo-upload preview) applies identically over the stored `player_match_sabremetrics` row. */
+export function lookupDerivedSabFields(
+  key: string,
+  counts: KillCreditCounts,
+  accuracy: Map<string, AccuracyTotals>,
+): DerivedSabFields {
+  const hsTkCounts = counts.hsTk.get(key);
+  const opening = counts.openingDuels.get(key);
+  const acc = accuracy.get(key);
+  return {
+    headshot_kills: hsTkCounts?.headshot_kills ?? 0,
+    teamkills: hsTkCounts?.teamkills ?? 0,
+    opening_kills: opening?.opening_kills ?? 0,
+    opening_deaths: opening?.opening_deaths ?? 0,
+    two_k_rounds: counts.twoKRounds.get(key) ?? 0,
+    shots_fired: acc?.shots_fired ?? 0,
+    shots_hit: acc?.shots_hit ?? 0,
+    headshot_hits: acc?.headshot_hits ?? 0,
+  };
 }
 
 /** Resolves which of a player's `WeaponKillStat[]` a "favorite vs specific weapon" filter should

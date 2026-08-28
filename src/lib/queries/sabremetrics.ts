@@ -2,9 +2,7 @@ import { supabase } from '../supabase';
 import type { SabFieldsWithDerived, PlayerMatchSabremetrics } from '../types';
 import { getPlayersById } from './player';
 import { resolveMatchSeasons, fetchAllPages, asPage } from './_shared';
-import {
-  getAllMatchKills, deriveHeadshotAndTeamkillCounts, deriveOpeningDuelCounts, deriveTwoKRoundCounts,
-} from './kills';
+import { getAllKillCreditFlags, deriveKillCreditCounts, lookupDerivedSabFields } from './kills';
 import { deriveAccuracyTotals } from './weaponStats';
 
 
@@ -27,9 +25,15 @@ export interface SabremetricMatchRow {
  *  data `match_kills`/`player_match_weapon_stats` already carry, so those are now the source of
  *  truth for them (#457). */
 export async function getAllSabremetrics(seasonId?: number): Promise<SabremetricMatchRow[]> {
-  // Shared as one promise (not two `getPlayersById()` calls) so getAllMatchKills()'s own internal
-  // name resolution doesn't duplicate the `players` table fetch below already needs.
+  // pmsRows shared as one promise (not fetched again per consumer) so deriveAccuracyTotals()'s and
+  // getAllKillCreditFlags()'s own internal `player_match_stats` reads don't duplicate the fetch
+  // below already needs. getAllKillCreditFlags() (unlike getAllMatchKills()) needs no season
+  // resolution or player-name join — deriveKillCreditCounts() reads nothing else — so it doesn't
+  // need playersByIdPromise either.
   const playersByIdPromise = getPlayersById();
+  const pmsRowsPromise = fetchAllPages<{ id: number; player_id: number; match_id: number; rounds_played: number }>(
+    (from, to) => asPage(supabase.from('player_match_stats').select('id, player_id, match_id, rounds_played').range(from, to)),
+  );
 
   const [
     sabRows,
@@ -43,14 +47,12 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     fetchAllPages<PlayerMatchSabremetrics>((from, to) =>
       supabase.from('player_match_sabremetrics').select('*').range(from, to),
     ),
-    fetchAllPages<{ id: number; player_id: number; match_id: number; rounds_played: number }>((from, to) =>
-      asPage(supabase.from('player_match_stats').select('id, player_id, match_id, rounds_played').range(from, to)),
-    ),
+    pmsRowsPromise,
     supabase.from('seasons').select('id, is_gauntlet'),
     resolveMatchSeasons(),
     playersByIdPromise,
-    getAllMatchKills(undefined, playersByIdPromise),
-    deriveAccuracyTotals(),
+    getAllKillCreditFlags(pmsRowsPromise),
+    deriveAccuracyTotals(undefined, pmsRowsPromise),
   ]);
   if (seasonErr) throw seasonErr;
 
@@ -61,9 +63,7 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
   const pmsLookup = new Map<number, { player_id: number; match_id: number; rounds_played: number }>();
   for (const r of pmsRows) pmsLookup.set(r.id, r);
 
-  const hsTk = deriveHeadshotAndTeamkillCounts(kills);
-  const openingDuels = deriveOpeningDuelCounts(kills);
-  const twoKRounds = deriveTwoKRoundCounts(kills);
+  const creditCounts = deriveKillCreditCounts(kills);
 
   const result: SabremetricMatchRow[] = [];
   for (const raw of sabRows) {
@@ -76,20 +76,7 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { player_match_stats_id: _, ...rest } = raw;
     const key = `${pms.match_id}:${pms.player_id}`;
-    const hsTkCounts = hsTk.get(key);
-    const opening = openingDuels.get(key);
-    const accuracy = accuracyTotals.get(key);
-    const sab: SabFieldsWithDerived = {
-      ...rest,
-      headshot_kills: hsTkCounts?.headshot_kills ?? 0,
-      teamkills: hsTkCounts?.teamkills ?? 0,
-      opening_kills: opening?.opening_kills ?? 0,
-      opening_deaths: opening?.opening_deaths ?? 0,
-      two_k_rounds: twoKRounds.get(key) ?? 0,
-      shots_fired: accuracy?.shots_fired ?? 0,
-      shots_hit: accuracy?.shots_hit ?? 0,
-      headshot_hits: accuracy?.headshot_hits ?? 0,
-    };
+    const sab: SabFieldsWithDerived = { ...rest, ...lookupDerivedSabFields(key, creditCounts, accuracyTotals) };
     result.push({
       player_id: pms.player_id,
       player_name: player?.name ?? `#${pms.player_id}`,

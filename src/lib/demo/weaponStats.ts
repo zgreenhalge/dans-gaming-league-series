@@ -28,12 +28,18 @@ export async function persistWeaponStats(
 
   const weaponRows: WeaponRow[] = [];
   const economyRows: EconomyRow[] = [];
+  let resolvedAny = false;
   for (const s of weaponStats) {
     const pmsId = pmsById.get(s.player_id);
     if (!pmsId) continue;
+    resolvedAny = true;
     for (const w of s.weaponStats) weaponRows.push({ match_id: matchId, player_match_stats_id: pmsId, ...w });
     for (const e of s.economyStats) economyRows.push({ match_id: matchId, player_match_stats_id: pmsId, ...e });
   }
+  // No player resolved to a player_match_stats row for this match (e.g. resolution hasn't landed
+  // yet) — bail rather than replaceMatchRows()-ing both tables down to empty with nothing to
+  // restore them from.
+  if (!resolvedAny) return;
 
   await Promise.all([
     replaceMatchRows('player_match_weapon_stats', matchId, weaponRows),

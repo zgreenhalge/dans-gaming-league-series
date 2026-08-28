@@ -10,8 +10,7 @@ import type {
   DemoMatchUtilityThrow, DemoMatchRoundEconomy,
 } from '@/lib/types';
 import {
-  deriveHeadshotAndTeamkillCounts, deriveOpeningDuelCounts, deriveTwoKRoundCounts,
-  type KillCreditFlags,
+  deriveKillCreditCounts, lookupDerivedSabFields, sumAccuracyTotals, type KillCreditFlags,
 } from '@/lib/queries';
 type Faction = 'CT' | 'T' | null;
 
@@ -626,32 +625,19 @@ export default function DemoUploadModal({
                     headshot: k.headshot,
                     is_teamkill: k.is_teamkill,
                   }));
-                  const hsTk = deriveHeadshotAndTeamkillCounts(killFlags);
-                  const openingDuels = deriveOpeningDuelCounts(killFlags);
-                  const twoKRounds = deriveTwoKRoundCounts(killFlags);
+                  const creditCounts = deriveKillCreditCounts(killFlags);
+                  const accuracyTotals = sumAccuracyTotals(
+                    (parsed.weaponStats ?? []).flatMap((w) =>
+                      w.weaponStats.map((ws) => ({ match_id: 0, player_id: w.player_id, ...ws })),
+                    ),
+                  );
                   const sabPlayers = parsed.sabremetrics!.map((s) => {
                     const mp = allPlayers.find((p) => p.player_id === s.player_id);
                     const stat = statMap.get(s.player_id);
                     const key = `0:${s.player_id}`;
-                    const counts = hsTk.get(key);
-                    const opening = openingDuels.get(key);
-                    const weaponStats = parsed.weaponStats?.find((w) => w.player_id === s.player_id);
-                    const accuracy = (weaponStats?.weaponStats ?? []).reduce(
-                      (acc, w) => ({
-                        shots_fired: acc.shots_fired + w.shots_fired,
-                        shots_hit: acc.shots_hit + w.shots_hit,
-                        headshot_hits: acc.headshot_hits + w.headshot_hits,
-                      }),
-                      { shots_fired: 0, shots_hit: 0, headshot_hits: 0 },
-                    );
                     const sabremetrics: SabFieldsWithDerived = {
                       ...(s.sabremetrics as SabFields),
-                      headshot_kills: counts?.headshot_kills ?? 0,
-                      teamkills: counts?.teamkills ?? 0,
-                      opening_kills: opening?.opening_kills ?? 0,
-                      opening_deaths: opening?.opening_deaths ?? 0,
-                      two_k_rounds: twoKRounds.get(key) ?? 0,
-                      ...accuracy,
+                      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals),
                     };
                     return {
                       player_id: s.player_id,

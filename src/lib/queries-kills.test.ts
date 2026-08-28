@@ -239,6 +239,12 @@ test('deriveOpeningDuelCounts: a world/unattributed opener credits only the open
   assert.deepEqual(counts.get('1:2'), { opening_kills: 0, opening_deaths: 1 });
 });
 
+test('deriveOpeningDuelCounts: a self-kill opener credits the opening death but not an opening kill', () => {
+  const kills = [kill({ round: 1, tick: 100, attacker: 1, victim: 1, weapon: 'world' })];
+  const counts = deriveOpeningDuelCounts(kills);
+  assert.deepEqual(counts.get('1:1'), { opening_kills: 0, opening_deaths: 1 });
+});
+
 test('deriveOpeningDuelCounts: each round is scored independently, and matches key separately', () => {
   const kills = [
     kill({ match: 100, round: 1, tick: 100, attacker: 1, victim: 2, weapon: 'ak47' }),
@@ -270,6 +276,15 @@ test('deriveTwoKRoundCounts: a teamkill does not count toward the 2k, even along
   const kills = [
     kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47' }),
     kill({ round: 1, attacker: 1, victim: 3, weapon: 'ak47', isTeamkill: true }),
+  ];
+  const counts = deriveTwoKRoundCounts(kills);
+  assert.equal(counts.has('1:1'), false);
+});
+
+test('deriveTwoKRoundCounts: a self-kill does not count toward the 2k, even alongside a real kill', () => {
+  const kills = [
+    kill({ round: 1, attacker: 1, victim: 2, weapon: 'ak47' }),
+    kill({ round: 1, attacker: 1, victim: 1, weapon: 'world' }),
   ];
   const counts = deriveTwoKRoundCounts(kills);
   assert.equal(counts.has('1:1'), false);

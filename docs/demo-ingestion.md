@@ -69,7 +69,6 @@ recorded score.
 | `roundSides.ts` | Which side (CT/T) each faction is on each round — see "Side splits" below |
 | `accumulators.ts` | Per-side K/A/D/damage/headshot deltas from round-end accumulator ticks |
 | `kast.ts` | KAST rounds + trade tracking (`KAST+`) |
-| `teamkill.ts` | Teamkills committed |
 | `clutch.ts` | 1vN attempts/wins and 2v1 numbers-advantage attempts/wins (`Clutch+`, `Choke+`) |
 | `utility.ts` | Flash assists, utility damage, teamflash/self-flash (`Utility+`) |
 | `objectives.ts` | Bomb plants/defuses (`Objective+`) |

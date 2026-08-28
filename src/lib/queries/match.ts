@@ -7,9 +7,7 @@ import type { ScheduledMatchRef } from '../server-schedule-collision';
 import { getPlayersById } from './player';
 import { asPage, fetchAllPages, getWeekLookup } from './_shared';
 import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '../demo/liveScore';
-import {
-  getMatchKills, deriveHeadshotAndTeamkillCounts, deriveOpeningDuelCounts, deriveTwoKRoundCounts,
-} from './kills';
+import { getMatchKills, deriveKillCreditCounts, lookupDerivedSabFields } from './kills';
 import { deriveAccuracyTotals } from './weaponStats';
 
 
@@ -330,26 +328,14 @@ export async function getMatchSabremetrics(matchId: number): Promise<MatchSabrem
   const pmsLookup = new Map(
     (pmsRows as { id: number; player_id: number; faction: string }[]).map((r) => [r.id, r]),
   );
-  const hsTk = deriveHeadshotAndTeamkillCounts(kills);
-  const openingDuels = deriveOpeningDuelCounts(kills);
-  const twoKRounds = deriveTwoKRoundCounts(kills);
+  const creditCounts = deriveKillCreditCounts(kills);
 
   return (sabRows as PlayerMatchSabremetrics[]).map((sab) => {
     const pms = pmsLookup.get(sab.player_match_stats_id)!;
     const key = `${matchId}:${pms.player_id}`;
-    const counts = hsTk.get(key);
-    const opening = openingDuels.get(key);
-    const accuracy = accuracyTotals.get(key);
     return {
       ...sab,
-      headshot_kills: counts?.headshot_kills ?? 0,
-      teamkills: counts?.teamkills ?? 0,
-      opening_kills: opening?.opening_kills ?? 0,
-      opening_deaths: opening?.opening_deaths ?? 0,
-      two_k_rounds: twoKRounds.get(key) ?? 0,
-      shots_fired: accuracy?.shots_fired ?? 0,
-      shots_hit: accuracy?.shots_hit ?? 0,
-      headshot_hits: accuracy?.headshot_hits ?? 0,
+      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals),
       player_id: pms.player_id,
       player_name: players.get(pms.player_id)?.name ?? `#${pms.player_id}`,
       faction: pms.faction as Faction,

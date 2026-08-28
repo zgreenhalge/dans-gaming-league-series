@@ -32,10 +32,7 @@
 import { readFileSync } from 'node:fs';
 import { parseDemoFile, type RosterEntry, type DemoPlayerStat } from '../src/lib/demoParser';
 import { parseDemoSabremetrics } from '../src/lib/demoOrchestrator';
-import {
-  deriveHeadshotAndTeamkillCounts, deriveOpeningDuelCounts, deriveTwoKRoundCounts,
-  type KillCreditFlags,
-} from '../src/lib/queries';
+import { deriveKillCreditCounts, type KillCreditFlags } from '../src/lib/queries';
 import { getReplayInputs } from '../src/lib/replay/inputs';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { demoKey } from '../src/lib/r2';
@@ -189,9 +186,7 @@ async function main() {
     headshot: k.headshot,
     is_teamkill: k.is_teamkill,
   }));
-  const hsTk = deriveHeadshotAndTeamkillCounts(killFlags);
-  const openingDuels = deriveOpeningDuelCounts(killFlags);
-  const twoKRounds = deriveTwoKRoundCounts(killFlags);
+  const { hsTk, openingDuels, twoKRounds } = deriveKillCreditCounts(killFlags);
   console.log('\nSabremetrics (compact — use --json for all fields):');
   for (const s of sabre.sabremetrics) {
     const name = nameOf.get(s.player_id) ?? `#${s.player_id}`;

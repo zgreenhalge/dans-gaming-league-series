@@ -93,6 +93,29 @@ export interface AccuracyTotals {
   headshot_hits: number;
 }
 
+/** Sums already-joined `(match_id, player_id)` accuracy rows into per-`` `${match_id}:${player_id}` ``
+ *  totals — the pure accumulation step behind `deriveAccuracyTotals()`, factored out so a
+ *  pre-persistence caller (the demo-upload preview, working from in-memory `DemoWeaponStat[]` before
+ *  any `player_match_weapon_stats` row exists) can reuse the same summing rule instead of
+ *  reimplementing it. */
+export function sumAccuracyTotals(
+  rows: { match_id: number; player_id: number; shots_fired: number; shots_hit: number; headshot_hits: number }[],
+): Map<string, AccuracyTotals> {
+  const out = new Map<string, AccuracyTotals>();
+  for (const r of rows) {
+    const key = `${r.match_id}:${r.player_id}`;
+    let c = out.get(key);
+    if (!c) {
+      c = { shots_fired: 0, shots_hit: 0, headshot_hits: 0 };
+      out.set(key, c);
+    }
+    c.shots_fired += r.shots_fired;
+    c.shots_hit += r.shots_hit;
+    c.headshot_hits += r.headshot_hits;
+  }
+  return out;
+}
+
 /**
  * Per (match, player) `shots_fired`/`shots_hit`/`headshot_hits` totals, summed from
  * `player_match_weapon_stats` — the query-time replacement for the same-named flat columns
@@ -105,10 +128,16 @@ export interface AccuracyTotals {
  * `WEAPON_CATEGORY` at all, so it counts non-gun weapons `collectAccuracy()` excludes.) Keyed by
  * `` `${match_id}:${player_id}` ``. Pass `matchId` to scope both queries to one match — the
  * match-page caller (`getMatchSabremetrics()`) doesn't need a full-table fetch just to look up one
- * match's totals, the same way `getMatchKills(matchId)` scopes its own `match_kills` read.
+ * match's totals, the same way `getMatchKills(matchId)` scopes its own `match_kills` read. Pass
+ * `pmsRows` when the caller already fetched `player_match_stats` (e.g. `getAllSabremetrics()`'s own
+ * `id, player_id, match_id, rounds_played` read, structurally compatible) to skip a redundant
+ * full-table fetch.
  */
-export async function deriveAccuracyTotals(matchId?: number): Promise<Map<string, AccuracyTotals>> {
-  const [rows, pmsRows] = await Promise.all([
+export async function deriveAccuracyTotals(
+  matchId?: number,
+  pmsRows?: { id: number; player_id: number; match_id: number }[] | Promise<{ id: number; player_id: number; match_id: number }[]>,
+): Promise<Map<string, AccuracyTotals>> {
+  const [rows, resolvedPmsRows] = await Promise.all([
     fetchAllPages<{ player_match_stats_id: number; shots_fired: number; shots_hit: number; headshot_hits: number }>(
       (from, to) => {
         let q = supabase.from('player_match_weapon_stats')
@@ -117,7 +146,7 @@ export async function deriveAccuracyTotals(matchId?: number): Promise<Map<string
         return asPage(q.range(from, to));
       },
     ),
-    fetchAllPages<{ id: number; player_id: number; match_id: number }>((from, to) => {
+    pmsRows ?? fetchAllPages<{ id: number; player_id: number; match_id: number }>((from, to) => {
       let q = supabase.from('player_match_stats').select('id, player_id, match_id');
       if (matchId != null) q = q.eq('match_id', matchId);
       return asPage(q.range(from, to));
@@ -125,21 +154,16 @@ export async function deriveAccuracyTotals(matchId?: number): Promise<Map<string
   ]);
 
   const pmsLookup = new Map<number, { player_id: number; match_id: number }>();
-  for (const r of pmsRows) pmsLookup.set(r.id, r);
+  for (const r of resolvedPmsRows) pmsLookup.set(r.id, r);
 
-  const out = new Map<string, AccuracyTotals>();
+  const joined: { match_id: number; player_id: number; shots_fired: number; shots_hit: number; headshot_hits: number }[] = [];
   for (const r of rows) {
     const pms = pmsLookup.get(r.player_match_stats_id);
     if (!pms) continue;
-    const key = `${pms.match_id}:${pms.player_id}`;
-    let c = out.get(key);
-    if (!c) {
-      c = { shots_fired: 0, shots_hit: 0, headshot_hits: 0 };
-      out.set(key, c);
-    }
-    c.shots_fired += r.shots_fired;
-    c.shots_hit += r.shots_hit;
-    c.headshot_hits += r.headshot_hits;
+    joined.push({
+      match_id: pms.match_id, player_id: pms.player_id,
+      shots_fired: r.shots_fired, shots_hit: r.shots_hit, headshot_hits: r.headshot_hits,
+    });
   }
-  return out;
+  return sumAccuracyTotals(joined);
 }
