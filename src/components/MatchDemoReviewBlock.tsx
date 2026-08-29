@@ -90,7 +90,23 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
         <div className="text-sm text-red-300">
           {data.resultError ?? 'Demo parsing failed — enter the result manually.'}
         </div>
-        <DismissLink onClick={dismiss} busy={busy} />
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            onClick={retry}
+            disabled={busy}
+            className="rounded-md border border-[var(--color-border-primary)] px-3 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)] disabled:opacity-50"
+          >
+            {busy ? 'Starting…' : 'Re-parse demo'}
+          </button>
+          <button
+            onClick={dismiss}
+            disabled={busy}
+            className="text-xs text-[var(--color-text-secondary)] underline hover:text-[var(--color-text-primary)] disabled:opacity-50"
+          >
+            Dismiss
+          </button>
+        </div>
+        {error && <div className="mt-2 text-xs text-red-300">{error}</div>}
       </Card>
     );
   }
