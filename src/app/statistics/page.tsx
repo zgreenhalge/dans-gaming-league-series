@@ -28,8 +28,8 @@ export const metadata = {
 };
 
 export default async function StatisticsPage() {
-  // Shared with getAllMatchKills()/getAllWeaponClassStats() below (same in-flight promise, not a
-  // second fetch).
+  // Shared with getAllMatchKills()/getAllWeaponClassStats()/getAllEconomyStats() below (same
+  // in-flight promise, not a second fetch).
   const playersByIdPromise = getPlayersById();
   const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, playersById, allMatches, ehogSnapshots, allSabremetrics, allMatchRounds, allMatchKills, allWeaponClassStats, allEconomyStats] =
     await Promise.all([
@@ -45,7 +45,7 @@ export default async function StatisticsPage() {
       getAllMatchRounds(),
       getAllMatchKills(undefined, playersByIdPromise),
       getAllWeaponClassStats(undefined, playersByIdPromise),
-      getAllEconomyStats(),
+      getAllEconomyStats(undefined, playersByIdPromise),
     ]);
 
   // H2H is computed client-side (see CareerStatsView) so its tab can honor the

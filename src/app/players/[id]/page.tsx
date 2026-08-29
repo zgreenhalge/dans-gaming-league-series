@@ -55,9 +55,10 @@ export default async function PlayerPage({
   const { discord: discordFeedback } = await searchParams;
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
-  // Shared with getAllMatchKills()/getAllWeaponClassStats() below (same in-flight promise, not a
-  // second fetch) — it resolves player names for match_kills' attacker/victim/assister and the
-  // Weapons sub-tab's rows without a redundant full `players` table read.
+  // Shared with getAllMatchKills()/getAllWeaponClassStats()/getAllEconomyStats() below (same
+  // in-flight promise, not a second fetch) — it resolves player names for match_kills'
+  // attacker/victim/assister and the Weapons/Economy sub-tabs' rows without a redundant full
+  // `players` table read.
   const playersByIdPromise = getPlayersById();
   const [session, detail, careerLeaderboard, playersById, ehog, leagueSabremetrics, nameHistory, playerMeta, matchRounds, matchKills, matchWeaponClassStats, economyStats] = await Promise.all([
     getServerSession(authOptions),
@@ -73,7 +74,7 @@ export default async function PlayerPage({
     getAllMatchRounds(),
     getAllMatchKills(undefined, playersByIdPromise),
     getAllWeaponClassStats(undefined, playersByIdPromise),
-    getAllEconomyStats(),
+    getAllEconomyStats(undefined, playersByIdPromise),
   ]);
   const isSelf = session?.user?.playerId === playerId;
   if (!detail) notFound();

@@ -15,7 +15,7 @@ import { buildFakeDb } from './test-support/fixtures';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getAllWeaponClassStats, getAllEconomyStats, getMatchWeaponClassStats, groupWeaponAccuracyByPlayer, aggregateEconomyStats, resolveEconomyStat, type EconomyMatchRow } from './queries';
+import { getAllWeaponClassStats, getAllEconomyStats, getMatchWeaponClassStats, groupWeaponAccuracyByPlayer, aggregateEconomyStats, resolveEconomyStat, getPlayersById, type EconomyMatchRow } from './queries';
 import { test, report } from './test-support/miniTest';
 
 function economyRow(overrides: Partial<EconomyMatchRow> & Pick<EconomyMatchRow, 'player_id' | 'match_id' | 'economy_type'>): EconomyMatchRow {
@@ -45,6 +45,15 @@ async function main() {
     const legacyRow = rows.find((r) => r.player_id === 2 && r.weapon == null);
     assert.equal(legacyRow?.weapon_category, 'shotgun');
     assert.equal(legacyRow?.shots_fired, 8);
+  });
+
+  await test('getAllEconomyStats: honors a pre-fetched playersById instead of fetching its own', async () => {
+    const playersById = await getPlayersById();
+    const overridden = new Map(playersById);
+    overridden.set(1, { ...overridden.get(1)!, name: 'Overridden Name' });
+    const rows = await getAllEconomyStats(undefined, overridden);
+    const alice = rows.find((r) => r.player_id === 1);
+    assert.equal(alice?.player_name, 'Overridden Name');
   });
 
   await test('getAllWeaponClassStats: seasonId filters out rows from other seasons', async () => {

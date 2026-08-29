@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import type { PlayerMatchWeaponStat, PlayerMatchEconomyStat, WeaponStatFields, Player } from '../types';
 import { getPlayersById } from './player';
-import { resolveMatchSeasons, fetchAllPages, fetchPmsLookup, asPage } from './_shared';
+import { resolveMatchSeasons, fetchAllPages, fetchPmsLookup, asPage, type PmsRow } from './_shared';
 import { WEAPON_CATEGORY, type WeaponCategory } from '../parsers/weaponClasses';
 
 export interface WeaponClassMatchRow extends WeaponStatFields {
@@ -39,27 +39,24 @@ interface JoinedFields {
  *  season-scoping, differing only in which table is read and how its bucket column(s) get shaped
  *  into the caller's own row type (weapon-class derives a category from `weapon`; economy has a
  *  single stored `economy_type` bucket already). `seasonId` filters to a single season the same way
- *  `getAllSabremetrics()` does. Pass `playersById` when the caller already fetched it (e.g.
- *  alongside `getAllMatchKills()`) to skip a redundant full `players` table read. */
+ *  `getAllSabremetrics()` does. Pass `playersById`/`pmsRows` when the caller already fetched them
+ *  (e.g. alongside `getAllMatchKills()`) to skip a redundant full `players`/`player_match_stats`
+ *  table read — same convention `getAllMatchKills()` uses, via the same `fetchPmsLookup()` helper. */
 async function getAllJoinedStats<Raw extends { player_match_stats_id: number }>(
   table: 'player_match_weapon_stats' | 'player_match_economy_stats',
   seasonId: number | undefined,
   playersById: Map<number, Player> | Promise<Map<number, Player>> | undefined,
+  pmsRows?: PmsRow[] | Promise<PmsRow[]>,
 ): Promise<(JoinedFields & { raw: Raw })[]> {
-  const [rows, pmsRows, matchSeason, resolvedPlayersById] = await Promise.all([
+  const [rows, pmsLookup, matchSeason, resolvedPlayersById] = await Promise.all([
     // `asPage()` erases the union `table` string can't otherwise resolve `Raw` against (same
     // reasoning `replaceMatchRows()` in `demo/factTables.ts` gives for its own untyped view) —
     // callers stay fully typed since `Raw` is always a fixed type argument, not inferred here.
     fetchAllPages<Raw>((from, to) => asPage(supabase.from(table).select('*').range(from, to))),
-    fetchAllPages<{ id: number; player_id: number; match_id: number }>((from, to) =>
-      asPage(supabase.from('player_match_stats').select('id, player_id, match_id').range(from, to)),
-    ),
+    fetchPmsLookup(undefined, pmsRows),
     resolveMatchSeasons(),
     playersById ? Promise.resolve(playersById) : getPlayersById(),
   ]);
-
-  const pmsLookup = new Map<number, { player_id: number; match_id: number }>();
-  for (const r of pmsRows) pmsLookup.set(r.id, r);
 
   const result: (JoinedFields & { raw: Raw })[] = [];
   for (const raw of rows) {
@@ -90,13 +87,15 @@ function resolveWeaponAndCategory(raw: PlayerMatchWeaponStat): { weapon: string 
 }
 
 /** Per-weapon shot/accuracy/damage/rounds breakdown (#279, #474), one row per (player, match,
- *  weapon). Pass `playersById` when the caller already fetched it (e.g. shared with an adjacent
- *  `getAllMatchKills()` call) to skip a redundant full `players` table read. */
+ *  weapon). Pass `playersById`/`pmsRows` when the caller already fetched them (e.g. shared with an
+ *  adjacent `getAllMatchKills()` call) to skip a redundant full `players`/`player_match_stats`
+ *  table read. */
 export async function getAllWeaponClassStats(
   seasonId?: number,
   playersById?: Map<number, Player> | Promise<Map<number, Player>>,
+  pmsRows?: PmsRow[] | Promise<PmsRow[]>,
 ): Promise<WeaponClassMatchRow[]> {
-  const rows = await getAllJoinedStats<PlayerMatchWeaponStat>('player_match_weapon_stats', seasonId, playersById);
+  const rows = await getAllJoinedStats<PlayerMatchWeaponStat>('player_match_weapon_stats', seasonId, playersById, pmsRows);
   return rows.map(({ raw, ...join }) => ({
     ...join,
     ...resolveWeaponAndCategory(raw),
@@ -109,9 +108,15 @@ export async function getAllWeaponClassStats(
 }
 
 /** Per-round-economy shot/accuracy/damage/rounds breakdown (#279), one row per (player, match,
- *  economy_type). */
-export async function getAllEconomyStats(seasonId?: number): Promise<EconomyMatchRow[]> {
-  const rows = await getAllJoinedStats<PlayerMatchEconomyStat>('player_match_economy_stats', seasonId, undefined);
+ *  economy_type). Pass `playersById`/`pmsRows` when the caller already fetched them (e.g. shared
+ *  with an adjacent `getAllMatchKills()` call) to skip a redundant full `players`/`player_match_stats`
+ *  table read. */
+export async function getAllEconomyStats(
+  seasonId?: number,
+  playersById?: Map<number, Player> | Promise<Map<number, Player>>,
+  pmsRows?: PmsRow[] | Promise<PmsRow[]>,
+): Promise<EconomyMatchRow[]> {
+  const rows = await getAllJoinedStats<PlayerMatchEconomyStat>('player_match_economy_stats', seasonId, playersById, pmsRows);
   return rows.map(({ raw, ...join }) => ({
     ...join,
     economy_type: raw.economy_type,
