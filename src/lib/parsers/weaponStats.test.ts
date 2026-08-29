@@ -1,6 +1,6 @@
 /**
- * Unit tests for collectWeaponClassStats and collectEconomyStats — per-weapon-category and
- * per-round-economy shot/accuracy/damage/rounds breakdowns (#279).
+ * Unit tests for collectWeaponClassStats and collectEconomyStats — per-weapon (#279, #474) and
+ * per-round-economy shot/accuracy/damage/rounds breakdowns.
  *
  * Run:  npx vitest run src/lib/parsers/weaponStats.test.ts
  */
@@ -26,24 +26,35 @@ function bucket(rows: WeaponBreakdownRow[], name: string): WeaponBreakdownRow | 
   return rows.find((r) => r.bucket === name);
 }
 
-test('collectWeaponClassStats: rifle shots/hits/headshots/damage bucket under "rifle"', () => {
+test('collectWeaponClassStats: rifle shots/hits/headshots/damage bucket under the exact weapon ("ak47")', () => {
   const fires = [fire({ round: 1, tick: 100, user: 'a', weapon: 'weapon_ak47' })];
   const hurts = [hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 40, hitgroup: 'head' })];
   const ctx = makeContext({ rounds, sides });
   const out = collectWeaponClassStats(fires, hurts, ctx, ids);
-  const rifle = bucket(out.get('a')!, 'rifle');
-  assert.equal(rifle?.shots_fired, 1);
-  assert.equal(rifle?.shots_hit, 1);
-  assert.equal(rifle?.headshot_hits, 1);
-  assert.equal(rifle?.damage_dealt, 40);
-  assert.equal(rifle?.rounds_played, 1);
+  const ak47 = bucket(out.get('a')!, 'ak47');
+  assert.equal(ak47?.shots_fired, 1);
+  assert.equal(ak47?.shots_hit, 1);
+  assert.equal(ak47?.headshot_hits, 1);
+  assert.equal(ak47?.damage_dealt, 40);
+  assert.equal(ak47?.rounds_played, 1);
 });
 
-test('collectWeaponClassStats: a knife/grenade weapon is not categorized', () => {
+test('collectWeaponClassStats: a knife/grenade weapon is not bucketed at all', () => {
   const fires = [fire({ round: 1, tick: 100, user: 'a', weapon: 'weapon_knife_push' })];
   const ctx = makeContext({ rounds, sides });
   const out = collectWeaponClassStats(fires, [], ctx, ids);
   assert.equal(out.get('a')!.length, 0);
+});
+
+test('collectWeaponClassStats: two different weapons in the same category stay in separate buckets', () => {
+  const fires = [
+    fire({ round: 1, tick: 100, user: 'a', weapon: 'weapon_ak47' }),
+    fire({ round: 1, tick: 110, user: 'a', weapon: 'weapon_m4a1' }),
+  ];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectWeaponClassStats(fires, [], ctx, ids);
+  assert.equal(bucket(out.get('a')!, 'ak47')?.shots_fired, 1);
+  assert.equal(bucket(out.get('a')!, 'm4a1')?.shots_fired, 1);
 });
 
 test('collectWeaponClassStats: rounds_played counts distinct rounds fired, not shots', () => {
@@ -54,9 +65,9 @@ test('collectWeaponClassStats: rounds_played counts distinct rounds fired, not s
   ];
   const ctx = makeContext({ rounds, sides });
   const out = collectWeaponClassStats(fires, [], ctx, ids);
-  const pistol = bucket(out.get('a')!, 'pistol');
-  assert.equal(pistol?.shots_fired, 3);
-  assert.equal(pistol?.rounds_played, 2);
+  const glock = bucket(out.get('a')!, 'glock');
+  assert.equal(glock?.shots_fired, 3);
+  assert.equal(glock?.rounds_played, 2);
 });
 
 test('collectWeaponClassStats: teamdamage is excluded from shots_hit/damage', () => {
@@ -64,9 +75,9 @@ test('collectWeaponClassStats: teamdamage is excluded from shots_hit/damage', ()
   const hurts = [hurt({ round: 1, tick: 105, victim: 'b', attacker: 'a', weapon: 'ak47', dmgHealth: 40 })];
   const ctx = makeContext({ rounds, sides });
   const out = collectWeaponClassStats(fires, hurts, ctx, ids);
-  const rifle = bucket(out.get('a')!, 'rifle');
-  assert.equal(rifle?.shots_hit ?? 0, 0);
-  assert.equal(rifle?.damage_dealt ?? 0, 0);
+  const ak47 = bucket(out.get('a')!, 'ak47');
+  assert.equal(ak47?.shots_hit ?? 0, 0);
+  assert.equal(ak47?.damage_dealt ?? 0, 0);
 });
 
 test('collectEconomyStats: rounds_played is seeded from classification, even with zero shots', () => {

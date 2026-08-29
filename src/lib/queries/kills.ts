@@ -1,9 +1,13 @@
 import { supabase } from '../supabase';
 import { resolveMatchSeasons, fetchAllPages, fetchPmsLookup, bumpCounter, type PmsRow } from './_shared';
 import { getPlayersById } from './player';
-import { killWeaponCategory, type KillWeaponCategory } from '../parsers/weaponClasses';
+import {
+  killWeaponCategory, weaponGroupKey, weaponDisplayName, isGunWeapon, KILL_WEAPON_CATEGORY_LABEL,
+  WEAPON_CATEGORIES, type KillWeaponCategory, type WeaponCategory,
+} from '../parsers/weaponClasses';
 import type { Player, Faction } from '../types';
-import type { AccuracyTotals } from './weaponStats';
+import type { AccuracyTotals, PlayerWeaponAccuracy, WeaponClassAggregateStat } from './weaponStats';
+import { ZERO_WEAPON_CLASS_STAT } from './weaponStats';
 import { resolveSide } from '../parsers/roundSides';
 import type { RoundSideInfo } from './rounds';
 import { ZERO_UTILITY, type UtilityCounts } from './utility';
@@ -183,7 +187,8 @@ export interface WeaponKillStat {
 /** A `WeaponKillStat` with every count at zero — the shape a weapon starts at before any kill/death
  *  is tallied into it (`aggregateWeaponKillStats()`), and the same shape `resolveWeaponStat()`
  *  falls back to for a weapon with no kills/deaths in scope, so both call sites build one from the
- *  same place instead of duplicating the field list. */
+ *  same place instead of duplicating the field list. `weapon` is expected already grouped via
+ *  `weaponGroupKey()` — this doesn't re-group it. */
 function zeroWeaponStat(weapon: string): WeaponKillStat {
   return {
     weapon,
@@ -198,18 +203,21 @@ function zeroWeaponStat(weapon: string): WeaponKillStat {
   };
 }
 
-/** Kills-with / headshot-kills-with / deaths-to, bucketed by individual weapon, for one player
- *  over whatever `kills` scope the caller already filtered (a season, a match, career). Self-kills
+/** Kills-with / headshot-kills-with / deaths-to, bucketed by weapon, for one player over whatever
+ *  `kills` scope the caller already filtered (a season, a match, career). Bucketed by
+ *  `weaponGroupKey()`, not the raw `match_kills.weapon` string, so every knife/bayonet skin variant
+ *  merges into one `knife` row rather than splitting across cosmetic skin names (#474). Self-kills
  *  and teamkills don't count toward `kills`/`headshotKills`/`noscopeKills`/`wallbangKills`/
  *  `blindKills`/`midairKills` (they're not a credited kill) but do still count as a death for the
  *  victim side. */
 export function aggregateWeaponKillStats(kills: MatchKillRow[], playerId: number): WeaponKillStat[] {
   const buckets = new Map<string, WeaponKillStat>();
   const getBucket = (weapon: string): WeaponKillStat => {
-    let b = buckets.get(weapon);
+    const key = weaponGroupKey(weapon);
+    let b = buckets.get(key);
     if (!b) {
-      b = zeroWeaponStat(weapon);
-      buckets.set(weapon, b);
+      b = zeroWeaponStat(key);
+      buckets.set(key, b);
     }
     return b;
   };
@@ -239,14 +247,16 @@ export function favoriteWeapon(stats: WeaponKillStat[]): WeaponKillStat | null {
   return stats.reduce<WeaponKillStat | null>((best, s) => (!best || s.kills > best.kills ? s : best), null);
 }
 
-/** Every distinct weapon with at least one credited kill (excludes self-kills/teamkills) across
+/** Every distinct weapon (grouped via `weaponGroupKey()`, so knife/bayonet skins collapse to one
+ *  `knife` entry — #474) with at least one credited kill (excludes self-kills/teamkills) across
  *  `kills`, sorted by total kill count descending — the option list for a "pick a specific weapon"
  *  filter (e.g. the Weapons sub-tab's weapon selector). */
 export function allWeaponsWithKills(kills: MatchKillRow[]): string[] {
   const counts = new Map<string, number>();
   for (const k of kills) {
     if (k.attacker_player_id == null || k.attacker_player_id === k.victim_player_id || k.is_teamkill) continue;
-    counts.set(k.weapon, (counts.get(k.weapon) ?? 0) + 1);
+    const key = weaponGroupKey(k.weapon);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([w]) => w);
 }
@@ -702,12 +712,108 @@ export function lookupDerivedSabFields(
 
 /** Resolves which of a player's `WeaponKillStat[]` a "favorite vs specific weapon" filter should
  *  show: `weapon === null` picks their favorite (`favoriteWeapon()`); a specific weapon name looks
- *  it up, falling back to a zeroed stat (rather than `null`) when the player has no kills/deaths
- *  with it — so a specific-weapon selection always renders a row for every player, per the
- *  Weapons sub-tab's filter contract. */
-export function resolveWeaponStat(stats: WeaponKillStat[], weapon: string | null): WeaponKillStat | null {
+ *  it up (grouped via `weaponGroupKey()`, so a raw skin name still finds its `knife` bucket),
+ *  falling back to a zeroed stat (rather than `null`) when the player has no kills/deaths with it —
+ *  so a specific-weapon selection always renders a row for every player, per the Weapons sub-tab's
+ *  filter contract. Not exported — `resolveWeaponFilterStat()` is the only caller (its `favorite`/
+ *  `weapon` branches delegate here; its `category` branch bypasses it entirely), and every UI
+ *  consumer goes through that wider three-mode resolver instead. */
+function resolveWeaponStat(stats: WeaponKillStat[], weapon: string | null): WeaponKillStat | null {
   if (weapon == null) return favoriteWeapon(stats);
-  return stats.find((s) => s.weapon === weapon) ?? zeroWeaponStat(weapon);
+  const key = weaponGroupKey(weapon);
+  return stats.find((s) => s.weapon === key) ?? zeroWeaponStat(key);
+}
+
+/** The Weapons sub-tab's filter selection, as a real discriminated union rather than an encoded
+ *  string (#474) — `favorite` picks each player's own favorite weapon; `weapon` scopes to one
+ *  specific weapon (grouped via `weaponGroupKey()`); `category` scopes to every weapon in a whole
+ *  `KillWeaponCategory`, rolled up via `aggregateKillCategoryStats()`. `WeaponFilterSelect`
+ *  (`SabremetricsLeaderboardView.tsx`) is the only place that needs a string form of this, to
+ *  satisfy the HTML `<select>` API — it encodes/decodes locally rather than a string encoding
+ *  leaking out to every other consumer of the selection. */
+export type WeaponFilter =
+  | { kind: 'favorite' }
+  | { kind: 'weapon'; weapon: string }
+  | { kind: 'category'; category: KillWeaponCategory };
+
+export const FAVORITE_WEAPON_FILTER: WeaponFilter = { kind: 'favorite' };
+
+/** One filter-resolved row's worth of kill stats plus the display label to show for it — the
+ *  common shape `resolveWeaponFilterStat()` returns whether the Weapons sub-tab filter picked a
+ *  favorite, one weapon, or a whole category (#474), so the table/tile renderers need only one
+ *  resolve call and one set of fields regardless of which mode is active. */
+export interface WeaponFilterStat {
+  label: string;
+  /** The specific weapon these stats are for, or `null` when scoped to a whole category (or there's
+   *  no favorite to show) — lets the UI render a weapon icon only when there's one specific weapon
+   *  to show it for. */
+  weapon: string | null;
+  kills: number;
+  headshotKills: number;
+  noscopeKills: number;
+  wallbangKills: number;
+  blindKills: number;
+  midairKills: number;
+  deaths: number;
+  /** Shot/accuracy/damage/rounds breakdown for this selection (#474) — `null` when the selection
+   *  has no such concept at all (a melee/utility/other weapon or category; CS2 tracks no
+   *  shots-fired for a knife swing or grenade throw), which is a different thing from a real *zero*
+   *  (a gun the player simply didn't fire in scope, which resolves to a zeroed `WeaponClassAggregateStat`
+   *  instead of `null`). */
+  accuracy: WeaponClassAggregateStat | null;
+}
+
+/** Builds a `WeaponFilterStat` from a resolved count source (a `WeaponKillStat` or
+ *  `WeaponCategoryKillStat`, both share the same six count fields) — the one place
+ *  `resolveWeaponFilterStat()`'s weapon and category branches both build their result, instead of
+ *  each restating the same six `?? 0` defaults. */
+function toFilterStat(
+  label: string,
+  weapon: string | null,
+  stat: { kills: number; headshotKills: number; noscopeKills: number; wallbangKills: number; blindKills: number; midairKills: number; deaths: number } | undefined,
+  accuracy: WeaponClassAggregateStat | null,
+): WeaponFilterStat {
+  return {
+    label,
+    weapon,
+    kills: stat?.kills ?? 0,
+    headshotKills: stat?.headshotKills ?? 0,
+    noscopeKills: stat?.noscopeKills ?? 0,
+    wallbangKills: stat?.wallbangKills ?? 0,
+    blindKills: stat?.blindKills ?? 0,
+    midairKills: stat?.midairKills ?? 0,
+    deaths: stat?.deaths ?? 0,
+    accuracy,
+  };
+}
+
+/** Resolves a player's `WeaponKillStat[]` against the Weapons sub-tab's three-mode `WeaponFilter`
+ *  (#474), also resolving that same selection's accuracy from `accuracy` (this player's
+ *  `PlayerWeaponAccuracy`, from `groupWeaponAccuracyByPlayer()` — `queries/weaponStats.ts`) when
+ *  omitted, every gun weapon/category still resolves a real zeroed accuracy stat rather than `null`
+ *  (an absent `accuracy` map just means "no rows fetched yet", not "no such stat exists"). A
+ *  category or weapon with no kills/deaths in scope still resolves a zeroed kill row (matching
+ *  `resolveWeaponStat()`'s own no-kills fallback) rather than `null`, so a selection always renders
+ *  a row for every player. */
+export function resolveWeaponFilterStat(
+  stats: WeaponKillStat[],
+  filter: WeaponFilter,
+  accuracy?: PlayerWeaponAccuracy,
+): WeaponFilterStat {
+  if (filter.kind === 'category') {
+    const catStat = aggregateKillCategoryStats(stats).find((c) => c.category === filter.category);
+    const isGunCategory = (WEAPON_CATEGORIES as string[]).includes(filter.category);
+    const acc = isGunCategory
+      ? (accuracy?.byCategory.get(filter.category as WeaponCategory) ?? ZERO_WEAPON_CLASS_STAT)
+      : null;
+    return toFilterStat(KILL_WEAPON_CATEGORY_LABEL[filter.category], null, catStat, acc);
+  }
+  const resolved = resolveWeaponStat(stats, filter.kind === 'weapon' ? filter.weapon : null);
+  const weapon = resolved?.weapon ?? null;
+  const acc = weapon != null && isGunWeapon(weapon)
+    ? (accuracy?.byWeapon.get(weapon) ?? ZERO_WEAPON_CLASS_STAT)
+    : null;
+  return toFilterStat(resolved ? weaponDisplayName(resolved.weapon) : '—', weapon, resolved ?? undefined, acc);
 }
 
 export interface WeaponCategoryKillStat {

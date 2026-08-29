@@ -9,13 +9,25 @@ import {
   aggregateWeaponKillStats,
   aggregateFlairKillStats,
   allWeaponsWithKills,
-  resolveWeaponStat,
+  resolveWeaponFilterStat,
+  groupWeaponAccuracyByPlayer,
+  ZERO_WEAPON_CLASS_STAT,
+  FAVORITE_WEAPON_FILTER,
   type AggregatedSab,
   type SabremetricStatRow,
   type MatchKillRow,
   type WeaponKillStat,
+  type WeaponFilter,
+  type WeaponFilterStat,
+  type WeaponClassMatchRow,
+  type WeaponClassAggregateStat,
+  type PlayerWeaponAccuracy,
   type FlairKillStat,
 } from '@/lib/queries';
+import {
+  weaponDisplayName, killWeaponCategory, KILL_WEAPON_CATEGORIES, KILL_WEAPON_CATEGORY_LABEL,
+  type KillWeaponCategory,
+} from '@/lib/parsers/weaponClasses';
 import { tabCls } from '@/lib/util';
 import EmptyState from './EmptyState';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
@@ -303,99 +315,168 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
   );
 }
 
-// --- Weapon Stats (#452) ---
+// --- Weapon Stats (#452, #474) ---
 //
 // Unlike every table above, per-player weapon breakdown isn't part of `AggregatedSab`/`SabFields`
-// — it's derived from raw `match_kills` rows (`aggregateWeaponKillStats()`/`resolveWeaponStat()`,
+// — it's derived from raw `match_kills` rows (`aggregateWeaponKillStats()`/`resolveWeaponFilterStat()`,
 // `src/lib/queries/kills.ts`) instead. `kills` may be empty (no demo reparsed since #452 added
 // this table) — the row/tile values just come back honestly zeroed rather than hiding the tab.
 //
-// The table shows one weapon's stats per player at a time, picked by `selectedWeapon` — either
-// each player's own favorite (`null`) or one weapon applied to every row — rather than each
-// player's favorite label next to a *different* weapon's (all-weapons-combined) totals, which
-// read as mismatched (e.g. "Favorite: AK-47 (20)" next to a 52-kill total across every weapon).
+// The table shows one filter selection's stats per player at a time, picked by `selectedFilter` —
+// each player's own favorite weapon (`null`), one weapon applied to every row, or a whole category
+// (guns/melee/utility/other) rolled up across every weapon in it — rather than each player's
+// favorite label next to a *different* weapon's (all-weapons-combined) totals, which read as
+// mismatched (e.g. "Favorite: AK-47 (20)" next to a 52-kill total across every weapon). Every row
+// also carries `player_match_weapon_stats`' accuracy/shots/damage/rounds breakdown for that same
+// selection (`WeaponFilterStat.accuracy`, resolved by `resolveWeaponFilterStat()` itself — kills.ts)
+// — `null` only when the selection has no such concept at all (melee/utility/other), not merely
+// because the count is zero, so the two ideas never get confused in the UI.
+
+// `<select>` only ever accepts a string value, so the `WeaponFilter` union is encoded/decoded to
+// one right here at the DOM boundary — every other consumer of a `WeaponFilter` (kills.ts,
+// WeaponsTable, buildWeaponTiles) works with the real union, never a string.
+const FAVORITE_OPTION_VALUE = 'favorite';
+const CATEGORY_OPTION_PREFIX = 'category:';
+
+function filterToOptionValue(filter: WeaponFilter): string {
+  if (filter.kind === 'favorite') return FAVORITE_OPTION_VALUE;
+  if (filter.kind === 'category') return `${CATEGORY_OPTION_PREFIX}${filter.category}`;
+  return filter.weapon;
+}
+
+function optionValueToFilter(value: string): WeaponFilter {
+  if (value === FAVORITE_OPTION_VALUE) return FAVORITE_WEAPON_FILTER;
+  if (value.startsWith(CATEGORY_OPTION_PREFIX)) {
+    return { kind: 'category', category: value.slice(CATEGORY_OPTION_PREFIX.length) as KillWeaponCategory };
+  }
+  return { kind: 'weapon', weapon: value };
+}
 
 /** The weapon-picker shared by the multi-player table and the single-player tile view — one
  *  control per Weapons sub-tab render, not per team-group table, so a match page with two teams
- *  shows one dropdown that both tables honor. */
+ *  shows one dropdown that both tables honor. Lists whole categories (#474's "options for the
+ *  categories" ask) ahead of individual weapons, both with their display names rather than raw
+ *  backend classnames — `allWeaponsWithKills()` already groups every knife/bayonet skin into one
+ *  `knife` option. */
+// The filter dropdown never gives `melee` its own <optgroup> — every knife/bayonet skin already
+// collapses to the single `knife` key (`weaponGroupKey()`), so a "Knives" group would only ever
+// contain one weapon, making "All Knives" and "Knife" identical selections sitting right on top of
+// each other. Its one weapon is folded into "Other" for display instead (below). This is purely a
+// dropdown-grouping choice — the underlying `melee` category itself is untouched, and still backs
+// `aggregateKillCategoryStats()`/the Flair tab's Knife stat exactly as before.
+const DROPDOWN_CATEGORIES = KILL_WEAPON_CATEGORIES.filter((c) => c !== 'melee');
+
+// `other` (world/fall-damage and bomb-detonation deaths) never has a real player attacker — see
+// `killWeaponCategory()` — so "All Other" would always resolve zero Kills, which reads as broken
+// rather than correct: a Deaths-only stat forced through a Kills-shaped filter. Hidden as a
+// selectable category for now (#498 tracks a dedicated uncredited-deaths display instead);
+// `other`'s one folded-in weapon (`Knife` — see above) still shows if the player has any.
+const HIDDEN_CATEGORY_FILTERS = new Set<KillWeaponCategory>(['other']);
+
 function WeaponFilterSelect({ kills, value, onChange }: {
-  kills: MatchKillRow[]; value: string | null; onChange: (weapon: string | null) => void;
+  kills: MatchKillRow[]; value: WeaponFilter; onChange: (filter: WeaponFilter) => void;
 }) {
-  const options = useMemo(() => allWeaponsWithKills(kills), [kills]);
+  // One <optgroup> per category (its display name as the bold, unselectable group label), with an
+  // "All <category>" <option> right under it standing in for "the title is selectable" — a native
+  // <select> can't make an <optgroup> label itself clickable, and repeating the label verbatim as
+  // that first option read as a duplicate rather than a selection, so it's worded to read as its
+  // own option instead. Every category gets a group regardless of whether any of its weapons have
+  // a kill in scope yet, matching the category filter's existing all-or-nothing availability; only
+  // the individual-weapon rows underneath are scoped to `allWeaponsWithKills()`.
+  const weaponsByCategory = useMemo(() => {
+    const map = new Map<KillWeaponCategory, string[]>();
+    for (const w of allWeaponsWithKills(kills)) {
+      const category = killWeaponCategory(w);
+      // See DROPDOWN_CATEGORIES above — melee's one weapon displays under "Other" instead of its
+      // own group.
+      const displayCategory = category === 'melee' ? 'other' : category;
+      let list = map.get(displayCategory);
+      if (!list) {
+        list = [];
+        map.set(displayCategory, list);
+      }
+      list.push(w);
+    }
+    return map;
+  }, [kills]);
+
   return (
     <div className="flex items-center gap-2">
       <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)]">Weapon</span>
       <select
-        value={value ?? 'favorite'}
-        onChange={(e) => onChange(e.target.value === 'favorite' ? null : e.target.value)}
+        value={filterToOptionValue(value)}
+        onChange={(e) => onChange(optionValueToFilter(e.target.value))}
         className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
       >
-        <option value="favorite">Favorite</option>
-        {options.map((w) => <option key={w} value={w}>{w}</option>)}
+        <option value={FAVORITE_OPTION_VALUE}>Favorite</option>
+        {DROPDOWN_CATEGORIES.map((c) => {
+          const weapons = weaponsByCategory.get(c) ?? [];
+          const showCategoryOption = !HIDDEN_CATEGORY_FILTERS.has(c);
+          if (!showCategoryOption && weapons.length === 0) return null; // nothing left to show
+          return (
+            <optgroup key={c} label={KILL_WEAPON_CATEGORY_LABEL[c]}>
+              {showCategoryOption && (
+                <option value={`${CATEGORY_OPTION_PREFIX}${c}`}>All {KILL_WEAPON_CATEGORY_LABEL[c]}</option>
+              )}
+              {weapons.map((w) => <option key={w} value={w}>{weaponDisplayName(w)}</option>)}
+            </optgroup>
+          );
+        })}
       </select>
     </div>
   );
 }
 
-interface PlayerWeaponRow {
-  player_id: number;
-  player_name: string;
-  weapon: string | null;
-  kills: number;
-  headshotKills: number;
-  noscopeKills: number;
-  wallbangKills: number;
-  blindKills: number;
-  midairKills: number;
-  deaths: number;
-}
+type PlayerWeaponRow = WeaponFilterStat & { player_id: number; player_name: string };
 
 function resolvePlayerWeaponRow(
   playerId: number,
   playerName: string,
   kills: MatchKillRow[],
-  selectedWeapon: string | null,
+  selectedFilter: WeaponFilter,
+  accuracyByPlayer: Map<number, PlayerWeaponAccuracy>,
 ): PlayerWeaponRow {
-  const resolved = resolveWeaponStat(aggregateWeaponKillStats(kills, playerId), selectedWeapon);
-  return {
-    player_id: playerId,
-    player_name: playerName,
-    weapon: resolved?.weapon ?? null,
-    kills: resolved?.kills ?? 0,
-    headshotKills: resolved?.headshotKills ?? 0,
-    noscopeKills: resolved?.noscopeKills ?? 0,
-    wallbangKills: resolved?.wallbangKills ?? 0,
-    blindKills: resolved?.blindKills ?? 0,
-    midairKills: resolved?.midairKills ?? 0,
-    deaths: resolved?.deaths ?? 0,
-  };
+  const resolved = resolveWeaponFilterStat(aggregateWeaponKillStats(kills, playerId), selectedFilter, accuracyByPlayer.get(playerId));
+  return { player_id: playerId, player_name: playerName, ...resolved };
 }
 
-/** Icon + weapon name — shared by the WeaponsTable column and the single-player Weapon tile
- *  (`buildWeaponTiles()`); kills live in their own "Kills With" column/tile next to it. */
-function WeaponLabel({ weapon }: { weapon: string | null }) {
-  if (!weapon) return <>—</>;
+/** Icon + display name — shared by the WeaponsTable column and the single-player Weapon tile
+ *  (`buildWeaponTiles()`); kills live in their own "Kills With" column/tile next to it. No icon
+ *  when `weapon` is null (a whole category is selected, or there's no favorite to show) — there's
+ *  no single weapon to draw one for. */
+function WeaponLabel({ weapon, label }: { weapon: string | null; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <WeaponIcon weapon={weapon} size={13} />
-      {weapon}
+      {weapon && <WeaponIcon weapon={weapon} size={13} />}
+      {label}
     </span>
   );
 }
 
-function WeaponsTable({ aggregated, kills, selectedWeapon, singlePlayer, showHeading = true }: {
+/** `r.accuracy`'s fields, defaulted to zero for a sort comparator — `null` (no accuracy concept
+ *  for this row's weapon/category) sorts identically to an all-zero real accuracy stat, which is
+ *  the right behavior (nothing to rank it by either way). */
+function accuracyOf(r: PlayerWeaponRow): WeaponClassAggregateStat {
+  return r.accuracy ?? ZERO_WEAPON_CLASS_STAT;
+}
+
+function WeaponsTable({ aggregated, kills, weaponClassStats, selectedFilter, singlePlayer, showHeading = true }: {
   aggregated: AggregatedSab[];
   kills: MatchKillRow[];
-  /** `null` = each player's own favorite weapon; a weapon name = that one weapon for every row. */
-  selectedWeapon: string | null;
+  weaponClassStats: WeaponClassMatchRow[];
+  selectedFilter: WeaponFilter;
   singlePlayer: boolean;
   showHeading?: boolean;
 }) {
   const [sort, toggleSort] = useSortState('kills');
 
+  // One grouping pass over `weaponClassStats`, not a per-player scan — see
+  // `groupWeaponAccuracyByPlayer()`'s own reasoning (queries/weaponStats.ts).
+  const accuracyByPlayer = useMemo(() => groupWeaponAccuracyByPlayer(weaponClassStats), [weaponClassStats]);
+
   const rows = useMemo(
-    () => aggregated.map((a) => resolvePlayerWeaponRow(a.player_id, a.player_name, kills, selectedWeapon)),
-    [aggregated, kills, selectedWeapon],
+    () => aggregated.map((a) => resolvePlayerWeaponRow(a.player_id, a.player_name, kills, selectedFilter, accuracyByPlayer)),
+    [aggregated, kills, selectedFilter, accuracyByPlayer],
   );
 
   const sorted = useMemo(() => {
@@ -410,6 +491,11 @@ function WeaponsTable({ aggregated, kills, selectedWeapon, singlePlayer, showHea
         case 'blind': aVal = a.blindKills; bVal = b.blindKills; break;
         case 'midair': aVal = a.midairKills; bVal = b.midairKills; break;
         case 'deaths': aVal = a.deaths; bVal = b.deaths; break;
+        case 'shots_fired': aVal = accuracyOf(a).shots_fired; bVal = accuracyOf(b).shots_fired; break;
+        case 'acc': aVal = accuracyOf(a).shots_hit / (accuracyOf(a).shots_fired || 1); bVal = accuracyOf(b).shots_hit / (accuracyOf(b).shots_fired || 1); break;
+        case 'head_acc': aVal = accuracyOf(a).headshot_hits / (accuracyOf(a).shots_hit || 1); bVal = accuracyOf(b).headshot_hits / (accuracyOf(b).shots_hit || 1); break;
+        case 'dmg_round': aVal = accuracyOf(a).damage_dealt / (accuracyOf(a).rounds_played || 1); bVal = accuracyOf(b).damage_dealt / (accuracyOf(b).rounds_played || 1); break;
+        case 'rounds': aVal = accuracyOf(a).rounds_played; bVal = accuracyOf(b).rounds_played; break;
         default: return 0;
       }
       return sort.asc ? aVal - bVal : bVal - aVal;
@@ -417,9 +503,11 @@ function WeaponsTable({ aggregated, kills, selectedWeapon, singlePlayer, showHea
     return copy;
   }, [rows, sort]);
 
-  const weaponColTitle = selectedWeapon == null
+  const weaponColTitle = selectedFilter.kind === 'favorite'
     ? "The weapon with this player's most credited kills"
-    : `Stats are for ${selectedWeapon} specifically, whether or not it's this player's favorite`;
+    : selectedFilter.kind === 'category'
+      ? `Stats are for every ${KILL_WEAPON_CATEGORY_LABEL[selectedFilter.category].toLowerCase()} kill combined`
+      : `Stats are for ${weaponDisplayName(selectedFilter.weapon)} specifically, whether or not it's this player's favorite`;
 
   return (
     <div className="my-6">
@@ -437,13 +525,18 @@ function WeaponsTable({ aggregated, kills, selectedWeapon, singlePlayer, showHea
               <SortableTh label="Blind With" title="Kills scored while the attacker was flashed, with this weapon" sortKey="blind" state={sort} onClick={toggleSort} />
               <SortableTh label="Midair With" title="Mid-air kills (attacker was airborne) with this weapon" sortKey="midair" state={sort} onClick={toggleSort} />
               <SortableTh label="Deaths To" title="Deaths to this weapon" sortKey="deaths" state={sort} onClick={toggleSort} />
+              <SortableTh label="Shots Fired" title="Shots fired with this weapon/category (guns only — '—' for a knife, grenade, etc.)" sortKey="shots_fired" state={sort} onClick={toggleSort} />
+              <SortableTh label="Accuracy" title="Shots that hit an enemy / shots fired" sortKey="acc" state={sort} onClick={toggleSort} />
+              <SortableTh label="Head Accuracy" title="Hits landing on the head / total hits" sortKey="head_acc" state={sort} onClick={toggleSort} />
+              <SortableTh label="Damage/Round" title="Damage dealt / rounds played with this weapon/category" sortKey="dmg_round" state={sort} onClick={toggleSort} />
+              <SortableTh label="Rounds" title="Rounds this player used this weapon/category in at least once" sortKey="rounds" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
             {sorted.map((r) => (
               <tr key={r.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                 {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
-                <td className="px-3 py-2 text-left"><WeaponLabel weapon={r.weapon} /></td>
+                <td className="px-3 py-2 text-left"><WeaponLabel weapon={r.weapon} label={r.label} /></td>
                 <td className={tdRight}>{r.kills}</td>
                 <td className={tdRight}>{pct(r.headshotKills, r.kills)}</td>
                 <td className={tdRight}>{r.noscopeKills}</td>
@@ -451,6 +544,11 @@ function WeaponsTable({ aggregated, kills, selectedWeapon, singlePlayer, showHea
                 <td className={tdRight}>{r.blindKills}</td>
                 <td className={tdRight}>{r.midairKills}</td>
                 <td className={tdRight}>{r.deaths}</td>
+                <td className={tdRight}>{r.accuracy ? r.accuracy.shots_fired : '—'}</td>
+                <td className={tdRight}>{r.accuracy ? pct(r.accuracy.shots_hit, r.accuracy.shots_fired) : '—'}</td>
+                <td className={tdRight}>{r.accuracy ? pct(r.accuracy.headshot_hits, r.accuracy.shots_hit) : '—'}</td>
+                <td className={tdRight}>{r.accuracy ? fmtNum(r.accuracy.rounds_played > 0 ? r.accuracy.damage_dealt / r.accuracy.rounds_played : 0, 1) : '—'}</td>
+                <td className={tdRight}>{r.accuracy ? r.accuracy.rounds_played : '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -545,7 +643,7 @@ function WeaponBar({ weapon, kills, maxKills }: { weapon: string; kills: number;
     <div className="grid grid-cols-[100px_1fr_40px] items-center gap-2.5 py-1.5">
       <span className="tracked text-[9px] text-[var(--color-text-secondary)] inline-flex items-center gap-1.5">
         <WeaponIcon weapon={weapon} size={11} />
-        {weapon}
+        {weaponDisplayName(weapon)}
       </span>
       <span className="block h-[6px] w-full bg-[rgba(255,255,255,0.08)]">
         <span className="block h-full bg-[var(--color-site-accent)]" style={{ width: `${pctWidth}%` }} />
@@ -822,9 +920,9 @@ interface SinglePlayerTiles {
   impact: StatTile[];
   duels: StatTile[];
   mechanics: StatTile[];
-  /** Per-weapon kills/HS%/deaths for this player — the Weapons tab resolves one weapon's stat
-   *  from this via `resolveWeaponStat()` (favorite, or whichever weapon the filter selects) and
-   *  renders it as tiles, same as `WeaponsTable` does per row. */
+  /** Per-weapon kills/HS%/deaths for this player — the Weapons tab resolves one filter selection's
+   *  stat from this via `resolveWeaponFilterStat()` (favorite, a specific weapon, or a whole
+   *  category) and renders it as tiles, same as `WeaponsTable` does per row. */
   weaponStats: WeaponKillStat[];
   /** Rendered as `WeaponBar`s below the weapons tiles — a ranked list, not a fixed small set of
    *  named metrics, so it doesn't fit the tile grid's label/value shape. */
@@ -928,20 +1026,33 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
 }
 
 /** The single-player counterpart of `resolvePlayerWeaponRow()`'s table cells — same resolved
- *  `WeaponKillStat` (favorite, or the filter's selected weapon), as a `StatTile[]`. */
-function buildWeaponTiles(weaponStats: WeaponKillStat[], selectedWeapon: string | null): StatTile[] {
-  const stat = resolveWeaponStat(weaponStats, selectedWeapon);
-  const titleSuffix = selectedWeapon == null ? "this player's favorite weapon" : selectedWeapon;
-  return [
-    { label: 'Weapon', title: 'The weapon these stats are for', value: <WeaponLabel weapon={stat?.weapon ?? null} /> },
-    { label: 'Kills With', title: `Credited kills with ${titleSuffix} (excludes self-kills and teamkills)`, value: stat?.kills ?? 0 },
-    { label: 'HS% With', title: `Headshot kills / kills with ${titleSuffix}`, value: pct(stat?.headshotKills ?? 0, stat?.kills ?? 0) },
-    { label: 'NS With', title: `No-scope kills with ${titleSuffix}`, value: stat?.noscopeKills ?? 0 },
-    { label: 'WB With', title: `Wallbang kills with ${titleSuffix}`, value: stat?.wallbangKills ?? 0 },
-    { label: 'Blind With', title: `Kills scored while flashed, with ${titleSuffix}`, value: stat?.blindKills ?? 0 },
-    { label: 'Midair With', title: `Mid-air kills with ${titleSuffix}`, value: stat?.midairKills ?? 0 },
-    { label: 'Deaths To', title: `Deaths to ${titleSuffix}`, value: stat?.deaths ?? 0 },
+ *  `WeaponFilterStat` (favorite, the filter's selected weapon, or a whole category), as a
+ *  `StatTile[]`. The five accuracy tiles are omitted entirely (rather than shown as dashes) when
+ *  `stat.accuracy` is `null` — this selection has no such concept at all (#474). */
+function buildWeaponTiles(weaponStats: WeaponKillStat[], selectedFilter: WeaponFilter, accuracy: PlayerWeaponAccuracy | undefined): StatTile[] {
+  const stat: WeaponFilterStat = resolveWeaponFilterStat(weaponStats, selectedFilter, accuracy);
+  const titleSuffix = selectedFilter.kind === 'favorite' ? "this player's favorite weapon" : stat.label;
+  const tiles: StatTile[] = [
+    { label: 'Weapon', title: 'The weapon (or category) these stats are for', value: <WeaponLabel weapon={stat.weapon} label={stat.label} /> },
+    { label: 'Kills With', title: `Credited kills with ${titleSuffix} (excludes self-kills and teamkills)`, value: stat.kills },
+    { label: 'HS% With', title: `Headshot kills / kills with ${titleSuffix}`, value: pct(stat.headshotKills, stat.kills) },
+    { label: 'NS With', title: `No-scope kills with ${titleSuffix}`, value: stat.noscopeKills },
+    { label: 'WB With', title: `Wallbang kills with ${titleSuffix}`, value: stat.wallbangKills },
+    { label: 'Blind With', title: `Kills scored while flashed, with ${titleSuffix}`, value: stat.blindKills },
+    { label: 'Midair With', title: `Mid-air kills with ${titleSuffix}`, value: stat.midairKills },
+    { label: 'Deaths To', title: `Deaths to ${titleSuffix}`, value: stat.deaths },
   ];
+  if (stat.accuracy) {
+    const acc = stat.accuracy;
+    tiles.push(
+      { label: 'Shots Fired', title: `Shots fired with ${titleSuffix}`, value: acc.shots_fired },
+      { label: 'Accuracy', title: `Shots that hit an enemy / shots fired, with ${titleSuffix}`, value: pct(acc.shots_hit, acc.shots_fired) },
+      { label: 'Head Accuracy', title: `Hits landing on the head / total hits, with ${titleSuffix}`, value: pct(acc.headshot_hits, acc.shots_hit) },
+      { label: 'Damage/Round', title: `Damage dealt with ${titleSuffix} / rounds played with it`, value: fmtNum(acc.rounds_played > 0 ? acc.damage_dealt / acc.rounds_played : 0, 1) },
+      { label: 'Rounds', title: `Rounds this player used ${titleSuffix} in at least once`, value: acc.rounds_played },
+    );
+  }
+  return tiles;
 }
 
 // --- Sub-tabs ---
@@ -1004,6 +1115,7 @@ export default function SabremetricsLeaderboardView({
   teamGroups,
   showPlusStats = true,
   kills = [],
+  weaponClassStats = [],
 }: {
   rows: SabremetricStatRow[];
   /** League-wide rows used as the Plus-stat baseline in single-player mode. Defaults to `rows`. */
@@ -1019,6 +1131,9 @@ export default function SabremetricsLeaderboardView({
    *  or league-wide). Empty is fine; the tab still renders, just with zeroed/dash values, until a
    *  demo is (re)parsed with `match_kills` populated. */
   kills?: MatchKillRow[];
+  /** `player_match_weapon_stats` rows (#279/#474) behind the Weapons sub-tab's category accuracy
+   *  breakdown — same scope as `kills`. Empty is fine, same honesty rule as `kills`. */
+  weaponClassStats?: WeaponClassMatchRow[];
 }) {
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);
   const leagueAggregated = useMemo(() => aggregateRows(leagueRows ?? rows), [leagueRows, rows]);
@@ -1027,10 +1142,17 @@ export default function SabremetricsLeaderboardView({
   // `SeasonTabView`, which filters its tab list on data that isn't known until render).
   const subTabs = showPlusStats ? ALL_SUB_TABS : ALL_SUB_TABS.filter((t) => t.key !== 'plus');
   const [sub, setSub] = useTabState(subTabs.map((t) => t.key), 'mechanics', 'sub');
-  /** `null` = each player's favorite weapon (default); a weapon name = that weapon for everyone.
-   *  Lives here, not inside `WeaponsTable`, so a match page's two team tables (and the
-   *  single-player tile view) share one selection and one dropdown. */
-  const [weaponFilter, setWeaponFilter] = useState<string | null>(null);
+  /** Favorite weapon by default; a `WeaponFilter` selects one specific weapon or a whole category
+   *  instead (#474). Lives here, not inside `WeaponsTable`, so a match page's two team tables (and
+   *  the single-player tile view) share one selection and one dropdown. */
+  const [weaponFilter, setWeaponFilter] = useState<WeaponFilter>(FAVORITE_WEAPON_FILTER);
+  // Single-player mode only ever needs one player's accuracy, but grouping is a single O(rows)
+  // pass regardless of how many players are pulled out of it afterward, so there's no cheaper way
+  // to look up just one.
+  const singlePlayerAccuracy = useMemo(
+    () => (aggregated.length > 0 ? groupWeaponAccuracyByPlayer(weaponClassStats).get(aggregated[0].player_id) : undefined),
+    [weaponClassStats, aggregated],
+  );
 
   // Memoized (not called inline in the singlePlayer branch below) so picking a different weapon
   // filter — which only ever changes buildWeaponTiles()'s cheap lookup — doesn't also re-run
@@ -1043,8 +1165,8 @@ export default function SabremetricsLeaderboardView({
     [singlePlayer, aggregated, leagueAggregated, kills],
   );
   const singlePlayerWeaponTiles = useMemo(
-    () => buildWeaponTiles(singlePlayerTiles?.weaponStats ?? [], weaponFilter),
-    [singlePlayerTiles, weaponFilter],
+    () => buildWeaponTiles(singlePlayerTiles?.weaponStats ?? [], weaponFilter, singlePlayerAccuracy),
+    [singlePlayerTiles, weaponFilter, singlePlayerAccuracy],
   );
 
   if (aggregated.length === 0) {
@@ -1116,7 +1238,7 @@ export default function SabremetricsLeaderboardView({
         <div className="space-y-3">
           <WeaponFilterSelect kills={kills} value={weaponFilter} onChange={setWeaponFilter} />
           <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
-            <WeaponsTable aggregated={agg} kills={kills} selectedWeapon={weaponFilter} singlePlayer={singlePlayer} showHeading={showHeading} />
+            <WeaponsTable aggregated={agg} kills={kills} weaponClassStats={weaponClassStats} selectedFilter={weaponFilter} singlePlayer={singlePlayer} showHeading={showHeading} />
           )} />
         </div>
       )}

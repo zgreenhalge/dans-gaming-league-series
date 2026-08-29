@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getPlayer, getCareerLeaderboard, getPlayersById, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory, getAllMatchRounds, getAllMatchKills } from '@/lib/queries';
+import { getPlayer, getCareerLeaderboard, getPlayersById, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory, getAllMatchRounds, getAllMatchKills, getAllWeaponClassStats } from '@/lib/queries';
 import { getPlayerMeta } from '@/lib/seo/og';
 import { isPlayedScore } from '@/lib/util';
 import { buildPlayerJsonLd } from '@/lib/seo/structured-data';
@@ -59,7 +59,7 @@ export default async function PlayerPage({
   // resolves player names for match_kills' attacker/victim/assister without a redundant
   // full `players` table read.
   const playersByIdPromise = getPlayersById();
-  const [session, detail, careerLeaderboard, playersById, ehog, leagueSabremetrics, nameHistory, playerMeta, matchRounds, matchKills] = await Promise.all([
+  const [session, detail, careerLeaderboard, playersById, ehog, leagueSabremetrics, nameHistory, playerMeta, matchRounds, matchKills, matchWeaponClassStats] = await Promise.all([
     getServerSession(authOptions),
     getPlayer(playerId),
     getCareerLeaderboard(),
@@ -72,6 +72,7 @@ export default async function PlayerPage({
     getPlayerMeta(playerId),
     getAllMatchRounds(),
     getAllMatchKills(undefined, playersByIdPromise),
+    getAllWeaponClassStats(undefined, playersByIdPromise),
   ]);
   const isSelf = session?.user?.playerId === playerId;
   if (!detail) notFound();
@@ -175,6 +176,7 @@ export default async function PlayerPage({
               sabremetrics={leagueSabremetrics}
               matchRounds={matchRounds}
               matchKills={matchKills}
+              matchWeaponClassStats={matchWeaponClassStats}
             />
           </UrlStateProvider>
         </Suspense>

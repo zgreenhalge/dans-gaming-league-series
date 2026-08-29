@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import SeasonTabView, { SEASON_TABS } from './SeasonTabView';
 import { useTabState } from './useTabState';
 import { tabCls } from '@/lib/util';
-import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow, MatchRoundRow, MatchKillRow } from '@/lib/queries';
+import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow, MatchRoundRow, MatchKillRow, WeaponClassMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 
 type TopTab = 'regular' | 'gauntlet';
@@ -53,6 +53,8 @@ export default function CombinedSeasonTabView({
   gauntletMatchRounds,
   matchKills,
   gauntletMatchKills,
+  matchWeaponClassStats,
+  gauntletMatchWeaponClassStats,
 }: {
   leaderboard: LeaderboardRowWithId[];
   schedule: WeekWithMatches[];
@@ -75,6 +77,8 @@ export default function CombinedSeasonTabView({
   gauntletMatchRounds?: MatchRoundRow[];
   matchKills?: MatchKillRow[];
   gauntletMatchKills?: MatchKillRow[];
+  matchWeaponClassStats?: WeaponClassMatchRow[];
+  gauntletMatchWeaponClassStats?: WeaponClassMatchRow[];
 }) {
   const [topTab, setTopTab] = useTabState(TOP_TABS, 'regular', 'view');
   const [subTab, setSubTab] = useTabState(SEASON_TABS, 'leaderboard');
@@ -109,6 +113,7 @@ export default function CombinedSeasonTabView({
           sabremetrics={sabremetrics}
           matchRounds={matchRounds}
           matchKills={matchKills}
+          matchWeaponClassStats={matchWeaponClassStats}
         />
       )}
 
@@ -129,6 +134,7 @@ export default function CombinedSeasonTabView({
           sabremetrics={gauntletSabremetrics}
           matchRounds={gauntletMatchRounds}
           matchKills={gauntletMatchKills}
+          matchWeaponClassStats={gauntletMatchWeaponClassStats}
         />
       )}
     </>

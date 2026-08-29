@@ -288,18 +288,27 @@ section, sliced a different way. Stored in their own tables (`player_match_weapo
 `player_match_economy_stats`), not `player_match_sabremetrics`, since each player has several rows
 (one per bucket) rather than one. See `src/lib/parsers/weaponStats.ts`.
 
-- **Weapon class** — `pistol`/`smg`/`rifle`/`sniper`/`shotgun` (`WEAPON_CATEGORY` in
-  `src/lib/parsers/weaponClasses.ts`, the full CS2 gun roster). `Shots Fired`/`Shots Hit`/`Headshot
-  Hits`/`Damage Dealt` are the same guns-only counts as the Mechanics section, split by which
-  category fired or landed the shot. `Rounds Played` for a category is the count of distinct live
-  rounds the player fired that category in at least once — shot-triggered, like the other counts.
+- **Weapon** — `player_match_weapon_stats` stores one row per (player, match, exact weapon
+  classname, e.g. `ak47`), gated by `WEAPON_CATEGORY` (`src/lib/parsers/weaponClasses.ts`, the full
+  CS2 gun roster) the same way `accuracy.ts`'s shots-fired/hit gating is — a grenade, knife, or C4
+  event is never bucketed at all. `Shots Fired`/`Shots Hit`/`Headshot Hits`/`Damage Dealt` are the
+  same guns-only counts as the Mechanics section, split by which exact weapon fired or landed the
+  shot. `Rounds Played` for a weapon is the count of distinct live rounds the player fired it in at
+  least once — shot-triggered, like the other counts. The weapon-class rollup
+  (`pistol`/`smg`/`rifle`/`sniper`/`shotgun`) shown in the Weapons sub-tab is *derived* from `weapon`
+  at query time (`WEAPON_CATEGORY[weapon]`, `getAllWeaponClassStats()`/`getMatchWeaponClassStats()`
+  in `src/lib/queries/weaponStats.ts`) rather than stored as its own column, the same
+  store-the-fact/derive-the-category relationship `killWeaponCategory()` already has to
+  `match_kills.weapon`. A row from a match not yet reparsed since this per-weapon granularity landed
+  still resolves its category from its own stored (pre-migration) category value — it just can't
+  answer a per-weapon-specific query until reparsed.
 - **Round economy** — `eco` (equipment value under $2000), `force_buy` ($2000-3499), or `full_buy`
   ($3500+), classified per player per round from their own
   `CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` at that round's freeze-time-end — an individual
   read, not a team average (Wingman's 2-player sides make the two nearly equivalent anyway).
   `Rounds Played` for a tier is seeded directly from this classification, independent of whether the
-  player fired a shot that round, unlike the weapon-class breakdown above — an eco round with zero
-  shots fired still counts as an eco round played.
+  player fired a shot that round, unlike the weapon breakdown above — an eco round with zero shots
+  fired still counts as an eco round played.
 
 ### Kills by Weapon
 
@@ -313,6 +322,14 @@ attacker is a known roster player, the attacker isn't the victim, and it isn't a
 (`is_teamkill = false`); `Deaths` counts every recorded death to that weapon regardless, including
 self-kills and teamkills, so the victim side of the breakdown always reflects what actually killed
 the player.
+
+Grouping is by `weaponGroupKey()` (`src/lib/parsers/weaponClasses.ts`), not the raw
+`match_kills.weapon` string directly — every knife/bayonet skin CS2 reports (`bayonet`,
+`knife_karambit`, `knife_m9_bayonet`, …) collapses to one `knife` bucket, so a player's knife kills
+show as a single combined row instead of splitting across cosmetic skin names. Every other weapon
+keeps its own key. Display text throughout the Weapons sub-tab (`weaponDisplayName()`) maps that key
+to the CS2 buy-menu name players expect (`AK-47`, `USP-S`, `Desert Eagle`, …) rather than the raw
+backend classname; an unrecognized key falls back to a title-cased version of itself.
 
 `No-scope Kills` is a sniper-rifle kill fired without the scope up (`noscope`); `Wallbang Kills` is a
 kill whose bullet penetrated a surface — wall, door, etc. — before landing (`wallbang`, derived from
@@ -338,11 +355,31 @@ since every kill weapon needs a bucket but only guns count toward accuracy.
 
 **Favorite weapon** (`favoriteWeapon()`) is simply the weapon with the most credited kills in scope.
 
-The Weapons sub-tab shows one weapon's row per player at a time, picked by a favorite-or-specific
-filter (`resolveWeaponStat()`): the favorite (`weapon = null`) or one weapon applied to every row,
-chosen from `allWeaponsWithKills()` — every weapon with at least one credited kill in the current
-scope, sorted by total kills descending. A specific-weapon selection a player has no kills/deaths with
-still renders a zeroed row rather than being hidden, so the filter always shows every player.
+The Weapons sub-tab shows one filter selection's row per player at a time, picked by
+`resolveWeaponFilterStat()` against a `WeaponFilter` — a real 3-way union (`kills.ts`), not an
+encoded string: each player's own favorite (`{kind: 'favorite'}`), one specific weapon (`{kind:
+'weapon', weapon}`, chosen from `allWeaponsWithKills()` — every weapon with at least one credited
+kill in the current scope, sorted by total kills descending, already grouped so knives appear
+once), or a whole category (`{kind: 'category', category}`, one of `KILL_WEAPON_CATEGORIES`,
+rolled up through `aggregateKillCategoryStats()`). Only the filter `<select>` itself
+(`WeaponFilterSelect`, `SabremetricsLeaderboardView.tsx`) ever encodes a `WeaponFilter` to a string,
+to satisfy the HTML control's own string-valued API — every other consumer works with the union
+directly. A specific-weapon or category selection with no kills/deaths in scope still renders a
+zeroed row rather than being hidden, so the filter always shows every player.
+
+Every resolved row also carries that same selection's `player_match_weapon_stats` accuracy —
+`WeaponFilterStat.accuracy` (`kills.ts`), resolved by the same `resolveWeaponFilterStat()` call from
+a `PlayerWeaponAccuracy` (`groupWeaponAccuracyByPlayer()`, `src/lib/queries/weaponStats.ts` — one
+grouping pass over `weaponClassStats` per render, keyed by both weapon and category, so a
+multi-player table looks each row up in O(1) rather than rescanning per player). `accuracy` is
+`null` only when the *selection itself* has no such concept at all — a melee/utility/other weapon
+or category, since CS2 tracks no shots-fired for a knife swing or grenade throw — never merely
+because the count happens to be zero (a gun a player didn't fire in scope still resolves a real
+zeroed `WeaponClassAggregateStat`). The two cases render differently: the Weapons sub-tab's table
+shows `—` in the accuracy columns for `null`; its single-player tile view omits the five accuracy
+tiles entirely rather than showing them zeroed. A `favorite` selection is the one case where
+`accuracy` isn't uniform across rows in the same table — each player's own favorite weapon differs,
+so one player's row might show real accuracy while another's (favorite is a knife) shows `—`.
 
 ### Flair
 

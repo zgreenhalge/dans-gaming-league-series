@@ -1,8 +1,10 @@
 /**
- * Unit tests for queries/kills.ts's pure aggregation helpers (#452) — aggregateWeaponKillStats,
- * favoriteWeapon, allWeaponsWithKills, resolveWeaponStat. These operate on already-joined
- * `MatchKillRow[]` in memory, so no fake-DB harness is needed (contrast queries-weaponStats.test.ts,
- * which exercises an actual Supabase join).
+ * Unit tests for queries/kills.ts's pure aggregation helpers (#452, #474) —
+ * aggregateWeaponKillStats, favoriteWeapon, allWeaponsWithKills, resolveWeaponFilterStat
+ * (`resolveWeaponStat()` is an unexported internal the `weapon`/`favorite` branches of
+ * `resolveWeaponFilterStat()` delegate to, so it's covered indirectly rather than tested on its
+ * own). These operate on already-joined `MatchKillRow[]` in memory, so no fake-DB harness is
+ * needed (contrast queries-weaponStats.test.ts, which exercises an actual Supabase join).
  *
  * Run:  npx vitest run src/lib/queries-kills.test.ts
  */
@@ -13,7 +15,8 @@ import {
   aggregateFlairKillStats,
   favoriteWeapon,
   allWeaponsWithKills,
-  resolveWeaponStat,
+  resolveWeaponFilterStat,
+  FAVORITE_WEAPON_FILTER,
   deriveHeadshotAndTeamkillCounts,
   deriveOpeningDuelCounts,
   deriveTwoKRoundCounts,
@@ -23,6 +26,7 @@ import {
   buildPlayerFactionsAndRoster,
   type MatchKillRow,
 } from './queries/kills';
+import { ZERO_WEAPON_CLASS_STAT, type PlayerWeaponAccuracy } from './queries/weaponStats';
 import type { RoundSideInfo } from './queries/rounds';
 import { test, report } from './test-support/miniTest';
 
@@ -125,22 +129,81 @@ test('allWeaponsWithKills: distinct credited-kill weapons, sorted by total kills
   assert.deepEqual(allWeaponsWithKills(kills), ['ak47', 'usp_silencer']);
 });
 
-test('resolveWeaponStat: null selection returns the favorite; a named selection returns that weapon zeroed if absent', () => {
+test('aggregateWeaponKillStats/allWeaponsWithKills: every knife/bayonet variant merges into one "knife" bucket (#474)', () => {
+  const kills = [
+    kill({ attacker: 1, victim: 2, weapon: 'knife_karambit' }),
+    kill({ attacker: 1, victim: 3, weapon: 'bayonet', headshot: false }),
+    kill({ attacker: 4, victim: 1, weapon: 'knife_m9_bayonet' }),
+  ];
+  const stats = aggregateWeaponKillStats(kills, 1);
+  const knifeEntries = stats.filter((s) => s.weapon === 'knife');
+  assert.equal(knifeEntries.length, 1);
+  assert.equal(knifeEntries[0].kills, 2);
+  assert.equal(knifeEntries[0].deaths, 1);
+
+  assert.deepEqual(allWeaponsWithKills(kills), ['knife']);
+});
+
+test('resolveWeaponFilterStat: a favorite-kind filter resolves the favorite weapon\'s display label and a zeroed accuracy when none is passed', () => {
   const kills = [
     kill({ attacker: 1, victim: 2, weapon: 'ak47' }),
     kill({ attacker: 1, victim: 3, weapon: 'ak47' }),
   ];
   const stats = aggregateWeaponKillStats(kills, 1);
+  const resolved = resolveWeaponFilterStat(stats, FAVORITE_WEAPON_FILTER);
+  assert.equal(resolved.weapon, 'ak47');
+  assert.equal(resolved.label, 'AK-47');
+  assert.equal(resolved.kills, 2);
+  // A gun weapon always has an accuracy *concept* — an omitted `accuracy` map just means no rows
+  // were fetched yet, not that the concept doesn't apply, so this resolves zeroed, not null.
+  assert.deepEqual(resolved.accuracy, ZERO_WEAPON_CLASS_STAT);
+});
 
-  assert.equal(resolveWeaponStat(stats, null)?.weapon, 'ak47');
+test('resolveWeaponFilterStat: a category-kind filter rolls up every weapon in that category, with no single weapon', () => {
+  const kills = [
+    kill({ attacker: 1, victim: 2, weapon: 'ak47', headshot: true }),
+    kill({ attacker: 1, victim: 3, weapon: 'm4a1_silencer' }),
+    kill({ attacker: 1, victim: 4, weapon: 'deagle' }), // pistol, not rifle
+  ];
+  const stats = aggregateWeaponKillStats(kills, 1);
+  const resolved = resolveWeaponFilterStat(stats, { kind: 'category', category: 'rifle' });
+  assert.equal(resolved.weapon, null);
+  assert.equal(resolved.label, 'Rifles');
+  assert.equal(resolved.kills, 2);
+  assert.equal(resolved.headshotKills, 1);
+  assert.deepEqual(resolved.accuracy, ZERO_WEAPON_CLASS_STAT);
+});
 
-  const named = resolveWeaponStat(stats, 'ak47');
-  assert.equal(named?.kills, 2);
+test('resolveWeaponFilterStat: a category with no kills in scope still resolves a zeroed kill row, not null', () => {
+  const stats = aggregateWeaponKillStats([kill({ attacker: 1, victim: 2, weapon: 'deagle' })], 1);
+  const resolved = resolveWeaponFilterStat(stats, { kind: 'category', category: 'sniper' });
+  assert.equal(resolved.kills, 0);
+});
 
-  const absent = resolveWeaponStat(stats, 'usp_silencer');
-  assert.deepEqual(absent, {
-    weapon: 'usp_silencer',
-    category: 'pistol',
+test('resolveWeaponFilterStat: a melee/utility/other category has no accuracy concept — accuracy resolves null, not zero', () => {
+  const stats = aggregateWeaponKillStats([kill({ attacker: 1, victim: 2, weapon: 'knife' })], 1);
+  const melee = resolveWeaponFilterStat(stats, { kind: 'category', category: 'melee' });
+  assert.equal(melee.kills, 1);
+  assert.equal(melee.accuracy, null);
+});
+
+test('resolveWeaponFilterStat: a weapon-kind filter resolves that specific weapon', () => {
+  const kills = [kill({ attacker: 1, victim: 2, weapon: 'usp_silencer' })];
+  const stats = aggregateWeaponKillStats(kills, 1);
+  const resolved = resolveWeaponFilterStat(stats, { kind: 'weapon', weapon: 'usp_silencer' });
+  assert.equal(resolved.weapon, 'usp_silencer');
+  assert.equal(resolved.label, 'USP-S');
+  assert.equal(resolved.kills, 1);
+  assert.deepEqual(resolved.accuracy, ZERO_WEAPON_CLASS_STAT);
+});
+
+test('resolveWeaponFilterStat: a weapon-kind filter for a weapon the player has no kills/deaths with still resolves a zeroed row', () => {
+  const kills = [kill({ attacker: 1, victim: 2, weapon: 'ak47' })];
+  const stats = aggregateWeaponKillStats(kills, 1);
+  const resolved = resolveWeaponFilterStat(stats, { kind: 'weapon', weapon: 'deagle' });
+  assert.deepEqual(resolved, {
+    label: 'Desert Eagle',
+    weapon: 'deagle',
     kills: 0,
     headshotKills: 0,
     noscopeKills: 0,
@@ -148,7 +211,31 @@ test('resolveWeaponStat: null selection returns the favorite; a named selection 
     blindKills: 0,
     midairKills: 0,
     deaths: 0,
+    accuracy: ZERO_WEAPON_CLASS_STAT,
   });
+});
+
+test('resolveWeaponFilterStat: a knife weapon selection has no accuracy concept — accuracy resolves null, not zero', () => {
+  const stats = aggregateWeaponKillStats([kill({ attacker: 1, victim: 2, weapon: 'knife' })], 1);
+  const resolved = resolveWeaponFilterStat(stats, { kind: 'weapon', weapon: 'knife' });
+  assert.equal(resolved.kills, 1);
+  assert.equal(resolved.accuracy, null);
+});
+
+test('resolveWeaponFilterStat: real accuracy flows through from a passed PlayerWeaponAccuracy, both by weapon and by category', () => {
+  const stats = aggregateWeaponKillStats([kill({ attacker: 1, victim: 2, weapon: 'ak47' })], 1);
+  const ak47Accuracy = { shots_fired: 40, shots_hit: 18, headshot_hits: 6, damage_dealt: 900, rounds_played: 10 };
+  const rifleAccuracy = { shots_fired: 55, shots_hit: 22, headshot_hits: 7, damage_dealt: 1100, rounds_played: 12 };
+  const accuracy: PlayerWeaponAccuracy = {
+    byWeapon: new Map([['ak47', ak47Accuracy]]),
+    byCategory: new Map([['rifle', rifleAccuracy]]),
+  };
+
+  const byWeapon = resolveWeaponFilterStat(stats, { kind: 'weapon', weapon: 'ak47' }, accuracy);
+  assert.deepEqual(byWeapon.accuracy, ak47Accuracy);
+
+  const byCategory = resolveWeaponFilterStat(stats, { kind: 'category', category: 'rifle' }, accuracy);
+  assert.deepEqual(byCategory.accuracy, rifleAccuracy);
 });
 
 test('aggregateWeaponKillStats: buckets noscope/wallbang/blind/midair kills per weapon for one player', () => {

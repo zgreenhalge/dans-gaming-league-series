@@ -73,10 +73,14 @@ function accumulateHurtDamage(
 }
 
 /**
- * Per-weapon-category shot/accuracy/damage/rounds breakdown (#279). WEAPON_CATEGORY is an
- * allowlist of real guns, so grenade/knife/C4 events fall through unbucketed with no separate
- * exclusion list needed (unlike accuracy.ts's NON_GUN_* sets). `rounds_played` for a category is
- * the count of distinct live rounds in which the player fired that category at least once.
+ * Per-weapon shot/accuracy/damage/rounds breakdown (#279, #474) — bucketed by the exact weapon
+ * classname (e.g. `ak47`), not by category; `player_match_weapon_stats` derives category from it
+ * at read time (`WEAPON_CATEGORY[weapon]`, `queries/weaponStats.ts`) instead of storing it
+ * redundantly, the same relationship `killWeaponCategory()` already has to `match_kills.weapon`.
+ * `WEAPON_CATEGORY` is still the gun-only inclusion gate — grenade/knife/C4 events fall through
+ * unbucketed with no separate exclusion list needed (unlike accuracy.ts's NON_GUN_* sets) — only
+ * what a bucket is keyed by changed, not which fire/hurt events count at all. `rounds_played` for a
+ * weapon is the count of distinct live rounds in which the player fired that weapon at least once.
  */
 export function collectWeaponClassStats(
   fireEvents: WeaponFireRow[],
@@ -86,25 +90,25 @@ export function collectWeaponClassStats(
 ): Map<string, WeaponBreakdownRow[]> {
   const steamSet = new Set(steamIds);
   const perPlayer = makePerPlayerBuckets(steamIds);
-  const roundsSeen = new Map<string, Set<number>>(); // `${steamid}::${category}` -> rounds
+  const roundsSeen = new Map<string, Set<number>>(); // `${steamid}::${weapon}` -> rounds
 
   for (const f of fireEvents) {
-    const category = WEAPON_CATEGORY[stripWeaponPrefix(f.weapon)];
-    if (!category) continue;
+    const weapon = stripWeaponPrefix(f.weapon);
+    if (!WEAPON_CATEGORY[weapon]) continue;
     const round = roundOf(f, context);
     if (round == null) continue;
     const shooter = f.user_steamid;
     if (!shooter || !steamSet.has(shooter)) continue;
 
-    const b = getOrCreate(perPlayer.get(shooter)!, category);
+    const b = getOrCreate(perPlayer.get(shooter)!, weapon);
     b.shots_fired += 1;
-    const seenKey = `${shooter}::${category}`;
+    const seenKey = `${shooter}::${weapon}`;
     let rounds = roundsSeen.get(seenKey);
     if (!rounds) { rounds = new Set(); roundsSeen.set(seenKey, rounds); }
     if (!rounds.has(round)) { rounds.add(round); b.rounds_played += 1; }
   }
 
-  accumulateHurtDamage(hurtEvents, context, steamSet, perPlayer, (h) => WEAPON_CATEGORY[h.weapon]);
+  accumulateHurtDamage(hurtEvents, context, steamSet, perPlayer, (h) => (WEAPON_CATEGORY[h.weapon] ? h.weapon : undefined));
 
   return flattenBuckets(perPlayer);
 }

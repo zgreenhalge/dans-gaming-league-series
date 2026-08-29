@@ -11,7 +11,7 @@ import { BasicStatsView } from './BasicStatsView';
 import { buildRegularToGauntletMap, deriveRates, extractSeasonNumber, tabCls, filterByMatchIds } from '@/lib/util';
 import { useLiveH2HData } from './useLiveH2HData';
 import type { LeaderboardRowWithId } from '@/lib/types';
-import type { TrophyEntry, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow, MatchRoundRow, MatchKillRow } from '@/lib/queries';
+import type { TrophyEntry, MapMatchRow, EhogSnapshotRow, SabremetricMatchRow, MatchRoundRow, MatchKillRow, WeaponClassMatchRow } from '@/lib/queries';
 import EhogTierBar from './EhogTierBar';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 import TabBar from './TabBar';
@@ -66,6 +66,7 @@ export default function CareerStatsView({
   allSabremetrics = [],
   allMatchRounds = [],
   allMatchKills = [],
+  allWeaponClassStats = [],
 }: {
   regularSeasons: { id: number; name: string }[];
   gauntletSeasons: { id: number; name: string }[];
@@ -80,6 +81,7 @@ export default function CareerStatsView({
   allSabremetrics?: SabremetricMatchRow[];
   allMatchRounds?: MatchRoundRow[];
   allMatchKills?: MatchKillRow[];
+  allWeaponClassStats?: WeaponClassMatchRow[];
 }) {
   const { includeRegular, includeGauntlet, selectedSeason, toggleRegular, toggleGauntlet, setSelectedSeason } = useSeasonFilter({ regularSeasons, gauntletSeasons });
   const [tab, setTab] = useTabState(CAREER_TABS, 'leaderboard');
@@ -126,6 +128,11 @@ export default function CareerStatsView({
   const filteredKills = useMemo(
     () => filterByMatchIds(allMatchKills, filteredMatches),
     [filteredMatches, allMatchKills],
+  );
+
+  const filteredWeaponClassStats = useMemo(
+    () => filterByMatchIds(allWeaponClassStats, filteredMatches),
+    [filteredMatches, allWeaponClassStats],
   );
 
   const h2hData = useLiveH2HData(filteredMatches, players);
@@ -244,7 +251,7 @@ export default function CareerStatsView({
       )}
 
       {tab === 'advanced' && (
-        <SabremetricsLeaderboardView rows={filteredSabremetrics} kills={filteredKills} />
+        <SabremetricsLeaderboardView rows={filteredSabremetrics} kills={filteredKills} weaponClassStats={filteredWeaponClassStats} />
       )}
 
       {tab === 'h2h' && (
