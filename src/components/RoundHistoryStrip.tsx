@@ -1,5 +1,5 @@
-import type { RoundCondition, RoundHistoryEntry } from '@/lib/types';
-import { CONDITION_ICON } from './icons/ConditionIcons';
+import type { RoundHistoryEntry } from '@/lib/types';
+import { CONDITION_ICON, CONDITION_LABEL } from './icons/ConditionIcons';
 
 type Side = 'CT' | 'T';
 
@@ -14,13 +14,6 @@ type Side = 'CT' | 'T';
  * Dividers mark every side-swap / phase boundary (halftime, then each overtime
  * half) and carry a running score callout, scaling to any number of overtimes.
  */
-
-const CONDITION_LABEL: Record<RoundCondition, string> = {
-  elim: 'elimination',
-  bomb: 'bomb detonation',
-  defuse: 'defuse',
-  time: 'time expired',
-};
 
 /** CSS color for a side, matching the site-wide CT=blue / T=orange convention. */
 function sideColor(side: Side): string {
@@ -114,7 +107,7 @@ function RoundTile({
   const teamName = entry.winner === 'SHIRTS' ? 'Shirts' : 'Skins';
   return (
     <div
-      title={`Round ${displayN} — ${teamName} won (${CONDITION_LABEL[entry.condition]}), ${entry.side} side`}
+      title={`Round ${displayN} — ${teamName} won (${CONDITION_LABEL[entry.condition].toLowerCase()}), ${entry.side} side`}
       className="relative h-[26px] w-[26px] rounded-[3px] border flex items-center justify-center"
       style={{
         background: `color-mix(in srgb, ${color} 16%, transparent)`,
