@@ -87,16 +87,19 @@ recorded score.
 
 Unlike every other collector above, `weaponStats.ts`'s two collectors — `collectWeaponClassStats()`
 and `collectEconomyStats()` — don't feed a single per-player row in `SabFields`. Each produces
-several bucketed rows per player (one per weapon category, or one per economy tier), persisted into
-their own tables — `player_match_weapon_stats` and `player_match_economy_stats` — rather than
+several bucketed rows per player (one per weapon, or one per economy tier), persisted into their own
+tables — `player_match_weapon_stats` and `player_match_economy_stats` — rather than
 `player_match_sabremetrics`. `demoOrchestrator.ts` returns them as `ParsedDemoSabremetricsResult`'s
 `weaponStats` field, alongside (not merged into) `sabremetrics`; `src/lib/demo/weaponStats.ts`
 persists them via `replaceMatchRows()` (`factTables.ts`), the same match-scoped delete-then-insert
-every other fact table uses, keyed off `player_match_stats_id` plus the bucket column
-(`weapon_category`/`economy_type`).
+every other fact table uses, keyed off `player_match_stats_id` plus the bucket column (`weapon`/
+`economy_type`). `weapon_category` is also written alongside `weapon` — `WEAPON_CATEGORY[weapon]`,
+computed in `demoOrchestrator.ts` — purely so the insert satisfies that column's still-`not null`
+constraint during the migration that added `weapon`; the query layer never reads that stored value
+for a row that has `weapon`, only derives category from `weapon` itself.
 
 `rounds_played` means something different for the two breakdowns. For weapon class, it's the count
-of distinct live rounds in which the player fired that category at least once — shot-triggered, same
+of distinct live rounds in which the player fired that weapon at least once — shot-triggered, same
 as `shots_fired`/`shots_hit`. For economy, it's seeded directly from the round's own eco/force/full
 classification, independent of whether the player fired a shot that round — an eco round the player
 never fired in still counts as an eco round played.
