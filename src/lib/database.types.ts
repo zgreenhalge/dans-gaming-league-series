@@ -990,6 +990,7 @@ export type Database = {
           rounds_played: number
           shots_fired: number
           shots_hit: number
+          weapon: string | null
           weapon_category: string
         }
         Insert: {
@@ -1001,6 +1002,7 @@ export type Database = {
           rounds_played?: number
           shots_fired?: number
           shots_hit?: number
+          weapon?: string | null
           weapon_category: string
         }
         Update: {
@@ -1012,6 +1014,7 @@ export type Database = {
           rounds_played?: number
           shots_fired?: number
           shots_hit?: number
+          weapon?: string | null
           weapon_category?: string
         }
         Relationships: [
