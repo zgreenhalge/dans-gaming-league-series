@@ -40,6 +40,14 @@ export function stripWeaponPrefix(classname: string): string {
  *  covering guns alone, since that breakdown has no melee/utility/other rows to display. */
 export const WEAPON_CATEGORIES: WeaponCategory[] = ['pistol', 'smg', 'rifle', 'sniper', 'shotgun'];
 
+/** Whether `weapon` is one CS2 tracks shots-fired/accuracy for at all — i.e. it has a
+ *  `WEAPON_CATEGORY` entry (#474). A knife, grenade, taser, or bomb has no such concept; a gun a
+ *  player simply hasn't fired in scope is a real *zero*, which is a different thing entirely
+ *  (`resolveWeaponFilterStat()`, `kills.ts`, treats the two distinctly). */
+export function isGunWeapon(weapon: string): boolean {
+  return WEAPON_CATEGORY[stripWeaponPrefix(weapon).toLowerCase()] != null;
+}
+
 /**
  * Category bucket for a *kill* weapon — every `player_death.weapon` value resolves to one of
  * these, unlike `WEAPON_CATEGORY` (guns only, deliberately left as an allowlist for
