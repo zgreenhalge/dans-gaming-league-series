@@ -25,7 +25,7 @@ import {
   type FlairKillStat,
 } from '@/lib/queries';
 import {
-  weaponDisplayName, KILL_WEAPON_CATEGORIES, KILL_WEAPON_CATEGORY_LABEL,
+  weaponDisplayName, killWeaponCategory, KILL_WEAPON_CATEGORIES, KILL_WEAPON_CATEGORY_LABEL,
   type KillWeaponCategory,
 } from '@/lib/parsers/weaponClasses';
 import { tabCls } from '@/lib/util';
@@ -361,7 +361,26 @@ function optionValueToFilter(value: string): WeaponFilter {
 function WeaponFilterSelect({ kills, value, onChange }: {
   kills: MatchKillRow[]; value: WeaponFilter; onChange: (filter: WeaponFilter) => void;
 }) {
-  const options = useMemo(() => allWeaponsWithKills(kills), [kills]);
+  // One <optgroup> per category, its own display name doing double duty as both the group's
+  // (bold, unselectable) label and the text of the group's first <option> — the only way to make
+  // a category "the title" while still letting it be picked, since a native <select> can't select
+  // an <optgroup> label itself. Every category gets a group regardless of whether any of its
+  // weapons have a kill in scope yet, matching the category filter's existing all-or-nothing
+  // availability; only the individual-weapon rows underneath are scoped to `allWeaponsWithKills()`.
+  const weaponsByCategory = useMemo(() => {
+    const map = new Map<KillWeaponCategory, string[]>();
+    for (const w of allWeaponsWithKills(kills)) {
+      const category = killWeaponCategory(w);
+      let list = map.get(category);
+      if (!list) {
+        list = [];
+        map.set(category, list);
+      }
+      list.push(w);
+    }
+    return map;
+  }, [kills]);
+
   return (
     <div className="flex items-center gap-2">
       <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)]">Weapon</span>
@@ -371,14 +390,14 @@ function WeaponFilterSelect({ kills, value, onChange }: {
         className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
       >
         <option value={FAVORITE_OPTION_VALUE}>Favorite</option>
-        <optgroup label="Category">
-          {KILL_WEAPON_CATEGORIES.map((c) => (
-            <option key={c} value={`${CATEGORY_OPTION_PREFIX}${c}`}>{KILL_WEAPON_CATEGORY_LABEL[c]}</option>
-          ))}
-        </optgroup>
-        <optgroup label="Weapon">
-          {options.map((w) => <option key={w} value={w}>{weaponDisplayName(w)}</option>)}
-        </optgroup>
+        {KILL_WEAPON_CATEGORIES.map((c) => (
+          <optgroup key={c} label={KILL_WEAPON_CATEGORY_LABEL[c]}>
+            <option value={`${CATEGORY_OPTION_PREFIX}${c}`}>{KILL_WEAPON_CATEGORY_LABEL[c]}</option>
+            {(weaponsByCategory.get(c) ?? []).map((w) => (
+              <option key={w} value={w}>{weaponDisplayName(w)}</option>
+            ))}
+          </optgroup>
+        ))}
       </select>
     </div>
   );
