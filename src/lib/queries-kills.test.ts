@@ -26,6 +26,7 @@ import {
   buildPlayerFactionsAndRoster,
   type MatchKillRow,
 } from './queries/kills';
+import { ZERO_WEAPON_CLASS_STAT, type PlayerWeaponAccuracy } from './queries/weaponStats';
 import type { RoundSideInfo } from './queries/rounds';
 import { test, report } from './test-support/miniTest';
 
@@ -143,7 +144,7 @@ test('aggregateWeaponKillStats/allWeaponsWithKills: every knife/bayonet variant 
   assert.deepEqual(allWeaponsWithKills(kills), ['knife']);
 });
 
-test('resolveWeaponFilterStat: a favorite-kind filter resolves the favorite weapon\'s display label', () => {
+test('resolveWeaponFilterStat: a favorite-kind filter resolves the favorite weapon\'s display label and a zeroed accuracy when none is passed', () => {
   const kills = [
     kill({ attacker: 1, victim: 2, weapon: 'ak47' }),
     kill({ attacker: 1, victim: 3, weapon: 'ak47' }),
@@ -153,6 +154,9 @@ test('resolveWeaponFilterStat: a favorite-kind filter resolves the favorite weap
   assert.equal(resolved.weapon, 'ak47');
   assert.equal(resolved.label, 'AK-47');
   assert.equal(resolved.kills, 2);
+  // A gun weapon always has an accuracy *concept* — an omitted `accuracy` map just means no rows
+  // were fetched yet, not that the concept doesn't apply, so this resolves zeroed, not null.
+  assert.deepEqual(resolved.accuracy, ZERO_WEAPON_CLASS_STAT);
 });
 
 test('resolveWeaponFilterStat: a category-kind filter rolls up every weapon in that category, with no single weapon', () => {
@@ -167,12 +171,20 @@ test('resolveWeaponFilterStat: a category-kind filter rolls up every weapon in t
   assert.equal(resolved.label, 'Rifles');
   assert.equal(resolved.kills, 2);
   assert.equal(resolved.headshotKills, 1);
+  assert.deepEqual(resolved.accuracy, ZERO_WEAPON_CLASS_STAT);
 });
 
-test('resolveWeaponFilterStat: a category with no kills in scope still resolves a zeroed row, not null', () => {
+test('resolveWeaponFilterStat: a category with no kills in scope still resolves a zeroed kill row, not null', () => {
   const stats = aggregateWeaponKillStats([kill({ attacker: 1, victim: 2, weapon: 'deagle' })], 1);
   const resolved = resolveWeaponFilterStat(stats, { kind: 'category', category: 'sniper' });
   assert.equal(resolved.kills, 0);
+});
+
+test('resolveWeaponFilterStat: a melee/utility/other category has no accuracy concept — accuracy resolves null, not zero', () => {
+  const stats = aggregateWeaponKillStats([kill({ attacker: 1, victim: 2, weapon: 'knife' })], 1);
+  const melee = resolveWeaponFilterStat(stats, { kind: 'category', category: 'melee' });
+  assert.equal(melee.kills, 1);
+  assert.equal(melee.accuracy, null);
 });
 
 test('resolveWeaponFilterStat: a weapon-kind filter resolves that specific weapon', () => {
@@ -182,6 +194,7 @@ test('resolveWeaponFilterStat: a weapon-kind filter resolves that specific weapo
   assert.equal(resolved.weapon, 'usp_silencer');
   assert.equal(resolved.label, 'USP-S');
   assert.equal(resolved.kills, 1);
+  assert.deepEqual(resolved.accuracy, ZERO_WEAPON_CLASS_STAT);
 });
 
 test('resolveWeaponFilterStat: a weapon-kind filter for a weapon the player has no kills/deaths with still resolves a zeroed row', () => {
@@ -198,7 +211,31 @@ test('resolveWeaponFilterStat: a weapon-kind filter for a weapon the player has 
     blindKills: 0,
     midairKills: 0,
     deaths: 0,
+    accuracy: ZERO_WEAPON_CLASS_STAT,
   });
+});
+
+test('resolveWeaponFilterStat: a knife weapon selection has no accuracy concept — accuracy resolves null, not zero', () => {
+  const stats = aggregateWeaponKillStats([kill({ attacker: 1, victim: 2, weapon: 'knife' })], 1);
+  const resolved = resolveWeaponFilterStat(stats, { kind: 'weapon', weapon: 'knife' });
+  assert.equal(resolved.kills, 1);
+  assert.equal(resolved.accuracy, null);
+});
+
+test('resolveWeaponFilterStat: real accuracy flows through from a passed PlayerWeaponAccuracy, both by weapon and by category', () => {
+  const stats = aggregateWeaponKillStats([kill({ attacker: 1, victim: 2, weapon: 'ak47' })], 1);
+  const ak47Accuracy = { shots_fired: 40, shots_hit: 18, headshot_hits: 6, damage_dealt: 900, rounds_played: 10 };
+  const rifleAccuracy = { shots_fired: 55, shots_hit: 22, headshot_hits: 7, damage_dealt: 1100, rounds_played: 12 };
+  const accuracy: PlayerWeaponAccuracy = {
+    byWeapon: new Map([['ak47', ak47Accuracy]]),
+    byCategory: new Map([['rifle', rifleAccuracy]]),
+  };
+
+  const byWeapon = resolveWeaponFilterStat(stats, { kind: 'weapon', weapon: 'ak47' }, accuracy);
+  assert.deepEqual(byWeapon.accuracy, ak47Accuracy);
+
+  const byCategory = resolveWeaponFilterStat(stats, { kind: 'category', category: 'rifle' }, accuracy);
+  assert.deepEqual(byCategory.accuracy, rifleAccuracy);
 });
 
 test('aggregateWeaponKillStats: buckets noscope/wallbang/blind/midair kills per weapon for one player', () => {

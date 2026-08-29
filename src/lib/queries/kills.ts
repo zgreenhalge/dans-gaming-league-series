@@ -2,11 +2,12 @@ import { supabase } from '../supabase';
 import { resolveMatchSeasons, fetchAllPages, fetchPmsLookup, bumpCounter, type PmsRow } from './_shared';
 import { getPlayersById } from './player';
 import {
-  killWeaponCategory, weaponGroupKey, weaponDisplayName, KILL_WEAPON_CATEGORY_LABEL,
-  type KillWeaponCategory,
+  killWeaponCategory, weaponGroupKey, weaponDisplayName, isGunWeapon, KILL_WEAPON_CATEGORY_LABEL,
+  WEAPON_CATEGORIES, type KillWeaponCategory, type WeaponCategory,
 } from '../parsers/weaponClasses';
 import type { Player, Faction } from '../types';
-import type { AccuracyTotals } from './weaponStats';
+import type { AccuracyTotals, PlayerWeaponAccuracy, WeaponClassAggregateStat } from './weaponStats';
+import { ZERO_WEAPON_CLASS_STAT } from './weaponStats';
 import { resolveSide } from '../parsers/roundSides';
 import type { RoundSideInfo } from './rounds';
 import { ZERO_UTILITY, type UtilityCounts } from './utility';
@@ -754,6 +755,12 @@ export interface WeaponFilterStat {
   blindKills: number;
   midairKills: number;
   deaths: number;
+  /** Shot/accuracy/damage/rounds breakdown for this selection (#474) — `null` when the selection
+   *  has no such concept at all (a melee/utility/other weapon or category; CS2 tracks no
+   *  shots-fired for a knife swing or grenade throw), which is a different thing from a real *zero*
+   *  (a gun the player simply didn't fire in scope, which resolves to a zeroed `WeaponClassAggregateStat`
+   *  instead of `null`). */
+  accuracy: WeaponClassAggregateStat | null;
 }
 
 /** Builds a `WeaponFilterStat` from a resolved count source (a `WeaponKillStat` or
@@ -763,7 +770,8 @@ export interface WeaponFilterStat {
 function toFilterStat(
   label: string,
   weapon: string | null,
-  stat?: { kills: number; headshotKills: number; noscopeKills: number; wallbangKills: number; blindKills: number; midairKills: number; deaths: number },
+  stat: { kills: number; headshotKills: number; noscopeKills: number; wallbangKills: number; blindKills: number; midairKills: number; deaths: number } | undefined,
+  accuracy: WeaponClassAggregateStat | null,
 ): WeaponFilterStat {
   return {
     label,
@@ -775,20 +783,37 @@ function toFilterStat(
     blindKills: stat?.blindKills ?? 0,
     midairKills: stat?.midairKills ?? 0,
     deaths: stat?.deaths ?? 0,
+    accuracy,
   };
 }
 
 /** Resolves a player's `WeaponKillStat[]` against the Weapons sub-tab's three-mode `WeaponFilter`
- *  (#474). A category with no kills/deaths in scope still resolves to a zeroed row (matching
- *  `resolveWeaponStat()`'s own no-kills fallback) rather than `null`, so a category selection also
- *  always renders a row for every player. */
-export function resolveWeaponFilterStat(stats: WeaponKillStat[], filter: WeaponFilter): WeaponFilterStat {
+ *  (#474), also resolving that same selection's accuracy from `accuracy` (this player's
+ *  `PlayerWeaponAccuracy`, from `groupWeaponAccuracyByPlayer()` — `queries/weaponStats.ts`) when
+ *  omitted, every gun weapon/category still resolves a real zeroed accuracy stat rather than `null`
+ *  (an absent `accuracy` map just means "no rows fetched yet", not "no such stat exists"). A
+ *  category or weapon with no kills/deaths in scope still resolves a zeroed kill row (matching
+ *  `resolveWeaponStat()`'s own no-kills fallback) rather than `null`, so a selection always renders
+ *  a row for every player. */
+export function resolveWeaponFilterStat(
+  stats: WeaponKillStat[],
+  filter: WeaponFilter,
+  accuracy?: PlayerWeaponAccuracy,
+): WeaponFilterStat {
   if (filter.kind === 'category') {
     const catStat = aggregateKillCategoryStats(stats).find((c) => c.category === filter.category);
-    return toFilterStat(KILL_WEAPON_CATEGORY_LABEL[filter.category], null, catStat);
+    const isGunCategory = (WEAPON_CATEGORIES as string[]).includes(filter.category);
+    const acc = isGunCategory
+      ? (accuracy?.byCategory.get(filter.category as WeaponCategory) ?? ZERO_WEAPON_CLASS_STAT)
+      : null;
+    return toFilterStat(KILL_WEAPON_CATEGORY_LABEL[filter.category], null, catStat, acc);
   }
   const resolved = resolveWeaponStat(stats, filter.kind === 'weapon' ? filter.weapon : null);
-  return toFilterStat(resolved ? weaponDisplayName(resolved.weapon) : '—', resolved?.weapon ?? null, resolved ?? undefined);
+  const weapon = resolved?.weapon ?? null;
+  const acc = weapon != null && isGunWeapon(weapon)
+    ? (accuracy?.byWeapon.get(weapon) ?? ZERO_WEAPON_CLASS_STAT)
+    : null;
+  return toFilterStat(resolved ? weaponDisplayName(resolved.weapon) : '—', weapon, resolved ?? undefined, acc);
 }
 
 export interface WeaponCategoryKillStat {
