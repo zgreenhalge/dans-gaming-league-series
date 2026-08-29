@@ -361,12 +361,13 @@ function optionValueToFilter(value: string): WeaponFilter {
 function WeaponFilterSelect({ kills, value, onChange }: {
   kills: MatchKillRow[]; value: WeaponFilter; onChange: (filter: WeaponFilter) => void;
 }) {
-  // One <optgroup> per category, its own display name doing double duty as both the group's
-  // (bold, unselectable) label and the text of the group's first <option> — the only way to make
-  // a category "the title" while still letting it be picked, since a native <select> can't select
-  // an <optgroup> label itself. Every category gets a group regardless of whether any of its
-  // weapons have a kill in scope yet, matching the category filter's existing all-or-nothing
-  // availability; only the individual-weapon rows underneath are scoped to `allWeaponsWithKills()`.
+  // One <optgroup> per category (its display name as the bold, unselectable group label), with an
+  // "All <category>" <option> right under it standing in for "the title is selectable" — a native
+  // <select> can't make an <optgroup> label itself clickable, and repeating the label verbatim as
+  // that first option read as a duplicate rather than a selection, so it's worded to read as its
+  // own option instead. Every category gets a group regardless of whether any of its weapons have
+  // a kill in scope yet, matching the category filter's existing all-or-nothing availability; only
+  // the individual-weapon rows underneath are scoped to `allWeaponsWithKills()`.
   const weaponsByCategory = useMemo(() => {
     const map = new Map<KillWeaponCategory, string[]>();
     for (const w of allWeaponsWithKills(kills)) {
@@ -392,7 +393,7 @@ function WeaponFilterSelect({ kills, value, onChange }: {
         <option value={FAVORITE_OPTION_VALUE}>Favorite</option>
         {KILL_WEAPON_CATEGORIES.map((c) => (
           <optgroup key={c} label={KILL_WEAPON_CATEGORY_LABEL[c]}>
-            <option value={`${CATEGORY_OPTION_PREFIX}${c}`}>{KILL_WEAPON_CATEGORY_LABEL[c]}</option>
+            <option value={`${CATEGORY_OPTION_PREFIX}${c}`}>All {KILL_WEAPON_CATEGORY_LABEL[c]}</option>
             {(weaponsByCategory.get(c) ?? []).map((w) => (
               <option key={w} value={w}>{weaponDisplayName(w)}</option>
             ))}
