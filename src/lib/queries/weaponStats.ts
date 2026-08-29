@@ -1,7 +1,10 @@
 import { supabase } from '../supabase';
-import type { PlayerMatchWeaponStat, PlayerMatchEconomyStat, WeaponStatFields, Player, Faction } from '../types';
+import type { PlayerMatchWeaponStat, PlayerMatchEconomyStat, WeaponStatFields, Player } from '../types';
 import { getPlayersById } from './player';
-import { resolveMatchSeasons, fetchAllPages, fetchPmsLookup, asPage, type PmsRow } from './_shared';
+import {
+  resolveMatchSeasons, fetchAllPages, fetchPmsLookup, fetchPmsFactionLookup, getRoundSides, asPage,
+  type PmsRow, type PmsFactionRow,
+} from './_shared';
 import { WEAPON_CATEGORY, type WeaponCategory } from '../parsers/weaponClasses';
 import { resolveSide } from '../parsers/roundSides';
 
@@ -113,50 +116,36 @@ export async function getAllWeaponClassStats(
 }
 
 type RawRoundEconomyRow = { match_id: number; round_number: number; player_match_stats_id: number; economy_type: string };
-type RawRoundWinRow = { match_id: number; round_number: number; shirts_side: string; winner_side: string };
-type RawPmsFactionRow = { id: number; player_id: number; match_id: number; faction: Faction };
 
 /** Per `` `${match_id}:${player_id}:${economy_type}` `` rounds actually WON, from
- *  `match_round_economy` joined to each round's own winner (`match_rounds`) — the round-level
- *  ground truth `player_match_economy_stats` doesn't carry itself (it only sums `rounds_played` per
- *  tier, never how many of those were won). Resolves each round's side the same way
- *  `deriveSideSplitCounts()`/`deriveClutchCounts()` (`queries/kills.ts`) do, but fetched
- *  independently here (rather than importing those helpers) since `kills.ts` already imports from
- *  this file — importing back would be circular. Pass `matchId` to scope all three reads to one
- *  match, matching `getMatchWeaponClassStats()`'s own reasoning for avoiding a full-table fetch. */
-async function getEconomyRoundWins(matchId?: number): Promise<Map<string, number>> {
-  const [roundEconomyRows, roundRows, pmsRows] = await Promise.all([
+ *  `match_round_economy` joined to each round's own winner (`getRoundSides()`, `_shared.ts`) — the
+ *  round-level ground truth `player_match_economy_stats` doesn't carry itself (it only sums
+ *  `rounds_played` per tier, never how many of those were won). Resolves each round's side the same
+ *  way `deriveSideSplitCounts()`/`deriveClutchCounts()` (`queries/kills.ts`) do, reusing
+ *  `getRoundSides()`/`fetchPmsFactionLookup()` from `_shared.ts` rather than each `derive*()`
+ *  consumer re-fetching `match_rounds`/`player_match_stats` on its own. Pass `matchId` to scope both
+ *  reads to one match, matching `getMatchWeaponClassStats()`'s own reasoning for avoiding a
+ *  full-table fetch; pass `pmsFactionLookup` when the caller already fetched one (e.g.
+ *  `getMatchEconomyStats()`'s own row-resolution lookup) to skip a second `player_match_stats` read. */
+async function getEconomyRoundWins(
+  matchId?: number,
+  pmsFactionLookup?: Map<number, PmsFactionRow> | Promise<Map<number, PmsFactionRow>>,
+): Promise<Map<string, number>> {
+  const [roundEconomyRows, roundSides, resolvedPmsFactionLookup] = await Promise.all([
     fetchAllPages<RawRoundEconomyRow>((from, to) => {
       let q = supabase.from('match_round_economy').select('match_id, round_number, player_match_stats_id, economy_type');
       if (matchId != null) q = q.eq('match_id', matchId);
       return asPage(q.range(from, to));
     }),
-    fetchAllPages<RawRoundWinRow>((from, to) => {
-      let q = supabase.from('match_rounds').select('match_id, round_number, shirts_side, winner_side');
-      if (matchId != null) q = q.eq('match_id', matchId);
-      return asPage(q.range(from, to));
-    }),
-    fetchAllPages<RawPmsFactionRow>((from, to) => {
-      let q = supabase.from('player_match_stats').select('id, player_id, match_id, faction');
-      if (matchId != null) q = q.eq('match_id', matchId);
-      return asPage(q.range(from, to));
-    }),
+    getRoundSides(matchId),
+    pmsFactionLookup ? Promise.resolve(pmsFactionLookup) : fetchPmsFactionLookup(matchId),
   ]);
-
-  const pmsById = new Map(pmsRows.map((r) => [r.id, r]));
-  const roundOutcomeByKey = new Map<string, { shirtsSide: 'CT' | 'T'; winnerSide: 'CT' | 'T' }>();
-  for (const r of roundRows) {
-    roundOutcomeByKey.set(`${r.match_id}:${r.round_number}`, {
-      shirtsSide: r.shirts_side as 'CT' | 'T',
-      winnerSide: r.winner_side as 'CT' | 'T',
-    });
-  }
 
   const out = new Map<string, number>();
   for (const r of roundEconomyRows) {
-    const pms = pmsById.get(r.player_match_stats_id);
+    const pms = resolvedPmsFactionLookup.get(r.player_match_stats_id);
     if (!pms) continue;
-    const outcome = roundOutcomeByKey.get(`${r.match_id}:${r.round_number}`);
+    const outcome = roundSides.get(`${r.match_id}:${r.round_number}`);
     if (!outcome) continue;
     if (resolveSide(outcome.shirtsSide, pms.faction) !== outcome.winnerSide) continue;
     const key = `${r.match_id}:${pms.player_id}:${r.economy_type}`;
@@ -236,13 +225,17 @@ export async function getMatchEconomyStats(
   matchId: number,
   playersById?: Map<number, Player> | Promise<Map<number, Player>>,
 ): Promise<EconomyMatchRow[]> {
+  // Fetched once and shared with getEconomyRoundWins() below (same in-flight promise, not a second
+  // `player_match_stats` read) — `PmsFactionRow` is a strict superset of what this function's own
+  // row-resolution needs (`player_id`/`match_id`), so one fetch covers both.
+  const pmsFactionLookupPromise = fetchPmsFactionLookup(matchId);
   const [rows, pmsLookup, resolvedPlayersById, roundWins] = await Promise.all([
     fetchAllPages<PlayerMatchEconomyStat>((from, to) =>
       supabase.from('player_match_economy_stats').select('*').eq('match_id', matchId).range(from, to),
     ),
-    fetchPmsLookup(matchId),
+    pmsFactionLookupPromise,
     playersById ? Promise.resolve(playersById) : getPlayersById(),
-    getEconomyRoundWins(matchId),
+    getEconomyRoundWins(matchId, pmsFactionLookupPromise),
   ]);
 
   const result: EconomyMatchRow[] = [];

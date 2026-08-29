@@ -1420,8 +1420,7 @@ export default function SabremetricsLeaderboardView({
    *  unplayed/not-yet-reparsed match or season has no economy rows to show at all, so the tab must
    *  hide rather than showing dead. Defaults to `false`, not derived from `economyRows` — a caller
    *  that wires `economyRows` must pass this explicitly, computed from its own season-*unscoped*
-   *  economy rows,
-   *  per docs/patterns.md's "Gate a tab on data": the gate signal must be "computed unscoped by
+   *  economy rows, per docs/patterns.md's "Gate a tab on data": the gate signal must be "computed unscoped by
    *  whatever transient filter (season, side, …) the page also applies, so the tab doesn't flicker
    *  in and out as the user toggles that filter." A caller that passes season-filtered
    *  `economyRows` without also passing this would otherwise silently boot the viewer off the tab

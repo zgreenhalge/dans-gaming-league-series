@@ -1,5 +1,8 @@
 import { supabase } from '../supabase';
-import { resolveMatchSeasons, fetchAllPages, fetchPmsLookup, bumpCounter, type PmsRow } from './_shared';
+import {
+  resolveMatchSeasons, fetchAllPages, fetchPmsLookup, bumpCounter, type PmsRow,
+  buildPlayerFactionsAndRoster, type PlayerFactionsAndRoster, type RoundSideInfo,
+} from './_shared';
 import { getPlayersById } from './player';
 import {
   killWeaponCategory, weaponGroupKey, weaponDisplayName, isGunWeapon, KILL_WEAPON_CATEGORY_LABEL,
@@ -9,8 +12,9 @@ import type { Player, Faction, RoundCondition } from '../types';
 import type { AccuracyTotals, PlayerWeaponAccuracy, WeaponClassAggregateStat } from './weaponStats';
 import { ZERO_WEAPON_CLASS_STAT } from './weaponStats';
 import { resolveSide } from '../parsers/roundSides';
-import type { RoundSideInfo } from './rounds';
 import { ZERO_UTILITY, type UtilityCounts } from './utility';
+
+export { buildPlayerFactionsAndRoster, type PlayerFactionsAndRoster };
 
 export interface MatchKillRow {
   match_id: number;
@@ -327,33 +331,6 @@ export function deriveHeadshotAndTeamkillCounts(kills: KillCreditFlags[]): Map<s
  *  is defined (also used by `sideForFaction()` there and `tallyPlayerRoundsBySide()` in
  *  `mapSideStats.ts`), kept under this name since every caller in this file already uses it. */
 export const resolvePlayerSide = resolveSide;
-
-export interface PlayerFactionsAndRoster {
-  playerFactions: Map<string, Faction>;
-  rosterByMatch: Map<number, number[]>;
-}
-
-/** Builds `deriveSideSplitCounts()`/`deriveClutchCounts()`'s two roster inputs from one pass over a
- *  `player_match_stats` read — `playerFactions` (`` `${match_id}:${player_id}` `` → `faction`) and
- *  `rosterByMatch` (every roster `player_id` per `match_id`) — the same construction
- *  `getAllSabremetrics()`, `getMatchSabremetrics()`, and the demo-upload preview each need from
- *  their own already-fetched roster rows. */
-export function buildPlayerFactionsAndRoster(
-  rows: { match_id: number; player_id: number; faction: Faction }[],
-): PlayerFactionsAndRoster {
-  const playerFactions = new Map<string, Faction>();
-  const rosterByMatch = new Map<number, number[]>();
-  for (const r of rows) {
-    playerFactions.set(`${r.match_id}:${r.player_id}`, r.faction);
-    let roster = rosterByMatch.get(r.match_id);
-    if (!roster) {
-      roster = [];
-      rosterByMatch.set(r.match_id, roster);
-    }
-    roster.push(r.player_id);
-  }
-  return { playerFactions, rosterByMatch };
-}
 
 export interface SideSplitCounts {
   kills_ct: number;

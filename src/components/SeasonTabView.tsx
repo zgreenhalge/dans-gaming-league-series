@@ -109,7 +109,7 @@ type SeasonTabViewProps = (RegularMode | GauntletMode) & {
 };
 
 export default function SeasonTabView(props: SeasonTabViewProps) {
-  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats } = props;
+  const { leaderboard, seasonStatus, currentPlayerId, subStyle, h2hData, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats = [] } = props;
   const hasSab = !!sabremetrics && sabremetrics.length > 0;
   const isGauntlet = props.kind === 'gauntlet';
   const schedule = props.kind === 'regular' ? props.schedule : EMPTY_SCHEDULE;
@@ -465,7 +465,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
           kills={matchKills}
           weaponClassStats={matchWeaponClassStats}
           economyRows={matchEconomyStats}
-          hasEconomyData={!!matchEconomyStats && matchEconomyStats.length > 0}
+          hasEconomyData={matchEconomyStats.length > 0}
         />
       )}
 

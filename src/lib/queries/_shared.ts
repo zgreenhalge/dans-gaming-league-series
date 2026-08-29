@@ -2,6 +2,7 @@ import { gunzipMaybe } from '../gzip';
 import { getR2Object } from '../r2';
 import { supabase } from '../supabase';
 import { isPlayedScore } from '../util';
+import type { Faction } from '../types';
 
 const SUPABASE_PAGE_SIZE = 1000;
 
@@ -155,6 +156,77 @@ export function fetchPmsLookup(
         return asPage(q.range(from, to));
       });
   return rowsPromise.then((r) => new Map(r.map((x) => [x.id, x])));
+}
+
+export type PmsFactionRow = PmsRow & { faction: Faction };
+
+/** Like `fetchPmsLookup()`, but also carrying `faction` — for a caller that needs to resolve a
+ *  round's side (`resolveSide()`, `parsers/roundSides.ts`) as well as the player_id, without a
+ *  second `player_match_stats` read alongside a plain `fetchPmsLookup()` call. Pass `matchId` to
+ *  scope to one match. */
+export function fetchPmsFactionLookup(matchId?: number): Promise<Map<number, PmsFactionRow>> {
+  return fetchAllPages<PmsFactionRow>((from, to) => {
+    let q = supabase.from('player_match_stats').select('id, player_id, match_id, faction');
+    if (matchId != null) q = q.eq('match_id', matchId);
+    return asPage(q.range(from, to));
+  }).then((rows) => new Map(rows.map((r) => [r.id, r])));
+}
+
+export interface PlayerFactionsAndRoster {
+  playerFactions: Map<string, Faction>;
+  rosterByMatch: Map<number, number[]>;
+}
+
+/** Builds `deriveSideSplitCounts()`/`deriveClutchCounts()`'s two roster inputs from one pass over a
+ *  `player_match_stats` read — `playerFactions` (`` `${match_id}:${player_id}` `` → `faction`) and
+ *  `rosterByMatch` (every roster `player_id` per `match_id`) — the same construction
+ *  `getAllSabremetrics()`, `getMatchSabremetrics()`, `getAllMatchRounds()`, and the demo-upload
+ *  preview each need from their own already-fetched roster rows. Lives here (not in `kills.ts`,
+ *  where its consumers are) so both `kills.ts` and `weaponStats.ts` can import it without a
+ *  circular dependency — `kills.ts` already imports from `weaponStats.ts`. */
+export function buildPlayerFactionsAndRoster(
+  rows: { match_id: number; player_id: number; faction: Faction }[],
+): PlayerFactionsAndRoster {
+  const playerFactions = new Map<string, Faction>();
+  const rosterByMatch = new Map<number, number[]>();
+  for (const r of rows) {
+    playerFactions.set(`${r.match_id}:${r.player_id}`, r.faction);
+    let roster = rosterByMatch.get(r.match_id);
+    if (!roster) {
+      roster = [];
+      rosterByMatch.set(r.match_id, roster);
+    }
+    roster.push(r.player_id);
+  }
+  return { playerFactions, rosterByMatch };
+}
+
+export interface RoundSideInfo {
+  shirtsSide: 'CT' | 'T';
+  winnerSide: 'CT' | 'T';
+}
+
+/** Every round's `shirts_side`/`winner_side`, keyed by `` `${match_id}:${round_number}` `` — the raw
+ *  ingredient `resolvePlayerSide()` (`queries/kills.ts`) needs to resolve which side a player was on
+ *  a given round, plus which side won it (`deriveClutchCounts()`'s win/loss check, and
+ *  `getEconomyRoundWins()`'s own win check — `queries/weaponStats.ts`). Lives here rather than
+ *  `rounds.ts` for the same circular-dependency reason as `buildPlayerFactionsAndRoster()` above.
+ *  No season resolution or `win_reason` join, unlike `getAllMatchRounds()` — side-split/clutch/
+ *  economy-win derivation doesn't need either, the same reasoning `getAllKillCreditFlags()`
+ *  (`queries/kills.ts`) uses to skip `getAllMatchKills()`'s season/name joins. Pass `matchId` to
+ *  scope to one match. */
+export async function getRoundSides(matchId?: number): Promise<Map<string, RoundSideInfo>> {
+  const rows = await fetchAllPages<{ match_id: number; round_number: number; shirts_side: string; winner_side: string }>(
+    (from, to) => {
+      let q = supabase.from('match_rounds').select('match_id, round_number, shirts_side, winner_side');
+      if (matchId != null) q = q.eq('match_id', matchId);
+      return q.range(from, to);
+    },
+  );
+  return new Map(rows.map((r) => [
+    `${r.match_id}:${r.round_number}`,
+    { shirtsSide: r.shirts_side as 'CT' | 'T', winnerSide: r.winner_side as 'CT' | 'T' },
+  ]));
 }
 
 /**
