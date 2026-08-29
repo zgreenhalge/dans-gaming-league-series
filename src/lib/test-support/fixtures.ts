@@ -227,6 +227,9 @@ export const MATCH_KILLS: Row[] = (() => {
   // Match 100: Alice(1000)/Bob(1001) SHIRTS vs Carol(1002)/Dave(1003) SKINS.
   let r = headshotBurst(rows, 100, 1, 1000, [1002, 1003], 9);
   r = headshotBurst(rows, 100, r, 1001, [1002, 1003], 6);
+  // Round 11's burst kill above only takes Dave(1003) — this extra kill also takes Carol(1002) the
+  // same round, a full T-side wipe (see MATCH_ROUNDS' round-11 comment).
+  rows.push(mkill({ match: 100, round: 11, attacker: 1000, victim: 1002 }));
   r = headshotBurst(rows, 100, r, 1002, [1000, 1001], 5);
   rows.push(mkill({ match: 100, round: r, attacker: 1002, victim: 1001, isTeamkill: true }));
   r += 1;
@@ -254,14 +257,19 @@ export const MATCH_KILLS: Row[] = (() => {
 // these rows only need to give query-time derivation a shirts_side to resolve against for every
 // round match_kills uses, and a constant side per match keeps the resulting kills_ct/_t etc.
 // hand-verifiable (every kill by a given attacker lands on the same side for the whole match).
-function roundRows(match: number, count: number, shirtsSide: 'CT' | 'T'): Row[] {
+function roundRows(match: number, count: number, shirtsSide: 'CT' | 'T', winReasons: Record<number, string> = {}): Row[] {
   return Array.from({ length: count }, (_, i) => ({
-    match_id: match, round_number: i + 1, shirts_side: shirtsSide, winner_side: shirtsSide, win_reason: null,
+    match_id: match, round_number: i + 1, shirts_side: shirtsSide, winner_side: shirtsSide,
+    win_reason: winReasons[i + 1] ?? null,
   }));
 }
 
 export const MATCH_ROUNDS: Row[] = [
-  ...roundRows(100, 25, 'CT'),
+  // Rounds 10/11 carry an explicit win_reason to exercise deriveNinjaDefuseRounds() (queries/kills.ts)
+  // against MATCH_KILLS' existing round 10/11 deaths: round 10 kills only Carol(1002), leaving her
+  // SKINS teammate Dave(1003) alive (a "ninja" defuse); round 11 kills both Carol and Dave (the extra
+  // kill added to MATCH_KILLS below), a full T-side wipe — not a ninja.
+  ...roundRows(100, 25, 'CT', { 10: 'defuse', 11: 'defuse' }),
   ...roundRows(200, 28, 'CT'),
   ...roundRows(300, 18, 'T'),
 ];

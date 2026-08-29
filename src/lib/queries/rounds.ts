@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
-import { resolveMatchSeasons, fetchAllPages } from './_shared';
-import type { RoundCondition } from '../types';
+import { resolveMatchSeasons, fetchAllPages, asPage } from './_shared';
+import type { Faction, RoundCondition } from '../types';
+import { buildPlayerFactionsAndRoster, deriveNinjaDefuseRounds, type NinjaVictim } from './kills';
 
 export interface MatchRoundRow {
   match_id: number;
@@ -12,6 +13,9 @@ export interface MatchRoundRow {
    *  `aggregateWinConditions()` (`src/lib/mapSideStats.ts`), which excludes those rounds rather
    *  than guessing a condition. */
   win_reason: RoundCondition | null;
+  /** True for a defuse win with at least one T-side player still alive — see
+   *  `deriveNinjaDefuseRounds()` (`queries/kills.ts`). Always false for every other `win_reason`. */
+  ninja: boolean;
 }
 
 type RawRoundRow = {
@@ -22,13 +26,49 @@ type RawRoundRow = {
   win_reason: string | null;
 };
 
+type RawKillVictimRow = { match_id: number; round_number: number; victim_player_match_stats_id: number };
+type RawPmsFactionRow = { id: number; player_id: number; match_id: number; faction: Faction };
+
 /** Every recorded round outcome (`match_rounds`), joined to season — the raw ingredient behind
- *  round-win-%-by-side. Flat, ungrouped, matching `getAllMatchKills()`'s pattern. */
+ *  round-win-%-by-side. Flat, ungrouped, matching `getAllMatchKills()`'s pattern. Also resolves
+ *  `ninja` per round (`deriveNinjaDefuseRounds()`), which needs `match_kills`/`player_match_stats`
+ *  faction data beyond `match_rounds` itself — fetched here rather than pushed onto every caller. */
 export async function getAllMatchRounds(seasonId?: number): Promise<MatchRoundRow[]> {
-  const [roundRows, matchSeason] = await Promise.all([
+  const [roundRows, matchSeason, killRows, pmsRows] = await Promise.all([
     fetchAllPages<RawRoundRow>((from, to) => supabase.from('match_rounds').select('*').range(from, to)),
     resolveMatchSeasons(),
+    fetchAllPages<RawKillVictimRow>((from, to) =>
+      asPage(supabase.from('match_kills').select('match_id, round_number, victim_player_match_stats_id').range(from, to)),
+    ),
+    fetchAllPages<RawPmsFactionRow>((from, to) =>
+      asPage(supabase.from('player_match_stats').select('id, player_id, match_id, faction').range(from, to)),
+    ),
   ]);
+
+  const pmsById = new Map(pmsRows.map((r) => [r.id, r]));
+  const victims: NinjaVictim[] = [];
+  for (const k of killRows) {
+    const pms = pmsById.get(k.victim_player_match_stats_id);
+    if (!pms) continue;
+    victims.push({ match_id: k.match_id, round_number: k.round_number, victim_player_id: pms.player_id });
+  }
+  const { playerFactions, rosterByMatch } = buildPlayerFactionsAndRoster(pmsRows);
+  const roundSides = new Map(roundRows.map((r) => [
+    `${r.match_id}:${r.round_number}`,
+    { shirtsSide: r.shirts_side as 'CT' | 'T', winnerSide: r.winner_side as 'CT' | 'T' },
+  ]));
+  const ninjaRounds = deriveNinjaDefuseRounds(
+    roundRows.map((r) => ({
+      match_id: r.match_id,
+      round_number: r.round_number,
+      winner_side: r.winner_side as 'CT' | 'T',
+      win_reason: r.win_reason as RoundCondition | null,
+    })),
+    victims,
+    roundSides,
+    playerFactions,
+    rosterByMatch,
+  );
 
   const result: MatchRoundRow[] = [];
   for (const r of roundRows) {
@@ -42,6 +82,7 @@ export async function getAllMatchRounds(seasonId?: number): Promise<MatchRoundRo
       winner_side: r.winner_side as 'CT' | 'T',
       shirts_side: r.shirts_side as 'CT' | 'T',
       win_reason: r.win_reason as RoundCondition | null,
+      ninja: ninjaRounds.has(`${r.match_id}:${r.round_number}`),
     });
   }
   return result;

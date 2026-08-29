@@ -550,7 +550,10 @@ function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
 const CONDITION_BUCKETS = Object.keys(CONDITION_LABEL) as RoundCondition[];
 
 /** How rounds in scope were decided, fed by `aggregateWinConditions()` instead of
- *  `aggregateScoreDistribution()` — same `DistributionTable` shape as `ScoreDistributionTable`. */
+ *  `aggregateScoreDistribution()` — same `DistributionTable` shape as `ScoreDistributionTable`.
+ *  "Ninja" is appended after the four `RoundCondition` buckets rather than folded into `CONDITION_
+ *  BUCKETS` — it's a defuse-win subset (see `WinConditionBreakdown.ninja`), not its own `win_reason`,
+ *  so its % column reads as "share of all rounds", not "share of defuses". */
 function WinConditionTable({ dist }: { dist: WinConditionBreakdown }) {
   return (
     <DistributionTable
@@ -558,7 +561,10 @@ function WinConditionTable({ dist }: { dist: WinConditionBreakdown }) {
       emptyMessage="No round data."
       categoryLabel="Condition"
       total={dist.total}
-      buckets={CONDITION_BUCKETS.map((key) => ({ label: CONDITION_LABEL[key], count: dist[key] }))}
+      buckets={[
+        ...CONDITION_BUCKETS.map((key) => ({ label: CONDITION_LABEL[key], count: dist[key] })),
+        { label: 'Ninja', count: dist.ninja, note: 'defuse, T(s) still alive' },
+      ]}
     />
   );
 }

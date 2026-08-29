@@ -112,6 +112,15 @@ on the match page's round-history strip (`RoundHistoryEntry.condition`, driven b
 `round_end` reason, but `RoundHistoryStrip` shows one match's rounds individually while this
 breakdown aggregates across every round in the current scope.
 
+**Ninja** — a defuse win (`win_reason = 'defuse'`) with at least one T-side player still alive when
+the round ended, from `deriveNinjaDefuseRounds()` (`src/lib/queries/kills.ts`): the bomb was
+defused without ever being contested. Resolved by comparing each round's T-side roster (from
+`player_match_stats.faction` + that round's `shirts_side`) against who actually died that round
+(`match_kills`), and attached as `MatchRoundRow.ninja` by `getAllMatchRounds()` so `RoundOutcome`
+consumers don't need their own kills/roster join. Surfaced as an extra row in the Round win
+condition breakdown — a count of the `defuse` subset, not an additional slice of `total` (a defuse
+round is already counted once via `defuse`; `ninja` isn't summed a second time).
+
 ## Sabremetrics
 
 Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.

@@ -5,7 +5,7 @@ import {
   killWeaponCategory, weaponGroupKey, weaponDisplayName, isGunWeapon, KILL_WEAPON_CATEGORY_LABEL,
   WEAPON_CATEGORIES, type KillWeaponCategory, type WeaponCategory,
 } from '../parsers/weaponClasses';
-import type { Player, Faction } from '../types';
+import type { Player, Faction, RoundCondition } from '../types';
 import type { AccuracyTotals, PlayerWeaponAccuracy, WeaponClassAggregateStat } from './weaponStats';
 import { ZERO_WEAPON_CLASS_STAT } from './weaponStats';
 import { resolveSide } from '../parsers/roundSides';
@@ -541,6 +541,68 @@ export function deriveClutchCounts(
     }
   }
 
+  return out;
+}
+
+export interface NinjaCandidateRound {
+  match_id: number;
+  round_number: number;
+  winner_side: 'CT' | 'T';
+  win_reason: RoundCondition | null;
+}
+
+export interface NinjaVictim {
+  match_id: number;
+  round_number: number;
+  victim_player_id: number;
+}
+
+/**
+ * Every `` `${match_id}:${round_number}` `` where the round was won by a defuse while at least one
+ * T-side player was still alive — a "ninja" defuse, the bomb defused without ever being contested.
+ * Only rounds with `win_reason === 'defuse'` and `winner_side === 'CT'` are candidates; every other
+ * round is skipped without being counted either way. A round whose match has no resolvable T-side
+ * roster (missing `player_match_stats` faction data) is never flagged, the same "don't guess"
+ * exclusion `aggregateWinConditions()` (`mapSideStats.ts`) already applies to a null `win_reason`.
+ *
+ * `roundSides`/`playerFactions`/`rosterByMatch` are the same three inputs `deriveClutchCounts()`
+ * takes — this needs the same "which side was this roster player on this round" resolution, just
+ * evaluated once at round end instead of kill-by-kill.
+ */
+export function deriveNinjaDefuseRounds(
+  rounds: NinjaCandidateRound[],
+  victims: NinjaVictim[],
+  roundSides: Map<string, RoundSideInfo>,
+  playerFactions: Map<string, Faction>,
+  rosterByMatch: Map<number, number[]>,
+): Set<string> {
+  const victimsByRound = new Map<string, number[]>();
+  for (const v of victims) {
+    const key = `${v.match_id}:${v.round_number}`;
+    const list = victimsByRound.get(key);
+    if (list) list.push(v.victim_player_id);
+    else victimsByRound.set(key, [v.victim_player_id]);
+  }
+
+  const out = new Set<string>();
+  for (const r of rounds) {
+    if (r.win_reason !== 'defuse' || r.winner_side !== 'CT') continue;
+    const key = `${r.match_id}:${r.round_number}`;
+    const roundInfo = roundSides.get(key);
+    if (roundInfo == null) continue;
+    const roster = rosterByMatch.get(r.match_id);
+    if (roster == null) continue;
+
+    const sideOf = (playerId: number): 'CT' | 'T' | undefined => {
+      const faction = playerFactions.get(`${r.match_id}:${playerId}`);
+      return faction == null ? undefined : resolveSide(roundInfo.shirtsSide, faction);
+    };
+
+    const tRosterSize = roster.filter((playerId) => sideOf(playerId) === 'T').length;
+    if (tRosterSize === 0) continue;
+    const tDead = new Set((victimsByRound.get(key) ?? []).filter((playerId) => sideOf(playerId) === 'T'));
+    if (tDead.size < tRosterSize) out.add(key);
+  }
   return out;
 }
 

@@ -83,6 +83,10 @@ export interface RoundOutcome {
   winner_side: 'CT' | 'T';
   shirts_side: 'CT' | 'T';
   win_reason: RoundCondition | null;
+  /** True for a defuse win with at least one T-side player still alive (`deriveNinjaDefuseRounds()`,
+   *  `queries/kills.ts`). Optional since not every `RoundOutcome` source resolves it — a caller that
+   *  omits it just never counts a ninja defuse (see `aggregateWinConditions()`). */
+  ninja?: boolean;
 }
 
 /** Round win/loss counts for CT and T, computed directly from round outcomes — symmetric per
@@ -228,19 +232,24 @@ export interface WinConditionBreakdown {
   bomb: number;
   defuse: number;
   time: number;
+  /** Defuse wins with at least one T-side player still alive — a subset of `defuse`, not an
+   *  additional slice of `total` (see `deriveNinjaDefuseRounds()`, `queries/kills.ts`). */
+  ninja: number;
   total: number;
 }
 
 /** How rounds in scope were decided — elimination, bomb detonation, defuse, or time expiring
  *  (`match_rounds.win_reason`, see `RoundCondition`). A round with no recorded condition (a
  *  `match_rounds` row predating this column, or a parser miss) is excluded from `total` rather than
- *  guessed into a bucket. */
+ *  guessed into a bucket. `ninja` counts a defuse-win subset and is never added to `total` a second
+ *  time — those rounds are already counted once via `defuse`. */
 export function aggregateWinConditions(rounds: RoundOutcome[]): WinConditionBreakdown {
-  const out: WinConditionBreakdown = { elim: 0, bomb: 0, defuse: 0, time: 0, total: 0 };
+  const out: WinConditionBreakdown = { elim: 0, bomb: 0, defuse: 0, time: 0, ninja: 0, total: 0 };
   for (const r of rounds) {
     if (r.win_reason == null) continue;
     out[r.win_reason]++;
     out.total++;
+    if (r.win_reason === 'defuse' && r.ninja) out.ninja++;
   }
   return out;
 }
