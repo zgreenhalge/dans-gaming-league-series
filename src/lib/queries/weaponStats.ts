@@ -15,7 +15,8 @@ export interface WeaponClassMatchRow extends WeaponStatFields {
   weapon: string | null;
   /** Derived from `weapon` via `WEAPON_CATEGORY` when present; falls back to the row's own stored
    *  category for a pre-reparse row with no `weapon` (#474 phase 1 — see the migration's own
-   *  comment for why that column stays live during this transition). */
+   *  comment for why that column stays live during this transition). #499 tracks dropping the
+   *  stored `weapon_category` column (and this fallback) once every match is confirmed reparsed. */
   weapon_category: WeaponCategory;
 }
 

@@ -285,7 +285,8 @@ export interface DemoWeaponStat {
   player_id: number;
   /** `weapon_category` is included alongside `weapon` purely so every insert still satisfies the
    *  column's current NOT NULL constraint (phase 1 of #474's migration) — always derived from
-   *  `weapon` (`WEAPON_CATEGORY[weapon]`) by the caller, never a second independent value. */
+   *  `weapon` (`WEAPON_CATEGORY[weapon]`) by the caller, never a second independent value. #499
+   *  tracks dropping this field once the column itself is dropped. */
   weaponStats: (WeaponStatFields & { weapon: string; weapon_category: string })[];
   economyStats: (WeaponStatFields & { economy_type: string })[];
 }
