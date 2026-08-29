@@ -366,6 +366,13 @@ function optionValueToFilter(value: string): WeaponFilter {
 // `aggregateKillCategoryStats()`/the Flair tab's Knife stat exactly as before.
 const DROPDOWN_CATEGORIES = KILL_WEAPON_CATEGORIES.filter((c) => c !== 'melee');
 
+// `other` (world/fall-damage and bomb-detonation deaths) never has a real player attacker — see
+// `killWeaponCategory()` — so "All Other" would always resolve zero Kills, which reads as broken
+// rather than correct: a Deaths-only stat forced through a Kills-shaped filter. Hidden as a
+// selectable category for now (#498 tracks a dedicated uncredited-deaths display instead);
+// `other`'s one folded-in weapon (`Knife` — see above) still shows if the player has any.
+const HIDDEN_CATEGORY_FILTERS = new Set<KillWeaponCategory>(['other']);
+
 function WeaponFilterSelect({ kills, value, onChange }: {
   kills: MatchKillRow[]; value: WeaponFilter; onChange: (filter: WeaponFilter) => void;
 }) {
@@ -402,14 +409,19 @@ function WeaponFilterSelect({ kills, value, onChange }: {
         className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
       >
         <option value={FAVORITE_OPTION_VALUE}>Favorite</option>
-        {DROPDOWN_CATEGORIES.map((c) => (
-          <optgroup key={c} label={KILL_WEAPON_CATEGORY_LABEL[c]}>
-            <option value={`${CATEGORY_OPTION_PREFIX}${c}`}>All {KILL_WEAPON_CATEGORY_LABEL[c]}</option>
-            {(weaponsByCategory.get(c) ?? []).map((w) => (
-              <option key={w} value={w}>{weaponDisplayName(w)}</option>
-            ))}
-          </optgroup>
-        ))}
+        {DROPDOWN_CATEGORIES.map((c) => {
+          const weapons = weaponsByCategory.get(c) ?? [];
+          const showCategoryOption = !HIDDEN_CATEGORY_FILTERS.has(c);
+          if (!showCategoryOption && weapons.length === 0) return null; // nothing left to show
+          return (
+            <optgroup key={c} label={KILL_WEAPON_CATEGORY_LABEL[c]}>
+              {showCategoryOption && (
+                <option value={`${CATEGORY_OPTION_PREFIX}${c}`}>All {KILL_WEAPON_CATEGORY_LABEL[c]}</option>
+              )}
+              {weapons.map((w) => <option key={w} value={w}>{weaponDisplayName(w)}</option>)}
+            </optgroup>
+          );
+        })}
       </select>
     </div>
   );
