@@ -122,18 +122,25 @@ type RawPmsFactionRow = { id: number; player_id: number; match_id: number; facti
  *  tier, never how many of those were won). Resolves each round's side the same way
  *  `deriveSideSplitCounts()`/`deriveClutchCounts()` (`queries/kills.ts`) do, but fetched
  *  independently here (rather than importing those helpers) since `kills.ts` already imports from
- *  this file — importing back would be circular. */
-async function getEconomyRoundWins(): Promise<Map<string, number>> {
+ *  this file — importing back would be circular. Pass `matchId` to scope all three reads to one
+ *  match, matching `getMatchWeaponClassStats()`'s own reasoning for avoiding a full-table fetch. */
+async function getEconomyRoundWins(matchId?: number): Promise<Map<string, number>> {
   const [roundEconomyRows, roundRows, pmsRows] = await Promise.all([
-    fetchAllPages<RawRoundEconomyRow>((from, to) =>
-      asPage(supabase.from('match_round_economy').select('match_id, round_number, player_match_stats_id, economy_type').range(from, to)),
-    ),
-    fetchAllPages<RawRoundWinRow>((from, to) =>
-      asPage(supabase.from('match_rounds').select('match_id, round_number, shirts_side, winner_side').range(from, to)),
-    ),
-    fetchAllPages<RawPmsFactionRow>((from, to) =>
-      asPage(supabase.from('player_match_stats').select('id, player_id, match_id, faction').range(from, to)),
-    ),
+    fetchAllPages<RawRoundEconomyRow>((from, to) => {
+      let q = supabase.from('match_round_economy').select('match_id, round_number, player_match_stats_id, economy_type');
+      if (matchId != null) q = q.eq('match_id', matchId);
+      return asPage(q.range(from, to));
+    }),
+    fetchAllPages<RawRoundWinRow>((from, to) => {
+      let q = supabase.from('match_rounds').select('match_id, round_number, shirts_side, winner_side');
+      if (matchId != null) q = q.eq('match_id', matchId);
+      return asPage(q.range(from, to));
+    }),
+    fetchAllPages<RawPmsFactionRow>((from, to) => {
+      let q = supabase.from('player_match_stats').select('id, player_id, match_id, faction');
+      if (matchId != null) q = q.eq('match_id', matchId);
+      return asPage(q.range(from, to));
+    }),
   ]);
 
   const pmsById = new Map(pmsRows.map((r) => [r.id, r]));
@@ -216,6 +223,45 @@ export async function getMatchWeaponClassStats(
       headshot_hits: raw.headshot_hits,
       damage_dealt: raw.damage_dealt,
       rounds_played: raw.rounds_played,
+    });
+  }
+  return result;
+}
+
+/** One match's `player_match_economy_stats` rows, joined to player names — the match-page-scoped
+ *  counterpart to `getAllEconomyStats()` (avoids a full-table fetch for one match's box score, same
+ *  reasoning as `getMatchWeaponClassStats()` above). `season_id` is left unresolved (`-1`), matching
+ *  that same convention. */
+export async function getMatchEconomyStats(
+  matchId: number,
+  playersById?: Map<number, Player> | Promise<Map<number, Player>>,
+): Promise<EconomyMatchRow[]> {
+  const [rows, pmsLookup, resolvedPlayersById, roundWins] = await Promise.all([
+    fetchAllPages<PlayerMatchEconomyStat>((from, to) =>
+      supabase.from('player_match_economy_stats').select('*').eq('match_id', matchId).range(from, to),
+    ),
+    fetchPmsLookup(matchId),
+    playersById ? Promise.resolve(playersById) : getPlayersById(),
+    getEconomyRoundWins(matchId),
+  ]);
+
+  const result: EconomyMatchRow[] = [];
+  for (const raw of rows) {
+    const pms = pmsLookup.get(raw.player_match_stats_id);
+    if (!pms) continue;
+    const player = resolvedPlayersById.get(pms.player_id);
+    result.push({
+      player_id: pms.player_id,
+      player_name: player?.name ?? `#${pms.player_id}`,
+      match_id: pms.match_id,
+      season_id: -1,
+      economy_type: raw.economy_type,
+      shots_fired: raw.shots_fired,
+      shots_hit: raw.shots_hit,
+      headshot_hits: raw.headshot_hits,
+      damage_dealt: raw.damage_dealt,
+      rounds_played: raw.rounds_played,
+      rounds_won: roundWins.get(`${pms.match_id}:${pms.player_id}:${raw.economy_type}`) ?? 0,
     });
   }
   return result;

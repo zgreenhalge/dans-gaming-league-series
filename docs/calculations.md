@@ -424,7 +424,10 @@ in. `W-L` = `rounds_won` – (`rounds_played` - `rounds_won`) — `rounds_won` c
 `getEconomyRoundWins()` (`src/lib/queries/weaponStats.ts`), which joins `match_round_economy`'s
 per-round tier to that round's own winner (`match_rounds`) via the player's side that round
 (`faction` + `shirts_side`); `player_match_economy_stats` itself only sums `rounds_played`, not how
-many of those were won, so this is a separate round-level join rather than a stored column.
+many of those were won, so this is a separate round-level join rather than a stored column. Surfaced
+on the player/statistics/season pages (season-scoped `getAllEconomyStats()`) and the match page
+(`getMatchEconomyStats()`), the same season/match split `getAllWeaponClassStats()`/
+`getMatchWeaponClassStats()` use for the Weapons sub-tab.
 
 ### Side Splits
 

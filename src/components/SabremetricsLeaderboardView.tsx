@@ -1416,10 +1416,11 @@ export default function SabremetricsLeaderboardView({
   /** Rows behind the Economy sub-tab (#481) — same scope as `rows` (season-filtered, in
    *  particular), so this alone isn't a safe tab-gating signal (see `hasEconomyData` below). */
   economyRows?: EconomyMatchRow[];
-  /** Gates the Economy sub-tab. Unlike `kills` (always shown, zeroed until a demo is parsed), no
-   *  caller currently wires economy data at match grain, so the tab must hide there rather than
-   *  showing dead. Defaults to `false`, not derived from `economyRows` — a caller that wires
-   *  `economyRows` must pass this explicitly, computed from its own season-*unscoped* economy rows,
+  /** Gates the Economy sub-tab. Unlike `kills` (always shown, zeroed until a demo is parsed), an
+   *  unplayed/not-yet-reparsed match or season has no economy rows to show at all, so the tab must
+   *  hide rather than showing dead. Defaults to `false`, not derived from `economyRows` — a caller
+   *  that wires `economyRows` must pass this explicitly, computed from its own season-*unscoped*
+   *  economy rows,
    *  per docs/patterns.md's "Gate a tab on data": the gate signal must be "computed unscoped by
    *  whatever transient filter (season, side, …) the page also applies, so the tab doesn't flicker
    *  in and out as the user toggles that filter." A caller that passes season-filtered

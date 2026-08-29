@@ -1,6 +1,6 @@
 /**
  * Regression harness for queries/weaponStats.ts (#279, #474, #481) — getAllWeaponClassStats,
- * getAllEconomyStats, getMatchWeaponClassStats, groupWeaponAccuracyByPlayer,
+ * getAllEconomyStats, getMatchWeaponClassStats, getMatchEconomyStats, groupWeaponAccuracyByPlayer,
  * aggregateEconomyStats, resolveEconomyStat. Exercises the player_match_stats -> matches ->
  * weeks -> seasons join and the season_id filter against the fixture DB's match-100 rows
  * (week 10 -> season 1).
@@ -15,7 +15,7 @@ import { buildFakeDb } from './test-support/fixtures';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getAllWeaponClassStats, getAllEconomyStats, getMatchWeaponClassStats, groupWeaponAccuracyByPlayer, aggregateEconomyStats, resolveEconomyStat, getPlayersById, type EconomyMatchRow } from './queries';
+import { getAllWeaponClassStats, getAllEconomyStats, getMatchWeaponClassStats, getMatchEconomyStats, groupWeaponAccuracyByPlayer, aggregateEconomyStats, resolveEconomyStat, getPlayersById, type EconomyMatchRow } from './queries';
 import { economyMatchRow as economyRow } from './test-support/sabFields';
 import { test, report } from './test-support/miniTest';
 
@@ -64,6 +64,17 @@ async function main() {
     assert.equal(ak47?.player_name, 'Alice');
     assert.equal(ak47?.weapon_category, 'rifle');
     assert.equal(ak47?.shots_fired, 90);
+  });
+
+  await test('getMatchEconomyStats: resolves one match\'s rows (including rounds_won) without a season_id', async () => {
+    const rows = await getMatchEconomyStats(100);
+    const aliceFullBuy = rows.find((r) => r.player_id === 1 && r.economy_type === 'full_buy');
+    assert.equal(aliceFullBuy?.match_id, 100);
+    assert.equal(aliceFullBuy?.season_id, -1);
+    assert.equal(aliceFullBuy?.player_name, 'Alice');
+    assert.equal(aliceFullBuy?.rounds_won, 1);
+    const carolFullBuy = rows.find((r) => r.player_id === 3 && r.economy_type === 'full_buy');
+    assert.equal(carolFullBuy?.rounds_won, 0);
   });
 
   await test('groupWeaponAccuracyByPlayer: sums every player\'s rows by weapon and by category in one pass (#474)', async () => {
