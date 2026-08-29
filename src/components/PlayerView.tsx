@@ -735,7 +735,7 @@ export default function PlayerView({
 
       {/* Advanced Stats tab */}
       {tab === 'advanced' && (
-        <SabremetricsLeaderboardView rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} singlePlayer kills={filteredKills} weaponClassStats={filteredWeaponClassStats} economyRows={filteredEconomyStats} />
+        <SabremetricsLeaderboardView rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} singlePlayer kills={filteredKills} weaponClassStats={filteredWeaponClassStats} economyRows={filteredEconomyStats} hasEconomyData={economyStats.length > 0} />
       )}
 
       {/* Matchups tab */}

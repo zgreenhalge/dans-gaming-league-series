@@ -2,7 +2,8 @@
 /**
  * Component tests for `SabremetricsLeaderboardView.tsx`'s sub-tab URL state: the Aim/Weapons/
  * Economy/Flair/Opening Duels/Trades/Impact/Utility/Stats Plus tab bar reads from and writes to
- * `sub`, and the Economy tab is gated on `economyRows` the same way Stats Plus is gated on
+ * `sub`, and the Economy tab is gated on the separate `hasEconomyData` prop (not on `economyRows`
+ * itself, which can be season-filtered to empty) the same way Stats Plus is gated on
  * `showPlusStats`.
  *
  * Run:  npx vitest run src/components/SabremetricsLeaderboardView.test.tsx
@@ -70,6 +71,16 @@ describe('SabremetricsLeaderboardView — sub-tab URL state', () => {
   test('shows Economy once economyRows are wired', () => {
     nextNavigationMock.setSearchParams('sub=economy');
     renderWithUrlState(<SabremetricsLeaderboardView rows={[row()]} economyRows={[economyRow()]} />);
+    expect(screen.getByRole('tab', { name: 'Economy' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('keeps Economy visible when hasEconomyData=true even though the current season filter left economyRows empty', () => {
+    // Regression for a bug where gating on economyRows.length directly (a season-filtered prop)
+    // silently booted the viewer off the Economy tab the moment they filtered to a season with no
+    // parsed economy data — docs/patterns.md requires the gate signal to be unscoped by transient
+    // filters like this one, which is exactly what the separate `hasEconomyData` prop is for.
+    nextNavigationMock.setSearchParams('sub=economy');
+    renderWithUrlState(<SabremetricsLeaderboardView rows={[row()]} economyRows={[]} hasEconomyData />);
     expect(screen.getByRole('tab', { name: 'Economy' })).toHaveAttribute('aria-selected', 'true');
   });
 

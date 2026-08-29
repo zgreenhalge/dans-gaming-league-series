@@ -258,7 +258,7 @@ export default function CareerStatsView({
       )}
 
       {tab === 'advanced' && (
-        <SabremetricsLeaderboardView rows={filteredSabremetrics} kills={filteredKills} weaponClassStats={filteredWeaponClassStats} economyRows={filteredEconomyStats} />
+        <SabremetricsLeaderboardView rows={filteredSabremetrics} kills={filteredKills} weaponClassStats={filteredWeaponClassStats} economyRows={filteredEconomyStats} hasEconomyData={allEconomyStats.length > 0} />
       )}
 
       {tab === 'h2h' && (

@@ -1376,6 +1376,7 @@ export default function SabremetricsLeaderboardView({
   kills = [],
   weaponClassStats = [],
   economyRows = [],
+  hasEconomyData = economyRows.length > 0,
 }: {
   rows: SabremetricStatRow[];
   /** League-wide rows used as the Plus-stat baseline in single-player mode. Defaults to `rows`. */
@@ -1394,20 +1395,30 @@ export default function SabremetricsLeaderboardView({
   /** `player_match_weapon_stats` rows (#279/#474) behind the Weapons sub-tab's category accuracy
    *  breakdown — same scope as `kills`. Empty is fine, same honesty rule as `kills`. */
   weaponClassStats?: WeaponClassMatchRow[];
-  /** Rows behind the Economy sub-tab (#481) — same scope as `rows`. Unlike `kills`, an empty array
-   *  hides the tab entirely rather than rendering it zeroed: no caller currently wires this up at
-   *  match grain, so an always-present-but-empty tab there would be dead (see docs/patterns.md's
-   *  "Gate a tab on data"). */
+  /** Rows behind the Economy sub-tab (#481) — same scope as `rows` (season-filtered, in
+   *  particular), so this alone isn't a safe tab-gating signal (see `hasEconomyData` below). */
   economyRows?: EconomyMatchRow[];
+  /** Gates the Economy sub-tab. Unlike `kills` (always shown, zeroed until a demo is parsed), no
+   *  caller currently wires economy data at match grain, so the tab must hide there rather than
+   *  showing dead. Defaults to `economyRows.length > 0`, but a season-filtering caller
+   *  (`CareerStatsView`/`PlayerView`) must pass this explicitly, computed from its own
+   *  season-*unscoped* economy rows — per docs/patterns.md's "Gate a tab on data": the gate signal
+   *  must be "computed unscoped by whatever transient filter (season, side, …) the page also
+   *  applies, so the tab doesn't flicker in and out as the user toggles that filter." Defaulting to
+   *  `economyRows.length > 0` would violate that the moment `economyRows` itself is season-scoped —
+   *  toggling to a season with no parsed economy data would silently boot the viewer off the tab. */
+  hasEconomyData?: boolean;
 }) {
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);
   const leagueAggregated = useMemo(() => aggregateRows(leagueRows ?? rows), [leagueRows, rows]);
-  // `showPlusStats` is a static prop and `economyRows.length > 0` is stable across this component's
-  // lifetime for any one caller (a page either wires economy data or doesn't), so `subTabs` is
-  // already the right key list to validate against — no second `resolveTab` stage needed (unlike
-  // `SeasonTabView`, which filters its tab list on data that isn't known until render).
+  // `showPlusStats` and `hasEconomyData` are each stable across this component's lifetime for any
+  // one caller — a page either wires economy data or doesn't, and callers that season-filter their
+  // `economyRows` pass `hasEconomyData` separately from an unscoped source (see its doc comment
+  // above) — so `subTabs` is already the right key list to validate against — no second
+  // `resolveTab` stage needed (unlike `SeasonTabView`, which filters its tab list on data that
+  // isn't known until render).
   const subTabs = ALL_SUB_TABS.filter((t) =>
-    (t.key !== 'plus' || showPlusStats) && (t.key !== 'economy' || economyRows.length > 0));
+    (t.key !== 'plus' || showPlusStats) && (t.key !== 'economy' || hasEconomyData));
   const [sub, setSub] = useTabState(subTabs.map((t) => t.key), 'mechanics', 'sub');
   /** Favorite weapon by default; a `WeaponFilter` selects one specific weapon or a whole category
    *  instead (#474). Lives here, not inside `WeaponsTable`, so a match page's two team tables (and
