@@ -98,6 +98,18 @@ async function main() {
     assert.equal(forceBuy?.rounds_played, 5);
   });
 
+  await test('getAllEconomyStats: rounds_won reflects round-level wins from match_round_economy joined to match_rounds', async () => {
+    const rows = await getAllEconomyStats();
+    // Alice (SHIRTS) always wins in the fixture's match 100 (see fixtures.ts's MATCH_ROUNDS comment).
+    const aliceFullBuy = rows.find((r) => r.player_id === 1 && r.economy_type === 'full_buy');
+    assert.equal(aliceFullBuy?.rounds_won, 1);
+    const aliceEco = rows.find((r) => r.player_id === 1 && r.economy_type === 'eco');
+    assert.equal(aliceEco?.rounds_won, 1);
+    // Carol (SKINS) always loses in the same match.
+    const carolFullBuy = rows.find((r) => r.player_id === 3 && r.economy_type === 'full_buy');
+    assert.equal(carolFullBuy?.rounds_won, 0);
+  });
+
   // --- aggregateEconomyStats/resolveEconomyStat (#481) ---
   await test('aggregateEconomyStats: sums per-tier totals across matches, ignores other players', () => {
     const rows: EconomyMatchRow[] = [

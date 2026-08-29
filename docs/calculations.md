@@ -420,7 +420,11 @@ game-defined rather than derived from what a player happened to use, a tier with
 still renders a zeroed row rather than being hidden or omitted from the picker. `Damage/Round` =
 `damage_dealt / rounds_played` for the resolved tier — `rounds_played` is seeded from the round's
 own economy classification, not shot-triggered, so it includes rounds the player never fired a shot
-in.
+in. `W-L` = `rounds_won` – (`rounds_played` - `rounds_won`) — `rounds_won` comes from
+`getEconomyRoundWins()` (`src/lib/queries/weaponStats.ts`), which joins `match_round_economy`'s
+per-round tier to that round's own winner (`match_rounds`) via the player's side that round
+(`faction` + `shirts_side`); `player_match_economy_stats` itself only sums `rounds_played`, not how
+many of those were won, so this is a separate round-level join rather than a stored column.
 
 ### Side Splits
 

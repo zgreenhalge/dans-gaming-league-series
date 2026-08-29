@@ -51,7 +51,7 @@ export function economyMatchRow(
   return {
     player_name: `#${overrides.player_id}`,
     season_id: 1,
-    shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0,
+    shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0, rounds_won: 0,
     ...overrides,
   };
 }

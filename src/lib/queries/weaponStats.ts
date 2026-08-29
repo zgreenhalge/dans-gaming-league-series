@@ -1,8 +1,9 @@
 import { supabase } from '../supabase';
-import type { PlayerMatchWeaponStat, PlayerMatchEconomyStat, WeaponStatFields, Player } from '../types';
+import type { PlayerMatchWeaponStat, PlayerMatchEconomyStat, WeaponStatFields, Player, Faction } from '../types';
 import { getPlayersById } from './player';
 import { resolveMatchSeasons, fetchAllPages, fetchPmsLookup, asPage, type PmsRow } from './_shared';
 import { WEAPON_CATEGORY, type WeaponCategory } from '../parsers/weaponClasses';
+import { resolveSide } from '../parsers/roundSides';
 
 export interface WeaponClassMatchRow extends WeaponStatFields {
   player_id: number;
@@ -26,6 +27,10 @@ export interface EconomyMatchRow extends WeaponStatFields {
   match_id: number;
   season_id: number;
   economy_type: string;
+  /** Rounds at this tier this player's side actually won — from `match_round_economy` joined to
+   *  each round's own winner (`getEconomyRoundWins()` below), not derivable from `rounds_played`
+   *  alone. */
+  rounds_won: number;
 }
 
 interface JoinedFields {
@@ -107,6 +112,52 @@ export async function getAllWeaponClassStats(
   }));
 }
 
+type RawRoundEconomyRow = { match_id: number; round_number: number; player_match_stats_id: number; economy_type: string };
+type RawRoundWinRow = { match_id: number; round_number: number; shirts_side: string; winner_side: string };
+type RawPmsFactionRow = { id: number; player_id: number; match_id: number; faction: Faction };
+
+/** Per `` `${match_id}:${player_id}:${economy_type}` `` rounds actually WON, from
+ *  `match_round_economy` joined to each round's own winner (`match_rounds`) — the round-level
+ *  ground truth `player_match_economy_stats` doesn't carry itself (it only sums `rounds_played` per
+ *  tier, never how many of those were won). Resolves each round's side the same way
+ *  `deriveSideSplitCounts()`/`deriveClutchCounts()` (`queries/kills.ts`) do, but fetched
+ *  independently here (rather than importing those helpers) since `kills.ts` already imports from
+ *  this file — importing back would be circular. */
+async function getEconomyRoundWins(): Promise<Map<string, number>> {
+  const [roundEconomyRows, roundRows, pmsRows] = await Promise.all([
+    fetchAllPages<RawRoundEconomyRow>((from, to) =>
+      asPage(supabase.from('match_round_economy').select('match_id, round_number, player_match_stats_id, economy_type').range(from, to)),
+    ),
+    fetchAllPages<RawRoundWinRow>((from, to) =>
+      asPage(supabase.from('match_rounds').select('match_id, round_number, shirts_side, winner_side').range(from, to)),
+    ),
+    fetchAllPages<RawPmsFactionRow>((from, to) =>
+      asPage(supabase.from('player_match_stats').select('id, player_id, match_id, faction').range(from, to)),
+    ),
+  ]);
+
+  const pmsById = new Map(pmsRows.map((r) => [r.id, r]));
+  const roundOutcomeByKey = new Map<string, { shirtsSide: 'CT' | 'T'; winnerSide: 'CT' | 'T' }>();
+  for (const r of roundRows) {
+    roundOutcomeByKey.set(`${r.match_id}:${r.round_number}`, {
+      shirtsSide: r.shirts_side as 'CT' | 'T',
+      winnerSide: r.winner_side as 'CT' | 'T',
+    });
+  }
+
+  const out = new Map<string, number>();
+  for (const r of roundEconomyRows) {
+    const pms = pmsById.get(r.player_match_stats_id);
+    if (!pms) continue;
+    const outcome = roundOutcomeByKey.get(`${r.match_id}:${r.round_number}`);
+    if (!outcome) continue;
+    if (resolveSide(outcome.shirtsSide, pms.faction) !== outcome.winnerSide) continue;
+    const key = `${r.match_id}:${pms.player_id}:${r.economy_type}`;
+    out.set(key, (out.get(key) ?? 0) + 1);
+  }
+  return out;
+}
+
 /** Per-round-economy shot/accuracy/damage/rounds breakdown (#279), one row per (player, match,
  *  economy_type). Pass `playersById`/`pmsRows` when the caller already fetched them (e.g. shared
  *  with an adjacent `getAllMatchKills()` call) to skip a redundant full `players`/`player_match_stats`
@@ -116,7 +167,10 @@ export async function getAllEconomyStats(
   playersById?: Map<number, Player> | Promise<Map<number, Player>>,
   pmsRows?: PmsRow[] | Promise<PmsRow[]>,
 ): Promise<EconomyMatchRow[]> {
-  const rows = await getAllJoinedStats<PlayerMatchEconomyStat>('player_match_economy_stats', seasonId, playersById, pmsRows);
+  const [rows, roundWins] = await Promise.all([
+    getAllJoinedStats<PlayerMatchEconomyStat>('player_match_economy_stats', seasonId, playersById, pmsRows),
+    getEconomyRoundWins(),
+  ]);
   return rows.map(({ raw, ...join }) => ({
     ...join,
     economy_type: raw.economy_type,
@@ -125,6 +179,7 @@ export async function getAllEconomyStats(
     headshot_hits: raw.headshot_hits,
     damage_dealt: raw.damage_dealt,
     rounds_played: raw.rounds_played,
+    rounds_won: roundWins.get(`${join.match_id}:${join.player_id}:${raw.economy_type}`) ?? 0,
   }));
 }
 
@@ -222,6 +277,8 @@ export function groupWeaponAccuracyByPlayer(rows: WeaponClassMatchRow[]): Map<nu
 
 export interface EconomyTierStat extends WeaponStatFields {
   economy_type: string;
+  /** Rounds at this tier this player's side actually won — see `EconomyMatchRow.rounds_won`. */
+  rounds_won: number;
 }
 
 /** The shape an economy tier starts at before any match row is summed into it
@@ -229,7 +286,7 @@ export interface EconomyTierStat extends WeaponStatFields {
  *  this player never played a round of — so both build one from the same place instead of
  *  duplicating the field list. */
 function zeroEconomyStat(economyType: string): EconomyTierStat {
-  return { economy_type: economyType, shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0 };
+  return { economy_type: economyType, shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0, rounds_won: 0 };
 }
 
 /** Per-player, per-economy-tier shot/accuracy/damage/rounds totals, summed across every
@@ -250,6 +307,7 @@ export function aggregateEconomyStats(rows: EconomyMatchRow[], playerId: number)
     b.headshot_hits += r.headshot_hits;
     b.damage_dealt += r.damage_dealt;
     b.rounds_played += r.rounds_played;
+    b.rounds_won += r.rounds_won;
   }
   return Array.from(buckets.values());
 }

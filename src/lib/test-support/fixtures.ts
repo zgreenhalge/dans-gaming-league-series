@@ -321,6 +321,19 @@ export const PLAYER_MATCH_ECONOMY_STATS: Row[] = [
   { player_match_stats_id: 1000, match_id: 100, economy_type: 'eco', shots_fired: 15, shots_hit: 6, headshot_hits: 2, damage_dealt: 200, rounds_played: 4 },
   { player_match_stats_id: 1001, match_id: 100, economy_type: 'full_buy', shots_fired: 80, shots_hit: 30, headshot_hits: 11, damage_dealt: 2500, rounds_played: 17 },
   { player_match_stats_id: 1001, match_id: 100, economy_type: 'force_buy', shots_fired: 5, shots_hit: 2, headshot_hits: 1, damage_dealt: 100, rounds_played: 5 },
+  { player_match_stats_id: 1002, match_id: 100, economy_type: 'full_buy', shots_fired: 40, shots_hit: 15, headshot_hits: 9, damage_dealt: 1800, rounds_played: 18 },
+];
+
+// ─── match_round_economy ────────────────────────────────────────────────
+// Match 100 only, round-grain economy tier per (round, player) — just enough rows to exercise
+// getEconomyRoundWins()'s round-win join (queries/weaponStats.ts) against MATCH_ROUNDS' constant
+// shirts_side='CT'/winner_side='CT' for match 100: Alice(1000)/Bob(1001) are SHIRTS (always win),
+// Carol(1002)/Dave(1003) are SKINS (always lose), so every row below has a hand-verifiable outcome.
+export const MATCH_ROUND_ECONOMY: Row[] = [
+  { match_id: 100, round_number: 1, player_match_stats_id: 1000, economy_type: 'full_buy' }, // Alice, wins
+  { match_id: 100, round_number: 2, player_match_stats_id: 1000, economy_type: 'eco' }, // Alice, wins
+  { match_id: 100, round_number: 1, player_match_stats_id: 1002, economy_type: 'full_buy' }, // Carol, loses
+  { match_id: 100, round_number: 2, player_match_stats_id: 1002, economy_type: 'full_buy' }, // Carol, loses
 ];
 
 // ─── player_season_leaderboard (a materialized VIEW — hand-authored, consistent with the
@@ -467,6 +480,7 @@ export function buildFakeDb(): FakeDb {
     match_utility_throws: MATCH_UTILITY_THROWS,
     player_match_weapon_stats: PLAYER_MATCH_WEAPON_STATS,
     player_match_economy_stats: PLAYER_MATCH_ECONOMY_STATS,
+    match_round_economy: MATCH_ROUND_ECONOMY,
     player_season_leaderboard: PLAYER_SEASON_LEADERBOARD,
     maps: MAPS,
     gauntlet_pods: GAUNTLET_PODS,

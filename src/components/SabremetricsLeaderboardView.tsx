@@ -736,6 +736,7 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
       let aVal: number, bVal: number;
       switch (sort.col) {
         case 'rounds_played': aVal = a.rounds_played; bVal = b.rounds_played; break;
+        case 'rounds_won': aVal = a.rounds_won; bVal = b.rounds_won; break;
         case 'shots_fired': aVal = a.shots_fired; bVal = b.shots_fired; break;
         case 'acc': aVal = a.shots_hit / (a.shots_fired || 1); bVal = b.shots_hit / (b.shots_fired || 1); break;
         case 'hs': aVal = a.headshot_hits / (a.shots_hit || 1); bVal = b.headshot_hits / (b.shots_hit || 1); break;
@@ -761,6 +762,7 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
               {!singlePlayer && <th className={playerThCls}>Player</th>}
               <th className="px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]" title={tierColTitle}>Tier</th>
               <SortableTh label="Rounds Played" title="Rounds played at this economy tier — seeded from the round's own eco/force/full classification, whether or not this player fired a shot in it" sortKey="rounds_played" state={sort} onClick={toggleSort} />
+              <SortableTh label="W-L" title="Rounds won vs. lost at this economy tier" sortKey="rounds_won" state={sort} onClick={toggleSort} />
               <SortableTh label="Shots Fired" title="Shots fired (guns only) in rounds at this economy tier" sortKey="shots_fired" state={sort} onClick={toggleSort} />
               <SortableTh label="Accuracy" title="Shots that hit an enemy / shots fired, in rounds at this economy tier" sortKey="acc" state={sort} onClick={toggleSort} />
               <SortableTh label="Headshot %" title="Headshot hits / hits, in rounds at this economy tier" sortKey="hs" state={sort} onClick={toggleSort} />
@@ -773,6 +775,7 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
                 {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
                 <td className="px-3 py-2 text-left">{economyTierLabel(r.economy_type)}</td>
                 <td className={tdRight}>{r.rounds_played}</td>
+                <td className={tdRight}>{r.rounds_won}-{r.rounds_played - r.rounds_won}</td>
                 <td className={tdRight}>{r.shots_fired}</td>
                 <td className={tdRight}>{pct(r.shots_hit, r.shots_fired)}</td>
                 <td className={tdRight}>{pct(r.headshot_hits, r.shots_hit)}</td>
@@ -1317,6 +1320,7 @@ function buildEconomyTiles(economyStats: EconomyTierStat[], selectedTier: string
   return [
     { label: 'Tier', title: 'The economy tier these stats are for', value: economyTierLabel(stat.economy_type) },
     { label: 'Rounds Played', title: `Rounds played at ${titleSuffix}`, value: stat.rounds_played },
+    { label: 'W-L', title: `Rounds won vs. lost at ${titleSuffix}`, value: `${stat.rounds_won}-${stat.rounds_played - stat.rounds_won}` },
     { label: 'Shots Fired', title: `Shots fired (guns only) at ${titleSuffix}`, value: stat.shots_fired },
     { label: 'Accuracy', title: `Shots that hit an enemy / shots fired, at ${titleSuffix}`, value: pct(stat.shots_hit, stat.shots_fired) },
     { label: 'Headshot %', title: `Headshot hits / hits, at ${titleSuffix}`, value: pct(stat.headshot_hits, stat.shots_hit) },
