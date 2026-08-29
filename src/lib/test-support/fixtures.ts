@@ -299,11 +299,13 @@ export const MATCH_UTILITY_THROWS: Row[] = [
 // per-category/per-tier aggregation without duplicating every played-match id above.
 
 export const PLAYER_MATCH_WEAPON_STATS: Row[] = [
-  { player_match_stats_id: 1000, match_id: 100, weapon_category: 'rifle', shots_fired: 90, shots_hit: 40, headshot_hits: 18, damage_dealt: 3200, rounds_played: 20 },
-  { player_match_stats_id: 1000, match_id: 100, weapon_category: 'pistol', shots_fired: 20, shots_hit: 8, headshot_hits: 3, damage_dealt: 400, rounds_played: 4 },
-  { player_match_stats_id: 1001, match_id: 100, weapon_category: 'rifle', shots_fired: 85, shots_hit: 32, headshot_hits: 12, damage_dealt: 2600, rounds_played: 19 },
-  { player_match_stats_id: 1002, match_id: 100, weapon_category: 'sniper', shots_fired: 40, shots_hit: 15, headshot_hits: 9, damage_dealt: 1800, rounds_played: 18 },
-  { player_match_stats_id: 1003, match_id: 100, weapon_category: 'smg', shots_fired: 60, shots_hit: 20, headshot_hits: 5, damage_dealt: 1300, rounds_played: 16 },
+  { player_match_stats_id: 1000, match_id: 100, weapon: 'ak47', weapon_category: 'rifle', shots_fired: 90, shots_hit: 40, headshot_hits: 18, damage_dealt: 3200, rounds_played: 20 },
+  { player_match_stats_id: 1000, match_id: 100, weapon: 'glock', weapon_category: 'pistol', shots_fired: 20, shots_hit: 8, headshot_hits: 3, damage_dealt: 400, rounds_played: 4 },
+  { player_match_stats_id: 1001, match_id: 100, weapon: 'm4a1', weapon_category: 'rifle', shots_fired: 85, shots_hit: 32, headshot_hits: 12, damage_dealt: 2600, rounds_played: 19 },
+  { player_match_stats_id: 1002, match_id: 100, weapon: 'awp', weapon_category: 'sniper', shots_fired: 40, shots_hit: 15, headshot_hits: 9, damage_dealt: 1800, rounds_played: 18 },
+  { player_match_stats_id: 1003, match_id: 100, weapon: 'mp7', weapon_category: 'smg', shots_fired: 60, shots_hit: 20, headshot_hits: 5, damage_dealt: 1300, rounds_played: 16 },
+  // A pre-migration row with no `weapon` set (#474 phase 1) — still rolls up correctly by category.
+  { player_match_stats_id: 1001, match_id: 100, weapon_category: 'shotgun', shots_fired: 8, shots_hit: 2, headshot_hits: 0, damage_dealt: 90, rounds_played: 2 },
 ];
 
 export const PLAYER_MATCH_ECONOMY_STATS: Row[] = [

@@ -2,14 +2,21 @@ import { supabase } from '../supabase';
 import type { PlayerMatchWeaponStat, PlayerMatchEconomyStat, WeaponStatFields, Player } from '../types';
 import { getPlayersById } from './player';
 import { resolveMatchSeasons, fetchAllPages, fetchPmsLookup, asPage } from './_shared';
-import type { WeaponCategory } from '../parsers/weaponClasses';
+import { WEAPON_CATEGORY, type WeaponCategory } from '../parsers/weaponClasses';
 
 export interface WeaponClassMatchRow extends WeaponStatFields {
   player_id: number;
   player_name: string;
   match_id: number;
   season_id: number;
-  weapon_category: string;
+  /** The exact weapon this row is for (#474), e.g. `ak47` — `null` only for a row from a match not
+   *  yet reparsed since this column was added; such rows still roll up correctly into
+   *  `weapon_category`, they just can't answer a per-weapon-specific selection until reparsed. */
+  weapon: string | null;
+  /** Derived from `weapon` via `WEAPON_CATEGORY` when present; falls back to the row's own stored
+   *  category for a pre-reparse row with no `weapon` (#474 phase 1 — see the migration's own
+   *  comment for why that column stays live during this transition). */
+  weapon_category: WeaponCategory;
 }
 
 export interface EconomyMatchRow extends WeaponStatFields {
@@ -20,28 +27,29 @@ export interface EconomyMatchRow extends WeaponStatFields {
   economy_type: string;
 }
 
-interface BreakdownRow extends WeaponStatFields {
+interface JoinedFields {
   player_id: number;
   player_name: string;
   match_id: number;
   season_id: number;
-  bucket: string;
 }
 
-/** Shared by `getAllWeaponClassStats()`/`getAllEconomyStats()` — same join and season-scoping,
- *  differing only in which table/bucket column is read. `seasonId` filters to a single season the
- *  same way `getAllSabremetrics()` does. Pass `playersById` when the caller already fetched it
- *  (e.g. alongside `getAllMatchKills()`) to skip a redundant full `players` table read. */
-async function getAllBreakdownStats(
+/** Shared by `getAllWeaponClassStats()`/`getAllEconomyStats()` — same `player_match_stats` join and
+ *  season-scoping, differing only in which table is read and how its bucket column(s) get shaped
+ *  into the caller's own row type (weapon-class derives a category from `weapon`; economy has a
+ *  single stored `economy_type` bucket already). `seasonId` filters to a single season the same way
+ *  `getAllSabremetrics()` does. Pass `playersById` when the caller already fetched it (e.g.
+ *  alongside `getAllMatchKills()`) to skip a redundant full `players` table read. */
+async function getAllJoinedStats<Raw extends { player_match_stats_id: number }>(
   table: 'player_match_weapon_stats' | 'player_match_economy_stats',
-  bucketColumn: 'weapon_category' | 'economy_type',
-  seasonId?: number,
-  playersById?: Map<number, Player> | Promise<Map<number, Player>>,
-): Promise<BreakdownRow[]> {
+  seasonId: number | undefined,
+  playersById: Map<number, Player> | Promise<Map<number, Player>> | undefined,
+): Promise<(JoinedFields & { raw: Raw })[]> {
   const [rows, pmsRows, matchSeason, resolvedPlayersById] = await Promise.all([
-    fetchAllPages<PlayerMatchWeaponStat | PlayerMatchEconomyStat>((from, to) =>
-      supabase.from(table).select('*').range(from, to),
-    ),
+    // `asPage()` erases the union `table` string can't otherwise resolve `Raw` against (same
+    // reasoning `replaceMatchRows()` in `demo/factTables.ts` gives for its own untyped view) —
+    // callers stay fully typed since `Raw` is always a fixed type argument, not inferred here.
+    fetchAllPages<Raw>((from, to) => asPage(supabase.from(table).select('*').range(from, to))),
     fetchAllPages<{ id: number; player_id: number; match_id: number }>((from, to) =>
       asPage(supabase.from('player_match_stats').select('id, player_id, match_id').range(from, to)),
     ),
@@ -52,7 +60,7 @@ async function getAllBreakdownStats(
   const pmsLookup = new Map<number, { player_id: number; match_id: number }>();
   for (const r of pmsRows) pmsLookup.set(r.id, r);
 
-  const result: BreakdownRow[] = [];
+  const result: (JoinedFields & { raw: Raw })[] = [];
   for (const raw of rows) {
     const pms = pmsLookup.get(raw.player_match_stats_id);
     if (!pms) continue;
@@ -65,33 +73,53 @@ async function getAllBreakdownStats(
       player_name: player?.name ?? `#${pms.player_id}`,
       match_id: pms.match_id,
       season_id: sid,
-      bucket: (raw as unknown as Record<string, string>)[bucketColumn],
-      shots_fired: raw.shots_fired,
-      shots_hit: raw.shots_hit,
-      headshot_hits: raw.headshot_hits,
-      damage_dealt: raw.damage_dealt,
-      rounds_played: raw.rounds_played,
+      raw,
     });
   }
   return result;
 }
 
-/** Per-weapon-category shot/accuracy/damage/rounds breakdown (#279), one row per (player, match,
- *  weapon_category). Pass `playersById` when the caller already fetched it (e.g. shared with an
- *  adjacent `getAllMatchKills()` call) to skip a redundant full `players` table read. */
+/** Resolves a joined `player_match_weapon_stats` row's `weapon`/`weapon_category` fields (#474) —
+ *  shared by `getAllWeaponClassStats()` and `getMatchWeaponClassStats()` so both derive category
+ *  from `weapon` the same way, falling back to the row's own stored category only when `weapon`
+ *  hasn't been backfilled yet. */
+function resolveWeaponAndCategory(raw: PlayerMatchWeaponStat): { weapon: string | null; weapon_category: WeaponCategory } {
+  const derived = raw.weapon != null ? WEAPON_CATEGORY[raw.weapon] : undefined;
+  return { weapon: raw.weapon, weapon_category: derived ?? (raw.weapon_category as WeaponCategory) };
+}
+
+/** Per-weapon shot/accuracy/damage/rounds breakdown (#279, #474), one row per (player, match,
+ *  weapon). Pass `playersById` when the caller already fetched it (e.g. shared with an adjacent
+ *  `getAllMatchKills()` call) to skip a redundant full `players` table read. */
 export async function getAllWeaponClassStats(
   seasonId?: number,
   playersById?: Map<number, Player> | Promise<Map<number, Player>>,
 ): Promise<WeaponClassMatchRow[]> {
-  const rows = await getAllBreakdownStats('player_match_weapon_stats', 'weapon_category', seasonId, playersById);
-  return rows.map(({ bucket, ...r }) => ({ ...r, weapon_category: bucket }));
+  const rows = await getAllJoinedStats<PlayerMatchWeaponStat>('player_match_weapon_stats', seasonId, playersById);
+  return rows.map(({ raw, ...join }) => ({
+    ...join,
+    ...resolveWeaponAndCategory(raw),
+    shots_fired: raw.shots_fired,
+    shots_hit: raw.shots_hit,
+    headshot_hits: raw.headshot_hits,
+    damage_dealt: raw.damage_dealt,
+    rounds_played: raw.rounds_played,
+  }));
 }
 
 /** Per-round-economy shot/accuracy/damage/rounds breakdown (#279), one row per (player, match,
  *  economy_type). */
 export async function getAllEconomyStats(seasonId?: number): Promise<EconomyMatchRow[]> {
-  const rows = await getAllBreakdownStats('player_match_economy_stats', 'economy_type', seasonId);
-  return rows.map(({ bucket, ...r }) => ({ ...r, economy_type: bucket }));
+  const rows = await getAllJoinedStats<PlayerMatchEconomyStat>('player_match_economy_stats', seasonId, undefined);
+  return rows.map(({ raw, ...join }) => ({
+    ...join,
+    economy_type: raw.economy_type,
+    shots_fired: raw.shots_fired,
+    shots_hit: raw.shots_hit,
+    headshot_hits: raw.headshot_hits,
+    damage_dealt: raw.damage_dealt,
+    rounds_played: raw.rounds_played,
+  }));
 }
 
 /** One match's `player_match_weapon_stats` rows, joined to player names — the match-page-scoped
@@ -121,7 +149,7 @@ export async function getMatchWeaponClassStats(
       player_name: player?.name ?? `#${pms.player_id}`,
       match_id: pms.match_id,
       season_id: -1,
-      weapon_category: raw.weapon_category,
+      ...resolveWeaponAndCategory(raw),
       shots_fired: raw.shots_fired,
       shots_hit: raw.shots_hit,
       headshot_hits: raw.headshot_hits,
@@ -133,55 +161,57 @@ export async function getMatchWeaponClassStats(
 }
 
 /** Same 5 fields as `WeaponStatFields` — aliased under its own name since this one is always a
- *  cross-match *sum* (`groupWeaponClassStatsByPlayer()`/`aggregateWeaponClassStat()`'s result),
- *  never a single stored row, but the shape is identical so there's no reason to redeclare it. */
+ *  cross-match *sum* (`groupWeaponAccuracyByPlayer()`'s result), never a single stored row, but the
+ *  shape is identical so there's no reason to redeclare it. */
 export type WeaponClassAggregateStat = WeaponStatFields;
 
-/** The zeroed shape a player with no rows for a category falls back to — exported so
- *  `WeaponClassBreakdownTable` (`SabremetricsLeaderboardView.tsx`) can default a
- *  `groupWeaponClassStatsByPlayer()` miss to the same shape `aggregateWeaponClassStat()` does. */
+/** The zeroed shape a player/weapon/category combination with no rows falls back to — exported so
+ *  a `groupWeaponAccuracyByPlayer()` miss (`SabremetricsLeaderboardView.tsx`) can default to the
+ *  same shape a real sum would have. */
 export const ZERO_WEAPON_CLASS_STAT: WeaponClassAggregateStat = {
   shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0,
 };
 
-/** Sums every player's `WeaponClassMatchRow`s for one gun category across every match in whatever
- *  scope the caller already fetched `rows` for (a season, career) in a single pass — the group-then-
- *  sum counterpart of `aggregateWeaponKillStats()`'s per-weapon buckets, but grouped by player
- *  instead so a multi-player table (`WeaponClassBreakdownTable`) can look each row up in O(1)
- *  rather than rescanning all of `rows` once per player (#474). Players with no rows for `category`
- *  are simply absent from the map — callers fall back to a zeroed stat via `aggregateWeaponClassStat()`
- *  or their own default. */
-export function groupWeaponClassStatsByPlayer(
-  rows: WeaponClassMatchRow[],
-  category: WeaponCategory,
-): Map<number, WeaponClassAggregateStat> {
-  const out = new Map<number, WeaponClassAggregateStat>();
-  for (const r of rows) {
-    if (r.weapon_category !== category) continue;
-    let c = out.get(r.player_id);
-    if (!c) {
-      c = { ...ZERO_WEAPON_CLASS_STAT };
-      out.set(r.player_id, c);
-    }
-    c.shots_fired += r.shots_fired;
-    c.shots_hit += r.shots_hit;
-    c.headshot_hits += r.headshot_hits;
-    c.damage_dealt += r.damage_dealt;
-    c.rounds_played += r.rounds_played;
-  }
-  return out;
+/** One player's weapon-class accuracy, resolvable either by exact weapon or by whole category —
+ *  `resolveWeaponFilterStat()` (`kills.ts`) needs both: a favorite/specific-weapon filter looks up
+ *  `byWeapon`, a category filter looks up `byCategory`. */
+export interface PlayerWeaponAccuracy {
+  byWeapon: Map<string, WeaponClassAggregateStat>;
+  byCategory: Map<WeaponCategory, WeaponClassAggregateStat>;
 }
 
-/** One player's rollup from `groupWeaponClassStatsByPlayer()`, zeroed when they have no rows for
- *  `category` in scope — the single-player convenience wrapper (`buildWeaponClassTiles()`'s only
- *  caller); a multi-player table should call `groupWeaponClassStatsByPlayer()` once itself instead
- *  of calling this per player. */
-export function aggregateWeaponClassStat(
-  rows: WeaponClassMatchRow[],
-  playerId: number,
-  category: WeaponCategory,
-): WeaponClassAggregateStat {
-  return groupWeaponClassStatsByPlayer(rows, category).get(playerId) ?? { ...ZERO_WEAPON_CLASS_STAT };
+function addWeaponClassStat<K>(map: Map<K, WeaponClassAggregateStat>, key: K, r: WeaponClassMatchRow): void {
+  let c = map.get(key);
+  if (!c) {
+    c = { ...ZERO_WEAPON_CLASS_STAT };
+    map.set(key, c);
+  }
+  c.shots_fired += r.shots_fired;
+  c.shots_hit += r.shots_hit;
+  c.headshot_hits += r.headshot_hits;
+  c.damage_dealt += r.damage_dealt;
+  c.rounds_played += r.rounds_played;
+}
+
+/** Sums every player's `WeaponClassMatchRow`s into per-player `PlayerWeaponAccuracy` — both by
+ *  exact weapon and by whole category — across every match in whatever scope the caller already
+ *  fetched `rows` for (a season, career), in a single pass over `rows` regardless of how many
+ *  players or weapons/categories end up queried against the result (#474). A multi-player table
+ *  calls this once per render and looks each row up in O(1), rather than rescanning `rows` once per
+ *  player. Rows with `weapon === null` (not yet backfilled, see `WeaponClassMatchRow`) still count
+ *  toward `byCategory` — only `byWeapon` misses them. */
+export function groupWeaponAccuracyByPlayer(rows: WeaponClassMatchRow[]): Map<number, PlayerWeaponAccuracy> {
+  const out = new Map<number, PlayerWeaponAccuracy>();
+  for (const r of rows) {
+    let p = out.get(r.player_id);
+    if (!p) {
+      p = { byWeapon: new Map(), byCategory: new Map() };
+      out.set(r.player_id, p);
+    }
+    if (r.weapon != null) addWeaponClassStat(p.byWeapon, r.weapon, r);
+    addWeaponClassStat(p.byCategory, r.weapon_category, r);
+  }
+  return out;
 }
 
 export interface AccuracyTotals {
