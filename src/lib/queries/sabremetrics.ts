@@ -181,20 +181,13 @@ export interface SabremetricStatRow {
   sab: SabFieldsWithDerived;
 }
 
-// Every sabremetric field `AggregatedSab` needs beyond the ct/t split is identical in name and
-// type to its `SabFieldsWithDerived` counterpart, so the bulk of the shape is inherited from
-// `SabFieldsWithDerived` itself (`Omit`ing the ct/t-split raw fields aggregateRows() unions into
-// `kills`/`deaths`/etc., plus the three fields this view never reads) rather than re-listing every
-// stat by hand — the single source of truth for "what sabremetrics exist" stays `SabFields`/
-// `SabFieldsWithDerived` in src/lib/types.ts. A new flat field needs no changes here; a new ct/t-split
-// field needs adding to this list AND to the matching destructure in aggregateRows() below, or it
-// silently lands as two unsummed raw columns instead of a unioned total.
-type DerivedRawSabFields =
-  | 'kills_ct' | 'kills_t' | 'deaths_ct' | 'deaths_t'
-  | 'assists_ct' | 'assists_t' | 'damage_ct' | 'damage_t'
-  | 'headshot_kills_ct' | 'headshot_kills_t' | 'blind_duration_dealt';
-
-export interface AggregatedSab extends Omit<SabFieldsWithDerived, DerivedRawSabFields> {
+// `AggregatedSab` inherits every sabremetric field from `SabFieldsWithDerived` as-is — including
+// the raw `_ct`/`_t` splits (`kills_ct`/`_t`, `deaths_ct`/`_t`, `assists_ct`/`_t`, `damage_ct`/`_t`,
+// `headshot_kills_ct`/`_t`) — so a season/career caller can read a player's per-side breakdown
+// (#482), not just the merged total. `kills`/`deaths`/`assists`/`damage` sit alongside the splits
+// as their own flat fields (unioned from the two `_ct`/`_t` halves in aggregateRows() below) since
+// most tables only need the total and shouldn't have to sum the split themselves.
+export interface AggregatedSab extends SabFieldsWithDerived {
   player_id: number;
   player_name: string;
   matches: number;
@@ -215,8 +208,7 @@ interface PlayerMeta {
 /** Accumulates raw per-match `sab` totals via the generic `addSabFields()` (one accumulator per
  *  player, mutated in place per row — same primitive `getSabremetricSeasonTotals()` builds its
  *  own `sumSabFields()` on), then flattens to `AggregatedSab`'s shape once per player at the end —
- *  so the accumulation step needs no field-shape knowledge at all, and only the final flatten
- *  touches `DerivedRawSabFields`. */
+ *  every raw field carries straight through, plus the four `_ct`/`_t`-unioned totals. */
 export function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
   const rawByPlayer = new Map<number, SabFieldsWithDerived>();
   const meta = new Map<number, PlayerMeta>();
@@ -242,19 +234,17 @@ export function aggregateRows(rows: SabremetricStatRow[]): AggregatedSab[] {
   }
 
   return Array.from(rawByPlayer, ([player_id, raw]): AggregatedSab => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { kills_ct, kills_t, deaths_ct, deaths_t, assists_ct, assists_t, damage_ct, damage_t, headshot_kills_ct, headshot_kills_t, blind_duration_dealt, ...shared } = raw;
     const { player_name, matches, rounds_played } = meta.get(player_id)!;
     return {
+      ...raw,
       player_id,
       player_name,
       matches,
       rounds_played,
-      kills: kills_ct + kills_t,
-      deaths: deaths_ct + deaths_t,
-      assists: assists_ct + assists_t,
-      damage: damage_ct + damage_t,
-      ...shared,
+      kills: raw.kills_ct + raw.kills_t,
+      deaths: raw.deaths_ct + raw.deaths_t,
+      assists: raw.assists_ct + raw.assists_t,
+      damage: raw.damage_ct + raw.damage_t,
     };
   });
 }

@@ -8,7 +8,6 @@
  * Run:  npx vitest run src/components/SabremetricsLeaderboardView.test.tsx
  */
 
-
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -72,5 +71,11 @@ describe('SabremetricsLeaderboardView — sub-tab URL state', () => {
     nextNavigationMock.setSearchParams('sub=economy');
     renderWithUrlState(<SabremetricsLeaderboardView rows={[row()]} economyRows={[economyRow()]} />);
     expect(screen.getByRole('tab', { name: 'Economy' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('shows Side Splits with no extra data wired (#482)', () => {
+    nextNavigationMock.setSearchParams('sub=sides');
+    renderWithUrlState(<SabremetricsLeaderboardView rows={[row()]} />);
+    expect(screen.getByRole('tab', { name: 'Side Splits' })).toHaveAttribute('aria-selected', 'true');
   });
 });

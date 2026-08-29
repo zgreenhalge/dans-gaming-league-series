@@ -402,6 +402,18 @@ still renders a zeroed row rather than being hidden or omitted from the picker. 
 own economy classification, not shot-triggered, so it includes rounds the player never fired a shot
 in.
 
+### Side Splits
+
+`AggregatedSab` (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`) carries `kills`/`deaths`/
+`assists`/`damage`/`headshot_kills` as merged totals *and* their raw `_ct`/`_t` halves side by side
+— the merged fields are simply the two halves summed, not a separately-tracked value. The Side
+Splits sub-tab renders both halves of each stat next to each other, one column (or tile) per side,
+so a player's CT/T split is visible at season/career grain without re-toggling anything. This is the
+same underlying split the per-match box score's CT/T checkboxes (`MatchTabView.tsx`'s `Scoreboard`)
+filter down to one side at a time — the box score toggles which side's numbers replace the merged
+column, while this sub-tab shows both at once since there's no single "current match" to toggle
+against at season/career grain.
+
 ### Player Rating (not yet implemented)
 
 A weighted sabremetric composite for individual performance. Independent from the

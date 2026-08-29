@@ -279,6 +279,10 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
           aVal = a.spray_shots_hit / (a.spray_shots_fired || 1);
           bVal = b.spray_shots_hit / (b.spray_shots_fired || 1);
           break;
+        case 'dropped_reload':
+          aVal = a.rounds_dropped_on_reload_total / (a.reloads_total || 1);
+          bVal = b.rounds_dropped_on_reload_total / (b.reloads_total || 1);
+          break;
         default: return 0;
       }
       return sort.asc ? aVal - bVal : bVal - aVal;
@@ -299,6 +303,7 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
               <SortableTh label="Head Accuracy" title="Hits landing on the head / total hits, excluding AWP shots (matches Leetify's Headshot Accuracy)" sortKey="head_acc" state={sort} onClick={toggleSort} />
               <SortableTh label="Counter-Strafe %" title="Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)" sortKey="cstrafe" state={sort} onClick={toggleSort} />
               <SortableTh label="Spray Accuracy" title="Hits / shots within sequences of 3+ consecutive rifle shots" sortKey="spray" state={sort} onClick={toggleSort} />
+              <SortableTh label="Rounds Dropped/Reload" title="Bullets still in the magazine (wasted) when reloading, averaged across every reload including clean ones" sortKey="dropped_reload" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -310,6 +315,85 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
                 <td className={tdRight}>{pct(a.headshot_hits_no_awp, a.shots_hit_no_awp)}</td>
                 <td className={tdRight}>{pct(a.counter_strafe_good_shots, a.counter_strafe_shots)}</td>
                 <td className={tdRight}>{pct(a.spray_shots_hit, a.spray_shots_fired)}</td>
+                <td className={tdRight}>{fmtNum(a.rounds_dropped_on_reload_total / (a.reloads_total || 1), 2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// --- Side Splits (#482) ---
+//
+// Kills/deaths/assists/damage/headshot kills broken out by CT vs. T side — the season/career-grain
+// counterpart of the per-match box score's CT/T checkbox toggle (`MatchTabView.tsx`'s `Scoreboard`).
+// That toggle filters the *same* merged columns down to one side at a time; here, both sides are
+// shown side by side so a player's split is visible without re-toggling. No separate fetch needed
+// (unlike Weapons/Economy) — `AggregatedSab` already carries the raw `_ct`/`_t` fields alongside
+// the merged totals (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`), so this reads straight
+// off the same `aggregated` array every other table here does.
+
+function SideSplitTable({ aggregated, singlePlayer, showHeading = true }: { aggregated: AggregatedSab[]; singlePlayer: boolean; showHeading?: boolean }) {
+  const [sort, toggleSort] = useSortState('kills_ct');
+
+  const sorted = useMemo(() => {
+    const copy = [...aggregated];
+    copy.sort((a, b) => {
+      let aVal: number, bVal: number;
+      switch (sort.col) {
+        case 'kills_ct': aVal = a.kills_ct; bVal = b.kills_ct; break;
+        case 'kills_t': aVal = a.kills_t; bVal = b.kills_t; break;
+        case 'deaths_ct': aVal = a.deaths_ct; bVal = b.deaths_ct; break;
+        case 'deaths_t': aVal = a.deaths_t; bVal = b.deaths_t; break;
+        case 'assists_ct': aVal = a.assists_ct; bVal = b.assists_ct; break;
+        case 'assists_t': aVal = a.assists_t; bVal = b.assists_t; break;
+        case 'damage_ct': aVal = a.damage_ct; bVal = b.damage_ct; break;
+        case 'damage_t': aVal = a.damage_t; bVal = b.damage_t; break;
+        case 'hs_ct': aVal = a.headshot_kills_ct; bVal = b.headshot_kills_ct; break;
+        case 'hs_t': aVal = a.headshot_kills_t; bVal = b.headshot_kills_t; break;
+        default: return 0;
+      }
+      return sort.asc ? aVal - bVal : bVal - aVal;
+    });
+    return copy;
+  }, [aggregated, sort]);
+
+  return (
+    <div className="my-6">
+      {showHeading && <h3 className="text-sm font-semibold mb-3">Side Splits</h3>}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-max border-collapse text-xs">
+          <thead>
+            <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
+              {!singlePlayer && <th className={playerThCls}>Player</th>}
+              <SortableTh label="Kills (CT)" title="Kills while playing CT" sortKey="kills_ct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Kills (T)" title="Kills while playing T" sortKey="kills_t" state={sort} onClick={toggleSort} />
+              <SortableTh label="Deaths (CT)" title="Deaths while playing CT" sortKey="deaths_ct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Deaths (T)" title="Deaths while playing T" sortKey="deaths_t" state={sort} onClick={toggleSort} />
+              <SortableTh label="Assists (CT)" title="Assists while playing CT" sortKey="assists_ct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Assists (T)" title="Assists while playing T" sortKey="assists_t" state={sort} onClick={toggleSort} />
+              <SortableTh label="Damage (CT)" title="Damage dealt while playing CT" sortKey="damage_ct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Damage (T)" title="Damage dealt while playing T" sortKey="damage_t" state={sort} onClick={toggleSort} />
+              <SortableTh label="HS Kills (CT)" title="Headshot kills while playing CT" sortKey="hs_ct" state={sort} onClick={toggleSort} />
+              <SortableTh label="HS Kills (T)" title="Headshot kills while playing T" sortKey="hs_t" state={sort} onClick={toggleSort} />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((a) => (
+              <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
+                <td className={tdRight}>{a.kills_ct}</td>
+                <td className={tdRight}>{a.kills_t}</td>
+                <td className={tdRight}>{a.deaths_ct}</td>
+                <td className={tdRight}>{a.deaths_t}</td>
+                <td className={tdRight}>{a.assists_ct}</td>
+                <td className={tdRight}>{a.assists_t}</td>
+                <td className={tdRight}>{a.damage_ct}</td>
+                <td className={tdRight}>{a.damage_t}</td>
+                <td className={tdRight}>{a.headshot_kills_ct}</td>
+                <td className={tdRight}>{a.headshot_kills_t}</td>
               </tr>
             ))}
           </tbody>
@@ -878,6 +962,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
           aVal = a.blind_duration_max_sum / (a.effective_flashes || 1);
           bVal = b.blind_duration_max_sum / (b.effective_flashes || 1);
           break;
+        case 'bdd': aVal = a.blind_duration_dealt; bVal = b.blind_duration_dealt; break;
         case 'he_thrown': aVal = a.he_thrown; bVal = b.he_thrown; break;
         case 'he_dmg': aVal = a.he_damage; bVal = b.he_damage; break;
         case 'he_dmg_throw':
@@ -914,6 +999,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
               <SortableTh label="Enemies Flashed" title="Enemy players blinded by your flashbangs" sortKey="ef" state={sort} onClick={toggleSort} />
               <SortableTh label="Enemies Flashed/Flash" title="Enemies flashed (1.1s+) per flashbang thrown" sortKey="ef_flash" state={sort} onClick={toggleSort} />
               <SortableTh label="Avg Blind/Flash" title="Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+" sortKey="blind_flash" state={sort} onClick={toggleSort} />
+              <SortableTh label="Blind Duration Dealt" title="Total seconds of blind exposure caused to enemies — a raw, ungated total with no half-blind gate and no role in Utility+" sortKey="bdd" state={sort} onClick={toggleSort} />
               <SortableTh label="Plants" title="Bomb plants" sortKey="pl" state={sort} onClick={toggleSort} />
               <SortableTh label="Defuses" title="Bomb defuses" sortKey="df" state={sort} onClick={toggleSort} />
               <SortableTh label="HE Thrown" title="HE grenades thrown" sortKey="he_thrown" state={sort} onClick={toggleSort} />
@@ -935,6 +1021,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
                   <td className={tdRight}>{a.enemies_flashed}</td>
                   <td className={tdRight}>{fmtNum(a.enemies_flashed / (a.flashes_thrown || 1), 2)}</td>
                   <td className={tdRight}>{fmtNum(a.blind_duration_max_sum / (a.effective_flashes || 1), 2)}</td>
+                  <td className={tdRight}>{fmtNum(a.blind_duration_dealt, 1)}</td>
                   <td className={tdRight}>{a.plants}</td>
                   <td className={tdRight}>{a.defuses}</td>
                   <td className={tdRight}>{a.he_thrown}</td>
@@ -1061,6 +1148,8 @@ interface SinglePlayerTiles {
    *  tier's stat from this via `resolveEconomyStat()` (most-played, or whichever tier the filter
    *  selects) and renders it as tiles, same as `EconomyTable` does per row. */
   economyStats: EconomyTierStat[];
+  /** Kills/deaths/assists/damage/headshot kills broken out by CT vs. T side — see `SideSplitTable`. */
+  sides: StatTile[];
   /** No-scope/wallbang/blind/knife kills, totaled across every weapon — see `FlairTable`. */
   flair: StatTile[];
   trades: StatTile[];
@@ -1095,6 +1184,20 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Head Accuracy', title: 'Hits landing on the head / total hits, excluding AWP shots (matches Leetify\'s Headshot Accuracy)', value: pct(agg.headshot_hits_no_awp, agg.shots_hit_no_awp) },
     { label: 'Counter-Strafe %', title: 'Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)', value: pct(agg.counter_strafe_good_shots, agg.counter_strafe_shots) },
     { label: 'Spray Accuracy', title: 'Hits / shots within sequences of 3+ consecutive rifle shots', value: pct(agg.spray_shots_hit, agg.spray_shots_fired) },
+    { label: 'Rounds Dropped/Reload', title: 'Bullets still in the magazine (wasted) when reloading, averaged across every reload including clean ones', value: fmtNum(agg.rounds_dropped_on_reload_total / (agg.reloads_total || 1), 2) },
+  ];
+
+  const sides: StatTile[] = [
+    { label: 'Kills (CT)', title: 'Kills while playing CT', value: agg.kills_ct },
+    { label: 'Kills (T)', title: 'Kills while playing T', value: agg.kills_t },
+    { label: 'Deaths (CT)', title: 'Deaths while playing CT', value: agg.deaths_ct },
+    { label: 'Deaths (T)', title: 'Deaths while playing T', value: agg.deaths_t },
+    { label: 'Assists (CT)', title: 'Assists while playing CT', value: agg.assists_ct },
+    { label: 'Assists (T)', title: 'Assists while playing T', value: agg.assists_t },
+    { label: 'Damage (CT)', title: 'Damage dealt while playing CT', value: agg.damage_ct },
+    { label: 'Damage (T)', title: 'Damage dealt while playing T', value: agg.damage_t },
+    { label: 'HS Kills (CT)', title: 'Headshot kills while playing CT', value: agg.headshot_kills_ct },
+    { label: 'HS Kills (T)', title: 'Headshot kills while playing T', value: agg.headshot_kills_t },
   ];
 
   const trades: StatTile[] = [
@@ -1114,6 +1217,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Enemies Flashed', title: 'Enemy players blinded by your flashbangs', value: agg.enemies_flashed },
     { label: 'Enemies Flashed/Flash', title: 'Enemies flashed (1.1s+) per flashbang thrown', value: fmtNum(agg.enemies_flashed / (agg.flashes_thrown || 1), 2) },
     { label: 'Avg Blind/Flash', title: 'Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+', value: fmtNum(agg.blind_duration_max_sum / (agg.effective_flashes || 1), 2) },
+    { label: 'Blind Duration Dealt', title: 'Total seconds of blind exposure caused to enemies — a raw, ungated total with no half-blind gate and no role in Utility+', value: fmtNum(agg.blind_duration_dealt, 1) },
     { label: 'Plants', title: 'Bomb plants', value: agg.plants },
     { label: 'Defuses', title: 'Bomb defuses', value: agg.defuses },
     { label: 'HE Thrown', title: 'HE grenades thrown', value: agg.he_thrown },
@@ -1158,7 +1262,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Knife', title: 'Knife kills', value: flairStat.knifeKills },
   ];
 
-  return { impact, duels, mechanics, weaponStats, topWeapons, economyStats, flair, trades, utility, plus: plusTiles };
+  return { impact, duels, mechanics, weaponStats, topWeapons, economyStats, sides, flair, trades, utility, plus: plusTiles };
 }
 
 /** The single-player counterpart of `resolvePlayerWeaponRow()`'s table cells — same resolved
@@ -1212,19 +1316,21 @@ function buildEconomyTiles(economyStats: EconomyTierStat[], selectedTier: string
 // single-player tile grids) — see the Impact/Mechanics/Trades split above. One tab state drives
 // both render paths so they never drift out of sync with each other.
 
-type SubTab = 'impact' | 'duels' | 'mechanics' | 'weapons' | 'economy' | 'flair' | 'trades' | 'utility' | 'plus';
+type SubTab = 'impact' | 'duels' | 'mechanics' | 'weapons' | 'economy' | 'sides' | 'flair' | 'trades' | 'utility' | 'plus';
 
 // Ordered to roughly match Leetify's match-page grouping (Aim, then situational Duels/Trades,
 // then Impact, then Utility) — see #173's Leetify-parity discussion. Weapons sits right after Aim
 // (#452) since both are gun-choice/precision stats; Economy sits right after Weapons (#481) since
 // it's the same per-player shot/accuracy/damage breakdown pattern, just bucketed by round-buy tier
-// instead of gun; Flair sits right after Economy (#465) since it's the same per-weapon kill data
-// rolled up into all-weapons totals instead of broken out by gun. Stats Plus has no Leetify analog
-// (it's DGLS's own league-relative composite), so it stays last.
+// instead of gun; Side Splits sits right after Economy (#482) since it's the same idea bucketed by
+// CT/T side instead; Flair sits right after Side Splits (#465) since it's the same per-weapon kill
+// data rolled up into all-weapons totals instead of broken out by gun. Stats Plus has no Leetify
+// analog (it's DGLS's own league-relative composite), so it stays last.
 const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'mechanics', label: 'Aim' },
   { key: 'weapons', label: 'Weapons' },
   { key: 'economy', label: 'Economy' },
+  { key: 'sides', label: 'Side Splits' },
   { key: 'flair', label: 'Flair' },
   { key: 'duels', label: 'Opening Duels' },
   { key: 'trades', label: 'Trades' },
@@ -1377,6 +1483,7 @@ export default function SabremetricsLeaderboardView({
             <StatTileGrid heading="Economy" tiles={singlePlayerEconomyTiles} />
           </div>
         )}
+        {sub === 'sides' && <StatTileGrid heading="Side Splits" tiles={tiles.sides} />}
         {sub === 'flair' && <StatTileGrid heading="Flair" tiles={tiles.flair} />}
         {sub === 'trades' && <StatTileGrid heading="Trades" tiles={tiles.trades} />}
         {sub === 'utility' && <StatTileGrid heading="Utility" tiles={tiles.utility} />}
@@ -1422,6 +1529,11 @@ export default function SabremetricsLeaderboardView({
             <EconomyTable aggregated={agg} economyRows={economyRows} selectedTier={economyFilter} singlePlayer={singlePlayer} showHeading={showHeading} />
           )} />
         </div>
+      )}
+      {sub === 'sides' && (
+        <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
+          <SideSplitTable aggregated={agg} singlePlayer={singlePlayer} showHeading={showHeading} />
+        )} />
       )}
       {sub === 'flair' && (
         <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
