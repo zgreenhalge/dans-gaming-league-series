@@ -434,11 +434,12 @@ on the player/statistics/season pages (season-scoped `getAllEconomyStats()`) and
 `AggregatedSab` (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`) carries `kills`/`deaths`/
 `assists`/`damage`/`headshot_kills` as merged totals *and* their raw `_ct`/`_t` halves side by side
 — the merged fields are simply the two halves summed, not a separately-tracked value. The Side
-Splits sub-tab filters those same five stats down to one side, the other, or both (merged) via a
-CT/T checkbox pair (`SideToggle`), one column per stat rather than one column per stat per side —
-the same interaction, and the same shared `splitStat()` helper (`src/lib/util.ts`), as the per-match
-box score's own CT/T checkboxes (`MatchTabView.tsx`'s `Scoreboard`). Both default to checked
-(the merged total); unchecking one narrows every column to the other side's numbers.
+Splits sub-tab renders both halves of each stat next to each other, one column (or tile) per side,
+so a player's CT/T split is visible at season/career grain without re-toggling anything. This is the
+same underlying split the per-match box score's CT/T checkboxes (`MatchTabView.tsx`'s `Scoreboard`)
+filter down to one side at a time — the box score toggles which side's numbers replace the merged
+column, while this sub-tab shows both at once since there's no single "current match" to toggle
+against at season/career grain.
 
 ### Player Rating (not yet implemented)
 

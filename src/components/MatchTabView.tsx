@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { tabCls, formatEhogDelta, splitStat } from '@/lib/util';
+import { tabCls, formatEhogDelta } from '@/lib/util';
 import EmptyState from '@/components/EmptyState';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import { PlayerName } from '@/components/PlayerName';
@@ -25,6 +25,19 @@ function factionClass(f: Faction): string {
   if (f === 'CT') return 'faction-ct';
   if (f === 'T') return 'faction-t';
   return '';
+}
+
+function splitStat(
+  s: SabFieldsWithDerived,
+  ct: keyof SabFieldsWithDerived,
+  t: keyof SabFieldsWithDerived,
+  includeCT: boolean,
+  includeT: boolean,
+): number {
+  let total = 0;
+  if (includeCT) total += s[ct] as number;
+  if (includeT) total += s[t] as number;
+  return total;
 }
 
 function Scoreboard({

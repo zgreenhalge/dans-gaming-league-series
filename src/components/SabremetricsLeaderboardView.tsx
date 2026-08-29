@@ -32,12 +32,11 @@ import {
   weaponDisplayName, killWeaponCategory, KILL_WEAPON_CATEGORIES, KILL_WEAPON_CATEGORY_LABEL,
   type KillWeaponCategory,
 } from '@/lib/parsers/weaponClasses';
-import { tabCls, splitStat } from '@/lib/util';
+import { tabCls } from '@/lib/util';
 import EmptyState from './EmptyState';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
 import { WeaponIcon } from './icons/WeaponIcon';
 import { useTabState } from './useTabState';
-import { Checkbox } from './SeasonFilter';
 
 // Side-tint helper (CT/T, not SHIRTS/SKINS) — matches MatchTabView.tsx's own factionClass(),
 // duplicated locally per this codebase's existing pattern of small per-file copies (also
@@ -328,102 +327,38 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
 
 // --- Side Splits (#482) ---
 //
-// Kills/deaths/assists/damage/headshot kills, filtered to CT, T, or both — the season/career-grain
-// counterpart of the per-match box score's CT/T checkbox toggle (`MatchTabView.tsx`'s `Scoreboard`,
-// via the same shared `splitStat()` helper, `src/lib/util.ts`). Unlike that toggle, this one has no
-// merged-column fallback to reuse when both sides are checked — `AggregatedSab` already carries the
-// merged totals as their own flat fields (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`), so
-// "both" just reads those directly rather than summing the two halves. One column per stat (not one
-// per stat per side) keeps this the same shape as every other table here, rather than a wide
-// CT/T-paired layout that reiterates the Stats tab's own Basic Stats table under a more confusing
-// column header.
+// Kills/deaths/assists/damage/headshot kills broken out by CT vs. T side — the season/career-grain
+// counterpart of the per-match box score's CT/T checkbox toggle (`MatchTabView.tsx`'s `Scoreboard`).
+// That toggle filters the *same* merged columns down to one side at a time; here, both sides are
+// shown side by side so a player's split is visible without re-toggling. No separate fetch needed
+// (unlike Weapons/Economy) — `AggregatedSab` already carries the raw `_ct`/`_t` fields alongside
+// the merged totals (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`), so this reads straight
+// off the same `aggregated` array every other table here does.
 
-function sideQualifier(includeCT: boolean, includeT: boolean): string {
-  if (includeCT && includeT) return '';
-  if (includeCT) return ' (CT)';
-  if (includeT) return ' (T)';
-  return ' (no side selected)';
-}
-
-/** The CT/T checkbox pair — one control per Side Splits render, shared by the multi-player table
- *  and the single-player tile view, mirroring `WeaponFilterSelect`'s placement above its table. */
-function SideToggle({ includeCT, includeT, onToggleCT, onToggleT }: {
-  includeCT: boolean; includeT: boolean; onToggleCT: () => void; onToggleT: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-4">
-      <Checkbox checked={includeCT} onToggle={onToggleCT} label="CT" />
-      <Checkbox checked={includeT} onToggle={onToggleT} label="T" />
-    </div>
-  );
-}
-
-interface PlayerSideRow {
-  player_id: number;
-  player_name: string;
-  kills: number;
-  deaths: number;
-  assists: number;
-  damage: number;
-  headshot_kills: number;
-}
-
-function resolvePlayerSideRow(a: AggregatedSab, includeCT: boolean, includeT: boolean): PlayerSideRow {
-  const bothSides = includeCT && includeT;
-  return {
-    player_id: a.player_id,
-    player_name: a.player_name,
-    kills: bothSides ? a.kills : splitStat(a, 'kills_ct', 'kills_t', includeCT, includeT),
-    deaths: bothSides ? a.deaths : splitStat(a, 'deaths_ct', 'deaths_t', includeCT, includeT),
-    assists: bothSides ? a.assists : splitStat(a, 'assists_ct', 'assists_t', includeCT, includeT),
-    damage: bothSides ? a.damage : splitStat(a, 'damage_ct', 'damage_t', includeCT, includeT),
-    headshot_kills: bothSides
-      ? a.headshot_kills
-      : splitStat(a, 'headshot_kills_ct', 'headshot_kills_t', includeCT, includeT),
-  };
-}
-
-/** The single-player counterpart of `resolvePlayerSideRow()` — same side-filtered row, as a
- *  `StatTile[]`, for the tile-grid view `SideSplitTable` doesn't render in. */
-function buildSideTiles(agg: AggregatedSab, includeCT: boolean, includeT: boolean): StatTile[] {
-  const row = resolvePlayerSideRow(agg, includeCT, includeT);
-  const qualifier = sideQualifier(includeCT, includeT);
-  return [
-    { label: 'Kills', title: `Kills${qualifier}`, value: row.kills },
-    { label: 'Deaths', title: `Deaths${qualifier}`, value: row.deaths },
-    { label: 'Assists', title: `Assists${qualifier}`, value: row.assists },
-    { label: 'Damage', title: `Damage dealt${qualifier}`, value: row.damage },
-    { label: 'HS Kills', title: `Headshot kills${qualifier}`, value: row.headshot_kills },
-  ];
-}
-
-function SideSplitTable({ aggregated, includeCT, includeT, singlePlayer, showHeading = true }: {
-  aggregated: AggregatedSab[]; includeCT: boolean; includeT: boolean; singlePlayer: boolean; showHeading?: boolean;
-}) {
-  const [sort, toggleSort] = useSortState('kills');
-  const qualifier = sideQualifier(includeCT, includeT);
-
-  const rows = useMemo(
-    () => aggregated.map((a) => resolvePlayerSideRow(a, includeCT, includeT)),
-    [aggregated, includeCT, includeT],
-  );
+function SideSplitTable({ aggregated, singlePlayer, showHeading = true }: { aggregated: AggregatedSab[]; singlePlayer: boolean; showHeading?: boolean }) {
+  const [sort, toggleSort] = useSortState('kills_ct');
 
   const sorted = useMemo(() => {
-    const copy = [...rows];
+    const copy = [...aggregated];
     copy.sort((a, b) => {
       let aVal: number, bVal: number;
       switch (sort.col) {
-        case 'kills': aVal = a.kills; bVal = b.kills; break;
-        case 'deaths': aVal = a.deaths; bVal = b.deaths; break;
-        case 'assists': aVal = a.assists; bVal = b.assists; break;
-        case 'damage': aVal = a.damage; bVal = b.damage; break;
-        case 'hs': aVal = a.headshot_kills; bVal = b.headshot_kills; break;
+        case 'kills_ct': aVal = a.kills_ct; bVal = b.kills_ct; break;
+        case 'kills_t': aVal = a.kills_t; bVal = b.kills_t; break;
+        case 'deaths_ct': aVal = a.deaths_ct; bVal = b.deaths_ct; break;
+        case 'deaths_t': aVal = a.deaths_t; bVal = b.deaths_t; break;
+        case 'assists_ct': aVal = a.assists_ct; bVal = b.assists_ct; break;
+        case 'assists_t': aVal = a.assists_t; bVal = b.assists_t; break;
+        case 'damage_ct': aVal = a.damage_ct; bVal = b.damage_ct; break;
+        case 'damage_t': aVal = a.damage_t; bVal = b.damage_t; break;
+        case 'hs_ct': aVal = a.headshot_kills_ct; bVal = b.headshot_kills_ct; break;
+        case 'hs_t': aVal = a.headshot_kills_t; bVal = b.headshot_kills_t; break;
         default: return 0;
       }
       return sort.asc ? aVal - bVal : bVal - aVal;
     });
     return copy;
-  }, [rows, sort]);
+  }, [aggregated, sort]);
 
   return (
     <div className="my-6">
@@ -433,22 +368,32 @@ function SideSplitTable({ aggregated, includeCT, includeT, singlePlayer, showHea
           <thead>
             <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
-              <SortableTh label="Kills" title={`Kills${qualifier}`} sortKey="kills" state={sort} onClick={toggleSort} />
-              <SortableTh label="Deaths" title={`Deaths${qualifier}`} sortKey="deaths" state={sort} onClick={toggleSort} />
-              <SortableTh label="Assists" title={`Assists${qualifier}`} sortKey="assists" state={sort} onClick={toggleSort} />
-              <SortableTh label="Damage" title={`Damage dealt${qualifier}`} sortKey="damage" state={sort} onClick={toggleSort} />
-              <SortableTh label="HS Kills" title={`Headshot kills${qualifier}`} sortKey="hs" state={sort} onClick={toggleSort} />
+              <SortableTh label="Kills (CT)" title="Kills while playing CT" sortKey="kills_ct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Kills (T)" title="Kills while playing T" sortKey="kills_t" state={sort} onClick={toggleSort} />
+              <SortableTh label="Deaths (CT)" title="Deaths while playing CT" sortKey="deaths_ct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Deaths (T)" title="Deaths while playing T" sortKey="deaths_t" state={sort} onClick={toggleSort} />
+              <SortableTh label="Assists (CT)" title="Assists while playing CT" sortKey="assists_ct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Assists (T)" title="Assists while playing T" sortKey="assists_t" state={sort} onClick={toggleSort} />
+              <SortableTh label="Damage (CT)" title="Damage dealt while playing CT" sortKey="damage_ct" state={sort} onClick={toggleSort} />
+              <SortableTh label="Damage (T)" title="Damage dealt while playing T" sortKey="damage_t" state={sort} onClick={toggleSort} />
+              <SortableTh label="HS Kills (CT)" title="Headshot kills while playing CT" sortKey="hs_ct" state={sort} onClick={toggleSort} />
+              <SortableTh label="HS Kills (T)" title="Headshot kills while playing T" sortKey="hs_t" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
-            {sorted.map((r) => (
-              <tr key={r.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
-                {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
-                <td className={tdRight}>{r.kills}</td>
-                <td className={tdRight}>{r.deaths}</td>
-                <td className={tdRight}>{r.assists}</td>
-                <td className={tdRight}>{r.damage}</td>
-                <td className={tdRight}>{r.headshot_kills}</td>
+            {sorted.map((a) => (
+              <tr key={a.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                {!singlePlayer && <PlayerCell id={a.player_id} name={a.player_name} />}
+                <td className={tdRight}>{a.kills_ct}</td>
+                <td className={tdRight}>{a.kills_t}</td>
+                <td className={tdRight}>{a.deaths_ct}</td>
+                <td className={tdRight}>{a.deaths_t}</td>
+                <td className={tdRight}>{a.assists_ct}</td>
+                <td className={tdRight}>{a.assists_t}</td>
+                <td className={tdRight}>{a.damage_ct}</td>
+                <td className={tdRight}>{a.damage_t}</td>
+                <td className={tdRight}>{a.headshot_kills_ct}</td>
+                <td className={tdRight}>{a.headshot_kills_t}</td>
               </tr>
             ))}
           </tbody>
@@ -1220,6 +1165,8 @@ interface SinglePlayerTiles {
    *  tier's stat from this via `resolveEconomyStat()` (most-played, or whichever tier the filter
    *  selects) and renders it as tiles, same as `EconomyTable` does per row. */
   economyStats: EconomyTierStat[];
+  /** Kills/deaths/assists/damage/headshot kills broken out by CT vs. T side — see `SideSplitTable`. */
+  sides: StatTile[];
   /** No-scope/wallbang/blind/knife kills, totaled across every weapon — see `FlairTable`. */
   flair: StatTile[];
   trades: StatTile[];
@@ -1255,6 +1202,19 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Counter-Strafe %', title: 'Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)', value: pct(agg.counter_strafe_good_shots, agg.counter_strafe_shots) },
     { label: 'Spray Accuracy', title: 'Hits / shots within sequences of 3+ consecutive rifle shots', value: pct(agg.spray_shots_hit, agg.spray_shots_fired) },
     { label: 'Rounds Dropped/Reload', title: 'Bullets still in the magazine (wasted) when reloading, averaged across every reload including clean ones', value: fmtNum(agg.rounds_dropped_on_reload_total / (agg.reloads_total || 1), 2) },
+  ];
+
+  const sides: StatTile[] = [
+    { label: 'Kills (CT)', title: 'Kills while playing CT', value: agg.kills_ct },
+    { label: 'Kills (T)', title: 'Kills while playing T', value: agg.kills_t },
+    { label: 'Deaths (CT)', title: 'Deaths while playing CT', value: agg.deaths_ct },
+    { label: 'Deaths (T)', title: 'Deaths while playing T', value: agg.deaths_t },
+    { label: 'Assists (CT)', title: 'Assists while playing CT', value: agg.assists_ct },
+    { label: 'Assists (T)', title: 'Assists while playing T', value: agg.assists_t },
+    { label: 'Damage (CT)', title: 'Damage dealt while playing CT', value: agg.damage_ct },
+    { label: 'Damage (T)', title: 'Damage dealt while playing T', value: agg.damage_t },
+    { label: 'HS Kills (CT)', title: 'Headshot kills while playing CT', value: agg.headshot_kills_ct },
+    { label: 'HS Kills (T)', title: 'Headshot kills while playing T', value: agg.headshot_kills_t },
   ];
 
   const trades: StatTile[] = [
@@ -1319,7 +1279,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Knife', title: 'Knife kills', value: flairStat.knifeKills },
   ];
 
-  return { impact, duels, mechanics, weaponStats, topWeapons, economyStats, flair, trades, utility, plus: plusTiles };
+  return { impact, duels, mechanics, weaponStats, topWeapons, economyStats, sides, flair, trades, utility, plus: plusTiles };
 }
 
 /** The single-player counterpart of `resolvePlayerWeaponRow()`'s table cells — same resolved
@@ -1493,10 +1453,6 @@ export default function SabremetricsLeaderboardView({
   );
   /** Same idea as `weaponFilter`, for the Economy sub-tab's tier picker. */
   const [economyFilter, setEconomyFilter] = useState<string | null>(null);
-  /** Side Splits' CT/T checkboxes — both on by default (merged totals), matching the match page's
-   *  own Scoreboard toggle default. */
-  const [includeCT, setIncludeCT] = useState(true);
-  const [includeT, setIncludeT] = useState(true);
 
   // Memoized (not called inline in the singlePlayer branch below) so picking a different weapon
   // filter — which only ever changes buildWeaponTiles()'s cheap lookup — doesn't also re-run
@@ -1515,10 +1471,6 @@ export default function SabremetricsLeaderboardView({
   const singlePlayerEconomyTiles = useMemo(
     () => buildEconomyTiles(singlePlayerTiles?.economyStats ?? [], economyFilter),
     [singlePlayerTiles, economyFilter],
-  );
-  const singlePlayerSideTiles = useMemo(
-    () => (aggregated.length > 0 ? buildSideTiles(aggregated[0], includeCT, includeT) : []),
-    [aggregated, includeCT, includeT],
   );
 
   if (aggregated.length === 0) {
@@ -1562,12 +1514,7 @@ export default function SabremetricsLeaderboardView({
             <StatTileGrid heading="Economy" tiles={singlePlayerEconomyTiles} />
           </div>
         )}
-        {sub === 'sides' && (
-          <div className="space-y-4">
-            <SideToggle includeCT={includeCT} includeT={includeT} onToggleCT={() => setIncludeCT((v) => !v)} onToggleT={() => setIncludeT((v) => !v)} />
-            <StatTileGrid heading="Side Splits" tiles={singlePlayerSideTiles} />
-          </div>
-        )}
+        {sub === 'sides' && <StatTileGrid heading="Side Splits" tiles={tiles.sides} />}
         {sub === 'flair' && <StatTileGrid heading="Flair" tiles={tiles.flair} />}
         {sub === 'trades' && <StatTileGrid heading="Trades" tiles={tiles.trades} />}
         {sub === 'utility' && <StatTileGrid heading="Utility" tiles={tiles.utility} />}
@@ -1615,12 +1562,9 @@ export default function SabremetricsLeaderboardView({
         </div>
       )}
       {sub === 'sides' && (
-        <div className="space-y-3">
-          <SideToggle includeCT={includeCT} includeT={includeT} onToggleCT={() => setIncludeCT((v) => !v)} onToggleT={() => setIncludeT((v) => !v)} />
-          <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
-            <SideSplitTable aggregated={agg} includeCT={includeCT} includeT={includeT} singlePlayer={singlePlayer} showHeading={showHeading} />
-          )} />
-        </div>
+        <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
+          <SideSplitTable aggregated={agg} singlePlayer={singlePlayer} showHeading={showHeading} />
+        )} />
       )}
       {sub === 'flair' && (
         <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
