@@ -358,6 +358,14 @@ function optionValueToFilter(value: string): WeaponFilter {
  *  categories" ask) ahead of individual weapons, both with their display names rather than raw
  *  backend classnames — `allWeaponsWithKills()` already groups every knife/bayonet skin into one
  *  `knife` option. */
+// The filter dropdown never gives `melee` its own <optgroup> — every knife/bayonet skin already
+// collapses to the single `knife` key (`weaponGroupKey()`), so a "Knives" group would only ever
+// contain one weapon, making "All Knives" and "Knife" identical selections sitting right on top of
+// each other. Its one weapon is folded into "Other" for display instead (below). This is purely a
+// dropdown-grouping choice — the underlying `melee` category itself is untouched, and still backs
+// `aggregateKillCategoryStats()`/the Flair tab's Knife stat exactly as before.
+const DROPDOWN_CATEGORIES = KILL_WEAPON_CATEGORIES.filter((c) => c !== 'melee');
+
 function WeaponFilterSelect({ kills, value, onChange }: {
   kills: MatchKillRow[]; value: WeaponFilter; onChange: (filter: WeaponFilter) => void;
 }) {
@@ -372,10 +380,13 @@ function WeaponFilterSelect({ kills, value, onChange }: {
     const map = new Map<KillWeaponCategory, string[]>();
     for (const w of allWeaponsWithKills(kills)) {
       const category = killWeaponCategory(w);
-      let list = map.get(category);
+      // See DROPDOWN_CATEGORIES above — melee's one weapon displays under "Other" instead of its
+      // own group.
+      const displayCategory = category === 'melee' ? 'other' : category;
+      let list = map.get(displayCategory);
       if (!list) {
         list = [];
-        map.set(category, list);
+        map.set(displayCategory, list);
       }
       list.push(w);
     }
@@ -391,7 +402,7 @@ function WeaponFilterSelect({ kills, value, onChange }: {
         className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
       >
         <option value={FAVORITE_OPTION_VALUE}>Favorite</option>
-        {KILL_WEAPON_CATEGORIES.map((c) => (
+        {DROPDOWN_CATEGORIES.map((c) => (
           <optgroup key={c} label={KILL_WEAPON_CATEGORY_LABEL[c]}>
             <option value={`${CATEGORY_OPTION_PREFIX}${c}`}>All {KILL_WEAPON_CATEGORY_LABEL[c]}</option>
             {(weaponsByCategory.get(c) ?? []).map((w) => (
