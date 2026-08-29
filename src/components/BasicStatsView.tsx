@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { LeaderboardRowWithId } from '@/lib/types';
 import { computeAdvancedStats, AdvancedStats } from '@/lib/stats';
-import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
+import { aggregateMapPickBanStats, aggregatePerSideStats, aggregateScoreDistribution, aggregateWinConditions, type MapPickBanStat, type PerSideStat, type ScoreDistribution, type WinConditionBreakdown, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import { mapSlug } from '@/lib/maps';
 import { tabCls } from '@/lib/util';
 import { useTabState, resolveTab } from './useTabState';
@@ -520,23 +520,71 @@ function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
   );
 }
 
+const CONDITION_BUCKETS: { key: keyof Omit<WinConditionBreakdown, 'total'>; label: string }[] = [
+  { key: 'elim', label: 'Elimination' },
+  { key: 'bomb', label: 'Bomb Detonation' },
+  { key: 'defuse', label: 'Defuse' },
+  { key: 'time', label: 'Time Expired' },
+];
+
+/** How rounds in scope were decided — same Category/Count/% shape as `ScoreDistributionTable`,
+ *  fed by `aggregateWinConditions()` instead of `aggregateScoreDistribution()`. */
+function WinConditionTable({ dist }: { dist: WinConditionBreakdown }) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-3">
+        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Round win condition</span>
+      </div>
+      {dist.total === 0 ? (
+        <EmptyState message="No round data." />
+      ) : (
+        <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
+          <table className="w-full min-w-max border-collapse text-[12px]">
+            <thead>
+              <tr className="bg-[var(--color-bg-secondary)]">
+                <Th align="left">Condition</Th>
+                <Th align="right">Count</Th>
+                <Th align="right">%</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {CONDITION_BUCKETS.map(({ key, label }) => (
+                <tr key={key} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
+                  <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{label}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{dist[key]}</td>
+                  <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">
+                    {((dist[key] / dist.total) * 100).toFixed(0)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MapsAndSidesSection({
   singleMap,
   scoreDistribution,
+  winConditions,
   mapPickBanStats,
   perSideStats,
 }: {
   singleMap: boolean;
   scoreDistribution: ScoreDistribution | null;
+  winConditions: WinConditionBreakdown | null;
   mapPickBanStats: MapPickBanStat[];
   perSideStats: PerSideStat[];
 }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Score Distribution sits in the 2-col row on a single map page (paired with per-side
-          stats); on a multi-map page it moves to its own full-width row below, alongside the
-          pick/ban table here, so three panels don't fight for two columns. */}
+      {/* Score Distribution sits in this top 2-col row on a single map page (paired with
+          per-side stats); on a multi-map page it moves to its own row below instead, paired
+          with Win Condition there, alongside the pick/ban table here, so four panels don't
+          fight for two columns. */}
       {singleMap && scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
       {!singleMap && <div>
         <div className="flex items-baseline justify-between mb-3">
@@ -615,7 +663,14 @@ function MapsAndSidesSection({
         )}
       </div>
       </div>
-      {!singleMap && scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
+      {!singleMap ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {scoreDistribution && <ScoreDistributionTable dist={scoreDistribution} />}
+          {winConditions && <WinConditionTable dist={winConditions} />}
+        </div>
+      ) : (
+        winConditions && <WinConditionTable dist={winConditions} />
+      )}
     </div>
   );
 }
@@ -654,6 +709,11 @@ export function BasicStatsView({ rows, matches, rounds, singleMap = false }: { r
     [matches],
   );
 
+  const winConditions = useMemo<WinConditionBreakdown | null>(
+    () => (matches ? aggregateWinConditions(rounds ?? []) : null),
+    [matches, rounds],
+  );
+
   const tabs: { key: BasicStatsTab; label: string }[] = [
     { key: 'basic', label: 'Basic Stats' },
     { key: 'kills', label: 'Kill Stats' },
@@ -682,6 +742,7 @@ export function BasicStatsView({ rows, matches, rounds, singleMap = false }: { r
         <MapsAndSidesSection
           singleMap={singleMap}
           scoreDistribution={scoreDistribution}
+          winConditions={winConditions}
           mapPickBanStats={mapPickBanStats}
           perSideStats={perSideStats}
         />

@@ -1,5 +1,5 @@
 import { extractSeasonNumber, isPlayedScore, parseScore } from './util';
-import type { MapIndexEntry } from './types';
+import type { MapIndexEntry, RoundCondition } from './types';
 import { resolveSide } from './parsers/roundSides';
 
 /**
@@ -78,10 +78,11 @@ export interface PerSideStat {
   roundsPlayed: number;
 }
 
-/** A `match_rounds` row (or the subset of it round-win-by-side aggregation needs). */
+/** A `match_rounds` row (or the subset of it round-win-by-side/win-condition aggregation needs). */
 export interface RoundOutcome {
   winner_side: 'CT' | 'T';
   shirts_side: 'CT' | 'T';
+  win_reason: RoundCondition | null;
 }
 
 /** Round win/loss counts for CT and T, computed directly from round outcomes — symmetric per
@@ -218,6 +219,28 @@ export function aggregateScoreDistribution(matches: MatchPickBanInput[]): ScoreD
     else if (loser <= 6) out.convincing++;
     else if (loser <= 9) out.competitive++;
     else out.close++;
+  }
+  return out;
+}
+
+export interface WinConditionBreakdown {
+  elim: number;
+  bomb: number;
+  defuse: number;
+  time: number;
+  total: number;
+}
+
+/** How rounds in scope were decided — elimination, bomb detonation, defuse, or time expiring
+ *  (`match_rounds.win_reason`, see `RoundCondition`). A round with no recorded condition (a
+ *  `match_rounds` row predating this column, or a parser miss) is excluded from `total` rather than
+ *  guessed into a bucket. */
+export function aggregateWinConditions(rounds: RoundOutcome[]): WinConditionBreakdown {
+  const out: WinConditionBreakdown = { elim: 0, bomb: 0, defuse: 0, time: 0, total: 0 };
+  for (const r of rounds) {
+    if (r.win_reason == null) continue;
+    out[r.win_reason]++;
+    out.total++;
   }
   return out;
 }

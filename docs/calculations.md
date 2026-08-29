@@ -101,6 +101,17 @@ falls back to the coarser whole-match `rounds_won`/`rounds_played`-on-starting-s
 a match with no parsed demo (no `match_rounds` rows). Surfaced as "Round Win%"/"RWR%" on the
 season/career/map Maps & Sides tab and the player page's Side stats table.
 
+**Round win condition** — `match_rounds.win_reason` (elimination/bomb detonation/defuse/time
+expired, see `RoundCondition`) is tallied by `aggregateWinConditions()`
+(`src/lib/mapSideStats.ts`) into a count and share per condition across every round in scope. A
+round with no recorded condition (a `match_rounds` row predating this column, or a parser miss) is
+excluded rather than guessed into a bucket. Surfaced as "Round win condition" on the season/career/
+map Maps & Sides tab, next to Score Distribution. This is a separate figure from the per-round icon
+on the match page's round-history strip (`RoundHistoryEntry.condition`, driven by the denormalized
+`matches.round_history` column populated at demo-parse time): both ultimately classify the same CS2
+`round_end` reason, but `RoundHistoryStrip` shows one match's rounds individually while this
+breakdown aggregates across every round in the current scope.
+
 ## Sabremetrics
 
 Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.

@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import { resolveMatchSeasons, fetchAllPages } from './_shared';
+import type { RoundCondition } from '../types';
 
 export interface MatchRoundRow {
   match_id: number;
@@ -7,7 +8,10 @@ export interface MatchRoundRow {
   round_number: number;
   winner_side: 'CT' | 'T';
   shirts_side: 'CT' | 'T';
-  win_reason: string | null;
+  /** Null only for a `match_rounds` row predating this column, or a parser miss — see
+   *  `aggregateWinConditions()` (`src/lib/mapSideStats.ts`), which excludes those rounds rather
+   *  than guessing a condition. */
+  win_reason: RoundCondition | null;
 }
 
 type RawRoundRow = {
@@ -37,7 +41,7 @@ export async function getAllMatchRounds(seasonId?: number): Promise<MatchRoundRo
       round_number: r.round_number,
       winner_side: r.winner_side as 'CT' | 'T',
       shirts_side: r.shirts_side as 'CT' | 'T',
-      win_reason: r.win_reason,
+      win_reason: r.win_reason as RoundCondition | null,
     });
   }
   return result;
