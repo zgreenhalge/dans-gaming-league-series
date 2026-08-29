@@ -389,6 +389,19 @@ than broken out per-weapon like the Weapons sub-tab (`aggregateFlairKillStats()`
 counters from `aggregateWeaponKillStats()` across all of a player's weapons; `Knife` is
 `aggregateKillCategoryStats()`'s `melee` category total (knives/bayonets), not a separate collector.
 
+### Economy
+
+The Economy sub-tab mirrors the Weapons sub-tab's favorite-or-specific pattern
+(`aggregateEconomyStats()`/`resolveEconomyStat()`, `src/lib/queries/weaponStats.ts`), but over the
+three round-buy tiers (`eco`/`force_buy`/`full_buy`, see [`demo-ingestion.md`](./demo-ingestion.md))
+instead of per-weapon kill data: one tier's row per player at a time, picked by "most rounds played"
+(`economyType = null`) or one tier applied to every row. Since the tier set is fixed and
+game-defined rather than derived from what a player happened to use, a tier with no rounds played
+still renders a zeroed row rather than being hidden or omitted from the picker. `Damage/Round` =
+`damage_dealt / rounds_played` for the resolved tier — `rounds_played` is seeded from the round's
+own economy classification, not shot-triggered, so it includes rounds the player never fired a shot
+in.
+
 ### Player Rating (not yet implemented)
 
 A weighted sabremetric composite for individual performance. Independent from the

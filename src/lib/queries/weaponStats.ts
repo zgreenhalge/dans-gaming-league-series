@@ -215,6 +215,49 @@ export function groupWeaponAccuracyByPlayer(rows: WeaponClassMatchRow[]): Map<nu
   return out;
 }
 
+export interface EconomyTierStat extends WeaponStatFields {
+  economy_type: string;
+}
+
+/** The shape an economy tier starts at before any match row is summed into it
+ *  (`aggregateEconomyStats()`), and the same shape `resolveEconomyStat()` falls back to for a tier
+ *  this player never played a round of — so both build one from the same place instead of
+ *  duplicating the field list. */
+function zeroEconomyStat(economyType: string): EconomyTierStat {
+  return { economy_type: economyType, shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0 };
+}
+
+/** Per-player, per-economy-tier shot/accuracy/damage/rounds totals, summed across every
+ *  `EconomyMatchRow` in scope — the Economy sub-tab's analog of `kills.ts`'s
+ *  `aggregateWeaponKillStats()`, reusing `player_match_economy_stats`' own bucketed totals rather
+ *  than re-deriving them from raw events. */
+export function aggregateEconomyStats(rows: EconomyMatchRow[], playerId: number): EconomyTierStat[] {
+  const buckets = new Map<string, EconomyTierStat>();
+  for (const r of rows) {
+    if (r.player_id !== playerId) continue;
+    let b = buckets.get(r.economy_type);
+    if (!b) {
+      b = zeroEconomyStat(r.economy_type);
+      buckets.set(r.economy_type, b);
+    }
+    b.shots_fired += r.shots_fired;
+    b.shots_hit += r.shots_hit;
+    b.headshot_hits += r.headshot_hits;
+    b.damage_dealt += r.damage_dealt;
+    b.rounds_played += r.rounds_played;
+  }
+  return Array.from(buckets.values());
+}
+
+/** Resolves one tier from an aggregated per-player breakdown — an explicit `economyType` picks
+ *  that bucket (zeroed if the player never played a round of it), `null` picks whichever tier this
+ *  player played the most rounds in, mirroring `resolveWeaponStat()`'s favorite-weapon default for
+ *  the Weapons sub-tab. */
+export function resolveEconomyStat(stats: EconomyTierStat[], economyType: string | null): EconomyTierStat {
+  if (economyType != null) return stats.find((s) => s.economy_type === economyType) ?? zeroEconomyStat(economyType);
+  return stats.reduce<EconomyTierStat>((best, s) => (s.rounds_played > best.rounds_played ? s : best), zeroEconomyStat('eco'));
+}
+
 export interface AccuracyTotals {
   shots_fired: number;
   shots_hit: number;

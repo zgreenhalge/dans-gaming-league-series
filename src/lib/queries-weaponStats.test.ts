@@ -1,8 +1,9 @@
 /**
- * Regression harness for queries/weaponStats.ts (#279, #474) — getAllWeaponClassStats,
- * getAllEconomyStats, getMatchWeaponClassStats, groupWeaponAccuracyByPlayer. Exercises the
- * player_match_stats -> matches -> weeks -> seasons join and the season_id filter against the
- * fixture DB's match-100 rows (week 10 -> season 1).
+ * Regression harness for queries/weaponStats.ts (#279, #474, #481) — getAllWeaponClassStats,
+ * getAllEconomyStats, getMatchWeaponClassStats, groupWeaponAccuracyByPlayer,
+ * aggregateEconomyStats, resolveEconomyStat. Exercises the player_match_stats -> matches ->
+ * weeks -> seasons join and the season_id filter against the fixture DB's match-100 rows
+ * (week 10 -> season 1).
  *
  * Run:  npx vitest run src/lib/queries-weaponStats.test.ts
  */
@@ -14,8 +15,16 @@ import { buildFakeDb } from './test-support/fixtures';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getAllWeaponClassStats, getAllEconomyStats, getMatchWeaponClassStats, groupWeaponAccuracyByPlayer } from './queries';
+import { getAllWeaponClassStats, getAllEconomyStats, getMatchWeaponClassStats, groupWeaponAccuracyByPlayer, aggregateEconomyStats, resolveEconomyStat, type EconomyMatchRow } from './queries';
 import { test, report } from './test-support/miniTest';
+
+function economyRow(overrides: Partial<EconomyMatchRow> & Pick<EconomyMatchRow, 'player_id' | 'match_id' | 'economy_type'>): EconomyMatchRow {
+  return {
+    player_name: 'Alice', season_id: 1,
+    shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0,
+    ...overrides,
+  };
+}
 
 async function main() {
   await test('getAllWeaponClassStats: resolves player/match/season and returns one row per weapon, with category derived', async () => {
@@ -85,6 +94,38 @@ async function main() {
     assert.equal(fullBuy?.shots_hit, 30);
     const forceBuy = bob.find((r) => r.economy_type === 'force_buy');
     assert.equal(forceBuy?.rounds_played, 5);
+  });
+
+  // --- aggregateEconomyStats/resolveEconomyStat (#481) ---
+  await test('aggregateEconomyStats: sums per-tier totals across matches, ignores other players', () => {
+    const rows: EconomyMatchRow[] = [
+      economyRow({ player_id: 1, match_id: 100, economy_type: 'eco', shots_fired: 5, shots_hit: 2, rounds_played: 2 }),
+      economyRow({ player_id: 1, match_id: 200, economy_type: 'eco', shots_fired: 3, shots_hit: 1, rounds_played: 1 }),
+      economyRow({ player_id: 1, match_id: 100, economy_type: 'full_buy', shots_fired: 10, shots_hit: 6, rounds_played: 3 }),
+      economyRow({ player_id: 2, match_id: 100, economy_type: 'eco', shots_fired: 100, shots_hit: 100, rounds_played: 100 }),
+    ];
+    const stats = aggregateEconomyStats(rows, 1);
+    assert.equal(stats.length, 2);
+    const eco = stats.find((s) => s.economy_type === 'eco')!;
+    assert.equal(eco.shots_fired, 8);
+    assert.equal(eco.shots_hit, 3);
+    assert.equal(eco.rounds_played, 3);
+    const fullBuy = stats.find((s) => s.economy_type === 'full_buy')!;
+    assert.equal(fullBuy.rounds_played, 3);
+  });
+
+  await test('resolveEconomyStat: null picks the tier with the most rounds played', () => {
+    const stats = aggregateEconomyStats([
+      economyRow({ player_id: 1, match_id: 100, economy_type: 'eco', rounds_played: 2 }),
+      economyRow({ player_id: 1, match_id: 100, economy_type: 'full_buy', rounds_played: 8 }),
+    ], 1);
+    assert.equal(resolveEconomyStat(stats, null).economy_type, 'full_buy');
+  });
+
+  await test('resolveEconomyStat: an explicit tier the player never played returns a zeroed stat, not undefined', () => {
+    const resolved = resolveEconomyStat([], 'force_buy');
+    assert.equal(resolved.economy_type, 'force_buy');
+    assert.equal(resolved.rounds_played, 0);
   });
 
   report();

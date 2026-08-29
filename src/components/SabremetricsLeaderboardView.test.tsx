@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 /**
  * Component tests for `SabremetricsLeaderboardView.tsx`'s sub-tab URL state: the Aim/Weapons/
- * Flair/Opening Duels/Trades/Impact/Utility/Stats Plus tab bar reads from and writes to `sub`.
+ * Economy/Flair/Opening Duels/Trades/Impact/Utility/Stats Plus tab bar reads from and writes to
+ * `sub`, and the Economy tab is gated on `economyRows` the same way Stats Plus is gated on
+ * `showPlusStats`.
  *
  * Run:  npx vitest run src/components/SabremetricsLeaderboardView.test.tsx
  */
+
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { screen } from '@testing-library/react';
@@ -23,6 +26,13 @@ beforeEach(() => {
 
 function row() {
   return sabremetricStatRow({ player_id: 1, match_id: 1 });
+}
+
+function economyRow() {
+  return {
+    player_id: 1, player_name: 'Alice', match_id: 1, season_id: 1, economy_type: 'eco',
+    shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0,
+  };
 }
 
 describe('SabremetricsLeaderboardView — sub-tab URL state', () => {
@@ -51,5 +61,16 @@ describe('SabremetricsLeaderboardView — sub-tab URL state', () => {
     renderWithUrlState(<SabremetricsLeaderboardView rows={[row()]} showPlusStats={false} />);
     expect(screen.queryByRole('tab', { name: 'Stats Plus' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Aim' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('hides Economy when no economyRows are wired (#481)', () => {
+    renderWithUrlState(<SabremetricsLeaderboardView rows={[row()]} />);
+    expect(screen.queryByRole('tab', { name: 'Economy' })).not.toBeInTheDocument();
+  });
+
+  test('shows Economy once economyRows are wired', () => {
+    nextNavigationMock.setSearchParams('sub=economy');
+    renderWithUrlState(<SabremetricsLeaderboardView rows={[row()]} economyRows={[economyRow()]} />);
+    expect(screen.getByRole('tab', { name: 'Economy' })).toHaveAttribute('aria-selected', 'true');
   });
 });

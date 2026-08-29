@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { groupRoundsByMatch, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow, type WeaponClassMatchRow } from '@/lib/queries';
+import { groupRoundsByMatch, type PlayerHistoryRow, type TrophyEntry, type EhogRatingPoint, type SabremetricMatchRow, type MatchRoundRow, type MatchKillRow, type WeaponClassMatchRow, type EconomyMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import { useLiveH2HData } from './useLiveH2HData';
 import { buildRegularToGauntletMap, dedupeVisibleSeasons, extractSeasonNumber, filterByMatchIds, isPlayedScore, seasonTitle, tabCls } from '@/lib/util';
@@ -119,6 +119,7 @@ export default function PlayerView({
   matchRounds = [],
   matchKills = [],
   matchWeaponClassStats = [],
+  economyStats = [],
 }: {
   playerId: number;
   history: PlayerHistoryRow[];
@@ -143,6 +144,9 @@ export default function PlayerView({
   /** `player_match_weapon_stats` rows (all seasons — filtered client-side alongside `history`) —
    *  feeds the Weapons section's per-category accuracy/damage/rounds breakdown (#474). */
   matchWeaponClassStats?: WeaponClassMatchRow[];
+  /** League-wide per-economy-tier breakdown rows — filtered down to this player's own (season-
+   *  filtered) matches the same way `matchKills` is, and feeds the Economy sub-tab. */
+  economyStats?: EconomyMatchRow[];
 }) {
   const { data: session } = useSession();
   const loggedInPlayerId = session?.user?.playerId ?? null;
@@ -244,6 +248,7 @@ export default function PlayerView({
     () => filterByMatchIds(matchWeaponClassStats, filtered),
     [filtered, matchWeaponClassStats],
   );
+  const filteredEconomyStats = useMemo(() => filterByMatchIds(economyStats, filtered), [filtered, economyStats]);
   const playedHistory = useMemo(() => filtered.filter(isPlayed), [filtered]);
   const upcomingHistory = filtered.filter((r) => !isPlayed(r)).reverse();
 
@@ -730,7 +735,7 @@ export default function PlayerView({
 
       {/* Advanced Stats tab */}
       {tab === 'advanced' && (
-        <SabremetricsLeaderboardView rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} singlePlayer kills={filteredKills} weaponClassStats={filteredWeaponClassStats} />
+        <SabremetricsLeaderboardView rows={filteredPlayerSabremetrics} leagueRows={filteredLeagueSabremetrics} singlePlayer kills={filteredKills} weaponClassStats={filteredWeaponClassStats} economyRows={filteredEconomyStats} />
       )}
 
       {/* Matchups tab */}

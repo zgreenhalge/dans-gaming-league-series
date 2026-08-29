@@ -13,6 +13,7 @@ import {
   getAllMatchRounds,
   getAllMatchKills,
   getAllWeaponClassStats,
+  getAllEconomyStats,
 } from '@/lib/queries';
 import CareerStatsView from '@/components/CareerStatsView';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
@@ -27,9 +28,10 @@ export const metadata = {
 };
 
 export default async function StatisticsPage() {
-  // Shared with getAllMatchKills() below (same in-flight promise, not a second fetch).
+  // Shared with getAllMatchKills()/getAllWeaponClassStats() below (same in-flight promise, not a
+  // second fetch).
   const playersByIdPromise = getPlayersById();
-  const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, playersById, allMatches, ehogSnapshots, allSabremetrics, allMatchRounds, allMatchKills, allWeaponClassStats] =
+  const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, playersById, allMatches, ehogSnapshots, allSabremetrics, allMatchRounds, allMatchKills, allWeaponClassStats, allEconomyStats] =
     await Promise.all([
       getCareerLeaderboard(),
       getAllLeaderboards(),
@@ -43,6 +45,7 @@ export default async function StatisticsPage() {
       getAllMatchRounds(),
       getAllMatchKills(undefined, playersByIdPromise),
       getAllWeaponClassStats(undefined, playersByIdPromise),
+      getAllEconomyStats(),
     ]);
 
   // H2H is computed client-side (see CareerStatsView) so its tab can honor the
@@ -98,6 +101,7 @@ export default async function StatisticsPage() {
               allMatchRounds={allMatchRounds}
               allMatchKills={allMatchKills}
               allWeaponClassStats={allWeaponClassStats}
+              allEconomyStats={allEconomyStats}
             />
           </UrlStateProvider>
         </Suspense>
