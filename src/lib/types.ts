@@ -267,6 +267,12 @@ export interface WeaponStatFields {
 
 export interface PlayerMatchWeaponStat extends WeaponStatFields {
   player_match_stats_id: number;
+  /** The exact weapon classname (e.g. `ak47`) a bucket is for (#474) — `null` only for rows
+   *  persisted before this column existed; every row written since always sets it. `weapon_category`
+   *  is derived from this at query time (`WEAPON_CATEGORY[weapon]`) rather than trusted from the
+   *  stored column, which stays live only for those pre-migration rows until they're backfilled via
+   *  reparse. */
+  weapon: string | null;
   weapon_category: string;
 }
 
@@ -277,7 +283,10 @@ export interface PlayerMatchEconomyStat extends WeaponStatFields {
 
 export interface DemoWeaponStat {
   player_id: number;
-  weaponStats: (WeaponStatFields & { weapon_category: string })[];
+  /** `weapon_category` is included alongside `weapon` purely so every insert still satisfies the
+   *  column's current NOT NULL constraint (phase 1 of #474's migration) — always derived from
+   *  `weapon` (`WEAPON_CATEGORY[weapon]`) by the caller, never a second independent value. */
+  weaponStats: (WeaponStatFields & { weapon: string; weapon_category: string })[];
   economyStats: (WeaponStatFields & { economy_type: string })[];
 }
 

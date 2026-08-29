@@ -35,6 +35,7 @@ import {
   type RoundFreezeEndRow, type PlayerEquipmentRow,
 } from './parsers/economy';
 import { collectWeaponClassStats, collectEconomyStats, collectMatchKills } from './parsers/weaponStats';
+import { WEAPON_CATEGORY } from './parsers/weaponClasses';
 
 const ZERO: SabFields = {
   damage_ct: 0, damage_t: 0,
@@ -371,8 +372,11 @@ export function parseDemoSabremetrics(
 
   const weaponStats: DemoWeaponStat[] = steamIds.map((steamId) => ({
     player_id: steamToPlayer.get(steamId)!.player_id,
+    // `row.bucket` is the exact weapon classname (#474) — `collectWeaponClassStats()` only ever
+    // buckets guns, so `WEAPON_CATEGORY[row.bucket]` is always defined here.
     weaponStats: weaponClassStats.get(steamId)!.map((row) => ({
-      weapon_category: row.bucket,
+      weapon: row.bucket,
+      weapon_category: WEAPON_CATEGORY[row.bucket],
       shots_fired: row.shots_fired,
       shots_hit: row.shots_hit,
       headshot_hits: row.headshot_hits,
