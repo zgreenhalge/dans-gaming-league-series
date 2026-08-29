@@ -475,27 +475,35 @@ function AverageGameStatsTable({ data }: { data: RowWithStats[] }) {
   );
 }
 
-function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
-  const buckets = [
-    { label: 'Crushing',    count: dist.crushed,     note: '13–3 or worse' },
-    { label: 'Convincing',  count: dist.convincing,  note: '13–4 to 13–6' },
-    { label: 'Competitive', count: dist.competitive, note: '13–7 to 13–9' },
-    { label: 'Close',       count: dist.close,       note: '13–10 or 13–11' },
-    { label: 'CRAZY',       count: dist.crazy,       note: 'Overtime' },
-  ];
+interface DistributionBucket {
+  label: string;
+  count: number;
+  note?: string;
+}
+
+/** The shared Category/Count/% shape behind `ScoreDistributionTable` and `WinConditionTable` —
+ *  same bordered table, empty state, and percentage-of-total column, parameterized by title,
+ *  category column header, and bucket list so the two callers differ only in their data. */
+function DistributionTable({ title, emptyMessage, categoryLabel, total, buckets }: {
+  title: string;
+  emptyMessage: string;
+  categoryLabel: string;
+  total: number;
+  buckets: DistributionBucket[];
+}) {
   return (
     <div>
       <div className="flex items-baseline justify-between mb-3">
-        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Score distribution</span>
+        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">{title}</span>
       </div>
-      {dist.total === 0 ? (
-        <EmptyState message="No match data." />
+      {total === 0 ? (
+        <EmptyState message={emptyMessage} />
       ) : (
         <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
           <table className="w-full min-w-max border-collapse text-[12px]">
             <thead>
               <tr className="bg-[var(--color-bg-secondary)]">
-                <Th align="left">Category</Th>
+                <Th align="left">{categoryLabel}</Th>
                 <Th align="right">Count</Th>
                 <Th align="right">%</Th>
               </tr>
@@ -505,11 +513,11 @@ function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
                 <tr key={label} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
                   <td className="pl-4 pr-3 py-2.5">
                     <span className="tracked text-[11px] font-semibold">{label}</span>
-                    <span className="ml-2 text-[10px] text-[var(--color-text-secondary)]">{note}</span>
+                    {note && <span className="ml-2 text-[10px] text-[var(--color-text-secondary)]">{note}</span>}
                   </td>
                   <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{count}</td>
                   <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">
-                    {((count / dist.total) * 100).toFixed(0)}%
+                    {((count / total) * 100).toFixed(0)}%
                   </td>
                 </tr>
               ))}
@@ -521,43 +529,37 @@ function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
   );
 }
 
-const CONDITION_BUCKETS: RoundCondition[] = ['elim', 'bomb', 'defuse', 'time'];
+function ScoreDistributionTable({ dist }: { dist: ScoreDistribution }) {
+  return (
+    <DistributionTable
+      title="Score distribution"
+      emptyMessage="No match data."
+      categoryLabel="Category"
+      total={dist.total}
+      buckets={[
+        { label: 'Crushing', count: dist.crushed, note: '13–3 or worse' },
+        { label: 'Convincing', count: dist.convincing, note: '13–4 to 13–6' },
+        { label: 'Competitive', count: dist.competitive, note: '13–7 to 13–9' },
+        { label: 'Close', count: dist.close, note: '13–10 or 13–11' },
+        { label: 'CRAZY', count: dist.crazy, note: 'Overtime' },
+      ]}
+    />
+  );
+}
 
-/** How rounds in scope were decided — same Category/Count/% shape as `ScoreDistributionTable`,
- *  fed by `aggregateWinConditions()` instead of `aggregateScoreDistribution()`. */
+const CONDITION_BUCKETS = Object.keys(CONDITION_LABEL) as RoundCondition[];
+
+/** How rounds in scope were decided, fed by `aggregateWinConditions()` instead of
+ *  `aggregateScoreDistribution()` — same `DistributionTable` shape as `ScoreDistributionTable`. */
 function WinConditionTable({ dist }: { dist: WinConditionBreakdown }) {
   return (
-    <div>
-      <div className="flex items-baseline justify-between mb-3">
-        <span className="tracked text-[10px] text-[var(--color-text-secondary)]">Round win condition</span>
-      </div>
-      {dist.total === 0 ? (
-        <EmptyState message="No round data." />
-      ) : (
-        <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] overflow-x-auto">
-          <table className="w-full min-w-max border-collapse text-[12px]">
-            <thead>
-              <tr className="bg-[var(--color-bg-secondary)]">
-                <Th align="left">Condition</Th>
-                <Th align="right">Count</Th>
-                <Th align="right">%</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {CONDITION_BUCKETS.map((key) => (
-                <tr key={key} className="lift-row border-b border-[var(--color-border-tertiary)] last:border-b-0">
-                  <td className="pl-4 pr-3 py-2.5 tracked text-[11px] font-semibold">{CONDITION_LABEL[key]}</td>
-                  <td className="px-3 py-2.5 text-right font-mono tnum text-[var(--color-text-primary)]">{dist[key]}</td>
-                  <td className="px-3 pr-4 py-2.5 text-right font-mono tnum text-[var(--color-text-secondary)]">
-                    {((dist[key] / dist.total) * 100).toFixed(0)}%
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+    <DistributionTable
+      title="Round win condition"
+      emptyMessage="No round data."
+      categoryLabel="Condition"
+      total={dist.total}
+      buckets={CONDITION_BUCKETS.map((key) => ({ label: CONDITION_LABEL[key], count: dist[key] }))}
+    />
   );
 }
 

@@ -515,6 +515,30 @@ function WeaponFilterSelect({ kills, value, onChange }: {
   );
 }
 
+/** The favorite-or-specific picker used by `EconomyFilterSelect` — a `<select>` with a synthetic
+ *  "favorite" sentinel option (`value = null`) plus one option per entry in `options`. */
+function FavoriteOrSpecificSelect({ label, favoriteLabel, options, value, onChange }: {
+  label: string;
+  favoriteLabel: string;
+  options: { value: string; label: string }[];
+  value: string | null;
+  onChange: (value: string | null) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)]">{label}</span>
+      <select
+        value={value ?? 'favorite'}
+        onChange={(e) => onChange(e.target.value === 'favorite' ? null : e.target.value)}
+        className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
+      >
+        <option value="favorite">{favoriteLabel}</option>
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  );
+}
+
 type PlayerWeaponRow = WeaponFilterStat & { player_id: number; player_name: string };
 
 function resolvePlayerWeaponRow(
@@ -664,22 +688,12 @@ const ECONOMY_TIERS: { type: string; label: string }[] = [
 
 /** The economy-tier picker shared by the multi-player table and the single-player tile view —
  *  mirrors `WeaponFilterSelect`, but over a fixed 3-value domain instead of one derived from data. */
+const ECONOMY_TIER_OPTIONS = ECONOMY_TIERS.map((t) => ({ value: t.type, label: t.label }));
+
 function EconomyFilterSelect({ value, onChange }: {
   value: string | null; onChange: (economyType: string | null) => void;
 }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)]">Economy Tier</span>
-      <select
-        value={value ?? 'favorite'}
-        onChange={(e) => onChange(e.target.value === 'favorite' ? null : e.target.value)}
-        className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
-      >
-        <option value="favorite">Most Played</option>
-        {ECONOMY_TIERS.map((t) => <option key={t.type} value={t.type}>{t.label}</option>)}
-      </select>
-    </div>
-  );
+  return <FavoriteOrSpecificSelect label="Economy Tier" favoriteLabel="Most Played" options={ECONOMY_TIER_OPTIONS} value={value} onChange={onChange} />;
 }
 
 function economyTierLabel(economyType: string): string {
@@ -1376,7 +1390,7 @@ export default function SabremetricsLeaderboardView({
   kills = [],
   weaponClassStats = [],
   economyRows = [],
-  hasEconomyData = economyRows.length > 0,
+  hasEconomyData = false,
 }: {
   rows: SabremetricStatRow[];
   /** League-wide rows used as the Plus-stat baseline in single-player mode. Defaults to `rows`. */
@@ -1400,13 +1414,15 @@ export default function SabremetricsLeaderboardView({
   economyRows?: EconomyMatchRow[];
   /** Gates the Economy sub-tab. Unlike `kills` (always shown, zeroed until a demo is parsed), no
    *  caller currently wires economy data at match grain, so the tab must hide there rather than
-   *  showing dead. Defaults to `economyRows.length > 0`, but a season-filtering caller
-   *  (`CareerStatsView`/`PlayerView`) must pass this explicitly, computed from its own
-   *  season-*unscoped* economy rows — per docs/patterns.md's "Gate a tab on data": the gate signal
-   *  must be "computed unscoped by whatever transient filter (season, side, …) the page also
-   *  applies, so the tab doesn't flicker in and out as the user toggles that filter." Defaulting to
-   *  `economyRows.length > 0` would violate that the moment `economyRows` itself is season-scoped —
-   *  toggling to a season with no parsed economy data would silently boot the viewer off the tab. */
+   *  showing dead. Defaults to `false`, not derived from `economyRows` — a caller that wires
+   *  `economyRows` must pass this explicitly, computed from its own season-*unscoped* economy rows,
+   *  per docs/patterns.md's "Gate a tab on data": the gate signal must be "computed unscoped by
+   *  whatever transient filter (season, side, …) the page also applies, so the tab doesn't flicker
+   *  in and out as the user toggles that filter." A caller that passes season-filtered
+   *  `economyRows` without also passing this would otherwise silently boot the viewer off the tab
+   *  the moment they filter to a season with no parsed economy data — deriving the default from
+   *  `economyRows.length` would reintroduce exactly that bug for any future caller who forgets to
+   *  override it, so the unsafe inference isn't offered as a default at all. */
   hasEconomyData?: boolean;
 }) {
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);

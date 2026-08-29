@@ -14,7 +14,7 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
 import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
-import { sabremetricStatRow } from '@/lib/test-support/sabFields';
+import { sabremetricStatRow, economyMatchRow } from '@/lib/test-support/sabFields';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
@@ -29,10 +29,7 @@ function row() {
 }
 
 function economyRow() {
-  return {
-    player_id: 1, player_name: 'Alice', match_id: 1, season_id: 1, economy_type: 'eco',
-    shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0,
-  };
+  return economyMatchRow({ player_id: 1, match_id: 1, economy_type: 'eco' });
 }
 
 describe('SabremetricsLeaderboardView — sub-tab URL state', () => {
@@ -68,9 +65,17 @@ describe('SabremetricsLeaderboardView — sub-tab URL state', () => {
     expect(screen.queryByRole('tab', { name: 'Economy' })).not.toBeInTheDocument();
   });
 
+  test('hides Economy when economyRows are wired but hasEconomyData is left at its default', () => {
+    // hasEconomyData defaults to false rather than economyRows.length > 0, on purpose: deriving it
+    // from a prop that can be season-filtered would silently reintroduce the bug this prop exists
+    // to prevent for any caller that forgets to pass it explicitly.
+    renderWithUrlState(<SabremetricsLeaderboardView rows={[row()]} economyRows={[economyRow()]} />);
+    expect(screen.queryByRole('tab', { name: 'Economy' })).not.toBeInTheDocument();
+  });
+
   test('shows Economy once economyRows are wired', () => {
     nextNavigationMock.setSearchParams('sub=economy');
-    renderWithUrlState(<SabremetricsLeaderboardView rows={[row()]} economyRows={[economyRow()]} />);
+    renderWithUrlState(<SabremetricsLeaderboardView rows={[row()]} economyRows={[economyRow()]} hasEconomyData />);
     expect(screen.getByRole('tab', { name: 'Economy' })).toHaveAttribute('aria-selected', 'true');
   });
 

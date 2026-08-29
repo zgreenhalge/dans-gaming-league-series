@@ -16,15 +16,8 @@ import { buildFakeDb } from './test-support/fixtures';
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
 import { getAllWeaponClassStats, getAllEconomyStats, getMatchWeaponClassStats, groupWeaponAccuracyByPlayer, aggregateEconomyStats, resolveEconomyStat, getPlayersById, type EconomyMatchRow } from './queries';
+import { economyMatchRow as economyRow } from './test-support/sabFields';
 import { test, report } from './test-support/miniTest';
-
-function economyRow(overrides: Partial<EconomyMatchRow> & Pick<EconomyMatchRow, 'player_id' | 'match_id' | 'economy_type'>): EconomyMatchRow {
-  return {
-    player_name: 'Alice', season_id: 1,
-    shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0,
-    ...overrides,
-  };
-}
 
 async function main() {
   await test('getAllWeaponClassStats: resolves player/match/season and returns one row per weapon, with category derived', async () => {
