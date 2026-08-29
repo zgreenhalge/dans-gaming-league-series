@@ -14,7 +14,7 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
 import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
-import { sabremetricStatRow, economyMatchRow } from '@/lib/test-support/sabFields';
+import { sabremetricStatRow, economyMatchRow, zeroSabFields } from '@/lib/test-support/sabFields';
 import SabremetricsLeaderboardView from './SabremetricsLeaderboardView';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
@@ -93,5 +93,22 @@ describe('SabremetricsLeaderboardView — sub-tab URL state', () => {
     nextNavigationMock.setSearchParams('sub=sides');
     renderWithUrlState(<SabremetricsLeaderboardView rows={[row()]} />);
     expect(screen.getByRole('tab', { name: 'Side Splits' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('Side Splits shows the merged CT+T total by default, then narrows to one side when its checkbox is toggled off', async () => {
+    nextNavigationMock.setSearchParams('sub=sides');
+    const sideRow = sabremetricStatRow({
+      player_id: 1, match_id: 1,
+      sab: zeroSabFields({ kills_ct: 7, kills_t: 2 }),
+    });
+    renderWithUrlState(<SabremetricsLeaderboardView rows={[sideRow]} />);
+
+    // Both CT and T checked by default — the merged total (7 + 2).
+    expect(screen.getByText('9')).toBeInTheDocument();
+
+    // Unchecking T narrows the same column down to the CT-only value.
+    await userEvent.click(screen.getByText('T'));
+    expect(screen.queryByText('9')).not.toBeInTheDocument();
+    expect(screen.getByText('7')).toBeInTheDocument();
   });
 });

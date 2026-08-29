@@ -1,4 +1,5 @@
 import { mapSlug } from './maps';
+import type { SabFieldsWithDerived } from './types';
 
 /**
  * Whether a DatHost server is actually up and reachable — the shared "on and done booting" check
@@ -300,6 +301,25 @@ export function tabCls(active: boolean, opts?: { compact?: boolean; accent?: boo
       ? `${accent ? 'border-[var(--color-site-accent)]' : 'border-[var(--color-text-primary)]'} text-[var(--color-text-primary)]`
       : 'border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]',
   ].join(' ');
+}
+
+/**
+ * Sums a sabremetric stat's CT/T-suffixed fields per which side(s) are toggled on — shared by the
+ * match page's Scoreboard side-filter checkboxes (`MatchTabView.tsx`) and the Advanced Stats tab's
+ * Side Splits table (`SabremetricsLeaderboardView.tsx`), so both compute a side-filtered stat the
+ * same way.
+ */
+export function splitStat(
+  s: SabFieldsWithDerived,
+  ct: keyof SabFieldsWithDerived,
+  t: keyof SabFieldsWithDerived,
+  includeCT: boolean,
+  includeT: boolean,
+): number {
+  let total = 0;
+  if (includeCT) total += s[ct] as number;
+  if (includeT) total += s[t] as number;
+  return total;
 }
 
 /** Two-letter initials from a display name, e.g. "Dan Smith" → "DS", "Dan" → "DA". */
