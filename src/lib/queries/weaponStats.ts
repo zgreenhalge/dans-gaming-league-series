@@ -227,17 +227,16 @@ export async function getMatchEconomyStats(
   matchId: number,
   playersById?: Map<number, Player> | Promise<Map<number, Player>>,
 ): Promise<EconomyMatchRow[]> {
-  // Fetched once and shared with getEconomyRoundWins() below (same in-flight promise, not a second
-  // `player_match_stats` read) — `PmsFactionRow` is a strict superset of what this function's own
-  // row-resolution needs (`player_id`/`match_id`), so one fetch covers both.
-  const pmsFactionLookupPromise = fetchPmsFactionLookup(matchId);
+  // `fetchPmsFactionLookup()` is `cache()`-wrapped and keyed by `matchId` (#507), so this function's
+  // own row-resolution call and `getEconomyRoundWins(matchId)`'s internal one already collapse to
+  // one `player_match_stats` read without a local promise to thread between them.
   const [rows, pmsLookup, resolvedPlayersById, roundWins] = await Promise.all([
     fetchAllPages<PlayerMatchEconomyStat>((from, to) =>
       supabase.from('player_match_economy_stats').select('*').eq('match_id', matchId).range(from, to),
     ),
-    pmsFactionLookupPromise,
+    fetchPmsFactionLookup(matchId),
     playersById ? Promise.resolve(playersById) : getPlayersById(),
-    getEconomyRoundWins(matchId, pmsFactionLookupPromise),
+    getEconomyRoundWins(matchId),
   ]);
 
   const result: EconomyMatchRow[] = [];
