@@ -382,7 +382,8 @@ const DROPDOWN_CATEGORIES = KILL_WEAPON_CATEGORIES.filter((c) => c !== 'melee');
 // `other` (world/fall-damage and bomb-detonation deaths) never has a real player attacker — see
 // `killWeaponCategory()` — so "All Other" would always resolve zero Kills, which reads as broken
 // rather than correct: a Deaths-only stat forced through a Kills-shaped filter. Hidden as a
-// selectable category for now (#498 tracks a dedicated uncredited-deaths display instead);
+// selectable category — its uncredited-death counts have their own dedicated display instead
+// (`FlairTable`'s Fall Deaths/C4 Deaths columns, `aggregateFlairKillStats()` in queries/kills.ts);
 // `other`'s one folded-in weapon (`Knife` — see above) still shows if the player has any.
 const HIDDEN_CATEGORY_FILTERS = new Set<KillWeaponCategory>(['other']);
 
@@ -713,7 +714,9 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
 //
 // Off-meta kill counts worth showing off on their own — no-scope/wallbang/blind/knife kills,
 // totaled across every weapon (`aggregateFlairKillStats()`) rather than broken out per-weapon
-// like the Weapons sub-tab above.
+// like the Weapons sub-tab above. Also home to the two uncredited-death counts (fall damage, C4)
+// that the Weapons sub-tab's Kills-shaped filter can't show (#498) — `HIDDEN_CATEGORY_FILTERS`
+// above has the full story on why `other` is hidden from that filter.
 
 interface PlayerFlairRow {
   player_id: number;
@@ -748,6 +751,8 @@ function FlairTable({ aggregated, kills, singlePlayer, showHeading = true }: {
         case 'blind': aVal = a.flair.blindKills; bVal = b.flair.blindKills; break;
         case 'midair': aVal = a.flair.midairKills; bVal = b.flair.midairKills; break;
         case 'knife': aVal = a.flair.knifeKills; bVal = b.flair.knifeKills; break;
+        case 'fall_deaths': aVal = a.flair.fallDamageDeaths; bVal = b.flair.fallDamageDeaths; break;
+        case 'c4_deaths': aVal = a.flair.c4Deaths; bVal = b.flair.c4Deaths; break;
         default: return 0;
       }
       return sort.asc ? aVal - bVal : bVal - aVal;
@@ -768,6 +773,8 @@ function FlairTable({ aggregated, kills, singlePlayer, showHeading = true }: {
               <SortableTh label="Blind" title="Kills scored while the attacker was flashed, across every weapon" sortKey="blind" state={sort} onClick={toggleSort} />
               <SortableTh label="Midair" title="Mid-air kills (attacker was airborne), across every weapon" sortKey="midair" state={sort} onClick={toggleSort} />
               <SortableTh label="Knife" title="Knife kills" sortKey="knife" state={sort} onClick={toggleSort} />
+              <SortableTh label="Fall Deaths" title="Deaths to fall damage or other environmental causes — never has a real attacker, so this is a death count, not a kill count" sortKey="fall_deaths" state={sort} onClick={toggleSort} />
+              <SortableTh label="C4 Deaths" title="Deaths to bomb detonation — never has a real attacker, so this is a death count, not a kill count" sortKey="c4_deaths" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -779,6 +786,8 @@ function FlairTable({ aggregated, kills, singlePlayer, showHeading = true }: {
                 <td className={tdRight}>{r.flair.blindKills}</td>
                 <td className={tdRight}>{r.flair.midairKills}</td>
                 <td className={tdRight}>{r.flair.knifeKills}</td>
+                <td className={tdRight}>{r.flair.fallDamageDeaths}</td>
+                <td className={tdRight}>{r.flair.c4Deaths}</td>
               </tr>
             ))}
           </tbody>
@@ -1182,6 +1191,8 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Blind', title: 'Kills scored while the attacker was flashed, across every weapon', value: flairStat.blindKills },
     { label: 'Midair', title: 'Mid-air kills (attacker was airborne), across every weapon', value: flairStat.midairKills },
     { label: 'Knife', title: 'Knife kills', value: flairStat.knifeKills },
+    { label: 'Fall Deaths', title: 'Deaths to fall damage or other environmental causes — never has a real attacker, so this is a death count, not a kill count', value: flairStat.fallDamageDeaths },
+    { label: 'C4 Deaths', title: 'Deaths to bomb detonation — never has a real attacker, so this is a death count, not a kill count', value: flairStat.c4Deaths },
   ];
 
   return { impact, duels, mechanics, weaponStats, topWeapons, economyStats, flair, trades, utility, plus: plusTiles };

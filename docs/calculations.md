@@ -407,6 +407,15 @@ than broken out per-weapon like the Weapons sub-tab (`aggregateFlairKillStats()`
 counters from `aggregateWeaponKillStats()` across all of a player's weapons; `Knife` is
 `aggregateKillCategoryStats()`'s `melee` category total (knives/bayonets), not a separate collector.
 
+It's also the home for the `other` category's two uncredited-death counts, `Fall Deaths` and
+`C4 Deaths` — a `world` (fall damage/environmental) or `planted_c4` (bomb detonation) death never
+has a real player attacker (`killWeaponCategory()`), so it's structurally a Deaths-only stat with no
+Kills to show; the Weapons sub-tab's category filter hides `other` for exactly that reason
+(`HIDDEN_CATEGORY_FILTERS`, `SabremetricsLeaderboardView.tsx`) rather than rendering an always-zero
+Kills row. `aggregateFlairKillStats()` reads each cause's `deaths` straight off its own
+`weaponGroupKey()` bucket (`world`, `planted_c4`) instead of through `aggregateKillCategoryStats()`'s
+merged `other` total, so the two causes stay distinguishable in the UI.
+
 ### Economy
 
 The Economy sub-tab shows one round-buy tier's row per player at a time

@@ -6,7 +6,8 @@ import {
 import { getPlayersById } from './player';
 import {
   killWeaponCategory, weaponGroupKey, weaponDisplayName, isGunWeapon, KILL_WEAPON_CATEGORY_LABEL,
-  WEAPON_CATEGORIES, type KillWeaponCategory, type WeaponCategory,
+  WEAPON_CATEGORIES, WORLD_DEATH_WEAPON, PLANTED_C4_DEATH_WEAPON,
+  type KillWeaponCategory, type WeaponCategory,
 } from '../parsers/weaponClasses';
 import type { Player, Faction, RoundCondition } from '../types';
 import type { AccuracyTotals, PlayerWeaponAccuracy, WeaponClassAggregateStat } from './weaponStats';
@@ -771,9 +772,8 @@ export function lookupDerivedSabFields(
  *  it up (grouped via `weaponGroupKey()`, so a raw skin name still finds its `knife` bucket),
  *  falling back to a zeroed stat (rather than `null`) when the player has no kills/deaths with it —
  *  so a specific-weapon selection always renders a row for every player, per the Weapons sub-tab's
- *  filter contract. Not exported — `resolveWeaponFilterStat()` is the only caller (its `favorite`/
- *  `weapon` branches delegate here; its `category` branch bypasses it entirely), and every UI
- *  consumer goes through that wider three-mode resolver instead. */
+ *  filter contract. Not exported — every caller (`resolveWeaponFilterStat()`'s `favorite`/`weapon`
+ *  branches, `aggregateFlairKillStats()`'s uncredited-death lookups) lives in this same file. */
 function resolveWeaponStat(stats: WeaponKillStat[], weapon: string | null): WeaponKillStat | null {
   if (weapon == null) return favoriteWeapon(stats);
   const key = weaponGroupKey(weapon);
@@ -919,13 +919,25 @@ export interface FlairKillStat {
   blindKills: number;
   midairKills: number;
   knifeKills: number;
+  /** Deaths to fall damage / other environmental causes (`match_kills.weapon === 'world'`) — never
+   *  has a real attacker (`killWeaponCategory()`), so it's an uncredited-death count, not a kill
+   *  count like every other field here (#498). */
+  fallDamageDeaths: number;
+  /** Deaths to bomb detonation (`match_kills.weapon === 'planted_c4'`) — same uncredited-death
+   *  shape as `fallDamageDeaths` (#498). */
+  c4Deaths: number;
 }
 
 /** "Flair" kills — the off-meta kill counts worth showing off on their own, summed across every
  *  weapon rather than broken out per-weapon like `aggregateWeaponKillStats()`. `noscopeKills`/
  *  `wallbangKills`/`blindKills`/`midairKills` total the same-named `WeaponKillStat` counters
  *  across every weapon a player has kills with; `knifeKills` reuses `aggregateKillCategoryStats()`'s
- *  `melee` category total (knives/bayonets) rather than reclassifying weapons itself. */
+ *  `melee` category total (knives/bayonets) rather than reclassifying weapons itself.
+ *  `fallDamageDeaths`/`c4Deaths` read the `WORLD_DEATH_WEAPON`/`PLANTED_C4_DEATH_WEAPON` buckets'
+ *  `deaths` directly (via the same `resolveWeaponStat()` lookup `resolveWeaponFilterStat()` uses)
+ *  rather than through `aggregateKillCategoryStats()`'s `other` rollup, which would merge the two
+ *  causes together — the Weapons sub-tab's dedicated uncredited-death display needs them told apart
+ *  (#498). */
 export function aggregateFlairKillStats(kills: MatchKillRow[], playerId: number): FlairKillStat {
   const stats = aggregateWeaponKillStats(kills, playerId);
   const knifeKills = aggregateKillCategoryStats(stats).find((c) => c.category === 'melee')?.kills ?? 0;
@@ -935,5 +947,7 @@ export function aggregateFlairKillStats(kills: MatchKillRow[], playerId: number)
     blindKills: stats.reduce((n, s) => n + s.blindKills, 0),
     midairKills: stats.reduce((n, s) => n + s.midairKills, 0),
     knifeKills,
+    fallDamageDeaths: resolveWeaponStat(stats, WORLD_DEATH_WEAPON)?.deaths ?? 0,
+    c4Deaths: resolveWeaponStat(stats, PLANTED_C4_DEATH_WEAPON)?.deaths ?? 0,
   };
 }
