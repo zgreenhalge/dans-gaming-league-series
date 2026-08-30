@@ -79,7 +79,6 @@ export interface SeasonPlayer {
   id: number;
   season_id: number;
   player_id: number;
-  joined_at: string;
 }
 
 /** A regular season's editable matchup draft — mirrors `Week`/`Match` in shape (down to reusing
