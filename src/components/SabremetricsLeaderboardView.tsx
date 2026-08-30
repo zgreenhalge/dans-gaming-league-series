@@ -1008,26 +1008,28 @@ interface SideSplitRow {
   adr: number;
 }
 
-/** CT/T-filtered Kills/Assists/Deaths/Damage, one row per player — `includeCT`/`includeT` narrow
- *  each stat via `splitStat()` against `AggregatedSab`'s raw `_ct`/`_t` fields, same primitive the
- *  match page's own `Scoreboard` filters with. ADR only ever shows with both sides selected
- *  (`bothSides`, using the total `rounds_played` denominator already shown elsewhere on the site);
- *  a side-filtered row shows a dash rather than guessing a rounds-played-by-side split that isn't
- *  available at this aggregate scope — see the Sides sub-tab's comment above `ALL_SUB_TABS`. */
+/** CT/T-filtered Kills/Assists/Deaths/Damage/ADR, one row per player — `includeCT`/`includeT`
+ *  narrow each stat via `splitStat()` against `AggregatedSab`'s raw `_ct`/`_t` fields, same
+ *  primitive the match page's own `Scoreboard` filters with. ADR's denominator is
+ *  `rounds_played_ct`/`_t` (`deriveRoundsPlayedBySide()`, `src/lib/queries/kills.ts`) — a real
+ *  per-round-per-side tally, not an approximation: every row here comes from a demo-parsed match
+ *  (`player_match_sabremetrics`), so unlike the match page's own `roundsPlayedBySide()` (which
+ *  approximates from one match's `target_win_rounds` when it has no better data) there's no
+ *  fallback to reach for at this scope — the real round-by-round split is always available. */
 function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }: {
   aggregated: AggregatedSab[]; includeCT: boolean; includeT: boolean; showHeading?: boolean;
 }) {
   const [sort, toggleSort] = useSortState('k');
-  const bothSides = includeCT && includeT;
 
   const rows = useMemo<SideSplitRow[]>(() => aggregated.map((a) => {
     const kills = splitStat(a, 'kills_ct', 'kills_t', includeCT, includeT);
     const assists = splitStat(a, 'assists_ct', 'assists_t', includeCT, includeT);
     const deaths = splitStat(a, 'deaths_ct', 'deaths_t', includeCT, includeT);
     const damage = splitStat(a, 'damage_ct', 'damage_t', includeCT, includeT);
-    const adr = bothSides && a.rounds_played > 0 ? damage / a.rounds_played : NaN;
+    const roundsPlayed = splitStat(a, 'rounds_played_ct', 'rounds_played_t', includeCT, includeT);
+    const adr = roundsPlayed > 0 ? damage / roundsPlayed : NaN;
     return { player_id: a.player_id, player_name: a.player_name, kills, assists, deaths, killDiff: kills - deaths, damage, adr };
-  }), [aggregated, bothSides, includeCT, includeT]);
+  }), [aggregated, includeCT, includeT]);
 
   const sorted = useMemo(() => {
     const copy = [...rows];
@@ -1060,7 +1062,7 @@ function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }:
               <SortableTh label="Deaths" sortKey="d" state={sort} onClick={toggleSort} />
               <SortableTh label="Kill Differential" sortKey="kdiff" state={sort} onClick={toggleSort} />
               <SortableTh label="Damage" sortKey="dmg" state={sort} onClick={toggleSort} />
-              <SortableTh label="ADR" title="Average Damage per Round — only available with both sides selected" sortKey="adr" state={sort} onClick={toggleSort} />
+              <SortableTh label="ADR" title="Average Damage per Round" sortKey="adr" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -1356,18 +1358,18 @@ type SubTab = 'impact' | 'duels' | 'mechanics' | 'weapons' | 'economy' | 'flair'
 // rolled up into all-weapons totals instead of broken out by gun. Sides and Stats Plus have no
 // Leetify analog (they're DGLS's own), so they stay last.
 //
-// Sides is a single filterable table (CT/T checkboxes above one K/D/A/Damage row set, gated on the
-// unscoped `hasSideData` prop — see its doc comment below), not the wide CT|T-paired-column layout
-// #482 originally shipped — that reiterated Stats > Basic Stats' own K/D/A columns under a more
-// confusing layout. It lives in Advanced Stats rather than on Basic Stats (#506) because Advanced
-// Stats already means "demo-backed" to users, so a CT/T filter here needs no coverage caveat the
-// way bolting one onto Basic Stats' always-accurate all-time total would. `AggregatedSab` carries
-// the raw `_ct`/`_t` fields this reads directly (`aggregateRows()`,
-// `src/lib/queries/sabremetrics.ts`), same as the match page's own Scoreboard CT/T checkboxes
-// (`MatchTabView.tsx`) via the shared `splitStat()`. ADR isn't side-filtered here, for the same
-// reason `docs/calculations.md`'s Side Splits section gives for the match scoreboard being the
-// one place ADR is side-filterable at all — no rounds-played-by-side total exists at this
-// aggregate scope, so a side-filtered row shows a dash rather than a guessed number.
+// Sides is a single filterable table (CT/T checkboxes above one K/D/A/Damage/ADR row set, gated on
+// the unscoped `hasSideData` prop — see its doc comment below), not the wide CT|T-paired-column
+// layout #482 originally shipped — that reiterated Stats > Basic Stats' own K/D/A columns under a
+// more confusing layout. It lives in Advanced Stats rather than on Basic Stats (#506) because
+// Advanced Stats already means "demo-backed" to users, so a CT/T filter here needs no coverage
+// caveat the way bolting one onto Basic Stats' always-accurate all-time total would. `AggregatedSab`
+// carries the raw `_ct`/`_t` fields (including `rounds_played_ct`/`_t`) this reads directly
+// (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`), same as the match page's own Scoreboard
+// CT/T checkboxes (`MatchTabView.tsx`) via the shared `splitStat()`. ADR is side-filterable here
+// with a real per-round denominator (`deriveRoundsPlayedBySide()`, `src/lib/queries/kills.ts`) —
+// see `SideSplitTable`'s own doc comment for why this scope needs no approximation the way the
+// match page's `roundsPlayedBySide()` does.
 const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'mechanics', label: 'Aim' },
   { key: 'weapons', label: 'Weapons' },
@@ -1629,6 +1631,7 @@ export default function SabremetricsLeaderboardView({
       )}
       {sub === 'sides' && (
         <div className="space-y-6">
+          <PerSideStatsTable perSideStats={perSideStats} />
           <div className="flex items-center gap-4">
             <Checkbox checked={includeCT} onToggle={() => setIncludeCT((v) => !v)} label="CT" />
             <Checkbox checked={includeT} onToggle={() => setIncludeT((v) => !v)} label="T" />
@@ -1636,7 +1639,6 @@ export default function SabremetricsLeaderboardView({
           <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
             <SideSplitTable aggregated={agg} includeCT={includeCT} includeT={includeT} showHeading={showHeading} />
           )} />
-          <PerSideStatsTable perSideStats={perSideStats} />
         </div>
       )}
       {sub === 'plus' && showPlusStats && <PlusStatsTable aggregated={aggregated} />}
