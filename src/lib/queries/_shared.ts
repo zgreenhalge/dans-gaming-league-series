@@ -138,6 +138,18 @@ export function bumpCounter<T, K extends keyof T>(
 
 export type PmsRow = { id: number; player_id: number; match_id: number };
 
+/** Fetches every `player_match_stats` row (`id, player_id, match_id`), unscoped — the raw `pmsRows`
+ *  a page can create once and pass to several sibling query calls (e.g. `getAllMatchKills()` and
+ *  `getAllWeaponClassStats()`/`getAllEconomyStats()`, both via their own `pmsRows` params) so they
+ *  share one `player_match_stats` read instead of each doing its own full-table fetch (#503). Also
+ *  `fetchPmsLookup()`'s own unscoped fetch, factored out here so the query isn't duplicated between
+ *  the two. */
+export function fetchAllPmsRows(): Promise<PmsRow[]> {
+  return fetchAllPages<PmsRow>((from, to) =>
+    asPage(supabase.from('player_match_stats').select('id, player_id, match_id').range(from, to)),
+  );
+}
+
 /** Resolves `player_match_stats.id -> {id, player_id, match_id}` — the FK-to-`player_id` lookup
  *  every fact-table reader needs (`match_kills`/`match_utility_throws` rows are keyed by
  *  `player_match_stats_id`, but every `derive*()` consumer works in `player_id`). Pass `rows` when
@@ -150,11 +162,11 @@ export function fetchPmsLookup(
 ): Promise<Map<number, PmsRow>> {
   const rowsPromise = rows
     ? Promise.resolve(rows)
-    : fetchAllPages<PmsRow>((from, to) => {
-        let q = supabase.from('player_match_stats').select('id, player_id, match_id');
-        if (matchId != null) q = q.eq('match_id', matchId);
-        return asPage(q.range(from, to));
-      });
+    : matchId != null
+      ? fetchAllPages<PmsRow>((from, to) =>
+          asPage(supabase.from('player_match_stats').select('id, player_id, match_id').eq('match_id', matchId).range(from, to)),
+        )
+      : fetchAllPmsRows();
   return rowsPromise.then((r) => new Map(r.map((x) => [x.id, x])));
 }
 

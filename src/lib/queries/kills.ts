@@ -207,50 +207,16 @@ function zeroWeaponStat(weapon: string): WeaponKillStat {
   };
 }
 
-/** Kills-with / headshot-kills-with / deaths-to, bucketed by weapon, for one player over whatever
- *  `kills` scope the caller already filtered (a season, a match, career). Bucketed by
+/** Kills-with / headshot-kills-with / deaths-to, bucketed by weapon, for every player with a kill or
+ *  death in `kills` — the Weapons sub-tab's multi-player table (`WeaponsTable`,
+ *  `SabremetricsLeaderboardView.tsx`) calls this once per render and looks each row up in O(1),
+ *  rather than rescanning `kills` once per player (#502); `aggregateWeaponKillStats()` below is a
+ *  one-player lookup on this same grouping, so there's one accumulation pass, not two. Bucketed by
  *  `weaponGroupKey()`, not the raw `match_kills.weapon` string, so every knife/bayonet skin variant
  *  merges into one `knife` row rather than splitting across cosmetic skin names (#474). Self-kills
  *  and teamkills don't count toward `kills`/`headshotKills`/`noscopeKills`/`wallbangKills`/
  *  `blindKills`/`midairKills` (they're not a credited kill) but do still count as a death for the
- *  victim side. */
-export function aggregateWeaponKillStats(kills: MatchKillRow[], playerId: number): WeaponKillStat[] {
-  const buckets = new Map<string, WeaponKillStat>();
-  const getBucket = (weapon: string): WeaponKillStat => {
-    const key = weaponGroupKey(weapon);
-    let b = buckets.get(key);
-    if (!b) {
-      b = zeroWeaponStat(key);
-      buckets.set(key, b);
-    }
-    return b;
-  };
-
-  for (const k of kills) {
-    const isCreditedKill =
-      k.attacker_player_id === playerId && k.attacker_player_id !== k.victim_player_id && !k.is_teamkill;
-    if (isCreditedKill) {
-      const b = getBucket(k.weapon);
-      b.kills += 1;
-      if (k.headshot) b.headshotKills += 1;
-      if (k.noscope) b.noscopeKills += 1;
-      if (k.wallbang) b.wallbangKills += 1;
-      if (k.blind_kill) b.blindKills += 1;
-      if (k.midair) b.midairKills += 1;
-    }
-    if (k.victim_player_id === playerId) {
-      getBucket(k.weapon).deaths += 1;
-    }
-  }
-
-  return [...buckets.values()].sort((a, b) => b.kills - a.kills);
-}
-
-/** Like `aggregateWeaponKillStats()`, but for every player with a kill or death in `kills` in one
- *  pass — the Weapons sub-tab's multi-player table (`WeaponsTable`, `SabremetricsLeaderboardView.tsx`)
- *  calls this once per render and looks each row up in O(1), rather than rescanning `kills` once per
- *  player (#502). A player with no kills/deaths in scope is simply absent from the map, matching
- *  `aggregateWeaponKillStats()`'s own `[]` for that case. */
+ *  victim side. A player with no kills/deaths in scope is simply absent from the map. */
 export function groupWeaponKillStatsByPlayer(kills: MatchKillRow[]): Map<number, WeaponKillStat[]> {
   const byPlayer = new Map<number, Map<string, WeaponKillStat>>();
   const getBucket = (playerId: number, weapon: string): WeaponKillStat => {
@@ -288,6 +254,12 @@ export function groupWeaponKillStatsByPlayer(kills: MatchKillRow[]): Map<number,
     out.set(playerId, [...buckets.values()].sort((a, b) => b.kills - a.kills));
   }
   return out;
+}
+
+/** One player's slice of `groupWeaponKillStatsByPlayer()` — `[]` for a player with no kills/deaths
+ *  in scope, matching the grouped map's own "simply absent" convention for that case. */
+export function aggregateWeaponKillStats(kills: MatchKillRow[], playerId: number): WeaponKillStat[] {
+  return groupWeaponKillStatsByPlayer(kills).get(playerId) ?? [];
 }
 
 /** The weapon a player has the most kills with, or `null` when they have none in scope. */
