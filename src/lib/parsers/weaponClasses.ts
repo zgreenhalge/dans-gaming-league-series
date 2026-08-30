@@ -68,6 +68,15 @@ export function killWeaponCategory(weapon: string): KillWeaponCategory {
   return 'other';
 }
 
+/** The two `match_kills.weapon` values that, in practice, ever fall through `killWeaponCategory()`
+ *  to `other` — fall damage/other environmental deaths and bomb detonation. Neither ever has a
+ *  real player attacker, so a kill is never credited to anyone for them. Exported so a caller that
+ *  needs to single one out (e.g. the Flair sub-tab's uncredited-death display,
+ *  `aggregateFlairKillStats()` in `queries/kills.ts`) reads the same two literals this file's own
+ *  classification is built from, rather than re-asserting them independently (#498). */
+export const WORLD_DEATH_WEAPON = 'world';
+export const PLANTED_C4_DEATH_WEAPON = 'planted_c4';
+
 /** Every `KillWeaponCategory`, in the order the Weapons sub-tab's category filter lists them
  *  (#474) — guns from closest-range to longest, then melee, utility, and the catch-all last. */
 export const KILL_WEAPON_CATEGORIES: KillWeaponCategory[] = [
