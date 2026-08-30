@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { cache } from 'react';
 import { supabase } from '../supabase';
 import { heatmapKey, mapHeatmapKey } from '../r2';
 import { HEATMAP_SCHEMA_VERSION, MAP_HEATMAP_ROLLUP_VERSION, type HeatmapArtifact, type HeatmapKind } from '../replay/heatmap';
@@ -355,7 +356,9 @@ export async function getMapIndex(): Promise<MapIndexEntry[]> {
   }).sort((a, b) => b.pickCount - a.pickCount);
 }
 
-export async function getMapDetail(slug: string): Promise<MapDetail | null> {
+/** Wrapped in React's `cache()` (#507), keyed by `slug`, so `generateMetadata` and the page body
+ *  calling this with the same `slug` (`src/app/maps/[slug]/page.tsx`) collapse to one computation. */
+export const getMapDetail = cache(async (slug: string): Promise<MapDetail | null> => {
   const { matches, weeks, seasons } = await fetchMapRawData();
   const canonicalName = buildCanonicalNames(matches, seasons);
 
@@ -553,7 +556,7 @@ export async function getMapDetail(slug: string): Promise<MapDetail | null> {
   }).sort(canonicalSort);
 
   return { name: mapName, slug, pickCount: playedMatches.length, banCount: bans, noPickCount, seasons: mapSeasons, matches: mapMatches, playerStats };
-}
+});
 
 // ---------------------------------------------------------------------------
 // Maps table lookup
