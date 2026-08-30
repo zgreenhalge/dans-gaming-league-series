@@ -212,7 +212,7 @@ export type SabFields = Omit<PlayerMatchSabremetrics, 'player_match_stats_id'>;
 /** `SabFields` plus the fields no longer stored on `player_match_sabremetrics` — derived at query
  *  time instead (`queries/kills.ts`'s `deriveHeadshotAndTeamkillCounts()`/
  *  `deriveOpeningDuelCounts()`/`deriveTwoKRoundCounts()`/`deriveSideSplitCounts()`/
- *  `deriveRoundsPlayedBySide()`, `queries/weaponStats.ts`'s `deriveAccuracyTotals()`,
+ *  `deriveRoundsBySide()`, `queries/weaponStats.ts`'s `deriveAccuracyTotals()`,
  *  `queries/utility.ts`'s `deriveUtilityCounts()`), but still carried alongside every other
  *  sabremetric so aggregation/display code doesn't need a special case for them. */
 export type SabFieldsWithDerived = SabFields & {
@@ -247,6 +247,8 @@ export type SabFieldsWithDerived = SabFields & {
   blind_duration_max_sum: number;
   rounds_played_ct: number;
   rounds_played_t: number;
+  rounds_won_ct: number;
+  rounds_won_t: number;
 };
 
 export interface DemoSabremetricStat {

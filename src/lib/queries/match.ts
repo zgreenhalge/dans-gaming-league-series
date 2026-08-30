@@ -9,7 +9,7 @@ import { asPage, fetchAllPages, getWeekLookup } from './_shared';
 import { rowToLiveScore, type LiveScoreRow, type LiveScoreDbRow } from '../demo/liveScore';
 import {
   getMatchKills, deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts,
-  buildPlayerFactionsAndRoster, lookupDerivedSabFields, deriveRoundsPlayedBySide, type DerivedSabFields,
+  buildPlayerFactionsAndRoster, lookupDerivedSabFields, deriveRoundsBySide, type DerivedSabFields,
 } from './kills';
 import { deriveAccuracyTotals } from './weaponStats';
 import { getRoundSides } from './rounds';
@@ -341,14 +341,14 @@ export async function getMatchSabremetrics(matchId: number): Promise<MatchSabrem
   const sideSplitCounts = deriveSideSplitCounts(kills, roundSides, playerFactions);
   const clutchCounts = deriveClutchCounts(kills, roundSides, playerFactions, rosterByMatch);
   const utilityCounts = deriveUtilityCounts(throws, kills, playerFactions);
-  const roundsPlayedBySide = deriveRoundsPlayedBySide(roundSides, playerFactions, rosterByMatch);
+  const roundsBySide = deriveRoundsBySide(roundSides, playerFactions, rosterByMatch);
 
   return (sabRows as PlayerMatchSabremetrics[]).map((sab) => {
     const pms = pmsLookup.get(sab.player_match_stats_id)!;
     const key = `${matchId}:${pms.player_id}`;
     return {
       ...sab,
-      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals, sideSplitCounts, clutchCounts, utilityCounts, roundsPlayedBySide),
+      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals, sideSplitCounts, clutchCounts, utilityCounts, roundsBySide),
       player_id: pms.player_id,
       player_name: players.get(pms.player_id)?.name ?? `#${pms.player_id}`,
       faction: pms.faction as Faction,

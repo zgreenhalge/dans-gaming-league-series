@@ -1006,16 +1006,23 @@ interface SideSplitRow {
   killDiff: number;
   damage: number;
   adr: number;
+  roundsWon: number;
+  roundsLost: number;
+  roundWinRate: number;
 }
 
-/** CT/T-filtered Kills/Assists/Deaths/Damage/ADR, one row per player — `includeCT`/`includeT`
- *  narrow each stat via `splitStat()` against `AggregatedSab`'s raw `_ct`/`_t` fields, same
- *  primitive the match page's own `Scoreboard` filters with. ADR's denominator is
- *  `rounds_played_ct`/`_t` (`deriveRoundsPlayedBySide()`, `src/lib/queries/kills.ts`) — a real
- *  per-round-per-side tally, not an approximation: every row here comes from a demo-parsed match
- *  (`player_match_sabremetrics`), so unlike the match page's own `roundsPlayedBySide()` (which
- *  approximates from one match's `target_win_rounds` when it has no better data) there's no
- *  fallback to reach for at this scope — the real round-by-round split is always available. */
+/** CT/T-filtered Kills/Assists/Deaths/Damage/ADR/RW-RL/RWR%, one row per player —
+ *  `includeCT`/`includeT` narrow each stat via `splitStat()` against `AggregatedSab`'s raw `_ct`/
+ *  `_t` fields, same primitive the match page's own `Scoreboard` filters with. ADR's denominator
+ *  and RW-RL/RWR% both come from `rounds_played_ct`/`_t` and `rounds_won_ct`/`_t`
+ *  (`deriveRoundsBySide()`, `src/lib/queries/kills.ts`) — a real per-round-per-side tally, not an
+ *  approximation: every row here comes from a demo-parsed match (`player_match_sabremetrics`), so
+ *  unlike the match page's own `roundsPlayedBySide()` (which approximates from one match's
+ *  `target_win_rounds` when it has no better data) there's no fallback to reach for at this scope —
+ *  the real round-by-round split is always available. RW-RL/RWR% are round-level, deliberately not
+ *  match-level W-L/WR% — a match win/loss can't cleanly attribute to one side once the halftime
+ *  swap has both teams play both sides, so a per-player match-outcome-by-side stat wouldn't mean
+ *  much; rounds don't have that problem. */
 function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }: {
   aggregated: AggregatedSab[]; includeCT: boolean; includeT: boolean; showHeading?: boolean;
 }) {
@@ -1027,8 +1034,13 @@ function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }:
     const deaths = splitStat(a, 'deaths_ct', 'deaths_t', includeCT, includeT);
     const damage = splitStat(a, 'damage_ct', 'damage_t', includeCT, includeT);
     const roundsPlayed = splitStat(a, 'rounds_played_ct', 'rounds_played_t', includeCT, includeT);
+    const roundsWon = splitStat(a, 'rounds_won_ct', 'rounds_won_t', includeCT, includeT);
     const adr = roundsPlayed > 0 ? damage / roundsPlayed : NaN;
-    return { player_id: a.player_id, player_name: a.player_name, kills, assists, deaths, killDiff: kills - deaths, damage, adr };
+    const roundWinRate = roundsPlayed > 0 ? (roundsWon / roundsPlayed) * 100 : NaN;
+    return {
+      player_id: a.player_id, player_name: a.player_name, kills, assists, deaths,
+      killDiff: kills - deaths, damage, adr, roundsWon, roundsLost: roundsPlayed - roundsWon, roundWinRate,
+    };
   }), [aggregated, includeCT, includeT]);
 
   const sorted = useMemo(() => {
@@ -1042,6 +1054,9 @@ function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }:
         case 'kdiff': aVal = a.killDiff; bVal = b.killDiff; break;
         case 'dmg':   aVal = a.damage;   bVal = b.damage;   break;
         case 'adr':   aVal = a.adr;      bVal = b.adr;      break;
+        // wins desc primary, losses asc secondary — same encoding GameStatsTable's own RW-RL sort uses.
+        case 'rw':    aVal = a.roundsWon * 1000 - a.roundsLost; bVal = b.roundsWon * 1000 - b.roundsLost; break;
+        case 'rwr':   aVal = a.roundWinRate; bVal = b.roundWinRate; break;
         default: return 0;
       }
       return sort.asc ? aVal - bVal : bVal - aVal;
@@ -1063,6 +1078,8 @@ function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }:
               <SortableTh label="Kill Differential" sortKey="kdiff" state={sort} onClick={toggleSort} />
               <SortableTh label="Damage" sortKey="dmg" state={sort} onClick={toggleSort} />
               <SortableTh label="ADR" title="Average Damage per Round" sortKey="adr" state={sort} onClick={toggleSort} />
+              <SortableTh label="RW–RL" title="Rounds Won – Rounds Lost" sortKey="rw" state={sort} onClick={toggleSort} />
+              <SortableTh label="RWR%" title="Round Win Rate" sortKey="rwr" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -1075,6 +1092,8 @@ function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }:
                 <td className={tdRight}>{fmtDiff(r.killDiff)}</td>
                 <td className={tdRight}>{r.damage.toLocaleString()}</td>
                 <td className={tdRight}>{fmtNum(r.adr, 2)}</td>
+                <td className={tdRight}>{r.roundsWon}–{r.roundsLost}</td>
+                <td className={tdRight}>{fmtNum(r.roundWinRate, 1)}</td>
               </tr>
             ))}
           </tbody>
@@ -1358,18 +1377,21 @@ type SubTab = 'impact' | 'duels' | 'mechanics' | 'weapons' | 'economy' | 'flair'
 // rolled up into all-weapons totals instead of broken out by gun. Sides and Stats Plus have no
 // Leetify analog (they're DGLS's own), so they stay last.
 //
-// Sides is a single filterable table (CT/T checkboxes above one K/D/A/Damage/ADR row set, gated on
-// the unscoped `hasSideData` prop — see its doc comment below), not the wide CT|T-paired-column
-// layout #482 originally shipped — that reiterated Stats > Basic Stats' own K/D/A columns under a
-// more confusing layout. It lives in Advanced Stats rather than on Basic Stats (#506) because
-// Advanced Stats already means "demo-backed" to users, so a CT/T filter here needs no coverage
-// caveat the way bolting one onto Basic Stats' always-accurate all-time total would. `AggregatedSab`
-// carries the raw `_ct`/`_t` fields (including `rounds_played_ct`/`_t`) this reads directly
-// (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`), same as the match page's own Scoreboard
-// CT/T checkboxes (`MatchTabView.tsx`) via the shared `splitStat()`. ADR is side-filterable here
-// with a real per-round denominator (`deriveRoundsPlayedBySide()`, `src/lib/queries/kills.ts`) —
-// see `SideSplitTable`'s own doc comment for why this scope needs no approximation the way the
-// match page's `roundsPlayedBySide()` does.
+// Sides is a single filterable table (CT/T checkboxes above one K/D/A/Damage/ADR/RW-RL/RWR% row
+// set, gated on the unscoped `hasSideData` prop — see its doc comment below), not the wide
+// CT|T-paired-column layout #482 originally shipped — that reiterated Stats > Basic Stats' own
+// K/D/A columns under a more confusing layout. It lives in Advanced Stats rather than on Basic
+// Stats (#506) because Advanced Stats already means "demo-backed" to users, so a CT/T filter here
+// needs no coverage caveat the way bolting one onto Basic Stats' always-accurate all-time total
+// would. `AggregatedSab` carries the raw `_ct`/`_t` fields (including `rounds_played_ct`/`_t` and
+// `rounds_won_ct`/`_t`) this reads directly (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`),
+// same as the match page's own Scoreboard CT/T checkboxes (`MatchTabView.tsx`) via the shared
+// `splitStat()`. ADR and RW-RL/RWR% are all side-filterable here with real per-round data
+// (`deriveRoundsBySide()`, `src/lib/queries/kills.ts`) — see `SideSplitTable`'s own doc comment for
+// why this scope needs no approximation the way the match page's `roundsPlayedBySide()` does, and
+// why RW-RL/RWR% are round-level rather than the match-level W-L/WR% Basic Stats' Game Stats tab
+// shows (a match win/loss can't cleanly attribute to one side once the halftime swap has both
+// teams play both sides).
 const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'mechanics', label: 'Aim' },
   { key: 'weapons', label: 'Weapons' },

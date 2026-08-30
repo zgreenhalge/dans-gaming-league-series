@@ -63,7 +63,9 @@
       "rounds_dropped_on_reload_total": 0,
       "reloads_total": 0,
       "rounds_played_ct": 25,
-      "rounds_played_t": 0
+      "rounds_played_t": 0,
+      "rounds_won_ct": 25,
+      "rounds_won_t": 0
     }
   },
   {
@@ -130,7 +132,9 @@
       "rounds_dropped_on_reload_total": 0,
       "reloads_total": 0,
       "rounds_played_ct": 25,
-      "rounds_played_t": 0
+      "rounds_played_t": 0,
+      "rounds_won_ct": 25,
+      "rounds_won_t": 0
     }
   },
   {
@@ -197,7 +201,9 @@
       "rounds_dropped_on_reload_total": 0,
       "reloads_total": 0,
       "rounds_played_ct": 0,
-      "rounds_played_t": 25
+      "rounds_played_t": 25,
+      "rounds_won_ct": 0,
+      "rounds_won_t": 0
     }
   },
   {
@@ -264,7 +270,9 @@
       "rounds_dropped_on_reload_total": 0,
       "reloads_total": 0,
       "rounds_played_ct": 0,
-      "rounds_played_t": 25
+      "rounds_played_t": 25,
+      "rounds_won_ct": 0,
+      "rounds_won_t": 0
     }
   },
   {
@@ -331,7 +339,9 @@
       "rounds_dropped_on_reload_total": 0,
       "reloads_total": 0,
       "rounds_played_ct": 28,
-      "rounds_played_t": 0
+      "rounds_played_t": 0,
+      "rounds_won_ct": 28,
+      "rounds_won_t": 0
     }
   },
   {
@@ -398,7 +408,9 @@
       "rounds_dropped_on_reload_total": 0,
       "reloads_total": 0,
       "rounds_played_ct": 28,
-      "rounds_played_t": 0
+      "rounds_played_t": 0,
+      "rounds_won_ct": 28,
+      "rounds_won_t": 0
     }
   },
   {
@@ -465,7 +477,9 @@
       "rounds_dropped_on_reload_total": 0,
       "reloads_total": 0,
       "rounds_played_ct": 0,
-      "rounds_played_t": 28
+      "rounds_played_t": 28,
+      "rounds_won_ct": 0,
+      "rounds_won_t": 0
     }
   },
   {
@@ -532,7 +546,9 @@
       "rounds_dropped_on_reload_total": 0,
       "reloads_total": 0,
       "rounds_played_ct": 0,
-      "rounds_played_t": 28
+      "rounds_played_t": 28,
+      "rounds_won_ct": 0,
+      "rounds_won_t": 0
     }
   },
   {
@@ -599,7 +615,9 @@
       "rounds_dropped_on_reload_total": 0,
       "reloads_total": 0,
       "rounds_played_ct": 0,
-      "rounds_played_t": 18
+      "rounds_played_t": 18,
+      "rounds_won_ct": 0,
+      "rounds_won_t": 18
     }
   },
   {
@@ -666,7 +684,9 @@
       "rounds_dropped_on_reload_total": 0,
       "reloads_total": 0,
       "rounds_played_ct": 0,
-      "rounds_played_t": 18
+      "rounds_played_t": 18,
+      "rounds_won_ct": 0,
+      "rounds_won_t": 18
     }
   },
   {
@@ -733,7 +753,9 @@
       "rounds_dropped_on_reload_total": 0,
       "reloads_total": 0,
       "rounds_played_ct": 18,
-      "rounds_played_t": 0
+      "rounds_played_t": 0,
+      "rounds_won_ct": 0,
+      "rounds_won_t": 0
     }
   },
   {
@@ -800,7 +822,9 @@
       "rounds_dropped_on_reload_total": 0,
       "reloads_total": 0,
       "rounds_played_ct": 18,
-      "rounds_played_t": 0
+      "rounds_played_t": 0,
+      "rounds_won_ct": 0,
+      "rounds_won_t": 0
     }
   }
 ]

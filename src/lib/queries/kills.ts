@@ -418,29 +418,32 @@ export function deriveSideSplitCounts(
   return out;
 }
 
-export interface RoundsPlayedBySide {
+export interface RoundsBySide {
   rounds_played_ct: number;
   rounds_played_t: number;
+  rounds_won_ct: number;
+  rounds_won_t: number;
 }
 
 /**
- * Per (match, player) rounds played on each side — every round in `roundSides` credited to
+ * Per (match, player) rounds played and won on each side — every round in `roundSides` credited to
  * whichever side the player's roster `faction` resolves to that round via `resolvePlayerSide()`,
- * correctly splitting across the halftime side swap. The ADR-by-side denominator behind
- * `SabremetricsLeaderboardView`'s Sides sub-tab: unlike `aggregatePlayerSideStats()`
+ * correctly splitting across the halftime side swap, with a won-round counted whenever that
+ * resolved side matches the round's own `winnerSide`. The ADR- and round-win-rate-by-side
+ * denominators behind `SabremetricsLeaderboardView`'s Sides sub-tab: unlike `aggregatePlayerSideStats()`
  * (`src/lib/mapSideStats.ts`, which spans a player's whole match history including matches with no
  * parsed demo, and falls back to a whole-match-on-starting-side approximation for those), this has
  * no such fallback — every row behind `player_match_sabremetrics` already comes from a demo-parsed
  * match, the same pipeline that populates `match_rounds`, so real per-round side data is always
  * available for every match in scope here.
  */
-export function deriveRoundsPlayedBySide(
+export function deriveRoundsBySide(
   roundSides: Map<string, RoundSideInfo>,
   playerFactions: Map<string, Faction>,
   rosterByMatch: Map<number, number[]>,
-): Map<string, RoundsPlayedBySide> {
-  const out = new Map<string, RoundsPlayedBySide>();
-  for (const [key, { shirtsSide }] of roundSides) {
+): Map<string, RoundsBySide> {
+  const out = new Map<string, RoundsBySide>();
+  for (const [key, { shirtsSide, winnerSide }] of roundSides) {
     const matchId = Number(key.split(':')[0]);
     const roster = rosterByMatch.get(matchId);
     if (!roster) continue;
@@ -448,7 +451,9 @@ export function deriveRoundsPlayedBySide(
       const faction = playerFactions.get(`${matchId}:${playerId}`);
       if (faction == null) continue;
       const side = resolvePlayerSide(shirtsSide, faction);
-      bumpCounter(out, `${matchId}:${playerId}`, ZERO_ROUNDS_PLAYED_BY_SIDE, side === 'CT' ? 'rounds_played_ct' : 'rounds_played_t');
+      const pmKey = `${matchId}:${playerId}`;
+      bumpCounter(out, pmKey, ZERO_ROUNDS_BY_SIDE, side === 'CT' ? 'rounds_played_ct' : 'rounds_played_t');
+      if (side === winnerSide) bumpCounter(out, pmKey, ZERO_ROUNDS_BY_SIDE, side === 'CT' ? 'rounds_won_ct' : 'rounds_won_t');
     }
   }
   return out;
@@ -756,6 +761,8 @@ export interface DerivedSabFields {
   blind_duration_max_sum: number;
   rounds_played_ct: number;
   rounds_played_t: number;
+  rounds_won_ct: number;
+  rounds_won_t: number;
 }
 
 const ZERO_SIDE_SPLIT: SideSplitCounts = {
@@ -763,7 +770,7 @@ const ZERO_SIDE_SPLIT: SideSplitCounts = {
   assists_ct: 0, assists_t: 0, headshot_kills_ct: 0, headshot_kills_t: 0,
 };
 
-const ZERO_ROUNDS_PLAYED_BY_SIDE: RoundsPlayedBySide = { rounds_played_ct: 0, rounds_played_t: 0 };
+const ZERO_ROUNDS_BY_SIDE: RoundsBySide = { rounds_played_ct: 0, rounds_played_t: 0, rounds_won_ct: 0, rounds_won_t: 0 };
 
 const ZERO_CLUTCH: ClutchCounts = {
   clutch_1v1_attempts: 0, clutch_1v1_wins: 0,
@@ -785,7 +792,7 @@ export function lookupDerivedSabFields(
   sideSplit: Map<string, SideSplitCounts>,
   clutch: Map<string, ClutchCounts>,
   utility: Map<string, UtilityCounts>,
-  roundsPlayedBySide: Map<string, RoundsPlayedBySide>,
+  roundsBySideMap: Map<string, RoundsBySide>,
 ): DerivedSabFields {
   const hsTkCounts = counts.hsTk.get(key);
   const opening = counts.openingDuels.get(key);
@@ -793,7 +800,7 @@ export function lookupDerivedSabFields(
   const split = sideSplit.get(key) ?? ZERO_SIDE_SPLIT;
   const clutchCounts = clutch.get(key) ?? ZERO_CLUTCH;
   const utilityCounts = utility.get(key) ?? ZERO_UTILITY;
-  const roundsBySide = roundsPlayedBySide.get(key) ?? ZERO_ROUNDS_PLAYED_BY_SIDE;
+  const roundsBySide = roundsBySideMap.get(key) ?? ZERO_ROUNDS_BY_SIDE;
   return {
     headshot_kills: hsTkCounts?.headshot_kills ?? 0,
     teamkills: hsTkCounts?.teamkills ?? 0,

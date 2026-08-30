@@ -90,7 +90,7 @@ scope:
   (`roundSides.ts`) — an approximation derived from that one match's starting-side/half/OT schedule,
   given only a rounds-played total and `target_win_rounds`, with no per-round breakdown.
 - The season/career Advanced Stats leaderboard's Sides sub-tab (`SabremetricsLeaderboardView.tsx`)
-  uses `rounds_played_ct`/`_t` (`deriveRoundsPlayedBySide()`, `src/lib/queries/kills.ts`) — a real
+  uses `rounds_played_ct`/`_t` (`deriveRoundsBySide()`, `src/lib/queries/kills.ts`) — a real
   per-round-per-side tally, the same primitive `deriveSideSplitCounts()` uses for `kills_ct`/`_t`
   and friends. No approximation is needed here: every row behind `player_match_sabremetrics` comes
   from a demo-parsed match, the same pipeline that populates `match_rounds`, so real round-level
@@ -113,6 +113,15 @@ a match with no parsed demo (no `match_rounds` rows). Surfaced as "Round Win%"/"
 page's own Side stats table (`aggregatePlayerSideStats()`), and — via the shared `PerSideStatsTable`
 component (`aggregatePerSideStats()`) — on Basic Stats' season/career/map Maps & Sides tab and
 Advanced Stats' Sides sub-tab.
+
+`SideSplitTable` (the Sides sub-tab's own per-player table, as opposed to the team-level
+`PerSideStatsTable` next to it) surfaces the same idea as "RW–RL"/"RWR%", but from
+`deriveRoundsBySide()`'s `rounds_won_ct`/`_t` rather than `mapSideStats.ts`'s aggregators — it's a
+different primitive because it operates on `AggregatedSab` (already scoped to demo-parsed matches),
+not `PlayerMatchInput`/`MatchPickBanInput`. Deliberately round-level, not match-level: a match win
+or loss can't cleanly attribute to one side once the halftime swap has both teams play both sides,
+so a per-player match-outcome-by-side stat (the site's usual "W-L"/"WR%", see Game Stats above)
+wouldn't mean much here.
 
 Basic Stats' own K/D/A/ADR columns are never side-filtered — they're the site's one always-accurate
 all-time total regardless of a match's demo-parse status, and a CT/T filter would silently narrow a

@@ -11,7 +11,7 @@ import type {
 } from '@/lib/types';
 import {
   deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts, buildPlayerFactionsAndRoster,
-  lookupDerivedSabFields, sumAccuracyTotals, deriveUtilityCounts, deriveRoundsPlayedBySide,
+  lookupDerivedSabFields, sumAccuracyTotals, deriveUtilityCounts, deriveRoundsBySide,
   type KillCreditFlags, type UtilityThrowRow,
 } from '@/lib/queries';
 type Faction = 'CT' | 'T' | null;
@@ -657,7 +657,7 @@ export default function DemoUploadModal({
                     blind_duration: u.blind_duration,
                   }));
                   const utilityCounts = deriveUtilityCounts(throws, killFlags, playerFactions);
-                  const roundsPlayedBySide = deriveRoundsPlayedBySide(roundSides, playerFactions, rosterByMatch);
+                  const roundsBySide = deriveRoundsBySide(roundSides, playerFactions, rosterByMatch);
                   const sabPlayers = parsed.sabremetrics!.map((s) => {
                     const mp = allPlayers.find((p) => p.player_id === s.player_id);
                     const stat = statMap.get(s.player_id);
@@ -666,7 +666,7 @@ export default function DemoUploadModal({
                       ...(s.sabremetrics as SabFields),
                       ...lookupDerivedSabFields(
                         key, creditCounts, accuracyTotals, sideSplitCounts, clutchCounts, utilityCounts,
-                        roundsPlayedBySide,
+                        roundsBySide,
                       ),
                     };
                     return {
