@@ -319,9 +319,7 @@ section, sliced a different way. Stored in their own tables (`player_match_weapo
   at query time (`WEAPON_CATEGORY[weapon]`, `getAllWeaponClassStats()`/`getMatchWeaponClassStats()`
   in `src/lib/queries/weaponStats.ts`) rather than stored as its own column, the same
   store-the-fact/derive-the-category relationship `killWeaponCategory()` already has to
-  `match_kills.weapon`. A row from a match not yet reparsed since this per-weapon granularity landed
-  still resolves its category from its own stored (pre-migration) category value — it just can't
-  answer a per-weapon-specific query until reparsed.
+  `match_kills.weapon`.
 - **Round economy** — `eco` (equipment value under $2000), `force_buy` ($2000-3499), or `full_buy`
   ($3500+), classified per player per round from their own
   `CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` at that round's freeze-time-end — an individual

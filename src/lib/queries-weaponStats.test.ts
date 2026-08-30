@@ -33,13 +33,6 @@ async function main() {
     assert.equal(ak47?.rounds_played, 20);
   });
 
-  await test('getAllWeaponClassStats: a pre-migration row with no weapon still derives its category from the stored column', async () => {
-    const rows = await getAllWeaponClassStats();
-    const legacyRow = rows.find((r) => r.player_id === 2 && r.weapon == null);
-    assert.equal(legacyRow?.weapon_category, 'shotgun');
-    assert.equal(legacyRow?.shots_fired, 8);
-  });
-
   await test('getAllEconomyStats: honors a pre-fetched playersById instead of fetching its own', async () => {
     const playersById = await getPlayersById();
     const overridden = new Map(playersById);
@@ -88,11 +81,8 @@ async function main() {
     assert.equal(alice.byCategory.has('shotgun'), false); // Alice has no shotgun rows
 
     const bob = grouped.get(2)!;
-    // Bob's rifle row (m4a1) and his pre-migration weapon-less shotgun row both roll up into
-    // byCategory; only the rifle row (which has a `weapon`) reaches byWeapon.
     assert.deepEqual(bob.byWeapon.get('m4a1'), { shots_fired: 85, shots_hit: 32, headshot_hits: 12, damage_dealt: 2600, rounds_played: 19 });
-    assert.equal(bob.byWeapon.has('shotgun'), false);
-    assert.deepEqual(bob.byCategory.get('shotgun'), { shots_fired: 8, shots_hit: 2, headshot_hits: 0, damage_dealt: 90, rounds_played: 2 });
+    assert.deepEqual(bob.byCategory.get('rifle'), { shots_fired: 85, shots_hit: 32, headshot_hits: 12, damage_dealt: 2600, rounds_played: 19 });
 
     assert.equal(grouped.has(3), true); // player 3 has an awp/sniper row
     assert.equal(grouped.get(3)!.byWeapon.has('awp'), true);
