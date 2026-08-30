@@ -17,6 +17,7 @@ import {
   aggregateEconomyStats,
   groupEconomyStatsByPlayer,
   resolveEconomyStat,
+  splitStat,
   type AggregatedSab,
   type SabremetricStatRow,
   type MatchKillRow,
@@ -34,11 +35,14 @@ import {
   weaponDisplayName, killWeaponCategory, KILL_WEAPON_CATEGORIES, KILL_WEAPON_CATEGORY_LABEL,
   type KillWeaponCategory,
 } from '@/lib/parsers/weaponClasses';
+import { aggregatePerSideStats, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import { tabCls } from '@/lib/util';
 import EmptyState from './EmptyState';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
 import { WeaponIcon } from './icons/WeaponIcon';
 import { useTabState } from './useTabState';
+import { Checkbox } from './SeasonFilter';
+import PerSideStatsTable from './PerSideStatsTable';
 
 // Side-tint helper (CT/T, not SHIRTS/SKINS) — matches MatchTabView.tsx's own factionClass(),
 // duplicated locally per this codebase's existing pattern of small per-file copies (also
@@ -985,6 +989,93 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
   );
 }
 
+// --- Sides (#506) ---
+
+interface SideSplitRow {
+  player_id: number;
+  player_name: string;
+  kills: number;
+  assists: number;
+  deaths: number;
+  killDiff: number;
+  damage: number;
+  adr: number;
+}
+
+/** CT/T-filtered Kills/Assists/Deaths/Damage, one row per player — `includeCT`/`includeT` narrow
+ *  each stat via `splitStat()` against `AggregatedSab`'s raw `_ct`/`_t` fields, same primitive the
+ *  match page's own `Scoreboard` filters with. ADR only ever shows with both sides selected
+ *  (`bothSides`, using the total `rounds_played` denominator already shown elsewhere on the site);
+ *  a side-filtered row shows a dash rather than guessing a rounds-played-by-side split that isn't
+ *  available at this aggregate scope — see the Sides sub-tab's comment above `ALL_SUB_TABS`. */
+function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }: {
+  aggregated: AggregatedSab[]; includeCT: boolean; includeT: boolean; showHeading?: boolean;
+}) {
+  const [sort, toggleSort] = useSortState('k');
+  const bothSides = includeCT && includeT;
+
+  const rows = useMemo<SideSplitRow[]>(() => aggregated.map((a) => {
+    const kills = splitStat(a, 'kills_ct', 'kills_t', includeCT, includeT);
+    const assists = splitStat(a, 'assists_ct', 'assists_t', includeCT, includeT);
+    const deaths = splitStat(a, 'deaths_ct', 'deaths_t', includeCT, includeT);
+    const damage = splitStat(a, 'damage_ct', 'damage_t', includeCT, includeT);
+    const adr = bothSides && a.rounds_played > 0 ? damage / a.rounds_played : NaN;
+    return { player_id: a.player_id, player_name: a.player_name, kills, assists, deaths, killDiff: kills - deaths, damage, adr };
+  }), [aggregated, bothSides, includeCT, includeT]);
+
+  const sorted = useMemo(() => {
+    const copy = [...rows];
+    copy.sort((a, b) => {
+      let aVal: number, bVal: number;
+      switch (sort.col) {
+        case 'k':     aVal = a.kills;    bVal = b.kills;    break;
+        case 'a':     aVal = a.assists;  bVal = b.assists;  break;
+        case 'd':     aVal = a.deaths;   bVal = b.deaths;   break;
+        case 'kdiff': aVal = a.killDiff; bVal = b.killDiff; break;
+        case 'dmg':   aVal = a.damage;   bVal = b.damage;   break;
+        case 'adr':   aVal = a.adr;      bVal = b.adr;      break;
+        default: return 0;
+      }
+      return sort.asc ? aVal - bVal : bVal - aVal;
+    });
+    return copy;
+  }, [rows, sort]);
+
+  return (
+    <div>
+      {showHeading && <h3 className="text-sm font-semibold mb-3">Side Splits</h3>}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-max border-collapse text-xs">
+          <thead>
+            <tr className="bg-[var(--color-bg-secondary)]">
+              <th className={playerThCls}>Player</th>
+              <SortableTh label="Kills" sortKey="k" state={sort} onClick={toggleSort} />
+              <SortableTh label="Assists" sortKey="a" state={sort} onClick={toggleSort} />
+              <SortableTh label="Deaths" sortKey="d" state={sort} onClick={toggleSort} />
+              <SortableTh label="Kill Differential" sortKey="kdiff" state={sort} onClick={toggleSort} />
+              <SortableTh label="Damage" sortKey="dmg" state={sort} onClick={toggleSort} />
+              <SortableTh label="ADR" title="Average Damage per Round — only available with both sides selected" sortKey="adr" state={sort} onClick={toggleSort} />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((r) => (
+              <tr key={r.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                <PlayerCell id={r.player_id} name={r.player_name} />
+                <td className={tdRight}>{r.kills}</td>
+                <td className={tdRight}>{r.assists}</td>
+                <td className={tdRight}>{r.deaths}</td>
+                <td className={tdRight}>{r.killDiff > 0 ? `+${r.killDiff}` : r.killDiff}</td>
+                <td className={tdRight}>{r.damage.toLocaleString()}</td>
+                <td className={tdRight}>{fmtNum(r.adr, 2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // --- Plus Stats (1-scaled: 1.00 = league average) ---
 
 function PlusStatsTable({ aggregated }: { aggregated: AggregatedSab[] }) {
@@ -1249,22 +1340,28 @@ function buildEconomyTiles(economyStats: EconomyTierStat[], selectedTier: string
 // single-player tile grids) — see the Impact/Mechanics/Trades split above. One tab state drives
 // both render paths so they never drift out of sync with each other.
 
-type SubTab = 'impact' | 'duels' | 'mechanics' | 'weapons' | 'economy' | 'flair' | 'trades' | 'utility' | 'plus';
+type SubTab = 'impact' | 'duels' | 'mechanics' | 'weapons' | 'economy' | 'flair' | 'trades' | 'utility' | 'plus' | 'sides';
 
 // Ordered to roughly match Leetify's match-page grouping (Aim, then situational Duels/Trades,
 // then Impact, then Utility) — see #173's Leetify-parity discussion. Weapons sits right after Aim
 // (#452) since both are gun-choice/precision stats; Economy sits right after Weapons (#481) since
 // it's the same per-player shot/accuracy/damage breakdown pattern, just bucketed by round-buy tier
 // instead of gun; Flair sits right after Economy (#465) since it's the same per-weapon kill data
-// rolled up into all-weapons totals instead of broken out by gun. Stats Plus has no Leetify analog
-// (it's DGLS's own league-relative composite), so it stays last.
+// rolled up into all-weapons totals instead of broken out by gun. Sides and Stats Plus have no
+// Leetify analog (they're DGLS's own), so they stay last.
 //
-// No Side Splits tab (#482 shipped one, since removed — see docs/calculations.md's Sabremetrics
-// section and issue #506): a wide CT/T-paired-column table just reiterated Stats > Basic Stats'
-// own K/D/A columns under a more confusing layout. `AggregatedSab` still carries the raw `_ct`/`_t`
-// fields (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`) for the match page's own Scoreboard
-// CT/T checkboxes; #506 tracks folding a similar toggle into Basic Stats' table directly instead of
-// a dedicated sub-tab here.
+// Sides is a single filterable table (CT/T checkboxes above one K/D/A/Damage row set, gated on the
+// `matches` prop being wired), not the wide CT|T-paired-column layout #482 originally shipped —
+// that reiterated Stats > Basic Stats' own K/D/A columns under a more confusing layout. It lives in
+// Advanced Stats rather than on Basic Stats (#506) because Advanced Stats already means
+// "demo-backed" to users, so a CT/T filter here needs no coverage caveat the way bolting one onto
+// Basic Stats' always-accurate all-time total would. `AggregatedSab` carries the raw `_ct`/`_t`
+// fields this reads directly (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`), same as the
+// match page's own Scoreboard CT/T checkboxes (`MatchTabView.tsx`) via the shared `splitStat()`.
+// ADR isn't side-filtered here, for the same reason `docs/calculations.md`'s Side Splits section
+// gives for the match scoreboard being the only place ADR is side-filterable at all — no
+// rounds-played-by-side total exists at this aggregate scope, so a side-filtered row shows a dash
+// rather than a guessed number.
 const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'mechanics', label: 'Aim' },
   { key: 'weapons', label: 'Weapons' },
@@ -1274,6 +1371,7 @@ const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'trades', label: 'Trades' },
   { key: 'impact', label: 'Impact' },
   { key: 'utility', label: 'Utility' },
+  { key: 'sides', label: 'Sides' },
   { key: 'plus', label: 'Stats Plus' },
 ];
 
@@ -1315,6 +1413,8 @@ export default function SabremetricsLeaderboardView({
   weaponClassStats = [],
   economyRows = [],
   hasEconomyData = false,
+  matches,
+  rounds = [],
 }: {
   rows: SabremetricStatRow[];
   /** League-wide rows used as the Plus-stat baseline in single-player mode. Defaults to `rows`. */
@@ -1348,6 +1448,14 @@ export default function SabremetricsLeaderboardView({
    *  `economyRows.length` would reintroduce exactly that bug for any future caller who forgets to
    *  override it, so the unsafe inference isn't offered as a default at all. */
   hasEconomyData?: boolean;
+  /** Match veto/side data behind the Sides sub-tab (#506) — same shape `BasicStatsView`'s own
+   *  `matches` prop takes, and typically the exact same array a caller already passes there. Gates
+   *  the tab: `undefined` (the match page, which filters CT/T per-team via `Scoreboard` instead)
+   *  hides it entirely, same pattern as `hasEconomyData` gating Economy. */
+  matches?: MatchPickBanInput[];
+  /** Round-level outcomes behind the Sides sub-tab's Round Win% panel — same shape and scope as
+   *  `BasicStatsView`'s own `rounds` prop. Empty is fine; Round Win% just shows a dash. */
+  rounds?: RoundOutcome[];
 }) {
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);
   const leagueAggregated = useMemo(() => aggregateRows(leagueRows ?? rows), [leagueRows, rows]);
@@ -1358,8 +1466,11 @@ export default function SabremetricsLeaderboardView({
   // `resolveTab` stage needed (unlike `SeasonTabView`, which filters its tab list on data that
   // isn't known until render).
   const subTabs = ALL_SUB_TABS.filter((t) =>
-    (t.key !== 'plus' || showPlusStats) && (t.key !== 'economy' || hasEconomyData));
+    (t.key !== 'plus' || showPlusStats) && (t.key !== 'economy' || hasEconomyData) && (t.key !== 'sides' || matches != null));
   const [sub, setSub] = useTabState(subTabs.map((t) => t.key), 'mechanics', 'sub');
+  const [includeCT, setIncludeCT] = useState(true);
+  const [includeT, setIncludeT] = useState(true);
+  const perSideStats = useMemo(() => (matches ? aggregatePerSideStats(matches, rounds) : []), [matches, rounds]);
   /** Favorite weapon by default; a `WeaponFilter` selects one specific weapon or a whole category
    *  instead (#474). Lives here, not inside `WeaponsTable`, so a match page's two team tables (and
    *  the single-player tile view) share one selection and one dropdown. */
@@ -1496,6 +1607,18 @@ export default function SabremetricsLeaderboardView({
         <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
           <UtilityTable aggregated={agg} singlePlayer={singlePlayer} showHeading={showHeading} />
         )} />
+      )}
+      {sub === 'sides' && matches && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-4">
+            <Checkbox checked={includeCT} onToggle={() => setIncludeCT((v) => !v)} label="CT" />
+            <Checkbox checked={includeT} onToggle={() => setIncludeT((v) => !v)} label="T" />
+          </div>
+          <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
+            <SideSplitTable aggregated={agg} includeCT={includeCT} includeT={includeT} showHeading={showHeading} />
+          )} />
+          <PerSideStatsTable perSideStats={perSideStats} />
+        </div>
       )}
       {sub === 'plus' && showPlusStats && <PlusStatsTable aggregated={aggregated} />}
     </div>

@@ -86,10 +86,14 @@ granular per-round per-side fact table to derive from instead.
 that side*, not the player's total rounds played — `roundsPlayedBySide()` in `roundSides.ts` derives
 that count from the same starting-side/half/OT schedule as the side map above, given only a rounds-played
 total and `target_win_rounds`, with no per-round breakdown. The match scoreboard
-(`MatchTabView.tsx`'s `Scoreboard`) is the one place stats are side-filterable this way; every other
-ADR/damage-per-round figure on the site (season/career/gauntlet aggregates, sabremetrics `ADR+`,
-per-match rows) always divides total damage by total rounds, with no side filter to narrow the
-denominator.
+(`MatchTabView.tsx`'s `Scoreboard`) is the one place ADR is side-filterable — it's the only scope
+with a single match's `target_win_rounds` to derive a rounds-played-by-side denominator from. The
+season/career Advanced Stats leaderboard's Sides sub-tab (`SabremetricsLeaderboardView.tsx`) filters
+Kills/Assists/Deaths/Damage by side the same way (via the shared `splitStat()`,
+`src/lib/queries/sabremetrics.ts`), but shows a dash for ADR instead of guessing a
+rounds-played-by-side total across many matches; every other ADR/damage-per-round figure on the site
+(season/career/gauntlet aggregates, sabremetrics `ADR+`, per-match rows) always divides total damage
+by total rounds, with no side filter to narrow the denominator.
 
 **Round win % by side** — unlike ADR-by-side, this *is* backed by a real per-round breakdown:
 `match_rounds` stores `winner_side`/`shirts_side` per round for every demo-parsed match (see
@@ -98,8 +102,16 @@ denominator.
 counts for whichever side actually played it, correctly splitting across the halftime side swap,
 rather than crediting a whole match to the side a team started on. `aggregatePlayerSideStats()` still
 falls back to the coarser whole-match `rounds_won`/`rounds_played`-on-starting-side approximation for
-a match with no parsed demo (no `match_rounds` rows). Surfaced as "Round Win%"/"RWR%" on the
-season/career/map Maps & Sides tab and the player page's Side stats table.
+a match with no parsed demo (no `match_rounds` rows). Surfaced as "Round Win%"/"RWR%" on the player
+page's own Side stats table (`aggregatePlayerSideStats()`), and — via the shared `PerSideStatsTable`
+component (`aggregatePerSideStats()`) — on Basic Stats' season/career/map Maps & Sides tab and
+Advanced Stats' Sides sub-tab.
+
+Basic Stats' own K/D/A/ADR columns are never side-filtered — they're the site's one always-accurate
+all-time total regardless of a match's demo-parse status, and a CT/T filter would silently narrow a
+subset of players' rows to demo-parsed-only data without saying so. The Sides sub-tab lives on
+Advanced Stats instead, where "demo-backed" is already the tab's whole premise, so no such coverage
+caveat is needed.
 
 **Round win condition** — `match_rounds.win_reason` (elimination/bomb detonation/defuse/time
 expired, see `RoundCondition`) is tallied by `aggregateWinConditions()`

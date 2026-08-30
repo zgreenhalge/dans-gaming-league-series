@@ -89,12 +89,19 @@ describe('SabremetricsLeaderboardView — sub-tab URL state', () => {
     expect(screen.getByRole('tab', { name: 'Economy' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  test('has no Side Splits tab (#482, removed — see #506)', () => {
+  test('hides Sides when no matches are wired', () => {
     nextNavigationMock.setSearchParams('sub=sides');
     renderWithUrlState(<SabremetricsLeaderboardView rows={[row()]} />);
-    expect(screen.queryByRole('tab', { name: 'Side Splits' })).not.toBeInTheDocument();
-    // A `sub` naming a tab that no longer exists falls back to the first visible tab, same as
-    // `sub=plus` does when Stats Plus is hidden.
+    expect(screen.queryByRole('tab', { name: 'Sides' })).not.toBeInTheDocument();
+    // A `sub` naming a hidden tab falls back to the first visible one, same as `sub=plus` does
+    // when Stats Plus is hidden.
     expect(screen.getByRole('tab', { name: 'Aim' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('shows Sides, with CT/T checkboxes, once matches are wired', () => {
+    nextNavigationMock.setSearchParams('sub=sides');
+    renderWithUrlState(<SabremetricsLeaderboardView rows={[row()]} matches={[]} />);
+    expect(screen.getByRole('tab', { name: 'Sides' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
   });
 });
