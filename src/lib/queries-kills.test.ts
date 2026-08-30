@@ -267,7 +267,22 @@ test('aggregateFlairKillStats: totals noscope/wallbang/blind/midair across every
     kill({ attacker: 2, victim: 1, weapon: 'knife' }),
   ];
   const flair = aggregateFlairKillStats(kills, 1);
-  assert.deepEqual(flair, { noscopeKills: 2, wallbangKills: 1, blindKills: 1, midairKills: 1, knifeKills: 2 });
+  assert.deepEqual(flair, {
+    noscopeKills: 2, wallbangKills: 1, blindKills: 1, midairKills: 1, knifeKills: 2,
+    fallDamageDeaths: 0, c4Deaths: 0,
+  });
+});
+
+test('aggregateFlairKillStats: fallDamageDeaths/c4Deaths count this player\'s uncredited deaths, told apart by cause', () => {
+  const kills = [
+    kill({ attacker: null, victim: 1, weapon: 'world' }),
+    kill({ attacker: null, victim: 1, weapon: 'world' }),
+    kill({ attacker: null, victim: 1, weapon: 'planted_c4' }),
+    kill({ attacker: null, victim: 2, weapon: 'planted_c4' }), // another player's death — not counted for player 1
+  ];
+  const flair = aggregateFlairKillStats(kills, 1);
+  assert.equal(flair.fallDamageDeaths, 2);
+  assert.equal(flair.c4Deaths, 1);
 });
 
 test('deriveHeadshotAndTeamkillCounts: counts headshot kills, keyed by match and attacker', () => {

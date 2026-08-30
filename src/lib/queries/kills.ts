@@ -919,13 +919,23 @@ export interface FlairKillStat {
   blindKills: number;
   midairKills: number;
   knifeKills: number;
+  /** Deaths to fall damage / other environmental causes (`match_kills.weapon === 'world'`) — never
+   *  has a real attacker (`killWeaponCategory()`), so it's an uncredited-death count, not a kill
+   *  count like every other field here (#498). */
+  fallDamageDeaths: number;
+  /** Deaths to bomb detonation (`match_kills.weapon === 'planted_c4'`) — same uncredited-death
+   *  shape as `fallDamageDeaths` (#498). */
+  c4Deaths: number;
 }
 
 /** "Flair" kills — the off-meta kill counts worth showing off on their own, summed across every
  *  weapon rather than broken out per-weapon like `aggregateWeaponKillStats()`. `noscopeKills`/
  *  `wallbangKills`/`blindKills`/`midairKills` total the same-named `WeaponKillStat` counters
  *  across every weapon a player has kills with; `knifeKills` reuses `aggregateKillCategoryStats()`'s
- *  `melee` category total (knives/bayonets) rather than reclassifying weapons itself. */
+ *  `melee` category total (knives/bayonets) rather than reclassifying weapons itself.
+ *  `fallDamageDeaths`/`c4Deaths` read the `world`/`planted_c4` buckets' `deaths` directly rather
+ *  than through `aggregateKillCategoryStats()`'s `other` rollup, which would merge the two causes
+ *  together — the Weapons sub-tab's dedicated uncredited-death display needs them told apart (#498). */
 export function aggregateFlairKillStats(kills: MatchKillRow[], playerId: number): FlairKillStat {
   const stats = aggregateWeaponKillStats(kills, playerId);
   const knifeKills = aggregateKillCategoryStats(stats).find((c) => c.category === 'melee')?.kills ?? 0;
@@ -935,5 +945,7 @@ export function aggregateFlairKillStats(kills: MatchKillRow[], playerId: number)
     blindKills: stats.reduce((n, s) => n + s.blindKills, 0),
     midairKills: stats.reduce((n, s) => n + s.midairKills, 0),
     knifeKills,
+    fallDamageDeaths: stats.find((s) => s.weapon === 'world')?.deaths ?? 0,
+    c4Deaths: stats.find((s) => s.weapon === 'planted_c4')?.deaths ?? 0,
   };
 }
