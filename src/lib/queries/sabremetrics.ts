@@ -4,7 +4,7 @@ import { getPlayersById } from './player';
 import { resolveMatchSeasons, fetchAllPages, asPage } from './_shared';
 import {
   getAllKillCreditFlags, deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts,
-  buildPlayerFactionsAndRoster, lookupDerivedSabFields,
+  buildPlayerFactionsAndRoster, lookupDerivedSabFields, deriveRoundsPlayedBySide,
 } from './kills';
 import { deriveAccuracyTotals } from './weaponStats';
 import { getRoundSides } from './rounds';
@@ -32,7 +32,10 @@ export interface SabremetricMatchRow {
  *  results rather than read off the stored `player_match_sabremetrics` row — all were exact
  *  duplicates of (or directly reconstructible from) `match_kills`/`player_match_weapon_stats`/
  *  `match_rounds`/`match_utility_throws`, so those are now the source of truth for them
- *  (#457/#488/#489). */
+ *  (#457/#488/#489). `rounds_played_ct`/`_t` (#506) are likewise derived, from `match_rounds` via
+ *  `deriveRoundsPlayedBySide()` — but were never a stored column at all, so there's nothing to
+ *  overwrite; they're purely new, the rounds-played-by-side denominator behind Advanced Stats'
+ *  Sides sub-tab's ADR-by-side column. */
 export async function getAllSabremetrics(seasonId?: number): Promise<SabremetricMatchRow[]> {
   // pmsRows shared as one promise (not fetched again per consumer) so deriveAccuracyTotals()'s and
   // getAllKillCreditFlags()'s own internal `player_match_stats` reads don't duplicate the fetch
@@ -87,6 +90,7 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
   const sideSplitCounts = deriveSideSplitCounts(kills, roundSides, playerFactions);
   const clutchCounts = deriveClutchCounts(kills, roundSides, playerFactions, rosterByMatch);
   const utilityCounts = deriveUtilityCounts(throws, kills, playerFactions);
+  const roundsPlayedBySide = deriveRoundsPlayedBySide(roundSides, playerFactions, rosterByMatch);
 
   const result: SabremetricMatchRow[] = [];
   for (const raw of sabRows) {
@@ -101,7 +105,7 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     const key = `${pms.match_id}:${pms.player_id}`;
     const sab: SabFieldsWithDerived = {
       ...rest,
-      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals, sideSplitCounts, clutchCounts, utilityCounts),
+      ...lookupDerivedSabFields(key, creditCounts, accuracyTotals, sideSplitCounts, clutchCounts, utilityCounts, roundsPlayedBySide),
     };
     result.push({
       player_id: pms.player_id,
@@ -201,10 +205,13 @@ export interface SabremetricStatRow {
 
 // `AggregatedSab` inherits every sabremetric field from `SabFieldsWithDerived` as-is — including
 // the raw `_ct`/`_t` splits (`kills_ct`/`_t`, `deaths_ct`/`_t`, `assists_ct`/`_t`, `damage_ct`/`_t`,
-// `headshot_kills_ct`/`_t`) — so a season/career caller can read a player's per-side breakdown
-// (#482), not just the merged total. `kills`/`deaths`/`assists`/`damage` sit alongside the splits
-// as their own flat fields (unioned from the two `_ct`/`_t` halves in aggregateRows() below) since
-// most tables only need the total and shouldn't have to sum the split themselves.
+// `headshot_kills_ct`/`_t`, `rounds_played_ct`/`_t`) — so a season/career caller can read a
+// player's per-side breakdown (#482/#506), not just the merged total. `kills`/`deaths`/`assists`/
+// `damage` sit alongside the splits as their own flat fields (unioned from the two `_ct`/`_t`
+// halves in aggregateRows() below) since most tables only need the total and shouldn't have to sum
+// the split themselves — `rounds_played` gets no such flat union since it's already a stored total
+// independent of `rounds_played_ct + rounds_played_t` (`player_match_stats.rounds_played`, summed
+// in `PlayerMeta` below), not derived from the split the way `kills`/`deaths`/`assists`/`damage` are.
 export interface AggregatedSab extends SabFieldsWithDerived {
   player_id: number;
   player_name: string;

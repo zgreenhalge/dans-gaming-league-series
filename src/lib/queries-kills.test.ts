@@ -23,6 +23,7 @@ import {
   resolvePlayerSide,
   deriveSideSplitCounts,
   deriveClutchCounts,
+  deriveRoundsPlayedBySide,
   buildPlayerFactionsAndRoster,
   type MatchKillRow,
 } from './queries/kills';
@@ -487,6 +488,54 @@ test('deriveSideSplitCounts: a player with no resolved faction is skipped, other
   const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
   assert.equal(counts.has('1:1'), false);
   assert.equal(counts.get('1:2')?.deaths_t, 1);
+});
+
+// ─── deriveRoundsPlayedBySide ───────────────────────────────────────────────
+
+test('deriveRoundsPlayedBySide: credits a SHIRTS player their resolved side each round, across the halftime swap', () => {
+  const roundSides = new Map([['1:1', ri('CT')], ['1:2', ri('T')]]);
+  const playerFactions = new Map([['1:7', 'SHIRTS' as const]]);
+  const rosterByMatch = new Map([[1, [7]]]);
+  const counts = deriveRoundsPlayedBySide(roundSides, playerFactions, rosterByMatch);
+  assert.equal(counts.get('1:7')?.rounds_played_ct, 1);
+  assert.equal(counts.get('1:7')?.rounds_played_t, 1);
+});
+
+test('deriveRoundsPlayedBySide: SKINS resolves to the opposite side of shirts_side', () => {
+  const roundSides = new Map([['1:1', ri('CT')]]);
+  const playerFactions = new Map([['1:7', 'SKINS' as const]]);
+  const rosterByMatch = new Map([[1, [7]]]);
+  const counts = deriveRoundsPlayedBySide(roundSides, playerFactions, rosterByMatch);
+  assert.equal(counts.get('1:7')?.rounds_played_ct ?? 0, 0);
+  assert.equal(counts.get('1:7')?.rounds_played_t, 1);
+});
+
+test('deriveRoundsPlayedBySide: every roster player is credited for the same round, not just kill participants', () => {
+  const roundSides = new Map([['1:1', ri('CT')]]);
+  const playerFactions = new Map([
+    ['1:7', 'SHIRTS' as const], ['1:8', 'SKINS' as const], ['1:9', 'SHIRTS' as const],
+  ]);
+  const rosterByMatch = new Map([[1, [7, 8, 9]]]);
+  const counts = deriveRoundsPlayedBySide(roundSides, playerFactions, rosterByMatch);
+  assert.equal(counts.get('1:7')?.rounds_played_ct, 1);
+  assert.equal(counts.get('1:8')?.rounds_played_t, 1);
+  assert.equal(counts.get('1:9')?.rounds_played_ct, 1);
+});
+
+test('deriveRoundsPlayedBySide: a player with no resolved faction is skipped', () => {
+  const roundSides = new Map([['1:1', ri('CT')]]);
+  const playerFactions = new Map<string, 'SHIRTS' | 'SKINS'>();
+  const rosterByMatch = new Map([[1, [7]]]);
+  const counts = deriveRoundsPlayedBySide(roundSides, playerFactions, rosterByMatch);
+  assert.equal(counts.has('1:7'), false);
+});
+
+test('deriveRoundsPlayedBySide: a round for a match with no roster entry contributes nothing', () => {
+  const roundSides = new Map([['2:1', ri('CT')]]);
+  const playerFactions = new Map([['2:7', 'SHIRTS' as const]]);
+  const rosterByMatch = new Map<number, number[]>();
+  const counts = deriveRoundsPlayedBySide(roundSides, playerFactions, rosterByMatch);
+  assert.equal(counts.size, 0);
 });
 
 // ─── deriveClutchCounts ─────────────────────────────────────────────────────
