@@ -447,10 +447,10 @@ const PAGINATION_FILLER_MATCHES: Row[] = Array.from({ length: 1250 }, (_, i) => 
 // getSeasonRoster()'s `if (!player) continue` skip branch.
 
 export const SEASON_PLAYERS: Row[] = [
-  { id: 1, season_id: 3, player_id: 1, joined_at: '2026-03-15T00:00:00.000Z' },
-  { id: 2, season_id: 3, player_id: 3, joined_at: '2026-03-16T00:00:00.000Z' },
-  { id: 3, season_id: 3, player_id: 2, joined_at: '2026-03-14T00:00:00.000Z' },
-  { id: 4, season_id: 1, player_id: 999, joined_at: '2026-01-10T00:00:00.000Z' },
+  { id: 1, season_id: 3, player_id: 1 },
+  { id: 2, season_id: 3, player_id: 3 },
+  { id: 3, season_id: 3, player_id: 2 },
+  { id: 4, season_id: 1, player_id: 999 },
 ];
 
 // ─── Season schedule draft ───────────────────────────────────────────────────

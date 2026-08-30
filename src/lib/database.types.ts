@@ -1218,19 +1218,16 @@ export type Database = {
       season_players: {
         Row: {
           id: number
-          joined_at: string
           player_id: number
           season_id: number
         }
         Insert: {
           id?: number
-          joined_at?: string
           player_id: number
           season_id: number
         }
         Update: {
           id?: number
-          joined_at?: string
           player_id?: number
           season_id?: number
         }
