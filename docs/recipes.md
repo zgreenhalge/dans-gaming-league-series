@@ -88,17 +88,30 @@ in.
    actually exported, not just declared.
 4. Batch independent Supabase reads with `Promise.all` and check `error` once, immediately —
    match the destructuring style in `getSeasonBaseData()` (`leaderboard.ts`).
-5. If the new helper needs season pairing (regular ↔ gauntlet), use `extractSeasonNumber()` /
+5. **If the read doesn't depend on its arguments — zero-arg, or keyed only by a primitive the
+   caller already has (a `matchId`, a `seasonId`) — wrap it in React's `cache()`
+   (`import { cache } from 'react'`) rather than adding a manual `xyz?: T | Promise<T>` override
+   parameter for sibling callers to thread down.** `cache()` dedupes identical calls within one
+   render pass automatically; see `getWeekLookup()`/`resolveMatchSeasons()`/`fetchPmsLookup()`/
+   `getRoundSides()` (`_shared.ts`), `getPlayersById()` (`player.ts`), `getSeasonBaseData()`
+   (`leaderboard.ts`), `fetchAllMatchRoundRows()` (`rounds.ts`), and `getMapDetail()` (`maps.ts`)
+   for the pattern. Reach for the older `xyz?: T | Promise<T>` param only when two callers need to
+   share a fetch whose *shape* genuinely differs from what the plain helper reads (e.g.
+   `getAllSabremetrics()`'s own `player_match_stats` read pulls extra columns `fetchAllPmsRows()`
+   doesn't) — `cache()`'s argument-keying can't recognize those as the same query. Never hand-build
+   a `const xPromise = someQuery(); …` local variable and pass it into two sibling calls just to
+   skip a second identical fetch — that's exactly what `cache()` replaces.
+6. If the new helper needs season pairing (regular ↔ gauntlet), use `extractSeasonNumber()` /
    `buildRegularToGauntletMap()` from `src/lib/util.ts` or `getLinkedGauntlet()`/
    `getLinkedRegularSeason()` (`seasons.ts`) — **never** assume adjacent IDs (see
    [`glossary.md`](./glossary.md)).
-6. Gate "did this match actually happen" on `isPlayedScore(m.final_score)`, not `final_score !=
+7. Gate "did this match actually happen" on `isPlayedScore(m.final_score)`, not `final_score !=
    null` — Season 3 has `"0-0"` placeholder rows.
-7. **If a helper needs something from another domain file** (e.g. `trophies.ts` calling
+8. **If a helper needs something from another domain file** (e.g. `trophies.ts` calling
    `getSeasons()` from `seasons.ts`), import it directly (`import { getSeasons } from './seasons'`)
    — don't duplicate the query. Check the existing cross-file imports in the target file first;
    most domains already import `getPlayersById()` from `player.ts` this way.
-8. **Add a regression test.** `src/lib/queries-<domain>.test.ts` (one file per domain, mirroring
+9. **Add a regression test.** `src/lib/queries-<domain>.test.ts` (one file per domain, mirroring
    the split) exercises every exported function against a shared in-memory fixture
    (`src/lib/test-support/fixtures.ts`) via a fake Supabase client
    (`src/lib/test-support/fakeSupabase.ts`), asserting on a golden-master snapshot
