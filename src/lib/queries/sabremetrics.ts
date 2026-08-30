@@ -36,11 +36,12 @@ export interface SabremetricMatchRow {
 export async function getAllSabremetrics(seasonId?: number): Promise<SabremetricMatchRow[]> {
   // pmsRows shared as one promise (not fetched again per consumer) so deriveAccuracyTotals()'s and
   // getAllKillCreditFlags()'s own internal `player_match_stats` reads don't duplicate the fetch
-  // below already needs. getAllKillCreditFlags() (unlike getAllMatchKills()) needs no season
-  // resolution or player-name join — deriveKillCreditCounts() reads nothing else — so it doesn't
-  // need playersByIdPromise either. `faction` is included so the same fetch also feeds
-  // deriveSideSplitCounts()'s playerFactions map, rather than a separate `player_match_stats` read.
-  const playersByIdPromise = getPlayersById();
+  // below already needs — `cache()` (#507) can't collapse this into those functions' own
+  // `fetchPmsLookup()`/`fetchAllPmsRows()` calls since this read's columns
+  // (`rounds_played`, `faction`) are a different shape than theirs. `faction` is included so the
+  // same fetch also feeds deriveSideSplitCounts()'s playerFactions map, rather than a separate
+  // `player_match_stats` read. `getPlayersById()` needs no such sharing — it's only read directly
+  // below, and is itself `cache()`-wrapped, so no local promise is needed for it.
   const pmsRowsPromise = fetchAllPages<
     { id: number; player_id: number; match_id: number; rounds_played: number; faction: Faction }
   >(
@@ -66,7 +67,7 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
     pmsRowsPromise,
     supabase.from('seasons').select('id, is_gauntlet'),
     resolveMatchSeasons(),
-    playersByIdPromise,
+    getPlayersById(),
     getAllKillCreditFlags(pmsRowsPromise),
     deriveAccuracyTotals(undefined, pmsRowsPromise),
     getRoundSides(),

@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { supabase } from '../supabase';
 import type { LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
 import { canonicalSort, deriveRates, deriveRwr, isPlayedScore } from '../util';
@@ -45,12 +46,15 @@ interface PerPlayerStats {
 /**
  * Fetches the three shared tables (weeks, matches, player_match_stats) once
  * and returns both derived outputs, replacing two back-to-back triple-fetches
- * with a single shared fetch.
+ * with a single shared fetch. Wrapped in React's `cache()` (#507) so every
+ * caller within one render pass — `getSeasonLeaderboard()`, `getCareerLeaderboard()`,
+ * `getAllLeaderboards()` — shares this one full `player_match_stats`/`matches` read
+ * rather than each re-scanning both tables independently.
  */
-async function getSeasonBaseData(): Promise<{
+const getSeasonBaseData = cache(async (): Promise<{
   perPlayerStats: Map<string, PerPlayerStats>;
   rosterBySeason: Map<number, Set<number>>;
-}> {
+}> => {
   const [
     stats,
     { data: matches, error: mErr },
@@ -121,7 +125,7 @@ async function getSeasonBaseData(): Promise<{
   }
 
   return { perPlayerStats, rosterBySeason };
-}
+});
 
 function zeroStatRows(
   seasonId: number,

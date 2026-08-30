@@ -316,16 +316,17 @@ export async function getMatchSabremetrics(matchId: number): Promise<MatchSabrem
 
   const pms = pmsRows as { id: number; player_id: number; faction: Faction }[];
   const pmsIds = pms.map((r) => r.id);
-  // Shared as one promise (not two `getPlayersById()` calls) so getMatchKills()'s own internal
-  // name resolution doesn't duplicate the `players` table fetch below already needs. Passing `pms`
-  // (already fetched above) into `getAllUtilityThrows()` likewise skips a redundant
-  // `player_match_stats` fetch it would otherwise make internally via `fetchPmsLookup()`.
-  const playersByIdPromise = getPlayersById();
+  // Passing `pms` (already fetched above) into `getAllUtilityThrows()` skips a redundant
+  // `player_match_stats` fetch it would otherwise make internally via `fetchPmsLookup()` — `cache()`
+  // (#507) can't collapse this into that call since this read's columns (`faction`, no `match_id`)
+  // are a different shape than `fetchPmsLookup()`'s own. `getPlayersById()`/`getMatchKills()` need
+  // no such sharing — both are themselves `cache()`-wrapped, so calling each once below already
+  // collapses to one `players` read without a local promise to thread through.
   const pmsForUtility = pms.map((r) => ({ id: r.id, player_id: r.player_id, match_id: matchId }));
   const [{ data: sabRows }, players, kills, accuracyTotals, roundSides, throws] = await Promise.all([
     supabase.from('player_match_sabremetrics').select('*').in('player_match_stats_id', pmsIds),
-    playersByIdPromise,
-    getMatchKills(matchId, playersByIdPromise),
+    getPlayersById(),
+    getMatchKills(matchId),
     deriveAccuracyTotals(matchId),
     getRoundSides(matchId),
     getAllUtilityThrows(matchId, pmsForUtility),

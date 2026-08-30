@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { supabase } from '../supabase';
 import {
   resolveMatchSeasons, fetchAllPages, asPage, fetchPmsFactionLookup,
@@ -33,11 +34,14 @@ type RawRoundRow = {
 
 type RawKillVictimRow = { match_id: number; round_number: number; victim_player_match_stats_id: number };
 
-/** Every recorded round outcome (`match_rounds`), joined to season — the raw ingredient behind
- *  round-win-%-by-side. Flat, ungrouped, matching `getAllMatchKills()`'s pattern. Also resolves
- *  `ninja` per round (`deriveNinjaDefuseRounds()`), which needs `match_kills`/`player_match_stats`
- *  faction data beyond `match_rounds` itself — fetched here rather than pushed onto every caller. */
-export async function getAllMatchRounds(seasonId?: number): Promise<MatchRoundRow[]> {
+/** Every recorded round outcome (`match_rounds`), joined to season, for every season at once —
+ *  the raw ingredient behind round-win-%-by-side. Flat, ungrouped, matching `getAllMatchKills()`'s
+ *  pattern. Also resolves `ninja` per round (`deriveNinjaDefuseRounds()`), which needs
+ *  `match_kills`/`player_match_stats` faction data beyond `match_rounds` itself — fetched here
+ *  rather than pushed onto every caller. Wrapped in React's `cache()` (#507): `getAllMatchRounds()`
+ *  filters this same season-independent computation down to `seasonId` rather than each distinct
+ *  `seasonId` re-running its own `match_rounds`/`match_kills` scan. */
+const fetchAllMatchRoundRows = cache(async (): Promise<MatchRoundRow[]> => {
   const [roundRows, matchSeason, killRows, pmsFactionLookup] = await Promise.all([
     fetchAllPages<RawRoundRow>((from, to) => supabase.from('match_rounds').select('*').range(from, to)),
     resolveMatchSeasons(),
@@ -77,7 +81,6 @@ export async function getAllMatchRounds(seasonId?: number): Promise<MatchRoundRo
   for (const r of roundRows) {
     const sid = matchSeason.get(r.match_id);
     if (sid == null) continue;
-    if (seasonId != null && sid !== seasonId) continue;
     result.push({
       match_id: r.match_id,
       season_id: sid,
@@ -89,6 +92,13 @@ export async function getAllMatchRounds(seasonId?: number): Promise<MatchRoundRo
     });
   }
   return result;
+});
+
+/** `fetchAllMatchRoundRows()` filtered to one season — pass `seasonId` to scope to a single
+ *  (regular or gauntlet) season; omit it for every season's rounds at once. */
+export async function getAllMatchRounds(seasonId?: number): Promise<MatchRoundRow[]> {
+  const rows = await fetchAllMatchRoundRows();
+  return seasonId == null ? rows : rows.filter((r) => r.season_id === seasonId);
 }
 
 /** Groups rounds by `match_id` — the shape `aggregatePlayerSideStats()`'s `roundsByMatch` param
