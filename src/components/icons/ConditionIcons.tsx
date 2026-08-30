@@ -92,3 +92,13 @@ export const CONDITION_ICON: Record<RoundCondition, (props: ConditionIconProps) 
   defuse: DefuseIcon,
   time: ClockIcon,
 };
+
+/** Display label per win condition — the one place this mapping is defined, so
+ *  `RoundHistoryStrip.tsx` (lowercased for its inline tooltip sentence) and
+ *  `BasicStatsView.tsx`'s win-condition breakdown table (used as-is) can't drift apart. */
+export const CONDITION_LABEL: Record<RoundCondition, string> = {
+  elim: 'Elimination',
+  bomb: 'Bomb Detonation',
+  defuse: 'Defuse',
+  time: 'Time Expired',
+};

@@ -1,5 +1,5 @@
 import type { SabFieldsWithDerived } from '../types';
-import type { SabremetricStatRow } from '../queries';
+import type { SabremetricStatRow, EconomyMatchRow } from '../queries';
 
 /** A zeroed `SabFieldsWithDerived`, overridable per test — the shared "override-style" fixture
  *  builder for every test suite that needs a sabremetrics row (`queries-sabremetrics.test.ts`,
@@ -38,6 +38,20 @@ export function sabremetricStatRow(
     player_name: `#${overrides.player_id}`,
     rounds_played: 24,
     sab: zeroSabFields(),
+    ...overrides,
+  };
+}
+
+/** A zeroed `EconomyMatchRow` for one player/match/tier, overridable — shared by
+ *  `queries-weaponStats.test.ts` and `SabremetricsLeaderboardView.test.tsx` so both build the same
+ *  shape instead of two independent copies that can drift. */
+export function economyMatchRow(
+  overrides: Partial<EconomyMatchRow> & { player_id: number; match_id: number; economy_type: string },
+): EconomyMatchRow {
+  return {
+    player_name: `#${overrides.player_id}`,
+    season_id: 1,
+    shots_fired: 0, shots_hit: 0, headshot_hits: 0, damage_dealt: 0, rounds_played: 0, rounds_won: 0,
     ...overrides,
   };
 }

@@ -13,13 +13,19 @@ import { test, report } from './test-support/miniTest';
 import {
   aggregateMapPickBanStats,
   aggregateScoreDistribution,
+  aggregateWinConditions,
   classifyMatchVeto,
   aggregatePlayerMapStats,
   aggregateMapIndexStats,
   type MatchPickBanInput,
   type PlayerMatchInput,
+  type RoundOutcome,
 } from './mapSideStats';
 import type { MapIndexEntry, MapSeasonStat } from './types';
+
+function round(opts: Partial<RoundOutcome>): RoundOutcome {
+  return { winner_side: 'CT', shirts_side: 'CT', win_reason: 'elim', ...opts };
+}
 
 function match(opts: Partial<MatchPickBanInput>): MatchPickBanInput {
   return {
@@ -229,6 +235,27 @@ test('aggregateScoreDistribution: loser-round bucket boundaries', () => {
   assert.equal(out.convincing, 2);
   assert.equal(out.competitive, 2);
   assert.equal(out.close, 1);
+});
+
+test('aggregateWinConditions: counts each bucket and excludes rounds with no recorded condition', () => {
+  const out = aggregateWinConditions([
+    round({ win_reason: 'elim' }),
+    round({ win_reason: 'elim' }),
+    round({ win_reason: 'bomb' }),
+    round({ win_reason: 'defuse' }),
+    round({ win_reason: 'time' }),
+    round({ win_reason: null }), // parser miss / predates the column -> excluded
+  ]);
+  assert.equal(out.elim, 2);
+  assert.equal(out.bomb, 1);
+  assert.equal(out.defuse, 1);
+  assert.equal(out.time, 1);
+  assert.equal(out.total, 5);
+});
+
+test('aggregateWinConditions: empty input totals zero', () => {
+  const out = aggregateWinConditions([]);
+  assert.equal(out.total, 0);
 });
 
 function seasonStat(opts: Partial<MapSeasonStat>): MapSeasonStat {

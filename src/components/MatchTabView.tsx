@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/SeasonFilter';
 import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import Th from '@/components/Th';
-import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, WeaponClassMatchRow } from '@/lib/queries';
+import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
 import type { SabFieldsWithDerived } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
 import { roundsPlayedBySide } from '@/lib/parsers/roundSides';
@@ -328,6 +328,7 @@ export default function MatchTabView({
   sabremetrics = [],
   matchKills = [],
   matchWeaponClassStats = [],
+  matchEconomyStats = [],
   ehog,
   scouting,
   mapInfo,
@@ -354,6 +355,9 @@ export default function MatchTabView({
   /** This match's `player_match_weapon_stats` rows — feeds the Advanced tab's Weapons sub-tab
    *  category accuracy breakdown (#474). */
   matchWeaponClassStats?: WeaponClassMatchRow[];
+  /** This match's `player_match_economy_stats` rows — feeds the Advanced tab's Economy sub-tab
+   *  (#481). Empty until a demo is (re)parsed. */
+  matchEconomyStats?: EconomyMatchRow[];
   /** EHOG skill-rating inputs: this match's rating deltas, pre-match projections, and each
    *  player's current rating. */
   ehog: {
@@ -555,7 +559,15 @@ export default function MatchTabView({
       )}
 
       {tab === 'advanced' && statsRecorded && (
-        <SabremetricsLeaderboardView rows={advancedStatRows} teamGroups={advancedStatTeams} showPlusStats={false} kills={matchKills} weaponClassStats={matchWeaponClassStats} />
+        <SabremetricsLeaderboardView
+          rows={advancedStatRows}
+          teamGroups={advancedStatTeams}
+          showPlusStats={false}
+          kills={matchKills}
+          weaponClassStats={matchWeaponClassStats}
+          economyRows={matchEconomyStats}
+          hasEconomyData={matchEconomyStats.length > 0}
+        />
       )}
 
       {tab === 'scouting' && (

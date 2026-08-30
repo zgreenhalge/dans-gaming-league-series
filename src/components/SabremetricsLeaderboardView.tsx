@@ -13,6 +13,8 @@ import {
   groupWeaponAccuracyByPlayer,
   ZERO_WEAPON_CLASS_STAT,
   FAVORITE_WEAPON_FILTER,
+  aggregateEconomyStats,
+  resolveEconomyStat,
   type AggregatedSab,
   type SabremetricStatRow,
   type MatchKillRow,
@@ -23,6 +25,8 @@ import {
   type WeaponClassAggregateStat,
   type PlayerWeaponAccuracy,
   type FlairKillStat,
+  type EconomyMatchRow,
+  type EconomyTierStat,
 } from '@/lib/queries';
 import {
   weaponDisplayName, killWeaponCategory, KILL_WEAPON_CATEGORIES, KILL_WEAPON_CATEGORY_LABEL,
@@ -275,6 +279,10 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
           aVal = a.spray_shots_hit / (a.spray_shots_fired || 1);
           bVal = b.spray_shots_hit / (b.spray_shots_fired || 1);
           break;
+        case 'dropped_reload':
+          aVal = a.rounds_dropped_on_reload_total / (a.reloads_total || 1);
+          bVal = b.rounds_dropped_on_reload_total / (b.reloads_total || 1);
+          break;
         default: return 0;
       }
       return sort.asc ? aVal - bVal : bVal - aVal;
@@ -295,6 +303,7 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
               <SortableTh label="Head Accuracy" title="Hits landing on the head / total hits, excluding AWP shots (matches Leetify's Headshot Accuracy)" sortKey="head_acc" state={sort} onClick={toggleSort} />
               <SortableTh label="Counter-Strafe %" title="Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)" sortKey="cstrafe" state={sort} onClick={toggleSort} />
               <SortableTh label="Spray Accuracy" title="Hits / shots within sequences of 3+ consecutive rifle shots" sortKey="spray" state={sort} onClick={toggleSort} />
+              <SortableTh label="Rounds Dropped/Reload" title="Bullets still in the magazine (wasted) when reloading, averaged across every reload including clean ones" sortKey="dropped_reload" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -306,6 +315,7 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
                 <td className={tdRight}>{pct(a.headshot_hits_no_awp, a.shots_hit_no_awp)}</td>
                 <td className={tdRight}>{pct(a.counter_strafe_good_shots, a.counter_strafe_shots)}</td>
                 <td className={tdRight}>{pct(a.spray_shots_hit, a.spray_shots_fired)}</td>
+                <td className={tdRight}>{fmtNum(a.rounds_dropped_on_reload_total / (a.reloads_total || 1), 2)}</td>
               </tr>
             ))}
           </tbody>
@@ -314,6 +324,7 @@ function MechanicsTable({ aggregated, singlePlayer, showHeading = true }: { aggr
     </div>
   );
 }
+
 
 // --- Weapon Stats (#452, #474) ---
 //
@@ -558,6 +569,136 @@ function WeaponsTable({ aggregated, kills, weaponClassStats, selectedFilter, sin
   );
 }
 
+// --- Economy (#481) ---
+//
+// Same per-player breakdown pattern as Weapons above, one economy tier's stats per player at a
+// time, picked by `selectedTier` — but sourced from `player_match_economy_stats`
+// (`aggregateEconomyStats()`/`resolveEconomyStat()`, `src/lib/queries/weaponStats.ts`) instead of
+// `match_kills`, since a round's economy classification isn't itself a kill event. The three tiers
+// are a fixed, game-defined set (unlike weapons, which vary player to player), so the picker's
+// options are a static list rather than derived from data. Unlike Weapons' favorite-or-specific
+// picker, there's no "most played" default option here: with only three buckets and full-buy
+// rounds dominating most matches, "most played" would resolve to full-buy for nearly every player,
+// making it a redundant alias for an explicit selection rather than a useful default — so the
+// picker always names one tier explicitly, and the table/tiles don't repeat that choice back as
+// their own "Tier" column/tile.
+
+const ECONOMY_TIERS: { type: string; label: string }[] = [
+  { type: 'eco', label: 'Eco' },
+  { type: 'force_buy', label: 'Force Buy' },
+  { type: 'full_buy', label: 'Full Buy' },
+];
+
+const ECONOMY_TIER_OPTIONS = ECONOMY_TIERS.map((t) => ({ value: t.type, label: t.label }));
+
+/** The economy-tier picker shared by the multi-player table and the single-player tile view — a
+ *  plain `<select>` over the fixed tier list, always one explicit tier (no "favorite" sentinel;
+ *  see the section comment above). */
+function EconomyFilterSelect({ value, onChange }: {
+  value: string; onChange: (economyType: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)]">Economy Tier</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
+      >
+        {ECONOMY_TIER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function economyTierLabel(economyType: string): string {
+  return ECONOMY_TIERS.find((t) => t.type === economyType)?.label ?? economyType;
+}
+
+interface PlayerEconomyRow extends EconomyTierStat {
+  player_id: number;
+  player_name: string;
+}
+
+function resolvePlayerEconomyRow(
+  playerId: number,
+  playerName: string,
+  economyRows: EconomyMatchRow[],
+  selectedTier: string,
+): PlayerEconomyRow {
+  const resolved = resolveEconomyStat(aggregateEconomyStats(economyRows, playerId), selectedTier);
+  return { player_id: playerId, player_name: playerName, ...resolved };
+}
+
+function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, showHeading = true }: {
+  aggregated: AggregatedSab[];
+  economyRows: EconomyMatchRow[];
+  selectedTier: string;
+  singlePlayer: boolean;
+  showHeading?: boolean;
+}) {
+  const [sort, toggleSort] = useSortState('rounds_played');
+
+  const rows = useMemo(
+    () => aggregated.map((a) => resolvePlayerEconomyRow(a.player_id, a.player_name, economyRows, selectedTier)),
+    [aggregated, economyRows, selectedTier],
+  );
+
+  const sorted = useMemo(() => {
+    const copy = [...rows];
+    copy.sort((a, b) => {
+      let aVal: number, bVal: number;
+      switch (sort.col) {
+        case 'rounds_played': aVal = a.rounds_played; bVal = b.rounds_played; break;
+        case 'rounds_won': aVal = a.rounds_won; bVal = b.rounds_won; break;
+        case 'shots_fired': aVal = a.shots_fired; bVal = b.shots_fired; break;
+        case 'acc': aVal = a.shots_hit / (a.shots_fired || 1); bVal = b.shots_hit / (b.shots_fired || 1); break;
+        case 'hs': aVal = a.headshot_hits / (a.shots_hit || 1); bVal = b.headshot_hits / (b.shots_hit || 1); break;
+        case 'dpr': aVal = a.damage_dealt / (a.rounds_played || 1); bVal = b.damage_dealt / (b.rounds_played || 1); break;
+        default: return 0;
+      }
+      return sort.asc ? aVal - bVal : bVal - aVal;
+    });
+    return copy;
+  }, [rows, sort]);
+
+  const tierLabel = economyTierLabel(selectedTier);
+
+  return (
+    <div className="my-6">
+      {showHeading && <h3 className="text-sm font-semibold mb-3">Economy</h3>}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-max border-collapse text-xs">
+          <thead>
+            <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
+              {!singlePlayer && <th className={playerThCls}>Player</th>}
+              <SortableTh label="Rounds Played" title={`Rounds played at ${tierLabel} — seeded from the round's own eco/force/full classification, whether or not this player fired a shot in it`} sortKey="rounds_played" state={sort} onClick={toggleSort} />
+              <SortableTh label="W-L" title={`Rounds won vs. lost at ${tierLabel}`} sortKey="rounds_won" state={sort} onClick={toggleSort} />
+              <SortableTh label="Shots Fired" title={`Shots fired (guns only) in rounds at ${tierLabel}`} sortKey="shots_fired" state={sort} onClick={toggleSort} />
+              <SortableTh label="Accuracy" title={`Shots that hit an enemy / shots fired, in rounds at ${tierLabel}`} sortKey="acc" state={sort} onClick={toggleSort} />
+              <SortableTh label="Headshot %" title={`Headshot hits / hits, in rounds at ${tierLabel}`} sortKey="hs" state={sort} onClick={toggleSort} />
+              <SortableTh label="Damage/Round" title={`Damage dealt per round played at ${tierLabel}`} sortKey="dpr" state={sort} onClick={toggleSort} />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((r) => (
+              <tr key={r.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
+                {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
+                <td className={tdRight}>{r.rounds_played}</td>
+                <td className={tdRight}>{r.rounds_won}-{r.rounds_played - r.rounds_won}</td>
+                <td className={tdRight}>{r.shots_fired}</td>
+                <td className={tdRight}>{pct(r.shots_hit, r.shots_fired)}</td>
+                <td className={tdRight}>{pct(r.headshot_hits, r.shots_hit)}</td>
+                <td className={tdRight}>{fmtNum(r.damage_dealt / (r.rounds_played || 1), 1)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // --- Flair ---
 //
 // Off-meta kill counts worth showing off on their own — no-scope/wallbang/blind/knife kills,
@@ -748,6 +889,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
           aVal = a.blind_duration_max_sum / (a.effective_flashes || 1);
           bVal = b.blind_duration_max_sum / (b.effective_flashes || 1);
           break;
+        case 'bdd': aVal = a.blind_duration_dealt; bVal = b.blind_duration_dealt; break;
         case 'he_thrown': aVal = a.he_thrown; bVal = b.he_thrown; break;
         case 'he_dmg': aVal = a.he_damage; bVal = b.he_damage; break;
         case 'he_dmg_throw':
@@ -784,6 +926,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
               <SortableTh label="Enemies Flashed" title="Enemy players blinded by your flashbangs" sortKey="ef" state={sort} onClick={toggleSort} />
               <SortableTh label="Enemies Flashed/Flash" title="Enemies flashed (1.1s+) per flashbang thrown" sortKey="ef_flash" state={sort} onClick={toggleSort} />
               <SortableTh label="Avg Blind/Flash" title="Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+" sortKey="blind_flash" state={sort} onClick={toggleSort} />
+              <SortableTh label="Blind Duration Dealt" title="Total seconds of blind exposure caused to enemies — a raw, ungated total with no half-blind gate and no role in Utility+" sortKey="bdd" state={sort} onClick={toggleSort} />
               <SortableTh label="Plants" title="Bomb plants" sortKey="pl" state={sort} onClick={toggleSort} />
               <SortableTh label="Defuses" title="Bomb defuses" sortKey="df" state={sort} onClick={toggleSort} />
               <SortableTh label="HE Thrown" title="HE grenades thrown" sortKey="he_thrown" state={sort} onClick={toggleSort} />
@@ -805,6 +948,7 @@ function UtilityTable({ aggregated, singlePlayer, showHeading = true }: { aggreg
                   <td className={tdRight}>{a.enemies_flashed}</td>
                   <td className={tdRight}>{fmtNum(a.enemies_flashed / (a.flashes_thrown || 1), 2)}</td>
                   <td className={tdRight}>{fmtNum(a.blind_duration_max_sum / (a.effective_flashes || 1), 2)}</td>
+                  <td className={tdRight}>{fmtNum(a.blind_duration_dealt, 1)}</td>
                   <td className={tdRight}>{a.plants}</td>
                   <td className={tdRight}>{a.defuses}</td>
                   <td className={tdRight}>{a.he_thrown}</td>
@@ -927,6 +1071,10 @@ interface SinglePlayerTiles {
   /** Rendered as `WeaponBar`s below the weapons tiles — a ranked list, not a fixed small set of
    *  named metrics, so it doesn't fit the tile grid's label/value shape. */
   topWeapons: WeaponKillStat[];
+  /** Per-economy-tier shot/accuracy/damage/rounds for this player — the Economy tab resolves the
+   *  filter's selected tier's stat from this via `resolveEconomyStat()` and renders it as tiles,
+   *  same as `EconomyTable` does per row. */
+  economyStats: EconomyTierStat[];
   /** No-scope/wallbang/blind/knife kills, totaled across every weapon — see `FlairTable`. */
   flair: StatTile[];
   trades: StatTile[];
@@ -934,7 +1082,7 @@ interface SinglePlayerTiles {
   plus: StatTile[];
 }
 
-function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: AggregatedSab[], kills: MatchKillRow[]): SinglePlayerTiles {
+function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: AggregatedSab[], kills: MatchKillRow[], economyRows: EconomyMatchRow[]): SinglePlayerTiles {
   const totalDuels = agg.opening_kills + agg.opening_deaths;
   const clutchAttempts = agg.clutch_1v1_attempts + agg.clutch_1v2_attempts;
   const clutchWins = agg.clutch_1v1_wins + agg.clutch_1v2_wins;
@@ -961,6 +1109,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Head Accuracy', title: 'Hits landing on the head / total hits, excluding AWP shots (matches Leetify\'s Headshot Accuracy)', value: pct(agg.headshot_hits_no_awp, agg.shots_hit_no_awp) },
     { label: 'Counter-Strafe %', title: 'Rifle shots fired at under 34% of max speed / all standing rifle shots (crouched shots excluded)', value: pct(agg.counter_strafe_good_shots, agg.counter_strafe_shots) },
     { label: 'Spray Accuracy', title: 'Hits / shots within sequences of 3+ consecutive rifle shots', value: pct(agg.spray_shots_hit, agg.spray_shots_fired) },
+    { label: 'Rounds Dropped/Reload', title: 'Bullets still in the magazine (wasted) when reloading, averaged across every reload including clean ones', value: fmtNum(agg.rounds_dropped_on_reload_total / (agg.reloads_total || 1), 2) },
   ];
 
   const trades: StatTile[] = [
@@ -980,6 +1129,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Enemies Flashed', title: 'Enemy players blinded by your flashbangs', value: agg.enemies_flashed },
     { label: 'Enemies Flashed/Flash', title: 'Enemies flashed (1.1s+) per flashbang thrown', value: fmtNum(agg.enemies_flashed / (agg.flashes_thrown || 1), 2) },
     { label: 'Avg Blind/Flash', title: 'Longest blind duration caused, averaged over flashes that blinded at least one enemy for 1.1s+', value: fmtNum(agg.blind_duration_max_sum / (agg.effective_flashes || 1), 2) },
+    { label: 'Blind Duration Dealt', title: 'Total seconds of blind exposure caused to enemies — a raw, ungated total with no half-blind gate and no role in Utility+', value: fmtNum(agg.blind_duration_dealt, 1) },
     { label: 'Plants', title: 'Bomb plants', value: agg.plants },
     { label: 'Defuses', title: 'Bomb defuses', value: agg.defuses },
     { label: 'HE Thrown', title: 'HE grenades thrown', value: agg.he_thrown },
@@ -1013,6 +1163,8 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
   const weaponStats = aggregateWeaponKillStats(kills, agg.player_id);
   const topWeapons = weaponStats.filter((w) => w.kills > 0).slice(0, 8);
 
+  const economyStats = aggregateEconomyStats(economyRows, agg.player_id);
+
   const flairStat = aggregateFlairKillStats(kills, agg.player_id);
   const flair: StatTile[] = [
     { label: 'No-scope', title: 'No-scope kills, across every weapon', value: flairStat.noscopeKills },
@@ -1022,7 +1174,7 @@ function buildSinglePlayerTiles(agg: AggregatedSab, leagueAggregated: Aggregated
     { label: 'Knife', title: 'Knife kills', value: flairStat.knifeKills },
   ];
 
-  return { impact, duels, mechanics, weaponStats, topWeapons, flair, trades, utility, plus: plusTiles };
+  return { impact, duels, mechanics, weaponStats, topWeapons, economyStats, flair, trades, utility, plus: plusTiles };
 }
 
 /** The single-player counterpart of `resolvePlayerWeaponRow()`'s table cells — same resolved
@@ -1055,23 +1207,47 @@ function buildWeaponTiles(weaponStats: WeaponKillStat[], selectedFilter: WeaponF
   return tiles;
 }
 
+/** The single-player counterpart of `resolvePlayerEconomyRow()`'s table cells — same resolved
+ *  `EconomyTierStat` for the filter's selected tier, as a `StatTile[]`. */
+function buildEconomyTiles(economyStats: EconomyTierStat[], selectedTier: string): StatTile[] {
+  const stat = resolveEconomyStat(economyStats, selectedTier);
+  const titleSuffix = `${economyTierLabel(selectedTier)} rounds`;
+  return [
+    { label: 'Rounds Played', title: `Rounds played at ${titleSuffix}`, value: stat.rounds_played },
+    { label: 'W-L', title: `Rounds won vs. lost at ${titleSuffix}`, value: `${stat.rounds_won}-${stat.rounds_played - stat.rounds_won}` },
+    { label: 'Shots Fired', title: `Shots fired (guns only) at ${titleSuffix}`, value: stat.shots_fired },
+    { label: 'Accuracy', title: `Shots that hit an enemy / shots fired, at ${titleSuffix}`, value: pct(stat.shots_hit, stat.shots_fired) },
+    { label: 'Headshot %', title: `Headshot hits / hits, at ${titleSuffix}`, value: pct(stat.headshot_hits, stat.shots_hit) },
+    { label: 'Damage/Round', title: `Damage dealt per round at ${titleSuffix}`, value: fmtNum(stat.damage_dealt / (stat.rounds_played || 1), 1) },
+  ];
+}
+
 // --- Sub-tabs ---
 //
 // Five sections is too much to stack on one page (both the wide multi-player tables and the
 // single-player tile grids) — see the Impact/Mechanics/Trades split above. One tab state drives
 // both render paths so they never drift out of sync with each other.
 
-type SubTab = 'impact' | 'duels' | 'mechanics' | 'weapons' | 'flair' | 'trades' | 'utility' | 'plus';
+type SubTab = 'impact' | 'duels' | 'mechanics' | 'weapons' | 'economy' | 'flair' | 'trades' | 'utility' | 'plus';
 
 // Ordered to roughly match Leetify's match-page grouping (Aim, then situational Duels/Trades,
 // then Impact, then Utility) — see #173's Leetify-parity discussion. Weapons sits right after Aim
-// (#452) since both are gun-choice/precision stats; Flair sits right after Weapons (#465) since
-// it's the same per-weapon kill data rolled up into all-weapons totals instead of broken out by
-// gun. Stats Plus has no Leetify analog (it's DGLS's own league-relative composite), so it stays
-// last.
+// (#452) since both are gun-choice/precision stats; Economy sits right after Weapons (#481) since
+// it's the same per-player shot/accuracy/damage breakdown pattern, just bucketed by round-buy tier
+// instead of gun; Flair sits right after Economy (#465) since it's the same per-weapon kill data
+// rolled up into all-weapons totals instead of broken out by gun. Stats Plus has no Leetify analog
+// (it's DGLS's own league-relative composite), so it stays last.
+//
+// No Side Splits tab (#482 shipped one, since removed — see docs/calculations.md's Sabremetrics
+// section and issue #506): a wide CT/T-paired-column table just reiterated Stats > Basic Stats'
+// own K/D/A columns under a more confusing layout. `AggregatedSab` still carries the raw `_ct`/`_t`
+// fields (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`) for the match page's own Scoreboard
+// CT/T checkboxes; #506 tracks folding a similar toggle into Basic Stats' table directly instead of
+// a dedicated sub-tab here.
 const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'mechanics', label: 'Aim' },
   { key: 'weapons', label: 'Weapons' },
+  { key: 'economy', label: 'Economy' },
   { key: 'flair', label: 'Flair' },
   { key: 'duels', label: 'Opening Duels' },
   { key: 'trades', label: 'Trades' },
@@ -1116,6 +1292,8 @@ export default function SabremetricsLeaderboardView({
   showPlusStats = true,
   kills = [],
   weaponClassStats = [],
+  economyRows = [],
+  hasEconomyData = false,
 }: {
   rows: SabremetricStatRow[];
   /** League-wide rows used as the Plus-stat baseline in single-player mode. Defaults to `rows`. */
@@ -1134,13 +1312,32 @@ export default function SabremetricsLeaderboardView({
   /** `player_match_weapon_stats` rows (#279/#474) behind the Weapons sub-tab's category accuracy
    *  breakdown — same scope as `kills`. Empty is fine, same honesty rule as `kills`. */
   weaponClassStats?: WeaponClassMatchRow[];
+  /** Rows behind the Economy sub-tab (#481) — same scope as `rows` (season-filtered, in
+   *  particular), so this alone isn't a safe tab-gating signal (see `hasEconomyData` below). */
+  economyRows?: EconomyMatchRow[];
+  /** Gates the Economy sub-tab. Unlike `kills` (always shown, zeroed until a demo is parsed), an
+   *  unplayed/not-yet-reparsed match or season has no economy rows to show at all, so the tab must
+   *  hide rather than showing dead. Defaults to `false`, not derived from `economyRows` — a caller
+   *  that wires `economyRows` must pass this explicitly, computed from its own season-*unscoped*
+   *  economy rows, per docs/patterns.md's "Gate a tab on data": the gate signal must be "computed unscoped by
+   *  whatever transient filter (season, side, …) the page also applies, so the tab doesn't flicker
+   *  in and out as the user toggles that filter." A caller that passes season-filtered
+   *  `economyRows` without also passing this would otherwise silently boot the viewer off the tab
+   *  the moment they filter to a season with no parsed economy data — deriving the default from
+   *  `economyRows.length` would reintroduce exactly that bug for any future caller who forgets to
+   *  override it, so the unsafe inference isn't offered as a default at all. */
+  hasEconomyData?: boolean;
 }) {
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);
   const leagueAggregated = useMemo(() => aggregateRows(leagueRows ?? rows), [leagueRows, rows]);
-  // `showPlusStats` is a static prop, not data that arrives after this first render, so `subTabs`
-  // is already the right key list to validate against — no second `resolveTab` stage needed (unlike
-  // `SeasonTabView`, which filters its tab list on data that isn't known until render).
-  const subTabs = showPlusStats ? ALL_SUB_TABS : ALL_SUB_TABS.filter((t) => t.key !== 'plus');
+  // `showPlusStats` and `hasEconomyData` are each stable across this component's lifetime for any
+  // one caller — a page either wires economy data or doesn't, and callers that season-filter their
+  // `economyRows` pass `hasEconomyData` separately from an unscoped source (see its doc comment
+  // above) — so `subTabs` is already the right key list to validate against — no second
+  // `resolveTab` stage needed (unlike `SeasonTabView`, which filters its tab list on data that
+  // isn't known until render).
+  const subTabs = ALL_SUB_TABS.filter((t) =>
+    (t.key !== 'plus' || showPlusStats) && (t.key !== 'economy' || hasEconomyData));
   const [sub, setSub] = useTabState(subTabs.map((t) => t.key), 'mechanics', 'sub');
   /** Favorite weapon by default; a `WeaponFilter` selects one specific weapon or a whole category
    *  instead (#474). Lives here, not inside `WeaponsTable`, so a match page's two team tables (and
@@ -1153,6 +1350,10 @@ export default function SabremetricsLeaderboardView({
     () => (aggregated.length > 0 ? groupWeaponAccuracyByPlayer(weaponClassStats).get(aggregated[0].player_id) : undefined),
     [weaponClassStats, aggregated],
   );
+  /** Same idea as `weaponFilter`, for the Economy sub-tab's tier picker — always one explicit tier
+   *  (no "most played" default; see the Economy section comment above `EconomyFilterSelect`).
+   *  Defaults to Full Buy, the tier most rounds in a match fall into. */
+  const [economyFilter, setEconomyFilter] = useState<string>('full_buy');
 
   // Memoized (not called inline in the singlePlayer branch below) so picking a different weapon
   // filter — which only ever changes buildWeaponTiles()'s cheap lookup — doesn't also re-run
@@ -1161,12 +1362,16 @@ export default function SabremetricsLeaderboardView({
   // but short-circuits to null outside single-player mode, so the multi-player render path never
   // pays for it.
   const singlePlayerTiles = useMemo(
-    () => (singlePlayer && aggregated.length > 0 ? buildSinglePlayerTiles(aggregated[0], leagueAggregated, kills) : null),
-    [singlePlayer, aggregated, leagueAggregated, kills],
+    () => (singlePlayer && aggregated.length > 0 ? buildSinglePlayerTiles(aggregated[0], leagueAggregated, kills, economyRows) : null),
+    [singlePlayer, aggregated, leagueAggregated, kills, economyRows],
   );
   const singlePlayerWeaponTiles = useMemo(
     () => buildWeaponTiles(singlePlayerTiles?.weaponStats ?? [], weaponFilter, singlePlayerAccuracy),
     [singlePlayerTiles, weaponFilter, singlePlayerAccuracy],
+  );
+  const singlePlayerEconomyTiles = useMemo(
+    () => buildEconomyTiles(singlePlayerTiles?.economyStats ?? [], economyFilter),
+    [singlePlayerTiles, economyFilter],
   );
 
   if (aggregated.length === 0) {
@@ -1204,6 +1409,12 @@ export default function SabremetricsLeaderboardView({
             )}
           </div>
         )}
+        {sub === 'economy' && (
+          <div className="space-y-4">
+            <EconomyFilterSelect value={economyFilter} onChange={setEconomyFilter} />
+            <StatTileGrid heading="Economy" tiles={singlePlayerEconomyTiles} />
+          </div>
+        )}
         {sub === 'flair' && <StatTileGrid heading="Flair" tiles={tiles.flair} />}
         {sub === 'trades' && <StatTileGrid heading="Trades" tiles={tiles.trades} />}
         {sub === 'utility' && <StatTileGrid heading="Utility" tiles={tiles.utility} />}
@@ -1239,6 +1450,14 @@ export default function SabremetricsLeaderboardView({
           <WeaponFilterSelect kills={kills} value={weaponFilter} onChange={setWeaponFilter} />
           <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
             <WeaponsTable aggregated={agg} kills={kills} weaponClassStats={weaponClassStats} selectedFilter={weaponFilter} singlePlayer={singlePlayer} showHeading={showHeading} />
+          )} />
+        </div>
+      )}
+      {sub === 'economy' && (
+        <div className="space-y-3">
+          <EconomyFilterSelect value={economyFilter} onChange={setEconomyFilter} />
+          <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
+            <EconomyTable aggregated={agg} economyRows={economyRows} selectedTier={economyFilter} singlePlayer={singlePlayer} showHeading={showHeading} />
           )} />
         </div>
       )}

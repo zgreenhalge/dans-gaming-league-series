@@ -101,6 +101,26 @@ falls back to the coarser whole-match `rounds_won`/`rounds_played`-on-starting-s
 a match with no parsed demo (no `match_rounds` rows). Surfaced as "Round Win%"/"RWR%" on the
 season/career/map Maps & Sides tab and the player page's Side stats table.
 
+**Round win condition** — `match_rounds.win_reason` (elimination/bomb detonation/defuse/time
+expired, see `RoundCondition`) is tallied by `aggregateWinConditions()`
+(`src/lib/mapSideStats.ts`) into a count and share per condition across every round in scope. A
+round with no recorded condition (a `match_rounds` row predating this column, or a parser miss) is
+excluded rather than guessed into a bucket. Surfaced as "Round win condition" on the season/career/
+map Maps & Sides tab, next to Score Distribution. This is a separate figure from the per-round icon
+on the match page's round-history strip (`RoundHistoryEntry.condition`, driven by the denormalized
+`matches.round_history` column populated at demo-parse time): both ultimately classify the same CS2
+`round_end` reason, but `RoundHistoryStrip` shows one match's rounds individually while this
+breakdown aggregates across every round in the current scope.
+
+**Ninja** — a defuse win (`win_reason = 'defuse'`) with at least one T-side player still alive when
+the round ended, from `deriveNinjaDefuseRounds()` (`src/lib/queries/kills.ts`): the bomb was
+defused without ever being contested. Resolved by comparing each round's T-side roster (from
+`player_match_stats.faction` + that round's `shirts_side`) against who actually died that round
+(`match_kills`), and attached as `MatchRoundRow.ninja` by `getAllMatchRounds()` so `RoundOutcome`
+consumers don't need their own kills/roster join. Surfaced as an extra row in the Round win
+condition breakdown — a count of the `defuse` subset, not an additional slice of `total` (a defuse
+round is already counted once via `defuse`; `ninja` isn't summed a second time).
+
 ## Sabremetrics
 
 Baseball style metrics with deeper insights, in the vein of WAR, OPS, etc.
@@ -388,6 +408,36 @@ than broken out per-weapon like the Weapons sub-tab (`aggregateFlairKillStats()`
 `src/lib/queries/kills.ts`): `No-scope`, `Wallbang`, `Blind`, and `Midair` sum the same-named
 counters from `aggregateWeaponKillStats()` across all of a player's weapons; `Knife` is
 `aggregateKillCategoryStats()`'s `melee` category total (knives/bayonets), not a separate collector.
+
+### Economy
+
+The Economy sub-tab shows one round-buy tier's row per player at a time
+(`aggregateEconomyStats()`/`resolveEconomyStat()`, `src/lib/queries/weaponStats.ts`), over the three
+fixed tiers (`eco`/`force_buy`/`full_buy`, see [`demo-ingestion.md`](./demo-ingestion.md)), always
+picked explicitly by the tier dropdown — unlike the Weapons sub-tab's favorite-or-specific picker,
+there's no "most played" default, since full-buy rounds dominate most matches and a "most played"
+default would just resolve to full-buy for nearly every player anyway. Since the tier set is fixed
+and game-defined rather than derived from what a player happened to use, a tier with no rounds
+played still renders a zeroed row rather than being hidden or omitted from the picker. The selected
+tier is named once by the dropdown, not repeated as its own column — every other column's tooltip
+names it instead (e.g. "Rounds played at Full Buy"). `Damage/Round` =
+`damage_dealt / rounds_played` for the resolved tier — `rounds_played` is seeded from the round's
+own economy classification, not shot-triggered, so it includes rounds the player never fired a shot
+in. `W-L` = `rounds_won` – (`rounds_played` - `rounds_won`) — `rounds_won` comes from
+`getEconomyRoundWins()` (`src/lib/queries/weaponStats.ts`), which joins `match_round_economy`'s
+per-round tier to that round's own winner (`match_rounds`) via the player's side that round
+(`faction` + `shirts_side`); `player_match_economy_stats` itself only sums `rounds_played`, not how
+many of those were won, so this is a separate round-level join rather than a stored column. Surfaced
+on the player/statistics/season pages (season-scoped `getAllEconomyStats()`) and the match page
+(`getMatchEconomyStats()`), the same season/match split `getAllWeaponClassStats()`/
+`getMatchWeaponClassStats()` use for the Weapons sub-tab.
+
+`AggregatedSab` (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`) carries `kills`/`deaths`/
+`assists`/`damage`/`headshot_kills` as merged totals *and* their raw `_ct`/`_t` halves side by side
+— the merged fields are simply the two halves summed, not a separately-tracked value. There is no
+sabremetrics sub-tab showing the `_ct`/`_t` halves at season/career grain; the same underlying split
+is only surfaced per-match, via the box score's CT/T checkboxes (`MatchTabView.tsx`'s `Scoreboard`),
+which toggle which side's numbers replace the merged column for that one match.
 
 ### Player Rating (not yet implemented)
 

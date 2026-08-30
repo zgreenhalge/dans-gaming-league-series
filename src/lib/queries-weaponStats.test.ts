@@ -1,8 +1,9 @@
 /**
- * Regression harness for queries/weaponStats.ts (#279, #474) — getAllWeaponClassStats,
- * getAllEconomyStats, getMatchWeaponClassStats, groupWeaponAccuracyByPlayer. Exercises the
- * player_match_stats -> matches -> weeks -> seasons join and the season_id filter against the
- * fixture DB's match-100 rows (week 10 -> season 1).
+ * Regression harness for queries/weaponStats.ts (#279, #474, #481) — getAllWeaponClassStats,
+ * getAllEconomyStats, getMatchWeaponClassStats, getMatchEconomyStats, groupWeaponAccuracyByPlayer,
+ * aggregateEconomyStats, resolveEconomyStat. Exercises the player_match_stats -> matches ->
+ * weeks -> seasons join and the season_id filter against the fixture DB's match-100 rows
+ * (week 10 -> season 1).
  *
  * Run:  npx vitest run src/lib/queries-weaponStats.test.ts
  */
@@ -14,7 +15,8 @@ import { buildFakeDb } from './test-support/fixtures';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getAllWeaponClassStats, getAllEconomyStats, getMatchWeaponClassStats, groupWeaponAccuracyByPlayer } from './queries';
+import { getAllWeaponClassStats, getAllEconomyStats, getMatchWeaponClassStats, getMatchEconomyStats, groupWeaponAccuracyByPlayer, aggregateEconomyStats, resolveEconomyStat, getPlayersById, type EconomyMatchRow } from './queries';
+import { economyMatchRow as economyRow } from './test-support/sabFields';
 import { test, report } from './test-support/miniTest';
 
 async function main() {
@@ -38,6 +40,15 @@ async function main() {
     assert.equal(legacyRow?.shots_fired, 8);
   });
 
+  await test('getAllEconomyStats: honors a pre-fetched playersById instead of fetching its own', async () => {
+    const playersById = await getPlayersById();
+    const overridden = new Map(playersById);
+    overridden.set(1, { ...overridden.get(1)!, name: 'Overridden Name' });
+    const rows = await getAllEconomyStats(undefined, overridden);
+    const alice = rows.find((r) => r.player_id === 1);
+    assert.equal(alice?.player_name, 'Overridden Name');
+  });
+
   await test('getAllWeaponClassStats: seasonId filters out rows from other seasons', async () => {
     const rows = await getAllWeaponClassStats(2);
     assert.equal(rows.length, 0);
@@ -53,6 +64,17 @@ async function main() {
     assert.equal(ak47?.player_name, 'Alice');
     assert.equal(ak47?.weapon_category, 'rifle');
     assert.equal(ak47?.shots_fired, 90);
+  });
+
+  await test('getMatchEconomyStats: resolves one match\'s rows (including rounds_won) without a season_id', async () => {
+    const rows = await getMatchEconomyStats(100);
+    const aliceFullBuy = rows.find((r) => r.player_id === 1 && r.economy_type === 'full_buy');
+    assert.equal(aliceFullBuy?.match_id, 100);
+    assert.equal(aliceFullBuy?.season_id, -1);
+    assert.equal(aliceFullBuy?.player_name, 'Alice');
+    assert.equal(aliceFullBuy?.rounds_won, 1);
+    const carolFullBuy = rows.find((r) => r.player_id === 3 && r.economy_type === 'full_buy');
+    assert.equal(carolFullBuy?.rounds_won, 0);
   });
 
   await test('groupWeaponAccuracyByPlayer: sums every player\'s rows by weapon and by category in one pass (#474)', async () => {
@@ -85,6 +107,42 @@ async function main() {
     assert.equal(fullBuy?.shots_hit, 30);
     const forceBuy = bob.find((r) => r.economy_type === 'force_buy');
     assert.equal(forceBuy?.rounds_played, 5);
+  });
+
+  await test('getAllEconomyStats: rounds_won reflects round-level wins from match_round_economy joined to match_rounds', async () => {
+    const rows = await getAllEconomyStats();
+    // Alice (SHIRTS) always wins in the fixture's match 100 (see fixtures.ts's MATCH_ROUNDS comment).
+    const aliceFullBuy = rows.find((r) => r.player_id === 1 && r.economy_type === 'full_buy');
+    assert.equal(aliceFullBuy?.rounds_won, 1);
+    const aliceEco = rows.find((r) => r.player_id === 1 && r.economy_type === 'eco');
+    assert.equal(aliceEco?.rounds_won, 1);
+    // Carol (SKINS) always loses in the same match.
+    const carolFullBuy = rows.find((r) => r.player_id === 3 && r.economy_type === 'full_buy');
+    assert.equal(carolFullBuy?.rounds_won, 0);
+  });
+
+  // --- aggregateEconomyStats/resolveEconomyStat (#481) ---
+  await test('aggregateEconomyStats: sums per-tier totals across matches, ignores other players', () => {
+    const rows: EconomyMatchRow[] = [
+      economyRow({ player_id: 1, match_id: 100, economy_type: 'eco', shots_fired: 5, shots_hit: 2, rounds_played: 2 }),
+      economyRow({ player_id: 1, match_id: 200, economy_type: 'eco', shots_fired: 3, shots_hit: 1, rounds_played: 1 }),
+      economyRow({ player_id: 1, match_id: 100, economy_type: 'full_buy', shots_fired: 10, shots_hit: 6, rounds_played: 3 }),
+      economyRow({ player_id: 2, match_id: 100, economy_type: 'eco', shots_fired: 100, shots_hit: 100, rounds_played: 100 }),
+    ];
+    const stats = aggregateEconomyStats(rows, 1);
+    assert.equal(stats.length, 2);
+    const eco = stats.find((s) => s.economy_type === 'eco')!;
+    assert.equal(eco.shots_fired, 8);
+    assert.equal(eco.shots_hit, 3);
+    assert.equal(eco.rounds_played, 3);
+    const fullBuy = stats.find((s) => s.economy_type === 'full_buy')!;
+    assert.equal(fullBuy.rounds_played, 3);
+  });
+
+  await test('resolveEconomyStat: an explicit tier the player never played returns a zeroed stat, not undefined', () => {
+    const resolved = resolveEconomyStat([], 'force_buy');
+    assert.equal(resolved.economy_type, 'force_buy');
+    assert.equal(resolved.rounds_played, 0);
   });
 
   report();

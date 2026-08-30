@@ -63,6 +63,38 @@ async function main() {
     assert.equal(aggregateRows(rows).length, 2);
   });
 
+  await test('aggregateRows: sums blind_duration_dealt across matches (#483)', () => {
+    const rows: SabremetricStatRow[] = [
+      row({ player_id: 1, match_id: 100, sab: zeroSab({ blind_duration_dealt: 3.5 }) }),
+      row({ player_id: 1, match_id: 200, sab: zeroSab({ blind_duration_dealt: 2.25 }) }),
+    ];
+    const [agg] = aggregateRows(rows);
+    assert.equal(agg.blind_duration_dealt, 5.75);
+  });
+
+  await test('aggregateRows: retains the raw ct/t split alongside the merged totals (#482)', () => {
+    const rows: SabremetricStatRow[] = [
+      row({ player_id: 1, match_id: 100, sab: zeroSab({ kills_ct: 5, kills_t: 3, deaths_ct: 4, deaths_t: 2, assists_ct: 1, assists_t: 1, damage_ct: 400, damage_t: 300, headshot_kills_ct: 2, headshot_kills_t: 1 }) }),
+      row({ player_id: 1, match_id: 200, sab: zeroSab({ kills_ct: 4, kills_t: 6, deaths_ct: 3, deaths_t: 5, assists_ct: 2, assists_t: 0, damage_ct: 350, damage_t: 420, headshot_kills_ct: 1, headshot_kills_t: 3 }) }),
+    ];
+    const [agg] = aggregateRows(rows);
+    assert.equal(agg.kills_ct, 9);
+    assert.equal(agg.kills_t, 9);
+    assert.equal(agg.deaths_ct, 7);
+    assert.equal(agg.deaths_t, 7);
+    assert.equal(agg.assists_ct, 3);
+    assert.equal(agg.assists_t, 1);
+    assert.equal(agg.damage_ct, 750);
+    assert.equal(agg.damage_t, 720);
+    assert.equal(agg.headshot_kills_ct, 3);
+    assert.equal(agg.headshot_kills_t, 4);
+    // The merged totals still union the two halves, unchanged from before the split was retained.
+    assert.equal(agg.kills, 18);
+    assert.equal(agg.deaths, 14);
+    assert.equal(agg.assists, 4);
+    assert.equal(agg.damage, 1470);
+  });
+
   // --- chokeScore: 1v1 losses + 2×1v2 losses + 5×2v1 losses ---
   await test('chokeScore weights blown clutches by how big the advantage was', () => {
     const [agg] = aggregateRows([row({
