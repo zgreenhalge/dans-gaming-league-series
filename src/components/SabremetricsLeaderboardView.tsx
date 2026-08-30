@@ -105,6 +105,12 @@ function fmtNum(v: number, d: number = 0): string {
   return v.toFixed(d);
 }
 
+function fmtDiff(v: number, d: number = 0): string {
+  if (!Number.isFinite(v)) return '—';
+  const s = v.toFixed(d);
+  return v > 0 ? `+${s}` : s;
+}
+
 function plusStyle(val: number): React.CSSProperties {
   const delta = Math.max(-1, Math.min(1, val - 1));
   const pct = Math.round(Math.abs(delta) * 100);
@@ -1064,7 +1070,7 @@ function SideSplitTable({ aggregated, includeCT, includeT, showHeading = true }:
                 <td className={tdRight}>{r.kills}</td>
                 <td className={tdRight}>{r.assists}</td>
                 <td className={tdRight}>{r.deaths}</td>
-                <td className={tdRight}>{r.killDiff > 0 ? `+${r.killDiff}` : r.killDiff}</td>
+                <td className={tdRight}>{fmtDiff(r.killDiff)}</td>
                 <td className={tdRight}>{r.damage.toLocaleString()}</td>
                 <td className={tdRight}>{fmtNum(r.adr, 2)}</td>
               </tr>
@@ -1351,17 +1357,17 @@ type SubTab = 'impact' | 'duels' | 'mechanics' | 'weapons' | 'economy' | 'flair'
 // Leetify analog (they're DGLS's own), so they stay last.
 //
 // Sides is a single filterable table (CT/T checkboxes above one K/D/A/Damage row set, gated on the
-// `matches` prop being wired), not the wide CT|T-paired-column layout #482 originally shipped —
-// that reiterated Stats > Basic Stats' own K/D/A columns under a more confusing layout. It lives in
-// Advanced Stats rather than on Basic Stats (#506) because Advanced Stats already means
-// "demo-backed" to users, so a CT/T filter here needs no coverage caveat the way bolting one onto
-// Basic Stats' always-accurate all-time total would. `AggregatedSab` carries the raw `_ct`/`_t`
-// fields this reads directly (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`), same as the
-// match page's own Scoreboard CT/T checkboxes (`MatchTabView.tsx`) via the shared `splitStat()`.
-// ADR isn't side-filtered here, for the same reason `docs/calculations.md`'s Side Splits section
-// gives for the match scoreboard being the only place ADR is side-filterable at all — no
-// rounds-played-by-side total exists at this aggregate scope, so a side-filtered row shows a dash
-// rather than a guessed number.
+// unscoped `hasSideData` prop — see its doc comment below), not the wide CT|T-paired-column layout
+// #482 originally shipped — that reiterated Stats > Basic Stats' own K/D/A columns under a more
+// confusing layout. It lives in Advanced Stats rather than on Basic Stats (#506) because Advanced
+// Stats already means "demo-backed" to users, so a CT/T filter here needs no coverage caveat the
+// way bolting one onto Basic Stats' always-accurate all-time total would. `AggregatedSab` carries
+// the raw `_ct`/`_t` fields this reads directly (`aggregateRows()`,
+// `src/lib/queries/sabremetrics.ts`), same as the match page's own Scoreboard CT/T checkboxes
+// (`MatchTabView.tsx`) via the shared `splitStat()`. ADR isn't side-filtered here, for the same
+// reason `docs/calculations.md`'s Side Splits section gives for the match scoreboard being the
+// one place ADR is side-filterable at all — no rounds-played-by-side total exists at this
+// aggregate scope, so a side-filtered row shows a dash rather than a guessed number.
 const ALL_SUB_TABS: { key: SubTab; label: string }[] = [
   { key: 'mechanics', label: 'Aim' },
   { key: 'weapons', label: 'Weapons' },
@@ -1413,8 +1419,9 @@ export default function SabremetricsLeaderboardView({
   weaponClassStats = [],
   economyRows = [],
   hasEconomyData = false,
-  matches,
+  matches = [],
   rounds = [],
+  hasSideData = false,
 }: {
   rows: SabremetricStatRow[];
   /** League-wide rows used as the Plus-stat baseline in single-player mode. Defaults to `rows`. */
@@ -1449,28 +1456,40 @@ export default function SabremetricsLeaderboardView({
    *  override it, so the unsafe inference isn't offered as a default at all. */
   hasEconomyData?: boolean;
   /** Match veto/side data behind the Sides sub-tab (#506) — same shape `BasicStatsView`'s own
-   *  `matches` prop takes, and typically the exact same array a caller already passes there. Gates
-   *  the tab: `undefined` (the match page, which filters CT/T per-team via `Scoreboard` instead)
-   *  hides it entirely, same pattern as `hasEconomyData` gating Economy. */
+   *  `matches` prop takes, and typically the exact same array a caller already passes there.
+   *  Defaults to `[]` (the match page, which filters CT/T per-team via `Scoreboard` instead, never
+   *  wires this); tab visibility is driven by `hasSideData` below, not by this array's contents. */
   matches?: MatchPickBanInput[];
   /** Round-level outcomes behind the Sides sub-tab's Round Win% panel — same shape and scope as
    *  `BasicStatsView`'s own `rounds` prop. Empty is fine; Round Win% just shows a dash. */
   rounds?: RoundOutcome[];
+  /** Gates the Sides sub-tab. Same reasoning as `hasEconomyData` above: a caller that
+   *  season-filters `matches` (e.g. the career page's `selectedSeason` toggle) must pass this
+   *  separately, computed from its own unscoped match list — deriving the default from
+   *  `matches.length` would silently boot the viewer off the tab the moment they filter to a
+   *  season with no matches, per docs/patterns.md's "Gate a tab on data". Defaults to `false`. */
+  hasSideData?: boolean;
 }) {
   const aggregated = useMemo(() => aggregateRows(rows), [rows]);
   const leagueAggregated = useMemo(() => aggregateRows(leagueRows ?? rows), [leagueRows, rows]);
-  // `showPlusStats` and `hasEconomyData` are each stable across this component's lifetime for any
-  // one caller — a page either wires economy data or doesn't, and callers that season-filter their
-  // `economyRows` pass `hasEconomyData` separately from an unscoped source (see its doc comment
-  // above) — so `subTabs` is already the right key list to validate against — no second
-  // `resolveTab` stage needed (unlike `SeasonTabView`, which filters its tab list on data that
-  // isn't known until render).
+  // `showPlusStats`, `hasEconomyData`, and `hasSideData` are each stable across this component's
+  // lifetime for any one caller — a page either wires the data or doesn't, and callers that
+  // season-filter their scoped array (`economyRows`/`matches`) pass the gate separately from an
+  // unscoped source (see each gate prop's doc comment above) — so `subTabs` is already the right
+  // key list to validate against — no second `resolveTab` stage needed (unlike `SeasonTabView`,
+  // which filters its tab list on data that isn't known until render).
   const subTabs = ALL_SUB_TABS.filter((t) =>
-    (t.key !== 'plus' || showPlusStats) && (t.key !== 'economy' || hasEconomyData) && (t.key !== 'sides' || matches != null));
+    (t.key !== 'plus' || showPlusStats) && (t.key !== 'economy' || hasEconomyData) && (t.key !== 'sides' || hasSideData));
   const [sub, setSub] = useTabState(subTabs.map((t) => t.key), 'mechanics', 'sub');
   const [includeCT, setIncludeCT] = useState(true);
   const [includeT, setIncludeT] = useState(true);
-  const perSideStats = useMemo(() => (matches ? aggregatePerSideStats(matches, rounds) : []), [matches, rounds]);
+  // Gated on `sub === 'sides'`, not just `matches`/`rounds` — otherwise this O(matches + rounds)
+  // pass over the full season/career round set would re-run on every Advanced Stats visit
+  // (default sub-tab is Aim), even for viewers who never open Sides.
+  const perSideStats = useMemo(
+    () => (sub === 'sides' ? aggregatePerSideStats(matches, rounds) : []),
+    [sub, matches, rounds],
+  );
   /** Favorite weapon by default; a `WeaponFilter` selects one specific weapon or a whole category
    *  instead (#474). Lives here, not inside `WeaponsTable`, so a match page's two team tables (and
    *  the single-player tile view) share one selection and one dropdown. */
@@ -1608,7 +1627,7 @@ export default function SabremetricsLeaderboardView({
           <UtilityTable aggregated={agg} singlePlayer={singlePlayer} showHeading={showHeading} />
         )} />
       )}
-      {sub === 'sides' && matches && (
+      {sub === 'sides' && (
         <div className="space-y-6">
           <div className="flex items-center gap-4">
             <Checkbox checked={includeCT} onToggle={() => setIncludeCT((v) => !v)} label="CT" />

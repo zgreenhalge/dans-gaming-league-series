@@ -468,6 +468,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
           hasEconomyData={matchEconomyStats.length > 0}
           matches={allMatches}
           rounds={matchRounds}
+          hasSideData={allMatches.length > 0}
         />
       )}
 
