@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -990,8 +990,7 @@ export type Database = {
           rounds_played: number
           shots_fired: number
           shots_hit: number
-          weapon: string | null
-          weapon_category: string
+          weapon: string
         }
         Insert: {
           damage_dealt?: number
@@ -1002,8 +1001,7 @@ export type Database = {
           rounds_played?: number
           shots_fired?: number
           shots_hit?: number
-          weapon?: string | null
-          weapon_category: string
+          weapon: string
         }
         Update: {
           damage_dealt?: number
@@ -1014,8 +1012,7 @@ export type Database = {
           rounds_played?: number
           shots_fired?: number
           shots_hit?: number
-          weapon?: string | null
-          weapon_category?: string
+          weapon?: string
         }
         Relationships: [
           {
@@ -1405,7 +1402,6 @@ export type Database = {
           is_gauntlet: boolean
           map_pool: string[] | null
           name: string
-          schedule_draft_locked_at: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["season_status_type"]
           target_win_rounds: number
@@ -1416,7 +1412,6 @@ export type Database = {
           is_gauntlet?: boolean
           map_pool?: string[] | null
           name: string
-          schedule_draft_locked_at?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["season_status_type"]
           target_win_rounds?: number
@@ -1427,7 +1422,6 @@ export type Database = {
           is_gauntlet?: boolean
           map_pool?: string[] | null
           name?: string
-          schedule_draft_locked_at?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["season_status_type"]
           target_win_rounds?: number

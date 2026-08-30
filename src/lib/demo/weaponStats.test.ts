@@ -38,8 +38,8 @@ async function main() {
       {
         player_id: 1,
         weaponStats: [
-          { weapon: 'ak47', weapon_category: 'rifle', ...bucket({ shots_fired: 90, shots_hit: 40 }) },
-          { weapon: 'glock', weapon_category: 'pistol', ...bucket({ shots_fired: 20, shots_hit: 8 }) },
+          { weapon: 'ak47', ...bucket({ shots_fired: 90, shots_hit: 40 }) },
+          { weapon: 'glock', ...bucket({ shots_fired: 20, shots_hit: 8 }) },
         ],
         economyStats: [{ economy_type: 'full_buy', ...bucket({ shots_fired: 95, shots_hit: 42 }) }],
       },
@@ -54,7 +54,7 @@ async function main() {
     const db = baseDb();
     __setTestAdminClient(createFakeSupabaseClient(db));
     const rows: DemoWeaponStat[] = [
-      { player_id: 999, weaponStats: [{ weapon: 'ak47', weapon_category: 'rifle', ...bucket() }], economyStats: [] },
+      { player_id: 999, weaponStats: [{ weapon: 'ak47', ...bucket() }], economyStats: [] },
     ];
     await persistWeaponStats(MATCH_ID, rows);
     assert.equal(db.player_match_weapon_stats!.length, 0);
@@ -63,26 +63,26 @@ async function main() {
   await test('persistWeaponStats: a reparse with a smaller bucket set drops the now-stale bucket (delete-then-insert)', async () => {
     const db = baseDb();
     db.player_match_weapon_stats = [
-      { match_id: MATCH_ID, player_match_stats_id: 1000, weapon: 'ak47', weapon_category: 'rifle', ...bucket() },
-      { match_id: MATCH_ID, player_match_stats_id: 1000, weapon_category: 'sniper', ...bucket() }, // no sniper shots this reparse
+      { match_id: MATCH_ID, player_match_stats_id: 1000, weapon: 'ak47', ...bucket() },
+      { match_id: MATCH_ID, player_match_stats_id: 1000, weapon: 'awp', ...bucket() }, // no awp shots this reparse
     ];
     __setTestAdminClient(createFakeSupabaseClient(db));
     const rows: DemoWeaponStat[] = [
-      { player_id: 1, weaponStats: [{ weapon: 'ak47', weapon_category: 'rifle', ...bucket({ shots_fired: 10 }) }], economyStats: [] },
+      { player_id: 1, weaponStats: [{ weapon: 'ak47', ...bucket({ shots_fired: 10 }) }], economyStats: [] },
     ];
     await persistWeaponStats(MATCH_ID, rows);
     assert.equal(db.player_match_weapon_stats!.length, 1);
-    assert.equal(db.player_match_weapon_stats![0].weapon_category, 'rifle');
+    assert.equal(db.player_match_weapon_stats![0].weapon, 'ak47');
   });
 
   await test('persistWeaponStats: every player unresolved leaves existing rows untouched (does not wipe them)', async () => {
     const db = baseDb();
     db.player_match_weapon_stats = [
-      { match_id: MATCH_ID, player_match_stats_id: 1000, weapon: 'ak47', weapon_category: 'rifle', ...bucket({ shots_fired: 10 }) },
+      { match_id: MATCH_ID, player_match_stats_id: 1000, weapon: 'ak47', ...bucket({ shots_fired: 10 }) },
     ];
     __setTestAdminClient(createFakeSupabaseClient(db));
     const rows: DemoWeaponStat[] = [
-      { player_id: 999, weaponStats: [{ weapon: 'ak47', weapon_category: 'rifle', ...bucket() }], economyStats: [] },
+      { player_id: 999, weaponStats: [{ weapon: 'ak47', ...bucket() }], economyStats: [] },
     ];
     await persistWeaponStats(MATCH_ID, rows);
     assert.equal(db.player_match_weapon_stats!.length, 1);
@@ -100,8 +100,8 @@ async function main() {
     const OTHER_MATCH_ID = 200;
     const db = baseDb();
     db.player_match_weapon_stats = [
-      { match_id: MATCH_ID, player_match_stats_id: 1000, weapon: 'ak47', weapon_category: 'rifle', ...bucket() },
-      { match_id: OTHER_MATCH_ID, player_match_stats_id: 2000, weapon: 'ak47', weapon_category: 'rifle', ...bucket() },
+      { match_id: MATCH_ID, player_match_stats_id: 1000, weapon: 'ak47', ...bucket() },
+      { match_id: OTHER_MATCH_ID, player_match_stats_id: 2000, weapon: 'ak47', ...bucket() },
     ];
     db.player_match_economy_stats = [
       { match_id: MATCH_ID, player_match_stats_id: 1000, economy_type: 'full_buy', ...bucket() },

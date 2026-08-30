@@ -93,10 +93,7 @@ tables — `player_match_weapon_stats` and `player_match_economy_stats` — rath
 `weaponStats` field, alongside (not merged into) `sabremetrics`; `src/lib/demo/weaponStats.ts`
 persists them via `replaceMatchRows()` (`factTables.ts`), the same match-scoped delete-then-insert
 every other fact table uses, keyed off `player_match_stats_id` plus the bucket column (`weapon`/
-`economy_type`). `weapon_category` is also written alongside `weapon` — `WEAPON_CATEGORY[weapon]`,
-computed in `demoOrchestrator.ts` — purely so the insert satisfies that column's still-`not null`
-constraint during the migration that added `weapon`; the query layer never reads that stored value
-for a row that has `weapon`, only derives category from `weapon` itself.
+`economy_type`).
 
 `rounds_played` means something different for the two breakdowns. For weapon class, it's the count
 of distinct live rounds in which the player fired that weapon at least once — shot-triggered, same
