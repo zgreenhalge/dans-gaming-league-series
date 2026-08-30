@@ -13,14 +13,9 @@ export interface WeaponClassMatchRow extends WeaponStatFields {
   player_name: string;
   match_id: number;
   season_id: number;
-  /** The exact weapon this row is for (#474), e.g. `ak47` — `null` only for a row from a match not
-   *  yet reparsed since this column was added; such rows still roll up correctly into
-   *  `weapon_category`, they just can't answer a per-weapon-specific selection until reparsed. */
-  weapon: string | null;
-  /** Derived from `weapon` via `WEAPON_CATEGORY` when present; falls back to the row's own stored
-   *  category for a pre-reparse row with no `weapon` (#474 phase 1 — see the migration's own
-   *  comment for why that column stays live during this transition). #499 tracks dropping the
-   *  stored `weapon_category` column (and this fallback) once every match is confirmed reparsed. */
+  /** The exact weapon this row is for, e.g. `ak47`. */
+  weapon: string;
+  /** Derived from `weapon` via `WEAPON_CATEGORY` (`resolveWeaponAndCategory()` below). */
   weapon_category: WeaponCategory;
 }
 
@@ -87,13 +82,11 @@ async function getAllJoinedStats<Raw extends { player_match_stats_id: number }>(
   return result;
 }
 
-/** Resolves a joined `player_match_weapon_stats` row's `weapon`/`weapon_category` fields (#474) —
- *  shared by `getAllWeaponClassStats()` and `getMatchWeaponClassStats()` so both derive category
- *  from `weapon` the same way, falling back to the row's own stored category only when `weapon`
- *  hasn't been backfilled yet. */
-function resolveWeaponAndCategory(raw: PlayerMatchWeaponStat): { weapon: string | null; weapon_category: WeaponCategory } {
-  const derived = raw.weapon != null ? WEAPON_CATEGORY[raw.weapon] : undefined;
-  return { weapon: raw.weapon, weapon_category: derived ?? (raw.weapon_category as WeaponCategory) };
+/** Resolves a joined `player_match_weapon_stats` row's `weapon`/`weapon_category` fields — shared
+ *  by `getAllWeaponClassStats()` and `getMatchWeaponClassStats()` so both derive category from
+ *  `weapon` the same way. */
+function resolveWeaponAndCategory(raw: PlayerMatchWeaponStat): { weapon: string; weapon_category: WeaponCategory } {
+  return { weapon: raw.weapon, weapon_category: WEAPON_CATEGORY[raw.weapon] };
 }
 
 /** Per-weapon shot/accuracy/damage/rounds breakdown (#279, #474), one row per (player, match,
@@ -299,8 +292,7 @@ function addWeaponClassStat<K>(map: Map<K, WeaponClassAggregateStat>, key: K, r:
  *  fetched `rows` for (a season, career), in a single pass over `rows` regardless of how many
  *  players or weapons/categories end up queried against the result (#474). A multi-player table
  *  calls this once per render and looks each row up in O(1), rather than rescanning `rows` once per
- *  player. Rows with `weapon === null` (not yet backfilled, see `WeaponClassMatchRow`) still count
- *  toward `byCategory` — only `byWeapon` misses them. */
+ *  player. */
 export function groupWeaponAccuracyByPlayer(rows: WeaponClassMatchRow[]): Map<number, PlayerWeaponAccuracy> {
   const out = new Map<number, PlayerWeaponAccuracy>();
   for (const r of rows) {
@@ -309,7 +301,7 @@ export function groupWeaponAccuracyByPlayer(rows: WeaponClassMatchRow[]): Map<nu
       p = { byWeapon: new Map(), byCategory: new Map() };
       out.set(r.player_id, p);
     }
-    if (r.weapon != null) addWeaponClassStat(p.byWeapon, r.weapon, r);
+    addWeaponClassStat(p.byWeapon, r.weapon, r);
     addWeaponClassStat(p.byCategory, r.weapon_category, r);
   }
   return out;
