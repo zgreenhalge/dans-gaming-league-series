@@ -17,7 +17,6 @@ import {
   classifyMatchVeto,
   aggregatePlayerMapStats,
   aggregateMapIndexStats,
-  aggregateAllPlayersSideRecords,
   type MatchPickBanInput,
   type PlayerMatchInput,
   type RoundOutcome,
@@ -80,13 +79,13 @@ test('aggregateMapPickBanStats: a match with no effective map at all is excluded
 test('aggregateMapPickBanStats: pickedAndWon credits the team that picked, not whoever won', () => {
   const shirtsWon = match({
     shirts_pick: 'Palais',
-    shirts_stats: [{ player_id: 1, is_win: true }],
-    skins_stats: [{ player_id: 2, is_win: false }],
+    shirts_stats: [{ is_win: true }],
+    skins_stats: [{ is_win: false }],
   });
   const skinsWonButShirtsPicked = match({
     shirts_pick: 'Palais',
-    shirts_stats: [{ player_id: 1, is_win: false }],
-    skins_stats: [{ player_id: 2, is_win: true }],
+    shirts_stats: [{ is_win: false }],
+    skins_stats: [{ is_win: true }],
   });
   const out = aggregateMapPickBanStats([shirtsWon, skinsWonButShirtsPicked]);
   assert.equal(out[0].picked, 2);
@@ -359,54 +358,6 @@ test('aggregateMapIndexStats: seasonsPlayed counts distinct regular-season numbe
   ];
   const out = aggregateMapIndexStats(maps, { includeRegular: false, includeGauntlet: false, selectedSeason: 'all' });
   assert.equal(out.get('palais')!.seasonsPlayed, 2); // Season 1 and Season 2 (gauntlet excluded, filter ignored)
-});
-
-// ─── aggregateAllPlayersSideRecords ─────────────────────────────────────────
-
-test('aggregateAllPlayersSideRecords: credits SHIRTS the opposite of skins_starting_side, SKINS the side directly', () => {
-  const matches = [match({
-    skins_starting_side: 'CT',
-    shirts_stats: [{ player_id: 1, is_win: true }],
-    skins_stats: [{ player_id: 2, is_win: false }],
-  })];
-  const out = aggregateAllPlayersSideRecords(matches);
-  const p1 = out.get(1)!;
-  assert.equal(p1.find((r) => r.side === 'T')?.wins, 1); // SHIRTS on a CT-skins match starts T
-  assert.equal(p1.find((r) => r.side === 'CT')?.wins, 0);
-  const p2 = out.get(2)!;
-  assert.equal(p2.find((r) => r.side === 'CT')?.losses, 1); // SKINS starts on skins_starting_side directly
-});
-
-test('aggregateAllPlayersSideRecords: sums wins/losses across multiple matches for the same player', () => {
-  const matches = [
-    match({ skins_starting_side: 'CT', shirts_stats: [{ player_id: 1, is_win: true }], skins_stats: [] }),
-    match({ skins_starting_side: 'T', shirts_stats: [{ player_id: 1, is_win: false }], skins_stats: [] }),
-  ];
-  const out = aggregateAllPlayersSideRecords(matches);
-  const p1 = out.get(1)!;
-  // Match 1: SHIRTS on a CT-skins-start match starts T, won. Match 2: SHIRTS on a T-skins-start
-  // match starts CT, lost.
-  assert.equal(p1.find((r) => r.side === 'T')?.wins, 1);
-  assert.equal(p1.find((r) => r.side === 'CT')?.losses, 1);
-});
-
-test('aggregateAllPlayersSideRecords: unplayed matches are excluded', () => {
-  const matches = [match({
-    final_score: '0-0',
-    skins_starting_side: 'CT',
-    shirts_stats: [{ player_id: 1, is_win: true }],
-    skins_stats: [],
-  })];
-  assert.equal(aggregateAllPlayersSideRecords(matches).has(1), false);
-});
-
-test('aggregateAllPlayersSideRecords: a match with no skins_starting_side is excluded', () => {
-  const matches = [match({
-    skins_starting_side: null,
-    shirts_stats: [{ player_id: 1, is_win: true }],
-    skins_stats: [],
-  })];
-  assert.equal(aggregateAllPlayersSideRecords(matches).has(1), false);
 });
 
 report();
