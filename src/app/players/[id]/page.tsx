@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { TopbarShell } from '@/components/TopbarShell';
-import { getPlayer, getCareerLeaderboard, getPlayersById, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory, getAllMatchRounds, getAllMatchKills, getAllWeaponClassStats, getAllEconomyStats } from '@/lib/queries';
+import { getPlayer, getCareerLeaderboard, getPlayersById, getPlayerEhogRating, getBatchMatchRatingDeltas, getSabremetricSeasonTotals, getPlayerNameHistory, getAllMatchRounds, getAllMatchKills, getAllWeaponClassStats, getAllEconomyStats, fetchAllPmsRows } from '@/lib/queries';
 import { getPlayerMeta } from '@/lib/seo/og';
 import { isPlayedScore } from '@/lib/util';
 import { buildPlayerJsonLd } from '@/lib/seo/structured-data';
@@ -56,10 +56,12 @@ export default async function PlayerPage({
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
   // Shared with getAllMatchKills()/getAllWeaponClassStats()/getAllEconomyStats() below (same
-  // in-flight promise, not a second fetch) — it resolves player names for match_kills'
-  // attacker/victim/assister and the Weapons/Economy sub-tabs' rows without a redundant full
-  // `players` table read.
+  // in-flight promises, not a second fetch each) — playersByIdPromise resolves player names for
+  // match_kills' attacker/victim/assister and the Weapons/Economy sub-tabs' rows, pmsRowsPromise
+  // is the `player_match_stats` join all three otherwise fetch independently, without either
+  // becoming a redundant extra full-table read.
   const playersByIdPromise = getPlayersById();
+  const pmsRowsPromise = fetchAllPmsRows();
   const [session, detail, careerLeaderboard, playersById, ehog, leagueSabremetrics, nameHistory, playerMeta, matchRounds, matchKills, matchWeaponClassStats, economyStats] = await Promise.all([
     getServerSession(authOptions),
     getPlayer(playerId),
@@ -72,9 +74,9 @@ export default async function PlayerPage({
     getPlayerNameHistory(playerId),
     getPlayerMeta(playerId),
     getAllMatchRounds(),
-    getAllMatchKills(undefined, playersByIdPromise),
-    getAllWeaponClassStats(undefined, playersByIdPromise),
-    getAllEconomyStats(undefined, playersByIdPromise),
+    getAllMatchKills(undefined, playersByIdPromise, pmsRowsPromise),
+    getAllWeaponClassStats(undefined, playersByIdPromise, pmsRowsPromise),
+    getAllEconomyStats(undefined, playersByIdPromise, pmsRowsPromise),
   ]);
   const isSelf = session?.user?.playerId === playerId;
   if (!detail) notFound();
