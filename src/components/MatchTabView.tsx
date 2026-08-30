@@ -14,6 +14,7 @@ import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import Th from '@/components/Th';
 import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
+import { splitStat } from '@/lib/queries';
 import type { SabFieldsWithDerived } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
 import { roundsPlayedBySide } from '@/lib/parsers/roundSides';
@@ -25,19 +26,6 @@ function factionClass(f: Faction): string {
   if (f === 'CT') return 'faction-ct';
   if (f === 'T') return 'faction-t';
   return '';
-}
-
-function splitStat(
-  s: SabFieldsWithDerived,
-  ct: keyof SabFieldsWithDerived,
-  t: keyof SabFieldsWithDerived,
-  includeCT: boolean,
-  includeT: boolean,
-): number {
-  let total = 0;
-  if (includeCT) total += s[ct] as number;
-  if (includeT) total += s[t] as number;
-  return total;
 }
 
 function Scoreboard({

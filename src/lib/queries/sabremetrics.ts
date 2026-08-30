@@ -116,6 +116,23 @@ export async function getAllSabremetrics(seasonId?: number): Promise<Sabremetric
   return result;
 }
 
+/** Sums a `SabFieldsWithDerived` stat's CT and T components according to which sides are
+ *  included — the shared primitive behind every CT/T side-filter UI: the match page's own
+ *  `Scoreboard` (`MatchTabView.tsx`) and the season/career leaderboard's Sides sub-tab
+ *  (`SabremetricsLeaderboardView.tsx`). */
+export function splitStat(
+  s: SabFieldsWithDerived,
+  ctKey: keyof SabFieldsWithDerived,
+  tKey: keyof SabFieldsWithDerived,
+  includeCT: boolean,
+  includeT: boolean,
+): number {
+  let total = 0;
+  if (includeCT) total += s[ctKey] as number;
+  if (includeT) total += s[tKey] as number;
+  return total;
+}
+
 /** Adds every field of `b` into `a` in place via `Object.keys()` rather than per-field
  *  enumeration — the shared accumulation primitive behind every sabremetric total in this
  *  codebase, used directly by `SabremetricsLeaderboardView`'s `aggregateRows()` (one accumulator
