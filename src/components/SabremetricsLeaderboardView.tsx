@@ -7,6 +7,7 @@ import {
   computeLeagueAverages,
   computePlusStats,
   aggregateWeaponKillStats,
+  groupWeaponKillStatsByPlayer,
   aggregateFlairKillStats,
   allWeaponsWithKills,
   resolveWeaponFilterStat,
@@ -14,6 +15,7 @@ import {
   ZERO_WEAPON_CLASS_STAT,
   FAVORITE_WEAPON_FILTER,
   aggregateEconomyStats,
+  groupEconomyStatsByPlayer,
   resolveEconomyStat,
   type AggregatedSab,
   type SabremetricStatRow,
@@ -443,11 +445,11 @@ type PlayerWeaponRow = WeaponFilterStat & { player_id: number; player_name: stri
 function resolvePlayerWeaponRow(
   playerId: number,
   playerName: string,
-  kills: MatchKillRow[],
+  weaponStatsByPlayer: Map<number, WeaponKillStat[]>,
   selectedFilter: WeaponFilter,
   accuracyByPlayer: Map<number, PlayerWeaponAccuracy>,
 ): PlayerWeaponRow {
-  const resolved = resolveWeaponFilterStat(aggregateWeaponKillStats(kills, playerId), selectedFilter, accuracyByPlayer.get(playerId));
+  const resolved = resolveWeaponFilterStat(weaponStatsByPlayer.get(playerId) ?? [], selectedFilter, accuracyByPlayer.get(playerId));
   return { player_id: playerId, player_name: playerName, ...resolved };
 }
 
@@ -485,9 +487,13 @@ function WeaponsTable({ aggregated, kills, weaponClassStats, selectedFilter, sin
   // `groupWeaponAccuracyByPlayer()`'s own reasoning (queries/weaponStats.ts).
   const accuracyByPlayer = useMemo(() => groupWeaponAccuracyByPlayer(weaponClassStats), [weaponClassStats]);
 
+  // One grouping pass over `kills`, not a per-player rescan — see `groupWeaponKillStatsByPlayer()`'s
+  // own reasoning (queries/kills.ts, #502).
+  const weaponStatsByPlayer = useMemo(() => groupWeaponKillStatsByPlayer(kills), [kills]);
+
   const rows = useMemo(
-    () => aggregated.map((a) => resolvePlayerWeaponRow(a.player_id, a.player_name, kills, selectedFilter, accuracyByPlayer)),
-    [aggregated, kills, selectedFilter, accuracyByPlayer],
+    () => aggregated.map((a) => resolvePlayerWeaponRow(a.player_id, a.player_name, weaponStatsByPlayer, selectedFilter, accuracyByPlayer)),
+    [aggregated, weaponStatsByPlayer, selectedFilter, accuracyByPlayer],
   );
 
   const sorted = useMemo(() => {
@@ -623,10 +629,10 @@ interface PlayerEconomyRow extends EconomyTierStat {
 function resolvePlayerEconomyRow(
   playerId: number,
   playerName: string,
-  economyRows: EconomyMatchRow[],
+  economyStatsByPlayer: Map<number, EconomyTierStat[]>,
   selectedTier: string,
 ): PlayerEconomyRow {
-  const resolved = resolveEconomyStat(aggregateEconomyStats(economyRows, playerId), selectedTier);
+  const resolved = resolveEconomyStat(economyStatsByPlayer.get(playerId) ?? [], selectedTier);
   return { player_id: playerId, player_name: playerName, ...resolved };
 }
 
@@ -639,9 +645,13 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
 }) {
   const [sort, toggleSort] = useSortState('rounds_played');
 
+  // One grouping pass over `economyRows`, not a per-player rescan — see
+  // `groupEconomyStatsByPlayer()`'s own reasoning (queries/weaponStats.ts, #502).
+  const economyStatsByPlayer = useMemo(() => groupEconomyStatsByPlayer(economyRows), [economyRows]);
+
   const rows = useMemo(
-    () => aggregated.map((a) => resolvePlayerEconomyRow(a.player_id, a.player_name, economyRows, selectedTier)),
-    [aggregated, economyRows, selectedTier],
+    () => aggregated.map((a) => resolvePlayerEconomyRow(a.player_id, a.player_name, economyStatsByPlayer, selectedTier)),
+    [aggregated, economyStatsByPlayer, selectedTier],
   );
 
   const sorted = useMemo(() => {

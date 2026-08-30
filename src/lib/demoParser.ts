@@ -1,29 +1,13 @@
 import { parseEvent, parseTicks } from '@laihoe/demoparser2';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
 import { findMatchStartTick } from './parsers/matchContext';
-import { buildRoundSides } from './parsers/roundSides';
+import { buildRoundSides, reasonToCondition } from './parsers/roundSides';
 import {
   inferSkinsStartingSide,
   resolveEffectiveSide,
   sideDisagreementWarning,
 } from './parsers/sideInference';
-import type { RoundCondition, RoundHistoryEntry } from './types';
-
-/** Map a CS2 round_end `reason` string to the win-condition icon bucket. */
-function reasonToCondition(reason: string | null): RoundCondition {
-  switch (reason) {
-    case 'bomb_exploded':
-      return 'bomb';
-    case 'bomb_defused':
-      return 'defuse';
-    case 'time_ran_out':
-    case 't_saved':
-      return 'time';
-    // 't_killed' (CT elim) and 'ct_killed' (T elim) both read as eliminations.
-    default:
-      return 'elim';
-  }
-}
+import type { RoundHistoryEntry } from './types';
 
 const TRACKING = 'CCSPlayerController.CCSPlayerController_ActionTrackingServices';
 

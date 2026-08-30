@@ -3,7 +3,7 @@ import type { PlayerMatchWeaponStat, PlayerMatchEconomyStat, WeaponStatFields, P
 import { getPlayersById } from './player';
 import {
   resolveMatchSeasons, fetchAllPages, fetchPmsLookup, fetchPmsFactionLookup, getRoundSides, asPage,
-  type PmsRow, type PmsFactionRow,
+  fetchAllPmsRows, type PmsRow, type PmsFactionRow,
 } from './_shared';
 import { WEAPON_CATEGORY, type WeaponCategory } from '../parsers/weaponClasses';
 import { resolveSide } from '../parsers/roundSides';
@@ -42,6 +42,8 @@ interface JoinedFields {
   match_id: number;
   season_id: number;
 }
+
+export { type PmsRow, fetchAllPmsRows };
 
 /** Shared by `getAllWeaponClassStats()`/`getAllEconomyStats()` — same `player_match_stats` join and
  *  season-scoping, differing only in which table is read and how its bucket column(s) get shaped
@@ -329,13 +331,21 @@ function zeroEconomyStat(economyType: string): EconomyTierStat {
 }
 
 /** Per-player, per-economy-tier shot/accuracy/damage/rounds totals, summed across every
- *  `EconomyMatchRow` in scope — the Economy sub-tab's analog of `kills.ts`'s
- *  `aggregateWeaponKillStats()`, reusing `player_match_economy_stats`' own bucketed totals rather
- *  than re-deriving them from raw events. */
-export function aggregateEconomyStats(rows: EconomyMatchRow[], playerId: number): EconomyTierStat[] {
-  const buckets = new Map<string, EconomyTierStat>();
+ *  `EconomyMatchRow` in scope, for every player in `rows` in one pass — the Economy sub-tab's
+ *  multi-player table (`EconomyTable`, `SabremetricsLeaderboardView.tsx`) calls this once per render
+ *  and looks each row up in O(1), rather than rescanning `rows` once per player, matching the same
+ *  one-pass pattern `groupWeaponAccuracyByPlayer()` establishes for the Weapons sub-tab (#502);
+ *  `aggregateEconomyStats()` below is a one-player lookup on this same grouping, so there's one
+ *  accumulation pass, not two. Reuses `player_match_economy_stats`' own bucketed totals rather than
+ *  re-deriving them from raw events. A player with no rows in scope is simply absent from the map. */
+export function groupEconomyStatsByPlayer(rows: EconomyMatchRow[]): Map<number, EconomyTierStat[]> {
+  const byPlayer = new Map<number, Map<string, EconomyTierStat>>();
   for (const r of rows) {
-    if (r.player_id !== playerId) continue;
+    let buckets = byPlayer.get(r.player_id);
+    if (!buckets) {
+      buckets = new Map();
+      byPlayer.set(r.player_id, buckets);
+    }
     let b = buckets.get(r.economy_type);
     if (!b) {
       b = zeroEconomyStat(r.economy_type);
@@ -348,7 +358,18 @@ export function aggregateEconomyStats(rows: EconomyMatchRow[], playerId: number)
     b.rounds_played += r.rounds_played;
     b.rounds_won += r.rounds_won;
   }
-  return Array.from(buckets.values());
+  const out = new Map<number, EconomyTierStat[]>();
+  for (const [playerId, buckets] of byPlayer) {
+    out.set(playerId, Array.from(buckets.values()));
+  }
+  return out;
+}
+
+/** One player's slice of `groupEconomyStatsByPlayer()` — `[]` for a player with no rows in scope,
+ *  matching the grouped map's own "simply absent" convention for that case. The Economy sub-tab's
+ *  analog of `kills.ts`'s `aggregateWeaponKillStats()`. */
+export function aggregateEconomyStats(rows: EconomyMatchRow[], playerId: number): EconomyTierStat[] {
+  return groupEconomyStatsByPlayer(rows).get(playerId) ?? [];
 }
 
 /** Resolves one explicit tier from an aggregated per-player breakdown — zeroed if the player never
