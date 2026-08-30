@@ -114,6 +114,14 @@ page's own Side stats table (`aggregatePlayerSideStats()`), and — via the shar
 component (`aggregatePerSideStats()`) — on Basic Stats' season/career/map Maps & Sides tab and
 Advanced Stats' Sides sub-tab.
 
+**W-L/WR% by side** — a different grain from either stat above: a *match*-level outcome, not a
+round-level one. `aggregateAllPlayersSideRecords()` (`src/lib/mapSideStats.ts`) credits each match's
+win/loss to whichever side the player's team started that match on (`resolvePlayerStartingSide()`),
+the same starting-side definition `aggregatePlayerSideStats()` uses for one player at a time — this
+is that function's per-player-in-one-pass analog, built for a leaderboard scope with no single
+player's already-filtered match list to call it with. Surfaced as "W–L"/"WR%" on the Sides sub-tab's
+`SideSplitTable`, alongside (but computed independently of) the round-level K/D/A/Damage/ADR columns.
+
 Basic Stats' own K/D/A/ADR columns are never side-filtered — they're the site's one always-accurate
 all-time total regardless of a match's demo-parse status, and a CT/T filter would silently narrow a
 subset of players' rows to demo-parsed-only data without saying so. The Sides sub-tab lives on

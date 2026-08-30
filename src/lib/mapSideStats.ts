@@ -54,8 +54,8 @@ export function classifyMatchVeto(m: VetoFields): MapVetoOutcome {
 
 export interface MatchPickBanInput extends VetoFields {
   skins_starting_side: 'CT' | 'T' | null;
-  shirts_stats: { is_win: boolean }[];
-  skins_stats: { is_win: boolean }[];
+  shirts_stats: { player_id: number; is_win: boolean }[];
+  skins_stats: { player_id: number; is_win: boolean }[];
 }
 
 export interface MapPickBanStat {
@@ -295,6 +295,49 @@ export function aggregatePerSideStats(
   ];
 }
 
+export interface PlayerSideRecord {
+  side: 'CT' | 'T';
+  wins: number;
+  losses: number;
+}
+
+/**
+ * Per-player win/loss record split by the side their team started that match on — one pass over
+ * `matches`, crediting every player in `shirts_stats`/`skins_stats` to `resolvePlayerStartingSide()`
+ * below, the same starting-side definition `aggregatePlayerSideStats()` uses one player at a time
+ * (PlayerView's own Side stats table). Feeds the season/career Advanced Stats leaderboard's Sides
+ * sub-tab (`SabremetricsLeaderboardView.tsx`), which — unlike `aggregatePlayerSideStats()`'s single-
+ * player caller — has no per-player match list to call that with, only the same team-level `matches`
+ * array `aggregatePerSideStats()` above already takes; this is that function's per-player analog.
+ */
+export function aggregateAllPlayersSideRecords(matches: MatchPickBanInput[]): Map<number, PlayerSideRecord[]> {
+  const tally = new Map<number, Record<'CT' | 'T', { wins: number; losses: number }>>();
+  const bump = (playerId: number, side: 'CT' | 'T', won: boolean): void => {
+    let rec = tally.get(playerId);
+    if (!rec) {
+      rec = { CT: { wins: 0, losses: 0 }, T: { wins: 0, losses: 0 } };
+      tally.set(playerId, rec);
+    }
+    if (won) rec[side].wins++;
+    else rec[side].losses++;
+  };
+
+  for (const m of matches) {
+    if (!isPlayedScore(m.final_score) || !m.skins_starting_side) continue;
+    for (const p of m.shirts_stats) bump(p.player_id, resolvePlayerStartingSide('SHIRTS', m.skins_starting_side), p.is_win);
+    for (const p of m.skins_stats) bump(p.player_id, resolvePlayerStartingSide('SKINS', m.skins_starting_side), p.is_win);
+  }
+
+  const out = new Map<number, PlayerSideRecord[]>();
+  for (const [playerId, rec] of tally) {
+    out.set(playerId, [
+      { side: 'CT', wins: rec.CT.wins, losses: rec.CT.losses },
+      { side: 'T', wins: rec.T.wins, losses: rec.T.losses },
+    ]);
+  }
+  return out;
+}
+
 // ─── Player-perspective stat interfaces & aggregators ───────────────────────
 
 export interface PlayerMatchInput extends VetoFields {
@@ -343,6 +386,15 @@ interface PlayerMapBucket {
   totalRounds: number;
 }
 
+/** A player's starting side, from their roster `faction` and the match's `skins_starting_side` —
+ *  SKINS starts on `skins_starting_side` directly, SHIRTS starts on the opposite. Shared by every
+ *  aggregator below that needs "which side did this player start the match on" — distinct from
+ *  `resolveSide()`/`resolvePlayerSide()` (`parsers/roundSides.ts`), which resolves a *round's* side
+ *  given that round's own `shirts_side`, the per-round equivalent of this per-match one. */
+function resolvePlayerStartingSide(faction: 'SHIRTS' | 'SKINS', skinsStartingSide: 'CT' | 'T'): 'CT' | 'T' {
+  return faction === 'SKINS' ? skinsStartingSide : (skinsStartingSide === 'CT' ? 'T' : 'CT');
+}
+
 /**
  * Per-map stats from one player's own match history — games/wins/picked/side are scoped to maps
  * the player actually played, but banned/no-picked reflect the veto activity of every match the
@@ -373,7 +425,7 @@ export function aggregatePlayerMapStats(matches: PlayerMatchInput[]): PlayerMapS
       if (playerPicked) b.picked++;
 
       if (m.skins_starting_side) {
-        const playerSide = m.faction === 'SKINS' ? m.skins_starting_side : (m.skins_starting_side === 'CT' ? 'T' : 'CT');
+        const playerSide = resolvePlayerStartingSide(m.faction, m.skins_starting_side);
         if (playerSide === 'CT') b.ctPlayed++;
         else b.tPlayed++;
       }
@@ -419,7 +471,7 @@ export function aggregatePlayerSideStats(
 
   for (const m of matches) {
     if (!isPlayedScore(m.final_score) || !m.skins_starting_side) continue;
-    const playerSide = m.faction === 'SKINS' ? m.skins_starting_side : (m.skins_starting_side === 'CT' ? 'T' : 'CT');
+    const playerSide = resolvePlayerStartingSide(m.faction, m.skins_starting_side);
     const bucket = playerSide === 'CT' ? ct : t;
     bucket.played++;
     if (m.is_win) bucket.wins++;
