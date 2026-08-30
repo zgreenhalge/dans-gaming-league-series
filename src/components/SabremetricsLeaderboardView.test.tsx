@@ -89,9 +89,12 @@ describe('SabremetricsLeaderboardView — sub-tab URL state', () => {
     expect(screen.getByRole('tab', { name: 'Economy' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  test('shows Side Splits with no extra data wired (#482)', () => {
+  test('has no Side Splits tab (#482, removed — see #506)', () => {
     nextNavigationMock.setSearchParams('sub=sides');
     renderWithUrlState(<SabremetricsLeaderboardView rows={[row()]} />);
-    expect(screen.getByRole('tab', { name: 'Side Splits' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: 'Side Splits' })).not.toBeInTheDocument();
+    // A `sub` naming a tab that no longer exists falls back to the first visible tab, same as
+    // `sub=plus` does when Stats Plus is hidden.
+    expect(screen.getByRole('tab', { name: 'Aim' })).toHaveAttribute('aria-selected', 'true');
   });
 });
