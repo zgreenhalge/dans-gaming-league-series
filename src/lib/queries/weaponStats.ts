@@ -351,13 +351,12 @@ export function aggregateEconomyStats(rows: EconomyMatchRow[], playerId: number)
   return Array.from(buckets.values());
 }
 
-/** Resolves one tier from an aggregated per-player breakdown — an explicit `economyType` picks
- *  that bucket (zeroed if the player never played a round of it), `null` picks whichever tier this
- *  player played the most rounds in, mirroring `resolveWeaponStat()`'s favorite-weapon default for
- *  the Weapons sub-tab. */
-export function resolveEconomyStat(stats: EconomyTierStat[], economyType: string | null): EconomyTierStat {
-  if (economyType != null) return stats.find((s) => s.economy_type === economyType) ?? zeroEconomyStat(economyType);
-  return stats.reduce<EconomyTierStat>((best, s) => (s.rounds_played > best.rounds_played ? s : best), zeroEconomyStat('eco'));
+/** Resolves one explicit tier from an aggregated per-player breakdown — zeroed if the player never
+ *  played a round of it. Unlike `resolveWeaponFilterStat()`'s favorite-weapon default for the
+ *  Weapons sub-tab, the Economy sub-tab has no "most played" default (see the Economy section
+ *  comment in `SabremetricsLeaderboardView.tsx`), so `economyType` is always explicit here. */
+export function resolveEconomyStat(stats: EconomyTierStat[], economyType: string): EconomyTierStat {
+  return stats.find((s) => s.economy_type === economyType) ?? zeroEconomyStat(economyType);
 }
 
 export interface AccuracyTotals {

@@ -411,13 +411,16 @@ counters from `aggregateWeaponKillStats()` across all of a player's weapons; `Kn
 
 ### Economy
 
-The Economy sub-tab mirrors the Weapons sub-tab's favorite-or-specific pattern
-(`aggregateEconomyStats()`/`resolveEconomyStat()`, `src/lib/queries/weaponStats.ts`), but over the
-three round-buy tiers (`eco`/`force_buy`/`full_buy`, see [`demo-ingestion.md`](./demo-ingestion.md))
-instead of per-weapon kill data: one tier's row per player at a time, picked by "most rounds played"
-(`economyType = null`) or one tier applied to every row. Since the tier set is fixed and
-game-defined rather than derived from what a player happened to use, a tier with no rounds played
-still renders a zeroed row rather than being hidden or omitted from the picker. `Damage/Round` =
+The Economy sub-tab shows one round-buy tier's row per player at a time
+(`aggregateEconomyStats()`/`resolveEconomyStat()`, `src/lib/queries/weaponStats.ts`), over the three
+fixed tiers (`eco`/`force_buy`/`full_buy`, see [`demo-ingestion.md`](./demo-ingestion.md)), always
+picked explicitly by the tier dropdown — unlike the Weapons sub-tab's favorite-or-specific picker,
+there's no "most played" default, since full-buy rounds dominate most matches and a "most played"
+default would just resolve to full-buy for nearly every player anyway. Since the tier set is fixed
+and game-defined rather than derived from what a player happened to use, a tier with no rounds
+played still renders a zeroed row rather than being hidden or omitted from the picker. The selected
+tier is named once by the dropdown, not repeated as its own column — every other column's tooltip
+names it instead (e.g. "Rounds played at Full Buy"). `Damage/Round` =
 `damage_dealt / rounds_played` for the resolved tier — `rounds_played` is seeded from the round's
 own economy classification, not shot-triggered, so it includes rounds the player never fired a shot
 in. `W-L` = `rounds_won` – (`rounds_played` - `rounds_won`) — `rounds_won` comes from

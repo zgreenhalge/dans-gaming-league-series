@@ -139,14 +139,6 @@ async function main() {
     assert.equal(fullBuy.rounds_played, 3);
   });
 
-  await test('resolveEconomyStat: null picks the tier with the most rounds played', () => {
-    const stats = aggregateEconomyStats([
-      economyRow({ player_id: 1, match_id: 100, economy_type: 'eco', rounds_played: 2 }),
-      economyRow({ player_id: 1, match_id: 100, economy_type: 'full_buy', rounds_played: 8 }),
-    ], 1);
-    assert.equal(resolveEconomyStat(stats, null).economy_type, 'full_buy');
-  });
-
   await test('resolveEconomyStat: an explicit tier the player never played returns a zeroed stat, not undefined', () => {
     const resolved = resolveEconomyStat([], 'force_buy');
     assert.equal(resolved.economy_type, 'force_buy');

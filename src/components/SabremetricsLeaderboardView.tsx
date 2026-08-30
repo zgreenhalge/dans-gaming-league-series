@@ -515,30 +515,6 @@ function WeaponFilterSelect({ kills, value, onChange }: {
   );
 }
 
-/** The favorite-or-specific picker used by `EconomyFilterSelect` — a `<select>` with a synthetic
- *  "favorite" sentinel option (`value = null`) plus one option per entry in `options`. */
-function FavoriteOrSpecificSelect({ label, favoriteLabel, options, value, onChange }: {
-  label: string;
-  favoriteLabel: string;
-  options: { value: string; label: string }[];
-  value: string | null;
-  onChange: (value: string | null) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)]">{label}</span>
-      <select
-        value={value ?? 'favorite'}
-        onChange={(e) => onChange(e.target.value === 'favorite' ? null : e.target.value)}
-        className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
-      >
-        <option value="favorite">{favoriteLabel}</option>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </div>
-  );
-}
-
 type PlayerWeaponRow = WeaponFilterStat & { player_id: number; player_name: string };
 
 function resolvePlayerWeaponRow(
@@ -672,13 +648,17 @@ function WeaponsTable({ aggregated, kills, weaponClassStats, selectedFilter, sin
 
 // --- Economy (#481) ---
 //
-// Same per-player breakdown pattern as Weapons above — one economy tier's stats per player at a
-// time, picked by `selectedTier` (either each player's own most-played tier, or one tier applied
-// to every row) — but sourced from `player_match_economy_stats` (`aggregateEconomyStats()`/
-// `resolveEconomyStat()`, `src/lib/queries/weaponStats.ts`) instead of `match_kills`, since a
-// round's economy classification isn't itself a kill event. The three tiers are a fixed,
-// game-defined set (unlike weapons, which vary player to player), so the picker's options are a
-// static list rather than derived from data.
+// Same per-player breakdown pattern as Weapons above, one economy tier's stats per player at a
+// time, picked by `selectedTier` — but sourced from `player_match_economy_stats`
+// (`aggregateEconomyStats()`/`resolveEconomyStat()`, `src/lib/queries/weaponStats.ts`) instead of
+// `match_kills`, since a round's economy classification isn't itself a kill event. The three tiers
+// are a fixed, game-defined set (unlike weapons, which vary player to player), so the picker's
+// options are a static list rather than derived from data. Unlike Weapons' favorite-or-specific
+// picker, there's no "most played" default option here: with only three buckets and full-buy
+// rounds dominating most matches, "most played" would resolve to full-buy for nearly every player,
+// making it a redundant alias for an explicit selection rather than a useful default — so the
+// picker always names one tier explicitly, and the table/tiles don't repeat that choice back as
+// their own "Tier" column/tile.
 
 const ECONOMY_TIERS: { type: string; label: string }[] = [
   { type: 'eco', label: 'Eco' },
@@ -686,14 +666,26 @@ const ECONOMY_TIERS: { type: string; label: string }[] = [
   { type: 'full_buy', label: 'Full Buy' },
 ];
 
-/** The economy-tier picker shared by the multi-player table and the single-player tile view —
- *  mirrors `WeaponFilterSelect`, but over a fixed 3-value domain instead of one derived from data. */
 const ECONOMY_TIER_OPTIONS = ECONOMY_TIERS.map((t) => ({ value: t.type, label: t.label }));
 
+/** The economy-tier picker shared by the multi-player table and the single-player tile view — a
+ *  plain `<select>` over the fixed tier list, always one explicit tier (no "favorite" sentinel;
+ *  see the section comment above). */
 function EconomyFilterSelect({ value, onChange }: {
-  value: string | null; onChange: (economyType: string | null) => void;
+  value: string; onChange: (economyType: string) => void;
 }) {
-  return <FavoriteOrSpecificSelect label="Economy Tier" favoriteLabel="Most Played" options={ECONOMY_TIER_OPTIONS} value={value} onChange={onChange} />;
+  return (
+    <div className="flex items-center gap-2">
+      <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)]">Economy Tier</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="tracked text-[11px] font-semibold border border-[var(--color-border-primary)] px-2.5 py-1 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
+      >
+        {ECONOMY_TIER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  );
 }
 
 function economyTierLabel(economyType: string): string {
@@ -709,7 +701,7 @@ function resolvePlayerEconomyRow(
   playerId: number,
   playerName: string,
   economyRows: EconomyMatchRow[],
-  selectedTier: string | null,
+  selectedTier: string,
 ): PlayerEconomyRow {
   const resolved = resolveEconomyStat(aggregateEconomyStats(economyRows, playerId), selectedTier);
   return { player_id: playerId, player_name: playerName, ...resolved };
@@ -718,8 +710,7 @@ function resolvePlayerEconomyRow(
 function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, showHeading = true }: {
   aggregated: AggregatedSab[];
   economyRows: EconomyMatchRow[];
-  /** `null` = each player's own most-played tier; a tier name = that one tier for every row. */
-  selectedTier: string | null;
+  selectedTier: string;
   singlePlayer: boolean;
   showHeading?: boolean;
 }) {
@@ -748,9 +739,7 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
     return copy;
   }, [rows, sort]);
 
-  const tierColTitle = selectedTier == null
-    ? "The economy tier this player played the most rounds in"
-    : `Stats are for ${economyTierLabel(selectedTier)} rounds specifically, whether or not it's this player's most-played tier`;
+  const tierLabel = economyTierLabel(selectedTier);
 
   return (
     <div className="my-6">
@@ -760,20 +749,18 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
           <thead>
             <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
-              <th className="px-3 py-2 text-left font-semibold text-[var(--color-text-secondary)] border-b border-[var(--color-border-primary)]" title={tierColTitle}>Tier</th>
-              <SortableTh label="Rounds Played" title="Rounds played at this economy tier — seeded from the round's own eco/force/full classification, whether or not this player fired a shot in it" sortKey="rounds_played" state={sort} onClick={toggleSort} />
-              <SortableTh label="W-L" title="Rounds won vs. lost at this economy tier" sortKey="rounds_won" state={sort} onClick={toggleSort} />
-              <SortableTh label="Shots Fired" title="Shots fired (guns only) in rounds at this economy tier" sortKey="shots_fired" state={sort} onClick={toggleSort} />
-              <SortableTh label="Accuracy" title="Shots that hit an enemy / shots fired, in rounds at this economy tier" sortKey="acc" state={sort} onClick={toggleSort} />
-              <SortableTh label="Headshot %" title="Headshot hits / hits, in rounds at this economy tier" sortKey="hs" state={sort} onClick={toggleSort} />
-              <SortableTh label="Damage/Round" title="Damage dealt per round played at this economy tier" sortKey="dpr" state={sort} onClick={toggleSort} />
+              <SortableTh label="Rounds Played" title={`Rounds played at ${tierLabel} — seeded from the round's own eco/force/full classification, whether or not this player fired a shot in it`} sortKey="rounds_played" state={sort} onClick={toggleSort} />
+              <SortableTh label="W-L" title={`Rounds won vs. lost at ${tierLabel}`} sortKey="rounds_won" state={sort} onClick={toggleSort} />
+              <SortableTh label="Shots Fired" title={`Shots fired (guns only) in rounds at ${tierLabel}`} sortKey="shots_fired" state={sort} onClick={toggleSort} />
+              <SortableTh label="Accuracy" title={`Shots that hit an enemy / shots fired, in rounds at ${tierLabel}`} sortKey="acc" state={sort} onClick={toggleSort} />
+              <SortableTh label="Headshot %" title={`Headshot hits / hits, in rounds at ${tierLabel}`} sortKey="hs" state={sort} onClick={toggleSort} />
+              <SortableTh label="Damage/Round" title={`Damage dealt per round played at ${tierLabel}`} sortKey="dpr" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
             {sorted.map((r) => (
               <tr key={r.player_id} className="lift-row bg-[var(--color-bg-primary)] border-b border-[var(--color-border-secondary)]">
                 {!singlePlayer && <PlayerCell id={r.player_id} name={r.player_name} />}
-                <td className="px-3 py-2 text-left">{economyTierLabel(r.economy_type)}</td>
                 <td className={tdRight}>{r.rounds_played}</td>
                 <td className={tdRight}>{r.rounds_won}-{r.rounds_played - r.rounds_won}</td>
                 <td className={tdRight}>{r.shots_fired}</td>
@@ -1161,9 +1148,9 @@ interface SinglePlayerTiles {
   /** Rendered as `WeaponBar`s below the weapons tiles — a ranked list, not a fixed small set of
    *  named metrics, so it doesn't fit the tile grid's label/value shape. */
   topWeapons: WeaponKillStat[];
-  /** Per-economy-tier shot/accuracy/damage/rounds for this player — the Economy tab resolves one
-   *  tier's stat from this via `resolveEconomyStat()` (most-played, or whichever tier the filter
-   *  selects) and renders it as tiles, same as `EconomyTable` does per row. */
+  /** Per-economy-tier shot/accuracy/damage/rounds for this player — the Economy tab resolves the
+   *  filter's selected tier's stat from this via `resolveEconomyStat()` and renders it as tiles,
+   *  same as `EconomyTable` does per row. */
   economyStats: EconomyTierStat[];
   /** Kills/deaths/assists/damage/headshot kills broken out by CT vs. T side — see `SideSplitTable`. */
   sides: StatTile[];
@@ -1313,12 +1300,11 @@ function buildWeaponTiles(weaponStats: WeaponKillStat[], selectedFilter: WeaponF
 }
 
 /** The single-player counterpart of `resolvePlayerEconomyRow()`'s table cells — same resolved
- *  `EconomyTierStat` (most-played tier, or the filter's selected tier), as a `StatTile[]`. */
-function buildEconomyTiles(economyStats: EconomyTierStat[], selectedTier: string | null): StatTile[] {
+ *  `EconomyTierStat` for the filter's selected tier, as a `StatTile[]`. */
+function buildEconomyTiles(economyStats: EconomyTierStat[], selectedTier: string): StatTile[] {
   const stat = resolveEconomyStat(economyStats, selectedTier);
-  const titleSuffix = selectedTier == null ? "this player's most-played economy tier" : `${economyTierLabel(selectedTier)} rounds`;
+  const titleSuffix = `${economyTierLabel(selectedTier)} rounds`;
   return [
-    { label: 'Tier', title: 'The economy tier these stats are for', value: economyTierLabel(stat.economy_type) },
     { label: 'Rounds Played', title: `Rounds played at ${titleSuffix}`, value: stat.rounds_played },
     { label: 'W-L', title: `Rounds won vs. lost at ${titleSuffix}`, value: `${stat.rounds_won}-${stat.rounds_played - stat.rounds_won}` },
     { label: 'Shots Fired', title: `Shots fired (guns only) at ${titleSuffix}`, value: stat.shots_fired },
@@ -1451,8 +1437,10 @@ export default function SabremetricsLeaderboardView({
     () => (aggregated.length > 0 ? groupWeaponAccuracyByPlayer(weaponClassStats).get(aggregated[0].player_id) : undefined),
     [weaponClassStats, aggregated],
   );
-  /** Same idea as `weaponFilter`, for the Economy sub-tab's tier picker. */
-  const [economyFilter, setEconomyFilter] = useState<string | null>(null);
+  /** Same idea as `weaponFilter`, for the Economy sub-tab's tier picker — always one explicit tier
+   *  (no "most played" default; see the Economy section comment above `EconomyFilterSelect`).
+   *  Defaults to Full Buy, the tier most rounds in a match fall into. */
+  const [economyFilter, setEconomyFilter] = useState<string>('full_buy');
 
   // Memoized (not called inline in the singlePlayer branch below) so picking a different weapon
   // filter — which only ever changes buildWeaponTiles()'s cheap lookup — doesn't also re-run
