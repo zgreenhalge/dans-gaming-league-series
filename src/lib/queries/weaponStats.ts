@@ -43,6 +43,19 @@ interface JoinedFields {
   season_id: number;
 }
 
+export { type PmsRow };
+
+/** Fetches the raw `player_match_stats` rows (`id, player_id, match_id`) once — the `pmsRows` a page
+ *  can create and pass to both `getAllMatchKills()` and `getAllWeaponClassStats()`/
+ *  `getAllEconomyStats()` (via their own `pmsRows` params, both ultimately `fetchPmsLookup()`), so
+ *  the three share one `player_match_stats` read instead of each doing its own full-table fetch
+ *  (#503). */
+export function fetchAllPmsRows(): Promise<PmsRow[]> {
+  return fetchAllPages<PmsRow>((from, to) =>
+    asPage(supabase.from('player_match_stats').select('id, player_id, match_id').range(from, to)),
+  );
+}
+
 /** Shared by `getAllWeaponClassStats()`/`getAllEconomyStats()` — same `player_match_stats` join and
  *  season-scoping, differing only in which table is read and how its bucket column(s) get shaped
  *  into the caller's own row type (weapon-class derives a category from `weapon`; economy has a
@@ -349,6 +362,39 @@ export function aggregateEconomyStats(rows: EconomyMatchRow[], playerId: number)
     b.rounds_won += r.rounds_won;
   }
   return Array.from(buckets.values());
+}
+
+/** Like `aggregateEconomyStats()`, but for every player in `rows` in one pass — the Economy
+ *  sub-tab's multi-player table (`EconomyTable`, `SabremetricsLeaderboardView.tsx`) calls this once
+ *  per render and looks each row up in O(1), rather than rescanning `rows` once per player, matching
+ *  the same one-pass pattern `groupWeaponAccuracyByPlayer()` establishes for the Weapons sub-tab
+ *  (#502). A player with no rows in scope is simply absent from the map, matching
+ *  `aggregateEconomyStats()`'s own `[]` for that case. */
+export function groupEconomyStatsByPlayer(rows: EconomyMatchRow[]): Map<number, EconomyTierStat[]> {
+  const byPlayer = new Map<number, Map<string, EconomyTierStat>>();
+  for (const r of rows) {
+    let buckets = byPlayer.get(r.player_id);
+    if (!buckets) {
+      buckets = new Map();
+      byPlayer.set(r.player_id, buckets);
+    }
+    let b = buckets.get(r.economy_type);
+    if (!b) {
+      b = zeroEconomyStat(r.economy_type);
+      buckets.set(r.economy_type, b);
+    }
+    b.shots_fired += r.shots_fired;
+    b.shots_hit += r.shots_hit;
+    b.headshot_hits += r.headshot_hits;
+    b.damage_dealt += r.damage_dealt;
+    b.rounds_played += r.rounds_played;
+    b.rounds_won += r.rounds_won;
+  }
+  const out = new Map<number, EconomyTierStat[]>();
+  for (const [playerId, buckets] of byPlayer) {
+    out.set(playerId, Array.from(buckets.values()));
+  }
+  return out;
 }
 
 /** Resolves one explicit tier from an aggregated per-player breakdown — zeroed if the player never

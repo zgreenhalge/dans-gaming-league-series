@@ -246,6 +246,50 @@ export function aggregateWeaponKillStats(kills: MatchKillRow[], playerId: number
   return [...buckets.values()].sort((a, b) => b.kills - a.kills);
 }
 
+/** Like `aggregateWeaponKillStats()`, but for every player with a kill or death in `kills` in one
+ *  pass — the Weapons sub-tab's multi-player table (`WeaponsTable`, `SabremetricsLeaderboardView.tsx`)
+ *  calls this once per render and looks each row up in O(1), rather than rescanning `kills` once per
+ *  player (#502). A player with no kills/deaths in scope is simply absent from the map, matching
+ *  `aggregateWeaponKillStats()`'s own `[]` for that case. */
+export function groupWeaponKillStatsByPlayer(kills: MatchKillRow[]): Map<number, WeaponKillStat[]> {
+  const byPlayer = new Map<number, Map<string, WeaponKillStat>>();
+  const getBucket = (playerId: number, weapon: string): WeaponKillStat => {
+    let buckets = byPlayer.get(playerId);
+    if (!buckets) {
+      buckets = new Map();
+      byPlayer.set(playerId, buckets);
+    }
+    const key = weaponGroupKey(weapon);
+    let b = buckets.get(key);
+    if (!b) {
+      b = zeroWeaponStat(key);
+      buckets.set(key, b);
+    }
+    return b;
+  };
+
+  for (const k of kills) {
+    const isCreditedKill =
+      k.attacker_player_id != null && k.attacker_player_id !== k.victim_player_id && !k.is_teamkill;
+    if (isCreditedKill) {
+      const b = getBucket(k.attacker_player_id as number, k.weapon);
+      b.kills += 1;
+      if (k.headshot) b.headshotKills += 1;
+      if (k.noscope) b.noscopeKills += 1;
+      if (k.wallbang) b.wallbangKills += 1;
+      if (k.blind_kill) b.blindKills += 1;
+      if (k.midair) b.midairKills += 1;
+    }
+    getBucket(k.victim_player_id, k.weapon).deaths += 1;
+  }
+
+  const out = new Map<number, WeaponKillStat[]>();
+  for (const [playerId, buckets] of byPlayer) {
+    out.set(playerId, [...buckets.values()].sort((a, b) => b.kills - a.kills));
+  }
+  return out;
+}
+
 /** The weapon a player has the most kills with, or `null` when they have none in scope. */
 export function favoriteWeapon(stats: WeaponKillStat[]): WeaponKillStat | null {
   return stats.reduce<WeaponKillStat | null>((best, s) => (!best || s.kills > best.kills ? s : best), null);
