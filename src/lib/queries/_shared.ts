@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { gunzipMaybe } from '../gzip';
 import { getR2Object } from '../r2';
 import { supabase } from '../supabase';
@@ -90,10 +91,12 @@ export function missingIds(requested: number[], covered: number[] | undefined): 
  * Resolves `week_id -> { season_id, week_number }` — the `weeks` -> `seasons` half of the
  * `matches` -> `weeks` -> `seasons` join every season-scoped query needs. Pass `seasonIds` to
  * scope to specific seasons (e.g. gauntlet seasons); omit it to resolve every week in the league.
+ * Wrapped in React's `cache()` so every no-arg caller within one render pass (the common case)
+ * shares one `weeks` read rather than each resolving it independently.
  */
 export type WeekLookup = Map<number, { season_id: number; week_number: number }>;
 
-export async function getWeekLookup(seasonIds?: number[]): Promise<WeekLookup> {
+export const getWeekLookup = cache(async (seasonIds?: number[]): Promise<WeekLookup> => {
   let query = supabase.from('weeks').select('id, season_id, week_number');
   if (seasonIds) query = query.in('season_id', seasonIds);
   const { data, error } = await query;
@@ -103,7 +106,7 @@ export async function getWeekLookup(seasonIds?: number[]): Promise<WeekLookup> {
   for (const w of (data ?? []) as { id: number; season_id: number; week_number: number }[])
     lookup.set(w.id, { season_id: w.season_id, week_number: w.week_number });
   return lookup;
-}
+});
 
 /** `getWeekLookup()`'s entries as `{id, season_id, week_number}` rows — for callers that need to
  *  filter/sort/iterate them as a list rather than look up by id. */
@@ -138,28 +141,33 @@ export function bumpCounter<T, K extends keyof T>(
 
 export type PmsRow = { id: number; player_id: number; match_id: number };
 
-/** Fetches every `player_match_stats` row (`id, player_id, match_id`), unscoped — the raw `pmsRows`
- *  a page can create once and pass to several sibling query calls (e.g. `getAllMatchKills()` and
- *  `getAllWeaponClassStats()`/`getAllEconomyStats()`, both via their own `pmsRows` params) so they
- *  share one `player_match_stats` read instead of each doing its own full-table fetch (#503). Also
- *  `fetchPmsLookup()`'s own unscoped fetch, factored out here so the query isn't duplicated between
- *  the two. */
-export function fetchAllPmsRows(): Promise<PmsRow[]> {
-  return fetchAllPages<PmsRow>((from, to) =>
+/** Fetches every `player_match_stats` row (`id, player_id, match_id`), unscoped. Wrapped in
+ *  React's `cache()` so every caller within one render pass — `getAllMatchKills()`,
+ *  `getAllWeaponClassStats()`/`getAllEconomyStats()` (via `getAllJoinedStats()`),
+ *  `getAllUtilityThrows()`, `deriveAccuracyTotals()`, and `fetchPmsLookup()`'s own unscoped fetch —
+ *  shares one `player_match_stats` read instead of each doing its own full-table fetch (#503, #507).
+ *  Those functions' own `pmsRows` params still exist for a caller sharing a differently-shaped but
+ *  structurally-compatible fetch (e.g. `getAllSabremetrics()`'s own `id, player_id, match_id,
+ *  rounds_played, faction` read) — `cache()` can't collapse two different column selections into
+ *  one query the way passing `rows` explicitly can. */
+export const fetchAllPmsRows = cache((): Promise<PmsRow[]> =>
+  fetchAllPages<PmsRow>((from, to) =>
     asPage(supabase.from('player_match_stats').select('id, player_id, match_id').range(from, to)),
-  );
-}
+  ),
+);
 
 /** Resolves `player_match_stats.id -> {id, player_id, match_id}` — the FK-to-`player_id` lookup
  *  every fact-table reader needs (`match_kills`/`match_utility_throws` rows are keyed by
- *  `player_match_stats_id`, but every `derive*()` consumer works in `player_id`). Pass `rows` when
- *  the caller already fetched `player_match_stats` (e.g. `getAllSabremetrics()`'s own
- *  `id, player_id, match_id, rounds_played` read, structurally compatible) to skip a redundant
- *  full-table fetch; pass `matchId` to scope an actual fetch to one match. */
-export function fetchPmsLookup(
+ *  `player_match_stats_id`, but every `derive*()` consumer works in `player_id`). Wrapped in
+ *  `cache()`, keyed by `matchId` (and by `rows`' own identity when passed), so sibling calls
+ *  scoped to the same match — or every unscoped call in one render pass — collapse to one fetch.
+ *  Pass `rows` when the caller already fetched `player_match_stats` in a differently-shaped but
+ *  structurally-compatible read `cache()` has no way to recognize as the same query; pass `matchId`
+ *  to scope an actual fetch to one match. */
+export const fetchPmsLookup = cache((
   matchId?: number,
   rows?: PmsRow[] | Promise<PmsRow[]>,
-): Promise<Map<number, PmsRow>> {
+): Promise<Map<number, PmsRow>> => {
   const rowsPromise = rows
     ? Promise.resolve(rows)
     : matchId != null
@@ -168,21 +176,22 @@ export function fetchPmsLookup(
         )
       : fetchAllPmsRows();
   return rowsPromise.then((r) => new Map(r.map((x) => [x.id, x])));
-}
+});
 
 export type PmsFactionRow = PmsRow & { faction: Faction };
 
 /** Like `fetchPmsLookup()`, but also carrying `faction` — for a caller that needs to resolve a
  *  round's side (`resolveSide()`, `parsers/roundSides.ts`) as well as the player_id, without a
- *  second `player_match_stats` read alongside a plain `fetchPmsLookup()` call. Pass `matchId` to
- *  scope to one match. */
-export function fetchPmsFactionLookup(matchId?: number): Promise<Map<number, PmsFactionRow>> {
-  return fetchAllPages<PmsFactionRow>((from, to) => {
+ *  second `player_match_stats` read alongside a plain `fetchPmsLookup()` call. Wrapped in `cache()`,
+ *  keyed by `matchId`, for the same reason `fetchPmsLookup()` is. Pass `matchId` to scope to one
+ *  match. */
+export const fetchPmsFactionLookup = cache((matchId?: number): Promise<Map<number, PmsFactionRow>> =>
+  fetchAllPages<PmsFactionRow>((from, to) => {
     let q = supabase.from('player_match_stats').select('id, player_id, match_id, faction');
     if (matchId != null) q = q.eq('match_id', matchId);
     return asPage(q.range(from, to));
-  }).then((rows) => new Map(rows.map((r) => [r.id, r])));
-}
+  }).then((rows) => new Map(rows.map((r) => [r.id, r]))),
+);
 
 export interface PlayerFactionsAndRoster {
   playerFactions: Map<string, Faction>;
@@ -225,9 +234,10 @@ export interface RoundSideInfo {
  *  `rounds.ts` for the same circular-dependency reason as `buildPlayerFactionsAndRoster()` above.
  *  No season resolution or `win_reason` join, unlike `getAllMatchRounds()` — side-split/clutch/
  *  economy-win derivation doesn't need either, the same reasoning `getAllKillCreditFlags()`
- *  (`queries/kills.ts`) uses to skip `getAllMatchKills()`'s season/name joins. Pass `matchId` to
- *  scope to one match. */
-export async function getRoundSides(matchId?: number): Promise<Map<string, RoundSideInfo>> {
+ *  (`queries/kills.ts`) uses to skip `getAllMatchKills()`'s season/name joins. Wrapped in `cache()`,
+ *  keyed by `matchId`, so sibling callers scoped to the same match (or every unscoped call in one
+ *  render pass) collapse to one fetch. Pass `matchId` to scope to one match. */
+export const getRoundSides = cache(async (matchId?: number): Promise<Map<string, RoundSideInfo>> => {
   const rows = await fetchAllPages<{ match_id: number; round_number: number; shirts_side: string; winner_side: string }>(
     (from, to) => {
       let q = supabase.from('match_rounds').select('match_id, round_number, shirts_side, winner_side');
@@ -239,15 +249,18 @@ export async function getRoundSides(matchId?: number): Promise<Map<string, Round
     `${r.match_id}:${r.round_number}`,
     { shirtsSide: r.shirts_side as 'CT' | 'T', winnerSide: r.winner_side as 'CT' | 'T' },
   ]));
-}
+});
 
 /**
  * Resolves `match_id -> season_id` for every played match (`isPlayedScore(final_score)`), via
  * `matches` -> `weeks` -> `seasons` — the join every demo-derived-stat query needs to scope its
  * rows to a season. Shared by `getAllSabremetrics()` and the weapon-class/economy breakdown
- * queries so the join logic can't drift between them.
+ * queries so the join logic can't drift between them. Wrapped in React's `cache()` (#507) so every
+ * caller within one render pass — `getAllMatchRounds()`, `getAllMatchKills()`,
+ * `getAllWeaponClassStats()`/`getAllEconomyStats()`, `getSabremetricSeasonTotals()` — shares one
+ * `matches`/`weeks` read rather than each resolving the join independently.
  */
-export async function resolveMatchSeasons(): Promise<Map<number, number>> {
+export const resolveMatchSeasons = cache(async (): Promise<Map<number, number>> => {
   const [{ data: matchRows, error: matchErr }, weekLookup] = await Promise.all([
     supabase.from('matches').select('id, week_id, final_score'),
     getWeekLookup(),
@@ -261,7 +274,7 @@ export async function resolveMatchSeasons(): Promise<Map<number, number>> {
     if (week != null) matchSeason.set(m.id, week.season_id);
   }
   return matchSeason;
-}
+});
 
 /**
  * Read a gzipped JSON artifact from R2 at `key`, or `null` if it doesn't exist, fails

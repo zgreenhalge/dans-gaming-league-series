@@ -3,7 +3,7 @@ import type { PlayerMatchWeaponStat, PlayerMatchEconomyStat, WeaponStatFields, P
 import { getPlayersById } from './player';
 import {
   resolveMatchSeasons, fetchAllPages, fetchPmsLookup, fetchPmsFactionLookup, getRoundSides, asPage,
-  fetchAllPmsRows, type PmsRow, type PmsFactionRow,
+  type PmsRow, type PmsFactionRow,
 } from './_shared';
 import { WEAPON_CATEGORY, type WeaponCategory } from '../parsers/weaponClasses';
 import { resolveSide } from '../parsers/roundSides';
@@ -43,7 +43,7 @@ interface JoinedFields {
   season_id: number;
 }
 
-export { type PmsRow, fetchAllPmsRows };
+export { type PmsRow };
 
 /** Shared by `getAllWeaponClassStats()`/`getAllEconomyStats()` — same `player_match_stats` join and
  *  season-scoping, differing only in which table is read and how its bucket column(s) get shaped

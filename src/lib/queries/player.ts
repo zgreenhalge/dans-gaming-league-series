@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { cache } from 'react';
 import { supabase } from '../supabase';
 import type { Player, Season, Match, PlayerMatchStat, ReplayStatus } from '../types';
 import { extractSeasonNumber, compareMatchRefDesc } from '../util';
@@ -60,14 +61,17 @@ export async function getPlayerNameHistory(playerId: number): Promise<PlayerName
 
 /** `client` defaults to the app's anon-key client but accepts an admin client for callers running
  *  outside a Next.js request (a GitHub Actions script, which has no `NEXT_PUBLIC_SUPABASE_ANON_KEY`) —
- *  same opt-in pattern as `getMatchIdsForMap()` (`maps.ts`). */
-export async function getPlayersById(client: SupabaseClient = supabase): Promise<Map<number, Player>> {
+ *  same opt-in pattern as `getMatchIdsForMap()` (`maps.ts`). Wrapped in React's `cache()` (#507) so
+ *  every default-`client` caller within one render pass shares one `players` table read instead of
+ *  each doing its own full-table fetch — outside a render pass (a script, a non-request context)
+ *  `cache()` has no scope to dedup against and this just runs as a plain call. */
+export const getPlayersById = cache(async (client: SupabaseClient = supabase): Promise<Map<number, Player>> => {
   const { data, error } = await client.from('players').select('*');
   if (error) throw error;
   const map = new Map<number, Player>();
   for (const p of (data ?? []) as Player[]) map.set(p.id, p);
   return map;
-}
+});
 
 /** `players` keyed by Steam ID (`players.steam_id`) instead of the internal id, scoped to just
  *  `steamIds` — for a caller matching a small, known set of players by the game server's own

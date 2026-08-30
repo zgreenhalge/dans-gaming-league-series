@@ -14,7 +14,6 @@ import {
   getAllMatchKills,
   getAllWeaponClassStats,
   getAllEconomyStats,
-  fetchAllPmsRows,
 } from '@/lib/queries';
 import CareerStatsView from '@/components/CareerStatsView';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
@@ -29,10 +28,11 @@ export const metadata = {
 };
 
 export default async function StatisticsPage() {
-  // Shared with getAllMatchKills()/getAllWeaponClassStats()/getAllEconomyStats() below (same
-  // in-flight promise, not a second fetch each).
-  const playersByIdPromise = getPlayersById();
-  const pmsRowsPromise = fetchAllPmsRows();
+  // getPlayersById()/getAllMatchKills()/getAllWeaponClassStats()/getAllEconomyStats() (and, via
+  // resolveMatchSeasons(), getAllMatchRounds()/getSabremetricSeasonTotals()) all read
+  // `players`/`player_match_stats`/`matches`/`weeks` independently, but are each wrapped in React's
+  // `cache()` (#507), so calling them plainly here still collapses to one read per table across
+  // this whole render pass rather than one per caller.
   const [careerRows, allLeaderboards, seasons, gauntletStats, medalists, playersById, allMatches, ehogSnapshots, allSabremetrics, allMatchRounds, allMatchKills, allWeaponClassStats, allEconomyStats] =
     await Promise.all([
       getCareerLeaderboard(),
@@ -40,14 +40,14 @@ export default async function StatisticsPage() {
       getSeasons(),
       getGauntletStats(),
       getAllSeasonMedalists(),
-      playersByIdPromise,
+      getPlayersById(),
       getAllMatchesWithPickBan(),
       getAllEhogSnapshots(),
       getSabremetricSeasonTotals(),
       getAllMatchRounds(),
-      getAllMatchKills(undefined, playersByIdPromise, pmsRowsPromise),
-      getAllWeaponClassStats(undefined, playersByIdPromise, pmsRowsPromise),
-      getAllEconomyStats(undefined, playersByIdPromise, pmsRowsPromise),
+      getAllMatchKills(),
+      getAllWeaponClassStats(),
+      getAllEconomyStats(),
     ]);
 
   // H2H is computed client-side (see CareerStatsView) so its tab can honor the
