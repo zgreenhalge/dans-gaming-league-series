@@ -1,9 +1,11 @@
-// TEMPORARY — ground-truth check for the #491 damage side-split investigation. Reads the raw
-// m_iDamage netprop directly at each round-end tick (bypassing collectAccumulators() entirely) and
-// manually recomputes the round-delta/side-split by hand, so a divergence from the stored
-// damage_ct/damage_t narrows down whether the bug is in accumulators.ts's loop or in an assumption
-// about the netprop itself (e.g. carrying pre-match/warmup damage into round 1's delta). Delete
-// before merging.
+// TEMPORARY — ground-truth check for the #491 damage side-split investigation. Reads several
+// candidate damage netprops directly at each round-end tick (bypassing collectAccumulators()
+// entirely): m_iDamage (what accumulators.ts currently reads, assumed cumulative across the match)
+// alongside m_flTotalRoundDamageDealt and CSPerRoundStats_t.m_iDamage (whose scope, cumulative vs.
+// reset-per-round, isn't yet confirmed). Prints raw values every round so the trajectory itself
+// (monotonic vs. sawtooth) settles which behavior each has, then computes both a delta-based total
+// (for cumulative-looking props) and a plain sum-of-raw-values total (for per-round-looking props)
+// so either can be compared against the known m_iDamage-based match total. Delete before merging.
 //
 // Needs Cloudflare R2 creds in env:
 //   set -a; . ./.env.local; set +a
@@ -18,7 +20,11 @@ import { getAdminClient } from '../src/lib/supabase-admin';
 import { buildRoundSides, resolveSide } from '../src/lib/parsers/roundSides';
 
 const NS = 'CCSPlayerController.CCSPlayerController_ActionTrackingServices';
-const PROP = `${NS}.m_iDamage`;
+const PROPS = [
+  `${NS}.m_iDamage`,
+  `${NS}.m_flTotalRoundDamageDealt`,
+  `${NS}.CSPerRoundStats_t.m_iDamage`,
+];
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
@@ -44,41 +50,55 @@ async function main() {
   }[];
 
   const rounds = buildRoundSides(roundEndRows, inputs.skinsSide, inputs.targetWinRounds, 0);
-  console.log(`\n=== raw m_iDamage accumulator: match ${matchId} ===`);
+  console.log(`\n=== raw damage netprop trajectories: match ${matchId} ===`);
   console.log(`live rounds: ${rounds.length}, skinsSide=${inputs.skinsSide}, targetWinRounds=${inputs.targetWinRounds}\n`);
 
   const endTicks = rounds.map((r) => r.endTick);
-  const rows = parseTicks(demoBuffer, [PROP], endTicks) as Record<string, unknown>[];
-  const byTickAndSteam = new Map<number, Map<string, number>>();
+  const rows = parseTicks(demoBuffer, PROPS, endTicks) as Record<string, unknown>[];
+  // tick -> steamid -> prop -> value
+  const byTickAndSteam = new Map<number, Map<string, Map<string, number>>>();
   for (const row of rows) {
     const tick = row.tick as number;
     const sid = String(row.steamid ?? '');
     if (!byTickAndSteam.has(tick)) byTickAndSteam.set(tick, new Map());
-    byTickAndSteam.get(tick)!.set(sid, (row[PROP] as number) ?? 0);
+    const bySteam = byTickAndSteam.get(tick)!;
+    if (!bySteam.has(sid)) bySteam.set(sid, new Map());
+    const byProp = bySteam.get(sid)!;
+    for (const prop of PROPS) byProp.set(prop, (row[prop] as number) ?? 0);
   }
 
   for (const [steamId, entry] of steamToPlayer) {
     console.log(`\n-- player_id ${entry.player_id} (${entry.faction}), steamid ${steamId} --`);
-    console.log(`round  endTick  shirtsSide  playerSide  raw_m_iDamage  delta`);
-    let prev = 0;
-    let ctTotal = 0;
-    let tTotal = 0;
+    console.log(`round  shirtsSide  playerSide  | ${PROPS.map((p) => p.replace(NS + '.', '')).join('  |  ')}`);
+    const prev = new Map<string, number>(PROPS.map((p) => [p, 0]));
+    const deltaTotal = new Map<string, { ct: number; t: number }>(PROPS.map((p) => [p, { ct: 0, t: 0 }]));
+    const sumTotal = new Map<string, { ct: number; t: number }>(PROPS.map((p) => [p, { ct: 0, t: 0 }]));
+
     for (const r of rounds) {
-      const raw = byTickAndSteam.get(r.endTick)?.get(steamId);
-      if (raw === undefined) {
-        console.log(`${String(r.roundNumber).padStart(5)}  ${String(r.endTick).padStart(7)}  no data at this tick for this player`);
-        continue;
-      }
-      const delta = raw - prev;
-      prev = raw;
+      const byProp = byTickAndSteam.get(r.endTick)?.get(steamId);
       const side = resolveSide(r.shirtsSide, entry.faction);
-      if (side === 'CT') ctTotal += delta; else tTotal += delta;
+      const cells: string[] = [];
+      for (const prop of PROPS) {
+        const raw = byProp?.get(prop) ?? 0;
+        const delta = raw - (prev.get(prop) ?? 0);
+        prev.set(prop, raw);
+        const dt = deltaTotal.get(prop)!;
+        const st = sumTotal.get(prop)!;
+        if (side === 'CT') { dt.ct += delta; st.ct += raw; } else { dt.t += delta; st.t += raw; }
+        cells.push(`raw=${raw} delta=${delta}`);
+      }
       console.log(
-        `${String(r.roundNumber).padStart(5)}  ${String(r.endTick).padStart(7)}  ${r.shirtsSide.padStart(10)}  ` +
-          `${side.padStart(10)}  ${String(raw).padStart(13)}  ${delta}`,
+        `${String(r.roundNumber).padStart(5)}  ${r.shirtsSide.padStart(10)}  ${side.padStart(10)}  | ${cells.join('  |  ')}`,
       );
     }
-    console.log(`manually recomputed: ct=${ctTotal}, t=${tTotal}, total=${ctTotal + tTotal}`);
+    for (const prop of PROPS) {
+      const dt = deltaTotal.get(prop)!;
+      const st = sumTotal.get(prop)!;
+      console.log(
+        `  ${prop.replace(NS + '.', '')}: delta-based ct=${dt.ct} t=${dt.t} total=${dt.ct + dt.t}  |  ` +
+          `sum-of-raw ct=${st.ct} t=${st.t} total=${st.ct + st.t}`,
+      );
+    }
   }
   console.log('');
 }
