@@ -1,14 +1,20 @@
 'use client';
 
 // The unified admin console's Activity feed (issue #262): every background job and every live
-// ops_errors row, merged into one status-tiered list — Errored / In Progress / Completed — instead of
-// the separate jobs dashboard and ops-errors page this replaces. Each tier renders as a flat,
-// newest-first list in a fixed-height scrollable panel, narrowed by a job-type filter rather than
-// pre-collapsed into groups — a filter stays useful regardless of how a burst of activity is
+// ops_errors row, merged into one newest-first list, tagged Errored / In Progress / Completed rather
+// than split into separate tabs — a status is just another thing to filter by, not a reason to
+// partition the view, so the tag filter chips sit alongside the existing type/range chips and any
+// combination narrows the same list. Fixed-height scrollable panel, narrowed by tag/type/range filters
+// rather than pre-collapsed into groups — filters stay useful regardless of how a burst of activity is
 // distributed, where a grouping heuristic only helps the shapes it was tuned for.
 //
+// A job sitting "in progress" past `STALE_IN_FLIGHT_MS` (jobIsStale(), src/lib/jobs.ts) tags as
+// Errored instead — a GitHub Actions run that dies without writing a terminal status (a hard
+// timeout, a manual cancel, a lost runner) otherwise leaves its row silently parked "in progress"
+// indefinitely, with nothing on this feed ever calling attention to it.
+//
 // Job row actions reuse the same per-pipeline islands the old JobsDashboard used
-// (`IngestJobActions`, `JobRetryButton`) — only the grouping/tiering here is new, not the mutations.
+// (`IngestJobActions`, `JobRetryButton`) — only the tagging here is new, not the mutations.
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -21,6 +27,7 @@ import {
   JOB_TYPE_LABEL,
   JOB_IN_PROGRESS_STATUSES,
   jobNeedsAttention,
+  jobIsStale,
   jobDurationLabel,
   type BackgroundJobRow,
   type BackgroundJobType,
@@ -30,7 +37,8 @@ import { JobRetryButton, JobsLiveRefresh } from './JobActions';
 import { OPERATION_LABELS, dismissOpsError, retryEndpointFor, type OpsErrorItem } from './OpsErrorList';
 import type { OpsErrorHistoryRow } from '@/lib/queries';
 
-type Tier = 'errored' | 'progress' | 'completed' | 'history';
+type View = 'events' | 'history';
+type Tag = 'errored' | 'progress' | 'completed';
 type TypeFilter = 'all' | BackgroundJobType;
 type RangeFilter = 'all' | '30m' | '1h' | '6h' | '12h' | '24h';
 
@@ -38,6 +46,8 @@ interface JobEvent {
   kind: 'job';
   key: string;
   job: BackgroundJobRow;
+  tag: Tag;
+  stale: boolean;
   when: string | null;
   ts: number | null;
 }
@@ -45,15 +55,14 @@ interface OpsEvent {
   kind: 'ops';
   key: string;
   err: OpsErrorItem;
+  tag: Tag;
   when: string | null;
   ts: number | null;
 }
 type Event = JobEvent | OpsEvent;
 
-const EMPTY_EVENTS: Event[] = [];
-
-function jobTier(job: BackgroundJobRow): Tier {
-  if (jobNeedsAttention(job)) return 'errored';
+function jobTag(job: BackgroundJobRow, stale: boolean): Tag {
+  if (jobNeedsAttention(job) || stale) return 'errored';
   if (JOB_IN_PROGRESS_STATUSES.has(job.status)) return 'progress';
   return 'completed';
 }
@@ -68,6 +77,10 @@ function matchesFilter(e: Event, filter: TypeFilter): boolean {
   if (filter === 'all') return true;
   if (e.kind === 'ops') return false;
   return e.job.jobType === filter;
+}
+
+function matchesTag(e: Event, tags: Set<Tag>): boolean {
+  return tags.has(e.tag);
 }
 
 const RANGE_MS: Record<Exclude<RangeFilter, 'all'>, number> = {
@@ -125,6 +138,24 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
+const TAG_LABEL: Record<Tag, string> = { errored: 'Errored', progress: 'In Progress', completed: 'Completed' };
+const TAG_CLS: Record<Tag, string> = {
+  errored: 'bg-[var(--color-accent-red-bg)] text-[var(--color-accent-red-fg)] border-[var(--color-accent-red-border)]',
+  progress: 'bg-[var(--color-accent-blue-bg)] text-[var(--color-accent-blue-fg)] border-[var(--color-accent-blue-border)]',
+  completed: 'bg-[var(--color-accent-green-bg)] text-[var(--color-accent-green-fg)] border-[var(--color-accent-green-border)]',
+};
+
+/** The status tag every event carries — what used to be three separate tabs (Errored / In Progress /
+ *  Completed) is now one of these per row, so the tag filter chips below narrow a single list instead
+ *  of switching between views. */
+function TagBadge({ tag }: { tag: Tag }) {
+  return (
+    <span className={`inline-block font-mono text-[10px] uppercase tracking-wide px-1.5 py-[1px] rounded border whitespace-nowrap ${TAG_CLS[tag]}`}>
+      {TAG_LABEL[tag]}
+    </span>
+  );
+}
+
 function TypeBadge({ jobType }: { jobType: BackgroundJobType }) {
   return (
     <span className="inline-block font-mono text-[10px] uppercase tracking-wide px-1.5 py-[1px] rounded border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)]">
@@ -133,13 +164,16 @@ function TypeBadge({ jobType }: { jobType: BackgroundJobType }) {
   );
 }
 
-/** The per-pipeline action island for a job row — demo gets confirm/dismiss/re-parse, replay/radar retry. */
-function JobRowActions({ job }: { job: BackgroundJobRow }) {
+/** The per-pipeline action island for a job row — demo gets confirm/dismiss/re-parse, replay/radar
+ *  retry. `stale` lets a job stuck "in progress" past `STALE_IN_FLIGHT_MS` still be retried instead
+ *  of reading "working…" forever — the dispatch routes' own guard (`isJobInFlight`,
+ *  `src/lib/background-jobs.ts`) already treats it the same way. */
+function JobRowActions({ job, stale }: { job: BackgroundJobRow; stale: boolean }) {
   const { subject } = job;
   if (job.jobType === 'demo_ingest' && subject.kind === 'match') {
-    return <IngestJobActions matchId={subject.matchId} status={job.status} hasPayload={job.hasPayload} />;
+    return <IngestJobActions matchId={subject.matchId} status={job.status} hasPayload={job.hasPayload} stale={stale} />;
   }
-  const inProgress = JOB_IN_PROGRESS_STATUSES.has(job.status);
+  const inProgress = JOB_IN_PROGRESS_STATUSES.has(job.status) && !stale;
   if (job.jobType === 'replay_extract' && subject.kind === 'match') {
     return <JobRetryButton dispatchUrl={`/api/matches/${subject.matchId}/replay/dispatch`} inProgress={inProgress} />;
   }
@@ -173,12 +207,13 @@ function DismissOpsError({ id, onDismissed }: { id: number; onDismissed: () => v
 }
 
 function JobEventRow({ event, now }: { event: JobEvent; now: number | null }) {
-  const { job } = event;
+  const { job, stale } = event;
   const durationLabel = jobDurationLabel(job, now);
   return (
     <div className="grid grid-cols-[1fr_auto] gap-2 items-start px-3 py-2.5 border-t border-[var(--color-border-tertiary)]">
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
+          <TagBadge tag={event.tag} />
           <TypeBadge jobType={job.jobType} />
           <StatusPill status={job.status} />
           <Link href={job.subject.href} className="font-display text-[13px] font-semibold hover:underline truncate">
@@ -187,6 +222,12 @@ function JobEventRow({ event, now }: { event: JobEvent; now: number | null }) {
         </div>
         {job.errorMessage && (
           <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-1 break-words">{job.errorMessage}</div>
+        )}
+        {stale && (
+          <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-1 break-words">
+            ⚠ No update in {durationLabel ?? 'a long time'} — the GitHub Action likely finished without
+            reporting back. Retrying will start a fresh run.
+          </div>
         )}
         {job.quarantineFlags.map((f, i) => (
           <div key={`q${i}`} className="font-mono text-[11px] text-[var(--color-accent-amber-fg)] mt-1 break-words">
@@ -210,7 +251,7 @@ function JobEventRow({ event, now }: { event: JobEvent; now: number | null }) {
               action log ↗
             </a>
           )}
-          <JobRowActions job={job} />
+          <JobRowActions job={job} stale={stale} />
         </div>
       </div>
     </div>
@@ -230,6 +271,7 @@ function OpsEventRow({ event, onJump, onDismissed }: {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
+            <TagBadge tag={event.tag} />
             <span className="inline-block font-mono text-[10px] uppercase tracking-wide px-1.5 py-[1px] rounded border border-[var(--color-accent-red-border)] text-[var(--color-accent-red-fg)]">
               ops error
             </span>
@@ -264,6 +306,12 @@ function OpsEventRow({ event, onJump, onDismissed }: {
     </div>
   );
 }
+
+const TAG_FILTERS: { value: Tag; label: string }[] = [
+  { value: 'errored', label: 'Errored' },
+  { value: 'progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+];
 
 const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -325,43 +373,10 @@ export function AdminActivityFeed({
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const liveOpsErrors = useMemo(() => opsErrors.filter((e) => !dismissed.has(e.id)), [opsErrors, dismissed]);
 
-  const { errored, progress, completed } = useMemo(() => {
-    const jobEvents: JobEvent[] = jobs.map((job) => ({
-      kind: 'job',
-      key: `job:${job.jobType}:${job.subject.kind === 'match' ? job.subject.matchId : job.subject.mapId}`,
-      job,
-      when: fmtUtcShort(job.updatedAt),
-      ts: toTs(job.updatedAt),
-    }));
-    const opsEvents: OpsEvent[] = liveOpsErrors.map((err) => ({
-      kind: 'ops',
-      key: `ops:${err.id}`,
-      err,
-      when: fmtUtcShort(err.occurredAt),
-      ts: toTs(err.occurredAt),
-    }));
-
-    const errored: Event[] = [
-      ...jobEvents.filter((e) => jobTier(e.job) === 'errored'),
-      ...opsEvents,
-    ].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0));
-    const progress: Event[] = jobEvents.filter((e) => jobTier(e.job) === 'progress');
-    const completed: Event[] = jobEvents.filter((e) => jobTier(e.job) === 'completed');
-
-    return { errored, progress, completed };
-  }, [jobs, liveOpsErrors]);
-
-  const [tab, setTab] = useState<Tier>(() => {
-    if (errored.length > 0) return 'errored';
-    if (progress.length > 0) return 'progress';
-    return 'completed';
-  });
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  const [rangeFilter, setRangeFilter] = useState<RangeFilter>('24h');
-
   // `Date.now()` can't be read during render (impure) — track it in state, refreshed periodically, so
-  // the range filter (30m/1h/…) has a "now" to compare against without one. `null` until the first
-  // tick means a non-"all" range filters out everything rather than (incorrectly) matching everything.
+  // the range filter (30m/1h/…) and the stale-job check have a "now" to compare against without one.
+  // `null` until the first tick means a non-"all" range filters out everything (rather than
+  // incorrectly matching everything) and a job in progress never misreads as stale before then.
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     const tick = () => setNow(Date.now());
@@ -373,49 +388,84 @@ export function AdminActivityFeed({
     };
   }, []);
 
-  const tierEvents =
-    tab === 'errored' ? errored : tab === 'progress' ? progress : tab === 'completed' ? completed : EMPTY_EVENTS;
+  const events = useMemo(() => {
+    const jobEvents: JobEvent[] = jobs.map((job) => {
+      const stale = now !== null && jobIsStale(job, now);
+      return {
+        kind: 'job',
+        key: `job:${job.jobType}:${job.subject.kind === 'match' ? job.subject.matchId : job.subject.mapId}`,
+        job,
+        tag: jobTag(job, stale),
+        stale,
+        when: fmtUtcShort(job.updatedAt),
+        ts: toTs(job.updatedAt),
+      };
+    });
+    const opsEvents: OpsEvent[] = liveOpsErrors.map((err) => ({
+      kind: 'ops',
+      key: `ops:${err.id}`,
+      err,
+      tag: 'errored',
+      when: fmtUtcShort(err.occurredAt),
+      ts: toTs(err.occurredAt),
+    }));
+    return [...jobEvents, ...opsEvents].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0));
+  }, [jobs, liveOpsErrors, now]);
+
+  const counts = useMemo(() => {
+    const c: Record<Tag, number> = { errored: 0, progress: 0, completed: 0 };
+    for (const e of events) c[e.tag]++;
+    return c;
+  }, [events]);
+
+  const [view, setView] = useState<View>('events');
+  const [tagFilter, setTagFilter] = useState<Set<Tag>>(new Set(['errored', 'progress', 'completed']));
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [rangeFilter, setRangeFilter] = useState<RangeFilter>('24h');
+
+  function toggleTag(tag: Tag) {
+    setTagFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) next.delete(tag);
+      else next.add(tag);
+      return next;
+    });
+  }
+
   const visible = useMemo(
-    () => tierEvents.filter((e) => matchesFilter(e, typeFilter) && matchesRange(e, rangeFilter, now)),
-    [tierEvents, typeFilter, rangeFilter, now],
+    () => events.filter((e) => matchesTag(e, tagFilter) && matchesFilter(e, typeFilter) && matchesRange(e, rangeFilter, now)),
+    [events, tagFilter, typeFilter, rangeFilter, now],
   );
 
   function dismissOne(id: number) {
     setDismissed((prev) => new Set(prev).add(id));
-    // Refreshes the server-fetched `opsErrors` prop so a remount (e.g. switching tabs and back)
+    // Refreshes the server-fetched `opsErrors` prop so a remount (e.g. switching views and back)
     // doesn't resurrect an already-dismissed row from stale data.
     router.refresh();
   }
-
-  const EMPTY_MESSAGE: Record<Exclude<Tier, 'history'>, string> = {
-    errored: 'Nothing needs attention.',
-    progress: 'Nothing running right now.',
-    completed: 'Nothing completed yet.',
-  };
 
   return (
     <>
       <JobsLiveRefresh />
 
       <TabBar bordered className="mb-3">
-        <button role="tab" aria-selected={tab === 'errored'} onClick={() => setTab('errored')} className={tabCls(tab === 'errored')}>
-          Errored ({errored.length})
+        <button role="tab" aria-selected={view === 'events'} onClick={() => setView('events')} className={tabCls(view === 'events')}>
+          Events ({events.length})
         </button>
-        <button role="tab" aria-selected={tab === 'progress'} onClick={() => setTab('progress')} className={tabCls(tab === 'progress')}>
-          In Progress ({progress.length})
-        </button>
-        <button role="tab" aria-selected={tab === 'completed'} onClick={() => setTab('completed')} className={tabCls(tab === 'completed')}>
-          Completed ({completed.length})
-        </button>
-        <button role="tab" aria-selected={tab === 'history'} onClick={() => setTab('history')} className={tabCls(tab === 'history')}>
+        <button role="tab" aria-selected={view === 'history'} onClick={() => setView('history')} className={tabCls(view === 'history')}>
           History
         </button>
       </TabBar>
 
-      {tab === 'history' ? (
+      {view === 'history' ? (
         <HistoryTable rows={opsErrorHistory} />
       ) : (
         <>
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            {TAG_FILTERS.map((f) => (
+              <FilterChip key={f.value} value={f.value} label={`${f.label} (${counts[f.value]})`} active={tagFilter.has(f.value)} onClick={toggleTag} />
+            ))}
+          </div>
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             {TYPE_FILTERS.map((f) => (
               <FilterChip key={f.value} value={f.value} label={f.label} active={typeFilter === f.value} onClick={setTypeFilter} />
@@ -428,7 +478,7 @@ export function AdminActivityFeed({
           </div>
 
           {visible.length === 0 ? (
-            <EmptyState size="lg" message={tierEvents.length === 0 ? EMPTY_MESSAGE[tab] : 'Nothing matches this filter.'} />
+            <EmptyState size="lg" message={events.length === 0 ? 'Nothing to show.' : 'Nothing matches this filter.'} />
           ) : (
             <div className="border border-[var(--color-border-tertiary)] rounded overflow-hidden max-h-[520px] overflow-y-auto [&>*:first-child]:border-t-0">
               {visible.map((e) =>
