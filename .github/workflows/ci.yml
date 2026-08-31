@@ -84,20 +84,21 @@ jobs:
       - name: Test
         run: npm test
 
-      # TEMPORARY — #491 damage side-split investigation. Delete this step (and the R2 env vars
-      # above) before merging. `if` lets it run even though the Test step above is expected to fail
-      # (the diagnostic test asserts zero mismatches, which isn't true yet).
-      - name: Dump round boundary ticks (match 71)
+      # TEMPORARY — #491 damage side-split fix validation. Delete these steps (and the R2 env vars
+      # above) before merging. `if` lets them run even though the Test step above is expected to
+      # fail (the diagnostic test asserts zero mismatches against currently-stored, pre-fix data,
+      # which isn't true until a reparse lands the fix).
+      - name: Verify damage-split fix (match 71)
         if: ${{ !cancelled() }}
-        run: npx tsx scripts/dump-round-boundary-ticks.ts --match 71
+        run: npx tsx scripts/verify-damage-split-fix.ts --match 71
 
-      - name: Dump raw damage accumulator (match 71)
+      - name: Verify damage-split fix (match 56)
         if: ${{ !cancelled() }}
-        run: npx tsx scripts/dump-raw-damage-accumulator.ts --match 71
+        run: npx tsx scripts/verify-damage-split-fix.ts --match 56
 
-      - name: Compare damage netprop candidates (match 71)
+      - name: Verify damage-split fix (match 33)
         if: ${{ !cancelled() }}
-        run: npx tsx scripts/compare-damage-netprops.ts --match 71
+        run: npx tsx scripts/verify-damage-split-fix.ts --match 33
 
       - name: Build
         run: npm run build
