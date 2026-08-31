@@ -247,9 +247,9 @@ const STARTING_HEALTH = 100;
  * `dmg_health` — a `player_hurt` event's damage isn't itself capped at the victim's remaining
  * health, so a kill's finishing hit(s) routinely report more "damage" than the victim had left
  * (most visibly on shotguns, whose per-pellet damage isn't individually capped either), and a
- * straight sum of unclamped rows overcounts a match's total damage by a large margin (confirmed
- * against real reparsed matches, #491). Health is shared across every attacker who hits a given
- * victim that round — a self-damage or teamdamage hit draws from the same pool a kill shot does —
+ * straight sum of unclamped rows overcounts a match's total damage by a large margin (#491). Health
+ * is shared across every attacker who hits a given victim that round — a self-damage or teamdamage
+ * hit draws from the same pool a kill shot does —
  * so this clamps per (round, victim) regardless of who's hitting them, walking hits in ascending
  * tick order (ties keep their original relative order — `hurtEvents` is already tick-ordered, and
  * `Array.prototype.sort` is stable) and flooring each one against whatever health remained. Mutates
