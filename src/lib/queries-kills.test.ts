@@ -23,6 +23,7 @@ import {
   resolvePlayerSide,
   deriveSideSplitCounts,
   deriveClutchCounts,
+  deriveRoundsBySide,
   buildPlayerFactionsAndRoster,
   type MatchKillRow,
 } from './queries/kills';
@@ -487,6 +488,76 @@ test('deriveSideSplitCounts: a player with no resolved faction is skipped, other
   const counts = deriveSideSplitCounts(kills, roundSides, playerFactions);
   assert.equal(counts.has('1:1'), false);
   assert.equal(counts.get('1:2')?.deaths_t, 1);
+});
+
+// ─── deriveRoundsBySide ───────────────────────────────────────────────
+
+test('deriveRoundsBySide: credits a SHIRTS player their resolved side each round, across the halftime swap', () => {
+  const roundSides = new Map([['1:1', ri('CT')], ['1:2', ri('T')]]);
+  const playerFactions = new Map([['1:7', 'SHIRTS' as const]]);
+  const rosterByMatch = new Map([[1, [7]]]);
+  const counts = deriveRoundsBySide(roundSides, playerFactions, rosterByMatch);
+  assert.equal(counts.get('1:7')?.rounds_played_ct, 1);
+  assert.equal(counts.get('1:7')?.rounds_played_t, 1);
+});
+
+test('deriveRoundsBySide: SKINS resolves to the opposite side of shirts_side', () => {
+  const roundSides = new Map([['1:1', ri('CT')]]);
+  const playerFactions = new Map([['1:7', 'SKINS' as const]]);
+  const rosterByMatch = new Map([[1, [7]]]);
+  const counts = deriveRoundsBySide(roundSides, playerFactions, rosterByMatch);
+  assert.equal(counts.get('1:7')?.rounds_played_ct ?? 0, 0);
+  assert.equal(counts.get('1:7')?.rounds_played_t, 1);
+});
+
+test('deriveRoundsBySide: every roster player is credited for the same round, not just kill participants', () => {
+  const roundSides = new Map([['1:1', ri('CT')]]);
+  const playerFactions = new Map([
+    ['1:7', 'SHIRTS' as const], ['1:8', 'SKINS' as const], ['1:9', 'SHIRTS' as const],
+  ]);
+  const rosterByMatch = new Map([[1, [7, 8, 9]]]);
+  const counts = deriveRoundsBySide(roundSides, playerFactions, rosterByMatch);
+  assert.equal(counts.get('1:7')?.rounds_played_ct, 1);
+  assert.equal(counts.get('1:8')?.rounds_played_t, 1);
+  assert.equal(counts.get('1:9')?.rounds_played_ct, 1);
+});
+
+test('deriveRoundsBySide: a player with no resolved faction is skipped', () => {
+  const roundSides = new Map([['1:1', ri('CT')]]);
+  const playerFactions = new Map<string, 'SHIRTS' | 'SKINS'>();
+  const rosterByMatch = new Map([[1, [7]]]);
+  const counts = deriveRoundsBySide(roundSides, playerFactions, rosterByMatch);
+  assert.equal(counts.has('1:7'), false);
+});
+
+test('deriveRoundsBySide: a round for a match with no roster entry contributes nothing', () => {
+  const roundSides = new Map([['2:1', ri('CT')]]);
+  const playerFactions = new Map([['2:7', 'SHIRTS' as const]]);
+  const rosterByMatch = new Map<number, number[]>();
+  const counts = deriveRoundsBySide(roundSides, playerFactions, rosterByMatch);
+  assert.equal(counts.size, 0);
+});
+
+test('deriveRoundsBySide: credits a won round only to the resolved side that actually won it', () => {
+  const roundSides = new Map([['1:1', ri('CT', 'CT')]]); // CT-shirts round, CT wins
+  const playerFactions = new Map([['1:7', 'SHIRTS' as const], ['1:8', 'SKINS' as const]]);
+  const rosterByMatch = new Map([[1, [7, 8]]]);
+  const counts = deriveRoundsBySide(roundSides, playerFactions, rosterByMatch);
+  // SHIRTS resolves to CT and CT won this round -> credited a win.
+  assert.equal(counts.get('1:7')?.rounds_won_ct, 1);
+  assert.equal(counts.get('1:7')?.rounds_won_t ?? 0, 0);
+  // SKINS resolves to T, but CT won (not T) -> played, not won.
+  assert.equal(counts.get('1:8')?.rounds_played_t, 1);
+  assert.equal(counts.get('1:8')?.rounds_won_t ?? 0, 0);
+});
+
+test('deriveRoundsBySide: a lost round is played but not credited as won', () => {
+  const roundSides = new Map([['1:1', ri('CT', 'T')]]); // CT-shirts round, T wins
+  const playerFactions = new Map([['1:7', 'SHIRTS' as const]]);
+  const rosterByMatch = new Map([[1, [7]]]);
+  const counts = deriveRoundsBySide(roundSides, playerFactions, rosterByMatch);
+  assert.equal(counts.get('1:7')?.rounds_played_ct, 1);
+  assert.equal(counts.get('1:7')?.rounds_won_ct ?? 0, 0);
 });
 
 // ─── deriveClutchCounts ─────────────────────────────────────────────────────

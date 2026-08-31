@@ -466,6 +466,9 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
           weaponClassStats={matchWeaponClassStats}
           economyRows={matchEconomyStats}
           hasEconomyData={matchEconomyStats.length > 0}
+          matches={allMatches}
+          rounds={matchRounds}
+          hasSideData={allMatches.length > 0}
         />
       )}
 
