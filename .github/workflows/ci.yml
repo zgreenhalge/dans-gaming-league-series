@@ -108,6 +108,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: npx tsx scripts/inspect-dropped-damage.ts --match 71
 
+      - name: Inspect round boundary damage (match 71, round 7)
+        if: ${{ !cancelled() }}
+        run: npx tsx scripts/inspect-round-boundary-damage.ts --match 71 --round 7 --steamid 76561199487369777
+
       - name: Build
         run: npm run build
 
