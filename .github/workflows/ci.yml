@@ -56,6 +56,12 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # TEMPORARY — #491 damage side-split investigation, needed by the "Dump round boundary ticks"
+      # step below. Remove alongside that step before merging.
+      CLOUDFLARE_R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID }}
+      CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -77,6 +83,13 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # TEMPORARY — #491 damage side-split investigation. Delete this step (and the R2 env vars
+      # above) before merging. `if` lets it run even though the Test step above is expected to fail
+      # (the diagnostic test asserts zero mismatches, which isn't true yet).
+      - name: Dump round boundary ticks (match 71)
+        if: ${{ !cancelled() }}
+        run: npx tsx scripts/dump-round-boundary-ticks.ts --match 71
 
       - name: Build
         run: npm run build
