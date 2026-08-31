@@ -57,7 +57,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       # TEMPORARY — #491 damage side-split investigation, needed by the "Dump round boundary ticks"
-      # step below. Remove alongside that step before merging.
+      # and "Dump raw damage accumulator" steps below. Remove alongside those steps before merging.
       CLOUDFLARE_R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID }}
       CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
       CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
@@ -90,6 +90,10 @@ jobs:
       - name: Dump round boundary ticks (match 71)
         if: ${{ !cancelled() }}
         run: npx tsx scripts/dump-round-boundary-ticks.ts --match 71
+
+      - name: Dump raw damage accumulator (match 71)
+        if: ${{ !cancelled() }}
+        run: npx tsx scripts/dump-raw-damage-accumulator.ts --match 71
 
       - name: Build
         run: npm run build
