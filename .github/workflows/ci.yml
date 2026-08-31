@@ -95,6 +95,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: npx tsx scripts/dump-raw-damage-accumulator.ts --match 71
 
+      - name: Compare damage netprop candidates (match 71)
+        if: ${{ !cancelled() }}
+        run: npx tsx scripts/compare-damage-netprops.ts --match 71
+
       - name: Build
         run: npm run build
 
