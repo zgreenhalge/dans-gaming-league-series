@@ -14,6 +14,7 @@ import { useSearchParams } from 'next/navigation';
 import TabBar from './TabBar';
 import { tabCls } from '@/lib/util';
 import { ServerConsolePanel } from './ServerConsolePanel';
+import { QuickActionsPanel } from './QuickActionsPanel';
 import { AdminActivityFeed } from './AdminActivityFeed';
 import { MatchManager } from './MatchManager';
 import { PlayerManager } from './PlayerManager';
@@ -80,6 +81,8 @@ export function AdminConsole({
   return (
     <div className="flex flex-col gap-6">
       <ServerConsolePanel active={server.active} configSets={server.configSets} maps={server.maps} />
+
+      <QuickActionsPanel />
 
       <TabBar bordered className="pb-1">
         <button role="tab" aria-selected={section === 'activity'} onClick={() => setSection('activity')} className={tabCls(section === 'activity', { accent: true })}>
