@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { recordJobStatus, dispatchAndRecordFailure, matchJobKey } from '@/lib/background-jobs';
+import { recordJobStatus, dispatchAndRecordFailure, isJobInFlight, matchJobKey } from '@/lib/background-jobs';
 import { REPLAY_EXTRACT_JOB_TYPE as JOB_TYPE } from '@/lib/jobs';
 import { parseMatchId } from '@/lib/util';
 
@@ -41,15 +41,8 @@ export async function POST(
   }
 
   // Guard: no-op if a job is already in flight for this match.
-  const { data: existing } = await supabaseAdmin
-    .from('background_jobs')
-    .select('status')
-    .eq('job_type', JOB_TYPE)
-    .eq('match_id', matchId)
-    .maybeSingle();
-  const existingStatus = (existing as { status?: string } | null)?.status;
-  if (existingStatus === 'queued' || existingStatus === 'running') {
-    return NextResponse.json({ status: existingStatus, alreadyRunning: true });
+  if (await isJobInFlight(supabaseAdmin, JOB_TYPE, matchJobKey(matchId))) {
+    return NextResponse.json({ alreadyRunning: true });
   }
 
   const token = process.env.GITHUB_DISPATCH_TOKEN;

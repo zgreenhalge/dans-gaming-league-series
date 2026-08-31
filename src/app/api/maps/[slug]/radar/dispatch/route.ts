@@ -8,10 +8,9 @@ import { requireSession } from '@/lib/session';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { isPlayerAdmin } from '@/lib/queries';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
-import { recordJobStatus, mapJobKey } from '@/lib/background-jobs';
+import { recordJobStatus, isJobInFlight, mapJobKey } from '@/lib/background-jobs';
 
 const JOB_TYPE = 'radar_build';
-const IN_PROGRESS: ReadonlySet<string> = new Set(['queued', 'running']);
 
 export async function POST(
   _req: NextRequest,
@@ -37,15 +36,8 @@ export async function POST(
   if (!mapId) return NextResponse.json({ error: 'Unknown map' }, { status: 404 });
 
   // Don't fire a second Action while one is already working this map.
-  const { data: existing } = await supabaseAdmin
-    .from('background_jobs')
-    .select('status')
-    .eq('job_type', JOB_TYPE)
-    .eq('map_id', mapId)
-    .maybeSingle();
-  const existingStatus = (existing as { status?: string } | null)?.status;
-  if (existingStatus && IN_PROGRESS.has(existingStatus)) {
-    return NextResponse.json({ ok: true, status: existingStatus, alreadyRunning: true });
+  if (await isJobInFlight(supabaseAdmin, JOB_TYPE, mapJobKey(mapId))) {
+    return NextResponse.json({ ok: true, alreadyRunning: true });
   }
 
   const dispatch = await dispatchWorkflow('radar-build.yml', { map_id: String(mapId) });

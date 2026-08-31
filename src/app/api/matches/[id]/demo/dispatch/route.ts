@@ -8,9 +8,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { requireMatchAccess } from '@/lib/match-access';
 import { dispatchWorkflow } from '@/lib/gh-dispatch';
-import { recordJobStatus, matchJobKey } from '@/lib/background-jobs';
+import { recordJobStatus, isJobInFlight, matchJobKey } from '@/lib/background-jobs';
 import { parseMatchId } from '@/lib/util';
-import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, DEMO_INGEST_IN_PROGRESS } from '@/lib/demo/ingestResult';
+import { DEMO_INGEST_JOB_TYPE as JOB_TYPE } from '@/lib/demo/ingestResult';
 
 export async function POST(
   _req: NextRequest,
@@ -28,15 +28,8 @@ export async function POST(
   const supabaseAdmin = getAdminClient();
 
   // Don't fire a second Action while one is already working this match.
-  const { data: existing } = await supabaseAdmin
-    .from('background_jobs')
-    .select('status')
-    .eq('job_type', JOB_TYPE)
-    .eq('match_id', matchId)
-    .maybeSingle();
-  const existingStatus = (existing as { status?: string } | null)?.status;
-  if (existingStatus && DEMO_INGEST_IN_PROGRESS.has(existingStatus)) {
-    return NextResponse.json({ ok: true, status: existingStatus, alreadyRunning: true });
+  if (await isJobInFlight(supabaseAdmin, JOB_TYPE, matchJobKey(matchId))) {
+    return NextResponse.json({ ok: true, alreadyRunning: true });
   }
 
   const dispatch = await dispatchWorkflow('demo-ingest.yml', { match_id: String(matchId) });

@@ -33,9 +33,15 @@ lives in Actions.
    (e.g. `POST /api/ingest/matchzy-log` dispatching on `map_result`). The route only **triggers** the
    job and records intent; it does **no** heavy work. It:
    - authorizes (session admin/in-match, or a constant-time shared secret),
-   - **guards against duplicates** — no-op if a `background_jobs` row for this `(job_type, key)`
-     is already `queued`/`running`. This guard is the one part that's genuinely per-route (an in-flight
-     `SELECT`, an atomic first-landing upsert, an auth check) and stays hand-written at the call site.
+   - **guards against duplicates** — no-op if a `background_jobs` row for this `(job_type, key)` is
+     already in flight, via `isJobInFlight()` (`src/lib/background-jobs.ts`). "In flight" means an
+     in-progress status *and* recent enough to trust: a row whose own `started_at`/`created_at` is
+     older than `STALE_IN_FLIGHT_MS` (`src/lib/jobs.ts` — comfortably above the longest pipeline's own
+     `timeout-minutes`) no longer counts, since a GitHub Actions run that dies without writing a
+     terminal status (a hard timeout, a manual cancel, a lost runner) would otherwise wedge that row
+     `queued`/`running` forever with no dispatch ever able to un-stick it. The atomic first-landing
+     upsert some routes use instead (and the auth check every route does) is the part that's genuinely
+     per-route and stays hand-written at the call site.
    - claims the row (`recordJobStatus` in `src/lib/background-jobs.ts`) to `queued`, then dispatches
      the workflow via `dispatchAndRecordFailure`, which rolls the row — and a subject column
      (`matches.replay_status`, etc.), when given one — back to `failed` if the dispatch call itself
