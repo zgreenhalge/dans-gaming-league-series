@@ -6,7 +6,10 @@
  */
 
 import assert from 'node:assert/strict';
-import { collectWeaponClassStats, collectEconomyStats, collectMatchKills, type WeaponBreakdownRow } from './weaponStats';
+import {
+  collectWeaponClassStats, collectEconomyStats, collectMatchKills, collectMatchDamageEvents,
+  type WeaponBreakdownRow,
+} from './weaponStats';
 import { makeContext, hurt, death } from './matchContextFixture';
 import type { WeaponFireRow } from './utility';
 import type { EconomyType } from './economy';
@@ -206,6 +209,65 @@ test('collectMatchKills: a same-faction kill is flagged is_teamkill', () => {
   const out = collectMatchKills(deaths, ctx, ids, NO_MIDAIR);
   assert.equal(out.length, 1);
   assert.equal(out[0].is_teamkill, true);
+});
+
+test('collectMatchDamageEvents: one row per hit, with resolved attacker/victim/weapon/damage/hitgroup', () => {
+  const hurts = [hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 40, hitgroup: 'head' })];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectMatchDamageEvents(hurts, ctx, ids);
+  assert.equal(out.length, 1);
+  assert.deepEqual(out[0], {
+    round_number: 1,
+    attacker_steamid: 'a',
+    victim_steamid: 'c',
+    weapon: 'ak47',
+    damage: 40,
+    hitgroup: 'head',
+    tick: 105,
+  });
+});
+
+test('collectMatchDamageEvents: multiple hits on the same victim in the same round each produce their own row', () => {
+  const hurts = [
+    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 20 }),
+    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 30 }),
+  ];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectMatchDamageEvents(hurts, ctx, ids);
+  assert.equal(out.length, 2);
+  assert.deepEqual(out.map((r) => r.damage), [20, 30]);
+});
+
+test('collectMatchDamageEvents: self-damage and teamdamage are kept, not filtered', () => {
+  const hurts = [
+    hurt({ round: 1, tick: 101, victim: 'a', attacker: 'a', weapon: 'hegrenade', dmgHealth: 10 }),
+    hurt({ round: 1, tick: 105, victim: 'b', attacker: 'a', weapon: 'ak47', dmgHealth: 15 }),
+  ];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectMatchDamageEvents(hurts, ctx, ids);
+  assert.equal(out.length, 2);
+});
+
+test('collectMatchDamageEvents: a hit outside any live round is dropped', () => {
+  const hurts = [hurt({ round: 99, tick: 50, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 10 })];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectMatchDamageEvents(hurts, ctx, ids);
+  assert.equal(out.length, 0);
+});
+
+test('collectMatchDamageEvents: a hit on a non-roster victim is dropped', () => {
+  const hurts = [hurt({ round: 1, tick: 105, victim: 'not-in-roster', attacker: 'a', weapon: 'ak47', dmgHealth: 10 })];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectMatchDamageEvents(hurts, ctx, ids);
+  assert.equal(out.length, 0);
+});
+
+test('collectMatchDamageEvents: an unresolved attacker (world/fall damage) is nulled, not dropped', () => {
+  const hurts = [hurt({ round: 1, tick: 105, victim: 'c', attacker: null, weapon: 'world', dmgHealth: 5 })];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectMatchDamageEvents(hurts, ctx, ids);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].attacker_steamid, null);
 });
 
 report();

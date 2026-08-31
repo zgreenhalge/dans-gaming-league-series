@@ -90,6 +90,7 @@ export async function POST(
     matchRounds: sabremetricsResult.matchRounds,
     matchUtilityThrows: sabremetricsResult.matchUtilityThrows,
     matchRoundEconomy: sabremetricsResult.matchRoundEconomy,
+    matchDamageEvents: sabremetricsResult.matchDamageEvents,
     warnings: [...new Set([...result.warnings, ...sabremetricsResult.warnings])],
   });
 }

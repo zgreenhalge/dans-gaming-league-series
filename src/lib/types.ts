@@ -336,6 +336,20 @@ export interface DemoMatchRoundEconomy {
   equipment_value: number;
 }
 
+// `match_damage_events`: one row per `player_hurt` event — the same "downstream queries decide"
+// convention `DemoMatchKill` follows for teamkills applies here too: self-damage and teamdamage are
+// kept, not filtered, and `attacker_player_id` is null for hits with no resolvable attacker
+// (world/fall damage).
+export interface DemoMatchDamageEvent {
+  round_number: number;
+  attacker_player_id: number | null;
+  victim_player_id: number;
+  weapon: string;
+  damage: number;
+  hitgroup: string;
+  tick: number;
+}
+
 export interface ParsedDemoSabremetricsResult {
   sabremetrics: DemoSabremetricStat[];
   weaponStats: DemoWeaponStat[];
@@ -343,5 +357,6 @@ export interface ParsedDemoSabremetricsResult {
   matchRounds: DemoMatchRound[];
   matchUtilityThrows: DemoMatchUtilityThrow[];
   matchRoundEconomy: DemoMatchRoundEconomy[];
+  matchDamageEvents: DemoMatchDamageEvent[];
   warnings: string[];
 }

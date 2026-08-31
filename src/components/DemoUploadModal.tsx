@@ -7,7 +7,7 @@ import { useHasMounted } from './useHasMounted';
 import Modal from './Modal';
 import type {
   SabFields, SabFieldsWithDerived, RoundHistoryEntry, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
-  DemoMatchUtilityThrow, DemoMatchRoundEconomy,
+  DemoMatchUtilityThrow, DemoMatchRoundEconomy, DemoMatchDamageEvent,
 } from '@/lib/types';
 import {
   deriveKillCreditCounts, deriveSideSplitCounts, deriveClutchCounts, buildPlayerFactionsAndRoster,
@@ -51,6 +51,7 @@ interface ParsedResult {
   matchRounds?: DemoMatchRound[];
   matchUtilityThrows?: DemoMatchUtilityThrow[];
   matchRoundEconomy?: DemoMatchRoundEconomy[];
+  matchDamageEvents?: DemoMatchDamageEvent[];
   round_history?: RoundHistoryEntry[] | null;
 }
 
@@ -333,6 +334,7 @@ export default function DemoUploadModal({
           matchRounds: parsed.matchRounds,
           matchUtilityThrows: parsed.matchUtilityThrows,
           matchRoundEconomy: parsed.matchRoundEconomy,
+          matchDamageEvents: parsed.matchDamageEvents,
           round_history: parsed.round_history ?? null,
           // Forward warnings so the score route can learn steam ids from elimination matches.
           warnings: parsed.warnings,

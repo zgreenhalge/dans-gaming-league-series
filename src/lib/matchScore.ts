@@ -28,6 +28,7 @@ import { persistMatchKills, clearMatchKills } from './demo/matchKills';
 import { persistMatchRounds, clearMatchRounds } from './demo/matchRounds';
 import { persistMatchUtilityThrows, clearMatchUtilityThrows } from './demo/matchUtilityThrows';
 import { persistMatchRoundEconomy, clearMatchRoundEconomy } from './demo/matchRoundEconomy';
+import { persistMatchDamageEvents, clearMatchDamageEvents } from './demo/matchDamageEvents';
 import { clearLiveScoreBestEffort } from './demo/liveScore';
 import { resolveAndPropagate } from './gauntlet-engine';
 import { checkSeasonCompletion, checkGauntletCompletion } from './season-lifecycle';
@@ -38,7 +39,7 @@ import { notifyMatchScoreReported } from './discord-notify';
 import { closeMatchThread } from './discord-threads';
 import type {
   DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
-  DemoMatchUtilityThrow, DemoMatchRoundEconomy, RoundHistoryEntry,
+  DemoMatchUtilityThrow, DemoMatchRoundEconomy, DemoMatchDamageEvent, RoundHistoryEntry,
 } from './types';
 
 type PlayerStatInput = {
@@ -134,6 +135,7 @@ export interface WriteMatchScoreInput {
   matchRounds?: DemoMatchRound[];
   matchUtilityThrows?: DemoMatchUtilityThrow[];
   matchRoundEconomy?: DemoMatchRoundEconomy[];
+  matchDamageEvents?: DemoMatchDamageEvent[];
   round_history?: unknown;
   /** Parser warnings, forwarded so a single elimination-resolved match can learn a steam id. Only
    *  applied when `opts.learnSteamIds` is set. */
@@ -216,7 +218,7 @@ export async function writeMatchScore(
 ): Promise<WriteMatchScoreResult> {
   const {
     shirts, skins, player_stats, sabremetrics, weaponStats, matchKills, matchRounds,
-    matchUtilityThrows, matchRoundEconomy, round_history, warnings,
+    matchUtilityThrows, matchRoundEconomy, matchDamageEvents, round_history, warnings,
   } = input;
 
   if (typeof shirts !== 'number' || typeof skins !== 'number' || !Number.isInteger(shirts) || !Number.isInteger(skins)) {
@@ -437,6 +439,19 @@ export async function writeMatchScore(
       } catch (e) {
         console.error('Match round economy write/delete failed (non-fatal):', e);
         await recordOpsError(supabaseAdmin, 'match', matchId, 'match_round_economy_persist', `Match round economy write failed: ${(e as Error).message}`);
+      }
+    })(),
+    (async () => {
+      try {
+        if (matchDamageEvents && matchDamageEvents.length > 0) {
+          await persistMatchDamageEvents(matchId, matchDamageEvents);
+        } else {
+          await clearMatchDamageEvents(matchId);
+        }
+        await clearOpsError(supabaseAdmin, 'match', matchId, 'match_damage_events_persist');
+      } catch (e) {
+        console.error('Match damage events write/delete failed (non-fatal):', e);
+        await recordOpsError(supabaseAdmin, 'match', matchId, 'match_damage_events_persist', `Match damage events write failed: ${(e as Error).message}`);
       }
     })(),
   ]);

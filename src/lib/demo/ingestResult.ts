@@ -3,7 +3,7 @@
 
 import type {
   DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
-  DemoMatchUtilityThrow, DemoMatchRoundEconomy, RoundHistoryEntry,
+  DemoMatchUtilityThrow, DemoMatchRoundEconomy, DemoMatchDamageEvent, RoundHistoryEntry,
 } from '../types';
 
 /** `background_jobs.job_type` for the demo-ingest pipeline (notify → Action → review block). */
@@ -30,6 +30,7 @@ export interface DemoConfirmPayload {
   matchRounds: DemoMatchRound[];
   matchUtilityThrows: DemoMatchUtilityThrow[];
   matchRoundEconomy: DemoMatchRoundEconomy[];
+  matchDamageEvents: DemoMatchDamageEvent[];
   round_history: RoundHistoryEntry[] | null;
 }
 
