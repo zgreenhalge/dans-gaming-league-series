@@ -2,10 +2,17 @@
 // `scripts/verify-damage-side-split.ts` inside the `frontend` CI job, which already carries live
 // Supabase creds (needed for `next build`'s prerender), so its output lands in the PR's Actions log
 // without needing local creds. Delete this file before merging.
+//
+// getOrCreateSingleton() (supabase-singleton.ts) refuses to build a real Supabase client under
+// Vitest unless a test explicitly opts in via __setTestAdminClient() — this test does exactly that,
+// injecting a real client built from the same env vars supabase-admin.ts itself would use. Read-only
+// (every call below is a `.select()`); nothing here writes.
 
-import { describe, it, expect } from 'vitest';
-import { getAdminClient } from './supabase-admin';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { createClient } from '@supabase/supabase-js';
+import { getAdminClient, __setTestAdminClient } from './supabase-admin';
 import { resolveSide } from './parsers/roundSides';
+import type { Database } from './database.types';
 import type { Faction } from './types';
 
 const hasLiveCreds = !!process.env.SUPABASE_SERVICE_ROLE_KEY && !!process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -27,6 +34,13 @@ async function fetchAll<T>(
 }
 
 describe.skipIf(!hasLiveCreds)('damage side-split diagnostic', () => {
+  beforeAll(() => {
+    __setTestAdminClient(
+      createClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!),
+    );
+  });
+  afterAll(() => __setTestAdminClient(undefined));
+
   it('recomputed CT/T damage from match_damage_events vs stored damage_ct/damage_t', async () => {
     const admin = getAdminClient();
 
