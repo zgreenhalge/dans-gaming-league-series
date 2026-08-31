@@ -76,12 +76,15 @@ Implemented in `src/lib/parsers/roundSides.ts`, and persisted per round as `matc
 (`match_rounds.shirts_side` for that round + the player's fixed match `faction`) and summing with
 `deriveSideSplitCounts()` (both `src/lib/queries/kills.ts`) — not collected during parsing.
 
-**CT/T splits for damage** (`damage_ct`/`damage_t`) are computed from the engine's
-`ActionTrackingServices` accumulators at each round-end tick: `delta(round R) = value@roundEnd(R) −
-value@roundEnd(R−1)` (R=1 baseline 0), each delta attributed to the player's side that round —
-implemented in `src/lib/parsers/accumulators.ts`. `match_damage_events` (see
-[`architecture.md`](./architecture.md)) is a separate granular per-hit fact table for damage, one row
-per `player_hurt` event with health-loss-clamped `damage` matching this accumulator's own behavior.
+**CT/T splits for damage** (`damage_ct`/`damage_t`) are read directly from the engine's
+`ActionTrackingServices.m_flTotalRoundDamageDealt` at each round-end tick — already scoped to that
+round (it resets rather than accumulating), so the raw value is credited straight to the player's
+side that round, no delta arithmetic needed — implemented in `src/lib/parsers/accumulators.ts`. The
+sibling `m_iDamage` accumulator is match-cumulative rather than per-round and updates one round late
+relative to the round_end event, so delta-computing a side split from it (as this code once did)
+misattributes each round's damage to the following round's side; `m_flTotalRoundDamageDealt` has no
+such lag. `match_damage_events` (see [`architecture.md`](./architecture.md)) is a separate granular
+per-hit fact table for damage, one row per `player_hurt` event with health-loss-clamped `damage`.
 
 **ADR by side** divides the side-filtered damage (`damage_ct`/`damage_t`) by the rounds *played on
 that side*, not the player's total rounds played. Two different denominators feed this, depending on
