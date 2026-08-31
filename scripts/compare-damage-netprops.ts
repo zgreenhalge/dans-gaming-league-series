@@ -1,10 +1,10 @@
 // TEMPORARY — ground-truth check for the #491 damage side-split investigation. Lists every
 // damage/health-related field path demoparser2 actually exposes for this exact demo (via
 // listUpdatedFields), then probes specific candidate props at the final round-end tick for all
-// roster players: m_iDamage (what accumulators.ts currently reads), m_unTotalRoundDamageDealt, and
-// m_matchStats.HealthPointsDealtTotal/HealthPointsRemovedTotal (CS2's own documented gross-damage
-// vs. actual-health-removed split, per CounterStrikeSharp's generated schema bindings) -- to see
-// whether m_iDamage is the same value as one of these or a genuinely different stat. Delete before
+// roster players: m_iDamage (what accumulators.ts currently reads, an int32) against
+// m_flTotalRoundDamageDealt (a float, a genuinely distinct top-level field the real field listing
+// surfaced) and the CSPerRoundStats_t-nested variants of both -- to see whether m_iDamage is the
+// same cumulative value as m_flTotalRoundDamageDealt or a genuinely different stat. Delete before
 // merging.
 //
 // Needs Cloudflare R2 creds in env:
@@ -56,11 +56,10 @@ async function main() {
 
   const candidates = [
     `${NS}.m_iDamage`,
-    `${NS}.m_unTotalRoundDamageDealt`,
-    `${NS}.m_matchStats.HealthPointsDealtTotal`,
-    `${NS}.m_matchStats.HealthPointsRemovedTotal`,
-    `${NS}.m_matchStats.m_HealthPointsDealtTotal`,
-    `${NS}.m_matchStats.m_flHealthPointsDealtTotal`,
+    `${NS}.m_flTotalRoundDamageDealt`,
+    `${NS}.CSPerRoundStats_t.m_iDamage`,
+    `${NS}.m_iUtilityDamage`,
+    `${NS}.CSPerRoundStats_t.m_iUtilityDamage`,
   ];
 
   for (const prop of candidates) {
