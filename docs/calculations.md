@@ -76,11 +76,12 @@ Implemented in `src/lib/parsers/roundSides.ts`, and persisted per round as `matc
 (`match_rounds.shirts_side` for that round + the player's fixed match `faction`) and summing with
 `deriveSideSplitCounts()` (both `src/lib/queries/kills.ts`) — not collected during parsing.
 
-**CT/T splits for damage** (`damage_ct`/`damage_t`) are still computed from the engine's
+**CT/T splits for damage** (`damage_ct`/`damage_t`) are computed from the engine's
 `ActionTrackingServices` accumulators at each round-end tick: `delta(round R) = value@roundEnd(R) −
 value@roundEnd(R−1)` (R=1 baseline 0), each delta attributed to the player's side that round —
-implemented in `src/lib/parsers/accumulators.ts`. Unlike the other split stats, damage has no
-granular per-round per-side fact table to derive from instead.
+implemented in `src/lib/parsers/accumulators.ts`. `match_damage_events` (see
+[`architecture.md`](./architecture.md)) is a separate granular per-hit fact table for damage, one row
+per `player_hurt` event, independent of this accumulator.
 
 **ADR by side** divides the side-filtered damage (`damage_ct`/`damage_t`) by the rounds *played on
 that side*, not the player's total rounds played. Two different denominators feed this, depending on

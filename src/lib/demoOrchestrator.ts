@@ -2,7 +2,7 @@ import { parseEvent, parseTicks } from '@laihoe/demoparser2';
 import type { RosterEntry } from './demoParser';
 import type {
   SabFields, DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
-  DemoMatchUtilityThrow, DemoMatchRoundEconomy, ParsedDemoSabremetricsResult,
+  DemoMatchUtilityThrow, DemoMatchRoundEconomy, DemoMatchDamageEvent, ParsedDemoSabremetricsResult,
 } from './types';
 import { readDemoPlayers, resolveRoster } from './parsers/rosterResolver';
 import { buildMatchContext, collectMidairAttackers, dedupeDeathEvents, findMatchStartTick, type PlayerDeathRow, type PlayerHurtRow } from './parsers/matchContext';
@@ -34,7 +34,9 @@ import {
   classifyRoundEconomy, collectMatchRoundEconomy, neededEconomyTicks,
   type RoundFreezeEndRow, type PlayerEquipmentRow,
 } from './parsers/economy';
-import { collectWeaponClassStats, collectEconomyStats, collectMatchKills } from './parsers/weaponStats';
+import {
+  collectWeaponClassStats, collectEconomyStats, collectMatchKills, collectMatchDamageEvents,
+} from './parsers/weaponStats';
 
 const ZERO: SabFields = {
   damage_ct: 0, damage_t: 0,
@@ -144,7 +146,7 @@ export function parseDemoSabremetrics(
     warnings.push(...context.warnings);
     return {
       sabremetrics: [], weaponStats: [], matchKills: [], matchRounds: [],
-      matchUtilityThrows: [], matchRoundEconomy: [],
+      matchUtilityThrows: [], matchRoundEconomy: [], matchDamageEvents: [],
       warnings: [...warnings, 'No live rounds found in demo.'],
     };
   }
@@ -349,6 +351,17 @@ export function parseDemoSabremetrics(
     equipment_value: e.equipment_value,
   }));
 
+  const damageEventFacts = collectMatchDamageEvents(hurtEvents, context, steamIds);
+  const matchDamageEvents: DemoMatchDamageEvent[] = damageEventFacts.map((e) => ({
+    round_number: e.round_number,
+    attacker_player_id: playerIdOf(e.attacker_steamid),
+    victim_player_id: playerIdOf(e.victim_steamid)!,
+    weapon: e.weapon,
+    damage: e.damage,
+    hitgroup: e.hitgroup,
+    tick: e.tick,
+  }));
+
   // 6. Merge with zero defaults
   const sabremetrics: DemoSabremetricStat[] = steamIds.map((steamId) => ({
     player_id: steamToPlayer.get(steamId)!.player_id,
@@ -394,6 +407,7 @@ export function parseDemoSabremetrics(
 
   return {
     sabremetrics, weaponStats, matchKills, matchRounds, matchUtilityThrows, matchRoundEconomy,
+    matchDamageEvents,
     warnings: uniqueWarnings,
   };
 }

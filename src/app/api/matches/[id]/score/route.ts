@@ -8,7 +8,7 @@ import { writeMatchScore } from '@/lib/matchScore';
 import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import type {
   DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
-  DemoMatchUtilityThrow, DemoMatchRoundEconomy,
+  DemoMatchUtilityThrow, DemoMatchRoundEconomy, DemoMatchDamageEvent,
 } from '@/lib/types';
 import { after, afterBestEffort } from '@/lib/after';
 
@@ -99,7 +99,7 @@ export async function PATCH(
 
   const {
     shirts, skins, player_stats, sabremetrics, weaponStats, matchKills, matchRounds,
-    matchUtilityThrows, matchRoundEconomy, round_history, warnings,
+    matchUtilityThrows, matchRoundEconomy, matchDamageEvents, round_history, warnings,
   } = body as {
     shirts: unknown;
     skins: unknown;
@@ -110,6 +110,7 @@ export async function PATCH(
     matchRounds?: DemoMatchRound[];
     matchUtilityThrows?: DemoMatchUtilityThrow[];
     matchRoundEconomy?: DemoMatchRoundEconomy[];
+    matchDamageEvents?: DemoMatchDamageEvent[];
     round_history?: unknown;
     warnings?: unknown; // parser warnings forwarded from the confirm — used to learn steam ids
   };
@@ -127,6 +128,7 @@ export async function PATCH(
       matchRounds,
       matchUtilityThrows,
       matchRoundEconomy,
+      matchDamageEvents,
       round_history,
       warnings: Array.isArray(warnings) ? (warnings as string[]) : undefined,
     },

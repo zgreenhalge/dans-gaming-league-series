@@ -101,14 +101,15 @@ as `shots_fired`/`shots_hit`. For economy, it's seeded directly from the round's
 classification, independent of whether the player fired a shot that round — an eco round the player
 never fired in still counts as an eco round played.
 
-## Kill, round, and utility fact tables
+## Kill, round, utility, and damage fact tables
 
-`match_kills`, `match_rounds`, and `match_utility_throws` (see [`architecture.md`](./architecture.md))
-are granular per-event fact tables, not per-player pre-aggregates — one row per kill, one row per
-round, and one row per flash, with aggregation (kills-by-weapon, killed-by-weapon, category rollups,
-favorite weapon, round-win-%-by-side, flash-effectiveness stats) done at query time rather than baked
-into the persisted shape. This is a deliberate departure from the `player_match_weapon_stats`-style
-pattern above: a new derived stat is a query change, not a new table.
+`match_kills`, `match_rounds`, `match_utility_throws`, and `match_damage_events` (see
+[`architecture.md`](./architecture.md)) are granular per-event fact tables, not per-player
+pre-aggregates — one row per kill, one row per round, one row per flash, and one row per damage
+instance, with aggregation (kills-by-weapon, killed-by-weapon, category rollups, favorite weapon,
+round-win-%-by-side, flash-effectiveness stats) done at query time rather than baked into the
+persisted shape. This is a deliberate departure from the `player_match_weapon_stats`-style pattern
+above: a new derived stat is a query change, not a new table.
 
 - `collectMatchKills()` (`weaponStats.ts`) reads `player_death` events (parsed with a `weapon` field,
   unlike every other consumer of that event) and emits one `KillFactRow` per kill: round, attacker/
@@ -164,6 +165,17 @@ pattern above: a new derived stat is a query change, not a new table.
   match `faction` — no side/round lookup needed, since "same team" is a faction question, not a side
   question the way CT/T-split kill credit is. `flashes_thrown` stays live-collected in `utility.ts`,
   since it needs `weapon_fire` events no fact table carries.
+- `collectMatchDamageEvents()` (`weaponStats.ts`) reads `player_hurt` events and emits one
+  `DamageEventFactRow` per hit: round, attacker/victim steamid, weapon, damage, hitgroup, tick. Same
+  "downstream queries decide" convention `collectMatchKills()` follows for teamkills — self-damage and
+  teamdamage are kept, not filtered — and every `weapon` value is kept regardless of category, so
+  grenade/utility damage (`hegrenade`, `molotov`/`inferno`) lands in the same table as gunfire with no
+  separate reconciliation against `match_utility_throws` needed. `attacker_steamid` is nulled out when
+  it's not a known roster player (world/fall damage), matching `collectMatchKills()`'s handling of
+  unresolvable attackers. `src/lib/demo/matchDamageEvents.ts` persists it via `replaceMatchRows()`,
+  resolving both attacker/victim to `player_match_stats_id`; a hit whose victim has no resolvable row
+  is dropped, matching `match_kills`' victim-required handling. `damage_ct`/`damage_t` are computed
+  independently of this table — see [`calculations.md`](./calculations.md).
 
 ## Match start (skipping warmup and stray knife rounds)
 

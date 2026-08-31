@@ -226,3 +226,55 @@ export function collectMatchKills(
 
   return rows;
 }
+
+export interface DamageEventFactRow {
+  round_number: number;
+  attacker_steamid: string | null;
+  victim_steamid: string;
+  weapon: string;
+  damage: number;
+  hitgroup: string;
+  tick: number;
+}
+
+/**
+ * One row per `player_hurt` event — a `match_damage_events` fact table row, same grain and
+ * "downstream queries decide" convention `collectMatchKills()` follows: self-damage and teamdamage
+ * are kept, not filtered (unlike `accumulateHurtDamage()`'s `shots_hit`/`damage_dealt` breakdowns
+ * above, which gate both out since those feed player-facing "damage to enemies" totals).
+ * `attacker_steamid` is nulled out when it's not a known roster player (world/fall damage), matching
+ * `collectMatchKills()`'s handling of unresolvable attackers. Every hit is kept regardless of
+ * `weapon` — grenade/utility damage (`hegrenade`, `molotov`/`inferno`) included alongside guns, so
+ * this table needs no separate reconciliation against `match_utility_throws` (which only tracks
+ * flash-blind instances, not damage) to cover utility.
+ */
+export function collectMatchDamageEvents(
+  hurtEvents: PlayerHurtRow[],
+  context: MatchContext,
+  steamIds: string[],
+): DamageEventFactRow[] {
+  const steamSet = new Set(steamIds);
+  const rows: DamageEventFactRow[] = [];
+
+  for (const h of hurtEvents) {
+    const round = roundOf(h, context);
+    if (round == null) continue;
+
+    const victim = h.user_steamid;
+    if (!victim || !steamSet.has(victim)) continue;
+
+    const attacker = h.attacker_steamid && steamSet.has(h.attacker_steamid) ? h.attacker_steamid : null;
+
+    rows.push({
+      round_number: round,
+      attacker_steamid: attacker,
+      victim_steamid: victim,
+      weapon: h.weapon,
+      damage: h.dmg_health,
+      hitgroup: h.hitgroup,
+      tick: h.tick,
+    });
+  }
+
+  return rows;
+}

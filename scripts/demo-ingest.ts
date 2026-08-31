@@ -61,6 +61,7 @@ import { persistMatchKills } from '../src/lib/demo/matchKills';
 import { persistMatchRounds } from '../src/lib/demo/matchRounds';
 import { persistMatchUtilityThrows } from '../src/lib/demo/matchUtilityThrows';
 import { persistMatchRoundEconomy } from '../src/lib/demo/matchRoundEconomy';
+import { persistMatchDamageEvents } from '../src/lib/demo/matchDamageEvents';
 import { writeMatchScore } from '../src/lib/matchScore';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '../src/lib/demo/ingestResult';
 import { matchJobKey } from '../src/lib/background-jobs';
@@ -142,6 +143,7 @@ async function main() {
       persistMatchRounds(matchId, sab.matchRounds),
       persistMatchUtilityThrows(matchId, sab.matchUtilityThrows),
       persistMatchRoundEconomy(matchId, sab.matchRoundEconomy),
+      persistMatchDamageEvents(matchId, sab.matchDamageEvents),
       deleteR2Object(demoResultKey(matchId)),
     ]);
     await setJob({
@@ -177,6 +179,7 @@ async function main() {
           matchRounds: sab.matchRounds,
           matchUtilityThrows: sab.matchUtilityThrows,
           matchRoundEconomy: sab.matchRoundEconomy,
+          matchDamageEvents: sab.matchDamageEvents,
           round_history: parsed.round_history,
         }
       : null;
@@ -206,6 +209,7 @@ async function main() {
         matchRounds: payload.matchRounds,
         matchUtilityThrows: payload.matchUtilityThrows,
         matchRoundEconomy: payload.matchRoundEconomy,
+        matchDamageEvents: payload.matchDamageEvents,
         round_history: payload.round_history,
       });
       if (written.ok) {
