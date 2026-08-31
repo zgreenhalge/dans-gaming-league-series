@@ -237,6 +237,46 @@ export interface DamageEventFactRow {
   tick: number;
 }
 
+/** A live round always starts every player at full health, with no mid-round regen (no health kits
+ *  in Wingman) — the ceiling `clampToHealthRemaining()` clamps each round's damage against. */
+const STARTING_HEALTH = 100;
+
+/**
+ * Clamps each row's `damage` down to what the victim actually had left that round, mirroring the
+ * engine's own `m_iDamage` accumulator (`docs/calculations.md`) rather than `player_hurt`'s raw
+ * `dmg_health` — a `player_hurt` event's damage isn't itself capped at the victim's remaining
+ * health, so a kill's finishing hit(s) routinely report more "damage" than the victim had left
+ * (most visibly on shotguns, whose per-pellet damage isn't individually capped either), and a
+ * straight sum of unclamped rows overcounts a match's total damage by a large margin (#491). Health
+ * is shared across every attacker who hits a given victim that round — a self-damage or teamdamage
+ * hit draws from the same pool a kill shot does —
+ * so this clamps per (round, victim) regardless of who's hitting them, walking hits in ascending
+ * tick order (ties keep their original relative order — `hurtEvents` is already tick-ordered, and
+ * `Array.prototype.sort` is stable) and flooring each one against whatever health remained. Mutates
+ * `rows` in place.
+ */
+function clampToHealthRemaining(rows: DamageEventFactRow[]): void {
+  const byRoundVictim = new Map<string, DamageEventFactRow[]>();
+  for (const r of rows) {
+    const key = `${r.round_number}:${r.victim_steamid}`;
+    let group = byRoundVictim.get(key);
+    if (!group) {
+      group = [];
+      byRoundVictim.set(key, group);
+    }
+    group.push(r);
+  }
+
+  for (const group of byRoundVictim.values()) {
+    group.sort((a, b) => a.tick - b.tick);
+    let remaining = STARTING_HEALTH;
+    for (const r of group) {
+      r.damage = Math.min(r.damage, remaining);
+      remaining -= r.damage;
+    }
+  }
+}
+
 /**
  * One row per `player_hurt` event — a `match_damage_events` fact table row, same grain and
  * "downstream queries decide" convention `collectMatchKills()` follows: self-damage and teamdamage
@@ -246,7 +286,8 @@ export interface DamageEventFactRow {
  * `collectMatchKills()`'s handling of unresolvable attackers. Every hit is kept regardless of
  * `weapon` — grenade/utility damage (`hegrenade`, `molotov`/`inferno`) included alongside guns, so
  * this table needs no separate reconciliation against `match_utility_throws` (which only tracks
- * flash-blind instances, not damage) to cover utility.
+ * flash-blind instances, not damage) to cover utility. `damage` is health actually lost, not the
+ * event's raw `dmg_health` — see `clampToHealthRemaining()`.
  */
 export function collectMatchDamageEvents(
   hurtEvents: PlayerHurtRow[],
@@ -276,5 +317,6 @@ export function collectMatchDamageEvents(
     });
   }
 
+  clampToHealthRemaining(rows);
   return rows;
 }
