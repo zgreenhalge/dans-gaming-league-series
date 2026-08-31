@@ -565,11 +565,15 @@ export function ServerConsolePanel({
   const canStop = configured && !!server && !isServerOff(server);
   const casualUse = !!(configured && server && !active && (server.players_online ?? 0) > 0);
 
+  const configSetLabel = configSets.find((c) => c.key === configSet)?.label ?? configSet;
+
   return (
     <div className="flex flex-col gap-4">
       {/* Status & direct controls — occupancy, raw DatHost state, and every action that responds to
-          either. One group: "what's happening right now, and what can I do about it." */}
-      <div className="border border-[var(--color-border-tertiary)] rounded px-4 py-4">
+          either. One group: "what's happening right now, and what can I do about it." Collapsible so
+          it can get out of the way once a server is up and idle, but the state pill stays visible in
+          the summary either way. */}
+      <CollapsiblePanel title="Server" defaultOpen preview={<StatePill configured={configured} server={server} />}>
         {pending && (
           <div className="border border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)] rounded px-3 py-2 mb-3">
             <div className="font-mono text-[11px] text-[var(--color-accent-amber-fg)] mb-2">{pending.message}</div>
@@ -687,52 +691,61 @@ export function ServerConsolePanel({
             <ConnectedRoster connectedPlayers={status?.connectedPlayers ?? []} highlight={casualUse} />
           </div>
         )}
+      </CollapsiblePanel>
 
-        {/* Server config — pick a config set + map + launch-time toggles, then either Start (boot with
-            them) or Apply config set (push them without starting) — the two actions that consume this
-            picker's state, side by side (#315). */}
-        <div className="mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
-          <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mb-2">Server config</div>
-          <div className="flex flex-col gap-2">
-            <LaunchOptionsPicker
-              configSets={configSets}
-              configSet={configSet}
-              onConfigSetChange={setConfigSet}
-              maps={maps}
-              mapChoice={mapChoice}
-              onMapChoiceChange={setMapChoice}
-              customMapId={customMapId}
-              onCustomMapIdChange={setCustomMapId}
-              customMapInvalid={customMapInvalid}
-              playout={playout}
-              onPlayoutChange={setPlayout}
-              friendly={friendly}
-              onFriendlyChange={setFriendly}
-            />
-            <div className="flex gap-2">
-              {canStart && !starting && !stopping && (
-                <button
-                  onClick={() => startServer()}
-                  disabled={startStopBusy || !configSet || !resolvedMapId}
-                  className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
-                >
-                  {startStopBusy ? '…' : 'Start'}
-                </button>
-              )}
+      {/* Server config — pick a config set + map + launch-time toggles, then either Start (boot with
+          them) or Apply config set (push them without starting) — the two actions that consume this
+          picker's state, side by side (#315). Its own collapsible panel (rather than living inside
+          "Server" above) since it's edited far less often than the status/occupancy controls are
+          watched. */}
+      <CollapsiblePanel
+        title="Server config"
+        defaultOpen
+        preview={
+          configSet && (
+            <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">{configSetLabel}</span>
+          )
+        }
+      >
+        <div className="flex flex-col gap-2">
+          <LaunchOptionsPicker
+            configSets={configSets}
+            configSet={configSet}
+            onConfigSetChange={setConfigSet}
+            maps={maps}
+            mapChoice={mapChoice}
+            onMapChoiceChange={setMapChoice}
+            customMapId={customMapId}
+            onCustomMapIdChange={setCustomMapId}
+            customMapInvalid={customMapInvalid}
+            playout={playout}
+            onPlayoutChange={setPlayout}
+            friendly={friendly}
+            onFriendlyChange={setFriendly}
+          />
+          <div className="flex gap-2">
+            {canStart && !starting && !stopping && (
               <button
-                onClick={() => applyConfig()}
-                disabled={!configSet || !resolvedMapId || applyBusy}
-                title="Reassert settings on the server without starting it"
-                className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
+                onClick={() => startServer()}
+                disabled={startStopBusy || !configSet || !resolvedMapId}
+                className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-green-border)] text-[var(--color-accent-green-fg)] hover:bg-[var(--color-accent-green-bg)] disabled:opacity-50"
               >
-                {applyBusy ? 'Applying…' : 'Apply config set'}
+                {startStopBusy ? '…' : 'Start'}
               </button>
-            </div>
-            {applyError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{applyError}</div>}
-            {applySuccess && !applyError && (
-              <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
             )}
+            <button
+              onClick={() => applyConfig()}
+              disabled={!configSet || !resolvedMapId || applyBusy}
+              title="Reassert settings on the server without starting it"
+              className="font-mono text-[11px] px-3 py-1.5 rounded border border-[var(--color-accent-blue-border)] text-[var(--color-accent-blue-fg)] hover:bg-[var(--color-accent-blue-bg)] disabled:opacity-50"
+            >
+              {applyBusy ? 'Applying…' : 'Apply config set'}
+            </button>
           </div>
+          {applyError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)]">{applyError}</div>}
+          {applySuccess && !applyError && (
+            <div className="font-mono text-[11px] text-[var(--color-accent-green-fg)]">Applied.</div>
+          )}
         </div>
 
         <div className="mt-4 pt-4 border-t border-[var(--color-border-tertiary)]">
@@ -748,7 +761,7 @@ export function ServerConsolePanel({
           {diffError && <div className="font-mono text-[11px] text-[var(--color-accent-red-fg)] mt-2">{diffError}</div>}
           {diff && !diffError && <ConfigDiffView diff={diff} />}
         </div>
-      </div>
+      </CollapsiblePanel>
 
       {/* Disk cleanup (#132) — collapsed by default; the preview still shows live schedule/last-run
           status so a paused schedule reads as amber even without expanding. */}
