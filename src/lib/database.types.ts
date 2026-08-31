@@ -348,6 +348,64 @@ export type Database = {
         }
         Relationships: []
       }
+      match_damage_events: {
+        Row: {
+          attacker_player_match_stats_id: number | null
+          damage: number
+          hitgroup: string
+          id: number
+          match_id: number
+          round_number: number
+          tick: number
+          victim_player_match_stats_id: number
+          weapon: string
+        }
+        Insert: {
+          attacker_player_match_stats_id?: number | null
+          damage: number
+          hitgroup: string
+          id?: never
+          match_id: number
+          round_number: number
+          tick: number
+          victim_player_match_stats_id: number
+          weapon: string
+        }
+        Update: {
+          attacker_player_match_stats_id?: number | null
+          damage?: number
+          hitgroup?: string
+          id?: never
+          match_id?: number
+          round_number?: number
+          tick?: number
+          victim_player_match_stats_id?: number
+          weapon?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_damage_events_attacker_fkey"
+            columns: ["attacker_player_match_stats_id"]
+            isOneToOne: false
+            referencedRelation: "player_match_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_damage_events_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_damage_events_victim_fkey"
+            columns: ["victim_player_match_stats_id"]
+            isOneToOne: false
+            referencedRelation: "player_match_stats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_discord_state: {
         Row: {
           event_id: string | null
