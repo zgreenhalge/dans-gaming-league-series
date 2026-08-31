@@ -120,6 +120,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: npx tsx scripts/dump-player-round-damage.ts --match 71 --steamid 76561199487369777
 
+      - name: Inspect round lifecycle events (match 71, round 19)
+        if: ${{ !cancelled() }}
+        run: npx tsx scripts/inspect-round-lifecycle-events.ts --match 71 --round 19 --steamid 76561199487369777
+
       - name: Build
         run: npm run build
 
