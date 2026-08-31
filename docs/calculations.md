@@ -81,7 +81,7 @@ Implemented in `src/lib/parsers/roundSides.ts`, and persisted per round as `matc
 value@roundEnd(R−1)` (R=1 baseline 0), each delta attributed to the player's side that round —
 implemented in `src/lib/parsers/accumulators.ts`. `match_damage_events` (see
 [`architecture.md`](./architecture.md)) is a separate granular per-hit fact table for damage, one row
-per `player_hurt` event, independent of this accumulator.
+per `player_hurt` event with health-loss-clamped `damage` matching this accumulator's own behavior.
 
 **ADR by side** divides the side-filtered damage (`damage_ct`/`damage_t`) by the rounds *played on
 that side*, not the player's total rounds played. Two different denominators feed this, depending on

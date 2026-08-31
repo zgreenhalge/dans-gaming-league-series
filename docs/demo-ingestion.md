@@ -172,10 +172,16 @@ above: a new derived stat is a query change, not a new table.
   grenade/utility damage (`hegrenade`, `molotov`/`inferno`) lands in the same table as gunfire with no
   separate reconciliation against `match_utility_throws` needed. `attacker_steamid` is nulled out when
   it's not a known roster player (world/fall damage), matching `collectMatchKills()`'s handling of
-  unresolvable attackers. `src/lib/demo/matchDamageEvents.ts` persists it via `replaceMatchRows()`,
-  resolving both attacker/victim to `player_match_stats_id`; a hit whose victim has no resolvable row
-  is dropped, matching `match_kills`' victim-required handling. `damage_ct`/`damage_t` are computed
-  independently of this table — see [`calculations.md`](./calculations.md).
+  unresolvable attackers. `damage` is health actually lost, not the event's raw `dmg_health` —
+  `clampToHealthRemaining()` walks each round's hits per victim in tick order and floors every hit
+  against whatever health that victim had left (shared across every attacker who hits them that
+  round, including self-damage and teamdamage), the same way the engine's own `m_iDamage` accumulator
+  behaves; an unclamped sum overcounts a match's total damage significantly, since a kill's finishing
+  hit(s) routinely report more nominal damage than the victim had left (most visibly on shotguns).
+  `src/lib/demo/matchDamageEvents.ts` persists it via `replaceMatchRows()`, resolving both
+  attacker/victim to `player_match_stats_id`; a hit whose victim has no resolvable row is dropped,
+  matching `match_kills`' victim-required handling. `damage_ct`/`damage_t` are computed independently
+  of this table — see [`calculations.md`](./calculations.md).
 
 ## Match start (skipping warmup and stray knife rounds)
 

@@ -270,4 +270,60 @@ test('collectMatchDamageEvents: an unresolved attacker (world/fall damage) is nu
   assert.equal(out[0].attacker_steamid, null);
 });
 
+test('collectMatchDamageEvents: damage is clamped to the victim\'s health remaining, not the raw dmg_health, mirroring m_iDamage', () => {
+  const hurts = [
+    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60 }),
+    // Nominal 60 would put the victim at -20; only 40 health was actually left to lose.
+    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60 }),
+  ];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectMatchDamageEvents(hurts, ctx, ids);
+  assert.deepEqual(out.map((r) => r.damage), [60, 40]);
+});
+
+test('collectMatchDamageEvents: a hit with no health left to lose is clamped to zero, not dropped', () => {
+  const hurts = [
+    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 100 }),
+    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 20 }),
+  ];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectMatchDamageEvents(hurts, ctx, ids);
+  assert.deepEqual(out.map((r) => r.damage), [100, 0]);
+});
+
+test('collectMatchDamageEvents: the health pool is shared across every attacker who hits the same victim that round', () => {
+  const hurts = [
+    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'c', weapon: 'hegrenade', dmgHealth: 70 }), // self-damage
+    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60 }), // finishing blow
+  ];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectMatchDamageEvents(hurts, ctx, ids);
+  assert.deepEqual(out.map((r) => r.damage), [70, 30]);
+});
+
+test('collectMatchDamageEvents: health resets each round and doesn\'t leak across victims', () => {
+  const hurts = [
+    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 90 }),
+    hurt({ round: 1, tick: 102, victim: 'd', attacker: 'a', weapon: 'ak47', dmgHealth: 90 }),
+    hurt({ round: 2, tick: 1101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 90 }),
+  ];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectMatchDamageEvents(hurts, ctx, ids);
+  assert.deepEqual(out.map((r) => r.damage), [90, 90, 90]);
+});
+
+test('collectMatchDamageEvents: clamping doesn\'t depend on the input already being tick-ordered', () => {
+  const hurts = [
+    hurt({ round: 1, tick: 105, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60 }),
+    hurt({ round: 1, tick: 101, victim: 'c', attacker: 'a', weapon: 'ak47', dmgHealth: 60 }),
+  ];
+  const ctx = makeContext({ rounds, sides });
+  const out = collectMatchDamageEvents(hurts, ctx, ids);
+  // Earlier tick (101) absorbs the full 60 first; the later tick (105) only has 40 left, regardless
+  // of which order the events arrive in.
+  const byTick = new Map(out.map((r) => [r.tick, r.damage]));
+  assert.equal(byTick.get(101), 60);
+  assert.equal(byTick.get(105), 40);
+});
+
 report();
