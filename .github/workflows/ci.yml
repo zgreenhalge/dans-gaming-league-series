@@ -56,12 +56,6 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      # TEMPORARY — #491 damage side-split investigation, needed by the "Dump round boundary ticks"
-      # and "Dump raw damage accumulator" steps below. Remove alongside those steps before merging.
-      CLOUDFLARE_R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID }}
-      CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
-      CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
-      CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -83,38 +77,6 @@ jobs:
 
       - name: Test
         run: npm test
-
-      # TEMPORARY — #491 damage side-split fix validation. Delete these steps (and the R2 env vars
-      # above) before merging. `if` lets them run even though the Test step above is expected to
-      # fail (the diagnostic test asserts zero mismatches against currently-stored, pre-fix data,
-      # which isn't true until a reparse lands the fix).
-      - name: Verify damage-split fix (match 71)
-        if: ${{ !cancelled() }}
-        run: npx tsx scripts/verify-damage-split-fix.ts --match 71
-
-      - name: Verify damage-split fix (match 56)
-        if: ${{ !cancelled() }}
-        run: npx tsx scripts/verify-damage-split-fix.ts --match 56
-
-      - name: Verify damage-split fix (match 33)
-        if: ${{ !cancelled() }}
-        run: npx tsx scripts/verify-damage-split-fix.ts --match 33
-
-      - name: Inspect dropped damage (match 56)
-        if: ${{ !cancelled() }}
-        run: npx tsx scripts/inspect-dropped-damage.ts --match 56
-
-      - name: Inspect dropped damage (match 71)
-        if: ${{ !cancelled() }}
-        run: npx tsx scripts/inspect-dropped-damage.ts --match 71
-
-      - name: Verify round-reset scope (match 71)
-        if: ${{ !cancelled() }}
-        run: npx tsx scripts/verify-round-reset-scope.ts --match 71 --steamid 76561199487369777
-
-      - name: Verify round-reset scope (match 56)
-        if: ${{ !cancelled() }}
-        run: npx tsx scripts/verify-round-reset-scope.ts --match 56 --steamid 76561199025044573
 
       - name: Build
         run: npm run build
