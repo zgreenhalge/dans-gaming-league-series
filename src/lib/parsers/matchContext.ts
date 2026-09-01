@@ -129,12 +129,15 @@ const FINAL_ROUND_SETTLE_FALLBACK_TICKS = 320;
  * tick, but ~`mp_round_restart_delay` later, at the next round's `round_officially_ended`/
  * `round_start` — real trailing action can still land in that gap (a player still alive and
  * shooting during the post-round delay), and reading the netprop exactly at `round_end` misses it
- * (#491). The "settle tick" is the latest tick still guaranteed to be *before* that reset: the next
- * `round_officially_ended` tick after this round's `endTick`, found dynamically per round rather
- * than assumed at a fixed offset — the gap is usually ~320 ticks (5s) but isn't always (an observed
- * outlier of 960 in real data). The match's last round has no following `round_officially_ended` to
- * anchor on (no next round is ever created), so it falls back to `endTick +
- * FINAL_ROUND_SETTLE_FALLBACK_TICKS` as a best-effort approximation.
+ * (#491). The "settle tick" is the latest tick still guaranteed to be *before* that reset: one tick
+ * before the next `round_officially_ended` tick after this round's `endTick` — the reset is already
+ * complete *by* `round_officially_ended`'s own tick (confirmed against real data: sampling exactly
+ * at that tick already reads 0), so reading there instead of one tick earlier would read the reset,
+ * not the settled value. The next round's tick is found dynamically per round rather than assumed at
+ * a fixed offset — the gap is usually ~320 ticks (5s) but isn't always (an observed outlier of 960 in
+ * real data). The match's last round has no following `round_officially_ended` to anchor on (no next
+ * round is ever created), so it falls back to `endTick + FINAL_ROUND_SETTLE_FALLBACK_TICKS` as a
+ * best-effort approximation.
  */
 export function computeSettleTicks(
   rounds: RoundSideInfo[],
@@ -143,7 +146,7 @@ export function computeSettleTicks(
   const sorted = [...officiallyEndedTicks].sort((a, b) => a - b);
   return Int32Array.from(rounds.map((r) => {
     const next = sorted.find((t) => t > r.endTick);
-    return next ?? r.endTick + FINAL_ROUND_SETTLE_FALLBACK_TICKS;
+    return next !== undefined ? next - 1 : r.endTick + FINAL_ROUND_SETTLE_FALLBACK_TICKS;
   }));
 }
 

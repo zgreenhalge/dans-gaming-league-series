@@ -90,11 +90,12 @@ The read itself happens at each round's **settle tick**, not `round_end`'s own t
 next round's `round_officially_ended`/`round_start`. Real action can still land in that gap (a player
 still alive and shooting during the post-round delay before the next round is created), and it's
 credited to the just-ended round's still-live counter — reading exactly at `round_end` is too early
-to see it and silently loses that damage. The settle tick is the next round's actual
+to see it and silently loses that damage. The settle tick is one tick before the next round's actual
 `round_officially_ended` tick, looked up per round rather than assumed at a fixed offset (real demos
-show the gap is usually ~320 ticks but not always). The match's last round has no following round to
-provide one, so it falls back to its own `round_end` tick plus that same observed delay, as a
-best-effort approximation rather than a confirmed read.
+show the gap is usually ~320 ticks but not always) — one tick *before*, not at, since the reset is
+already complete by `round_officially_ended`'s own tick. The match's last round has no following
+round to provide one, so it falls back to its own `round_end` tick plus that same observed delay, as
+a best-effort approximation rather than a confirmed read.
 
 `match_damage_events` (see [`architecture.md`](./architecture.md)) is a separate granular per-hit
 fact table for damage, one row per `player_hurt` event with health-loss-clamped `damage`.
