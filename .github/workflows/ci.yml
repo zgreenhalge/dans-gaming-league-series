@@ -108,21 +108,13 @@ jobs:
         if: ${{ !cancelled() }}
         run: npx tsx scripts/inspect-dropped-damage.ts --match 71
 
-      - name: Inspect round boundary damage (match 71, round 7)
+      - name: Verify round-reset scope (match 71)
         if: ${{ !cancelled() }}
-        run: npx tsx scripts/inspect-round-boundary-damage.ts --match 71 --round 7 --steamid 76561199487369777
+        run: npx tsx scripts/verify-round-reset-scope.ts --match 71 --steamid 76561199487369777
 
-      - name: Inspect round boundary damage (match 71, round 19)
+      - name: Verify round-reset scope (match 56)
         if: ${{ !cancelled() }}
-        run: npx tsx scripts/inspect-round-boundary-damage.ts --match 71 --round 19 --steamid 76561199487369777
-
-      - name: Dump per-round damage trajectory (match 71, player 2)
-        if: ${{ !cancelled() }}
-        run: npx tsx scripts/dump-player-round-damage.ts --match 71 --steamid 76561199487369777
-
-      - name: Inspect round lifecycle events (match 71, round 19)
-        if: ${{ !cancelled() }}
-        run: npx tsx scripts/inspect-round-lifecycle-events.ts --match 71 --round 19 --steamid 76561199487369777
+        run: npx tsx scripts/verify-round-reset-scope.ts --match 56 --steamid 76561199025044573
 
       - name: Build
         run: npm run build
