@@ -8,12 +8,17 @@
  */
 
 import assert from 'node:assert/strict';
-import { dedupeDeathEvents } from './matchContext';
+import { dedupeDeathEvents, computeSettleTicks } from './matchContext';
 import { makeContext, death } from './matchContextFixture';
+import type { RoundSideInfo } from './roundSides';
 import { test, report } from '../test-support/miniTest';
 
 const sides = { a: 'CT', b: 'CT', c: 'T', d: 'T' } as const;
 const rounds = [{ roundNumber: 1, winnerSide: 'CT' as const }, { roundNumber: 2, winnerSide: 'T' as const }];
+
+function round(roundNumber: number, endTick: number): RoundSideInfo {
+  return { roundNumber, endTick, winnerSide: 'CT', shirtsSide: 'CT', winReason: 'elim' };
+}
 
 test('dedupeDeathEvents: a genuine duplicate death for the same (round, victim) is dropped and warned', () => {
   // Both events are post-match-start and in-round — a demoparser2-level duplicate, not warmup
@@ -63,6 +68,34 @@ test('dedupeDeathEvents: an event outside any live round passes through untouche
   const out = dedupeDeathEvents(deaths, ctx);
   assert.equal(out.length, 1);
   assert.equal(ctx.warnings.length, 0);
+});
+
+test('computeSettleTicks: middle rounds settle at their own round_officially_ended tick; the last round falls back to endTick + 320', () => {
+  // Three rounds produce two transition events (none follows the match's last round) — the same
+  // shape real demos have.
+  const result = computeSettleTicks(
+    [round(1, 100), round(2, 500), round(3, 900)],
+    [220, 620],
+  );
+  assert.deepEqual(Array.from(result), [220, 620, 900 + 320]);
+});
+
+test('computeSettleTicks: an unsorted officiallyEndedTicks list is still matched correctly', () => {
+  const result = computeSettleTicks(
+    [round(1, 100), round(2, 500), round(3, 900)],
+    [620, 220], // deliberately out of order
+  );
+  assert.deepEqual(Array.from(result), [220, 620, 900 + 320]);
+});
+
+test('computeSettleTicks: an outlier gap is read from the real event tick, not assumed at a fixed offset', () => {
+  // Real demos show the gap is usually ~320 ticks (5s) but not always — an observed outlier of
+  // 960 in real match data. The last round still has no following event, so it falls back.
+  const result = computeSettleTicks(
+    [round(1, 100), round(2, 1200)],
+    [1060],
+  );
+  assert.deepEqual(Array.from(result), [1060, 1200 + 320]);
 });
 
 report();
