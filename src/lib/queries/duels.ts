@@ -3,11 +3,15 @@ import type { MatchDamageEventRow } from './damage';
 import { killWeaponCategory, KILL_WEAPON_CATEGORIES, type KillWeaponCategory } from '../parsers/weaponClasses';
 
 /** One weapon category's kill split within a duel — only categories either side actually landed
- *  a kill in appear in `MatchDuelStat.weaponBreakdown`. */
+ *  a kill in appear in `MatchDuelStat.weaponBreakdown`. Each array holds one entry per kill, in
+ *  kill order, `true` when that kill was a headshot — a UI can render one visual "pip" per kill
+ *  (à la Leetify's H2H) rather than just a count. */
 export interface MatchDuelWeaponSplit {
   category: KillWeaponCategory;
-  aKills: number;
-  bKills: number;
+  /** `aId`'s kills on `bId` in this category, oldest first. */
+  aKills: boolean[];
+  /** `bId`'s kills on `aId` in this category, oldest first. */
+  bKills: boolean[];
 }
 
 /** One `aId`-vs-`bId` player pair's actual kill/damage exchange within a single match, straight
@@ -44,25 +48,29 @@ export function computeMatchDuels(
   aIds: number[],
   bIds: number[],
 ): MatchDuelStat[] {
+  // Sorted once (not per pair) so weaponBreakdown's kill order reflects when each kill actually
+  // happened, not the order match_kills rows happened to come back in.
+  const orderedKills = [...kills].sort((x, y) => x.round_number - y.round_number || x.tick - y.tick);
+
   return aIds.flatMap((aId) =>
     bIds.map((bId) => {
       let aKills = 0, bKills = 0, aHeadshots = 0, bHeadshots = 0;
-      const byCategory = new Map<KillWeaponCategory, { aKills: number; bKills: number }>();
-      const bumpCategory = (weapon: string, side: 'aKills' | 'bKills') => {
+      const byCategory = new Map<KillWeaponCategory, { aKills: boolean[]; bKills: boolean[] }>();
+      const recordKill = (weapon: string, headshot: boolean, side: 'aKills' | 'bKills') => {
         const category = killWeaponCategory(weapon);
-        const split = byCategory.get(category) ?? { aKills: 0, bKills: 0 };
-        split[side]++;
+        const split = byCategory.get(category) ?? { aKills: [], bKills: [] };
+        split[side].push(headshot);
         byCategory.set(category, split);
       };
-      for (const k of kills) {
+      for (const k of orderedKills) {
         if (k.attacker_player_id === aId && k.victim_player_id === bId) {
           aKills++;
           if (k.headshot) aHeadshots++;
-          bumpCategory(k.weapon, 'aKills');
+          recordKill(k.weapon, k.headshot, 'aKills');
         } else if (k.attacker_player_id === bId && k.victim_player_id === aId) {
           bKills++;
           if (k.headshot) bHeadshots++;
-          bumpCategory(k.weapon, 'bKills');
+          recordKill(k.weapon, k.headshot, 'bKills');
         }
       }
 
@@ -73,8 +81,8 @@ export function computeMatchDuels(
       }
 
       const weaponBreakdown = KILL_WEAPON_CATEGORIES
-        .map((category) => ({ category, ...(byCategory.get(category) ?? { aKills: 0, bKills: 0 }) }))
-        .filter((split) => split.aKills > 0 || split.bKills > 0);
+        .map((category) => ({ category, ...(byCategory.get(category) ?? { aKills: [], bKills: [] }) }))
+        .filter((split) => split.aKills.length > 0 || split.bKills.length > 0);
 
       return { aId, bId, aKills, bKills, aHeadshots, bHeadshots, aDamage, bDamage, weaponBreakdown };
     }),

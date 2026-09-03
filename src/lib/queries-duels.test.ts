@@ -112,10 +112,22 @@ test('computeMatchDuels: buckets kills by weapon category, only including catego
   ];
   const [duel] = computeMatchDuels(kills, [], [1], [2]);
   assert.deepEqual(duel.weaponBreakdown, [
-    { category: 'pistol', aKills: 0, bKills: 1 },
-    { category: 'rifle', aKills: 2, bKills: 0 },
-    { category: 'melee', aKills: 0, bKills: 1 },
+    { category: 'pistol', aKills: [], bKills: [false] },
+    { category: 'rifle', aKills: [false, false], bKills: [] },
+    { category: 'melee', aKills: [], bKills: [false] },
   ]);
+});
+
+test('computeMatchDuels: each category kill list preserves headshot flags in round/tick order, not insertion order', () => {
+  const kills = [
+    kill({ round: 2, tick: 50, attacker: 1, victim: 2, weapon: 'ak47', headshot: false }),
+    kill({ round: 1, tick: 200, attacker: 1, victim: 2, weapon: 'ak47', headshot: true }),
+    kill({ round: 1, tick: 100, attacker: 1, victim: 2, weapon: 'ak47', headshot: false }),
+  ];
+  const [duel] = computeMatchDuels(kills, [], [1], [2]);
+  const [rifle] = duel.weaponBreakdown;
+  assert.equal(rifle.category, 'rifle');
+  assert.deepEqual(rifle.aKills, [false, true, false]);
 });
 
 report();

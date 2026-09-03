@@ -3,12 +3,24 @@
 import Link from 'next/link';
 import type { MatchDuelStat, MatchKillRow, MatchDamageEventRow } from '@/lib/queries';
 import { computeMatchDuels } from '@/lib/queries';
-import { KILL_WEAPON_CATEGORY_LABEL } from '@/lib/parsers/weaponClasses';
+import { KILL_WEAPON_CATEGORY_LABEL, type KillWeaponCategory } from '@/lib/parsers/weaponClasses';
 import { EmptyPanel, type H2HPlayer } from './MatchupDetail';
 import PlayerAvatar from './PlayerAvatar';
+import { WeaponIcon } from './icons/WeaponIcon';
+import { HeadshotIcon } from './icons/KillModifierIcons';
 
 const A_COLOR = 'var(--color-t)';
 const B_COLOR = 'var(--color-ct)';
+const HS_COLOR = 'var(--color-accent-red-fg)';
+
+/** A representative gun per kill-weapon category, for the weapon breakdown's category icon —
+ *  there's no dedicated category icon asset, so this reuses the closest single weapon's icon
+ *  (already sourced for `WeaponIcon` elsewhere). `other` has no sensible representative (its kills
+ *  are world/bomb deaths, never a specific weapon) so it renders no icon, just its text label. */
+const CATEGORY_ICON_WEAPON: Partial<Record<KillWeaponCategory, string>> = {
+  pistol: 'deagle', smg: 'mac10', rifle: 'ak47', sniper: 'awp', shotgun: 'nova',
+  melee: 'knife', utility: 'hegrenade',
+};
 
 /** A stat split as a proportional bar (à la Leetify's H2H) — the two totals overlaid on their
  *  own colored segment, sized to each one's share of the pair's combined total. Kills/headshots
@@ -52,13 +64,44 @@ function SplitBar({
   );
 }
 
-/** One weapon category's kill split, e.g. "Rifles  2 – 0". */
-function WeaponBreakdownRow({ category, aKills, bKills }: MatchDuelStat['weaponBreakdown'][number]) {
+/** One kill, as a numbered "pip" (à la Leetify's H2H) — colored by which side got it, tinted red
+ *  with a headshot badge underneath when that specific kill was a headshot. */
+function KillPip({ index, headshot, color }: { index: number; headshot: boolean; color: string }) {
   return (
-    <div className="flex items-center gap-2 py-1 border-t border-[var(--color-border-tertiary)]">
-      <span className="flex-1 text-right font-mono tnum text-[11px]" style={{ color: aKills > 0 ? A_COLOR : 'var(--color-text-secondary)' }}>{aKills}</span>
-      <span className="w-[64px] shrink-0 text-center font-mono text-[10px] text-[var(--color-text-secondary)] truncate">{KILL_WEAPON_CATEGORY_LABEL[category]}</span>
-      <span className="flex-1 font-mono tnum text-[11px]" style={{ color: bKills > 0 ? B_COLOR : 'var(--color-text-secondary)' }}>{bKills}</span>
+    <div className="flex flex-col items-center gap-0.5 shrink-0">
+      <div
+        className="flex items-center justify-center min-w-[20px] h-5 px-1 rounded-sm font-mono text-[10px] font-bold text-white"
+        style={{ background: headshot ? HS_COLOR : color }}
+      >
+        {index}
+      </div>
+      <div className="h-2.5 flex items-center justify-center">
+        {headshot && <HeadshotIcon size={10} style={{ color: HS_COLOR }} />}
+      </div>
+    </div>
+  );
+}
+
+/** One weapon category's kill split — a category icon/label, then each side's kills as a strip of
+ *  numbered pips (only the sides that actually landed a kill in this category get a strip). */
+function WeaponCategoryBlock({ category, aKills, bKills }: MatchDuelStat['weaponBreakdown'][number]) {
+  const iconWeapon = CATEGORY_ICON_WEAPON[category];
+  return (
+    <div className="py-2 border-t border-[var(--color-border-tertiary)]">
+      <div className="flex items-center justify-center gap-1.5 mb-1.5">
+        {iconWeapon && <WeaponIcon weapon={iconWeapon} size={14} className="text-[var(--color-text-secondary)]" />}
+        <span className="tracked text-[9px] text-[var(--color-text-secondary)]">{KILL_WEAPON_CATEGORY_LABEL[category]}</span>
+      </div>
+      {aKills.length > 0 && (
+        <div className="flex flex-wrap gap-1 justify-center mb-1">
+          {aKills.map((headshot, i) => <KillPip key={i} index={i + 1} headshot={headshot} color={A_COLOR} />)}
+        </div>
+      )}
+      {bKills.length > 0 && (
+        <div className="flex flex-wrap gap-1 justify-center">
+          {bKills.map((headshot, i) => <KillPip key={i} index={i + 1} headshot={headshot} color={B_COLOR} />)}
+        </div>
+      )}
     </div>
   );
 }
@@ -100,8 +143,8 @@ function DuelCard({ duel, players }: { duel: MatchDuelStat; players: Map<number,
         {duel.weaponBreakdown.length > 0 && (
           <div className="mt-2 pt-2 border-t border-[var(--color-border-primary)]">
             <div className="text-center tracked text-[8px] text-[var(--color-text-secondary)] mb-1">Weapon breakdown</div>
-            {duel.weaponBreakdown.map((row) => (
-              <WeaponBreakdownRow key={row.category} {...row} />
+            {duel.weaponBreakdown.map((split) => (
+              <WeaponCategoryBlock key={split.category} {...split} />
             ))}
           </div>
         )}
