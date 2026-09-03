@@ -328,11 +328,15 @@ Manage:
   failure-count table. This is the notification channel: the surface for anything that would otherwise
   fail silently (Discord is deprioritized). Each row is badged by type with a color-coded status pill,
   stage/error, the Action log link, and — for staged demo jobs — parse warnings + quarantine flags (read
-  from R2). An in-progress job whose own `started_at`/`created_at` says it's run past
-  `STALE_IN_FLIGHT_MS` (`jobIsStale()`, `src/lib/jobs.ts` — comfortably above the longest pipeline's own
+  from R2). An in-progress job whose `updated_at` heartbeat has gone quiet past `STALE_IN_FLIGHT_MS`
+  (`jobIsStale()`/`isStale()`, `src/lib/jobs.ts` — comfortably above the longest pipeline's own
   `timeout-minutes`) tags Errored instead of sitting silently In Progress: a GitHub Actions run that dies
   without writing a terminal status (a hard timeout, a manual cancel, a lost runner) otherwise never
-  moves its row off `running`. Demo rows carry inline actions — **Confirm** (a cleanly parsed,
+  moves its row off `running`. Judged off `updated_at` rather than `started_at`/`created_at` — every
+  write this pipeline makes stamps `updated_at` unconditionally, so a still-progressing job keeps
+  refreshing it (never reads stale mid-run) and a fresh redispatch's own claim write immediately
+  un-stales a previously-stuck row, with no dispatch route needing to reset per-run timestamps by hand.
+  Demo rows carry inline actions — **Confirm** (a cleanly parsed,
   score-derived result only), **Re-parse**, **Dismiss** — driven by the shared `useDemoIngestActions`
   hook (the same one the in-match `MatchDemoReviewBlock` uses, so they can't drift); replay/radar rows
   carry a **Retry** that re-dispatches their Action (`JobRetryButton`). A stale row's Re-parse/Retry
@@ -477,7 +481,7 @@ shared score-write + hooks, #138) · `src/lib/demo/mapResult.ts` (`map_result` p
 `src/components/MatchServerPanel.tsx` · `src/components/MatchDemoReviewBlock.tsx` ·
 `src/components/useDemoIngestActions.ts` (shared confirm/dismiss/re-parse) ·
 `src/components/IngestJobActions.tsx` · `src/components/JobActions.tsx` (generic retry + live refresh) ·
-`src/components/AdminActivityFeed.tsx` · `src/lib/jobs.ts` (`jobIsStale`, `STALE_IN_FLIGHT_MS`) ·
+`src/components/AdminActivityFeed.tsx` · `src/lib/jobs.ts` (`jobIsStale`, `isStale`, `STALE_IN_FLIGHT_MS`) ·
 `src/lib/background-jobs.ts` (`isJobInFlight`) · `src/components/QuickActionsPanel.tsx` ·
 `src/components/useDemoMatchIds.ts` ·
 `src/components/ServerConsolePanel.tsx` · `src/components/LaunchOptionsPicker.tsx` (shared config-set +

@@ -7,7 +7,15 @@
  */
 
 import assert from 'node:assert/strict';
-import { jobNeedsAttention, jobDurationLabel, groupBackgroundJobs, type BackgroundJobRow } from './jobs';
+import {
+  jobNeedsAttention,
+  jobDurationLabel,
+  jobIsStale,
+  isStale,
+  STALE_IN_FLIGHT_MS,
+  groupBackgroundJobs,
+  type BackgroundJobRow,
+} from './jobs';
 import { test, report } from './test-support/miniTest';
 
 function matchJob(overrides: Partial<BackgroundJobRow> = {}): BackgroundJobRow {
@@ -83,6 +91,44 @@ test('jobNeedsAttention: failed flags across every job type', () => {
 test('jobNeedsAttention: non-demo pipelines do not flag on parsed/quarantined-shaped statuses', () => {
   assert.equal(jobNeedsAttention(matchJob({ jobType: 'replay_extract', status: 'parsed' })), false);
   assert.equal(jobNeedsAttention(matchJob({ jobType: 'replay_extract', status: 'succeeded' })), false);
+});
+
+// --- jobIsStale / isStale ---
+
+test('isStale: false when under the threshold, true once past it', () => {
+  const updatedAt = '2026-01-01T00:00:00.000Z';
+  const justUnder = new Date(updatedAt).getTime() + STALE_IN_FLIGHT_MS - 1;
+  const justOver = new Date(updatedAt).getTime() + STALE_IN_FLIGHT_MS + 1;
+  assert.equal(isStale(updatedAt, justUnder), false);
+  assert.equal(isStale(updatedAt, justOver), true);
+});
+
+test('isStale: false with no updatedAt to judge by', () => {
+  assert.equal(isStale(null, Date.now()), false);
+});
+
+test('jobIsStale: false for a non-in-progress status regardless of updatedAt age', () => {
+  const job = matchJob({ status: 'succeeded', updatedAt: '2020-01-01T00:00:00.000Z' });
+  assert.equal(jobIsStale(job, Date.now()), false);
+});
+
+test('jobIsStale: true for an in-progress job whose updatedAt heartbeat has gone quiet', () => {
+  const job = matchJob({ status: 'running', updatedAt: '2026-01-01T00:00:00.000Z' });
+  const now = new Date('2026-01-01T00:00:00.000Z').getTime() + STALE_IN_FLIGHT_MS + 1;
+  assert.equal(jobIsStale(job, now), true);
+});
+
+// See isStale()'s doc comment (jobs.ts) for why this is judged off updatedAt rather than
+// startedAt/createdAt — a redispatch only ever refreshes the former.
+test('jobIsStale: a fresh redispatch is not stale even with days-old startedAt/createdAt', () => {
+  const job = matchJob({
+    status: 'queued',
+    updatedAt: '2026-01-04T00:00:00.000Z',
+    startedAt: '2026-01-01T00:00:00.000Z',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  });
+  const now = new Date('2026-01-04T00:00:01.000Z').getTime();
+  assert.equal(jobIsStale(job, now), false);
 });
 
 // --- jobDurationLabel ---
