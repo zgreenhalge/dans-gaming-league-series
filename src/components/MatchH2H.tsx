@@ -122,7 +122,9 @@ function WeaponCategoryBlock({ category, aKills, bKills }: MatchDuelStat['weapon
         </div>
       )}
       {bKills.length > 0 && (
-        <div className="flex flex-wrap gap-1 justify-center">
+        // row-reverse so kill #1 sits on the right and the sequence reads right-to-left,
+        // matching the direction these pips point (mirrors the aKills row above).
+        <div className="flex flex-row-reverse flex-wrap gap-1 justify-center">
           {bKills.map((headshot, i) => <KillPip key={i} index={i + 1} headshot={headshot} color={B_COLOR} direction="left" />)}
         </div>
       )}
