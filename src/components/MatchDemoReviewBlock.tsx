@@ -16,6 +16,9 @@ import { useDemoIngestActions } from './useDemoIngestActions';
 
 interface ResultResponse {
   status: string | null; // background_jobs status
+  // Whether an in-progress `status` has been running past `STALE_IN_FLIGHT_MS` — a GitHub Action that
+  // died without reporting back rather than one still genuinely working (`src/lib/jobs.ts`).
+  stale?: boolean;
   result: DemoIngestResult | null;
   resultError?: string; // set when the staged artifact exists but couldn't be read
   hasDemo?: boolean; // set when there's no job/result but the demo is already sitting in R2
@@ -67,7 +70,30 @@ export default function MatchDemoReviewBlock({ matchId }: { matchId: number }) {
   }, [matchId, refresh]);
 
   if (!data) return null;
-  const { status, result, hasDemo } = data;
+  const { status, result, hasDemo, stale } = data;
+
+  // In progress, but stuck past the point a genuinely-working parse would still be running — the
+  // Action likely finished (or died) without ever writing a terminal status. Offer a retry instead of
+  // spinning forever; `retry()` redispatches through the same route whose own in-flight guard
+  // (`isJobInFlight`, `background-jobs.ts`) already stopped treating a stale row as blocking.
+  if (!result && status && DEMO_INGEST_IN_PROGRESS.has(status) && stale) {
+    return (
+      <Card>
+        <Header />
+        <div className="text-sm text-amber-300">
+          Still parsing after a long time — the GitHub Action likely finished without reporting back.
+        </div>
+        <button
+          onClick={retry}
+          disabled={busy}
+          className="mt-3 rounded-md border border-[var(--color-border-primary)] px-3 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)] disabled:opacity-50"
+        >
+          {busy ? 'Starting…' : 'Retry parsing'}
+        </button>
+        {error && <div className="mt-2 text-xs text-red-300">{error}</div>}
+      </Card>
+    );
+  }
 
   // Parsing in flight.
   if (!result && status && DEMO_INGEST_IN_PROGRESS.has(status)) {
