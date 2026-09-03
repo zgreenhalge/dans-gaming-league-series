@@ -122,11 +122,11 @@ export default async function MatchPage({
   const shirts = stats.filter((s) => s.faction === 'SHIRTS');
   const skins = stats.filter((s) => s.faction === 'SKINS');
 
-  const showScouting = shirts.length === 2 && skins.length === 2;
+  const hasFull2v2Roster = shirts.length === 2 && skins.length === 2;
   // Once a match is played, its Scouting Report tab (pre-match career-history prep) gives way
   // to the H2H tab (this match's own actual matchups, computed below) — so the scouting fetches
   // are only worth making beforehand.
-  const showPreMatchScouting = showScouting && !played;
+  const showPreMatchScouting = hasFull2v2Roster && !played;
   const key = makeDemoKey(matchId);
 
   // Rating projections/win-probability render for an unplayed match either in its own week's date
@@ -167,19 +167,10 @@ export default async function MatchPage({
   // The H2H tab's 4 matchups + 2 teammate pairs, computed straight from this match's own box
   // score (`stats`) via the same `computeH2H` aggregation core the career H2H views use — just
   // fed a single match instead of a season's worth.
-  const matchH2H = played && showScouting
+  const matchH2H = played && hasFull2v2Roster
     ? computeH2H(
         [matchToH2HInput(
-          {
-            id: match.id,
-            match_number: match.match_number,
-            final_score: match.final_score,
-            picked_map: match.picked_map,
-            shirts_pick: match.shirts_pick,
-            skins_starting_side: match.skins_starting_side,
-            shirts_stats: shirts,
-            skins_stats: skins,
-          },
+          { ...match, shirts_stats: shirts, skins_stats: skins },
           week.week_number,
           extractSeasonNumber(season.name),
           season.is_gauntlet,

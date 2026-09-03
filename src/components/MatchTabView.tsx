@@ -387,7 +387,7 @@ export default function MatchTabView({
   const { demoDownloadUrl, job: replayJob, events: replayEvents, recordingURL } = recap;
 
   const hasScoutingData = !!(scoutingData && scoutingH2H);
-  const hasMatchH2H = !!matchH2H && (matchH2H.duos.length > 0 || matchH2H.rivals.length > 0) && shirts.length === 2 && skins.length === 2;
+  const hasMatchH2H = !!matchH2H && (matchH2H.duos.length > 0 || matchH2H.rivals.length > 0);
   const hasProjections = ratingProjections.length > 0;
   const hasSab = sabremetrics.length > 0;
   const canDispatchReplay =
@@ -407,10 +407,6 @@ export default function MatchTabView({
 
   const allStats = [...shirts, ...skins];
   const statsRecorded = allStats.length > 0;
-
-  const h2hPlayers = new Map(
-    allStats.map((s) => [s.player_id, { id: s.player_id, name: s.player_name, steam_avatar_url: s.steam_avatar_url }]),
-  );
 
   const sabMap = new Map<number, SabFieldsWithDerived>(
     sabremetrics.map((s) => [s.player_id, s]),
@@ -603,7 +599,7 @@ export default function MatchTabView({
           skinIds={[skins[0].player_id, skins[1].player_id]}
           duos={matchH2H.duos}
           rivals={matchH2H.rivals}
-          players={h2hPlayers}
+          players={new Map(allStats.map((s) => [s.player_id, { id: s.player_id, name: s.player_name, steam_avatar_url: s.steam_avatar_url }]))}
           shirtsF={shirtsF}
           skinsF={skinsF}
         />

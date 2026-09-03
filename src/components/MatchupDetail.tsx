@@ -8,7 +8,26 @@ import { useMapLookup } from './MapContext';
 import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
 
-type H2HPlayer = { id: number; name: string; steam_avatar_url: string | null };
+export type H2HPlayer = { id: number; name: string; steam_avatar_url: string | null };
+type Faction = 'CT' | 'T' | null;
+
+/** T-orange/CT-blue/neutral color for a faction — shared by every view that colors a
+ *  shirts/skins pairing by starting side (Scouting Report, a match's own H2H tab). */
+export function factionColor(f: Faction): string {
+  if (f === 'T') return 'var(--color-t)';
+  if (f === 'CT') return 'var(--color-ct)';
+  return 'var(--color-text-secondary)';
+}
+
+/** Placeholder card for a pair with no H2H history yet (Scouting Report) or no data for this
+ *  match (a match's own H2H tab). */
+export function EmptyPanel({ label }: { label: string }) {
+  return (
+    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] flex items-center justify-center p-8 min-h-[80px]">
+      <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">{label}</span>
+    </div>
+  );
+}
 
 function StatCell({ label, children, color, title }: { label: string; children: React.ReactNode; color?: string; title?: string }) {
   return (
@@ -217,6 +236,7 @@ export function DuoDetail({
   statsHref,
   friendshipRating,
   ratingBreakdown,
+  bestMapLabel = 'Best on',
 }: {
   duo: DuoStats;
   players: Map<number, H2HPlayer>;
@@ -227,6 +247,10 @@ export function DuoDetail({
   statsHref?: string;
   friendshipRating?: number;
   ratingBreakdown?: string;
+  /** Caption ahead of `duo.bestMap` — "Best on" implies a map they've won together, which
+   *  doesn't hold when `duo` is computed from a single match (a match's own H2H tab passes
+   *  "Played on" instead, since that match's map isn't necessarily one they won). */
+  bestMapLabel?: string;
 }) {
   const maps = useMapLookup();
   const a = players.get(duo.playerA);
@@ -251,7 +275,7 @@ export function DuoDetail({
           className={`font-mono text-[10px] mt-1 truncate ${duo.bestMap ? '' : 'invisible'}`}
           style={{ textShadow: '0 1px 4px rgba(0,0,0,0.8)', color: 'rgba(255,255,255,0.7)' }}
         >
-          Best on{' '}
+          {bestMapLabel}{' '}
           {duo.bestMap ? (
             <Link
               href={`/maps/${mapSlug(duo.bestMap)}`}

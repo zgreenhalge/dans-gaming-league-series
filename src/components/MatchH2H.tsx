@@ -2,24 +2,10 @@
 
 import type { DuoStats, H2HStats } from '@/lib/queries';
 import { findDuo, findRival, normalizeRival } from '@/lib/h2h';
-import { DuoDetail, RivalDetail } from './MatchupDetail';
+import { winRatePct } from '@/lib/util';
+import { DuoDetail, RivalDetail, EmptyPanel, factionColor, type H2HPlayer } from './MatchupDetail';
 
 type Faction = 'CT' | 'T' | null;
-type H2HPlayer = { id: number; name: string; steam_avatar_url: string | null };
-
-function factionColor(f: Faction): string {
-  if (f === 'T') return 'var(--color-t)';
-  if (f === 'CT') return 'var(--color-ct)';
-  return 'var(--color-text-secondary)';
-}
-
-function EmptyPanel({ label }: { label: string }) {
-  return (
-    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] flex items-center justify-center p-8 min-h-[80px]">
-      <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">{label}</span>
-    </div>
-  );
-}
 
 /**
  * This match's own 4 matchups (shirts pair vs. skins pair) plus the two teammate pairs,
@@ -77,8 +63,9 @@ export default function MatchH2H({
             minimal
             headerLabel="Shirts"
             headerColor={factionColor(shirtsF)}
-            friendshipRating={shirtsDuo.roundsPlayed > 0 ? Math.round((shirtsDuo.roundsWon / shirtsDuo.roundsPlayed) * 100) : 0}
+            friendshipRating={winRatePct(shirtsDuo.roundsWon, shirtsDuo.roundsPlayed)}
             ratingBreakdown="Round win rate this match"
+            bestMapLabel="Played on"
           />
         ) : (
           <EmptyPanel label={`Shirts (${name(shirtIds[0])} & ${name(shirtIds[1])}) — no data`} />
@@ -90,8 +77,9 @@ export default function MatchH2H({
             minimal
             headerLabel="Skins"
             headerColor={factionColor(skinsF)}
-            friendshipRating={skinsDuo.roundsPlayed > 0 ? Math.round((skinsDuo.roundsWon / skinsDuo.roundsPlayed) * 100) : 0}
+            friendshipRating={winRatePct(skinsDuo.roundsWon, skinsDuo.roundsPlayed)}
             ratingBreakdown="Round win rate this match"
+            bestMapLabel="Played on"
           />
         ) : (
           <EmptyPanel label={`Skins (${name(skinIds[0])} & ${name(skinIds[1])}) — no data`} />
@@ -111,7 +99,7 @@ export default function MatchH2H({
               rival={rival}
               players={players}
               minimal
-              rivalryRating={rival.aStats.roundsPlayed > 0 ? Math.round(rival.aStats.rwr) : 0}
+              rivalryRating={Math.round(rival.aStats.rwr)}
               ratingBreakdown="Round win rate this match"
             />
           ) : (
