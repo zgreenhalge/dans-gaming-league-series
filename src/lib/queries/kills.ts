@@ -283,6 +283,44 @@ export function allWeaponsWithKills(kills: MatchKillRow[]): string[] {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([w]) => w);
 }
 
+/** One `aId`-vs-`bId` player pair's actual kill exchange within a single match, straight from
+ *  that match's killfeed — how many times each one killed the other, not an aggregate
+ *  multi-match rivalry score. Powers a match's own H2H tab (`MatchH2H.tsx`). */
+export interface MatchDuelStat {
+  aId: number;
+  bId: number;
+  /** `aId`'s kills on `bId`. */
+  aKills: number;
+  /** `bId`'s kills on `aId`. */
+  bKills: number;
+  /** Of `aKills`, how many were headshots. */
+  aHeadshots: number;
+  /** Of `bKills`, how many were headshots. */
+  bHeadshots: number;
+}
+
+/** Computes every `aIds[i]`-vs-`bIds[j]` pair's duel record from one match's killfeed — e.g. the
+ *  4 shirts-vs-skins matchups in a 2v2 Wingman match. Every combination is returned, even ones
+ *  with zero kills either way (they never crossed paths) — callers render an empty state for
+ *  those rather than this function guessing at one. */
+export function computeMatchDuels(kills: MatchKillRow[], aIds: number[], bIds: number[]): MatchDuelStat[] {
+  return aIds.flatMap((aId) =>
+    bIds.map((bId) => {
+      let aKills = 0, bKills = 0, aHeadshots = 0, bHeadshots = 0;
+      for (const k of kills) {
+        if (k.attacker_player_id === aId && k.victim_player_id === bId) {
+          aKills++;
+          if (k.headshot) aHeadshots++;
+        } else if (k.attacker_player_id === bId && k.victim_player_id === aId) {
+          bKills++;
+          if (k.headshot) bHeadshots++;
+        }
+      }
+      return { aId, bId, aKills, bKills, aHeadshots, bHeadshots };
+    }),
+  );
+}
+
 export interface HeadshotTeamkillCounts {
   headshot_kills: number;
   teamkills: number;
