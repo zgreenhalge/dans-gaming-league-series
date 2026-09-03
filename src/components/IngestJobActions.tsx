@@ -12,18 +12,23 @@ export function IngestJobActions({
   matchId,
   status,
   hasPayload,
+  stale = false,
 }: {
   matchId: number;
   status: string;
   hasPayload: boolean;
+  /** The row's own timestamps say it's been "in progress" far longer than the Action ever runs —
+   *  treat it as stuck rather than genuinely still working, so re-parse stays available instead of
+   *  reading "working…" forever (`jobIsStale()`, `src/lib/jobs.ts`). */
+  stale?: boolean;
 }) {
   const router = useRouter();
   const { confirm, dismiss, retry, busy, error } = useDemoIngestActions(matchId, {
     onSuccess: () => router.refresh(),
   });
 
-  // Nothing to act on while the Action is still working.
-  if (DEMO_INGEST_IN_PROGRESS.has(status)) {
+  // Nothing to act on while the Action is still genuinely working.
+  if (DEMO_INGEST_IN_PROGRESS.has(status) && !stale) {
     return <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">working…</span>;
   }
 
