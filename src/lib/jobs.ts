@@ -107,9 +107,16 @@ export const STALE_IN_FLIGHT_MS = 45 * 60 * 1000;
  * by hand.
  */
 export function isStale(updatedAt: string | null, nowMs: number): boolean {
-  if (!updatedAt) return false;
-  const t = new Date(updatedAt).getTime();
-  return !Number.isNaN(t) && nowMs - t > STALE_IN_FLIGHT_MS;
+  const t = parseIso(updatedAt);
+  return t !== null && nowMs - t > STALE_IN_FLIGHT_MS;
+}
+
+/** An ISO timestamp parsed to epoch ms, or `null` for a missing/unparseable one — the one NaN-guarded
+ *  `new Date(iso).getTime()` step every timestamp check in this file goes through. */
+function parseIso(iso: string | null): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? null : t;
 }
 
 /** `startedAt` if set, else `createdAt` (a `queued` row may not have `startedAt` yet), parsed to an
@@ -117,10 +124,7 @@ export function isStale(updatedAt: string | null, nowMs: number): boolean {
  *  long has this run taken" display; staleness detection uses `isStale()`/`updatedAt` instead (see
  *  above) since `startedAt`/`createdAt` don't reliably reset across a redispatch. */
 function resolveJobStart(startedAt: string | null, createdAt: string | null): number | null {
-  const iso = startedAt ?? createdAt;
-  if (!iso) return null;
-  const t = new Date(iso).getTime();
-  return Number.isNaN(t) ? null : t;
+  return parseIso(startedAt ?? createdAt);
 }
 
 /**
@@ -154,9 +158,8 @@ export function jobDurationLabel(job: BackgroundJobRow, nowMs: number | null): s
   if (JOB_IN_PROGRESS_STATUSES.has(job.status)) {
     return nowMs === null ? null : `running ${formatDuration(nowMs - start)}`;
   }
-  if (!job.finishedAt) return null;
-  const finish = new Date(job.finishedAt).getTime();
-  return Number.isNaN(finish) ? null : `took ${formatDuration(finish - start)}`;
+  const finish = parseIso(job.finishedAt);
+  return finish === null ? null : `took ${formatDuration(finish - start)}`;
 }
 
 /** One pipeline's state within a subject group (a match's demo/replay lane, or a map's radar lane). */

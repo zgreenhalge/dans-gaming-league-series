@@ -118,11 +118,8 @@ test('jobIsStale: true for an in-progress job whose updatedAt heartbeat has gone
   assert.equal(jobIsStale(job, now), true);
 });
 
-// A redispatch of a long-stuck row only ever refreshes `updatedAt` (see `recordJobStatus()`) —
-// `startedAt`/`createdAt` are deliberately left alone (`demo_ingest`'s `createdAt` means "when the
-// demo was first attempted," not "when this run started"; `startedAt` isn't reset by every dispatch
-// route either). A fresh redispatch must read as not-stale immediately, off `updatedAt` alone,
-// regardless of how ancient those other two timestamps still are.
+// See isStale()'s doc comment (jobs.ts) for why this is judged off updatedAt rather than
+// startedAt/createdAt — a redispatch only ever refreshes the former.
 test('jobIsStale: a fresh redispatch is not stale even with days-old startedAt/createdAt', () => {
   const job = matchJob({
     status: 'queued',
