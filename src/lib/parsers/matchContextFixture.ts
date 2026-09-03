@@ -53,16 +53,17 @@ export function makeContext(opts: {
     factionOf.set(sid, side === 'CT' ? 'SHIRTS' : 'SKINS');
   }
 
+  // No collector besides accumulators.ts's own tests reads settleTicks (see accumulators.test.ts's
+  // note that collectAccumulators() isn't exercised through this fixture) — same value as
+  // roundEndTicks, matching a round with no trailing post-round action.
+  const endTicks = Int32Array.from(rounds.map((r) => r.endTick));
+
   return {
     rounds,
     liveRounds,
     matchStartTick,
-    roundEndTicks: Int32Array.from(rounds.map((r) => r.endTick)),
-    // No collector besides accumulators.ts's own tests reads settleTicks (see
-    // accumulators.test.ts's note that collectAccumulators() isn't exercised through this
-    // fixture) — defaults to the same value as roundEndTicks, matching a round with no
-    // trailing post-round action.
-    settleTicks: Int32Array.from(rounds.map((r) => r.endTick)),
+    roundEndTicks: endTicks,
+    settleTicks: endTicks,
     tickRate: opts.tickRate ?? 64,
     playerSides,
     roundDeaths,
