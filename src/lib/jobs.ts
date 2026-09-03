@@ -92,15 +92,29 @@ export const JOB_IN_PROGRESS_STATUSES: ReadonlySet<string> = new Set(['received'
 export const STALE_IN_FLIGHT_MS = 45 * 60 * 1000;
 
 /**
+ * `startedAt` if set, else `createdAt` (a `queued` row may not have `startedAt` yet), parsed to an
+ * epoch ms — or `null` if there's no timestamp to derive one from. Shared by every "how long has this
+ * job been going" computation: `jobIsStale` and `jobDurationLabel` below, and — via this same plain
+ * two-string signature rather than a `BackgroundJobRow` — `isJobInFlight`'s in-flight guard
+ * (`background-jobs.ts`), which reads the raw `started_at`/`created_at` columns straight off a
+ * Supabase row. One parse, not three.
+ */
+export function resolveJobStart(startedAt: string | null, createdAt: string | null): number | null {
+  const iso = startedAt ?? createdAt;
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
+/**
  * Whether an in-progress job's own timestamps say it's been running long enough to be stuck rather
  * than genuinely still working. `false` for a non-in-progress status or a row with no timestamp to
  * judge staleness by (trust the status in that case).
  */
 export function jobIsStale(job: BackgroundJobRow, nowMs: number): boolean {
   if (!JOB_IN_PROGRESS_STATUSES.has(job.status)) return false;
-  const startIso = job.startedAt ?? job.createdAt;
-  const start = startIso ? new Date(startIso).getTime() : NaN;
-  if (Number.isNaN(start)) return false;
+  const start = resolveJobStart(job.startedAt, job.createdAt);
+  if (start === null) return false;
   return nowMs - start > STALE_IN_FLIGHT_MS;
 }
 
@@ -121,9 +135,8 @@ export function jobNeedsAttention(job: BackgroundJobRow): boolean {
  * time falls back to `createdAt` since a `queued` row may not have `startedAt` set yet.
  */
 export function jobDurationLabel(job: BackgroundJobRow, nowMs: number | null): string | null {
-  const startIso = job.startedAt ?? job.createdAt;
-  const start = startIso ? new Date(startIso).getTime() : NaN;
-  if (Number.isNaN(start)) return null;
+  const start = resolveJobStart(job.startedAt, job.createdAt);
+  if (start === null) return null;
   if (JOB_IN_PROGRESS_STATUSES.has(job.status)) {
     return nowMs === null ? null : `running ${formatDuration(nowMs - start)}`;
   }

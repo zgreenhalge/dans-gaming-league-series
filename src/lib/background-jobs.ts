@@ -7,7 +7,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { dispatchWorkflow } from './gh-dispatch';
-import { JOB_IN_PROGRESS_STATUSES, STALE_IN_FLIGHT_MS } from './jobs';
+import { JOB_IN_PROGRESS_STATUSES, STALE_IN_FLIGHT_MS, resolveJobStart } from './jobs';
 
 /** A denormalized status column mirroring a `background_jobs` row for cheap reads elsewhere (e.g.
  *  `matches.replay_status`), kept in sync alongside the job row. */
@@ -43,9 +43,8 @@ export async function isJobInFlight(admin: SupabaseClient, jobType: string, key:
     .maybeSingle();
   const row = data as { status?: string; started_at?: string | null; created_at?: string | null } | null;
   if (!row?.status || !JOB_IN_PROGRESS_STATUSES.has(row.status)) return false;
-  const startIso = row.started_at ?? row.created_at;
-  const start = startIso ? new Date(startIso).getTime() : NaN;
-  if (Number.isNaN(start)) return true; // no timestamp to judge staleness by — trust the status
+  const start = resolveJobStart(row.started_at ?? null, row.created_at ?? null);
+  if (start === null) return true; // no timestamp to judge staleness by — trust the status
   return Date.now() - start <= STALE_IN_FLIGHT_MS;
 }
 
