@@ -22,6 +22,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { triggerRatingRecompute } from './ehog-recompute';
 import { parseEliminationWarning } from './parsers/rosterResolver';
+import { resolvePlayerMatchStatsIds } from './demo/_shared';
 import { persistSabremetrics, clearSabremetrics } from './demo/sabremetrics';
 import { persistWeaponStats, clearWeaponStats } from './demo/weaponStats';
 import { persistMatchKills, clearMatchKills } from './demo/matchKills';
@@ -361,14 +362,24 @@ export async function writeMatchScore(
 
   // Sabremetrics and weapon-category/round-economy breakdowns (#279): upsert or clean up, each
   // non-fatal (never rolls back the committed score) and independent of the other, so they run
-  // concurrently rather than serialized behind each other's Supabase round-trip.
+  // concurrently rather than serialized behind each other's Supabase round-trip. All six branches
+  // resolve the same player_id -> player_match_stats.id map, so it's resolved once up front and
+  // handed to each — kept independent of the branches below (caught rather than left to reject
+  // anything) so a failure here can't take any branch down with it: a branch that doesn't get a
+  // resolved map falls back to resolving its own copy, keeping its own independent error handling.
+  let pmsById: Map<number, number> | undefined;
+  try {
+    pmsById = await resolvePlayerMatchStatsIds(matchId);
+  } catch (e) {
+    console.error('Shared player_match_stats id resolution failed (non-fatal, each branch will resolve its own):', e);
+  }
   await Promise.all([
     (async () => {
       try {
         if (sabremetrics && sabremetrics.length > 0) {
-          await persistSabremetrics(matchId, sabremetrics);
+          await persistSabremetrics(matchId, sabremetrics, pmsById);
         } else {
-          await clearSabremetrics(matchId);
+          await clearSabremetrics(matchId, pmsById);
         }
         await clearOpsError(supabaseAdmin, 'match', matchId, 'sabremetrics_persist');
       } catch (e) {
@@ -379,7 +390,7 @@ export async function writeMatchScore(
     (async () => {
       try {
         if (weaponStats && weaponStats.length > 0) {
-          await persistWeaponStats(matchId, weaponStats);
+          await persistWeaponStats(matchId, weaponStats, pmsById);
         } else {
           await clearWeaponStats(matchId);
         }
@@ -392,7 +403,7 @@ export async function writeMatchScore(
     (async () => {
       try {
         if (matchKills && matchKills.length > 0) {
-          await persistMatchKills(matchId, matchKills);
+          await persistMatchKills(matchId, matchKills, pmsById);
         } else {
           await clearMatchKills(matchId);
         }
@@ -418,7 +429,7 @@ export async function writeMatchScore(
     (async () => {
       try {
         if (matchUtilityThrows && matchUtilityThrows.length > 0) {
-          await persistMatchUtilityThrows(matchId, matchUtilityThrows);
+          await persistMatchUtilityThrows(matchId, matchUtilityThrows, pmsById);
         } else {
           await clearMatchUtilityThrows(matchId);
         }
@@ -431,7 +442,7 @@ export async function writeMatchScore(
     (async () => {
       try {
         if (matchRoundEconomy && matchRoundEconomy.length > 0) {
-          await persistMatchRoundEconomy(matchId, matchRoundEconomy);
+          await persistMatchRoundEconomy(matchId, matchRoundEconomy, pmsById);
         } else {
           await clearMatchRoundEconomy(matchId);
         }
@@ -444,7 +455,7 @@ export async function writeMatchScore(
     (async () => {
       try {
         if (matchDamageEvents && matchDamageEvents.length > 0) {
-          await persistMatchDamageEvents(matchId, matchDamageEvents);
+          await persistMatchDamageEvents(matchId, matchDamageEvents, pmsById);
         } else {
           await clearMatchDamageEvents(matchId);
         }

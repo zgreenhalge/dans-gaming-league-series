@@ -71,6 +71,18 @@ async function main() {
     assert.equal(db.player_match_sabremetrics!.length, 0);
   });
 
+  await test('persistSabremetrics: a passed-in pmsById is used instead of resolving one (#518)', async () => {
+    // No player_match_stats rows at all — if this resolved its own map it would find nothing and
+    // drop every row. matchScore.ts shares one pre-resolved map across all six sibling fact tables
+    // rather than each re-querying the same match redundantly — this must still work when passed one.
+    const db: FakeDb = { player_match_sabremetrics: [] };
+    __setTestAdminClient(createFakeSupabaseClient(db));
+    const pmsById = new Map([[1, 1000]]);
+    await persistSabremetrics(MATCH_ID, [{ player_id: 1, sabremetrics: zeroSab({ kills_ct: 7 }) }], pmsById);
+    assert.equal(db.player_match_sabremetrics!.length, 1);
+    assert.equal(db.player_match_sabremetrics![0].player_match_stats_id, 1000);
+  });
+
   await test('clearSabremetrics: deletes every row for this match\'s resolved players', async () => {
     const db = baseDb();
     db.player_match_sabremetrics = [

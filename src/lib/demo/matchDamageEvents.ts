@@ -12,12 +12,17 @@ type DamageEventRow = Database['public']['Tables']['match_damage_events']['Inser
 
 /** Replace this match's `match_damage_events` rows. A hit whose victim has no resolvable
  *  `player_match_stats` row is dropped (an attacker missing a row just nulls that column — the
- *  hit itself still needs to be recorded against the victim), matching `persistMatchKills()`. */
+ *  hit itself still needs to be recorded against the victim), matching `persistMatchKills()`.
+ *
+ *  `pmsById` lets a caller that's already resolving it for sibling fact tables (a score confirm
+ *  writes ~6 of these concurrently for the same match) pass its own map instead of this function
+ *  re-querying `player_match_stats` redundantly — omit it to resolve independently. */
 export async function persistMatchDamageEvents(
   matchId: number,
   events: DemoMatchDamageEvent[],
+  pmsById?: Map<number, number>,
 ): Promise<void> {
-  const pmsById = await resolvePlayerMatchStatsIds(matchId);
+  pmsById ??= await resolvePlayerMatchStatsIds(matchId);
 
   const rows: DamageEventRow[] = [];
   for (const e of events) {
