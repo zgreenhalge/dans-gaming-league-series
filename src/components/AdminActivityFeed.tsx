@@ -42,14 +42,19 @@ type Tag = 'errored' | 'progress' | 'completed';
 type TypeFilter = 'all' | BackgroundJobType;
 type RangeFilter = 'all' | '30m' | '1h' | '6h' | '12h' | '24h';
 
-interface JobEvent {
+/** A job row's tag/staleness depends on `now` (a 60s-refreshed tick); everything else about it
+ *  doesn't — kept as its own shape so recomputing tag/staleness each tick is a cheap re-map over
+ *  `JobEventBase`s rather than rebuilding and re-sorting the whole event list. */
+interface JobEventBase {
   kind: 'job';
   key: string;
   job: BackgroundJobRow;
-  tag: Tag;
-  stale: boolean;
   when: string | null;
   ts: number | null;
+}
+interface JobEvent extends JobEventBase {
+  tag: Tag;
+  stale: boolean;
 }
 interface OpsEvent {
   kind: 'ops';
@@ -59,6 +64,7 @@ interface OpsEvent {
   when: string | null;
   ts: number | null;
 }
+type BaseEvent = JobEventBase | OpsEvent;
 type Event = JobEvent | OpsEvent;
 
 function jobTag(job: BackgroundJobRow, stale: boolean): Tag {
@@ -120,17 +126,21 @@ function FilterChip<T extends string>({ value, label, active, onClick }: {
   );
 }
 
+/** The four accent tones every status/tag badge on this feed renders in — one string per tone, so
+ *  `StatusPill` and `TagBadge` (below) share the same palette instead of each hand-typing the same
+ *  `bg-…/text-…/border-…` triples. */
+const TONE_CLS = {
+  red: 'bg-[var(--color-accent-red-bg)] text-[var(--color-accent-red-fg)] border-[var(--color-accent-red-border)]',
+  amber: 'bg-[var(--color-accent-amber-bg)] text-[var(--color-accent-amber-fg)] border-[var(--color-accent-amber-border)]',
+  blue: 'bg-[var(--color-accent-blue-bg)] text-[var(--color-accent-blue-fg)] border-[var(--color-accent-blue-border)]',
+  green: 'bg-[var(--color-accent-green-bg)] text-[var(--color-accent-green-fg)] border-[var(--color-accent-green-border)]',
+} as const;
+
 function StatusPill({ status }: { status: string }) {
   const failed = status === 'failed';
   const review = status === 'parsed' || status === 'quarantined';
   const progress = JOB_IN_PROGRESS_STATUSES.has(status);
-  const cls = failed
-    ? 'bg-[var(--color-accent-red-bg)] text-[var(--color-accent-red-fg)] border-[var(--color-accent-red-border)]'
-    : review
-      ? 'bg-[var(--color-accent-amber-bg)] text-[var(--color-accent-amber-fg)] border-[var(--color-accent-amber-border)]'
-      : progress
-        ? 'bg-[var(--color-accent-blue-bg)] text-[var(--color-accent-blue-fg)] border-[var(--color-accent-blue-border)]'
-        : 'bg-[var(--color-accent-green-bg)] text-[var(--color-accent-green-fg)] border-[var(--color-accent-green-border)]';
+  const cls = failed ? TONE_CLS.red : review ? TONE_CLS.amber : progress ? TONE_CLS.blue : TONE_CLS.green;
   return (
     <span className={`inline-block font-mono text-[10px] px-2 py-[2px] rounded border whitespace-nowrap ${cls}`}>
       {status}
@@ -139,11 +149,8 @@ function StatusPill({ status }: { status: string }) {
 }
 
 const TAG_LABEL: Record<Tag, string> = { errored: 'Errored', progress: 'In Progress', completed: 'Completed' };
-const TAG_CLS: Record<Tag, string> = {
-  errored: 'bg-[var(--color-accent-red-bg)] text-[var(--color-accent-red-fg)] border-[var(--color-accent-red-border)]',
-  progress: 'bg-[var(--color-accent-blue-bg)] text-[var(--color-accent-blue-fg)] border-[var(--color-accent-blue-border)]',
-  completed: 'bg-[var(--color-accent-green-bg)] text-[var(--color-accent-green-fg)] border-[var(--color-accent-green-border)]',
-};
+const TAG_ORDER: Tag[] = ['errored', 'progress', 'completed'];
+const TAG_CLS: Record<Tag, string> = { errored: TONE_CLS.red, progress: TONE_CLS.blue, completed: TONE_CLS.green };
 
 /** The status tag every event carries — what used to be three separate tabs (Errored / In Progress /
  *  Completed) is now one of these per row, so the tag filter chips below narrow a single list instead
@@ -307,11 +314,7 @@ function OpsEventRow({ event, onJump, onDismissed }: {
   );
 }
 
-const TAG_FILTERS: { value: Tag; label: string }[] = [
-  { value: 'errored', label: 'Errored' },
-  { value: 'progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-];
+const TAG_FILTERS: { value: Tag; label: string }[] = TAG_ORDER.map((value) => ({ value, label: TAG_LABEL[value] }));
 
 const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -388,19 +391,16 @@ export function AdminActivityFeed({
     };
   }, []);
 
-  const events = useMemo(() => {
-    const jobEvents: JobEvent[] = jobs.map((job) => {
-      const stale = now !== null && jobIsStale(job, now);
-      return {
-        kind: 'job',
-        key: `job:${job.jobType}:${job.subject.kind === 'match' ? job.subject.matchId : job.subject.mapId}`,
-        job,
-        tag: jobTag(job, stale),
-        stale,
-        when: fmtUtcShort(job.updatedAt),
-        ts: toTs(job.updatedAt),
-      };
-    });
+  // Sorted independently of `now` — a job's tag/staleness ticks every 60s, but that's no reason to
+  // rebuild + re-sort the whole merged list every tick when `jobs`/`liveOpsErrors` haven't changed.
+  const sortedBase = useMemo<BaseEvent[]>(() => {
+    const jobEvents: JobEventBase[] = jobs.map((job) => ({
+      kind: 'job',
+      key: `job:${job.jobType}:${job.subject.kind === 'match' ? job.subject.matchId : job.subject.mapId}`,
+      job,
+      when: fmtUtcShort(job.updatedAt),
+      ts: toTs(job.updatedAt),
+    }));
     const opsEvents: OpsEvent[] = liveOpsErrors.map((err) => ({
       kind: 'ops',
       key: `ops:${err.id}`,
@@ -410,7 +410,17 @@ export function AdminActivityFeed({
       ts: toTs(err.occurredAt),
     }));
     return [...jobEvents, ...opsEvents].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0));
-  }, [jobs, liveOpsErrors, now]);
+  }, [jobs, liveOpsErrors]);
+
+  const events = useMemo<Event[]>(
+    () =>
+      sortedBase.map((e) => {
+        if (e.kind === 'ops') return e;
+        const stale = now !== null && jobIsStale(e.job, now);
+        return { ...e, tag: jobTag(e.job, stale), stale };
+      }),
+    [sortedBase, now],
+  );
 
   const counts = useMemo(() => {
     const c: Record<Tag, number> = { errored: 0, progress: 0, completed: 0 };
@@ -419,7 +429,7 @@ export function AdminActivityFeed({
   }, [events]);
 
   const [view, setView] = useState<View>('events');
-  const [tagFilter, setTagFilter] = useState<Set<Tag>>(new Set(['errored', 'progress', 'completed']));
+  const [tagFilter, setTagFilter] = useState<Set<Tag>>(() => new Set(TAG_ORDER));
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [rangeFilter, setRangeFilter] = useState<RangeFilter>('24h');
 
