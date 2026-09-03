@@ -76,12 +76,29 @@ Implemented in `src/lib/parsers/roundSides.ts`, and persisted per round as `matc
 (`match_rounds.shirts_side` for that round + the player's fixed match `faction`) and summing with
 `deriveSideSplitCounts()` (both `src/lib/queries/kills.ts`) — not collected during parsing.
 
-**CT/T splits for damage** (`damage_ct`/`damage_t`) are computed from the engine's
-`ActionTrackingServices` accumulators at each round-end tick: `delta(round R) = value@roundEnd(R) −
-value@roundEnd(R−1)` (R=1 baseline 0), each delta attributed to the player's side that round —
-implemented in `src/lib/parsers/accumulators.ts`. `match_damage_events` (see
-[`architecture.md`](./architecture.md)) is a separate granular per-hit fact table for damage, one row
-per `player_hurt` event with health-loss-clamped `damage` matching this accumulator's own behavior.
+**CT/T splits for damage** (`damage_ct`/`damage_t`) are read directly from the engine's
+`ActionTrackingServices.m_flTotalRoundDamageDealt` — already scoped to the current round (it resets
+rather than accumulating), so the raw value is credited straight to the player's side that round, no
+delta arithmetic needed — implemented in `src/lib/parsers/accumulators.ts`. The sibling `m_iDamage`
+accumulator is match-cumulative rather than per-round and updates one round late relative to the
+round_end event, so delta-computing a side split from it would misattribute each round's damage to
+the following round's side; `m_flTotalRoundDamageDealt` has no such lag.
+
+The read itself happens at each round's **settle tick**, not `round_end`'s own tick —
+`computeSettleTicks()` (`src/lib/parsers/matchContext.ts`). The engine doesn't reset
+`m_flTotalRoundDamageDealt` when `round_end` fires; it resets ~`mp_round_restart_delay` later, at the
+next round's `round_officially_ended`/`round_start`. Real action can still land in that gap (a player
+still alive and shooting during the post-round delay before the next round is created), and it's
+credited to the just-ended round's still-live counter — reading exactly at `round_end` is too early
+to see it and silently loses that damage. The settle tick is one tick before the next round's actual
+`round_officially_ended` tick, looked up per round rather than assumed at a fixed offset (real demos
+show the gap is usually ~320 ticks but not always) — one tick *before*, not at, since the reset is
+already complete by `round_officially_ended`'s own tick. The match's last round has no following
+round to provide one, so it falls back to its own `round_end` tick plus that same observed delay, as
+a best-effort approximation rather than a confirmed read.
+
+`match_damage_events` (see [`architecture.md`](./architecture.md)) is a separate granular per-hit
+fact table for damage, one row per `player_hurt` event with health-loss-clamped `damage`.
 
 **ADR by side** divides the side-filtered damage (`damage_ct`/`damage_t`) by the rounds *played on
 that side*, not the player's total rounds played. Two different denominators feed this, depending on

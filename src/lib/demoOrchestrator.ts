@@ -125,6 +125,12 @@ export function parseDemoSabremetrics(
     demoBuffer, 'round_freeze_end', [], ['total_rounds_played'],
   ) as RoundFreezeEndRow[];
 
+  // Needed for accumulators.ts's settle-tick sampling (#491) — see buildMatchContext()'s
+  // officiallyEndedTicks param / computeSettleTicks().
+  const officiallyEndedEvents = parseEvent(
+    demoBuffer, 'round_officially_ended', [], [],
+  ) as { tick: number }[];
+
   // 3. Build match context — resolve the starting side the same way parseDemoFile does
   // (stored wins; otherwise infer from the demo) so sabremetrics and the score agree.
   const matchStartTick = findMatchStartTick(demoBuffer);
@@ -140,6 +146,7 @@ export function parseDemoSabremetrics(
   const context = buildMatchContext(
     demoBuffer, roundEndEvents, deathEvents,
     steamToPlayer, effectiveSide, targetWinRounds,
+    officiallyEndedEvents.map((e) => e.tick),
   );
 
   if (context.rounds.length === 0) {
