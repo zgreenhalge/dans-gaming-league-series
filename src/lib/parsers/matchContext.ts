@@ -104,7 +104,8 @@ export interface MatchContext {
    *  `RoundBounds` structurally (this field plus `liveRounds`), so any collector with `context` in
    *  scope passes `context` itself to `roundOf()`/`groupByRound()`. */
   matchStartTick: number;
-  roundEndTicks: Int32Array;
+  /** Per-round "settle tick" — see `computeSettleTicks()`. Parallel to `rounds`. */
+  settleTicks: Int32Array;
   tickRate: number;
   /** Per-round CT/T side, only populated when the starting side resolves (see `hasSides`). Needed
    *  for CT/T-specific splits; prefer `factionOf`/`isTeamKill()` for "are these two teammates". */
@@ -115,6 +116,37 @@ export interface MatchContext {
   factionOf: Map<string, 'SHIRTS' | 'SKINS'>;
   warnings: string[];
   hasSides: boolean;
+}
+
+/** Best-effort settle tick for the match's last round, which has no following
+ *  `round_officially_ended` to anchor on (see `computeSettleTicks()`) — the observed
+ *  `mp_round_restart_delay` (#491), applied as an approximation rather than a confirmed read. */
+const FINAL_ROUND_SETTLE_FALLBACK_TICKS = 320;
+
+/**
+ * A round-scoped engine netprop (e.g. `m_flTotalRoundDamageDealt`) resets not at `round_end`'s own
+ * tick, but ~`mp_round_restart_delay` later, at the next round's `round_officially_ended`/
+ * `round_start` — real trailing action can still land in that gap (a player still alive and
+ * shooting during the post-round delay), and reading the netprop exactly at `round_end` misses it
+ * (#491). The "settle tick" is the latest tick still guaranteed to be *before* that reset: one tick
+ * before the next `round_officially_ended` tick after this round's `endTick` — the reset is already
+ * complete *by* `round_officially_ended`'s own tick (confirmed against real data: sampling exactly
+ * at that tick already reads 0), so reading there instead of one tick earlier would read the reset,
+ * not the settled value. The next round's tick is found dynamically per round rather than assumed at
+ * a fixed offset — the gap is usually ~320 ticks (5s) but isn't always (an observed outlier of 960 in
+ * real data). The match's last round has no following `round_officially_ended` to anchor on (no next
+ * round is ever created), so it falls back to `endTick + FINAL_ROUND_SETTLE_FALLBACK_TICKS` as a
+ * best-effort approximation.
+ */
+export function computeSettleTicks(
+  rounds: RoundSideInfo[],
+  officiallyEndedTicks: number[],
+): Int32Array {
+  const sorted = [...officiallyEndedTicks].sort((a, b) => a - b);
+  return Int32Array.from(rounds.map((r) => {
+    const next = sorted.find((t) => t > r.endTick);
+    return next !== undefined ? next - 1 : r.endTick + FINAL_ROUND_SETTLE_FALLBACK_TICKS;
+  }));
 }
 
 /**
@@ -192,6 +224,7 @@ export function buildMatchContext(
   steamToPlayer: Map<string, { player_id: number; faction: 'SHIRTS' | 'SKINS' }>,
   skinsStartingSide: 'CT' | 'T' | null,
   targetWinRounds: number,
+  officiallyEndedTicks: number[] = [],
 ): MatchContext {
   const warnings: string[] = [];
 
@@ -219,7 +252,7 @@ export function buildMatchContext(
   }
 
   const liveRounds = new Set(rounds.map((r) => r.roundNumber));
-  const roundEndTicks = Int32Array.from(rounds.map((r) => r.endTick));
+  const settleTicks = computeSettleTicks(rounds, officiallyEndedTicks);
 
   const roundByNumber = new Map<number, RoundSideInfo>();
   for (const r of rounds) roundByNumber.set(r.roundNumber, r);
@@ -250,7 +283,7 @@ export function buildMatchContext(
     rounds,
     liveRounds,
     matchStartTick,
-    roundEndTicks,
+    settleTicks,
     tickRate,
     playerSides,
     roundDeaths,
