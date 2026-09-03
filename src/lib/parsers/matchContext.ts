@@ -101,11 +101,14 @@ export interface MatchContext {
   rounds: RoundSideInfo[];
   liveRounds: Set<number>;
   /** Tick the live match begins at — see `RoundBounds`/`roundOf()`. `MatchContext` satisfies
-   *  `RoundBounds` structurally (this field plus `liveRounds`), so any collector with `context` in
-   *  scope passes `context` itself to `roundOf()`/`groupByRound()`. */
+   *  `RoundBounds` structurally (this field plus `liveRounds` and `settleWindowByRound`), so any
+   *  collector with `context` in scope passes `context` itself to `roundOf()`/`groupByRound()`. */
   matchStartTick: number;
   /** Per-round "settle tick" — see `computeSettleTicks()`. Parallel to `rounds`. */
   settleTicks: Int32Array;
+  /** Each round's own `endTick` and settle tick, keyed by round number instead of array index —
+   *  see `RoundBounds`/`roundOf()`. */
+  settleWindowByRound: Map<number, { endTick: number; settleTick: number }>;
   tickRate: number;
   /** Per-round CT/T side, only populated when the starting side resolves (see `hasSides`). Needed
    *  for CT/T-specific splits; prefer `factionOf`/`isTeamKill()` for "are these two teammates". */
@@ -255,6 +258,10 @@ export function buildMatchContext(
 
   const liveRounds = new Set(rounds.map((r) => r.roundNumber));
   const settleTicks = computeSettleTicks(rounds, officiallyEndedTicks);
+  const settleWindowByRound = new Map<number, { endTick: number; settleTick: number }>();
+  for (let i = 0; i < rounds.length; i++) {
+    settleWindowByRound.set(rounds[i].roundNumber, { endTick: rounds[i].endTick, settleTick: settleTicks[i] });
+  }
 
   const roundByNumber = new Map<number, RoundSideInfo>();
   for (const r of rounds) roundByNumber.set(r.roundNumber, r);
@@ -277,7 +284,7 @@ export function buildMatchContext(
 
   const roundDeaths = buildRoundDeaths(
     deathEvents,
-    { liveRounds, matchStartTick },
+    { liveRounds, matchStartTick, settleWindowByRound },
     (steamId) => steamToPlayer.has(steamId),
   );
 
@@ -286,6 +293,7 @@ export function buildMatchContext(
     liveRounds,
     matchStartTick,
     settleTicks,
+    settleWindowByRound,
     tickRate,
     playerSides,
     roundDeaths,

@@ -8,7 +8,15 @@ import { buildRoundDeaths, type MatchContext, type PlayerDeathRow, type PlayerHu
 import type { RoundSideInfo } from './roundSides';
 
 export function makeContext(opts: {
-  rounds: { roundNumber: number; winnerSide: 'CT' | 'T' | null; endTick?: number }[];
+  rounds: {
+    roundNumber: number;
+    winnerSide: 'CT' | 'T' | null;
+    endTick?: number;
+    /** Defaults to `endTick` (no trailing post-round action). Set higher than `endTick` to model a
+     *  round with a real settle window, for tests exercising `roundOf()`'s trailing-action
+     *  correction (#518). */
+    settleTick?: number;
+  }[];
   sides: Record<string, 'CT' | 'T'>;
   sidesByRound?: Record<number, Record<string, 'CT' | 'T'>>;
   deaths?: PlayerDeathRow[];
@@ -44,7 +52,23 @@ export function makeContext(opts: {
     }
   }
 
-  const roundDeaths = buildRoundDeaths(opts.deaths ?? [], { liveRounds, matchStartTick }, (sid) => sid in opts.sides);
+  // Defaults to each round's own endTick (no trailing post-round action, matching
+  // accumulators.test.ts's note that collectAccumulators() isn't exercised through this fixture) —
+  // pass a round's settleTick explicitly to model a real settle window and exercise roundOf()'s
+  // trailing-action correction.
+  const settleTicks = Int32Array.from(
+    opts.rounds.map((r, i) => r.settleTick ?? rounds[i].endTick),
+  );
+  const settleWindowByRound = new Map<number, { endTick: number; settleTick: number }>();
+  for (let i = 0; i < rounds.length; i++) {
+    settleWindowByRound.set(rounds[i].roundNumber, { endTick: rounds[i].endTick, settleTick: settleTicks[i] });
+  }
+
+  const roundDeaths = buildRoundDeaths(
+    opts.deaths ?? [],
+    { liveRounds, matchStartTick, settleWindowByRound },
+    (sid) => sid in opts.sides,
+  );
 
   // Faction is a fixed roster fact, independent of per-round side. Fixtures don't model side
   // switches across a match, so a player's opts.sides entry maps 1:1 to a faction here.
@@ -53,16 +77,12 @@ export function makeContext(opts: {
     factionOf.set(sid, side === 'CT' ? 'SHIRTS' : 'SKINS');
   }
 
-  // No collector besides accumulators.ts's own tests reads settleTicks (see accumulators.test.ts's
-  // note that collectAccumulators() isn't exercised through this fixture) — defaults to each
-  // round's own endTick, matching a round with no trailing post-round action.
-  const settleTicks = Int32Array.from(rounds.map((r) => r.endTick));
-
   return {
     rounds,
     liveRounds,
     matchStartTick,
     settleTicks,
+    settleWindowByRound,
     tickRate: opts.tickRate ?? 64,
     playerSides,
     roundDeaths,

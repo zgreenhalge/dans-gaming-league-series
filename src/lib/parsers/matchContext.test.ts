@@ -3,6 +3,8 @@
  * duplicate player_death for the same (round, victim) before any event-based collector
  * (KAST, trades, multikills, match_kills, ...) sees the deathEvents stream, so a genuine
  * demoparser2-level duplicate can't get silently double-counted by every consumer independently.
+ * Also covers computeSettleTicks() and the trailing-action scenario that used to masquerade as a
+ * duplicate before roundOf()'s own correction (#518, tested directly in _shared.test.ts).
  *
  * Run:  npx vitest run src/lib/parsers/matchContext.test.ts
  */
@@ -68,6 +70,32 @@ test('dedupeDeathEvents: an event outside any live round passes through untouche
   const out = dedupeDeathEvents(deaths, ctx);
   assert.equal(out.length, 1);
   assert.equal(ctx.warnings.length, 0);
+});
+
+test('dedupeDeathEvents: a bomb detonating on its own fuse timer after round_end no longer collides with the next round\'s real death (#518)', () => {
+  // Round 1 ends (round_end) at tick 1000, but the planted bomb doesn't actually detonate until
+  // tick 1050 — real trailing action, well within round 1's settle window (up to 1250). Its
+  // player_death carries total_rounds_played=1 (round 2's naive offset) purely because
+  // total_rounds_played had already incremented at round_end. Without roundOf()'s correction this
+  // would collide with c's genuine round-2 death below and get dropped by dedup — with it, both
+  // resolve to their real rounds and neither is touched.
+  const roundsWithSettle = [
+    { roundNumber: 1, winnerSide: 'CT' as const, endTick: 1000, settleTick: 1250 },
+    { roundNumber: 2, winnerSide: 'T' as const, endTick: 2000 },
+  ];
+  const deaths = [
+    death({ round: 2, tick: 1050, victim: 'c', attacker: null, weapon: 'planted_c4' }),
+    death({ round: 2, tick: 1800, victim: 'c', attacker: 'a', weapon: 'm4a1_silencer' }),
+  ];
+  const ctx = makeContext({ rounds: roundsWithSettle, sides, deaths });
+  const out = dedupeDeathEvents(deaths, ctx);
+  assert.equal(out.length, 2);
+  assert.equal(ctx.warnings.length, 0);
+  assert.equal(out[0].weapon, 'planted_c4');
+  assert.equal(out[1].weapon, 'm4a1_silencer');
+  // The bomb death is now correctly attributed to round 1, the real elimination to round 2.
+  assert.ok(ctx.roundDeaths.get('c')?.has(1));
+  assert.ok(ctx.roundDeaths.get('c')?.has(2));
 });
 
 test('computeSettleTicks: middle rounds settle one tick before their own round_officially_ended; the last round settles at its own round_end tick', () => {
