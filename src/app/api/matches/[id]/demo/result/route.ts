@@ -12,24 +12,23 @@ import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '@/lib/demo/ingestResult';
 import { recordJobStatus, matchJobKey } from '@/lib/background-jobs';
-import { JOB_IN_PROGRESS_STATUSES, STALE_IN_FLIGHT_MS, resolveJobStart } from '@/lib/jobs';
+import { JOB_IN_PROGRESS_STATUSES, isStale } from '@/lib/jobs';
 
 /** The job's status plus whether it's an in-progress row stuck past `STALE_IN_FLIGHT_MS` — the same
- *  check the admin Activity feed's `jobIsStale()` makes, so a demo stuck behind a dead GitHub Action
- *  reads the same way here as it does there (`isJobInFlight`, `background-jobs.ts`, already lets a
- *  stale row's retry actually redispatch). */
+ *  heartbeat check the admin Activity feed's `jobIsStale()` makes, so a demo stuck behind a dead
+ *  GitHub Action reads the same way here as it does there (`isJobInFlight`, `background-jobs.ts`,
+ *  already lets a stale row's retry actually redispatch). */
 async function jobStatus(matchId: number): Promise<{ status: string | null; stale: boolean }> {
   const { data } = await getAdminClient()
     .from('background_jobs')
-    .select('status, started_at, created_at')
+    .select('status, updated_at')
     .eq('job_type', JOB_TYPE)
     .eq('match_id', matchId)
     .maybeSingle();
-  const row = data as { status?: string; started_at?: string | null; created_at?: string | null } | null;
+  const row = data as { status?: string; updated_at?: string | null } | null;
   const status = row?.status ?? null;
   if (!status || !JOB_IN_PROGRESS_STATUSES.has(status)) return { status, stale: false };
-  const start = resolveJobStart(row?.started_at ?? null, row?.created_at ?? null);
-  return { status, stale: start !== null && Date.now() - start > STALE_IN_FLIGHT_MS };
+  return { status, stale: isStale(row?.updated_at ?? null, Date.now()) };
 }
 
 type OrphanGateRow = VetoFields & {

@@ -7,7 +7,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { dispatchWorkflow } from './gh-dispatch';
-import { JOB_IN_PROGRESS_STATUSES, STALE_IN_FLIGHT_MS, resolveJobStart } from './jobs';
+import { JOB_IN_PROGRESS_STATUSES, isStale } from './jobs';
 
 /** A denormalized status column mirroring a `background_jobs` row for cheap reads elsewhere (e.g.
  *  `matches.replay_status`), kept in sync alongside the job row. */
@@ -29,23 +29,22 @@ export const mapJobKey = (id: number): JobKey => ({ column: 'map_id', id });
 
 /**
  * Whether a `background_jobs` row for `(jobType, key)` is genuinely in flight — an in-progress
- * status recent enough to trust, not one parked there by a run that died without ever writing a
- * terminal status (see `STALE_IN_FLIGHT_MS` in `jobs.ts`). Every dispatch route's duplicate-guard
- * goes through this instead of a bare status check, so a stuck job's own "reparse"/"retry" button is
- * what un-wedges it rather than a silent no-op that leaves the row wedged indefinitely.
+ * status with a recent enough `updated_at` heartbeat to trust, not one parked there by a run that
+ * died without ever writing a terminal status (see `isStale()`/`STALE_IN_FLIGHT_MS` in `jobs.ts`).
+ * Every dispatch route's duplicate-guard goes through this instead of a bare status check, so a
+ * stuck job's own "reparse"/"retry" button is what un-wedges it rather than a silent no-op that
+ * leaves the row wedged indefinitely.
  */
 export async function isJobInFlight(admin: SupabaseClient, jobType: string, key: JobKey): Promise<boolean> {
   const { data } = await admin
     .from('background_jobs')
-    .select('status, started_at, created_at')
+    .select('status, updated_at')
     .eq('job_type', jobType)
     .eq(key.column, key.id)
     .maybeSingle();
-  const row = data as { status?: string; started_at?: string | null; created_at?: string | null } | null;
+  const row = data as { status?: string; updated_at?: string | null } | null;
   if (!row?.status || !JOB_IN_PROGRESS_STATUSES.has(row.status)) return false;
-  const start = resolveJobStart(row.started_at ?? null, row.created_at ?? null);
-  if (start === null) return true; // no timestamp to judge staleness by — trust the status
-  return Date.now() - start <= STALE_IN_FLIGHT_MS;
+  return !isStale(row.updated_at ?? null, Date.now());
 }
 
 /** `created_at` of a `background_jobs` row for `(jobType, key)`, or `null` if no such row exists yet.
