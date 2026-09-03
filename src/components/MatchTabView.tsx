@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/SeasonFilter';
 import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import Th from '@/components/Th';
-import type { MatchStatRow, MatchScoutingData, H2HData, DuoStats, H2HStats, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
+import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
 import { splitStat } from '@/lib/queries';
 import type { SabFieldsWithDerived } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
@@ -320,7 +320,6 @@ export default function MatchTabView({
   matchEconomyStats = [],
   ehog,
   scouting,
-  matchH2H,
   mapInfo,
   recap,
 }: {
@@ -361,12 +360,6 @@ export default function MatchTabView({
     data: MatchScoutingData | null;
     h2h: H2HData | null;
   };
-  /** This match's own 4 matchups + 2 teammate pairs for the H2H tab, computed from the match's
-   *  actual box score once it's played (`null` beforehand). */
-  matchH2H: {
-    duos: DuoStats[];
-    rivals: H2HStats[];
-  } | null;
   /** The picked map, other matches played on it (for the heatmap), and the season's map pool. */
   mapInfo: {
     map: string | null;
@@ -387,7 +380,9 @@ export default function MatchTabView({
   const { demoDownloadUrl, job: replayJob, events: replayEvents, recordingURL } = recap;
 
   const hasScoutingData = !!(scoutingData && scoutingH2H);
-  const hasMatchH2H = !!matchH2H && (matchH2H.duos.length > 0 || matchH2H.rivals.length > 0);
+  // Real duel data only exists once a demo's been parsed into match_kills — a played match
+  // without one has no H2H tab rather than a half-empty one.
+  const hasMatchH2H = played && matchKills.length > 0 && shirts.length === 2 && skins.length === 2;
   const hasProjections = ratingProjections.length > 0;
   const hasSab = sabremetrics.length > 0;
   const canDispatchReplay =
@@ -593,15 +588,12 @@ export default function MatchTabView({
         </>
       )}
 
-      {tab === 'h2h' && hasMatchH2H && matchH2H && (
+      {tab === 'h2h' && hasMatchH2H && (
         <MatchH2H
           shirtIds={[shirts[0].player_id, shirts[1].player_id]}
           skinIds={[skins[0].player_id, skins[1].player_id]}
-          duos={matchH2H.duos}
-          rivals={matchH2H.rivals}
+          matchKills={matchKills}
           players={new Map(allStats.map((s) => [s.player_id, { id: s.player_id, name: s.player_name, steam_avatar_url: s.steam_avatar_url }]))}
-          shirtsF={shirtsF}
-          skinsF={skinsF}
         />
       )}
 

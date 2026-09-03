@@ -587,9 +587,9 @@ export function mapMatchRowsToH2HInput(matches: _H2HSourceMatch[]): H2HMatchInpu
   }));
 }
 
-// Minimal shape shared by `scheduleToH2HInput`/`gauntletRoundsToH2HInput`/`matchToH2HInput` —
-// mirrors `MatchWithRoster`/`GauntletMatch`/`Match` (queries/schedule.ts, queries/gauntlet.ts,
-// the match page) without importing them, so this file stays supabase-free.
+// Minimal shape shared by `scheduleToH2HInput`/`gauntletRoundsToH2HInput` — mirrors
+// `MatchWithRoster`/`GauntletMatch` (queries/schedule.ts, queries/gauntlet.ts) without importing
+// them, so this file stays supabase-free.
 interface _SeasonSourceMatch {
   id: number;
   match_number: number;
@@ -602,9 +602,9 @@ interface _SeasonSourceMatch {
 }
 
 /** Adapts one already-resolved match (with its own roster) into `computeH2H`'s input shape.
- *  Shared by `scheduleToH2HInput`/`gauntletRoundsToH2HInput` (a season's own H2H tab, one match
- *  at a time across a week/round) and a match page's own H2H tab (a single match). */
-export function matchToH2HInput(
+ *  Shared by `scheduleToH2HInput`/`gauntletRoundsToH2HInput` — a season's own H2H tab, one match
+ *  at a time across a week/round. */
+function matchToH2HInput(
   m: _SeasonSourceMatch,
   weekOrRoundNumber: number,
   seasonNumber: number | null,

@@ -113,17 +113,19 @@ so you don't have to reverse-engineer them from scratch each time.
   - **Duos** (`DuoStats`) — performance when two players are *teammates* (same faction)
   - **Rivals** (`H2HStats`) — performance when two players are *opponents* (different factions)
   Rendered by `H2HMatrix.tsx` (overview grid) and `MatchupDetail.tsx` (drill-down for a pair —
-  `DuoDetail`/`RivalDetail`, shared by the Statistics H2H tab, a player's Matchups tab, a match's
-  pre-match Scouting Report, and a played match's own H2H tab). Each non-`minimal` drill-down
-  includes **Map Intel**: a per-pair, per-map record (`DuoStats.mapBreakdown` /
-  `H2HStats.mapBreakdown`) aggregated directly from that pair's own match history — not from
-  either player's individual career map stats.
-- **Match H2H tab** — a played match's own 4 matchups (each shirts player vs. each skins player)
-  plus its 2 teammate pairs, rendered by `MatchH2H.tsx` in the same `DuoDetail`/`RivalDetail`
-  cards as the Scouting Report's Friends/Rivals sections, but fed `computeH2H()` given only that
-  one match (`matchToH2HInput()` in `src/lib/h2h.ts`) so every stat reflects this match's actual
-  box score rather than career history. Replaces the Scouting Report tab once the match is played
-  (`getMatch()`'s `stats` have real `is_win`/`adr`/etc. only then) — see `MatchTabView.tsx`.
+  `DuoDetail`/`RivalDetail`, shared by the Statistics H2H tab, a player's Matchups tab, and a
+  match's pre-match Scouting Report). Each non-`minimal` drill-down includes **Map Intel**: a
+  per-pair, per-map record (`DuoStats.mapBreakdown` / `H2HStats.mapBreakdown`) aggregated directly
+  from that pair's own match history — not from either player's individual career map stats. A
+  played match's own H2H tab (below) is a different, single-match concept and doesn't use any of
+  this machinery.
+- **Match H2H tab / duel** — a played match's own 4 shirts-vs-skins kill exchanges, rendered by
+  `MatchH2H.tsx` and computed by `computeMatchDuels()` (`src/lib/queries/kills.ts`) straight from
+  that match's parsed killfeed (`match_kills` → `getMatchKills()`) — literally how many times each
+  pair killed each other in this one match, not a `computeH2H()`-style career rivalry score.
+  Replaces the Scouting Report tab once the match is played, and only once a demo's been parsed
+  into kills (`matchKills.length > 0` — see `MatchTabView.tsx`); a played match with no parsed
+  demo shows neither tab.
 - **Blended score** (H2H rankings) — how the "Best Friends"/"Closest Rivals" cards
   (`topDuos`/`topRivals` in `H2HSection.tsx`) rank pairs, and how the `H2HMatrix` colors
   its cells. Shared via `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/queries/h2h.ts`.

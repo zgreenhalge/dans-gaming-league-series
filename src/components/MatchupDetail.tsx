@@ -236,7 +236,6 @@ export function DuoDetail({
   statsHref,
   friendshipRating,
   ratingBreakdown,
-  bestMapLabel = 'Best on',
 }: {
   duo: DuoStats;
   players: Map<number, H2HPlayer>;
@@ -247,10 +246,6 @@ export function DuoDetail({
   statsHref?: string;
   friendshipRating?: number;
   ratingBreakdown?: string;
-  /** Caption ahead of `duo.bestMap` — "Best on" implies a map they've won together, which
-   *  doesn't hold when `duo` is computed from a single match (a match's own H2H tab passes
-   *  "Played on" instead, since that match's map isn't necessarily one they won). */
-  bestMapLabel?: string;
 }) {
   const maps = useMapLookup();
   const a = players.get(duo.playerA);
@@ -275,7 +270,7 @@ export function DuoDetail({
           className={`font-mono text-[10px] mt-1 truncate ${duo.bestMap ? '' : 'invisible'}`}
           style={{ textShadow: '0 1px 4px rgba(0,0,0,0.8)', color: 'rgba(255,255,255,0.7)' }}
         >
-          {bestMapLabel}{' '}
+          Best on{' '}
           {duo.bestMap ? (
             <Link
               href={`/maps/${mapSlug(duo.bestMap)}`}

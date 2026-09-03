@@ -7,8 +7,7 @@ import { getMatchMeta } from '@/lib/seo/og';
 import { buildMatchJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 import { projectRatingDeltas, predictWinProbability, isProvisional, type RatingProjection } from '@/lib/ehog';
-import { computeH2H, matchToH2HInput } from '@/lib/h2h';
-import { isPlayedScore, parseScore, extractSeasonNumber, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
+import { isPlayedScore, parseScore, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
 import { TopbarShell } from '@/components/TopbarShell';
@@ -163,21 +162,6 @@ export default async function MatchPage({
     played ? getMatchEconomyStats(matchId) : Promise.resolve([]),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
-
-  // The H2H tab's 4 matchups + 2 teammate pairs, computed straight from this match's own box
-  // score (`stats`) via the same `computeH2H` aggregation core the career H2H views use — just
-  // fed a single match instead of a season's worth.
-  const matchH2H = played && hasFull2v2Roster
-    ? computeH2H(
-        [matchToH2HInput(
-          { ...match, shirts_stats: shirts, skins_stats: skins },
-          week.week_number,
-          extractSeasonNumber(season.name),
-          season.is_gauntlet,
-        )],
-        new Map(stats.map((s) => [s.player_id, { name: s.player_name, steam_avatar_url: s.steam_avatar_url }])),
-      )
-    : null;
 
   // Replay/Events (issue #121). Only played matches can have a replay, and the Recap
   // tab is gated on `played`, so skip the queries entirely otherwise. Status is
@@ -441,7 +425,6 @@ export default async function MatchPage({
               matchEconomyStats={matchEconomyStats}
               ehog={{ deltas: ratingDeltas, projections: ratingProjections, current: ratingCurrent }}
               scouting={{ data: scoutingData, h2h: scoutingH2H }}
-              matchH2H={matchH2H}
               mapInfo={{ map, matchIds: mapMatchIds, pool: season.map_pool }}
               recap={{ demoDownloadUrl, job: replayJob, events: replayEvents, recordingURL: match.recording_url }}
             />
