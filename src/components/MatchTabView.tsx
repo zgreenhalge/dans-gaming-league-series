@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/SeasonFilter';
 import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import Th from '@/components/Th';
-import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
+import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, MatchDamageEventRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
 import { splitStat } from '@/lib/queries';
 import type { SabFieldsWithDerived } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
@@ -316,6 +316,7 @@ export default function MatchTabView({
   skinsSide,
   sabremetrics = [],
   matchKills = [],
+  matchDamageEvents = [],
   matchWeaponClassStats = [],
   matchEconomyStats = [],
   ehog,
@@ -339,8 +340,12 @@ export default function MatchTabView({
   targetWinRounds: number;
   skinsSide: 'CT' | 'T' | null;
   sabremetrics?: MatchSabremetricsRow[];
-  /** This match's demo-derived kills, one row per kill — feeds the Advanced tab's Weapons table. */
+  /** This match's demo-derived kills, one row per kill — feeds the Advanced tab's Weapons table
+   *  and the H2H tab's duel cards. */
   matchKills?: MatchKillRow[];
+  /** This match's demo-derived damage events, one row per hit — feeds the H2H tab's per-pair
+   *  damage bar. Empty until a demo is (re)parsed. */
+  matchDamageEvents?: MatchDamageEventRow[];
   /** This match's `player_match_weapon_stats` rows — feeds the Advanced tab's Weapons sub-tab
    *  category accuracy breakdown (#474). */
   matchWeaponClassStats?: WeaponClassMatchRow[];
@@ -593,6 +598,7 @@ export default function MatchTabView({
           shirtIds={[shirts[0].player_id, shirts[1].player_id]}
           skinIds={[skins[0].player_id, skins[1].player_id]}
           matchKills={matchKills}
+          matchDamageEvents={matchDamageEvents}
           players={new Map(allStats.map((s) => [s.player_id, { id: s.player_id, name: s.player_name, steam_avatar_url: s.steam_avatar_url }]))}
         />
       )}

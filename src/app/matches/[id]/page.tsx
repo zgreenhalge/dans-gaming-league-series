@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, isWeekComplete, isMatchCurrentlyLive, getMatchKills, getMatchWeaponClassStats, getMatchEconomyStats } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, isWeekComplete, isMatchCurrentlyLive, getMatchKills, getMatchDamageEvents, getMatchWeaponClassStats, getMatchEconomyStats } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/seo/og';
 import { buildMatchJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
@@ -137,7 +137,7 @@ export default async function MatchPage({
   const needsPreviousWeekCheck =
     showPreMatchScouting && week.week_number > 1 && matchWindow != null && today < matchWindow.weekStart;
 
-  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, previousWeekComplete, isLiveNow, matchKills, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
     showPreMatchScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     // Cached and shared across every match page (see #441 item 3) rather than a fresh
     // full-league computeH2H() scan on each load.
@@ -158,6 +158,9 @@ export default async function MatchPage({
     // Drives the `--ticker-h` override below — only an unplayed match can ever be the live one.
     played ? Promise.resolve(false) : isMatchCurrentlyLive(matchId),
     played ? getMatchKills(matchId) : Promise.resolve([]),
+    // Feeds the H2H tab's per-pair damage bar (#461) — a match's own kill/damage exchange, not
+    // each player's own damage total (`player_match_stats.damage`).
+    played ? getMatchDamageEvents(matchId) : Promise.resolve([]),
     played ? getMatchWeaponClassStats(matchId) : Promise.resolve([]),
     played ? getMatchEconomyStats(matchId) : Promise.resolve([]),
   ]);
@@ -421,6 +424,7 @@ export default async function MatchPage({
               skinsSide={match.skins_starting_side}
               sabremetrics={sabremetrics}
               matchKills={matchKills}
+              matchDamageEvents={matchDamageEvents}
               matchWeaponClassStats={matchWeaponClassStats}
               matchEconomyStats={matchEconomyStats}
               ehog={{ deltas: ratingDeltas, projections: ratingProjections, current: ratingCurrent }}

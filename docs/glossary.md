@@ -119,13 +119,14 @@ so you don't have to reverse-engineer them from scratch each time.
   from that pair's own match history — not from either player's individual career map stats. A
   played match's own H2H tab (below) is a different, single-match concept and doesn't use any of
   this machinery.
-- **Match H2H tab / duel** — a played match's own 4 shirts-vs-skins kill exchanges, rendered by
-  `MatchH2H.tsx` and computed by `computeMatchDuels()` (`src/lib/queries/kills.ts`) straight from
-  that match's parsed killfeed (`match_kills` → `getMatchKills()`) — literally how many times each
-  pair killed each other in this one match, not a `computeH2H()`-style career rivalry score.
-  Replaces the Scouting Report tab once the match is played, and only once a demo's been parsed
-  into kills (`matchKills.length > 0` — see `MatchTabView.tsx`); a played match with no parsed
-  demo shows neither tab.
+- **Match H2H tab / duel** — a played match's own 4 shirts-vs-skins duels, rendered by
+  `MatchH2H.tsx` and computed by `computeMatchDuels()` (`src/lib/queries/duels.ts`) straight from
+  that match's parsed killfeed and damage log (`match_kills` → `getMatchKills()`, `kills.ts`;
+  `match_damage_events` → `getMatchDamageEvents()`, `damage.ts`) — literally how many times each
+  pair killed each other, with how much damage and which weapon categories, in this one match, not
+  a `computeH2H()`-style career rivalry score. Replaces the Scouting Report tab once the match is
+  played, and only once a demo's been parsed into kills (`matchKills.length > 0` — see
+  `MatchTabView.tsx`); a played match with no parsed demo shows neither tab.
 - **Blended score** (H2H rankings) — how the "Best Friends"/"Closest Rivals" cards
   (`topDuos`/`topRivals` in `H2HSection.tsx`) rank pairs, and how the `H2HMatrix` colors
   its cells. Shared via `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/queries/h2h.ts`.
