@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/SeasonFilter';
 import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import Th from '@/components/Th';
+import { useTabState, resolveTab } from './useTabState';
 import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, MatchDamageEventRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
 import { splitStat } from '@/lib/queries';
 import type { SabFieldsWithDerived } from '@/lib/types';
@@ -22,6 +23,7 @@ import { roundsPlayedBySide } from '@/lib/parsers/roundSides';
 
 type Faction = 'CT' | 'T' | null;
 type Tab = 'leaderboard' | 'advanced' | 'scouting' | 'h2h' | 'recap';
+const MATCH_TABS: readonly Tab[] = ['leaderboard', 'advanced', 'scouting', 'h2h', 'recap'];
 
 function factionClass(f: Faction): string {
   if (f === 'CT') return 'faction-ct';
@@ -401,7 +403,17 @@ export default function MatchTabView({
   // existing replay/heatmap/recording, and a player/admin can still reach the tab to
   // add a recording URL before any demo is ever uploaded.
   const hasRecap = !!demoDownloadUrl || !!replayEvents || !!recordingURL || canEditRecording;
-  const [tab, setTab] = useState<Tab>('leaderboard');
+  const [rawTab, setTab] = useTabState(MATCH_TABS, 'leaderboard');
+  // Falls back to Scoreboard when the URL names a tab this match doesn't currently have (e.g. a
+  // stale ?tab=h2h link for a match whose demo hasn't been parsed).
+  const availableTabs: { key: Tab }[] = [
+    { key: 'leaderboard' },
+    ...(hasSab ? [{ key: 'advanced' as const }] : []),
+    ...(hasScoutingData ? [{ key: 'scouting' as const }] : []),
+    ...(hasMatchH2H ? [{ key: 'h2h' as const }] : []),
+    ...(played && hasRecap ? [{ key: 'recap' as const }] : []),
+  ];
+  const tab = resolveTab(rawTab, availableTabs);
   const [includeCT, setIncludeCT] = useState(true);
   const [includeT, setIncludeT] = useState(true);
 
