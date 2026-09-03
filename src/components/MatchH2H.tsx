@@ -64,7 +64,7 @@ function SplitBar({
   );
 }
 
-const PIP_W = 22;
+const PIP_W = 30;
 const PIP_H = 20;
 const PIP_NOTCH = 6;
 // Each segment overlaps the previous by exactly the notch depth, so its point nests into the
