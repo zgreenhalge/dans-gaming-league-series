@@ -47,7 +47,7 @@ export function BulkReparseButton({ matchIds }: { matchIds: number[] }) {
   if (matchIds.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-3 mb-4">
+    <div className="flex items-center gap-3">
       <button
         onClick={runAll}
         disabled={busy}

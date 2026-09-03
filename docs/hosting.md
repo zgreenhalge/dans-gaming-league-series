@@ -316,51 +316,65 @@ purely advisory, since a scrim never blocks a match from actually starting.
 ## Admin surfaces
 
 **`/admin`** is the unified admin console (issue #262), linked from the Topbar (visible only when
-`session.user.isAdmin`). Three zones on one page — a standalone Server panel (always visible,
-regardless of which tab below it is open — the shared server isn't scoped to any one tab), an Activity
-feed, and Manage:
+`session.user.isAdmin`). A standalone Server panel and a Quick actions panel sit above the tabs, always
+visible regardless of which tab is open (neither is scoped to any one tab); below them, Activity and
+Manage:
 
 - **Activity feed** (`AdminActivityFeed.tsx`) — every `background_jobs` row across all four pipelines
-  (`demo_ingest`, `replay_extract`, `radar_build`, `ehog_recompute`; #145) merged with live `ops_errors`, tiered Errored /
-  In Progress / Completed (defaulting to the first non-empty tier in that priority order). This is the
-  notification channel: the surface for anything that would otherwise fail silently (Discord is
-  deprioritized). Each row is badged by type with a color-coded status pill, stage/error, the Action
-  log link, and — for staged demo jobs — parse warnings + quarantine flags (read from R2). Demo rows
-  carry inline actions — **Confirm** (a cleanly parsed, score-derived result only), **Re-parse**,
-  **Dismiss** — driven by the shared `useDemoIngestActions` hook (the same one the in-match
-  `MatchDemoReviewBlock` uses, so they can't drift); replay/radar rows carry a **Retry** that
-  re-dispatches their Action (`JobRetryButton`). Data comes from `getBackgroundJobs()`/`getOpsErrors()`;
-  the list stays live via Realtime on `background_jobs`. The Completed tier clusters consecutive
-  same-type/same-status runs (a bulk reparse reads as one line, not forty); Errored never clusters.
-- **Server panel** (`ServerConsolePanel.tsx`, one bordered box) — the single shared server's current
-  occupant (reconciled via `getActiveServerMatch`), and — on the occupying match — two controls:
-  **Apply match settings** (re-push that match's MatchZy config via `matchzy_loadmatch_url`, restoring
-  forced `map_sides` + demo-upload cvars after an "Apply config set" or panel edit clobbered them;
-  sends the server back to warmup/knife-select) and **Teardown** (stop a server left live — the
-  autostop-failed safety valve). Connection details (a one-click Steam join, the raw `connect` string +
-  copy button) and the **connected roster** (`ConnectedRoster`, `ServerStatusBits.tsx` — a real name
-  list via `getConnectedPlayers`, not a bare count; its heading tints amber for "casual use," someone
-  connected outside a DGLS match) are the same shared components `/scrim` uses — no separate "idle"/
-  player-count lines duplicating what the state pill and roster already say. Below that, in the same
-  box, the shared `LaunchOptionsPicker` (config set + map + "Play out all rounds"/"Friendly" toggles —
-  the same component `/scrim` uses) with **Start** and **Apply config set** side by side: Start
-  launches via `launchServer` (same orchestration and toggles `/api/scrim/start` uses, so the two
-  surfaces can't drift, #315); Apply config set pushes the picked set's `server`/`cs2_settings` + cfg
-  files without starting (`applyConfigSetOnly`) — the same fields `dathost-golden-apply.ts --reassert`
-  pushes, and the same call real-match provisioning makes via `launchServer`, so a manual apply here
-  and an automatic one at the next match provision can never disagree on which fields get re-asserted.
-  It does *not* load a match config, so run **Apply match settings** after it if a match is mid-setup.
-  The **Compare to live config** block runs `diffConfigSet` read-only for the selected config set
-  (settings + every cfg file, cvar-by-cvar), the same comparison the `dathost-golden-diff` CLI renders.
-  Live via Realtime on `match_server_state`. Also hosts the **disk cleanup** controls (issue #132, see
-  `infra/matchzy/README.md`) — enable/disable the `dathost-cleanup` workflow, set its interval, and a
-  **Run now** button, all through `src/lib/gh-dispatch.ts`'s GitHub Actions helpers rather than
-  `background_jobs` (there's no per-match/per-map target for this job).
+  (`demo_ingest`, `replay_extract`, `radar_build`, `ehog_recompute`; #145) merged with live `ops_errors`
+  into one newest-first list. Each row carries a status tag — Errored / In Progress / Completed — and a
+  row of filter chips narrows the list by tag, job type, and time range in any combination, rather than
+  splitting the tag into separate tabs; a **History** view sits alongside it for the week-grouped
+  failure-count table. This is the notification channel: the surface for anything that would otherwise
+  fail silently (Discord is deprioritized). Each row is badged by type with a color-coded status pill,
+  stage/error, the Action log link, and — for staged demo jobs — parse warnings + quarantine flags (read
+  from R2). An in-progress job whose own `started_at`/`created_at` says it's run past
+  `STALE_IN_FLIGHT_MS` (`jobIsStale()`, `src/lib/jobs.ts` — comfortably above the longest pipeline's own
+  `timeout-minutes`) tags Errored instead of sitting silently In Progress: a GitHub Actions run that dies
+  without writing a terminal status (a hard timeout, a manual cancel, a lost runner) otherwise never
+  moves its row off `running`. Demo rows carry inline actions — **Confirm** (a cleanly parsed,
+  score-derived result only), **Re-parse**, **Dismiss** — driven by the shared `useDemoIngestActions`
+  hook (the same one the in-match `MatchDemoReviewBlock` uses, so they can't drift); replay/radar rows
+  carry a **Retry** that re-dispatches their Action (`JobRetryButton`). A stale row's Re-parse/Retry
+  stays available rather than reading "working…" forever — every dispatch route's duplicate-guard
+  (`isJobInFlight()`, `src/lib/background-jobs.ts`) treats the same stale row as not actually in flight,
+  so pressing it starts a fresh run instead of silently no-op'ing. Data comes from
+  `getBackgroundJobs()`/`getOpsErrors()`; the list stays live via Realtime on `background_jobs`.
+- **Server panel** (`ServerConsolePanel.tsx`) — two collapsible sections (`CollapsiblePanel`, both open
+  by default). **Server** holds the single shared server's current occupant (reconciled via
+  `getActiveServerMatch`), and — on the occupying match — two controls: **Apply match settings**
+  (re-push that match's MatchZy config via `matchzy_loadmatch_url`, restoring forced `map_sides` +
+  demo-upload cvars after an "Apply config set" or panel edit clobbered them; sends the server back to
+  warmup/knife-select) and **Teardown** (stop a server left live — the autostop-failed safety valve).
+  Connection details (a one-click Steam join, the raw `connect` string + copy button) and the
+  **connected roster** (`ConnectedRoster`, `ServerStatusBits.tsx` — a real name list via
+  `getConnectedPlayers`, not a bare count; its heading tints amber for "casual use," someone connected
+  outside a DGLS match) are the same shared components `/scrim` uses — no separate "idle"/player-count
+  lines duplicating what the state pill and roster already say; the state pill also renders as the
+  panel's collapsed-preview. **Server config** holds the shared `LaunchOptionsPicker` (config set + map
+  + "Play out all rounds"/"Friendly" toggles — the same component `/scrim` uses) with **Start** and
+  **Apply config set** side by side: Start launches via `launchServer` (same orchestration and toggles
+  `/api/scrim/start` uses, so the two surfaces can't drift, #315); Apply config set pushes the picked
+  set's `server`/`cs2_settings` + cfg files without starting (`applyConfigSetOnly`) — the same fields
+  `dathost-golden-apply.ts --reassert` pushes, and the same call real-match provisioning makes via
+  `launchServer`, so a manual apply here and an automatic one at the next match provision can never
+  disagree on which fields get re-asserted. It does *not* load a match config, so run **Apply match
+  settings** after it if a match is mid-setup. The **Compare to live config** block runs
+  `diffConfigSet` read-only for the selected config set (settings + every cfg file, cvar-by-cvar), the
+  same comparison the `dathost-golden-diff` CLI renders. Live via Realtime on `match_server_state`. Also
+  hosts the **disk cleanup** controls (issue #132, see `infra/matchzy/README.md`, its own collapsed-by-
+  default panel) — enable/disable the `dathost-cleanup` workflow, set its interval, and a **Run now**
+  button, all through `src/lib/gh-dispatch.ts`'s GitHub Actions helpers rather than `background_jobs`
+  (there's no per-match/per-map target for this job).
+- **Quick actions panel** (`QuickActionsPanel.tsx`) — shortcuts for the console's most reached-for
+  global tools, so they don't get buried a tab and a sub-tab deep. Currently just the bulk demo
+  re-parse button (`BulkReparseButton`, shared `useDemoMatchIds()` hook with `MatchManager`'s per-row
+  indicator); renders nothing while there are no demo matches to reparse.
 - **Manage** — Match/Player/Season, reusing `MatchManager`/`PlayerManager`/`SeasonManager` behind a
   Match/Player/Season switch; unrelated to the job/hosting pipelines documented here.
 
-An Activity-tab ops error for a `match`/`player`/`season` entity links straight into the matching
-Manage tab, prefiltered to that subject — see `AdminConsole.tsx`.
+An Activity ops error for a `match`/`player`/`season` entity links straight into the matching Manage
+tab, prefiltered to that subject — see `AdminConsole.tsx`.
 
 `is_admin` is threaded into the session JWT (`authOptions.js`) and typed on `session.user.isAdmin`;
 existing sessions are backfilled on their next request (no re-login needed). Every admin page still
@@ -463,6 +477,9 @@ shared score-write + hooks, #138) · `src/lib/demo/mapResult.ts` (`map_result` p
 `src/components/MatchServerPanel.tsx` · `src/components/MatchDemoReviewBlock.tsx` ·
 `src/components/useDemoIngestActions.ts` (shared confirm/dismiss/re-parse) ·
 `src/components/IngestJobActions.tsx` · `src/components/JobActions.tsx` (generic retry + live refresh) ·
+`src/components/AdminActivityFeed.tsx` · `src/lib/jobs.ts` (`jobIsStale`, `STALE_IN_FLIGHT_MS`) ·
+`src/lib/background-jobs.ts` (`isJobInFlight`) · `src/components/QuickActionsPanel.tsx` ·
+`src/components/useDemoMatchIds.ts` ·
 `src/components/ServerConsolePanel.tsx` · `src/components/LaunchOptionsPicker.tsx` (shared config-set +
 map + playout/friendly toggle controls, used by both `ServerConsolePanel` and `ScrimPanel`) ·
 `src/components/MapPicker.tsx` (shared map-select + custom-workshop-ID input) ·

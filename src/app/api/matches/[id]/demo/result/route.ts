@@ -12,15 +12,24 @@ import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '@/lib/demo/ingestResult';
 import { recordJobStatus, matchJobKey } from '@/lib/background-jobs';
+import { JOB_IN_PROGRESS_STATUSES, STALE_IN_FLIGHT_MS, resolveJobStart } from '@/lib/jobs';
 
-async function jobStatus(matchId: number): Promise<string | null> {
+/** The job's status plus whether it's an in-progress row stuck past `STALE_IN_FLIGHT_MS` — the same
+ *  check the admin Activity feed's `jobIsStale()` makes, so a demo stuck behind a dead GitHub Action
+ *  reads the same way here as it does there (`isJobInFlight`, `background-jobs.ts`, already lets a
+ *  stale row's retry actually redispatch). */
+async function jobStatus(matchId: number): Promise<{ status: string | null; stale: boolean }> {
   const { data } = await getAdminClient()
     .from('background_jobs')
-    .select('status')
+    .select('status, started_at, created_at')
     .eq('job_type', JOB_TYPE)
     .eq('match_id', matchId)
     .maybeSingle();
-  return (data as { status?: string } | null)?.status ?? null;
+  const row = data as { status?: string; started_at?: string | null; created_at?: string | null } | null;
+  const status = row?.status ?? null;
+  if (!status || !JOB_IN_PROGRESS_STATUSES.has(status)) return { status, stale: false };
+  const start = resolveJobStart(row?.started_at ?? null, row?.created_at ?? null);
+  return { status, stale: start !== null && Date.now() - start > STALE_IN_FLIGHT_MS };
 }
 
 type OrphanGateRow = VetoFields & {
@@ -76,7 +85,7 @@ export async function GET(
   const access = await requireMatchAccess(matchId);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
-  const [status, buf] = await Promise.all([jobStatus(matchId), getR2Object(demoResultKey(matchId))]);
+  const [{ status, stale }, buf] = await Promise.all([jobStatus(matchId), getR2Object(demoResultKey(matchId))]);
   if (!buf) {
     // No staged artifact. If there's also no job at all (status null — the ingest notify never
     // fired, or its dispatch was lost) *and* this match is actually in the window where a demo could
@@ -84,16 +93,17 @@ export async function GET(
     // considered abandoned rather than still uploading, and offer a manual trigger instead of asking
     // for a re-upload. This never fires for a match that hasn't started or is already scored.
     const hasDemo = status ? false : await findOrphanedDemo(matchId);
-    return NextResponse.json({ status, result: null, hasDemo });
+    return NextResponse.json({ status, stale, result: null, hasDemo });
   }
   // A truncated/corrupt artifact (partial write, aborted Action) must not 500 into a silently
   // swallowed error — surface it so the UI can show a failure and let the user dismiss it.
   try {
     const result = JSON.parse(gunzipMaybe(buf).toString()) as DemoIngestResult;
-    return NextResponse.json({ status, result });
+    return NextResponse.json({ status, stale, result });
   } catch {
     return NextResponse.json({
       status,
+      stale,
       result: null,
       resultError: 'The staged demo result is unreadable (corrupt or incomplete).',
     });

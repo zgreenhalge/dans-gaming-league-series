@@ -14,6 +14,8 @@ import { useSearchParams } from 'next/navigation';
 import TabBar from './TabBar';
 import { tabCls } from '@/lib/util';
 import { ServerConsolePanel } from './ServerConsolePanel';
+import { QuickActionsPanel } from './QuickActionsPanel';
+import { useDemoMatchIds } from './useDemoMatchIds';
 import { AdminActivityFeed } from './AdminActivityFeed';
 import { MatchManager } from './MatchManager';
 import { PlayerManager } from './PlayerManager';
@@ -77,9 +79,16 @@ export function AdminConsole({
   // effect — MatchManager/PlayerManager's search state only reads its initial prop at mount.
   const jumpNonce = jump?.nonce ?? 0;
 
+  // Fetched once here rather than separately by QuickActionsPanel and MatchManager — both need it
+  // (the bulk-reparse button, the per-row "reparse demo" indicator) and either can be mounted at the
+  // same time (QuickActionsPanel is always visible; MatchManager mounts too on Manage → Match).
+  const demoMatchIds = useDemoMatchIds();
+
   return (
     <div className="flex flex-col gap-6">
       <ServerConsolePanel active={server.active} configSets={server.configSets} maps={server.maps} />
+
+      <QuickActionsPanel demoMatchIds={demoMatchIds} />
 
       <TabBar bordered className="pb-1">
         <button role="tab" aria-selected={section === 'activity'} onClick={() => setSection('activity')} className={tabCls(section === 'activity', { accent: true })}>
@@ -109,7 +118,7 @@ export function AdminConsole({
           </TabBar>
 
           {manageType === 'match' && (
-            <MatchManager key={jumpNonce} matches={matches} initialQuery={jumpQueryFor('match')} />
+            <MatchManager key={jumpNonce} matches={matches} initialQuery={jumpQueryFor('match')} demoMatchIds={demoMatchIds} />
           )}
           {manageType === 'player' && (
             <PlayerManager key={jumpNonce} players={players} selfId={selfId} initialQuery={jumpQueryFor('player')} />

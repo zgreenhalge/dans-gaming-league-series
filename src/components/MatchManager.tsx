@@ -5,25 +5,17 @@
 // duplicate mutation logic). Score + stats editing intentionally stays on the match page (it's one
 // coupled operation via /score).
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { isPlayedScore } from '@/lib/util';
 import type { AdminMatchRow } from '@/lib/queries';
 import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import EmptyState from './EmptyState';
+import SectionLabel from './SectionLabel';
 import VetoSequence from './VetoSequence';
 import { ScheduleEditor } from './ScheduleEditor';
 import { FeatureMatchToggle } from './FeatureMatchToggle';
 import { ReparseDemoButton } from './ReparseDemoButton';
-import { BulkReparseButton } from './BulkReparseButton';
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="font-mono text-[10px] uppercase tracking-wide text-[var(--color-text-secondary)] mb-2">
-      {children}
-    </div>
-  );
-}
 
 /** The map a match was played on — the pick lives in `shirts_pick`, falling back to `picked_map`. */
 function mapFor(m: AdminMatchRow): string | null {
@@ -46,19 +38,19 @@ function searchText(m: AdminMatchRow): string {
   return parts.filter(Boolean).join(' ').toLowerCase();
 }
 
-export function MatchManager({ matches, initialQuery = '' }: { matches: AdminMatchRow[]; initialQuery?: string }) {
+export function MatchManager({
+  matches,
+  initialQuery = '',
+  demoMatchIds,
+}: {
+  matches: AdminMatchRow[];
+  initialQuery?: string;
+  /** Fetched once by the parent `AdminConsole` (shared with `QuickActionsPanel`'s bulk-reparse
+   *  button) rather than re-fetched here. */
+  demoMatchIds: Set<number> | null;
+}) {
   const [query, setQuery] = useState(initialQuery);
   const [openId, setOpenId] = useState<number | null>(null);
-  const [demoMatchIds, setDemoMatchIds] = useState<Set<number> | null>(null);
-
-  useEffect(() => {
-    fetch('/api/admin/matches/demo-list')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((j: { matchIds?: number[] } | null) => {
-        if (j?.matchIds) setDemoMatchIds(new Set(j.matchIds));
-      })
-      .catch(() => {});
-  }, []);
 
   // All unplayed, non-gauntlet scheduled matches — the collision pool the schedule editor checks
   // against (built once from the loaded list, so no per-row fetch).
@@ -83,8 +75,6 @@ export function MatchManager({ matches, initialQuery = '' }: { matches: AdminMat
 
   return (
     <>
-      {demoMatchIds && <BulkReparseButton matchIds={[...demoMatchIds]} />}
-
       <input
         type="search"
         value={query}
