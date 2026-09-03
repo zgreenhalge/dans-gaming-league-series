@@ -64,16 +64,40 @@ function SplitBar({
   );
 }
 
-/** One kill, as a numbered "pip" (à la Leetify's H2H) — colored by which side got it, tinted red
- *  with a headshot badge underneath when that specific kill was a headshot. */
-function KillPip({ index, headshot, color }: { index: number; headshot: boolean; color: string }) {
+const PIP_W = 22;
+const PIP_H = 20;
+const PIP_NOTCH = 6;
+// Inset so a headshot's stroke isn't clipped by the SVG viewport at the polygon's own edge.
+const PIP_STROKE_INSET = 1.5;
+
+/** One kill, as a numbered arrow-shaped "pip" (à la Leetify's H2H) — the fill color is always the
+ *  side that got the kill (never color-only for headshot, so a colorblind reader isn't relying on
+ *  hue alone); a headshot instead gets a red ring around the pip (not a solid red fill) plus the
+ *  usual headshot badge underneath — two independent, non-color cues. Points toward the other
+ *  player (`direction`) so the two sides' pip rows read as arrows meeting in the middle, rather
+ *  than plain squares. */
+function KillPip({
+  index,
+  headshot,
+  color,
+  direction,
+}: {
+  index: number;
+  headshot: boolean;
+  color: string;
+  direction: 'right' | 'left';
+}) {
+  const m = PIP_STROKE_INSET;
+  const points = direction === 'right'
+    ? `${m},${m} ${PIP_W - PIP_NOTCH},${m} ${PIP_W - m},${PIP_H / 2} ${PIP_W - PIP_NOTCH},${PIP_H - m} ${m},${PIP_H - m}`
+    : `${PIP_W - m},${m} ${PIP_NOTCH},${m} ${m},${PIP_H / 2} ${PIP_NOTCH},${PIP_H - m} ${PIP_W - m},${PIP_H - m}`;
   return (
     <div className="flex flex-col items-center gap-0.5 shrink-0">
-      <div
-        className="flex items-center justify-center min-w-[20px] h-5 px-1 rounded-sm font-mono text-[10px] font-bold text-white"
-        style={{ background: headshot ? HS_COLOR : color }}
-      >
-        {index}
+      <div className="relative" style={{ width: PIP_W, height: PIP_H }}>
+        <svg width={PIP_W} height={PIP_H} viewBox={`0 0 ${PIP_W} ${PIP_H}`}>
+          <polygon points={points} fill={color} stroke={headshot ? HS_COLOR : 'none'} strokeWidth={headshot ? 2 : 0} strokeLinejoin="round" />
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] font-bold text-white">{index}</span>
       </div>
       <div className="h-2.5 flex items-center justify-center">
         {headshot && <HeadshotIcon size={10} style={{ color: HS_COLOR }} />}
@@ -94,12 +118,12 @@ function WeaponCategoryBlock({ category, aKills, bKills }: MatchDuelStat['weapon
       </div>
       {aKills.length > 0 && (
         <div className="flex flex-wrap gap-1 justify-center mb-1">
-          {aKills.map((headshot, i) => <KillPip key={i} index={i + 1} headshot={headshot} color={A_COLOR} />)}
+          {aKills.map((headshot, i) => <KillPip key={i} index={i + 1} headshot={headshot} color={A_COLOR} direction="right" />)}
         </div>
       )}
       {bKills.length > 0 && (
         <div className="flex flex-wrap gap-1 justify-center">
-          {bKills.map((headshot, i) => <KillPip key={i} index={i + 1} headshot={headshot} color={B_COLOR} />)}
+          {bKills.map((headshot, i) => <KillPip key={i} index={i + 1} headshot={headshot} color={B_COLOR} direction="left" />)}
         </div>
       )}
     </div>
