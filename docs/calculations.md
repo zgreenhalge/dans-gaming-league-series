@@ -81,8 +81,8 @@ Implemented in `src/lib/parsers/roundSides.ts`, and persisted per round as `matc
 rather than accumulating), so the raw value is credited straight to the player's side that round, no
 delta arithmetic needed — implemented in `src/lib/parsers/accumulators.ts`. The sibling `m_iDamage`
 accumulator is match-cumulative rather than per-round and updates one round late relative to the
-round_end event, so delta-computing a side split from it (as this code once did) misattributes each
-round's damage to the following round's side; `m_flTotalRoundDamageDealt` has no such lag.
+round_end event, so delta-computing a side split from it would misattribute each round's damage to
+the following round's side; `m_flTotalRoundDamageDealt` has no such lag.
 
 The read itself happens at each round's **settle tick**, not `round_end`'s own tick —
 `computeSettleTicks()` (`src/lib/parsers/matchContext.ts`). The engine doesn't reset

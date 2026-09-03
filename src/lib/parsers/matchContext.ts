@@ -104,8 +104,7 @@ export interface MatchContext {
    *  `RoundBounds` structurally (this field plus `liveRounds`), so any collector with `context` in
    *  scope passes `context` itself to `roundOf()`/`groupByRound()`. */
   matchStartTick: number;
-  roundEndTicks: Int32Array;
-  /** Per-round "settle tick" — see `computeSettleTicks()`. Parallel to `rounds`/`roundEndTicks`. */
+  /** Per-round "settle tick" — see `computeSettleTicks()`. Parallel to `rounds`. */
   settleTicks: Int32Array;
   tickRate: number;
   /** Per-round CT/T side, only populated when the starting side resolves (see `hasSides`). Needed
@@ -253,7 +252,6 @@ export function buildMatchContext(
   }
 
   const liveRounds = new Set(rounds.map((r) => r.roundNumber));
-  const roundEndTicks = Int32Array.from(rounds.map((r) => r.endTick));
   const settleTicks = computeSettleTicks(rounds, officiallyEndedTicks);
 
   const roundByNumber = new Map<number, RoundSideInfo>();
@@ -285,7 +283,6 @@ export function buildMatchContext(
     rounds,
     liveRounds,
     matchStartTick,
-    roundEndTicks,
     settleTicks,
     tickRate,
     playerSides,
