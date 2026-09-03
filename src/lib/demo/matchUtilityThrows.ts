@@ -13,12 +13,17 @@ type UtilityThrowRow = Database['public']['Tables']['match_utility_throws']['Ins
 /** Replace this match's `match_utility_throws` rows. Unlike `match_kills` (victim required,
  *  attacker/assister optional), both `flasher`/`blinded` are `not null` — a throw whose flasher or
  *  blinded player has no resolvable `player_match_stats` row is dropped entirely rather than
- *  partially recorded. */
+ *  partially recorded.
+ *
+ *  `pmsById` lets a caller that's already resolving it for sibling fact tables (a score confirm
+ *  writes ~6 of these concurrently for the same match) pass its own map instead of this function
+ *  re-querying `player_match_stats` redundantly — omit it to resolve independently. */
 export async function persistMatchUtilityThrows(
   matchId: number,
   throws: DemoMatchUtilityThrow[],
+  pmsById?: Map<number, number>,
 ): Promise<void> {
-  const pmsById = await resolvePlayerMatchStatsIds(matchId);
+  pmsById ??= await resolvePlayerMatchStatsIds(matchId);
 
   const rows: UtilityThrowRow[] = [];
   for (const u of throws) {

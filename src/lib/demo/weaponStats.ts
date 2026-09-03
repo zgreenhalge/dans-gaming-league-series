@@ -18,13 +18,18 @@ type EconomyRow = Database['public']['Tables']['player_match_economy_stats']['In
  *  rows here, and a reparse can produce a smaller bucket set than the previous parse (e.g. no
  *  sniper shots this time) — an upsert has no "this bucket wasn't in the new parse" signal to act
  *  on, so it would leave that now-stale row behind forever. Replacing every row for the match first
- *  guarantees the persisted set always matches this parse exactly. */
+ *  guarantees the persisted set always matches this parse exactly.
+ *
+ *  `pmsById` lets a caller that's already resolving it for sibling fact tables (a score confirm
+ *  writes ~6 of these concurrently for the same match) pass its own map instead of this function
+ *  re-querying `player_match_stats` redundantly — omit it to resolve independently. */
 export async function persistWeaponStats(
   matchId: number,
   weaponStats: DemoWeaponStat[],
+  pmsById?: Map<number, number>,
 ): Promise<void> {
   if (weaponStats.length === 0) return;
-  const pmsById = await resolvePlayerMatchStatsIds(matchId);
+  pmsById ??= await resolvePlayerMatchStatsIds(matchId);
 
   const weaponRows: WeaponRow[] = [];
   const economyRows: EconomyRow[] = [];
