@@ -7,7 +7,8 @@ import { getMatchMeta } from '@/lib/seo/og';
 import { buildMatchJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 import { projectRatingDeltas, predictWinProbability, isProvisional, type RatingProjection } from '@/lib/ehog';
-import { isPlayedScore, parseScore, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
+import { computeH2H, matchToH2HInput } from '@/lib/h2h';
+import { isPlayedScore, parseScore, extractSeasonNumber, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
 import { TopbarShell } from '@/components/TopbarShell';
@@ -122,6 +123,10 @@ export default async function MatchPage({
   const skins = stats.filter((s) => s.faction === 'SKINS');
 
   const showScouting = shirts.length === 2 && skins.length === 2;
+  // Once a match is played, its Scouting Report tab (pre-match career-history prep) gives way
+  // to the H2H tab (this match's own actual matchups, computed below) — so the scouting fetches
+  // are only worth making beforehand.
+  const showPreMatchScouting = showScouting && !played;
   const key = makeDemoKey(matchId);
 
   // Rating projections/win-probability render for an unplayed match either in its own week's date
@@ -131,13 +136,13 @@ export default async function MatchPage({
   const today = new Date().toISOString().slice(0, 10);
   const isCurrentWeek = matchWindow != null && today >= matchWindow.weekStart && today <= matchWindow.weekEnd;
   const needsPreviousWeekCheck =
-    !played && showScouting && week.week_number > 1 && matchWindow != null && today < matchWindow.weekStart;
+    showPreMatchScouting && week.week_number > 1 && matchWindow != null && today < matchWindow.weekStart;
 
   const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, previousWeekComplete, isLiveNow, matchKills, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
-    showScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
+    showPreMatchScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     // Cached and shared across every match page (see #441 item 3) rather than a fresh
     // full-league computeH2H() scan on each load.
-    showScouting ? getCareerH2HDataCached() : Promise.resolve(null),
+    showPreMatchScouting ? getCareerH2HDataCached() : Promise.resolve(null),
     r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }))
       .then(() =>
         getSignedUrl(r2, new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }), {
@@ -148,7 +153,7 @@ export default async function MatchPage({
     played ? getMatchRatingDeltas(matchId) : Promise.resolve(new Map<number, number>()),
     played ? getMatchSabremetrics(matchId) : Promise.resolve([]),
     // Match ids on this map — feeds the scouting report's Map Intel heatmap (#128).
-    showScouting && map ? getMatchIdsForMap(map) : Promise.resolve<number[]>([]),
+    showPreMatchScouting && map ? getMatchIdsForMap(map) : Promise.resolve<number[]>([]),
     season.is_gauntlet ? getGauntletPodForMatch(matchId) : Promise.resolve(null),
     needsPreviousWeekCheck ? isWeekComplete(season.id, week.week_number - 1) : Promise.resolve(false),
     // Drives the `--ticker-h` override below — only an unplayed match can ever be the live one.
@@ -158,6 +163,30 @@ export default async function MatchPage({
     played ? getMatchEconomyStats(matchId) : Promise.resolve([]),
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
+
+  // The H2H tab's 4 matchups + 2 teammate pairs, computed straight from this match's own box
+  // score (`stats`) via the same `computeH2H` aggregation core the career H2H views use — just
+  // fed a single match instead of a season's worth.
+  const matchH2H = played && showScouting
+    ? computeH2H(
+        [matchToH2HInput(
+          {
+            id: match.id,
+            match_number: match.match_number,
+            final_score: match.final_score,
+            picked_map: match.picked_map,
+            shirts_pick: match.shirts_pick,
+            skins_starting_side: match.skins_starting_side,
+            shirts_stats: shirts,
+            skins_stats: skins,
+          },
+          week.week_number,
+          extractSeasonNumber(season.name),
+          season.is_gauntlet,
+        )],
+        new Map(stats.map((s) => [s.player_id, { name: s.player_name, steam_avatar_url: s.steam_avatar_url }])),
+      )
+    : null;
 
   // Replay/Events (issue #121). Only played matches can have a replay, and the Recap
   // tab is gated on `played`, so skip the queries entirely otherwise. Status is
@@ -174,7 +203,7 @@ export default async function MatchPage({
   let ratingProjections: RatingProjection[] = [];
   const ratingCurrent: Record<number, number> = {};
   let winProbability: { pShirtsWin: number; provisional: boolean } | null = null;
-  if (!played && showScouting && (isCurrentWeek || previousWeekComplete)) {
+  if (showPreMatchScouting && (isCurrentWeek || previousWeekComplete)) {
     const allPlayerIds = [...shirts, ...skins].map((s) => s.player_id);
     const playerRatings = await getPlayerRatings(allPlayerIds);
     const byId = new Map(playerRatings.map((r) => [r.playerId, r]));
@@ -421,6 +450,7 @@ export default async function MatchPage({
               matchEconomyStats={matchEconomyStats}
               ehog={{ deltas: ratingDeltas, projections: ratingProjections, current: ratingCurrent }}
               scouting={{ data: scoutingData, h2h: scoutingH2H }}
+              matchH2H={matchH2H}
               mapInfo={{ map, matchIds: mapMatchIds, pool: season.map_pool }}
               recap={{ demoDownloadUrl, job: replayJob, events: replayEvents, recordingURL: match.recording_url }}
             />

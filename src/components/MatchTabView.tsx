@@ -9,18 +9,19 @@ import { PlayerName } from '@/components/PlayerName';
 import DemoUploadModal from '@/components/DemoUploadModal';
 import MatchRecapTab from '@/components/MatchRecapTab';
 import ScoutingReport from '@/components/ScoutingReport';
+import MatchH2H from '@/components/MatchH2H';
 import { Checkbox } from '@/components/SeasonFilter';
 import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import Th from '@/components/Th';
-import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
+import type { MatchStatRow, MatchScoutingData, H2HData, DuoStats, H2HStats, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
 import { splitStat } from '@/lib/queries';
 import type { SabFieldsWithDerived } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
 import { roundsPlayedBySide } from '@/lib/parsers/roundSides';
 
 type Faction = 'CT' | 'T' | null;
-type Tab = 'leaderboard' | 'advanced' | 'scouting' | 'recap';
+type Tab = 'leaderboard' | 'advanced' | 'scouting' | 'h2h' | 'recap';
 
 function factionClass(f: Faction): string {
   if (f === 'CT') return 'faction-ct';
@@ -319,6 +320,7 @@ export default function MatchTabView({
   matchEconomyStats = [],
   ehog,
   scouting,
+  matchH2H,
   mapInfo,
   recap,
 }: {
@@ -353,11 +355,18 @@ export default function MatchTabView({
     projections: RatingProjection[];
     current: Record<number, number>;
   };
-  /** Pre-match scouting report data for the Scouting Report tab. */
+  /** Pre-match scouting report data for the Scouting Report tab. `null` once the match is
+   *  played — the Scouting Report tab gives way to the H2H tab below. */
   scouting: {
     data: MatchScoutingData | null;
     h2h: H2HData | null;
   };
+  /** This match's own 4 matchups + 2 teammate pairs for the H2H tab, computed from the match's
+   *  actual box score once it's played (`null` beforehand). */
+  matchH2H: {
+    duos: DuoStats[];
+    rivals: H2HStats[];
+  } | null;
   /** The picked map, other matches played on it (for the heatmap), and the season's map pool. */
   mapInfo: {
     map: string | null;
@@ -378,6 +387,7 @@ export default function MatchTabView({
   const { demoDownloadUrl, job: replayJob, events: replayEvents, recordingURL } = recap;
 
   const hasScoutingData = !!(scoutingData && scoutingH2H);
+  const hasMatchH2H = !!matchH2H && (matchH2H.duos.length > 0 || matchH2H.rivals.length > 0) && shirts.length === 2 && skins.length === 2;
   const hasProjections = ratingProjections.length > 0;
   const hasSab = sabremetrics.length > 0;
   const canDispatchReplay =
@@ -397,6 +407,10 @@ export default function MatchTabView({
 
   const allStats = [...shirts, ...skins];
   const statsRecorded = allStats.length > 0;
+
+  const h2hPlayers = new Map(
+    allStats.map((s) => [s.player_id, { id: s.player_id, name: s.player_name, steam_avatar_url: s.steam_avatar_url }]),
+  );
 
   const sabMap = new Map<number, SabFieldsWithDerived>(
     sabremetrics.map((s) => [s.player_id, s]),
@@ -502,6 +516,12 @@ export default function MatchTabView({
           </button>
         )}
 
+        {hasMatchH2H && (
+          <button role="tab" aria-selected={tab === 'h2h'} type="button" className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
+            H2H
+          </button>
+        )}
+
         {played && hasRecap && (
           <button role="tab" aria-selected={tab === 'recap'} type="button" className={tabCls(tab === 'recap')} onClick={() => setTab('recap')}>
             Recap
@@ -575,6 +595,18 @@ export default function MatchTabView({
             />
           )}
         </>
+      )}
+
+      {tab === 'h2h' && hasMatchH2H && matchH2H && (
+        <MatchH2H
+          shirtIds={[shirts[0].player_id, shirts[1].player_id]}
+          skinIds={[skins[0].player_id, skins[1].player_id]}
+          duos={matchH2H.duos}
+          rivals={matchH2H.rivals}
+          players={h2hPlayers}
+          shirtsF={shirtsF}
+          skinsF={skinsF}
+        />
       )}
 
       {tab === 'recap' && hasRecap && (
