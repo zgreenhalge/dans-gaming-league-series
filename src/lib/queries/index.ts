@@ -20,3 +20,5 @@ export * from './weaponStats';
 export * from './kills';
 export * from './rounds';
 export * from './utility';
+export * from './damage';
+export * from './duels';

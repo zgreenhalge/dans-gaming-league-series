@@ -1,11 +1,10 @@
 /**
- * Unit tests for queries/kills.ts's pure aggregation helpers (#452, #474, #461) —
- * aggregateWeaponKillStats, favoriteWeapon, allWeaponsWithKills, resolveWeaponFilterStat,
- * computeMatchDuels (`resolveWeaponStat()` is an unexported internal the `weapon`/`favorite`
- * branches of `resolveWeaponFilterStat()` delegate to, so it's covered indirectly rather than
- * tested on its own). These operate on already-joined `MatchKillRow[]` in memory, so no fake-DB
- * harness is needed (contrast queries-weaponStats.test.ts, which exercises an actual Supabase
- * join).
+ * Unit tests for queries/kills.ts's pure aggregation helpers (#452, #474) —
+ * aggregateWeaponKillStats, favoriteWeapon, allWeaponsWithKills, resolveWeaponFilterStat
+ * (`resolveWeaponStat()` is an unexported internal the `weapon`/`favorite` branches of
+ * `resolveWeaponFilterStat()` delegate to, so it's covered indirectly rather than tested on its
+ * own). These operate on already-joined `MatchKillRow[]` in memory, so no fake-DB harness is
+ * needed (contrast queries-weaponStats.test.ts, which exercises an actual Supabase join).
  *
  * Run:  npx vitest run src/lib/queries-kills.test.ts
  */
@@ -16,7 +15,6 @@ import {
   aggregateFlairKillStats,
   favoriteWeapon,
   allWeaponsWithKills,
-  computeMatchDuels,
   resolveWeaponFilterStat,
   FAVORITE_WEAPON_FILTER,
   deriveHeadshotAndTeamkillCounts,
@@ -693,32 +691,6 @@ test('buildPlayerFactionsAndRoster: builds both maps in one pass, grouping roste
   assert.equal(playerFactions.get('2:3'), 'SHIRTS');
   assert.deepEqual(rosterByMatch.get(1), [1, 2]);
   assert.deepEqual(rosterByMatch.get(2), [3]);
-});
-
-test('computeMatchDuels: counts kills each direction between one pair, and headshots within them', () => {
-  const kills = [
-    kill({ attacker: 1, victim: 2, weapon: 'ak47', headshot: true }),
-    kill({ attacker: 1, victim: 2, weapon: 'ak47' }),
-    kill({ attacker: 2, victim: 1, weapon: 'deagle', headshot: true }),
-  ];
-  const [duel] = computeMatchDuels(kills, [1], [2]);
-  assert.deepEqual(duel, { aId: 1, bId: 2, aKills: 2, bKills: 1, aHeadshots: 1, bHeadshots: 1 });
-});
-
-test('computeMatchDuels: returns every aIds × bIds combination, zeroed for pairs with no kills either way', () => {
-  const kills = [kill({ attacker: 1, victim: 3, weapon: 'ak47' })];
-  const duels = computeMatchDuels(kills, [1, 2], [3, 4]);
-  assert.equal(duels.length, 4);
-  assert.deepEqual(
-    duels.map((d) => `${d.aId}-${d.bId}:${d.aKills}/${d.bKills}`),
-    ['1-3:1/0', '1-4:0/0', '2-3:0/0', '2-4:0/0'],
-  );
-});
-
-test('computeMatchDuels: a kill between two players outside aIds/bIds is ignored', () => {
-  const kills = [kill({ attacker: 5, victim: 6, weapon: 'ak47' })];
-  const duels = computeMatchDuels(kills, [1], [2]);
-  assert.deepEqual(duels, [{ aId: 1, bId: 2, aKills: 0, bKills: 0, aHeadshots: 0, bHeadshots: 0 }]);
 });
 
 report();
