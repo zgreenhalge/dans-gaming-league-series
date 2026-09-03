@@ -10,38 +10,41 @@ import PlayerAvatar from './PlayerAvatar';
 const A_COLOR = 'var(--color-t)';
 const B_COLOR = 'var(--color-ct)';
 
-/** A two-column stat row — `aValue` under the left (shirts) player, `bValue` under the right
- *  (skins) one, with the stat's label centered between them. */
-function StatRow({ label, aValue, bValue }: { label: string; aValue: React.ReactNode; bValue: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2 py-1">
-      <span className="flex-1 text-right font-mono tnum text-[15px] font-bold" style={{ color: A_COLOR }}>{aValue}</span>
-      <span className="w-[64px] shrink-0 text-center tracked text-[8px] text-[var(--color-text-secondary)]">{label}</span>
-      <span className="flex-1 font-mono tnum text-[15px] font-bold" style={{ color: B_COLOR }}>{bValue}</span>
-    </div>
-  );
-}
-
-/** Damage split as a proportional bar (à la Leetify's H2H) — the two totals overlaid on their
- *  own colored segment, sized to how much of the pair's combined damage each one dealt. A match
- *  parsed before `match_damage_events` existed has kills but no damage rows — rather than draw a
- *  fake even split, that shows as an explicit "no damage data" state. */
-function DamageBar({ aDamage, bDamage }: { aDamage: number; bDamage: number }) {
-  const total = aDamage + bDamage;
+/** A stat split as a proportional bar (à la Leetify's H2H) — the two totals overlaid on their
+ *  own colored segment, sized to each one's share of the pair's combined total. Kills/headshots
+ *  are always real once the card renders at all (a 0-0 split is meaningful — they genuinely never
+ *  traded there), so those always draw a bar with the real numbers on it; damage instead passes
+ *  `emptyMessage`, since a match parsed before `match_damage_events` existed has kills but no
+ *  damage rows — rather than draw a fake even split there, that shows as an explicit
+ *  "no damage data" state instead of a bar. */
+function SplitBar({
+  label,
+  aValue,
+  bValue,
+  emptyMessage,
+}: {
+  label: string;
+  aValue: number;
+  bValue: number;
+  emptyMessage?: string;
+}) {
+  const total = aValue + bValue;
+  const showEmpty = emptyMessage != null && total === 0;
+  const aPct = total > 0 ? (aValue / total) * 100 : 50;
   return (
     <div className="flex flex-col gap-1 py-1">
-      <span className="text-center tracked text-[8px] text-[var(--color-text-secondary)]">Damage</span>
-      {total === 0 ? (
+      <span className="text-center tracked text-[8px] text-[var(--color-text-secondary)]">{label}</span>
+      {showEmpty ? (
         <div className="flex h-6 items-center justify-center bg-[var(--color-bg-secondary)]">
-          <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">No damage data</span>
+          <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">{emptyMessage}</span>
         </div>
       ) : (
         <div className="flex h-6 overflow-hidden">
-          <div className="flex items-center justify-center" style={{ width: `${(aDamage / total) * 100}%`, background: A_COLOR }}>
-            {aDamage > 0 && <span className="display-numeral text-[13px] font-black text-white" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>{aDamage}</span>}
+          <div className="flex items-center justify-center" style={{ width: `${aPct}%`, background: A_COLOR }}>
+            <span className="display-numeral text-[13px] font-black text-white" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>{aValue}</span>
           </div>
           <div className="flex items-center justify-center flex-1" style={{ background: B_COLOR }}>
-            {bDamage > 0 && <span className="display-numeral text-[13px] font-black text-white" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>{bDamage}</span>}
+            <span className="display-numeral text-[13px] font-black text-white" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>{bValue}</span>
           </div>
         </div>
       )}
@@ -74,8 +77,6 @@ function DuelCard({ duel, players }: { duel: MatchDuelStat; players: Map<number,
     return <EmptyPanel label={`${a.name} & ${b.name} — no direct kills recorded`} />;
   }
 
-  const aHsPct = duel.aKills > 0 ? Math.round((duel.aHeadshots / duel.aKills) * 100) : 0;
-  const bHsPct = duel.bKills > 0 ? Math.round((duel.bHeadshots / duel.bKills) * 100) : 0;
   const nameStyle = (color: string): React.CSSProperties => ({ color, WebkitTextStroke: '1px black', paintOrder: 'stroke fill' });
 
   return (
@@ -92,9 +93,9 @@ function DuelCard({ duel, players }: { duel: MatchDuelStat; players: Map<number,
           </Link>
         </div>
 
-        <StatRow label="Kills" aValue={duel.aKills} bValue={duel.bKills} />
-        <StatRow label="HS%" aValue={`${aHsPct}%`} bValue={`${bHsPct}%`} />
-        <DamageBar aDamage={duel.aDamage} bDamage={duel.bDamage} />
+        <SplitBar label="Kills" aValue={duel.aKills} bValue={duel.bKills} />
+        <SplitBar label="Headshots" aValue={duel.aHeadshots} bValue={duel.bHeadshots} />
+        <SplitBar label="Damage" aValue={duel.aDamage} bValue={duel.bDamage} emptyMessage="No damage data" />
 
         {duel.weaponBreakdown.length > 0 && (
           <div className="mt-2 pt-2 border-t border-[var(--color-border-primary)]">
