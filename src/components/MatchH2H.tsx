@@ -67,47 +67,64 @@ function SplitBar({
 const PIP_W = 22;
 const PIP_H = 20;
 const PIP_NOTCH = 6;
+// Each segment overlaps the previous by exactly the notch depth, so its point nests into the
+// next one's notch — one continuous arrow chain rather than separate pips with gaps between them.
+const PIP_STEP = PIP_W - PIP_NOTCH;
 // Inset so a headshot's stroke isn't clipped by the SVG viewport at the polygon's own edge.
 const PIP_STROKE_INSET = 1.5;
 
-/** One kill, as a numbered arrow-shaped "pip" (à la Leetify's H2H) — the fill color is always the
- *  side that got the kill (never color-only for headshot, so a colorblind reader isn't relying on
- *  hue alone); a headshot instead gets a red ring around the pip (not a solid red fill) plus the
- *  usual headshot badge underneath — two independent, non-color cues. Points toward the other
- *  player (`direction`) so the two sides' pip rows read as arrows meeting in the middle, rather
- *  than plain squares. */
-function KillPip({
-  index,
-  headshot,
-  color,
-  direction,
-}: {
-  index: number;
-  headshot: boolean;
-  color: string;
-  direction: 'right' | 'left';
-}) {
+/** One kill-weapon-category row's kills, as a single seamless chevron chain (à la Leetify's H2H)
+ *  — one numbered arrow segment per kill, colored for the side that got it (never color-only for
+ *  headshot, so a colorblind reader isn't relying on hue alone); a headshot instead gets a red
+ *  ring around its segment (not a solid red fill) plus the usual headshot badge underneath — two
+ *  independent, non-color cues. `direction` points every segment toward the other player, with
+ *  kill #1 nearest that player, so `aKills` and `bKills` rows read as arrows meeting in the
+ *  middle rather than plain squares. Drawn as one `<svg>` (not one per kill) so each segment's
+ *  point can overlap the next one's notch exactly, instead of leaving a diamond-shaped gap the
+ *  way separate elements with a shared border would. */
+function KillPipRow({ kills, color, direction }: { kills: boolean[]; color: string; direction: 'right' | 'left' }) {
+  if (kills.length === 0) return null;
+  const width = PIP_STEP * (kills.length - 1) + PIP_W;
   const m = PIP_STROKE_INSET;
-  const points = direction === 'right'
-    ? `${m},${m} ${PIP_W - PIP_NOTCH},${m} ${PIP_W - m},${PIP_H / 2} ${PIP_W - PIP_NOTCH},${PIP_H - m} ${m},${PIP_H - m}`
-    : `${PIP_W - m},${m} ${PIP_NOTCH},${m} ${m},${PIP_H / 2} ${PIP_NOTCH},${PIP_H - m} ${PIP_W - m},${PIP_H - m}`;
+  // 'right': kill #1 (i=0) is the leftmost segment, arrow points right, notch on the left.
+  // 'left': kill #1 is the rightmost segment instead, arrow points left, notch on the right —
+  // both the offset order and the shape mirror so the chain still reads "kill #1 nearest the
+  // other player, flowing toward them."
+  const segments = kills.map((headshot, i) => {
+    const offset = direction === 'right' ? i * PIP_STEP : width - PIP_W - i * PIP_STEP;
+    const points = direction === 'right'
+      ? [[m, m], [PIP_W - PIP_NOTCH, m], [PIP_W - m, PIP_H / 2], [PIP_W - PIP_NOTCH, PIP_H - m], [m, PIP_H - m], [PIP_NOTCH, PIP_H / 2]]
+      : [[PIP_W - m, m], [PIP_NOTCH, m], [m, PIP_H / 2], [PIP_NOTCH, PIP_H - m], [PIP_W - m, PIP_H - m], [PIP_W - PIP_NOTCH, PIP_H / 2]];
+    return { index: i + 1, headshot, offset, pointsAttr: points.map(([x, y]) => `${x + offset},${y}`).join(' ') };
+  });
+
   return (
-    <div className="flex flex-col items-center gap-0.5 shrink-0">
-      <div className="relative" style={{ width: PIP_W, height: PIP_H }}>
-        <svg width={PIP_W} height={PIP_H} viewBox={`0 0 ${PIP_W} ${PIP_H}`}>
-          <polygon points={points} fill={color} stroke={headshot ? HS_COLOR : 'none'} strokeWidth={headshot ? 2 : 0} strokeLinejoin="round" />
-        </svg>
-        <span className="absolute inset-0 flex items-center justify-center font-mono text-[10px] font-bold text-white">{index}</span>
-      </div>
-      <div className="h-2.5 flex items-center justify-center">
-        {headshot && <HeadshotIcon size={10} style={{ color: HS_COLOR }} />}
-      </div>
+    <div className="relative mx-auto" style={{ width, height: PIP_H + 12 }}>
+      <svg width={width} height={PIP_H} viewBox={`0 0 ${width} ${PIP_H}`} className="block">
+        {segments.map((s) => (
+          <g key={s.index}>
+            <polygon points={s.pointsAttr} fill={color} stroke={s.headshot ? HS_COLOR : 'none'} strokeWidth={s.headshot ? 2 : 0} strokeLinejoin="round" />
+            <text x={s.offset + PIP_W / 2} y={PIP_H / 2} textAnchor="middle" dominantBaseline="central" fontSize={10} fontWeight="bold" fill="white" className="font-mono">
+              {s.index}
+            </text>
+          </g>
+        ))}
+      </svg>
+      {segments.some((s) => s.headshot) && (
+        <div className="absolute inset-x-0 top-full mt-0.5" style={{ height: 10 }}>
+          {segments.filter((s) => s.headshot).map((s) => (
+            <div key={s.index} className="absolute" style={{ left: s.offset + PIP_W / 2, transform: 'translateX(-50%)' }}>
+              <HeadshotIcon size={10} style={{ color: HS_COLOR }} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-/** One weapon category's kill split — a category icon/label, then each side's kills as a strip of
- *  numbered pips (only the sides that actually landed a kill in this category get a strip). */
+/** One weapon category's kill split — a category icon/label, then each side's kills as a
+ *  seamless chevron chain (only the sides that actually landed a kill in this category get one). */
 function WeaponCategoryBlock({ category, aKills, bKills }: MatchDuelStat['weaponBreakdown'][number]) {
   const iconWeapon = CATEGORY_ICON_WEAPON[category];
   return (
@@ -116,18 +133,8 @@ function WeaponCategoryBlock({ category, aKills, bKills }: MatchDuelStat['weapon
         {iconWeapon && <WeaponIcon weapon={iconWeapon} size={14} className="text-[var(--color-text-secondary)]" />}
         <span className="tracked text-[9px] text-[var(--color-text-secondary)]">{KILL_WEAPON_CATEGORY_LABEL[category]}</span>
       </div>
-      {aKills.length > 0 && (
-        <div className="flex flex-wrap gap-1 justify-center mb-1">
-          {aKills.map((headshot, i) => <KillPip key={i} index={i + 1} headshot={headshot} color={A_COLOR} direction="right" />)}
-        </div>
-      )}
-      {bKills.length > 0 && (
-        // row-reverse so kill #1 sits on the right and the sequence reads right-to-left,
-        // matching the direction these pips point (mirrors the aKills row above).
-        <div className="flex flex-row-reverse flex-wrap gap-1 justify-center">
-          {bKills.map((headshot, i) => <KillPip key={i} index={i + 1} headshot={headshot} color={B_COLOR} direction="left" />)}
-        </div>
-      )}
+      {aKills.length > 0 && <div className="mb-1"><KillPipRow kills={aKills} color={A_COLOR} direction="right" /></div>}
+      {bKills.length > 0 && <KillPipRow kills={bKills} color={B_COLOR} direction="left" />}
     </div>
   );
 }
