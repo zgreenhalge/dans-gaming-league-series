@@ -94,8 +94,11 @@ to see it and silently loses that damage. The settle tick is one tick before the
 `round_officially_ended` tick, looked up per round rather than assumed at a fixed offset (real demos
 show the gap is usually ~320 ticks but not always) — one tick *before*, not at, since the reset is
 already complete by `round_officially_ended`'s own tick. The match's last round has no following
-round to provide one, so it falls back to its own `round_end` tick plus that same observed delay, as
-a best-effort approximation rather than a confirmed read.
+round to provide one — and, with no next round ever created, nothing ever triggers the reset either,
+so its own `round_end` tick is already the settled value (confirmed against real matches: the netprop
+is flat from `round_end` through the rest of the recorded demo). This also sidesteps demo recordings
+that stop within a few hundred ticks of the match's last `round_end` — common enough in practice that
+a fixed offset past `round_end` risks landing after the recording ends and reading nothing at all.
 
 `match_damage_events` (see [`architecture.md`](./architecture.md)) is a separate granular per-hit
 fact table for damage, one row per `player_hurt` event with health-loss-clamped `damage`.

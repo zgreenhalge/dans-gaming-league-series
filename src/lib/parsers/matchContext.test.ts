@@ -70,15 +70,16 @@ test('dedupeDeathEvents: an event outside any live round passes through untouche
   assert.equal(ctx.warnings.length, 0);
 });
 
-test('computeSettleTicks: middle rounds settle one tick before their own round_officially_ended; the last round falls back to endTick + 320', () => {
+test('computeSettleTicks: middle rounds settle one tick before their own round_officially_ended; the last round settles at its own round_end tick', () => {
   // Three rounds produce two transition events (none follows the match's last round) — the same
   // shape real demos have. One tick *before* round_officially_ended, not at it — the reset is
-  // already complete by that exact tick (confirmed against real data).
+  // already complete by that exact tick (confirmed against real data). The last round has no
+  // following round_start to trigger a reset at all, so its own round_end tick is already settled.
   const result = computeSettleTicks(
     [round(1, 100), round(2, 500), round(3, 900)],
     [220, 620],
   );
-  assert.deepEqual(Array.from(result), [219, 619, 900 + 320]);
+  assert.deepEqual(Array.from(result), [219, 619, 900]);
 });
 
 test('computeSettleTicks: an unsorted officiallyEndedTicks list is still matched correctly', () => {
@@ -86,17 +87,18 @@ test('computeSettleTicks: an unsorted officiallyEndedTicks list is still matched
     [round(1, 100), round(2, 500), round(3, 900)],
     [620, 220], // deliberately out of order
   );
-  assert.deepEqual(Array.from(result), [219, 619, 900 + 320]);
+  assert.deepEqual(Array.from(result), [219, 619, 900]);
 });
 
 test('computeSettleTicks: an outlier gap is read from the real event tick, not assumed at a fixed offset', () => {
   // Real demos show the gap is usually ~320 ticks (5s) but not always — an observed outlier of
-  // 960 in real match data. The last round still has no following event, so it falls back.
+  // 960 in real match data. The last round still has no following event, so it settles at its own
+  // round_end tick rather than guessing an offset.
   const result = computeSettleTicks(
     [round(1, 100), round(2, 1200)],
     [1060],
   );
-  assert.deepEqual(Array.from(result), [1059, 1200 + 320]);
+  assert.deepEqual(Array.from(result), [1059, 1200]);
 });
 
 report();

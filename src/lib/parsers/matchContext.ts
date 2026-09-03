@@ -118,11 +118,6 @@ export interface MatchContext {
   hasSides: boolean;
 }
 
-/** Best-effort settle tick for the match's last round, which has no following
- *  `round_officially_ended` to anchor on (see `computeSettleTicks()`) — the observed
- *  `mp_round_restart_delay` (#491), applied as an approximation rather than a confirmed read. */
-const FINAL_ROUND_SETTLE_FALLBACK_TICKS = 320;
-
 /**
  * A round-scoped engine netprop (e.g. `m_flTotalRoundDamageDealt`) resets not at `round_end`'s own
  * tick, but ~`mp_round_restart_delay` later, at the next round's `round_officially_ended`/
@@ -134,9 +129,16 @@ const FINAL_ROUND_SETTLE_FALLBACK_TICKS = 320;
  * at that tick already reads 0), so reading there instead of one tick earlier would read the reset,
  * not the settled value. The next round's tick is found dynamically per round rather than assumed at
  * a fixed offset — the gap is usually ~320 ticks (5s) but isn't always (an observed outlier of 960 in
- * real data). The match's last round has no following `round_officially_ended` to anchor on (no next
- * round is ever created), so it falls back to `endTick + FINAL_ROUND_SETTLE_FALLBACK_TICKS` as a
- * best-effort approximation.
+ * real data).
+ *
+ * The match's last round has no following `round_officially_ended` — no next round is ever created,
+ * so nothing ever triggers the reset this function otherwise settles ahead of. Its own `round_end`
+ * tick is therefore already the settled value (confirmed against real matches: the netprop is flat
+ * from `round_end` through the rest of the recorded demo, hundreds of ticks past where a real reset
+ * would show). Using `round_end`'s own tick — rather than a fixed offset past it — also sidesteps a
+ * real failure mode: demo recording frequently stops within a few hundred ticks of the match's last
+ * `round_end` (#518), so an offset tick can land past the end of the recorded demo and read nothing
+ * at all, silently zeroing that round for every player.
  */
 export function computeSettleTicks(
   rounds: RoundSideInfo[],
@@ -145,7 +147,7 @@ export function computeSettleTicks(
   const sorted = [...officiallyEndedTicks].sort((a, b) => a - b);
   return Int32Array.from(rounds.map((r) => {
     const next = sorted.find((t) => t > r.endTick);
-    return next !== undefined ? next - 1 : r.endTick + FINAL_ROUND_SETTLE_FALLBACK_TICKS;
+    return next !== undefined ? next - 1 : r.endTick;
   }));
 }
 
