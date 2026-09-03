@@ -199,13 +199,23 @@ guaranteed to reset at `begin_new_match`, so a warmup-period event's offset can 
 live round number and, without the tick check, get counted as that round's data by every collector
 that reads it (`MatchContext` carries `matchStartTick` alongside `liveRounds` for exactly this).
 
+`roundOf()` also corrects for trailing action: `total_rounds_played` increments the instant
+`round_end` fires, but a planted bomb detonating on its own fuse timer, lingering grenade/molotov
+damage, or a gunfight blow landing a few ticks late can still produce an event afterward and before
+the round actually resets (#518). Such an event's `total_rounds_played` already reports the *next*
+round, so `roundOf()` reattributes it back to the round it actually happened in whenever its tick
+falls strictly after that round's own `round_end` and at or before its settle tick
+(`computeSettleTicks()`, `parsers/matchContext.ts`) — a real next-round event can never land that
+early, since nothing about the next round starts until after it.
+
 A player can die at most once in a live round — `match_kills` enforces `unique (round, victim)` — so
 `dedupeDeathEvents()` (`parsers/matchContext.ts`) drops any second `player_death` landing on the same
 (round, victim) before any event-based collector sees the stream (`demoOrchestrator.ts` calls it once,
-right after `buildMatchContext()`). A genuine duplicate there (as opposed to warmup noise, which the
-tick check above already excludes) is a real anomaly — e.g. a duplicated event from the parser itself
-— so it's recorded to `context.warnings`, which gates auto-commit (`evaluateAutoCommit()`), routing the
-match to manual review instead of confirming with silently-dropped or double-counted events.
+right after `buildMatchContext()`). A genuine duplicate there (as opposed to warmup noise or trailing
+action, both already resolved to their correct round by `roundOf()` above) is a real anomaly — e.g. a
+duplicated event from the parser itself — so it's recorded to `context.warnings`, which gates
+auto-commit (`evaluateAutoCommit()`), routing the match to manual review instead of confirming with
+silently-dropped or double-counted events.
 
 Survivors keep their engine `total_rounds_played` as their round identity — they are **not**
 renumbered to 1..N — since round-death/hurt events and accumulator ticks are keyed by that same

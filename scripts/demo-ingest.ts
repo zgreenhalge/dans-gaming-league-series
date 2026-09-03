@@ -55,6 +55,7 @@ import { evaluateAutoCommit } from '../src/lib/demo/autoCommit';
 import { getAdminClient } from '../src/lib/supabase-admin';
 import { gunzipMaybe } from '../src/lib/gzip';
 import { isPlayedScore, parseScore } from '../src/lib/util';
+import { resolvePlayerMatchStatsIds } from '../src/lib/demo/_shared';
 import { persistSabremetrics } from '../src/lib/demo/sabremetrics';
 import { persistWeaponStats } from '../src/lib/demo/weaponStats';
 import { persistMatchKills } from '../src/lib/demo/matchKills';
@@ -65,7 +66,7 @@ import { persistMatchDamageEvents } from '../src/lib/demo/matchDamageEvents';
 import { writeMatchScore } from '../src/lib/matchScore';
 import { DEMO_INGEST_JOB_TYPE as JOB_TYPE, type DemoIngestResult } from '../src/lib/demo/ingestResult';
 import { matchJobKey } from '../src/lib/background-jobs';
-import { notice } from './gh-actions-log';
+import { notice, warning } from './gh-actions-log';
 import { createJobRunner } from './job-stage';
 
 const STAGES = ['fetch', 'parse'] as const;
@@ -135,15 +136,25 @@ async function main() {
     // Five independent operations (different tables/objects, no data dependency between them) —
     // run concurrently, matching matchScore.ts's score-confirm path. setJob() stays sequenced
     // after: it marks the job confirmed, which should only happen once persistence has actually
-    // landed.
+    // landed. Most of these resolve the same player_id -> player_match_stats.id map internally;
+    // resolving it once here and sharing it avoids each redundantly re-querying it. That shared
+    // resolution stays independent of the operations below (caught rather than left to reject the
+    // whole Promise.all) so a failure there can't take down persistMatchRounds/deleteR2Object,
+    // neither of which needs it — each affected persist call falls back to resolving its own copy.
+    let pmsById: Map<number, number> | undefined;
+    try {
+      pmsById = await resolvePlayerMatchStatsIds(matchId);
+    } catch (e) {
+      warning(`Shared player_match_stats id resolution failed for match ${matchId} (each persist call will resolve its own): ${e instanceof Error ? e.message : String(e)}`);
+    }
     await Promise.all([
-      persistSabremetrics(matchId, sab.sabremetrics),
-      persistWeaponStats(matchId, sab.weaponStats),
-      persistMatchKills(matchId, sab.matchKills),
+      persistSabremetrics(matchId, sab.sabremetrics, pmsById),
+      persistWeaponStats(matchId, sab.weaponStats, pmsById),
+      persistMatchKills(matchId, sab.matchKills, pmsById),
       persistMatchRounds(matchId, sab.matchRounds),
-      persistMatchUtilityThrows(matchId, sab.matchUtilityThrows),
-      persistMatchRoundEconomy(matchId, sab.matchRoundEconomy),
-      persistMatchDamageEvents(matchId, sab.matchDamageEvents),
+      persistMatchUtilityThrows(matchId, sab.matchUtilityThrows, pmsById),
+      persistMatchRoundEconomy(matchId, sab.matchRoundEconomy, pmsById),
+      persistMatchDamageEvents(matchId, sab.matchDamageEvents, pmsById),
       deleteR2Object(demoResultKey(matchId)),
     ]);
     await setJob({

@@ -11,9 +11,17 @@ type KillRow = Database['public']['Tables']['match_kills']['Insert'];
 
 /** Replace this match's `match_kills` rows. A kill whose victim has no resolvable
  *  `player_match_stats` row is dropped (attacker/assister missing a row just nulls that column —
- *  the death itself still needs to be recorded against the victim). */
-export async function persistMatchKills(matchId: number, kills: DemoMatchKill[]): Promise<void> {
-  const pmsById = await resolvePlayerMatchStatsIds(matchId);
+ *  the death itself still needs to be recorded against the victim).
+ *
+ *  `pmsById` lets a caller that's already resolving it for sibling fact tables (a score confirm
+ *  writes ~6 of these concurrently for the same match) pass its own map instead of this function
+ *  re-querying `player_match_stats` redundantly — omit it to resolve independently. */
+export async function persistMatchKills(
+  matchId: number,
+  kills: DemoMatchKill[],
+  pmsById?: Map<number, number>,
+): Promise<void> {
+  pmsById ??= await resolvePlayerMatchStatsIds(matchId);
 
   const rows: KillRow[] = [];
   for (const k of kills) {

@@ -50,6 +50,19 @@ async function main() {
     assert.ok(db.player_match_weapon_stats!.every((r) => r.player_match_stats_id === 1000));
   });
 
+  await test('persistWeaponStats: a passed-in pmsById is used instead of resolving one (#518)', async () => {
+    // No player_match_stats rows at all — proves the pre-resolved map is what resolves the player,
+    // not a fresh query (matchScore.ts shares one map across all six sibling fact tables this way).
+    const db: FakeDb = { player_match_weapon_stats: [], player_match_economy_stats: [] };
+    __setTestAdminClient(createFakeSupabaseClient(db));
+    const rows: DemoWeaponStat[] = [
+      { player_id: 1, weaponStats: [{ weapon: 'ak47', ...bucket({ shots_fired: 10 }) }], economyStats: [] },
+    ];
+    await persistWeaponStats(MATCH_ID, rows, new Map([[1, 1000]]));
+    assert.equal(db.player_match_weapon_stats!.length, 1);
+    assert.equal(db.player_match_weapon_stats![0].player_match_stats_id, 1000);
+  });
+
   await test('persistWeaponStats: a player with no player_match_stats row for this match is dropped entirely', async () => {
     const db = baseDb();
     __setTestAdminClient(createFakeSupabaseClient(db));

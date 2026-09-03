@@ -20,6 +20,9 @@ export interface RoundBounds {
   /** Tick the live match begins at (`findMatchStartTick`). 0 means "no tick filtering" (the demo
    *  had no `begin_new_match`, matching `findMatchStartTick`'s own fallback). */
   matchStartTick: number;
+  /** Each live round's own `round_end` tick and settle tick (`computeSettleTicks()` in
+   *  `matchContext.ts`), keyed by round number — see `roundOf()`'s trailing-action correction. */
+  settleWindowByRound: Map<number, { endTick: number; settleTick: number }>;
 }
 
 /**
@@ -30,15 +33,28 @@ export interface RoundBounds {
  * the live match's round numbers (MatchZy's round counter doesn't reliably reset at
  * `begin_new_match`), so a warmup death can otherwise land in `liveRounds` by coincidence and get
  * counted as a real round's event — `buildRoundSides()` already applies this same `tick >=
- * matchStartTick` filter to `round_end` events for the same reason. The one place this
- * offset-and-liveness check is decided, so every collector gates events the same way.
+ * matchStartTick` filter to `round_end` events for the same reason.
+ *
+ * `total_rounds_played` also increments the instant `round_end` fires, but real trailing action —
+ * a planted bomb detonating on its own fuse timer, lingering grenade/molotov damage, a gunfight
+ * blow landing a few ticks late — can still produce an event after that tick and before the round
+ * actually resets (#518). `total_rounds_played` already reports the *next* round by then, so the
+ * naive offset is corrected back to the previous round whenever the event's tick falls strictly
+ * after that round's own `round_end` tick and at or before its settle tick
+ * (`computeSettleTicks()`) — a real next-round event can never land that early, since nothing
+ * about the next round starts until after it. The one place this offset-and-liveness check is
+ * decided, so every collector gates events the same way.
  */
 export function roundOf(
   event: { total_rounds_played: number; tick: number },
   bounds: RoundBounds,
 ): number | null {
   if (event.tick < bounds.matchStartTick) return null;
-  const round = event.total_rounds_played + 1;
+  let round = event.total_rounds_played + 1;
+  const prevWindow = bounds.settleWindowByRound.get(round - 1);
+  if (prevWindow && event.tick > prevWindow.endTick && event.tick <= prevWindow.settleTick) {
+    round -= 1;
+  }
   return bounds.liveRounds.has(round) ? round : null;
 }
 
