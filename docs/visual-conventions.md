@@ -156,10 +156,14 @@ conventions, distinct from the content-page patterns above:
   activity feed, not an entry in a subject picker. The kind of resource one physical thing serves
   many matches (the shared DatHost match server is the current example) isn't "an event that
   happened" or "a thing you search for," so it shouldn't be gated behind a tab or a query.
-- **Default a severity-tabbed view to whatever's most urgent, not to the first tab.** A tab bar over
-  status tiers (e.g. Errored / In Progress / Completed) should land on the first non-empty tier in
-  that priority order, derived from the same counts the tab badges render — never a hardcoded
-  default — so nobody has to click past "nothing's wrong here" to find what needs attention.
+- **Prefer a tag over a tab for a status split that sits alongside other filters.** When a list already
+  narrows by other criteria (type, time range, search), give status (e.g. Errored / In Progress /
+  Completed) the same treatment — a badge on each row plus a toggleable filter chip, all filters
+  combining on one list — rather than a tab bar that partitions the view. A tab hides whichever tiers
+  aren't selected from every other filter at once; a chip lets "Errored jobs from the last hour" and
+  "everything from the last hour" both stay one click away. The admin console's Activity feed
+  (`AdminActivityFeed.tsx`) is the worked example — status, job type, and time range are three chip rows
+  over one list, not three separate axes of tabs.
 - **When consolidating several surfaces into one page, actively remove what becomes duplicate.**
   Don't just concatenate sections. If a fact one surface shows is now equally visible somewhere else
   on the same page (a job's error state, a shared resource's current occupant), cut it from the

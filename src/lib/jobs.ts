@@ -79,6 +79,46 @@ const DEMO_ATTENTION_STATUSES: ReadonlySet<string> = new Set(['parsed', 'quarant
 export const JOB_IN_PROGRESS_STATUSES: ReadonlySet<string> = new Set(['received', 'queued', 'running']);
 
 /**
+ * How long an in-progress job can run before it's treated as stuck rather than still working —
+ * comfortably above the longest pipeline's own `timeout-minutes` (25, radar-build; see
+ * `docs/github-actions.md`). A GitHub Actions cancellation — the hard timeout, a manual cancel, a
+ * lost runner — never reaches the script's `fail()` handler (`cancel-in-progress: false` exists so a
+ * *retry* can't orphan a still-live run, but nothing unwinds a run that dies on its own), so nothing
+ * else ever moves a genuinely-dead run's row off `received`/`queued`/`running`. One number shared by
+ * the Activity feed (tags a stale row as needing attention instead of leaving it silently "in
+ * progress") and every dispatch route's in-flight guard (`isJobInFlight` in `background-jobs.ts`) —
+ * so a job can never read "still fine" in one place and "stuck" in the other.
+ */
+export const STALE_IN_FLIGHT_MS = 45 * 60 * 1000;
+
+/**
+ * `startedAt` if set, else `createdAt` (a `queued` row may not have `startedAt` yet), parsed to an
+ * epoch ms — or `null` if there's no timestamp to derive one from. Shared by every "how long has this
+ * job been going" computation: `jobIsStale` and `jobDurationLabel` below, and — via this same plain
+ * two-string signature rather than a `BackgroundJobRow` — `isJobInFlight`'s in-flight guard
+ * (`background-jobs.ts`), which reads the raw `started_at`/`created_at` columns straight off a
+ * Supabase row. One parse, not three.
+ */
+export function resolveJobStart(startedAt: string | null, createdAt: string | null): number | null {
+  const iso = startedAt ?? createdAt;
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
+/**
+ * Whether an in-progress job's own timestamps say it's been running long enough to be stuck rather
+ * than genuinely still working. `false` for a non-in-progress status or a row with no timestamp to
+ * judge staleness by (trust the status in that case).
+ */
+export function jobIsStale(job: BackgroundJobRow, nowMs: number): boolean {
+  if (!JOB_IN_PROGRESS_STATUSES.has(job.status)) return false;
+  const start = resolveJobStart(job.startedAt, job.createdAt);
+  if (start === null) return false;
+  return nowMs - start > STALE_IN_FLIGHT_MS;
+}
+
+/**
  * Whether a job needs an operator's attention right now — drives the Needs Attention tab and its
  * count. Demo review states (`parsed`/`quarantined`) and any pipeline's `failed` qualify; in-progress
  * and terminal-success states do not.
@@ -95,9 +135,8 @@ export function jobNeedsAttention(job: BackgroundJobRow): boolean {
  * time falls back to `createdAt` since a `queued` row may not have `startedAt` set yet.
  */
 export function jobDurationLabel(job: BackgroundJobRow, nowMs: number | null): string | null {
-  const startIso = job.startedAt ?? job.createdAt;
-  const start = startIso ? new Date(startIso).getTime() : NaN;
-  if (Number.isNaN(start)) return null;
+  const start = resolveJobStart(job.startedAt, job.createdAt);
+  if (start === null) return null;
   if (JOB_IN_PROGRESS_STATUSES.has(job.status)) {
     return nowMs === null ? null : `running ${formatDuration(nowMs - start)}`;
   }
