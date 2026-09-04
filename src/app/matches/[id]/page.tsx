@@ -431,6 +431,7 @@ export default async function MatchPage({
               matchWeaponClassStats={matchWeaponClassStats}
               matchEconomyStats={matchEconomyStats}
               matchRoundEconomy={matchRoundEconomy}
+              roundHistory={match.round_history ?? []}
               ehog={{ deltas: ratingDeltas, projections: ratingProjections, current: ratingCurrent }}
               scouting={{ data: scoutingData, h2h: scoutingH2H }}
               mapInfo={{ map, matchIds: mapMatchIds, pool: season.map_pool }}
