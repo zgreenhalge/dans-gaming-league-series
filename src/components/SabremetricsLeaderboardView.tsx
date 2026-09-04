@@ -30,6 +30,8 @@ import {
   type FlairKillStat,
   type EconomyMatchRow,
   type EconomyTierStat,
+  type MatchDamageEventRow,
+  type MatchRoundEconomyRow,
 } from '@/lib/queries';
 import {
   weaponDisplayName, killWeaponCategory, KILL_WEAPON_CATEGORIES, KILL_WEAPON_CATEGORY_LABEL,
@@ -43,6 +45,7 @@ import { WeaponIcon } from './icons/WeaponIcon';
 import { useTabState } from './useTabState';
 import { Checkbox } from './SeasonFilter';
 import PerSideStatsTable from './PerSideStatsTable';
+import RoundEconomyChart from './RoundEconomyChart';
 
 // Side-tint helper (CT/T, not SHIRTS/SKINS) — matches MatchTabView.tsx's own factionClass(),
 // duplicated locally per this codebase's existing pattern of small per-file copies (also
@@ -1443,6 +1446,8 @@ export default function SabremetricsLeaderboardView({
   weaponClassStats = [],
   economyRows = [],
   hasEconomyData = false,
+  damageEvents = [],
+  roundEconomy = [],
   matches = [],
   rounds = [],
   hasSideData = false,
@@ -1479,6 +1484,16 @@ export default function SabremetricsLeaderboardView({
    *  `economyRows.length` would reintroduce exactly that bug for any future caller who forgets to
    *  override it, so the unsafe inference isn't offered as a default at all. */
   hasEconomyData?: boolean;
+  /** This match's demo-derived damage events (#519) — feeds the Economy sub-tab's round-by-round
+   *  chart tooltip. Only meaningful alongside `roundEconomy` below; a season/career caller that
+   *  never wires `roundEconomy` doesn't need this either. */
+  damageEvents?: MatchDamageEventRow[];
+  /** This match's `match_round_economy` rows, one row per (round, player) — drives the Economy
+   *  sub-tab's round-by-round money/kills/damage chart (#519). Only ever populated by the match
+   *  page (`teamGroups` is what makes the chart meaningful — a season/career view spans many
+   *  matches' round numbers at once, so it never wires this). Empty is fine; the chart simply
+   *  doesn't render, same as an unplayed/not-yet-reparsed match. */
+  roundEconomy?: MatchRoundEconomyRow[];
   /** Match veto/side data behind the Sides sub-tab (#506) — same shape `BasicStatsView`'s own
    *  `matches` prop takes, and typically the exact same array a caller already passes there.
    *  Defaults to `[]` (the match page, which filters CT/T per-team via `Scoreboard` instead, never
@@ -1548,6 +1563,17 @@ export default function SabremetricsLeaderboardView({
     () => buildEconomyTiles(singlePlayerTiles?.economyStats ?? [], economyFilter),
     [singlePlayerTiles, economyFilter],
   );
+  /** `{id, name, side}` for every rostered player, in `teamGroups` order — the round-by-round
+   *  chart's own input shape, which colors/groups lines by side rather than SHIRTS/SKINS identity
+   *  (see `RoundEconomyChart`). Only ever non-empty on the match page (`teamGroups` set); a
+   *  season/career caller has no single round sequence to plot against. */
+  const roundEconomyPlayers = useMemo(() => {
+    if (!teamGroups) return [];
+    const nameById = new Map(aggregated.map((a) => [a.player_id, a.player_name]));
+    return teamGroups.flatMap((g) =>
+      [...g.playerIds].sort((a, b) => a - b).map((id) => ({ id, name: nameById.get(id) ?? `#${id}`, side: g.side })),
+    );
+  }, [teamGroups, aggregated]);
 
   if (aggregated.length === 0) {
     return <EmptyState message="No sabremetric data available. Upload demos on match pages to populate advanced stats." />;
@@ -1630,6 +1656,12 @@ export default function SabremetricsLeaderboardView({
       )}
       {sub === 'economy' && (
         <div className="space-y-3">
+          {roundEconomy.length > 0 && (
+            <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3">
+              <h3 className="text-sm font-semibold mb-3">Round Economy</h3>
+              <RoundEconomyChart players={roundEconomyPlayers} roundEconomy={roundEconomy} kills={kills} damageEvents={damageEvents} />
+            </div>
+          )}
           <EconomyFilterSelect value={economyFilter} onChange={setEconomyFilter} />
           <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
             <EconomyTable aggregated={agg} economyRows={economyRows} selectedTier={economyFilter} singlePlayer={singlePlayer} showHeading={showHeading} />
