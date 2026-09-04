@@ -111,7 +111,10 @@ function KillPipRow({ kills, color, direction }: { kills: boolean[]; color: stri
         ))}
       </svg>
       {segments.some((s) => s.headshot) && (
-        <div className="absolute inset-x-0 top-full mt-0.5" style={{ height: 10 }}>
+        // top is a fixed pixel offset below the SVG (not `top-full`, which resolves against this
+        // wrapper's own padded height — PIP_H + 12 — putting the strip below the wrapper's own
+        // bottom edge instead of right under the chevrons, overlapping whatever follows).
+        <div className="absolute inset-x-0" style={{ top: PIP_H + 2, height: 10 }}>
           {segments.filter((s) => s.headshot).map((s) => (
             <div key={s.index} className="absolute" style={{ left: s.offset + PIP_W / 2, transform: 'translateX(-50%)' }}>
               <HeadshotIcon size={10} style={{ color: HS_COLOR }} />
