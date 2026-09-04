@@ -38,6 +38,7 @@ import {
   type KillWeaponCategory,
 } from '@/lib/parsers/weaponClasses';
 import { aggregatePerSideStats, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
+import type { RoundHistoryEntry } from '@/lib/types';
 import { tabCls } from '@/lib/util';
 import EmptyState from './EmptyState';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
@@ -1448,6 +1449,7 @@ export default function SabremetricsLeaderboardView({
   hasEconomyData = false,
   damageEvents = [],
   roundEconomy = [],
+  roundHistory = [],
   matches = [],
   rounds = [],
   hasSideData = false,
@@ -1494,6 +1496,10 @@ export default function SabremetricsLeaderboardView({
    *  matches' round numbers at once, so it never wires this). Empty is fine; the chart simply
    *  doesn't render, same as an unplayed/not-yet-reparsed match. */
   roundEconomy?: MatchRoundEconomyRow[];
+  /** This match's round-by-round outcomes (`matches.round_history`) — drives the round-by-round
+   *  chart's win/loss background bands (#519). Only meaningful alongside `roundEconomy`; a
+   *  season/career caller never wires either. */
+  roundHistory?: RoundHistoryEntry[];
   /** Match veto/side data behind the Sides sub-tab (#506) — same shape `BasicStatsView`'s own
    *  `matches` prop takes, and typically the exact same array a caller already passes there.
    *  Defaults to `[]` (the match page, which filters CT/T per-team via `Scoreboard` instead, never
@@ -1574,6 +1580,14 @@ export default function SabremetricsLeaderboardView({
       [...g.playerIds].sort((a, b) => a - b).map((id) => ({ id, name: nameById.get(id) ?? `#${id}`, side: g.side })),
     );
   }, [teamGroups, aggregated]);
+  /** Each team's match-long display side, keyed by `TeamGroup.key` ('shirts'/'skins' —
+   *  `MatchTabView`'s own convention) — lets the round-by-round chart tint a round's winner band
+   *  by the *team* that won, not the round's actual (half-swapping) side. */
+  const roundEconomyTeamSides = useMemo(() => {
+    const shirts = teamGroups?.find((g) => g.key === 'shirts')?.side ?? null;
+    const skins = teamGroups?.find((g) => g.key === 'skins')?.side ?? null;
+    return { shirts, skins };
+  }, [teamGroups]);
 
   if (aggregated.length === 0) {
     return <EmptyState message="No sabremetric data available. Upload demos on match pages to populate advanced stats." />;
@@ -1659,7 +1673,14 @@ export default function SabremetricsLeaderboardView({
           {roundEconomy.length > 0 && (
             <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3">
               <h3 className="text-sm font-semibold mb-3">Round Economy</h3>
-              <RoundEconomyChart players={roundEconomyPlayers} roundEconomy={roundEconomy} kills={kills} damageEvents={damageEvents} />
+              <RoundEconomyChart
+                players={roundEconomyPlayers}
+                roundEconomy={roundEconomy}
+                kills={kills}
+                damageEvents={damageEvents}
+                roundHistory={roundHistory}
+                teamSides={roundEconomyTeamSides}
+              />
             </div>
           )}
           <EconomyFilterSelect value={economyFilter} onChange={setEconomyFilter} />

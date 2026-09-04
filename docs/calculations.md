@@ -494,7 +494,13 @@ and grouped by that player's match-long display side rather than SHIRTS/SKINS id
 convention as `Scoreboard`/`TeamHeader`), with the second player sharing a side drawn dashed so
 teammates stay distinguishable. Kills that round are marked directly on the line (a filled dot
 sized to the kill count); money and damage for the hovered round are read from a tooltip rather than
-a second plotted axis, keeping the chart to one visual channel (money) per player. Fed by
+a second plotted axis, keeping the chart to one visual channel (money) per player. Each round's
+background is tinted by the *team* that won it (`matches.round_history`), mapped through that
+team's own fixed display color rather than the round's actual (half-swapping) side, so a band's
+color always agrees with the line color of the team it credits. `round_history[].n` and
+`match_round_economy.round_number` are the same unrenumbered engine round identity
+(`total_rounds_played`, see `buildRoundSides()` in `src/lib/parsers/roundSides.ts`), so the two join
+directly with no offset math despite `RoundHistoryStrip`'s own display renumbering elsewhere. Fed by
 `getMatchRoundEconomy()` (`src/lib/queries/roundEconomy.ts`), the round-grain counterpart of
 `getMatchEconomyStats()`'s tier-bucketed aggregate above — a season/career caller never wires this,
 since there's no single round sequence to plot across multiple matches.

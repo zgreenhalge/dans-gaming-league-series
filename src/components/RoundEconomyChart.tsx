@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MatchKillRow, MatchDamageEventRow, MatchRoundEconomyRow } from '@/lib/queries';
+import type { RoundHistoryEntry } from '@/lib/types';
 
 type Side = 'CT' | 'T' | null;
 
@@ -42,11 +43,22 @@ export default function RoundEconomyChart({
   roundEconomy,
   kills,
   damageEvents,
+  roundHistory,
+  teamSides,
 }: {
   players: { id: number; name: string; side: Side }[];
   roundEconomy: MatchRoundEconomyRow[];
   kills: MatchKillRow[];
   damageEvents: MatchDamageEventRow[];
+  /** This match's round-by-round outcomes (`matches.round_history`) — drives the background
+   *  win/loss bands. `entry.n` is the same raw engine round identity `roundEconomy.round_number`
+   *  uses (both come from the demo parser's `total_rounds_played`, unrenumbered), so the two join
+   *  directly with no offset math. Empty is fine; rounds simply render with no band. */
+  roundHistory: RoundHistoryEntry[];
+  /** Each team's match-long display side (`shirtsF`/`skinsF` in `MatchTabView`/`Scoreboard`) — a
+   *  round's winning band is tinted by the *team* that won it, mapped through this to the same
+   *  fixed color that team's own player lines use, not the round's actual (half-swapping) side. */
+  teamSides: { shirts: Side; skins: Side };
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 600, h: 220 });
@@ -64,10 +76,16 @@ export default function RoundEconomyChart({
     return () => observer.disconnect();
   }, []);
 
-  const { rounds, lines, yMax } = useMemo(() => {
+  const { rounds, lines, yMax, bandColors, winners } = useMemo(() => {
     const roundSet = new Set<number>();
     for (const r of roundEconomy) roundSet.add(r.round_number);
     const rounds = [...roundSet].sort((a, b) => a - b);
+
+    const outcomeByRound = new Map(roundHistory.map((e) => [e.n, e]));
+    const winners = rounds.map((r) => outcomeByRound.get(r) ?? null);
+    const bandColors = winners.map((outcome) =>
+      outcome ? sideColor(outcome.winner === 'SHIRTS' ? teamSides.shirts : teamSides.skins) : null,
+    );
 
     // A side can hold at most two players; the second one drawn for a side is dashed so
     // teammates stay distinguishable without a second color per side.
@@ -96,8 +114,8 @@ export default function RoundEconomyChart({
 
     const dataMax = Math.max(0, ...lines.flatMap((l) => l.points.map((p) => p.money ?? 0)));
     const yMax = Math.max(1000, Math.ceil((dataMax * 1.15) / 500) * 500);
-    return { rounds, lines, yMax };
-  }, [players, roundEconomy, kills, damageEvents]);
+    return { rounds, lines, yMax, bandColors, winners };
+  }, [players, roundEconomy, kills, damageEvents, roundHistory, teamSides]);
 
   if (rounds.length === 0) return null;
 
@@ -162,6 +180,7 @@ export default function RoundEconomyChart({
             {l.name}
           </span>
         ))}
+        <span className="text-[10px] text-[var(--color-text-secondary)]">— background tints the round winner</span>
       </div>
 
       <svg
@@ -172,6 +191,25 @@ export default function RoundEconomyChart({
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHoverRound(null)}
       >
+        {(() => {
+          const colWidth = plotW / rounds.length;
+          return rounds.map((r, i) => {
+            const color = bandColors[i];
+            if (!color) return null;
+            return (
+              <rect
+                key={r}
+                x={xFor(i) - colWidth / 2}
+                y={PADDING.top}
+                width={colWidth}
+                height={plotH}
+                fill={color}
+                fillOpacity={0.1}
+              />
+            );
+          });
+        })()}
+
         {yTicks.map((tick) => {
           const y = yFor(tick);
           return (
@@ -216,7 +254,7 @@ export default function RoundEconomyChart({
         )}
 
         {hoverIdx >= 0 && (() => {
-          const tooltipW = 150;
+          const tooltipW = 175;
           const tooltipH = 20 + lines.length * 14;
           let tx = xFor(hoverIdx) - tooltipW / 2;
           if (tx < PADDING.left) tx = PADDING.left;
@@ -226,7 +264,7 @@ export default function RoundEconomyChart({
             <g style={{ pointerEvents: 'none' }}>
               <rect x={tx} y={ty} width={tooltipW} height={tooltipH} rx={4} fill="var(--color-bg-secondary)" stroke="var(--color-border-primary)" strokeWidth={1} />
               <text x={tx + 8} y={ty + 13} fill="var(--color-text-primary)" fontSize={10} fontFamily="monospace" fontWeight={600}>
-                Round {rounds[hoverIdx]}
+                Round {rounds[hoverIdx]}{winners[hoverIdx] ? ` — ${winners[hoverIdx]!.winner === 'SHIRTS' ? 'Shirts' : 'Skins'} won` : ''}
               </text>
               {lines.map((l, i) => {
                 const p = l.points[hoverIdx];
