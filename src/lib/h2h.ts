@@ -569,6 +569,9 @@ interface _SeasonSourceMatch {
   skins_stats: _H2HSourceStat[];
 }
 
+/** Adapts one already-resolved match (with its own roster) into `computeH2H`'s input shape.
+ *  Shared by `scheduleToH2HInput`/`gauntletRoundsToH2HInput` — a season's own H2H tab, one match
+ *  at a time across a week/round. */
 function seasonMatchToH2HInput(
   m: _SeasonSourceMatch,
   weekOrRoundNumber: number,

@@ -107,15 +107,26 @@ so you don't have to reverse-engineer them from scratch each time.
   between (a real materialized bracket vs. a live "if the season ended today" preview) and why.
   Distinct from the canonical gauntlet ranking below, which only ever describes a *completed*
   gauntlet.
-- **H2H (Head-to-Head)** — cross-player comparison surfaced in `getH2HData()`. Two distinct shapes
-  live inside `H2HData` (`src/lib/queries/h2h.ts`):
+- **H2H (Head-to-Head)** — cross-player comparison, aggregated by `computeH2H()` (`src/lib/h2h.ts`,
+  the shared aggregation core) from a set of played matches. Two distinct shapes live inside its
+  `H2HData` result:
   - **Duos** (`DuoStats`) — performance when two players are *teammates* (same faction)
   - **Rivals** (`H2HStats`) — performance when two players are *opponents* (different factions)
   Rendered by `H2HMatrix.tsx` (overview grid) and `MatchupDetail.tsx` (drill-down for a pair —
   `DuoDetail`/`RivalDetail`, shared by the Statistics H2H tab, a player's Matchups tab, and a
-  match's Scouting Report). Each pair's drill-down includes **Map Intel**: a per-pair,
-  per-map record (`DuoStats.mapBreakdown` / `H2HStats.mapBreakdown`) aggregated directly from
-  that pair's own match history — not from either player's individual career map stats.
+  match's pre-match Scouting Report). Each non-`minimal` drill-down includes **Map Intel**: a
+  per-pair, per-map record (`DuoStats.mapBreakdown` / `H2HStats.mapBreakdown`) aggregated directly
+  from that pair's own match history — not from either player's individual career map stats. A
+  played match's own H2H tab (below) is a different, single-match concept and doesn't use any of
+  this machinery.
+- **Match H2H tab / duel** — a played match's own 4 shirts-vs-skins duels, rendered by
+  `MatchH2H.tsx` and computed by `computeMatchDuels()` (`src/lib/queries/duels.ts`) straight from
+  that match's parsed killfeed and damage log (`match_kills` → `getMatchKills()`, `kills.ts`;
+  `match_damage_events` → `getMatchDamageEvents()`, `damage.ts`) — literally how many times each
+  pair killed each other, with how much damage and which weapon categories, in this one match, not
+  a `computeH2H()`-style career rivalry score. Replaces the Scouting Report tab once the match is
+  played, and only once a demo's been parsed into kills (`matchKills.length > 0` — see
+  `MatchTabView.tsx`); a played match with no parsed demo shows neither tab.
 - **Blended score** (H2H rankings) — how the "Best Friends"/"Closest Rivals" cards
   (`topDuos`/`topRivals` in `H2HSection.tsx`) rank pairs, and how the `H2HMatrix` colors
   its cells. Shared via `duoBlendedScorer`/`rivalBlendedScorer` in `src/lib/queries/h2h.ts`.
@@ -127,7 +138,8 @@ so you don't have to reverse-engineer them from scratch each time.
   turning every term into a 0–1 "how close to the best?" fraction before the weights
   (0.5 / 0.3 / 0.2, etc.) are applied. `Math.max(1, ...)` guards the empty-data case.
 - **Scouting report** — pre-match prep view (`getMatchScoutingData()` → `ScoutingReport.tsx`)
-  showing each upcoming player's recent form/history before a match is played.
+  showing each upcoming player's recent form/history before a match is played. Only shown for an
+  unplayed match — see **Match H2H tab** above for what a match's own tab shows once it's played.
 - **Bye** — a player who sits out a given week (`weeks.bye_player_id`); odd-numbered rosters mean
   someone rotates out each week.
 - **Played match** — *not* simply "has a `final_score`." Season 3 matches were pre-staged with
@@ -159,6 +171,7 @@ so you don't have to reverse-engineer them from scratch each time.
 | Veto sequence rendering | `src/components/VetoSequence.tsx` |
 | H2H overview grid / drill-down | `src/components/H2HMatrix.tsx`, `src/components/MatchupDetail.tsx` |
 | Pre-match prep view | `src/components/ScoutingReport.tsx` |
+| Played match's own H2H tab | `src/components/MatchH2H.tsx` |
 | Gauntlet bracket rendering | `src/components/GauntletRoundsList.tsx`, `src/components/GauntletStandings.tsx` |
 | Gauntlet bracket generation + advancement engine | `src/lib/gauntlet-bracket.ts`, `src/lib/gauntlet-engine.ts` |
 | Career vs per-season stat views | `src/components/CareerStatsView.tsx`, `src/components/SeasonTabView.tsx`, `src/components/CombinedSeasonTabView.tsx` |

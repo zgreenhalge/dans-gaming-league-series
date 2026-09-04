@@ -8,14 +8,16 @@ import { useMapLookup } from './MapContext';
 import { avgOf, tabCls } from '@/lib/util';
 import { findDuo, findRival } from '@/lib/h2h';
 import Link from 'next/link';
-import { DuoDetail, RivalDetail } from './MatchupDetail';
+import { DuoDetail, RivalDetail, EmptyPanel, factionColor } from './MatchupDetail';
 import MapHeatmap from './MapHeatmap';
 
 function h2hHref(nameA: string, nameB: string, type: 'partner' | 'opponent'): string {
   return `/statistics?tab=h2h&a=${encodeURIComponent(nameA)}&b=${encodeURIComponent(nameB)}&type=${type}`;
 }
 
-/** Return a copy of `rival` with A/B flipped so that `desiredA` is always playerA. */
+/** Returns a copy of `rival` with A/B flipped so that `desiredA` is always playerA — lets a
+ *  caller pin a consistent side (the shirts player) regardless of which player `computeH2H`
+ *  happened to assign as A by id ordering. */
 function normalizeRival(rival: H2HStats, desiredA: number): H2HStats {
   if (rival.playerA === desiredA) return rival;
   return {
@@ -43,14 +45,6 @@ function normalizeRival(rival: H2HStats, desiredA: number): H2HStats {
       score: m.score ? { a: m.score.b, b: m.score.a } : null,
     })),
   };
-}
-
-function EmptyPanel({ label }: { label: string }) {
-  return (
-    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] flex items-center justify-center p-8 min-h-[80px]">
-      <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">{label}</span>
-    </div>
-  );
 }
 
 function heatTitle(val: number, baseline: number, unit: string, decimals: number): string {
@@ -196,12 +190,6 @@ function MapCard({
 }
 
 type Faction = 'CT' | 'T' | null;
-
-function factionColor(f: Faction): string {
-  if (f === 'T') return 'var(--color-t)';
-  if (f === 'CT') return 'var(--color-ct)';
-  return 'var(--color-text-secondary)';
-}
 
 export default function ScoutingReport({
   shirts,

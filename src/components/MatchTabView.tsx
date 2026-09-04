@@ -9,18 +9,21 @@ import { PlayerName } from '@/components/PlayerName';
 import DemoUploadModal from '@/components/DemoUploadModal';
 import MatchRecapTab from '@/components/MatchRecapTab';
 import ScoutingReport from '@/components/ScoutingReport';
+import MatchH2H from '@/components/MatchH2H';
 import { Checkbox } from '@/components/SeasonFilter';
 import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import Th from '@/components/Th';
-import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
+import { useTabState, resolveTab } from './useTabState';
+import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, MatchDamageEventRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
 import { splitStat } from '@/lib/queries';
 import type { SabFieldsWithDerived } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
 import { roundsPlayedBySide } from '@/lib/parsers/roundSides';
 
 type Faction = 'CT' | 'T' | null;
-type Tab = 'leaderboard' | 'advanced' | 'scouting' | 'recap';
+type Tab = 'leaderboard' | 'advanced' | 'scouting' | 'h2h' | 'recap';
+const MATCH_TABS: readonly Tab[] = ['leaderboard', 'advanced', 'scouting', 'h2h', 'recap'];
 
 function factionClass(f: Faction): string {
   if (f === 'CT') return 'faction-ct';
@@ -315,6 +318,7 @@ export default function MatchTabView({
   skinsSide,
   sabremetrics = [],
   matchKills = [],
+  matchDamageEvents = [],
   matchWeaponClassStats = [],
   matchEconomyStats = [],
   ehog,
@@ -338,8 +342,12 @@ export default function MatchTabView({
   targetWinRounds: number;
   skinsSide: 'CT' | 'T' | null;
   sabremetrics?: MatchSabremetricsRow[];
-  /** This match's demo-derived kills, one row per kill — feeds the Advanced tab's Weapons table. */
+  /** This match's demo-derived kills, one row per kill — feeds the Advanced tab's Weapons table
+   *  and the H2H tab's duel cards. */
   matchKills?: MatchKillRow[];
+  /** This match's demo-derived damage events, one row per hit — feeds the H2H tab's per-pair
+   *  damage bar. Empty until a demo is (re)parsed. */
+  matchDamageEvents?: MatchDamageEventRow[];
   /** This match's `player_match_weapon_stats` rows — feeds the Advanced tab's Weapons sub-tab
    *  category accuracy breakdown (#474). */
   matchWeaponClassStats?: WeaponClassMatchRow[];
@@ -353,7 +361,8 @@ export default function MatchTabView({
     projections: RatingProjection[];
     current: Record<number, number>;
   };
-  /** Pre-match scouting report data for the Scouting Report tab. */
+  /** Pre-match scouting report data for the Scouting Report tab. `null` once the match is
+   *  played — the Scouting Report tab gives way to the H2H tab below. */
   scouting: {
     data: MatchScoutingData | null;
     h2h: H2HData | null;
@@ -378,6 +387,9 @@ export default function MatchTabView({
   const { demoDownloadUrl, job: replayJob, events: replayEvents, recordingURL } = recap;
 
   const hasScoutingData = !!(scoutingData && scoutingH2H);
+  // Real duel data only exists once a demo's been parsed into match_kills — a played match
+  // without one has no H2H tab rather than a half-empty one.
+  const hasMatchH2H = played && matchKills.length > 0 && shirts.length === 2 && skins.length === 2;
   const hasProjections = ratingProjections.length > 0;
   const hasSab = sabremetrics.length > 0;
   const canDispatchReplay =
@@ -391,7 +403,17 @@ export default function MatchTabView({
   // existing replay/heatmap/recording, and a player/admin can still reach the tab to
   // add a recording URL before any demo is ever uploaded.
   const hasRecap = !!demoDownloadUrl || !!replayEvents || !!recordingURL || canEditRecording;
-  const [tab, setTab] = useState<Tab>('leaderboard');
+  const [rawTab, setTab] = useTabState(MATCH_TABS, 'leaderboard');
+  // Falls back to Scoreboard when the URL names a tab this match doesn't currently have (e.g. a
+  // stale ?tab=h2h link for a match whose demo hasn't been parsed).
+  const availableTabs: { key: Tab }[] = [
+    { key: 'leaderboard' },
+    ...(hasSab ? [{ key: 'advanced' as const }] : []),
+    ...(hasScoutingData ? [{ key: 'scouting' as const }] : []),
+    ...(hasMatchH2H ? [{ key: 'h2h' as const }] : []),
+    ...(played && hasRecap ? [{ key: 'recap' as const }] : []),
+  ];
+  const tab = resolveTab(rawTab, availableTabs);
   const [includeCT, setIncludeCT] = useState(true);
   const [includeT, setIncludeT] = useState(true);
 
@@ -502,6 +524,12 @@ export default function MatchTabView({
           </button>
         )}
 
+        {hasMatchH2H && (
+          <button role="tab" aria-selected={tab === 'h2h'} type="button" className={tabCls(tab === 'h2h')} onClick={() => setTab('h2h')}>
+            H2H
+          </button>
+        )}
+
         {played && hasRecap && (
           <button role="tab" aria-selected={tab === 'recap'} type="button" className={tabCls(tab === 'recap')} onClick={() => setTab('recap')}>
             Recap
@@ -575,6 +603,16 @@ export default function MatchTabView({
             />
           )}
         </>
+      )}
+
+      {tab === 'h2h' && hasMatchH2H && (
+        <MatchH2H
+          shirtIds={[shirts[0].player_id, shirts[1].player_id]}
+          skinIds={[skins[0].player_id, skins[1].player_id]}
+          matchKills={matchKills}
+          matchDamageEvents={matchDamageEvents}
+          players={new Map(allStats.map((s) => [s.player_id, { id: s.player_id, name: s.player_name, steam_avatar_url: s.steam_avatar_url }]))}
+        />
       )}
 
       {tab === 'recap' && hasRecap && (
