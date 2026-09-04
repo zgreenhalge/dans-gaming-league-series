@@ -74,6 +74,18 @@ const PIP_STEP = PIP_W - PIP_NOTCH;
 // Inset so a headshot's stroke isn't clipped by the SVG viewport at the polygon's own edge.
 const PIP_STROKE_INSET = 1.5;
 
+// A right-pointing arrow/chevron outline (notch on the left, point on the right), inset by
+// PIP_STROKE_INSET. 'left'-direction segments mirror this horizontally (x -> PIP_W - x) rather
+// than a second hand-derived hexagon that would need to be kept in sync with this one by eye.
+const PIP_BASE_POINTS: [number, number][] = [
+  [PIP_STROKE_INSET, PIP_STROKE_INSET],
+  [PIP_W - PIP_NOTCH, PIP_STROKE_INSET],
+  [PIP_W - PIP_STROKE_INSET, PIP_H / 2],
+  [PIP_W - PIP_NOTCH, PIP_H - PIP_STROKE_INSET],
+  [PIP_STROKE_INSET, PIP_H - PIP_STROKE_INSET],
+  [PIP_NOTCH, PIP_H / 2],
+];
+
 /** One kill-weapon-category row's kills, as a single seamless chevron chain (à la Leetify's H2H)
  *  — one numbered arrow segment per kill, colored for the side that got it (never color-only for
  *  headshot, so a colorblind reader isn't relying on hue alone); a headshot instead gets a red
@@ -86,16 +98,15 @@ const PIP_STROKE_INSET = 1.5;
 function KillPipRow({ kills, color, direction }: { kills: boolean[]; color: string; direction: 'right' | 'left' }) {
   if (kills.length === 0) return null;
   const width = PIP_STEP * (kills.length - 1) + PIP_W;
-  const m = PIP_STROKE_INSET;
   // 'right': kill #1 (i=0) is the leftmost segment, arrow points right, notch on the left.
-  // 'left': kill #1 is the rightmost segment instead, arrow points left, notch on the right —
-  // both the offset order and the shape mirror so the chain still reads "kill #1 nearest the
-  // other player, flowing toward them."
+  // 'left': kill #1 is the rightmost segment instead, arrow points left, notch on the right — the
+  // offset order mirrors (position i behaves like right-pointing position kills.length-1-i) and
+  // the shape mirrors too, so the chain still reads "kill #1 nearest the other player, flowing
+  // toward them."
+  const points = direction === 'right' ? PIP_BASE_POINTS : PIP_BASE_POINTS.map(([x, y]): [number, number] => [PIP_W - x, y]);
   const segments = kills.map((headshot, i) => {
-    const offset = direction === 'right' ? i * PIP_STEP : width - PIP_W - i * PIP_STEP;
-    const points = direction === 'right'
-      ? [[m, m], [PIP_W - PIP_NOTCH, m], [PIP_W - m, PIP_H / 2], [PIP_W - PIP_NOTCH, PIP_H - m], [m, PIP_H - m], [PIP_NOTCH, PIP_H / 2]]
-      : [[PIP_W - m, m], [PIP_NOTCH, m], [m, PIP_H / 2], [PIP_NOTCH, PIP_H - m], [PIP_W - m, PIP_H - m], [PIP_W - PIP_NOTCH, PIP_H / 2]];
+    const positionIndex = direction === 'right' ? i : kills.length - 1 - i;
+    const offset = positionIndex * PIP_STEP;
     return { index: i + 1, headshot, offset, pointsAttr: points.map(([x, y]) => `${x + offset},${y}`).join(' ') };
   });
 
