@@ -488,6 +488,17 @@ on the player/statistics/season pages (season-scoped `getAllEconomyStats()`) and
 (`getMatchEconomyStats()`), the same season/match split `getAllWeaponClassStats()`/
 `getMatchWeaponClassStats()` use for the Weapons sub-tab.
 
+On the match page only, the Economy sub-tab also shows `RoundEconomyChart` — one line per player
+plotting equipment value (`match_round_economy.equipment_value`) across every live round, colored
+and grouped by that player's match-long display side rather than SHIRTS/SKINS identity (same
+convention as `Scoreboard`/`TeamHeader`), with the second player sharing a side drawn dashed so
+teammates stay distinguishable. Kills that round are marked directly on the line (a filled dot
+sized to the kill count); money and damage for the hovered round are read from a tooltip rather than
+a second plotted axis, keeping the chart to one visual channel (money) per player. Fed by
+`getMatchRoundEconomy()` (`src/lib/queries/roundEconomy.ts`), the round-grain counterpart of
+`getMatchEconomyStats()`'s tier-bucketed aggregate above — a season/career caller never wires this,
+since there's no single round sequence to plot across multiple matches.
+
 `AggregatedSab` (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`) carries `kills`/`deaths`/
 `assists`/`damage`/`headshot_kills` as merged totals *and* their raw `_ct`/`_t` halves side by side
 — the merged fields are simply the two halves summed, not a separately-tracked value. There is no
