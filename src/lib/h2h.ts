@@ -493,38 +493,6 @@ export function findRival(rivals: H2HStats[], a: number, b: number): H2HStats | 
   return rivals.find((r) => h2hPairKey(r.playerA, r.playerB) === key);
 }
 
-/** Returns a copy of `rival` with A/B flipped so that `desiredA` is always playerA — lets a
- *  caller pin a consistent side (e.g. always the shirts player) regardless of which player
- *  `computeH2H` happened to assign as A by id ordering. */
-export function normalizeRival(rival: H2HStats, desiredA: number): H2HStats {
-  if (rival.playerA === desiredA) return rival;
-  return {
-    playerA: rival.playerB,
-    playerB: rival.playerA,
-    meetings: rival.meetings,
-    aWins: rival.bWins,
-    bWins: rival.aWins,
-    lastMap: rival.lastMap,
-    aStats: rival.bStats,
-    bStats: rival.aStats,
-    mapBreakdown: rival.mapBreakdown.map((s) => ({
-      ...s,
-      wins: s.losses,
-      losses: s.wins,
-      roundsWon: s.roundsPlayed - s.roundsWon,
-      aAdr: s.bAdr,
-      bAdr: s.aAdr,
-    })),
-    matches: rival.matches.map((m) => ({
-      ...m,
-      aWon: m.aWon == null ? null : !m.aWon,
-      aTeam: m.bTeam,
-      bTeam: m.aTeam,
-      score: m.score ? { a: m.score.b, b: m.score.a } : null,
-    })),
-  };
-}
-
 // Minimal shape for `mapMatchRowsToH2HInput` — mirrors `MapMatchRow`/`MapPlayerStat`
 // from queries.ts without importing them, so this file stays supabase-free.
 interface _H2HSourceStat {
@@ -604,7 +572,7 @@ interface _SeasonSourceMatch {
 /** Adapts one already-resolved match (with its own roster) into `computeH2H`'s input shape.
  *  Shared by `scheduleToH2HInput`/`gauntletRoundsToH2HInput` — a season's own H2H tab, one match
  *  at a time across a week/round. */
-function matchToH2HInput(
+function seasonMatchToH2HInput(
   m: _SeasonSourceMatch,
   weekOrRoundNumber: number,
   seasonNumber: number | null,
@@ -641,7 +609,7 @@ export function scheduleToH2HInput(
   return weeks.flatMap((w) =>
     w.matches
       .filter((m) => isPlayedScore(m.final_score))
-      .map((m) => matchToH2HInput(m, w.week_number, seasonNumber, false)),
+      .map((m) => seasonMatchToH2HInput(m, w.week_number, seasonNumber, false)),
   );
 }
 
@@ -654,6 +622,6 @@ export function gauntletRoundsToH2HInput(
   return rounds.flatMap((r) =>
     r.matches
       .filter((m) => isPlayedScore(m.final_score))
-      .map((m) => matchToH2HInput(m, r.round_number, seasonNumber, true)),
+      .map((m) => seasonMatchToH2HInput(m, r.round_number, seasonNumber, true)),
   );
 }

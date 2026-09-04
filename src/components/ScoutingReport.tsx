@@ -6,13 +6,45 @@ import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdow
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
 import { avgOf, tabCls } from '@/lib/util';
-import { findDuo, findRival, normalizeRival } from '@/lib/h2h';
+import { findDuo, findRival } from '@/lib/h2h';
 import Link from 'next/link';
 import { DuoDetail, RivalDetail, EmptyPanel, factionColor } from './MatchupDetail';
 import MapHeatmap from './MapHeatmap';
 
 function h2hHref(nameA: string, nameB: string, type: 'partner' | 'opponent'): string {
   return `/statistics?tab=h2h&a=${encodeURIComponent(nameA)}&b=${encodeURIComponent(nameB)}&type=${type}`;
+}
+
+/** Returns a copy of `rival` with A/B flipped so that `desiredA` is always playerA — lets a
+ *  caller pin a consistent side (the shirts player) regardless of which player `computeH2H`
+ *  happened to assign as A by id ordering. */
+function normalizeRival(rival: H2HStats, desiredA: number): H2HStats {
+  if (rival.playerA === desiredA) return rival;
+  return {
+    playerA: rival.playerB,
+    playerB: rival.playerA,
+    meetings: rival.meetings,
+    aWins: rival.bWins,
+    bWins: rival.aWins,
+    lastMap: rival.lastMap,
+    aStats: rival.bStats,
+    bStats: rival.aStats,
+    mapBreakdown: rival.mapBreakdown.map((s) => ({
+      ...s,
+      wins: s.losses,
+      losses: s.wins,
+      roundsWon: s.roundsPlayed - s.roundsWon,
+      aAdr: s.bAdr,
+      bAdr: s.aAdr,
+    })),
+    matches: rival.matches.map((m) => ({
+      ...m,
+      aWon: m.aWon == null ? null : !m.aWon,
+      aTeam: m.bTeam,
+      bTeam: m.aTeam,
+      score: m.score ? { a: m.score.b, b: m.score.a } : null,
+    })),
+  };
 }
 
 function heatTitle(val: number, baseline: number, unit: string, decimals: number): string {
