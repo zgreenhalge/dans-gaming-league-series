@@ -79,43 +79,61 @@ const DEMO_ATTENTION_STATUSES: ReadonlySet<string> = new Set(['parsed', 'quarant
 export const JOB_IN_PROGRESS_STATUSES: ReadonlySet<string> = new Set(['received', 'queued', 'running']);
 
 /**
- * How long an in-progress job can run before it's treated as stuck rather than still working —
- * comfortably above the longest pipeline's own `timeout-minutes` (25, radar-build; see
- * `docs/github-actions.md`). A GitHub Actions cancellation — the hard timeout, a manual cancel, a
- * lost runner — never reaches the script's `fail()` handler (`cancel-in-progress: false` exists so a
- * *retry* can't orphan a still-live run, but nothing unwinds a run that dies on its own), so nothing
- * else ever moves a genuinely-dead run's row off `received`/`queued`/`running`. One number shared by
- * the Activity feed (tags a stale row as needing attention instead of leaving it silently "in
- * progress") and every dispatch route's in-flight guard (`isJobInFlight` in `background-jobs.ts`) —
- * so a job can never read "still fine" in one place and "stuck" in the other.
+ * How long an in-progress job can go without a single write to its row before it's treated as stuck
+ * rather than still working — comfortably above the longest pipeline's own `timeout-minutes` (25,
+ * radar-build; see `docs/github-actions.md`). A GitHub Actions cancellation — the hard timeout, a
+ * manual cancel, a lost runner — never reaches the script's `fail()` handler (`cancel-in-progress:
+ * false` exists so a *retry* can't orphan a still-live run, but nothing unwinds a run that dies on its
+ * own), so nothing else ever moves a genuinely-dead run's row off `received`/`queued`/`running`. One
+ * number shared by the Activity feed (tags a stale row as needing attention instead of leaving it
+ * silently "in progress") and every dispatch route's in-flight guard (`isJobInFlight` in
+ * `background-jobs.ts`) — so a job can never read "still fine" in one place and "stuck" in the other.
  */
 export const STALE_IN_FLIGHT_MS = 45 * 60 * 1000;
 
 /**
- * `startedAt` if set, else `createdAt` (a `queued` row may not have `startedAt` yet), parsed to an
- * epoch ms — or `null` if there's no timestamp to derive one from. Shared by every "how long has this
- * job been going" computation: `jobIsStale` and `jobDurationLabel` below, and — via this same plain
- * two-string signature rather than a `BackgroundJobRow` — `isJobInFlight`'s in-flight guard
- * (`background-jobs.ts`), which reads the raw `started_at`/`created_at` columns straight off a
- * Supabase row. One parse, not three.
+ * Whether `updatedAt` — the last time this row was written to *at all* — is old enough to call the
+ * job stuck. `updatedAt` is a heartbeat, not "how long has this been running": `recordJobStatus()`/
+ * `advanceJobStatus()` (`background-jobs.ts`) stamp it on every write unconditionally — every claim,
+ * every `stage()` transition (`scripts/job-stage.ts`), every terminal status — so a job that's still
+ * actively progressing keeps refreshing it and never reads stale no matter how long the whole run
+ * takes, while a script that dies silently simply stops writing. Deliberately *not* based on
+ * `startedAt`/`createdAt`: `demo_ingest`'s `createdAt` is preserved across retries by design (see
+ * `getJobCreatedAt()`'s doc comment — it's "when the demo was first attempted," not "when this run
+ * started"), so a fresh redispatch of a long-stuck row would otherwise still read its ancient
+ * `createdAt` and re-flag as stale the instant it lands, before the Action even starts. Basing this on
+ * `updatedAt` instead means that same redispatch's own write — which always refreshes `updatedAt` —
+ * un-stales the row for free, with no dispatch route needing to remember to reset per-run timestamps
+ * by hand.
  */
-export function resolveJobStart(startedAt: string | null, createdAt: string | null): number | null {
-  const iso = startedAt ?? createdAt;
+export function isStale(updatedAt: string | null, nowMs: number): boolean {
+  const t = parseIso(updatedAt);
+  return t !== null && nowMs - t > STALE_IN_FLIGHT_MS;
+}
+
+/** An ISO timestamp parsed to epoch ms, or `null` for a missing/unparseable one — the one NaN-guarded
+ *  `new Date(iso).getTime()` step every timestamp check in this file goes through. */
+function parseIso(iso: string | null): number | null {
   if (!iso) return null;
   const t = new Date(iso).getTime();
   return Number.isNaN(t) ? null : t;
 }
 
+/** `startedAt` if set, else `createdAt` (a `queued` row may not have `startedAt` yet), parsed to an
+ *  epoch ms — or `null` if there's no timestamp to derive one from. Only for `jobDurationLabel`'s "how
+ *  long has this run taken" display; staleness detection uses `isStale()`/`updatedAt` instead (see
+ *  above) since `startedAt`/`createdAt` don't reliably reset across a redispatch. */
+function resolveJobStart(startedAt: string | null, createdAt: string | null): number | null {
+  return parseIso(startedAt ?? createdAt);
+}
+
 /**
- * Whether an in-progress job's own timestamps say it's been running long enough to be stuck rather
- * than genuinely still working. `false` for a non-in-progress status or a row with no timestamp to
- * judge staleness by (trust the status in that case).
+ * Whether an in-progress job has gone quiet long enough to be treated as stuck rather than genuinely
+ * still working. `false` for a non-in-progress status.
  */
 export function jobIsStale(job: BackgroundJobRow, nowMs: number): boolean {
   if (!JOB_IN_PROGRESS_STATUSES.has(job.status)) return false;
-  const start = resolveJobStart(job.startedAt, job.createdAt);
-  if (start === null) return false;
-  return nowMs - start > STALE_IN_FLIGHT_MS;
+  return isStale(job.updatedAt, nowMs);
 }
 
 /**
@@ -140,9 +158,8 @@ export function jobDurationLabel(job: BackgroundJobRow, nowMs: number | null): s
   if (JOB_IN_PROGRESS_STATUSES.has(job.status)) {
     return nowMs === null ? null : `running ${formatDuration(nowMs - start)}`;
   }
-  if (!job.finishedAt) return null;
-  const finish = new Date(job.finishedAt).getTime();
-  return Number.isNaN(finish) ? null : `took ${formatDuration(finish - start)}`;
+  const finish = parseIso(job.finishedAt);
+  return finish === null ? null : `took ${formatDuration(finish - start)}`;
 }
 
 /** One pipeline's state within a subject group (a match's demo/replay lane, or a map's radar lane). */

@@ -35,13 +35,19 @@ lives in Actions.
    - authorizes (session admin/in-match, or a constant-time shared secret),
    - **guards against duplicates** — no-op if a `background_jobs` row for this `(job_type, key)` is
      already in flight, via `isJobInFlight()` (`src/lib/background-jobs.ts`). "In flight" means an
-     in-progress status *and* recent enough to trust: a row whose own `started_at`/`created_at` is
-     older than `STALE_IN_FLIGHT_MS` (`src/lib/jobs.ts` — comfortably above the longest pipeline's own
-     `timeout-minutes`) no longer counts, since a GitHub Actions run that dies without writing a
-     terminal status (a hard timeout, a manual cancel, a lost runner) would otherwise wedge that row
-     `queued`/`running` forever with no dispatch ever able to un-stick it. The atomic first-landing
-     upsert some routes use instead (and the auth check every route does) is the part that's genuinely
-     per-route and stays hand-written at the call site.
+     in-progress status *and* an `updated_at` heartbeat recent enough to trust — not older than
+     `STALE_IN_FLIGHT_MS` (`isStale()`, `src/lib/jobs.ts` — comfortably above the longest pipeline's own
+     `timeout-minutes`), since a GitHub Actions run that dies without writing a terminal status (a hard
+     timeout, a manual cancel, a lost runner) would otherwise wedge that row `queued`/`running` forever
+     with no dispatch ever able to un-stick it. Staleness is judged off `updated_at` specifically, not
+     `started_at`/`created_at`: every write this whole pipeline makes (`recordJobStatus()`,
+     `advanceJobStatus()`) stamps `updated_at` unconditionally, so a fresh redispatch's own claim write
+     immediately un-stales the row — `started_at`/`created_at` aren't reliably reset per redispatch (and
+     `demo_ingest`'s `created_at` is deliberately preserved across retries, see `getJobCreatedAt()`'s
+     doc comment), so basing this on either would have a redispatched row reading stale again the
+     instant it lands, before the Action even starts. The atomic first-landing upsert some routes use
+     instead (and the auth check every route does) is the part that's genuinely per-route and stays
+     hand-written at the call site.
    - claims the row (`recordJobStatus` in `src/lib/background-jobs.ts`) to `queued`, then dispatches
      the workflow via `dispatchAndRecordFailure`, which rolls the row — and a subject column
      (`matches.replay_status`, etc.), when given one — back to `failed` if the dispatch call itself
