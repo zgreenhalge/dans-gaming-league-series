@@ -8,6 +8,7 @@ import { EmptyPanel, type H2HPlayer } from './MatchupDetail';
 import PlayerAvatar from './PlayerAvatar';
 import { WeaponIcon } from './icons/WeaponIcon';
 import { HeadshotIcon } from './icons/KillModifierIcons';
+import { CollapsiblePanel } from './CollapsiblePanel';
 
 const A_COLOR = 'var(--color-t)';
 const B_COLOR = 'var(--color-ct)';
@@ -177,12 +178,11 @@ function DuelCard({ duel, players }: { duel: MatchDuelStat; players: Map<number,
         <SplitBar label="Damage" aValue={duel.aDamage} bValue={duel.bDamage} emptyMessage="No damage data" />
 
         {duel.weaponBreakdown.length > 0 && (
-          <div className="mt-2 pt-2 border-t border-[var(--color-border-primary)]">
-            <div className="text-center tracked text-[8px] text-[var(--color-text-secondary)] mb-1">Weapon breakdown</div>
+          <CollapsiblePanel title="Weapon breakdown" className="mt-2">
             {duel.weaponBreakdown.map((split) => (
               <WeaponCategoryBlock key={split.category} {...split} />
             ))}
-          </div>
+          </CollapsiblePanel>
         )}
       </div>
     </div>
