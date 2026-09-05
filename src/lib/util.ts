@@ -467,3 +467,13 @@ export function filterByMatchIds<R extends { match_id: number }>(
   const matchIds = new Set(matches.map((m) => m.match_id));
   return rows.filter((r) => matchIds.has(r.match_id));
 }
+
+/** T-orange/CT-blue/neutral color for a faction — shared by every view that colors a
+ *  shirts/skins pairing by starting side (Scouting Report, a match's own H2H tab, the win
+ *  probability bar). Lives here rather than in a `'use client'` component module so a Server
+ *  Component can call it directly without invoking a client-only function reference. */
+export function factionColor(f: 'CT' | 'T' | null): string {
+  if (f === 'T') return 'var(--color-t)';
+  if (f === 'CT') return 'var(--color-ct)';
+  return 'var(--color-text-secondary)';
+}

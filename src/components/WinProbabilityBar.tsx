@@ -2,7 +2,7 @@
 // the bar split at the SHIRTS-win percentage. Pre-match uses a live prediction (current ratings);
 // post-match reads the frozen matches.pre_match_win_prob and marks whichever side actually won.
 
-import { factionColor } from './MatchupDetail';
+import { factionColor } from '@/lib/util';
 
 type Faction = 'CT' | 'T' | null;
 
