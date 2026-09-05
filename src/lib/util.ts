@@ -334,6 +334,16 @@ export function winRateColor(winRate: number): string {
   return `color-mix(in srgb, var(--color-accent-green-fill) ${Math.round(t)}%, var(--color-bg-secondary))`;
 }
 
+/** CSS color for a side — the site-wide CT=blue / T=orange convention (round-history strip,
+ *  replay event feed, round-economy chart, …). `undefined`/`null` (no side, or not yet resolved)
+ *  returns `undefined` so a caller styling with it just falls through to the element's default
+ *  color rather than picking a fallback on this function's behalf. */
+export function sideColor(side: 'CT' | 'T' | null | undefined): string | undefined {
+  if (side === 'CT') return 'var(--color-ct)';
+  if (side === 'T') return 'var(--color-t)';
+  return undefined;
+}
+
 /**
  * Canonical leaderboard sort: Wins → RWR% → ADR (all descending).
  * Use this wherever player rows are ranked — never sort by ADR alone.

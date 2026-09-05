@@ -27,7 +27,14 @@ export type RoundCondition = 'elim' | 'bomb' | 'defuse' | 'time';
 
 /** One round's outcome, for the CS2-scoreboard-style round-history strip. */
 export interface RoundHistoryEntry {
-  n: number;                  // 1-based round number
+  /** The raw, unrenumbered engine round identity (`total_rounds_played` at that round's
+   *  `round_end`) — NOT guaranteed to start at 1; a stray knife round before the live match shifts
+   *  every real round's `n` up by however many preceded it (see `buildRoundSides()` in
+   *  `src/lib/parsers/roundSides.ts`). `RoundHistoryStrip.tsx` renumbers this for display
+   *  (`realRound()`). This is the same numbering `match_rounds`/`match_kills`/
+   *  `match_round_economy`/`match_damage_events`'s own `round_number` uses, so any of those join
+   *  directly against this field with no offset math (e.g. `RoundEconomyChart`'s win/loss bands). */
+  n: number;
   winner: 'SHIRTS' | 'SKINS'; // winning team (drives vertical track)
   side: 'CT' | 'T';           // winning side (drives tile color)
   condition: RoundCondition;  // how the round was won (drives icon)

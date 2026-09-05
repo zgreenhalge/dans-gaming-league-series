@@ -67,6 +67,18 @@ export interface TeamGroup {
   header?: React.ReactNode;
 }
 
+/** The Economy sub-tab's round-by-round chart inputs (#519), grouped into one prop since all
+ *  three arrays exist solely to feed `RoundEconomyChart` — see `roundEconomyData` below. */
+interface RoundEconomyData {
+  rows: MatchRoundEconomyRow[];
+  history: RoundHistoryEntry[];
+  damageEvents: MatchDamageEventRow[];
+}
+/** Hoisted so the prop's default value is a stable reference across renders — an inline `{}`
+ *  default would recreate the object (and invalidate any memo keyed on it) on every render in
+ *  which the caller omits the prop. */
+const ROUND_ECONOMY_DATA_EMPTY: RoundEconomyData = { rows: [], history: [], damageEvents: [] };
+
 // --- Sorting ---
 
 type SortKey = string;
@@ -1447,9 +1459,7 @@ export default function SabremetricsLeaderboardView({
   weaponClassStats = [],
   economyRows = [],
   hasEconomyData = false,
-  damageEvents = [],
-  roundEconomy = [],
-  roundHistory = [],
+  roundEconomyData = ROUND_ECONOMY_DATA_EMPTY,
   matches = [],
   rounds = [],
   hasSideData = false,
@@ -1486,20 +1496,14 @@ export default function SabremetricsLeaderboardView({
    *  `economyRows.length` would reintroduce exactly that bug for any future caller who forgets to
    *  override it, so the unsafe inference isn't offered as a default at all. */
   hasEconomyData?: boolean;
-  /** This match's demo-derived damage events (#519) — feeds the Economy sub-tab's round-by-round
-   *  chart tooltip. Only meaningful alongside `roundEconomy` below; a season/career caller that
-   *  never wires `roundEconomy` doesn't need this either. */
-  damageEvents?: MatchDamageEventRow[];
-  /** This match's `match_round_economy` rows, one row per (round, player) — drives the Economy
-   *  sub-tab's round-by-round money/kills/damage chart (#519). Only ever populated by the match
-   *  page (`teamGroups` is what makes the chart meaningful — a season/career view spans many
-   *  matches' round numbers at once, so it never wires this). Empty is fine; the chart simply
-   *  doesn't render, same as an unplayed/not-yet-reparsed match. */
-  roundEconomy?: MatchRoundEconomyRow[];
-  /** This match's round-by-round outcomes (`matches.round_history`) — drives the round-by-round
-   *  chart's win/loss background bands (#519). Only meaningful alongside `roundEconomy`; a
-   *  season/career caller never wires either. */
-  roundHistory?: RoundHistoryEntry[];
+  /** This match's `match_round_economy`/`match_damage_events`/`round_history` data (#519), grouped
+   *  into one prop since all three exist solely to feed the Economy sub-tab's round-by-round
+   *  money/kills/damage chart and are never read elsewhere in this file. Only ever populated by
+   *  the match page — `roundEconomyData.rows` being non-empty (and `teamGroups` being set) is
+   *  itself the chart's gate, so a season/career caller that never wires this doesn't need a
+   *  separate `hasRoundEconomyData`-style boolean the way `economyRows`/`matches` do: unlike those,
+   *  this data is never season-filtered down to empty — it's simply absent outside the match page. */
+  roundEconomyData?: RoundEconomyData;
   /** Match veto/side data behind the Sides sub-tab (#506) — same shape `BasicStatsView`'s own
    *  `matches` prop takes, and typically the exact same array a caller already passes there.
    *  Defaults to `[]` (the match page, which filters CT/T per-team via `Scoreboard` instead, never
@@ -1569,25 +1573,26 @@ export default function SabremetricsLeaderboardView({
     () => buildEconomyTiles(singlePlayerTiles?.economyStats ?? [], economyFilter),
     [singlePlayerTiles, economyFilter],
   );
-  /** `{id, name, side}` for every rostered player, in `teamGroups` order — the round-by-round
-   *  chart's own input shape, which colors/groups lines by side rather than SHIRTS/SKINS identity
-   *  (see `RoundEconomyChart`). Only ever non-empty on the match page (`teamGroups` set); a
-   *  season/career caller has no single round sequence to plot against. */
-  const roundEconomyPlayers = useMemo(() => {
-    if (!teamGroups) return [];
+  /** `RoundEconomyChart`'s own two derived inputs, built from `teamGroups` in one pass since
+   *  they're only ever consumed together by that one chart: `players` is `{id, name, side}` for
+   *  every rostered player (colors/groups lines by side rather than SHIRTS/SKINS identity), and
+   *  `teamSides` is each team's match-long display side keyed by `TeamGroup.key`
+   *  ('shirts'/'skins' — `MatchTabView`'s own convention), letting the chart tint a round's winner
+   *  band by the *team* that won rather than the round's actual (half-swapping) side. Only
+   *  non-empty on the match page (`teamGroups` set); a season/career caller has no single round
+   *  sequence to plot against. */
+  const roundEconomyInputs = useMemo(() => {
+    if (!teamGroups) return { players: [], teamSides: { shirts: null, skins: null } };
     const nameById = new Map(aggregated.map((a) => [a.player_id, a.player_name]));
-    return teamGroups.flatMap((g) =>
+    const players = teamGroups.flatMap((g) =>
       [...g.playerIds].sort((a, b) => a - b).map((id) => ({ id, name: nameById.get(id) ?? `#${id}`, side: g.side })),
     );
+    const teamSides = {
+      shirts: teamGroups.find((g) => g.key === 'shirts')?.side ?? null,
+      skins: teamGroups.find((g) => g.key === 'skins')?.side ?? null,
+    };
+    return { players, teamSides };
   }, [teamGroups, aggregated]);
-  /** Each team's match-long display side, keyed by `TeamGroup.key` ('shirts'/'skins' —
-   *  `MatchTabView`'s own convention) — lets the round-by-round chart tint a round's winner band
-   *  by the *team* that won, not the round's actual (half-swapping) side. */
-  const roundEconomyTeamSides = useMemo(() => {
-    const shirts = teamGroups?.find((g) => g.key === 'shirts')?.side ?? null;
-    const skins = teamGroups?.find((g) => g.key === 'skins')?.side ?? null;
-    return { shirts, skins };
-  }, [teamGroups]);
 
   if (aggregated.length === 0) {
     return <EmptyState message="No sabremetric data available. Upload demos on match pages to populate advanced stats." />;
@@ -1670,16 +1675,16 @@ export default function SabremetricsLeaderboardView({
       )}
       {sub === 'economy' && (
         <div className="space-y-3">
-          {roundEconomy.length > 0 && (
+          {roundEconomyData.rows.length > 0 && (
             <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3">
               <h3 className="text-sm font-semibold mb-3">Round Economy</h3>
               <RoundEconomyChart
-                players={roundEconomyPlayers}
-                roundEconomy={roundEconomy}
+                players={roundEconomyInputs.players}
+                roundEconomy={roundEconomyData.rows}
                 kills={kills}
-                damageEvents={damageEvents}
-                roundHistory={roundHistory}
-                teamSides={roundEconomyTeamSides}
+                damageEvents={roundEconomyData.damageEvents}
+                roundHistory={roundEconomyData.history}
+                teamSides={roundEconomyInputs.teamSides}
               />
             </div>
           )}

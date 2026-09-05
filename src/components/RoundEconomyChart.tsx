@@ -1,20 +1,23 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { MatchKillRow, MatchDamageEventRow, MatchRoundEconomyRow } from '@/lib/queries';
 import type { RoundHistoryEntry } from '@/lib/types';
+import { sideColor } from '@/lib/util';
+import { useElementWidth } from './useElementWidth';
+
+const CHART_HEIGHT = 220;
 
 type Side = 'CT' | 'T' | null;
 
 const PADDING = { top: 16, right: 16, bottom: 24, left: 44 };
 const DOT_R = 3;
 
-/** CSS color for a side, matching the site-wide CT=blue / T=orange convention
- *  (`RoundHistoryStrip.tsx`'s own `sideColor()`). */
-function sideColor(side: Side): string {
-  if (side === 'T') return 'var(--color-t)';
-  if (side === 'CT') return 'var(--color-ct)';
-  return 'var(--color-text-secondary)';
+/** `sideColor()` (`@/lib/util`) returns `undefined` for a null/unresolved side so a text-color
+ *  caller can fall through to the default; this chart always needs a concrete stroke/fill color,
+ *  so it falls back to the neutral secondary-text color instead of leaving one un-set. */
+function lineColor(side: Side): string {
+  return sideColor(side) ?? 'var(--color-text-secondary)';
 }
 
 interface RoundPoint {
@@ -51,41 +54,46 @@ export default function RoundEconomyChart({
   kills: MatchKillRow[];
   damageEvents: MatchDamageEventRow[];
   /** This match's round-by-round outcomes (`matches.round_history`) — drives the background
-   *  win/loss bands. `entry.n` is the same raw engine round identity `roundEconomy.round_number`
-   *  uses (both come from the demo parser's `total_rounds_played`, unrenumbered), so the two join
-   *  directly with no offset math. Empty is fine; rounds simply render with no band. */
+   *  win/loss bands. Joins directly against `roundEconomy.round_number` with no offset math; see
+   *  `RoundHistoryEntry.n`'s own doc comment for why. Empty is fine; rounds simply render with no
+   *  band. */
   roundHistory: RoundHistoryEntry[];
   /** Each team's match-long display side (`shirtsF`/`skinsF` in `MatchTabView`/`Scoreboard`) — a
    *  round's winning band is tinted by the *team* that won it, mapped through this to the same
    *  fixed color that team's own player lines use, not the round's actual (half-swapping) side. */
   teamSides: { shirts: Side; skins: Side };
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [dims, setDims] = useState({ w: 600, h: 220 });
+  const [containerRef, width] = useElementWidth(320, 600);
   const [hoverRound, setHoverRound] = useState<number | null>(null);
 
-  useEffect(() => {
-    const node = containerRef.current;
-    if (!node) return;
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) setDims({ w: Math.max(320, entry.contentRect.width), h: 220 });
-    });
-    observer.observe(node);
-    setDims({ w: Math.max(320, node.clientWidth), h: 220 });
-    return () => observer.disconnect();
-  }, []);
-
-  const { rounds, lines, yMax, bandColors, winners } = useMemo(() => {
+  const { rounds, lines, yMax, roundBands } = useMemo(() => {
     const roundSet = new Set<number>();
     for (const r of roundEconomy) roundSet.add(r.round_number);
     const rounds = [...roundSet].sort((a, b) => a - b);
 
     const outcomeByRound = new Map(roundHistory.map((e) => [e.n, e]));
-    const winners = rounds.map((r) => outcomeByRound.get(r) ?? null);
-    const bandColors = winners.map((outcome) =>
-      outcome ? sideColor(outcome.winner === 'SHIRTS' ? teamSides.shirts : teamSides.skins) : null,
-    );
+    const roundBands = rounds.map((r) => {
+      const winner = outcomeByRound.get(r) ?? null;
+      const color = winner ? lineColor(winner.winner === 'SHIRTS' ? teamSides.shirts : teamSides.skins) : null;
+      return { winner, color };
+    });
+
+    // One pass each over roundEconomy/kills/damageEvents, keyed by "round-player", so the
+    // per-player-per-round loop below is a Map lookup instead of a fresh scan of each array.
+    const key = (round: number, playerId: number) => `${round}-${playerId}`;
+    const moneyByKey = new Map(roundEconomy.map((r) => [key(r.round_number, r.player_id), r.equipment_value]));
+    const killsByKey = new Map<string, number>();
+    for (const k of kills) {
+      if (k.attacker_player_id == null) continue;
+      const k2 = key(k.round_number, k.attacker_player_id);
+      killsByKey.set(k2, (killsByKey.get(k2) ?? 0) + 1);
+    }
+    const damageByKey = new Map<string, number>();
+    for (const d of damageEvents) {
+      if (d.attacker_player_id == null || d.attacker_player_id === d.victim_player_id) continue;
+      const k = key(d.round_number, d.attacker_player_id);
+      damageByKey.set(k, (damageByKey.get(k) ?? 0) + d.damage);
+    }
 
     // A side can hold at most two players; the second one drawn for a side is dashed so
     // teammates stay distinguishable without a second color per side.
@@ -97,30 +105,22 @@ export default function RoundEconomyChart({
       seenPerSide.set(sideKey, seenCount + 1);
 
       const points: RoundPoint[] = rounds.map((round) => {
-        const moneyRow = roundEconomy.find((r) => r.round_number === round && r.player_id === p.id);
-        const roundKills = kills.filter((k) => k.round_number === round && k.attacker_player_id === p.id).length;
-        let roundDamage = 0;
-        for (const d of damageEvents) {
-          if (d.round_number === round && d.attacker_player_id === p.id && d.victim_player_id !== p.id) {
-            roundDamage += d.damage;
-          }
-        }
-        const money = moneyRow ? moneyRow.equipment_value : null;
-        return { round, money, kills: roundKills, damage: roundDamage };
+        const k = key(round, p.id);
+        const money = moneyByKey.get(k) ?? null;
+        return { round, money, kills: killsByKey.get(k) ?? 0, damage: damageByKey.get(k) ?? 0 };
       });
 
-      return { id: p.id, name: p.name, color: sideColor(p.side), dashed: seenCount === 1, points };
+      return { id: p.id, name: p.name, color: lineColor(p.side), dashed: seenCount === 1, points };
     });
 
     const dataMax = Math.max(0, ...lines.flatMap((l) => l.points.map((p) => p.money ?? 0)));
     const yMax = Math.max(1000, Math.ceil((dataMax * 1.15) / 500) * 500);
-    return { rounds, lines, yMax, bandColors, winners };
+    return { rounds, lines, yMax, roundBands };
   }, [players, roundEconomy, kills, damageEvents, roundHistory, teamSides]);
 
   if (rounds.length === 0) return null;
 
-  const width = dims.w;
-  const height = dims.h;
+  const height = CHART_HEIGHT;
   const plotW = width - PADDING.left - PADDING.right;
   const plotH = height - PADDING.top - PADDING.bottom;
   const span = Math.max(1, rounds.length - 1);
@@ -194,7 +194,7 @@ export default function RoundEconomyChart({
         {(() => {
           const colWidth = plotW / rounds.length;
           return rounds.map((r, i) => {
-            const color = bandColors[i];
+            const color = roundBands[i].color;
             if (!color) return null;
             return (
               <rect
@@ -264,7 +264,7 @@ export default function RoundEconomyChart({
             <g style={{ pointerEvents: 'none' }}>
               <rect x={tx} y={ty} width={tooltipW} height={tooltipH} rx={4} fill="var(--color-bg-secondary)" stroke="var(--color-border-primary)" strokeWidth={1} />
               <text x={tx + 8} y={ty + 13} fill="var(--color-text-primary)" fontSize={10} fontFamily="monospace" fontWeight={600}>
-                Round {rounds[hoverIdx]}{winners[hoverIdx] ? ` — ${winners[hoverIdx]!.winner === 'SHIRTS' ? 'Shirts' : 'Skins'} won` : ''}
+                Round {rounds[hoverIdx]}{roundBands[hoverIdx].winner ? ` — ${roundBands[hoverIdx].winner!.winner === 'SHIRTS' ? 'Shirts' : 'Skins'} won` : ''}
               </text>
               {lines.map((l, i) => {
                 const p = l.points[hoverIdx];
