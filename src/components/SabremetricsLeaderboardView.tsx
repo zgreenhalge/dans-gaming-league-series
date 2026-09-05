@@ -17,6 +17,7 @@ import {
   aggregateEconomyStats,
   groupEconomyStatsByPlayer,
   resolveEconomyStat,
+  ALL_ECONOMY_TIERS,
   splitStat,
   type AggregatedSab,
   type SabremetricStatRow,
@@ -30,12 +31,16 @@ import {
   type FlairKillStat,
   type EconomyMatchRow,
   type EconomyTierStat,
+  type MatchDamageEventRow,
+  type MatchRoundEconomyRow,
 } from '@/lib/queries';
 import {
   weaponDisplayName, killWeaponCategory, KILL_WEAPON_CATEGORIES, KILL_WEAPON_CATEGORY_LABEL,
   type KillWeaponCategory,
 } from '@/lib/parsers/weaponClasses';
+import { ECONOMY_TYPE_LABEL } from '@/lib/parsers/economy';
 import { aggregatePerSideStats, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
+import type { RoundHistoryEntry } from '@/lib/types';
 import { tabCls } from '@/lib/util';
 import EmptyState from './EmptyState';
 import StatTileGrid, { type StatTile } from './StatTileGrid';
@@ -43,6 +48,7 @@ import { WeaponIcon } from './icons/WeaponIcon';
 import { useTabState } from './useTabState';
 import { Checkbox } from './SeasonFilter';
 import PerSideStatsTable from './PerSideStatsTable';
+import RoundEconomyChart from './RoundEconomyChart';
 
 // Side-tint helper (CT/T, not SHIRTS/SKINS) — matches MatchTabView.tsx's own factionClass(),
 // duplicated locally per this codebase's existing pattern of small per-file copies (also
@@ -62,6 +68,18 @@ export interface TeamGroup {
   side: Side;
   header?: React.ReactNode;
 }
+
+/** The Economy sub-tab's round-by-round chart inputs (#519), grouped into one prop since all
+ *  three arrays exist solely to feed `RoundEconomyChart` — see `roundEconomyData` below. */
+interface RoundEconomyData {
+  rows: MatchRoundEconomyRow[];
+  history: RoundHistoryEntry[];
+  damageEvents: MatchDamageEventRow[];
+}
+/** Hoisted so the prop's default value is a stable reference across renders — an inline `{}`
+ *  default would recreate the object (and invalidate any memo keyed on it) on every render in
+ *  which the caller omits the prop. */
+const ROUND_ECONOMY_DATA_EMPTY: RoundEconomyData = { rows: [], history: [], damageEvents: [] };
 
 // --- Sorting ---
 
@@ -591,26 +609,27 @@ function WeaponsTable({ aggregated, kills, weaponClassStats, selectedFilter, sin
 // Same per-player breakdown pattern as Weapons above, one economy tier's stats per player at a
 // time, picked by `selectedTier` — but sourced from `player_match_economy_stats`
 // (`aggregateEconomyStats()`/`resolveEconomyStat()`, `src/lib/queries/weaponStats.ts`) instead of
-// `match_kills`, since a round's economy classification isn't itself a kill event. The three tiers
-// are a fixed, game-defined set (unlike weapons, which vary player to player), so the picker's
-// options are a static list rather than derived from data. Unlike Weapons' favorite-or-specific
-// picker, there's no "most played" default option here: with only three buckets and full-buy
-// rounds dominating most matches, "most played" would resolve to full-buy for nearly every player,
-// making it a redundant alias for an explicit selection rather than a useful default — so the
-// picker always names one tier explicitly, and the table/tiles don't repeat that choice back as
-// their own "Tier" column/tile.
+// `match_kills`, since a round's economy classification isn't itself a kill event. The three real
+// tiers are a fixed, game-defined set (unlike weapons, which vary player to player), so the
+// picker's options are a static list rather than derived from data. Unlike Weapons'
+// favorite-or-specific picker, there's no "most played" default among the three real tiers: with
+// full-buy rounds dominating most matches, "most played" would resolve to full-buy for nearly
+// every player, making it a redundant alias for an explicit selection rather than a useful
+// default. The picker's actual default is `ALL_ECONOMY_TIERS` — a genuine fourth option (every
+// tier summed), not a guess at one of the three — so the table/tiles still show something
+// meaningful before a viewer narrows to a specific tier.
 
 const ECONOMY_TIERS: { type: string; label: string }[] = [
-  { type: 'eco', label: 'Eco' },
-  { type: 'force_buy', label: 'Force Buy' },
-  { type: 'full_buy', label: 'Full Buy' },
+  { type: ALL_ECONOMY_TIERS, label: 'All Rounds' },
+  { type: 'eco', label: ECONOMY_TYPE_LABEL.eco },
+  { type: 'force_buy', label: ECONOMY_TYPE_LABEL.force_buy },
+  { type: 'full_buy', label: ECONOMY_TYPE_LABEL.full_buy },
 ];
 
 const ECONOMY_TIER_OPTIONS = ECONOMY_TIERS.map((t) => ({ value: t.type, label: t.label }));
 
-/** The economy-tier picker shared by the multi-player table and the single-player tile view — a
- *  plain `<select>` over the fixed tier list, always one explicit tier (no "favorite" sentinel;
- *  see the section comment above). */
+/** The economy-tier picker shared by the multi-player table, the single-player tile view, and the
+ *  round-by-round chart's dimming (see the section comment above). */
 function EconomyFilterSelect({ value, onChange }: {
   value: string; onChange: (economyType: string) => void;
 }) {
@@ -630,6 +649,12 @@ function EconomyFilterSelect({ value, onChange }: {
 
 function economyTierLabel(economyType: string): string {
   return ECONOMY_TIERS.find((t) => t.type === economyType)?.label ?? economyType;
+}
+
+/** "at Full Buy" / "across all rounds" — the phrase every Economy column tooltip below plugs into
+ *  "Rounds played {phrase}", so `ALL_ECONOMY_TIERS` reads grammatically instead of "at All Rounds". */
+function economyTierPhrase(economyType: string): string {
+  return economyType === ALL_ECONOMY_TIERS ? 'across all rounds' : `at ${economyTierLabel(economyType)}`;
 }
 
 interface PlayerEconomyRow extends EconomyTierStat {
@@ -683,7 +708,7 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
     return copy;
   }, [rows, sort]);
 
-  const tierLabel = economyTierLabel(selectedTier);
+  const tierPhrase = economyTierPhrase(selectedTier);
 
   return (
     <div className="my-6">
@@ -693,12 +718,12 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
           <thead>
             <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
-              <SortableTh label="Rounds Played" title={`Rounds played at ${tierLabel} — seeded from the round's own eco/force/full classification, whether or not this player fired a shot in it`} sortKey="rounds_played" state={sort} onClick={toggleSort} />
-              <SortableTh label="W-L" title={`Rounds won vs. lost at ${tierLabel}`} sortKey="rounds_won" state={sort} onClick={toggleSort} />
-              <SortableTh label="Shots Fired" title={`Shots fired (guns only) in rounds at ${tierLabel}`} sortKey="shots_fired" state={sort} onClick={toggleSort} />
-              <SortableTh label="Accuracy" title={`Shots that hit an enemy / shots fired, in rounds at ${tierLabel}`} sortKey="acc" state={sort} onClick={toggleSort} />
-              <SortableTh label="Headshot %" title={`Headshot hits / hits, in rounds at ${tierLabel}`} sortKey="hs" state={sort} onClick={toggleSort} />
-              <SortableTh label="Damage/Round" title={`Damage dealt per round played at ${tierLabel}`} sortKey="dpr" state={sort} onClick={toggleSort} />
+              <SortableTh label="Rounds Played" title={`Rounds played ${tierPhrase} — seeded from the round's own eco/force/full classification, whether or not this player fired a shot in it`} sortKey="rounds_played" state={sort} onClick={toggleSort} />
+              <SortableTh label="W-L" title={`Rounds won vs. lost ${tierPhrase}`} sortKey="rounds_won" state={sort} onClick={toggleSort} />
+              <SortableTh label="Shots Fired" title={`Shots fired (guns only) in rounds ${tierPhrase}`} sortKey="shots_fired" state={sort} onClick={toggleSort} />
+              <SortableTh label="Accuracy" title={`Shots that hit an enemy / shots fired, in rounds ${tierPhrase}`} sortKey="acc" state={sort} onClick={toggleSort} />
+              <SortableTh label="Headshot %" title={`Headshot hits / hits, in rounds ${tierPhrase}`} sortKey="hs" state={sort} onClick={toggleSort} />
+              <SortableTh label="Damage/Round" title={`Damage dealt per round played ${tierPhrase}`} sortKey="dpr" state={sort} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -1350,14 +1375,14 @@ function buildWeaponTiles(weaponStats: WeaponKillStat[], selectedFilter: WeaponF
  *  `EconomyTierStat` for the filter's selected tier, as a `StatTile[]`. */
 function buildEconomyTiles(economyStats: EconomyTierStat[], selectedTier: string): StatTile[] {
   const stat = resolveEconomyStat(economyStats, selectedTier);
-  const titleSuffix = `${economyTierLabel(selectedTier)} rounds`;
+  const phrase = economyTierPhrase(selectedTier);
   return [
-    { label: 'Rounds Played', title: `Rounds played at ${titleSuffix}`, value: stat.rounds_played },
-    { label: 'W-L', title: `Rounds won vs. lost at ${titleSuffix}`, value: `${stat.rounds_won}-${stat.rounds_played - stat.rounds_won}` },
-    { label: 'Shots Fired', title: `Shots fired (guns only) at ${titleSuffix}`, value: stat.shots_fired },
-    { label: 'Accuracy', title: `Shots that hit an enemy / shots fired, at ${titleSuffix}`, value: pct(stat.shots_hit, stat.shots_fired) },
-    { label: 'Headshot %', title: `Headshot hits / hits, at ${titleSuffix}`, value: pct(stat.headshot_hits, stat.shots_hit) },
-    { label: 'Damage/Round', title: `Damage dealt per round at ${titleSuffix}`, value: fmtNum(stat.damage_dealt / (stat.rounds_played || 1), 1) },
+    { label: 'Rounds Played', title: `Rounds played ${phrase}`, value: stat.rounds_played },
+    { label: 'W-L', title: `Rounds won vs. lost ${phrase}`, value: `${stat.rounds_won}-${stat.rounds_played - stat.rounds_won}` },
+    { label: 'Shots Fired', title: `Shots fired (guns only) ${phrase}`, value: stat.shots_fired },
+    { label: 'Accuracy', title: `Shots that hit an enemy / shots fired, ${phrase}`, value: pct(stat.shots_hit, stat.shots_fired) },
+    { label: 'Headshot %', title: `Headshot hits / hits, ${phrase}`, value: pct(stat.headshot_hits, stat.shots_hit) },
+    { label: 'Damage/Round', title: `Damage dealt per round ${phrase}`, value: fmtNum(stat.damage_dealt / (stat.rounds_played || 1), 1) },
   ];
 }
 
@@ -1443,6 +1468,7 @@ export default function SabremetricsLeaderboardView({
   weaponClassStats = [],
   economyRows = [],
   hasEconomyData = false,
+  roundEconomyData = ROUND_ECONOMY_DATA_EMPTY,
   matches = [],
   rounds = [],
   hasSideData = false,
@@ -1479,6 +1505,14 @@ export default function SabremetricsLeaderboardView({
    *  `economyRows.length` would reintroduce exactly that bug for any future caller who forgets to
    *  override it, so the unsafe inference isn't offered as a default at all. */
   hasEconomyData?: boolean;
+  /** This match's `match_round_economy`/`match_damage_events`/`round_history` data (#519), grouped
+   *  into one prop since all three exist solely to feed the Economy sub-tab's round-by-round
+   *  money/kills/damage chart and are never read elsewhere in this file. Only ever populated by
+   *  the match page — `roundEconomyData.rows` being non-empty (and `teamGroups` being set) is
+   *  itself the chart's gate, so a season/career caller that never wires this doesn't need a
+   *  separate `hasRoundEconomyData`-style boolean the way `economyRows`/`matches` do: unlike those,
+   *  this data is never season-filtered down to empty — it's simply absent outside the match page. */
+  roundEconomyData?: RoundEconomyData;
   /** Match veto/side data behind the Sides sub-tab (#506) — same shape `BasicStatsView`'s own
    *  `matches` prop takes, and typically the exact same array a caller already passes there.
    *  Defaults to `[]` (the match page, which filters CT/T per-team via `Scoreboard` instead, never
@@ -1525,10 +1559,11 @@ export default function SabremetricsLeaderboardView({
     () => (aggregated.length > 0 ? groupWeaponAccuracyByPlayer(weaponClassStats).get(aggregated[0].player_id) : undefined),
     [weaponClassStats, aggregated],
   );
-  /** Same idea as `weaponFilter`, for the Economy sub-tab's tier picker — always one explicit tier
-   *  (no "most played" default; see the Economy section comment above `EconomyFilterSelect`).
-   *  Defaults to Full Buy, the tier most rounds in a match fall into. */
-  const [economyFilter, setEconomyFilter] = useState<string>('full_buy');
+  /** Same idea as `weaponFilter`, for the Economy sub-tab's tier picker (see the Economy section
+   *  comment above `EconomyFilterSelect`). Defaults to `ALL_ECONOMY_TIERS` — a combined view of
+   *  every tier, not a guess at one — which also feeds the round-by-round chart's dimming: no
+   *  filter selected means no rounds are dimmed. */
+  const [economyFilter, setEconomyFilter] = useState<string>(ALL_ECONOMY_TIERS);
 
   // Memoized (not called inline in the singlePlayer branch below) so picking a different weapon
   // filter — which only ever changes buildWeaponTiles()'s cheap lookup — doesn't also re-run
@@ -1548,6 +1583,26 @@ export default function SabremetricsLeaderboardView({
     () => buildEconomyTiles(singlePlayerTiles?.economyStats ?? [], economyFilter),
     [singlePlayerTiles, economyFilter],
   );
+  /** `RoundEconomyChart`'s own two derived inputs, built from `teamGroups` in one pass since
+   *  they're only ever consumed together by that one chart: `players` is `{id, name, side}` for
+   *  every rostered player (colors/groups lines by side rather than SHIRTS/SKINS identity), and
+   *  `teamSides` is each team's match-long display side keyed by `TeamGroup.key`
+   *  ('shirts'/'skins' — `MatchTabView`'s own convention), letting the chart tint a round's winner
+   *  band by the *team* that won rather than the round's actual (half-swapping) side. Only
+   *  non-empty on the match page (`teamGroups` set); a season/career caller has no single round
+   *  sequence to plot against. */
+  const roundEconomyInputs = useMemo(() => {
+    if (!teamGroups) return { players: [], teamSides: { shirts: null, skins: null } };
+    const nameById = new Map(aggregated.map((a) => [a.player_id, a.player_name]));
+    const players = teamGroups.flatMap((g) =>
+      [...g.playerIds].sort((a, b) => a - b).map((id) => ({ id, name: nameById.get(id) ?? `#${id}`, side: g.side })),
+    );
+    const teamSides = {
+      shirts: teamGroups.find((g) => g.key === 'shirts')?.side ?? null,
+      skins: teamGroups.find((g) => g.key === 'skins')?.side ?? null,
+    };
+    return { players, teamSides };
+  }, [teamGroups, aggregated]);
 
   if (aggregated.length === 0) {
     return <EmptyState message="No sabremetric data available. Upload demos on match pages to populate advanced stats." />;
@@ -1631,6 +1686,20 @@ export default function SabremetricsLeaderboardView({
       {sub === 'economy' && (
         <div className="space-y-3">
           <EconomyFilterSelect value={economyFilter} onChange={setEconomyFilter} />
+          {roundEconomyData.rows.length > 0 && (
+            <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] px-4 py-3">
+              <h3 className="text-sm font-semibold mb-3">Round Economy</h3>
+              <RoundEconomyChart
+                players={roundEconomyInputs.players}
+                roundEconomy={roundEconomyData.rows}
+                kills={kills}
+                damageEvents={roundEconomyData.damageEvents}
+                roundHistory={roundEconomyData.history}
+                teamSides={roundEconomyInputs.teamSides}
+                selectedTier={economyFilter}
+              />
+            </div>
+          )}
           <GroupedOrFlat aggregated={aggregated} groups={teamGroups} render={(agg) => (
             <EconomyTable aggregated={agg} economyRows={economyRows} selectedTier={economyFilter} singlePlayer={singlePlayer} showHeading={showHeading} />
           )} />
