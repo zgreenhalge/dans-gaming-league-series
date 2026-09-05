@@ -9,15 +9,6 @@ import PlayerAvatar from './PlayerAvatar';
 import RatingCircle from './RatingCircle';
 
 export type H2HPlayer = { id: number; name: string; steam_avatar_url: string | null };
-type Faction = 'CT' | 'T' | null;
-
-/** T-orange/CT-blue/neutral color for a faction — shared by every view that colors a
- *  shirts/skins pairing by starting side (Scouting Report, a match's own H2H tab). */
-export function factionColor(f: Faction): string {
-  if (f === 'T') return 'var(--color-t)';
-  if (f === 'CT') return 'var(--color-ct)';
-  return 'var(--color-text-secondary)';
-}
 
 /** Placeholder card for a pair with no H2H history yet (Scouting Report) or no data for this
  *  match (a match's own H2H tab). */

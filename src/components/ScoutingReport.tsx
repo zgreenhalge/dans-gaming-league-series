@@ -5,10 +5,10 @@ import type { DuoStats, H2HStats, MapLeagueAvg, MapStat, ScoutingPlayer } from '
 import { duoBlendedScorer, rivalBlendedScorer, duoBreakdownScorer, rivalBreakdownScorer } from '@/lib/queries';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
-import { avgOf, tabCls } from '@/lib/util';
+import { avgOf, factionColor, tabCls } from '@/lib/util';
 import { findDuo, findRival } from '@/lib/h2h';
 import Link from 'next/link';
-import { DuoDetail, RivalDetail, EmptyPanel, factionColor } from './MatchupDetail';
+import { DuoDetail, RivalDetail, EmptyPanel } from './MatchupDetail';
 import MapHeatmap from './MapHeatmap';
 
 function h2hHref(nameA: string, nameB: string, type: 'partner' | 'opponent'): string {
