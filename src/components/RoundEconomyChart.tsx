@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { MatchKillRow, MatchDamageEventRow, MatchRoundEconomyRow } from '@/lib/queries';
+import { ALL_ECONOMY_TIERS, type MatchKillRow, type MatchDamageEventRow, type MatchRoundEconomyRow } from '@/lib/queries';
 import type { RoundHistoryEntry } from '@/lib/types';
+import { ECONOMY_TYPE_LABEL, type EconomyType } from '@/lib/parsers/economy';
 import { sideColor } from '@/lib/util';
 import { useElementWidth } from './useElementWidth';
 
@@ -36,6 +37,10 @@ interface RoundPoint {
   money: number | null;
   kills: number;
   damage: number;
+  economyType: EconomyType | null;
+  /** Whether this round matches the Economy sub-tab's selected tier filter — always `true` under
+   *  `ALL_ECONOMY_TIERS` (nothing to dim against). Drives the line/marker dimming below. */
+  matchesFilter: boolean;
 }
 
 interface PlayerLine {
@@ -49,13 +54,21 @@ interface PlayerLine {
   points: RoundPoint[];
 }
 
+interface TeamPoint {
+  round: number;
+  /** `null` only when neither of the team's two players has a value for that round (both dropped
+   *  by a parser miss) — a single missing player's round is still summed as the other's value. */
+  money: number | null;
+  /** True only when *both* teammates matched the selected filter that round — a genuine team eco/
+   *  force/full round, not just "one of the two happened to." */
+  matchesFilter: boolean;
+}
+
 interface TeamLine {
   key: 'shirts' | 'skins';
   label: string;
   color: string;
-  /** `null` only when neither of the team's two players has a value for that round (both dropped
-   *  by a parser miss) — a single missing player's round is still summed as the other's value. */
-  points: { round: number; money: number | null }[];
+  points: TeamPoint[];
 }
 
 /** Round-by-round equipment value (money), with kills/damage surfaced on hover — the Economy
@@ -69,6 +82,7 @@ export default function RoundEconomyChart({
   damageEvents,
   roundHistory,
   teamSides,
+  selectedTier,
 }: {
   players: { id: number; name: string; side: Side }[];
   roundEconomy: MatchRoundEconomyRow[];
@@ -83,6 +97,11 @@ export default function RoundEconomyChart({
    *  round's winning band is tinted by the *team* that won it, mapped through this to the same
    *  fixed color that team's own player lines use, not the round's actual (half-swapping) side. */
   teamSides: { shirts: Side; skins: Side };
+  /** The Economy sub-tab's shared tier filter (`economyFilter` in `SabremetricsLeaderboardView`) —
+   *  dims a player's line/marker for any round that isn't their own `economy_type` that round, and
+   *  a team-total line for any round where either teammate didn't match. `ALL_ECONOMY_TIERS`
+   *  (the default) dims nothing. */
+  selectedTier: string;
 }) {
   const [containerRef, width] = useElementWidth(320, 600);
   const [hoverRound, setHoverRound] = useState<number | null>(null);
@@ -102,7 +121,7 @@ export default function RoundEconomyChart({
     // One pass each over roundEconomy/kills/damageEvents, keyed by "round-player", so the
     // per-player-per-round loop below is a Map lookup instead of a fresh scan of each array.
     const key = (round: number, playerId: number) => `${round}-${playerId}`;
-    const moneyByKey = new Map(roundEconomy.map((r) => [key(r.round_number, r.player_id), r.equipment_value]));
+    const econByKey = new Map(roundEconomy.map((r) => [key(r.round_number, r.player_id), r]));
     const killsByKey = new Map<string, number>();
     for (const k of kills) {
       if (k.attacker_player_id == null) continue;
@@ -127,8 +146,17 @@ export default function RoundEconomyChart({
 
       const points: RoundPoint[] = rounds.map((round) => {
         const k = key(round, p.id);
-        const money = moneyByKey.get(k) ?? null;
-        return { round, money, kills: killsByKey.get(k) ?? 0, damage: damageByKey.get(k) ?? 0 };
+        const econRow = econByKey.get(k);
+        const economyType = (econRow?.economy_type as EconomyType) ?? null;
+        const matchesFilter = selectedTier === ALL_ECONOMY_TIERS || economyType === selectedTier;
+        return {
+          round,
+          money: econRow?.equipment_value ?? null,
+          kills: killsByKey.get(k) ?? 0,
+          damage: damageByKey.get(k) ?? 0,
+          economyType,
+          matchesFilter,
+        };
       });
 
       return { id: p.id, name: p.name, side: p.side, color: playerTint(p.side, seenCount), dashed: seenCount === 1, points };
@@ -136,13 +164,20 @@ export default function RoundEconomyChart({
 
     // Team totals: a flat sum of both teammates' money each round, one line per team, in the
     // team's own undiluted color (bold/thick, see render below) so it reads as the "headline"
-    // line the two tinted player lines are a breakdown of.
+    // line the two tinted player lines are a breakdown of. A team round only "matches" the
+    // selected filter when both teammates individually did — a genuine team eco/force/full round,
+    // not just one of the two happening to.
     const teamLines: TeamLine[] = (['shirts', 'skins'] as const).map((teamKey) => {
       const side = teamSides[teamKey];
       const members = lines.filter((l) => l.side === side);
-      const points = rounds.map((round, i) => {
-        const values = members.map((m) => m.points[i].money).filter((v): v is number => v != null);
-        return { round, money: values.length > 0 ? values.reduce((a, b) => a + b, 0) : null };
+      const points: TeamPoint[] = rounds.map((round, i) => {
+        const memberPoints = members.map((m) => m.points[i]);
+        const values = memberPoints.map((p) => p.money).filter((v): v is number => v != null);
+        return {
+          round,
+          money: values.length > 0 ? values.reduce((a, b) => a + b, 0) : null,
+          matchesFilter: memberPoints.every((p) => p.matchesFilter),
+        };
       });
       return { key: teamKey, label: teamKey === 'shirts' ? 'Shirts Total' : 'Skins Total', color: lineColor(side), points };
     });
@@ -154,7 +189,7 @@ export default function RoundEconomyChart({
     );
     const yMax = Math.max(1000, Math.ceil((dataMax * 1.15) / 500) * 500);
     return { rounds, lines, teamLines, yMax, roundBands };
-  }, [players, roundEconomy, kills, damageEvents, roundHistory, teamSides]);
+  }, [players, roundEconomy, kills, damageEvents, roundHistory, teamSides, selectedTier]);
 
   if (rounds.length === 0) return null;
 
@@ -169,11 +204,14 @@ export default function RoundEconomyChart({
   const yTickCount = 4;
   const yTicks = Array.from({ length: yTickCount + 1 }, (_, i) => (yMax * i) / yTickCount);
 
-  function pathFor(points: { money: number | null }[]): string {
+  /** Builds one path through `points`, breaking (a fresh `M`) at any point with no money or,
+   *  when `onlyWhere` is given, at any point it excludes — used to draw a "bright overlay" of just
+   *  the filter-matching stretches on top of a dimmed full line (see `hasFilter` below). */
+  function pathFor(points: { money: number | null }[], onlyWhere?: (i: number) => boolean): string {
     let d = '';
     let open = false;
     points.forEach((p, i) => {
-      if (p.money == null) {
+      if (p.money == null || (onlyWhere && !onlyWhere(i))) {
         open = false;
         return;
       }
@@ -184,6 +222,9 @@ export default function RoundEconomyChart({
     });
     return d;
   }
+
+  const hasFilter = selectedTier !== ALL_ECONOMY_TIERS;
+  const DIMMED_OPACITY = 0.22;
 
   function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -226,7 +267,9 @@ export default function RoundEconomyChart({
             {l.name}
           </span>
         ))}
-        <span className="text-[10px] text-[var(--color-text-secondary)]">— background tints the round winner</span>
+        <span className="text-[10px] text-[var(--color-text-secondary)]">
+          — background tints the round winner{hasFilter ? `; dimmed rounds weren't ${ECONOMY_TYPE_LABEL[selectedTier as EconomyType] ?? selectedTier}` : ''}
+        </span>
       </div>
 
       <svg
@@ -279,21 +322,35 @@ export default function RoundEconomyChart({
         )}
 
         {/* Team totals draw first (thick, undiluted color) so the two tinted per-player lines/
-            markers read as a breakdown layered on top, not the other way around. */}
+            markers read as a breakdown layered on top, not the other way around. When a tier
+            filter is active, the full line draws dimmed and a second, full-opacity "bright"
+            overlay traces only the rounds that matched (both teammates, for a team line) —
+            two layers of the same path rather than variable per-segment opacity. */}
         {teamLines.map((t) => (
-          <path key={t.key} d={pathFor(t.points)} fill="none" stroke={t.color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" opacity={0.85} />
+          <g key={t.key}>
+            <path d={pathFor(t.points)} fill="none" stroke={t.color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" opacity={hasFilter ? DIMMED_OPACITY : 0.85} />
+            {hasFilter && (
+              <path d={pathFor(t.points, (i) => t.points[i].matchesFilter)} fill="none" stroke={t.color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" opacity={0.85} />
+            )}
+          </g>
         ))}
 
         {lines.map((l) => (
-          <path key={l.id} d={pathFor(l.points)} fill="none" stroke={l.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={l.dashed ? '5,3' : undefined} />
+          <g key={l.id}>
+            <path d={pathFor(l.points)} fill="none" stroke={l.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={l.dashed ? '5,3' : undefined} opacity={hasFilter ? DIMMED_OPACITY : 1} />
+            {hasFilter && (
+              <path d={pathFor(l.points, (i) => l.points[i].matchesFilter)} fill="none" stroke={l.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={l.dashed ? '5,3' : undefined} />
+            )}
+          </g>
         ))}
 
         {lines.map((l) =>
           l.points.map((p, i) => {
             if (p.money == null) return null;
             const r = p.kills > 0 ? Math.min(10, DOT_R + p.kills * 2.5) : DOT_R;
+            const dimmed = hasFilter && !p.matchesFilter;
             return (
-              <g key={`${l.id}-${p.round}`}>
+              <g key={`${l.id}-${p.round}`} opacity={dimmed ? DIMMED_OPACITY : 1}>
                 <circle cx={xFor(i)} cy={yFor(p.money)} r={r} fill={p.kills > 0 ? l.color : 'var(--color-bg-primary)'} stroke={l.color} strokeWidth={1.5} />
                 {p.kills > 1 && (
                   <text x={xFor(i)} y={yFor(p.money)} textAnchor="middle" dominantBaseline="central" fill="var(--color-bg-primary)" fontSize={8} fontWeight={700}>

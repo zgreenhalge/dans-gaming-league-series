@@ -3,6 +3,15 @@ import { roundOf, type RoundBounds } from './_shared';
 
 export type EconomyType = 'eco' | 'force_buy' | 'full_buy';
 
+/** Display label for each tier — the one place this mapping lives, shared by the Economy sub-tab's
+ *  tier picker/table (`SabremetricsLeaderboardView.tsx`) and the round-by-round chart's tooltip
+ *  (`RoundEconomyChart.tsx`). */
+export const ECONOMY_TYPE_LABEL: Record<EconomyType, string> = {
+  eco: 'Eco',
+  force_buy: 'Force Buy',
+  full_buy: 'Full Buy',
+};
+
 // Standard CS round-economy cutoffs, applied per player rather than per-team average — Wingman's
 // 2-player sides make the two nearly equivalent, and every other collector in this codebase is
 // already per-player.
