@@ -152,9 +152,8 @@ const TAG_LABEL: Record<Tag, string> = { errored: 'Errored', progress: 'In Progr
 const TAG_ORDER: Tag[] = ['errored', 'progress', 'completed'];
 const TAG_CLS: Record<Tag, string> = { errored: TONE_CLS.red, progress: TONE_CLS.blue, completed: TONE_CLS.green };
 
-/** The status tag every event carries — what used to be three separate tabs (Errored / In Progress /
- *  Completed) is now one of these per row, so the tag filter chips below narrow a single list instead
- *  of switching between views. */
+/** The status tag every event carries, shown per row so the tag filter chips below narrow a single
+ *  list instead of switching between views. */
 function TagBadge({ tag }: { tag: Tag }) {
   return (
     <span className={`inline-block font-mono text-[10px] uppercase tracking-wide px-1.5 py-[1px] rounded border whitespace-nowrap ${TAG_CLS[tag]}`}>
