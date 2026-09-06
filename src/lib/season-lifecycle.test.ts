@@ -1,7 +1,7 @@
 /**
  * Coverage for season status transitions and their gauntlet side effects: activateSeason() (explicit
  * admin UPCOMING -> ACTIVE, plus its best-effort gauntlet-build), checkSeasonCompletion() (auto
- * ACTIVE -> COMPLETED once every match is played, plus its best-effort gauntlet auto-seed), and
+ * ACTIVE -> ARCHIVED once every match is played, plus its best-effort gauntlet auto-seed), and
  * checkGauntletCompletion() (auto -> ARCHIVED once the gauntlet's Final pod is decided, archiving
  * both the gauntlet and its paired regular season).
  *
@@ -138,7 +138,7 @@ async function testCheckSeasonCompletion() {
     assert.equal(db.seasons[0].status, 'ACTIVE');
   });
 
-  await test('checkSeasonCompletion: marks COMPLETED and seeds an already-built paired gauntlet', async () => {
+  await test('checkSeasonCompletion: marks ARCHIVED and seeds an already-built paired gauntlet', async () => {
     const db = playedSeasonFixture();
     db.seasons.push({ id: 21, name: 'Season 80 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 });
     db.gauntlet_pods!.push({ id: 500, season_id: 21, round_number: 1, pod_index: 0, advance_rule: 'single', is_final: true, week_id: null, match1_id: null, match2_id: null });
@@ -151,7 +151,7 @@ async function testCheckSeasonCompletion() {
     const client = installFixture(db);
     await checkSeasonCompletion(client as never, 20);
 
-    assert.equal(db.seasons.find((s) => s.id === 20)!.status, 'COMPLETED');
+    assert.equal(db.seasons.find((s) => s.id === 20)!.status, 'ARCHIVED');
     const slots = db.gauntlet_pod_slots!.filter((s) => s.pod_id === 500).sort((a, b) => (a.slot_index as number) - (b.slot_index as number));
     assert.deepEqual(slots.map((s) => s.player_id), [1, 2, 3, 4]);
   });
@@ -168,7 +168,7 @@ async function testCheckSeasonCompletion() {
     const client = installFixture(db);
     await checkSeasonCompletion(client as never, 20);
 
-    assert.equal(db.seasons.find((s) => s.id === 20)!.status, 'COMPLETED');
+    assert.equal(db.seasons.find((s) => s.id === 20)!.status, 'ARCHIVED');
     assert.equal(opsErrorFor(db, 20, 'gauntlet_seed').length, 1);
     assert.ok((opsErrorFor(db, 20, 'gauntlet_seed')[0].message as string).includes('drifted'));
   });

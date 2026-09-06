@@ -233,7 +233,7 @@ before `gauntlet_pods` — `gauntlet_pod_slots` has two FKs into `gauntlet_pods`
 any slot still pointing at one as its advancement source. Pass `{ force: true }` to
 delete anyway even if matches have been played — there is no undo, so the admin UI (below) requires
 typing the gauntlet's name to confirm. If the gauntlet had already archived its paired regular
-season (see "Season status lifecycle"), deleting it reverts that season back to `COMPLETED` — an
+season (see "Season status lifecycle"), deleting it reverts that season back to `ACTIVE` — an
 archived season with no gauntlet behind it is a dead end. The admin console's Manage → Season view
 (`SeasonManager.tsx`) surfaces build, seed, and reset together, one row per season, based on where it
 is in that lifecycle.
@@ -270,9 +270,12 @@ schema addition:
   generator-built shape's *unseeded* slots (awaiting `seedBracket()`) from everything else, manual or
   already-seeded.
 - `materializeIfReady()` never turns a fully-seeded pod into real matches while the paired regular
-  season is still ACTIVE or UPCOMING (`regularSeasonIsDone()`) — a manually-built gauntlet can be
-  seeded and structured well before the regular season it draws standings from is actually over, and
-  nothing should go live while the standings behind those seed numbers could still move. The pod
+  season still has matches unplayed (`regularSeasonIsDone()`, keyed on match completion rather than
+  `seasons.status` — a reset-and-rebuilt gauntlet reverts its regular season's status back to
+  `ACTIVE` via `deleteGauntletSeason()` without its match history changing, so status alone can't be
+  the gate) — a manually-built gauntlet can be seeded and structured well before the regular season
+  it draws standings from is actually over, and nothing should go live while the standings behind
+  those seed numbers could still move. The pod
   stays saved (fully seeded, visibly so in the editor) but not materialized; a later save — there's
   no automatic retry, since `checkSeasonCompletion()`'s own trigger only ever drives the generator's
   path — turns it into real matches once the season completes. `saveManualDraft()` surfaces this as a
@@ -318,32 +321,33 @@ tracks a `droppedPlayerIds` set as ephemeral UI state, and a dropped player's se
 
 ### Season status lifecycle
 
-`seasons.status` (`UPCOMING`/`ACTIVE`/`COMPLETED`/`ARCHIVED`) applies to both regular and gauntlet
-season rows and has one admin-triggered and two automatic transitions, all in
-`src/lib/season-lifecycle.ts`:
+`seasons.status` (`UPCOMING`/`ACTIVE`/`ARCHIVED`) applies to both regular and gauntlet season rows
+and has one admin-triggered and two automatic transitions, all in `src/lib/season-lifecycle.ts`:
 
 - **`UPCOMING` → `ACTIVE`** ("go live", regular seasons only) is an explicit admin action —
   `PATCH /api/seasons/[id]/status` (`{ status: 'ACTIVE' }`), surfaced as the "Mark Active" button
   next to the start-date control on a season's page (`MarkSeasonActiveButton.tsx`). `activateSeason()`
   flips the status, then best-effort calls `tryBuildGauntletShape()` — a build failure never blocks
   the season going live.
-- **`ACTIVE` → `COMPLETED`** (regular seasons) is fully automatic — `checkSeasonCompletion()` runs
+- **`ACTIVE` → `ARCHIVED`** (regular seasons) is fully automatic — `checkSeasonCompletion()` runs
   from a non-fatal hook on `PATCH /api/matches/[id]/score` for every non-gauntlet match. If the
   score just committed means every match in that season (via `weeks.season_id`) now has a played
-  score, the season flips to `COMPLETED` and `trySeedGauntlet()` runs best-effort against final
+  score, the season flips to `ARCHIVED` and `trySeedGauntlet()` runs best-effort against final
   standings. A season with no matches yet, or with any match still unplayed, is never "fully
   played" — nothing fires until the literal last match is scored.
 - **`→ ARCHIVED`** (gauntlet seasons, cascading to their paired regular season) is also fully
   automatic — `checkGauntletCompletion()` runs from a non-fatal hook on every gauntlet match score,
   sharing the same `isSeasonFullyPlayed()` check `checkSeasonCompletion()` uses (every match under
-  the season, not just the highest `round_number`'s). Once true, it archives the gauntlet season
-  and, via `getLinkedRegularSeason()`, its paired regular season too — regardless of the regular
-  season's current status. A season isn't fully "in the books" until its playoffs conclude, so
-  `ARCHIVED` is reached through the gauntlet, not the regular season's own match completion.
-  Checking every match rather than only the final round matters for manually-built gauntlets (see
-  below) — an automated bracket's final round can't materialize until every earlier pod has
-  resolved, so the two checks coincide there, but nothing enforces that ordering for a hand-built
-  one.
+  the season, not just the highest `round_number`'s), plus `isGauntletBracketDecided()` (its Final
+  pod specifically must exist and be played). Once both are true, it archives the gauntlet season
+  and, via `getLinkedRegularSeason()`, its paired regular season too if that hasn't already happened.
+  The regular season is normally archived well before this, by its own match completion above, since
+  `regularSeasonIsDone()` blocks any gauntlet pod from materializing until then. This cascade only
+  does real work for a gauntlet rebuilt after `deleteGauntletSeason()` reverted its paired regular
+  season back to `ACTIVE` — re-archiving it once the rebuilt bracket finishes. Checking every match
+  rather than only the final round matters for manually-built gauntlets (see below) — an automated
+  bracket's final round can't materialize until every earlier pod has resolved, so the two checks
+  coincide there, but nothing enforces that ordering for a hand-built one.
 
 Gauntlet seasons are born `ACTIVE` at creation and have no `UPCOMING` phase or admin-triggered
 transition of their own — `ACTIVE → ARCHIVED` is their entire lifecycle, driven by
@@ -353,7 +357,7 @@ transition of their own — `ACTIVE → ARCHIVED` is their entire lifecycle, dri
 every linked (`discord_id` set) player on the roster — a catch-up pass covering anyone who linked
 Discord after already being added, since `POST /api/seasons/[id]/players`'s own per-player grant
 (see below) would have been a no-op at that time. `checkSeasonCompletion()` best-effort revokes it
-from the same roster once the season is `COMPLETED` — the role tracks the *current* season's
+from the same roster once the season is `ARCHIVED` — the role tracks the *current* season's
 participants, not a career badge. `syncParticipantRoleForPlayer()` covers the other trigger — a
 player linking Discord after already being rostered — by granting the role right away if they're on
 the active roster; it's called from the OAuth callback and the admin override's link path. The role
@@ -388,7 +392,7 @@ Wired into twenty-seven operations today:
 | Operation | Entity | Recorded from |
 |---|---|---|
 | `gauntlet_build` | `season` (regular) | `activateSeason()` |
-| `season_complete` | `season` (regular) | `checkSeasonCompletion()`, if the `COMPLETED` status update itself fails |
+| `season_complete` | `season` (regular) | `checkSeasonCompletion()`, if the `ARCHIVED` status update itself fails |
 | `gauntlet_seed` | `season` (regular) | `checkSeasonCompletion()` (including a `trySeedGauntlet()` roster-`drift` result, which needs the same admin attention as a thrown error even though it isn't one) |
 | `gauntlet_archive` | `season` (gauntlet) | `checkGauntletCompletion()` |
 | `gauntlet_delete` | `season` (gauntlet) | `deleteGauntletSeason()`'s mid-sequence failure — safe to retry since every delete step is a no-op against an already-empty target |

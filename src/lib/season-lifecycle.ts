@@ -2,11 +2,12 @@
  * Season status transitions and their gauntlet side effects, for both regular and gauntlet season
  * rows. UPCOMING -> ACTIVE is an explicit admin action (`activateSeason`); every other transition
  * is automatic, detected from the score route:
- *   - ACTIVE -> COMPLETED once every match in a regular season has been played
+ *   - A regular season goes ACTIVE -> ARCHIVED once every match in it has been played
  *     (`checkSeasonCompletion`), which also best-effort seeds its linked gauntlet.
- *   - -> ARCHIVED once every match in a gauntlet has been played *and* its Final pod is specifically
- *     decided (`checkGauntletCompletion`) — archives the gauntlet *and* its paired regular season
- *     together, since a season isn't fully "in the books" until its playoffs conclude.
+ *   - A gauntlet season goes -> ARCHIVED once every match in it has been played *and* its Final pod
+ *     is specifically decided (`checkGauntletCompletion`), which also archives its paired regular
+ *     season if that hasn't happened yet (a manually-built gauntlet can still be going after its
+ *     regular season already archived).
  * All side effects are best-effort: a failure here never blocks the status transition that
  * triggered it. Every failure (or roster-drift outcome that needs admin attention) is recorded via
  * `recordOpsError()` (`src/lib/ops-errors.ts`, entity type `season`, operation
@@ -18,9 +19,8 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { allMatchesPlayed } from './util';
 import { tryBuildGauntletShape, trySeedGauntlet, isGauntletBracketDecided } from './gauntlet-engine';
-import { getLinkedRegularSeason, getMatchScoresForWeeks, getSeasonParticipants } from './queries';
+import { getLinkedRegularSeason, getSeasonParticipants, isSeasonFullyPlayed } from './queries';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { grantParticipantRoleToRoster, revokeParticipantRoleFromRoster, type RosterRoleEntry } from './discord-roles';
 
@@ -93,15 +93,6 @@ export async function activateSeason(supabaseAdmin: SupabaseClient, seasonId: nu
   return result;
 }
 
-/** True if the season has a schedule (at least one week/match exists) and every match in it has a
- * played score. A season with no matches yet is never "fully played". */
-async function isSeasonFullyPlayed(supabaseAdmin: SupabaseClient, seasonId: number): Promise<boolean> {
-  const { data: weeks, error: weekErr } = await supabaseAdmin.from('weeks').select('id').eq('season_id', seasonId);
-  if (weekErr) throw weekErr;
-  const weekIds = ((weeks ?? []) as { id: number }[]).map((w) => w.id);
-  return allMatchesPlayed(await getMatchScoresForWeeks(supabaseAdmin, weekIds));
-}
-
 /** Best-effort gauntlet-seed behind `checkSeasonCompletion()` — never throws; a roster-drift skip
  * or a real failure is recorded as an `ops_error` instead. */
 async function seedGauntletBestEffort(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
@@ -124,7 +115,7 @@ async function seedGauntletBestEffort(supabaseAdmin: SupabaseClient, seasonId: n
 
 /** Called from the score route's post-commit hook for every regular-season match. If this score
  * completed the season (every match now played) and the season is still ACTIVE, marks it
- * COMPLETED, then concurrently best-effort seeds its linked gauntlet from final standings and
+ * ARCHIVED, then concurrently best-effort seeds its linked gauntlet from final standings and
  * revokes `@Participants` from the whole roster (the season's over, so it's no longer "current") —
  * neither depends on the other's result. No-op for gauntlet matches, seasons not currently ACTIVE,
  * or seasons with matches still outstanding. */
@@ -138,11 +129,11 @@ export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seaso
   const season = seasonRow as { status: string; is_gauntlet: boolean } | null;
   if (!season || season.is_gauntlet || season.status !== 'ACTIVE') return;
 
-  if (!(await isSeasonFullyPlayed(supabaseAdmin, seasonId))) return;
+  if (!(await isSeasonFullyPlayed(seasonId, supabaseAdmin))) return;
 
-  const { error: updErr } = await supabaseAdmin.from('seasons').update({ status: 'COMPLETED' }).eq('id', seasonId);
+  const { error: updErr } = await supabaseAdmin.from('seasons').update({ status: 'ARCHIVED' }).eq('id', seasonId);
   if (updErr) {
-    await recordOpsError(supabaseAdmin, 'season', seasonId, 'season_complete', `Marking season COMPLETED failed: ${updErr.message}`);
+    await recordOpsError(supabaseAdmin, 'season', seasonId, 'season_complete', `Marking season ARCHIVED failed: ${updErr.message}`);
     throw updErr;
   }
 
@@ -175,7 +166,7 @@ export async function checkGauntletCompletion(supabaseAdmin: SupabaseClient, gau
   const season = seasonRow as { name: string; status: string; is_gauntlet: boolean } | null;
   if (!season || !season.is_gauntlet) return;
 
-  if (!(await isSeasonFullyPlayed(supabaseAdmin, gauntletSeasonId))) return;
+  if (!(await isSeasonFullyPlayed(gauntletSeasonId, supabaseAdmin))) return;
   if (!(await isGauntletBracketDecided(supabaseAdmin, gauntletSeasonId))) return;
 
   // Checked separately from the gauntlet's own status so a run that archived the gauntlet but then

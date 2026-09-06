@@ -85,7 +85,7 @@ async function main() {
 
   await test('PATCH — a status other than ACTIVE is rejected (400)', async () => {
     installFixture();
-    const res = await call(UPCOMING_SEASON_ID, ADMIN_ID, { status: 'COMPLETED' });
+    const res = await call(UPCOMING_SEASON_ID, ADMIN_ID, { status: 'ARCHIVED' });
     assert.equal(res.status, 400);
   });
 

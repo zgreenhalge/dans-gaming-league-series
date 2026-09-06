@@ -460,5 +460,21 @@
       "replay_status": "ready"
     }
   ],
-  "trophies": []
+  "trophies": [
+    {
+      "season_id": 1,
+      "season_name": "Season 5",
+      "is_gauntlet": false,
+      "rank": 1,
+      "stats": {
+        "kills": 20,
+        "assists": 3,
+        "deaths": 15,
+        "win_rate_percentage": 100,
+        "rounds_won": 13,
+        "rounds_lost": 9,
+        "overall_adr": 85.5
+      }
+    }
+  ]
 }

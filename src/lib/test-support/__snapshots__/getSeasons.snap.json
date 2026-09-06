@@ -2,7 +2,7 @@
   {
     "id": 1,
     "name": "Season 5",
-    "status": "COMPLETED",
+    "status": "ARCHIVED",
     "target_win_rounds": 13,
     "buy_in_amount": 20,
     "is_gauntlet": false,
@@ -16,7 +16,7 @@
   {
     "id": 2,
     "name": "Season 5 Gauntlet",
-    "status": "COMPLETED",
+    "status": "ARCHIVED",
     "target_win_rounds": 13,
     "buy_in_amount": null,
     "is_gauntlet": true,
@@ -38,7 +38,7 @@
   {
     "id": 4,
     "name": "Season 4 Gauntlet",
-    "status": "COMPLETED",
+    "status": "ARCHIVED",
     "target_win_rounds": 13,
     "buy_in_amount": null,
     "is_gauntlet": true,

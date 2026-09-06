@@ -27,11 +27,11 @@ import type { SabFields } from '../types';
 // ─── Seasons ───────────────────────────────────────────────────────────────
 
 export const SEASONS: Row[] = [
-  { id: 1, name: 'Season 5', status: 'COMPLETED', target_win_rounds: 13, buy_in_amount: 20, is_gauntlet: false, start_date: '2026-01-01', map_pool: ['Foroglio', 'Cobblestone', 'Vertigo'] },
-  { id: 2, name: 'Season 5 Gauntlet', status: 'COMPLETED', target_win_rounds: 13, buy_in_amount: null, is_gauntlet: true, start_date: '2026-03-01', map_pool: null },
+  { id: 1, name: 'Season 5', status: 'ARCHIVED', target_win_rounds: 13, buy_in_amount: 20, is_gauntlet: false, start_date: '2026-01-01', map_pool: ['Foroglio', 'Cobblestone', 'Vertigo'] },
+  { id: 2, name: 'Season 5 Gauntlet', status: 'ARCHIVED', target_win_rounds: 13, buy_in_amount: null, is_gauntlet: true, start_date: '2026-03-01', map_pool: null },
   { id: 3, name: 'Season 6', status: 'ACTIVE', target_win_rounds: 13, buy_in_amount: 20, is_gauntlet: false, start_date: '2026-04-01', map_pool: ['Foroglio'] },
   // Orphan gauntlet — no paired "Season 4" regular season exists in this fixture.
-  { id: 4, name: 'Season 4 Gauntlet', status: 'COMPLETED', target_win_rounds: 13, buy_in_amount: null, is_gauntlet: true, start_date: '2025-11-01', map_pool: null },
+  { id: 4, name: 'Season 4 Gauntlet', status: 'ARCHIVED', target_win_rounds: 13, buy_in_amount: null, is_gauntlet: true, start_date: '2025-11-01', map_pool: null },
 ];
 
 // ─── Weeks ─────────────────────────────────────────────────────────────────

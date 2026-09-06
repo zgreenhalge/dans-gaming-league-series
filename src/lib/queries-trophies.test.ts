@@ -1,8 +1,8 @@
 /**
  * Regression harness for queries.ts's trophies/medals function (#63) — getAllSeasonMedalists.
- * The fixture's regular season (id 1) is COMPLETED, not ARCHIVED, so it deliberately exercises the
- * "not archived, skip" branch for regular-season trophies — only the gauntlet trophy path (which
- * doesn't check season status) can produce entries against this fixture.
+ * The fixture's regular season (id 1) is ARCHIVED, so it exercises the regular-season trophy path
+ * alongside the gauntlet trophy path — the fixture's other regular season (id 3, "Season 6") is
+ * ACTIVE and deliberately exercises the "not archived, skip" branch.
  *
  * Run:  npx vitest run src/lib/queries-trophies.test.ts
  */

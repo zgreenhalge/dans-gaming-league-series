@@ -9,8 +9,8 @@ import { deleteSeasonScheduleDraft } from '@/lib/season-schedule-draft-engine';
  * results yet — nothing in this app ever writes `weeks` rows for a season before it goes live (that
  * only happens through the historical CSV ingestion pipeline), so there's nothing to lose. Refuses
  * anything else: gauntlet seasons are never UPCOMING (born ACTIVE) and have their own reset route
- * (`DELETE /api/seasons/[id]/gauntlet`); ACTIVE/COMPLETED/ARCHIVED seasons always carry real history,
- * with no force override here.
+ * (`DELETE /api/seasons/[id]/gauntlet`); ACTIVE/ARCHIVED seasons always carry real history, with no
+ * force override here.
  */
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();

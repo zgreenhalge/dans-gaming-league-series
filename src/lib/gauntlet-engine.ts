@@ -18,6 +18,7 @@ import {
   getLinkedRegularSeason,
   getGauntletRounds,
   getGauntletBracketShape,
+  isSeasonFullyPlayed,
 } from './queries';
 import { clearOpsError, recordOpsError } from './ops-errors';
 import { validateIntegrity, groupLabel, type DraftPod } from './gauntlet-draft';
@@ -327,20 +328,22 @@ export async function getSeedBands(
   };
 }
 
-/** True once the gauntlet's paired regular season is COMPLETED or ARCHIVED — or once there's no
- * paired regular season to check at all (an orphan gauntlet has no still-moving standings to protect
- * against). Gates every materialization path uniformly (`materializeIfReady()`, below) so a pod can
- * never go live with real matches while the regular season its seed numbers are resolved from could
- * still change who holds which seed. The generator's own auto-seed path (`trySeedGauntlet()`,
- * triggered by `checkSeasonCompletion()`) only ever runs after the regular season's COMPLETED write
- * has already landed, so this never blocks it in practice — it exists to stop the *manual* editor
- * from materializing a fully-seeded pod while the season backing its seeds is still live. */
+/** True once every match in the gauntlet's paired regular season has been played — or once there's
+ * no paired regular season to check at all (an orphan gauntlet has no still-moving standings to
+ * protect against). Gates every materialization path uniformly (`materializeIfReady()`, below) so a
+ * pod can never go live with real matches while the regular season its seed numbers are resolved
+ * from could still change who holds which seed. Deliberately checks match completion
+ * (`isSeasonFullyPlayed()`) rather than `regularSeason.status`: the status is the admin-visible
+ * lifecycle stage and can move independently of the season's own match history (a reset gauntlet
+ * reverts its paired regular season from `ARCHIVED` back to `ACTIVE` via `deleteGauntletSeason()`,
+ * even though every match is still played), so tying this gate to status would deadlock a
+ * rebuilt bracket. */
 async function regularSeasonIsDone(supabaseAdmin: SupabaseClient, gauntletSeasonId: number): Promise<boolean> {
   const gauntletSeason = await getSeason(gauntletSeasonId);
   if (!gauntletSeason) return true;
   const regularSeason = await getLinkedRegularSeason(gauntletSeason.name);
   if (!regularSeason) return true;
-  return regularSeason.status === 'COMPLETED' || regularSeason.status === 'ARCHIVED';
+  return isSeasonFullyPlayed(regularSeason.id, supabaseAdmin);
 }
 
 export type MaterializeOutcome = 'materialized' | 'not-ready' | 'already-materialized' | 'regular-season-not-done';
@@ -427,8 +430,9 @@ export async function seedBracket(
  * since `gauntlet_pod_slots` has two FKs into `gauntlet_pods` (`pod_id` and `source_pod_id`) and
  * there's no ON DELETE CASCADE on either. If its paired regular season was
  * ARCHIVED (i.e. this gauntlet had already completed and archived it via `checkGauntletCompletion`),
- * reverts that season back to COMPLETED — an archived season with no gauntlet behind it is a
- * confusing dead end. Also clears any stale build/seed `ops_errors` on the regular season, and any
+ * reverts that season back to ACTIVE — an archived season with no gauntlet behind it is a confusing
+ * dead end, and ACTIVE is what makes it manageable again (rebuild-eligible) in the admin console.
+ * Also clears any stale build/seed `ops_errors` on the regular season, and any
  * stale archive `ops_errors` on the gauntlet season itself (otherwise it'd outlive the row it
  * references and show up as a phantom "Season #N" entry) — resetting the gauntlet is the recovery
  * action for a roster-drift seed failure, so a fresh start shouldn't carry the old failure forward.
@@ -493,7 +497,7 @@ export async function deleteGauntletSeason(supabaseAdmin: SupabaseClient, gauntl
         if (regularSeason.status === 'ARCHIVED') {
           const { error: revertErr } = await supabaseAdmin
             .from('seasons')
-            .update({ status: 'COMPLETED' })
+            .update({ status: 'ACTIVE' })
             .eq('id', regularSeason.id);
           if (revertErr) throw revertErr;
         }
@@ -690,11 +694,11 @@ export type SaveDraftResult =
  * rather than repeating cascade-clearing logic server-side. The pod/slot shape diff itself is
  * applied atomically via the `reconcile_gauntlet_draft()` DB function (one Postgres transaction) —
  * see the comment above that RPC call below for why materialization afterward is a separate step.
- * A pod that becomes fully seeded while the paired regular season is still ACTIVE/UPCOMING is saved
- * but deliberately *not* materialized into real matches yet (`regularSeasonIsDone()`) — the standings
- * its seed numbers resolve against could still change who holds which seed, so nothing should go
- * live until they're final. Note this needs a *manual* re-save once the regular season completes:
- * `checkSeasonCompletion()`'s own auto-seed trigger only ever drives the generator's path
+ * A pod that becomes fully seeded while the paired regular season still has matches unplayed is
+ * saved but deliberately *not* materialized into real matches yet (`regularSeasonIsDone()`) — the
+ * standings its seed numbers resolve against could still change who holds which seed, so nothing
+ * should go live until they're final. Note this needs a *manual* re-save once the regular season
+ * completes: `checkSeasonCompletion()`'s own auto-seed trigger only ever drives the generator's path
  * (`trySeedGauntlet()`), which no-ops for a manual gauntlet — there's no seed-slot-with-no-player to
  * fill in, by construction, so it never has a reason to touch materialization here. */
 export async function saveManualDraft(
@@ -890,9 +894,9 @@ export async function saveManualDraft(
     const touched = podsNeedingSlotWrite
       .map((pod) => ({ id: keyToId.get(pod.key)!, round_number: pod.round_number }))
       .sort((a, b) => a.round_number - b.round_number);
-    // regularSeason (fetched above) already answers this — no need for materializeIfReady() to
-    // re-derive it via regularSeasonIsDone() on every pod in the loop.
-    const seasonDone = regularSeason.status === 'COMPLETED' || regularSeason.status === 'ARCHIVED';
+    // Computed once here rather than letting materializeIfReady() re-derive it via
+    // regularSeasonIsDone() on every pod in the loop.
+    const seasonDone = await isSeasonFullyPlayed(regularSeason.id, supabaseAdmin);
     let blockedByRegularSeason = false;
     for (const { id } of touched) {
       const outcome = await materializeIfReady(supabaseAdmin, id, seasonDone);

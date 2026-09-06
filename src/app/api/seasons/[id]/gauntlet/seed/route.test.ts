@@ -32,14 +32,14 @@ function makeDb(): FakeDb {
   return {
     players,
     seasons: [
-      { id: NO_SHAPE_SEASON_ID, name: 'Season 30', status: 'COMPLETED', is_gauntlet: false, target_win_rounds: 13 },
-      // Seeding materializes round 1 immediately once the regular season is done — COMPLETED here
+      { id: NO_SHAPE_SEASON_ID, name: 'Season 30', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 },
+      // Seeding materializes round 1 immediately once the regular season is done — ARCHIVED here
       // matches the real trigger condition (regularSeasonIsDone() in gauntlet-engine.ts).
-      { id: READY_SEASON_ID, name: 'Season 31', status: 'COMPLETED', is_gauntlet: false, target_win_rounds: 13 },
+      { id: READY_SEASON_ID, name: 'Season 31', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 },
       { id: 111, name: 'Season 31 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 },
-      { id: ALREADY_SEEDED_SEASON_ID, name: 'Season 32', status: 'COMPLETED', is_gauntlet: false, target_win_rounds: 13 },
+      { id: ALREADY_SEEDED_SEASON_ID, name: 'Season 32', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 },
       { id: 121, name: 'Season 32 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 },
-      { id: DRIFTED_SEASON_ID, name: 'Season 33', status: 'COMPLETED', is_gauntlet: false, target_win_rounds: 13 },
+      { id: DRIFTED_SEASON_ID, name: 'Season 33', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 },
       { id: 131, name: 'Season 33 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 },
     ],
     // READY_SEASON_ID: 4-player leaderboard, gauntlet shape built for 4 (round1 seeds 1-4, unseeded).
@@ -70,8 +70,22 @@ function makeDb(): FakeDb {
       { id: 11, pod_id: 1002, slot_index: 2, source_kind: 'seed', source_seed: 3, source_pod_id: null, player_id: null },
       { id: 12, pod_id: 1002, slot_index: 3, source_kind: 'seed', source_seed: 4, source_pod_id: null, player_id: null },
     ],
-    weeks: [{ id: 500, season_id: 121, week_number: 1, bye_player_id: null }],
-    matches: [{ id: 5000, week_id: 500, match_number: 1, final_score: '13-9', is_playoff_game: true }],
+    // A played week/match for each regular season so isSeasonFullyPlayed() (the materialization
+    // gate) sees them as actually done, matching their ARCHIVED status above.
+    weeks: [
+      { id: 10, season_id: NO_SHAPE_SEASON_ID, week_number: 1, bye_player_id: null },
+      { id: 11, season_id: READY_SEASON_ID, week_number: 1, bye_player_id: null },
+      { id: 12, season_id: ALREADY_SEEDED_SEASON_ID, week_number: 1, bye_player_id: null },
+      { id: 13, season_id: DRIFTED_SEASON_ID, week_number: 1, bye_player_id: null },
+      { id: 500, season_id: 121, week_number: 1, bye_player_id: null },
+    ],
+    matches: [
+      { id: 10, week_id: 10, match_number: 1, final_score: '13-9' },
+      { id: 11, week_id: 11, match_number: 1, final_score: '13-9' },
+      { id: 12, week_id: 12, match_number: 1, final_score: '13-9' },
+      { id: 13, week_id: 13, match_number: 1, final_score: '13-9' },
+      { id: 5000, week_id: 500, match_number: 1, final_score: '13-9', is_playoff_game: true },
+    ],
     player_match_stats: [],
     ops_errors: [],
   };
