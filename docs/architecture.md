@@ -337,14 +337,14 @@ and has one admin-triggered and two automatic transitions, all in `src/lib/seaso
   sharing the same `isSeasonFullyPlayed()` check `checkSeasonCompletion()` uses (every match under
   the season, not just the highest `round_number`'s), plus `isGauntletBracketDecided()` (its Final
   pod specifically must exist and be played). Once both are true, it archives the gauntlet season
-  and, via `getLinkedRegularSeason()`, its paired regular season too if that hasn't already happened
-  — the regular season is normally archived well before this (by its own match completion, above,
-  since `regularSeasonIsDone()` blocks any gauntlet pod from materializing until then), but a
-  gauntlet rebuilt after `deleteGauntletSeason()` reverted its paired regular season back to `ACTIVE`
-  needs this cascade to re-archive it once the rebuilt bracket finishes. Checking every match rather
-  than only the final round matters for manually-built gauntlets (see below) — an automated bracket's
-  final round can't materialize until every earlier pod has resolved, so the two checks coincide
-  there, but nothing enforces that ordering for a hand-built one.
+  and, via `getLinkedRegularSeason()`, its paired regular season too if that hasn't already happened.
+  The regular season is normally archived well before this, by its own match completion above, since
+  `regularSeasonIsDone()` blocks any gauntlet pod from materializing until then. This cascade only
+  does real work for a gauntlet rebuilt after `deleteGauntletSeason()` reverted its paired regular
+  season back to `ACTIVE` — re-archiving it once the rebuilt bracket finishes. Checking every match
+  rather than only the final round matters for manually-built gauntlets (see below) — an automated
+  bracket's final round can't materialize until every earlier pod has resolved, so the two checks
+  coincide there, but nothing enforces that ordering for a hand-built one.
 
 Gauntlet seasons are born `ACTIVE` at creation and have no `UPCOMING` phase or admin-triggered
 transition of their own — `ACTIVE → ARCHIVED` is their entire lifecycle, driven by
