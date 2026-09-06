@@ -33,7 +33,7 @@ function makeDb(): FakeDb {
       { id: 3, is_admin: false, name: 'Player 3' },
       { id: 4, is_admin: false, name: 'Player 4' },
     ],
-    seasons: [{ id: SEASON_ID, name: 'Season 40', status: 'COMPLETED', is_gauntlet: false, target_win_rounds: 13 }],
+    seasons: [{ id: SEASON_ID, name: 'Season 40', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 }],
     player_season_leaderboard: [1, 2, 3, 4].map((id, i) => ({ season_id: SEASON_ID, player_id: id, player_name: `Player ${id}`, win_rate_percentage: 100 - i * 10 })),
     gauntlet_pods: [],
     gauntlet_pod_slots: [],

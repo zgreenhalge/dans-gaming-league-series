@@ -1,4 +1,65 @@
 {
   "__type": "Map",
-  "entries": []
+  "entries": [
+    [
+      1,
+      [
+        {
+          "season_id": 1,
+          "season_name": "Season 5",
+          "is_gauntlet": false,
+          "rank": 1,
+          "stats": {
+            "kills": 20,
+            "assists": 3,
+            "deaths": 15,
+            "win_rate_percentage": 100,
+            "rounds_won": 13,
+            "rounds_lost": 9,
+            "overall_adr": 85.5
+          }
+        }
+      ]
+    ],
+    [
+      2,
+      [
+        {
+          "season_id": 1,
+          "season_name": "Season 5",
+          "is_gauntlet": false,
+          "rank": 2,
+          "stats": {
+            "kills": 18,
+            "assists": 5,
+            "deaths": 16,
+            "win_rate_percentage": 100,
+            "rounds_won": 13,
+            "rounds_lost": 9,
+            "overall_adr": 78.18181818181819
+          }
+        }
+      ]
+    ],
+    [
+      3,
+      [
+        {
+          "season_id": 1,
+          "season_name": "Season 5",
+          "is_gauntlet": false,
+          "rank": 3,
+          "stats": {
+            "kills": 14,
+            "assists": 4,
+            "deaths": 19,
+            "win_rate_percentage": 0,
+            "rounds_won": 9,
+            "rounds_lost": 13,
+            "overall_adr": 65
+          }
+        }
+      ]
+    ]
+  ]
 }

@@ -132,7 +132,7 @@ function twoPodFixture(): FakeDb {
   // auto-materialize.
   return {
     seasons: [
-      { id: 10, name: 'Season 9', status: 'COMPLETED', is_gauntlet: false, target_win_rounds: 13 },
+      { id: 10, name: 'Season 9', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 },
       { id: 20, name: 'Season 9 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 },
     ],
     weeks: [{ id: 1, season_id: 20, week_number: 1, bye_player_id: null }],
@@ -186,7 +186,7 @@ function twoPodFixture(): FakeDb {
   await test('resolveAndPropagate: a wildcard pod advances every player with at least one win, up to downstream capacity', async () => {
   const db: FakeDb = {
     seasons: [
-      { id: 10, name: 'Season 9', status: 'COMPLETED', is_gauntlet: false, target_win_rounds: 13 },
+      { id: 10, name: 'Season 9', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 },
       { id: 20, name: 'Season 9 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 },
     ],
     weeks: [{ id: 1, season_id: 20, week_number: 1, bye_player_id: null }],
@@ -262,7 +262,7 @@ function twoPodFixture(): FakeDb {
 
 function draftFixtureDb(): FakeDb {
   return {
-    seasons: [{ id: 30, name: 'Season 11', status: 'COMPLETED', is_gauntlet: false, target_win_rounds: 13 }],
+    seasons: [{ id: 30, name: 'Season 11', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 }],
     weeks: [],
     matches: [],
     player_match_stats: [],
@@ -354,7 +354,7 @@ function draftPod(overrides: Partial<DraftPod> & { key: string }): DraftPod {
   assert.equal(finalSlots[0].source_pod_id, r1.id);
   assert.equal(finalSlots[0].player_id, null);
 
-  // r1 was fully seeded and the regular season is COMPLETED -> it should have materialized.
+  // r1 was fully seeded and the regular season is ARCHIVED -> it should have materialized.
   assert.ok(r1.match1_id != null, 'r1 should have materialized');
   assert.equal(final.match1_id, null, 'final is still missing 3 slots, so it should not materialize');
 });

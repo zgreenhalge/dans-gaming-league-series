@@ -1,7 +1,7 @@
 {
   "id": 2,
   "name": "Season 5 Gauntlet",
-  "status": "COMPLETED",
+  "status": "ARCHIVED",
   "target_win_rounds": 13,
   "buy_in_amount": null,
   "is_gauntlet": true,

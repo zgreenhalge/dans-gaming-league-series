@@ -32,14 +32,14 @@ function makeDb(): FakeDb {
   return {
     players,
     seasons: [
-      { id: NO_SHAPE_SEASON_ID, name: 'Season 30', status: 'COMPLETED', is_gauntlet: false, target_win_rounds: 13 },
-      // Seeding materializes round 1 immediately once the regular season is done — COMPLETED here
+      { id: NO_SHAPE_SEASON_ID, name: 'Season 30', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 },
+      // Seeding materializes round 1 immediately once the regular season is done — ARCHIVED here
       // matches the real trigger condition (regularSeasonIsDone() in gauntlet-engine.ts).
-      { id: READY_SEASON_ID, name: 'Season 31', status: 'COMPLETED', is_gauntlet: false, target_win_rounds: 13 },
+      { id: READY_SEASON_ID, name: 'Season 31', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 },
       { id: 111, name: 'Season 31 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 },
-      { id: ALREADY_SEEDED_SEASON_ID, name: 'Season 32', status: 'COMPLETED', is_gauntlet: false, target_win_rounds: 13 },
+      { id: ALREADY_SEEDED_SEASON_ID, name: 'Season 32', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 },
       { id: 121, name: 'Season 32 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 },
-      { id: DRIFTED_SEASON_ID, name: 'Season 33', status: 'COMPLETED', is_gauntlet: false, target_win_rounds: 13 },
+      { id: DRIFTED_SEASON_ID, name: 'Season 33', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 },
       { id: 131, name: 'Season 33 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 },
     ],
     // READY_SEASON_ID: 4-player leaderboard, gauntlet shape built for 4 (round1 seeds 1-4, unseeded).

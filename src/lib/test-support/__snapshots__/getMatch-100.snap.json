@@ -29,7 +29,7 @@
   "season": {
     "id": 1,
     "name": "Season 5",
-    "status": "COMPLETED",
+    "status": "ARCHIVED",
     "target_win_rounds": 13,
     "buy_in_amount": 20,
     "is_gauntlet": false,
