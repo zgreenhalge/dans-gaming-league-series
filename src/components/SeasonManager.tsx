@@ -6,7 +6,7 @@
 // season dropdown to build a gauntlet, then a *third*, separate list to seed/reset one — three
 // un-linked tools that each made you re-find the same season). A season is expandable exactly when
 // it's an ACTIVE regular season with gauntlet-lifecycle work available; every other row (UPCOMING,
-// COMPLETED, ARCHIVED, or a gauntlet season itself) is a plain, non-interactive line, with "go live"
+// ARCHIVED, or a gauntlet season itself) is a plain, non-interactive line, with "go live"
 // as the one action UPCOMING seasons get inline instead of behind an expand. Every mutation still
 // goes through the existing, unmodified components (`CreateSeasonForm`, `CreateGauntletForm`,
 // `GauntletLifecycleList`, `MarkSeasonActiveButton`) scoped to a single season — this is composition,
@@ -32,7 +32,6 @@ export interface SeasonSummary {
 const STATUS_BADGE: Record<string, string> = {
   ACTIVE: 'bg-[var(--color-accent-green-bg)] text-[var(--color-accent-green-strong)] border-[var(--color-accent-green-border)]',
   UPCOMING: 'bg-[var(--color-accent-amber-bg)] text-[var(--color-accent-amber-strong)] border-[var(--color-accent-amber-border)]',
-  COMPLETED: 'bg-[var(--color-accent-blue-bg)] text-[var(--color-accent-blue-strong)] border-[var(--color-accent-blue-border)]',
   ARCHIVED: 'border-[var(--color-border-secondary)] text-[var(--color-text-secondary)]',
 };
 

@@ -1,4 +1,4 @@
-export type SeasonStatus = 'UPCOMING' | 'ACTIVE' | 'COMPLETED' | 'ARCHIVED';
+export type SeasonStatus = 'UPCOMING' | 'ACTIVE' | 'ARCHIVED';
 export type Faction = 'SHIRTS' | 'SKINS';
 
 /** A match's 2D-replay job status — gates the Recap tab's 2D Replay/Heatmap/Pathing UI. */

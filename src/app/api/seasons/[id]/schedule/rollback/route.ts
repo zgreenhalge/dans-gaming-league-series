@@ -13,7 +13,7 @@ import { rollbackSeasonScheduleDraft, mapScheduleDraftError } from '@/lib/season
  * from, so once every remaining real week is either rolled back or played, `POST .../schedule` /
  * `PATCH .../schedule` / `DELETE .../schedule` become usable again (they refuse while any real week
  * still exists). No season-status gate: this is only ever destructive to unplayed weeks regardless
- * of what stage the season is in, so there's nothing an UPCOMING/ACTIVE/COMPLETED check would add.
+ * of what stage the season is in, so there's nothing an UPCOMING/ACTIVE/ARCHIVED check would add.
  */
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await requireAdminAccess();

@@ -327,20 +327,20 @@ export async function getSeedBands(
   };
 }
 
-/** True once the gauntlet's paired regular season is COMPLETED or ARCHIVED — or once there's no
- * paired regular season to check at all (an orphan gauntlet has no still-moving standings to protect
- * against). Gates every materialization path uniformly (`materializeIfReady()`, below) so a pod can
- * never go live with real matches while the regular season its seed numbers are resolved from could
- * still change who holds which seed. The generator's own auto-seed path (`trySeedGauntlet()`,
- * triggered by `checkSeasonCompletion()`) only ever runs after the regular season's COMPLETED write
- * has already landed, so this never blocks it in practice — it exists to stop the *manual* editor
- * from materializing a fully-seeded pod while the season backing its seeds is still live. */
+/** True once the gauntlet's paired regular season is ARCHIVED — or once there's no paired regular
+ * season to check at all (an orphan gauntlet has no still-moving standings to protect against).
+ * Gates every materialization path uniformly (`materializeIfReady()`, below) so a pod can never go
+ * live with real matches while the regular season its seed numbers are resolved from could still
+ * change who holds which seed. The generator's own auto-seed path (`trySeedGauntlet()`, triggered by
+ * `checkSeasonCompletion()`) only ever runs after the regular season's ARCHIVED write has already
+ * landed, so this never blocks it in practice — it exists to stop the *manual* editor from
+ * materializing a fully-seeded pod while the season backing its seeds is still live. */
 async function regularSeasonIsDone(supabaseAdmin: SupabaseClient, gauntletSeasonId: number): Promise<boolean> {
   const gauntletSeason = await getSeason(gauntletSeasonId);
   if (!gauntletSeason) return true;
   const regularSeason = await getLinkedRegularSeason(gauntletSeason.name);
   if (!regularSeason) return true;
-  return regularSeason.status === 'COMPLETED' || regularSeason.status === 'ARCHIVED';
+  return regularSeason.status === 'ARCHIVED';
 }
 
 export type MaterializeOutcome = 'materialized' | 'not-ready' | 'already-materialized' | 'regular-season-not-done';
@@ -427,8 +427,9 @@ export async function seedBracket(
  * since `gauntlet_pod_slots` has two FKs into `gauntlet_pods` (`pod_id` and `source_pod_id`) and
  * there's no ON DELETE CASCADE on either. If its paired regular season was
  * ARCHIVED (i.e. this gauntlet had already completed and archived it via `checkGauntletCompletion`),
- * reverts that season back to COMPLETED — an archived season with no gauntlet behind it is a
- * confusing dead end. Also clears any stale build/seed `ops_errors` on the regular season, and any
+ * reverts that season back to ACTIVE — an archived season with no gauntlet behind it is a confusing
+ * dead end, and ACTIVE is what makes it manageable again (rebuild-eligible) in the admin console.
+ * Also clears any stale build/seed `ops_errors` on the regular season, and any
  * stale archive `ops_errors` on the gauntlet season itself (otherwise it'd outlive the row it
  * references and show up as a phantom "Season #N" entry) — resetting the gauntlet is the recovery
  * action for a roster-drift seed failure, so a fresh start shouldn't carry the old failure forward.
@@ -493,7 +494,7 @@ export async function deleteGauntletSeason(supabaseAdmin: SupabaseClient, gauntl
         if (regularSeason.status === 'ARCHIVED') {
           const { error: revertErr } = await supabaseAdmin
             .from('seasons')
-            .update({ status: 'COMPLETED' })
+            .update({ status: 'ACTIVE' })
             .eq('id', regularSeason.id);
           if (revertErr) throw revertErr;
         }
@@ -892,7 +893,7 @@ export async function saveManualDraft(
       .sort((a, b) => a.round_number - b.round_number);
     // regularSeason (fetched above) already answers this — no need for materializeIfReady() to
     // re-derive it via regularSeasonIsDone() on every pod in the loop.
-    const seasonDone = regularSeason.status === 'COMPLETED' || regularSeason.status === 'ARCHIVED';
+    const seasonDone = regularSeason.status === 'ARCHIVED';
     let blockedByRegularSeason = false;
     for (const { id } of touched) {
       const outcome = await materializeIfReady(supabaseAdmin, id, seasonDone);

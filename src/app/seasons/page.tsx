@@ -223,7 +223,7 @@ export default async function SeasonsPage() {
   // Group all past seasons (regular + gauntlet) by season number
   type PastGroup = { num: number; regular: Season | null; gauntlet: Season | null };
   const pastGroupMap = new Map<number, PastGroup>();
-  for (const s of seasons.filter((s) => s.status === 'COMPLETED' || s.status === 'ARCHIVED')) {
+  for (const s of seasons.filter((s) => s.status === 'ARCHIVED')) {
     const num = extractSeasonNumber(s.name) ?? s.id;
     const g = pastGroupMap.get(num) ?? { num, regular: null, gauntlet: null };
     if (s.is_gauntlet) g.gauntlet = s; else g.regular = s;
