@@ -70,8 +70,22 @@ function makeDb(): FakeDb {
       { id: 11, pod_id: 1002, slot_index: 2, source_kind: 'seed', source_seed: 3, source_pod_id: null, player_id: null },
       { id: 12, pod_id: 1002, slot_index: 3, source_kind: 'seed', source_seed: 4, source_pod_id: null, player_id: null },
     ],
-    weeks: [{ id: 500, season_id: 121, week_number: 1, bye_player_id: null }],
-    matches: [{ id: 5000, week_id: 500, match_number: 1, final_score: '13-9', is_playoff_game: true }],
+    // A played week/match for each regular season so isSeasonFullyPlayed() (the materialization
+    // gate) sees them as actually done, matching their ARCHIVED status above.
+    weeks: [
+      { id: 10, season_id: NO_SHAPE_SEASON_ID, week_number: 1, bye_player_id: null },
+      { id: 11, season_id: READY_SEASON_ID, week_number: 1, bye_player_id: null },
+      { id: 12, season_id: ALREADY_SEEDED_SEASON_ID, week_number: 1, bye_player_id: null },
+      { id: 13, season_id: DRIFTED_SEASON_ID, week_number: 1, bye_player_id: null },
+      { id: 500, season_id: 121, week_number: 1, bye_player_id: null },
+    ],
+    matches: [
+      { id: 10, week_id: 10, match_number: 1, final_score: '13-9' },
+      { id: 11, week_id: 11, match_number: 1, final_score: '13-9' },
+      { id: 12, week_id: 12, match_number: 1, final_score: '13-9' },
+      { id: 13, week_id: 13, match_number: 1, final_score: '13-9' },
+      { id: 5000, week_id: 500, match_number: 1, final_score: '13-9', is_playoff_game: true },
+    ],
     player_match_stats: [],
     ops_errors: [],
   };

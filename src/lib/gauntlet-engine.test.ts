@@ -25,7 +25,7 @@ import { __setTestClient } from './supabase';
 import { createFakeSupabaseClient, type FakeDb, type Row, type RpcHandler } from './test-support/fakeSupabase';
 import { makeReconcileGauntletDraftRpc } from './test-support/reconcileGauntletDraftRpc';
 import { test, report } from './test-support/miniTest';
-import { materializePod, resolveAndPropagate, saveManualDraft } from './gauntlet-engine';
+import { materializePod, resolveAndPropagate, saveManualDraft, deleteGauntletSeason, trySeedGauntlet } from './gauntlet-engine';
 import { emptyDraftPod, type DraftPod } from './gauntlet-draft';
 
 // ─── shared fixture plumbing ─────────────────────────────────────────────────
@@ -135,10 +135,16 @@ function twoPodFixture(): FakeDb {
       { id: 10, name: 'Season 9', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 },
       { id: 20, name: 'Season 9 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 },
     ],
-    weeks: [{ id: 1, season_id: 20, week_number: 1, bye_player_id: null }],
+    weeks: [
+      { id: 1, season_id: 20, week_number: 1, bye_player_id: null },
+      // A played week for the regular season (id 10) so isSeasonFullyPlayed() sees it as actually
+      // done, matching its ARCHIVED status above.
+      { id: 2, season_id: 10, week_number: 1, bye_player_id: null },
+    ],
     matches: [
       { id: 500, week_id: 1, match_number: 1, final_score: '13-9', is_playoff_game: true },
       { id: 501, week_id: 1, match_number: 2, final_score: '13-11', is_playoff_game: true },
+      { id: 502, week_id: 2, match_number: 1, final_score: '13-9' },
     ],
     player_match_stats: [
       { id: 1, match_id: 500, player_id: 1, is_win: true },
@@ -189,10 +195,16 @@ function twoPodFixture(): FakeDb {
       { id: 10, name: 'Season 9', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 },
       { id: 20, name: 'Season 9 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 },
     ],
-    weeks: [{ id: 1, season_id: 20, week_number: 1, bye_player_id: null }],
+    weeks: [
+      { id: 1, season_id: 20, week_number: 1, bye_player_id: null },
+      // A played week for the regular season (id 10) so isSeasonFullyPlayed() sees it as actually
+      // done, matching its ARCHIVED status above.
+      { id: 2, season_id: 10, week_number: 1, bye_player_id: null },
+    ],
     matches: [
       { id: 500, week_id: 1, match_number: 1, final_score: '13-9', is_playoff_game: true },
       { id: 501, week_id: 1, match_number: 2, final_score: '13-11', is_playoff_game: true },
+      { id: 502, week_id: 2, match_number: 1, final_score: '13-9' },
     ],
     // Wildcard pod: players 1 and 2 each win exactly one game (1 win each -> both survive);
     // players 3 and 4 win nothing.
@@ -263,8 +275,10 @@ function twoPodFixture(): FakeDb {
 function draftFixtureDb(): FakeDb {
   return {
     seasons: [{ id: 30, name: 'Season 11', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 }],
-    weeks: [],
-    matches: [],
+    // A played week/match so isSeasonFullyPlayed() (the manual editor's materialization gate) sees
+    // this regular season as actually done, matching its ARCHIVED status above.
+    weeks: [{ id: 1, season_id: 30, week_number: 1, bye_player_id: null }],
+    matches: [{ id: 1, week_id: 1, match_number: 1, final_score: '13-9' }],
     player_match_stats: [],
     gauntlet_pods: [],
     gauntlet_pod_slots: [],
@@ -409,6 +423,54 @@ function draftPod(overrides: Partial<DraftPod> & { key: string }): DraftPod {
     const pod = db.gauntlet_pods.find((p) => p.id === 500)!;
     assert.equal(pod.advance_rule, 'single', 'a pod that raced to materialized must not have its advance_rule changed underneath the live match');
     assert.equal(pod.match1_id, 700, 'the race-injected materialization itself must survive untouched');
+  });
+
+  // ─── deleteGauntletSeason -> rebuild ─────────────────────────────────────────
+
+  await test('deleteGauntletSeason: a rebuilt gauntlet still materializes after the regular season is reverted to ACTIVE', async () => {
+    const db: FakeDb = {
+      seasons: [
+        { id: 10, name: 'Season 12', status: 'ARCHIVED', is_gauntlet: false, target_win_rounds: 13 },
+        { id: 20, name: 'Season 12 Gauntlet', status: 'ARCHIVED', is_gauntlet: true, target_win_rounds: 13 },
+      ],
+      weeks: [{ id: 1, season_id: 10, week_number: 1, bye_player_id: null }],
+      matches: [{ id: 100, week_id: 1, match_number: 1, final_score: '13-9' }],
+      player_season_leaderboard: [1, 2, 3, 4].map((id, i) => ({
+        season_id: 10, player_id: id, player_name: `Player ${id}`, win_rate_percentage: 100 - i * 10,
+      })),
+      gauntlet_pods: [{ id: 900, season_id: 20, round_number: 1, pod_index: 0, advance_rule: 'single', is_final: true, week_id: null, match1_id: null, match2_id: null }],
+      gauntlet_pod_slots: [
+        { id: 1, pod_id: 900, slot_index: 0, source_kind: 'seed', source_seed: 1, source_pod_id: null, player_id: null },
+        { id: 2, pod_id: 900, slot_index: 1, source_kind: 'seed', source_seed: 2, source_pod_id: null, player_id: null },
+        { id: 3, pod_id: 900, slot_index: 2, source_kind: 'seed', source_seed: 3, source_pod_id: null, player_id: null },
+        { id: 4, pod_id: 900, slot_index: 3, source_kind: 'seed', source_seed: 4, source_pod_id: null, player_id: null },
+      ],
+      ops_errors: [],
+      players: makePlayers([1, 2, 3, 4]),
+    };
+    const client = installFixture(db);
+
+    // Delete the already-archived gauntlet — reverts its paired regular season back to ACTIVE.
+    await deleteGauntletSeason(client as never, 20);
+    assert.equal(db.seasons.find((s) => s.id === 10)!.status, 'ACTIVE');
+    assert.equal(db.seasons.some((s) => s.id === 20), false, 'the old gauntlet season row is gone');
+
+    // Rebuild: a fresh gauntlet season with an unseeded shape, as tryBuildGauntletShape() would leave it.
+    db.seasons.push({ id: 21, name: 'Season 12 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 });
+    db.gauntlet_pods.push({ id: 901, season_id: 21, round_number: 1, pod_index: 0, advance_rule: 'single', is_final: true, week_id: null, match1_id: null, match2_id: null });
+    db.gauntlet_pod_slots.push(
+      { id: 5, pod_id: 901, slot_index: 0, source_kind: 'seed', source_seed: 1, source_pod_id: null, player_id: null },
+      { id: 6, pod_id: 901, slot_index: 1, source_kind: 'seed', source_seed: 2, source_pod_id: null, player_id: null },
+      { id: 7, pod_id: 901, slot_index: 2, source_kind: 'seed', source_seed: 3, source_pod_id: null, player_id: null },
+      { id: 8, pod_id: 901, slot_index: 3, source_kind: 'seed', source_seed: 4, source_pod_id: null, player_id: null },
+    );
+
+    // Seeding must still materialize round 1 even though the regular season is ACTIVE, not ARCHIVED —
+    // the materialization gate checks match completion, not status, so a reverted-to-ACTIVE season
+    // whose matches are still all played doesn't deadlock the rebuilt bracket.
+    const result = await trySeedGauntlet(client as never, 10);
+    assert.equal(result.status, 'seeded');
+    assert.ok(db.gauntlet_pods.find((p) => p.id === 901)!.match1_id != null, 'round 1 should have materialized, not deadlocked behind ACTIVE status');
   });
 }
 

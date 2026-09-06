@@ -1,8 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { Player, Season } from '../types';
-import { extractSeasonNumber } from '../util';
+import { allMatchesPlayed, extractSeasonNumber } from '../util';
 import { getPlayersById } from './player';
+import { getMatchScoresForWeeks } from './schedule';
 
 export interface SeasonRosterEntry {
   player_id: number;
@@ -31,6 +32,18 @@ export async function getSeasons(client: SupabaseClient = supabase): Promise<Sea
 export async function getActiveRegularSeason(client: SupabaseClient = supabase): Promise<Season | null> {
   const seasons = await getSeasons(client);
   return seasons.find((s) => !s.is_gauntlet && s.status === 'ACTIVE') ?? null;
+}
+
+/** True if the season has a schedule (at least one week/match exists) and every match in it has a
+ * played score. A season with no matches yet is never "fully played". The shared ground truth for
+ * "is this season actually done" — deliberately independent of `seasons.status`, which tracks the
+ * admin-visible lifecycle stage and can move (e.g. a reset gauntlet reverting its paired regular
+ * season back to `ACTIVE`) without the season's own match history changing. */
+export async function isSeasonFullyPlayed(seasonId: number, client: SupabaseClient = supabase): Promise<boolean> {
+  const { data: weeks, error: weekErr } = await client.from('weeks').select('id').eq('season_id', seasonId);
+  if (weekErr) throw weekErr;
+  const weekIds = ((weeks ?? []) as { id: number }[]).map((w) => w.id);
+  return allMatchesPlayed(await getMatchScoresForWeeks(client, weekIds));
 }
 
 export async function getSeason(id: number, client: SupabaseClient = supabase): Promise<Season | null> {

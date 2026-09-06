@@ -270,9 +270,12 @@ schema addition:
   generator-built shape's *unseeded* slots (awaiting `seedBracket()`) from everything else, manual or
   already-seeded.
 - `materializeIfReady()` never turns a fully-seeded pod into real matches while the paired regular
-  season is still ACTIVE or UPCOMING (`regularSeasonIsDone()`) — a manually-built gauntlet can be
-  seeded and structured well before the regular season it draws standings from is actually over, and
-  nothing should go live while the standings behind those seed numbers could still move. The pod
+  season still has matches unplayed (`regularSeasonIsDone()`, keyed on match completion rather than
+  `seasons.status` — a reset-and-rebuilt gauntlet reverts its regular season's status back to
+  `ACTIVE` via `deleteGauntletSeason()` without its match history changing, so status alone can't be
+  the gate) — a manually-built gauntlet can be seeded and structured well before the regular season
+  it draws standings from is actually over, and nothing should go live while the standings behind
+  those seed numbers could still move. The pod
   stays saved (fully seeded, visibly so in the editor) but not materialized; a later save — there's
   no automatic retry, since `checkSeasonCompletion()`'s own trigger only ever drives the generator's
   path — turns it into real matches once the season completes. `saveManualDraft()` surfaces this as a
