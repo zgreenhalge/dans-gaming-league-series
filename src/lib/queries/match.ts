@@ -261,9 +261,19 @@ export async function isMatchCurrentlyLive(matchId: number): Promise<boolean> {
 /**
  * Other unplayed matches that have a scheduled time — used to warn (and link) when a match is
  * scheduled close to another, since they'd contend for the single shared DatHost server (#134).
- * Played matches are excluded (their scheduled time is moot).
+ * Played matches are excluded (their scheduled time is moot). A gauntlet match's own pod sibling is
+ * always excluded too — the two are *intentionally* scheduled 30 minutes apart on the one server
+ * (see `PATCH /api/matches/[id]/schedule`), not a collision to warn about.
  */
 export async function getOtherScheduledMatches(matchId: number): Promise<ScheduledMatchRef[]> {
+  const { data: podRow } = await supabase
+    .from('gauntlet_pods')
+    .select('match1_id, match2_id')
+    .or(`match1_id.eq.${matchId},match2_id.eq.${matchId}`)
+    .maybeSingle();
+  const pod = podRow as { match1_id: number | null; match2_id: number | null } | null;
+  const podSiblingId = pod ? (pod.match1_id === matchId ? pod.match2_id : pod.match1_id) : null;
+
   const { data } = await supabase
     .from('matches')
     .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
@@ -280,7 +290,7 @@ export async function getOtherScheduledMatches(matchId: number): Promise<Schedul
   // unknown (same pattern as other nested selects here).
   const rows = (data ?? []) as unknown as Row[];
   return rows
-    .filter((r) => r.scheduled_at && !isPlayedScore(r.final_score))
+    .filter((r) => r.scheduled_at && !isPlayedScore(r.final_score) && r.id !== podSiblingId)
     .map((r) => ({
       id: r.id,
       scheduledAt: r.scheduled_at as string,

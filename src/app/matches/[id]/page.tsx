@@ -1,8 +1,9 @@
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
-import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, isWeekComplete, isMatchCurrentlyLive, getMatchKills, getMatchDamageEvents, getMatchWeaponClassStats, getMatchEconomyStats } from '@/lib/queries';
+import { getMatch, getMatchScoutingData, getCareerH2HDataCached, getMatchRatingDeltas, getPlayerRatings, getMatchSabremetrics, getReplayJobState, getReplayEventsView, getMatchIdsForMap, getOtherScheduledMatches, getGauntletPodForMatch, getGauntletPodSibling, isWeekComplete, isMatchCurrentlyLive, getMatchKills, getMatchDamageEvents, getMatchWeaponClassStats, getMatchEconomyStats } from '@/lib/queries';
 import { getMatchMeta } from '@/lib/seo/og';
 import { buildMatchJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
@@ -137,7 +138,7 @@ export default async function MatchPage({
   const needsPreviousWeekCheck =
     showPreMatchScouting && week.week_number > 1 && matchWindow != null && today < matchWindow.weekStart;
 
-  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, podSibling, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
     showPreMatchScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     // Cached and shared across every match page (see #441 item 3) rather than a fresh
     // full-league computeH2H() scan on each load.
@@ -154,6 +155,7 @@ export default async function MatchPage({
     // Match ids on this map — feeds the scouting report's Map Intel heatmap (#128).
     showPreMatchScouting && map ? getMatchIdsForMap(map) : Promise.resolve<number[]>([]),
     season.is_gauntlet ? getGauntletPodForMatch(matchId) : Promise.resolve(null),
+    season.is_gauntlet ? getGauntletPodSibling(matchId) : Promise.resolve(null),
     needsPreviousWeekCheck ? isWeekComplete(season.id, week.week_number - 1) : Promise.resolve(false),
     // Drives the `--ticker-h` override below — only an unplayed match can ever be the live one.
     played ? Promise.resolve(false) : isMatchCurrentlyLive(matchId),
@@ -244,7 +246,10 @@ export default async function MatchPage({
       // Non-admins are blocked from veto until the window opens
       canVeto = isAdmin || vetoWindowOpen;
       vetoIsAdmin = isAdmin;
-      if (!season.is_gauntlet) canEdit = true;
+      // Scheduling rights apply to both regular and gauntlet matches — MatchHeaderSection itself
+      // further restricts a gauntlet pod's Game 2 to read-only (its time is always derived from
+      // Game 1's, see PATCH /api/matches/[id]/schedule).
+      canEdit = true;
       if (myStatRow) {
         playerFaction = myStatRow.faction as 'SHIRTS' | 'SKINS';
         if (season.is_gauntlet) {
@@ -267,9 +272,10 @@ export default async function MatchPage({
 
   // Other unplayed matches' scheduled times, for the single-server scheduling-collision warning
   // (#134) — both the schedule editor and the overlap banner. Fetched for any viewer of an unplayed
-  // non-gauntlet match so the banner shows regardless of edit rights.
-  const otherScheduled =
-    !played && !season.is_gauntlet ? await getOtherScheduledMatches(match.id) : [];
+  // match, gauntlet included, so the banner shows regardless of edit rights; a gauntlet match's own
+  // pod sibling is excluded server-side (getOtherScheduledMatches) since it's intentionally 30
+  // minutes away, not a collision.
+  const otherScheduled = !played ? await getOtherScheduledMatches(match.id) : [];
   const scheduleCollision = findScheduleCollision(match.scheduled_at, otherScheduled);
 
   const matchJsonLd = buildMatchJsonLd({
@@ -304,6 +310,14 @@ export default async function MatchPage({
             {GAUNTLET_POD_STAKES_LABEL[gauntletPod.advance_rule]}
           </div>
         )}
+        {podSibling && (
+          <div className="font-mono text-[11px] text-[var(--color-text-secondary)] text-center py-2">
+            <Link href={`/matches/${podSibling.matchId}`} className="hover:underline">
+              Game {podSibling.gameNumber} of this pod
+              {podSibling.finalScore && isPlayedScore(podSibling.finalScore) ? ` · ${podSibling.finalScore}` : ''}
+            </Link>
+          </div>
+        )}
       </div>
       <Topbar seasonId={season.id} seasonName={season.name} weekNumber={week.week_number} matchNumber={match.match_number} isGauntlet={season.is_gauntlet} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
@@ -328,6 +342,10 @@ export default async function MatchPage({
               canEdit={canEdit}
               played={played}
               isGauntlet={season.is_gauntlet}
+              // A pod's Game 2 has no independent schedule of its own — only Game 1 (identified by
+              // the sibling reporting itself as Game 1) can be edited; PATCH /api/matches/[id]/schedule
+              // enforces this same rule server-side.
+              isPodGame2={podSibling?.gameNumber === 1}
               otherScheduled={otherScheduled}
             />
 

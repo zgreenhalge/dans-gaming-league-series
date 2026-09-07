@@ -1,4 +1,6 @@
 {
   "advance_rule": "single",
-  "is_final": true
+  "is_final": true,
+  "match1_id": 200,
+  "match2_id": 201
 }

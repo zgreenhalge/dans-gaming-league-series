@@ -22,6 +22,16 @@ function mapFor(m: AdminMatchRow): string | null {
   return m.match.shirts_pick ?? m.match.picked_map;
 }
 
+function fmtScheduled(iso: string): string {
+  return new Date(iso).toLocaleString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 /**
  * Lowercased searchable text for a match: its full label, shorthand tokens (`s1`/`s1g`/`w5`/`r3`/`m2`
  * — so "S1 W5 M2" works, not just the full "Season 1 · Wk 5"), the played map, and the score. Search
@@ -52,12 +62,13 @@ export function MatchManager({
   const [query, setQuery] = useState(initialQuery);
   const [openId, setOpenId] = useState<number | null>(null);
 
-  // All unplayed, non-gauntlet scheduled matches — the collision pool the schedule editor checks
-  // against (built once from the loaded list, so no per-row fetch).
+  // Every unplayed scheduled match — the collision pool the schedule editor checks against (built
+  // once from the loaded list, so no per-row fetch). A gauntlet match's own pod sibling is filtered
+  // out per-row below (see `others`), not here, since it's intentionally 30 minutes away.
   const scheduledRefs: ScheduledMatchRef[] = useMemo(
     () =>
       matches
-        .filter((m) => m.match.scheduled_at && !m.isGauntlet && !isPlayedScore(m.match.final_score))
+        .filter((m) => m.match.scheduled_at && !isPlayedScore(m.match.final_score))
         .map((m) => ({ id: m.match.id, scheduledAt: m.match.scheduled_at as string, label: m.label })),
     [matches],
   );
@@ -90,7 +101,7 @@ export function MatchManager({
           {filtered.map((m) => {
             const played = isPlayedScore(m.match.final_score);
             const isOpen = openId === m.match.id;
-            const others = scheduledRefs.filter((r) => r.id !== m.match.id);
+            const others = scheduledRefs.filter((r) => r.id !== m.match.id && r.id !== m.podSiblingId);
             return (
               <div key={m.match.id} className="border-b border-[var(--color-border-tertiary)] last:border-b-0">
                 <button
@@ -115,9 +126,29 @@ export function MatchManager({
 
                 {isOpen && (
                   <div className="px-3 py-4 flex flex-col gap-5 bg-[var(--color-bg-secondary)] border-t border-[var(--color-border-tertiary)]">
-                    {!m.isGauntlet && !played && (
+                    {!played && m.podGameNumber === 2 ? (
                       <section>
                         <SectionLabel>Schedule</SectionLabel>
+                        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+                          {m.match.scheduled_at ? fmtScheduled(m.match.scheduled_at) : 'unscheduled'} — set from{' '}
+                          <button
+                            type="button"
+                            onClick={() => setOpenId(m.podSiblingId)}
+                            className="underline decoration-dotted hover:text-[var(--color-text-primary)]"
+                          >
+                            Game 1
+                          </button>
+                          , 30 minutes earlier.
+                        </div>
+                      </section>
+                    ) : !played && (
+                      <section>
+                        <SectionLabel>Schedule</SectionLabel>
+                        {m.isGauntlet && (
+                          <div className="font-mono text-[10px] text-[var(--color-text-secondary)] mb-1.5">
+                            Pod start (Game 1) — Game 2 begins 30 minutes later, on the same server.
+                          </div>
+                        )}
                         <ScheduleEditor
                           matchId={m.match.id}
                           scheduledAt={m.match.scheduled_at}

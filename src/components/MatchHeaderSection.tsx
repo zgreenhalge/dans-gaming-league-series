@@ -17,6 +17,10 @@ interface Props {
   canEdit: boolean;
   played: boolean;
   isGauntlet: boolean;
+  /** True when this match is Game 2 of a gauntlet pod — its time is always derived from Game 1's
+   *  (30 minutes later), so scheduling is shown read-only rather than editable. Always false for a
+   *  non-gauntlet match or a gauntlet match that's Game 1. */
+  isPodGame2?: boolean;
   /** Other unplayed scheduled matches — drives the shared-server collision warning (#134). */
   otherScheduled?: ScheduledMatchRef[];
 }
@@ -86,6 +90,7 @@ export default function MatchHeaderSection({
   canEdit,
   played,
   isGauntlet,
+  isPodGame2 = false,
   otherScheduled = [],
 }: Props) {
   const isClient = useHasMounted();
@@ -104,14 +109,29 @@ export default function MatchHeaderSection({
     clear,
   } = useScheduleEditor({ matchId, scheduledAt, weekStart, weekEnd, otherScheduled });
 
-  const showSchedule = !played && !isGauntlet;
+  const showSchedule = !played;
+  // Game 2 of a gauntlet pod has no independent schedule — its time is always Game 1's + 30 minutes
+  // (PATCH /api/matches/[id]/schedule enforces this server-side), so it's shown but never editable
+  // here regardless of the caller's own canEdit.
+  const canEditSchedule = canEdit && !isPodGame2;
   const windowLabel =
     isClient && weekStart && weekEnd ? `${fmtWindowDate(weekStart)} – ${fmtWindowDate(weekEnd)}` : null;
 
   const scheduleReadView = showSchedule && !editing && (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-col items-start gap-1">
+      {isPodGame2 && (
+        <span className="map-text-scrim tracked text-[9px] text-[var(--color-text-secondary)]">
+          Game 2 · 30 min after Game 1
+        </span>
+      )}
+      {isGauntlet && !isPodGame2 && (
+        <span className="map-text-scrim tracked text-[9px] text-[var(--color-text-secondary)]">
+          Game 1 · sets this pod&apos;s start time
+        </span>
+      )}
+      <div className="flex items-center gap-2">
       {scheduledAt ? (
-        canEdit ? (
+        canEditSchedule ? (
           <div>
             <button
               onClick={startEditing}
@@ -142,7 +162,7 @@ export default function MatchHeaderSection({
           {windowLabel}
         </span>
       ) : null}
-      {canEdit && !scheduledAt && (
+      {canEditSchedule && !scheduledAt && (
         <button
           onClick={startEditing}
           className="map-text-scrim tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
@@ -150,10 +170,11 @@ export default function MatchHeaderSection({
           Set time
         </button>
       )}
+      </div>
     </div>
   );
 
-  const scheduleEditView = showSchedule && editing && (
+  const scheduleEditView = showSchedule && canEditSchedule && editing && (
     <div className="flex items-center gap-2 flex-wrap">
       <input
         type="datetime-local"
