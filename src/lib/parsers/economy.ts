@@ -14,9 +14,11 @@ export const ECONOMY_TYPE_LABEL: Record<EconomyType, string> = {
 
 // Standard CS round-economy cutoffs, applied per player rather than per-team average — Wingman's
 // 2-player sides make the two nearly equivalent, and every other collector in this codebase is
-// already per-player.
-const ECO_MAX = 2000;
-const FORCE_BUY_MAX = 3500;
+// already per-player. Exported so the Economy sub-tab's tier picker can explain these thresholds
+// (`EconomyFilterSelect`'s info tooltip, `SabremetricsLeaderboardView.tsx`) from the same numbers
+// `classifyEconomy()` actually uses, rather than a copy that could drift if these are ever tuned.
+export const ECO_MAX = 2000;
+export const FORCE_BUY_MAX = 3500;
 
 export interface RoundFreezeEndRow {
   tick: number;
