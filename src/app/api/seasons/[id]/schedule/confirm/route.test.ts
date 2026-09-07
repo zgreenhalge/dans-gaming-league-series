@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
 import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
+import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
 import { createFakeSupabaseClient, type FakeDb, type Row } from '@/lib/test-support/fakeSupabase';
 import { makeSeasonScheduleDraftRpcHandlers } from '@/lib/test-support/seasonScheduleDraftRpc';
 import { jsonRequest, sessionFor } from '@/lib/test-support/nextRequest';
@@ -150,7 +151,8 @@ async function main() {
     assert.equal((await res.json()).error, 'This season already has a real schedule');
   });
 
-  await test('POST — admin confirms a ready draft, materializing real weeks/matches (201)', async () => {
+  await test('POST — admin confirms a ready draft, materializing real weeks/matches (201) and auto-activating', async () => {
+    __setTestAfterMode(true);
     const db = installFixture();
     const expectedMatches = FULL_PLAN.reduce((n, w) => n + w.matches.length, 0);
     const res = await call(READY_DRAFT_SEASON_ID, ADMIN_ID);
@@ -162,6 +164,12 @@ async function main() {
     assert.equal(db.weeks.filter((w) => w.season_id === READY_DRAFT_SEASON_ID).length, FULL_PLAN.length);
     assert.equal(db.matches.length, expectedMatches);
     assert.equal(db.player_match_stats.length, expectedMatches * 4);
+
+    // Confirming the schedule is also what flips the season live now — deferred past the response
+    // via after(), so it only shows up once that queued work is flushed.
+    await __flushTestAfter();
+    assert.equal(db.seasons.find((s) => s.id === READY_DRAFT_SEASON_ID)!.status, 'ACTIVE');
+    __setTestAfterMode(false);
   });
 
   __setTestSession(undefined);

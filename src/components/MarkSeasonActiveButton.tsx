@@ -11,12 +11,16 @@ interface Props {
   seasonStatus: string;
 }
 
-/** Admin control to transition a regular season UPCOMING -> ACTIVE ("go live"), shown next to
- * SeasonStartDateButton. Going live also best-effort builds the season's gauntlet bracket shape
- * (server-side, via activateSeason()) — there's no undo in the UI, so this arms before firing. If
- * that build fails, the PATCH response says so (`gauntletBuilt`/`gauntletBuildError`) and this
- * shows it as a persistent warning rather than just logging it server-side — activation itself
- * still succeeds, so the warning is the only place the failure is visible afterward. */
+/** Manual fallback for transitioning a regular season UPCOMING -> ACTIVE ("go live"), shown next to
+ * SeasonStartDateButton. Confirming a season's matchup draft already does this automatically
+ * (`activateSeasonBestEffort()`, deferred off `POST /api/seasons/[id]/schedule/confirm`) — this
+ * button only ever matters for the rare case where that auto-trigger's own status write failed
+ * (recorded as a `season_activate` ops error), leaving the season stuck on `UPCOMING`. Going live
+ * also best-effort builds the season's gauntlet bracket shape (server-side, via activateSeason()) —
+ * there's no undo in the UI, so this arms before firing. If that build fails, the PATCH response
+ * says so (`gauntletBuilt`/`gauntletBuildError`) and this shows it as a persistent warning rather
+ * than just logging it server-side — activation itself still succeeds, so the warning is the only
+ * place the failure is visible afterward. */
 export default function MarkSeasonActiveButton({ seasonId, canEdit, seasonStatus }: Props) {
   const router = useRouter();
   const [armed, setArmed] = useState(false);
