@@ -288,25 +288,31 @@ export function parseDemoSabremetrics(
   }
   const reloadStats = collectRoundsDropped(reloadEvents, reloadStateRows, context, steamIds);
 
-  // Round economy (#279): classifies each player's eco/force-buy/full-buy tier per round from
-  // CCSPlayerPawn.m_unFreezetimeEndEquipmentValue at each round's freeze-time-end, sampled once
-  // per round (not per shot) — same single-anchor-read shape as sideInference.ts. Wrapped
-  // defensively like the reload/inventory tick reads above.
+  // Round economy (#279, #519): classifies each player's eco/half-buy/force-buy/full-buy tier per
+  // round from CCSPlayerPawn.m_unFreezetimeEndEquipmentValue (confirmed against a real DGLS demo)
+  // and CCSPlayerController.m_iAccount (cash remaining after buying — the force-vs-half signal,
+  // not yet validated against a real demo; a bad field name here fails soft into "0 remaining",
+  // which only ever mis-splits force_buy/half_buy, never eco/full_buy) at each round's
+  // freeze-time-end, sampled once per round (not per shot) — same single-anchor-read shape as
+  // sideInference.ts. Wrapped defensively like the reload/inventory tick reads above.
   const economyTicks = neededEconomyTicks(freezeEndEvents, context);
   let equipmentRows: PlayerEquipmentRow[] = [];
   if (economyTicks.length > 0) {
     try {
       const rawEquipmentRows = parseTicks(
-        demoBuffer, ['CCSPlayerPawn.m_unFreezetimeEndEquipmentValue'], economyTicks,
+        demoBuffer,
+        ['CCSPlayerPawn.m_unFreezetimeEndEquipmentValue', 'CCSPlayerController.m_iAccount'],
+        economyTicks,
       ) as Record<string, unknown>[];
       equipmentRows = rawEquipmentRows.map((r) => ({
         tick: Number(r.tick),
         steamid: String(r.steamid ?? ''),
         equipmentValue: Number(r['CCSPlayerPawn.m_unFreezetimeEndEquipmentValue'] ?? 0),
+        remainingCash: Number(r['CCSPlayerController.m_iAccount'] ?? 0),
       }));
     } catch (err) {
       warnings.push(
-        `Weapon-type economy stats not computed: demoparser2's "CCSPlayerPawn.m_unFreezetimeEndEquipmentValue" tick field failed (${(err as Error).message}).`,
+        `Weapon-type economy stats not computed: demoparser2's "CCSPlayerPawn.m_unFreezetimeEndEquipmentValue"/"CCSPlayerController.m_iAccount" tick fields failed (${(err as Error).message}).`,
       );
     }
   }

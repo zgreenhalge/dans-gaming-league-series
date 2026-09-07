@@ -1,6 +1,7 @@
 /**
- * Unit tests for classifyRoundEconomy — round-economy tier classification (#279), from each
- * player's own CCSPlayerPawn.m_unFreezetimeEndEquipmentValue at a round's freeze-time-end.
+ * Unit tests for classifyRoundEconomy — round-economy tier classification (#279, #519), from each
+ * player's own CCSPlayerPawn.m_unFreezetimeEndEquipmentValue and CCSPlayerController.m_iAccount at
+ * a round's freeze-time-end, plus their side that round.
  *
  * Run:  npx vitest run src/lib/parsers/economy.test.ts
  */
@@ -17,30 +18,33 @@ function freeze(opts: { round: number; tick: number }): RoundFreezeEndRow {
   return { tick: opts.tick, total_rounds_played: opts.round - 1 };
 }
 
-function equip(opts: { tick: number; steamid: string; value: number }): PlayerEquipmentRow {
-  return { tick: opts.tick, steamid: opts.steamid, equipmentValue: opts.value };
+function equip(opts: { tick: number; steamid: string; value: number; cash?: number }): PlayerEquipmentRow {
+  return { tick: opts.tick, steamid: opts.steamid, equipmentValue: opts.value, remainingCash: opts.cash ?? 0 };
 }
 
 const sides = { a: 'CT', b: 'CT', c: 'T', d: 'T' } as const;
 const ids = Object.keys(sides);
 const rounds = [{ roundNumber: 1, winnerSide: 'CT' as const }];
 
-test('classifyEconomy: below $2000 is eco', () => {
-  assert.equal(classifyEconomy(850), 'eco');
-  assert.equal(classifyEconomy(1999), 'eco');
+test('classifyEconomy: below $2000 is eco, regardless of remaining cash or side', () => {
+  assert.equal(classifyEconomy(850, 0, 'T'), 'eco');
+  assert.equal(classifyEconomy(1999, 9000, 'CT'), 'eco');
 });
 
-test('classifyEconomy: $2000-3499 is force_buy', () => {
-  assert.equal(classifyEconomy(2000), 'force_buy');
-  assert.equal(classifyEconomy(3499), 'force_buy');
+test('classifyEconomy: full-buy floor is side-specific', () => {
+  assert.equal(classifyEconomy(3800, 0, 'T'), 'full_buy');
+  assert.equal(classifyEconomy(3799, 0, 'T'), 'force_buy');
+  assert.equal(classifyEconomy(4400, 0, 'CT'), 'full_buy');
+  assert.equal(classifyEconomy(4399, 0, 'CT'), 'force_buy');
 });
 
-test('classifyEconomy: $3500+ is full_buy', () => {
-  assert.equal(classifyEconomy(3500), 'full_buy');
-  assert.equal(classifyEconomy(4750), 'full_buy');
+test('classifyEconomy: between eco and full-buy, remaining cash splits force_buy vs half_buy', () => {
+  assert.equal(classifyEconomy(3000, 999, 'T'), 'force_buy');
+  assert.equal(classifyEconomy(3000, 1000, 'T'), 'half_buy');
+  assert.equal(classifyEconomy(3000, 5000, 'T'), 'half_buy');
 });
 
-test('classifyRoundEconomy: classifies each player independently for a round', () => {
+test('classifyRoundEconomy: classifies each player independently for a round, by their own side', () => {
   const freezes = [freeze({ round: 1, tick: 100 })];
   const rows = [
     equip({ tick: 100, steamid: 'a', value: 800 }),
@@ -56,6 +60,14 @@ test('classifyRoundEconomy: a round with no matching equipment row is left uncla
   const freezes = [freeze({ round: 1, tick: 100 })];
   const ctx = makeContext({ rounds, sides });
   const out = classifyRoundEconomy(freezes, [], ctx, ids);
+  assert.equal(out.get('a')?.has(1), false);
+});
+
+test('classifyRoundEconomy: a round with no resolvable side is left unclassified', () => {
+  const freezes = [freeze({ round: 1, tick: 100 })];
+  const rows = [equip({ tick: 100, steamid: 'a', value: 800 })];
+  const ctx = makeContext({ rounds, sides, hasSides: false });
+  const out = classifyRoundEconomy(freezes, rows, ctx, ids);
   assert.equal(out.get('a')?.has(1), false);
 });
 
