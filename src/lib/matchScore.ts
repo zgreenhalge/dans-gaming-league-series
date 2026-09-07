@@ -37,7 +37,7 @@ import { recordOpsError, clearOpsError } from './ops-errors';
 import { advanceJobStatus, matchJobKey } from './background-jobs';
 import { DEMO_INGEST_JOB_TYPE } from './demo/ingestResult';
 import { notifyMatchScoreReported } from './discord-notify';
-import { closeMatchThread } from './discord-threads';
+import { closeMatchThread, closeGauntletPodThreadIfDone } from './discord-threads';
 import type {
   DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
   DemoMatchUtilityThrow, DemoMatchRoundEconomy, DemoMatchDamageEvent, RoundHistoryEntry,
@@ -480,7 +480,9 @@ export async function writeMatchScore(
         : runSeasonCompletionCheck(supabaseAdmin, m.weeks.season_id),
       runSteamIdLearningHook(supabaseAdmin, matchId, opts.learnSteamIds, warnings),
       notifyMatchScoreReported(supabaseAdmin, matchId),
-      closeMatchThread(supabaseAdmin, matchId),
+      // A gauntlet pod's thread coordinates both of its games — closing it after only one is scored
+      // would cut off coordination for the one still unplayed, so this waits for both.
+      isGauntlet ? closeGauntletPodThreadIfDone(supabaseAdmin, matchId) : closeMatchThread(supabaseAdmin, matchId),
     ]);
   };
 

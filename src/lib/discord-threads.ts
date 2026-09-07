@@ -1,29 +1,34 @@
-// Best-effort Discord forum-thread automation for weekly matches (#398). One thread per match in a
-// regular season's `season-{N}` forum channel (`extractSeasonNumber()`'s convention), opening post
-// tagging the four rostered players. Always admin-triggered — a season's `start_date` is often
-// arbitrary and so is when an admin actually wants a week published, so there's no automatic
-// Sunday-midnight cron here, only `publishWeekThreads()` called from
-// `POST /api/seasons/[id]/discord-threads`. Every match's outcome is both recorded to `ops_errors`
-// (`discord_thread_create`, entity `match`) and returned directly to the caller, since a channel
-// permission overwrite is the likeliest first-attempt failure and needs to be visible immediately in
-// the admin console, not only in the Activity feed on a later page load. `closeMatchThread()` is the
-// other half — archives + locks one match's thread once it has nothing left to coordinate, called
-// from `writeMatchScore()`'s (`matchScore.ts`) best-effort hooks on every score write (same spot
-// `notifyMatchScoreReported()` fires from), not from `publishWeekThreads()`.
+// Best-effort Discord forum-thread automation for weekly matches (#398) and gauntlet pods. One
+// thread per match in a regular season's `season-{N}` forum channel (`extractSeasonNumber()`'s
+// convention), opening post tagging the four rostered players — `publishWeekThreads()`. A gauntlet
+// pod's two games share the same 4 players and are always played sequentially, so they get one
+// thread between them instead ("Round N Pod M") — `publishPodThreads()`, resolving to the same
+// `season-{N}` channel as the pod's paired regular season. Always admin-triggered — a season's
+// `start_date` is often arbitrary and so is when an admin actually wants a week/round published, so
+// there's no automatic Sunday-midnight cron here, only these two functions called from
+// `POST /api/seasons/[id]/discord-threads`. Every match's (or pod's) outcome is both recorded to
+// `ops_errors` (`discord_thread_create`, entity `match`) and returned directly to the caller, since a
+// channel permission overwrite is the likeliest first-attempt failure and needs to be visible
+// immediately in the admin console, not only in the Activity feed on a later page load.
+// `closeMatchThread()`/`closeGauntletPodThreadIfDone()` are the other half — archive + lock a
+// thread once it has nothing left to coordinate, called from `writeMatchScore()`'s (`matchScore.ts`)
+// best-effort hooks on every score write (same spot `notifyMatchScoreReported()` fires from), not
+// from either publish function.
 //
 // Idempotency is checked against Discord itself, not `match_discord_state` — an admin can create a
-// match's thread by hand (or a previous run's Discord call could have succeeded right before its own
-// DB write failed), and the DB would have no record of it either way. `listChannelThreads()` reads
-// the forum channel's actual threads before creating anything, matched by exact title
-// (`threadTitle()`'s "Week N Game M"), the only link back to a match a hand-made thread can carry. A
-// match whose title already exists in the channel is never posted into or otherwise touched — its
-// thread id is just adopted into `match_discord_state` so `closeMatchThread()` can still find it once
-// the match is played.
+// thread by hand (or a previous run's Discord call could have succeeded right before its own DB
+// write failed), and the DB would have no record of it either way. `listChannelThreads()` reads the
+// forum channel's actual threads before creating anything, matched by exact title (`threadTitle()`'s
+// "Week N Game M", or `podThreadTitle()`'s "Round N Pod M") — the only link back to a match/pod a
+// hand-made thread can carry. A title that already exists in the channel is never posted into or
+// otherwise touched — its thread id is just adopted into `match_discord_state` (both games' rows, for
+// a pod) so the close functions can still find it once played.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getSeason, getSeasonSchedule, findNextUnplayedWeek, getPlayersById } from './queries';
+import { getSeason, getSeasonSchedule, findNextUnplayedWeek, getGauntletRounds, getGauntletPodForMatch, getPlayersById } from './queries';
 import type { WeekWithMatches, MatchWithRoster } from './queries/schedule';
-import { extractSeasonNumber } from './util';
+import type { GauntletMatch, GauntletRound } from './queries/gauntlet';
+import { extractSeasonNumber, isPlayedScore, allMatchesPlayed } from './util';
 import { recordOpsError, clearOpsError } from './ops-errors';
 
 const CHANNEL_OPERATION = 'discord_thread_publish';
@@ -97,6 +102,13 @@ export async function resolveSeasonForumChannel(
  *  `match_discord_state`. */
 export function threadTitle(weekNumber: number, matchNumber: number): string {
   return `Week ${weekNumber} Game ${matchNumber}`;
+}
+
+/** A gauntlet pod's Discord thread title, "Round N Pod M" (1-based, `podIndex` is 0-based) — one
+ *  thread per pod, not per game, since both of a pod's games share the same 4 players and are
+ *  scheduled/played as a unit. Same idempotency role `threadTitle()` plays for weekly threads. */
+export function podThreadTitle(roundNumber: number, podIndex: number): string {
+  return `Round ${roundNumber} Pod ${podIndex + 1}`;
 }
 
 export interface DiscordThread {
@@ -290,4 +302,173 @@ export async function publishWeekThreads(
   }
 
   return { seasonName: season.name, weekNumber: targetWeek.week_number, matches: results };
+}
+
+function resolveTargetRound(rounds: GauntletRound[], round: number | 'next'): GauntletRound | null {
+  return round === 'next'
+    ? rounds.find((r) => r.matches.some((m) => !isPlayedScore(m.final_score))) ?? null
+    : rounds.find((r) => r.round_number === round) ?? null;
+}
+
+/** A pod's opening post: both games' shirts-vs-skins lineups, tagging each player the same way
+ *  `openingPost()` does for a weekly match thread — mentioned by linked Discord account, or their
+ *  plain name otherwise. Both games share the same 4 players reshuffled across factions, so this is
+ *  the one place a pod thread actually distinguishes them. */
+function podOpeningPost(game1: GauntletMatch, game2: GauntletMatch, playersById: Map<number, { discord_id: string | null }>): string {
+  const mention = (p: { player_id: number; player_name: string }) => {
+    const discordId = playersById.get(p.player_id)?.discord_id;
+    return discordId ? `<@${discordId}>` : p.player_name;
+  };
+  const line = (m: GauntletMatch) => `${m.shirts_stats.map(mention).join(' & ')} vs ${m.skins_stats.map(mention).join(' & ')}`;
+  return `Game 1: ${line(game1)}\nGame 2 (30 min later): ${line(game2)}`;
+}
+
+/** Creates (or adopts, per this file's header) one pod's Discord thread and points both of its
+ *  games' `match_discord_state` rows at it — the pod counterpart to `publishMatchThread()`. */
+async function publishPodThread(
+  supabaseAdmin: SupabaseClient,
+  channelId: string,
+  token: string,
+  roundNumber: number,
+  podIndex: number,
+  game1: GauntletMatch,
+  game2: GauntletMatch,
+  playersById: Map<number, { discord_id: string | null }>,
+  existingThreadId: string | undefined,
+): Promise<ThreadPublishResult> {
+  const title = podThreadTitle(roundNumber, podIndex);
+
+  if (existingThreadId) {
+    await supabaseAdmin.from('match_discord_state').upsert(
+      [
+        { match_id: game1.id, thread_id: existingThreadId },
+        { match_id: game2.id, thread_id: existingThreadId },
+      ],
+      { onConflict: 'match_id' },
+    );
+    await recordOpsError(
+      supabaseAdmin, 'match', game1.id, THREAD_OPERATION,
+      `Thread "${title}" already exists in the channel (${existingThreadId}) — adopted it instead of creating a duplicate`,
+    );
+    return { matchId: game1.id, title, status: 'skipped', detail: `Already exists (thread ${existingThreadId})` };
+  }
+
+  try {
+    const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/threads`, {
+      method: 'POST',
+      headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: title, message: { content: podOpeningPost(game1, game2, playersById) } }),
+    });
+    if (!res.ok) {
+      const detail = await discordErrorDetail('Thread create', res);
+      await recordOpsError(supabaseAdmin, 'match', game1.id, THREAD_OPERATION, detail);
+      return { matchId: game1.id, title, status: 'failed', detail };
+    }
+    const thread = (await res.json()) as { id: string };
+    await supabaseAdmin.from('match_discord_state').upsert(
+      [
+        { match_id: game1.id, thread_id: thread.id },
+        { match_id: game2.id, thread_id: thread.id },
+      ],
+      { onConflict: 'match_id' },
+    );
+    await clearOpsError(supabaseAdmin, 'match', game1.id, THREAD_OPERATION);
+    return { matchId: game1.id, title, status: 'created', detail: `Thread ${thread.id}` };
+  } catch (e) {
+    const detail = `Thread create failed: ${(e as Error).message}`;
+    await recordOpsError(supabaseAdmin, 'match', game1.id, THREAD_OPERATION, detail);
+    return { matchId: game1.id, title, status: 'failed', detail };
+  }
+}
+
+export interface PublishPodThreadsResult {
+  seasonName: string;
+  roundNumber: number;
+  pods: ThreadPublishResult[];
+}
+
+/** Publishes one round's pod threads for a gauntlet season — the pod counterpart to
+ *  `publishWeekThreads()`, resolving to the same `season-{N}` forum channel as the paired regular
+ *  season (`extractSeasonNumber()` parses "Season N Gauntlet" the same as "Season N"). `round` is
+ *  either an explicit round number or `'next'`, resolved as the first round with any unplayed game.
+ *  A pod whose two games aren't both materialized yet is reported `failed` rather than attempted —
+ *  there's nothing to link to until it is. */
+export async function publishPodThreads(
+  supabaseAdmin: SupabaseClient,
+  gauntletSeasonId: number,
+  round: number | 'next',
+): Promise<PublishPodThreadsResult | { error: string }> {
+  const season = await getSeason(gauntletSeasonId);
+  if (!season) return { error: 'Season not found' };
+  if (!season.is_gauntlet) return { error: 'Not a gauntlet season' };
+
+  const token = process.env.DISCORD_BOT_TOKEN;
+  const guildId = process.env.DISCORD_GUILD_ID;
+  if (!token || !guildId) return { error: 'Discord is not configured (DISCORD_BOT_TOKEN / DISCORD_GUILD_ID)' };
+
+  const rounds = await getGauntletRounds(gauntletSeasonId);
+  const targetRound = resolveTargetRound(rounds, round);
+  if (!targetRound) return { error: round === 'next' ? 'No upcoming round found' : `Round ${round} not found` };
+
+  const byPod = new Map<number, GauntletMatch[]>();
+  for (const m of targetRound.matches) {
+    if (m.pod_index == null) continue;
+    const list = byPod.get(m.pod_index) ?? [];
+    list.push(m);
+    byPod.set(m.pod_index, list);
+  }
+  if (byPod.size === 0) return { error: `Round ${targetRound.round_number} has no materialized pods` };
+
+  const channel = await resolveSeasonForumChannel(guildId, token, season.name);
+  if ('error' in channel) {
+    await recordOpsError(supabaseAdmin, 'season', gauntletSeasonId, CHANNEL_OPERATION, channel.error);
+    return { error: channel.error };
+  }
+
+  const existingThreads = await listChannelThreads(guildId, channel.channelId, token);
+  if ('error' in existingThreads) {
+    await recordOpsError(supabaseAdmin, 'season', gauntletSeasonId, CHANNEL_OPERATION, existingThreads.error);
+    return { error: existingThreads.error };
+  }
+  await clearOpsError(supabaseAdmin, 'season', gauntletSeasonId, CHANNEL_OPERATION);
+  const existingByTitle = new Map(existingThreads.map((t) => [t.name, t.id]));
+
+  const playersById = await getPlayersById();
+  const results: ThreadPublishResult[] = [];
+  for (const [podIndex, matches] of [...byPod.entries()].sort((a, b) => a[0] - b[0])) {
+    const title = podThreadTitle(targetRound.round_number, podIndex);
+    if (matches.length !== 2) {
+      results.push({ matchId: matches[0]?.id ?? 0, title, status: 'failed', detail: 'Pod is not fully materialized (expected 2 games)' });
+      continue;
+    }
+    const [game1, game2] = [...matches].sort((a, b) => a.match_number - b.match_number);
+    results.push(
+      await publishPodThread(supabaseAdmin, channel.channelId, token, targetRound.round_number, podIndex, game1, game2, playersById, existingByTitle.get(title)),
+    );
+  }
+
+  return { seasonName: season.name, roundNumber: targetRound.round_number, pods: results };
+}
+
+/** Gauntlet counterpart to `closeMatchThread()` — a pod's thread coordinates both of its games, so
+ *  it must not archive/lock after only the first is scored. No-ops until both of the pod's games
+ *  have a played score, then closes the shared thread via either game's `match_discord_state` row
+ *  (`publishPodThreads()` points both at the same thread id). No-ops (not an error) for a match with
+ *  no resolvable pod. */
+export async function closeGauntletPodThreadIfDone(supabaseAdmin: SupabaseClient, matchId: number): Promise<void> {
+  const pod = await getGauntletPodForMatch(matchId);
+  if (!pod) return;
+
+  const { data, error } = await supabaseAdmin
+    .from('matches')
+    .select('id, final_score')
+    .in('id', [pod.match1_id, pod.match2_id]);
+  if (error) {
+    console.error(`closeGauntletPodThreadIfDone(${matchId}) failed to read pod matches:`, error);
+    return;
+  }
+  const matches = (data ?? []) as { id: number; final_score: string | null }[];
+  if (matches.length !== 2 || !allMatchesPlayed(matches)) return;
+
+  await closeMatchThread(supabaseAdmin, matchId);
 }

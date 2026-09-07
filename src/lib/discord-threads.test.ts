@@ -24,8 +24,30 @@ fakeDb.players = fakeDb.players.map((p) =>
 const adminClient = createFakeSupabaseClient(fakeDb);
 __setTestClient(adminClient);
 
-import { publishWeekThreads, closeMatchThread } from './discord-threads';
+import { publishWeekThreads, publishPodThreads, closeMatchThread, closeGauntletPodThreadIfDone } from './discord-threads';
 import { test, report } from './test-support/miniTest';
+
+// Season 2 ("Season 5 Gauntlet")'s pod 1000 only carries match1_id (200) in the shared fixture — a
+// transient state elsewhere in this test suite. The pod tests below need a real two-game pod, built
+// on its own db/client instance (never mutating the shared fixture's row objects, only replacing
+// them) so it doesn't leak into publishWeekThreads()'s own tests above, which read the same season 1
+// data via the shared `adminClient`.
+function podFakeDb() {
+  const db = buildFakeDb();
+  db.matches.push({ ...db.matches.find((m) => m.id === 200)!, id: 201, match_number: 2, final_score: null, scheduled_at: null });
+  db.gauntlet_pods = db.gauntlet_pods.map((p) => (p.match1_id === 200 ? { ...p, match2_id: 201 } : p));
+  db.player_match_stats = [
+    ...db.player_match_stats,
+    { id: 9001, match_id: 201, player_id: 1, faction: 'SHIRTS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, rounds_played: 0, rounds_won: 0, is_win: false },
+    { id: 9002, match_id: 201, player_id: 5, faction: 'SHIRTS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, rounds_played: 0, rounds_won: 0, is_win: false },
+    { id: 9003, match_id: 201, player_id: 2, faction: 'SKINS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, rounds_played: 0, rounds_won: 0, is_win: false },
+    { id: 9004, match_id: 201, player_id: 6, faction: 'SKINS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, rounds_played: 0, rounds_won: 0, is_win: false },
+  ];
+  db.players = db.players.map((p) =>
+    p.id === 1 ? { ...p, discord_id: 'discord-alice' } : p.id === 2 ? { ...p, discord_id: 'discord-bob' } : p,
+  );
+  return db;
+}
 
 const GUILD_CHANNELS = [
   { id: 'channel-season-5', name: 'season-5', type: 15 },
@@ -321,6 +343,94 @@ async function main() {
     const rows = liveOpsErrors('match', 101, 'discord_thread_close');
     assert.equal(rows.length, 1);
     assert.match(rows[0].message as string, /network down/);
+  });
+
+  await test('publishPodThreads: refuses a non-gauntlet season', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    const result = await publishPodThreads(adminClient, 1, 1);
+    assert.ok('error' in result);
+    assert.match((result as { error: string }).error, /Not a gauntlet season/);
+  });
+
+  await test('publishPodThreads: one thread per pod, mentioning all 4 players across both games', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    const db = podFakeDb();
+    const client = createFakeSupabaseClient(db);
+    __setTestClient(client);
+    const { calls } = stubDiscord();
+
+    const result = await publishPodThreads(client, 2, 1);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    assert.equal(ok.seasonName, 'Season 5 Gauntlet');
+    assert.equal(ok.roundNumber, 1);
+    assert.equal(ok.pods.length, 1);
+    assert.equal(ok.pods[0].status, 'created');
+    assert.equal(ok.pods[0].title, 'Round 1 Pod 1');
+
+    const createCalls = calls.filter((c) => c.init?.method === 'POST');
+    assert.equal(createCalls.length, 1, 'one thread for the whole pod, not one per game');
+    const body = JSON.parse(createCalls[0].init?.body as string);
+    assert.equal(body.name, 'Round 1 Pod 1');
+    // Game 1 (match 200): shirts Alice(1)+Bob(2) vs skins Erin(5)+Frank(6). Game 2 (match 201): shirts
+    // Alice(1)+Erin(5) vs skins Bob(2)+Frank(6) — same 4 players, reshuffled.
+    assert.match(body.message.content, /Game 1: <@discord-alice> & <@discord-bob> vs Erin & Frank/);
+    assert.match(body.message.content, /Game 2 \(30 min later\): <@discord-alice> & Erin vs <@discord-bob> & Frank/);
+
+    // Both games point at the same thread.
+    const state200 = await client.from('match_discord_state').select('thread_id').eq('match_id', 200).maybeSingle();
+    const state201 = await client.from('match_discord_state').select('thread_id').eq('match_id', 201).maybeSingle();
+    assert.ok((state200.data as { thread_id: string }).thread_id);
+    assert.equal((state200.data as { thread_id: string }).thread_id, (state201.data as { thread_id: string }).thread_id);
+
+    __setTestClient(adminClient);
+  });
+
+  await test('closeGauntletPodThreadIfDone: does not close after only Game 1 is scored', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    const db = podFakeDb();
+    const client = createFakeSupabaseClient(db);
+    __setTestClient(client);
+    stubDiscord();
+    await publishPodThreads(client, 2, 1);
+
+    // Game 1 (200) is already played ('13-11') in the fixture; Game 2 (201) stays unplayed.
+    const { calls } = stubDiscordClose();
+    await closeGauntletPodThreadIfDone(client, 200);
+    assert.equal(calls.length, 0, 'the pod thread must stay open until both games are played');
+
+    __setTestClient(adminClient);
+  });
+
+  await test('closeGauntletPodThreadIfDone: closes the shared thread once both games are played', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    const db = podFakeDb();
+    db.matches = db.matches.map((m) => (m.id === 201 ? { ...m, final_score: '13-8' } : m));
+    const client = createFakeSupabaseClient(db);
+    __setTestClient(client);
+    stubDiscord();
+    await publishPodThreads(client, 2, 1);
+    const { data } = await client.from('match_discord_state').select('thread_id').eq('match_id', 200).maybeSingle();
+    const threadId = (data as { thread_id: string }).thread_id;
+
+    const { calls } = stubDiscordClose();
+    await closeGauntletPodThreadIfDone(client, 201);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, `https://discord.com/api/v10/channels/${threadId}`);
+    assert.deepEqual(JSON.parse(calls[0].init?.body as string), { archived: true, locked: true });
+
+    __setTestClient(adminClient);
+  });
+
+  await test('closeGauntletPodThreadIfDone: no-ops for a match with no resolvable pod', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    const { calls } = stubDiscordClose();
+    await closeGauntletPodThreadIfDone(adminClient, 100); // non-gauntlet match
+    assert.equal(calls.length, 0);
   });
 
   delete process.env.DISCORD_BOT_TOKEN;
