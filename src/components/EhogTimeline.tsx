@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { EhogRatingPoint } from '@/lib/queries';
 import { seasonTitle } from '@/lib/util';
+import { useElementWidth } from './useElementWidth';
 
 const PADDING = { top: 16, right: 16, bottom: 24, left: 40 };
 const DOT_R = 4;
 const HOVER_R = 7;
+const HEIGHT = 180;
 
 function formatLabel(p: EhogRatingPoint): string {
   const st = seasonTitle(p.seasonName);
@@ -20,27 +22,11 @@ export default function EhogTimeline({
 }: {
   history: EhogRatingPoint[];
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerRef, width] = useElementWidth(300, 600);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [hoverReset, setHoverReset] = useState<number | null>(null);
-  const [dims, setDims] = useState({ w: 600, h: 180 });
 
-  useEffect(() => {
-    const node = containerRef.current;
-    if (!node) return;
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) {
-        setDims({ w: Math.max(300, entry.contentRect.width), h: 180 });
-      }
-    });
-    observer.observe(node);
-    setDims({ w: Math.max(300, node.clientWidth), h: 180 });
-    return () => observer.disconnect();
-  }, []);
-
-  const width = dims.w;
-  const height = dims.h;
+  const height = HEIGHT;
   const plotW = width - PADDING.left - PADDING.right;
   const plotH = height - PADDING.top - PADDING.bottom;
 

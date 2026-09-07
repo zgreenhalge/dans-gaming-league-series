@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useState } from 'react';
 import { GRADE_TIERS, ehogColorFor } from './EhogBadge';
+import { useElementWidth } from './useElementWidth';
 
 const EHOG_MIN = 10;
 const EHOG_MAX = 100;
@@ -40,22 +41,9 @@ interface PlayerDot {
 
 export default function EhogTierBar({ players, highlightPlayerId }: { players?: PlayerDot[]; highlightPlayerId?: number | null }) {
   const segments = buildSegments();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerW, setContainerW] = useState(0);
+  const [containerRef, containerW] = useElementWidth(0);
   const [localHoveredId, setLocalHoveredId] = useState<number | null>(null);
   const hoveredId = localHoveredId ?? highlightPlayerId ?? null;
-
-  useEffect(() => {
-    const node = containerRef.current;
-    if (!node) return;
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) setContainerW(entry.contentRect.width);
-    });
-    observer.observe(node);
-    setContainerW(node.clientWidth);
-    return () => observer.disconnect();
-  }, []);
 
   const dots = (players ?? []).map((p) => ({
     ...p,

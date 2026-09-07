@@ -363,11 +363,28 @@ export function aggregateEconomyStats(rows: EconomyMatchRow[], playerId: number)
   return groupEconomyStatsByPlayer(rows).get(playerId) ?? [];
 }
 
-/** Resolves one explicit tier from an aggregated per-player breakdown — zeroed if the player never
- *  played a round of it. Unlike `resolveWeaponFilterStat()`'s favorite-weapon default for the
- *  Weapons sub-tab, the Economy sub-tab has no "most played" default (see the Economy section
- *  comment in `SabremetricsLeaderboardView.tsx`), so `economyType` is always explicit here. */
+/** Sentinel `economyType` for `resolveEconomyStat()` meaning "every tier combined" — the Economy
+ *  sub-tab's default selection (`SabremetricsLeaderboardView.tsx`), distinct from any real
+ *  `EconomyType` value so it can never collide with one read off a row. */
+export const ALL_ECONOMY_TIERS = 'all';
+
+/** Resolves one tier (or every tier summed, for `ALL_ECONOMY_TIERS`) from an aggregated per-player
+ *  breakdown — zeroed if the player never played a round in scope. Unlike
+ *  `resolveWeaponFilterStat()`'s favorite-weapon default for the Weapons sub-tab, there's no
+ *  "most played" default here (see the Economy section comment in `SabremetricsLeaderboardView.tsx`);
+ *  `ALL_ECONOMY_TIERS` is a combined view, not a guess at one tier. */
 export function resolveEconomyStat(stats: EconomyTierStat[], economyType: string): EconomyTierStat {
+  if (economyType === ALL_ECONOMY_TIERS) {
+    return stats.reduce((acc, s) => ({
+      economy_type: ALL_ECONOMY_TIERS,
+      shots_fired: acc.shots_fired + s.shots_fired,
+      shots_hit: acc.shots_hit + s.shots_hit,
+      headshot_hits: acc.headshot_hits + s.headshot_hits,
+      damage_dealt: acc.damage_dealt + s.damage_dealt,
+      rounds_played: acc.rounds_played + s.rounds_played,
+      rounds_won: acc.rounds_won + s.rounds_won,
+    }), zeroEconomyStat(ALL_ECONOMY_TIERS));
+  }
   return stats.find((s) => s.economy_type === economyType) ?? zeroEconomyStat(economyType);
 }
 

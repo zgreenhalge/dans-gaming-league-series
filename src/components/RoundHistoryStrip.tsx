@@ -1,7 +1,6 @@
 import type { RoundHistoryEntry } from '@/lib/types';
+import { sideColor } from '@/lib/util';
 import { CONDITION_ICON, CONDITION_LABEL } from './icons/ConditionIcons';
-
-type Side = 'CT' | 'T';
 
 /**
  * CS2-scoreboard-style round-history strip.
@@ -14,11 +13,6 @@ type Side = 'CT' | 'T';
  * Dividers mark every side-swap / phase boundary (halftime, then each overtime
  * half) and carry a running score callout, scaling to any number of overtimes.
  */
-
-/** CSS color for a side, matching the site-wide CT=blue / T=orange convention. */
-function sideColor(side: Side): string {
-  return side === 'T' ? 'var(--color-t)' : 'var(--color-ct)';
-}
 
 /**
  * Regulation half length is `targetWinRounds - 1` rounds; overtime halves are
@@ -140,8 +134,8 @@ export default function RoundHistoryStrip({
     <section className="mt-6">
       <div className="flex items-center justify-end mb-2">
         <div className="flex items-center gap-3 text-[10px] text-[var(--color-text-secondary)]">
-          <LegendSwatch color={sideColor('T')} label="T" />
-          <LegendSwatch color={sideColor('CT')} label="CT" />
+          <LegendSwatch color={sideColor('T')!} label="T" />
+          <LegendSwatch color={sideColor('CT')!} label="CT" />
         </div>
       </div>
 
@@ -167,13 +161,13 @@ export default function RoundHistoryStrip({
                   {/* top track (Shirts wins) */}
                   <div className="h-[34px] flex items-end justify-center">
                     {col.entry.winner === 'SHIRTS' && (
-                      <RoundTile entry={col.entry} displayN={col.displayN} color={sideColor(col.entry.side)} />
+                      <RoundTile entry={col.entry} displayN={col.displayN} color={sideColor(col.entry.side)!} />
                     )}
                   </div>
                   {/* bottom track (Skins wins) */}
                   <div className="h-[34px] flex items-start justify-center">
                     {col.entry.winner === 'SKINS' && (
-                      <RoundTile entry={col.entry} displayN={col.displayN} color={sideColor(col.entry.side)} />
+                      <RoundTile entry={col.entry} displayN={col.displayN} color={sideColor(col.entry.side)!} />
                     )}
                   </div>
                   <div className="h-[16px] flex items-center justify-center font-mono text-[9px] text-[var(--color-text-secondary)] tnum">

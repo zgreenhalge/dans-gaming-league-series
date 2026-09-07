@@ -369,13 +369,24 @@ section, sliced a different way. Stored in their own tables (`player_match_weapo
   in `src/lib/queries/weaponStats.ts`) rather than stored as its own column, the same
   store-the-fact/derive-the-category relationship `killWeaponCategory()` already has to
   `match_kills.weapon`.
-- **Round economy** — `eco` (equipment value under $2000), `force_buy` ($2000-3499), or `full_buy`
-  ($3500+), classified per player per round from their own
-  `CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` at that round's freeze-time-end — an individual
-  read, not a team average (Wingman's 2-player sides make the two nearly equivalent anyway).
-  `Rounds Played` for a tier is seeded directly from this classification, independent of whether the
-  player fired a shot that round, unlike the weapon breakdown above — an eco round with zero shots
-  fired still counts as an eco round played.
+- **Round economy** — one of four tiers (`classifyEconomy()`, `src/lib/parsers/economy.ts`),
+  classified per player per round, an individual read rather than a team average (Wingman's
+  2-player sides make the two nearly equivalent anyway):
+  - `eco` — equipment value under $2,000.
+  - `full_buy` — equipment value at or above the side's own floor: $3,800 for T, $4,400 for CT. The
+    floor is side-specific because a CT's complete kit costs more than a T's (Kevlar+Helmet $1,000
+    vs Kevlar $650, plus a CT-only $400 defuse kit).
+  - Between those two — a real loadout, but not a complete one — `force_buy` vs `half_buy` is split
+    by cash *remaining* after buying (`CCSPlayerController.m_iAccount`), not equipment value: under
+    $1,000 left over is `force_buy` (spent essentially everything scraping a kit together), $1,000+
+    left over is `half_buy` (a deliberate, conservative buy with money held back). Two players can
+    land on an identical mid-tier equipment value for opposite reasons — this is the one distinction
+    equipment value alone can't make.
+  Equipment value comes from `CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` at that round's
+  freeze-time-end; remaining cash from `CCSPlayerController.m_iAccount` at the same tick. `Rounds
+  Played` for a tier is seeded directly from this classification, independent of whether the player
+  fired a shot that round, unlike the weapon breakdown above — an eco round with zero shots fired
+  still counts as an eco round played.
 
 ### Kills by Weapon
 
@@ -468,13 +479,15 @@ merged `other` total, so the two causes stay distinguishable in the UI.
 ### Economy
 
 The Economy sub-tab shows one round-buy tier's row per player at a time
-(`aggregateEconomyStats()`/`resolveEconomyStat()`, `src/lib/queries/weaponStats.ts`), over the three
-fixed tiers (`eco`/`force_buy`/`full_buy`, see [`demo-ingestion.md`](./demo-ingestion.md)), always
-picked explicitly by the tier dropdown — unlike the Weapons sub-tab's favorite-or-specific picker,
-there's no "most played" default, since full-buy rounds dominate most matches and a "most played"
-default would just resolve to full-buy for nearly every player anyway. Since the tier set is fixed
-and game-defined rather than derived from what a player happened to use, a tier with no rounds
-played still renders a zeroed row rather than being hidden or omitted from the picker. The selected
+(`aggregateEconomyStats()`/`resolveEconomyStat()`, `src/lib/queries/weaponStats.ts`), over the four
+fixed tiers (`eco`/`half_buy`/`force_buy`/`full_buy`, see [`demo-ingestion.md`](./demo-ingestion.md))
+plus `ALL_ECONOMY_TIERS` (every tier summed), always picked explicitly by the tier dropdown — unlike
+the Weapons sub-tab's favorite-or-specific picker, there's no "most played" default among the four
+real tiers, since full-buy rounds dominate most matches and a "most played" default would just
+resolve to full-buy for nearly every player anyway (the picker's actual default is the combined
+`ALL_ECONOMY_TIERS` view instead). Since the tier set is fixed and game-defined rather than derived
+from what a player happened to use, a tier with no rounds played still renders a zeroed row rather
+than being hidden or omitted from the picker. The selected
 tier is named once by the dropdown, not repeated as its own column — every other column's tooltip
 names it instead (e.g. "Rounds played at Full Buy"). `Damage/Round` =
 `damage_dealt / rounds_played` for the resolved tier — `rounds_played` is seeded from the round's
@@ -487,6 +500,23 @@ many of those were won, so this is a separate round-level join rather than a sto
 on the player/statistics/season pages (season-scoped `getAllEconomyStats()`) and the match page
 (`getMatchEconomyStats()`), the same season/match split `getAllWeaponClassStats()`/
 `getMatchWeaponClassStats()` use for the Weapons sub-tab.
+
+On the match page only, the Economy sub-tab also shows `RoundEconomyChart` — one line per player
+plotting equipment value (`match_round_economy.equipment_value`) across every live round, colored
+and grouped by that player's match-long display side rather than SHIRTS/SKINS identity (same
+convention as `Scoreboard`/`TeamHeader`), with the second player sharing a side drawn dashed so
+teammates stay distinguishable. Kills that round are marked directly on the line (a filled dot
+sized to the kill count); money and damage for the hovered round are read from a tooltip rather than
+a second plotted axis, keeping the chart to one visual channel (money) per player. Each round's
+background is tinted by the *team* that won it (`matches.round_history`), mapped through that
+team's own fixed display color rather than the round's actual (half-swapping) side, so a band's
+color always agrees with the line color of the team it credits. `round_history[].n` and
+`match_round_economy.round_number` are the same unrenumbered engine round identity
+(`total_rounds_played`, see `buildRoundSides()` in `src/lib/parsers/roundSides.ts`), so the two join
+directly with no offset math despite `RoundHistoryStrip`'s own display renumbering elsewhere. Fed by
+`getMatchRoundEconomy()` (`src/lib/queries/roundEconomy.ts`), the round-grain counterpart of
+`getMatchEconomyStats()`'s tier-bucketed aggregate above — a season/career caller never wires this,
+since there's no single round sequence to plot across multiple matches.
 
 `AggregatedSab` (`aggregateRows()`, `src/lib/queries/sabremetrics.ts`) carries `kills`/`deaths`/
 `assists`/`damage`/`headshot_kills` as merged totals *and* their raw `_ct`/`_t` halves side by side

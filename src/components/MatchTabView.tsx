@@ -15,9 +15,9 @@ import TabBar from '@/components/TabBar';
 import SabremetricsLeaderboardView, { type TeamGroup } from '@/components/SabremetricsLeaderboardView';
 import Th from '@/components/Th';
 import { useTabState, resolveTab } from './useTabState';
-import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, MatchDamageEventRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
+import type { MatchStatRow, MatchScoutingData, H2HData, MatchSabremetricsRow, ReplayJobState, ReplayEventsView, SabremetricStatRow, MatchKillRow, MatchDamageEventRow, WeaponClassMatchRow, EconomyMatchRow, MatchRoundEconomyRow } from '@/lib/queries';
 import { splitStat } from '@/lib/queries';
-import type { SabFieldsWithDerived } from '@/lib/types';
+import type { SabFieldsWithDerived, RoundHistoryEntry } from '@/lib/types';
 import type { RatingProjection } from '@/lib/ehog';
 import { roundsPlayedBySide } from '@/lib/parsers/roundSides';
 
@@ -321,6 +321,8 @@ export default function MatchTabView({
   matchDamageEvents = [],
   matchWeaponClassStats = [],
   matchEconomyStats = [],
+  matchRoundEconomy = [],
+  roundHistory = [],
   ehog,
   scouting,
   mapInfo,
@@ -354,6 +356,14 @@ export default function MatchTabView({
   /** This match's `player_match_economy_stats` rows — feeds the Advanced tab's Economy sub-tab
    *  (#481). Empty until a demo is (re)parsed. */
   matchEconomyStats?: EconomyMatchRow[];
+  /** This match's `match_round_economy` rows, one row per (round, player) — feeds the Advanced
+   *  tab's Economy sub-tab round-by-round chart (#519), a finer grain than `matchEconomyStats`'s
+   *  eco/force/full tier aggregate. Empty until a demo is (re)parsed. */
+  matchRoundEconomy?: MatchRoundEconomyRow[];
+  /** This match's round-by-round outcomes (`matches.round_history`) — the same array
+   *  `RoundHistoryStrip` renders on the Overview tab, reused here to shade the round-by-round
+   *  chart's win/loss bands (#519). Null/empty is fine; the chart just shows no bands. */
+  roundHistory?: RoundHistoryEntry[];
   /** EHOG skill-rating inputs: this match's rating deltas, pre-match projections, and each
    *  player's current rating. */
   ehog: {
@@ -583,6 +593,7 @@ export default function MatchTabView({
           weaponClassStats={matchWeaponClassStats}
           economyRows={matchEconomyStats}
           hasEconomyData={matchEconomyStats.length > 0}
+          roundEconomyData={{ rows: matchRoundEconomy, history: roundHistory, damageEvents: matchDamageEvents }}
         />
       )}
 
