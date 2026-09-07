@@ -38,7 +38,8 @@ import {
   weaponDisplayName, killWeaponCategory, KILL_WEAPON_CATEGORIES, KILL_WEAPON_CATEGORY_LABEL,
   type KillWeaponCategory,
 } from '@/lib/parsers/weaponClasses';
-import { ECONOMY_TYPE_LABEL } from '@/lib/parsers/economy';
+import { ECONOMY_TYPE_LABEL, ECO_MAX, FORCE_BUY_MAX } from '@/lib/parsers/economy';
+import { InfoTooltip } from './InfoTooltip';
 import { aggregatePerSideStats, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import type { RoundHistoryEntry } from '@/lib/types';
 import { tabCls } from '@/lib/util';
@@ -636,6 +637,16 @@ function EconomyFilterSelect({ value, onChange }: {
   return (
     <div className="flex items-center gap-2">
       <span className="tracked text-[10px] font-semibold text-[var(--color-text-secondary)]">Economy Tier</span>
+      <InfoTooltip width="w-64">
+        Classified per player from their equipment value (weapons, armor, and utility) at
+        freeze-time end:
+        <br />
+        {ECONOMY_TYPE_LABEL.eco} — under ${ECO_MAX.toLocaleString()}
+        <br />
+        {ECONOMY_TYPE_LABEL.force_buy} — ${ECO_MAX.toLocaleString()}–${(FORCE_BUY_MAX - 1).toLocaleString()}
+        <br />
+        {ECONOMY_TYPE_LABEL.full_buy} — ${FORCE_BUY_MAX.toLocaleString()}+
+      </InfoTooltip>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}

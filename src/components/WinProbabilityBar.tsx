@@ -3,22 +3,9 @@
 // post-match reads the frozen matches.pre_match_win_prob and marks whichever side actually won.
 
 import { factionColor } from '@/lib/util';
+import { InfoTooltip } from './InfoTooltip';
 
 type Faction = 'CT' | 'T' | null;
-
-function WinProbabilityTooltip() {
-  return (
-    <span tabIndex={0} className="group relative inline-flex items-center cursor-help ml-1.5">
-      <span className="border border-[var(--color-border-secondary)] rounded-full w-3.5 h-3.5 inline-flex items-center justify-center leading-none font-mono text-[9px] text-[var(--color-text-secondary)]">
-        ?
-      </span>
-      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 w-56 rounded border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] p-2 font-mono text-[10px] leading-snug normal-case text-[var(--color-text-secondary)] opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100 z-10">
-        One or more players are early in their rating history, so this prediction carries extra
-        uncertainty.
-      </span>
-    </span>
-  );
-}
 
 export function WinProbabilityBar({
   pShirtsWin,
@@ -56,7 +43,12 @@ export function WinProbabilityBar({
         <span style={{ color: shirtsLabelColor }}>
           SHIRTS {shirtsPct}%{played && shirtsWon ? ' ✓' : ''}
         </span>
-        {!played && provisional && <WinProbabilityTooltip />}
+        {!played && provisional && (
+          <InfoTooltip className="ml-1.5">
+            One or more players are early in their rating history, so this prediction carries extra
+            uncertainty.
+          </InfoTooltip>
+        )}
         <span style={{ color: skinsLabelColor }}>
           {skinsPct}% SKINS{played && !shirtsWon ? ' ✓' : ''}
         </span>
