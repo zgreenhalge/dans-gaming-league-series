@@ -80,7 +80,7 @@ recorded score.
 | `unusedUtility.ts` | Buy-menu value of grenades held at death (`Unused Util/Death`) |
 | `reload.ts` | Rounds dropped on reload, read from the discrete `weapon_reload` event (`Rounds Dropped/Reload`) |
 | `weaponClasses.ts` | CS2 weapon → category (pistol/smg/rifle/sniper/shotgun) allowlist; also the gun/non-gun source of truth for `accuracy.ts`, shared with `weaponStats.ts`. `killWeaponCategory()` is the separate, wider mapping used for kills — it covers every kill weapon (melee/utility/other, not just guns) and must not be used for the accuracy allowlist |
-| `economy.ts` | Per-round eco/force-buy/full-buy classification from `CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` at each round's freeze-time-end |
+| `economy.ts` | Per-round eco/half-buy/force-buy/full-buy classification from `CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` and `CCSPlayerController.m_iAccount` at each round's freeze-time-end (see `classifyEconomy()` and [`calculations.md`](./calculations.md)) |
 | `weaponStats.ts` | Per-weapon-category and per-round-economy shot/accuracy/damage/rounds breakdowns, plus `collectMatchKills()` — flat per-kill fact rows for `match_kills` (see "Kill and round fact tables" below) |
 
 ## Weapon-class and round-economy breakdowns
@@ -97,7 +97,7 @@ every other fact table uses, keyed off `player_match_stats_id` plus the bucket c
 
 `rounds_played` means something different for the two breakdowns. For weapon class, it's the count
 of distinct live rounds in which the player fired that weapon at least once — shot-triggered, same
-as `shots_fired`/`shots_hit`. For economy, it's seeded directly from the round's own eco/force/full
+as `shots_fired`/`shots_hit`. For economy, it's seeded directly from the round's own tier
 classification, independent of whether the player fired a shot that round — an eco round the player
 never fired in still counts as an eco round played.
 

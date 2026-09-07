@@ -264,7 +264,7 @@ export interface DemoSabremetricStat {
 }
 
 // #279: per-player shot/accuracy/damage/rounds breakdown, bucketed either by weapon class
-// (pistol/smg/rifle/sniper/shotgun) or by round-economy tier (eco/force_buy/full_buy) — same
+// (pistol/smg/rifle/sniper/shotgun) or by round-economy tier (eco/half_buy/force_buy/full_buy) — same
 // metric shape, two different tables (`player_match_weapon_stats`/`player_match_economy_stats`)
 // since a round's economy classification is independent of which weapon fired.
 export interface WeaponStatFields {
