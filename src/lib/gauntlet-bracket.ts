@@ -11,6 +11,10 @@
  * unspecified shape.
  */
 
+/** The qualifier-count range `buildGauntletBracket()` has a worked shape for. */
+export const GAUNTLET_MIN_QUALIFIERS = 4;
+export const GAUNTLET_MAX_QUALIFIERS = 20;
+
 export type AdvanceRule = 'single' | 'wildcard';
 
 export interface PodSlotPlan {
@@ -221,7 +225,7 @@ export function buildGauntletBracket(N: number): BracketPlan {
   if (N === 12) return build12();
   if (N >= 13 && N <= 19) return buildPlateau(N);
   if (N === 20) return build20();
-  throw new Error(`buildGauntletBracket: unsupported qualifier count N=${N} (supported: 4-20)`);
+  throw new Error(`buildGauntletBracket: unsupported qualifier count N=${N} (supported: ${GAUNTLET_MIN_QUALIFIERS}-${GAUNTLET_MAX_QUALIFIERS})`);
 }
 
 /** Where a single seed would land if the bracket were built right now. */
