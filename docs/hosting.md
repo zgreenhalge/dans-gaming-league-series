@@ -16,7 +16,9 @@ A `stop`→`start` gives a fresh CS2 process each match (which fixed the Season-
 instability) with zero orphan-billing risk. The tradeoff: **no concurrent matches** — the single
 server is a shared resource, which the concurrency guard and scheduling warning below make safe and
 visible. There is no second server, on standby or otherwise — every match, including both games of
-a gauntlet pod, plays on this one box, sequentially.
+a gauntlet pod, plays on this one box, sequentially. See
+[`architecture.md`](./architecture.md#gauntlet-bracket-scheduling)'s "Pod scheduling" for how a pod's
+two games get scheduled 30 minutes apart to reflect this.
 
 Because the server is reconfigured for recreational modes between matches, **launching must re-assert
 the `golden` config set's full `cs2_settings` before every boot** (`applyConfigSet`, via
