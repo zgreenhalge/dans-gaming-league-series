@@ -219,12 +219,12 @@ function build20(): BracketPlan {
 }
 
 export function buildGauntletBracket(N: number): BracketPlan {
-  if (N >= 4 && N <= 7) return buildLadder(N);
+  if (N >= GAUNTLET_MIN_QUALIFIERS && N <= 7) return buildLadder(N);
   if (N === 8) return build8();
   if (N >= 9 && N <= 11) return build9to11(N);
   if (N === 12) return build12();
   if (N >= 13 && N <= 19) return buildPlateau(N);
-  if (N === 20) return build20();
+  if (N === GAUNTLET_MAX_QUALIFIERS) return build20();
   throw new Error(`buildGauntletBracket: unsupported qualifier count N=${N} (supported: ${GAUNTLET_MIN_QUALIFIERS}-${GAUNTLET_MAX_QUALIFIERS})`);
 }
 
