@@ -83,6 +83,12 @@ so you don't have to reverse-engineer them from scratch each time.
     `player_season_leaderboard` view excludes them entirely — gauntlet stats must be computed
     directly from `player_match_stats` (`getGauntletStats`, `getGauntletSeasonLeaderboard`,
     `getGauntletRounds`)
+  - **Pod scheduling** — a pod's two games share the same 4 players, so they're always scheduled and
+    played sequentially, never concurrently. `PATCH /api/matches/[id]/schedule` treats the given time
+    as Game 1's; Game 2's `scheduled_at` is always derived 30 minutes later and isn't independently
+    editable. One Discord thread, one Scheduled Event, and one reminder cover the whole pod. See
+    [`architecture.md`](./architecture.md#gauntlet-bracket-scheduling)'s "Pod scheduling" for the full
+    mechanics.
   - **Canonical gauntlet ranking** — the official finish order for a completed gauntlet; see
     [`calculations.md`](./calculations.md#canonical-gauntlet-ranking) for the
     full placement rules. Implemented by `canonicalGauntletRankMap()` in `src/lib/gauntlet-ranking.ts`

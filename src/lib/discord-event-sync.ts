@@ -54,11 +54,12 @@
 // bounded (`SCAN_CONCURRENCY`) rather than fully unbounded — see its own comment for why.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getSeason, getSeasonSchedule } from './queries';
+import { getSeason, getSeasonSchedule, getGauntletRounds, podGamePairs } from './queries';
 import { isPlayedScore } from './util';
-import { discordErrorDetail, resolveSeasonForumChannel, listChannelThreads, threadTitle } from './discord-threads';
+import { discordErrorDetail, resolveSeasonForumChannel, listChannelThreads, threadTitle, podThreadTitle } from './discord-threads';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { scheduleMatchReminder } from './discord-notify';
+import { podGame2ScheduledAt } from './gauntlet-pod';
 
 const EVENT_SYNC_OPERATION = 'discord_event_sync';
 // Caps how many matches scan their thread concurrently. Each match's thread is on its own per-channel
@@ -262,7 +263,12 @@ async function scanThreadSince(
 
 /** One unplayed match's outcome: finds (or reuses a cached) scheduled-event id and syncs
  *  `matches.scheduled_at` to it. Independent of every other match — safe to run concurrently with
- *  them (see this file's header) since it only ever touches this match's own thread and rows. */
+ *  them (see this file's header) since it only ever touches this match's own thread and rows.
+ *
+ *  `podPartnerId`, when given, is a gauntlet pod's Game 2 — its own thread state is never tracked
+ *  (the pod has one shared thread, keyed off Game 1 here), so its `scheduled_at` is simply derived
+ *  (`podGame2ScheduledAt()`) from whatever this call resolves for `match`, written as a plain
+ *  best-effort follow-up rather than its own tracked `EventSyncResult`. */
 async function syncMatchScheduledEvent(
   supabaseAdmin: SupabaseClient,
   token: string,
@@ -271,6 +277,7 @@ async function syncMatchScheduledEvent(
   threadId: string | undefined,
   state: MatchDiscordState | undefined,
   eventsById: Map<string, DiscordScheduledEvent>,
+  podPartnerId?: number,
 ): Promise<EventSyncResult> {
   if (!threadId) {
     return { matchId: match.id, title, status: 'no_thread', detail: 'No Discord thread found yet' };
@@ -343,39 +350,69 @@ async function syncMatchScheduledEvent(
   }
   await clearOpsError(supabaseAdmin, 'match', match.id, EVENT_SYNC_OPERATION);
 
+  if (podPartnerId != null) {
+    const partnerScheduledAt = podGame2ScheduledAt(event.scheduled_start_time);
+    const { error: partnerError } = await supabaseAdmin
+      .from('matches')
+      .update({ scheduled_at: partnerScheduledAt })
+      .eq('id', podPartnerId);
+    if (partnerError) {
+      const detail = `Writing pod partner ${podPartnerId}'s scheduled_at failed: ${partnerError.message}`;
+      await recordOpsError(supabaseAdmin, 'match', podPartnerId, EVENT_SYNC_OPERATION, detail);
+      return { matchId: match.id, title, status: 'failed', detail };
+    }
+    await clearOpsError(supabaseAdmin, 'match', podPartnerId, EVENT_SYNC_OPERATION);
+  }
+
   // This is the other write path for matches.scheduled_at (PATCH /api/matches/[id]/schedule only
   // covers a human editing it by hand) — scheduleMatchReminder() (re)schedules the 1-hour reminder's
   // one-shot pg_cron job here too, or a match whose time only ever comes from Discord event sync
-  // would never get a reminder scheduled at all. Awaited directly (not deferred) since this file runs
-  // as a standalone script (scripts/discord-event-sync.ts, via GitHub Actions), not a Next.js
-  // request, so there's no response to defer past.
+  // would never get a reminder scheduled at all. Only `match` itself gets one — a gauntlet pod's
+  // Game 2 (`podPartnerId`) never does, one reminder per pod, same as the manual schedule route.
+  // Awaited directly (not deferred) since this file runs as a standalone script
+  // (scripts/discord-event-sync.ts, via GitHub Actions), not a Next.js request, so there's no
+  // response to defer past.
   await scheduleMatchReminder(supabaseAdmin, match.id, event.scheduled_start_time);
 
   return { matchId: match.id, title, status: 'synced', detail: `Synced to ${event.scheduled_start_time}` };
 }
 
-/** Syncs one regular season's unplayed matches against events shared in their Discord threads.
- *  Returns `{ error }` for a season-level failure (bad season, unconfigured Discord, resolving the
- *  forum channel, or listing its threads/the guild's events) before any match is considered;
- *  otherwise every unplayed match's own outcome, matched or not. */
+/** Syncs one season's unplayed matches (or, for a gauntlet, unplayed pods' Game 1s) against events
+ *  shared in their Discord threads. Returns `{ error }` for a season-level failure (bad season,
+ *  unconfigured Discord, resolving the forum channel, or listing its threads/the guild's events)
+ *  before any match is considered; otherwise every tracked match's own outcome, matched or not. */
 export async function syncSeasonScheduledEvents(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
 ): Promise<SyncSeasonEventsResult | { error: string }> {
   const season = await getSeason(seasonId, supabaseAdmin);
   if (!season) return { error: 'Season not found' };
-  if (season.is_gauntlet) return { error: 'Gauntlet seasons do not use weekly match threads' };
 
   const token = process.env.DISCORD_BOT_TOKEN;
   const guildId = process.env.DISCORD_GUILD_ID;
   if (!token || !guildId) return { error: 'Discord is not configured (DISCORD_BOT_TOKEN / DISCORD_GUILD_ID)' };
 
-  const schedule = await getSeasonSchedule(seasonId, supabaseAdmin);
   const unplayedByTitle = new Map<string, { id: number; scheduled_at: string | null }>();
-  for (const week of schedule) {
-    for (const match of week.matches) {
-      if (isPlayedScore(match.final_score)) continue;
-      unplayedByTitle.set(threadTitle(week.week_number, match.match_number), match);
+  // A gauntlet pod's Game 2 is never independently tracked here — its thread state lives on Game 1
+  // (see publishPodThreads()), and its own scheduled_at is always derived from whatever Game 1
+  // resolves to (syncMatchScheduledEvent()'s podPartnerId parameter).
+  const podPartnerByAnchorId = new Map<number, number>();
+  if (season.is_gauntlet) {
+    const rounds = await getGauntletRounds(seasonId);
+    for (const round of rounds) {
+      for (const { podIndex, game1, game2 } of podGamePairs(round)) {
+        if (isPlayedScore(game1.final_score)) continue;
+        unplayedByTitle.set(podThreadTitle(round.round_number, podIndex), { id: game1.id, scheduled_at: game1.scheduled_at });
+        podPartnerByAnchorId.set(game1.id, game2.id);
+      }
+    }
+  } else {
+    const schedule = await getSeasonSchedule(seasonId, supabaseAdmin);
+    for (const week of schedule) {
+      for (const match of week.matches) {
+        if (isPlayedScore(match.final_score)) continue;
+        unplayedByTitle.set(threadTitle(week.week_number, match.match_number), match);
+      }
     }
   }
   if (unplayedByTitle.size === 0) return { seasonName: season.name, matches: [] };
@@ -415,6 +452,7 @@ export async function syncSeasonScheduledEvents(
       syncMatchScheduledEvent(
         supabaseAdmin, token, title, match,
         threadIdByTitle.get(title), stateByMatchId.get(match.id), eventsById,
+        podPartnerByAnchorId.get(match.id),
       ),
   );
 

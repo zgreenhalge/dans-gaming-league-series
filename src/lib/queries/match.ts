@@ -14,6 +14,7 @@ import {
 import { deriveAccuracyTotals } from './weaponStats';
 import { getRoundSides } from './rounds';
 import { getAllUtilityThrows, deriveUtilityCounts } from './utility';
+import { getGauntletPodForMatch } from './gauntlet';
 
 
 export interface MatchStatRow extends PlayerMatchStat {
@@ -261,14 +262,20 @@ export async function isMatchCurrentlyLive(matchId: number): Promise<boolean> {
 /**
  * Other unplayed matches that have a scheduled time — used to warn (and link) when a match is
  * scheduled close to another, since they'd contend for the single shared DatHost server (#134).
- * Played matches are excluded (their scheduled time is moot).
+ * Played matches are excluded (their scheduled time is moot). A gauntlet match's own pod sibling is
+ * always excluded too — the two are *intentionally* scheduled 30 minutes apart on the one server
+ * (see `PATCH /api/matches/[id]/schedule`), not a collision to warn about.
  */
 export async function getOtherScheduledMatches(matchId: number): Promise<ScheduledMatchRef[]> {
-  const { data } = await supabase
-    .from('matches')
-    .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
-    .not('scheduled_at', 'is', null)
-    .neq('id', matchId);
+  const [pod, { data }] = await Promise.all([
+    getGauntletPodForMatch(matchId),
+    supabase
+      .from('matches')
+      .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
+      .not('scheduled_at', 'is', null)
+      .neq('id', matchId),
+  ]);
+  const podSiblingId = pod ? (pod.match1_id === matchId ? pod.match2_id : pod.match1_id) : null;
   type Row = {
     id: number;
     match_number: number | null;
@@ -280,7 +287,7 @@ export async function getOtherScheduledMatches(matchId: number): Promise<Schedul
   // unknown (same pattern as other nested selects here).
   const rows = (data ?? []) as unknown as Row[];
   return rows
-    .filter((r) => r.scheduled_at && !isPlayedScore(r.final_score))
+    .filter((r) => r.scheduled_at && !isPlayedScore(r.final_score) && r.id !== podSiblingId)
     .map((r) => ({
       id: r.id,
       scheduledAt: r.scheduled_at as string,

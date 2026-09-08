@@ -3,6 +3,8 @@ import { requireAdminAccess } from '@/lib/admin-access';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { getSeason } from '@/lib/queries';
 import { confirmSeasonScheduleDraft, mapScheduleDraftError } from '@/lib/season-schedule-draft-engine';
+import { activateSeasonBestEffort } from '@/lib/season-lifecycle';
+import { after } from '@/lib/after';
 
 /**
  * Confirms a regular season's matchup draft — materializes it into real `weeks`/`matches`/
@@ -13,6 +15,11 @@ import { confirmSeasonScheduleDraft, mapScheduleDraftError } from '@/lib/season-
  * can't both pass it), 400 if no draft exists yet, and 400 with the specific integrity/completeness
  * gaps if the draft isn't ready — the draft itself is never touched by a rejected attempt, so more
  * edits plus another confirm is the recovery path.
+ *
+ * A confirmed schedule is the point of no return for a season's roster/definition, so this is also
+ * what flips `UPCOMING -> ACTIVE` — deferred past the response (`activateSeasonBestEffort`, same
+ * "fire in after(), never fail the primary write" shape every other post-commit hook in this repo
+ * uses) rather than making the admin click a separate "Mark Active" afterward.
  */
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const supabaseAdmin = getAdminClient();
@@ -62,6 +69,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       { status: 400 },
     );
   }
+
+  after(() => activateSeasonBestEffort(supabaseAdmin, seasonId));
 
   return NextResponse.json({ ok: true, weeksCreated: result.weeksCreated, matchesCreated: result.matchesCreated }, { status: 201 });
 }

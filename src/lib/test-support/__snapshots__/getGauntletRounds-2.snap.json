@@ -6,6 +6,7 @@
         "id": 200,
         "match_number": 1,
         "final_score": "13-11",
+        "scheduled_at": null,
         "picked_map": "Foroglio",
         "shirts_pick": "Foroglio",
         "skins_starting_side": "T",

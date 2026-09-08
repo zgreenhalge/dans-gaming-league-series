@@ -15,6 +15,15 @@ export interface AdminMatchRow {
   /** Week window (yyyy-mm-dd) for the schedule editor's out-of-window warning; null if undated. */
   weekStart: string | null;
   weekEnd: string | null;
+  /** The other match in this one's gauntlet pod, if any — null for a non-gauntlet match or a
+   *  gauntlet match with no resolvable pod. Excluded from the schedule editor's own collision
+   *  candidates (the two are intentionally 30 minutes apart on the one server). */
+  podSiblingId: number | null;
+  /** 1 or 2 — which of the pod's two games this is (by materialization order), null when
+   *  `podSiblingId` is null. Only game 1 sets the pod's schedule (`PATCH /api/matches/[id]/schedule`
+   *  writes both games' `scheduled_at` from a single "pod start" time); game 2 is read-only,
+   *  always 30 minutes after game 1. */
+  podGameNumber: 1 | 2 | null;
 }
 
 /**
@@ -24,10 +33,19 @@ export interface AdminMatchRow {
  * the site. Admin-only surface; the page gates access.
  */
 export async function getAdminMatches(): Promise<AdminMatchRow[]> {
-  const { data, error } = await supabase
-    .from('matches')
-    .select('*, weeks(week_number, seasons(name, is_gauntlet, map_pool, start_date))');
+  const [{ data, error }, { data: podRows }] = await Promise.all([
+    supabase.from('matches').select('*, weeks(week_number, seasons(name, is_gauntlet, map_pool, start_date))'),
+    supabase.from('gauntlet_pods').select('match1_id, match2_id'),
+  ]);
   if (error || !data) return [];
+
+  const podInfoByMatchId = new Map<number, { siblingId: number; gameNumber: 1 | 2 }>();
+  for (const p of (podRows ?? []) as { match1_id: number | null; match2_id: number | null }[]) {
+    if (p.match1_id != null && p.match2_id != null) {
+      podInfoByMatchId.set(p.match1_id, { siblingId: p.match2_id, gameNumber: 1 });
+      podInfoByMatchId.set(p.match2_id, { siblingId: p.match1_id, gameNumber: 2 });
+    }
+  }
 
   type Row = Match & {
     weeks: {
@@ -65,6 +83,8 @@ export async function getAdminMatches(): Promise<AdminMatchRow[]> {
       mapPool: season?.map_pool ?? null,
       weekStart: win ? fmt(win.start) : null,
       weekEnd: win ? fmt(win.end) : null,
+      podSiblingId: podInfoByMatchId.get(r.id)?.siblingId ?? null,
+      podGameNumber: podInfoByMatchId.get(r.id)?.gameNumber ?? null,
     };
   });
 

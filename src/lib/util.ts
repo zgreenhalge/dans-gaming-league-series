@@ -416,10 +416,9 @@ export function compareMatchRefDesc(
   return b.matchNumber - a.matchNumber;
 }
 
-/** Stakes copy for a gauntlet pod, shown wherever its matches render — shared so the round list
- * and the match detail page can't drift. Not shown for the final pod (advance_rule is unused
- * there; nobody "advances" from it — canonicalGauntletRankMap (gauntlet-ranking.ts) ranks it on
- * read instead). */
+/** Stakes copy for a gauntlet pod, shown in the round list grouped by pod. Not shown for the final
+ * pod (advance_rule is unused there; nobody "advances" from it — canonicalGauntletRankMap
+ * (gauntlet-ranking.ts) ranks it on read instead). */
 export const GAUNTLET_POD_STAKES_LABEL: Record<'single' | 'wildcard', string> = {
   single: 'Elimination pod — win both games to survive (3 of 4 are out).',
   wildcard: 'Wildcard pod — only last place is eliminated (3 of 4 advance).',

@@ -24,10 +24,47 @@ beforeEach(() => {
   nextNavigationMock.setPathname('/seasons/1');
 });
 
+// A season auto-activates on schedule confirm (before any match is played), so `seasonStatus: 'ACTIVE'`
+// alone no longer implies real standings exist — SeasonTabView's Leaderboard/Stats tabs also need at
+// least one played match. This fixture stands in for that.
+const PLAYED_WEEK = {
+  id: 1,
+  season_id: 1,
+  week_number: 1,
+  bye_player_id: null,
+  bye_player_name: null,
+  matches: [
+    {
+      id: 100,
+      week_id: 1,
+      match_number: 1,
+      final_score: '13-8',
+      picked_map: null,
+      shirts_ban: null,
+      shirts_ban2: null,
+      skins_ban1: null,
+      skins_ban2: null,
+      shirts_pick: null,
+      skins_starting_side: null,
+      is_playoff_game: false,
+      is_feature_match: false,
+      pre_match_win_prob: null,
+      pre_match_win_prob_formula_version: null,
+      scheduled_at: null,
+      round_history: null,
+      recording_url: null,
+      shirts: [],
+      skins: [],
+      shirts_stats: [],
+      skins_stats: [],
+    },
+  ],
+};
+
 function baseProps() {
   return {
     leaderboard: [leaderboardRow()],
-    schedule: [],
+    schedule: [PLAYED_WEEK],
     seasonStartDate: null,
     seasonStatus: 'ACTIVE',
     gauntletRounds: [],
@@ -35,6 +72,8 @@ function baseProps() {
     gauntletLeaderboard: [leaderboardRow({ player_id: 2, player_name: 'Bob' })],
     gauntletStatus: 'ACTIVE',
     currentPlayerId: null,
+    isAdmin: false,
+    regularSeasonId: 1,
     h2hData: EMPTY_H2H,
     gauntletH2hData: EMPTY_H2H,
   };
@@ -62,5 +101,54 @@ describe('CombinedSeasonTabView — top tab (`view`) and sub tab (`tab`)', () =>
 
     await userEvent.click(screen.getByRole('tab', { name: 'Gauntlet' }));
     expect(nextNavigationMock.pushState.mock.calls[0][2]).toBe('/seasons/1?tab=stats&view=gauntlet');
+  });
+});
+
+describe('CombinedSeasonTabView — admin "Manage Bracket" link on the Gauntlet tab', () => {
+  test('shown for an admin before any game in the gauntlet has been played', () => {
+    nextNavigationMock.setSearchParams('view=gauntlet');
+    renderWithUrlState(<CombinedSeasonTabView {...baseProps()} isAdmin regularSeasonId={7} />);
+    expect(screen.getByRole('link', { name: 'Manage Bracket →' })).toHaveAttribute(
+      'href',
+      '/admin/seasons/gauntlet/manual/7',
+    );
+  });
+
+  test('hidden for a non-admin', () => {
+    nextNavigationMock.setSearchParams('view=gauntlet');
+    renderWithUrlState(<CombinedSeasonTabView {...baseProps()} isAdmin={false} regularSeasonId={7} />);
+    expect(screen.queryByRole('link', { name: 'Manage Bracket →' })).not.toBeInTheDocument();
+  });
+
+  test('hidden once any game in the gauntlet has been played, even for an admin', () => {
+    nextNavigationMock.setSearchParams('view=gauntlet');
+    renderWithUrlState(
+      <CombinedSeasonTabView
+        {...baseProps()}
+        isAdmin
+        regularSeasonId={7}
+        gauntletRounds={[
+          {
+            round_number: 1,
+            matches: [
+              {
+                id: 100,
+                match_number: 1,
+                final_score: '13-8',
+                scheduled_at: null,
+                picked_map: null,
+                shirts_pick: null,
+                skins_starting_side: null,
+                shirts_stats: [],
+                skins_stats: [],
+                pod_index: 0,
+                advance_rule: 'single',
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+    expect(screen.queryByRole('link', { name: 'Manage Bracket →' })).not.toBeInTheDocument();
   });
 });

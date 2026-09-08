@@ -219,6 +219,7 @@ export interface GauntletMatch {
   id: number;
   match_number: number;
   final_score: string | null;
+  scheduled_at: string | null;
   picked_map: string | null;
   shirts_pick: string | null;
   skins_starting_side: 'CT' | 'T' | null;
@@ -233,6 +234,44 @@ export interface GauntletMatch {
 export interface GauntletRound {
   round_number: number;
   matches: GauntletMatch[];
+}
+
+/** Groups a round's matches by `pod_index` — the shared first step behind every "which games belong
+ * to the same pod" derivation (pod-thread publishing, pod-aware event-sync). Matches with no
+ * resolvable `pod_index` (legacy CSV-imported gauntlets, with no `gauntlet_pods` rows at all) are
+ * dropped. A pod not yet fully materialized still appears here (with fewer than 2 matches) — callers
+ * that need to report on an incomplete pod should inspect the map directly; `podGamePairs()` below
+ * silently excludes them for callers that only care about fully materialized pods. */
+export function groupPodMatches(round: GauntletRound): Map<number, GauntletMatch[]> {
+  const byPod = new Map<number, GauntletMatch[]>();
+  for (const m of round.matches) {
+    if (m.pod_index == null) continue;
+    const list = byPod.get(m.pod_index) ?? [];
+    list.push(m);
+    byPod.set(m.pod_index, list);
+  }
+  return byPod;
+}
+
+export interface PodGamePair {
+  podIndex: number;
+  /** The pod's earlier-materialized game — the one match schedulable via
+   * `PATCH /api/matches/[id]/schedule`; see `docs/architecture.md#gauntlet-bracket-scheduling`. */
+  game1: GauntletMatch;
+  game2: GauntletMatch;
+}
+
+/** A round's fully materialized pods, paired into Game 1/Game 2 (by `match_number`) and sorted by
+ * pod index — the shared derivation behind pod-level scheduling, Discord thread publishing, and
+ * event-sync. A pod with fewer than 2 materialized games is silently excluded (nothing to pair yet). */
+export function podGamePairs(round: GauntletRound): PodGamePair[] {
+  const pairs: PodGamePair[] = [];
+  for (const [podIndex, matches] of groupPodMatches(round)) {
+    if (matches.length !== 2) continue;
+    const [game1, game2] = [...matches].sort((a, b) => a.match_number - b.match_number);
+    pairs.push({ podIndex, game1, game2 });
+  }
+  return pairs.sort((a, b) => a.podIndex - b.podIndex);
 }
 
 /** Per-season gauntlet leaderboard — same shape as the regular leaderboard view. */
@@ -339,17 +378,58 @@ export async function getGauntletSeasonLeaderboard(
 
 /** The gauntlet pod a match belongs to, if any — null for non-gauntlet matches and for gauntlets
  * predating the bracket-scheduling feature (no gauntlet_pods rows). Used to show the pod stakes
- * label on the match detail page. */
+ * label on the match detail page, and (via `match1_id`/`match2_id`) to resolve a match's pod
+ * sibling for scheduling and cross-linking — both of a pod's games share one `player_match_stats`
+ * roster reshuffled across two factions, so they're always scheduled and played as a pair. */
 export async function getGauntletPodForMatch(
   matchId: number,
-): Promise<{ advance_rule: 'single' | 'wildcard'; is_final: boolean } | null> {
+): Promise<{ advance_rule: 'single' | 'wildcard'; is_final: boolean; match1_id: number; match2_id: number } | null> {
   const { data, error } = await supabase
     .from('gauntlet_pods')
-    .select('advance_rule, is_final')
+    .select('advance_rule, is_final, match1_id, match2_id')
     .or(`match1_id.eq.${matchId},match2_id.eq.${matchId}`)
+    .not('match1_id', 'is', null)
+    .not('match2_id', 'is', null)
     .maybeSingle();
   if (error) throw error;
-  return (data ?? null) as { advance_rule: 'single' | 'wildcard'; is_final: boolean } | null;
+  return data as { advance_rule: 'single' | 'wildcard'; is_final: boolean; match1_id: number; match2_id: number } | null;
+}
+
+export interface GauntletPodSibling {
+  matchId: number;
+  /** 1 or 2 — which game the SIBLING match is, for the "Game N of this pod" link label. */
+  gameNumber: 1 | 2;
+  /** True when `matchId` itself — not the sibling — is Game 2 of the pod. */
+  callerIsGame2: boolean;
+  finalScore: string | null;
+}
+
+/** The other game in `matchId`'s pod, for the match page's "your pod" cross-link — null for a pod
+ * with no resolvable sibling match row. Both games share the same 4 players, so this is always the
+ * one other match a gauntlet match page should point at. Takes the pod already resolved by the
+ * caller's own `getGauntletPodForMatch()` call rather than re-fetching it. */
+export async function getGauntletPodSibling(
+  matchId: number,
+  pod: { match1_id: number; match2_id: number },
+): Promise<GauntletPodSibling | null> {
+  const siblingId = pod.match1_id === matchId ? pod.match2_id : pod.match1_id;
+  const gameNumber: 1 | 2 = pod.match1_id === matchId ? 2 : 1;
+  const callerIsGame2 = pod.match1_id !== matchId;
+
+  const { data, error } = await supabase
+    .from('matches')
+    .select('final_score')
+    .eq('id', siblingId)
+    .maybeSingle();
+  if (error) throw error;
+  const m = data as { final_score: string | null } | null;
+  if (!m) return null;
+  return {
+    matchId: siblingId,
+    gameNumber,
+    callerIsGame2,
+    finalScore: m.final_score,
+  };
 }
 
 export interface BracketSlot {
@@ -559,6 +639,7 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
         id: m.id,
         match_number: m.match_number,
         final_score: m.final_score,
+        scheduled_at: m.scheduled_at,
         picked_map: m.picked_map,
         shirts_pick: m.shirts_pick,
         skins_starting_side: m.skins_starting_side,

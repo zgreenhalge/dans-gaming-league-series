@@ -6,6 +6,7 @@ import Link from 'next/link';
 import EmptyState from './EmptyState';
 import PlayerAvatar from './PlayerAvatar';
 import { PlayerName } from './PlayerName';
+import { GAUNTLET_MIN_QUALIFIERS, GAUNTLET_MAX_QUALIFIERS } from '@/lib/gauntlet-bracket';
 
 interface RosterEntry {
   player_id: number;
@@ -41,6 +42,8 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
   const rosterIds = new Set(roster.map((r) => r.player_id));
   const addablePlayers = allPlayers.filter((p) => !rosterIds.has(p.id)).sort((a, b) => a.name.localeCompare(b.name));
   const selfOnRoster = currentPlayerId != null && rosterIds.has(currentPlayerId);
+  const gauntletSizeUnsupported =
+    roster.length > 0 && (roster.length < GAUNTLET_MIN_QUALIFIERS || roster.length > GAUNTLET_MAX_QUALIFIERS);
 
   async function mutate(playerId: number, method: 'POST' | 'DELETE') {
     setError(null);
@@ -89,6 +92,14 @@ export function SeasonRosterPanel({ seasonId, roster, allPlayers, isAdmin, curre
           </button>
         )}
       </div>
+
+      {gauntletSizeUnsupported && (
+        <div className="px-4 py-2 border-b border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)] text-[12px] text-[var(--color-accent-amber-fg)]">
+          {roster.length} {roster.length === 1 ? 'player' : 'players'} won&apos;t produce an automated gauntlet
+          bracket (needs {GAUNTLET_MIN_QUALIFIERS}–{GAUNTLET_MAX_QUALIFIERS}) — a gauntlet will need to be built
+          by hand once the season ends.
+        </div>
+      )}
 
       {roster.length === 0 ? (
         <EmptyState message="No players on the roster yet." className="px-4 py-3" />

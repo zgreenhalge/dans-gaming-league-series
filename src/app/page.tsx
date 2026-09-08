@@ -22,6 +22,11 @@ function ActiveSeasonPanel({
   season: Season;
   leaderboard: LeaderboardRowWithId[];
 }) {
+  // seasonTitle() collapses both a regular season and its paired gauntlet to the same "Season N" —
+  // fine everywhere else since context disambiguates, but here they can both render as Live tiles
+  // at once, so the gauntlet keeps its full name ("Season N Gauntlet") to stay distinguishable.
+  // Linking to the gauntlet's own id is enough — the season page itself redirects a gauntlet id to
+  // its paired regular season and renders the gauntlet tab inline.
   return (
     <div
       className="lift-card border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]"
@@ -36,12 +41,17 @@ function ActiveSeasonPanel({
             <span className="live-dot w-1.5 h-1.5 rounded-full bg-[var(--color-accent-green-fill)]" />
             Live
           </span>
+          {season.is_gauntlet && (
+            <span className="inline-flex items-center px-1.5 py-0.5 tracked text-[10px] font-semibold text-[var(--color-accent-amber-fg)] bg-[var(--color-accent-amber-bg)] border border-[var(--color-accent-amber-border)]">
+              Gauntlet
+            </span>
+          )}
         </div>
         <div className="font-display text-[32px] font-semibold leading-tight text-[var(--color-text-primary)]">
-          {seasonTitle(season.name)}
+          {season.is_gauntlet ? season.name : seasonTitle(season.name)}
         </div>
         <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5">
-          {leaderboard.length} players
+          {season.is_gauntlet ? 'In progress' : `${leaderboard.length} players`}
         </div>
       </Link>
     </div>
@@ -100,6 +110,10 @@ export default async function Home() {
     .filter((s) => !s.is_gauntlet && s.status === 'UPCOMING')
     .sort((a, b) => a.id - b.id);
   const active = seasons.filter((s) => !s.is_gauntlet && s.status === 'ACTIVE');
+  // Kept separate from `active` rather than merged in: a gauntlet has no weekly schedule (no
+  // `start_date`, no week/match structure the This-Week/Next-Week panels below understand), so it
+  // only ever drives its own Live tile, never the schedule panels' "first active season" pick.
+  const activeGauntlets = seasons.filter((s) => s.is_gauntlet && s.status === 'ACTIVE');
 
   // Fetch schedule for the first active season to power the This Week + Next Week panels
   let nextUpWeek: WeekWithMatches | null = null;
@@ -139,6 +153,14 @@ export default async function Home() {
         )}
 
         {active.map((s) => (
+          <ActiveSeasonPanel
+            key={s.id}
+            season={s}
+            leaderboard={leaderboards.get(s.id) ?? []}
+          />
+        ))}
+
+        {activeGauntlets.map((s) => (
           <ActiveSeasonPanel
             key={s.id}
             season={s}

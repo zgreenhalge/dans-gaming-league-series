@@ -1,14 +1,28 @@
 // Polls Discord for scheduled events and writes any matching match's start time into
 // `matches.scheduled_at` (#398) — see `syncSeasonScheduledEvents()` in `../src/lib/discord-event-sync.ts`
 // for the correlation and idempotency rules. Runs against whichever regular season is currently
-// `ACTIVE`; a no-op (not an error) when none is.
+// `ACTIVE`, plus its paired gauntlet if one exists and is itself still going (a gauntlet season is
+// born ACTIVE and stays that way until it's decided — see season-lifecycle.ts) — a no-op (not an
+// error) when neither applies.
 //
 //   set -a; . ./.env.local; set +a
 //   npx tsx scripts/discord-event-sync.ts
 
-import { getActiveRegularSeason } from '../src/lib/queries';
-import { syncSeasonScheduledEvents } from '../src/lib/discord-event-sync';
+import { getActiveRegularSeason, getLinkedGauntlet } from '../src/lib/queries';
+import { syncSeasonScheduledEvents, type SyncSeasonEventsResult } from '../src/lib/discord-event-sync';
 import { getAdminClient } from '../src/lib/supabase-admin';
+
+function report(result: SyncSeasonEventsResult | { error: string }): boolean {
+  if ('error' in result) {
+    console.error(`✖ ${result.error}`);
+    return false;
+  }
+  for (const m of result.matches) {
+    console.log(`  ${m.title}: ${m.status} — ${m.detail}`);
+  }
+  console.log(`Synced ${result.seasonName}: ${result.matches.length} unplayed match(es) checked.`);
+  return true;
+}
 
 async function main() {
   const admin = getAdminClient();
@@ -18,16 +32,14 @@ async function main() {
     return;
   }
 
-  const result = await syncSeasonScheduledEvents(admin, season.id);
-  if ('error' in result) {
-    console.error(`✖ ${result.error}`);
-    process.exit(1);
+  let ok = report(await syncSeasonScheduledEvents(admin, season.id));
+
+  const gauntlet = await getLinkedGauntlet(season.name);
+  if (gauntlet && gauntlet.status === 'ACTIVE') {
+    ok = report(await syncSeasonScheduledEvents(admin, gauntlet.id)) && ok;
   }
 
-  for (const m of result.matches) {
-    console.log(`  ${m.title}: ${m.status} — ${m.detail}`);
-  }
-  console.log(`Synced ${result.seasonName}: ${result.matches.length} unplayed match(es) checked.`);
+  if (!ok) process.exit(1);
 }
 
 main().catch((e) => {

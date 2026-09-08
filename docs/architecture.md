@@ -62,7 +62,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 |---|---|---|
 | `PATCH` | `/api/matches/[id]/veto` | Submit a single pick/ban step (auto-provisions the server on completion) |
 | `PATCH` | `/api/matches/[id]/score` | Submit final score + player stats (tears down the server; posts a `#match-notifications` Discord alert and closes the match's Discord thread, if any, the first time a match transitions into "played" — see [`hosting.md`](./hosting.md)) |
-| `PATCH` | `/api/matches/[id]/schedule` | Set a match's scheduled time |
+| `PATCH` | `/api/matches/[id]/schedule` | Set a match's scheduled time — for a gauntlet match, this is Game 1 only; Game 2's `scheduled_at` is derived 30 minutes later, and scheduling Game 2 directly is refused (see [Gauntlet bracket scheduling](#gauntlet-bracket-scheduling)) |
 | `PATCH` | `/api/matches/[id]/feature` | Toggle a match's `is_feature_match` flag (admin only) |
 | `POST` | `/api/matches/[id]/demo/upload-url` | Mint a presigned Cloudflare R2 URL to upload a `.dem` file |
 | `POST` | `/api/matches/[id]/demo/parse` | Parse the uploaded demo into match + sabremetric stats (see [`demo-ingestion.md`](./demo-ingestion.md)) |
@@ -100,7 +100,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `POST` | `/api/cron/match-reminder` | Posts the 1-hour-out Discord reminder for one match (`notifyMatchReminder()`, `discord-notify.ts`, #395) — fired by Supabase `pg_net`, not a Vercel cron; see below |
 | `POST` | `/api/discord/interactions` | Discord Interactions endpoint (#396) — Ed25519-verified (`DISCORD_PUBLIC_KEY`), serves `/leaderboard`, `/scheduled`, `/player`, `/name-color` slash commands (`src/lib/discord-commands.ts`). Command *definitions* are separate, pushed by `scripts/register-discord-commands.ts` — this route only serves already-registered commands, it doesn't register them |
 | `POST` | `/api/admin/discord/backfill-name-roles` | Creates name-color Discord roles for every linked player still missing one (admin only; see "Discord account linking" above) |
-| `POST` | `/api/seasons/[id]/discord-threads` | Publish one week's Discord match threads — `{ week: number \| 'next' }` — to a regular season's `season-{N}` forum channel, tagging rostered players (`publishWeekThreads()`, `src/lib/discord-threads.ts`, #398). Admin-triggered only; refuses gauntlet seasons (admin only) |
+| `POST` | `/api/seasons/[id]/discord-threads` | Publish one week's (or, for a gauntlet season, one round's per-pod) Discord threads — `{ week: number \| 'next' }` — to the season's `season-{N}` forum channel, tagging rostered players (`publishWeekThreads()`/`publishPodThreads()`, `src/lib/discord-threads.ts`, #398). Admin-triggered only (admin only) |
 
 ## Database
 
@@ -198,7 +198,7 @@ Later rounds materialize automatically as their pod resolves, via a non-fatal ho
 (`resolveAndPropagate()`) appended to `PATCH /api/matches/[id]/score` after the score commit; both it
 and the seeding step share a `materializeIfReady()` helper that only materializes a pod once all four
 of its slots are filled and it hasn't already been. A pod's `advance_rule` and `is_final` also drive
-the "pod stakes" label shown on the round list and match page (`GAUNTLET_POD_STAKES_LABEL` in
+the "pod stakes" label shown on the round list, grouped by pod (`GAUNTLET_POD_STAKES_LABEL` in
 `src/lib/util.ts`). The score route runs `checkGauntletCompletion()` (below) only after
 `resolveAndPropagate()` settles, in the same hook — running them as unordered independent hooks would
 let completion see an incomplete round as "everything played" and archive before the final round
@@ -223,6 +223,30 @@ one survivor onward, which of them ("Winner of Round 1 Group 1", "Second of Roun
 existing round-by-round `GauntletRoundsList` below the diagram still carries per-game detail (scores,
 maps, stats). `getGauntletBracketShape()` returns `[]` for a manual gauntlet (no `gauntlet_pods`
 rows), so the diagram silently no-ops there and the page falls back to the plain round list.
+
+**Pod scheduling.** A pod's two games share the same 4 players reshuffled across factions, so they can
+never be played simultaneously — the shared DatHost server ([`hosting.md`](./hosting.md)'s reuse
+model) has no capacity for that anyway, and there's no plan to add a second server. Scheduling is
+therefore a pod-level concept, not a per-match one: `PATCH /api/matches/[id]/schedule` treats the time
+given as the pod's start (Game 1), refusing the request outright if it targets Game 2 directly, and
+writes Game 2's `matches.scheduled_at` as Game 1's time plus a fixed 30-minute gap
+(`POD_GAME_GAP_MS`) — the two matches' own rows stay the single source of truth, so nothing downstream
+needs a separate "pod schedule" concept just to read a time. The shared-server collision warning
+(`getOtherScheduledMatches()`/`findScheduleCollision()`) excludes a match's own pod sibling from its
+candidate pool, since 30 minutes apart on the one server is the intended shape, not a conflict; the
+match page and admin console both surface a link to the pod's other game (`getGauntletPodSibling()`)
+and hide the schedule editor on Game 2 in favor of a read-only "N minutes after Game 1" note.
+`match_server_state` needs nothing extra — with play strictly sequential, a pod's two games just
+provision/play/teardown one after the other on the one server, same as any other two matches.
+
+Discord follows the same pod-not-match grain: `publishPodThreads()` (`discord-threads.ts`) posts one
+thread per pod ("Round N Pod M") in the same `season-{N}` forum channel `publishWeekThreads()` uses,
+mentioning all 4 players and both games' lineups, and points both games' `match_discord_state` rows at
+it; `closeGauntletPodThreadIfDone()` archives/locks it only once *both* games are played, not after
+the first (`writeMatchScore()`'s hook branches on `is_gauntlet` to call this instead of the regular
+`closeMatchThread()`). Only Game 1 ever gets a scheduled-reminder job or a Discord Scheduled Event
+sync target (`discord-event-sync.ts`'s `podPartnerId` parameter propagates a synced time onto Game 2
+without giving it a reminder of its own) — one thread, one event, one reminder per pod.
 
 `DELETE /api/seasons/[id]/gauntlet` reverses either step — it refuses once any of the gauntlet's
 matches has a played score, otherwise deletes the gauntlet season and everything materialized under
@@ -324,11 +348,15 @@ tracks a `droppedPlayerIds` set as ephemeral UI state, and a dropped player's se
 `seasons.status` (`UPCOMING`/`ACTIVE`/`ARCHIVED`) applies to both regular and gauntlet season rows
 and has one admin-triggered and two automatic transitions, all in `src/lib/season-lifecycle.ts`:
 
-- **`UPCOMING` → `ACTIVE`** ("go live", regular seasons only) is an explicit admin action —
-  `PATCH /api/seasons/[id]/status` (`{ status: 'ACTIVE' }`), surfaced as the "Mark Active" button
-  next to the start-date control on a season's page (`MarkSeasonActiveButton.tsx`). `activateSeason()`
+- **`UPCOMING` → `ACTIVE`** ("go live", regular seasons only) fires automatically the moment a
+  season's matchup draft is confirmed (`POST /api/seasons/[id]/schedule/confirm`, deferred past the
+  response via `activateSeasonBestEffort()`) — confirming is already the point of no return for the
+  roster and schedule, so there's nothing left for a separate manual step to gate. `activateSeason()`
   flips the status, then best-effort calls `tryBuildGauntletShape()` — a build failure never blocks
-  the season going live.
+  the season going live. `PATCH /api/seasons/[id]/status` (`{ status: 'ACTIVE' }`) still exists and is
+  still admin-only; it's surfaced as the "Mark Active" button next to the start-date control on a
+  season's page (`MarkSeasonActiveButton.tsx`), which only ever renders while a season is still
+  `UPCOMING` — the manual fallback for the rare case where the auto-trigger's own status write fails.
 - **`ACTIVE` → `ARCHIVED`** (regular seasons) is fully automatic — `checkSeasonCompletion()` runs
   from a non-fatal hook on `PATCH /api/matches/[id]/score` for every non-gauntlet match. If the
   score just committed means every match in that season (via `weeks.season_id`) now has a played
@@ -387,10 +415,11 @@ NULL`; `getOpsErrorHistory()` reads every row from the last 8 weeks regardless o
 grouped into a flat `(operation, week)` failure count, for the admin console's Activity → History
 tab.
 
-Wired into twenty-seven operations today:
+Wired into twenty-eight operations today:
 
 | Operation | Entity | Recorded from |
 |---|---|---|
+| `season_activate` | `season` (regular) | `activateSeasonBestEffort()` — the schedule-confirm auto-trigger's own status-update failure; `MarkSeasonActiveButton` is the manual retry |
 | `gauntlet_build` | `season` (regular) | `activateSeason()` |
 | `season_complete` | `season` (regular) | `checkSeasonCompletion()`, if the `ARCHIVED` status update itself fails |
 | `gauntlet_seed` | `season` (regular) | `checkSeasonCompletion()` (including a `trySeedGauntlet()` roster-`drift` result, which needs the same admin attention as a thrown error even though it isn't one) |

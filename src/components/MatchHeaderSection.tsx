@@ -16,7 +16,8 @@ interface Props {
   weekEnd: string | null;
   canEdit: boolean;
   played: boolean;
-  isGauntlet: boolean;
+  /** True for Game 2 of a gauntlet pod — its time is derived from Game 1's, so it's shown read-only. */
+  isPodGame2?: boolean;
   /** Other unplayed scheduled matches — drives the shared-server collision warning (#134). */
   otherScheduled?: ScheduledMatchRef[];
 }
@@ -85,7 +86,7 @@ export default function MatchHeaderSection({
   weekEnd,
   canEdit,
   played,
-  isGauntlet,
+  isPodGame2 = false,
   otherScheduled = [],
 }: Props) {
   const isClient = useHasMounted();
@@ -104,56 +105,61 @@ export default function MatchHeaderSection({
     clear,
   } = useScheduleEditor({ matchId, scheduledAt, weekStart, weekEnd, otherScheduled });
 
-  const showSchedule = !played && !isGauntlet;
+  // Game 2 of a gauntlet pod has no independent schedule — its time is always derived from Game 1's
+  // (PATCH /api/matches/[id]/schedule enforces this server-side), so it's shown but never editable
+  // here regardless of the caller's own canEdit.
+  const canEditSchedule = canEdit && !isPodGame2;
   const windowLabel =
     isClient && weekStart && weekEnd ? `${fmtWindowDate(weekStart)} – ${fmtWindowDate(weekEnd)}` : null;
 
-  const scheduleReadView = showSchedule && !editing && (
-    <div className="flex items-center gap-2">
-      {scheduledAt ? (
-        canEdit ? (
-          <div>
-            <button
-              onClick={startEditing}
-              className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)] hover:underline transition-colors"
-            >
-              {isClient ? fmtScheduled(scheduledAt) : null}
-            </button>
-            {countdown && (
-              <div className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
-                {countdown}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div>
-            <div className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)]">
-              {isClient ? fmtScheduled(scheduledAt) : null}
+  const scheduleReadView = !editing && (
+    <div className="flex flex-col items-start gap-1">
+      <div className="flex items-center gap-2">
+        {scheduledAt ? (
+          canEditSchedule ? (
+            <div>
+              <button
+                onClick={startEditing}
+                className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)] hover:underline transition-colors"
+              >
+                {isClient ? fmtScheduled(scheduledAt) : null}
+              </button>
+              {countdown && (
+                <div className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
+                  {countdown}
+                </div>
+              )}
             </div>
-            {countdown && (
-              <div className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
-                {countdown}
+          ) : (
+            <div>
+              <div className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)]">
+                {isClient ? fmtScheduled(scheduledAt) : null}
               </div>
-            )}
-          </div>
-        )
-      ) : windowLabel ? (
-        <span className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)]">
-          {windowLabel}
-        </span>
-      ) : null}
-      {canEdit && !scheduledAt && (
-        <button
-          onClick={startEditing}
-          className="map-text-scrim tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
-        >
-          Set time
-        </button>
-      )}
+              {countdown && (
+                <div className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
+                  {countdown}
+                </div>
+              )}
+            </div>
+          )
+        ) : windowLabel ? (
+          <span className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)]">
+            {windowLabel}
+          </span>
+        ) : null}
+        {canEditSchedule && !scheduledAt && (
+          <button
+            onClick={startEditing}
+            className="map-text-scrim tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
+          >
+            Set time
+          </button>
+        )}
+      </div>
     </div>
   );
 
-  const scheduleEditView = showSchedule && editing && (
+  const scheduleEditView = canEditSchedule && editing && (
     <div className="flex items-center gap-2 flex-wrap">
       <input
         type="datetime-local"
@@ -212,7 +218,7 @@ export default function MatchHeaderSection({
       </div>
 
       {/* ── Warning row: only appears here, never inside the header row ─────── */}
-      {showSchedule && warning && (
+      {!played && warning && (
         <div className="flex justify-start">
           <ScheduleWarningBox
             warning={warning}
