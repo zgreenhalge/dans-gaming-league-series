@@ -180,12 +180,15 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
 
   // A tab with nothing behind it (e.g. a gauntlet before any pod is seeded) is hidden rather than
   // shown with a "nothing here yet" message — mirrors the H2H empty check in `H2HSection`.
-  // A regular season's leaderboard and stats both hide while its roster is still open for edit
-  // (UPCOMING, see SeasonRosterPanel): getSeasonLeaderboard() merges in zero-stat placeholder rows
-  // for every rostered player regardless of whether a match exists yet, so `leaderboard.length > 0`
-  // alone is true from roster size — any rows at that point are leftover/placeholder, not real
-  // standings, for either tab.
-  const notRealStandingsYet = !isGauntlet && seasonStatus === 'UPCOMING';
+  // A regular season's leaderboard and stats both hide until its schedule has a played match:
+  // getSeasonLeaderboard() merges in zero-stat placeholder rows for every rostered player regardless
+  // of whether a match exists yet, so `leaderboard.length > 0` alone is true from roster size — any
+  // rows before the first played match are leftover/placeholder, not real standings, for either tab.
+  // A season auto-activates on schedule confirm (see activateSeasonBestEffort()), so `seasonStatus`
+  // alone can't tell "just confirmed, nothing played" apart from "well underway" — hence the played
+  // check rather than gating on UPCOMING.
+  const notRealStandingsYet =
+    !isGauntlet && !schedule.some((w) => w.matches.some((m) => isPlayedScore(m.final_score)));
   const hasLeaderboard = leaderboard.length > 0 && !notRealStandingsYet;
   const hasStats = leaderboard.length > 0 && !notRealStandingsYet;
   const hasH2H = h2hData.players.length > 0 && (h2hData.duos.length > 0 || h2hData.rivals.length > 0);

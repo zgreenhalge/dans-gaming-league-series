@@ -24,10 +24,47 @@ beforeEach(() => {
   nextNavigationMock.setPathname('/seasons/1');
 });
 
+// A season auto-activates on schedule confirm (before any match is played), so `seasonStatus: 'ACTIVE'`
+// alone no longer implies real standings exist — SeasonTabView's Leaderboard/Stats tabs also need at
+// least one played match. This fixture stands in for that.
+const PLAYED_WEEK = {
+  id: 1,
+  season_id: 1,
+  week_number: 1,
+  bye_player_id: null,
+  bye_player_name: null,
+  matches: [
+    {
+      id: 100,
+      week_id: 1,
+      match_number: 1,
+      final_score: '13-8',
+      picked_map: null,
+      shirts_ban: null,
+      shirts_ban2: null,
+      skins_ban1: null,
+      skins_ban2: null,
+      shirts_pick: null,
+      skins_starting_side: null,
+      is_playoff_game: false,
+      is_feature_match: false,
+      pre_match_win_prob: null,
+      pre_match_win_prob_formula_version: null,
+      scheduled_at: null,
+      round_history: null,
+      recording_url: null,
+      shirts: [],
+      skins: [],
+      shirts_stats: [],
+      skins_stats: [],
+    },
+  ],
+};
+
 function baseProps() {
   return {
     leaderboard: [leaderboardRow()],
-    schedule: [],
+    schedule: [PLAYED_WEEK],
     seasonStartDate: null,
     seasonStatus: 'ACTIVE',
     gauntletRounds: [],
