@@ -39,14 +39,11 @@ export async function getAdminMatches(): Promise<AdminMatchRow[]> {
   ]);
   if (error || !data) return [];
 
-  const podSiblingByMatchId = new Map<number, number>();
-  const podGameNumberByMatchId = new Map<number, 1 | 2>();
+  const podInfoByMatchId = new Map<number, { siblingId: number; gameNumber: 1 | 2 }>();
   for (const p of (podRows ?? []) as { match1_id: number | null; match2_id: number | null }[]) {
     if (p.match1_id != null && p.match2_id != null) {
-      podSiblingByMatchId.set(p.match1_id, p.match2_id);
-      podSiblingByMatchId.set(p.match2_id, p.match1_id);
-      podGameNumberByMatchId.set(p.match1_id, 1);
-      podGameNumberByMatchId.set(p.match2_id, 2);
+      podInfoByMatchId.set(p.match1_id, { siblingId: p.match2_id, gameNumber: 1 });
+      podInfoByMatchId.set(p.match2_id, { siblingId: p.match1_id, gameNumber: 2 });
     }
   }
 
@@ -86,8 +83,8 @@ export async function getAdminMatches(): Promise<AdminMatchRow[]> {
       mapPool: season?.map_pool ?? null,
       weekStart: win ? fmt(win.start) : null,
       weekEnd: win ? fmt(win.end) : null,
-      podSiblingId: podSiblingByMatchId.get(r.id) ?? null,
-      podGameNumber: podGameNumberByMatchId.get(r.id) ?? null,
+      podSiblingId: podInfoByMatchId.get(r.id)?.siblingId ?? null,
+      podGameNumber: podInfoByMatchId.get(r.id)?.gameNumber ?? null,
     };
   });
 
