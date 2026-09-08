@@ -14,6 +14,7 @@ import {
 import { deriveAccuracyTotals } from './weaponStats';
 import { getRoundSides } from './rounds';
 import { getAllUtilityThrows, deriveUtilityCounts } from './utility';
+import { getGauntletPodForMatch } from './gauntlet';
 
 
 export interface MatchStatRow extends PlayerMatchStat {
@@ -266,19 +267,15 @@ export async function isMatchCurrentlyLive(matchId: number): Promise<boolean> {
  * (see `PATCH /api/matches/[id]/schedule`), not a collision to warn about.
  */
 export async function getOtherScheduledMatches(matchId: number): Promise<ScheduledMatchRef[]> {
-  const { data: podRow } = await supabase
-    .from('gauntlet_pods')
-    .select('match1_id, match2_id')
-    .or(`match1_id.eq.${matchId},match2_id.eq.${matchId}`)
-    .maybeSingle();
-  const pod = podRow as { match1_id: number | null; match2_id: number | null } | null;
+  const [pod, { data }] = await Promise.all([
+    getGauntletPodForMatch(matchId),
+    supabase
+      .from('matches')
+      .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
+      .not('scheduled_at', 'is', null)
+      .neq('id', matchId),
+  ]);
   const podSiblingId = pod ? (pod.match1_id === matchId ? pod.match2_id : pod.match1_id) : null;
-
-  const { data } = await supabase
-    .from('matches')
-    .select('id, match_number, scheduled_at, final_score, weeks(week_number, seasons(name))')
-    .not('scheduled_at', 'is', null)
-    .neq('id', matchId);
   type Row = {
     id: number;
     match_number: number | null;
