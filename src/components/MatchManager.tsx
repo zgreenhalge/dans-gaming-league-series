@@ -8,28 +8,19 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { isPlayedScore } from '@/lib/util';
+import { POD_GAME_GAP_LABEL } from '@/lib/gauntlet-pod';
 import type { AdminMatchRow } from '@/lib/queries';
 import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import EmptyState from './EmptyState';
 import SectionLabel from './SectionLabel';
 import VetoSequence from './VetoSequence';
-import { ScheduleEditor } from './ScheduleEditor';
+import { ScheduleEditor, fmtScheduled } from './ScheduleEditor';
 import { FeatureMatchToggle } from './FeatureMatchToggle';
 import { ReparseDemoButton } from './ReparseDemoButton';
 
 /** The map a match was played on — the pick lives in `shirts_pick`, falling back to `picked_map`. */
 function mapFor(m: AdminMatchRow): string | null {
   return m.match.shirts_pick ?? m.match.picked_map;
-}
-
-function fmtScheduled(iso: string): string {
-  return new Date(iso).toLocaleString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
 
 /**
@@ -126,36 +117,37 @@ export function MatchManager({
 
                 {isOpen && (
                   <div className="px-3 py-4 flex flex-col gap-5 bg-[var(--color-bg-secondary)] border-t border-[var(--color-border-tertiary)]">
-                    {!played && m.podGameNumber === 2 ? (
+                    {!played && (
                       <section>
                         <SectionLabel>Schedule</SectionLabel>
-                        <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                          {m.match.scheduled_at ? fmtScheduled(m.match.scheduled_at) : 'unscheduled'} — set from{' '}
-                          <button
-                            type="button"
-                            onClick={() => setOpenId(m.podSiblingId)}
-                            className="underline decoration-dotted hover:text-[var(--color-text-primary)]"
-                          >
-                            Game 1
-                          </button>
-                          , 30 minutes earlier.
-                        </div>
-                      </section>
-                    ) : !played && (
-                      <section>
-                        <SectionLabel>Schedule</SectionLabel>
-                        {m.isGauntlet && (
-                          <div className="font-mono text-[10px] text-[var(--color-text-secondary)] mb-1.5">
-                            Pod start (Game 1) — Game 2 begins 30 minutes later, on the same server.
+                        {m.podGameNumber === 2 ? (
+                          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
+                            {m.match.scheduled_at ? fmtScheduled(m.match.scheduled_at) : 'unscheduled'} — set from{' '}
+                            <button
+                              type="button"
+                              onClick={() => setOpenId(m.podSiblingId)}
+                              className="underline decoration-dotted hover:text-[var(--color-text-primary)]"
+                            >
+                              Game 1
+                            </button>
+                            , {POD_GAME_GAP_LABEL} earlier.
                           </div>
+                        ) : (
+                          <>
+                            {m.isGauntlet && (
+                              <div className="font-mono text-[10px] text-[var(--color-text-secondary)] mb-1.5">
+                                Pod start (Game 1) — Game 2 begins {POD_GAME_GAP_LABEL} later, on the same server.
+                              </div>
+                            )}
+                            <ScheduleEditor
+                              matchId={m.match.id}
+                              scheduledAt={m.match.scheduled_at}
+                              weekStart={m.weekStart}
+                              weekEnd={m.weekEnd}
+                              otherScheduled={others}
+                            />
+                          </>
                         )}
-                        <ScheduleEditor
-                          matchId={m.match.id}
-                          scheduledAt={m.match.scheduled_at}
-                          weekStart={m.weekStart}
-                          weekEnd={m.weekEnd}
-                          otherScheduled={others}
-                        />
                       </section>
                     )}
 

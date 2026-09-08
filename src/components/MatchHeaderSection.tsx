@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { toSentenceCase, mapSlug } from '@/lib/maps';
 import { type ScheduledMatchRef } from '@/lib/server-schedule-collision';
+import { POD_GAME_GAP_LABEL } from '@/lib/gauntlet-pod';
 import { useScheduleEditor } from './useScheduleEditor';
 import { useHasMounted } from './useHasMounted';
 import { ScheduleWarningBox } from './ScheduleWarning';
@@ -109,72 +110,66 @@ export default function MatchHeaderSection({
     clear,
   } = useScheduleEditor({ matchId, scheduledAt, weekStart, weekEnd, otherScheduled });
 
-  const showSchedule = !played;
-  // Game 2 of a gauntlet pod has no independent schedule — its time is always Game 1's + 30 minutes
+  // Game 2 of a gauntlet pod has no independent schedule — its time is always derived from Game 1's
   // (PATCH /api/matches/[id]/schedule enforces this server-side), so it's shown but never editable
   // here regardless of the caller's own canEdit.
   const canEditSchedule = canEdit && !isPodGame2;
   const windowLabel =
     isClient && weekStart && weekEnd ? `${fmtWindowDate(weekStart)} – ${fmtWindowDate(weekEnd)}` : null;
 
-  const scheduleReadView = showSchedule && !editing && (
+  const scheduleReadView = !editing && (
     <div className="flex flex-col items-start gap-1">
-      {isPodGame2 && (
+      {isGauntlet && (
         <span className="map-text-scrim tracked text-[9px] text-[var(--color-text-secondary)]">
-          Game 2 · 30 min after Game 1
-        </span>
-      )}
-      {isGauntlet && !isPodGame2 && (
-        <span className="map-text-scrim tracked text-[9px] text-[var(--color-text-secondary)]">
-          Game 1 · sets this pod&apos;s start time
+          {isPodGame2 ? `Game 2 · ${POD_GAME_GAP_LABEL} after Game 1` : "Game 1 · sets this pod's start time"}
         </span>
       )}
       <div className="flex items-center gap-2">
-      {scheduledAt ? (
-        canEditSchedule ? (
-          <div>
-            <button
-              onClick={startEditing}
-              className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)] hover:underline transition-colors"
-            >
-              {isClient ? fmtScheduled(scheduledAt) : null}
-            </button>
-            {countdown && (
-              <div className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
-                {countdown}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div>
-            <div className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)]">
-              {isClient ? fmtScheduled(scheduledAt) : null}
+        {scheduledAt ? (
+          canEditSchedule ? (
+            <div>
+              <button
+                onClick={startEditing}
+                className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)] hover:underline transition-colors"
+              >
+                {isClient ? fmtScheduled(scheduledAt) : null}
+              </button>
+              {countdown && (
+                <div className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
+                  {countdown}
+                </div>
+              )}
             </div>
-            {countdown && (
-              <div className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
-                {countdown}
+          ) : (
+            <div>
+              <div className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)]">
+                {isClient ? fmtScheduled(scheduledAt) : null}
               </div>
-            )}
-          </div>
-        )
-      ) : windowLabel ? (
-        <span className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)]">
-          {windowLabel}
-        </span>
-      ) : null}
-      {canEditSchedule && !scheduledAt && (
-        <button
-          onClick={startEditing}
-          className="map-text-scrim tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
-        >
-          Set time
-        </button>
-      )}
+              {countdown && (
+                <div className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
+                  {countdown}
+                </div>
+              )}
+            </div>
+          )
+        ) : windowLabel ? (
+          <span className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)]">
+            {windowLabel}
+          </span>
+        ) : null}
+        {canEditSchedule && !scheduledAt && (
+          <button
+            onClick={startEditing}
+            className="map-text-scrim tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
+          >
+            Set time
+          </button>
+        )}
       </div>
     </div>
   );
 
-  const scheduleEditView = showSchedule && canEditSchedule && editing && (
+  const scheduleEditView = canEditSchedule && editing && (
     <div className="flex items-center gap-2 flex-wrap">
       <input
         type="datetime-local"
@@ -233,7 +228,7 @@ export default function MatchHeaderSection({
       </div>
 
       {/* ── Warning row: only appears here, never inside the header row ─────── */}
-      {showSchedule && warning && (
+      {!played && warning && (
         <div className="flex justify-start">
           <ScheduleWarningBox
             warning={warning}
