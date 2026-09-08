@@ -21,7 +21,7 @@ import { isPlayedScore, tabCls, weekAnchorId, roundAnchorId } from '@/lib/util';
 import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
 import { projectGauntletSeeding, seedPlacementsByPlayer, type SeedPlacement } from '@/lib/gauntlet-bracket';
 
-type Tab = 'leaderboard' | 'schedule' | 'h2h' | 'stats' | 'advanced';
+type Tab = 'leaderboard' | 'groups' | 'schedule' | 'h2h' | 'stats' | 'advanced';
 
 function playerInMatch(
   match: { shirts_stats: { player_id: number }[]; skins_stats: { player_id: number }[] },
@@ -71,7 +71,7 @@ export type { Tab as SeasonTab };
 // hides tabs with no data behind them — but `useTabState` needs a fixed list to validate against.
 // Exported so `CombinedSeasonTabView`'s own `subTab` (shared between this component's regular and
 // gauntlet instances) validates against the same list instead of a second, driftable copy.
-export const SEASON_TABS: readonly Tab[] = ['leaderboard', 'stats', 'advanced', 'h2h', 'schedule'];
+export const SEASON_TABS: readonly Tab[] = ['leaderboard', 'stats', 'advanced', 'h2h', 'groups', 'schedule'];
 
 // Stable empty-array fallbacks so `schedule`/`rounds` keep a consistent identity across
 // renders when the season is the other kind — a fresh `[]` literal here would break the
@@ -192,7 +192,9 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const hasLeaderboard = leaderboard.length > 0 && !notRealStandingsYet;
   const hasStats = leaderboard.length > 0 && !notRealStandingsYet;
   const hasH2H = h2hData.players.length > 0 && (h2hData.duos.length > 0 || h2hData.rivals.length > 0);
-  const hasSchedule = isGauntlet ? bracketShape.length > 0 || rounds.length > 0 : schedule.length > 0;
+  // Split from `hasSchedule` (regular season has no analog — a round-robin has no bracket to show).
+  const hasGroups = isGauntlet && bracketShape.length > 0;
+  const hasSchedule = isGauntlet ? rounds.length > 0 : schedule.length > 0;
 
   // "My games" is URL state too (`mine=1`, omitted when off) — not just for its own sake, but
   // because it changes what a shared `week`/`round` link *means*: those ids are drawn from the
@@ -348,13 +350,14 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
     ...(hasStats ? [{ key: 'stats' as const, label: 'Stats' }] : []),
     ...(hasSab ? [{ key: 'advanced' as const, label: 'Advanced Stats' }] : []),
     ...(hasH2H ? [{ key: 'h2h' as const, label: 'H2H' }] : []),
-    ...(hasSchedule ? [{ key: 'schedule' as const, label: isGauntlet ? 'Rounds' : 'Schedule' }] : []),
+    ...(hasGroups ? [{ key: 'groups' as const, label: 'Groups' }] : []),
+    ...(hasSchedule ? [{ key: 'schedule' as const, label: 'Schedule' }] : []),
   ];
   // Falls back to the first surviving tab when the caller-controlled `tab` (shared between the
   // regular and gauntlet sub-views in `CombinedSeasonTabView`) points at one this side has hidden.
   const tab = resolveTab(rawTab, tabs);
 
-  // Scrolls to the default-open week/round whenever the Schedule/Rounds tab becomes active with no
+  // Scrolls to the default-open week/round whenever the Schedule tab becomes active with no
   // explicit `week`/`round` override (that case already scrolls via `scrollTargetId` above) — without
   // this, switching to the tab expands the current week but leaves the page wherever it already was,
   // which can be well above it in a season with many played weeks.
@@ -426,29 +429,24 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
         </>
       )}
 
+      {tab === 'groups' && hasGroups && (
+        <GauntletBracketDiagram
+          pods={bracketShape}
+          currentPlayerId={currentPlayerId}
+          rankMap={gauntletRanking}
+          seedNames={seedNames}
+        />
+      )}
+
       {tab === 'schedule' && hasSchedule && (
         isGauntlet ? (
-          <>
-            {bracketShape.length > 0 && (
-              <div className="mb-6">
-                <GauntletBracketDiagram
-                  pods={bracketShape}
-                  currentPlayerId={currentPlayerId}
-                  rankMap={gauntletRanking}
-                  seedNames={seedNames}
-                />
-              </div>
-            )}
-            {rounds.length > 0 && (
-              <GauntletRoundsList
-                displayRounds={displayRounds}
-                allRounds={rounds}
-                openRounds={openItems}
-                onToggleRound={toggleItem}
-                currentPlayerId={currentPlayerId}
-              />
-            )}
-          </>
+          <GauntletRoundsList
+            displayRounds={displayRounds}
+            allRounds={rounds}
+            openRounds={openItems}
+            onToggleRound={toggleItem}
+            currentPlayerId={currentPlayerId}
+          />
         ) : (
           <ScheduleList
             displaySchedule={displaySchedule}
