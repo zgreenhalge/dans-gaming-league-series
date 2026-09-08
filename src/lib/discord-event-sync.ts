@@ -357,8 +357,11 @@ async function syncMatchScheduledEvent(
       .update({ scheduled_at: partnerScheduledAt })
       .eq('id', podPartnerId);
     if (partnerError) {
-      console.error(`syncMatchScheduledEvent: writing pod partner ${podPartnerId}'s scheduled_at failed:`, partnerError);
+      const detail = `Writing pod partner ${podPartnerId}'s scheduled_at failed: ${partnerError.message}`;
+      await recordOpsError(supabaseAdmin, 'match', podPartnerId, EVENT_SYNC_OPERATION, detail);
+      return { matchId: match.id, title, status: 'failed', detail };
     }
+    await clearOpsError(supabaseAdmin, 'match', podPartnerId, EVENT_SYNC_OPERATION);
   }
 
   // This is the other write path for matches.scheduled_at (PATCH /api/matches/[id]/schedule only
