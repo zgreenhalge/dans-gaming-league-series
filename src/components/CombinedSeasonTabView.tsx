@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import SeasonTabView, { SEASON_TABS } from './SeasonTabView';
 import { useTabState } from './useTabState';
-import { tabCls } from '@/lib/util';
+import { tabCls, isPlayedScore } from '@/lib/util';
 import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow, MatchRoundRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 
@@ -43,6 +44,8 @@ export default function CombinedSeasonTabView({
   gauntletLeaderboard,
   gauntletStatus,
   currentPlayerId,
+  isAdmin,
+  regularSeasonId,
   h2hData,
   gauntletH2hData,
   ehogRatings,
@@ -69,6 +72,10 @@ export default function CombinedSeasonTabView({
   gauntletLeaderboard: LeaderboardRowWithId[];
   gauntletStatus: string;
   currentPlayerId: number | null;
+  isAdmin: boolean;
+  /** The paired regular season's own id — the manual bracket editor is always keyed by it, never by
+   *  the gauntlet's own id (`/admin/seasons/gauntlet/manual/[id]`). */
+  regularSeasonId: number;
   h2hData: H2HData;
   gauntletH2hData: H2HData;
   ehogRatings?: Record<number, number>;
@@ -93,6 +100,14 @@ export default function CombinedSeasonTabView({
   const seedNames = useMemo(
     () => new Map(leaderboard.map((row, i) => [i + 1, row.player_name])),
     [leaderboard],
+  );
+
+  // Once any game has a played score, the bracket editor's own materialize-on-save locks a
+  // materialized pod anyway — but hiding the link entirely past that point keeps this from reading
+  // as an ongoing management surface once the gauntlet is actually underway.
+  const gauntletStarted = useMemo(
+    () => gauntletRounds.some((r) => r.matches.some((m) => isPlayedScore(m.final_score))),
+    [gauntletRounds],
   );
 
   return (
@@ -120,6 +135,17 @@ export default function CombinedSeasonTabView({
           matchWeaponClassStats={matchWeaponClassStats}
           matchEconomyStats={matchEconomyStats}
         />
+      )}
+
+      {topTab === 'gauntlet' && isAdmin && !gauntletStarted && (
+        <div className="mb-4">
+          <Link
+            href={`/admin/seasons/gauntlet/manual/${regularSeasonId}`}
+            className="font-mono text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] underline decoration-dotted"
+          >
+            Manage Bracket →
+          </Link>
+        </div>
       )}
 
       {topTab === 'gauntlet' && (

@@ -348,6 +348,8 @@ export default async function SeasonPage({
                 gauntletLeaderboard={gauntletLeaderboard}
                 gauntletStatus={linkedGauntlet.status}
                 currentPlayerId={currentPlayerId}
+                isAdmin={isAdmin}
+                regularSeasonId={season.id}
                 h2hData={h2hData}
                 gauntletH2hData={gauntletH2hData}
                 ehogRatings={ehogRatings}

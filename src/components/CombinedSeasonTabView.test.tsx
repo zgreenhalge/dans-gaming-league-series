@@ -35,6 +35,8 @@ function baseProps() {
     gauntletLeaderboard: [leaderboardRow({ player_id: 2, player_name: 'Bob' })],
     gauntletStatus: 'ACTIVE',
     currentPlayerId: null,
+    isAdmin: false,
+    regularSeasonId: 1,
     h2hData: EMPTY_H2H,
     gauntletH2hData: EMPTY_H2H,
   };
@@ -62,5 +64,54 @@ describe('CombinedSeasonTabView — top tab (`view`) and sub tab (`tab`)', () =>
 
     await userEvent.click(screen.getByRole('tab', { name: 'Gauntlet' }));
     expect(nextNavigationMock.pushState.mock.calls[0][2]).toBe('/seasons/1?tab=stats&view=gauntlet');
+  });
+});
+
+describe('CombinedSeasonTabView — admin "Manage Bracket" link on the Gauntlet tab', () => {
+  test('shown for an admin before any game in the gauntlet has been played', () => {
+    nextNavigationMock.setSearchParams('view=gauntlet');
+    renderWithUrlState(<CombinedSeasonTabView {...baseProps()} isAdmin regularSeasonId={7} />);
+    expect(screen.getByRole('link', { name: 'Manage Bracket →' })).toHaveAttribute(
+      'href',
+      '/admin/seasons/gauntlet/manual/7',
+    );
+  });
+
+  test('hidden for a non-admin', () => {
+    nextNavigationMock.setSearchParams('view=gauntlet');
+    renderWithUrlState(<CombinedSeasonTabView {...baseProps()} isAdmin={false} regularSeasonId={7} />);
+    expect(screen.queryByRole('link', { name: 'Manage Bracket →' })).not.toBeInTheDocument();
+  });
+
+  test('hidden once any game in the gauntlet has been played, even for an admin', () => {
+    nextNavigationMock.setSearchParams('view=gauntlet');
+    renderWithUrlState(
+      <CombinedSeasonTabView
+        {...baseProps()}
+        isAdmin
+        regularSeasonId={7}
+        gauntletRounds={[
+          {
+            round_number: 1,
+            matches: [
+              {
+                id: 100,
+                match_number: 1,
+                final_score: '13-8',
+                scheduled_at: null,
+                picked_map: null,
+                shirts_pick: null,
+                skins_starting_side: null,
+                shirts_stats: [],
+                skins_stats: [],
+                pod_index: 0,
+                advance_rule: 'single',
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+    expect(screen.queryByRole('link', { name: 'Manage Bracket →' })).not.toBeInTheDocument();
   });
 });
