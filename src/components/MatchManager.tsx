@@ -8,7 +8,6 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { isPlayedScore } from '@/lib/util';
-import { POD_GAME_GAP_LABEL } from '@/lib/gauntlet-pod';
 import type { AdminMatchRow } from '@/lib/queries';
 import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import EmptyState from './EmptyState';
@@ -121,32 +120,28 @@ export function MatchManager({
                       <section>
                         <SectionLabel>Schedule</SectionLabel>
                         {m.podGameNumber === 2 ? (
-                          <div className="font-mono text-[12px] text-[var(--color-text-secondary)]">
-                            {m.match.scheduled_at ? fmtScheduled(m.match.scheduled_at) : 'unscheduled'} — set from{' '}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {m.match.scheduled_at ? (
+                              <span className="font-mono text-[12px] text-[var(--color-text-primary)]">{fmtScheduled(m.match.scheduled_at)}</span>
+                            ) : (
+                              <span className="font-mono text-[12px] text-[var(--color-text-secondary)]">unscheduled</span>
+                            )}
                             <button
                               type="button"
                               onClick={() => setOpenId(m.podSiblingId)}
-                              className="underline decoration-dotted hover:text-[var(--color-text-primary)]"
+                              className="font-mono text-[10px] px-2 py-[3px] rounded border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
                             >
-                              Game 1
+                              Game 1 ↗
                             </button>
-                            , {POD_GAME_GAP_LABEL} earlier.
                           </div>
                         ) : (
-                          <>
-                            {m.isGauntlet && (
-                              <div className="font-mono text-[10px] text-[var(--color-text-secondary)] mb-1.5">
-                                Pod start (Game 1) — Game 2 begins {POD_GAME_GAP_LABEL} later, on the same server.
-                              </div>
-                            )}
-                            <ScheduleEditor
-                              matchId={m.match.id}
-                              scheduledAt={m.match.scheduled_at}
-                              weekStart={m.weekStart}
-                              weekEnd={m.weekEnd}
-                              otherScheduled={others}
-                            />
-                          </>
+                          <ScheduleEditor
+                            matchId={m.match.id}
+                            scheduledAt={m.match.scheduled_at}
+                            weekStart={m.weekStart}
+                            weekEnd={m.weekEnd}
+                            otherScheduled={others}
+                          />
                         )}
                       </section>
                     )}

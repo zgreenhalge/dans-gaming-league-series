@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { toSentenceCase, mapSlug } from '@/lib/maps';
 import { type ScheduledMatchRef } from '@/lib/server-schedule-collision';
-import { POD_GAME_GAP_LABEL } from '@/lib/gauntlet-pod';
 import { useScheduleEditor } from './useScheduleEditor';
 import { useHasMounted } from './useHasMounted';
 import { ScheduleWarningBox } from './ScheduleWarning';
@@ -17,10 +16,7 @@ interface Props {
   weekEnd: string | null;
   canEdit: boolean;
   played: boolean;
-  isGauntlet: boolean;
-  /** True when this match is Game 2 of a gauntlet pod — its time is always derived from Game 1's
-   *  (30 minutes later), so scheduling is shown read-only rather than editable. Always false for a
-   *  non-gauntlet match or a gauntlet match that's Game 1. */
+  /** True for Game 2 of a gauntlet pod — its time is derived from Game 1's, so it's shown read-only. */
   isPodGame2?: boolean;
   /** Other unplayed scheduled matches — drives the shared-server collision warning (#134). */
   otherScheduled?: ScheduledMatchRef[];
@@ -90,7 +86,6 @@ export default function MatchHeaderSection({
   weekEnd,
   canEdit,
   played,
-  isGauntlet,
   isPodGame2 = false,
   otherScheduled = [],
 }: Props) {
@@ -119,11 +114,6 @@ export default function MatchHeaderSection({
 
   const scheduleReadView = !editing && (
     <div className="flex flex-col items-start gap-1">
-      {isGauntlet && (
-        <span className="map-text-scrim tracked text-[9px] text-[var(--color-text-secondary)]">
-          {isPodGame2 ? `Game 2 · ${POD_GAME_GAP_LABEL} after Game 1` : "Game 1 · sets this pod's start time"}
-        </span>
-      )}
       <div className="flex items-center gap-2">
         {scheduledAt ? (
           canEditSchedule ? (

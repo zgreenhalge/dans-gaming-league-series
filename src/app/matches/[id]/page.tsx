@@ -348,9 +348,6 @@ export default async function MatchPage({
               weekEnd={window?.weekEnd ?? null}
               canEdit={canEdit}
               played={played}
-              isGauntlet={season.is_gauntlet}
-              // A pod's Game 2 has no independent schedule of its own — only Game 1 can be edited;
-              // PATCH /api/matches/[id]/schedule enforces this same rule server-side.
               isPodGame2={podSibling?.callerIsGame2 ?? false}
               otherScheduled={otherScheduled}
             />
