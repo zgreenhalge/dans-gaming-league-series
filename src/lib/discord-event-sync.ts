@@ -54,16 +54,12 @@
 // bounded (`SCAN_CONCURRENCY`) rather than fully unbounded — see its own comment for why.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getSeason, getSeasonSchedule, getGauntletRounds } from './queries';
+import { getSeason, getSeasonSchedule, getGauntletRounds, podGamePairs } from './queries';
 import { isPlayedScore } from './util';
 import { discordErrorDetail, resolveSeasonForumChannel, listChannelThreads, threadTitle, podThreadTitle } from './discord-threads';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { scheduleMatchReminder } from './discord-notify';
-
-/** Both games in a gauntlet pod share the same 4 players, so they can never actually be played at
- * once — the fixed gap once a pod's Game 1 time is known (matches PATCH /api/matches/[id]/schedule's
- * own POD_GAME_GAP_MS). */
-const POD_GAME_GAP_MS = 30 * 60 * 1000;
+import { podGame2ScheduledAt } from './gauntlet-pod';
 
 const EVENT_SYNC_OPERATION = 'discord_event_sync';
 // Caps how many matches scan their thread concurrently. Each match's thread is on its own per-channel
@@ -271,8 +267,8 @@ async function scanThreadSince(
  *
  *  `podPartnerId`, when given, is a gauntlet pod's Game 2 — its own thread state is never tracked
  *  (the pod has one shared thread, keyed off Game 1 here), so its `scheduled_at` is simply derived
- *  as `POD_GAME_GAP_MS` after whatever this call resolves for `match`, written as a plain best-effort
- *  follow-up rather than its own tracked `EventSyncResult`. */
+ *  (`podGame2ScheduledAt()`) from whatever this call resolves for `match`, written as a plain
+ *  best-effort follow-up rather than its own tracked `EventSyncResult`. */
 async function syncMatchScheduledEvent(
   supabaseAdmin: SupabaseClient,
   token: string,
@@ -355,7 +351,7 @@ async function syncMatchScheduledEvent(
   await clearOpsError(supabaseAdmin, 'match', match.id, EVENT_SYNC_OPERATION);
 
   if (podPartnerId != null) {
-    const partnerScheduledAt = new Date(eventMs + POD_GAME_GAP_MS).toISOString();
+    const partnerScheduledAt = podGame2ScheduledAt(event.scheduled_start_time);
     const { error: partnerError } = await supabaseAdmin
       .from('matches')
       .update({ scheduled_at: partnerScheduledAt })
@@ -401,16 +397,7 @@ export async function syncSeasonScheduledEvents(
   if (season.is_gauntlet) {
     const rounds = await getGauntletRounds(seasonId);
     for (const round of rounds) {
-      const byPod = new Map<number, typeof round.matches>();
-      for (const m of round.matches) {
-        if (m.pod_index == null) continue;
-        const list = byPod.get(m.pod_index) ?? [];
-        list.push(m);
-        byPod.set(m.pod_index, list);
-      }
-      for (const [podIndex, matches] of byPod) {
-        if (matches.length !== 2) continue;
-        const [game1, game2] = [...matches].sort((a, b) => a.match_number - b.match_number);
+      for (const { podIndex, game1, game2 } of podGamePairs(round)) {
         if (isPlayedScore(game1.final_score)) continue;
         unplayedByTitle.set(podThreadTitle(round.round_number, podIndex), { id: game1.id, scheduled_at: game1.scheduled_at });
         podPartnerByAnchorId.set(game1.id, game2.id);

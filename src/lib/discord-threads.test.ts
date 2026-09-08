@@ -377,7 +377,7 @@ async function main() {
     // Game 1 (match 200): shirts Alice(1)+Bob(2) vs skins Erin(5)+Frank(6). Game 2 (match 201): shirts
     // Alice(1)+Erin(5) vs skins Bob(2)+Frank(6) — same 4 players, reshuffled.
     assert.match(body.message.content, /Game 1: <@discord-alice> & <@discord-bob> vs Erin & Frank/);
-    assert.match(body.message.content, /Game 2 \(30 min later\): <@discord-alice> & Erin vs <@discord-bob> & Frank/);
+    assert.match(body.message.content, /Game 2 \(30 minutes later\): <@discord-alice> & Erin vs <@discord-bob> & Frank/);
 
     // Both games point at the same thread.
     const state200 = await client.from('match_discord_state').select('thread_id').eq('match_id', 200).maybeSingle();

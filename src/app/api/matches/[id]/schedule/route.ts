@@ -4,10 +4,7 @@ import { getAdminClient } from '@/lib/supabase-admin';
 import { scheduleMatchReminder } from '@/lib/discord-notify';
 import { getGauntletPodForMatch } from '@/lib/queries';
 import { after } from '@/lib/after';
-
-/** Both games in a gauntlet pod share the same 4 players, so they can never actually be played at
- * once — this is the fixed gap between them once a pod's start time is set. */
-const POD_GAME_GAP_MS = 30 * 60 * 1000;
+import { POD_GAME_GAP_LABEL, podGame2ScheduledAt } from '@/lib/gauntlet-pod';
 
 export async function PATCH(
   req: NextRequest,
@@ -58,9 +55,9 @@ export async function PATCH(
       ?.weeks?.seasons?.is_gauntlet ?? false;
 
   // A gauntlet match is always half of a pod — the pod, not the individual game, is what gets
-  // scheduled (see POD_GAME_GAP_MS above). Game 1's id is the one canonical "pod start" time to
-  // write through; Game 2 always follows 30 minutes later and is never independently editable, so
-  // editing from Game 2's own page/row is refused rather than silently reinterpreting its value.
+  // scheduled (see podGame2ScheduledAt()). Game 1's id is the one canonical "pod start" time to
+  // write through; Game 2 always follows and is never independently editable, so editing from
+  // Game 2's own page/row is refused rather than silently reinterpreting its value.
   let gauntletGame2Id: number | null = null;
   if (isGauntlet) {
     const pod = await getGauntletPodForMatch(matchId);
@@ -69,7 +66,7 @@ export async function PATCH(
     }
     if (matchId !== pod.match1_id) {
       return NextResponse.json(
-        { error: "Schedule this pod's Game 1 match instead — Game 2 always follows 30 minutes later" },
+        { error: `Schedule this pod's Game 1 match instead — Game 2 always follows ${POD_GAME_GAP_LABEL} later` },
         { status: 400 },
       );
     }
@@ -101,9 +98,7 @@ export async function PATCH(
   // own 500 (never swallowed) rather than left to look like the whole PATCH silently no-op'd; retrying
   // the same request is safe since both writes are idempotent.
   if (gauntletGame2Id != null) {
-    const game2ScheduledAt = scheduled_at
-      ? new Date(new Date(scheduled_at).getTime() + POD_GAME_GAP_MS).toISOString()
-      : null;
+    const game2ScheduledAt = podGame2ScheduledAt(scheduled_at);
     const { error: game2Error } = await supabaseAdmin
       .from('matches')
       .update({ scheduled_at: game2ScheduledAt })

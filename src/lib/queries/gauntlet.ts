@@ -236,6 +236,44 @@ export interface GauntletRound {
   matches: GauntletMatch[];
 }
 
+/** Groups a round's matches by `pod_index` — the shared first step behind every "which games belong
+ * to the same pod" derivation (pod-thread publishing, pod-aware event-sync). Matches with no
+ * resolvable `pod_index` (legacy CSV-imported gauntlets, with no `gauntlet_pods` rows at all) are
+ * dropped. A pod not yet fully materialized still appears here (with fewer than 2 matches) — callers
+ * that need to report on an incomplete pod should inspect the map directly; `podGamePairs()` below
+ * silently excludes them for callers that only care about fully materialized pods. */
+export function groupPodMatches(round: GauntletRound): Map<number, GauntletMatch[]> {
+  const byPod = new Map<number, GauntletMatch[]>();
+  for (const m of round.matches) {
+    if (m.pod_index == null) continue;
+    const list = byPod.get(m.pod_index) ?? [];
+    list.push(m);
+    byPod.set(m.pod_index, list);
+  }
+  return byPod;
+}
+
+export interface PodGamePair {
+  podIndex: number;
+  /** The pod's earlier-materialized game — the one match schedulable via
+   * `PATCH /api/matches/[id]/schedule`; see `docs/architecture.md#gauntlet-bracket-scheduling`. */
+  game1: GauntletMatch;
+  game2: GauntletMatch;
+}
+
+/** A round's fully materialized pods, paired into Game 1/Game 2 (by `match_number`) and sorted by
+ * pod index — the shared derivation behind pod-level scheduling, Discord thread publishing, and
+ * event-sync. A pod with fewer than 2 materialized games is silently excluded (nothing to pair yet). */
+export function podGamePairs(round: GauntletRound): PodGamePair[] {
+  const pairs: PodGamePair[] = [];
+  for (const [podIndex, matches] of groupPodMatches(round)) {
+    if (matches.length !== 2) continue;
+    const [game1, game2] = [...matches].sort((a, b) => a.match_number - b.match_number);
+    pairs.push({ podIndex, game1, game2 });
+  }
+  return pairs.sort((a, b) => a.podIndex - b.podIndex);
+}
+
 /** Per-season gauntlet leaderboard — same shape as the regular leaderboard view. */
 export async function getGauntletSeasonLeaderboard(
   seasonId: number,
@@ -359,21 +397,26 @@ export async function getGauntletPodForMatch(
 
 export interface GauntletPodSibling {
   matchId: number;
-  /** 1 or 2 — which of the pod's two games this is, by materialization order. */
+  /** 1 or 2 — which game the SIBLING match is, for the "Game N of this pod" link label. */
   gameNumber: 1 | 2;
+  /** True when `matchId` itself — not the sibling — is Game 2 of the pod. */
+  callerIsGame2: boolean;
   scheduledAt: string | null;
   finalScore: string | null;
   map: string | null;
 }
 
-/** The other game in `matchId`'s pod, for the match page's "your pod" cross-link — null for a
- * non-gauntlet match or one with no resolvable pod. Both games share the same 4 players, so this is
- * always the one other match a gauntlet match page should point at. */
-export async function getGauntletPodSibling(matchId: number): Promise<GauntletPodSibling | null> {
-  const pod = await getGauntletPodForMatch(matchId);
-  if (!pod) return null;
+/** The other game in `matchId`'s pod, for the match page's "your pod" cross-link — null for a pod
+ * with no resolvable sibling match row. Both games share the same 4 players, so this is always the
+ * one other match a gauntlet match page should point at. Takes the pod already resolved by the
+ * caller's own `getGauntletPodForMatch()` call rather than re-fetching it. */
+export async function getGauntletPodSibling(
+  matchId: number,
+  pod: { match1_id: number; match2_id: number },
+): Promise<GauntletPodSibling | null> {
   const siblingId = pod.match1_id === matchId ? pod.match2_id : pod.match1_id;
   const gameNumber: 1 | 2 = pod.match1_id === matchId ? 2 : 1;
+  const callerIsGame2 = pod.match1_id !== matchId;
 
   const { data, error } = await supabase
     .from('matches')
@@ -386,6 +429,7 @@ export async function getGauntletPodSibling(matchId: number): Promise<GauntletPo
   return {
     matchId: siblingId,
     gameNumber,
+    callerIsGame2,
     scheduledAt: m.scheduled_at,
     finalScore: m.final_score,
     map: m.shirts_pick ?? m.picked_map,

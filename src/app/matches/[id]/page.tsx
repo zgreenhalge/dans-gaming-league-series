@@ -138,6 +138,13 @@ export default async function MatchPage({
   const needsPreviousWeekCheck =
     showPreMatchScouting && week.week_number > 1 && matchWindow != null && today < matchWindow.weekStart;
 
+  // Fetched once and reused for both the stakes label and the pod cross-link below — a pod's two
+  // games share one `gauntlet_pods` row, so resolving it twice would just be the same query twice.
+  const gauntletPodPromise = season.is_gauntlet ? getGauntletPodForMatch(matchId) : Promise.resolve(null);
+  const podSiblingPromise = gauntletPodPromise.then((pod) =>
+    pod ? getGauntletPodSibling(matchId, pod) : null,
+  );
+
   const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, podSibling, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
     showPreMatchScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     // Cached and shared across every match page (see #441 item 3) rather than a fresh
@@ -154,8 +161,8 @@ export default async function MatchPage({
     played ? getMatchSabremetrics(matchId) : Promise.resolve([]),
     // Match ids on this map — feeds the scouting report's Map Intel heatmap (#128).
     showPreMatchScouting && map ? getMatchIdsForMap(map) : Promise.resolve<number[]>([]),
-    season.is_gauntlet ? getGauntletPodForMatch(matchId) : Promise.resolve(null),
-    season.is_gauntlet ? getGauntletPodSibling(matchId) : Promise.resolve(null),
+    gauntletPodPromise,
+    podSiblingPromise,
     needsPreviousWeekCheck ? isWeekComplete(season.id, week.week_number - 1) : Promise.resolve(false),
     // Drives the `--ticker-h` override below — only an unplayed match can ever be the live one.
     played ? Promise.resolve(false) : isMatchCurrentlyLive(matchId),
@@ -342,10 +349,9 @@ export default async function MatchPage({
               canEdit={canEdit}
               played={played}
               isGauntlet={season.is_gauntlet}
-              // A pod's Game 2 has no independent schedule of its own — only Game 1 (identified by
-              // the sibling reporting itself as Game 1) can be edited; PATCH /api/matches/[id]/schedule
-              // enforces this same rule server-side.
-              isPodGame2={podSibling?.gameNumber === 1}
+              // A pod's Game 2 has no independent schedule of its own — only Game 1 can be edited;
+              // PATCH /api/matches/[id]/schedule enforces this same rule server-side.
+              isPodGame2={podSibling?.callerIsGame2 ?? false}
               otherScheduled={otherScheduled}
             />
 

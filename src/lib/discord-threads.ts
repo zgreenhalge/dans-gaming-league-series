@@ -25,11 +25,12 @@
 // a pod) so the close functions can still find it once played.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getSeason, getSeasonSchedule, findNextUnplayedWeek, getGauntletRounds, getGauntletPodForMatch, getPlayersById } from './queries';
+import { getSeason, getSeasonSchedule, findNextUnplayedWeek, getGauntletRounds, getGauntletPodForMatch, getPlayersById, groupPodMatches } from './queries';
 import type { WeekWithMatches, MatchWithRoster } from './queries/schedule';
 import type { GauntletMatch, GauntletRound } from './queries/gauntlet';
 import { extractSeasonNumber, isPlayedScore, allMatchesPlayed } from './util';
 import { recordOpsError, clearOpsError } from './ops-errors';
+import { POD_GAME_GAP_LABEL } from './gauntlet-pod';
 
 const CHANNEL_OPERATION = 'discord_thread_publish';
 const THREAD_OPERATION = 'discord_thread_create';
@@ -148,66 +149,97 @@ export async function listChannelThreads(
   return [...active.threads.filter((t) => t.parent_id === channelId), ...archived.threads];
 }
 
-/** One match's opening-post body — mentions every rostered player who's linked their Discord account
- *  (`<@discord_id>`), falling back to their plain DGLS name for anyone unlinked. */
-function openingPost(match: MatchWithRoster, playersById: Map<number, { discord_id: string | null }>): string {
-  const mention = (p: { player_id: number; player_name: string }) => {
-    const discordId = playersById.get(p.player_id)?.discord_id;
-    return discordId ? `<@${discordId}>` : p.player_name;
-  };
-  return `${match.shirts.map(mention).join(' & ')} vs ${match.skins.map(mention).join(' & ')}`;
+/** A player's opening-post mention: the `<@discord_id>` tag when they've linked their Discord
+ *  account, else their plain DGLS name. Shared by a weekly match's and a gauntlet pod's opening
+ *  posts alike. */
+function mentionOrName(p: { player_id: number; player_name: string }, playersById: Map<number, { discord_id: string | null }>): string {
+  const discordId = playersById.get(p.player_id)?.discord_id;
+  return discordId ? `<@${discordId}>` : p.player_name;
 }
 
-/** Creates one match's Discord thread — unless `existingThreadId` says Discord already has one titled
- *  for this match (looked up once per `publishWeekThreads()` call via `listChannelThreads()`, not
- *  read from `match_discord_state`), in which case it's adopted into the DB rather than duplicated or
- *  posted into. Either way the outcome is recorded to `ops_errors` (same "detected, skipped, needs
- *  admin eyes" pattern as a real failure for the adopt case) so a re-publish attempt on an
- *  already-published week is visible, not silently a no-op. */
-async function publishMatchThread(
+/** One game's "A & B vs C & D" lineup line, mentioning each player per `mentionOrName()`. */
+function lineup(
+  shirts: { player_id: number; player_name: string }[],
+  skins: { player_id: number; player_name: string }[],
+  playersById: Map<number, { discord_id: string | null }>,
+): string {
+  return `${shirts.map((p) => mentionOrName(p, playersById)).join(' & ')} vs ${skins.map((p) => mentionOrName(p, playersById)).join(' & ')}`;
+}
+
+/** One match's opening-post body. */
+function openingPost(match: MatchWithRoster, playersById: Map<number, { discord_id: string | null }>): string {
+  return lineup(match.shirts, match.skins, playersById);
+}
+
+/** Creates (or adopts, per this file's header) a Discord thread and points every match in
+ *  `matchIds` at it via `match_discord_state` — shared mechanics behind a weekly match's own thread
+ *  (`matchIds` of length 1, via `publishWeekThreads()`) and a gauntlet pod's shared thread (length 2,
+ *  via `publishPodThreads()`). `matchIds[0]` is the "anchor" `ops_errors`/result key either way. */
+async function publishThread(
   supabaseAdmin: SupabaseClient,
   channelId: string,
   token: string,
-  weekNumber: number,
-  match: MatchWithRoster,
-  playersById: Map<number, { discord_id: string | null }>,
+  title: string,
+  content: string,
+  matchIds: number[],
   existingThreadId: string | undefined,
 ): Promise<ThreadPublishResult> {
-  const title = threadTitle(weekNumber, match.match_number);
+  const anchorId = matchIds[0];
+  const stateRows = (threadId: string) => matchIds.map((matchId) => ({ match_id: matchId, thread_id: threadId }));
 
   if (existingThreadId) {
-    await supabaseAdmin
-      .from('match_discord_state')
-      .upsert({ match_id: match.id, thread_id: existingThreadId }, { onConflict: 'match_id' });
+    await supabaseAdmin.from('match_discord_state').upsert(stateRows(existingThreadId), { onConflict: 'match_id' });
     await recordOpsError(
-      supabaseAdmin, 'match', match.id, THREAD_OPERATION,
+      supabaseAdmin, 'match', anchorId, THREAD_OPERATION,
       `Thread "${title}" already exists in the channel (${existingThreadId}) — adopted it instead of creating a duplicate`,
     );
-    return { matchId: match.id, title, status: 'skipped', detail: `Already exists (thread ${existingThreadId})` };
+    return { matchId: anchorId, title, status: 'skipped', detail: `Already exists (thread ${existingThreadId})` };
   }
 
   try {
     const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/threads`, {
       method: 'POST',
       headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: title, message: { content: openingPost(match, playersById) } }),
+      body: JSON.stringify({ name: title, message: { content } }),
     });
     if (!res.ok) {
       const detail = await discordErrorDetail('Thread create', res);
-      await recordOpsError(supabaseAdmin, 'match', match.id, THREAD_OPERATION, detail);
-      return { matchId: match.id, title, status: 'failed', detail };
+      await recordOpsError(supabaseAdmin, 'match', anchorId, THREAD_OPERATION, detail);
+      return { matchId: anchorId, title, status: 'failed', detail };
     }
     const thread = (await res.json()) as { id: string };
-    await supabaseAdmin
-      .from('match_discord_state')
-      .upsert({ match_id: match.id, thread_id: thread.id }, { onConflict: 'match_id' });
-    await clearOpsError(supabaseAdmin, 'match', match.id, THREAD_OPERATION);
-    return { matchId: match.id, title, status: 'created', detail: `Thread ${thread.id}` };
+    await supabaseAdmin.from('match_discord_state').upsert(stateRows(thread.id), { onConflict: 'match_id' });
+    await clearOpsError(supabaseAdmin, 'match', anchorId, THREAD_OPERATION);
+    return { matchId: anchorId, title, status: 'created', detail: `Thread ${thread.id}` };
   } catch (e) {
     const detail = `Thread create failed: ${(e as Error).message}`;
-    await recordOpsError(supabaseAdmin, 'match', match.id, THREAD_OPERATION, detail);
-    return { matchId: match.id, title, status: 'failed', detail };
+    await recordOpsError(supabaseAdmin, 'match', anchorId, THREAD_OPERATION, detail);
+    return { matchId: anchorId, title, status: 'failed', detail };
   }
+}
+
+/** Resolves a season's forum channel and its already-existing threads — the season-level scaffold
+ *  shared by `publishWeekThreads()` and `publishPodThreads()`. Records/clears the
+ *  `discord_thread_publish` ops error itself. */
+async function resolveChannelAndThreads(
+  supabaseAdmin: SupabaseClient,
+  seasonId: number,
+  seasonName: string,
+  guildId: string,
+  token: string,
+): Promise<{ channelId: string; existingByTitle: Map<string, string> } | { error: string }> {
+  const channel = await resolveSeasonForumChannel(guildId, token, seasonName);
+  if ('error' in channel) {
+    await recordOpsError(supabaseAdmin, 'season', seasonId, CHANNEL_OPERATION, channel.error);
+    return { error: channel.error };
+  }
+  const existingThreads = await listChannelThreads(guildId, channel.channelId, token);
+  if ('error' in existingThreads) {
+    await recordOpsError(supabaseAdmin, 'season', seasonId, CHANNEL_OPERATION, existingThreads.error);
+    return { error: existingThreads.error };
+  }
+  await clearOpsError(supabaseAdmin, 'season', seasonId, CHANNEL_OPERATION);
+  return { channelId: channel.channelId, existingByTitle: new Map(existingThreads.map((t) => [t.name, t.id])) };
 }
 
 function resolveTargetWeek(schedule: WeekWithMatches[], week: number | 'next'): WeekWithMatches | null {
@@ -278,26 +310,16 @@ export async function publishWeekThreads(
   if (!targetWeek) return { error: week === 'next' ? 'No upcoming week found' : `Week ${week} not found` };
   if (targetWeek.matches.length === 0) return { error: `Week ${targetWeek.week_number} has no matches` };
 
-  const channel = await resolveSeasonForumChannel(guildId, token, season.name);
-  if ('error' in channel) {
-    await recordOpsError(supabaseAdmin, 'season', seasonId, CHANNEL_OPERATION, channel.error);
-    return { error: channel.error };
-  }
-
-  const existingThreads = await listChannelThreads(guildId, channel.channelId, token);
-  if ('error' in existingThreads) {
-    await recordOpsError(supabaseAdmin, 'season', seasonId, CHANNEL_OPERATION, existingThreads.error);
-    return { error: existingThreads.error };
-  }
-  await clearOpsError(supabaseAdmin, 'season', seasonId, CHANNEL_OPERATION);
-  const existingByTitle = new Map(existingThreads.map((t) => [t.name, t.id]));
+  const resolved = await resolveChannelAndThreads(supabaseAdmin, seasonId, season.name, guildId, token);
+  if ('error' in resolved) return resolved;
+  const { channelId, existingByTitle } = resolved;
 
   const playersById = await getPlayersById();
   const results: ThreadPublishResult[] = [];
   for (const match of targetWeek.matches) {
     const title = threadTitle(targetWeek.week_number, match.match_number);
     results.push(
-      await publishMatchThread(supabaseAdmin, channel.channelId, token, targetWeek.week_number, match, playersById, existingByTitle.get(title)),
+      await publishThread(supabaseAdmin, channelId, token, title, openingPost(match, playersById), [match.id], existingByTitle.get(title)),
     );
   }
 
@@ -310,75 +332,11 @@ function resolveTargetRound(rounds: GauntletRound[], round: number | 'next'): Ga
     : rounds.find((r) => r.round_number === round) ?? null;
 }
 
-/** A pod's opening post: both games' shirts-vs-skins lineups, tagging each player the same way
- *  `openingPost()` does for a weekly match thread — mentioned by linked Discord account, or their
- *  plain name otherwise. Both games share the same 4 players reshuffled across factions, so this is
- *  the one place a pod thread actually distinguishes them. */
+/** A pod's opening post: both games' shirts-vs-skins lineups. Both games share the same 4 players
+ *  reshuffled across factions, so this is the one place a pod thread actually distinguishes them. */
 function podOpeningPost(game1: GauntletMatch, game2: GauntletMatch, playersById: Map<number, { discord_id: string | null }>): string {
-  const mention = (p: { player_id: number; player_name: string }) => {
-    const discordId = playersById.get(p.player_id)?.discord_id;
-    return discordId ? `<@${discordId}>` : p.player_name;
-  };
-  const line = (m: GauntletMatch) => `${m.shirts_stats.map(mention).join(' & ')} vs ${m.skins_stats.map(mention).join(' & ')}`;
-  return `Game 1: ${line(game1)}\nGame 2 (30 min later): ${line(game2)}`;
-}
-
-/** Creates (or adopts, per this file's header) one pod's Discord thread and points both of its
- *  games' `match_discord_state` rows at it — the pod counterpart to `publishMatchThread()`. */
-async function publishPodThread(
-  supabaseAdmin: SupabaseClient,
-  channelId: string,
-  token: string,
-  roundNumber: number,
-  podIndex: number,
-  game1: GauntletMatch,
-  game2: GauntletMatch,
-  playersById: Map<number, { discord_id: string | null }>,
-  existingThreadId: string | undefined,
-): Promise<ThreadPublishResult> {
-  const title = podThreadTitle(roundNumber, podIndex);
-
-  if (existingThreadId) {
-    await supabaseAdmin.from('match_discord_state').upsert(
-      [
-        { match_id: game1.id, thread_id: existingThreadId },
-        { match_id: game2.id, thread_id: existingThreadId },
-      ],
-      { onConflict: 'match_id' },
-    );
-    await recordOpsError(
-      supabaseAdmin, 'match', game1.id, THREAD_OPERATION,
-      `Thread "${title}" already exists in the channel (${existingThreadId}) — adopted it instead of creating a duplicate`,
-    );
-    return { matchId: game1.id, title, status: 'skipped', detail: `Already exists (thread ${existingThreadId})` };
-  }
-
-  try {
-    const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/threads`, {
-      method: 'POST',
-      headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: title, message: { content: podOpeningPost(game1, game2, playersById) } }),
-    });
-    if (!res.ok) {
-      const detail = await discordErrorDetail('Thread create', res);
-      await recordOpsError(supabaseAdmin, 'match', game1.id, THREAD_OPERATION, detail);
-      return { matchId: game1.id, title, status: 'failed', detail };
-    }
-    const thread = (await res.json()) as { id: string };
-    await supabaseAdmin.from('match_discord_state').upsert(
-      [
-        { match_id: game1.id, thread_id: thread.id },
-        { match_id: game2.id, thread_id: thread.id },
-      ],
-      { onConflict: 'match_id' },
-    );
-    await clearOpsError(supabaseAdmin, 'match', game1.id, THREAD_OPERATION);
-    return { matchId: game1.id, title, status: 'created', detail: `Thread ${thread.id}` };
-  } catch (e) {
-    const detail = `Thread create failed: ${(e as Error).message}`;
-    await recordOpsError(supabaseAdmin, 'match', game1.id, THREAD_OPERATION, detail);
-    return { matchId: game1.id, title, status: 'failed', detail };
-  }
+  return `Game 1: ${lineup(game1.shirts_stats, game1.skins_stats, playersById)}\n` +
+    `Game 2 (${POD_GAME_GAP_LABEL} later): ${lineup(game2.shirts_stats, game2.skins_stats, playersById)}`;
 }
 
 export interface PublishPodThreadsResult {
@@ -410,28 +368,12 @@ export async function publishPodThreads(
   const targetRound = resolveTargetRound(rounds, round);
   if (!targetRound) return { error: round === 'next' ? 'No upcoming round found' : `Round ${round} not found` };
 
-  const byPod = new Map<number, GauntletMatch[]>();
-  for (const m of targetRound.matches) {
-    if (m.pod_index == null) continue;
-    const list = byPod.get(m.pod_index) ?? [];
-    list.push(m);
-    byPod.set(m.pod_index, list);
-  }
+  const byPod = groupPodMatches(targetRound);
   if (byPod.size === 0) return { error: `Round ${targetRound.round_number} has no materialized pods` };
 
-  const channel = await resolveSeasonForumChannel(guildId, token, season.name);
-  if ('error' in channel) {
-    await recordOpsError(supabaseAdmin, 'season', gauntletSeasonId, CHANNEL_OPERATION, channel.error);
-    return { error: channel.error };
-  }
-
-  const existingThreads = await listChannelThreads(guildId, channel.channelId, token);
-  if ('error' in existingThreads) {
-    await recordOpsError(supabaseAdmin, 'season', gauntletSeasonId, CHANNEL_OPERATION, existingThreads.error);
-    return { error: existingThreads.error };
-  }
-  await clearOpsError(supabaseAdmin, 'season', gauntletSeasonId, CHANNEL_OPERATION);
-  const existingByTitle = new Map(existingThreads.map((t) => [t.name, t.id]));
+  const resolved = await resolveChannelAndThreads(supabaseAdmin, gauntletSeasonId, season.name, guildId, token);
+  if ('error' in resolved) return resolved;
+  const { channelId, existingByTitle } = resolved;
 
   const playersById = await getPlayersById();
   const results: ThreadPublishResult[] = [];
@@ -443,7 +385,7 @@ export async function publishPodThreads(
     }
     const [game1, game2] = [...matches].sort((a, b) => a.match_number - b.match_number);
     results.push(
-      await publishPodThread(supabaseAdmin, channel.channelId, token, targetRound.round_number, podIndex, game1, game2, playersById, existingByTitle.get(title)),
+      await publishThread(supabaseAdmin, channelId, token, title, podOpeningPost(game1, game2, playersById), [game1.id, game2.id], existingByTitle.get(title)),
     );
   }
 
