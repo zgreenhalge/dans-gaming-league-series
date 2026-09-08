@@ -198,7 +198,7 @@ Later rounds materialize automatically as their pod resolves, via a non-fatal ho
 (`resolveAndPropagate()`) appended to `PATCH /api/matches/[id]/score` after the score commit; both it
 and the seeding step share a `materializeIfReady()` helper that only materializes a pod once all four
 of its slots are filled and it hasn't already been. A pod's `advance_rule` and `is_final` also drive
-the "pod stakes" label shown on the round list and match page (`GAUNTLET_POD_STAKES_LABEL` in
+the "pod stakes" label shown on the round list, grouped by pod (`GAUNTLET_POD_STAKES_LABEL` in
 `src/lib/util.ts`). The score route runs `checkGauntletCompletion()` (below) only after
 `resolveAndPropagate()` settles, in the same hook — running them as unordered independent hooks would
 let completion see an incomplete round as "everything played" and archive before the final round

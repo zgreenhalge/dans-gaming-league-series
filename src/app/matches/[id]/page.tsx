@@ -8,7 +8,7 @@ import { getMatchMeta } from '@/lib/seo/og';
 import { buildMatchJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
 import { projectRatingDeltas, predictWinProbability, isProvisional, type RatingProjection } from '@/lib/ehog';
-import { isPlayedScore, parseScore, GAUNTLET_POD_STAKES_LABEL } from '@/lib/util';
+import { isPlayedScore, parseScore } from '@/lib/util';
 import { mapImageFor } from '@/lib/maps';
 import { getMapLookup } from '@/lib/queries';
 import { TopbarShell } from '@/components/TopbarShell';
@@ -138,14 +138,13 @@ export default async function MatchPage({
   const needsPreviousWeekCheck =
     showPreMatchScouting && week.week_number > 1 && matchWindow != null && today < matchWindow.weekStart;
 
-  // Fetched once and reused for both the stakes label and the pod cross-link below — a pod's two
-  // games share one `gauntlet_pods` row, so resolving it twice would just be the same query twice.
-  const gauntletPodPromise = season.is_gauntlet ? getGauntletPodForMatch(matchId) : Promise.resolve(null);
-  const podSiblingPromise = gauntletPodPromise.then((pod) =>
-    pod ? getGauntletPodSibling(matchId, pod) : null,
+  // A pod's sibling lookup needs the pod itself first — chained rather than a second query, since
+  // both games share one `gauntlet_pods` row.
+  const podSiblingPromise = (season.is_gauntlet ? getGauntletPodForMatch(matchId) : Promise.resolve(null)).then(
+    (pod) => (pod ? getGauntletPodSibling(matchId, pod) : null),
   );
 
-  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, gauntletPod, podSibling, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, podSibling, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
     showPreMatchScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     // Cached and shared across every match page (see #441 item 3) rather than a fresh
     // full-league computeH2H() scan on each load.
@@ -161,7 +160,6 @@ export default async function MatchPage({
     played ? getMatchSabremetrics(matchId) : Promise.resolve([]),
     // Match ids on this map — feeds the scouting report's Map Intel heatmap (#128).
     showPreMatchScouting && map ? getMatchIdsForMap(map) : Promise.resolve<number[]>([]),
-    gauntletPodPromise,
     podSiblingPromise,
     needsPreviousWeekCheck ? isWeekComplete(season.id, week.week_number - 1) : Promise.resolve(false),
     // Drives the `--ticker-h` override below — only an unplayed match can ever be the live one.
@@ -312,11 +310,6 @@ export default async function MatchPage({
       <div className="centering">
         {match.is_feature_match && <FeatureMatchBanner />}
         {scheduleCollision && <SchedulingOverlapBanner conflict={scheduleCollision} />}
-        {gauntletPod && !gauntletPod.is_final && (
-          <div className="font-mono text-[11px] text-[var(--color-text-secondary)] text-center py-2">
-            {GAUNTLET_POD_STAKES_LABEL[gauntletPod.advance_rule]}
-          </div>
-        )}
         {podSibling && (
           <div className="font-mono text-[11px] text-[var(--color-text-secondary)] text-center py-2">
             <Link href={`/matches/${podSibling.matchId}`} className="hover:underline">
