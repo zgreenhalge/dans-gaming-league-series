@@ -401,9 +401,7 @@ export interface GauntletPodSibling {
   gameNumber: 1 | 2;
   /** True when `matchId` itself — not the sibling — is Game 2 of the pod. */
   callerIsGame2: boolean;
-  scheduledAt: string | null;
   finalScore: string | null;
-  map: string | null;
 }
 
 /** The other game in `matchId`'s pod, for the match page's "your pod" cross-link — null for a pod
@@ -420,19 +418,17 @@ export async function getGauntletPodSibling(
 
   const { data, error } = await supabase
     .from('matches')
-    .select('scheduled_at, final_score, picked_map, shirts_pick')
+    .select('final_score')
     .eq('id', siblingId)
     .maybeSingle();
   if (error) throw error;
-  const m = data as { scheduled_at: string | null; final_score: string | null; picked_map: string | null; shirts_pick: string | null } | null;
+  const m = data as { final_score: string | null } | null;
   if (!m) return null;
   return {
     matchId: siblingId,
     gameNumber,
     callerIsGame2,
-    scheduledAt: m.scheduled_at,
     finalScore: m.final_score,
-    map: m.shirts_pick ?? m.picked_map,
   };
 }
 
