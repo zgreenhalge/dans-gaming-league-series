@@ -420,8 +420,8 @@ export function compareMatchRefDesc(
  * pod (advance_rule is unused there; nobody "advances" from it — canonicalGauntletRankMap
  * (gauntlet-ranking.ts) ranks it on read instead). */
 export const GAUNTLET_POD_STAKES_LABEL: Record<'single' | 'wildcard', string> = {
-  single: 'Elimination pod — win both games to survive (3 of 4 are out).',
-  wildcard: 'Wildcard pod — only last place is eliminated (3 of 4 advance).',
+  single: 'Elimination — win both games to survive (3 of 4 are out).',
+  wildcard: 'Wildcard — only last place is eliminated (3 of 4 advance).',
 };
 
 export function avgOf(arr: number[]): number {
