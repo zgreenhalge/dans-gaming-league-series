@@ -76,6 +76,13 @@ function GauntletRoundCard({
   const maxRoundNumber = Math.max(...allRounds.map((r) => r.round_number));
   const isFinalRound = round.round_number === maxRoundNumber;
 
+  const podGroups = groupMatchesByPod(round.matches);
+  // When every pod in this round shares the same stakes, show it once in the header instead of once
+  // per pod below — a round can also mix rules (e.g. one wildcard pod feeding one elimination pod),
+  // in which case there's no single label to hoist and each pod keeps its own.
+  const podRules = new Set(podGroups.map((g) => g.advance_rule).filter((r) => r != null));
+  const roundStakes = !isFinalRound && podRules.size === 1 ? [...podRules][0] : null;
+
   const playerIdsInLaterRounds = new Set<number>();
   for (const r of allRounds) {
     if (r.round_number <= round.round_number) continue;
@@ -96,18 +103,25 @@ function GauntletRoundCard({
         <span className="text-[var(--color-text-secondary)] text-[12px] leading-none select-none w-3 shrink-0">
           {isOpen ? '−' : '+'}
         </span>
-        <span className="tracked text-[11px] font-semibold text-[var(--color-text-primary)]">
-          Round {round.round_number}
-        </span>
+        <div className="flex items-baseline gap-2.5 flex-1 min-w-0">
+          <span className="tracked text-[11px] font-semibold text-[var(--color-text-primary)]">
+            Round {round.round_number}
+          </span>
+          {roundStakes && (
+            <span className="font-mono text-[10px] text-[var(--color-text-secondary)]">
+              {GAUNTLET_POD_STAKES_LABEL[roundStakes]}
+            </span>
+          )}
+        </div>
       </button>
 
       {isOpen && (
         <>
           {(() => {
             let gameNumber = 0;
-            return groupMatchesByPod(round.matches).map((group, gi) => (
+            return podGroups.map((group, gi) => (
               <div key={group.pod_index ?? `solo-${gi}`}>
-                {!isFinalRound && group.advance_rule && (
+                {!isFinalRound && !roundStakes && group.advance_rule && (
                   <div className="px-4 py-1.5 font-mono text-[11px] text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-tertiary)]">
                     {GAUNTLET_POD_STAKES_LABEL[group.advance_rule]}
                   </div>
