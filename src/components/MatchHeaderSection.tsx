@@ -207,13 +207,15 @@ export default function MatchHeaderSection({
         ) : 'TBD'}
       </div>
       {podSibling && (
-        <Link
-          href={`/matches/${podSibling.matchId}`}
-          className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:underline"
-        >
-          Go to Game {podSibling.gameNumber}
-          {podSibling.finalScore && isPlayedScore(podSibling.finalScore) ? ` · ${podSibling.finalScore}` : ''}
-        </Link>
+        <div className="mt-1">
+          <Link
+            href={`/matches/${podSibling.matchId}`}
+            className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:underline"
+          >
+            Go to Game {podSibling.gameNumber}
+            {podSibling.finalScore && isPlayedScore(podSibling.finalScore) ? ` · ${podSibling.finalScore}` : ''}
+          </Link>
+        </div>
       )}
     </div>
   );
