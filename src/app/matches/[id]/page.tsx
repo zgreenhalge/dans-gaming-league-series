@@ -1,5 +1,4 @@
 import { Suspense } from 'react';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import type { Metadata } from 'next';
@@ -310,14 +309,6 @@ export default async function MatchPage({
       <div className="centering">
         {match.is_feature_match && <FeatureMatchBanner />}
         {scheduleCollision && <SchedulingOverlapBanner conflict={scheduleCollision} />}
-        {podSibling && (
-          <div className="font-mono text-[11px] text-[var(--color-text-secondary)] text-center py-2">
-            <Link href={`/matches/${podSibling.matchId}`} className="hover:underline">
-              Game {podSibling.gameNumber} of this pod
-              {podSibling.finalScore && isPlayedScore(podSibling.finalScore) ? ` · ${podSibling.finalScore}` : ''}
-            </Link>
-          </div>
-        )}
       </div>
       <Topbar seasonId={season.id} seasonName={season.name} weekNumber={week.week_number} matchNumber={match.match_number} isGauntlet={season.is_gauntlet} />
       <main className="max-w-[1080px] mx-auto px-6 pb-16">
@@ -342,6 +333,7 @@ export default async function MatchPage({
               canEdit={canEdit}
               played={played}
               isPodGame2={podSibling?.callerIsGame2 ?? false}
+              podSibling={podSibling}
               otherScheduled={otherScheduled}
             />
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { toSentenceCase, mapSlug } from '@/lib/maps';
 import { type ScheduledMatchRef } from '@/lib/server-schedule-collision';
+import { isPlayedScore } from '@/lib/util';
 import { useScheduleEditor } from './useScheduleEditor';
 import { useHasMounted } from './useHasMounted';
 import { ScheduleWarningBox } from './ScheduleWarning';
@@ -18,6 +19,9 @@ interface Props {
   played: boolean;
   /** True for Game 2 of a gauntlet pod — its time is derived from Game 1's, so it's shown read-only. */
   isPodGame2?: boolean;
+  /** The pod's other game, for the cross-link under the map name — null for a non-gauntlet match or
+   *  one with no resolvable pod sibling. */
+  podSibling?: { matchId: number; gameNumber: number; finalScore: string | null } | null;
   /** Other unplayed scheduled matches — drives the shared-server collision warning (#134). */
   otherScheduled?: ScheduledMatchRef[];
 }
@@ -87,6 +91,7 @@ export default function MatchHeaderSection({
   canEdit,
   played,
   isPodGame2 = false,
+  podSibling = null,
   otherScheduled = [],
 }: Props) {
   const isClient = useHasMounted();
@@ -201,6 +206,15 @@ export default function MatchHeaderSection({
           </Link>
         ) : 'TBD'}
       </div>
+      {podSibling && (
+        <Link
+          href={`/matches/${podSibling.matchId}`}
+          className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:underline"
+        >
+          Go to Game {podSibling.gameNumber}
+          {podSibling.finalScore && isPlayedScore(podSibling.finalScore) ? ` · ${podSibling.finalScore}` : ''}
+        </Link>
+      )}
     </div>
   );
 
