@@ -68,6 +68,7 @@ export default async function AdminPage() {
         return {
           regularSeasonId: s.id,
           regularSeasonName: s.name,
+          gauntletSeasonId: gauntletId,
           gauntletName: gauntletById.get(gauntletId)?.name ?? `Season ${gauntletId} Gauntlet`,
           seeded,
           started,

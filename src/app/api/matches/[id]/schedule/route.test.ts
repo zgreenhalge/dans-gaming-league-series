@@ -1,14 +1,16 @@
 /**
  * Route-handler harness for PATCH /api/matches/[id]/schedule — the admin-or-in-match access gate,
- * the gauntlet-match rejection, body validation, and (#395) that a successful write always calls the
- * `schedule_match_reminder` RPC afterward with the right args, best-effort (an RPC failure doesn't
- * fail the request, since scheduled_at itself already committed).
+ * the gauntlet-pod scheduling rules (Game 1 only, Game 2 derived 30 minutes later), body validation,
+ * and (#395) that a successful write always calls the `schedule_match_reminder` RPC afterward with
+ * the right args, best-effort (an RPC failure doesn't fail the request, since scheduled_at itself
+ * already committed).
  *
  * Run:  npx vitest run "src/app/api/matches/[id]/schedule/route.test.ts"
  */
 
 import assert from 'node:assert/strict';
 import { __setTestSession } from '@/lib/session';
+import { __setTestClient } from '@/lib/supabase';
 import { __setTestAdminClient } from '@/lib/supabase-admin';
 import { __setTestAfterMode, __flushTestAfter } from '@/lib/after';
 import { createFakeSupabaseClient, type RpcHandler } from '@/lib/test-support/fakeSupabase';
@@ -20,12 +22,38 @@ import { PATCH } from './route';
 const ADMIN_ID = 1;
 const OUT_OF_MATCH_ID = 5;
 const MATCH_ID = 100; // non-gauntlet
-const GAUNTLET_MATCH_ID = 200;
+const GAUNTLET_MATCH_ID = 200; // pod 1000's Game 1 (match1_id) in the base fixture
+const GAUNTLET_MATCH_ID_2 = 201; // Game 2, added by installPodFixture() below
 
 function installFixture(rpcHandlers: Record<string, RpcHandler> = {}) {
   const db = buildFakeDb();
   const client = createFakeSupabaseClient(db, rpcHandlers);
+  // The route reads its gauntlet-pod lookup through the query layer's anon `supabase` singleton
+  // (getGauntletPodForMatch()), same as every other read-only query helper, while writing through
+  // the admin client — both need to point at the same fake db.
+  __setTestClient(client);
   __setTestAdminClient(client);
+  return db;
+}
+
+/** installFixture() plus a second materialized match completing GAUNTLET_MATCH_ID's pod — the base
+ * fixture's pod 1000 only carries `match1_id` (it exists for other tests that don't need a full pod
+ * pair), so the Game-1/Game-2 scheduling tests build the real two-match shape here instead of
+ * touching the shared fixture. */
+function installPodFixture(rpcHandlers: Record<string, RpcHandler> = {}) {
+  const db = installFixture(rpcHandlers);
+  db.matches.push({
+    id: GAUNTLET_MATCH_ID_2, week_id: 12, match_number: 2, final_score: null,
+    picked_map: null, shirts_ban: null, shirts_ban2: null, skins_ban1: null, skins_ban2: null,
+    shirts_pick: null, skins_starting_side: null, is_playoff_game: true, is_feature_match: false,
+    pre_match_win_prob: null, pre_match_win_prob_formula_version: null, scheduled_at: null,
+    round_history: null, recording_url: null, replay_status: 'none',
+  });
+  // Replace, don't mutate, the pod row — buildFakeDb() returns the same shared fixture row objects
+  // every call, so mutating one in place would leak into every other test that touches this fixture.
+  db.gauntlet_pods = db.gauntlet_pods.map((p) =>
+    p.match1_id === GAUNTLET_MATCH_ID ? { ...p, match2_id: GAUNTLET_MATCH_ID_2 } : p,
+  );
   return db;
 }
 
@@ -64,10 +92,50 @@ async function main() {
     assert.equal(res.status, 403);
   });
 
-  await test('PATCH — gauntlet matches are rejected (403), even for an admin', async () => {
+  await test('PATCH — a gauntlet match with no fully materialized pod is rejected (404)', async () => {
+    // Base fixture's pod 1000 only has match1_id set — a transient state in production, between
+    // materializePod()'s two match inserts, that's never actually schedulable.
     installFixture();
     const res = await call(GAUNTLET_MATCH_ID, ADMIN_ID, { scheduled_at: null });
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 404);
+  });
+
+  await test('PATCH — scheduling a pod\'s Game 2 directly is rejected (400), pointing at Game 1', async () => {
+    installPodFixture();
+    const res = await call(GAUNTLET_MATCH_ID_2, ADMIN_ID, { scheduled_at: '2026-09-01T18:00:00.000Z' });
+    assert.equal(res.status, 400);
+    assert.match((await res.json()).error, /Game 1/);
+  });
+
+  await test('PATCH — scheduling a pod\'s Game 1 also sets Game 2 thirty minutes later, and reminds only Game 1', async () => {
+    __setTestAfterMode(true);
+    const { calls, handler } = recordingRpc();
+    const db = installPodFixture({ schedule_match_reminder: handler });
+    const iso = '2026-09-01T18:00:00.000Z';
+
+    const res = await call(GAUNTLET_MATCH_ID, ADMIN_ID, { scheduled_at: iso });
+    assert.equal(res.status, 200);
+    assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID)?.scheduled_at, iso);
+    assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID_2)?.scheduled_at, '2026-09-01T18:30:00.000Z');
+
+    await __flushTestAfter();
+    assert.equal(calls.length, 1, 'only Game 1 gets a reminder scheduled — one per pod, not two');
+    assert.deepEqual(calls[0], { p_match_id: GAUNTLET_MATCH_ID, p_scheduled_at: iso });
+    __setTestAfterMode(false);
+  });
+
+  await test('PATCH — clearing a pod\'s Game 1 time also clears Game 2\'s', async () => {
+    __setTestAfterMode(true);
+    const db = installPodFixture({ schedule_match_reminder: () => true });
+    db.matches.find((m) => m.id === GAUNTLET_MATCH_ID)!.scheduled_at = '2026-09-01T18:00:00.000Z';
+    db.matches.find((m) => m.id === GAUNTLET_MATCH_ID_2)!.scheduled_at = '2026-09-01T18:30:00.000Z';
+
+    const res = await call(GAUNTLET_MATCH_ID, ADMIN_ID, { scheduled_at: null });
+    assert.equal(res.status, 200);
+    assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID)?.scheduled_at, null);
+    assert.equal(db.matches.find((m) => m.id === GAUNTLET_MATCH_ID_2)?.scheduled_at, null);
+    await __flushTestAfter();
+    __setTestAfterMode(false);
   });
 
   await test('PATCH — missing scheduled_at in the body is rejected (400)', async () => {
@@ -178,6 +246,7 @@ async function main() {
   });
 
   __setTestSession(undefined);
+  __setTestClient(undefined);
   __setTestAdminClient(undefined);
   report();
 }

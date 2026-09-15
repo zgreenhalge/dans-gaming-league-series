@@ -261,7 +261,10 @@ export async function isMatchCurrentlyLive(matchId: number): Promise<boolean> {
 /**
  * Other unplayed matches that have a scheduled time — used to warn (and link) when a match is
  * scheduled close to another, since they'd contend for the single shared DatHost server (#134).
- * Played matches are excluded (their scheduled time is moot).
+ * Played matches are excluded (their scheduled time is moot). A gauntlet match's own pod sibling is
+ * intentionally 30 minutes away, not a collision — callers that need that excluded (the match page)
+ * already have the pod resolved and filter it out of the result themselves, rather than this
+ * general-purpose query re-resolving `gauntlet_pods` on every call, gauntlet or not.
  */
 export async function getOtherScheduledMatches(matchId: number): Promise<ScheduledMatchRef[]> {
   const { data } = await supabase

@@ -61,9 +61,10 @@ export default function SeasonStartDateButton({ seasonId, startDate, canEdit, se
   }
 
   if (!editing) {
-    const isUpcoming = seasonStatus === 'UPCOMING';
-    if (seasonStatus === 'ACTIVE') return null;
-    if (!canEdit && !startDate && !isUpcoming) return null;
+    // A start date only matters for planning ahead — once a season is live or archived, its weeks
+    // already happened on whatever schedule they happened on, so there's nothing left to show or
+    // edit here.
+    if (seasonStatus !== 'UPCOMING') return null;
     return (
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">

@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArmedConfirmButton } from './ArmedConfirmButton';
+import { DiscordThreadPublisher } from './DiscordThreadPublisher';
 
 export interface GauntletRow {
   regularSeasonId: number;
   regularSeasonName: string;
+  gauntletSeasonId: number;
   gauntletName: string;
   seeded: boolean;
   started: boolean;
@@ -180,6 +182,12 @@ function GauntletLifecycleRow({ season }: { season: GauntletRow }) {
               <div className="font-mono text-[12px]">{seededResult.relegated.join(', ')}</div>
             </div>
           )}
+        </div>
+      )}
+
+      {season.seeded && (
+        <div className="mt-3 pt-3 border-t border-[var(--color-border-tertiary)]">
+          <DiscordThreadPublisher seasonId={season.gauntletSeasonId} periodLabel="Round" />
         </div>
       )}
     </div>

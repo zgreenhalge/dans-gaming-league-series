@@ -1,7 +1,11 @@
 /**
  * Season status transitions and their gauntlet side effects, for both regular and gauntlet season
- * rows. UPCOMING -> ACTIVE is an explicit admin action (`activateSeason`); every other transition
- * is automatic, detected from the score route:
+ * rows. UPCOMING -> ACTIVE (`activateSeason`) fires automatically the moment a season's schedule is
+ * confirmed (`POST /api/seasons/[id]/schedule/confirm`, via `activateSeasonBestEffort`) — confirming
+ * is already the point of no return for the roster/schedule, so there's nothing left for a separate
+ * manual step to gate. `MarkSeasonActiveButton` stays on the season page as a manual fallback for the
+ * rare case where the auto-trigger's own status write fails; every other transition is automatic,
+ * detected from the score route:
  *   - A regular season goes ACTIVE -> ARCHIVED once every match in it has been played
  *     (`checkSeasonCompletion`), which also best-effort seeds its linked gauntlet.
  *   - A gauntlet season goes -> ARCHIVED once every match in it has been played *and* its Final pod
@@ -91,6 +95,25 @@ export async function activateSeason(supabaseAdmin: SupabaseClient, seasonId: nu
     buildGauntletShapeBestEffort(supabaseAdmin, seasonId),
   ]);
   return result;
+}
+
+/** Best-effort wrapper around `activateSeason()` for the schedule-confirm auto-trigger
+ * (`POST /api/seasons/[id]/schedule/confirm`) — confirming a season's schedule is real, committed
+ * data (weeks/matches now exist) regardless of whether the subsequent ACTIVE flip lands, so a
+ * failure here must never fail the confirm response itself. Recorded to `ops_errors`
+ * (`season_activate`) rather than thrown; `MarkSeasonActiveButton` stays on the season page as the
+ * manual retry path for exactly this case. */
+export async function activateSeasonBestEffort(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
+  try {
+    await activateSeason(supabaseAdmin, seasonId);
+    await clearOpsError(supabaseAdmin, 'season', seasonId, 'season_activate');
+  } catch (err) {
+    console.error(`auto-activate(season ${seasonId}) after schedule confirm failed:`, err);
+    await recordOpsError(
+      supabaseAdmin, 'season', seasonId, 'season_activate',
+      `Auto-activate after schedule confirm failed: ${(err as Error).message}. Use "Mark Active" to retry.`,
+    );
+  }
 }
 
 /** Best-effort gauntlet-seed behind `checkSeasonCompletion()` — never throws; a roster-drift skip

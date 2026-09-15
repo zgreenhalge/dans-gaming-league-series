@@ -29,7 +29,9 @@
       "Foroglio"
     ],
     "weekStart": "2026-04-01",
-    "weekEnd": "2026-04-07"
+    "weekEnd": "2026-04-07",
+    "podSiblingId": null,
+    "podGameNumber": null
   },
   {
     "match": {
@@ -59,7 +61,9 @@
     "isGauntlet": true,
     "mapPool": null,
     "weekStart": "2026-03-01",
-    "weekEnd": "2026-03-07"
+    "weekEnd": "2026-03-07",
+    "podSiblingId": null,
+    "podGameNumber": null
   },
   {
     "match": {
@@ -93,7 +97,9 @@
       "Vertigo"
     ],
     "weekStart": "2026-01-08",
-    "weekEnd": "2026-01-14"
+    "weekEnd": "2026-01-14",
+    "podSiblingId": null,
+    "podGameNumber": null
   },
   {
     "match": {
@@ -127,7 +133,9 @@
       "Vertigo"
     ],
     "weekStart": "2026-01-01",
-    "weekEnd": "2026-01-07"
+    "weekEnd": "2026-01-07",
+    "podSiblingId": null,
+    "podGameNumber": null
   },
   {
     "match": {
@@ -161,7 +169,9 @@
       "Vertigo"
     ],
     "weekStart": "2026-01-01",
-    "weekEnd": "2026-01-07"
+    "weekEnd": "2026-01-07",
+    "podSiblingId": null,
+    "podGameNumber": null
   },
   {
     "match": {
@@ -191,6 +201,8 @@
     "isGauntlet": true,
     "mapPool": null,
     "weekStart": "2025-11-01",
-    "weekEnd": "2025-11-07"
+    "weekEnd": "2025-11-07",
+    "podSiblingId": null,
+    "podGameNumber": null
   }
 ]

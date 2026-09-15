@@ -56,14 +56,29 @@ async function main() {
     assert.deepEqual(await getGauntletSeasonLeaderboard(1), []);
   });
 
-  await test('getGauntletPodForMatch(200) — resolves via the .or() match1/match2 clause, snapshot', async () => {
-    const pod = await getGauntletPodForMatch(200);
-    assert.notEqual(pod, null);
-    matchesSnapshot('getGauntletPodForMatch-200', pod);
+  await test('getGauntletPodForMatch(200) — pod 1000 has no match2_id yet, so it\'s not fully materialized', async () => {
+    // A transient state in real production data (between materializePod()'s two match inserts), kept
+    // as a fixture shorthand here since other tests in this file don't need a full two-match pod.
+    assert.equal(await getGauntletPodForMatch(200), null);
   });
 
   await test('getGauntletPodForMatch(100) — non-gauntlet match has no pod', async () => {
     assert.equal(await getGauntletPodForMatch(100), null);
+  });
+
+  await test('getGauntletPodForMatch — resolves via the .or() match1/match2 clause once both games are materialized, snapshot', async () => {
+    const db = buildFakeDb();
+    db.matches.push({ ...db.matches.find((m) => m.id === 200)!, id: 201, match_number: 2, final_score: null, scheduled_at: null });
+    // Replace, don't mutate, the pod row — buildFakeDb() returns the same shared fixture row objects
+    // every call, so mutating one in place would leak into every other test in this file.
+    db.gauntlet_pods = db.gauntlet_pods.map((p) => (p.match1_id === 200 ? { ...p, match2_id: 201 } : p));
+    __setTestClient(createFakeSupabaseClient(db));
+
+    const pod = await getGauntletPodForMatch(200);
+    assert.notEqual(pod, null);
+    matchesSnapshot('getGauntletPodForMatch-200', pod);
+
+    __setTestClient(createFakeSupabaseClient(buildFakeDb())); // restore the module-shared fixture for later tests
   });
 
   await test('getGauntletBracketShape(2) — one materialized, played, final pod, snapshot', async () => {

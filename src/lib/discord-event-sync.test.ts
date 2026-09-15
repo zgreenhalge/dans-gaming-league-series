@@ -143,12 +143,13 @@ async function main() {
     assert.match((result as { error: string }).error, /not configured/);
   });
 
-  await test('syncSeasonScheduledEvents: refuses a gauntlet season', async () => {
+  await test('syncSeasonScheduledEvents: a gauntlet season with no pod needing a time syncs nothing', async () => {
+    // Season 2 (fixtures.ts) is ARCHIVED with one played match (200) whose pod (1000) never got a
+    // Game 2 materialized — nothing here is an unplayed, fully-materialized pod to sync against.
     process.env.DISCORD_BOT_TOKEN = 'bot-token';
     process.env.DISCORD_GUILD_ID = GUILD_ID;
     const result = await syncSeasonScheduledEvents(adminClient, 2);
-    assert.ok('error' in result);
-    assert.match((result as { error: string }).error, /Gauntlet/);
+    assert.deepEqual(result, { seasonName: 'Season 5 Gauntlet', matches: [] });
   });
 
   await test('syncSeasonScheduledEvents: errors for a nonexistent season', async () => {
@@ -468,6 +469,100 @@ async function main() {
       );
     } finally {
       match101.scheduled_at = originalScheduledAt;
+    }
+  });
+
+  // ─── Gauntlet pods: Game 1's thread drives both games' scheduled_at ────────────────────────────
+
+  await test('syncSeasonScheduledEvents (gauntlet): syncs a pod\'s Game 1 from its shared thread, derives Game 2 30 minutes later, and reminds only Game 1', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = GUILD_ID;
+    // Complete pod 1000 (season 2, "Season 5 Gauntlet") with a real Game 2 — the shared fixture only
+    // carries match1_id (200) on its own. Restored in `finally` since these are the shared fakeDb's
+    // own row objects, same convention the schedule_match_reminder tests above use.
+    const pod1000 = fakeDb.gauntlet_pods.find((p) => p.match1_id === 200)!;
+    const match200 = fakeDb.matches.find((m) => m.id === 200)!;
+    const originalMatch200Score = match200.final_score;
+    fakeDb.matches.push({ ...match200, id: 9201, match_number: 2, final_score: null, scheduled_at: null });
+    pod1000.match2_id = 9201;
+    match200.final_score = null; // an unplayed Game 1 — otherwise the pod has nothing left to sync
+
+    const rpcCalls: Record<string, unknown>[] = [];
+    const clientWithRpc = createFakeSupabaseClient(fakeDb, {
+      schedule_match_reminder: (args) => { rpcCalls.push(args); return true; },
+    });
+
+    stubDiscord({
+      threads: [{ id: 'thread-pod1000', name: 'Round 1 Pod 1', parent_id: 'channel-season-5' }],
+      events: [{ id: '4444444444444444444', scheduled_start_time: '2026-05-01T18:00:00.000Z', status: 1 }],
+      messagesByThread: {
+        'thread-pod1000': [{ id: 'm0', content: shareLink('4444444444444444444') }],
+      },
+    });
+
+    try {
+      const result = await syncSeasonScheduledEvents(clientWithRpc, 2);
+      assert.ok(!('error' in result));
+      const ok = result as Exclude<typeof result, { error: string }>;
+      assert.equal(ok.matches.length, 1, 'Game 2 is never tracked independently — only the pod\'s Game 1');
+      assert.equal(ok.matches[0].matchId, 200);
+      assert.equal(ok.matches[0].status, 'synced');
+
+      const game1 = fakeDb.matches.find((m) => m.id === 200)!;
+      const game2 = fakeDb.matches.find((m) => m.id === 9201)!;
+      assert.equal(game1.scheduled_at, '2026-05-01T18:00:00.000Z');
+      assert.equal(game2.scheduled_at, '2026-05-01T18:30:00.000Z', 'Game 2 is always Game 1\'s time plus 30 minutes');
+
+      assert.equal(rpcCalls.length, 1, 'one reminder per pod, scheduled against Game 1 only');
+      assert.deepEqual(rpcCalls[0], { p_match_id: 200, p_scheduled_at: '2026-05-01T18:00:00.000Z' });
+    } finally {
+      fakeDb.matches = fakeDb.matches.filter((m) => m.id !== 9201);
+      pod1000.match2_id = null;
+      match200.final_score = originalMatch200Score;
+    }
+  });
+
+  await test('syncSeasonScheduledEvents (gauntlet): never overwrites Game 2\'s scheduled_at once Game 2 is already played, even while Game 1 still syncs', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = GUILD_ID;
+    // Out-of-order match entry (a real, documented occurrence in this league) can leave Game 2
+    // scored before Game 1 is. Game 1 syncing its own event must not drag Game 2's scheduled_at
+    // along with it once Game 2 is done.
+    const pod1000 = fakeDb.gauntlet_pods.find((p) => p.match1_id === 200)!;
+    const match200 = fakeDb.matches.find((m) => m.id === 200)!;
+    const originalMatch200Score = match200.final_score;
+    fakeDb.matches.push({ ...match200, id: 9202, match_number: 2, final_score: '13-9', scheduled_at: '2026-04-01T12:00:00.000Z' });
+    pod1000.match2_id = 9202;
+    match200.final_score = null; // Game 1 is still unplayed — Game 2 already has a result
+    // Match 200 may carry a cached event_id from an earlier test's own sync — clear it so this test's
+    // own thread scan runs fresh instead of trusting a stale cache pointed at a different event.
+    const originalDiscordState = fakeDb.match_discord_state;
+    fakeDb.match_discord_state = (fakeDb.match_discord_state ?? []).filter((r) => r.match_id !== 200);
+
+    stubDiscord({
+      threads: [{ id: 'thread-pod1000', name: 'Round 1 Pod 1', parent_id: 'channel-season-5' }],
+      events: [{ id: '5555555555555555555', scheduled_start_time: '2026-05-08T18:00:00.000Z', status: 1 }],
+      messagesByThread: {
+        'thread-pod1000': [{ id: 'm0', content: shareLink('5555555555555555555') }],
+      },
+    });
+
+    try {
+      const result = await syncSeasonScheduledEvents(createFakeSupabaseClient(fakeDb), 2);
+      assert.ok(!('error' in result));
+      const ok = result as Exclude<typeof result, { error: string }>;
+      assert.equal(ok.matches[0].matchId, 200);
+      assert.equal(ok.matches[0].status, 'synced');
+
+      const game1 = fakeDb.matches.find((m) => m.id === 200)!;
+      const game2 = fakeDb.matches.find((m) => m.id === 9202)!;
+      assert.equal(game1.scheduled_at, '2026-05-08T18:00:00.000Z');
+      assert.equal(game2.scheduled_at, '2026-04-01T12:00:00.000Z', 'a played Game 2 keeps its own scheduled_at untouched');
+    } finally {
+      fakeDb.matches = fakeDb.matches.filter((m) => m.id !== 9202);
+      pod1000.match2_id = null;
+      match200.final_score = originalMatch200Score;
+      fakeDb.match_discord_state = originalDiscordState;
     }
   });
 

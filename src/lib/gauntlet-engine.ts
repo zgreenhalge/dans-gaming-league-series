@@ -156,7 +156,10 @@ export async function materializePod(
   // (e.g. its last two feeder pods resolving within moments of each other) — the `.is('match1_id',
   // null)` guard means only one caller's update actually matches a row. The loser deletes its
   // orphaned match1 row and backs out before creating match 2 or any stats, so the pod is never
-  // double-materialized.
+  // double-materialized. This is also the one place that decides "match1_id is Game 1" — it's always
+  // inserted with the lower match_number, which is the invariant `podGamePairs()`
+  // (queries/gauntlet.ts) relies on to sort a pod's two games without needing match1_id/match2_id
+  // identity at hand.
   const match1Id = await insertMatch(nextMatchNumber);
   const { data: claimed, error: claimErr } = await supabaseAdmin
     .from('gauntlet_pods')
