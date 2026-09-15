@@ -25,11 +25,11 @@
 // a pod) so the close functions can still find it once played.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getSeason, getSeasonSchedule, findNextUnplayedWeek, getGauntletRounds, getGauntletPodForMatch, getPlayersById, groupPodMatches } from './queries';
+import { getSeason, getSeasonSchedule, findNextUnplayedWeek, getGauntletRounds, getGauntletPodForMatch, getPlayersById, groupPodMatches, podGamePairs } from './queries';
 import type { WeekWithMatches, MatchWithRoster } from './queries/schedule';
 import type { GauntletMatch, GauntletRound } from './queries/gauntlet';
 import type { Season } from './types';
-import { extractSeasonNumber, isPlayedScore, allMatchesPlayed } from './util';
+import { extractSeasonNumber, allMatchesPlayed } from './util';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { POD_GAME_GAP_LABEL } from './gauntlet-pod';
 
@@ -330,12 +330,6 @@ export async function publishWeekThreads(
   return { seasonName: season.name, weekNumber: targetWeek.week_number, matches: results };
 }
 
-function resolveTargetRound(rounds: GauntletRound[], round: number | 'next'): GauntletRound | null {
-  return round === 'next'
-    ? rounds.find((r) => r.matches.some((m) => !isPlayedScore(m.final_score))) ?? null
-    : rounds.find((r) => r.round_number === round) ?? null;
-}
-
 /** A pod's opening post: both games' shirts-vs-skins lineups. Both games share the same 4 players
  *  reshuffled across factions, so this is the one place a pod thread actually distinguishes them. */
 function podOpeningPost(game1: GauntletMatch, game2: GauntletMatch, playersById: Map<number, { discord_id: string | null }>): string {
@@ -345,17 +339,26 @@ function podOpeningPost(game1: GauntletMatch, game2: GauntletMatch, playersById:
 
 export interface PublishPodThreadsResult {
   seasonName: string;
-  roundNumber: number;
+  /** The single round targeted, or `null` when `round: 'next'` swept every round for newly-finalized
+   *  pods rather than targeting one round in particular (see `publishPodThreads()`'s doc comment). */
+  roundNumber: number | null;
   pods: ThreadPublishResult[];
 }
 
-/** Publishes one round's pod threads for a gauntlet season — the pod counterpart to
- *  `publishWeekThreads()`, resolving to the same `season-{N}` forum channel as the paired regular
- *  season (`extractSeasonNumber()` parses "Season N Gauntlet" the same as "Season N"). `round` is
- *  either an explicit round number or `'next'`, resolved as the first round with any unplayed game.
- *  A pod whose two games aren't both materialized yet is reported `failed` rather than attempted —
- *  there's nothing to link to until it is. `knownSeason`, if given, skips the `getSeason()` lookup —
- *  see `publishWeekThreads()`'s own doc comment. */
+/** Publishes pod threads for a gauntlet season — the pod counterpart to `publishWeekThreads()`,
+ *  resolving to the same `season-{N}` forum channel as the paired regular season
+ *  (`extractSeasonNumber()` parses "Season N Gauntlet" the same as "Season N"). An explicit `round`
+ *  number targets that one round, reporting every pod in it — one whose two games aren't both
+ *  materialized yet is `failed` rather than attempted, since there's nothing to link to until it is.
+ *
+ *  `round: 'next'` means something different here than it does for `publishWeekThreads()`'s weeks: a
+ *  bracket's parallel groups within the *same* round resolve independently, so one pod can finalize
+ *  (both games materialize) well before its round-mate does — there's no single "next round" to point
+ *  at the way there's a single next week. So `'next'` instead sweeps every round for every
+ *  fully-materialized pod that doesn't have a thread yet (checked against Discord itself, per this
+ *  file's header comment) and publishes all of them in one call — an unmaterialized pod is silently
+ *  skipped rather than reported, since there's nothing yet to say about it. `knownSeason`, if given,
+ *  skips the `getSeason()` lookup — see `publishWeekThreads()`'s own doc comment. */
 export async function publishPodThreads(
   supabaseAdmin: SupabaseClient,
   gauntletSeasonId: number,
@@ -371,30 +374,49 @@ export async function publishPodThreads(
   if (!token || !guildId) return { error: 'Discord is not configured (DISCORD_BOT_TOKEN / DISCORD_GUILD_ID)' };
 
   const rounds = await getGauntletRounds(gauntletSeasonId);
-  const targetRound = resolveTargetRound(rounds, round);
-  if (!targetRound) return { error: round === 'next' ? 'No upcoming round found' : `Round ${round} not found` };
-
-  const byPod = groupPodMatches(targetRound);
-  if (byPod.size === 0) return { error: `Round ${targetRound.round_number} has no materialized pods` };
 
   const resolved = await resolveChannelAndThreads(supabaseAdmin, gauntletSeasonId, season.name, guildId, token);
   if ('error' in resolved) return resolved;
   const { channelId, existingByTitle } = resolved;
-
   const playersById = await getPlayersById();
-  const results: ThreadPublishResult[] = [];
-  for (const [podIndex, matches] of [...byPod.entries()].sort((a, b) => a[0] - b[0])) {
-    const title = podThreadTitle(targetRound.round_number, podIndex);
-    if (matches.length !== 2) {
-      results.push({ matchId: matches[0]?.id ?? 0, title, status: 'failed', detail: 'Pod is not fully materialized (expected 2 games)' });
-      continue;
+
+  const publishPod = (title: string, game1: GauntletMatch, game2: GauntletMatch) =>
+    publishThread(supabaseAdmin, channelId, token, title, podOpeningPost(game1, game2, playersById), [game1.id, game2.id], existingByTitle.get(title));
+
+  if (round === 'next') {
+    // podGamePairs() already carries the "fully materialized" filter and the game1/game2 pairing —
+    // an unmaterialized pod is simply absent from it, exactly the silent-skip this sweep wants.
+    const results: ThreadPublishResult[] = [];
+    for (const targetRound of rounds) {
+      for (const { podIndex, game1, game2 } of podGamePairs(targetRound)) {
+        const title = podThreadTitle(targetRound.round_number, podIndex);
+        if (existingByTitle.has(title)) continue;
+        results.push(await publishPod(title, game1, game2));
+      }
     }
-    const [game1, game2] = [...matches].sort((a, b) => a.match_number - b.match_number);
-    results.push(
-      await publishThread(supabaseAdmin, channelId, token, title, podOpeningPost(game1, game2, playersById), [game1.id, game2.id], existingByTitle.get(title)),
-    );
+    if (results.length === 0) return { error: 'No newly finalized pods to publish' };
+    return { seasonName: season.name, roundNumber: null, pods: results };
   }
 
+  const targetRound = rounds.find((r) => r.round_number === round);
+  if (!targetRound) return { error: `Round ${round} not found` };
+  const byPod = groupPodMatches(targetRound);
+  if (byPod.size === 0) return { error: `Round ${targetRound.round_number} has no materialized pods` };
+  // Reuse podGamePairs() for the pairing itself — groupPodMatches() is still needed here (unlike the
+  // 'next' sweep above) to enumerate an incomplete pod so it can be reported `failed`, which
+  // podGamePairs() silently excludes.
+  const pairsByPodIndex = new Map(podGamePairs(targetRound).map((p) => [p.podIndex, p]));
+
+  const results: ThreadPublishResult[] = [];
+  for (const podIndex of [...byPod.keys()].sort((a, b) => a - b)) {
+    const title = podThreadTitle(targetRound.round_number, podIndex);
+    const pair = pairsByPodIndex.get(podIndex);
+    if (!pair) {
+      results.push({ matchId: byPod.get(podIndex)![0]?.id ?? 0, title, status: 'failed', detail: 'Pod is not fully materialized (expected 2 games)' });
+      continue;
+    }
+    results.push(await publishPod(title, pair.game1, pair.game2));
+  }
   return { seasonName: season.name, roundNumber: targetRound.round_number, pods: results };
 }
 

@@ -100,7 +100,7 @@ ones (`matchzy-config`, `ingest/matchzy-log`) are called by the game server, not
 | `POST` | `/api/cron/match-reminder` | Posts the 1-hour-out Discord reminder for one match (`notifyMatchReminder()`, `discord-notify.ts`, #395) — fired by Supabase `pg_net`, not a Vercel cron; see below |
 | `POST` | `/api/discord/interactions` | Discord Interactions endpoint (#396) — Ed25519-verified (`DISCORD_PUBLIC_KEY`), serves `/leaderboard`, `/scheduled`, `/player`, `/name-color` slash commands (`src/lib/discord-commands.ts`). Command *definitions* are separate, pushed by `scripts/register-discord-commands.ts` — this route only serves already-registered commands, it doesn't register them |
 | `POST` | `/api/admin/discord/backfill-name-roles` | Creates name-color Discord roles for every linked player still missing one (admin only; see "Discord account linking" above) |
-| `POST` | `/api/seasons/[id]/discord-threads` | Publish one week's (or, for a gauntlet season, one round's per-pod) Discord threads — `{ week: number \| 'next' }` — to the season's `season-{N}` forum channel, tagging rostered players (`publishWeekThreads()`/`publishPodThreads()`, `src/lib/discord-threads.ts`, #398). Admin-triggered only (admin only) |
+| `POST` | `/api/seasons/[id]/discord-threads` | Publish Discord threads to the season's `season-{N}` forum channel, tagging rostered players — one per match for a regular season's week, or one per pod for a gauntlet's round (`publishWeekThreads()`/`publishPodThreads()`, `src/lib/discord-threads.ts`, #398). `{ week: number \| 'next' }` — an explicit number targets that week/round; for a gauntlet, `'next'` sweeps every round for every finalized pod with no thread yet (a bracket's parallel groups don't share one "next round"). Admin-triggered only (admin only) |
 
 ## Database
 
@@ -272,7 +272,10 @@ provision/play/teardown one after the other on the one server, same as any other
 Discord follows the same pod-not-match grain: `publishPodThreads()` (`discord-threads.ts`) posts one
 thread per pod ("Round N Pod M") in the same `season-{N}` forum channel `publishWeekThreads()` uses,
 mentioning all 4 players and both games' lineups, and points both games' `match_discord_state` rows at
-it; `closeGauntletPodThreadIfDone()` archives/locks it only once *both* games are played, not after
+it. Because a bracket's parallel groups within one round can finalize at different times, its `'next'`
+resolution sweeps every round for every fully-materialized pod without a thread yet rather than
+targeting a single "next round" the way `publishWeekThreads()` targets a single next week; an explicit
+round number still targets just that round. `closeGauntletPodThreadIfDone()` archives/locks it only once *both* games are played, not after
 the first (`writeMatchScore()`'s hook branches on `is_gauntlet` to call this instead of the regular
 `closeMatchThread()`). Only Game 1 ever gets a scheduled-reminder job or a Discord Scheduled Event
 sync target (`discord-event-sync.ts`'s `podPartnerId` parameter propagates a synced time onto Game 2

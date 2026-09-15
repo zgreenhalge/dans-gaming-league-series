@@ -1,17 +1,21 @@
 'use client';
 
 // Manage -> Season's Discord thread publisher (#398) — admin-triggered only, since a season's
-// start_date is often arbitrary and so is when an admin actually wants threads posted.
-// "Publish Next Week/Round" resolves "next" as the first period with no played matches yet
-// (`findNextUnplayedWeek()`/gauntlet's own resolution, server-side in `publishWeekThreads()`/
-// `publishPodThreads()`) — deliberately not the home page / `/scheduled` calendar-current week,
-// since out-of-order match entry can put those on a different period than the one that still needs
-// threads. The number field covers publishing an arbitrary past/future period by hand. A regular
-// season publishes one thread per match; a gauntlet season (`periodLabel="Round"`) publishes one per
-// pod, covering both its games. Results render immediately — a channel permission overwrite is the
-// likeliest first-attempt failure and needs to be visible right here, not only in the Activity feed
-// on a later page load. Closing a thread once its match(es) are played happens separately, from the
-// score route (`closeMatchThread()`/`closeGauntletPodThreadIfDone()`), not from here.
+// start_date is often arbitrary and so is when an admin actually wants threads posted. For a regular
+// season, "Publish Next Week" resolves "next" as the first week with no played matches yet
+// (`findNextUnplayedWeek()`, server-side in `publishWeekThreads()`) — deliberately not the home page /
+// `/scheduled` calendar-current week, since out-of-order match entry can put those on a different
+// week than the one that still needs threads. A gauntlet's pods don't share that single-target
+// shape — a bracket's parallel groups within the same round can finalize at different times — so for
+// a gauntlet season (`periodLabel="Round"`), "Publish Ready Pods" instead sweeps every round for
+// every fully-materialized pod with no thread yet and publishes all of them at once
+// (`publishPodThreads()`'s `round: 'next'`), which is why its result list has no single period number
+// header. The number field, for either season type, covers publishing an arbitrary past/future
+// period by hand. A regular season publishes one thread per match; a gauntlet season publishes one
+// per pod, covering both its games. Results render immediately — a channel permission overwrite is
+// the likeliest first-attempt failure and needs to be visible right here, not only in the Activity
+// feed on a later page load. Closing a thread once its match(es) are played happens separately, from
+// the score route (`closeMatchThread()`/`closeGauntletPodThreadIfDone()`), not from here.
 
 import { useState } from 'react';
 import { ADMIN_PRIMARY_BUTTON_CLS } from './ArmedConfirmButton';
@@ -79,7 +83,7 @@ export function DiscordThreadPublisher({ seasonId, periodLabel = 'Week' }: { sea
           disabled={busy}
           className={`${ADMIN_PRIMARY_BUTTON_CLS} disabled:opacity-40`}
         >
-          {busy ? 'Publishing…' : `Publish Next ${periodLabel}`}
+          {busy ? 'Publishing…' : periodLabel === 'Round' ? 'Publish Ready Pods' : `Publish Next ${periodLabel}`}
         </button>
 
         <div className="flex items-center gap-2">
@@ -106,7 +110,9 @@ export function DiscordThreadPublisher({ seasonId, periodLabel = 'Week' }: { sea
 
       {results.length > 0 && (
         <div className="flex flex-col gap-1 border border-[var(--color-border-tertiary)] rounded px-3 py-2.5">
-          <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-1">{periodLabel} {publishedPeriod}</div>
+          <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-1">
+            {publishedPeriod != null ? `${periodLabel} ${publishedPeriod}` : 'Ready Pods'}
+          </div>
           {results.map((r) => (
             <div key={r.matchId} className="font-mono text-[11px] flex items-baseline gap-2">
               <span>{STATUS_ICON[r.status]}</span>

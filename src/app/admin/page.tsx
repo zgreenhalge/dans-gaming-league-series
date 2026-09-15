@@ -56,10 +56,16 @@ export default async function AdminPage() {
   const paired = buildRegularToGauntletMap(regularSeasons, gauntletSeasons);
   const gauntletById = new Map(gauntletSeasons.map((g) => [g.id, g]));
   const seasonOpsErrors = opsErrors.filter((e) => e.entityType === 'season');
-  const activeRegular = regularSeasons.filter((s) => s.status === 'ACTIVE');
+  // A paired gauntlet stays "in progress" for the admin console until it archives — a regular season
+  // itself archives the moment its last match is played, typically before its gauntlet has even
+  // started, so gating this on the regular season's own status would strand its build/seed/reset and
+  // pod-thread controls right when they're needed.
   const gauntletsInProgress: GauntletRow[] = await Promise.all(
-    activeRegular
-      .filter((s) => paired.has(s.id))
+    regularSeasons
+      .filter((s) => {
+        const gauntletId = paired.get(s.id);
+        return gauntletId !== undefined && gauntletById.get(gauntletId)?.status !== 'ARCHIVED';
+      })
       .map(async (s) => {
         const gauntletId = paired.get(s.id)!;
         const rounds = await getGauntletRounds(gauntletId);
