@@ -403,7 +403,10 @@ export async function syncSeasonScheduledEvents(
       for (const { podIndex, game1, game2 } of podGamePairs(round)) {
         if (isPlayedScore(game1.final_score)) continue;
         unplayedByTitle.set(podThreadTitle(round.round_number, podIndex), { id: game1.id, scheduled_at: game1.scheduled_at });
-        podPartnerByAnchorId.set(game1.id, game2.id);
+        // Out-of-order match entry (a documented gotcha — matches aren't always scored in play
+        // order) can leave Game 2 already played while Game 1 isn't yet — never queue an already-
+        // played match for a derived scheduled_at overwrite.
+        if (!isPlayedScore(game2.final_score)) podPartnerByAnchorId.set(game1.id, game2.id);
       }
     }
   } else {
