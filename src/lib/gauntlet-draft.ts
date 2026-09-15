@@ -16,7 +16,7 @@
  */
 
 import type { BracketPlan, AdvanceRule } from './gauntlet-bracket';
-import type { BracketPod } from './queries';
+import type { BracketPod, BracketSlot } from './queries';
 
 export type { AdvanceRule };
 
@@ -67,10 +67,19 @@ export function emptyDraftPod(key: string, round_number: number, pod_index: numb
 }
 
 /** Human name for a pod, shared by the diagram and the editor's slot picker so both read
- * "Winner of Round 1 Group 1" / "Second of Round 1 Group 2" identically. Groups are 1-indexed for
+ * "Round 1 Group 1 Winner" / "Second of Round 1 Group 2" identically. Groups are 1-indexed for
  * display; `pod_index` is 0-indexed. */
 export function groupLabel(pod: { round_number: number; pod_index: number; is_final: boolean }): string {
   return pod.is_final ? 'the Final' : `Round ${pod.round_number} Group ${pod.pod_index + 1}`;
+}
+
+/** The "advances from this pod" label — "Round 1 Group 1 Winner", or "Final Winner" for the pod with
+ * the bracket's one final. Deliberately not built off `groupLabel()`'s own "the Final" text (which
+ * reads fine mid-sentence, e.g. "beyond the Final's capacity", but not as a standalone label). Shared
+ * by `pendingSlotLabel()` and `availableAdvancements()`, the two single-advance ("this pod sends
+ * exactly one survivor on") label sites. */
+function winnerLabel(pod: { round_number: number; pod_index: number; is_final: boolean }): string {
+  return pod.is_final ? 'Final Winner' : `${groupLabel(pod)} Winner`;
 }
 
 const ORDINALS = ['First', 'Second', 'Third', 'Fourth'];
@@ -100,6 +109,52 @@ export function computeAdvanceOrdinals(pods: BracketPod[]): Map<string, number> 
     list.forEach((entry, i) => result.set(`${entry.podId}:${entry.slotIndex}`, i));
   }
   return result;
+}
+
+/** A bracket shape's pods keyed by id — the lookup both `GauntletBracketDiagram` and
+ * `GauntletRoundsList` need to resolve a pod-sourced slot's `source_pod_id` back to the pod itself
+ * (for `pendingSlotLabel()`'s "... Winner" naming and, in the diagram, drawing the connector
+ * line). */
+export function podsById(pods: BracketPod[]): Map<number, BracketPod> {
+  return new Map(pods.map((p) => [p.id, p]));
+}
+
+/** Whether a not-yet-materialized pod might still turn out to involve the given player once it
+ * resolves — only false once some slot is positively known to be someone else and none are them yet;
+ * a pod with nothing resolved at all always might still be theirs (e.g. they're still alive in an
+ * earlier pod this one is waiting on). The "should a pending pod still show under 'My games only'"
+ * check, shared by `GauntletRoundsList` (which pod to render) and `SeasonTabView` (which round to
+ * keep from being filtered away entirely when none of its *real* matches involve the player). */
+export function podMightBeMine(pod: BracketPod, playerId: number): boolean {
+  const anyResolved = pod.slots.some((s) => s.player_id != null);
+  const mineResolved = pod.slots.some((s) => s.player_id === playerId);
+  return !anyResolved || mineResolved;
+}
+
+/** Describes a slot whose occupant isn't decided yet, without ever surfacing a bare "TBD" — a seed
+ * slot names the seed, and a pod-sourced slot names the pod it comes from plus, for a pod that sends
+ * more than one survivor onward, which of those survivors ("First"/"Second"/...) this slot expects.
+ * `ordinal` is this slot's 0-based position among every slot fed by the same source pod, from
+ * `computeAdvanceOrdinals()`. `seedNames` (seed number → player name, from the paired regular
+ * season's *current* standings) fills in who that seed would be today — only ever shown before the
+ * bracket is actually seeded, since a seeded slot already has its own `player_name` and never reaches
+ * this function. Shared by `GauntletBracketDiagram` (the Groups tab) and `GauntletRoundsList` (the
+ * Schedule tab's pending-pod placeholders) so an undecided slot reads identically in both. */
+export function pendingSlotLabel(
+  slot: BracketSlot,
+  sourcePod: BracketPod | undefined,
+  ordinal: number,
+  seedNames?: Map<number, string>,
+): string {
+  if (slot.source_kind === 'seed' && slot.source_seed != null) {
+    const name = seedNames?.get(slot.source_seed);
+    return name ? `Seed ${slot.source_seed} (${name})` : `Seed ${slot.source_seed}`;
+  }
+  if (slot.source_kind === 'pod' && sourcePod) {
+    if (capacityFor(sourcePod.advance_rule) <= 1) return winnerLabel(sourcePod);
+    return `${ordinalWord(ordinal)} of ${groupLabel(sourcePod)}`;
+  }
+  return 'TBD';
 }
 
 /** Loads an already-persisted bracket shape (a manual gauntlet already in progress, or one built by
@@ -267,7 +322,7 @@ export function availableAdvancements(pods: DraftPod[]): AdvancementOption[] {
       options.push({
         sourcePodKey: pod.key,
         ordinal,
-        label: capacity === 1 ? `Winner of ${groupLabel(pod)}` : `${ordinalWord(ordinal)} of ${groupLabel(pod)}`,
+        label: capacity === 1 ? winnerLabel(pod) : `${ordinalWord(ordinal)} of ${groupLabel(pod)}`,
       });
     }
   }

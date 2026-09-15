@@ -235,6 +235,13 @@ export interface GauntletMatch {
 export interface GauntletRound {
   round_number: number;
   matches: GauntletMatch[];
+  /** True when this round is the bracket's actual final — sourced from `gauntlet_pods.is_final`,
+   * not from "the highest round_number with matches scheduled so far." A gauntlet's true final
+   * round can still be unmaterialized (no week/matches yet) while an earlier round is fully
+   * scheduled, so inferring "final" from the max round_number among returned rounds mislabels that
+   * earlier round as the final. Legacy CSV-imported gauntlets (no `gauntlet_pods` rows at all) fall
+   * back to that max-round_number heuristic, since they have no pod data to read `is_final` from. */
+  is_final_round: boolean;
 }
 
 /** Groups a round's matches by `pod_index` — the shared first step behind every "which games belong
@@ -576,19 +583,31 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
     getPlayersById(),
     supabase
       .from('gauntlet_pods')
-      .select('pod_index, advance_rule, match1_id, match2_id')
+      .select('round_number, pod_index, advance_rule, is_final, match1_id, match2_id')
       .eq('season_id', seasonId),
   ]);
   if (sErr) throw sErr;
   if (pErr) throw pErr;
 
+  type PodRow = {
+    round_number: number;
+    pod_index: number;
+    advance_rule: 'single' | 'wildcard';
+    is_final: boolean;
+    match1_id: number | null;
+    match2_id: number | null;
+  };
+  const podRows = (pods ?? []) as PodRow[];
+
   // Absent for gauntlets predating the bracket-scheduling feature (historical CSV imports have no
   // gauntlet_pods rows at all) — GauntletMatch.pod_index/advance_rule stay null for those.
   const podByMatchId = new Map<number, { pod_index: number; advance_rule: 'single' | 'wildcard' }>();
-  for (const p of (pods ?? []) as { pod_index: number; advance_rule: 'single' | 'wildcard'; match1_id: number | null; match2_id: number | null }[]) {
+  for (const p of podRows) {
     if (p.match1_id != null) podByMatchId.set(p.match1_id, { pod_index: p.pod_index, advance_rule: p.advance_rule });
     if (p.match2_id != null) podByMatchId.set(p.match2_id, { pod_index: p.pod_index, advance_rule: p.advance_rule });
   }
+  // Rounds containing the bracket's final pod — see GauntletRound.is_final_round.
+  const finalRoundNumbers = new Set(podRows.filter((p) => p.is_final).map((p) => p.round_number));
 
   type RawStat = {
     match_id: number;
@@ -630,6 +649,11 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
     matchesByWeekId.set(m.week_id, list);
   }
 
+  // Legacy CSV-imported gauntlets have no gauntlet_pods rows at all — fall back to the last
+  // scheduled round being the final, since there's no pod data to read `is_final` from. weekRows is
+  // sorted ascending above, so its last entry's week_number is that fallback round_number.
+  const fallbackFinalRoundNumber = podRows.length === 0 ? weekRows[weekRows.length - 1].week_number : null;
+
   const rounds: GauntletRound[] = [];
   for (const week of weekRows) {
     const weekMatches = (matchesByWeekId.get(week.id) ?? []).sort(
@@ -652,7 +676,11 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
         advance_rule: pod?.advance_rule ?? null,
       };
     });
-    rounds.push({ round_number: week.week_number, matches: gauntletMatches });
+    rounds.push({
+      round_number: week.week_number,
+      matches: gauntletMatches,
+      is_final_round: finalRoundNumbers.has(week.week_number) || week.week_number === fallbackFinalRoundNumber,
+    });
   }
   return rounds;
 }
