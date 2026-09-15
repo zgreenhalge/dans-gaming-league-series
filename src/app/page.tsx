@@ -152,15 +152,7 @@ export default async function Home() {
           </div>
         )}
 
-        {active.map((s) => (
-          <ActiveSeasonPanel
-            key={s.id}
-            season={s}
-            leaderboard={leaderboards.get(s.id) ?? []}
-          />
-        ))}
-
-        {activeGauntlets.map((s) => (
+        {[...active, ...activeGauntlets].map((s) => (
           <ActiveSeasonPanel
             key={s.id}
             season={s}

@@ -118,49 +118,47 @@ export default function MatchHeaderSection({
     isClient && weekStart && weekEnd ? `${fmtWindowDate(weekStart)} – ${fmtWindowDate(weekEnd)}` : null;
 
   const scheduleReadView = !editing && (
-    <div className="flex flex-col items-start gap-1">
-      <div className="flex items-center gap-2">
-        {scheduledAt ? (
-          canEditSchedule ? (
-            <div>
-              <button
-                onClick={startEditing}
-                className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)] hover:underline transition-colors"
-              >
-                {isClient ? fmtScheduled(scheduledAt) : null}
-              </button>
-              {countdown && (
-                <div className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
-                  {countdown}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div>
-              <div className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)]">
-                {isClient ? fmtScheduled(scheduledAt) : null}
+    <div className="flex items-center gap-2">
+      {scheduledAt ? (
+        canEditSchedule ? (
+          <div>
+            <button
+              onClick={startEditing}
+              className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)] hover:underline transition-colors"
+            >
+              {isClient ? fmtScheduled(scheduledAt) : null}
+            </button>
+            {countdown && (
+              <div className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
+                {countdown}
               </div>
-              {countdown && (
-                <div className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
-                  {countdown}
-                </div>
-              )}
+            )}
+          </div>
+        ) : (
+          <div>
+            <div className="map-text-scrim font-display text-[28px] font-semibold leading-tight text-[var(--color-text-primary)]">
+              {isClient ? fmtScheduled(scheduledAt) : null}
             </div>
-          )
-        ) : windowLabel ? (
-          <span className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)]">
-            {windowLabel}
-          </span>
-        ) : null}
-        {canEditSchedule && !scheduledAt && (
-          <button
-            onClick={startEditing}
-            className="map-text-scrim tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
-          >
-            Set time
-          </button>
-        )}
-      </div>
+            {countdown && (
+              <div className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)] mt-1">
+                {countdown}
+              </div>
+            )}
+          </div>
+        )
+      ) : windowLabel ? (
+        <span className="map-text-scrim tracked text-[10px] text-[var(--color-text-secondary)]">
+          {windowLabel}
+        </span>
+      ) : null}
+      {canEditSchedule && !scheduledAt && (
+        <button
+          onClick={startEditing}
+          className="map-text-scrim tracked text-[10px] font-semibold px-2 py-1 border border-[var(--color-border-primary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-secondary)] transition-colors"
+        >
+          Set time
+        </button>
+      )}
     </div>
   );
 
