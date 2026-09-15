@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import { PlayerName } from './PlayerName';
 import type { BracketPod, BracketSlot } from '@/lib/queries';
-import { capacityFor, groupLabel, ordinalWord, computeAdvanceOrdinals } from '@/lib/gauntlet-draft';
+import { computeAdvanceOrdinals, pendingSlotLabel } from '@/lib/gauntlet-draft';
 
 const POD_W = 232;
 const HEADER_H = 28;
@@ -20,32 +20,6 @@ const STATUS_COLOR: Record<SlotStatus, string> = {
   pending: 'var(--color-text-primary)',
   placeholder: 'var(--color-text-secondary)',
 };
-
-/** Describes a slot whose occupant isn't decided yet, without ever surfacing a bare "TBD" — a seed
- * slot names the seed, and a pod-sourced slot names the pod it comes from plus, for a pod that sends
- * more than one survivor onward, which of those survivors ("First"/"Second"/...) this slot expects.
- * `ordinal` is this slot's 0-based position among every slot fed by the same source pod, from
- * `computeAdvanceOrdinals()`. `seedNames` (seed number → player name, from the paired regular
- * season's *current* standings) fills in who that seed would be today — only ever shown before the
- * bracket is actually seeded, since a seeded slot already has its own `player_name` and never reaches
- * this function. */
-function pendingSlotLabel(
-  slot: BracketSlot,
-  sourcePod: BracketPod | undefined,
-  ordinal: number,
-  seedNames?: Map<number, string>,
-): string {
-  if (slot.source_kind === 'seed' && slot.source_seed != null) {
-    const name = seedNames?.get(slot.source_seed);
-    return name ? `Seed ${slot.source_seed} (${name})` : `Seed ${slot.source_seed}`;
-  }
-  if (slot.source_kind === 'pod' && sourcePod) {
-    const name = groupLabel(sourcePod);
-    if (capacityFor(sourcePod.advance_rule) <= 1) return `Winner of ${name}`;
-    return `${ordinalWord(ordinal)} of ${name}`;
-  }
-  return 'TBD';
-}
 
 /** Overview flow diagram of a gauntlet bracket — one box per pod, grouped into columns by round,
  * with a connector line from a pod to every downstream pod a survivor advances into. Reads the

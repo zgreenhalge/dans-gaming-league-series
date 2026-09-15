@@ -16,7 +16,7 @@
  */
 
 import type { BracketPlan, AdvanceRule } from './gauntlet-bracket';
-import type { BracketPod } from './queries';
+import type { BracketPod, BracketSlot } from './queries';
 
 export type { AdvanceRule };
 
@@ -100,6 +100,33 @@ export function computeAdvanceOrdinals(pods: BracketPod[]): Map<string, number> 
     list.forEach((entry, i) => result.set(`${entry.podId}:${entry.slotIndex}`, i));
   }
   return result;
+}
+
+/** Describes a slot whose occupant isn't decided yet, without ever surfacing a bare "TBD" — a seed
+ * slot names the seed, and a pod-sourced slot names the pod it comes from plus, for a pod that sends
+ * more than one survivor onward, which of those survivors ("First"/"Second"/...) this slot expects.
+ * `ordinal` is this slot's 0-based position among every slot fed by the same source pod, from
+ * `computeAdvanceOrdinals()`. `seedNames` (seed number → player name, from the paired regular
+ * season's *current* standings) fills in who that seed would be today — only ever shown before the
+ * bracket is actually seeded, since a seeded slot already has its own `player_name` and never reaches
+ * this function. Shared by `GauntletBracketDiagram` (the Groups tab) and `GauntletRoundsList` (the
+ * Schedule tab's pending-pod placeholders) so an undecided slot reads identically in both. */
+export function pendingSlotLabel(
+  slot: BracketSlot,
+  sourcePod: BracketPod | undefined,
+  ordinal: number,
+  seedNames?: Map<number, string>,
+): string {
+  if (slot.source_kind === 'seed' && slot.source_seed != null) {
+    const name = seedNames?.get(slot.source_seed);
+    return name ? `Seed ${slot.source_seed} (${name})` : `Seed ${slot.source_seed}`;
+  }
+  if (slot.source_kind === 'pod' && sourcePod) {
+    const name = groupLabel(sourcePod);
+    if (capacityFor(sourcePod.advance_rule) <= 1) return `Winner of ${name}`;
+    return `${ordinalWord(ordinal)} of ${name}`;
+  }
+  return 'TBD';
 }
 
 /** Loads an already-persisted bracket shape (a manual gauntlet already in progress, or one built by
