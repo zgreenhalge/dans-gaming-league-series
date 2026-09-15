@@ -73,8 +73,7 @@ function GauntletRoundCard({
         (rankMap.get(a.player_id) ?? Infinity) - (rankMap.get(b.player_id) ?? Infinity))
     : unsortedRecords;
   const allPlayed = allMatchesPlayed(round.matches);
-  const maxRoundNumber = Math.max(...allRounds.map((r) => r.round_number));
-  const isFinalRound = round.round_number === maxRoundNumber;
+  const isFinalRound = round.is_final_round;
 
   const podGroups = groupMatchesByPod(round.matches);
   // When every pod in this round shares the same stakes, show it once in the header instead of once

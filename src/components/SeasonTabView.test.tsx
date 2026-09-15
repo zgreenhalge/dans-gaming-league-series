@@ -33,7 +33,7 @@ function week(id: number, weekNumber: number): WeekWithMatches {
 }
 
 function round(n: number): GauntletRound {
-  return { round_number: n, matches: [] };
+  return { round_number: n, matches: [], is_final_round: false };
 }
 
 describe('SeasonTabView — tab state', () => {
