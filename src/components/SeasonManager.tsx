@@ -53,12 +53,12 @@ export function SeasonManager({
   const errorsByLabel = new Map(seasonOpsErrors.map((e) => [e.label, e]));
 
   // Every ACTIVE regular season is expandable, and so is an ARCHIVED one whose paired gauntlet is
-  // still open (`gauntletByRegularId` only carries seasons whose gauntlet lifecycle isn't done yet,
-  // per `admin/page.tsx`'s `regularSeasonsWithOpenGauntlet`) — a season archives the moment its last
-  // match is played, which is typically before its gauntlet has even started, so gating this on
-  // ACTIVE alone would strand every gauntlet's build/seed/reset and pod-thread controls right when
-  // they're needed. Gauntlet lifecycle controls (build/seed/reset, or the eligible "create" form) and
-  // the Discord match-thread publisher both live in the expansion.
+  // still open (`gauntletByRegularId` only carries seasons whose gauntlet lifecycle isn't done yet —
+  // see `admin/page.tsx`'s `gauntletsInProgress`) — a season archives the moment its last match is
+  // played, which is typically before its gauntlet has even started, so gating this on ACTIVE alone
+  // would strand every gauntlet's build/seed/reset and pod-thread controls right when they're needed.
+  // Gauntlet lifecycle controls (build/seed/reset, or the eligible "create" form) and the Discord
+  // match-thread publisher both live in the expansion.
   function expandable(s: SeasonSummary): boolean {
     return !s.isGauntlet && (s.status === 'ACTIVE' || gauntletByRegularId.has(s.id));
   }
