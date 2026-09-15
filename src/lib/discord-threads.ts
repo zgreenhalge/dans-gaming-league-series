@@ -28,6 +28,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSeason, getSeasonSchedule, findNextUnplayedWeek, getGauntletRounds, getGauntletPodForMatch, getPlayersById, groupPodMatches } from './queries';
 import type { WeekWithMatches, MatchWithRoster } from './queries/schedule';
 import type { GauntletMatch, GauntletRound } from './queries/gauntlet';
+import type { Season } from './types';
 import { extractSeasonNumber, isPlayedScore, allMatchesPlayed } from './util';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { POD_GAME_GAP_LABEL } from './gauntlet-pod';
@@ -291,13 +292,16 @@ export async function closeMatchThread(supabaseAdmin: SupabaseClient, matchId: n
  *  created one at a time rather than in parallel, out of caution around
  *  Discord's per-route rate limits on forum thread creation. Returns `{ error }` for a season-level
  *  failure (bad season, unconfigured Discord, channel not found/wrong type, no such week) before any
- *  match is attempted; otherwise every match's own outcome, whether or not some of them failed. */
+ *  match is attempted; otherwise every match's own outcome, whether or not some of them failed.
+ *  `knownSeason`, if given, skips the `getSeason()` lookup — for a caller (the publish route) that
+ *  already fetched the season to decide which of this/`publishPodThreads` to call. */
 export async function publishWeekThreads(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
   week: number | 'next',
+  knownSeason?: Season,
 ): Promise<PublishWeekThreadsResult | { error: string }> {
-  const season = await getSeason(seasonId);
+  const season = knownSeason ?? (await getSeason(seasonId));
   if (!season) return { error: 'Season not found' };
   if (season.is_gauntlet) return { error: 'Gauntlet seasons do not use weekly match threads' };
 
@@ -350,13 +354,15 @@ export interface PublishPodThreadsResult {
  *  season (`extractSeasonNumber()` parses "Season N Gauntlet" the same as "Season N"). `round` is
  *  either an explicit round number or `'next'`, resolved as the first round with any unplayed game.
  *  A pod whose two games aren't both materialized yet is reported `failed` rather than attempted —
- *  there's nothing to link to until it is. */
+ *  there's nothing to link to until it is. `knownSeason`, if given, skips the `getSeason()` lookup —
+ *  see `publishWeekThreads()`'s own doc comment. */
 export async function publishPodThreads(
   supabaseAdmin: SupabaseClient,
   gauntletSeasonId: number,
   round: number | 'next',
+  knownSeason?: Season,
 ): Promise<PublishPodThreadsResult | { error: string }> {
-  const season = await getSeason(gauntletSeasonId);
+  const season = knownSeason ?? (await getSeason(gauntletSeasonId));
   if (!season) return { error: 'Season not found' };
   if (!season.is_gauntlet) return { error: 'Not a gauntlet season' };
 

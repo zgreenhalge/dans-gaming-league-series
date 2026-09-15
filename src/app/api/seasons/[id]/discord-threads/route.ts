@@ -31,8 +31,8 @@ export async function POST(
   if (!season) return NextResponse.json({ error: 'Season not found' }, { status: 404 });
 
   const result = season.is_gauntlet
-    ? await publishPodThreads(getAdminClient(), seasonId, week)
-    : await publishWeekThreads(getAdminClient(), seasonId, week);
+    ? await publishPodThreads(getAdminClient(), seasonId, week, season)
+    : await publishWeekThreads(getAdminClient(), seasonId, week, season);
   if ('error' in result) {
     return NextResponse.json({ error: result.error }, { status: 502 });
   }
