@@ -150,25 +150,31 @@ export async function listChannelThreads(
   return [...active.threads.filter((t) => t.parent_id === channelId), ...archived.threads];
 }
 
-/** A player's opening-post mention: the `<@discord_id>` tag when they've linked their Discord
- *  account, else their plain DGLS name. Shared by a weekly match's and a gauntlet pod's opening
- *  posts alike. */
-function mentionOrName(p: { player_id: number; player_name: string }, playersById: Map<number, { discord_id: string | null }>): string {
-  const discordId = playersById.get(p.player_id)?.discord_id;
-  return discordId ? `<@${discordId}>` : p.player_name;
+/** A player's opening-post mention: their personal Discord name-color role tag (`<@&roleId>`) when
+ *  they have one, else their plain DGLS name — the same "tag if linked, else plain name" convention
+ *  `discord-notify.ts`'s `playerTag()` uses for match-score announcements (kept as a separate,
+ *  parallel implementation rather than a shared import: `discord-notify.ts` already imports from this
+ *  file for `discordErrorDetail()`, so the reverse import would cycle). A role mention pings the one
+ *  player it's assigned to, same as tagging them directly, but renders in their name-color and
+ *  survives them changing their own Discord display name. Shared by a weekly match's and a gauntlet
+ *  pod's opening posts alike. Only usable in a thread's plain message `content` (which `publishThread()`
+ *  posts into, never an embed) — Discord doesn't parse mentions inside an embed as tags. */
+function mentionOrName(p: { player_id: number; player_name: string }, playersById: Map<number, { discord_name_role_id: string | null }>): string {
+  const roleId = playersById.get(p.player_id)?.discord_name_role_id;
+  return roleId ? `<@&${roleId}>` : p.player_name;
 }
 
 /** One game's "A & B vs C & D" lineup line, mentioning each player per `mentionOrName()`. */
 function lineup(
   shirts: { player_id: number; player_name: string }[],
   skins: { player_id: number; player_name: string }[],
-  playersById: Map<number, { discord_id: string | null }>,
+  playersById: Map<number, { discord_name_role_id: string | null }>,
 ): string {
   return `${shirts.map((p) => mentionOrName(p, playersById)).join(' & ')} vs ${skins.map((p) => mentionOrName(p, playersById)).join(' & ')}`;
 }
 
 /** One match's opening-post body. */
-function openingPost(match: MatchWithRoster, playersById: Map<number, { discord_id: string | null }>): string {
+function openingPost(match: MatchWithRoster, playersById: Map<number, { discord_name_role_id: string | null }>): string {
   return lineup(match.shirts, match.skins, playersById);
 }
 
@@ -332,7 +338,7 @@ export async function publishWeekThreads(
 
 /** A pod's opening post: both games' shirts-vs-skins lineups. Both games share the same 4 players
  *  reshuffled across factions, so this is the one place a pod thread actually distinguishes them. */
-function podOpeningPost(game1: GauntletMatch, game2: GauntletMatch, playersById: Map<number, { discord_id: string | null }>): string {
+function podOpeningPost(game1: GauntletMatch, game2: GauntletMatch, playersById: Map<number, { discord_name_role_id: string | null }>): string {
   return `Game 1: ${lineup(game1.shirts_stats, game1.skins_stats, playersById)}\n` +
     `Game 2: ${lineup(game2.shirts_stats, game2.skins_stats, playersById)}`;
 }
