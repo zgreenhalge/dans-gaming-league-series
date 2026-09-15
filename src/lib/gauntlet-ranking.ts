@@ -4,7 +4,7 @@ import { allMatchesPlayed, isPlayedScore, parseScore, deriveRwr, deriveAdr } fro
 // from queries/gauntlet.ts without creating a circular import.
 interface _GauntletPlayer { player_id: number; faction: 'SHIRTS' | 'SKINS'; is_win: boolean; adr: number }
 interface _GauntletMatch { final_score: string | null; shirts_stats: _GauntletPlayer[]; skins_stats: _GauntletPlayer[] }
-interface _GauntletRound { round_number: number; matches: _GauntletMatch[] }
+interface _GauntletRound { round_number: number; matches: _GauntletMatch[]; is_final_round?: boolean }
 
 /**
  * Canonical gauntlet ranking — returns a Map<player_id, rank> (1-indexed) matching
@@ -23,8 +23,14 @@ interface _GauntletRound { round_number: number; matches: _GauntletMatch[] }
 export function canonicalGauntletRankMap(rounds: _GauntletRound[]): Map<number, number> {
   if (rounds.length === 0) return new Map();
 
-  const maxRound = Math.max(...rounds.map((r) => r.round_number));
-  const finalRound = rounds.find((r) => r.round_number === maxRound);
+  // Prefer the bracket's declared final round (`is_final_round`, sourced from
+  // `gauntlet_pods.is_final`) over the highest round_number seen — the true final can still be
+  // unmaterialized while an earlier round is fully scheduled, which would otherwise crown that
+  // earlier round's winner champion prematurely. Callers that don't supply `is_final_round` (e.g.
+  // hand-built round fixtures) fall back to the old max-round_number heuristic.
+  const declaredFinal = rounds.find((r) => r.is_final_round === true);
+  const maxRound = declaredFinal ? declaredFinal.round_number : Math.max(...rounds.map((r) => r.round_number));
+  const finalRound = declaredFinal ?? rounds.find((r) => r.round_number === maxRound);
   if (!finalRound || !allMatchesPlayed(finalRound.matches)) {
     return new Map();
   }
