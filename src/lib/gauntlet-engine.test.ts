@@ -82,14 +82,14 @@ async function main() {
   assert.equal(m2.match_number, 2);
 
   // ranked by seed: r0=seed1(p1), r1=seed2(p2), r2=seed3(p3), r3=seed4(p4)
-  // game1 shirts=[r0,r3]=[1,4] skins=[r1,r2]=[2,3]; game2 shirts=[r0,r2]=[1,3] skins=[r1,r3]=[2,4]
+  // game1 shirts=[r0,r1]=[1,2] skins=[r2,r3]=[3,4]; game2 shirts=[r0,r2]=[1,3] skins=[r1,r3]=[2,4]
   const statsFor = (matchId: unknown) => db.player_match_stats.filter((s) => s.match_id === matchId);
   const game1 = statsFor(m1.id);
   assert.equal(game1.length, 4);
   assert.deepEqual(game1.find((s) => s.player_id === 1)!.faction, 'SHIRTS');
-  assert.deepEqual(game1.find((s) => s.player_id === 4)!.faction, 'SHIRTS');
-  assert.deepEqual(game1.find((s) => s.player_id === 2)!.faction, 'SKINS');
+  assert.deepEqual(game1.find((s) => s.player_id === 2)!.faction, 'SHIRTS');
   assert.deepEqual(game1.find((s) => s.player_id === 3)!.faction, 'SKINS');
+  assert.deepEqual(game1.find((s) => s.player_id === 4)!.faction, 'SKINS');
   assert.ok(game1.every((s) => s.kills === 0 && s.is_win === false));
 
   const pod = db.gauntlet_pods.find((p) => p.id === 900)!;

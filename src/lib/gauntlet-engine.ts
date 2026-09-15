@@ -69,7 +69,7 @@ async function getSeedByPlayer(supabaseAdmin: SupabaseClient, seasonId: number):
 }
 
 /** Creates the pod's two `matches` rows (+ 4 `player_match_stats` rows each) and links them back
- * onto `gauntlet_pods`. Pairing: rank 0-3 by seed (best first), game 1 = {0+3 vs 1+2}, game 2 =
+ * onto `gauntlet_pods`. Pairing: rank 0-3 by seed (best first), game 1 = {0+1 vs 2+3}, game 2 =
  * {0+2 vs 1+3} — two distinct pairings so exactly one player goes 2-0 and one goes 0-2. Faction:
  * whichever pair contains the pod's top (best) seed is SHIRTS in both games. */
 export async function materializePod(
@@ -115,7 +115,7 @@ export async function materializePod(
     1 + Math.max(0, ...((existingMatches ?? []) as { match_number: number }[]).map((m) => m.match_number));
 
   const games: { shirts: typeof ranked; skins: typeof ranked }[] = [
-    { shirts: [r0, r3], skins: [r1, r2] },
+    { shirts: [r0, r1], skins: [r2, r3] },
     { shirts: [r0, r2], skins: [r1, r3] },
   ];
 
