@@ -231,7 +231,7 @@ one — the tab itself is hidden (`src/app/seasons/[id]/page.tsx`) until `gauntl
 `gauntletRounds` has something in it, so a bare gauntlet-season shell with neither shows no tab at
 all rather than an empty one. An unresolved slot never reads a bare "TBD" — a seed-sourced slot names
 the seed ("Seed 3"), and a pod-sourced slot names the source pod and, for a pod that sends more than
-one survivor onward, which of them ("Winner of Round 1 Group 1", "Second of Round 1 Group 2"). Both
+one survivor onward, which of them ("Round 1 Group 1 Winner", "Second of Round 1 Group 2"). Both
 that labeling logic (`pendingSlotLabel()`) and the ordinal it needs (`computeAdvanceOrdinals()`) live
 in `src/lib/gauntlet-draft.ts`, shared with the round-by-round `GauntletRoundsList` below the diagram
 (#528): that view still gets its per-game detail (scores, maps, stats) from `getGauntletRounds()`,

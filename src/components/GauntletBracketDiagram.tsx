@@ -24,7 +24,7 @@ const STATUS_COLOR: Record<SlotStatus, string> = {
 /** Overview flow diagram of a gauntlet bracket — one box per pod, grouped into columns by round,
  * with a connector line from a pod to every downstream pod a survivor advances into. Reads the
  * persisted `gauntlet_pods`/`gauntlet_pod_slots` shape (`getGauntletBracketShape()`), so it renders
- * identically whether the bracket is unseeded (placeholder "winner of ..." rows, dashed future
+ * identically whether the bracket is unseeded (placeholder "... Winner" rows, dashed future
  * connectors), mid-play, or complete. `rankMap` is optional — pass `canonicalGauntletRankMap(rounds)`
  * to highlight the champion once the final round is fully played; omit it (e.g. for the pre-seed
  * preview, where no rounds exist yet) and the final pod's occupants just render as pending. */
@@ -80,7 +80,7 @@ export function GauntletBracketDiagram({
   }
 
   // Stable ordinal position of every pod-sourced slot among all slots fed by the same source pod —
-  // used by `pendingSlotLabel` to distinguish "Winner of ..." from "Second of ...".
+  // used by `pendingSlotLabel` to distinguish "... Winner" from "Second of ...".
   const advanceOrdinals = computeAdvanceOrdinals(pods);
 
   function slotStatus(pod: BracketPod, slot: BracketSlot): SlotStatus {

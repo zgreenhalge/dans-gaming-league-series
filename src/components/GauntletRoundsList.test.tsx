@@ -84,7 +84,7 @@ describe('GauntletRoundsList — pending pod placeholders (#528)', () => {
       />,
     );
 
-    expect(screen.getByText('Winner of Round 1 Group 1')).toBeInTheDocument();
+    expect(screen.getByText('Round 1 Group 1 Winner')).toBeInTheDocument();
     expect(screen.queryByText('TBD')).not.toBeInTheDocument();
   });
 

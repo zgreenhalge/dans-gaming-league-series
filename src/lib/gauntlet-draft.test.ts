@@ -111,10 +111,10 @@ test('pendingSlotLabel: seed slot names the current standings holder when seedNa
   assert.equal(pendingSlotLabel(slot, undefined, 0, seedNames), 'Seed 3 (Alice)');
 });
 
-test('pendingSlotLabel: pod-sourced slot from a single-elimination pod reads "Winner of ..."', () => {
+test('pendingSlotLabel: pod-sourced slot from a single-elimination pod reads "... Winner"', () => {
   const slot = bracketSlot({ source_kind: 'pod', source_pod_id: 10 });
   const sourcePod = bracketPod({ id: 10, round_number: 1, pod_index: 0, advance_rule: 'single' });
-  assert.equal(pendingSlotLabel(slot, sourcePod, 0), 'Winner of Round 1 Group 1');
+  assert.equal(pendingSlotLabel(slot, sourcePod, 0), 'Round 1 Group 1 Winner');
 });
 
 test('pendingSlotLabel: pod-sourced slot from a wildcard pod reads "<Ordinal> of ..." by the given ordinal', () => {
@@ -127,7 +127,7 @@ test('pendingSlotLabel: pod-sourced slot from a wildcard pod reads "<Ordinal> of
 test('pendingSlotLabel: pod-sourced slot names the Final, never a bare "TBD"', () => {
   const slot = bracketSlot({ source_kind: 'pod', source_pod_id: 20 });
   const sourcePod = bracketPod({ id: 20, round_number: 2, pod_index: 0, advance_rule: 'single', is_final: true });
-  assert.equal(pendingSlotLabel(slot, sourcePod, 0), 'Winner of the Final');
+  assert.equal(pendingSlotLabel(slot, sourcePod, 0), 'Final Winner');
 });
 
 test('pendingSlotLabel: falls back to "TBD" when the source pod is unresolvable', () => {
@@ -319,13 +319,13 @@ test('availableAdvancements: a wildcard pod offers 3 ordinals with First/Second/
   ]);
 });
 
-test('availableAdvancements: a single-advance pod offers one "Winner of" option; a final pod offers none', () => {
+test('availableAdvancements: a single-advance pod offers one "... Winner" option; a final pod offers none', () => {
   const pods: DraftPod[] = [
     draftPod({ key: 'src', round_number: 1, pod_index: 0, advance_rule: 'single' }),
     draftPod({ key: 'final', is_final: true, advance_rule: 'single' }),
   ];
   const options = availableAdvancements(pods);
-  assert.deepEqual(options, [{ sourcePodKey: 'src', ordinal: 0, label: 'Winner of Round 1 Group 1' }]);
+  assert.deepEqual(options, [{ sourcePodKey: 'src', ordinal: 0, label: 'Round 1 Group 1 Winner' }]);
 });
 
 // ─── validateIntegrity ───────────────────────────────────────────────────────

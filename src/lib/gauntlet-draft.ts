@@ -67,10 +67,19 @@ export function emptyDraftPod(key: string, round_number: number, pod_index: numb
 }
 
 /** Human name for a pod, shared by the diagram and the editor's slot picker so both read
- * "Winner of Round 1 Group 1" / "Second of Round 1 Group 2" identically. Groups are 1-indexed for
+ * "Round 1 Group 1 Winner" / "Second of Round 1 Group 2" identically. Groups are 1-indexed for
  * display; `pod_index` is 0-indexed. */
 export function groupLabel(pod: { round_number: number; pod_index: number; is_final: boolean }): string {
   return pod.is_final ? 'the Final' : `Round ${pod.round_number} Group ${pod.pod_index + 1}`;
+}
+
+/** The "advances from this pod" label — "Round 1 Group 1 Winner", or "Final Winner" for the pod with
+ * the bracket's one final. Deliberately not built off `groupLabel()`'s own "the Final" text (which
+ * reads fine mid-sentence, e.g. "beyond the Final's capacity", but not as a standalone label). Shared
+ * by `pendingSlotLabel()` and `availableAdvancements()`, the two single-advance ("this pod sends
+ * exactly one survivor on") label sites. */
+function winnerLabel(pod: { round_number: number; pod_index: number; is_final: boolean }): string {
+  return pod.is_final ? 'Final Winner' : `${groupLabel(pod)} Winner`;
 }
 
 const ORDINALS = ['First', 'Second', 'Third', 'Fourth'];
@@ -104,7 +113,7 @@ export function computeAdvanceOrdinals(pods: BracketPod[]): Map<string, number> 
 
 /** A bracket shape's pods keyed by id — the lookup both `GauntletBracketDiagram` and
  * `GauntletRoundsList` need to resolve a pod-sourced slot's `source_pod_id` back to the pod itself
- * (for `pendingSlotLabel()`'s "Winner of ..." naming and, in the diagram, drawing the connector
+ * (for `pendingSlotLabel()`'s "... Winner" naming and, in the diagram, drawing the connector
  * line). */
 export function podsById(pods: BracketPod[]): Map<number, BracketPod> {
   return new Map(pods.map((p) => [p.id, p]));
@@ -142,9 +151,8 @@ export function pendingSlotLabel(
     return name ? `Seed ${slot.source_seed} (${name})` : `Seed ${slot.source_seed}`;
   }
   if (slot.source_kind === 'pod' && sourcePod) {
-    const name = groupLabel(sourcePod);
-    if (capacityFor(sourcePod.advance_rule) <= 1) return `Winner of ${name}`;
-    return `${ordinalWord(ordinal)} of ${name}`;
+    if (capacityFor(sourcePod.advance_rule) <= 1) return winnerLabel(sourcePod);
+    return `${ordinalWord(ordinal)} of ${groupLabel(sourcePod)}`;
   }
   return 'TBD';
 }
@@ -314,7 +322,7 @@ export function availableAdvancements(pods: DraftPod[]): AdvancementOption[] {
       options.push({
         sourcePodKey: pod.key,
         ordinal,
-        label: capacity === 1 ? `Winner of ${groupLabel(pod)}` : `${ordinalWord(ordinal)} of ${groupLabel(pod)}`,
+        label: capacity === 1 ? winnerLabel(pod) : `${ordinalWord(ordinal)} of ${groupLabel(pod)}`,
       });
     }
   }
