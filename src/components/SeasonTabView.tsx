@@ -17,7 +17,7 @@ import TabBar from './TabBar';
 import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow, MatchRoundRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 import type { MatchPickBanInput } from '@/lib/mapSideStats';
-import { isPlayedScore, tabCls, weekAnchorId, roundAnchorId } from '@/lib/util';
+import { isPlayedScore, anyMatchPlayed, tabCls, weekAnchorId, roundAnchorId } from '@/lib/util';
 import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
 import { projectGauntletSeeding, seedPlacementsByPlayer, type SeedPlacement } from '@/lib/gauntlet-bracket';
 
@@ -188,7 +188,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   // alone can't tell "just confirmed, nothing played" apart from "well underway" — hence the played
   // check rather than gating on UPCOMING.
   const notRealStandingsYet =
-    !isGauntlet && !schedule.some((w) => w.matches.some((m) => isPlayedScore(m.final_score)));
+    !isGauntlet && !anyMatchPlayed(schedule.flatMap((w) => w.matches));
   const hasLeaderboard = leaderboard.length > 0 && !notRealStandingsYet;
   const hasStats = leaderboard.length > 0 && !notRealStandingsYet;
   const hasH2H = h2hData.players.length > 0 && (h2hData.duos.length > 0 || h2hData.rivals.length > 0);

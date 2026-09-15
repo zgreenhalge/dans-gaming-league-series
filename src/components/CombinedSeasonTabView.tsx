@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import SeasonTabView, { SEASON_TABS } from './SeasonTabView';
 import { useTabState } from './useTabState';
-import { tabCls, isPlayedScore } from '@/lib/util';
+import { tabCls, anyMatchPlayed } from '@/lib/util';
 import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow, MatchRoundRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 
@@ -106,7 +106,7 @@ export default function CombinedSeasonTabView({
   // materialized pod anyway — but hiding the link entirely past that point keeps this from reading
   // as an ongoing management surface once the gauntlet is actually underway.
   const gauntletStarted = useMemo(
-    () => gauntletRounds.some((r) => r.matches.some((m) => isPlayedScore(m.final_score))),
+    () => anyMatchPlayed(gauntletRounds.flatMap((r) => r.matches)),
     [gauntletRounds],
   );
 

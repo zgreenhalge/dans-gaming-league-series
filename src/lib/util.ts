@@ -41,6 +41,14 @@ export function allMatchesPlayed(rows: { final_score: string | null }[]): boolea
   return rows.length > 0 && rows.every((m) => isPlayedScore(m.final_score));
 }
 
+/** True if any row in `rows` has a played `final_score` — the "every" predicate's counterpart, for
+ * "has this scope of matches started at all" checks (e.g. a season's standings/stats aren't real
+ * until its first match is played, regardless of the season's own status). Callers with a nested
+ * weeks/rounds-of-matches shape should flatten to a flat match array first. */
+export function anyMatchPlayed(rows: { final_score: string | null }[]): boolean {
+  return rows.some((m) => isPlayedScore(m.final_score));
+}
+
 export const PLAYER_NAME_MIN_LENGTH = 2;
 export const PLAYER_NAME_MAX_LENGTH = 32;
 const PLAYER_NAME_RE = /^[A-Za-z]+(?: [A-Za-z]+)*$/;
