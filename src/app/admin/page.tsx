@@ -56,9 +56,18 @@ export default async function AdminPage() {
   const paired = buildRegularToGauntletMap(regularSeasons, gauntletSeasons);
   const gauntletById = new Map(gauntletSeasons.map((g) => [g.id, g]));
   const seasonOpsErrors = opsErrors.filter((e) => e.entityType === 'season');
-  const activeRegular = regularSeasons.filter((s) => s.status === 'ACTIVE');
+  // A regular season's gauntlet lifecycle needs surfacing whenever its postseason isn't done yet —
+  // for an ACTIVE season that's always true; for an ARCHIVED one (the common case: a season archives
+  // the moment its last match is played, typically before its gauntlet has even started) it's true
+  // as long as the paired gauntlet hasn't itself archived. A season with no paired gauntlet at all is
+  // only actionable while still ACTIVE (build requires it) — see the gauntlet build route.
+  const regularSeasonsWithOpenGauntlet = regularSeasons.filter((s) => {
+    const gauntletId = paired.get(s.id);
+    if (!gauntletId) return s.status === 'ACTIVE';
+    return gauntletById.get(gauntletId)?.status !== 'ARCHIVED';
+  });
   const gauntletsInProgress: GauntletRow[] = await Promise.all(
-    activeRegular
+    regularSeasonsWithOpenGauntlet
       .filter((s) => paired.has(s.id))
       .map(async (s) => {
         const gauntletId = paired.get(s.id)!;
