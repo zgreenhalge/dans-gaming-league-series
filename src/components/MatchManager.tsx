@@ -67,12 +67,19 @@ export function MatchManager({
   const indexed = useMemo(() => matches.map((m) => ({ m, text: searchText(m) })), [matches]);
 
   // Every match ever played is too long a list to be meaningful unfiltered — show nothing until a
-  // search actually narrows it, rather than the full history by default.
+  // search actually narrows it, rather than the full history by default. The currently-open row is
+  // always included even when the search would otherwise exclude it — the pod schedule section's
+  // "Game 1 ↗" jumps straight to that match's own row by id, regardless of what's currently searched,
+  // so a narrow query (e.g. "m2") can't leave the jump target unreachable.
   const filtered = useMemo(() => {
     const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if (tokens.length === 0) return [];
-    return indexed.filter(({ text }) => tokens.every((t) => text.includes(t))).map(({ m }) => m);
-  }, [indexed, query]);
+    const matched = tokens.length === 0 ? [] : indexed.filter(({ text }) => tokens.every((t) => text.includes(t))).map(({ m }) => m);
+    if (openId != null && !matched.some((m) => m.match.id === openId)) {
+      const openRow = matches.find((m) => m.match.id === openId);
+      if (openRow) return [openRow, ...matched];
+    }
+    return matched;
+  }, [indexed, query, openId, matches]);
 
   return (
     <>
