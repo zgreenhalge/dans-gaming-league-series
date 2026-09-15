@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import type { Match, Player } from '../types';
 import { matchLabel, extractSeasonNumber, compareMatchRefDesc, weekWindow } from '../util';
+import { podGames } from '../gauntlet-pod';
 
 
 /** One row of the admin match-management console (#144) — a full match plus the context its editors
@@ -42,8 +43,9 @@ export async function getAdminMatches(): Promise<AdminMatchRow[]> {
   const podInfoByMatchId = new Map<number, { siblingId: number; gameNumber: 1 | 2 }>();
   for (const p of (podRows ?? []) as { match1_id: number | null; match2_id: number | null }[]) {
     if (p.match1_id != null && p.match2_id != null) {
-      podInfoByMatchId.set(p.match1_id, { siblingId: p.match2_id, gameNumber: 1 });
-      podInfoByMatchId.set(p.match2_id, { siblingId: p.match1_id, gameNumber: 2 });
+      for (const g of podGames({ match1_id: p.match1_id, match2_id: p.match2_id })) {
+        podInfoByMatchId.set(g.matchId, { siblingId: g.siblingId, gameNumber: g.gameNumber });
+      }
     }
   }
 

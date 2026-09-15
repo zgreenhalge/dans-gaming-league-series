@@ -1,6 +1,7 @@
 import { supabase } from '../supabase';
 import type { LeaderboardRowWithId, PlayerMatchStat, Match } from '../types';
 import { allMatchesPlayed, canonicalSort, deriveRates, isPlayedScore } from '../util';
+import { getPodSibling } from '../gauntlet-pod';
 import { getPlayersById } from './player';
 import { getWeekLookup, weekRowsFromLookup } from './_shared';
 
@@ -412,9 +413,7 @@ export async function getGauntletPodSibling(
   matchId: number,
   pod: { match1_id: number; match2_id: number },
 ): Promise<GauntletPodSibling | null> {
-  const siblingId = pod.match1_id === matchId ? pod.match2_id : pod.match1_id;
-  const gameNumber: 1 | 2 = pod.match1_id === matchId ? 2 : 1;
-  const callerIsGame2 = pod.match1_id !== matchId;
+  const { siblingId, siblingGameNumber: gameNumber, callerIsGame2 } = getPodSibling(pod, matchId);
 
   const { data, error } = await supabase
     .from('matches')

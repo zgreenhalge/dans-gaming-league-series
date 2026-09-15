@@ -231,11 +231,13 @@ therefore a pod-level concept, not a per-match one: `PATCH /api/matches/[id]/sch
 given as the pod's start (Game 1), refusing the request outright if it targets Game 2 directly, and
 writes Game 2's `matches.scheduled_at` as Game 1's time plus a fixed 30-minute gap
 (`POD_GAME_GAP_MS`) — the two matches' own rows stay the single source of truth, so nothing downstream
-needs a separate "pod schedule" concept just to read a time. The shared-server collision warning
-(`getOtherScheduledMatches()`/`findScheduleCollision()`) excludes a match's own pod sibling from its
-candidate pool, since 30 minutes apart on the one server is the intended shape, not a conflict; the
-match page and admin console both surface a link to the pod's other game (`getGauntletPodSibling()`)
-and hide the schedule editor on Game 2 in favor of a read-only "N minutes after Game 1" note.
+needs a separate "pod schedule" concept just to read a time. `getOtherScheduledMatches()` itself stays
+gauntlet-agnostic (one query, no `gauntlet_pods` lookup); its callers, which already know a match's pod
+sibling from resolving it for other reasons, filter that sibling out of the shared-server collision
+warning's (`findScheduleCollision()`) candidate pool themselves, since 30 minutes apart on the one
+server is the intended shape, not a conflict. The match page and admin console both surface a link to
+the pod's other game (`getGauntletPodSibling()`) and hide the schedule editor on Game 2 in favor of a
+read-only time plus a link back to Game 1.
 `match_server_state` needs nothing extra — with play strictly sequential, a pod's two games just
 provision/play/teardown one after the other on the one server, same as any other two matches.
 

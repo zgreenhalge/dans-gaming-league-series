@@ -142,8 +142,12 @@ export default async function MatchPage({
   const podSiblingPromise = (season.is_gauntlet ? getGauntletPodForMatch(matchId) : Promise.resolve(null)).then(
     (pod) => (pod ? getGauntletPodSibling(matchId, pod) : null),
   );
+  // Independent of podSiblingPromise (getOtherScheduledMatches() itself has no gauntlet awareness) —
+  // the pod sibling it needs to exclude from the collision pool is filtered out below, once both
+  // promises have resolved.
+  const otherScheduledPromise = !played ? getOtherScheduledMatches(match.id) : Promise.resolve([]);
 
-  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, podSibling, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, podSibling, otherScheduledRaw, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
     showPreMatchScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     // Cached and shared across every match page (see #441 item 3) rather than a fresh
     // full-league computeH2H() scan on each load.
@@ -160,6 +164,7 @@ export default async function MatchPage({
     // Match ids on this map — feeds the scouting report's Map Intel heatmap (#128).
     showPreMatchScouting && map ? getMatchIdsForMap(map) : Promise.resolve<number[]>([]),
     podSiblingPromise,
+    otherScheduledPromise,
     needsPreviousWeekCheck ? isWeekComplete(season.id, week.week_number - 1) : Promise.resolve(false),
     // Drives the `--ticker-h` override below — only an unplayed match can ever be the live one.
     played ? Promise.resolve(false) : isMatchCurrentlyLive(matchId),
@@ -277,9 +282,9 @@ export default async function MatchPage({
   // Other unplayed matches' scheduled times, for the single-server scheduling-collision warning
   // (#134) — both the schedule editor and the overlap banner. Fetched for any viewer of an unplayed
   // match, gauntlet included, so the banner shows regardless of edit rights; a gauntlet match's own
-  // pod sibling is excluded server-side (getOtherScheduledMatches) since it's intentionally 30
-  // minutes away, not a collision.
-  const otherScheduled = !played ? await getOtherScheduledMatches(match.id) : [];
+  // pod sibling is excluded here (not inside getOtherScheduledMatches, which stays gauntlet-agnostic)
+  // since it's intentionally 30 minutes away, not a collision.
+  const otherScheduled = otherScheduledRaw.filter((r) => r.id !== podSibling?.matchId);
   const scheduleCollision = findScheduleCollision(match.scheduled_at, otherScheduled);
 
   const matchJsonLd = buildMatchJsonLd({
