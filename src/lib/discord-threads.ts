@@ -2,7 +2,7 @@
 // thread per match in a regular season's `season-{N}` forum channel (`extractSeasonNumber()`'s
 // convention), opening post tagging the four rostered players — `publishWeekThreads()`. A gauntlet
 // pod's two games share the same 4 players and are always played sequentially, so they get one
-// thread between them instead ("Round N Pod M") — `publishPodThreads()`, resolving to the same
+// thread between them instead ("GAUNTLET: Round N Group M") — `publishPodThreads()`, resolving to the same
 // `season-{N}` channel as the pod's paired regular season. Always admin-triggered — a season's
 // `start_date` is often arbitrary and so is when an admin actually wants a week/round published, so
 // there's no automatic Sunday-midnight cron here, only these two functions called from
@@ -19,7 +19,7 @@
 // thread by hand (or a previous run's Discord call could have succeeded right before its own DB
 // write failed), and the DB would have no record of it either way. `listChannelThreads()` reads the
 // forum channel's actual threads before creating anything, matched by exact title (`threadTitle()`'s
-// "Week N Game M", or `podThreadTitle()`'s "Round N Pod M") — the only link back to a match/pod a
+// "Week N Game M", or `podThreadTitle()`'s "GAUNTLET: Round N Group M") — the only link back to a match/pod a
 // hand-made thread can carry. A title that already exists in the channel is never posted into or
 // otherwise touched — its thread id is just adopted into `match_discord_state` (both games' rows, for
 // a pod) so the close functions can still find it once played.
@@ -31,7 +31,6 @@ import type { GauntletMatch, GauntletRound } from './queries/gauntlet';
 import type { Season } from './types';
 import { extractSeasonNumber, allMatchesPlayed } from './util';
 import { recordOpsError, clearOpsError } from './ops-errors';
-import { POD_GAME_GAP_LABEL } from './gauntlet-pod';
 
 const CHANNEL_OPERATION = 'discord_thread_publish';
 const THREAD_OPERATION = 'discord_thread_create';
@@ -106,11 +105,12 @@ export function threadTitle(weekNumber: number, matchNumber: number): string {
   return `Week ${weekNumber} Game ${matchNumber}`;
 }
 
-/** A gauntlet pod's Discord thread title, "Round N Pod M" (1-based, `podIndex` is 0-based) — one
- *  thread per pod, not per game, since both of a pod's games share the same 4 players and are
- *  scheduled/played as a unit. Same idempotency role `threadTitle()` plays for weekly threads. */
+/** A gauntlet pod's Discord thread title, "GAUNTLET: Round N Group M" (1-based, `podIndex` is
+ *  0-based) — one thread per pod, not per game, since both of a pod's games share the same 4
+ *  players and are scheduled/played as a unit. Same idempotency role `threadTitle()` plays for
+ *  weekly threads. */
 export function podThreadTitle(roundNumber: number, podIndex: number): string {
-  return `Round ${roundNumber} Pod ${podIndex + 1}`;
+  return `GAUNTLET: Round ${roundNumber} Group ${podIndex + 1}`;
 }
 
 export interface DiscordThread {
@@ -334,7 +334,7 @@ export async function publishWeekThreads(
  *  reshuffled across factions, so this is the one place a pod thread actually distinguishes them. */
 function podOpeningPost(game1: GauntletMatch, game2: GauntletMatch, playersById: Map<number, { discord_id: string | null }>): string {
   return `Game 1: ${lineup(game1.shirts_stats, game1.skins_stats, playersById)}\n` +
-    `Game 2 (${POD_GAME_GAP_LABEL} later): ${lineup(game2.shirts_stats, game2.skins_stats, playersById)}`;
+    `Game 2: ${lineup(game2.shirts_stats, game2.skins_stats, playersById)}`;
 }
 
 export interface PublishPodThreadsResult {

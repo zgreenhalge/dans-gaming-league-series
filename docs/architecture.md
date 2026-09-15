@@ -242,7 +242,7 @@ read-only time plus a link back to Game 1.
 provision/play/teardown one after the other on the one server, same as any other two matches.
 
 Discord follows the same pod-not-match grain: `publishPodThreads()` (`discord-threads.ts`) posts one
-thread per pod ("Round N Pod M") in the same `season-{N}` forum channel `publishWeekThreads()` uses,
+thread per pod ("GAUNTLET: Round N Group M") in the same `season-{N}` forum channel `publishWeekThreads()` uses,
 mentioning all 4 players and both games' lineups, and points both games' `match_discord_state` rows at
 it. Because a bracket's parallel groups within one round can finalize at different times, its `'next'`
 resolution sweeps every round for every fully-materialized pod without a thread yet rather than
