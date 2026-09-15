@@ -443,6 +443,9 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
           <GauntletRoundsList
             displayRounds={displayRounds}
             allRounds={rounds}
+            bracketShape={bracketShape}
+            seedNames={seedNames}
+            myGamesOnly={myGamesOnly}
             openRounds={openItems}
             onToggleRound={toggleItem}
             currentPlayerId={currentPlayerId}

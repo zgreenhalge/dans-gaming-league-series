@@ -5,7 +5,8 @@ import { MatchCard } from './MatchCard';
 import { PlayerName } from './PlayerName';
 import { allMatchesPlayed, isPlayedScore, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
 import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
-import type { GauntletRound, GauntletMatch } from '@/lib/queries';
+import { computeAdvanceOrdinals, pendingSlotLabel } from '@/lib/gauntlet-draft';
+import type { GauntletRound, GauntletMatch, BracketPod } from '@/lib/queries';
 
 function computeGauntletRecords(matches: GauntletMatch[]) {
   const records = new Map<
@@ -52,9 +53,68 @@ function groupMatchesByPod(matches: GauntletMatch[]) {
   return groups;
 }
 
+type PodEntry =
+  | { kind: 'real'; pod_index: number | null; advance_rule: GauntletMatch['advance_rule']; matches: GauntletMatch[] }
+  | { kind: 'pending'; pod_index: number; advance_rule: BracketPod['advance_rule']; pod: BracketPod };
+
+/** A round's pods, real and not-yet-materialized alike, in pod_index order — the merged view behind
+ * the Schedule tab's placeholder rows (#528). A round can mix both: e.g. a wildcard pod that's fully
+ * played feeding an elimination pod still waiting on the rest of its bracket to resolve. */
+function buildPodEntries(matches: GauntletMatch[], pendingPods: BracketPod[]): PodEntry[] {
+  const real: PodEntry[] = groupMatchesByPod(matches).map((g) => ({ kind: 'real', ...g }));
+  const pending: PodEntry[] = pendingPods.map((pod) => ({ kind: 'pending', pod_index: pod.pod_index, advance_rule: pod.advance_rule, pod }));
+  return [...real, ...pending].sort((a, b) => (a.pod_index ?? -1) - (b.pod_index ?? -1));
+}
+
+/** A not-yet-materialized pod's four slots — named the same way the Groups tab names an undecided
+ * slot (`pendingSlotLabel`), since this pod has no real matches yet to render as `MatchCard`s. */
+function PendingPodRows({
+  pod,
+  podsById,
+  advanceOrdinals,
+  seedNames,
+  currentPlayerId,
+}: {
+  pod: BracketPod;
+  podsById: Map<number, BracketPod>;
+  advanceOrdinals: Map<string, number>;
+  seedNames?: Map<number, string>;
+  currentPlayerId: number | null;
+}) {
+  return (
+    <div className="px-4 py-2 bg-[var(--color-bg-primary)] border-b border-[var(--color-border-tertiary)] last:border-b-0">
+      <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-1.5">Not yet scheduled</div>
+      <div className="flex flex-col gap-1">
+        {pod.slots.map((slot) => {
+          const sourcePod = slot.source_pod_id != null ? podsById.get(slot.source_pod_id) : undefined;
+          const ordinal = advanceOrdinals.get(`${pod.id}:${slot.slot_index}`) ?? 0;
+          return (
+            <div key={slot.slot_index} className="font-display text-[13px] font-semibold">
+              {slot.player_name ? (
+                <PlayerName
+                  name={slot.player_name}
+                  isMe={currentPlayerId !== null && slot.player_id === currentPlayerId}
+                />
+              ) : (
+                <span className="font-mono text-[11px] font-normal tracked text-[var(--color-text-secondary)]">
+                  {pendingSlotLabel(slot, sourcePod, ordinal, seedNames)}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function GauntletRoundCard({
   round,
   allRounds,
+  pendingPods,
+  podsById,
+  advanceOrdinals,
+  seedNames,
   rankMap,
   currentPlayerId,
   isOpen,
@@ -62,6 +122,11 @@ function GauntletRoundCard({
 }: {
   round: GauntletRound;
   allRounds: GauntletRound[];
+  /** This round's not-yet-materialized pods (#528) — already filtered to this round_number. */
+  pendingPods: BracketPod[];
+  podsById: Map<number, BracketPod>;
+  advanceOrdinals: Map<string, number>;
+  seedNames?: Map<number, string>;
   rankMap: Map<number, number>;
   currentPlayerId: number | null;
   isOpen: boolean;
@@ -75,11 +140,11 @@ function GauntletRoundCard({
   const allPlayed = allMatchesPlayed(round.matches);
   const isFinalRound = round.is_final_round;
 
-  const podGroups = groupMatchesByPod(round.matches);
+  const podEntries = buildPodEntries(round.matches, pendingPods);
   // When every pod in this round shares the same stakes, show it once in the header instead of once
   // per pod below — a round can also mix rules (e.g. one wildcard pod feeding one elimination pod),
   // in which case there's no single label to hoist and each pod keeps its own.
-  const podRules = new Set(podGroups.map((g) => g.advance_rule).filter((r) => r != null));
+  const podRules = new Set(podEntries.map((g) => g.advance_rule).filter((r) => r != null));
   const roundStakes = !isFinalRound && podRules.size === 1 ? [...podRules][0] : null;
 
   const playerIdsInLaterRounds = new Set<number>();
@@ -118,31 +183,41 @@ function GauntletRoundCard({
         <>
           {(() => {
             let gameNumber = 0;
-            return podGroups.map((group, gi) => (
-              <div key={group.pod_index ?? `solo-${gi}`}>
-                {!isFinalRound && !roundStakes && group.advance_rule && (
+            return podEntries.map((entry, gi) => (
+              <div key={entry.kind === 'pending' ? `pod-${entry.pod.id}` : (entry.pod_index ?? `solo-${gi}`)}>
+                {!isFinalRound && !roundStakes && entry.advance_rule && (
                   <div className="px-4 py-1.5 font-mono text-[11px] text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-tertiary)]">
-                    {GAUNTLET_POD_STAKES_LABEL[group.advance_rule]}
+                    {GAUNTLET_POD_STAKES_LABEL[entry.advance_rule]}
                   </div>
                 )}
-                {group.matches.map((m) => {
-                  gameNumber++;
-                  const played = isPlayedScore(m.final_score);
-                  return (
-                    <MatchCard
-                      key={m.id}
-                      href={`/matches/${m.id}`}
-                      map={m.shirts_pick ?? m.picked_map}
-                      label={{ type: 'game', gameNumber }}
-                      right={played ? { type: 'score', score: m.final_score! } : { type: 'pending' }}
-                      shirtsStats={m.shirts_stats}
-                      skinsStats={m.skins_stats}
-                      shirtsFallback={m.shirts_stats.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
-                      skinsFallback={m.skins_stats.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
-                      currentPlayerId={currentPlayerId}
-                    />
-                  );
-                })}
+                {entry.kind === 'pending' ? (
+                  <PendingPodRows
+                    pod={entry.pod}
+                    podsById={podsById}
+                    advanceOrdinals={advanceOrdinals}
+                    seedNames={seedNames}
+                    currentPlayerId={currentPlayerId}
+                  />
+                ) : (
+                  entry.matches.map((m) => {
+                    gameNumber++;
+                    const played = isPlayedScore(m.final_score);
+                    return (
+                      <MatchCard
+                        key={m.id}
+                        href={`/matches/${m.id}`}
+                        map={m.shirts_pick ?? m.picked_map}
+                        label={{ type: 'game', gameNumber }}
+                        right={played ? { type: 'score', score: m.final_score! } : { type: 'pending' }}
+                        shirtsStats={m.shirts_stats}
+                        skinsStats={m.skins_stats}
+                        shirtsFallback={m.shirts_stats.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
+                        skinsFallback={m.skins_stats.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
+                        currentPlayerId={currentPlayerId}
+                      />
+                    );
+                  })
+                )}
               </div>
             ));
           })()}
@@ -221,17 +296,46 @@ function GauntletRoundCard({
 export default function GauntletRoundsList({
   displayRounds,
   allRounds,
+  bracketShape = [],
+  seedNames,
+  myGamesOnly = false,
   openRounds,
   onToggleRound,
   currentPlayerId,
 }: {
   displayRounds: GauntletRound[];
   allRounds: GauntletRound[];
+  /** The gauntlet's full pod/slot shape (`getGauntletBracketShape()`) — supplies the placeholder rows
+   * this component renders for pods that exist in the bracket but haven't materialized real matches
+   * yet (#528). Omitted (or `[]`) renders exactly as before: real matches only. */
+  bracketShape?: BracketPod[];
+  seedNames?: Map<number, string>;
+  /** Mirrors the "My games" toggle `displayRounds` was already filtered by — applied here to
+   * `bracketShape`'s pending pods too, so a pod nobody-you've-tracked-yet is in doesn't reappear
+   * once the toggle is on. A pod with no resolved slots at all is always shown: there's nothing yet
+   * to say it isn't yours. */
+  myGamesOnly?: boolean;
   openRounds: Set<number>;
   onToggleRound: (roundNumber: number) => void;
   currentPlayerId: number | null;
 }) {
   const rankMap = canonicalGauntletRankMap(allRounds);
+
+  const podsById = new Map(bracketShape.map((p) => [p.id, p]));
+  const advanceOrdinals = computeAdvanceOrdinals(bracketShape);
+  const pendingPodsByRound = new Map<number, BracketPod[]>();
+  for (const pod of bracketShape) {
+    if (pod.materialized) continue;
+    // Only hide a pod once we can positively rule it out — some slot is already resolved to someone
+    // else and none to the current player. A pod with nothing resolved yet might still turn out to
+    // be theirs (e.g. they're still alive in an earlier pod this one is waiting on).
+    const anyResolved = pod.slots.some((s) => s.player_id != null);
+    const mineResolved = pod.slots.some((s) => s.player_id === currentPlayerId);
+    if (myGamesOnly && currentPlayerId != null && anyResolved && !mineResolved) continue;
+    const list = pendingPodsByRound.get(pod.round_number) ?? [];
+    list.push(pod);
+    pendingPodsByRound.set(pod.round_number, list);
+  }
 
   if (displayRounds.length === 0) {
     return <EmptyState message="No matches found." />;
@@ -244,6 +348,10 @@ export default function GauntletRoundsList({
           key={r.round_number}
           round={r}
           allRounds={allRounds}
+          pendingPods={(pendingPodsByRound.get(r.round_number) ?? []).sort((a, b) => a.pod_index - b.pod_index)}
+          podsById={podsById}
+          advanceOrdinals={advanceOrdinals}
+          seedNames={seedNames}
           rankMap={rankMap}
           currentPlayerId={currentPlayerId}
           isOpen={openRounds.has(r.round_number)}
