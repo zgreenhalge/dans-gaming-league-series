@@ -6,8 +6,13 @@ import { MatchCard } from './MatchCard';
 import { PlayerName } from './PlayerName';
 import { allMatchesPlayed, isPlayedScore, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
 import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
-import { computeAdvanceOrdinals, pendingSlotLabel, podsById as buildPodsById } from '@/lib/gauntlet-draft';
+import { computeAdvanceOrdinals, pendingSlotLabel, podMightBeMine, podsById as buildPodsById } from '@/lib/gauntlet-draft';
 import type { GauntletRound, GauntletMatch, BracketPod } from '@/lib/queries';
+
+// A stable reference for rounds with no pending pods — `pendingPodsByRound.get(...) ?? EMPTY_PODS`
+// keeps GauntletRoundCard's `useMemo` dependency stable across renders instead of a fresh `[]`
+// literal defeating it every time.
+const EMPTY_PODS: BracketPod[] = [];
 
 function computeGauntletRecords(matches: GauntletMatch[]) {
   const records = new Map<
@@ -330,12 +335,7 @@ export default function GauntletRoundsList({
     const byRound = new Map<number, BracketPod[]>();
     for (const pod of bracketShape) {
       if (pod.materialized) continue;
-      // Only hide a pod once we can positively rule it out — some slot is already resolved to
-      // someone else and none to the current player. A pod with nothing resolved yet might still
-      // turn out to be theirs (e.g. they're still alive in an earlier pod this one is waiting on).
-      const anyResolved = pod.slots.some((s) => s.player_id != null);
-      const mineResolved = pod.slots.some((s) => s.player_id === currentPlayerId);
-      if (myGamesOnly && currentPlayerId != null && anyResolved && !mineResolved) continue;
+      if (myGamesOnly && currentPlayerId != null && !podMightBeMine(pod, currentPlayerId)) continue;
       const list = byRound.get(pod.round_number) ?? [];
       list.push(pod);
       byRound.set(pod.round_number, list);
@@ -354,7 +354,7 @@ export default function GauntletRoundsList({
           key={r.round_number}
           round={r}
           allRounds={allRounds}
-          pendingPods={pendingPodsByRound.get(r.round_number) ?? []}
+          pendingPods={pendingPodsByRound.get(r.round_number) ?? EMPTY_PODS}
           podsById={podsById}
           advanceOrdinals={advanceOrdinals}
           seedNames={seedNames}

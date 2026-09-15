@@ -110,6 +110,18 @@ export function podsById(pods: BracketPod[]): Map<number, BracketPod> {
   return new Map(pods.map((p) => [p.id, p]));
 }
 
+/** Whether a not-yet-materialized pod might still turn out to involve the given player once it
+ * resolves — only false once some slot is positively known to be someone else and none are them yet;
+ * a pod with nothing resolved at all always might still be theirs (e.g. they're still alive in an
+ * earlier pod this one is waiting on). The "should a pending pod still show under 'My games only'"
+ * check, shared by `GauntletRoundsList` (which pod to render) and `SeasonTabView` (which round to
+ * keep from being filtered away entirely when none of its *real* matches involve the player). */
+export function podMightBeMine(pod: BracketPod, playerId: number): boolean {
+  const anyResolved = pod.slots.some((s) => s.player_id != null);
+  const mineResolved = pod.slots.some((s) => s.player_id === playerId);
+  return !anyResolved || mineResolved;
+}
+
 /** Describes a slot whose occupant isn't decided yet, without ever surfacing a bare "TBD" — a seed
  * slot names the seed, and a pod-sourced slot names the pod it comes from plus, for a pod that sends
  * more than one survivor onward, which of those survivors ("First"/"Second"/...) this slot expects.

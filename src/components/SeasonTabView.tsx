@@ -20,6 +20,7 @@ import type { MatchPickBanInput } from '@/lib/mapSideStats';
 import { isPlayedScore, anyMatchPlayed, tabCls, weekAnchorId, roundAnchorId } from '@/lib/util';
 import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
 import { projectGauntletSeeding, seedPlacementsByPlayer, type SeedPlacement } from '@/lib/gauntlet-bracket';
+import { podMightBeMine } from '@/lib/gauntlet-draft';
 
 type Tab = 'leaderboard' | 'groups' | 'schedule' | 'h2h' | 'stats' | 'advanced';
 
@@ -272,9 +273,19 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
       currentPlayerId
         ? rounds
             .map((r) => ({ ...r, matches: r.matches.filter((m) => playerInMatch(m, currentPlayerId)) }))
-            .filter((r) => r.matches.length > 0)
+            .filter(
+              (r) =>
+                r.matches.length > 0 ||
+                // A round can also be "mine" through a pending pod that hasn't resolved who's in it
+                // yet — dropping the round here (because none of its *real* matches involve me) would
+                // hide that placeholder from GauntletRoundsList entirely, before it ever gets a
+                // chance to show it (#528).
+                bracketShape.some(
+                  (p) => p.round_number === r.round_number && !p.materialized && podMightBeMine(p, currentPlayerId),
+                ),
+            )
         : rounds,
-    [rounds, currentPlayerId],
+    [rounds, currentPlayerId, bracketShape],
   );
 
   const displaySchedule = myGamesOnly ? mySchedule : schedule;

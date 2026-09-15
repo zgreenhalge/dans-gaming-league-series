@@ -3,8 +3,10 @@
  * Component tests for `SeasonTabView.tsx`'s URL state: the tab bar reads from/writes to the `tab`
  * query param via `useTabState`, and which weeks/rounds are expanded reads from/writes to a
  * comma-separated `week`/`round` param on every toggle — including a shared link opening straight to
- * one item and scrolling to it on mount. Doesn't cover the gauntlet-seeding/tab-visibility logic,
- * which has no URL-state dependency of its own.
+ * one item and scrolling to it on mount. Also covers one content case tied to that same "My games"
+ * URL state: a gauntlet round must survive its `myRounds` filter when a *pending* pod (not a real
+ * match) might still be the current player's (#528 follow-up). Otherwise doesn't cover the
+ * gauntlet-seeding/tab-visibility logic, which has no URL-state dependency of its own.
  *
  * Run:  npx vitest run src/components/SeasonTabView.test.tsx
  */
@@ -17,7 +19,9 @@ import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
 import { createNextAuthMock } from '@/lib/test-support/mockNextAuth';
 import { leaderboardRow, EMPTY_H2H } from '@/lib/test-support/leaderboardFixtures';
 import { h2hDataWithDuo } from '@/lib/test-support/h2hFixtures';
+import { bracketPod } from '@/lib/test-support/gauntletFixtures';
 import SeasonTabView from './SeasonTabView';
+import type { GauntletMatch } from '@/lib/queries';
 import type { WeekWithMatches, GauntletRound } from '@/lib/queries';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
@@ -266,6 +270,48 @@ describe('SeasonTabView — week/round deep link', () => {
       />,
     );
     expect(screen.getByRole('button', { name: /Round 3/ })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('"My games" keeps a round whose only real match is someone else\'s, when a pending pod there might still be mine', () => {
+    // Round 2's one real match is entirely other players (90/91) — under the old myRounds filter
+    // this round would vanish under "My games" before GauntletRoundsList ever sees it, hiding the
+    // pending pod (#528) that might still turn out to include the current player (5).
+    const otherPlayersMatch: GauntletMatch = {
+      id: 500,
+      match_number: 1,
+      final_score: '13-9',
+      scheduled_at: null,
+      picked_map: 'Map',
+      shirts_pick: null,
+      skins_starting_side: null,
+      shirts_stats: [{ player_id: 90, player_name: 'Other', faction: 'SHIRTS', kills: 0, assists: 0, deaths: 0, adr: 0, is_win: true, rounds_won: 13, rounds_played: 22 }],
+      skins_stats: [{ player_id: 91, player_name: 'Rival', faction: 'SKINS', kills: 0, assists: 0, deaths: 0, adr: 0, is_win: false, rounds_won: 9, rounds_played: 22 }],
+      pod_index: 0,
+      advance_rule: 'single',
+    };
+    const pendingPod = bracketPod({
+      id: 40,
+      round_number: 2,
+      pod_index: 1,
+      advance_rule: 'single',
+      slots: [{ slot_index: 0, source_kind: 'seed', source_seed: 3, source_pod_id: null, player_id: null, player_name: null }],
+    });
+
+    nextNavigationMock.setSearchParams('tab=schedule&mine=1&round=2');
+    renderWithUrlState(
+      <SeasonTabView
+        kind="gauntlet"
+        rounds={[round(1), { round_number: 2, matches: [otherPlayersMatch], is_final_round: false }]}
+        bracketShape={[pendingPod]}
+        leaderboard={[leaderboardRow()]}
+        seasonStatus="ACTIVE"
+        currentPlayerId={5}
+        h2hData={EMPTY_H2H}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /Round 2/ })).toBeInTheDocument();
+    expect(screen.getByText('Not yet scheduled')).toBeInTheDocument();
   });
 
 });
