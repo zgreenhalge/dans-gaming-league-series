@@ -49,6 +49,38 @@ function podFakeDb() {
   return db;
 }
 
+// Round 2 of the same gauntlet, with two pods that finalize at different times — a bracket's
+// parallel groups don't resolve in lockstep. Pod 0 (matches 210/211) is fully materialized, like
+// round 1's pod; pod 1 has a shape (`gauntlet_pods` row) but no materialized games yet, modeling a
+// group still waiting on an earlier round's winner. Built on `podFakeDb()`'s db so round 1's own pod
+// stays in the mix for the cross-round sweep test below.
+function splitRoundFakeDb() {
+  const db = podFakeDb();
+  db.weeks = [...db.weeks, { id: 15, season_id: 2, week_number: 2, bye_player_id: null }];
+  db.matches = [
+    ...db.matches,
+    { ...db.matches.find((m) => m.id === 200)!, id: 210, week_id: 15, match_number: 1, final_score: null },
+    { ...db.matches.find((m) => m.id === 201)!, id: 211, week_id: 15, match_number: 2, final_score: null },
+  ];
+  db.player_match_stats = [
+    ...db.player_match_stats,
+    { id: 9010, match_id: 210, player_id: 1, faction: 'SHIRTS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, rounds_played: 0, rounds_won: 0, is_win: false },
+    { id: 9011, match_id: 210, player_id: 5, faction: 'SHIRTS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, rounds_played: 0, rounds_won: 0, is_win: false },
+    { id: 9012, match_id: 210, player_id: 2, faction: 'SKINS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, rounds_played: 0, rounds_won: 0, is_win: false },
+    { id: 9013, match_id: 210, player_id: 6, faction: 'SKINS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, rounds_played: 0, rounds_won: 0, is_win: false },
+    { id: 9014, match_id: 211, player_id: 1, faction: 'SHIRTS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, rounds_played: 0, rounds_won: 0, is_win: false },
+    { id: 9015, match_id: 211, player_id: 6, faction: 'SHIRTS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, rounds_played: 0, rounds_won: 0, is_win: false },
+    { id: 9016, match_id: 211, player_id: 5, faction: 'SKINS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, rounds_played: 0, rounds_won: 0, is_win: false },
+    { id: 9017, match_id: 211, player_id: 2, faction: 'SKINS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, rounds_played: 0, rounds_won: 0, is_win: false },
+  ];
+  db.gauntlet_pods = [
+    ...db.gauntlet_pods,
+    { id: 1002, season_id: 2, round_number: 2, pod_index: 0, advance_rule: 'single', is_final: false, week_id: 15, match1_id: 210, match2_id: 211 },
+    { id: 1003, season_id: 2, round_number: 2, pod_index: 1, advance_rule: 'single', is_final: false, week_id: 15, match1_id: null, match2_id: null },
+  ];
+  return db;
+}
+
 const GUILD_CHANNELS = [
   { id: 'channel-season-5', name: 'season-5', type: 15 },
   { id: 'channel-season-6', name: 'season-6', type: 15 },
@@ -384,6 +416,108 @@ async function main() {
     const state201 = await client.from('match_discord_state').select('thread_id').eq('match_id', 201).maybeSingle();
     assert.ok((state200.data as { thread_id: string }).thread_id);
     assert.equal((state200.data as { thread_id: string }).thread_id, (state201.data as { thread_id: string }).thread_id);
+
+    __setTestClient(adminClient);
+  });
+
+  await test("publishPodThreads: 'next' sweeps every round, publishing finalized pods and skipping an unmaterialized sibling", async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    const db = splitRoundFakeDb();
+    const client = createFakeSupabaseClient(db);
+    __setTestClient(client);
+    stubDiscord();
+
+    // Round 1 Pod 1 and Round 2 Pod 1 are both fully materialized and unpublished; Round 2 Pod 2 has
+    // no matches yet — 'next' publishes both ready pods across the two different rounds in one call
+    // and never mentions the unready one at all.
+    const result = await publishPodThreads(client, 2, 'next');
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    assert.equal(ok.roundNumber, null, 'no single round header — this swept across rounds');
+    assert.deepEqual(
+      ok.pods.map((p) => [p.title, p.status]),
+      [['Round 1 Pod 1', 'created'], ['Round 2 Pod 1', 'created']],
+    );
+
+    __setTestClient(adminClient);
+  });
+
+  await test("publishPodThreads: 'next' only reports newly-created threads, not pods already published", async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    const db = splitRoundFakeDb();
+    const client = createFakeSupabaseClient(db);
+    __setTestClient(client);
+    // Round 1 Pod 1's thread already exists in the channel (an earlier publish, or an admin's manual
+    // create) — 'next' should adopt it silently rather than re-reporting it, since only Round 2 Pod 1
+    // is actually new.
+    stubDiscord({ existingThreads: [{ id: 'thread-existing', name: 'Round 1 Pod 1', parent_id: 'channel-season-5' }] });
+
+    const result = await publishPodThreads(client, 2, 'next');
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    assert.deepEqual(ok.pods.map((p) => p.title), ['Round 2 Pod 1']);
+    assert.equal(ok.pods[0].status, 'created');
+
+    __setTestClient(adminClient);
+  });
+
+  await test("publishPodThreads: 'next' errors when nothing is newly finalized", async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    const db = podFakeDb();
+    const client = createFakeSupabaseClient(db);
+    __setTestClient(client);
+    stubDiscord({ existingThreads: [{ id: 'thread-existing', name: 'Round 1 Pod 1', parent_id: 'channel-season-5' }] });
+
+    const result = await publishPodThreads(client, 2, 'next');
+    assert.deepEqual(result, { error: 'No newly finalized pods to publish' });
+
+    __setTestClient(adminClient);
+  });
+
+  await test('publishPodThreads: an explicit round number still targets only that round, silently omitting a pod with zero materialized games', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    const db = splitRoundFakeDb();
+    const client = createFakeSupabaseClient(db);
+    __setTestClient(client);
+    stubDiscord();
+
+    const result = await publishPodThreads(client, 2, 2);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    assert.equal(ok.roundNumber, 2);
+    // Pod 2 has zero materialized matches, so it's absent from `matches` entirely and never appears
+    // here at all — `matches.length !== 2` only fires for a pod caught mid-materialization (below).
+    assert.equal(ok.pods.length, 1);
+    assert.equal(ok.pods[0].title, 'Round 2 Pod 1');
+    assert.equal(ok.pods[0].status, 'created');
+
+    __setTestClient(adminClient);
+  });
+
+  await test('publishPodThreads: an explicit round number reports a pod stuck with only one materialized game as failed', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    const db = splitRoundFakeDb();
+    // Pod 2 (round 2, pod_index 1) gets Game 1 only — a pod caught mid-materialization, unlike its
+    // zero-games state in the base fixture.
+    db.matches = [...db.matches, { ...db.matches.find((m) => m.id === 210)!, id: 212, week_id: 15, match_number: 3 }];
+    db.gauntlet_pods = db.gauntlet_pods.map((p) => (p.id === 1003 ? { ...p, match1_id: 212 } : p));
+    const client = createFakeSupabaseClient(db);
+    __setTestClient(client);
+    stubDiscord();
+
+    const result = await publishPodThreads(client, 2, 2);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    assert.deepEqual(
+      ok.pods.map((p) => [p.title, p.status]),
+      [['Round 2 Pod 1', 'created'], ['Round 2 Pod 2', 'failed']],
+    );
+    assert.equal(ok.pods[1].detail, 'Pod is not fully materialized (expected 2 games)');
 
     __setTestClient(adminClient);
   });
