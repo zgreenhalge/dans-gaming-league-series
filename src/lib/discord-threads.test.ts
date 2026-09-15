@@ -1,8 +1,9 @@
 /**
  * Unit tests for discord-threads.ts: `publishWeekThreads()`'s admin-triggered weekly match-thread
- * publish (#398) — forum-channel resolution, per-match idempotency checked against Discord itself
- * (not `match_discord_state`, so a hand-created thread is discovered and adopted rather than
- * duplicated), and the ops_errors observability trail alongside the per-match results returned to the
+ * publish (#398) — forum-channel resolution, per-match idempotency that prefers a previously-recorded
+ * `match_discord_state.thread_id` (once confirmed still live) and falls back to an exact title match
+ * against Discord itself otherwise, so a hand-created thread is discovered and adopted rather than
+ * duplicated, and the ops_errors observability trail alongside the per-match results returned to the
  * caller — plus `closeMatchThread()`'s best-effort single-match close, the score route's hook on the
  * transition into "played".
  *
@@ -216,12 +217,12 @@ async function main() {
     assert.ok((state100 as { thread_id: string }).thread_id);
   });
 
-  await test('publishWeekThreads: re-publishing the same week finds its own threads in Discord (not match_discord_state) and skips them', async () => {
+  await test('publishWeekThreads: re-publishing the same week adopts its own already-recorded threads and skips them', async () => {
     process.env.DISCORD_BOT_TOKEN = 'bot-token';
     process.env.DISCORD_GUILD_ID = 'guild-1';
-    // One stub instance shared across both calls — its `threads` list is what Discord "actually has",
-    // updated in place by the first call's creates, so the second call's idempotency check is really
-    // reading that simulated Discord state, not any DB row.
+    // The first call's creates write match_discord_state.thread_id for both matches, so the second
+    // call's idempotency check is really exercising resolveExistingThreadId()'s id-first branch (the
+    // titles happen to still match here too, but the id check runs first and wins).
     const { calls } = stubDiscord();
     const first = await publishWeekThreads(adminClient, 1, 1);
     assert.ok(!('error' in first));
@@ -232,7 +233,7 @@ async function main() {
     const ok = second as Exclude<typeof second, { error: string }>;
     assert.deepEqual(ok.matches.map((m) => m.status), ['skipped', 'skipped']);
     assert.equal(liveOpsErrors('match', 100, 'discord_thread_create').length, 1);
-    assert.match(liveOpsErrors('match', 100, 'discord_thread_create')[0].message as string, /already exists in the channel/);
+    assert.match(liveOpsErrors('match', 100, 'discord_thread_create')[0].message as string, /Already linked to thread/);
 
     // No new thread was created on the second call — only the first call's two POSTs ever happened.
     assert.equal(calls.filter((c) => c.init?.method === 'POST').length, 2);
@@ -262,7 +263,37 @@ async function main() {
 
     const rows = liveOpsErrors('match', 102, 'discord_thread_create');
     assert.equal(rows.length, 1);
-    assert.match(rows[0].message as string, /already exists in the channel/);
+    assert.match(rows[0].message as string, /Already linked to thread/);
+  });
+
+  await test('publishWeekThreads: adopts a match\'s already-known thread by its recorded thread_id even though the thread was renamed since', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    const db = buildFakeDb();
+    // Match 100 (season 1, week 1) already points at a thread from a prior publish — the live thread's
+    // current name no longer matches threadTitle()'s "Week 1 Game 1" output. A fresh db/client, not
+    // the shared adminClient/fakeDb, since match 100/101/102 accumulate state across other tests.
+    db.match_discord_state = [{ match_id: 100, thread_id: 'thread-renamed', event_id: null, message_checkpoint: null }];
+    const client = createFakeSupabaseClient(db);
+    __setTestClient(client);
+    const { calls } = stubDiscord({
+      existingThreads: [{ id: 'thread-renamed', name: 'Some Other Name', parent_id: 'channel-season-5' }],
+    });
+
+    const result = await publishWeekThreads(client, 1, 1);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    const m100 = ok.matches.find((m) => m.matchId === 100)!;
+    assert.equal(m100.title, 'Week 1 Game 1', 'the title in the result is the current format');
+    assert.equal(m100.status, 'skipped');
+    assert.equal(m100.detail, 'Already exists (thread thread-renamed)');
+
+    // Match 101 has no known thread_id and no title match, so it creates a brand-new thread — that
+    // one POST is expected and unrelated to what this test checks; match 100 must not get a second.
+    const createCalls = calls.filter((c) => c.init?.method === 'POST');
+    assert.equal(createCalls.length, 1, 'only match 101 creates a new thread; match 100 is adopted, not recreated');
+
+    __setTestClient(adminClient);
   });
 
   await test('publishWeekThreads: "next" resolves to the first week with no played matches', async () => {
@@ -419,6 +450,61 @@ async function main() {
     const state201 = await client.from('match_discord_state').select('thread_id').eq('match_id', 201).maybeSingle();
     assert.ok((state200.data as { thread_id: string }).thread_id);
     assert.equal((state200.data as { thread_id: string }).thread_id, (state201.data as { thread_id: string }).thread_id);
+
+    __setTestClient(adminClient);
+  });
+
+  await test('publishPodThreads: adopts a pod\'s already-known thread by its recorded thread_id even though the thread was renamed since', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    const db = podFakeDb();
+    // Both games already point at a thread from a prior publish, back when podThreadTitle() produced
+    // the old "Round 1 Pod 1" format — the live thread itself was since renamed (or never renamed at
+    // all; either way its current name no longer matches what podThreadTitle() computes today).
+    db.match_discord_state = [
+      { match_id: 200, thread_id: 'thread-renamed', event_id: null, message_checkpoint: null },
+      { match_id: 201, thread_id: 'thread-renamed', event_id: null, message_checkpoint: null },
+    ];
+    const client = createFakeSupabaseClient(db);
+    __setTestClient(client);
+    const { calls } = stubDiscord({
+      existingThreads: [{ id: 'thread-renamed', name: 'Some Other Name', parent_id: 'channel-season-5' }],
+    });
+
+    const result = await publishPodThreads(client, 2, 1);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    assert.equal(ok.pods[0].title, 'GAUNTLET: Round 1 Group 1', 'the title in the result is the current format');
+    assert.equal(ok.pods[0].status, 'skipped');
+    assert.equal(ok.pods[0].detail, 'Already exists (thread thread-renamed)');
+
+    // Never touched — no thread-create POST was made despite the title not matching by name.
+    assert.equal(calls.filter((c) => c.init?.method === 'POST').length, 0);
+
+    __setTestClient(adminClient);
+  });
+
+  await test('publishPodThreads: a stale recorded thread_id (deleted or no longer live) falls back to the title match instead of being trusted blindly', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    const db = podFakeDb();
+    // A previously-recorded thread_id that no longer exists in the channel at all (deleted, or the
+    // fixture never had one) — must not be trusted outright, or a genuinely missing thread would never
+    // get (re-)created.
+    db.match_discord_state = [
+      { match_id: 200, thread_id: 'thread-deleted', event_id: null, message_checkpoint: null },
+      { match_id: 201, thread_id: 'thread-deleted', event_id: null, message_checkpoint: null },
+    ];
+    const client = createFakeSupabaseClient(db);
+    __setTestClient(client);
+    const { calls } = stubDiscord(); // no existing threads at all
+
+    const result = await publishPodThreads(client, 2, 1);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    assert.equal(ok.pods[0].status, 'created', 'falls through to creating a real thread rather than trusting the dead id');
+
+    assert.equal(calls.filter((c) => c.init?.method === 'POST').length, 1);
 
     __setTestClient(adminClient);
   });
