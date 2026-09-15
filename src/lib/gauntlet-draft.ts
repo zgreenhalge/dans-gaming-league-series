@@ -102,6 +102,14 @@ export function computeAdvanceOrdinals(pods: BracketPod[]): Map<string, number> 
   return result;
 }
 
+/** A bracket shape's pods keyed by id — the lookup both `GauntletBracketDiagram` and
+ * `GauntletRoundsList` need to resolve a pod-sourced slot's `source_pod_id` back to the pod itself
+ * (for `pendingSlotLabel()`'s "Winner of ..." naming and, in the diagram, drawing the connector
+ * line). */
+export function podsById(pods: BracketPod[]): Map<number, BracketPod> {
+  return new Map(pods.map((p) => [p.id, p]));
+}
+
 /** Describes a slot whose occupant isn't decided yet, without ever surfacing a bare "TBD" — a seed
  * slot names the seed, and a pod-sourced slot names the pod it comes from plus, for a pod that sends
  * more than one survivor onward, which of those survivors ("First"/"Second"/...) this slot expects.

@@ -205,7 +205,12 @@ round shares one rule. A round is the bracket's final round when `gauntlet_pods.
 highest round_number with matches scheduled so far — the two diverge whenever the true final round
 hasn't materialized yet while an earlier round has already been fully scheduled, and conflating them
 would both suppress that earlier round's stakes label (final rounds carry none) and let
-`canonicalGauntletRankMap()` crown a premature champion off it. The score route runs
+`canonicalGauntletRankMap()` crown a premature champion off it. `finalRoundOf()` (`src/lib/util.ts`)
+is the one shared pick-the-final-round function both `GauntletRoundCard` (via `round.is_final_round`
+directly, since `getGauntletRounds()` already resolved it per round) and `canonicalGauntletRankMap()`
+(picking one round out of the full list) rely on — it prefers a round flagged `is_final_round`,
+falling back to the highest `round_number` only for a caller that never set the flag (e.g. a
+hand-built round list in a test). The score route runs
 `checkGauntletCompletion()` (below) only after
 `resolveAndPropagate()` settles, in the same hook — running them as unordered independent hooks would
 let completion see an incomplete round as "everything played" and archive before the final round

@@ -29,6 +29,7 @@ import {
 } from './gauntlet-draft';
 import type { BracketPod, BracketSlot } from './queries';
 import type { BracketPlan } from './gauntlet-bracket';
+import { bracketPod } from './test-support/gauntletFixtures';
 
 // ─── capacityFor / groupLabel / ordinalWord ─────────────────────────────────
 
@@ -66,19 +67,6 @@ test('emptyDraftPod: fresh pod is wildcard, non-final, 4 empty slots', () => {
 });
 
 // ─── computeAdvanceOrdinals ──────────────────────────────────────────────────
-
-function bracketPod(overrides: Partial<BracketPod> & { id: number }): BracketPod {
-  return {
-    round_number: 1,
-    pod_index: 0,
-    advance_rule: 'wildcard',
-    is_final: false,
-    played: false,
-    materialized: false,
-    slots: [],
-    ...overrides,
-  };
-}
 
 test('computeAdvanceOrdinals: assigns 0-based ordinals per source pod, in (round, pod_index, slot_index) order', () => {
   // Pod 10 (round 1) feeds two downstream slots: pod 20 slot 1 and pod 21 slot 0. Consumers are

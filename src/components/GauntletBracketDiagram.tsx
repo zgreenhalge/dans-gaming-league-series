@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import { PlayerName } from './PlayerName';
 import type { BracketPod, BracketSlot } from '@/lib/queries';
-import { computeAdvanceOrdinals, pendingSlotLabel } from '@/lib/gauntlet-draft';
+import { computeAdvanceOrdinals, pendingSlotLabel, podsById as buildPodsById } from '@/lib/gauntlet-draft';
 
 const POD_W = 232;
 const HEADER_H = 28;
@@ -56,7 +56,7 @@ export function GauntletBracketDiagram({
   const width = rounds.length * POD_W + (rounds.length - 1) * ROUND_GAP;
   const height = COLUMN_HEADER_H + maxPodsInRound * POD_H + (maxPodsInRound - 1) * POD_GAP;
 
-  const podsById = new Map(pods.map((p) => [p.id, p]));
+  const podsById = buildPodsById(pods);
 
   const posByPodId = new Map<number, { x: number; y: number }>();
   rounds.forEach((r, ri) => {

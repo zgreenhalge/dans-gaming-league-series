@@ -432,6 +432,22 @@ export const GAUNTLET_POD_STAKES_LABEL: Record<'single' | 'wildcard', string> = 
   wildcard: 'Wildcard — only last place is eliminated (3 of 4 advance).',
 };
 
+/** Picks a gauntlet round list's final round — the one round every "is this over/who won" derivation
+ * (`canonicalGauntletRankMap`, `GauntletRoundCard`) needs to single out. Prefers a round explicitly
+ * flagged `is_final_round` (set by `getGauntletRounds()` from `gauntlet_pods.is_final`, so it's
+ * accurate even while the true final round is still unmaterialized and an earlier round happens to
+ * be fully scheduled); falls back to the highest `round_number` for a caller that doesn't supply the
+ * flag (e.g. a hand-built round list in a test). Returns `undefined` for an empty list. */
+export function finalRoundOf<T extends { round_number: number; is_final_round?: boolean }>(
+  rounds: T[],
+): T | undefined {
+  const declared = rounds.find((r) => r.is_final_round === true);
+  if (declared) return declared;
+  return rounds.length === 0
+    ? undefined
+    : rounds.reduce((latest, r) => (r.round_number > latest.round_number ? r : latest));
+}
+
 export function avgOf(arr: number[]): number {
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }

@@ -1,11 +1,12 @@
 'use client';
 
+import { useMemo } from 'react';
 import EmptyState from './EmptyState';
 import { MatchCard } from './MatchCard';
 import { PlayerName } from './PlayerName';
 import { allMatchesPlayed, isPlayedScore, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
 import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
-import { computeAdvanceOrdinals, pendingSlotLabel } from '@/lib/gauntlet-draft';
+import { computeAdvanceOrdinals, pendingSlotLabel, podsById as buildPodsById } from '@/lib/gauntlet-draft';
 import type { GauntletRound, GauntletMatch, BracketPod } from '@/lib/queries';
 
 function computeGauntletRecords(matches: GauntletMatch[]) {
@@ -140,7 +141,7 @@ function GauntletRoundCard({
   const allPlayed = allMatchesPlayed(round.matches);
   const isFinalRound = round.is_final_round;
 
-  const podEntries = buildPodEntries(round.matches, pendingPods);
+  const podEntries = useMemo(() => buildPodEntries(round.matches, pendingPods), [round.matches, pendingPods]);
   // When every pod in this round shares the same stakes, show it once in the header instead of once
   // per pod below — a round can also mix rules (e.g. one wildcard pod feeding one elimination pod),
   // in which case there's no single label to hoist and each pod keeps its own.
@@ -321,21 +322,26 @@ export default function GauntletRoundsList({
 }) {
   const rankMap = canonicalGauntletRankMap(allRounds);
 
-  const podsById = new Map(bracketShape.map((p) => [p.id, p]));
-  const advanceOrdinals = computeAdvanceOrdinals(bracketShape);
-  const pendingPodsByRound = new Map<number, BracketPod[]>();
-  for (const pod of bracketShape) {
-    if (pod.materialized) continue;
-    // Only hide a pod once we can positively rule it out — some slot is already resolved to someone
-    // else and none to the current player. A pod with nothing resolved yet might still turn out to
-    // be theirs (e.g. they're still alive in an earlier pod this one is waiting on).
-    const anyResolved = pod.slots.some((s) => s.player_id != null);
-    const mineResolved = pod.slots.some((s) => s.player_id === currentPlayerId);
-    if (myGamesOnly && currentPlayerId != null && anyResolved && !mineResolved) continue;
-    const list = pendingPodsByRound.get(pod.round_number) ?? [];
-    list.push(pod);
-    pendingPodsByRound.set(pod.round_number, list);
-  }
+  // Pure functions of bracketShape/myGamesOnly/currentPlayerId — memoized so toggling a round
+  // open/closed (which re-renders this whole list) doesn't redo them for the entire bracket.
+  const podsById = useMemo(() => buildPodsById(bracketShape), [bracketShape]);
+  const advanceOrdinals = useMemo(() => computeAdvanceOrdinals(bracketShape), [bracketShape]);
+  const pendingPodsByRound = useMemo(() => {
+    const byRound = new Map<number, BracketPod[]>();
+    for (const pod of bracketShape) {
+      if (pod.materialized) continue;
+      // Only hide a pod once we can positively rule it out — some slot is already resolved to
+      // someone else and none to the current player. A pod with nothing resolved yet might still
+      // turn out to be theirs (e.g. they're still alive in an earlier pod this one is waiting on).
+      const anyResolved = pod.slots.some((s) => s.player_id != null);
+      const mineResolved = pod.slots.some((s) => s.player_id === currentPlayerId);
+      if (myGamesOnly && currentPlayerId != null && anyResolved && !mineResolved) continue;
+      const list = byRound.get(pod.round_number) ?? [];
+      list.push(pod);
+      byRound.set(pod.round_number, list);
+    }
+    return byRound;
+  }, [bracketShape, myGamesOnly, currentPlayerId]);
 
   if (displayRounds.length === 0) {
     return <EmptyState message="No matches found." />;
@@ -348,7 +354,7 @@ export default function GauntletRoundsList({
           key={r.round_number}
           round={r}
           allRounds={allRounds}
-          pendingPods={(pendingPodsByRound.get(r.round_number) ?? []).sort((a, b) => a.pod_index - b.pod_index)}
+          pendingPods={pendingPodsByRound.get(r.round_number) ?? []}
           podsById={podsById}
           advanceOrdinals={advanceOrdinals}
           seedNames={seedNames}

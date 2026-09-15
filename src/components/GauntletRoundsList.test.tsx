@@ -11,20 +11,8 @@
 import { describe, expect, test } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import GauntletRoundsList from './GauntletRoundsList';
-import type { BracketPod, GauntletRound } from '@/lib/queries';
-
-function bracketPod(overrides: Partial<BracketPod> & { id: number }): BracketPod {
-  return {
-    round_number: 1,
-    pod_index: 0,
-    advance_rule: 'wildcard',
-    is_final: false,
-    played: false,
-    materialized: false,
-    slots: [],
-    ...overrides,
-  };
-}
+import type { GauntletRound } from '@/lib/queries';
+import { bracketPod } from '@/lib/test-support/gauntletFixtures';
 
 const round2: GauntletRound = { round_number: 2, matches: [], is_final_round: false };
 

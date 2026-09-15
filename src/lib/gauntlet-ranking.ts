@@ -1,4 +1,4 @@
-import { allMatchesPlayed, isPlayedScore, parseScore, deriveRwr, deriveAdr } from './util';
+import { allMatchesPlayed, isPlayedScore, parseScore, deriveRwr, deriveAdr, finalRoundOf } from './util';
 
 // Minimal types for canonicalGauntletRankMap — mirrors GauntletRound/GauntletMatch
 // from queries/gauntlet.ts without creating a circular import.
@@ -23,17 +23,11 @@ interface _GauntletRound { round_number: number; matches: _GauntletMatch[]; is_f
 export function canonicalGauntletRankMap(rounds: _GauntletRound[]): Map<number, number> {
   if (rounds.length === 0) return new Map();
 
-  // Prefer the bracket's declared final round (`is_final_round`, sourced from
-  // `gauntlet_pods.is_final`) over the highest round_number seen — the true final can still be
-  // unmaterialized while an earlier round is fully scheduled, which would otherwise crown that
-  // earlier round's winner champion prematurely. Callers that don't supply `is_final_round` (e.g.
-  // hand-built round fixtures) fall back to the old max-round_number heuristic.
-  const declaredFinal = rounds.find((r) => r.is_final_round === true);
-  const maxRound = declaredFinal ? declaredFinal.round_number : Math.max(...rounds.map((r) => r.round_number));
-  const finalRound = declaredFinal ?? rounds.find((r) => r.round_number === maxRound);
+  const finalRound = finalRoundOf(rounds);
   if (!finalRound || !allMatchesPlayed(finalRound.matches)) {
     return new Map();
   }
+  const maxRound = finalRound.round_number;
 
   // Compute per-player record, RWR% and ADR for a given set of matches.
   // ADR is round-weighted (per-match adr * rounds) so it aggregates correctly.

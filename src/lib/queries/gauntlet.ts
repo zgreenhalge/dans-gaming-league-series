@@ -649,6 +649,11 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
     matchesByWeekId.set(m.week_id, list);
   }
 
+  // Legacy CSV-imported gauntlets have no gauntlet_pods rows at all — fall back to the last
+  // scheduled round being the final, since there's no pod data to read `is_final` from. weekRows is
+  // sorted ascending above, so its last entry's week_number is that fallback round_number.
+  const fallbackFinalRoundNumber = podRows.length === 0 ? weekRows[weekRows.length - 1].week_number : null;
+
   const rounds: GauntletRound[] = [];
   for (const week of weekRows) {
     const weekMatches = (matchesByWeekId.get(week.id) ?? []).sort(
@@ -671,14 +676,11 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
         advance_rule: pod?.advance_rule ?? null,
       };
     });
-    rounds.push({ round_number: week.week_number, matches: gauntletMatches, is_final_round: false });
-  }
-  // Legacy CSV-imported gauntlets have no gauntlet_pods rows at all — fall back to the last
-  // scheduled round being the final, since there's no pod data to read `is_final` from.
-  const fallbackFinalRoundNumber =
-    podRows.length === 0 && rounds.length > 0 ? Math.max(...rounds.map((r) => r.round_number)) : null;
-  for (const r of rounds) {
-    r.is_final_round = finalRoundNumbers.has(r.round_number) || r.round_number === fallbackFinalRoundNumber;
+    rounds.push({
+      round_number: week.week_number,
+      matches: gauntletMatches,
+      is_final_round: finalRoundNumbers.has(week.week_number) || week.week_number === fallbackFinalRoundNumber,
+    });
   }
   return rounds;
 }
