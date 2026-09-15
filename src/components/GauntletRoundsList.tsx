@@ -72,8 +72,15 @@ function buildPodEntries(matches: GauntletMatch[], pendingPods: BracketPod[]): P
   return [...real, ...pending].sort((a, b) => (a.pod_index ?? -1) - (b.pod_index ?? -1));
 }
 
-/** A not-yet-materialized pod's four slots — named the same way the Groups tab names an undecided
- * slot (`pendingSlotLabel`), since this pod has no real matches yet to render as `MatchCard`s. */
+/** A not-yet-materialized pod's four slots, laid out as a 2-vs-2 matchup — the same visual shape as a
+ * real game's shirts/skins columns (`MatchCard`'s `grid-cols-2 divide-x`), so a pending pod reads as
+ * "who's playing whom" rather than an undifferentiated list of four names. Which pair of slots ends
+ * up on which side of the eventual real games isn't decided until the pod actually materializes (game
+ * 1 and game 2 use different pairings — see `materializePod()` in `gauntlet-engine.ts`), so the split
+ * here (first half of `slot_index` order vs. second half) is a display grouping only, not a
+ * prediction of the real pairing. Each slot names its occupant the same way the Groups tab names an
+ * undecided one (`pendingSlotLabel`), since this pod has no real matches yet to render as
+ * `MatchCard`s. */
 function PendingPodRows({
   pod,
   podsById,
@@ -87,28 +94,36 @@ function PendingPodRows({
   seedNames?: Map<number, string>;
   currentPlayerId: number | null;
 }) {
+  const sortedSlots = [...pod.slots].sort((a, b) => a.slot_index - b.slot_index);
+  const mid = Math.ceil(sortedSlots.length / 2);
+  const sides = [sortedSlots.slice(0, mid), sortedSlots.slice(mid)];
+
   return (
-    <div className="px-4 py-2 bg-[var(--color-bg-primary)] border-b border-[var(--color-border-tertiary)] last:border-b-0">
-      <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-1.5">Not yet scheduled</div>
-      <div className="flex flex-col gap-1">
-        {pod.slots.map((slot) => {
-          const sourcePod = slot.source_pod_id != null ? podsById.get(slot.source_pod_id) : undefined;
-          const ordinal = advanceOrdinals.get(`${pod.id}:${slot.slot_index}`) ?? 0;
-          return (
-            <div key={slot.slot_index} className="font-display text-[13px] font-semibold">
-              {slot.player_name ? (
-                <PlayerName
-                  name={slot.player_name}
-                  isMe={currentPlayerId !== null && slot.player_id === currentPlayerId}
-                />
-              ) : (
-                <span className="font-mono text-[11px] font-normal tracked text-[var(--color-text-secondary)]">
-                  {pendingSlotLabel(slot, sourcePod, ordinal, seedNames)}
-                </span>
-              )}
-            </div>
-          );
-        })}
+    <div className="px-4 py-3 bg-[var(--color-bg-primary)] border-b border-[var(--color-border-tertiary)] last:border-b-0">
+      <div className="tracked text-[9px] text-[var(--color-text-secondary)] mb-2">Not yet scheduled</div>
+      <div className="grid grid-cols-2 divide-x divide-[var(--color-border-tertiary)]">
+        {sides.map((side, i) => (
+          <div key={i} className={`flex flex-col gap-1 ${i === 0 ? 'pr-3' : 'pl-3'}`}>
+            {side.map((slot) => {
+              const sourcePod = slot.source_pod_id != null ? podsById.get(slot.source_pod_id) : undefined;
+              const ordinal = advanceOrdinals.get(`${pod.id}:${slot.slot_index}`) ?? 0;
+              return (
+                <div key={slot.slot_index} className="font-display text-[13px] font-semibold truncate">
+                  {slot.player_name ? (
+                    <PlayerName
+                      name={slot.player_name}
+                      isMe={currentPlayerId !== null && slot.player_id === currentPlayerId}
+                    />
+                  ) : (
+                    <span className="font-mono text-[11px] font-normal tracked text-[var(--color-text-secondary)]">
+                      {pendingSlotLabel(slot, sourcePod, ordinal, seedNames)}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -188,44 +203,62 @@ function GauntletRoundCard({
       {isOpen && (
         <>
           {(() => {
-            let gameNumber = 0;
-            return podEntries.map((entry, gi) => (
-              <div key={entry.kind === 'pending' ? `pod-${entry.pod.id}` : (entry.pod_index ?? `solo-${gi}`)}>
-                {!isFinalRound && !roundStakes && entry.advance_rule && (
-                  <div className="px-4 py-1.5 font-mono text-[11px] text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-tertiary)]">
-                    {GAUNTLET_POD_STAKES_LABEL[entry.advance_rule]}
-                  </div>
-                )}
-                {entry.kind === 'pending' ? (
-                  <PendingPodRows
-                    pod={entry.pod}
-                    podsById={podsById}
-                    advanceOrdinals={advanceOrdinals}
-                    seedNames={seedNames}
-                    currentPlayerId={currentPlayerId}
-                  />
-                ) : (
-                  entry.matches.map((m) => {
-                    gameNumber++;
-                    const played = isPlayedScore(m.final_score);
-                    return (
-                      <MatchCard
-                        key={m.id}
-                        href={`/matches/${m.id}`}
-                        map={m.shirts_pick ?? m.picked_map}
-                        label={{ type: 'game', gameNumber }}
-                        right={played ? { type: 'score', score: m.final_score! } : { type: 'pending' }}
-                        shirtsStats={m.shirts_stats}
-                        skinsStats={m.skins_stats}
-                        shirtsFallback={m.shirts_stats.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
-                        skinsFallback={m.skins_stats.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
-                        currentPlayerId={currentPlayerId}
-                      />
-                    );
-                  })
-                )}
-              </div>
-            ));
+            // Legacy pod-less matches (pod_index null — a gauntlet predating bracket scheduling)
+            // have no per-pod grouping to number games within, so they keep one continuous "Game N"
+            // count across the whole round, same as before this diff — only a real pod's own two
+            // games reset to Game 1/Game 2 per pod, declared inside the map below.
+            let soloGameNumber = 0;
+            return podEntries.map((entry, gi) => {
+              // A pod header names its group so consecutive pods in one round read as distinct
+              // matchups rather than one undifferentiated list of games — "Group N" 1-indexed to
+              // match the Groups tab (`groupLabel()` in gauntlet-draft.ts), or "Final" for the round
+              // with the bracket's single final pod. `null` only for a legacy pod-less match (no
+              // group concept).
+              const groupLabel = entry.pod_index != null ? (isFinalRound ? 'Final' : `Group ${entry.pod_index + 1}`) : null;
+              const stakesText = !isFinalRound && !roundStakes && entry.advance_rule ? GAUNTLET_POD_STAKES_LABEL[entry.advance_rule] : null;
+              let podGameNumber = 0; // 1-indexed within this pod, not across the whole round
+              return (
+                <div
+                  key={entry.kind === 'pending' ? `pod-${entry.pod.id}` : (entry.pod_index ?? `solo-${gi}`)}
+                  className="border-t-2 border-[var(--color-border-primary)] first:border-t-0"
+                >
+                  {(groupLabel || stakesText) && (
+                    <div className="px-4 py-1.5 font-mono text-[11px] text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border-b border-[var(--color-border-tertiary)] flex items-baseline gap-2">
+                      {groupLabel && <span className="tracked font-semibold text-[var(--color-text-primary)]">{groupLabel}</span>}
+                      {stakesText && <span>{stakesText}</span>}
+                    </div>
+                  )}
+                  {entry.kind === 'pending' ? (
+                    <PendingPodRows
+                      pod={entry.pod}
+                      podsById={podsById}
+                      advanceOrdinals={advanceOrdinals}
+                      seedNames={seedNames}
+                      currentPlayerId={currentPlayerId}
+                    />
+                  ) : (
+                    entry.matches.map((m) => {
+                      const gameNumber = entry.pod_index != null ? ++podGameNumber : ++soloGameNumber;
+                      const played = isPlayedScore(m.final_score);
+                      return (
+                        <MatchCard
+                          key={m.id}
+                          href={`/matches/${m.id}`}
+                          map={m.shirts_pick ?? m.picked_map}
+                          label={{ type: 'game', gameNumber }}
+                          right={played ? { type: 'score', score: m.final_score! } : { type: 'pending' }}
+                          shirtsStats={m.shirts_stats}
+                          skinsStats={m.skins_stats}
+                          shirtsFallback={m.shirts_stats.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
+                          skinsFallback={m.skins_stats.map((p) => p.player_name).join(' & ') || 'Skins TBD'}
+                          currentPlayerId={currentPlayerId}
+                        />
+                      );
+                    })
+                  )}
+                </div>
+              );
+            });
           })()}
 
           {records.length > 0 && (
