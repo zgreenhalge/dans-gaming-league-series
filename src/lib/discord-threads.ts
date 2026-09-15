@@ -2,7 +2,7 @@
 // thread per match in a regular season's `season-{N}` forum channel (`extractSeasonNumber()`'s
 // convention), opening post tagging the four rostered players — `publishWeekThreads()`. A gauntlet
 // pod's two games share the same 4 players and are always played sequentially, so they get one
-// thread between them instead ("Round N Pod M") — `publishPodThreads()`, resolving to the same
+// thread between them instead ("GAUNTLET: Round N Group M") — `publishPodThreads()`, resolving to the same
 // `season-{N}` channel as the pod's paired regular season. Always admin-triggered — a season's
 // `start_date` is often arbitrary and so is when an admin actually wants a week/round published, so
 // there's no automatic Sunday-midnight cron here, only these two functions called from
@@ -19,7 +19,7 @@
 // thread by hand (or a previous run's Discord call could have succeeded right before its own DB
 // write failed), and the DB would have no record of it either way. `listChannelThreads()` reads the
 // forum channel's actual threads before creating anything, matched by exact title (`threadTitle()`'s
-// "Week N Game M", or `podThreadTitle()`'s "Round N Pod M") — the only link back to a match/pod a
+// "Week N Game M", or `podThreadTitle()`'s "GAUNTLET: Round N Group M") — the only link back to a match/pod a
 // hand-made thread can carry. A title that already exists in the channel is never posted into or
 // otherwise touched — its thread id is just adopted into `match_discord_state` (both games' rows, for
 // a pod) so the close functions can still find it once played.
@@ -31,7 +31,6 @@ import type { GauntletMatch, GauntletRound } from './queries/gauntlet';
 import type { Season } from './types';
 import { extractSeasonNumber, allMatchesPlayed } from './util';
 import { recordOpsError, clearOpsError } from './ops-errors';
-import { POD_GAME_GAP_LABEL } from './gauntlet-pod';
 
 const CHANNEL_OPERATION = 'discord_thread_publish';
 const THREAD_OPERATION = 'discord_thread_create';
@@ -106,11 +105,12 @@ export function threadTitle(weekNumber: number, matchNumber: number): string {
   return `Week ${weekNumber} Game ${matchNumber}`;
 }
 
-/** A gauntlet pod's Discord thread title, "Round N Pod M" (1-based, `podIndex` is 0-based) — one
- *  thread per pod, not per game, since both of a pod's games share the same 4 players and are
- *  scheduled/played as a unit. Same idempotency role `threadTitle()` plays for weekly threads. */
+/** A gauntlet pod's Discord thread title, "GAUNTLET: Round N Group M" (1-based, `podIndex` is
+ *  0-based) — one thread per pod, not per game, since both of a pod's games share the same 4
+ *  players and are scheduled/played as a unit. Same idempotency role `threadTitle()` plays for
+ *  weekly threads. */
 export function podThreadTitle(roundNumber: number, podIndex: number): string {
-  return `Round ${roundNumber} Pod ${podIndex + 1}`;
+  return `GAUNTLET: Round ${roundNumber} Group ${podIndex + 1}`;
 }
 
 export interface DiscordThread {
@@ -150,25 +150,31 @@ export async function listChannelThreads(
   return [...active.threads.filter((t) => t.parent_id === channelId), ...archived.threads];
 }
 
-/** A player's opening-post mention: the `<@discord_id>` tag when they've linked their Discord
- *  account, else their plain DGLS name. Shared by a weekly match's and a gauntlet pod's opening
- *  posts alike. */
-function mentionOrName(p: { player_id: number; player_name: string }, playersById: Map<number, { discord_id: string | null }>): string {
-  const discordId = playersById.get(p.player_id)?.discord_id;
-  return discordId ? `<@${discordId}>` : p.player_name;
+/** A player's opening-post mention: their personal Discord name-color role tag (`<@&roleId>`) when
+ *  they have one, else their plain DGLS name — the same "tag if linked, else plain name" convention
+ *  `discord-notify.ts`'s `playerTag()` uses for match-score announcements (kept as a separate,
+ *  parallel implementation rather than a shared import: `discord-notify.ts` already imports from this
+ *  file for `discordErrorDetail()`, so the reverse import would cycle). A role mention pings the one
+ *  player it's assigned to, same as tagging them directly, but renders in their name-color and
+ *  survives them changing their own Discord display name. Shared by a weekly match's and a gauntlet
+ *  pod's opening posts alike. Only usable in a thread's plain message `content` (which `publishThread()`
+ *  posts into, never an embed) — Discord doesn't parse mentions inside an embed as tags. */
+function mentionOrName(p: { player_id: number; player_name: string }, playersById: Map<number, { discord_name_role_id: string | null }>): string {
+  const roleId = playersById.get(p.player_id)?.discord_name_role_id;
+  return roleId ? `<@&${roleId}>` : p.player_name;
 }
 
 /** One game's "A & B vs C & D" lineup line, mentioning each player per `mentionOrName()`. */
 function lineup(
   shirts: { player_id: number; player_name: string }[],
   skins: { player_id: number; player_name: string }[],
-  playersById: Map<number, { discord_id: string | null }>,
+  playersById: Map<number, { discord_name_role_id: string | null }>,
 ): string {
   return `${shirts.map((p) => mentionOrName(p, playersById)).join(' & ')} vs ${skins.map((p) => mentionOrName(p, playersById)).join(' & ')}`;
 }
 
 /** One match's opening-post body. */
-function openingPost(match: MatchWithRoster, playersById: Map<number, { discord_id: string | null }>): string {
+function openingPost(match: MatchWithRoster, playersById: Map<number, { discord_name_role_id: string | null }>): string {
   return lineup(match.shirts, match.skins, playersById);
 }
 
@@ -332,9 +338,9 @@ export async function publishWeekThreads(
 
 /** A pod's opening post: both games' shirts-vs-skins lineups. Both games share the same 4 players
  *  reshuffled across factions, so this is the one place a pod thread actually distinguishes them. */
-function podOpeningPost(game1: GauntletMatch, game2: GauntletMatch, playersById: Map<number, { discord_id: string | null }>): string {
+function podOpeningPost(game1: GauntletMatch, game2: GauntletMatch, playersById: Map<number, { discord_name_role_id: string | null }>): string {
   return `Game 1: ${lineup(game1.shirts_stats, game1.skins_stats, playersById)}\n` +
-    `Game 2 (${POD_GAME_GAP_LABEL} later): ${lineup(game2.shirts_stats, game2.skins_stats, playersById)}`;
+    `Game 2: ${lineup(game2.shirts_stats, game2.skins_stats, playersById)}`;
 }
 
 export interface PublishPodThreadsResult {

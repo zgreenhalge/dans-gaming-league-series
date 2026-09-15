@@ -15,11 +15,13 @@ import { createFakeSupabaseClient, type Row } from './test-support/fakeSupabase'
 import { buildFakeDb } from './test-support/fixtures';
 
 const fakeDb = buildFakeDb();
-// Alice (1) and Bob (2) linked their Discord accounts — used to assert the opening post mentions
-// linked players and falls back to a plain name for unlinked ones (Carol, 3; Dave, 4). A fresh array
-// so this doesn't mutate the shared PLAYERS fixture other test files also read.
+// Alice (1) and Bob (2) linked their Discord accounts and have a name-color role — used to assert the
+// opening post tags linked players by role and falls back to a plain name for unlinked ones (Carol,
+// 3; Dave, 4). A fresh array so this doesn't mutate the shared PLAYERS fixture other test files also
+// read.
 fakeDb.players = fakeDb.players.map((p) =>
-  p.id === 1 ? { ...p, discord_id: 'discord-alice' } : p.id === 2 ? { ...p, discord_id: 'discord-bob' } : p,
+  p.id === 1 ? { ...p, discord_id: 'discord-alice', discord_name_role_id: 'role-alice' }
+    : p.id === 2 ? { ...p, discord_id: 'discord-bob', discord_name_role_id: 'role-bob' } : p,
 );
 const adminClient = createFakeSupabaseClient(fakeDb);
 __setTestClient(adminClient);
@@ -44,7 +46,8 @@ function podFakeDb() {
     { id: 9004, match_id: 201, player_id: 6, faction: 'SKINS', kills: 0, assists: 0, deaths: 0, adr: 0, damage: 0, rounds_played: 0, rounds_won: 0, is_win: false },
   ];
   db.players = db.players.map((p) =>
-    p.id === 1 ? { ...p, discord_id: 'discord-alice' } : p.id === 2 ? { ...p, discord_id: 'discord-bob' } : p,
+    p.id === 1 ? { ...p, discord_id: 'discord-alice', discord_name_role_id: 'role-alice' }
+      : p.id === 2 ? { ...p, discord_id: 'discord-bob', discord_name_role_id: 'role-bob' } : p,
   );
   return db;
 }
@@ -188,7 +191,7 @@ async function main() {
     assert.deepEqual(result, { error: 'Week 99 not found' });
   });
 
-  await test('publishWeekThreads: creates a thread per match, mentioning linked players by id and unlinked players by name', async () => {
+  await test('publishWeekThreads: creates a thread per match, mentioning linked players by name-color role and unlinked players by name', async () => {
     process.env.DISCORD_BOT_TOKEN = 'bot-token';
     process.env.DISCORD_GUILD_ID = 'guild-1';
     const { calls } = stubDiscord();
@@ -206,8 +209,8 @@ async function main() {
     assert.equal(createCalls.length, 2);
     const firstBody = JSON.parse(createCalls[0].init?.body as string);
     assert.equal(firstBody.name, 'Week 1 Game 1');
-    // Match 100: shirts Alice(1)+Bob(2, both linked), skins Carol(3)+Dave(4, unlinked).
-    assert.equal(firstBody.message.content, '<@discord-alice> & <@discord-bob> vs Carol & Dave');
+    // Match 100: shirts Alice(1)+Bob(2, both linked with a name-color role), skins Carol(3)+Dave(4, unlinked).
+    assert.equal(firstBody.message.content, '<@&role-alice> & <@&role-bob> vs Carol & Dave');
 
     const { data: state100 } = await adminClient.from('match_discord_state').select('thread_id').eq('match_id', 100).maybeSingle();
     assert.ok((state100 as { thread_id: string }).thread_id);
@@ -400,16 +403,16 @@ async function main() {
     assert.equal(ok.roundNumber, 1);
     assert.equal(ok.pods.length, 1);
     assert.equal(ok.pods[0].status, 'created');
-    assert.equal(ok.pods[0].title, 'Round 1 Pod 1');
+    assert.equal(ok.pods[0].title, 'GAUNTLET: Round 1 Group 1');
 
     const createCalls = calls.filter((c) => c.init?.method === 'POST');
     assert.equal(createCalls.length, 1, 'one thread for the whole pod, not one per game');
     const body = JSON.parse(createCalls[0].init?.body as string);
-    assert.equal(body.name, 'Round 1 Pod 1');
+    assert.equal(body.name, 'GAUNTLET: Round 1 Group 1');
     // Game 1 (match 200): shirts Alice(1)+Bob(2) vs skins Erin(5)+Frank(6). Game 2 (match 201): shirts
     // Alice(1)+Erin(5) vs skins Bob(2)+Frank(6) — same 4 players, reshuffled.
-    assert.match(body.message.content, /Game 1: <@discord-alice> & <@discord-bob> vs Erin & Frank/);
-    assert.match(body.message.content, /Game 2 \(30 minutes later\): <@discord-alice> & Erin vs <@discord-bob> & Frank/);
+    assert.match(body.message.content, /Game 1: <@&role-alice> & <@&role-bob> vs Erin & Frank/);
+    assert.match(body.message.content, /Game 2: <@&role-alice> & Erin vs <@&role-bob> & Frank/);
 
     // Both games point at the same thread.
     const state200 = await client.from('match_discord_state').select('thread_id').eq('match_id', 200).maybeSingle();
@@ -437,7 +440,7 @@ async function main() {
     assert.equal(ok.roundNumber, null, 'no single round header — this swept across rounds');
     assert.deepEqual(
       ok.pods.map((p) => [p.title, p.status]),
-      [['Round 1 Pod 1', 'created'], ['Round 2 Pod 1', 'created']],
+      [['GAUNTLET: Round 1 Group 1', 'created'], ['GAUNTLET: Round 2 Group 1', 'created']],
     );
 
     __setTestClient(adminClient);
@@ -452,12 +455,12 @@ async function main() {
     // Round 1 Pod 1's thread already exists in the channel (an earlier publish, or an admin's manual
     // create) — 'next' should adopt it silently rather than re-reporting it, since only Round 2 Pod 1
     // is actually new.
-    stubDiscord({ existingThreads: [{ id: 'thread-existing', name: 'Round 1 Pod 1', parent_id: 'channel-season-5' }] });
+    stubDiscord({ existingThreads: [{ id: 'thread-existing', name: 'GAUNTLET: Round 1 Group 1', parent_id: 'channel-season-5' }] });
 
     const result = await publishPodThreads(client, 2, 'next');
     assert.ok(!('error' in result));
     const ok = result as Exclude<typeof result, { error: string }>;
-    assert.deepEqual(ok.pods.map((p) => p.title), ['Round 2 Pod 1']);
+    assert.deepEqual(ok.pods.map((p) => p.title), ['GAUNTLET: Round 2 Group 1']);
     assert.equal(ok.pods[0].status, 'created');
 
     __setTestClient(adminClient);
@@ -469,7 +472,7 @@ async function main() {
     const db = podFakeDb();
     const client = createFakeSupabaseClient(db);
     __setTestClient(client);
-    stubDiscord({ existingThreads: [{ id: 'thread-existing', name: 'Round 1 Pod 1', parent_id: 'channel-season-5' }] });
+    stubDiscord({ existingThreads: [{ id: 'thread-existing', name: 'GAUNTLET: Round 1 Group 1', parent_id: 'channel-season-5' }] });
 
     const result = await publishPodThreads(client, 2, 'next');
     assert.deepEqual(result, { error: 'No newly finalized pods to publish' });
@@ -492,7 +495,7 @@ async function main() {
     // Pod 2 has zero materialized matches, so it's absent from `matches` entirely and never appears
     // here at all — `matches.length !== 2` only fires for a pod caught mid-materialization (below).
     assert.equal(ok.pods.length, 1);
-    assert.equal(ok.pods[0].title, 'Round 2 Pod 1');
+    assert.equal(ok.pods[0].title, 'GAUNTLET: Round 2 Group 1');
     assert.equal(ok.pods[0].status, 'created');
 
     __setTestClient(adminClient);
@@ -515,7 +518,7 @@ async function main() {
     const ok = result as Exclude<typeof result, { error: string }>;
     assert.deepEqual(
       ok.pods.map((p) => [p.title, p.status]),
-      [['Round 2 Pod 1', 'created'], ['Round 2 Pod 2', 'failed']],
+      [['GAUNTLET: Round 2 Group 1', 'created'], ['GAUNTLET: Round 2 Group 2', 'failed']],
     );
     assert.equal(ok.pods[1].detail, 'Pod is not fully materialized (expected 2 games)');
 

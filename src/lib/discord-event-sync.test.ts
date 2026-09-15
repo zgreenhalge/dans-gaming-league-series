@@ -493,7 +493,7 @@ async function main() {
     });
 
     stubDiscord({
-      threads: [{ id: 'thread-pod1000', name: 'Round 1 Pod 1', parent_id: 'channel-season-5' }],
+      threads: [{ id: 'thread-pod1000', name: 'GAUNTLET: Round 1 Group 1', parent_id: 'channel-season-5' }],
       events: [{ id: '4444444444444444444', scheduled_start_time: '2026-05-01T18:00:00.000Z', status: 1 }],
       messagesByThread: {
         'thread-pod1000': [{ id: 'm0', content: shareLink('4444444444444444444') }],
@@ -540,7 +540,7 @@ async function main() {
     fakeDb.match_discord_state = (fakeDb.match_discord_state ?? []).filter((r) => r.match_id !== 200);
 
     stubDiscord({
-      threads: [{ id: 'thread-pod1000', name: 'Round 1 Pod 1', parent_id: 'channel-season-5' }],
+      threads: [{ id: 'thread-pod1000', name: 'GAUNTLET: Round 1 Group 1', parent_id: 'channel-season-5' }],
       events: [{ id: '5555555555555555555', scheduled_start_time: '2026-05-08T18:00:00.000Z', status: 1 }],
       messagesByThread: {
         'thread-pod1000': [{ id: 'm0', content: shareLink('5555555555555555555') }],
