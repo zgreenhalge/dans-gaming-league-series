@@ -264,7 +264,10 @@ export interface PodGamePair {
 
 /** A round's fully materialized pods, paired into Game 1/Game 2 (by `match_number`) and sorted by
  * pod index — the shared derivation behind pod-level scheduling, Discord thread publishing, and
- * event-sync. A pod with fewer than 2 materialized games is silently excluded (nothing to pair yet). */
+ * event-sync. A pod with fewer than 2 materialized games is silently excluded (nothing to pair yet).
+ * Relies on `materializePod()` (`gauntlet-engine.ts`) always inserting match1 with the lower
+ * `match_number` — the same "match1_id is Game 1" identity `getPodSibling()`/`podGames()`
+ * (`gauntlet-pod.ts`) use, just derived here without needing the pod row's own ids in hand. */
 export function podGamePairs(round: GauntletRound): PodGamePair[] {
   const pairs: PodGamePair[] = [];
   for (const [podIndex, matches] of groupPodMatches(round)) {
@@ -378,10 +381,11 @@ export async function getGauntletSeasonLeaderboard(
 }
 
 /** The gauntlet pod a match belongs to, if any — null for non-gauntlet matches and for gauntlets
- * predating the bracket-scheduling feature (no gauntlet_pods rows). Used to show the pod stakes
- * label on the match detail page, and (via `match1_id`/`match2_id`) to resolve a match's pod
- * sibling for scheduling and cross-linking — both of a pod's games share one `player_match_stats`
- * roster reshuffled across two factions, so they're always scheduled and played as a pair. */
+ * predating the bracket-scheduling feature (no gauntlet_pods rows), or a pod that isn't fully
+ * materialized yet. Used (via `match1_id`/`match2_id`) to resolve a match's pod sibling for
+ * scheduling (`PATCH /api/matches/[id]/schedule`) and cross-linking (the match page, via
+ * `getGauntletPodSibling()`) — both of a pod's games share one `player_match_stats` roster
+ * reshuffled across two factions, so they're always scheduled and played as a pair. */
 export async function getGauntletPodForMatch(
   matchId: number,
 ): Promise<{ advance_rule: 'single' | 'wildcard'; is_final: boolean; match1_id: number; match2_id: number } | null> {
