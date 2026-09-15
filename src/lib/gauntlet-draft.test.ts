@@ -16,6 +16,7 @@ import {
   groupLabel,
   ordinalWord,
   computeAdvanceOrdinals,
+  pendingSlotLabel,
   fromPersistedShape,
   fromGeneratedPlan,
   pruneInvalidReferences,
@@ -26,8 +27,9 @@ import {
   draftToPreviewPods,
   type DraftPod,
 } from './gauntlet-draft';
-import type { BracketPod } from './queries';
+import type { BracketPod, BracketSlot } from './queries';
 import type { BracketPlan } from './gauntlet-bracket';
+import { bracketPod } from './test-support/gauntletFixtures';
 
 // ─── capacityFor / groupLabel / ordinalWord ─────────────────────────────────
 
@@ -66,19 +68,6 @@ test('emptyDraftPod: fresh pod is wildcard, non-final, 4 empty slots', () => {
 
 // ─── computeAdvanceOrdinals ──────────────────────────────────────────────────
 
-function bracketPod(overrides: Partial<BracketPod> & { id: number }): BracketPod {
-  return {
-    round_number: 1,
-    pod_index: 0,
-    advance_rule: 'wildcard',
-    is_final: false,
-    played: false,
-    materialized: false,
-    slots: [],
-    ...overrides,
-  };
-}
-
 test('computeAdvanceOrdinals: assigns 0-based ordinals per source pod, in (round, pod_index, slot_index) order', () => {
   // Pod 10 (round 1) feeds two downstream slots: pod 20 slot 1 and pod 21 slot 0. Consumers are
   // visited in (round_number, pod_index) order regardless of slot_index within a pod.
@@ -103,6 +92,47 @@ test('computeAdvanceOrdinals: assigns 0-based ordinals per source pod, in (round
   const ordinals = computeAdvanceOrdinals(pods);
   assert.equal(ordinals.get('20:1'), 0);
   assert.equal(ordinals.get('21:0'), 1);
+});
+
+// ─── pendingSlotLabel ────────────────────────────────────────────────────────
+
+function bracketSlot(overrides: Partial<BracketSlot>): BracketSlot {
+  return { slot_index: 0, source_kind: 'seed', source_seed: null, source_pod_id: null, player_id: null, player_name: null, ...overrides };
+}
+
+test('pendingSlotLabel: seed slot with no seedNames map falls back to "Seed N"', () => {
+  const slot = bracketSlot({ source_kind: 'seed', source_seed: 3 });
+  assert.equal(pendingSlotLabel(slot, undefined, 0), 'Seed 3');
+});
+
+test('pendingSlotLabel: seed slot names the current standings holder when seedNames is given', () => {
+  const slot = bracketSlot({ source_kind: 'seed', source_seed: 3 });
+  const seedNames = new Map([[3, 'Alice']]);
+  assert.equal(pendingSlotLabel(slot, undefined, 0, seedNames), 'Seed 3 (Alice)');
+});
+
+test('pendingSlotLabel: pod-sourced slot from a single-elimination pod reads "... Winner"', () => {
+  const slot = bracketSlot({ source_kind: 'pod', source_pod_id: 10 });
+  const sourcePod = bracketPod({ id: 10, round_number: 1, pod_index: 0, advance_rule: 'single' });
+  assert.equal(pendingSlotLabel(slot, sourcePod, 0), 'Round 1 Group 1 Winner');
+});
+
+test('pendingSlotLabel: pod-sourced slot from a wildcard pod reads "<Ordinal> of ..." by the given ordinal', () => {
+  const slot = bracketSlot({ source_kind: 'pod', source_pod_id: 10 });
+  const sourcePod = bracketPod({ id: 10, round_number: 1, pod_index: 1, advance_rule: 'wildcard' });
+  assert.equal(pendingSlotLabel(slot, sourcePod, 0), 'First of Round 1 Group 2');
+  assert.equal(pendingSlotLabel(slot, sourcePod, 1), 'Second of Round 1 Group 2');
+});
+
+test('pendingSlotLabel: pod-sourced slot names the Final, never a bare "TBD"', () => {
+  const slot = bracketSlot({ source_kind: 'pod', source_pod_id: 20 });
+  const sourcePod = bracketPod({ id: 20, round_number: 2, pod_index: 0, advance_rule: 'single', is_final: true });
+  assert.equal(pendingSlotLabel(slot, sourcePod, 0), 'Final Winner');
+});
+
+test('pendingSlotLabel: falls back to "TBD" when the source pod is unresolvable', () => {
+  const slot = bracketSlot({ source_kind: 'pod', source_pod_id: 999 });
+  assert.equal(pendingSlotLabel(slot, undefined, 0), 'TBD');
 });
 
 // ─── fromPersistedShape ──────────────────────────────────────────────────────
@@ -289,13 +319,13 @@ test('availableAdvancements: a wildcard pod offers 3 ordinals with First/Second/
   ]);
 });
 
-test('availableAdvancements: a single-advance pod offers one "Winner of" option; a final pod offers none', () => {
+test('availableAdvancements: a single-advance pod offers one "... Winner" option; a final pod offers none', () => {
   const pods: DraftPod[] = [
     draftPod({ key: 'src', round_number: 1, pod_index: 0, advance_rule: 'single' }),
     draftPod({ key: 'final', is_final: true, advance_rule: 'single' }),
   ];
   const options = availableAdvancements(pods);
-  assert.deepEqual(options, [{ sourcePodKey: 'src', ordinal: 0, label: 'Winner of Round 1 Group 1' }]);
+  assert.deepEqual(options, [{ sourcePodKey: 'src', ordinal: 0, label: 'Round 1 Group 1 Winner' }]);
 });
 
 // ─── validateIntegrity ───────────────────────────────────────────────────────

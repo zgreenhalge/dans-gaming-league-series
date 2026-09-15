@@ -1,10 +1,10 @@
-import { allMatchesPlayed, isPlayedScore, parseScore, deriveRwr, deriveAdr } from './util';
+import { allMatchesPlayed, isPlayedScore, parseScore, deriveRwr, deriveAdr, finalRoundOf } from './util';
 
 // Minimal types for canonicalGauntletRankMap — mirrors GauntletRound/GauntletMatch
 // from queries/gauntlet.ts without creating a circular import.
 interface _GauntletPlayer { player_id: number; faction: 'SHIRTS' | 'SKINS'; is_win: boolean; adr: number }
 interface _GauntletMatch { final_score: string | null; shirts_stats: _GauntletPlayer[]; skins_stats: _GauntletPlayer[] }
-interface _GauntletRound { round_number: number; matches: _GauntletMatch[] }
+interface _GauntletRound { round_number: number; matches: _GauntletMatch[]; is_final_round?: boolean }
 
 /**
  * Canonical gauntlet ranking — returns a Map<player_id, rank> (1-indexed) matching
@@ -23,11 +23,11 @@ interface _GauntletRound { round_number: number; matches: _GauntletMatch[] }
 export function canonicalGauntletRankMap(rounds: _GauntletRound[]): Map<number, number> {
   if (rounds.length === 0) return new Map();
 
-  const maxRound = Math.max(...rounds.map((r) => r.round_number));
-  const finalRound = rounds.find((r) => r.round_number === maxRound);
+  const finalRound = finalRoundOf(rounds);
   if (!finalRound || !allMatchesPlayed(finalRound.matches)) {
     return new Map();
   }
+  const maxRound = finalRound.round_number;
 
   // Compute per-player record, RWR% and ADR for a given set of matches.
   // ADR is round-weighted (per-match adr * rounds) so it aggregates correctly.

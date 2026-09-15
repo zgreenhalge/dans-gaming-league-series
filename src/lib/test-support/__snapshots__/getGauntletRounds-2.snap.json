@@ -65,6 +65,7 @@
         "pod_index": 0,
         "advance_rule": "single"
       }
-    ]
+    ],
+    "is_final_round": true
   }
 ]

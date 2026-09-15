@@ -145,6 +145,7 @@ describe('CombinedSeasonTabView — admin "Manage Bracket" link on the Gauntlet 
                 advance_rule: 'single',
               },
             ],
+            is_final_round: true,
           },
         ]}
       />,

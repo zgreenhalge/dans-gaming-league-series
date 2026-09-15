@@ -199,7 +199,19 @@ Later rounds materialize automatically as their pod resolves, via a non-fatal ho
 and the seeding step share a `materializeIfReady()` helper that only materializes a pod once all four
 of its slots are filled and it hasn't already been. A pod's `advance_rule` and `is_final` also drive
 the "pod stakes" label shown on the round list, grouped by pod (`GAUNTLET_POD_STAKES_LABEL` in
-`src/lib/util.ts`). The score route runs `checkGauntletCompletion()` (below) only after
+`src/lib/util.ts`) — hoisted to the round header instead of repeated per pod when every pod in the
+round shares one rule. A round is the bracket's final round when `gauntlet_pods.is_final` says so
+(`GauntletRound.is_final_round`, `getGauntletRounds()`), not when it merely happens to be the
+highest round_number with matches scheduled so far — the two diverge whenever the true final round
+hasn't materialized yet while an earlier round has already been fully scheduled, and conflating them
+would both suppress that earlier round's stakes label (final rounds carry none) and let
+`canonicalGauntletRankMap()` crown a premature champion off it. `finalRoundOf()` (`src/lib/util.ts`)
+is the one shared pick-the-final-round function both `GauntletRoundCard` (via `round.is_final_round`
+directly, since `getGauntletRounds()` already resolved it per round) and `canonicalGauntletRankMap()`
+(picking one round out of the full list) rely on — it prefers a round flagged `is_final_round`,
+falling back to the highest `round_number` only for a caller that never set the flag (e.g. a
+hand-built round list in a test). The score route runs
+`checkGauntletCompletion()` (below) only after
 `resolveAndPropagate()` settles, in the same hook — running them as unordered independent hooks would
 let completion see an incomplete round as "everything played" and archive before the final round
 materializes.
@@ -219,10 +231,26 @@ one — the tab itself is hidden (`src/app/seasons/[id]/page.tsx`) until `gauntl
 `gauntletRounds` has something in it, so a bare gauntlet-season shell with neither shows no tab at
 all rather than an empty one. An unresolved slot never reads a bare "TBD" — a seed-sourced slot names
 the seed ("Seed 3"), and a pod-sourced slot names the source pod and, for a pod that sends more than
-one survivor onward, which of them ("Winner of Round 1 Group 1", "Second of Round 1 Group 2"). The
-existing round-by-round `GauntletRoundsList` below the diagram still carries per-game detail (scores,
-maps, stats). `getGauntletBracketShape()` returns `[]` for a manual gauntlet (no `gauntlet_pods`
-rows), so the diagram silently no-ops there and the page falls back to the plain round list.
+one survivor onward, which of them ("Round 1 Group 1 Winner", "Second of Round 1 Group 2"). Both
+that labeling logic (`pendingSlotLabel()`) and the ordinal it needs (`computeAdvanceOrdinals()`) live
+in `src/lib/gauntlet-draft.ts`, shared with the round-by-round `GauntletRoundsList` below the diagram
+(#528): that view still gets its per-game detail (scores, maps, stats) from `getGauntletRounds()`,
+which returns nothing for a pod until its matches materialize, but now also takes `bracketShape` as a
+prop and renders a "Not yet scheduled" placeholder for every pod in a round that bracketShape knows
+about but hasn't materialized yet — the pod's four slots split into a 2-vs-2 matchup layout (by
+`slot_index` order; which pair actually ends up on which side of the real games isn't decided until
+`materializePod()` runs, so this split is a display grouping, not a pairing prediction), named the
+same way the diagram names them. Every pod in a round gets an explicit "Group N" (or "Final" in the
+round with the bracket's one final pod) header regardless of whether its stakes label is hoisted to
+the round header, so consecutive pods read as distinct groups rather than one undifferentiated list
+of games — and each pod numbers its own games "Game 1"/"Game 2" rather than continuing a count across
+the whole round. `SeasonTabView` unions `rounds` (real, materialized rounds) with an empty-shell round
+per `bracketShape` round_number that has no week yet — e.g. an unscheduled final — into
+`scheduleRounds`, the set the Schedule tab (and `GauntletRoundsList`'s own internal ranking, via
+`finalRoundOf()`) actually renders from, so a round can show up purely from its bracket shape before
+any of its pods exist as real matches. `getGauntletBracketShape()` returns `[]` for a manual gauntlet
+(no `gauntlet_pods` rows), so neither the diagram nor any of this renders there — the page falls back
+to the plain round list.
 
 **Pod scheduling.** A pod's two games share the same 4 players reshuffled across factions, so they can
 never be played simultaneously — the shared DatHost server ([`hosting.md`](./hosting.md)'s reuse
