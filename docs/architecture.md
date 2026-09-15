@@ -236,11 +236,21 @@ that labeling logic (`pendingSlotLabel()`) and the ordinal it needs (`computeAdv
 in `src/lib/gauntlet-draft.ts`, shared with the round-by-round `GauntletRoundsList` below the diagram
 (#528): that view still gets its per-game detail (scores, maps, stats) from `getGauntletRounds()`,
 which returns nothing for a pod until its matches materialize, but now also takes `bracketShape` as a
-prop and renders a "Not yet scheduled" placeholder — one row per slot, named the same way the diagram
-names it — for every pod in a displayed round that bracketShape knows about but hasn't materialized
-yet. `getGauntletBracketShape()` returns `[]` for a manual gauntlet (no `gauntlet_pods` rows), so
-neither the diagram nor these placeholders render there — the page falls back to the plain round
-list.
+prop and renders a "Not yet scheduled" placeholder for every pod in a round that bracketShape knows
+about but hasn't materialized yet — the pod's four slots split into a 2-vs-2 matchup layout (by
+`slot_index` order; which pair actually ends up on which side of the real games isn't decided until
+`materializePod()` runs, so this split is a display grouping, not a pairing prediction), named the
+same way the diagram names them. Every pod in a round gets an explicit "Group N" (or "Final" in the
+round with the bracket's one final pod) header regardless of whether its stakes label is hoisted to
+the round header, so consecutive pods read as distinct groups rather than one undifferentiated list
+of games — and each pod numbers its own games "Game 1"/"Game 2" rather than continuing a count across
+the whole round. `SeasonTabView` unions `rounds` (real, materialized rounds) with an empty-shell round
+per `bracketShape` round_number that has no week yet — e.g. an unscheduled final — into
+`scheduleRounds`, the set the Schedule tab (and `GauntletRoundsList`'s own internal ranking, via
+`finalRoundOf()`) actually renders from, so a round can show up purely from its bracket shape before
+any of its pods exist as real matches. `getGauntletBracketShape()` returns `[]` for a manual gauntlet
+(no `gauntlet_pods` rows), so neither the diagram nor any of this renders there — the page falls back
+to the plain round list.
 
 **Pod scheduling.** A pod's two games share the same 4 players reshuffled across factions, so they can
 never be played simultaneously — the shared DatHost server ([`hosting.md`](./hosting.md)'s reuse

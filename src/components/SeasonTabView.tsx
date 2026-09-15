@@ -121,9 +121,27 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const mapPool = props.kind === 'regular' ? (props.mapPool ?? null) : null;
   const gauntletBracketShape = props.kind === 'regular' ? (props.gauntletBracketShape ?? EMPTY_BRACKET_SHAPE) : EMPTY_BRACKET_SHAPE;
 
+  // The full set of rounds the Schedule tab (and anything ranking off it) should see — real,
+  // materialized rounds (`rounds`, from getGauntletRounds()) plus an empty shell for any round_number
+  // bracketShape knows about but that has no week/matches yet (e.g. an unscheduled final), so a round
+  // always exists to attach that round's pending-pod placeholders to (#528) and so `finalRoundOf()`
+  // (canonicalGauntletRankMap, GauntletRoundsList) can find the bracket's *real* final round instead
+  // of falling back to whichever earlier round happens to be the last one with real matches. Distinct
+  // from `rounds` itself, which stays untouched for any other purpose (Discord threads, event-sync,
+  // …) — an empty shell round carries no real data of its own.
+  const scheduleRounds = useMemo(() => {
+    if (!isGauntlet) return rounds;
+    const byNumber = new Map(rounds.map((r) => [r.round_number, r]));
+    const missingRoundNumbers = new Set(bracketShape.map((p) => p.round_number).filter((n) => !byNumber.has(n)));
+    for (const n of missingRoundNumbers) {
+      byNumber.set(n, { round_number: n, matches: [], is_final_round: bracketShape.some((p) => p.round_number === n && p.is_final) });
+    }
+    return [...byNumber.values()].sort((a, b) => a.round_number - b.round_number);
+  }, [isGauntlet, rounds, bracketShape]);
+
   const gauntletRanking = useMemo(
-    () => (isGauntlet ? canonicalGauntletRankMap(rounds) : undefined),
-    [isGauntlet, rounds],
+    () => (isGauntlet ? canonicalGauntletRankMap(scheduleRounds) : undefined),
+    [isGauntlet, scheduleRounds],
   );
 
   // Seed-placement row tinting for a regular season's own leaderboard — gold for a bye, red for a
@@ -164,16 +182,16 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
 
   const defaultOpenSet = useMemo<Set<number>>(() => {
     if (isGauntlet) {
-      const idx = rounds.findIndex((r) => r.matches.some((m) => !isPlayedScore(m.final_score)));
-      if (idx !== -1) return new Set([rounds[idx].round_number]);
-      if (rounds.length > 0) return new Set([rounds[rounds.length - 1].round_number]);
+      const idx = scheduleRounds.findIndex((r) => r.matches.some((m) => !isPlayedScore(m.final_score)));
+      if (idx !== -1) return new Set([scheduleRounds[idx].round_number]);
+      if (scheduleRounds.length > 0) return new Set([scheduleRounds[scheduleRounds.length - 1].round_number]);
     } else {
       const idx = schedule.findIndex((w) => w.matches.some((m) => !isPlayedScore(m.final_score)));
       if (idx !== -1) return new Set([schedule[idx].id]);
       if (schedule.length > 0) return new Set([schedule[schedule.length - 1].id]);
     }
     return new Set();
-  }, [isGauntlet, rounds, schedule]);
+  }, [isGauntlet, scheduleRounds, schedule]);
 
   const [localTab, setLocalTab] = useTabState(SEASON_TABS, 'leaderboard');
   const rawTab = props.tab ?? localTab;
@@ -195,7 +213,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const hasH2H = h2hData.players.length > 0 && (h2hData.duos.length > 0 || h2hData.rivals.length > 0);
   // Split from `hasSchedule` (regular season has no analog — a round-robin has no bracket to show).
   const hasGroups = isGauntlet && bracketShape.length > 0;
-  const hasSchedule = isGauntlet ? rounds.length > 0 : schedule.length > 0;
+  const hasSchedule = isGauntlet ? scheduleRounds.length > 0 : schedule.length > 0;
 
   // "My games" is URL state too (`mine=1`, omitted when off) — not just for its own sake, but
   // because it changes what a shared `week`/`round` link *means*: those ids are drawn from the
@@ -221,7 +239,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const { initialPair: urlInitialPair, onPairChange: handleH2HPairChange } = useH2HPairUrlState(h2hData.players);
 
   const openParam = isGauntlet ? 'round' : 'week';
-  const itemExists = (id: number) => (isGauntlet ? rounds.some((r) => r.round_number === id) : schedule.some((w) => w.id === id));
+  const itemExists = (id: number) => (isGauntlet ? scheduleRounds.some((r) => r.round_number === id) : schedule.some((w) => w.id === id));
 
   const [rawOpen, setRawOpen] = useUrlState(openParam, serializeIdSet(defaultOpenSet), {
     parse: (raw) => {
@@ -271,7 +289,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
   const myRounds = useMemo(
     () =>
       currentPlayerId
-        ? rounds
+        ? scheduleRounds
             .map((r) => ({ ...r, matches: r.matches.filter((m) => playerInMatch(m, currentPlayerId)) }))
             .filter(
               (r) =>
@@ -284,12 +302,12 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
                   (p) => p.round_number === r.round_number && !p.materialized && podMightBeMine(p, currentPlayerId),
                 ),
             )
-        : rounds,
-    [rounds, currentPlayerId, bracketShape],
+        : scheduleRounds,
+    [scheduleRounds, currentPlayerId, bracketShape],
   );
 
   const displaySchedule = myGamesOnly ? mySchedule : schedule;
-  const displayRounds = myGamesOnly ? myRounds : rounds;
+  const displayRounds = myGamesOnly ? myRounds : scheduleRounds;
   const displayCount = isGauntlet ? displayRounds.length : displaySchedule.length;
 
   const allMatches = useMemo<MatchPickBanInput[]>(() => {
@@ -453,7 +471,7 @@ export default function SeasonTabView(props: SeasonTabViewProps) {
         isGauntlet ? (
           <GauntletRoundsList
             displayRounds={displayRounds}
-            allRounds={rounds}
+            allRounds={scheduleRounds}
             bracketShape={bracketShape}
             seedNames={seedNames}
             myGamesOnly={myGamesOnly}

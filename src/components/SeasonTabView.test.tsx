@@ -314,6 +314,28 @@ describe('SeasonTabView — week/round deep link', () => {
     expect(screen.getByText('Not yet scheduled')).toBeInTheDocument();
   });
 
+  test('an entirely unmaterialized final round (no week/matches yet) still shows up on the Schedule tab', () => {
+    // `rounds` only goes up to round 2 — getGauntletRounds() never returns a round for one with no
+    // week yet. bracketShape is the only source that knows round 3 (the final) exists at all.
+    const finalPod = bracketPod({ id: 50, round_number: 3, pod_index: 0, advance_rule: 'single', is_final: true });
+
+    nextNavigationMock.setSearchParams('tab=schedule&round=3');
+    renderWithUrlState(
+      <SeasonTabView
+        kind="gauntlet"
+        rounds={[round(1), round(2)]}
+        bracketShape={[finalPod]}
+        leaderboard={[leaderboardRow()]}
+        seasonStatus="ACTIVE"
+        currentPlayerId={null}
+        h2hData={EMPTY_H2H}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /Round 3/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Not yet scheduled')).toBeInTheDocument();
+  });
+
 });
 
 describe('SeasonTabView — H2H pair writes to the URL', () => {
