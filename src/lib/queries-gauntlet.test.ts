@@ -93,6 +93,34 @@ async function main() {
     assert.deepEqual(await getGauntletBracketShape(1), []);
   });
 
+  await test('getGauntletBracketShape() orders a pod\'s slots by seed rank, not raw slot_index', async () => {
+    const db = buildFakeDb();
+    // A manually-arranged pod, matching the shape a real one can take: slot_index reflects
+    // whatever order the pod was drafted in, not the players' seed strength.
+    db.gauntlet_pods = [
+      ...db.gauntlet_pods,
+      { id: 2000, season_id: 99, round_number: 1, pod_index: 0, advance_rule: 'single', is_final: false, week_id: null, match1_id: null, match2_id: null },
+    ];
+    db.gauntlet_pod_slots = [
+      ...db.gauntlet_pod_slots,
+      { pod_id: 2000, slot_index: 0, source_kind: 'seed', source_seed: 11, source_pod_id: null, player_id: 13 },
+      { pod_id: 2000, slot_index: 1, source_kind: 'seed', source_seed: 10, source_pod_id: null, player_id: 11 },
+      { pod_id: 2000, slot_index: 2, source_kind: 'seed', source_seed: 12, source_pod_id: null, player_id: 10 },
+      { pod_id: 2000, slot_index: 3, source_kind: 'seed', source_seed: 13, source_pod_id: null, player_id: 12 },
+    ];
+    __setTestClient(createFakeSupabaseClient(db));
+
+    const shape = await getGauntletBracketShape(99);
+    assert.equal(shape.length, 1);
+    // Re-ordered to seed 10, 11, 12, 13 (best first) — the same order materializePod() ranks these
+    // occupants in when it pairs the pod's two real games — rather than the persisted slot_index
+    // order (11, 10, 12, 13).
+    assert.deepEqual(shape[0].slots.map((s) => s.source_seed), [10, 11, 12, 13]);
+    assert.deepEqual(shape[0].slots.map((s) => s.player_id), [11, 13, 10, 12]);
+
+    __setTestClient(createFakeSupabaseClient(buildFakeDb())); // restore the module-shared fixture for later tests
+  });
+
   await test('getGauntletRounds(2) — one round, one match, snapshot', async () => {
     const rounds = await getGauntletRounds(2);
     assert.equal(rounds.length, 1);
