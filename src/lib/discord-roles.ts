@@ -20,8 +20,27 @@ import { getActiveRegularSeason, getSeasonParticipants } from './queries';
 const OPERATION = 'discord_role_sync';
 const NAME_ROLE_OPERATION = 'discord_name_role_sync';
 
-/** Runs one Discord REST call, recording/clearing `operation`'s `ops_errors` row around it. Returns
- *  the response on success, or `null` once the failure's been recorded, so a caller can
+// A roster-wide grant/revoke pass fires one call per player in quick succession, which is exactly
+// the shape that trips Discord's rate limit on the guild-member-role route. MAX_ATTEMPTS bounds how
+// many times a single call retries a 429 before giving up and recording it as a real failure.
+const MAX_ATTEMPTS = 3;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** How long to wait before retrying a 429, per Discord's own `Retry-After` response header
+ *  (seconds) — falling back to a flat 1s if the header's missing or unparseable. Capped at 5s so a
+ *  rate-limited roster sync can't stall the best-effort season transition it rides along with for
+ *  too long. */
+function retryDelayMs(res: Response): number {
+  const seconds = Number(res.headers.get('retry-after'));
+  return Math.min(Number.isFinite(seconds) ? Math.ceil(seconds * 1000) : 1000, 5000);
+}
+
+/** Runs one Discord REST call, retrying a 429 up to `MAX_ATTEMPTS` times (honoring `Retry-After`)
+ *  before recording/clearing `operation`'s `ops_errors` row around the final outcome. Returns the
+ *  response on success, or `null` once the failure's been recorded, so a caller can
  *  `if (!res) return;` and stop there. The one shared primitive every Discord role mutation in this
  *  file goes through — @Participants grant/revoke and every name-color role step alike.
  *
@@ -40,18 +59,25 @@ async function discordApiCall(
   init: RequestInit,
   tolerate404 = true,
 ): Promise<Response | null> {
-  try {
-    const res = await fetch(url, init);
-    if (!res.ok && !(tolerate404 && res.status === 404)) {
-      await recordOpsError(supabaseAdmin, 'player', playerId, operation, `${label} returned ${res.status}`);
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(url, init);
+      if (res.status === 429 && attempt < MAX_ATTEMPTS) {
+        await sleep(retryDelayMs(res));
+        continue;
+      }
+      if (!res.ok && !(tolerate404 && res.status === 404)) {
+        await recordOpsError(supabaseAdmin, 'player', playerId, operation, `${label} returned ${res.status}`);
+        return null;
+      }
+      await clearOpsError(supabaseAdmin, 'player', playerId, operation);
+      return res;
+    } catch (e) {
+      await recordOpsError(supabaseAdmin, 'player', playerId, operation, `${label} failed: ${(e as Error).message}`);
       return null;
     }
-    await clearOpsError(supabaseAdmin, 'player', playerId, operation);
-    return res;
-  } catch (e) {
-    await recordOpsError(supabaseAdmin, 'player', playerId, operation, `${label} failed: ${(e as Error).message}`);
-    return null;
   }
+  return null; // unreachable -- the loop's final iteration always returns
 }
 
 async function setGuildMemberRole(
@@ -98,14 +124,22 @@ export interface RosterRoleEntry {
 /** Grants @Participants to every linked player on a roster — the "go live" catch-up pass, covering
  *  anyone who linked Discord after already being added to the roster (their individual add-hook
  *  would have been a no-op at the time, since discord_id was still null then). Unlinked players are
- *  silently skipped, same as the single-player path. */
+ *  silently skipped, same as the single-player path. Sequential, not `Promise.all` — firing a whole
+ *  roster's worth of guild-member-role calls at once is what trips Discord's rate limit on that
+ *  route in the first place; one at a time (each already retrying its own 429s, see
+ *  `discordApiCall`) keeps a roster-sized batch well clear of it. */
 export async function grantParticipantRoleToRoster(supabaseAdmin: SupabaseClient, roster: RosterRoleEntry[]): Promise<void> {
-  await Promise.all(roster.map((r) => grantParticipantRole(supabaseAdmin, r.player_id, r.discord_id)));
+  for (const r of roster) {
+    await grantParticipantRole(supabaseAdmin, r.player_id, r.discord_id);
+  }
 }
 
-/** Revokes @Participants from every linked player on a roster — the season-completion pass. */
+/** Revokes @Participants from every linked player on a roster — the season-completion pass.
+ *  Sequential for the same rate-limit reason as `grantParticipantRoleToRoster`. */
 export async function revokeParticipantRoleFromRoster(supabaseAdmin: SupabaseClient, roster: RosterRoleEntry[]): Promise<void> {
-  await Promise.all(roster.map((r) => revokeParticipantRole(supabaseAdmin, r.player_id, r.discord_id)));
+  for (const r of roster) {
+    await revokeParticipantRole(supabaseAdmin, r.player_id, r.discord_id);
+  }
 }
 
 /** Reconciles one player's @Participants membership against whether they're on the current ACTIVE

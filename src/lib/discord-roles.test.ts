@@ -58,22 +58,28 @@ function stubFetch(status = 204): { calls: FetchCall[] } {
   const calls: FetchCall[] = [];
   (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
     calls.push({ url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(init.body as string) : undefined });
-    return { ok: status >= 200 && status < 300, status } as Response;
+    return { ok: status >= 200 && status < 300, status, headers: { get: () => null } } as unknown as Response;
   }) as typeof fetch;
   return { calls };
 }
 
 /** Like `stubFetch()`, but returns a different response for each successive call (holding the last
  *  one for any call beyond the list) — for exercising the name-role functions' multi-request
- *  sequences (create → resolve the bot's top role position → reposition → assign). */
-function stubFetchSequence(responses: { status: number; json?: unknown }[]): { calls: FetchCall[] } {
+ *  sequences (create → resolve the bot's top role position → reposition → assign), and the
+ *  429-retry sequences below. `headers` lets a 429 response carry a `Retry-After` value. */
+function stubFetchSequence(responses: { status: number; json?: unknown; headers?: Record<string, string> }[]): { calls: FetchCall[] } {
   const calls: FetchCall[] = [];
   let i = 0;
   (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
     calls.push({ url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(init.body as string) : undefined });
     const r = responses[Math.min(i, responses.length - 1)];
     i++;
-    return { ok: r.status >= 200 && r.status < 300, status: r.status, json: async () => r.json ?? {} } as unknown as Response;
+    return {
+      ok: r.status >= 200 && r.status < 300,
+      status: r.status,
+      json: async () => r.json ?? {},
+      headers: { get: (name: string) => r.headers?.[name.toLowerCase()] ?? null },
+    } as unknown as Response;
   }) as typeof fetch;
   return { calls };
 }
@@ -169,6 +175,56 @@ async function main() {
     const rows = liveOpsErrors(db, PLAYER_ID);
     assert.equal(rows.length, 1);
     assert.match(rows[0].message as string, /403/);
+  });
+
+  await test('grantParticipantRole: retries a 429 honoring Retry-After, then succeeds', async () => {
+    setEnv();
+    const { db, client } = freshDb();
+    const { calls } = stubFetchSequence([
+      { status: 429, headers: { 'retry-after': '0' } },
+      { status: 204 },
+    ]);
+    await grantParticipantRole(client, PLAYER_ID, 'user-1');
+    assert.equal(calls.length, 2, 'must retry once after the 429 before succeeding');
+    assert.equal(liveOpsErrors(db, PLAYER_ID).length, 0);
+  });
+
+  await test('grantParticipantRole: gives up after repeated 429s and records ops_errors', async () => {
+    setEnv();
+    const { db, client } = freshDb();
+    const { calls } = stubFetchSequence([
+      { status: 429, headers: { 'retry-after': '0' } },
+      { status: 429, headers: { 'retry-after': '0' } },
+      { status: 429, headers: { 'retry-after': '0' } },
+    ]);
+    await grantParticipantRole(client, PLAYER_ID, 'user-1');
+    assert.equal(calls.length, 3, 'must stop retrying at the attempt cap');
+    const rows = liveOpsErrors(db, PLAYER_ID);
+    assert.equal(rows.length, 1);
+    assert.match(rows[0].message as string, /429/);
+  });
+
+  await test('grantParticipantRoleToRoster: processes players sequentially, not concurrently', async () => {
+    // Regression test: firing a whole roster's worth of guild-member-role PUTs concurrently is what
+    // trips Discord's rate limit on that route in the first place -- sequential processing is what
+    // keeps a roster-sized batch clear of it.
+    setEnv();
+    const { client } = freshDb();
+    let concurrent = 0;
+    let maxConcurrent = 0;
+    (globalThis as unknown as { fetch: typeof fetch }).fetch = (async () => {
+      concurrent++;
+      maxConcurrent = Math.max(maxConcurrent, concurrent);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      concurrent--;
+      return { ok: true, status: 204, headers: { get: () => null } } as unknown as Response;
+    }) as typeof fetch;
+    await grantParticipantRoleToRoster(client, [
+      { player_id: 1, discord_id: 'user-1' },
+      { player_id: 2, discord_id: 'user-2' },
+      { player_id: 3, discord_id: 'user-3' },
+    ]);
+    assert.equal(maxConcurrent, 1);
   });
 
   await test('a later success clears the prior ops_errors row', async () => {
