@@ -3,7 +3,8 @@
  * season's unplayed matches and Discord scheduled events, via the earliest *live* event-share link
  * (either Discord's actual invite-link share form, `discord.gg/{code}?event={id}`, or the direct
  * `discord.com/events/{guild}/{event}` form) found in each match's own thread (#398) — thread discovery
- * by title (independent of `match_discord_state`), the checkpointed scan (a full backward walk only
+ * that prefers a previously-recorded `match_discord_state.thread_id` (once confirmed still live) and
+ * falls back to an exact title match otherwise, the checkpointed scan (a full backward walk only
  * the first time a thread is seen, an `after=<checkpoint>` catch-up on every poll after that, and no
  * message fetch at all once an event is cached), writing a matched event's start time into
  * `matches.scheduled_at`, idempotency once already in sync, `no_thread`/`no_event` for a match nothing
@@ -171,6 +172,57 @@ async function main() {
     assert.equal(ok.matches.length, 2);
     assert.ok(ok.matches.every((m) => m.status === 'no_thread'));
     assert.ok(!calls.some((c) => c.includes('/messages')));
+  });
+
+  await test('syncSeasonScheduledEvents: finds a match\'s thread by its recorded thread_id even though the thread was renamed since', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = GUILD_ID;
+    const db = buildFakeDb();
+    // Match 101 already has a recorded thread_id from a prior sync/publish — the live thread's current
+    // name no longer matches threadTitle()'s "Week 1 Game 2" output (renamed, or created back when the
+    // title format was different). A fresh db/client, not the shared adminClient/fakeDb, since match
+    // 101/102 accumulate state across later tests in this file.
+    db.match_discord_state = [{ match_id: 101, thread_id: 'thread-renamed', event_id: null, message_checkpoint: null }];
+    const client = createFakeSupabaseClient(db);
+    __setTestClient(client);
+    stubDiscord({
+      threads: [{ id: 'thread-renamed', name: 'Some Other Name', parent_id: 'channel-season-5' }],
+      events: [{ id: '9999999999999999999', scheduled_start_time: '2026-02-01T18:00:00.000Z', status: 1 }],
+      messagesByThread: { 'thread-renamed': [{ id: 'm0', content: shareLink('9999999999999999999') }] },
+    });
+
+    const result = await syncSeasonScheduledEvents(client, 1);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    const m101 = ok.matches.find((m) => m.matchId === 101)!;
+    assert.equal(m101.status, 'synced', 'found the thread via its recorded id despite the name mismatch');
+
+    __setTestClient(adminClient);
+  });
+
+  await test('syncSeasonScheduledEvents: a stale recorded thread_id falls back to the title match instead of being trusted blindly', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = GUILD_ID;
+    const db = buildFakeDb();
+    // A previously-recorded thread_id that's no longer live (deleted) must not be trusted outright —
+    // it should fall back to the thread that's actually there now under the current title, not report
+    // "no_thread".
+    db.match_discord_state = [{ match_id: 101, thread_id: 'thread-deleted', event_id: null, message_checkpoint: null }];
+    const client = createFakeSupabaseClient(db);
+    __setTestClient(client);
+    stubDiscord({
+      threads: [{ id: 'thread-current', name: 'Week 1 Game 2', parent_id: 'channel-season-5' }],
+      events: [{ id: '8888888888888888888', scheduled_start_time: '2026-02-02T18:00:00.000Z', status: 1 }],
+      messagesByThread: { 'thread-current': [{ id: 'm0', content: shareLink('8888888888888888888') }] },
+    });
+
+    const result = await syncSeasonScheduledEvents(client, 1);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    const m101 = ok.matches.find((m) => m.matchId === 101)!;
+    assert.equal(m101.status, 'synced', 'falls through to the title-matched thread rather than trusting the dead id');
+
+    __setTestClient(adminClient);
   });
 
   // ─── Match 101: a first-time scan that finds its event immediately ─────────────────────────────
