@@ -149,9 +149,10 @@ async function main() {
     const { calls } = stubFetchSequence([
       { status: 429, headers: { 'retry-after': '0' } },
       { status: 429, headers: { 'retry-after': '0' } },
+      { status: 429, headers: { 'retry-after': '0' } },
     ]);
     await grantParticipantRole(client, PLAYER_ID, 'user-1');
-    assert.equal(calls.length, 2, 'must stop retrying at the attempt cap');
+    assert.equal(calls.length, 3, 'must stop retrying at the attempt cap');
     const rows = liveOpsErrors(db, PLAYER_ID);
     assert.equal(rows.length, 1);
     assert.match(rows[0].message as string, /429/);

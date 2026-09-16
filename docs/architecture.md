@@ -432,8 +432,8 @@ player can be rostered and participating without ever linking their account. Eve
 through `src/lib/discord-roles.ts`, which no-ops unconditionally (no error, no throw) when
 `DISCORD_BOT_TOKEN`/`DISCORD_GUILD_ID`/`DISCORD_PARTICIPANTS_ROLE_ID` aren't all set, or when a given
 player has no linked `discord_id`. A roster-wide grant/revoke pass runs one Discord call at a time
-(not concurrently) and each call retries its own 429s once (honoring `Retry-After`, capped at 2s)
-before giving up — a real Discord API failure past that is recorded to `ops_errors`
+(not concurrently) and each call retries its own 429s (honoring `Retry-After`, up to 2 retries capped
+at 5s each) before giving up — a real Discord API failure past that is recorded to `ops_errors`
 (`discord_role_sync`), see below.
 
 #### Surfacing best-effort failures (`ops_errors`)

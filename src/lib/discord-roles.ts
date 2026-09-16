@@ -23,18 +23,20 @@ const NAME_ROLE_OPERATION = 'discord_name_role_sync';
 
 // A roster-wide grant/revoke pass fires one call per player, sequentially (see
 // grantParticipantRoleToRoster/revokeParticipantRoleFromRoster below), synchronously inside an
-// admin request. MAX_ATTEMPTS and the cap in retryDelayMs() together bound one retried call to at
-// most one extra ~2s wait — enough to ride out the odd 429 without letting a rate-limited roster of
-// any size stall that request for minutes.
-const MAX_ATTEMPTS = 2;
+// admin request. MAX_ATTEMPTS bounds a single call to at most 2 retries — enough that a call
+// actually honoring Discord's own Retry-After has a real chance to clear a genuine rate-limit
+// window (the point of retrying at all — an admin no longer has to re-run this by hand), without
+// retrying forever against something that isn't a transient 429.
+const MAX_ATTEMPTS = 3;
 
 /** How long to wait before retrying a 429, per Discord's own `Retry-After` response header
- *  (seconds) — falling back to a flat 1s if the header's missing or unparseable. Capped at 2s so a
- *  rate-limited roster sync can't stall the best-effort season transition it rides along with for
- *  too long. */
+ *  (seconds) — falling back to a flat 1s if the header's missing or unparseable. Capped at 5s: long
+ *  enough to honor a realistic `Retry-After` value rather than undercut it (retrying too early just
+ *  reproduces the same 429), short enough that a rate-limited roster sync still can't stall the
+ *  best-effort season transition it rides along with indefinitely. */
 function retryDelayMs(res: Response): number {
   const seconds = Number(res.headers.get('retry-after'));
-  return Math.min(Number.isFinite(seconds) ? Math.ceil(seconds * 1000) : 1000, 2000);
+  return Math.min(Number.isFinite(seconds) ? Math.ceil(seconds * 1000) : 1000, 5000);
 }
 
 /** Runs one Discord REST call, retrying a 429 up to `MAX_ATTEMPTS` times (honoring `Retry-After`)
