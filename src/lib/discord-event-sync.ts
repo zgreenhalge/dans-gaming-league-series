@@ -7,11 +7,14 @@
 // that id *is* the correlation: an exact event id, sourced from the platform itself, not a freeform
 // string two humans have to agree on.
 //
-// Threads are found the same title-matched way `publishWeekThreads()` finds them
-// (`resolveSeasonForumChannel()` + `listChannelThreads()`, both exported from `discord-threads.ts`)
-// rather than via `match_discord_state` — a thread nobody has "published" through the bot yet (an
-// admin or player made it by hand) still gets found and scanned, exactly like a hand-made thread
-// still gets adopted by a `publishWeekThreads()` re-run.
+// Threads are found the same way `publishWeekThreads()` finds them: a match's previously-recorded
+// `match_discord_state.thread_id` first, if it's still live, else falling back to an exact title match
+// against the channel's actual threads (`resolveSeasonForumChannel()` + `listChannelThreads()`, both
+// exported from `discord-threads.ts`). The title fallback is what makes a thread nobody has
+// "published" through the bot yet (an admin or player made it by hand) still get found and scanned,
+// exactly like a hand-made thread still gets adopted by a `publishWeekThreads()` re-run; the id-first
+// check is what lets an already-known thread survive its own title changing (e.g. a wording update to
+// `threadTitle()`/`podThreadTitle()`) without losing sync coverage.
 //
 // No gateway bot required — this is a plain REST poll (`discord-event-sync.yml`) against whichever
 // season is currently `ACTIVE`. A real Discord bot's gateway would push a `MESSAGE_CREATE` event the
@@ -56,7 +59,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSeason, getSeasonSchedule, getGauntletRounds, podGamePairs } from './queries';
 import { isPlayedScore } from './util';
-import { discordErrorDetail, resolveSeasonForumChannel, listChannelThreads, threadTitle, podThreadTitle } from './discord-threads';
+import { discordErrorDetail, resolveSeasonForumChannel, listChannelThreads, threadTitle, podThreadTitle, resolveExistingThreadId } from './discord-threads';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { scheduleMatchReminder } from './discord-notify';
 import { podGame2ScheduledAt } from './gauntlet-pod';
@@ -96,6 +99,7 @@ interface DiscordMessage {
 
 interface MatchDiscordState {
   match_id: number;
+  thread_id: string | null;
   event_id: string | null;
   message_checkpoint: string | null;
 }
@@ -429,7 +433,7 @@ export async function syncSeasonScheduledEvents(
       'error' in channel ? channel : listChannelThreads(guildId, channel.channelId, token),
     ),
     listGuildScheduledEvents(guildId, token),
-    supabaseAdmin.from('match_discord_state').select('match_id, event_id, message_checkpoint').in('match_id', matchIds),
+    supabaseAdmin.from('match_discord_state').select('match_id, thread_id, event_id, message_checkpoint').in('match_id', matchIds),
   ]);
 
   if ('error' in channelThreadsResult) {
@@ -443,9 +447,17 @@ export async function syncSeasonScheduledEvents(
   await clearOpsError(supabaseAdmin, 'season', seasonId, EVENT_SYNC_OPERATION);
 
   const threadIdByTitle = new Map(channelThreadsResult.map((t) => [t.name, t.id]));
+  const liveThreadIds = new Set(channelThreadsResult.map((t) => t.id));
   const eventsById = new Map(eventsResult.filter((e) => LIVE_EVENT_STATUSES.has(e.status)).map((e) => [e.id, e]));
   const stateByMatchId = new Map(
     ((stateRowsResult.data ?? []) as MatchDiscordState[]).map((r) => [r.match_id, r]),
+  );
+  // discord-threads.ts's own resolveExistingThreadId() — a match's previously-recorded thread_id
+  // (syncMatchScheduledEvent() writes it on every successful scan), preferred over the exact-title
+  // match so a thread survives its own title changing, but only once confirmed still live. Shared
+  // rather than a second, hand-rolled copy of the same fallback order.
+  const knownThreadIdByMatch = new Map(
+    [...stateByMatchId.entries()].flatMap(([matchId, state]) => (state.thread_id ? [[matchId, state.thread_id] as const] : [])),
   );
 
   const results = await mapWithConcurrency(
@@ -454,7 +466,8 @@ export async function syncSeasonScheduledEvents(
     ([title, match]) =>
       syncMatchScheduledEvent(
         supabaseAdmin, token, title, match,
-        threadIdByTitle.get(title), stateByMatchId.get(match.id), eventsById,
+        resolveExistingThreadId([match.id], knownThreadIdByMatch, liveThreadIds, threadIdByTitle, title),
+        stateByMatchId.get(match.id), eventsById,
         podPartnerByAnchorId.get(match.id),
       ),
   );

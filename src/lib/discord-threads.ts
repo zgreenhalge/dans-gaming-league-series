@@ -15,12 +15,15 @@
 // best-effort hooks on every score write (same spot `notifyMatchScoreReported()` fires from), not
 // from either publish function.
 //
-// Idempotency is checked against Discord itself, not `match_discord_state` — an admin can create a
-// thread by hand (or a previous run's Discord call could have succeeded right before its own DB
-// write failed), and the DB would have no record of it either way. `listChannelThreads()` reads the
-// forum channel's actual threads before creating anything, matched by exact title (`threadTitle()`'s
-// "Week N Game M", or `podThreadTitle()`'s "GAUNTLET: Round N Group M") — the only link back to a match/pod a
-// hand-made thread can carry. A title that already exists in the channel is never posted into or
+// Idempotency prefers a match's own previously-recorded `match_discord_state.thread_id`
+// (`getKnownThreadIds()`/`resolveExistingThreadId()`) — checked against Discord itself, not just
+// trusted outright, since the DB alone can't be relied on: an admin can create a thread by hand, or a
+// previous run's Discord call could have succeeded right before its own DB write failed, and the DB
+// would have no record of it either way. Falling back to an exact title match (`threadTitle()`'s
+// "Week N Game M", or `podThreadTitle()`'s "GAUNTLET: Round N Group M") against `listChannelThreads()`'s
+// read of the forum channel's actual threads is what finds a hand-made thread with no row at all; the
+// id-first check is what lets an already-known thread survive its own title changing (e.g. a wording
+// update) without losing idempotency. Either way, a thread that already exists is never posted into or
 // otherwise touched — its thread id is just adopted into `match_discord_state` (both games' rows, for
 // a pod) so the close functions can still find it once played.
 
@@ -196,9 +199,12 @@ async function publishThread(
 
   if (existingThreadId) {
     await supabaseAdmin.from('match_discord_state').upsert(stateRows(existingThreadId), { onConflict: 'match_id' });
+    // Deliberately doesn't claim the live thread is named `title` — it might have been adopted via a
+    // previously-recorded thread_id (resolveExistingThreadId()) rather than an exact title match, in
+    // which case its actual Discord name could be anything.
     await recordOpsError(
       supabaseAdmin, 'match', anchorId, THREAD_OPERATION,
-      `Thread "${title}" already exists in the channel (${existingThreadId}) — adopted it instead of creating a duplicate`,
+      `Already linked to thread ${existingThreadId} — adopted it instead of creating a duplicate for "${title}"`,
     );
     return { matchId: anchorId, title, status: 'skipped', detail: `Already exists (thread ${existingThreadId})` };
   }
@@ -251,6 +257,49 @@ async function resolveChannelAndThreads(
 
 function resolveTargetWeek(schedule: WeekWithMatches[], week: number | 'next'): WeekWithMatches | null {
   return week === 'next' ? findNextUnplayedWeek(schedule) : schedule.find((w) => w.week_number === week) ?? null;
+}
+
+/** Every one of `matchIds`' already-known thread id, from a prior publish — read once per publish
+ *  call rather than trusted as the *only* way to find a thread (see this file's header on why title
+ *  matching against Discord itself is still the fallback: a hand-made thread, or a previous run whose
+ *  Discord call succeeded right before its own DB write failed, has no row here at all).
+ *  `discord-event-sync.ts` doesn't call this directly — its own `match_discord_state` read also needs
+ *  `event_id`/`message_checkpoint`, so it derives the same id map from its own richer query instead;
+ *  `resolveExistingThreadId()` below is what the two files actually share. A read failure here
+ *  degrades to exactly the title-only matching that existed before this lookup was added, rather than
+ *  failing the whole publish — this is a resilience improvement layered on an already-correct
+ *  fallback, not something publishing depends on. */
+async function getKnownThreadIds(supabaseAdmin: SupabaseClient, matchIds: number[]): Promise<Map<number, string>> {
+  if (matchIds.length === 0) return new Map();
+  const { data, error } = await supabaseAdmin.from('match_discord_state').select('match_id, thread_id').in('match_id', matchIds);
+  const known = new Map<number, string>();
+  if (error) return known;
+  for (const row of (data ?? []) as { match_id: number; thread_id: string | null }[]) {
+    if (row.thread_id) known.set(row.match_id, row.thread_id);
+  }
+  return known;
+}
+
+/** The thread a match (or a pod's two matches) should be adopted into, if one already exists —
+ *  preferring a previously-recorded `match_discord_state.thread_id` (so a thread survives its own
+ *  title changing, e.g. a wording update to `threadTitle()`/`podThreadTitle()`) over the exact-title
+ *  match `existingByTitle` still falls back to for a thread this code has never recorded a row for. A
+ *  recorded id is only trusted once confirmed still live (present in `liveThreadIds`, sourced from the
+ *  same `listChannelThreads()` read `existingByTitle` came from) — a stale id (the thread was deleted,
+ *  or moved) falls through to the title match exactly as if no row existed. Exported so
+ *  `discord-event-sync.ts` shares this exact resolution rather than a second, hand-rolled copy. */
+export function resolveExistingThreadId(
+  matchIds: number[],
+  knownThreadIdByMatch: Map<number, string>,
+  liveThreadIds: Set<string>,
+  existingByTitle: Map<string, string>,
+  title: string,
+): string | undefined {
+  for (const matchId of matchIds) {
+    const known = knownThreadIdByMatch.get(matchId);
+    if (known && liveThreadIds.has(known)) return known;
+  }
+  return existingByTitle.get(title);
 }
 
 /** Archives + locks a single match's Discord thread, if it has one — `writeMatchScore()`'s
@@ -320,16 +369,23 @@ export async function publishWeekThreads(
   if (!targetWeek) return { error: week === 'next' ? 'No upcoming week found' : `Week ${week} not found` };
   if (targetWeek.matches.length === 0) return { error: `Week ${targetWeek.week_number} has no matches` };
 
-  const resolved = await resolveChannelAndThreads(supabaseAdmin, seasonId, season.name, guildId, token);
+  // Independent reads — the Discord channel/thread lookup, the already-known thread ids, and the
+  // roster — run concurrently rather than as one long sequential chain.
+  const [resolved, knownThreadIdByMatch, playersById] = await Promise.all([
+    resolveChannelAndThreads(supabaseAdmin, seasonId, season.name, guildId, token),
+    getKnownThreadIds(supabaseAdmin, targetWeek.matches.map((m) => m.id)),
+    getPlayersById(),
+  ]);
   if ('error' in resolved) return resolved;
   const { channelId, existingByTitle } = resolved;
+  const liveThreadIds = new Set(existingByTitle.values());
 
-  const playersById = await getPlayersById();
   const results: ThreadPublishResult[] = [];
   for (const match of targetWeek.matches) {
     const title = threadTitle(targetWeek.week_number, match.match_number);
+    const existingThreadId = resolveExistingThreadId([match.id], knownThreadIdByMatch, liveThreadIds, existingByTitle, title);
     results.push(
-      await publishThread(supabaseAdmin, channelId, token, title, openingPost(match, playersById), [match.id], existingByTitle.get(title)),
+      await publishThread(supabaseAdmin, channelId, token, title, openingPost(match, playersById), [match.id], existingThreadId),
     );
   }
 
@@ -381,13 +437,24 @@ export async function publishPodThreads(
 
   const rounds = await getGauntletRounds(gauntletSeasonId);
 
-  const resolved = await resolveChannelAndThreads(supabaseAdmin, gauntletSeasonId, season.name, guildId, token);
+  // Independent reads — the Discord channel/thread lookup, the already-known thread ids, and the
+  // roster — run concurrently rather than as one long sequential chain. The known-ids lookup covers
+  // the whole gauntlet's materialized matches, not just the round(s) this call targets — small and
+  // bounded (a bracket has few rounds), and simpler than re-deriving the same scope split as the
+  // round/'next' branches below just to narrow this one lookup.
+  const [resolved, knownThreadIdByMatch, playersById] = await Promise.all([
+    resolveChannelAndThreads(supabaseAdmin, gauntletSeasonId, season.name, guildId, token),
+    getKnownThreadIds(supabaseAdmin, rounds.flatMap((r) => r.matches.map((m) => m.id))),
+    getPlayersById(),
+  ]);
   if ('error' in resolved) return resolved;
   const { channelId, existingByTitle } = resolved;
-  const playersById = await getPlayersById();
+  const liveThreadIds = new Set(existingByTitle.values());
 
-  const publishPod = (title: string, game1: GauntletMatch, game2: GauntletMatch) =>
-    publishThread(supabaseAdmin, channelId, token, title, podOpeningPost(game1, game2, playersById), [game1.id, game2.id], existingByTitle.get(title));
+  const publishPod = (title: string, game1: GauntletMatch, game2: GauntletMatch) => {
+    const existingThreadId = resolveExistingThreadId([game1.id, game2.id], knownThreadIdByMatch, liveThreadIds, existingByTitle, title);
+    return publishThread(supabaseAdmin, channelId, token, title, podOpeningPost(game1, game2, playersById), [game1.id, game2.id], existingThreadId);
+  };
 
   if (round === 'next') {
     // podGamePairs() already carries the "fully materialized" filter and the game1/game2 pairing —
