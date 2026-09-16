@@ -2,6 +2,7 @@ import { supabase } from '../supabase';
 import type { LeaderboardRowWithId, PlayerMatchStat, Match } from '../types';
 import { allMatchesPlayed, canonicalSort, deriveRates, isPlayedScore } from '../util';
 import { getPodSibling } from '../gauntlet-pod';
+import { seedByPlayerId, slotRank } from '../gauntlet-draft';
 import { getPlayersById } from './player';
 import { getWeekLookup, weekRowsFromLookup } from './_shared';
 
@@ -539,6 +540,8 @@ export async function getGauntletBracketShape(gauntletSeasonId: number): Promise
     slotsByPod.set(row.pod_id, list);
   }
 
+  const seedByPlayer = seedByPlayerId((slotRows ?? []) as SlotRow[]);
+
   return pods.map((p) => {
     const podMatchIds = [p.match1_id, p.match2_id].filter((id): id is number => id != null);
     return {
@@ -549,7 +552,12 @@ export async function getGauntletBracketShape(gauntletSeasonId: number): Promise
       is_final: p.is_final,
       played: podMatchIds.length > 0 && podMatchIds.every((id) => playedMatch.get(id) === true),
       materialized: p.match1_id != null,
-      slots: (slotsByPod.get(p.id) ?? []).sort((a, b) => a.slot_index - b.slot_index),
+      // Ordered by each occupant's original tournament seed (best first), matching
+      // `materializePod()`'s own ranking of a pod's occupants — not raw `slot_index`, which only
+      // reflects insertion order and can read out of rank order for a manually-arranged pod.
+      slots: (slotsByPod.get(p.id) ?? []).sort(
+        (a, b) => slotRank(a, seedByPlayer) - slotRank(b, seedByPlayer) || a.slot_index - b.slot_index,
+      ),
     };
   });
 }

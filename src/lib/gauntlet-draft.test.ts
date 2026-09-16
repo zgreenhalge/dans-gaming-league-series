@@ -25,6 +25,8 @@ import {
   validateIntegrity,
   validateComplete,
   draftToPreviewPods,
+  seedByPlayerId,
+  slotRank,
   type DraftPod,
 } from './gauntlet-draft';
 import type { BracketPod, BracketSlot } from './queries';
@@ -92,6 +94,41 @@ test('computeAdvanceOrdinals: assigns 0-based ordinals per source pod, in (round
   const ordinals = computeAdvanceOrdinals(pods);
   assert.equal(ordinals.get('20:1'), 0);
   assert.equal(ordinals.get('21:0'), 1);
+});
+
+// ─── seedByPlayerId / slotRank ───────────────────────────────────────────────
+
+test('seedByPlayerId: maps player_id to seed from seed-sourced slots only, across every pod', () => {
+  const pods: BracketPod[] = [
+    bracketPod({
+      id: 10,
+      slots: [
+        { slot_index: 0, source_kind: 'seed', source_seed: 2, source_pod_id: null, player_id: 20, player_name: 'B' },
+        { slot_index: 1, source_kind: 'seed', source_seed: 1, source_pod_id: null, player_id: 10, player_name: 'A' },
+      ],
+    }),
+    bracketPod({
+      id: 11,
+      round_number: 2,
+      slots: [
+        // A resolved advancement slot carries no source_seed and must not be treated as a seed origin.
+        { slot_index: 0, source_kind: 'pod', source_seed: null, source_pod_id: 10, player_id: 10, player_name: 'A' },
+      ],
+    }),
+  ];
+  const seedByPlayer = seedByPlayerId(pods.flatMap((p) => p.slots));
+  assert.deepEqual([...seedByPlayer.entries()].sort(), [[10, 1], [20, 2]]);
+});
+
+test('slotRank: a seed slot ranks by its own seed; a resolved advance slot by its occupant\'s original seed; unresolved sorts last', () => {
+  const seedByPlayer = new Map([[10, 1], [20, 2]]);
+  const seedSlot: BracketSlot = { slot_index: 0, source_kind: 'seed', source_seed: 3, source_pod_id: null, player_id: 30, player_name: 'C' };
+  const resolvedAdvanceSlot: BracketSlot = { slot_index: 1, source_kind: 'pod', source_seed: null, source_pod_id: 10, player_id: 10, player_name: 'A' };
+  const unresolvedSlot: BracketSlot = { slot_index: 2, source_kind: 'pod', source_seed: null, source_pod_id: 10, player_id: null, player_name: null };
+
+  assert.equal(slotRank(seedSlot, seedByPlayer), 3);
+  assert.equal(slotRank(resolvedAdvanceSlot, seedByPlayer), 1);
+  assert.equal(slotRank(unresolvedSlot, seedByPlayer), Infinity);
 });
 
 // ─── pendingSlotLabel ────────────────────────────────────────────────────────

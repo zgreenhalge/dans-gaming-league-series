@@ -119,6 +119,31 @@ export function podsById(pods: BracketPod[]): Map<number, BracketPod> {
   return new Map(pods.map((p) => [p.id, p]));
 }
 
+/** Every player's original tournament seed, keyed by player_id, derived from a season's own
+ * 'seed'-sourced slots — the entry point every occupant traces back to, whether round 1 or a later
+ * bye. The single derivation shared by `getSeedByPlayer()` (gauntlet-engine.ts, ranking a pod's
+ * occupants to pair its two real games) and `slotRank()` below (ranking a pod's slots for display),
+ * so the order games get generated in and the order they're shown in can never drift apart. */
+export function seedByPlayerId(slots: Pick<BracketSlot, 'source_kind' | 'source_seed' | 'player_id'>[]): Map<number, number> {
+  const map = new Map<number, number>();
+  for (const slot of slots) {
+    if (slot.source_kind === 'seed' && slot.player_id != null && slot.source_seed != null) {
+      map.set(slot.player_id, slot.source_seed);
+    }
+  }
+  return map;
+}
+
+/** A slot's rank for "best to worst" display ordering — its own seed number for a direct seed pick,
+ * or (once a 'pod'-sourced advancement slot resolves) the occupant's original seed via
+ * `seedByPlayerId()`. `Infinity` for a still-unresolved slot, so unknowns always sort last. Matches
+ * `materializePod()`'s own occupant ranking, so a pod's slots always read in the same order its two
+ * games actually get paired. */
+export function slotRank(slot: BracketSlot, seedByPlayer: Map<number, number>): number {
+  if (slot.source_kind === 'seed' && slot.source_seed != null) return slot.source_seed;
+  return slot.player_id != null ? (seedByPlayer.get(slot.player_id) ?? Infinity) : Infinity;
+}
+
 /** Whether a not-yet-materialized pod might still turn out to involve the given player once it
  * resolves — only false once some slot is positively known to be someone else and none are them yet;
  * a pod with nothing resolved at all always might still be theirs (e.g. they're still alive in an
