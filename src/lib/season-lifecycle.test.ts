@@ -194,6 +194,118 @@ function decidedGauntletFixture(): FakeDb {
   };
 }
 
+// ─── @Participants deferral around a paired gauntlet ────────────────────────
+
+const DISCORD_ENV_KEYS = ['DISCORD_BOT_TOKEN', 'DISCORD_GUILD_ID', 'DISCORD_PARTICIPANTS_ROLE_ID'] as const;
+
+function setDiscordEnv() {
+  process.env.DISCORD_BOT_TOKEN = 'test-bot-token';
+  process.env.DISCORD_GUILD_ID = 'test-guild-id';
+  process.env.DISCORD_PARTICIPANTS_ROLE_ID = 'test-role-id';
+}
+
+function clearDiscordEnv() {
+  for (const key of DISCORD_ENV_KEYS) delete process.env[key];
+}
+
+interface FetchCall {
+  url: string;
+  method: string;
+}
+
+function stubDiscordFetch(): { calls: FetchCall[] } {
+  const calls: FetchCall[] = [];
+  (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
+    calls.push({ url, method: init?.method ?? 'GET' });
+    return { ok: true, status: 204, headers: { get: () => null } } as unknown as Response;
+  }) as typeof fetch;
+  return { calls };
+}
+
+function withDiscordIds(players: FakeDb['players']): FakeDb['players'] {
+  return players.map((p) => ({ ...p, discord_id: `user-${p.id}` }));
+}
+
+async function testParticipantRoleDeferral() {
+  await test('checkSeasonCompletion: defers the @Participants revoke while a paired gauntlet is still active', async () => {
+    setDiscordEnv();
+    const db = playedSeasonFixture();
+    db.players = withDiscordIds(db.players);
+    db.seasons.push({ id: 21, name: 'Season 80 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 });
+    db.season_players = [1, 2, 3, 4].map((id, i) => ({ id: i + 1, season_id: 20, player_id: id }));
+    const client = installFixture(db);
+    const { calls } = stubDiscordFetch();
+
+    await checkSeasonCompletion(client as never, 20);
+
+    assert.equal(db.seasons.find((s) => s.id === 20)!.status, 'ARCHIVED');
+    assert.equal(calls.filter((c) => c.method === 'DELETE').length, 0, 'the gauntlet is still active -- nothing should be revoked yet');
+    clearDiscordEnv();
+  });
+
+  await test('checkSeasonCompletion: revokes immediately when the season has no paired gauntlet', async () => {
+    setDiscordEnv();
+    const db = playedSeasonFixture();
+    db.players = withDiscordIds(db.players);
+    db.season_players = [1, 2, 3, 4].map((id, i) => ({ id: i + 1, season_id: 20, player_id: id }));
+    const client = installFixture(db);
+    const { calls } = stubDiscordFetch();
+
+    await checkSeasonCompletion(client as never, 20);
+
+    assert.equal(db.seasons.find((s) => s.id === 20)!.status, 'ARCHIVED');
+    assert.equal(calls.filter((c) => c.method === 'DELETE').length, 4, 'no gauntlet to defer to -- revoke the whole roster now');
+    clearDiscordEnv();
+  });
+
+  await test('checkSeasonCompletion: revokes immediately when the paired gauntlet is already archived', async () => {
+    setDiscordEnv();
+    const db = playedSeasonFixture();
+    db.players = withDiscordIds(db.players);
+    db.seasons.push({ id: 21, name: 'Season 80 Gauntlet', status: 'ARCHIVED', is_gauntlet: true, target_win_rounds: 13 });
+    db.season_players = [1, 2, 3, 4].map((id, i) => ({ id: i + 1, season_id: 20, player_id: id }));
+    const client = installFixture(db);
+    const { calls } = stubDiscordFetch();
+
+    await checkSeasonCompletion(client as never, 20);
+
+    assert.equal(calls.filter((c) => c.method === 'DELETE').length, 4);
+    clearDiscordEnv();
+  });
+
+  await test("checkGauntletCompletion: revokes @Participants from the paired regular season's roster once the gauntlet archives", async () => {
+    setDiscordEnv();
+    const db = decidedGauntletFixture();
+    db.players = withDiscordIds(db.players);
+    db.season_players = [1, 2].map((id, i) => ({ id: i + 1, season_id: 30, player_id: id }));
+    const client = installFixture(db);
+    const { calls } = stubDiscordFetch();
+
+    await checkGauntletCompletion(client as never, 31);
+
+    assert.equal(db.seasons.find((s) => s.id === 31)!.status, 'ARCHIVED');
+    assert.equal(db.seasons.find((s) => s.id === 30)!.status, 'ARCHIVED');
+    assert.equal(calls.filter((c) => c.method === 'DELETE').length, 2);
+    clearDiscordEnv();
+  });
+
+  await test('checkGauntletCompletion: does not revoke again once the archive is already idempotent (a no-op call)', async () => {
+    setDiscordEnv();
+    const db = decidedGauntletFixture();
+    db.players = withDiscordIds(db.players);
+    db.season_players = [1, 2].map((id, i) => ({ id: i + 1, season_id: 30, player_id: id }));
+    db.seasons.find((s) => s.id === 30)!.status = 'ARCHIVED';
+    db.seasons.find((s) => s.id === 31)!.status = 'ARCHIVED';
+    const client = installFixture(db);
+    const { calls } = stubDiscordFetch();
+
+    await checkGauntletCompletion(client as never, 31); // must not throw or re-revoke
+
+    assert.equal(calls.length, 0);
+    clearDiscordEnv();
+  });
+}
+
 async function testCheckGauntletCompletion() {
   await test('checkGauntletCompletion: no-op for a missing or non-gauntlet season', async () => {
     const db = decidedGauntletFixture();
@@ -249,6 +361,7 @@ async function main() {
   await testActivateSeason();
   await testCheckSeasonCompletion();
   await testCheckGauntletCompletion();
+  await testParticipantRoleDeferral();
   report();
 }
 
