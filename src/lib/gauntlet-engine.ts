@@ -21,7 +21,7 @@ import {
   isSeasonFullyPlayed,
 } from './queries';
 import { clearOpsError, recordOpsError } from './ops-errors';
-import { validateIntegrity, groupLabel, type DraftPod } from './gauntlet-draft';
+import { validateIntegrity, groupLabel, seedByPlayerId, type DraftPod } from './gauntlet-draft';
 
 export interface GauntletPodRow {
   id: number;
@@ -57,19 +57,15 @@ async function getSeedByPlayer(supabaseAdmin: SupabaseClient, seasonId: number):
     .select('id, gauntlet_pod_slots!pod_id(source_kind, source_seed, player_id)')
     .eq('season_id', seasonId);
   if (error) throw error;
-  const map = new Map<number, number>();
-  for (const pod of (data ?? []) as { gauntlet_pod_slots: { source_kind: string; source_seed: number | null; player_id: number | null }[] }[]) {
-    for (const slot of pod.gauntlet_pod_slots) {
-      if (slot.source_kind === 'seed' && slot.player_id != null && slot.source_seed != null) {
-        map.set(slot.player_id, slot.source_seed);
-      }
-    }
-  }
-  return map;
+  const slots = (data ?? []).flatMap(
+    (pod: { gauntlet_pod_slots: { source_kind: 'seed' | 'pod'; source_seed: number | null; player_id: number | null }[] }) =>
+      pod.gauntlet_pod_slots,
+  );
+  return seedByPlayerId(slots);
 }
 
 /** Creates the pod's two `matches` rows (+ 4 `player_match_stats` rows each) and links them back
- * onto `gauntlet_pods`. Pairing: rank 0-3 by seed (best first), game 1 = {0+3 vs 1+2}, game 2 =
+ * onto `gauntlet_pods`. Pairing: rank 0-3 by seed (best first), game 1 = {0+1 vs 2+3}, game 2 =
  * {0+2 vs 1+3} — two distinct pairings so exactly one player goes 2-0 and one goes 0-2. Faction:
  * whichever pair contains the pod's top (best) seed is SHIRTS in both games. */
 export async function materializePod(
@@ -115,7 +111,7 @@ export async function materializePod(
     1 + Math.max(0, ...((existingMatches ?? []) as { match_number: number }[]).map((m) => m.match_number));
 
   const games: { shirts: typeof ranked; skins: typeof ranked }[] = [
-    { shirts: [r0, r3], skins: [r1, r2] },
+    { shirts: [r0, r1], skins: [r2, r3] },
     { shirts: [r0, r2], skins: [r1, r3] },
   ];
 

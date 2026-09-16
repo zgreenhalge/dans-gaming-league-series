@@ -77,7 +77,7 @@ function buildPodEntries(matches: GauntletMatch[], pendingPods: BracketPod[]): P
  * "who's playing whom" rather than an undifferentiated list of four names. Which pair of slots ends
  * up on which side of the eventual real games isn't decided until the pod actually materializes (game
  * 1 and game 2 use different pairings — see `materializePod()` in `gauntlet-engine.ts`), so the split
- * here (first half of `slot_index` order vs. second half) is a display grouping only, not a
+ * here (first half of rank order vs. second half) is a display grouping only, not a
  * prediction of the real pairing. Each slot names its occupant the same way the Groups tab names an
  * undecided one (`pendingSlotLabel`), since this pod has no real matches yet to render as
  * `MatchCard`s. */
@@ -94,9 +94,10 @@ function PendingPodRows({
   seedNames?: Map<number, string>;
   currentPlayerId: number | null;
 }) {
-  const sortedSlots = [...pod.slots].sort((a, b) => a.slot_index - b.slot_index);
-  const mid = Math.ceil(sortedSlots.length / 2);
-  const sides = [sortedSlots.slice(0, mid), sortedSlots.slice(mid)];
+  // pod.slots already arrives in rank order (best seed first — see `getGauntletBracketShape()`),
+  // matching the order `materializePod()` will actually pair once this pod's games exist.
+  const mid = Math.ceil(pod.slots.length / 2);
+  const sides = [pod.slots.slice(0, mid), pod.slots.slice(mid)];
 
   return (
     <div className="px-4 py-3 bg-[var(--color-bg-primary)] border-b border-[var(--color-border-tertiary)] last:border-b-0">
