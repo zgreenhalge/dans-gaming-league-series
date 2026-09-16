@@ -197,10 +197,21 @@ function lineup(
   return `${shirts.map((p) => mentionOrName(p, playersById)).join(' & ')} vs ${skins.map((p) => mentionOrName(p, playersById)).join(' & ')}`;
 }
 
-/** One match's opening-post body — the lineup line plus a link to the match's page on the site, so
- *  the thread doubles as a jumping-off point to its box score once played. */
+/** One match's opening-post body — just the lineup line. The link to the match's own page rides
+ *  along as a title-linked embed instead (`matchLinkEmbed()`) rather than a markdown link here:
+ *  Discord only renders `[text](url)` as a real hyperlink inside an embed, never in plain message
+ *  content (the one place `lineup()`'s role mentions render as tags, so content can't be given up for
+ *  it either). */
 function openingPost(match: MatchWithRoster, playersById: Map<number, { discord_name_role_id: string | null }>): string {
-  return `${lineup(match.shirts, match.skins, playersById)}\n${SITE_URL}/matches/${match.id}`;
+  return lineup(match.shirts, match.skins, playersById);
+}
+
+/** A match's page as a clickable-title embed — Discord's only way to render a real hyperlink outside
+ *  plain text, since `[text](url)` markdown links aren't parsed in a message's `content` (only inside
+ *  embeds). `label` is the link's visible text ("Box Score" for a single-match thread, "Game 1"/"Game
+ *  2" for a pod's shared thread, one per game since they're separate matches). */
+function matchLinkEmbed(label: string, matchId: number): { title: string; url: string } {
+  return { title: label, url: `${SITE_URL}/matches/${matchId}` };
 }
 
 /** Explicitly adds each of `discordIds` as a member of a just-created thread. Mentioning someone in
@@ -249,7 +260,9 @@ async function addThreadMembers(
  *  via `publishPodThreads()`). `matchIds[0]` is the "anchor" `ops_errors`/result key either way.
  *  `participantDiscordIds` are explicitly added as thread members (`addThreadMembers()`) once a new
  *  thread is actually created — not on the adopt path, since an existing thread's membership isn't
- *  this call's to fix. */
+ *  this call's to fix. `embeds` (`matchLinkEmbed()` per match) rides along on the same starter
+ *  message as `content` — never sent on the adopt path either, since an already-existing thread's
+ *  starter message isn't this call's to edit. */
 async function publishThread(
   supabaseAdmin: SupabaseClient,
   channelId: string,
@@ -259,6 +272,7 @@ async function publishThread(
   matchIds: number[],
   existingThreadId: string | undefined,
   participantDiscordIds: string[],
+  embeds: { title: string; url: string }[],
 ): Promise<ThreadPublishResult> {
   const anchorId = matchIds[0];
   const stateRows = (threadId: string) => matchIds.map((matchId) => ({ match_id: matchId, thread_id: threadId }));
@@ -279,7 +293,7 @@ async function publishThread(
     const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/threads`, {
       method: 'POST',
       headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: title, message: { content } }),
+      body: JSON.stringify({ name: title, message: { content, embeds } }),
     });
     if (!res.ok) {
       const detail = await discordErrorDetail('Thread create', res);
@@ -453,20 +467,21 @@ export async function publishWeekThreads(
     const existingThreadId = resolveExistingThreadId([match.id], knownThreadIdByMatch, liveThreadIds, existingByTitle, title);
     const discordIds = participantDiscordIds([...match.shirts, ...match.skins], playersById);
     results.push(
-      await publishThread(supabaseAdmin, channelId, token, title, openingPost(match, playersById), [match.id], existingThreadId, discordIds),
+      await publishThread(
+        supabaseAdmin, channelId, token, title, openingPost(match, playersById), [match.id], existingThreadId, discordIds,
+        [matchLinkEmbed('Box Score', match.id)],
+      ),
     );
   }
 
   return { seasonName: season.name, weekNumber: targetWeek.week_number, matches: results };
 }
 
-/** A pod's opening post: both games' shirts-vs-skins lineups, each linked to its own match page.
- *  Both games share the same 4 players reshuffled across factions, so this is the one place a pod
- *  thread actually distinguishes them — and they're separate matches, so each gets its own link
- *  rather than one link for the pod. */
+/** A pod's opening post: both games' shirts-vs-skins lineups. Both games share the same 4 players
+ *  reshuffled across factions, so this is the one place a pod thread actually distinguishes them. */
 function podOpeningPost(game1: GauntletMatch, game2: GauntletMatch, playersById: Map<number, { discord_name_role_id: string | null }>): string {
-  return `Game 1: ${lineup(game1.shirts_stats, game1.skins_stats, playersById)} — ${SITE_URL}/matches/${game1.id}\n` +
-    `Game 2: ${lineup(game2.shirts_stats, game2.skins_stats, playersById)} — ${SITE_URL}/matches/${game2.id}`;
+  return `Game 1: ${lineup(game1.shirts_stats, game1.skins_stats, playersById)}\n` +
+    `Game 2: ${lineup(game2.shirts_stats, game2.skins_stats, playersById)}`;
 }
 
 export interface PublishPodThreadsResult {
@@ -527,7 +542,10 @@ export async function publishPodThreads(
       [...game1.shirts_stats, ...game1.skins_stats, ...game2.shirts_stats, ...game2.skins_stats],
       playersById,
     );
-    return publishThread(supabaseAdmin, channelId, token, title, podOpeningPost(game1, game2, playersById), [game1.id, game2.id], existingThreadId, discordIds);
+    return publishThread(
+      supabaseAdmin, channelId, token, title, podOpeningPost(game1, game2, playersById), [game1.id, game2.id], existingThreadId, discordIds,
+      [matchLinkEmbed('Game 1', game1.id), matchLinkEmbed('Game 2', game2.id)],
+    );
   };
 
   if (round === 'next') {
