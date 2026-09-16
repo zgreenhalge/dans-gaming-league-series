@@ -3,7 +3,10 @@
 // convention), opening post tagging the four rostered players — `publishWeekThreads()`. A gauntlet
 // pod's two games share the same 4 players and are always played sequentially, so they get one
 // thread between them instead ("GAUNTLET: Round N Group M") — `publishPodThreads()`, resolving to the same
-// `season-{N}` channel as the pod's paired regular season. Always admin-triggered — a season's
+// `season-{N}` channel as the pod's paired regular season. Mentioning a player in the message a
+// thread is *created* with pings them but doesn't reliably add them as a thread member, so every
+// Discord-linked participant is also explicitly added as a member once the thread exists
+// (`addThreadMembers()`) rather than left to that side effect. Always admin-triggered — a season's
 // `start_date` is often arbitrary and so is when an admin actually wants a week/round published, so
 // there's no automatic Sunday-midnight cron here, only these two functions called from
 // `POST /api/seasons/[id]/discord-threads`. Every match's (or pod's) outcome is both recorded to
@@ -37,6 +40,7 @@ import { recordOpsError, clearOpsError } from './ops-errors';
 
 const CHANNEL_OPERATION = 'discord_thread_publish';
 const THREAD_OPERATION = 'discord_thread_create';
+const THREAD_MEMBER_ADD_OPERATION = 'discord_thread_member_add';
 const THREAD_CLOSE_OPERATION = 'discord_thread_close';
 const DISCORD_FORUM_CHANNEL_TYPE = 15;
 
@@ -167,6 +171,22 @@ function mentionOrName(p: { player_id: number; player_name: string }, playersByI
   return roleId ? `<@&${roleId}>` : p.player_name;
 }
 
+/** The distinct linked Discord ids among `players` — every rostered participant who should end up an
+ *  actual member of their match's thread (see `addThreadMembers()`), not just pinged in its opening
+ *  post. A player with no `discord_id` (unlinked) is silently excluded, same as `mentionOrName()`'s
+ *  plain-name fallback for them. */
+function participantDiscordIds(
+  players: { player_id: number }[],
+  playersById: Map<number, { discord_id: string | null }>,
+): string[] {
+  const ids = new Set<string>();
+  for (const p of players) {
+    const discordId = playersById.get(p.player_id)?.discord_id;
+    if (discordId) ids.add(discordId);
+  }
+  return [...ids];
+}
+
 /** One game's "A & B vs C & D" lineup line, mentioning each player per `mentionOrName()`. */
 function lineup(
   shirts: { player_id: number; player_name: string }[],
@@ -181,10 +201,53 @@ function openingPost(match: MatchWithRoster, playersById: Map<number, { discord_
   return lineup(match.shirts, match.skins, playersById);
 }
 
+/** Explicitly adds each of `discordIds` as a member of a just-created thread. Mentioning someone in
+ *  the `message` a forum thread is created *with* pings them but — unlike a mention posted into a
+ *  thread that already exists — doesn't reliably add them to the thread's member list, so this is
+ *  what actually gets a match's rostered (and Discord-linked) players into the thread's participant
+ *  list, rather than relying on that starter-message side effect. Best-effort and per-user: one
+ *  failure doesn't stop the rest, and none of them fail the publish itself (the thread was already
+ *  created successfully by the time this runs) — recorded to `ops_errors` instead so a failure is
+ *  still visible rather than silently dropped. */
+async function addThreadMembers(
+  supabaseAdmin: SupabaseClient,
+  threadId: string,
+  discordIds: string[],
+  token: string,
+  anchorMatchId: number,
+): Promise<void> {
+  if (discordIds.length === 0) return;
+  // A handful of independent PUTs (one per rostered player) — run concurrently rather than
+  // sequentially, unlike thread *creation* itself, which is deliberately serialized elsewhere in this
+  // file out of caution around Discord's per-route rate limit on that specific endpoint.
+  const outcomes = await Promise.all(
+    discordIds.map(async (discordId) => {
+      try {
+        const res = await fetch(`https://discord.com/api/v10/channels/${threadId}/thread-members/${discordId}`, {
+          method: 'PUT',
+          headers: { Authorization: `Bot ${token}` },
+        });
+        return res.ok ? null : await discordErrorDetail(`Add thread member ${discordId}`, res);
+      } catch (e) {
+        return `Add thread member ${discordId} failed: ${(e as Error).message}`;
+      }
+    }),
+  );
+  const failures = outcomes.filter((f): f is string => f !== null);
+  if (failures.length > 0) {
+    await recordOpsError(supabaseAdmin, 'match', anchorMatchId, THREAD_MEMBER_ADD_OPERATION, failures.join('; '));
+  } else {
+    await clearOpsError(supabaseAdmin, 'match', anchorMatchId, THREAD_MEMBER_ADD_OPERATION);
+  }
+}
+
 /** Creates (or adopts, per this file's header) a Discord thread and points every match in
  *  `matchIds` at it via `match_discord_state` — shared mechanics behind a weekly match's own thread
  *  (`matchIds` of length 1, via `publishWeekThreads()`) and a gauntlet pod's shared thread (length 2,
- *  via `publishPodThreads()`). `matchIds[0]` is the "anchor" `ops_errors`/result key either way. */
+ *  via `publishPodThreads()`). `matchIds[0]` is the "anchor" `ops_errors`/result key either way.
+ *  `participantDiscordIds` are explicitly added as thread members (`addThreadMembers()`) once a new
+ *  thread is actually created — not on the adopt path, since an existing thread's membership isn't
+ *  this call's to fix. */
 async function publishThread(
   supabaseAdmin: SupabaseClient,
   channelId: string,
@@ -193,6 +256,7 @@ async function publishThread(
   content: string,
   matchIds: number[],
   existingThreadId: string | undefined,
+  participantDiscordIds: string[],
 ): Promise<ThreadPublishResult> {
   const anchorId = matchIds[0];
   const stateRows = (threadId: string) => matchIds.map((matchId) => ({ match_id: matchId, thread_id: threadId }));
@@ -223,6 +287,7 @@ async function publishThread(
     const thread = (await res.json()) as { id: string };
     await supabaseAdmin.from('match_discord_state').upsert(stateRows(thread.id), { onConflict: 'match_id' });
     await clearOpsError(supabaseAdmin, 'match', anchorId, THREAD_OPERATION);
+    await addThreadMembers(supabaseAdmin, thread.id, participantDiscordIds, token, anchorId);
     return { matchId: anchorId, title, status: 'created', detail: `Thread ${thread.id}` };
   } catch (e) {
     const detail = `Thread create failed: ${(e as Error).message}`;
@@ -384,8 +449,9 @@ export async function publishWeekThreads(
   for (const match of targetWeek.matches) {
     const title = threadTitle(targetWeek.week_number, match.match_number);
     const existingThreadId = resolveExistingThreadId([match.id], knownThreadIdByMatch, liveThreadIds, existingByTitle, title);
+    const discordIds = participantDiscordIds([...match.shirts, ...match.skins], playersById);
     results.push(
-      await publishThread(supabaseAdmin, channelId, token, title, openingPost(match, playersById), [match.id], existingThreadId),
+      await publishThread(supabaseAdmin, channelId, token, title, openingPost(match, playersById), [match.id], existingThreadId, discordIds),
     );
   }
 
@@ -453,7 +519,11 @@ export async function publishPodThreads(
 
   const publishPod = (title: string, game1: GauntletMatch, game2: GauntletMatch) => {
     const existingThreadId = resolveExistingThreadId([game1.id, game2.id], knownThreadIdByMatch, liveThreadIds, existingByTitle, title);
-    return publishThread(supabaseAdmin, channelId, token, title, podOpeningPost(game1, game2, playersById), [game1.id, game2.id], existingThreadId);
+    const discordIds = participantDiscordIds(
+      [...game1.shirts_stats, ...game1.skins_stats, ...game2.shirts_stats, ...game2.skins_stats],
+      playersById,
+    );
+    return publishThread(supabaseAdmin, channelId, token, title, podOpeningPost(game1, game2, playersById), [game1.id, game2.id], existingThreadId, discordIds);
   };
 
   if (round === 'next') {

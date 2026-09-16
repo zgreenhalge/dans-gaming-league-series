@@ -3,7 +3,9 @@
  * publish (#398) — forum-channel resolution, per-match idempotency that prefers a previously-recorded
  * `match_discord_state.thread_id` (once confirmed still live) and falls back to an exact title match
  * against Discord itself otherwise, so a hand-created thread is discovered and adopted rather than
- * duplicated, and the ops_errors observability trail alongside the per-match results returned to the
+ * duplicated, explicit thread-member addition for every linked, rostered participant on a newly
+ * created thread (`addThreadMembers()` — a starter-message mention alone doesn't reliably add someone
+ * as a member), and the ops_errors observability trail alongside the per-match results returned to the
  * caller — plus `closeMatchThread()`'s best-effort single-match close, the score route's hook on the
  * transition into "played".
  *
@@ -111,7 +113,7 @@ interface StubThread {
  * against this simulated Discord state, never against `match_discord_state`.
  */
 function stubDiscord(
-  opts: { threadStatus?: number; threadBody?: unknown; existingThreads?: StubThread[] } = {},
+  opts: { threadStatus?: number; threadBody?: unknown; existingThreads?: StubThread[]; memberAddStatus?: number; memberAddBody?: unknown } = {},
 ): { calls: FetchCall[]; threads: StubThread[] } {
   const calls: FetchCall[] = [];
   const threads: StubThread[] = [...(opts.existingThreads ?? [])];
@@ -126,6 +128,11 @@ function stubDiscord(
     }
     if (url.includes('/threads/archived/public')) {
       return { ok: true, status: 200, json: async () => ({ threads: [] }) } as unknown as Response;
+    }
+    if (url.includes('/thread-members/')) {
+      const status = opts.memberAddStatus ?? 204;
+      const ok = status >= 200 && status < 300;
+      return { ok, status, json: async () => opts.memberAddBody ?? (ok ? {} : { message: 'Missing Permissions' }) } as unknown as Response;
     }
     if (url.endsWith('/threads')) {
       const status = opts.threadStatus ?? 200;
@@ -215,6 +222,34 @@ async function main() {
 
     const { data: state100 } = await adminClient.from('match_discord_state').select('thread_id').eq('match_id', 100).maybeSingle();
     assert.ok((state100 as { thread_id: string }).thread_id);
+
+    // Pinging linked players in the opening post isn't enough to make them thread members (Discord
+    // doesn't reliably add mentioned users from a thread's own starter message) — they're also
+    // explicitly added via the thread-members endpoint. Only Alice/Bob are linked; Carol/Dave aren't.
+    const threadId = (state100 as { thread_id: string }).thread_id;
+    const memberAddCalls = calls.filter((c) => c.init?.method === 'PUT' && c.url.startsWith(`https://discord.com/api/v10/channels/${threadId}/thread-members/`));
+    assert.deepEqual(
+      memberAddCalls.map((c) => c.url).sort(),
+      [
+        `https://discord.com/api/v10/channels/${threadId}/thread-members/discord-alice`,
+        `https://discord.com/api/v10/channels/${threadId}/thread-members/discord-bob`,
+      ],
+    );
+  });
+
+  await test('publishWeekThreads: a failure adding a thread member is recorded but does not fail the create', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    stubDiscord({ memberAddStatus: 403, memberAddBody: { message: 'Missing Permissions' } });
+    const result = await publishWeekThreads(adminClient, 1, 2);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    // Match 102 (week 2) — the thread is still created even though adding its members failed.
+    assert.equal(ok.matches[0].status, 'created');
+    const rows = liveOpsErrors('match', 102, 'discord_thread_member_add');
+    assert.equal(rows.length, 1);
+    assert.match(rows[0].message as string, /403/);
+    assert.match(rows[0].message as string, /Missing Permissions/);
   });
 
   await test('publishWeekThreads: re-publishing the same week adopts its own already-recorded threads and skips them', async () => {
@@ -450,6 +485,18 @@ async function main() {
     const state201 = await client.from('match_discord_state').select('thread_id').eq('match_id', 201).maybeSingle();
     assert.ok((state200.data as { thread_id: string }).thread_id);
     assert.equal((state200.data as { thread_id: string }).thread_id, (state201.data as { thread_id: string }).thread_id);
+
+    // Both games' rosters share the same 4 players reshuffled; only linked ones (Alice, Bob) are
+    // explicitly added as thread members, deduped across the two games rather than added twice each.
+    const threadId = (state200.data as { thread_id: string }).thread_id;
+    const memberAddCalls = calls.filter((c) => c.init?.method === 'PUT' && c.url.startsWith(`https://discord.com/api/v10/channels/${threadId}/thread-members/`));
+    assert.deepEqual(
+      memberAddCalls.map((c) => c.url).sort(),
+      [
+        `https://discord.com/api/v10/channels/${threadId}/thread-members/discord-alice`,
+        `https://discord.com/api/v10/channels/${threadId}/thread-members/discord-bob`,
+      ],
+    );
 
     __setTestClient(adminClient);
   });
