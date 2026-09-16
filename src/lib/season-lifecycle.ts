@@ -7,11 +7,15 @@
  * rare case where the auto-trigger's own status write fails; every other transition is automatic,
  * detected from the score route:
  *   - A regular season goes ACTIVE -> ARCHIVED once every match in it has been played
- *     (`checkSeasonCompletion`), which also best-effort seeds its linked gauntlet.
+ *     (`checkSeasonCompletion`), which also best-effort seeds its linked gauntlet. `@Participants`
+ *     stays granted to the roster at this point — a paired gauntlet always outlives the regular
+ *     season's own archival, so the role revoke is deferred to the gauntlet's own completion (see
+ *     below) unless there's no gauntlet to defer to.
  *   - A gauntlet season goes -> ARCHIVED once every match in it has been played *and* its Final pod
  *     is specifically decided (`checkGauntletCompletion`), which also archives its paired regular
  *     season if that hasn't happened yet (a manually-built gauntlet can still be going after its
- *     regular season already archived).
+ *     regular season already archived), then best-effort revokes `@Participants` from the paired
+ *     regular season's roster.
  * All side effects are best-effort: a failure here never blocks the status transition that
  * triggered it. Every failure (or roster-drift outcome that needs admin attention) is recorded via
  * `recordOpsError()` (`src/lib/ops-errors.ts`, entity type `season`, operation
@@ -24,7 +28,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { tryBuildGauntletShape, trySeedGauntlet, isGauntletBracketDecided } from './gauntlet-engine';
-import { getLinkedRegularSeason, getSeasonParticipants, isSeasonFullyPlayed } from './queries';
+import { getLinkedGauntlet, getLinkedRegularSeason, getSeasonParticipants, isSeasonFullyPlayed } from './queries';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { grantParticipantRoleToRoster, revokeParticipantRoleFromRoster, type RosterRoleEntry } from './discord-roles';
 
@@ -138,18 +142,22 @@ async function seedGauntletBestEffort(supabaseAdmin: SupabaseClient, seasonId: n
 
 /** Called from the score route's post-commit hook for every regular-season match. If this score
  * completed the season (every match now played) and the season is still ACTIVE, marks it
- * ARCHIVED, then concurrently best-effort seeds its linked gauntlet from final standings and
- * revokes `@Participants` from the whole roster (the season's over, so it's no longer "current") —
- * neither depends on the other's result. No-op for gauntlet matches, seasons not currently ACTIVE,
- * or seasons with matches still outstanding. */
+ * ARCHIVED, then best-effort seeds its linked gauntlet from final standings.
+ *
+ * A paired gauntlet always outlives its regular season's own archival — the gauntlet plays out
+ * entirely after the regular season is done — so `@Participants` must stay granted through it. The
+ * revoke here only fires immediately when there's no gauntlet to defer to (none was ever built, or
+ * it's somehow already `ARCHIVED`); otherwise it's left for `checkGauntletCompletion()` to run once
+ * the gauntlet itself finishes. No-op for gauntlet matches, seasons not currently ACTIVE, or seasons
+ * with matches still outstanding. */
 export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seasonId: number): Promise<void> {
   const { data: seasonRow, error: seasonErr } = await supabaseAdmin
     .from('seasons')
-    .select('status, is_gauntlet')
+    .select('name, status, is_gauntlet')
     .eq('id', seasonId)
     .maybeSingle();
   if (seasonErr) throw seasonErr;
-  const season = seasonRow as { status: string; is_gauntlet: boolean } | null;
+  const season = seasonRow as { name: string; status: string; is_gauntlet: boolean } | null;
   if (!season || season.is_gauntlet || season.status !== 'ACTIVE') return;
 
   if (!(await isSeasonFullyPlayed(seasonId, supabaseAdmin))) return;
@@ -160,8 +168,11 @@ export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seaso
     throw updErr;
   }
 
+  const linkedGauntlet = await getLinkedGauntlet(season.name);
+  const revokeNow = !linkedGauntlet || linkedGauntlet.status === 'ARCHIVED';
+
   await Promise.all([
-    syncParticipantRoleForRoster(supabaseAdmin, seasonId, 'revoke', revokeParticipantRoleFromRoster),
+    revokeNow ? syncParticipantRoleForRoster(supabaseAdmin, seasonId, 'revoke', revokeParticipantRoleFromRoster) : Promise.resolve(),
     seedGauntletBestEffort(supabaseAdmin, seasonId),
   ]);
 }
@@ -178,7 +189,13 @@ export async function checkSeasonCompletion(supabaseAdmin: SupabaseClient, seaso
  * the Final pod specifically to exist and be played. Conversely the Final being decided doesn't
  * alone imply nothing else is outstanding (an earlier-round game unrelated to the Final's path could
  * still be unplayed), hence still checking both. Idempotent: no-ops once the gauntlet is already
- * ARCHIVED, or if either condition isn't met yet. */
+ * ARCHIVED, or if either condition isn't met yet.
+ *
+ * Once both seasons are archived, best-effort revokes `@Participants` — the revoke
+ * `checkSeasonCompletion()` deferred while this gauntlet was still ahead of it. It's run against
+ * the paired *regular* season's roster (who actually hold the role, granted at that season's own
+ * activation), not the gauntlet's own smaller seeded-qualifiers roster; an orphan gauntlet with no
+ * paired regular season falls back to its own roster so the role still eventually gets revoked. */
 export async function checkGauntletCompletion(supabaseAdmin: SupabaseClient, gauntletSeasonId: number): Promise<void> {
   const { data: seasonRow, error: seasonErr } = await supabaseAdmin
     .from('seasons')
@@ -222,5 +239,9 @@ export async function checkGauntletCompletion(supabaseAdmin: SupabaseClient, gau
       'gauntlet_archive',
       `Auto-archive failed: ${(err as Error).message}`,
     );
+    return;
   }
+
+  const rosterSeasonId = regularSeason?.id ?? gauntletSeasonId;
+  await syncParticipantRoleForRoster(supabaseAdmin, rosterSeasonId, 'revoke', revokeParticipantRoleFromRoster);
 }
