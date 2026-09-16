@@ -37,6 +37,7 @@ import type { GauntletMatch, GauntletRound } from './queries/gauntlet';
 import type { Season } from './types';
 import { extractSeasonNumber, allMatchesPlayed } from './util';
 import { recordOpsError, clearOpsError } from './ops-errors';
+import { SITE_URL } from './seo/site';
 
 const CHANNEL_OPERATION = 'discord_thread_publish';
 const THREAD_OPERATION = 'discord_thread_create';
@@ -196,9 +197,10 @@ function lineup(
   return `${shirts.map((p) => mentionOrName(p, playersById)).join(' & ')} vs ${skins.map((p) => mentionOrName(p, playersById)).join(' & ')}`;
 }
 
-/** One match's opening-post body. */
+/** One match's opening-post body — the lineup line plus a link to the match's page on the site, so
+ *  the thread doubles as a jumping-off point to its box score once played. */
 function openingPost(match: MatchWithRoster, playersById: Map<number, { discord_name_role_id: string | null }>): string {
-  return lineup(match.shirts, match.skins, playersById);
+  return `${lineup(match.shirts, match.skins, playersById)}\n${SITE_URL}/matches/${match.id}`;
 }
 
 /** Explicitly adds each of `discordIds` as a member of a just-created thread. Mentioning someone in
@@ -458,11 +460,13 @@ export async function publishWeekThreads(
   return { seasonName: season.name, weekNumber: targetWeek.week_number, matches: results };
 }
 
-/** A pod's opening post: both games' shirts-vs-skins lineups. Both games share the same 4 players
- *  reshuffled across factions, so this is the one place a pod thread actually distinguishes them. */
+/** A pod's opening post: both games' shirts-vs-skins lineups, each linked to its own match page.
+ *  Both games share the same 4 players reshuffled across factions, so this is the one place a pod
+ *  thread actually distinguishes them — and they're separate matches, so each gets its own link
+ *  rather than one link for the pod. */
 function podOpeningPost(game1: GauntletMatch, game2: GauntletMatch, playersById: Map<number, { discord_name_role_id: string | null }>): string {
-  return `Game 1: ${lineup(game1.shirts_stats, game1.skins_stats, playersById)}\n` +
-    `Game 2: ${lineup(game2.shirts_stats, game2.skins_stats, playersById)}`;
+  return `Game 1: ${lineup(game1.shirts_stats, game1.skins_stats, playersById)} — ${SITE_URL}/matches/${game1.id}\n` +
+    `Game 2: ${lineup(game2.shirts_stats, game2.skins_stats, playersById)} — ${SITE_URL}/matches/${game2.id}`;
 }
 
 export interface PublishPodThreadsResult {

@@ -217,8 +217,9 @@ async function main() {
     assert.equal(createCalls.length, 2);
     const firstBody = JSON.parse(createCalls[0].init?.body as string);
     assert.equal(firstBody.name, 'Week 1 Game 1');
-    // Match 100: shirts Alice(1)+Bob(2, both linked with a name-color role), skins Carol(3)+Dave(4, unlinked).
-    assert.equal(firstBody.message.content, '<@&role-alice> & <@&role-bob> vs Carol & Dave');
+    // Match 100: shirts Alice(1)+Bob(2, both linked with a name-color role), skins Carol(3)+Dave(4, unlinked),
+    // followed by a link to the match's own page on the site.
+    assert.equal(firstBody.message.content, '<@&role-alice> & <@&role-bob> vs Carol & Dave\nhttps://dans-gaming-league-series.vercel.app/matches/100');
 
     const { data: state100 } = await adminClient.from('match_discord_state').select('thread_id').eq('match_id', 100).maybeSingle();
     assert.ok((state100 as { thread_id: string }).thread_id);
@@ -476,9 +477,10 @@ async function main() {
     const body = JSON.parse(createCalls[0].init?.body as string);
     assert.equal(body.name, 'GAUNTLET: Round 1 Group 1');
     // Game 1 (match 200): shirts Alice(1)+Bob(2) vs skins Erin(5)+Frank(6). Game 2 (match 201): shirts
-    // Alice(1)+Erin(5) vs skins Bob(2)+Frank(6) — same 4 players, reshuffled.
-    assert.match(body.message.content, /Game 1: <@&role-alice> & <@&role-bob> vs Erin & Frank/);
-    assert.match(body.message.content, /Game 2: <@&role-alice> & Erin vs <@&role-bob> & Frank/);
+    // Alice(1)+Erin(5) vs skins Bob(2)+Frank(6) — same 4 players, reshuffled. Each game links its own
+    // match page since they're separate matches sharing one thread.
+    assert.match(body.message.content, /Game 1: <@&role-alice> & <@&role-bob> vs Erin & Frank — https:\/\/dans-gaming-league-series\.vercel\.app\/matches\/200/);
+    assert.match(body.message.content, /Game 2: <@&role-alice> & Erin vs <@&role-bob> & Frank — https:\/\/dans-gaming-league-series\.vercel\.app\/matches\/201/);
 
     // Both games point at the same thread.
     const state200 = await client.from('match_discord_state').select('thread_id').eq('match_id', 200).maybeSingle();
