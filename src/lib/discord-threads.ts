@@ -217,18 +217,23 @@ async function addThreadMembers(
   anchorMatchId: number,
 ): Promise<void> {
   if (discordIds.length === 0) return;
-  const failures: string[] = [];
-  for (const discordId of discordIds) {
-    try {
-      const res = await fetch(`https://discord.com/api/v10/channels/${threadId}/thread-members/${discordId}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bot ${token}` },
-      });
-      if (!res.ok) failures.push(await discordErrorDetail(`Add thread member ${discordId}`, res));
-    } catch (e) {
-      failures.push(`Add thread member ${discordId} failed: ${(e as Error).message}`);
-    }
-  }
+  // A handful of independent PUTs (one per rostered player) — run concurrently rather than
+  // sequentially, unlike thread *creation* itself, which is deliberately serialized elsewhere in this
+  // file out of caution around Discord's per-route rate limit on that specific endpoint.
+  const outcomes = await Promise.all(
+    discordIds.map(async (discordId) => {
+      try {
+        const res = await fetch(`https://discord.com/api/v10/channels/${threadId}/thread-members/${discordId}`, {
+          method: 'PUT',
+          headers: { Authorization: `Bot ${token}` },
+        });
+        return res.ok ? null : await discordErrorDetail(`Add thread member ${discordId}`, res);
+      } catch (e) {
+        return `Add thread member ${discordId} failed: ${(e as Error).message}`;
+      }
+    }),
+  );
+  const failures = outcomes.filter((f): f is string => f !== null);
   if (failures.length > 0) {
     await recordOpsError(supabaseAdmin, 'match', anchorMatchId, THREAD_MEMBER_ADD_OPERATION, failures.join('; '));
   } else {
