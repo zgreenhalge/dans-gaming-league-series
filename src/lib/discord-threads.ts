@@ -197,21 +197,25 @@ function lineup(
   return `${shirts.map((p) => mentionOrName(p, playersById)).join(' & ')} vs ${skins.map((p) => mentionOrName(p, playersById)).join(' & ')}`;
 }
 
-/** One match's opening-post body — just the lineup line. The link to the match's own page rides
- *  along as a title-linked embed instead (`matchLinkEmbed()`) rather than a markdown link here:
- *  Discord only renders `[text](url)` as a real hyperlink inside an embed, never in plain message
- *  content (the one place `lineup()`'s role mentions render as tags, so content can't be given up for
- *  it either). */
+/** One match's opening-post body — just the lineup line. Its link to the match's own page rides
+ *  along as a masked link in the starter message's embed instead (`matchLinksEmbed()`): a bare URL
+ *  here would work too, but Discord's own link auto-unfurl would then tack a second, redundant
+ *  preview card onto the one embed already carrying the link. */
 function openingPost(match: MatchWithRoster, playersById: Map<number, { discord_name_role_id: string | null }>): string {
   return lineup(match.shirts, match.skins, playersById);
 }
 
-/** A match's page as a clickable-title embed — Discord's only way to render a real hyperlink outside
- *  plain text, since `[text](url)` markdown links aren't parsed in a message's `content` (only inside
- *  embeds). `label` is the link's visible text ("Box Score" for a single-match thread, "Game 1"/"Game
- *  2" for a pod's shared thread, one per game since they're separate matches). */
-function matchLinkEmbed(label: string, matchId: number): { title: string; url: string } {
-  return { title: label, url: `${SITE_URL}/matches/${matchId}` };
+/** A thread's one link-out embed — every match the thread covers gets a masked link (`[label](url)`)
+ *  in the embed `description`, since Discord parses masked-link markdown inside an embed (unlike a
+ *  bare `content` URL, which it'd auto-unfurl into its own separate, redundant preview card). One
+ *  embed regardless of match count, so a pod's two games share it rather than getting one each.
+ *  `author` echoes `discord-notify.ts`'s own match-embed convention (the season name as the small
+ *  eyebrow line), so a thread's link-out reads as the same bot presence as its score announcements. */
+function matchLinksEmbed(seasonName: string, matches: { label: string; matchId: number }[]): { description: string; author: { name: string } } {
+  return {
+    description: matches.map((m) => `[${m.label}](${SITE_URL}/matches/${m.matchId})`).join('\n'),
+    author: { name: seasonName },
+  };
 }
 
 /** Explicitly adds each of `discordIds` as a member of a just-created thread. Mentioning someone in
@@ -260,9 +264,9 @@ async function addThreadMembers(
  *  via `publishPodThreads()`). `matchIds[0]` is the "anchor" `ops_errors`/result key either way.
  *  `participantDiscordIds` are explicitly added as thread members (`addThreadMembers()`) once a new
  *  thread is actually created — not on the adopt path, since an existing thread's membership isn't
- *  this call's to fix. `embeds` (`matchLinkEmbed()` per match) rides along on the same starter
- *  message as `content` — never sent on the adopt path either, since an already-existing thread's
- *  starter message isn't this call's to edit. */
+ *  this call's to fix. `embed` (`matchLinksEmbed()`) rides along on the same starter message as
+ *  `content` — never sent on the adopt path either, since an already-existing thread's starter
+ *  message isn't this call's to edit. */
 async function publishThread(
   supabaseAdmin: SupabaseClient,
   channelId: string,
@@ -272,7 +276,7 @@ async function publishThread(
   matchIds: number[],
   existingThreadId: string | undefined,
   participantDiscordIds: string[],
-  embeds: { title: string; url: string }[],
+  embed: { description: string; author: { name: string } },
 ): Promise<ThreadPublishResult> {
   const anchorId = matchIds[0];
   const stateRows = (threadId: string) => matchIds.map((matchId) => ({ match_id: matchId, thread_id: threadId }));
@@ -293,7 +297,7 @@ async function publishThread(
     const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/threads`, {
       method: 'POST',
       headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: title, message: { content, embeds } }),
+      body: JSON.stringify({ name: title, message: { content, embeds: [embed] } }),
     });
     if (!res.ok) {
       const detail = await discordErrorDetail('Thread create', res);
@@ -469,7 +473,7 @@ export async function publishWeekThreads(
     results.push(
       await publishThread(
         supabaseAdmin, channelId, token, title, openingPost(match, playersById), [match.id], existingThreadId, discordIds,
-        [matchLinkEmbed('Box Score', match.id)],
+        matchLinksEmbed(season.name, [{ label: 'Box Score', matchId: match.id }]),
       ),
     );
   }
@@ -544,7 +548,7 @@ export async function publishPodThreads(
     );
     return publishThread(
       supabaseAdmin, channelId, token, title, podOpeningPost(game1, game2, playersById), [game1.id, game2.id], existingThreadId, discordIds,
-      [matchLinkEmbed('Game 1', game1.id), matchLinkEmbed('Game 2', game2.id)],
+      matchLinksEmbed(season.name, [{ label: 'Game 1', matchId: game1.id }, { label: 'Game 2', matchId: game2.id }]),
     );
   };
 

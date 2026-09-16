@@ -219,9 +219,12 @@ async function main() {
     assert.equal(firstBody.name, 'Week 1 Game 1');
     // Match 100: shirts Alice(1)+Bob(2, both linked with a name-color role), skins Carol(3)+Dave(4, unlinked).
     assert.equal(firstBody.message.content, '<@&role-alice> & <@&role-bob> vs Carol & Dave');
-    // The match's own page rides along as a title-linked embed, not a markdown link in content —
-    // Discord doesn't render `[text](url)` as a hyperlink outside an embed.
-    assert.deepEqual(firstBody.message.embeds, [{ title: 'Box Score', url: 'https://dans-gaming-league-series.vercel.app/matches/100' }]);
+    // The match's own page rides along as a masked link in the starter message's one embed, not a
+    // bare URL in content — a bare URL there would trigger Discord's own auto-unfurl into a second,
+    // redundant preview card alongside the one this embed already carries.
+    assert.deepEqual(firstBody.message.embeds, [
+      { description: '[Box Score](https://dans-gaming-league-series.vercel.app/matches/100)', author: { name: 'Season 5' } },
+    ]);
 
     const { data: state100 } = await adminClient.from('match_discord_state').select('thread_id').eq('match_id', 100).maybeSingle();
     assert.ok((state100 as { thread_id: string }).thread_id);
@@ -482,11 +485,14 @@ async function main() {
     // Alice(1)+Erin(5) vs skins Bob(2)+Frank(6) — same 4 players, reshuffled.
     assert.match(body.message.content, /Game 1: <@&role-alice> & <@&role-bob> vs Erin & Frank/);
     assert.match(body.message.content, /Game 2: <@&role-alice> & Erin vs <@&role-bob> & Frank/);
-    // Each game links its own match page as a title-linked embed, since they're separate matches
+    // Both games' links share the pod's one embed as masked links, since they're separate matches
     // sharing one thread.
     assert.deepEqual(body.message.embeds, [
-      { title: 'Game 1', url: 'https://dans-gaming-league-series.vercel.app/matches/200' },
-      { title: 'Game 2', url: 'https://dans-gaming-league-series.vercel.app/matches/201' },
+      {
+        description: '[Game 1](https://dans-gaming-league-series.vercel.app/matches/200)\n'
+          + '[Game 2](https://dans-gaming-league-series.vercel.app/matches/201)',
+        author: { name: 'Season 5 Gauntlet' },
+      },
     ]);
 
     // Both games point at the same thread.
