@@ -37,6 +37,7 @@ import type { GauntletMatch, GauntletRound } from './queries/gauntlet';
 import type { Season } from './types';
 import { extractSeasonNumber, allMatchesPlayed } from './util';
 import { recordOpsError, clearOpsError } from './ops-errors';
+import { matchUrl } from './seo/site';
 
 const CHANNEL_OPERATION = 'discord_thread_publish';
 const THREAD_OPERATION = 'discord_thread_create';
@@ -196,9 +197,18 @@ function lineup(
   return `${shirts.map((p) => mentionOrName(p, playersById)).join(' & ')} vs ${skins.map((p) => mentionOrName(p, playersById)).join(' & ')}`;
 }
 
-/** One match's opening-post body. */
+/** A masked "Box Score" link to a match's own page — Discord parses masked-link markdown in a bot's
+ *  own message `content` (unlike a regular user-typed message, where it's disabled), so this reads
+ *  as plain link text rather than a bare URL, while the URL underneath is left unwrapped so Discord's
+ *  own auto-unfurl still fires on it: the rich preview card `/matches/[id]`'s `opengraph-image.tsx`
+ *  already generates for any other share of the link, not a hand-built embed duplicating it. */
+function matchLink(matchId: number): string {
+  return `[Box Score](${matchUrl(matchId)})`;
+}
+
+/** One match's opening-post body — the lineup line plus a masked link to its own page. */
 function openingPost(match: MatchWithRoster, playersById: Map<number, { discord_name_role_id: string | null }>): string {
-  return lineup(match.shirts, match.skins, playersById);
+  return `${lineup(match.shirts, match.skins, playersById)} — ${matchLink(match.id)}`;
 }
 
 /** Explicitly adds each of `discordIds` as a member of a just-created thread. Mentioning someone in
@@ -458,11 +468,13 @@ export async function publishWeekThreads(
   return { seasonName: season.name, weekNumber: targetWeek.week_number, matches: results };
 }
 
-/** A pod's opening post: both games' shirts-vs-skins lineups. Both games share the same 4 players
- *  reshuffled across factions, so this is the one place a pod thread actually distinguishes them. */
+/** A pod's opening post: both games' shirts-vs-skins lineups, each with its own masked link. Both
+ *  games share the same 4 players reshuffled across factions, so this is the one place a pod thread
+ *  actually distinguishes them — and they're separate matches, so each gets its own link and its own
+ *  auto-unfurled preview card rather than one link for the pod. */
 function podOpeningPost(game1: GauntletMatch, game2: GauntletMatch, playersById: Map<number, { discord_name_role_id: string | null }>): string {
-  return `Game 1: ${lineup(game1.shirts_stats, game1.skins_stats, playersById)}\n` +
-    `Game 2: ${lineup(game2.shirts_stats, game2.skins_stats, playersById)}`;
+  return `Game 1: ${lineup(game1.shirts_stats, game1.skins_stats, playersById)} — ${matchLink(game1.id)}\n` +
+    `Game 2: ${lineup(game2.shirts_stats, game2.skins_stats, playersById)} — ${matchLink(game2.id)}`;
 }
 
 export interface PublishPodThreadsResult {

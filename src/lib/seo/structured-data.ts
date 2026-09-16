@@ -1,4 +1,4 @@
-import { SITE_URL } from './site';
+import { SITE_URL, matchUrl } from './site';
 import { matchTitle } from '../util';
 
 /**
@@ -58,7 +58,7 @@ export function buildMatchJsonLd(params: {
     '@type': 'SportsEvent',
     name,
     description,
-    url: `${SITE_URL}/matches/${params.matchId}`,
+    url: matchUrl(params.matchId),
     ...(params.scheduledAt ? { startDate: params.scheduledAt } : {}),
     ...(!params.played ? { eventStatus: 'https://schema.org/EventScheduled' } : {}),
     ...(params.recordingUrl
@@ -120,7 +120,7 @@ export function buildSeasonJsonLd(params: {
     subEvent: params.matches.map((m) => ({
       '@type': 'SportsEvent',
       name: m.name,
-      url: `${SITE_URL}/matches/${m.id}`,
+      url: matchUrl(m.id),
       ...(m.startDate ? { startDate: m.startDate } : {}),
     })),
   };

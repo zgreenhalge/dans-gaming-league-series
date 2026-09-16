@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { SITE_URL } from '@/lib/seo/site';
+import { SITE_URL, matchUrl } from '@/lib/seo/site';
 import { getSeasons, getPlayersById, getMapLookup, getAllPlayedMatchIds } from '@/lib/queries';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -24,7 +24,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   const matchRoutes: MetadataRoute.Sitemap = matchIds.map((id) => ({
-    url: `${SITE_URL}/matches/${id}`,
+    url: matchUrl(id),
     changeFrequency: 'monthly',
     priority: 0.5,
   }));

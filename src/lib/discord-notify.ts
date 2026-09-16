@@ -58,7 +58,7 @@ import { getMatchBoxScore, type MatchBoxScorePlayer, type MatchDiscordPlayer } f
 import { getPlayersBySteamId } from './queries/player';
 import type { LiveScoreRow, LiveRoundPlayerStat } from './demo/liveScore';
 import { recordOpsError, clearOpsError } from './ops-errors';
-import { SITE_URL } from './seo/site';
+import { SITE_URL, matchUrl } from './seo/site';
 import { discordErrorDetail } from './discord-threads';
 import { formatDuration, deriveAdr } from './util';
 import type { Player } from './types';
@@ -181,7 +181,7 @@ async function buildLiveBoxScore(
  *  line (Discord's small "eyebrow" text above the title — the same role it plays for real
  *  sports/esports score bots), the title is just "Week N · Match M" (short enough to never wrap
  *  oddly, and doubles as a clickable link to the match page via `url`) — the description doesn't
- *  repeat that link, since the title already carries it. `matchUrl`/the thumbnail are derived here
+ *  repeat that link, since the title already carries it. The match link/thumbnail are derived here
  *  (from `matchId`/`image`) rather than by each caller, since all three need the same ones.
  *
  *  Players are never named in the embed itself — the roster line in the message's `content`
@@ -189,13 +189,12 @@ async function buildLiveBoxScore(
  *  map (if known) then the status block. A post-match box score, when given, becomes two full-width
  *  (non-inline) fields, Shirts then Skins stacked. */
 function buildMatchEmbed(parts: MatchEmbedParts): Embed {
-  const matchUrl = `${SITE_URL}/matches/${parts.matchId}`;
   const mapLine = parts.map ? `on ${parts.map}\n\n` : '';
   const embed: Embed = {
     title: parts.weekMatchLabel,
     description: `${mapLine}${parts.statusLine}`,
     color: parts.color,
-    url: matchUrl,
+    url: matchUrl(parts.matchId),
     author: { name: parts.seasonName },
   };
   if (parts.image) embed.thumbnail = { url: `${SITE_URL}${parts.image}` };

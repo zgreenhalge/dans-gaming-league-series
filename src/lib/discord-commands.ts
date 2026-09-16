@@ -17,7 +17,7 @@ import { extractSeasonNumber, matchTitle, isPlayedScore } from './util';
 import { type DiscordInteraction, optionValue, callerDiscordId, messageResponse } from './discordInteractions';
 import { setDiscordRoleColor } from './discord-roles';
 import type { Player } from './types';
-import { SITE_URL } from './seo/site';
+import { SITE_URL, matchUrl } from './seo/site';
 
 const MAX_LEADERBOARD_ROWS = 25;
 
@@ -76,7 +76,7 @@ export async function handleScheduledCommand() {
         : m.scheduled_at
           ? new Date(m.scheduled_at).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
           : 'Not yet scheduled';
-      return `**[${title}](${SITE_URL}/matches/${m.id})**\n${shirts} vs ${skins} — ${status}`;
+      return `**[${title}](${matchUrl(m.id)})**\n${shirts} vs ${skins} — ${status}`;
     });
 
   return messageResponse(lines.join('\n\n'));
