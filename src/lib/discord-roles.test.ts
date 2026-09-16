@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { __setTestClient } from './supabase';
 import { createFakeSupabaseClient, type FakeDb, type Row } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
+import { setDiscordEnv as setEnv, clearDiscordEnv as clearEnv, stubFetch, stubFetchSequence } from './test-support/discordFetchStub';
 import {
   grantParticipantRole,
   revokeParticipantRole,
@@ -36,53 +37,6 @@ const UNROSTERED_PLAYER_ID = 4;
 const MATCH_ROSTERED_ONLY_PLAYER_ID = 5;
 
 const PLAYER_ID = 1;
-const ENV_KEYS = ['DISCORD_BOT_TOKEN', 'DISCORD_GUILD_ID', 'DISCORD_PARTICIPANTS_ROLE_ID'] as const;
-
-function clearEnv() {
-  for (const key of ENV_KEYS) delete process.env[key];
-}
-
-function setEnv() {
-  process.env.DISCORD_BOT_TOKEN = 'test-bot-token';
-  process.env.DISCORD_GUILD_ID = 'test-guild-id';
-  process.env.DISCORD_PARTICIPANTS_ROLE_ID = 'test-role-id';
-}
-
-interface FetchCall {
-  url: string;
-  method: string;
-  body?: unknown;
-}
-
-function stubFetch(status = 204): { calls: FetchCall[] } {
-  const calls: FetchCall[] = [];
-  (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
-    calls.push({ url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(init.body as string) : undefined });
-    return { ok: status >= 200 && status < 300, status, headers: { get: () => null } } as unknown as Response;
-  }) as typeof fetch;
-  return { calls };
-}
-
-/** Like `stubFetch()`, but returns a different response for each successive call (holding the last
- *  one for any call beyond the list) — for exercising the name-role functions' multi-request
- *  sequences (create → resolve the bot's top role position → reposition → assign), and the
- *  429-retry sequences below. `headers` lets a 429 response carry a `Retry-After` value. */
-function stubFetchSequence(responses: { status: number; json?: unknown; headers?: Record<string, string> }[]): { calls: FetchCall[] } {
-  const calls: FetchCall[] = [];
-  let i = 0;
-  (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
-    calls.push({ url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(init.body as string) : undefined });
-    const r = responses[Math.min(i, responses.length - 1)];
-    i++;
-    return {
-      ok: r.status >= 200 && r.status < 300,
-      status: r.status,
-      json: async () => r.json ?? {},
-      headers: { get: (name: string) => r.headers?.[name.toLowerCase()] ?? null },
-    } as unknown as Response;
-  }) as typeof fetch;
-  return { calls };
-}
 
 function freshDb(): { db: FakeDb; client: ReturnType<typeof createFakeSupabaseClient> } {
   // buildFakeDb() returns the shared fixture arrays by reference, not copies -- a deep clone here is
@@ -195,10 +149,9 @@ async function main() {
     const { calls } = stubFetchSequence([
       { status: 429, headers: { 'retry-after': '0' } },
       { status: 429, headers: { 'retry-after': '0' } },
-      { status: 429, headers: { 'retry-after': '0' } },
     ]);
     await grantParticipantRole(client, PLAYER_ID, 'user-1');
-    assert.equal(calls.length, 3, 'must stop retrying at the attempt cap');
+    assert.equal(calls.length, 2, 'must stop retrying at the attempt cap');
     const rows = liveOpsErrors(db, PLAYER_ID);
     assert.equal(rows.length, 1);
     assert.match(rows[0].message as string, /429/);

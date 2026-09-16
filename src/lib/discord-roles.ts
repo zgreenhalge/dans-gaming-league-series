@@ -16,26 +16,25 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { recordOpsError, clearOpsError } from './ops-errors';
 import { getActiveRegularSeason, getSeasonParticipants } from './queries';
+import { sleep } from './dathost';
 
 const OPERATION = 'discord_role_sync';
 const NAME_ROLE_OPERATION = 'discord_name_role_sync';
 
-// A roster-wide grant/revoke pass fires one call per player in quick succession, which is exactly
-// the shape that trips Discord's rate limit on the guild-member-role route. MAX_ATTEMPTS bounds how
-// many times a single call retries a 429 before giving up and recording it as a real failure.
-const MAX_ATTEMPTS = 3;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+// A roster-wide grant/revoke pass fires one call per player, sequentially (see
+// grantParticipantRoleToRoster/revokeParticipantRoleFromRoster below), synchronously inside an
+// admin request. MAX_ATTEMPTS and the cap in retryDelayMs() together bound one retried call to at
+// most one extra ~2s wait — enough to ride out the odd 429 without letting a rate-limited roster of
+// any size stall that request for minutes.
+const MAX_ATTEMPTS = 2;
 
 /** How long to wait before retrying a 429, per Discord's own `Retry-After` response header
- *  (seconds) — falling back to a flat 1s if the header's missing or unparseable. Capped at 5s so a
+ *  (seconds) — falling back to a flat 1s if the header's missing or unparseable. Capped at 2s so a
  *  rate-limited roster sync can't stall the best-effort season transition it rides along with for
  *  too long. */
 function retryDelayMs(res: Response): number {
   const seconds = Number(res.headers.get('retry-after'));
-  return Math.min(Number.isFinite(seconds) ? Math.ceil(seconds * 1000) : 1000, 5000);
+  return Math.min(Number.isFinite(seconds) ? Math.ceil(seconds * 1000) : 1000, 2000);
 }
 
 /** Runs one Discord REST call, retrying a 429 up to `MAX_ATTEMPTS` times (honoring `Retry-After`)

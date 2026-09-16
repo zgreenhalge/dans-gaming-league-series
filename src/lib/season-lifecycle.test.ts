@@ -16,6 +16,7 @@
 import assert from 'node:assert/strict';
 import { __setTestClient } from './supabase';
 import { createFakeSupabaseClient, type FakeDb } from './test-support/fakeSupabase';
+import { setDiscordEnv, clearDiscordEnv, stubFetch } from './test-support/discordFetchStub';
 import { test, report } from './test-support/miniTest';
 import { activateSeason, checkSeasonCompletion, checkGauntletCompletion } from './season-lifecycle';
 
@@ -196,32 +197,6 @@ function decidedGauntletFixture(): FakeDb {
 
 // ─── @Participants deferral around a paired gauntlet ────────────────────────
 
-const DISCORD_ENV_KEYS = ['DISCORD_BOT_TOKEN', 'DISCORD_GUILD_ID', 'DISCORD_PARTICIPANTS_ROLE_ID'] as const;
-
-function setDiscordEnv() {
-  process.env.DISCORD_BOT_TOKEN = 'test-bot-token';
-  process.env.DISCORD_GUILD_ID = 'test-guild-id';
-  process.env.DISCORD_PARTICIPANTS_ROLE_ID = 'test-role-id';
-}
-
-function clearDiscordEnv() {
-  for (const key of DISCORD_ENV_KEYS) delete process.env[key];
-}
-
-interface FetchCall {
-  url: string;
-  method: string;
-}
-
-function stubDiscordFetch(): { calls: FetchCall[] } {
-  const calls: FetchCall[] = [];
-  (globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
-    calls.push({ url, method: init?.method ?? 'GET' });
-    return { ok: true, status: 204, headers: { get: () => null } } as unknown as Response;
-  }) as typeof fetch;
-  return { calls };
-}
-
 function withDiscordIds(players: FakeDb['players']): FakeDb['players'] {
   return players.map((p) => ({ ...p, discord_id: `user-${p.id}` }));
 }
@@ -234,7 +209,7 @@ async function testParticipantRoleDeferral() {
     db.seasons.push({ id: 21, name: 'Season 80 Gauntlet', status: 'ACTIVE', is_gauntlet: true, target_win_rounds: 13 });
     db.season_players = [1, 2, 3, 4].map((id, i) => ({ id: i + 1, season_id: 20, player_id: id }));
     const client = installFixture(db);
-    const { calls } = stubDiscordFetch();
+    const { calls } = stubFetch();
 
     await checkSeasonCompletion(client as never, 20);
 
@@ -249,7 +224,7 @@ async function testParticipantRoleDeferral() {
     db.players = withDiscordIds(db.players);
     db.season_players = [1, 2, 3, 4].map((id, i) => ({ id: i + 1, season_id: 20, player_id: id }));
     const client = installFixture(db);
-    const { calls } = stubDiscordFetch();
+    const { calls } = stubFetch();
 
     await checkSeasonCompletion(client as never, 20);
 
@@ -265,7 +240,7 @@ async function testParticipantRoleDeferral() {
     db.seasons.push({ id: 21, name: 'Season 80 Gauntlet', status: 'ARCHIVED', is_gauntlet: true, target_win_rounds: 13 });
     db.season_players = [1, 2, 3, 4].map((id, i) => ({ id: i + 1, season_id: 20, player_id: id }));
     const client = installFixture(db);
-    const { calls } = stubDiscordFetch();
+    const { calls } = stubFetch();
 
     await checkSeasonCompletion(client as never, 20);
 
@@ -279,7 +254,7 @@ async function testParticipantRoleDeferral() {
     db.players = withDiscordIds(db.players);
     db.season_players = [1, 2].map((id, i) => ({ id: i + 1, season_id: 30, player_id: id }));
     const client = installFixture(db);
-    const { calls } = stubDiscordFetch();
+    const { calls } = stubFetch();
 
     await checkGauntletCompletion(client as never, 31);
 
@@ -297,7 +272,7 @@ async function testParticipantRoleDeferral() {
     db.seasons.find((s) => s.id === 30)!.status = 'ARCHIVED';
     db.seasons.find((s) => s.id === 31)!.status = 'ARCHIVED';
     const client = installFixture(db);
-    const { calls } = stubDiscordFetch();
+    const { calls } = stubFetch();
 
     await checkGauntletCompletion(client as never, 31); // must not throw or re-revoke
 
