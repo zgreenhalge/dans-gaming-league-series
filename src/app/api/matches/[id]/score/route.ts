@@ -4,7 +4,7 @@ import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
-import { writeMatchScore } from '@/lib/matchScore';
+import { writeMatchScore, toStatsByPlayerId } from '@/lib/matchScore';
 import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import type {
   DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
@@ -71,8 +71,7 @@ export async function PATCH(
   const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
   const allStats = (matchStats ?? []) as { player_id: number; faction: string }[];
   const isInMatch = allStats.some((s) => s.player_id === playerId);
-  const statsByPlayerId = new Map<number, { player_id: number; faction: string }>();
-  for (const s of allStats) statsByPlayerId.set(s.player_id, s);
+  const statsByPlayerId = toStatsByPlayerId(allStats);
 
   if (!isAdmin && !isInMatch) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

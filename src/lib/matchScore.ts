@@ -52,6 +52,17 @@ type PlayerStatInput = {
   adr?: number | null;
 };
 
+/** A match's `player_match_stats` rows keyed by `player_id` — shared shape between the score route
+ *  (authorizing the request) and this file's own fallback fetch, so both build the same lookup the
+ *  same way. */
+export function toStatsByPlayerId(
+  rows: { player_id: number; faction: string }[],
+): Map<number, { player_id: number; faction: string }> {
+  const byPlayerId = new Map<number, { player_id: number; faction: string }>();
+  for (const row of rows) byPlayerId.set(row.player_id, row);
+  return byPlayerId;
+}
+
 const ROUND_CONDITIONS = new Set(['elim', 'bomb', 'defuse', 'time']);
 
 /**
@@ -265,9 +276,7 @@ export async function writeMatchScore(
     const m = matchRow as unknown as { weeks: { season_id: number; seasons: { is_gauntlet: boolean } } };
     seasonId = m.weeks.season_id;
     isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
-    const allStats = (matchStats ?? []) as { player_id: number; faction: string }[];
-    statsByPlayerId = new Map();
-    for (const s of allStats) statsByPlayerId.set(s.player_id, s);
+    statsByPlayerId = toStatsByPlayerId((matchStats ?? []) as { player_id: number; faction: string }[]);
   }
 
   const roundsPlayed = shirts + skins;
