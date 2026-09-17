@@ -570,7 +570,10 @@ export type MapRow = {
   image_url: string | null;
 };
 
-export async function getMapLookup(client: SupabaseClient = supabase): Promise<Record<string, { image_url: string | null; workshop_url: string | null }>> {
+/** `cache()`-wrapped so the root layout's own read (feeds `MapProvider`) and a page's separate read
+ *  of the same table collapse into a single Supabase round trip per request — same reasoning as
+ *  `getMapDetail()` below. */
+export const getMapLookup = cache(async (client: SupabaseClient = supabase): Promise<Record<string, { image_url: string | null; workshop_url: string | null }>> => {
   const { data, error } = await client.from('maps').select('*');
   if (error) throw error;
   const lookup: Record<string, { image_url: string | null; workshop_url: string | null }> = {};
@@ -578,7 +581,7 @@ export async function getMapLookup(client: SupabaseClient = supabase): Promise<R
     lookup[row.slug] = { image_url: row.image_url, workshop_url: row.workshop_url };
   }
   return lookup;
-}
+});
 
 export interface WorkshopMapOption {
   name: string;

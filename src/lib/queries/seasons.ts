@@ -16,14 +16,17 @@ export interface SeasonRosterEntry {
 /** `client` defaults to the app's anon-key client but accepts an admin client for callers running
  *  outside a Next.js request (a GitHub Actions script, which has no `NEXT_PUBLIC_SUPABASE_ANON_KEY`) —
  *  same opt-in pattern as `getMatchIdsForMap()` (`maps.ts`). */
-export async function getSeasons(client: SupabaseClient = supabase): Promise<Season[]> {
+/** `cache()`-wrapped so the root layout's own read (feeds `SideNav`) and a page's separate read of
+ *  the same table collapse into a single Supabase round trip per request — same reasoning as
+ *  `getSeason()` below. */
+export const getSeasons = cache(async (client: SupabaseClient = supabase): Promise<Season[]> => {
   const { data, error } = await client
     .from('seasons')
     .select('*')
     .order('id');
   if (error) throw error;
   return (data ?? []) as Season[];
-}
+});
 
 /** The current regular (non-gauntlet) `ACTIVE` season, or `null` if none is — a gauntlet can also be
  *  `ACTIVE` at the same time as its paired regular season briefly completes ahead of it (see
