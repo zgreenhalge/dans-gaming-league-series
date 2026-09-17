@@ -22,12 +22,7 @@ export async function POST() {
   const serverId = dathostServerId();
   const supabaseAdmin = getAdminClient();
 
-  // Neither depends on the other's result (both only need `supabaseAdmin`) — run together rather
-  // than as two sequential round trips.
-  const [active, scrimSession] = await Promise.all([
-    getActiveServerMatch(supabaseAdmin),
-    getScrimSession(supabaseAdmin),
-  ]);
+  const active = await getActiveServerMatch(supabaseAdmin);
   if (active) {
     return NextResponse.json(
       { error: `${active.label} is currently ${active.serverState} on this server.`, code: 'server_occupied' },
@@ -35,6 +30,10 @@ export async function POST() {
     );
   }
 
+  // Only reached once `active` rules out a real match holding the server — fetching this
+  // unconditionally alongside `active` would pay for it even on the (409) occupied path, where it's
+  // never read.
+  const scrimSession = await getScrimSession(supabaseAdmin);
   if (scrimSession && scrimSession.startedBy !== playerId && !session.user.isAdmin) {
     return NextResponse.json(
       { error: 'Only the player who started this scrim (or an admin) can stop it.', code: 'not_owner' },

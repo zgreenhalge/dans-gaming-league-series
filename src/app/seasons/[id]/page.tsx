@@ -133,25 +133,24 @@ export default async function SeasonPage({
   const seasonId = Number(id);
   if (!Number.isFinite(seasonId)) notFound();
 
-  // Independent reads — none depends on another's result, so they run together instead of
-  // stacking as sequential round trips. `playersById` is `cache()`-wrapped and gets reused below
-  // (regular and gauntlet branches alike) with zero additional query.
-  const [season, session, playersById] = await Promise.all([
+  // Independent reads — neither depends on the other's result, so they run together instead of
+  // stacking as sequential round trips.
+  const [season, session] = await Promise.all([
     getSeason(seasonId),
     getServerSession(authOptions),
-    getPlayersById(),
   ]);
   if (!season) notFound();
 
   const currentPlayerId = session?.user?.playerId ?? null;
-  const isAdmin = currentPlayerId != null ? !!playersById.get(currentPlayerId)?.is_admin : false;
 
   if (season.is_gauntlet) {
     const linked = await getLinkedRegularSeason(season.name);
     if (linked) redirect(`/seasons/${linked.id}`);
 
-    // Orphan gauntlet with no paired regular season — render standalone
-    const [rounds, bracketShape, leaderboard, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
+    // Orphan gauntlet with no paired regular season — render standalone. `getPlayersById()` is
+    // `cache()`-wrapped and reused below (h2hData) with zero additional query — fetched here rather
+    // than earlier so a season that redirects above never pays for it at all.
+    const [rounds, bracketShape, leaderboard, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats, playersById] = await Promise.all([
       getGauntletRounds(seasonId),
       getGauntletBracketShape(seasonId),
       getGauntletSeasonLeaderboard(seasonId),
@@ -161,7 +160,9 @@ export default async function SeasonPage({
       getAllMatchKills(seasonId),
       getAllWeaponClassStats(seasonId),
       getAllEconomyStats(seasonId),
+      getPlayersById(),
     ]);
+    const isAdmin = currentPlayerId != null ? !!playersById.get(currentPlayerId)?.is_admin : false;
     // Computed from `rounds` — already fetched above for the Rounds tab — instead of a second,
     // redundant getH2HData() round-trip over the same matches (see #441).
     const h2hData = computeH2H(gauntletRoundsToH2HInput(rounds, extractSeasonNumber(season.name)), playersById);
@@ -229,8 +230,14 @@ export default async function SeasonPage({
     );
   }
 
-  // Regular season — check for paired gauntlet
-  const linkedGauntlet = await getLinkedGauntlet(season.name);
+  // Regular season — check for paired gauntlet. Neither depends on the other's result, so they run
+  // together; `isAdmin` (derived from `playersById`) gates one of the entries in the Promise.all
+  // below, so `playersById` has to be resolved before that batch starts rather than folded into it.
+  const [linkedGauntlet, playersById] = await Promise.all([
+    getLinkedGauntlet(season.name),
+    getPlayersById(),
+  ]);
+  const isAdmin = currentPlayerId != null ? !!playersById.get(currentPlayerId)?.is_admin : false;
 
   const isUpcoming = season.status === 'UPCOMING';
 
