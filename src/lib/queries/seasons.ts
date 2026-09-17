@@ -3,8 +3,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { Player, Season } from '../types';
 import { allMatchesPlayed, extractSeasonNumber } from '../util';
+import { computeH2H, scheduleToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
-import { getMatchScoresForWeeks } from './schedule';
+import { getMatchScoresForWeeks, getSeasonSchedule, type WeekWithMatches } from './schedule';
+import { getSeasonEhogRatings } from './ehog';
+import { getAllSabremetrics, type SabremetricMatchRow } from './sabremetrics';
+import { getAllMatchRounds, type MatchRoundRow } from './rounds';
+import { getAllMatchKills, type MatchKillRow } from './kills';
+import { getAllWeaponClassStats, getAllEconomyStats, type WeaponClassMatchRow, type EconomyMatchRow } from './weaponStats';
 
 export interface SeasonRosterEntry {
   player_id: number;
@@ -150,4 +156,41 @@ export async function getSeasonParticipants(seasonId: number, playersById?: Map<
     }
   }
   return [...byId.values()].sort((a, b) => a.player_name.localeCompare(b.player_name));
+}
+
+export interface RegularSeasonHeavyView {
+  schedule: WeekWithMatches[];
+  h2hData: H2HData;
+  ehogRatings: Record<number, number>;
+  sabremetrics: SabremetricMatchRow[];
+  matchRounds: MatchRoundRow[];
+  matchKills: MatchKillRow[];
+  matchWeaponClassStats: WeaponClassMatchRow[];
+  matchEconomyStats: EconomyMatchRow[];
+}
+
+/** Every per-match ("heavy") field the season detail page's Regular Season tab needs, batched into
+ *  one call — distinct from the page's light data (the season row, `getSeasonLeaderboard()`, the
+ *  paired gauntlet's bracket shape), which is needed regardless of which tab is showing and so is
+ *  fetched separately, always. `seasonNumber`/`playersById` are accepted rather than re-resolved
+ *  here since every caller (the page's own initial render, the lazy tab-switch route) already has
+ *  both in hand. */
+export async function getRegularSeasonHeavyView(
+  seasonId: number,
+  seasonNumber: number | null,
+  playersById: Map<number, Player>,
+): Promise<RegularSeasonHeavyView> {
+  const [schedule, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
+    getSeasonSchedule(seasonId),
+    getSeasonEhogRatings(seasonId),
+    getAllSabremetrics(seasonId),
+    getAllMatchRounds(seasonId),
+    getAllMatchKills(seasonId),
+    getAllWeaponClassStats(seasonId),
+    getAllEconomyStats(seasonId),
+  ]);
+  // Computed from `schedule` — already fetched above — instead of a second, redundant
+  // getH2HData() round-trip over the same matches (see #441).
+  const h2hData = computeH2H(scheduleToH2HInput(schedule, seasonNumber), playersById);
+  return { schedule, h2hData, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats };
 }

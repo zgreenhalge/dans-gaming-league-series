@@ -101,6 +101,49 @@ export async function getSeasonSchedule(
   });
 }
 
+export interface SeasonMatchSummary {
+  id: number;
+  week_number: number;
+  match_number: number;
+  scheduled_at: string | null;
+}
+
+export interface SeasonMatchSummaries {
+  weekCount: number;
+  matches: SeasonMatchSummary[];
+}
+
+/** A season's match/week counts and light per-match listing (id, week/match number, scheduled_at) —
+ *  everything the season detail page's header and structured-data (JSON-LD) need, without
+ *  `getSeasonSchedule()`'s full per-match roster embed (`player_match_stats`). Kept separate so the
+ *  page can show accurate counts regardless of which tab (Regular Season vs. Gauntlet) is initially
+ *  rendered, without eagerly paying for the heavy roster-embedded schedule either way. One embedded
+ *  query (weeks -> matches), same pattern as `getSeasonSchedule()` above, instead of a `weeks` round
+ *  trip followed by a second `matches` one. */
+export async function getSeasonMatchSummaries(
+  seasonId: number,
+  client: SupabaseClient = supabase,
+): Promise<SeasonMatchSummaries> {
+  const { data: weeks, error: wErr } = await client
+    .from('weeks')
+    .select('week_number, matches(id, match_number, scheduled_at)')
+    .eq('season_id', seasonId);
+  if (wErr) throw wErr;
+  // Supabase types embedded to-many relations as arrays already, so no unwrap needed at that level —
+  // still cast through unknown since the generated Database type doesn't model this nested select
+  // shape (same pattern as getSeasonSchedule()'s own embed above).
+  const weekRows = (weeks ?? []) as unknown as {
+    week_number: number;
+    matches: { id: number; match_number: number; scheduled_at: string | null }[];
+  }[];
+
+  const summaries = weekRows
+    .flatMap((w) => w.matches.map((m) => ({ id: m.id, week_number: w.week_number, match_number: m.match_number, scheduled_at: m.scheduled_at })))
+    .sort((a, b) => a.week_number - b.week_number || a.match_number - b.match_number);
+
+  return { weekCount: weekRows.length, matches: summaries };
+}
+
 /** Fetches `final_score` for every match in the given weeks — the shared fetch shape behind
  * `isSeasonFullyPlayed()` (`season-lifecycle.ts`), used wherever a caller already has week ids in
  * hand (`isWeekComplete()` below fetches by season+week number in a single joined query instead,

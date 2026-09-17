@@ -19,6 +19,7 @@
             "assists": 2,
             "deaths": 18,
             "adr": 88,
+            "damage": 2112,
             "is_win": true,
             "rounds_won": 13,
             "rounds_played": 24
@@ -31,6 +32,7 @@
             "assists": 4,
             "deaths": 19,
             "adr": 80,
+            "damage": 1920,
             "is_win": true,
             "rounds_won": 13,
             "rounds_played": 24
@@ -45,6 +47,7 @@
             "assists": 3,
             "deaths": 21,
             "adr": 70,
+            "damage": 1680,
             "is_win": false,
             "rounds_won": 11,
             "rounds_played": 24
@@ -57,6 +60,7 @@
             "assists": 5,
             "deaths": 22,
             "adr": 65,
+            "damage": 1560,
             "is_win": false,
             "rounds_won": 11,
             "rounds_played": 24

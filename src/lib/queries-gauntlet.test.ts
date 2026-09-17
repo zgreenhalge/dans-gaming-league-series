@@ -24,6 +24,8 @@ import {
   getGauntletBracketShape,
   getGauntletRounds,
   getAllGauntletSummaries,
+  deriveGauntletSeasonLeaderboard,
+  getPlayersById,
 } from './queries';
 
 /** Guards against a duplicate inline reimplementation of `deriveRates()` silently reappearing. */
@@ -125,6 +127,31 @@ async function main() {
     const rounds = await getGauntletRounds(2);
     assert.equal(rounds.length, 1);
     matchesSnapshot('getGauntletRounds-2', rounds);
+  });
+
+  await test('deriveGauntletSeasonLeaderboard() — same result as getGauntletSeasonLeaderboard() from already-fetched rounds', async () => {
+    const [rounds, playersById] = await Promise.all([getGauntletRounds(2), getPlayersById()]);
+    const derived = deriveGauntletSeasonLeaderboard(rounds, 2, playersById);
+    assert.deepEqual(derived, await getGauntletSeasonLeaderboard(2));
+  });
+
+  await test('deriveGauntletSeasonLeaderboard() — excludes a stat row with an unresolved player_id, same as getGauntletSeasonLeaderboard()', async () => {
+    const db = buildFakeDb();
+    // getGauntletRounds() has no `players` guard (it falls back to a `#<id>` display name), so this
+    // row survives into its shirts_stats/skins_stats — deriveGauntletSeasonLeaderboard() must still
+    // drop it, matching getGauntletSeasonLeaderboard()'s own `if (!player) continue`.
+    db.player_match_stats = [
+      ...db.player_match_stats,
+      { id: 9000, match_id: 200, player_id: 999, faction: 'SKINS', kills: 5, assists: 0, deaths: 5, adr: 50, damage: 1200, rounds_played: 24, rounds_won: 11, is_win: false },
+    ];
+    __setTestClient(createFakeSupabaseClient(db));
+
+    const [rounds, playersById] = await Promise.all([getGauntletRounds(2), getPlayersById()]);
+    const derived = deriveGauntletSeasonLeaderboard(rounds, 2, playersById);
+    assert.ok(!derived.some((r) => r.player_id === 999));
+    assert.deepEqual(derived, await getGauntletSeasonLeaderboard(2));
+
+    __setTestClient(createFakeSupabaseClient(buildFakeDb())); // restore the module-shared fixture for later tests
   });
 
   await test('getAllGauntletSummaries() — both gauntlets, snapshot', async () => {

@@ -1,28 +1,25 @@
 // @vitest-environment jsdom
 /**
- * Component tests for `CombinedSeasonTabView.tsx`'s issue #90 URL-state migration: `topTab` reads
- * from/writes to the `view` param, `subTab` reads from/writes to the `tab` param, and both stay
- * shared between the regular-season and gauntlet `SeasonTabView` instances it renders.
+ * Component tests for `CombinedSeasonTabView.tsx`: `topTab` reads from/writes to the `view` param,
+ * `subTab` reads from/writes to the `tab` param and stays shared between the regular-season and
+ * gauntlet `SeasonTabView` instances it renders, and the non-initial tab's heavy data is fetched
+ * lazily (mocked here) the first time it's opened.
  *
  * Run:  npx vitest run src/components/CombinedSeasonTabView.test.tsx
  */
 
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createNextNavigationMock, nextNavigationMock, resetNextNavigationMock } from '@/lib/test-support/mockNextNavigation';
 import { renderWithUrlState } from '@/lib/test-support/renderWithUrlState';
 import { createNextAuthMock } from '@/lib/test-support/mockNextAuth';
 import { leaderboardRow, EMPTY_H2H } from '@/lib/test-support/leaderboardFixtures';
+import type { RegularSeasonHeavyView, GauntletSeasonHeavyView } from '@/lib/queries';
 import CombinedSeasonTabView from './CombinedSeasonTabView';
 
 vi.mock('next/navigation', () => createNextNavigationMock());
 vi.mock('next-auth/react', () => createNextAuthMock());
-
-beforeEach(() => {
-  resetNextNavigationMock();
-  nextNavigationMock.setPathname('/seasons/1');
-});
 
 // A season auto-activates on schedule confirm (before any match is played), so `seasonStatus: 'ACTIVE'`
 // alone no longer implies real standings exist — SeasonTabView's Leaderboard/Stats tabs also need at
@@ -61,28 +58,77 @@ const PLAYED_WEEK = {
   ],
 };
 
+const REGULAR_HEAVY: RegularSeasonHeavyView = {
+  schedule: [PLAYED_WEEK],
+  h2hData: EMPTY_H2H,
+  ehogRatings: {},
+  sabremetrics: [],
+  matchRounds: [],
+  matchKills: [],
+  matchWeaponClassStats: [],
+  matchEconomyStats: [],
+};
+
+const GAUNTLET_HEAVY: GauntletSeasonHeavyView = {
+  rounds: [],
+  leaderboard: [leaderboardRow({ player_id: 2, player_name: 'Bob' })],
+  h2hData: EMPTY_H2H,
+  ehogRatings: {},
+  sabremetrics: [],
+  matchRounds: [],
+  matchKills: [],
+  matchWeaponClassStats: [],
+  matchEconomyStats: [],
+};
+
+beforeEach(() => {
+  resetNextNavigationMock();
+  nextNavigationMock.setPathname('/seasons/1');
+  // Backs whichever tab's heavy data isn't already seeded via `initialHeavyData` — a test that
+  // clicks into the non-initial tab exercises the lazy-fetch path against this mock instead of a
+  // real network call.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(GAUNTLET_HEAVY) } as Response)),
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 function baseProps() {
   return {
     leaderboard: [leaderboardRow()],
-    schedule: [PLAYED_WEEK],
     seasonStartDate: null,
     seasonStatus: 'ACTIVE',
-    gauntletRounds: [],
     gauntletBracketShape: [],
-    gauntletLeaderboard: [leaderboardRow({ player_id: 2, player_name: 'Bob' })],
     gauntletStatus: 'ACTIVE',
+    gauntletStarted: false,
     currentPlayerId: null,
     isAdmin: false,
     regularSeasonId: 1,
-    h2hData: EMPTY_H2H,
-    gauntletH2hData: EMPTY_H2H,
+    gauntletSeasonId: 2,
+    seasonNumber: 1,
+    initialView: 'regular' as const,
+    initialHeavyData: { kind: 'regular' as const, data: REGULAR_HEAVY },
+  };
+}
+
+/** Props for a test that starts on the Gauntlet tab (`view=gauntlet`) — seeds gauntlet data too, so
+ *  the initial render doesn't need the lazy-fetch mock to resolve first. */
+function gauntletInitialProps() {
+  return {
+    ...baseProps(),
+    initialView: 'gauntlet' as const,
+    initialHeavyData: { kind: 'gauntlet' as const, data: GAUNTLET_HEAVY },
   };
 }
 
 describe('CombinedSeasonTabView — top tab (`view`) and sub tab (`tab`)', () => {
   test('reads the active top tab from `view`', () => {
     nextNavigationMock.setSearchParams('view=gauntlet');
-    renderWithUrlState(<CombinedSeasonTabView {...baseProps()} />);
+    renderWithUrlState(<CombinedSeasonTabView {...gauntletInitialProps()} />);
     expect(screen.getByRole('tab', { name: 'Gauntlet' })).toHaveAttribute('aria-selected', 'true');
   });
 
@@ -104,10 +150,33 @@ describe('CombinedSeasonTabView — top tab (`view`) and sub tab (`tab`)', () =>
   });
 });
 
+describe('CombinedSeasonTabView — lazy-loading the non-initial tab', () => {
+  // `nextNavigationMock`'s `pushState` is a no-op spy that never feeds back into `useSearchParams()`
+  // (see its own doc comment) — a simulated tab click can't actually change which tab the component
+  // reads as active, so these exercise the lazy-fetch path via the URL the component mounts with
+  // instead: `view=gauntlet` makes `topTab` read as `'gauntlet'` on the very first render even
+  // though only the regular view's heavy data was eagerly seeded, the same mismatch a real
+  // navigation to `?view=gauntlet` produces the instant before its own fetch resolves.
+  test('fetches and renders a tab whose data was not eagerly seeded', async () => {
+    nextNavigationMock.setSearchParams('view=gauntlet');
+    renderWithUrlState(<CombinedSeasonTabView {...baseProps()} />);
+
+    // The fetch mock resolves GAUNTLET_HEAVY's leaderboard — its player ("Bob") should appear once
+    // loading finishes.
+    expect(await screen.findByText('Bob')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('never fetches when the active tab already has data', () => {
+    renderWithUrlState(<CombinedSeasonTabView {...baseProps()} />);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
 describe('CombinedSeasonTabView — admin "Manage Bracket" link on the Gauntlet tab', () => {
   test('shown for an admin before any game in the gauntlet has been played', () => {
     nextNavigationMock.setSearchParams('view=gauntlet');
-    renderWithUrlState(<CombinedSeasonTabView {...baseProps()} isAdmin regularSeasonId={7} />);
+    renderWithUrlState(<CombinedSeasonTabView {...gauntletInitialProps()} isAdmin regularSeasonId={7} />);
     expect(screen.getByRole('link', { name: 'Manage Bracket →' })).toHaveAttribute(
       'href',
       '/admin/seasons/gauntlet/manual/7',
@@ -116,39 +185,14 @@ describe('CombinedSeasonTabView — admin "Manage Bracket" link on the Gauntlet 
 
   test('hidden for a non-admin', () => {
     nextNavigationMock.setSearchParams('view=gauntlet');
-    renderWithUrlState(<CombinedSeasonTabView {...baseProps()} isAdmin={false} regularSeasonId={7} />);
+    renderWithUrlState(<CombinedSeasonTabView {...gauntletInitialProps()} isAdmin={false} regularSeasonId={7} />);
     expect(screen.queryByRole('link', { name: 'Manage Bracket →' })).not.toBeInTheDocument();
   });
 
   test('hidden once any game in the gauntlet has been played, even for an admin', () => {
     nextNavigationMock.setSearchParams('view=gauntlet');
     renderWithUrlState(
-      <CombinedSeasonTabView
-        {...baseProps()}
-        isAdmin
-        regularSeasonId={7}
-        gauntletRounds={[
-          {
-            round_number: 1,
-            matches: [
-              {
-                id: 100,
-                match_number: 1,
-                final_score: '13-8',
-                scheduled_at: null,
-                picked_map: null,
-                shirts_pick: null,
-                skins_starting_side: null,
-                shirts_stats: [],
-                skins_stats: [],
-                pod_index: 0,
-                advance_rule: 'single',
-              },
-            ],
-            is_final_round: true,
-          },
-        ]}
-      />,
+      <CombinedSeasonTabView {...gauntletInitialProps()} isAdmin regularSeasonId={7} gauntletStarted />,
     );
     expect(screen.queryByRole('link', { name: 'Manage Bracket →' })).not.toBeInTheDocument();
   });
