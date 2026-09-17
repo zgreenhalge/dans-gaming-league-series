@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import SeasonTabView, { SEASON_TABS } from './SeasonTabView';
 import { useTabState } from './useTabState';
-import { tabCls, anyMatchPlayed } from '@/lib/util';
-import type { WeekWithMatches, GauntletRound, BracketPod, H2HData, SabremetricMatchRow, MatchRoundRow, MatchKillRow, WeaponClassMatchRow, EconomyMatchRow } from '@/lib/queries';
+import { tabCls } from '@/lib/util';
+import { SkeletonBar } from './Skeleton';
+import type { BracketPod, RegularSeasonHeavyView, GauntletSeasonHeavyView } from '@/lib/queries';
 import type { LeaderboardRowWithId } from '@/lib/types';
 
 type TopTab = 'regular' | 'gauntlet';
@@ -33,66 +34,110 @@ function TopTabBar({ tab, setTab }: { tab: TopTab; setTab: (t: TopTab) => void }
   );
 }
 
+function TabLoadingSkeleton() {
+  return (
+    <div aria-hidden>
+      <SkeletonBar className="h-px w-full mb-6" />
+      {[1, 2, 3, 4, 5].map((i) => (
+        <SkeletonBar key={i} className="h-10 w-full mb-px" />
+      ))}
+    </div>
+  );
+}
+
+function TabLoadError({ label, onRetry }: { label: string; onRetry: () => void }) {
+  return (
+    <div className="font-mono text-[12px] text-[var(--color-text-secondary)] flex items-center gap-3">
+      <span>Couldn&apos;t load {label}.</span>
+      <button onClick={onRetry} className="underline decoration-dotted hover:text-[var(--color-text-primary)]">
+        Retry
+      </button>
+    </div>
+  );
+}
+
+type HeavyCache = { regular?: RegularSeasonHeavyView; gauntlet?: GauntletSeasonHeavyView };
+
 export default function CombinedSeasonTabView({
   leaderboard,
-  schedule,
   seasonStartDate,
   seasonStatus,
   mapPool,
-  gauntletRounds,
   gauntletBracketShape,
-  gauntletLeaderboard,
   gauntletStatus,
+  gauntletStarted,
   currentPlayerId,
   isAdmin,
   regularSeasonId,
-  h2hData,
-  gauntletH2hData,
-  ehogRatings,
-  gauntletEhogRatings,
-  sabremetrics,
-  gauntletSabremetrics,
-  matchRounds,
-  gauntletMatchRounds,
-  matchKills,
-  gauntletMatchKills,
-  matchWeaponClassStats,
-  gauntletMatchWeaponClassStats,
-  matchEconomyStats,
-  gauntletMatchEconomyStats,
+  gauntletSeasonId,
+  seasonNumber,
+  initialView,
+  initialHeavyData,
 }: {
   leaderboard: LeaderboardRowWithId[];
-  schedule: WeekWithMatches[];
   seasonStartDate: string | null;
   seasonStatus: string;
   /** The regular season's map pool — feeds the Bans/No-picks columns in the Maps & Sides tab. */
   mapPool?: string[] | null;
-  gauntletRounds: GauntletRound[];
   gauntletBracketShape: BracketPod[];
-  gauntletLeaderboard: LeaderboardRowWithId[];
   gauntletStatus: string;
+  /** Whether any of the gauntlet's matches has a played score — light (`getGauntletSeasonProgress()`),
+   *  so it's known before (and regardless of whether) the Gauntlet tab's own heavy data has loaded. */
+  gauntletStarted: boolean;
   currentPlayerId: number | null;
   isAdmin: boolean;
   /** The paired regular season's own id — the manual bracket editor is always keyed by it, never by
    *  the gauntlet's own id (`/admin/seasons/gauntlet/manual/[id]`). */
   regularSeasonId: number;
-  h2hData: H2HData;
-  gauntletH2hData: H2HData;
-  ehogRatings?: Record<number, number>;
-  gauntletEhogRatings?: Record<number, number>;
-  sabremetrics?: SabremetricMatchRow[];
-  gauntletSabremetrics?: SabremetricMatchRow[];
-  matchRounds?: MatchRoundRow[];
-  gauntletMatchRounds?: MatchRoundRow[];
-  matchKills?: MatchKillRow[];
-  gauntletMatchKills?: MatchKillRow[];
-  matchWeaponClassStats?: WeaponClassMatchRow[];
-  gauntletMatchWeaponClassStats?: WeaponClassMatchRow[];
-  matchEconomyStats?: EconomyMatchRow[];
-  gauntletMatchEconomyStats?: EconomyMatchRow[];
+  gauntletSeasonId: number;
+  seasonNumber: number | null;
+  /** Which tab the server eagerly fetched heavy data for — the other tab's heavy data is fetched
+   *  client-side, once, the first time it's actually opened. */
+  initialView: TopTab;
+  initialHeavyData: { kind: 'regular'; data: RegularSeasonHeavyView } | { kind: 'gauntlet'; data: GauntletSeasonHeavyView };
 }) {
-  const [topTab, setTopTab] = useTabState(TOP_TABS, 'regular', 'view');
+  const [topTab, setTopTab] = useTabState(TOP_TABS, initialView, 'view');
   const [subTab, setSubTab] = useTabState(SEASON_TABS, 'leaderboard');
+
+  const [heavyCache, setHeavyCache] = useState<HeavyCache>(() => ({
+    [initialHeavyData.kind]: initialHeavyData.data,
+  }));
+  const [loadingKind, setLoadingKind] = useState<TopTab | null>(null);
+  const [loadError, setLoadError] = useState<TopTab | null>(null);
+  // Bumped by the error state's "Retry" button to force the effect below to re-run for the same
+  // `topTab` — switching away and back would also retry naturally (a fresh `topTab` value re-runs
+  // it), but a retry button avoids making that the only way back from a failed fetch.
+  const [retryNonce, setRetryNonce] = useState(0);
+
+  // Fetches the active tab's heavy data the first time it's opened — once cached, switching back to
+  // it later is instant (no further network calls for the life of this page view).
+  useEffect(() => {
+    if (heavyCache[topTab] || loadingKind === topTab) return;
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoadingKind(topTab);
+    setLoadError(null);
+    const seasonId = topTab === 'regular' ? regularSeasonId : gauntletSeasonId;
+    fetch(`/api/seasons/${seasonId}/view?kind=${topTab}&seasonNumber=${seasonNumber ?? ''}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load');
+        return res.json();
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setHeavyCache((prev) => ({ ...prev, [topTab]: data }));
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(topTab);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingKind(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topTab, retryNonce, regularSeasonId, gauntletSeasonId, seasonNumber]);
 
   // Seed number → player name from the regular season's own standings (already canonical-sorted,
   // i.e. seed order) — lets the gauntlet bracket diagram name an unseeded seed slot before the
@@ -102,40 +147,40 @@ export default function CombinedSeasonTabView({
     [leaderboard],
   );
 
-  // Once any game has a played score, the bracket editor's own materialize-on-save locks a
-  // materialized pod anyway — but hiding the link entirely past that point keeps this from reading
-  // as an ongoing management surface once the gauntlet is actually underway.
-  const gauntletStarted = useMemo(
-    () => anyMatchPlayed(gauntletRounds.flatMap((r) => r.matches)),
-    [gauntletRounds],
-  );
+  const regularData = heavyCache.regular;
+  const gauntletData = heavyCache.gauntlet;
 
   return (
     <>
       <TopTabBar tab={topTab} setTab={setTopTab} />
 
-      {topTab === 'regular' && (
-        <SeasonTabView
-          kind="regular"
-          leaderboard={leaderboard}
-          schedule={schedule}
-          seasonStartDate={seasonStartDate}
-          seasonStatus={seasonStatus}
-          mapPool={mapPool}
-          gauntletBracketShape={gauntletBracketShape}
-          currentPlayerId={currentPlayerId}
-          h2hData={h2hData}
-          subStyle
-          tab={subTab}
-          onTabChange={setSubTab}
-          ehogRatings={ehogRatings}
-          sabremetrics={sabremetrics}
-          matchRounds={matchRounds}
-          matchKills={matchKills}
-          matchWeaponClassStats={matchWeaponClassStats}
-          matchEconomyStats={matchEconomyStats}
-        />
-      )}
+      {topTab === 'regular' &&
+        (regularData ? (
+          <SeasonTabView
+            kind="regular"
+            leaderboard={leaderboard}
+            schedule={regularData.schedule}
+            seasonStartDate={seasonStartDate}
+            seasonStatus={seasonStatus}
+            mapPool={mapPool}
+            gauntletBracketShape={gauntletBracketShape}
+            currentPlayerId={currentPlayerId}
+            h2hData={regularData.h2hData}
+            subStyle
+            tab={subTab}
+            onTabChange={setSubTab}
+            ehogRatings={regularData.ehogRatings}
+            sabremetrics={regularData.sabremetrics}
+            matchRounds={regularData.matchRounds}
+            matchKills={regularData.matchKills}
+            matchWeaponClassStats={regularData.matchWeaponClassStats}
+            matchEconomyStats={regularData.matchEconomyStats}
+          />
+        ) : loadError === 'regular' ? (
+          <TabLoadError label="regular season stats" onRetry={() => setRetryNonce((n) => n + 1)} />
+        ) : (
+          <TabLoadingSkeleton />
+        ))}
 
       {topTab === 'gauntlet' && isAdmin && !gauntletStarted && (
         <div className="mb-4">
@@ -148,27 +193,32 @@ export default function CombinedSeasonTabView({
         </div>
       )}
 
-      {topTab === 'gauntlet' && (
-        <SeasonTabView
-          kind="gauntlet"
-          leaderboard={gauntletLeaderboard}
-          rounds={gauntletRounds}
-          bracketShape={gauntletBracketShape}
-          seedNames={seedNames}
-          seasonStatus={gauntletStatus}
-          currentPlayerId={currentPlayerId}
-          h2hData={gauntletH2hData}
-          subStyle
-          tab={subTab}
-          onTabChange={setSubTab}
-          ehogRatings={gauntletEhogRatings}
-          sabremetrics={gauntletSabremetrics}
-          matchRounds={gauntletMatchRounds}
-          matchKills={gauntletMatchKills}
-          matchWeaponClassStats={gauntletMatchWeaponClassStats}
-          matchEconomyStats={gauntletMatchEconomyStats}
-        />
-      )}
+      {topTab === 'gauntlet' &&
+        (gauntletData ? (
+          <SeasonTabView
+            kind="gauntlet"
+            leaderboard={gauntletData.leaderboard}
+            rounds={gauntletData.rounds}
+            bracketShape={gauntletBracketShape}
+            seedNames={seedNames}
+            seasonStatus={gauntletStatus}
+            currentPlayerId={currentPlayerId}
+            h2hData={gauntletData.h2hData}
+            subStyle
+            tab={subTab}
+            onTabChange={setSubTab}
+            ehogRatings={gauntletData.ehogRatings}
+            sabremetrics={gauntletData.sabremetrics}
+            matchRounds={gauntletData.matchRounds}
+            matchKills={gauntletData.matchKills}
+            matchWeaponClassStats={gauntletData.matchWeaponClassStats}
+            matchEconomyStats={gauntletData.matchEconomyStats}
+          />
+        ) : loadError === 'gauntlet' ? (
+          <TabLoadError label="gauntlet stats" onRetry={() => setRetryNonce((n) => n + 1)} />
+        ) : (
+          <TabLoadingSkeleton />
+        ))}
     </>
   );
 }

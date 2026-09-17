@@ -6,25 +6,29 @@ import { TopbarShell } from '@/components/TopbarShell';
 import {
   getSeason,
   getSeasonLeaderboard,
-  getSeasonSchedule,
+  getSeasonMatchSummaries,
   getSeasonRoster,
   getPlayersById,
   hasSeasonScheduleDraft,
   getGauntletRounds,
   getGauntletBracketShape,
-  getGauntletSeasonLeaderboard,
+  getGauntletSeasonProgress,
+  deriveGauntletSeasonLeaderboard,
   getLinkedGauntlet,
   getLinkedRegularSeason,
+  getRegularSeasonHeavyView,
+  getGauntletSeasonHeavyView,
   getSeasonEhogRatings,
   getAllSabremetrics,
   getAllMatchRounds,
   getAllMatchKills,
   getAllWeaponClassStats,
   getAllEconomyStats,
-  type WeekWithMatches,
+  type RegularSeasonHeavyView,
+  type GauntletSeasonHeavyView,
   type GauntletRound,
 } from '@/lib/queries';
-import { computeH2H, scheduleToH2HInput, gauntletRoundsToH2HInput } from '@/lib/h2h';
+import { computeH2H, gauntletRoundsToH2HInput } from '@/lib/h2h';
 import SeasonTabView from '@/components/SeasonTabView';
 import CombinedSeasonTabView from '@/components/CombinedSeasonTabView';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
@@ -68,10 +72,6 @@ export async function generateMetadata({
       description,
     },
   };
-}
-
-function countMatches(schedule: WeekWithMatches[]) {
-  return schedule.reduce((sum, w) => sum + w.matches.length, 0);
 }
 
 function countGauntletMatches(rounds: GauntletRound[]) {
@@ -126,12 +126,20 @@ function SeasonStatusTag({ status }: { status: Season['status'] }) {
 
 export default async function SeasonPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { id } = await params;
   const seasonId = Number(id);
   if (!Number.isFinite(seasonId)) notFound();
+
+  // Which of the Regular Season / Gauntlet tabs to eagerly render server-side — the other tab's own
+  // heavy data is fetched lazily, client-side, the first time it's actually opened (see
+  // CombinedSeasonTabView). Read from the URL so a direct `?view=gauntlet` link still renders that
+  // tab on the first paint, with no client-side flash/refetch.
+  const initialView: 'regular' | 'gauntlet' = (await searchParams).view === 'gauntlet' ? 'gauntlet' : 'regular';
 
   // Independent reads — neither depends on the other's result, so they run together instead of
   // stacking as sequential round trips.
@@ -150,10 +158,9 @@ export default async function SeasonPage({
     // Orphan gauntlet with no paired regular season — render standalone. `getPlayersById()` is
     // `cache()`-wrapped and reused below (h2hData) with zero additional query — fetched here rather
     // than earlier so a season that redirects above never pays for it at all.
-    const [rounds, bracketShape, leaderboard, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats, playersById] = await Promise.all([
+    const [rounds, bracketShape, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats, playersById] = await Promise.all([
       getGauntletRounds(seasonId),
       getGauntletBracketShape(seasonId),
-      getGauntletSeasonLeaderboard(seasonId),
       getSeasonEhogRatings(seasonId),
       getAllSabremetrics(seasonId),
       getAllMatchRounds(seasonId),
@@ -163,6 +170,9 @@ export default async function SeasonPage({
       getPlayersById(),
     ]);
     const isAdmin = currentPlayerId != null ? !!playersById.get(currentPlayerId)?.is_admin : false;
+    // Derived from `rounds` — already fetched above — instead of a second, redundant
+    // getGauntletSeasonLeaderboard() round trip over the same matches.
+    const leaderboard = deriveGauntletSeasonLeaderboard(rounds, seasonId, playersById);
     // Computed from `rounds` — already fetched above for the Rounds tab — instead of a second,
     // redundant getH2HData() round-trip over the same matches (see #441).
     const h2hData = computeH2H(gauntletRoundsToH2HInput(rounds, extractSeasonNumber(season.name)), playersById);
@@ -230,62 +240,66 @@ export default async function SeasonPage({
     );
   }
 
-  // Regular season — check for paired gauntlet. Neither depends on the other's result, so they run
-  // together; `isAdmin` (derived from `playersById`) gates one of the entries in the Promise.all
-  // below, so `playersById` has to be resolved before that batch starts rather than folded into it.
-  const [linkedGauntlet, playersById] = await Promise.all([
+  // Regular season — check for paired gauntlet. `leaderboard` and `matchSummaries` are both light
+  // (the latter deliberately so — see getSeasonMatchSummaries()'s own doc comment) and needed
+  // regardless of which tab ends up showing, so they're fetched eagerly here alongside
+  // `linkedGauntlet`/`playersById` rather than folded into either tab's own heavy view.
+  const [linkedGauntlet, playersById, leaderboard, matchSummaries] = await Promise.all([
     getLinkedGauntlet(season.name),
     getPlayersById(),
+    getSeasonLeaderboard(seasonId),
+    getSeasonMatchSummaries(seasonId),
   ]);
   const isAdmin = currentPlayerId != null ? !!playersById.get(currentPlayerId)?.is_admin : false;
-
   const isUpcoming = season.status === 'UPCOMING';
-
-  const [leaderboard, schedule, gauntletRounds, gauntletBracketShape, gauntletLeaderboard, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics, hasSchedule, matchRounds, gauntletMatchRounds, matchKills, gauntletMatchKills, matchWeaponClassStats, gauntletMatchWeaponClassStats, matchEconomyStats, gauntletMatchEconomyStats] = await Promise.all([
-    getSeasonLeaderboard(seasonId),
-    getSeasonSchedule(seasonId),
-    linkedGauntlet ? getGauntletRounds(linkedGauntlet.id) : Promise.resolve(null),
-    linkedGauntlet ? getGauntletBracketShape(linkedGauntlet.id) : Promise.resolve(null),
-    linkedGauntlet ? getGauntletSeasonLeaderboard(linkedGauntlet.id) : Promise.resolve(null),
-    getSeasonEhogRatings(seasonId),
-    linkedGauntlet ? getSeasonEhogRatings(linkedGauntlet.id) : Promise.resolve(null),
-    getAllSabremetrics(seasonId),
-    linkedGauntlet ? getAllSabremetrics(linkedGauntlet.id) : Promise.resolve([]),
-    isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
-    getAllMatchRounds(seasonId),
-    linkedGauntlet ? getAllMatchRounds(linkedGauntlet.id) : Promise.resolve([]),
-    getAllMatchKills(seasonId),
-    linkedGauntlet ? getAllMatchKills(linkedGauntlet.id) : Promise.resolve([]),
-    getAllWeaponClassStats(seasonId),
-    linkedGauntlet ? getAllWeaponClassStats(linkedGauntlet.id) : Promise.resolve([]),
-    getAllEconomyStats(seasonId),
-    linkedGauntlet ? getAllEconomyStats(linkedGauntlet.id) : Promise.resolve([]),
-  ]);
-  // Computed from `schedule`/`gauntletRounds` — already fetched above for the Schedule/Rounds tabs
-  // — instead of two more redundant getH2HData() round-trips over the same matches (see #441).
   const seasonNumber = extractSeasonNumber(season.name);
-  const h2hData = computeH2H(scheduleToH2HInput(schedule, seasonNumber), playersById);
-  const gauntletH2hData = linkedGauntlet && gauntletRounds
-    ? computeH2H(gauntletRoundsToH2HInput(gauntletRounds, seasonNumber), playersById)
+
+  // The paired gauntlet's light cross-link data (bracket shape, seeded/started) plus this page's
+  // other light reads, all independent of each other — together with the heavy view for whichever
+  // tab `initialView` names (the other tab's heavy view is fetched lazily, client-side, once it's
+  // actually opened — see CombinedSeasonTabView).
+  const [gauntletBracketShape, gauntletSeasonProgress, hasSchedule, roster, initialHeavy] = await Promise.all([
+    linkedGauntlet ? getGauntletBracketShape(linkedGauntlet.id) : Promise.resolve([]),
+    linkedGauntlet ? getGauntletSeasonProgress(linkedGauntlet.id) : Promise.resolve({ seeded: false, started: false }),
+    isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
+    isUpcoming ? getSeasonRoster(seasonId, playersById) : Promise.resolve([]),
+    initialView === 'gauntlet' && linkedGauntlet
+      ? getGauntletSeasonHeavyView(linkedGauntlet.id, seasonNumber, playersById)
+      : getRegularSeasonHeavyView(seasonId, seasonNumber, playersById),
+  ]);
+
+  // A paired gauntlet season row can exist with no bracket shape yet (manual shell) and no seeded
+  // matches, in which case it's indistinguishable from having no gauntlet at all — not worth a tab.
+  const showGauntletTab = !!linkedGauntlet && (gauntletBracketShape.length > 0 || gauntletSeasonProgress.seeded);
+
+  let initialHeavyData: { kind: 'regular'; data: RegularSeasonHeavyView } | { kind: 'gauntlet'; data: GauntletSeasonHeavyView } =
+    initialView === 'gauntlet' && linkedGauntlet
+      ? { kind: 'gauntlet', data: initialHeavy as GauntletSeasonHeavyView }
+      : { kind: 'regular', data: initialHeavy as RegularSeasonHeavyView };
+  // Rare fallback: a `?view=gauntlet` link landed on a season whose linked gauntlet turns out to
+  // have no real content to show a tab for — fetch the regular view actually needed to render
+  // instead. Never reached on a normal page load (only a stale/bogus `view` param takes this path).
+  if (!showGauntletTab && initialHeavyData.kind === 'gauntlet') {
+    initialHeavyData = { kind: 'regular', data: await getRegularSeasonHeavyView(seasonId, seasonNumber, playersById) };
+  }
+
+  const matchCount = matchSummaries.matches.length;
+  const finalWeek = matchSummaries.matches.length > 0
+    ? Math.max(...matchSummaries.matches.map((m) => m.week_number))
     : null;
-  // getSeasonRoster() needs playersById too — pass the copy just fetched above instead of letting
-  // it do its own redundant full players-table read.
-  const roster = isUpcoming ? await getSeasonRoster(seasonId, playersById) : [];
-  const matchCount = countMatches(schedule);
-  const finalWeek = schedule.length > 0 ? schedule[schedule.length - 1].week_number : null;
   const seasonJsonLd = buildSeasonJsonLd({
     seasonId: season.id,
     seasonTitle: seasonTitle(season.name),
     startDate: season.start_date,
     endDate: seasonEndDate(season.start_date, finalWeek),
-    matches: schedule.flatMap((w) =>
-      w.matches.map((m) => ({
-        id: m.id,
-        name: matchTitle({ seasonName: season.name, weekNumber: w.week_number, matchNumber: m.match_number, isGauntlet: false }),
-        startDate: m.scheduled_at,
-      })),
-    ),
+    matches: matchSummaries.matches.map((m) => ({
+      id: m.id,
+      name: matchTitle({ seasonName: season.name, weekNumber: m.week_number, matchNumber: m.match_number, isGauntlet: false }),
+      startDate: m.scheduled_at,
+    })),
   });
+
+  const regularHeavy = initialHeavyData.kind === 'regular' ? initialHeavyData.data : null;
 
   return (
     <div className="min-h-screen">
@@ -300,7 +314,7 @@ export default async function SeasonPage({
             </div>
           </div>
           <div className="font-mono text-[12px] text-[var(--color-text-secondary)] mt-1.5">
-            {leaderboard.length} players · {matchCount} matches · {schedule.length} weeks
+            {leaderboard.length} players · {matchCount} matches · {matchSummaries.weekCount} weeks
           </div>
           <div className="mt-2 flex items-center gap-3 flex-wrap">
             <SeasonStartDateButton
@@ -330,59 +344,42 @@ export default async function SeasonPage({
         )}
         <Suspense>
           <UrlStateProvider>
-            {linkedGauntlet &&
-            gauntletRounds &&
-            gauntletBracketShape &&
-            gauntletLeaderboard &&
-            gauntletH2hData &&
-            // The Gauntlet tab is only worth showing once there's something to see in it — a paired
-            // gauntlet season row can exist with no bracket shape yet (manual shell) and no rounds
-            // (unseeded), in which case it's indistinguishable from having no gauntlet at all.
-            (gauntletBracketShape.length > 0 || gauntletRounds.length > 0) ? (
+            {showGauntletTab && linkedGauntlet ? (
               <CombinedSeasonTabView
                 leaderboard={leaderboard}
-                schedule={schedule}
                 seasonStartDate={season.start_date}
                 seasonStatus={season.status}
                 mapPool={season.map_pool}
-                gauntletRounds={gauntletRounds}
                 gauntletBracketShape={gauntletBracketShape}
-                gauntletLeaderboard={gauntletLeaderboard}
                 gauntletStatus={linkedGauntlet.status}
+                gauntletStarted={gauntletSeasonProgress.started}
                 currentPlayerId={currentPlayerId}
                 isAdmin={isAdmin}
                 regularSeasonId={season.id}
-                h2hData={h2hData}
-                gauntletH2hData={gauntletH2hData}
-                ehogRatings={ehogRatings}
-                gauntletEhogRatings={gauntletEhogRatings ?? undefined}
-                sabremetrics={sabremetrics}
-                gauntletSabremetrics={gauntletSabremetrics}
-                matchRounds={matchRounds}
-                gauntletMatchRounds={gauntletMatchRounds}
-                matchKills={matchKills}
-                gauntletMatchKills={gauntletMatchKills}
-                matchWeaponClassStats={matchWeaponClassStats}
-                gauntletMatchWeaponClassStats={gauntletMatchWeaponClassStats}
-                matchEconomyStats={matchEconomyStats}
-                gauntletMatchEconomyStats={gauntletMatchEconomyStats}
+                gauntletSeasonId={linkedGauntlet.id}
+                seasonNumber={seasonNumber}
+                initialView={initialView}
+                initialHeavyData={initialHeavyData}
               />
             ) : (
+              // `showGauntletTab` false guarantees `initialHeavyData.kind === 'regular'` — either
+              // there was never a gauntlet-kind fetch to begin with, or the fallback above already
+              // replaced it with one.
               <SeasonTabView
                 kind="regular"
                 leaderboard={leaderboard}
-                schedule={schedule}
+                schedule={regularHeavy!.schedule}
                 seasonStartDate={season.start_date}
                 seasonStatus={season.status}
                 mapPool={season.map_pool}
                 currentPlayerId={currentPlayerId}
-                h2hData={h2hData}
-                ehogRatings={ehogRatings}
-                sabremetrics={sabremetrics}
-                matchRounds={matchRounds}
-                matchKills={matchKills}
-                matchWeaponClassStats={matchWeaponClassStats}
-                matchEconomyStats={matchEconomyStats}
+                h2hData={regularHeavy!.h2hData}
+                ehogRatings={regularHeavy!.ehogRatings}
+                sabremetrics={regularHeavy!.sabremetrics}
+                matchRounds={regularHeavy!.matchRounds}
+                matchKills={regularHeavy!.matchKills}
+                matchWeaponClassStats={regularHeavy!.matchWeaponClassStats}
+                matchEconomyStats={regularHeavy!.matchEconomyStats}
               />
             )}
           </UrlStateProvider>
