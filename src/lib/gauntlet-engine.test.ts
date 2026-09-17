@@ -131,8 +131,8 @@ async function main() {
         { id: 801, week_id: 1, match_number: 2, final_score: '13-11', is_playoff_game: false },
       ],
       // Player 1 (seed 1, the pod's top seed) already has a real +2 SHIRTS/SKINS career balance from
-      // played regular-season matches — enough that the old "top seed is always SHIRTS" rule would
-      // skew them further, but the balance-aware choice should land them on SKINS instead.
+      // played regular-season matches — enough that the balance-aware choice should land them on
+      // SKINS instead, even though they're the pod's top-ranked occupant.
       player_match_stats: [
         { id: 1, match_id: 800, player_id: 1, faction: 'SHIRTS', is_win: true },
         { id: 2, match_id: 801, player_id: 1, faction: 'SHIRTS', is_win: true },

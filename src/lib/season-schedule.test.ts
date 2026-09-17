@@ -166,9 +166,8 @@ async function main() {
     await test(`buildSeasonSchedule(${n}) — shirts/skins stay roughly balanced per seed`, () => {
       const balance = balanceOf(buildSeasonSchedule(n));
       // Best-effort optimization, not an exact guarantee — bounded empirically (observed max 2
-      // across n=7-19, now that the season-wide local-search pass replaces the old per-match greedy
-      // walk's ~5 empirical max) with headroom, to catch a real regression (e.g. the optimizer
-      // getting stuck or dropped entirely) without being a flaky assertion on the exact optimum.
+      // across n=7-19) with headroom, to catch a real regression (e.g. the optimizer getting stuck
+      // or dropped entirely) without being a flaky assertion on the exact optimum.
       for (const [seed, bal] of balance) {
         assert.ok(Math.abs(bal) <= 4, `n=${n} seed ${seed}: shirts/skins imbalance ${bal}, expected within +/-4`);
       }

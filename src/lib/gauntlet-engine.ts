@@ -66,15 +66,6 @@ async function getSeedByPlayer(supabaseAdmin: SupabaseClient, seasonId: number):
   return seedByPlayerId(slots);
 }
 
-/** Creates the pod's two `matches` rows (+ 4 `player_match_stats` rows each) and links them back
- * onto `gauntlet_pods`. Pairing: rank 0-3 by seed (best first), game 1 = {0+1 vs 2+3}, game 2 =
- * {0+2 vs 1+3} — two distinct pairings so exactly one player goes 2-0 and one goes 0-2. Faction:
- * which of each game's two fixed pairs is SHIRTS vs SKINS has no bearing on that guarantee, so each
- * game in turn takes whichever orientation is cheaper against the 4 occupants' real running
- * SHIRTS/SKINS balance (`chooseSides()`, `season-schedule.ts` — the same cost math regular-season
- * generation's season-wide search builds on, applied directly here since only a game or two are ever
- * in play at once). The balance itself (`getSideBalance()`) is unified across regular season and
- * gauntlet play, including this same gauntlet's own already-materialized-but-unplayed pods. */
 /** Resolves the pod's round week (creating it if this is the round's first materializing pod) and
  * the next free match_number within it. Select-then-insert, not a DB-enforced upsert (weeks has no
  * unique constraint on (season_id, week_number)) — two concurrent first-materializations of the same
@@ -114,6 +105,15 @@ async function resolveWeekAndNextMatchNumber(
   return { weekId, nextMatchNumber };
 }
 
+/** Creates the pod's two `matches` rows (+ 4 `player_match_stats` rows each) and links them back
+ * onto `gauntlet_pods`. Pairing: rank 0-3 by seed (best first), game 1 = {0+1 vs 2+3}, game 2 =
+ * {0+2 vs 1+3} — two distinct pairings so exactly one player goes 2-0 and one goes 0-2. Faction:
+ * which of each game's two fixed pairs is SHIRTS vs SKINS has no bearing on that guarantee, so each
+ * game in turn takes whichever orientation is cheaper against the 4 occupants' real running
+ * SHIRTS/SKINS balance (`chooseSides()`, `season-schedule.ts` — the same cost math regular-season
+ * generation's season-wide search builds on, applied directly here since only a game or two are ever
+ * in play at once). The balance itself (`getSideBalance()`) is unified across regular season and
+ * gauntlet play, including this same gauntlet's own already-materialized-but-unplayed pods. */
 export async function materializePod(
   supabaseAdmin: SupabaseClient,
   pod: Pick<GauntletPodRow, 'id' | 'season_id' | 'round_number'>,
