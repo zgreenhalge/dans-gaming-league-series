@@ -270,9 +270,23 @@ async function publishThread(
 ): Promise<ThreadPublishResult> {
   const anchorId = matchIds[0];
   const stateRows = (threadId: string) => matchIds.map((matchId) => ({ match_id: matchId, thread_id: threadId }));
+  const fail = async (detail: string): Promise<ThreadPublishResult> => {
+    await recordOpsError(supabaseAdmin, 'match', anchorId, THREAD_OPERATION, detail);
+    return { matchId: anchorId, title, status: 'failed', detail };
+  };
+  /** Records `threadId` into `match_discord_state`, returning a `'failed'` result (built from
+   *  `failDetail`) if that write itself doesn't land — never `null` and a landed write both. */
+  const trackThread = async (threadId: string, failDetail: (writeError: string) => string): Promise<ThreadPublishResult | null> => {
+    const { error } = await supabaseAdmin.from('match_discord_state').upsert(stateRows(threadId), { onConflict: 'match_id' });
+    return error ? fail(failDetail(error.message)) : null;
+  };
 
   if (existingThreadId) {
-    await supabaseAdmin.from('match_discord_state').upsert(stateRows(existingThreadId), { onConflict: 'match_id' });
+    const trackingFailure = await trackThread(
+      existingThreadId,
+      (writeError) => `Already linked to thread ${existingThreadId}, but recording match_discord_state failed: ${writeError}`,
+    );
+    if (trackingFailure) return trackingFailure;
     // Deliberately doesn't claim the live thread is named `title` — it might have been adopted via a
     // previously-recorded thread_id (resolveExistingThreadId()) rather than an exact title match, in
     // which case its actual Discord name could be anything.
@@ -289,20 +303,19 @@ async function publishThread(
       headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: title, message: { content } }),
     });
-    if (!res.ok) {
-      const detail = await discordErrorDetail('Thread create', res);
-      await recordOpsError(supabaseAdmin, 'match', anchorId, THREAD_OPERATION, detail);
-      return { matchId: anchorId, title, status: 'failed', detail };
-    }
+    if (!res.ok) return fail(await discordErrorDetail('Thread create', res));
+
     const thread = (await res.json()) as { id: string };
-    await supabaseAdmin.from('match_discord_state').upsert(stateRows(thread.id), { onConflict: 'match_id' });
+    const trackingFailure = await trackThread(
+      thread.id,
+      (writeError) => `Thread ${thread.id} was created but recording match_discord_state failed: ${writeError}`,
+    );
+    if (trackingFailure) return trackingFailure;
     await clearOpsError(supabaseAdmin, 'match', anchorId, THREAD_OPERATION);
     await addThreadMembers(supabaseAdmin, thread.id, participantDiscordIds, token, anchorId);
     return { matchId: anchorId, title, status: 'created', detail: `Thread ${thread.id}` };
   } catch (e) {
-    const detail = `Thread create failed: ${(e as Error).message}`;
-    await recordOpsError(supabaseAdmin, 'match', anchorId, THREAD_OPERATION, detail);
-    return { matchId: anchorId, title, status: 'failed', detail };
+    return fail(`Thread create failed: ${(e as Error).message}`);
   }
 }
 

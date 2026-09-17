@@ -14,7 +14,7 @@
 
 import assert from 'node:assert/strict';
 import { __setTestClient } from './supabase';
-import { createFakeSupabaseClient, type Row } from './test-support/fakeSupabase';
+import { createFakeSupabaseClient, clientFailingOn, type Row } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 
 const fakeDb = buildFakeDb();
@@ -388,6 +388,53 @@ async function main() {
     const rows = liveOpsErrors('match', 102, 'discord_thread_create');
     assert.equal(rows.length, 1);
     assert.match(rows[0].message as string, /Missing Access/);
+  });
+
+  await test('publishWeekThreads: a match_discord_state write failure while adopting an existing thread is reported failed, not skipped', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    // Week 2 (season 1, week_id 11) has one match, 102 — "Week 2 Game 1". An admin already created
+    // that exact thread by hand, same setup as the "adopts it" test above, but this time the
+    // `match_discord_state` upsert that's supposed to record the adoption fails.
+    stubDiscord({ existingThreads: [{ id: 'admin-thread-2', name: 'Week 2 Game 1', parent_id: 'channel-season-5' }] });
+    const failingClient = clientFailingOn(adminClient, 'match_discord_state', 'upsert', { code: 'TEST', message: 'connection reset' });
+    const result = await publishWeekThreads(failingClient, 1, 2);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    assert.equal(ok.matches.length, 1);
+    // Not 'skipped': the thread exists on Discord, but nothing was recorded to find it again later.
+    assert.equal(ok.matches[0].status, 'failed');
+    assert.match(ok.matches[0].detail, /Already linked to thread/);
+    assert.match(ok.matches[0].detail, /connection reset/);
+
+    const rows = liveOpsErrors('match', 102, 'discord_thread_create');
+    assert.equal(rows.length, 1, 'the write-failure message must win over the routine "adopted" one');
+    assert.match(rows[0].message as string, /connection reset/);
+  });
+
+  await test('publishWeekThreads: a match_discord_state write failure after creating a new thread is reported failed, and the row is not left half-written', async () => {
+    process.env.DISCORD_BOT_TOKEN = 'bot-token';
+    process.env.DISCORD_GUILD_ID = 'guild-1';
+    // Week 1 (matches 100, 101) already has thread ids from an earlier test; this test's own
+    // stubDiscord() instance has no existing threads, so Discord's idempotency check still finds
+    // nothing and both matches go through the create path again.
+    const before100 = await adminClient.from('match_discord_state').select('thread_id').eq('match_id', 100).maybeSingle();
+    stubDiscord();
+    const failingClient = clientFailingOn(adminClient, 'match_discord_state', 'upsert', { code: 'TEST', message: 'write timed out' });
+    const result = await publishWeekThreads(failingClient, 1, 1);
+    assert.ok(!('error' in result));
+    const ok = result as Exclude<typeof result, { error: string }>;
+    assert.deepEqual(ok.matches.map((m) => m.status), ['failed', 'failed']);
+    assert.match(ok.matches[0].detail, /was created but recording match_discord_state failed/);
+    assert.match(ok.matches[0].detail, /write timed out/);
+
+    const rows = liveOpsErrors('match', 100, 'discord_thread_create');
+    assert.equal(rows.length, 1);
+    assert.match(rows[0].message as string, /write timed out/);
+
+    // The failed upsert never touched the real table — match 100's prior thread_id is untouched.
+    const after100 = await adminClient.from('match_discord_state').select('thread_id').eq('match_id', 100).maybeSingle();
+    assert.deepEqual(after100.data, before100.data);
   });
 
   await test('closeMatchThread: no-ops without DISCORD_BOT_TOKEN', async () => {
