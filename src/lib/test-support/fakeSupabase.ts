@@ -512,3 +512,38 @@ export class FakeSupabaseClient {
 export function createFakeSupabaseClient(db: FakeDb, rpcHandlers: Record<string, RpcHandler> = {}): SupabaseClient {
   return new FakeSupabaseClient(db, rpcHandlers) as unknown as SupabaseClient;
 }
+
+/** Wraps a client so touching one table throws instead of delegating to the real fake table —
+ * simulates a client-level failure (a broken connection, an unexpected error) distinct from a
+ * legitimate "not found" result this fake would otherwise return. Every other table still delegates
+ * to `client`. */
+export function clientThrowingOn(client: SupabaseClient, table: string, message = `simulated ${table} failure`): SupabaseClient {
+  return {
+    from: (t: string) => {
+      if (t === table) throw new Error(message);
+      return client.from(t);
+    },
+    rpc: client.rpc.bind(client),
+  } as unknown as SupabaseClient;
+}
+
+/** Wraps a client so one table's `method` resolves `{ data: null, error }` instead of landing —
+ * simulating a write failure this fake's own builder has no way to produce on its own (its only
+ * built-in error is `.insert()`'s primary-key collision — see this file's header). Every other
+ * method on the same table, and every other table, still goes through the real builder, so chained
+ * access that doesn't touch `method` keeps working. */
+export function clientFailingOn(
+  client: SupabaseClient,
+  table: string,
+  method: 'insert' | 'update' | 'upsert' | 'delete',
+  error: FakeError,
+): SupabaseClient {
+  return {
+    from: (t: string) => {
+      const builder = client.from(t);
+      if (t !== table) return builder;
+      return Object.assign(builder, { [method]: () => Promise.resolve({ data: null, error }) });
+    },
+    rpc: client.rpc.bind(client),
+  } as unknown as SupabaseClient;
+}

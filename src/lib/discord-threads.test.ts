@@ -14,7 +14,7 @@
 
 import assert from 'node:assert/strict';
 import { __setTestClient } from './supabase';
-import { createFakeSupabaseClient, type Row } from './test-support/fakeSupabase';
+import { createFakeSupabaseClient, clientFailingOn, type Row } from './test-support/fakeSupabase';
 import { buildFakeDb } from './test-support/fixtures';
 
 const fakeDb = buildFakeDb();
@@ -159,21 +159,6 @@ function stubDiscordClose(status = 200, body?: unknown): { calls: FetchCall[] } 
     return { ok, status, json: async () => body ?? (ok ? {} : { message: 'Missing Permissions' }) } as unknown as Response;
   }) as typeof fetch;
   return { calls };
-}
-
-/** Wraps a fake client so `.from(table).upsert(...)` resolves to `{ error }` instead of landing —
- * simulating a transient DB failure on `publishThread()`'s `match_discord_state` writes, which the
- * fake Supabase client itself has no way to produce (its `.upsert()` never fails). Every other table
- * still goes through the real fake client, since `publishThread()`'s Discord calls and
- * `recordOpsError()`/`clearOpsError()` still need `ops_errors`/season/schedule reads to work. */
-function withFailingUpsert(client: ReturnType<typeof createFakeSupabaseClient>, table: string, message: string) {
-  return {
-    from(t: string) {
-      if (t === table) return { upsert: () => Promise.resolve({ data: null, error: { code: 'TEST', message } }) };
-      return client.from(t);
-    },
-    rpc: client.rpc.bind(client),
-  } as unknown as typeof client;
 }
 
 function liveOpsErrors(entityType: string, entityId: number, operation: string): Row[] {
@@ -412,7 +397,7 @@ async function main() {
     // that exact thread by hand, same setup as the "adopts it" test above, but this time the
     // `match_discord_state` upsert that's supposed to record the adoption fails.
     stubDiscord({ existingThreads: [{ id: 'admin-thread-2', name: 'Week 2 Game 1', parent_id: 'channel-season-5' }] });
-    const failingClient = withFailingUpsert(adminClient, 'match_discord_state', 'connection reset');
+    const failingClient = clientFailingOn(adminClient, 'match_discord_state', 'upsert', { code: 'TEST', message: 'connection reset' });
     const result = await publishWeekThreads(failingClient, 1, 2);
     assert.ok(!('error' in result));
     const ok = result as Exclude<typeof result, { error: string }>;
@@ -435,7 +420,7 @@ async function main() {
     // nothing and both matches go through the create path again.
     const before100 = await adminClient.from('match_discord_state').select('thread_id').eq('match_id', 100).maybeSingle();
     stubDiscord();
-    const failingClient = withFailingUpsert(adminClient, 'match_discord_state', 'write timed out');
+    const failingClient = clientFailingOn(adminClient, 'match_discord_state', 'upsert', { code: 'TEST', message: 'write timed out' });
     const result = await publishWeekThreads(failingClient, 1, 1);
     assert.ok(!('error' in result));
     const ok = result as Exclude<typeof result, { error: string }>;
