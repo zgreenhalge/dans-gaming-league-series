@@ -34,7 +34,6 @@ import MarkSeasonActiveButton from '@/components/MarkSeasonActiveButton';
 import { SeasonRosterPanel } from '@/components/SeasonRosterPanel';
 import { SeasonScheduleEntryPoint } from '@/components/SeasonScheduleEntryPoint';
 import { authOptions } from '@/lib/authOptions';
-import { supabase } from '@/lib/supabase';
 import { seasonTitle, weekWindow, matchTitle, extractSeasonNumber } from '@/lib/util';
 import { buildSeasonJsonLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/JsonLd';
@@ -134,31 +133,28 @@ export default async function SeasonPage({
   const seasonId = Number(id);
   if (!Number.isFinite(seasonId)) notFound();
 
-  const season = await getSeason(seasonId);
+  // Independent reads — none depends on another's result, so they run together instead of
+  // stacking as sequential round trips. `playersById` is `cache()`-wrapped and gets reused below
+  // (regular and gauntlet branches alike) with zero additional query.
+  const [season, session, playersById] = await Promise.all([
+    getSeason(seasonId),
+    getServerSession(authOptions),
+    getPlayersById(),
+  ]);
   if (!season) notFound();
 
-  const session = await getServerSession(authOptions);
   const currentPlayerId = session?.user?.playerId ?? null;
-  let isAdmin = false;
-  if (session?.user?.playerId) {
-    const { data: playerRow } = await supabase
-      .from('players')
-      .select('is_admin')
-      .eq('id', session.user.playerId)
-      .maybeSingle();
-    isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
-  }
+  const isAdmin = currentPlayerId != null ? !!playersById.get(currentPlayerId)?.is_admin : false;
 
   if (season.is_gauntlet) {
     const linked = await getLinkedRegularSeason(season.name);
     if (linked) redirect(`/seasons/${linked.id}`);
 
     // Orphan gauntlet with no paired regular season — render standalone
-    const [rounds, bracketShape, leaderboard, playersById, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
+    const [rounds, bracketShape, leaderboard, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
       getGauntletRounds(seasonId),
       getGauntletBracketShape(seasonId),
       getGauntletSeasonLeaderboard(seasonId),
-      getPlayersById(),
       getSeasonEhogRatings(seasonId),
       getAllSabremetrics(seasonId),
       getAllMatchRounds(seasonId),
@@ -238,7 +234,7 @@ export default async function SeasonPage({
 
   const isUpcoming = season.status === 'UPCOMING';
 
-  const [leaderboard, schedule, gauntletRounds, gauntletBracketShape, gauntletLeaderboard, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics, playersById, hasSchedule, matchRounds, gauntletMatchRounds, matchKills, gauntletMatchKills, matchWeaponClassStats, gauntletMatchWeaponClassStats, matchEconomyStats, gauntletMatchEconomyStats] = await Promise.all([
+  const [leaderboard, schedule, gauntletRounds, gauntletBracketShape, gauntletLeaderboard, ehogRatings, gauntletEhogRatings, sabremetrics, gauntletSabremetrics, hasSchedule, matchRounds, gauntletMatchRounds, matchKills, gauntletMatchKills, matchWeaponClassStats, gauntletMatchWeaponClassStats, matchEconomyStats, gauntletMatchEconomyStats] = await Promise.all([
     getSeasonLeaderboard(seasonId),
     getSeasonSchedule(seasonId),
     linkedGauntlet ? getGauntletRounds(linkedGauntlet.id) : Promise.resolve(null),
@@ -248,7 +244,6 @@ export default async function SeasonPage({
     linkedGauntlet ? getSeasonEhogRatings(linkedGauntlet.id) : Promise.resolve(null),
     getAllSabremetrics(seasonId),
     linkedGauntlet ? getAllSabremetrics(linkedGauntlet.id) : Promise.resolve([]),
-    getPlayersById(),
     isUpcoming && isAdmin ? hasSeasonScheduleDraft(seasonId) : Promise.resolve(false),
     getAllMatchRounds(seasonId),
     linkedGauntlet ? getAllMatchRounds(linkedGauntlet.id) : Promise.resolve([]),

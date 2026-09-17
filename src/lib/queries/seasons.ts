@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { Player, Season } from '../types';
@@ -46,7 +47,9 @@ export async function isSeasonFullyPlayed(seasonId: number, client: SupabaseClie
   return allMatchesPlayed(await getMatchScoresForWeeks(client, weekIds));
 }
 
-export async function getSeason(id: number, client: SupabaseClient = supabase): Promise<Season | null> {
+/** `cache()`-wrapped so a route that reads it from both `generateMetadata` and the page component
+ *  (e.g. `seasons/[id]/page.tsx`) collapses into a single Supabase round trip per request. */
+export const getSeason = cache(async (id: number, client: SupabaseClient = supabase): Promise<Season | null> => {
   const { data, error } = await client
     .from('seasons')
     .select('*')
@@ -54,7 +57,7 @@ export async function getSeason(id: number, client: SupabaseClient = supabase): 
     .maybeSingle();
   if (error) throw error;
   return (data ?? null) as Season | null;
-}
+});
 
 /** Find the gauntlet season paired to a regular season by season number in name. */
 export async function getLinkedGauntlet(regularSeasonName: string): Promise<Season | null> {
