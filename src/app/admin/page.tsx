@@ -9,12 +9,12 @@ import {
   getAdminPlayers,
   getMapsForWorkshopPicker,
   getSeasons,
-  getGauntletRounds,
+  getGauntletSeasonProgress,
 } from '@/lib/queries';
 import { getActiveServerMatch } from '@/lib/dathost-lifecycle';
 import { listConfigSets } from '@/lib/dathost-config';
 import { getAdminClient } from '@/lib/supabase-admin';
-import { buildRegularToGauntletMap, isPlayedScore, extractSeasonNumber } from '@/lib/util';
+import { buildRegularToGauntletMap, extractSeasonNumber } from '@/lib/util';
 import type { GauntletRow } from '@/components/GauntletLifecycleList';
 
 export const metadata = {
@@ -68,9 +68,7 @@ export default async function AdminPage() {
       })
       .map(async (s) => {
         const gauntletId = paired.get(s.id)!;
-        const rounds = await getGauntletRounds(gauntletId);
-        const seeded = rounds.length > 0;
-        const started = rounds.some((r) => r.matches.some((m) => isPlayedScore(m.final_score)));
+        const { seeded, started } = await getGauntletSeasonProgress(gauntletId);
         return {
           regularSeasonId: s.id,
           regularSeasonName: s.name,

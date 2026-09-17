@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { Player, Season } from '../types';
@@ -15,14 +16,17 @@ export interface SeasonRosterEntry {
 /** `client` defaults to the app's anon-key client but accepts an admin client for callers running
  *  outside a Next.js request (a GitHub Actions script, which has no `NEXT_PUBLIC_SUPABASE_ANON_KEY`) —
  *  same opt-in pattern as `getMatchIdsForMap()` (`maps.ts`). */
-export async function getSeasons(client: SupabaseClient = supabase): Promise<Season[]> {
+/** `cache()`-wrapped so the root layout's own read (feeds `SideNav`) and a page's separate read of
+ *  the same table collapse into a single Supabase round trip per request — same reasoning as
+ *  `getSeason()` below. */
+export const getSeasons = cache(async (client: SupabaseClient = supabase): Promise<Season[]> => {
   const { data, error } = await client
     .from('seasons')
     .select('*')
     .order('id');
   if (error) throw error;
   return (data ?? []) as Season[];
-}
+});
 
 /** The current regular (non-gauntlet) `ACTIVE` season, or `null` if none is — a gauntlet can also be
  *  `ACTIVE` at the same time as its paired regular season briefly completes ahead of it (see
@@ -46,7 +50,9 @@ export async function isSeasonFullyPlayed(seasonId: number, client: SupabaseClie
   return allMatchesPlayed(await getMatchScoresForWeeks(client, weekIds));
 }
 
-export async function getSeason(id: number, client: SupabaseClient = supabase): Promise<Season | null> {
+/** `cache()`-wrapped so a route that reads it from both `generateMetadata` and the page component
+ *  (e.g. `seasons/[id]/page.tsx`) collapses into a single Supabase round trip per request. */
+export const getSeason = cache(async (id: number, client: SupabaseClient = supabase): Promise<Season | null> => {
   const { data, error } = await client
     .from('seasons')
     .select('*')
@@ -54,7 +60,7 @@ export async function getSeason(id: number, client: SupabaseClient = supabase): 
     .maybeSingle();
   if (error) throw error;
   return (data ?? null) as Season | null;
-}
+});
 
 /** Find the gauntlet season paired to a regular season by season number in name. */
 export async function getLinkedGauntlet(regularSeasonName: string): Promise<Season | null> {

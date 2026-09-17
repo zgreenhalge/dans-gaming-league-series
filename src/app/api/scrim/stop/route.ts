@@ -30,6 +30,9 @@ export async function POST() {
     );
   }
 
+  // Only reached once `active` rules out a real match holding the server — fetching this
+  // unconditionally alongside `active` would pay for it even on the (409) occupied path, where it's
+  // never read.
   const scrimSession = await getScrimSession(supabaseAdmin);
   if (scrimSession && scrimSession.startedBy !== playerId && !session.user.isAdmin) {
     return NextResponse.json(

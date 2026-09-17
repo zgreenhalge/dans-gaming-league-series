@@ -91,13 +91,17 @@ export default async function PlayerPage({
   const playedMatchIds = detail.history
     .filter((h) => isPlayedScore(h.final_score) && h.rounds_played > 0)
     .map((h) => h.match_id);
-  const matchDeltasMap = await getBatchMatchRatingDeltas(playedMatchIds);
+  // Neither depends on the other's result — both only need `detail`, already in hand — so they
+  // run together instead of as two sequential round trips.
+  const [matchDeltasMap, freshSteam] = await Promise.all([
+    getBatchMatchRatingDeltas(playedMatchIds),
+    maybeRefreshSteamProfile(detail.player),
+  ]);
   const matchDeltas: Record<number, Record<number, number>> = {};
   for (const [matchId, playerMap] of matchDeltasMap) {
     matchDeltas[matchId] = Object.fromEntries(playerMap);
   }
 
-  const freshSteam = await maybeRefreshSteamProfile(detail.player);
   if (freshSteam) {
     detail.player.steam_nickname = freshSteam.steam_nickname;
     detail.player.steam_avatar_url = freshSteam.steam_avatar_url;

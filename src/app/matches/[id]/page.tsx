@@ -21,7 +21,7 @@ import { UrlStateProvider } from '@/components/UrlStateProvider';
 import RoundHistoryStrip from '@/components/RoundHistoryStrip';
 import { WinProbabilityBar } from '@/components/WinProbabilityBar';
 import { authOptions } from '@/lib/authOptions';
-import { supabase } from '@/lib/supabase';
+import { getPlayersById } from '@/lib/queries';
 import { FeatureMatchBanner } from '@/components/FeatureMatch';
 import { SchedulingOverlapBanner } from '@/components/SchedulingOverlapBanner';
 import { findScheduleCollision } from '@/lib/server-schedule-collision';
@@ -109,7 +109,13 @@ export default async function MatchPage({
   const { id } = await params;
   const matchId = Number(id);
   if (!Number.isFinite(matchId)) notFound();
-  const [detail, mapLookup] = await Promise.all([getMatch(matchId), getMapLookup()]);
+  // getServerSession() depends on none of the match/map data — starts alongside them instead of
+  // waiting for this batch to resolve first.
+  const [detail, mapLookup, session] = await Promise.all([
+    getMatch(matchId),
+    getMapLookup(),
+    getServerSession(authOptions),
+  ]);
   if (!detail) notFound();
 
   const { match, week, season, stats } = detail;
@@ -147,7 +153,34 @@ export default async function MatchPage({
   // promises have resolved.
   const otherScheduledPromise = !played ? getOtherScheduledMatches(match.id) : Promise.resolve([]);
 
-  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, podSibling, otherScheduledRaw, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
+  // Replay/Events (issue #121), chained rather than a second query: the events lookup needs the
+  // job's own status first. Independent of the big Promise.all below (depends only on `played`,
+  // known right after the first Promise.all), so it's folded in instead of awaited after it.
+  // Only played matches can have a replay, and the Recap tab is gated on `played`, so skip the
+  // queries entirely otherwise. Status is defensive (tolerates missing DB columns). We load the
+  // events payload whenever a job has ever run (status !== 'none'), NOT only when status === 'ready',
+  // so a failed/in-flight *re*generation never hides a replay whose payload still exists in R2 —
+  // the Recap tab gates on the payload, not the status flag.
+  const replayPromise = played
+    ? getReplayJobState(matchId).then(async (job) => ({
+        job,
+        events: job.status !== 'none' ? await getReplayEventsView(matchId) : null,
+      }))
+    : Promise.resolve({
+        job: { status: 'none' as const, stage: null, ghRunUrl: null, errorMessage: null },
+        events: null,
+      });
+
+  // Pre-match win probability's player ratings — depends only on shirts/skins, both available
+  // right after the first Promise.all, so it's folded into this batch instead of awaited
+  // afterward. Whether the result is actually *used* still gates on the time-window check below
+  // (previousWeekComplete, resolved in this same batch).
+  const allScoutedPlayerIds = [...shirts, ...skins].map((s) => s.player_id);
+  const playerRatingsPromise = showPreMatchScouting
+    ? getPlayerRatings(allScoutedPlayerIds)
+    : Promise.resolve([]);
+
+  const [scoutingData, scoutingH2H, demoDownloadUrl, ratingDeltaMap, sabremetrics, mapMatchIds, podSibling, otherScheduledRaw, previousWeekComplete, isLiveNow, matchKills, matchDamageEvents, matchWeaponClassStats, matchEconomyStats, replay, playerRatingsRows] = await Promise.all([
     showPreMatchScouting ? getMatchScoutingData(matchId) : Promise.resolve(null),
     // Cached and shared across every match page (see #441 item 3) rather than a fresh
     // full-league computeH2H() scan on each load.
@@ -174,32 +207,21 @@ export default async function MatchPage({
     played ? getMatchDamageEvents(matchId) : Promise.resolve([]),
     played ? getMatchWeaponClassStats(matchId) : Promise.resolve([]),
     played ? getMatchEconomyStats(matchId) : Promise.resolve([]),
+    replayPromise,
+    playerRatingsPromise,
   ]);
   const ratingDeltas: Record<number, number> = Object.fromEntries(ratingDeltaMap);
-
-  // Replay/Events (issue #121). Only played matches can have a replay, and the Recap
-  // tab is gated on `played`, so skip the queries entirely otherwise. Status is
-  // defensive (tolerates missing DB columns). We load the events payload whenever a
-  // job has ever run (status !== 'none'), NOT only when status === 'ready', so a
-  // failed/in-flight *re*generation never hides a replay whose payload still exists in
-  // R2 — the Recap tab gates on the payload, not the status flag.
-  const replayJob = played
-    ? await getReplayJobState(matchId)
-    : { status: 'none' as const, stage: null, ghRunUrl: null, errorMessage: null };
-  const replayEvents =
-    played && replayJob.status !== 'none' ? await getReplayEventsView(matchId) : null;
+  const { job: replayJob, events: replayEvents } = replay;
 
   let ratingProjections: RatingProjection[] = [];
   const ratingCurrent: Record<number, number> = {};
   let winProbability: { pShirtsWin: number; provisional: boolean } | null = null;
   if (showPreMatchScouting && (isCurrentWeek || previousWeekComplete)) {
-    const allPlayerIds = [...shirts, ...skins].map((s) => s.player_id);
-    const playerRatings = await getPlayerRatings(allPlayerIds);
-    const byId = new Map(playerRatings.map((r) => [r.playerId, r]));
+    const byId = new Map(playerRatingsRows.map((r) => [r.playerId, r]));
     const shirtRatings = shirts.map((s) => byId.get(s.player_id)!);
     const skinRatings = skins.map((s) => byId.get(s.player_id)!);
     ratingProjections = projectRatingDeltas(shirtRatings, skinRatings, season.target_win_rounds);
-    for (const r of playerRatings) ratingCurrent[r.playerId] = r.ehogRating;
+    for (const r of playerRatingsRows) ratingCurrent[r.playerId] = r.ehogRating;
     winProbability = {
       pShirtsWin: predictWinProbability(shirtRatings, skinRatings),
       provisional: isProvisional(shirtRatings, skinRatings),
@@ -217,7 +239,6 @@ export default async function MatchPage({
   const shirtsF = shirtsFaction(match.skins_starting_side);
   const skinsF: Faction = match.skins_starting_side;
 
-  const session = await getServerSession(authOptions);
   const currentPlayerId = session?.user?.playerId ?? null;
 
   // Veto window: open only when a scheduled time exists and we're within 10 minutes of it
@@ -242,12 +263,11 @@ export default async function MatchPage({
   if (currentPlayerId !== null) {
     const myStatRow = stats.find((s) => s.player_id === currentPlayerId);
     const isInMatch = !!myStatRow;
-    const { data: playerRow } = await supabase
-      .from('players')
-      .select('is_admin')
-      .eq('id', currentPlayerId)
-      .maybeSingle();
-    const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
+    // `getPlayersById()` is `cache()`-wrapped and already fetched above (getMatch() calls it
+    // internally to resolve `stats`' player names) — reusing it here costs zero additional query,
+    // vs. the ad-hoc `players` lookup this replaces.
+    const playersById = await getPlayersById();
+    const isAdmin = !!playersById.get(currentPlayerId)?.is_admin;
     isCurrentUserAdmin = isAdmin;
     const authorized = isInMatch || isAdmin;
     canManageServer = authorized;

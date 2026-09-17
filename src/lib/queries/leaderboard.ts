@@ -127,6 +127,15 @@ const getSeasonBaseData = cache(async (): Promise<{
   return { perPlayerStats, rosterBySeason };
 });
 
+/** The raw, unfiltered `player_season_leaderboard` table. `cache()`-wrapped so
+ *  `getCareerLeaderboard()`, `getAllLeaderboards()`, and any indirect caller of the latter (e.g.
+ *  `getAllSeasonMedalists()`) share one read instead of each re-scanning the view. */
+const getRawSeasonLeaderboardRows = cache(async (): Promise<LeaderboardRow[]> => {
+  const { data, error } = await supabase.from('player_season_leaderboard').select('*');
+  if (error) throw error;
+  return (data ?? []) as LeaderboardRow[];
+});
+
 function zeroStatRows(
   seasonId: number,
   playerIds: Set<number>,
@@ -256,13 +265,12 @@ export async function getSideBalance(
  * are re-derived from totals so the math stays correct.
  */
 export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
-  const [{ data: rows, error }, { perPlayerStats: perPlayer, rosterBySeason }, playersById, { data: seasonRows, error: sErr }] = await Promise.all([
-    supabase.from('player_season_leaderboard').select('*'),
+  const [rows, { perPlayerStats: perPlayer, rosterBySeason }, playersById, { data: seasonRows, error: sErr }] = await Promise.all([
+    getRawSeasonLeaderboardRows(),
     getSeasonBaseData(),
     getPlayersById(),
     supabase.from('seasons').select('id, status'),
   ]);
-  if (error) throw error;
   if (sErr) throw sErr;
 
   const activeSeasonIds = new Set(
@@ -391,17 +399,14 @@ export async function getCareerLeaderboard(): Promise<LeaderboardRowWithId[]> {
 }
 
 /** Returns leaderboards for every season, keyed by season_id. */
-export async function getAllLeaderboards(): Promise<
+export const getAllLeaderboards = cache(async (): Promise<
   Map<number, LeaderboardRowWithId[]>
-> {
-  const [{ data: rows, error }, playersById, { perPlayerStats: perPlayer, rosterBySeason }] = await Promise.all([
-    supabase
-      .from('player_season_leaderboard')
-      .select('*'),
+> => {
+  const [rows, playersById, { perPlayerStats: perPlayer, rosterBySeason }] = await Promise.all([
+    getRawSeasonLeaderboardRows(),
     getPlayersById(),
     getSeasonBaseData(),
   ]);
-  if (error) throw error;
 
   const out = new Map<number, LeaderboardRowWithId[]>();
   for (const r of (rows ?? []) as LeaderboardRow[]) {
@@ -441,4 +446,4 @@ export async function getAllLeaderboards(): Promise<
   }
 
   return out;
-}
+});

@@ -33,15 +33,20 @@ export async function GET() {
 
   // Independent calls (DatHost REST vs. Supabase) — run concurrently rather than paying the sum of
   // both latencies on a route hit every 15s per open tab plus after every action.
-  const [serverResult, active] = await Promise.all([
-    getServer(serverId)
-      .then((s) => ({ server: s, error: null as string | null }))
-      .catch((err) => ({ server: null, error: err instanceof Error ? err.message : 'Could not reach DatHost' })),
+  const serverPromise = getServer(serverId)
+    .then((s) => ({ server: s, error: null as string | null }))
+    .catch((err) => ({ server: null, error: err instanceof Error ? err.message : 'Could not reach DatHost' }));
+  // Only depends on `server` (from serverPromise above), not on `active` — chained off serverPromise
+  // directly instead of waiting for the whole batch below to settle first.
+  const connectedPlayersPromise = serverPromise.then(({ server }) => getConnectedPlayers(serverId, server));
+
+  const [serverResult, active, connectedPlayers] = await Promise.all([
+    serverPromise,
     getActiveServerMatch(getAdminClient()),
+    connectedPlayersPromise,
   ]);
 
   const { server, error } = serverResult;
   const connect = server ? connectHost(server) : null;
-  const connectedPlayers = await getConnectedPlayers(serverId, server);
   return NextResponse.json({ configured: true, server, connect, active, connectedPlayers, error } satisfies AdminServerStatus);
 }

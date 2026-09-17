@@ -425,7 +425,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   if (rosterRows.length === 0) return null;
   const playerIds = rosterRows.map((r) => r.player_id);
 
-  type LeagueMatchRow = { id: number; final_score: string | null; shirts_pick: string | null; picked_map: string | null };
+  type LeagueMatchRow = { id: number; final_score: string | null; shirts_pick: string | null; picked_map: string | null; week_id: number | null; match_number: number };
   type LeagueStatRow = { match_id: number; adr: number; kills: number; deaths: number; assists: number; is_win: boolean };
 
   const [statRows, players, leagueStatRows, leagueMatchRows, weekLookup] = await Promise.all([
@@ -442,23 +442,30 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
           .range(from, to),
       ),
     ),
+    // `week_id` included here (beyond what the map-league-averages computation below needs) so
+    // `matchById` can be built by filtering these already-fetched rows instead of a second,
+    // redundant `matches` round trip for the same rows (every id in `matchIds` is already present
+    // here, since this is every match in the league).
     fetchAllPages<LeagueMatchRow>((from, to) =>
-      supabase.from('matches').select('id, final_score, shirts_pick, picked_map').range(from, to),
+      supabase.from('matches').select('id, final_score, shirts_pick, picked_map, week_id, match_number').range(from, to),
     ),
     getWeekLookup(),
   ]);
   const allStats = statRows;
 
+  const leagueMatchById = new Map<number, LeagueMatchRow>();
+  for (const mm of leagueMatchRows) leagueMatchById.set(mm.id, mm);
+
+  // Every id here is already a key in leagueMatchById (that's every match in the league), so lookups
+  // below read leagueMatchById directly rather than copying a redundant subset Map out of it first.
   const matchIds = Array.from(new Set(allStats.map((s) => s.match_id)));
-  const { data: matches, error: matchesErr } = await supabase.from('matches').select('*').in('id', matchIds);
-  if (matchesErr) throw matchesErr;
-  const matchById = new Map<number, Match>();
-  for (const mm of (matches ?? []) as Match[]) matchById.set(mm.id, mm);
 
   const seasonIds = Array.from(
     new Set(
-      (matches ?? [])
-        .map((mm) => weekLookup.get((mm as Match).week_id)?.season_id)
+      matchIds
+        .map((id) => leagueMatchById.get(id))
+        .filter((mm): mm is LeagueMatchRow => mm != null)
+        .map((mm) => (mm.week_id != null ? weekLookup.get(mm.week_id)?.season_id : undefined))
         .filter((id): id is number => id != null),
     ),
   );
@@ -477,11 +484,11 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
     const rows = allStats
       .filter((s) => s.player_id === playerId && s.rounds_played > 0)
       .map((s) => {
-        const mm = matchById.get(s.match_id);
-        const w = mm ? weekLookup.get(mm.week_id) : undefined;
+        const mm = leagueMatchById.get(s.match_id);
+        const w = mm && mm.week_id != null ? weekLookup.get(mm.week_id) : undefined;
         return mm && w && isPlayedScore(mm.final_score) ? { stat: s, match: mm, week: w } : null;
       })
-      .filter((r): r is { stat: PlayerMatchStat; match: Match; week: { season_id: number; week_number: number } } => r !== null)
+      .filter((r): r is { stat: PlayerMatchStat; match: LeagueMatchRow; week: { season_id: number; week_number: number } } => r !== null)
       .sort((a, b) =>
         -compareMatchRefDesc(
           { seasonNumber: extractSeasonNumber(seasonNameById.get(a.week.season_id) ?? ''), isGauntlet: seasonIsGauntletById.get(a.week.season_id) ?? false, weekNumber: a.week.week_number, matchNumber: a.match.match_number },
@@ -541,9 +548,6 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
       mapStats,
     };
   }
-
-  const leagueMatchById = new Map<number, LeagueMatchRow>();
-  for (const mm of leagueMatchRows) leagueMatchById.set(mm.id, mm);
 
   // Use a Set of match IDs to count unique matches (not player-stat rows).
   // Each Wingman match has 2 player rows per side, so row-counting would inflate counts by 2×.

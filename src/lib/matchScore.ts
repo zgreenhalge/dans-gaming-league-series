@@ -52,6 +52,17 @@ type PlayerStatInput = {
   adr?: number | null;
 };
 
+/** A match's `player_match_stats` rows keyed by `player_id` — shared shape between the score route
+ *  (authorizing the request) and this file's own fallback fetch, so both build the same lookup the
+ *  same way. */
+export function toStatsByPlayerId(
+  rows: { player_id: number; faction: string }[],
+): Map<number, { player_id: number; faction: string }> {
+  const byPlayerId = new Map<number, { player_id: number; faction: string }>();
+  for (const row of rows) byPlayerId.set(row.player_id, row);
+  return byPlayerId;
+}
+
 const ROUND_CONDITIONS = new Set(['elim', 'bomb', 'defuse', 'time']);
 
 /**
@@ -152,6 +163,16 @@ export interface WriteMatchScoreOptions {
    *  past the HTTP response. Omit outside a request scope (the demo-ingest Action), where the hooks
    *  are awaited directly instead so they finish before the process exits. */
   after?: (fn: () => void | Promise<void>) => void;
+  /** The match's season id/gauntlet flag and this match's player→faction map, when the caller already
+   *  fetched both — the interactive score route needs them to authorize the request before ever
+   *  calling here, so passing them through avoids re-querying `matches`/`player_match_stats` from
+   *  scratch. Omit to have this function fetch both itself (the demo-ingest Action, which has
+   *  neither in hand). */
+  matchContext?: {
+    seasonId: number;
+    isGauntlet: boolean;
+    statsByPlayerId: Map<number, { player_id: number; faction: string }>;
+  };
 }
 
 export type WriteMatchScoreResult = { ok: true } | { ok: false; error: string; status: number };
@@ -232,22 +253,31 @@ export async function writeMatchScore(
     return { ok: false, error: 'player_stats must be a non-empty array', status: 400 };
   }
 
-  const { data: matchRow } = await supabaseAdmin
-    .from('matches')
-    .select('id, weeks(season_id, seasons(is_gauntlet))')
-    .eq('id', matchId)
-    .maybeSingle();
-  if (!matchRow) return { ok: false, error: 'Match not found', status: 404 };
-  const m = matchRow as unknown as { weeks: { season_id: number; seasons: { is_gauntlet: boolean } } };
-  const isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
-
-  const { data: matchStats } = await supabaseAdmin
-    .from('player_match_stats')
-    .select('player_id, faction')
-    .eq('match_id', matchId);
-  const allStats = (matchStats ?? []) as { player_id: number; faction: string }[];
-  const statsByPlayerId = new Map<number, { player_id: number; faction: string }>();
-  for (const s of allStats) statsByPlayerId.set(s.player_id, s);
+  let seasonId: number;
+  let isGauntlet: boolean;
+  let statsByPlayerId: Map<number, { player_id: number; faction: string }>;
+  if (opts.matchContext) {
+    ({ seasonId, isGauntlet, statsByPlayerId } = opts.matchContext);
+  } else {
+    // Neither read depends on the other — both need only `matchId` — so they run together rather
+    // than as two sequential round trips.
+    const [{ data: matchRow }, { data: matchStats }] = await Promise.all([
+      supabaseAdmin
+        .from('matches')
+        .select('id, weeks(season_id, seasons(is_gauntlet))')
+        .eq('id', matchId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('player_match_stats')
+        .select('player_id, faction')
+        .eq('match_id', matchId),
+    ]);
+    if (!matchRow) return { ok: false, error: 'Match not found', status: 404 };
+    const m = matchRow as unknown as { weeks: { season_id: number; seasons: { is_gauntlet: boolean } } };
+    seasonId = m.weeks.season_id;
+    isGauntlet = m.weeks?.seasons?.is_gauntlet ?? false;
+    statsByPlayerId = toStatsByPlayerId((matchStats ?? []) as { player_id: number; faction: string }[]);
+  }
 
   const roundsPlayed = shirts + skins;
 
@@ -342,10 +372,18 @@ export async function writeMatchScore(
     console.error(`reconcile demo_ingest job(${matchId}) failed (non-fatal):`, e);
   }
 
-  for (const u of updates) {
-    const { error: statErr } = await supabaseAdmin
-      .from('player_match_stats')
-      .update({
+  // A single batched, atomic upsert rather than one round trip per player (at most 4 rows — 2v2
+  // Wingman — but still an avoidable cost on the hottest write path in the app). Every row here is
+  // already known to exist (validated against `statsByPlayerId` above), so the upsert always takes
+  // the update branch; `faction` is carried along unchanged since Postgres' `ON CONFLICT DO UPDATE`
+  // still needs a value for every NOT NULL column in the VALUES list.
+  const { error: statErr } = await supabaseAdmin
+    .from('player_match_stats')
+    .upsert(
+      updates.map((u) => ({
+        match_id: matchId,
+        player_id: u.player_id,
+        faction: statsByPlayerId.get(u.player_id)!.faction,
         kills: u.kills,
         assists: u.assists,
         deaths: u.deaths,
@@ -354,11 +392,10 @@ export async function writeMatchScore(
         rounds_played: u.rounds_played,
         rounds_won: u.rounds_won,
         is_win: u.is_win,
-      })
-      .eq('match_id', matchId)
-      .eq('player_id', u.player_id);
-    if (statErr) return { ok: false, error: statErr.message, status: 500 };
-  }
+      })),
+      { onConflict: 'match_id,player_id' },
+    );
+  if (statErr) return { ok: false, error: statErr.message, status: 500 };
 
   // Sabremetrics and weapon-category/round-economy breakdowns (#279): upsert or clean up, each
   // non-fatal (never rolls back the committed score) and independent of the other, so they run
@@ -476,8 +513,8 @@ export async function writeMatchScore(
     await Promise.all([
       triggerRatingRecompute(supabaseAdmin, { jobKey: matchJobKey(matchId) }),
       isGauntlet
-        ? runGauntletCompletionPipeline(supabaseAdmin, matchId, m.weeks.season_id)
-        : runSeasonCompletionCheck(supabaseAdmin, m.weeks.season_id),
+        ? runGauntletCompletionPipeline(supabaseAdmin, matchId, seasonId)
+        : runSeasonCompletionCheck(supabaseAdmin, seasonId),
       runSteamIdLearningHook(supabaseAdmin, matchId, opts.learnSteamIds, warnings),
       notifyMatchScoreReported(supabaseAdmin, matchId),
       // A gauntlet pod's thread coordinates both of its games — closing it after only one is scored

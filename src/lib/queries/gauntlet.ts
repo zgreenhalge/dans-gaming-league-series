@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import type { LeaderboardRowWithId, PlayerMatchStat, Match } from '../types';
-import { allMatchesPlayed, canonicalSort, deriveRates, isPlayedScore } from '../util';
+import { allMatchesPlayed, anyMatchPlayed, canonicalSort, deriveRates, isPlayedScore } from '../util';
 import { getPodSibling } from '../gauntlet-pod';
 import { seedByPlayerId, slotRank } from '../gauntlet-draft';
 import { getPlayersById } from './player';
@@ -562,6 +562,25 @@ export async function getGauntletBracketShape(gauntletSeasonId: number): Promise
   });
 }
 
+/** Whether a gauntlet season has any materialized matches yet ("seeded") and whether any of them has
+ *  a played score ("started") — the admin console's gauntlet-lifecycle list needs only these two
+ *  booleans per season, not the full per-player payload `getGauntletRounds()` builds (which joins
+ *  `player_match_stats`/`players` to get there). Reads only `weeks`/`matches`, so it's cheap enough
+ *  to call once per in-progress gauntlet on that page. */
+export async function getGauntletSeasonProgress(seasonId: number): Promise<{ seeded: boolean; started: boolean }> {
+  const weekLookup = await getWeekLookup([seasonId]);
+  const weekIds = weekRowsFromLookup(weekLookup).map((w) => w.id);
+  if (weekIds.length === 0) return { seeded: false, started: false };
+
+  const { data, error } = await supabase.from('matches').select('final_score').in('week_id', weekIds);
+  if (error) throw error;
+  const rows = (data ?? []) as { final_score: string | null }[];
+  return {
+    seeded: rows.length > 0,
+    started: anyMatchPlayed(rows),
+  };
+}
+
 /** Fetches all matches for a gauntlet season and groups them into rounds by week_number. */
 export async function getGauntletRounds(seasonId: number): Promise<GauntletRound[]> {
   // getWeekLookup() carries no ordering guarantee, unlike the `.order('week_number')` this used to
@@ -573,13 +592,19 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
 
   const weekIds = weekRows.map((w) => w.id);
 
+  // Narrowed to the columns this function actually reads (below) — `matches` also carries several
+  // JSON/text columns (`round_history`, ban pairs, `pre_match_win_prob*`, etc.) never used here.
+  type GauntletMatchRow = Pick<
+    Match,
+    'id' | 'match_number' | 'final_score' | 'scheduled_at' | 'picked_map' | 'shirts_pick' | 'skins_starting_side' | 'week_id'
+  >;
   const { data: matchData, error: mErr } = await supabase
     .from('matches')
-    .select('*')
+    .select('id, match_number, final_score, scheduled_at, picked_map, shirts_pick, skins_starting_side, week_id')
     .in('week_id', weekIds)
     .order('match_number');
   if (mErr) throw mErr;
-  const matchRows = (matchData ?? []) as Match[];
+  const matchRows = (matchData ?? []) as GauntletMatchRow[];
   if (matchRows.length === 0) return [];
 
   const matchIds = matchRows.map((m) => m.id);
@@ -650,7 +675,7 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
   }
 
   // Group match rows by week_id so we can assign round_number from week_number.
-  const matchesByWeekId = new Map<number, Match[]>();
+  const matchesByWeekId = new Map<number, GauntletMatchRow[]>();
   for (const m of matchRows) {
     const list = matchesByWeekId.get(m.week_id) ?? [];
     list.push(m);

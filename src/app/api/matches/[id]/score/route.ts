@@ -4,7 +4,7 @@ import { isPlayedScore, parseMatchId } from '@/lib/util';
 import { getAdminClient } from '@/lib/supabase-admin';
 import { teardownMatchServer, AUTO_TEARDOWN_DELAY_MS } from '@/lib/dathost-lifecycle';
 import { recordOpsError, clearOpsError } from '@/lib/ops-errors';
-import { writeMatchScore } from '@/lib/matchScore';
+import { writeMatchScore, toStatsByPlayerId } from '@/lib/matchScore';
 import { isVetoComplete, type VetoFields } from '@/lib/veto';
 import type {
   DemoSabremetricStat, DemoWeaponStat, DemoMatchKill, DemoMatchRound,
@@ -71,6 +71,7 @@ export async function PATCH(
   const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
   const allStats = (matchStats ?? []) as { player_id: number; faction: string }[];
   const isInMatch = allStats.some((s) => s.player_id === playerId);
+  const statsByPlayerId = toStatsByPlayerId(allStats);
 
   if (!isAdmin && !isInMatch) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -132,7 +133,13 @@ export async function PATCH(
       round_history,
       warnings: Array.isArray(warnings) ? (warnings as string[]) : undefined,
     },
-    { learnSteamIds: isAdmin, after },
+    {
+      learnSteamIds: isAdmin,
+      after,
+      // Already fetched above to authorize the request — pass it through so writeMatchScore()
+      // doesn't re-query matches/player_match_stats from scratch on this hot write path.
+      matchContext: { seasonId: m.weeks.season_id, isGauntlet, statsByPlayerId },
+    },
   );
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });

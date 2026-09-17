@@ -16,10 +16,14 @@ export default async function SeasonScheduleEditorPage({ params }: { params: Pro
   const seasonId = Number(id);
   if (!Number.isFinite(seasonId)) notFound();
 
-  const season = await getSeason(seasonId);
+  // getSeasonRoster()/getSeasonScheduleDraft() depend only on seasonId, not on getSeason()'s
+  // result — the `notFound()` check below is all that needs `season` — so all three run together.
+  const [season, roster, draft] = await Promise.all([
+    getSeason(seasonId),
+    getSeasonRoster(seasonId),
+    getSeasonScheduleDraft(seasonId),
+  ]);
   if (!season || season.is_gauntlet) notFound();
-
-  const [roster, draft] = await Promise.all([getSeasonRoster(seasonId), getSeasonScheduleDraft(seasonId)]);
   const players = roster.map((r) => ({ id: r.player_id, name: r.player_name }));
   const initialWeeks = toDraftScheduleWeeks(draft);
 
