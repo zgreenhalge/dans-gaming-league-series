@@ -71,6 +71,8 @@ export async function PATCH(
   const isAdmin = !!(playerRow as { is_admin?: boolean } | null)?.is_admin;
   const allStats = (matchStats ?? []) as { player_id: number; faction: string }[];
   const isInMatch = allStats.some((s) => s.player_id === playerId);
+  const statsByPlayerId = new Map<number, { player_id: number; faction: string }>();
+  for (const s of allStats) statsByPlayerId.set(s.player_id, s);
 
   if (!isAdmin && !isInMatch) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -132,7 +134,13 @@ export async function PATCH(
       round_history,
       warnings: Array.isArray(warnings) ? (warnings as string[]) : undefined,
     },
-    { learnSteamIds: isAdmin, after },
+    {
+      learnSteamIds: isAdmin,
+      after,
+      // Already fetched above to authorize the request — pass it through so writeMatchScore()
+      // doesn't re-query matches/player_match_stats from scratch on this hot write path.
+      matchContext: { seasonId: m.weeks.season_id, isGauntlet, statsByPlayerId },
+    },
   );
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
