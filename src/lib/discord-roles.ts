@@ -202,25 +202,33 @@ async function getBotTopRolePosition(guildId: string, token: string): Promise<nu
  *  `topPosition` lets a caller resolving several players in one batch (`backfillNameRoles()`) pass in
  *  the bot's top-role position once for the whole batch instead of every call re-resolving the same
  *  guild-wide, per-player-invariant value — pass it explicit `undefined` (the default) to have this
- *  function resolve it itself, for a standalone call. */
+ *  function resolve it itself, for a standalone call.
+ *
+ *  `skipExistingCheck` lets a caller whose own query already guarantees `discord_name_role_id` is
+ *  null (`backfillNameRoles()`'s `WHERE` clause) skip the redundant re-check here — every other
+ *  caller (the OAuth link callback, the admin player-edit route) has no such guarantee and must
+ *  leave this false (the default). */
 export async function createNameRole(
   supabaseAdmin: SupabaseClient,
   playerId: number,
   discordId: string | null,
   playerName: string,
   topPosition?: number | null,
+  skipExistingCheck?: boolean,
 ): Promise<void> {
   if (!discordId) return;
   const token = process.env.DISCORD_BOT_TOKEN;
   const guildId = process.env.DISCORD_GUILD_ID;
   if (!token || !guildId) return;
 
-  const { data: existing } = await supabaseAdmin
-    .from('players')
-    .select('discord_name_role_id')
-    .eq('id', playerId)
-    .maybeSingle();
-  if ((existing as { discord_name_role_id?: string | null } | null)?.discord_name_role_id) return;
+  if (!skipExistingCheck) {
+    const { data: existing } = await supabaseAdmin
+      .from('players')
+      .select('discord_name_role_id')
+      .eq('id', playerId)
+      .maybeSingle();
+    if ((existing as { discord_name_role_id?: string | null } | null)?.discord_name_role_id) return;
+  }
 
   const headers = { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' };
   const createRes = await discordApiCall(
@@ -368,7 +376,9 @@ export async function backfillNameRoles(supabaseAdmin: SupabaseClient): Promise<
   // Discord's order settle before the next request reads it, so each new role correctly stacks in
   // just below the bot, pushing the previous batch entries (and everything below them) down by one.
   for (const p of players) {
-    await createNameRole(supabaseAdmin, p.id, p.discord_id, p.name, topPosition);
+    // `skipExistingCheck: true` — this function's own query above already filtered to
+    // `discord_name_role_id is null`, so createNameRole() doesn't need to re-fetch and re-check it.
+    await createNameRole(supabaseAdmin, p.id, p.discord_id, p.name, topPosition, true);
   }
   return { attempted: players.length };
 }
