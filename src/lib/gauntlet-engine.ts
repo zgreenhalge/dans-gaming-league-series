@@ -11,6 +11,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { allMatchesPlayed, extractSeasonNumber } from './util';
 import { buildGauntletBracket, type AdvanceRule, type BracketPlan } from './gauntlet-bracket';
+import { chooseSides } from './season-schedule';
 import {
   getSeason,
   getSeasonLeaderboard,
@@ -18,6 +19,7 @@ import {
   getLinkedRegularSeason,
   getGauntletRounds,
   getGauntletBracketShape,
+  getSideBalance,
   isSeasonFullyPlayed,
 } from './queries';
 import { clearOpsError, recordOpsError } from './ops-errors';
@@ -67,7 +69,11 @@ async function getSeedByPlayer(supabaseAdmin: SupabaseClient, seasonId: number):
 /** Creates the pod's two `matches` rows (+ 4 `player_match_stats` rows each) and links them back
  * onto `gauntlet_pods`. Pairing: rank 0-3 by seed (best first), game 1 = {0+1 vs 2+3}, game 2 =
  * {0+2 vs 1+3} — two distinct pairings so exactly one player goes 2-0 and one goes 0-2. Faction:
- * whichever pair contains the pod's top (best) seed is SHIRTS in both games. */
+ * which of each game's two fixed pairs is SHIRTS vs SKINS has no bearing on that guarantee, so it's
+ * chosen the same balance-aware way regular-season generation chooses it (`chooseSides()`,
+ * `season-schedule.ts`) — each game in turn, cheapest orientation against the 4 occupants' real
+ * running SHIRTS/SKINS balance (`getSideBalance()`, unified across regular season and gauntlet play,
+ * including this same gauntlet's own already-materialized-but-unplayed pods). */
 export async function materializePod(
   supabaseAdmin: SupabaseClient,
   pod: Pick<GauntletPodRow, 'id' | 'season_id' | 'round_number'>,
@@ -110,9 +116,13 @@ export async function materializePod(
   const nextMatchNumber =
     1 + Math.max(0, ...((existingMatches ?? []) as { match_number: number }[]).map((m) => m.match_number));
 
-  const games: { shirts: typeof ranked; skins: typeof ranked }[] = [
-    { shirts: [r0, r1], skins: [r2, r3] },
-    { shirts: [r0, r2], skins: [r1, r3] },
+  const balance = await getSideBalance(
+    ranked.map((o) => o.player_id),
+    { includeUnplayedInSeasonId: pod.season_id },
+  );
+  const games: { shirts: [number, number]; skins: [number, number] }[] = [
+    chooseSides([r0.player_id, r1.player_id], [r2.player_id, r3.player_id], balance),
+    chooseSides([r0.player_id, r2.player_id], [r1.player_id, r3.player_id], balance),
   ];
 
   const insertMatch = async (matchNumber: number) => {
@@ -140,8 +150,8 @@ export async function materializePod(
   const insertStats = async (matchId: number, game: (typeof games)[number]) => {
     const zeroStats = { kills: 0, assists: 0, deaths: 0, damage: 0, adr: 0, rounds_played: 0, rounds_won: 0, is_win: false };
     const statRows = [
-      ...game.shirts.map((o) => ({ match_id: matchId, player_id: o.player_id, faction: 'SHIRTS', ...zeroStats })),
-      ...game.skins.map((o) => ({ match_id: matchId, player_id: o.player_id, faction: 'SKINS', ...zeroStats })),
+      ...game.shirts.map((playerId) => ({ match_id: matchId, player_id: playerId, faction: 'SHIRTS', ...zeroStats })),
+      ...game.skins.map((playerId) => ({ match_id: matchId, player_id: playerId, faction: 'SKINS', ...zeroStats })),
     ];
     const { error: statsInsErr } = await supabaseAdmin.from('player_match_stats').insert(statRows);
     if (statsInsErr) throw statsInsErr;

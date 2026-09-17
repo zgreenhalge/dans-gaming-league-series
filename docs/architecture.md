@@ -158,7 +158,13 @@ qualifier field size — it has a literal worked shape for every `N` from 4 to 2
 the full reference table in `gauntlet-bracket.test.ts`) and throws for anything outside that range
 rather than guessing an unspecified shape. Its output is a plan of **pods** — 4 players playing 2
 games with two distinct partner pairings, guaranteeing exactly one 2-0 and one 0-2 result — each
-tagged `single` (only the 2-0 survives) or `wildcard` (only the 0-2 is eliminated).
+tagged `single` (only the 2-0 survives) or `wildcard` (only the 0-2 is eliminated). Which of each
+game's two fixed pairs is labeled SHIRTS vs SKINS is a free choice with no bearing on that guarantee,
+so `materializePod()` (`gauntlet-engine.ts`) picks it the same balance-aware way regular-season
+schedule generation does (`chooseSides()`, `season-schedule.ts`): whichever orientation leaves the 4
+occupants' real running SHIRTS/SKINS balance closer to zero, reading that balance unified across
+regular season and gauntlet play, including this same gauntlet's own already-decided-but-unplayed
+pods.
 
 Building and seeding a bracket are two separate steps, because the shape only depends on the
 qualifier *count*, not on who qualified:
