@@ -456,16 +456,15 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
   const leagueMatchById = new Map<number, LeagueMatchRow>();
   for (const mm of leagueMatchRows) leagueMatchById.set(mm.id, mm);
 
+  // Every id here is already a key in leagueMatchById (that's every match in the league), so lookups
+  // below read leagueMatchById directly rather than copying a redundant subset Map out of it first.
   const matchIds = Array.from(new Set(allStats.map((s) => s.match_id)));
-  const matchById = new Map<number, LeagueMatchRow>();
-  for (const id of matchIds) {
-    const mm = leagueMatchById.get(id);
-    if (mm) matchById.set(id, mm);
-  }
 
   const seasonIds = Array.from(
     new Set(
-      [...matchById.values()]
+      matchIds
+        .map((id) => leagueMatchById.get(id))
+        .filter((mm): mm is LeagueMatchRow => mm != null)
         .map((mm) => (mm.week_id != null ? weekLookup.get(mm.week_id)?.season_id : undefined))
         .filter((id): id is number => id != null),
     ),
@@ -485,7 +484,7 @@ export async function getMatchScoutingData(matchId: number): Promise<MatchScouti
     const rows = allStats
       .filter((s) => s.player_id === playerId && s.rounds_played > 0)
       .map((s) => {
-        const mm = matchById.get(s.match_id);
+        const mm = leagueMatchById.get(s.match_id);
         const w = mm && mm.week_id != null ? weekLookup.get(mm.week_id) : undefined;
         return mm && w && isPlayedScore(mm.final_score) ? { stat: s, match: mm, week: w } : null;
       })
