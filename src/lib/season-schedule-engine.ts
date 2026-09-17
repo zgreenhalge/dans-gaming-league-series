@@ -25,7 +25,7 @@ export interface PlayerWeekPlan {
 
 export function buildRosterSchedule(
   playerIds: number[],
-  options?: { doubleheaderPolicy?: DoubleheaderPolicy },
+  options?: { doubleheaderPolicy?: DoubleheaderPolicy; initialBalance?: Map<number, number> },
 ): PlayerWeekPlan[] {
   if (new Set(playerIds).size !== playerIds.length) {
     throw new Error('buildRosterSchedule: playerIds must not contain duplicates');
@@ -38,7 +38,18 @@ export function buildRosterSchedule(
     return id;
   };
 
-  const weeks = buildSeasonSchedule(playerIds.length, options);
+  // initialBalance arrives keyed by real player_id (the caller's real-balance query, keyed the same
+  // way every other player-facing map in this codebase is); translate to the seed-keyed map
+  // buildSeasonSchedule() operates in, mirroring seedToPlayer's own direction.
+  const seedBalance = new Map<number, number>();
+  if (options?.initialBalance) {
+    playerIds.forEach((id, i) => {
+      const bal = options.initialBalance!.get(id);
+      if (bal != null) seedBalance.set(i + 1, bal);
+    });
+  }
+
+  const weeks = buildSeasonSchedule(playerIds.length, { doubleheaderPolicy: options?.doubleheaderPolicy, initialBalance: seedBalance });
   return weeks.map((w) => ({
     week: w.week,
     matches: w.matches.map((m) => ({

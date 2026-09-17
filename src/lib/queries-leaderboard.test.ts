@@ -15,7 +15,7 @@ import type { LeaderboardRowWithId } from './types';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getSeasonLeaderboard, getCareerLeaderboard, getAllLeaderboards } from './queries';
+import { getSeasonLeaderboard, getCareerLeaderboard, getAllLeaderboards, getSideBalance } from './queries';
 import { test, report } from './test-support/miniTest';
 
 function assertCanonicallySorted(
@@ -74,6 +74,30 @@ async function main() {
   await test('getAllLeaderboards() — one entry per season with leaderboard rows, snapshot', async () => {
     const map = await getAllLeaderboards();
     matchesSnapshot('getAllLeaderboards', map);
+  });
+
+  await test('getSideBalance() — real career (SHIRTS - SKINS), unified across regular season and gauntlet, played matches only', async () => {
+    // Alice(1)/Bob(2): SHIRTS in played match 100 (regular) and 200 (gauntlet) -> +2 each.
+    // Carol(3)/Dave(4): SKINS in match 100, SHIRTS in played orphan-gauntlet match 300 -> net 0.
+    // Erin(5)/Frank(6): SKINS in match 200 only -> -1 each. Grace(7)/Heidi(8): SKINS in match 300 -> -1 each.
+    // Match 101 (unplayed) and 102 (S3-style "0-0") are excluded by isPlayedScore() despite having rows.
+    const balance = await getSideBalance([1, 2, 3, 4, 5, 6, 7, 8, 999]);
+    assert.deepEqual(
+      Object.fromEntries(balance),
+      { 1: 2, 2: 2, 3: 0, 4: 0, 5: -1, 6: -1, 7: -1, 8: -1, 999: 0 },
+    );
+  });
+
+  await test('getSideBalance({ includeUnplayedInSeasonId }) — also counts that season\'s already-decided-but-unplayed rows', async () => {
+    // Match 400 (unplayed, Season 6 / id 3) has real faction-assigned player_match_stats rows —
+    // opting that season in counts them on top of career-played history; a different season's
+    // unplayed rows (match 101, Season 5 / id 1) stay excluded either way.
+    const balance = await getSideBalance([1, 5, 6, 7], { includeUnplayedInSeasonId: 3 });
+    assert.deepEqual(Object.fromEntries(balance), { 1: 3, 5: 0, 6: -2, 7: -2 });
+  });
+
+  await test('getSideBalance([]) — empty input short-circuits to an empty map', async () => {
+    assert.deepEqual(await getSideBalance([]), new Map());
   });
 
   report();

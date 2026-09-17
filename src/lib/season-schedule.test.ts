@@ -11,7 +11,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { buildTeammateRounds, buildSeasonSchedule, pairKey } from './season-schedule';
+import { buildTeammateRounds, buildSeasonSchedule, optimizeSideBalance, pairKey, type MatchPlan } from './season-schedule';
 import { test, report } from './test-support/miniTest';
 
 function expectedRounds(n: number): number {
@@ -151,24 +151,63 @@ async function main() {
     });
   }
 
+  function balanceOf(weeks: ReturnType<typeof buildSeasonSchedule>): Map<number, number> {
+    const balance = new Map<number, number>();
+    for (const w of weeks) {
+      for (const m of w.matches) {
+        for (const s of m.shirts) balance.set(s, (balance.get(s) ?? 0) + 1);
+        for (const s of m.skins) balance.set(s, (balance.get(s) ?? 0) - 1);
+      }
+    }
+    return balance;
+  }
+
   for (let n = 7; n <= 19; n++) {
     await test(`buildSeasonSchedule(${n}) — shirts/skins stay roughly balanced per seed`, () => {
-      const weeks = buildSeasonSchedule(n);
-      const balance = new Map<number, number>();
-      for (const w of weeks) {
-        for (const m of w.matches) {
-          for (const s of m.shirts) balance.set(s, (balance.get(s) ?? 0) + 1);
-          for (const s of m.skins) balance.set(s, (balance.get(s) ?? 0) - 1);
-        }
-      }
-      // Best-effort tiebreaker, not an exact guarantee — bounded empirically (observed max 5
-      // across n=7-19) with headroom, to catch a real regression (e.g. side-balancing dropped
-      // entirely) without being a flaky assertion on the exact optimum.
+      const balance = balanceOf(buildSeasonSchedule(n));
+      // Best-effort optimization, not an exact guarantee — bounded empirically (observed max 2
+      // across n=7-19) with headroom, to catch a real regression (e.g. the optimizer getting stuck
+      // or dropped entirely) without being a flaky assertion on the exact optimum.
       for (const [seed, bal] of balance) {
-        assert.ok(Math.abs(bal) <= 6, `n=${n} seed ${seed}: shirts/skins imbalance ${bal}, expected within +/-6`);
+        assert.ok(Math.abs(bal) <= 4, `n=${n} seed ${seed}: shirts/skins imbalance ${bal}, expected within +/-4`);
       }
     });
   }
+
+  for (const n of [7, 13, 19]) {
+    for (const skew of [-8, 5]) {
+      await test(`buildSeasonSchedule(${n}, initialBalance seed 1 = ${skew}) — trends back toward zero, not just flat`, () => {
+        const balance = balanceOf(buildSeasonSchedule(n, { initialBalance: new Map([[1, skew]]) }));
+        const seasonDelta = balance.get(1) ?? 0;
+        const finalReal = skew + seasonDelta;
+        assert.ok(
+          Math.abs(finalReal) < Math.abs(skew),
+          `n=${n}: seed 1 started at ${skew}, ended this season at ${finalReal} — expected real improvement, not just holding flat`,
+        );
+      });
+    }
+  }
+
+  await test('optimizeSideBalance: converges to the better of two orientations regardless of the random starting side', () => {
+    // A single match: with seed 1 already real-balance +5, the only way to reduce total |balance|
+    // is to put them on skins — the better orientation is unique (not tied), so this must hold no
+    // matter which side the search's internal randomization happens to start from.
+    const matches: MatchPlan[] = [{ shirts: [1, 2], skins: [3, 4] }];
+    optimizeSideBalance(matches, new Map([[1, 5]]), Math.random);
+    assert.ok(matches[0].skins.includes(1), 'seed 1 (already +5) should end up on skins to reduce total imbalance');
+  });
+
+  await test('optimizeSideBalance: two identical pairings converge to a perfectly balanced pair via exactly one flip', () => {
+    const matches: MatchPlan[] = [
+      { shirts: [1, 2], skins: [3, 4] },
+      { shirts: [1, 2], skins: [3, 4] },
+    ];
+    optimizeSideBalance(matches, new Map(), Math.random);
+    const balance = balanceOf([{ week: 1, matches, byeSeeds: [] }]);
+    for (const [seed, bal] of balance) {
+      assert.equal(bal, 0, `seed ${seed}: expected perfectly balanced (0), got ${bal}`);
+    }
+  });
 
   report();
 }

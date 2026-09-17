@@ -213,33 +213,130 @@ function pickDonorPlayer(matches: MatchPlan[], leftoverTeam: [number, number], s
 // ─── Shirts/skins side balance ─────────────────────────────────────────────────────────────────
 //
 // Which team a match calls "shirts" vs "skins" has no bearing on teammate/opponent coverage —
-// pairKey() and opponentPairsOf() are symmetric in the two labels — so it's decided as a pure
-// tiebreaker pass over pairings the coverage search has already locked in, never something that
-// search optimizes for. Each player's running (shirts count - skins count) is tracked as matches
-// are finalized in schedule order; for each match, whichever of the two possible side assignments
-// leaves its 4 players' balances closer to zero (summed |balance|) is taken, ties keeping the
-// pairing's given team order for determinism.
-function chooseSides(
+// pairKey() and opponentPairsOf() are symmetric in the two labels — so it's decided as a pass over
+// pairings the coverage search has already locked in, never something that search optimizes for.
+//
+// A single match's two possible orientations is chooseSides()'s job — a simple greedy pick used
+// where only one or two matches are in play at once (gauntlet pod labeling, `gauntlet-engine.ts`).
+// A whole season's matches all being simultaneously free to flip (their labels don't affect
+// coverage at all) is enough freedom that a single greedy forward pass can still land far from
+// balanced — optimizeSideBalance() below instead treats the season as one search: repeatedly flip
+// whichever single match's flip reduces the season's total |balance| (seeded by `initialBalance`, a
+// player's real balance carried in from outside this season) the most, until no flip helps.
+//
+// A single-flip hill climb from the pairing step's own given orientation gets stuck: the teammate
+// round-robin (`buildTeammateRounds()`) always lists seed 1's team first, and `bestMatchPairing()`
+// always assigns "first" to `shirts` — so a hill climb starting there finds every one of seed 1's
+// matches locked in a mutual stalemate with that round's partner (flipping helps seed 1 exactly as
+// much as it hurts the partner, a net-zero move the search never takes) long before the season is
+// actually balanced. Randomizing each match's starting orientation before climbing breaks that
+// structural symmetry; running several random restarts and keeping the best guards against any one
+// restart still landing in a bad optimum. With this league's match-per-season counts (well under 30)
+// this converges in a handful of passes per restart.
+const BALANCE_SEARCH_RESTARTS = 8;
+
+/** Swaps `m`'s shirts/skins labels in place and updates `balance` to match (each of the 4 players'
+ * running balance moves by ∓2 — from +1 to -1, or -1 to +1). */
+function flipMatch(m: MatchPlan, balance: Map<number, number>): void {
+  for (const seed of m.shirts) balance.set(seed, (balance.get(seed) ?? 0) - 2);
+  for (const seed of m.skins) balance.set(seed, (balance.get(seed) ?? 0) + 2);
+  [m.shirts, m.skins] = [m.skins, m.shirts];
+}
+
+/** The change in total season |balance| that flipping `m` would cause, without actually flipping it
+ * — negative means flipping improves the total. */
+function flipCostDelta(m: MatchPlan, balance: Map<number, number>): number {
+  let delta = 0;
+  for (const seed of m.shirts) {
+    const bal = balance.get(seed) ?? 0;
+    delta += Math.abs(bal - 2) - Math.abs(bal);
+  }
+  for (const seed of m.skins) {
+    const bal = balance.get(seed) ?? 0;
+    delta += Math.abs(bal + 2) - Math.abs(bal);
+  }
+  return delta;
+}
+
+/** Commits `teamA` as SHIRTS / `teamB` as SKINS into `balance`, then flips (via `flipMatch()`) if
+ * `flipCostDelta()` says the other way round leaves the two teams' combined |balance| smaller — a
+ * tie keeps `teamA` as SHIRTS. The same cost math `optimizeSideBalance()`'s search uses, applied
+ * once instead of hunting for a global optimum: the right choice when only a match or two are ever
+ * in play at once and there's no larger season-wide freedom to exploit (gauntlet pod labeling,
+ * `gauntlet-engine.ts`'s `materializePod()`). */
+export function chooseSides(
   teamA: [number, number],
   teamB: [number, number],
   balance: Map<number, number>,
 ): MatchPlan {
-  const b = (seed: number) => balance.get(seed) ?? 0;
-  const costIfShirts = (team: [number, number]) => Math.abs(b(team[0]) + 1) + Math.abs(b(team[1]) + 1);
-  const costIfSkins = (team: [number, number]) => Math.abs(b(team[0]) - 1) + Math.abs(b(team[1]) - 1);
+  const m: MatchPlan = { shirts: teamA, skins: teamB };
+  for (const seed of teamA) balance.set(seed, (balance.get(seed) ?? 0) + 1);
+  for (const seed of teamB) balance.set(seed, (balance.get(seed) ?? 0) - 1);
+  if (flipCostDelta(m, balance) < 0) flipMatch(m, balance);
+  return m;
+}
 
-  const costAShirtsBSkins = costIfShirts(teamA) + costIfSkins(teamB);
-  const costBShirtsASkins = costIfShirts(teamB) + costIfSkins(teamA);
+/** Total `sum(|balance|)` across every player currently tracked. */
+function totalAbsBalance(balance: Map<number, number>): number {
+  let sum = 0;
+  for (const v of balance.values()) sum += Math.abs(v);
+  return sum;
+}
 
-  const [shirts, skins] = costBShirtsASkins < costAShirtsBSkins ? [teamB, teamA] : [teamA, teamB];
-  for (const seed of shirts) balance.set(seed, b(seed) + 1);
-  for (const seed of skins) balance.set(seed, b(seed) - 1);
-  return { shirts, skins };
+/** One hill climb to a local optimum, starting from `matches`' current orientation and `balance`'s
+ * current values (both mutated in place): repeatedly flips whichever single match most reduces the
+ * total, breaking ties uniformly via `rand`, until no flip improves. */
+function hillClimbSideBalance(matches: MatchPlan[], balance: Map<number, number>, rand: () => number): void {
+  for (;;) {
+    let bestIdx = -1;
+    let bestDelta = 0;
+    let tieCount = 0;
+    for (let i = 0; i < matches.length; i++) {
+      const delta = flipCostDelta(matches[i], balance);
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestIdx = i;
+        tieCount = 1;
+      } else if (delta === bestDelta && delta < 0) {
+        tieCount++;
+        if (shouldTakeTiedCandidate(tieCount, rand)) bestIdx = i;
+      }
+    }
+    if (bestIdx === -1) return;
+    flipMatch(matches[bestIdx], balance);
+  }
+}
+
+/** Runs `BALANCE_SEARCH_RESTARTS` independent hill climbs (see the comment above), each from its own
+ * randomized starting orientation seeded by `initialBalance`, and leaves `matches` (mutated in place)
+ * at whichever restart reached the lowest total `sum(|balance|)`. */
+export function optimizeSideBalance(matches: MatchPlan[], initialBalance: Map<number, number>, rand: () => number): void {
+  let best: { cost: number; orientations: MatchPlan[] } | null = null;
+
+  for (let restart = 0; restart < BALANCE_SEARCH_RESTARTS; restart++) {
+    const balance = new Map(initialBalance);
+    for (const m of matches) {
+      if (rand() < 0.5) [m.shirts, m.skins] = [m.skins, m.shirts];
+      for (const seed of m.shirts) balance.set(seed, (balance.get(seed) ?? 0) + 1);
+      for (const seed of m.skins) balance.set(seed, (balance.get(seed) ?? 0) - 1);
+    }
+
+    hillClimbSideBalance(matches, balance, rand);
+
+    const cost = totalAbsBalance(balance);
+    if (!best || cost < best.cost) {
+      best = { cost, orientations: matches.map((m) => ({ shirts: m.shirts, skins: m.skins })) };
+    }
+  }
+
+  matches.forEach((m, i) => {
+    m.shirts = best!.orientations[i].shirts;
+    m.skins = best!.orientations[i].skins;
+  });
 }
 
 function attemptSchedule(teammateRounds: TeammateRound[], policy: DoubleheaderPolicy, rand: () => number): WeekPlan[] {
   const seenOpponentPairs = new Set<string>();
-  const sideBalance = new Map<number, number>();
   const weeks: WeekPlan[] = [];
 
   for (const round of teammateRounds) {
@@ -248,16 +345,16 @@ function attemptSchedule(teammateRounds: TeammateRound[], policy: DoubleheaderPo
     const individualLeftover = round.byeSeed;
 
     const { matches: pairedMatches } = bestMatchPairing(teams, seenOpponentPairs, rand);
-    const matches = pairedMatches.map((m) => chooseSides(m.shirts, m.skins, sideBalance));
+    const matches: MatchPlan[] = pairedMatches.map((m) => ({ shirts: m.shirts, skins: m.skins }));
     const byeSeeds: number[] = [];
 
     if (leftoverTeam && policy === 'auto') {
       if (individualLeftover != null) {
         const donor = pickDonorPlayer(matches, leftoverTeam, seenOpponentPairs, rand);
-        matches.push(chooseSides(leftoverTeam, [individualLeftover, donor], sideBalance));
+        matches.push({ shirts: leftoverTeam, skins: [individualLeftover, donor] });
       } else {
         const donorTeam = pickDonorTeam(matches, leftoverTeam, seenOpponentPairs, rand);
-        matches.push(chooseSides(leftoverTeam, donorTeam, sideBalance));
+        matches.push({ shirts: leftoverTeam, skins: donorTeam });
       }
     } else {
       if (leftoverTeam) byeSeeds.push(...leftoverTeam);
@@ -310,7 +407,10 @@ const MAX_ATTEMPTS = 200;
 export const MIN_SEED_COUNT = 7;
 export const MAX_SEED_COUNT = 19;
 
-export function buildSeasonSchedule(seedCount: number, options?: { doubleheaderPolicy?: DoubleheaderPolicy }): WeekPlan[] {
+export function buildSeasonSchedule(
+  seedCount: number,
+  options?: { doubleheaderPolicy?: DoubleheaderPolicy; initialBalance?: Map<number, number> },
+): WeekPlan[] {
   if (seedCount < MIN_SEED_COUNT || seedCount > MAX_SEED_COUNT) {
     throw new Error(
       `buildSeasonSchedule: seedCount=${seedCount} is outside the supported range (${MIN_SEED_COUNT}-${MAX_SEED_COUNT})`,
@@ -318,6 +418,7 @@ export function buildSeasonSchedule(seedCount: number, options?: { doubleheaderP
   }
 
   const policy = options?.doubleheaderPolicy ?? 'auto';
+  const initialBalance = options?.initialBalance ?? new Map<number, number>();
   const teammateRounds = buildTeammateRounds(seedCount);
 
   if (policy === 'never' && teammateRounds.some((r) => r.teams.length % 2 === 1)) {
@@ -329,7 +430,17 @@ export function buildSeasonSchedule(seedCount: number, options?: { doubleheaderP
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const rand = mulberry32(seedCount * 100003 + attempt);
     const weeks = attemptSchedule(teammateRounds, policy, rand);
-    if (hasFullCoverage(weeks, seedCount)) return weeks;
+    if (hasFullCoverage(weeks, seedCount)) {
+      // Side-balance labeling doesn't affect coverage (see the comment above chooseSides()), so it's
+      // only worth optimizing once a schedule has already passed the coverage check — a discarded
+      // attempt would otherwise pay for the full local search for nothing.
+      optimizeSideBalance(
+        weeks.flatMap((w) => w.matches),
+        initialBalance,
+        rand,
+      );
+      return weeks;
+    }
   }
 
   throw new Error(

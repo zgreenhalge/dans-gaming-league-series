@@ -20,7 +20,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildRosterSchedule } from './season-schedule-engine';
 import type { DoubleheaderPolicy } from './season-schedule';
-import { getSeasonScheduleDraft, getSeasonRoster, toDraftScheduleWeeks } from './queries';
+import { getSeasonScheduleDraft, getSeasonRoster, getSideBalance, toDraftScheduleWeeks } from './queries';
 import {
   validateDraftIntegrity,
   validateDraftCompleteness,
@@ -94,14 +94,20 @@ function toDraftWeeksPayload(weeks: DraftScheduleWeek[]) {
  * (it depends on confirm/materialize existing first) and must not be reached for such a season in
  * the meantime. Refuses with `ScheduleAlreadyMaterializedError` once the season's schedule has been
  * confirmed — `season.status === 'UPCOMING'` alone doesn't rule this out, since confirming
- * deliberately doesn't change status (that's a separate admin action). */
+ * deliberately doesn't change status (that's a separate admin action).
+ *
+ * Seeds the generator's shirts/skins optimizer with each roster player's real career balance
+ * (`getSideBalance()`) rather than starting every player at zero — a player already skewed from
+ * past seasons trends back toward even instead of this new season treating their history as if it
+ * never happened. */
 export async function generateSeasonScheduleDraft(
   supabaseAdmin: SupabaseClient,
   seasonId: number,
   playerIds: number[],
   options?: { doubleheaderPolicy?: DoubleheaderPolicy },
 ): Promise<void> {
-  const plan = buildRosterSchedule(playerIds, options);
+  const initialBalance = await getSideBalance(playerIds);
+  const plan = buildRosterSchedule(playerIds, { ...options, initialBalance });
 
   for (const week of plan) {
     if (week.byePlayerIds.length > 1) {

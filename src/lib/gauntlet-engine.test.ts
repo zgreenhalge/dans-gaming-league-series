@@ -122,6 +122,38 @@ async function main() {
   assert.equal(db.gauntlet_pods.find((p) => p.id === 900)!.match2_id, null);
 });
 
+  await test('materializePod: SHIRTS/SKINS choice favors whichever pair keeps real career balance closer to zero', async () => {
+    const db: FakeDb = {
+      seasons: [],
+      weeks: [{ id: 1, season_id: 10, week_number: 1, bye_player_id: null }],
+      matches: [
+        { id: 800, week_id: 1, match_number: 1, final_score: '13-9', is_playoff_game: false },
+        { id: 801, week_id: 1, match_number: 2, final_score: '13-11', is_playoff_game: false },
+      ],
+      // Player 1 (seed 1, the pod's top seed) already has a real +2 SHIRTS/SKINS career balance from
+      // played regular-season matches — enough that the balance-aware choice should land them on
+      // SKINS instead, even though they're the pod's top-ranked occupant.
+      player_match_stats: [
+        { id: 1, match_id: 800, player_id: 1, faction: 'SHIRTS', is_win: true },
+        { id: 2, match_id: 801, player_id: 1, faction: 'SHIRTS', is_win: true },
+      ],
+      gauntlet_pods: [{ id: 900, season_id: 20, round_number: 1, pod_index: 0, advance_rule: 'single', is_final: false, week_id: null, match1_id: null, match2_id: null }],
+      gauntlet_pod_slots: [],
+      players: makePlayers([1, 2, 3, 4]),
+    };
+    const client = installFixture(db);
+
+    const seedByPlayer = new Map([[1, 1], [2, 2], [3, 3], [4, 4]]);
+    await materializePod(client as never, { id: 900, season_id: 20, round_number: 1 }, [
+      { player_id: 1 }, { player_id: 2 }, { player_id: 3 }, { player_id: 4 },
+    ], seedByPlayer);
+
+    const podWeekId = db.gauntlet_pods.find((p) => p.id === 900)!.week_id;
+    const [m1] = [...db.matches].filter((m) => m.week_id === podWeekId).sort((a, b) => (a.match_number as number) - (b.match_number as number));
+    const game1 = db.player_match_stats.filter((s) => s.match_id === m1.id);
+    assert.equal(game1.find((s) => s.player_id === 1)!.faction, 'SKINS', 'player 1 already +2 real balance should land on SKINS, not SHIRTS');
+  });
+
 // ─── resolveAndPropagate ─────────────────────────────────────────────────────
 
 function twoPodFixture(): FakeDb {

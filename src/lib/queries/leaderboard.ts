@@ -1,9 +1,9 @@
 import { cache } from 'react';
 import { supabase } from '../supabase';
-import type { LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
+import type { Faction, LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
 import { canonicalSort, deriveRates, deriveRwr, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
-import { asPage, fetchAllPages, getWeekLookup } from './_shared';
+import { asPage, batchedIn, fetchAllPages, getWeekLookup, resolveMatchSeasons } from './_shared';
 
 
 function n(v: number | null | undefined): number {
@@ -195,6 +195,59 @@ export async function getSeasonLeaderboard(
   const unseenIds = new Set([...rosterIds].filter((id) => !playedIds.has(id)));
   if (unseenIds.size > 0) result.push(...zeroStatRows(seasonId, unseenIds, playersById));
   return result.sort(canonicalSort);
+}
+
+/**
+ * Each player's real running (SHIRTS count − SKINS count) across every played match, regular season
+ * and gauntlet unified — the actual career exposure `initialBalance` (season-schedule-engine.ts) and
+ * gauntlet pod labeling (gauntlet-engine.ts) draw from, so a schedule/pod decision reflects a
+ * player's real history instead of resetting to zero every time. Players not yet in `playerIds`'
+ * history default to 0 rather than being absent from the map.
+ *
+ * `includeUnplayedInSeasonId`, when passed, also counts that one season's not-yet-played matches —
+ * every `player_match_stats` row a gauntlet season has exists only because a pod already locked in
+ * its faction split (`materializePod()`), so an unplayed row there is a real decision already made,
+ * not a placeholder still waiting to be assigned. A confirmed-but-unplayed regular season's rows are
+ * always excluded (the normal `isPlayedScore()` gate) since those are exactly that kind of
+ * placeholder, scheduled but not yet actually happened.
+ */
+export async function getSideBalance(
+  playerIds: number[],
+  opts?: { includeUnplayedInSeasonId?: number },
+): Promise<Map<number, number>> {
+  const balance = new Map<number, number>(playerIds.map((id) => [id, 0]));
+  if (playerIds.length === 0) return balance;
+
+  // resolveMatchSeasons() already resolves + caches every played match's season — reusing it here
+  // means every pod's getSideBalance() call within one gauntlet round shares that one cached read
+  // instead of each re-scanning the whole `matches` table itself.
+  const eligibleMatchIds = new Set((await resolveMatchSeasons()).keys());
+
+  if (opts?.includeUnplayedInSeasonId != null) {
+    const weekLookup = await getWeekLookup([opts.includeUnplayedInSeasonId]);
+    const weekIds = [...weekLookup.keys()];
+    if (weekIds.length > 0) {
+      const { data: seasonMatches, error } = await supabase.from('matches').select('id').in('week_id', weekIds);
+      if (error) throw error;
+      for (const m of (seasonMatches ?? []) as { id: number }[]) eligibleMatchIds.add(m.id);
+    }
+  }
+  if (eligibleMatchIds.size === 0) return balance;
+
+  const stats = await batchedIn<{ player_id: number; faction: Faction; match_id: number }>(
+    'player_match_stats',
+    'match_id',
+    [...eligibleMatchIds],
+    'player_id, faction, match_id',
+  );
+
+  const idSet = new Set(playerIds);
+  for (const s of stats) {
+    if (!idSet.has(s.player_id)) continue;
+    const delta = s.faction === 'SHIRTS' ? 1 : -1;
+    balance.set(s.player_id, (balance.get(s.player_id) ?? 0) + delta);
+  }
+  return balance;
 }
 
 /**
