@@ -69,26 +69,21 @@ async function getSeedByPlayer(supabaseAdmin: SupabaseClient, seasonId: number):
 /** Creates the pod's two `matches` rows (+ 4 `player_match_stats` rows each) and links them back
  * onto `gauntlet_pods`. Pairing: rank 0-3 by seed (best first), game 1 = {0+1 vs 2+3}, game 2 =
  * {0+2 vs 1+3} — two distinct pairings so exactly one player goes 2-0 and one goes 0-2. Faction:
- * which of each game's two fixed pairs is SHIRTS vs SKINS has no bearing on that guarantee, so it's
- * chosen the same balance-aware way regular-season generation chooses it (`chooseSides()`,
- * `season-schedule.ts`) — each game in turn, cheapest orientation against the 4 occupants' real
- * running SHIRTS/SKINS balance (`getSideBalance()`, unified across regular season and gauntlet play,
- * including this same gauntlet's own already-materialized-but-unplayed pods). */
-export async function materializePod(
+ * which of each game's two fixed pairs is SHIRTS vs SKINS has no bearing on that guarantee, so each
+ * game in turn takes whichever orientation is cheaper against the 4 occupants' real running
+ * SHIRTS/SKINS balance (`chooseSides()`, `season-schedule.ts` — the same cost math regular-season
+ * generation's season-wide search builds on, applied directly here since only a game or two are ever
+ * in play at once). The balance itself (`getSideBalance()`) is unified across regular season and
+ * gauntlet play, including this same gauntlet's own already-materialized-but-unplayed pods. */
+/** Resolves the pod's round week (creating it if this is the round's first materializing pod) and
+ * the next free match_number within it. Select-then-insert, not a DB-enforced upsert (weeks has no
+ * unique constraint on (season_id, week_number)) — two concurrent first-materializations of the same
+ * round could each insert their own week row. The gauntlet_pods claim below still prevents duplicate
+ * matches/stats in that case; the worst outcome is an orphaned empty week row for the losing caller. */
+async function resolveWeekAndNextMatchNumber(
   supabaseAdmin: SupabaseClient,
-  pod: Pick<GauntletPodRow, 'id' | 'season_id' | 'round_number'>,
-  occupants: { player_id: number }[],
-  seedByPlayer: Map<number, number>,
-): Promise<void> {
-  const ranked = [...occupants].sort(
-    (a, b) => (seedByPlayer.get(a.player_id) ?? Infinity) - (seedByPlayer.get(b.player_id) ?? Infinity),
-  );
-  const [r0, r1, r2, r3] = ranked;
-
-  // Select-then-insert, not a DB-enforced upsert (weeks has no unique constraint on
-  // (season_id, week_number)) — two concurrent first-materializations of the same round could each
-  // insert their own week row. The gauntlet_pods claim below still prevents duplicate matches/stats
-  // in that case; the worst outcome is an orphaned empty week row for the losing caller.
+  pod: Pick<GauntletPodRow, 'season_id' | 'round_number'>,
+): Promise<{ weekId: number; nextMatchNumber: number }> {
   const { data: existingWeek, error: weekSelErr } = await supabaseAdmin
     .from('weeks')
     .select('id')
@@ -116,10 +111,29 @@ export async function materializePod(
   const nextMatchNumber =
     1 + Math.max(0, ...((existingMatches ?? []) as { match_number: number }[]).map((m) => m.match_number));
 
-  const balance = await getSideBalance(
-    ranked.map((o) => o.player_id),
-    { includeUnplayedInSeasonId: pod.season_id },
+  return { weekId, nextMatchNumber };
+}
+
+export async function materializePod(
+  supabaseAdmin: SupabaseClient,
+  pod: Pick<GauntletPodRow, 'id' | 'season_id' | 'round_number'>,
+  occupants: { player_id: number }[],
+  seedByPlayer: Map<number, number>,
+): Promise<void> {
+  const ranked = [...occupants].sort(
+    (a, b) => (seedByPlayer.get(a.player_id) ?? Infinity) - (seedByPlayer.get(b.player_id) ?? Infinity),
   );
+  const [r0, r1, r2, r3] = ranked;
+
+  // Independent reads — run concurrently rather than one after another.
+  const [{ weekId, nextMatchNumber }, balance] = await Promise.all([
+    resolveWeekAndNextMatchNumber(supabaseAdmin, pod),
+    getSideBalance(
+      ranked.map((o) => o.player_id),
+      { includeUnplayedInSeasonId: pod.season_id },
+    ),
+  ]);
+
   const games: { shirts: [number, number]; skins: [number, number] }[] = [
     chooseSides([r0.player_id, r1.player_id], [r2.player_id, r3.player_id], balance),
     chooseSides([r0.player_id, r2.player_id], [r1.player_id, r3.player_id], balance),

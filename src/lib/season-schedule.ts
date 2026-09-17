@@ -235,30 +235,6 @@ function pickDonorPlayer(matches: MatchPlan[], leftoverTeam: [number, number], s
 // this converges in a handful of passes per restart.
 const BALANCE_SEARCH_RESTARTS = 8;
 
-/** Picks whichever of `teamA`/`teamB` should be SHIRTS to leave both teams' combined |balance|
- * (post-match) smaller, breaking a tie by keeping `teamA` as SHIRTS — commits the result into
- * `balance` before returning. A simple greedy pick, not a search: the right choice when only a
- * match or two are in play at once and there's no larger season-wide freedom to exploit (gauntlet
- * pod labeling, `gauntlet-engine.ts`'s `materializePod()`) — `optimizeSideBalance()` above is the
- * season-wide equivalent for `attemptSchedule()`'s much larger match set. */
-export function chooseSides(
-  teamA: [number, number],
-  teamB: [number, number],
-  balance: Map<number, number>,
-): MatchPlan {
-  const b = (seed: number) => balance.get(seed) ?? 0;
-  const costIfShirts = (team: [number, number]) => Math.abs(b(team[0]) + 1) + Math.abs(b(team[1]) + 1);
-  const costIfSkins = (team: [number, number]) => Math.abs(b(team[0]) - 1) + Math.abs(b(team[1]) - 1);
-
-  const costAShirtsBSkins = costIfShirts(teamA) + costIfSkins(teamB);
-  const costBShirtsASkins = costIfShirts(teamB) + costIfSkins(teamA);
-
-  const [shirts, skins] = costBShirtsASkins < costAShirtsBSkins ? [teamB, teamA] : [teamA, teamB];
-  for (const seed of shirts) balance.set(seed, b(seed) + 1);
-  for (const seed of skins) balance.set(seed, b(seed) - 1);
-  return { shirts, skins };
-}
-
 /** Swaps `m`'s shirts/skins labels in place and updates `balance` to match (each of the 4 players'
  * running balance moves by ∓2 — from +1 to -1, or -1 to +1). */
 function flipMatch(m: MatchPlan, balance: Map<number, number>): void {
@@ -280,6 +256,24 @@ function flipCostDelta(m: MatchPlan, balance: Map<number, number>): number {
     delta += Math.abs(bal + 2) - Math.abs(bal);
   }
   return delta;
+}
+
+/** Commits `teamA` as SHIRTS / `teamB` as SKINS into `balance`, then flips (via `flipMatch()`) if
+ * `flipCostDelta()` says the other way round leaves the two teams' combined |balance| smaller — a
+ * tie keeps `teamA` as SHIRTS. The same cost math `optimizeSideBalance()`'s search uses, applied
+ * once instead of hunting for a global optimum: the right choice when only a match or two are ever
+ * in play at once and there's no larger season-wide freedom to exploit (gauntlet pod labeling,
+ * `gauntlet-engine.ts`'s `materializePod()`). */
+export function chooseSides(
+  teamA: [number, number],
+  teamB: [number, number],
+  balance: Map<number, number>,
+): MatchPlan {
+  const m: MatchPlan = { shirts: teamA, skins: teamB };
+  for (const seed of teamA) balance.set(seed, (balance.get(seed) ?? 0) + 1);
+  for (const seed of teamB) balance.set(seed, (balance.get(seed) ?? 0) - 1);
+  if (flipCostDelta(m, balance) < 0) flipMatch(m, balance);
+  return m;
 }
 
 /** Total `sum(|balance|)` across every player currently tracked. */
@@ -341,12 +335,7 @@ export function optimizeSideBalance(matches: MatchPlan[], initialBalance: Map<nu
   });
 }
 
-function attemptSchedule(
-  teammateRounds: TeammateRound[],
-  policy: DoubleheaderPolicy,
-  rand: () => number,
-  initialBalance: Map<number, number>,
-): WeekPlan[] {
+function attemptSchedule(teammateRounds: TeammateRound[], policy: DoubleheaderPolicy, rand: () => number): WeekPlan[] {
   const seenOpponentPairs = new Set<string>();
   const weeks: WeekPlan[] = [];
 
@@ -376,12 +365,6 @@ function attemptSchedule(
 
     weeks.push({ week: round.round, matches, byeSeeds });
   }
-
-  optimizeSideBalance(
-    weeks.flatMap((w) => w.matches),
-    initialBalance,
-    rand,
-  );
 
   return weeks;
 }
@@ -446,8 +429,18 @@ export function buildSeasonSchedule(
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const rand = mulberry32(seedCount * 100003 + attempt);
-    const weeks = attemptSchedule(teammateRounds, policy, rand, initialBalance);
-    if (hasFullCoverage(weeks, seedCount)) return weeks;
+    const weeks = attemptSchedule(teammateRounds, policy, rand);
+    if (hasFullCoverage(weeks, seedCount)) {
+      // Side-balance labeling doesn't affect coverage (see the comment above chooseSides()), so it's
+      // only worth optimizing once a schedule has already passed the coverage check — a discarded
+      // attempt would otherwise pay for the full local search for nothing.
+      optimizeSideBalance(
+        weeks.flatMap((w) => w.matches),
+        initialBalance,
+        rand,
+      );
+      return weeks;
+    }
   }
 
   throw new Error(

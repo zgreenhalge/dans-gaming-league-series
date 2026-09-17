@@ -3,7 +3,7 @@ import { supabase } from '../supabase';
 import type { Faction, LeaderboardRow, LeaderboardRowWithId, Player } from '../types';
 import { canonicalSort, deriveRates, deriveRwr, isPlayedScore } from '../util';
 import { getPlayersById } from './player';
-import { asPage, batchedIn, fetchAllPages, getWeekLookup } from './_shared';
+import { asPage, batchedIn, fetchAllPages, getWeekLookup, resolveMatchSeasons } from './_shared';
 
 
 function n(v: number | null | undefined): number {
@@ -218,24 +218,26 @@ export async function getSideBalance(
   const balance = new Map<number, number>(playerIds.map((id) => [id, 0]));
   if (playerIds.length === 0) return balance;
 
-  const [{ data: matches, error: mErr }, weekLookup] = await Promise.all([
-    supabase.from('matches').select('id, week_id, final_score'),
-    getWeekLookup(),
-  ]);
-  if (mErr) throw mErr;
+  // resolveMatchSeasons() already resolves + caches every played match's season — reusing it here
+  // means every pod's getSideBalance() call within one gauntlet round shares that one cached read
+  // instead of each re-scanning the whole `matches` table itself.
+  const eligibleMatchIds = new Set((await resolveMatchSeasons()).keys());
 
-  const eligibleMatchIds = ((matches ?? []) as { id: number; week_id: number; final_score: string | null }[])
-    .filter(
-      (m) =>
-        isPlayedScore(m.final_score) || weekLookup.get(m.week_id)?.season_id === opts?.includeUnplayedInSeasonId,
-    )
-    .map((m) => m.id);
-  if (eligibleMatchIds.length === 0) return balance;
+  if (opts?.includeUnplayedInSeasonId != null) {
+    const weekLookup = await getWeekLookup([opts.includeUnplayedInSeasonId]);
+    const weekIds = [...weekLookup.keys()];
+    if (weekIds.length > 0) {
+      const { data: seasonMatches, error } = await supabase.from('matches').select('id').in('week_id', weekIds);
+      if (error) throw error;
+      for (const m of (seasonMatches ?? []) as { id: number }[]) eligibleMatchIds.add(m.id);
+    }
+  }
+  if (eligibleMatchIds.size === 0) return balance;
 
   const stats = await batchedIn<{ player_id: number; faction: Faction; match_id: number }>(
     'player_match_stats',
     'match_id',
-    eligibleMatchIds,
+    [...eligibleMatchIds],
     'player_id, faction, match_id',
   );
 
