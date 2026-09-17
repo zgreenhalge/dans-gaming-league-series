@@ -288,13 +288,14 @@ export function parseDemoSabremetrics(
   }
   const reloadStats = collectRoundsDropped(reloadEvents, reloadStateRows, context, steamIds);
 
-  // Round economy (#279, #519): classifies each player's eco/half-buy/force-buy/full-buy tier per
-  // round from CCSPlayerPawn.m_unFreezetimeEndEquipmentValue (confirmed against a real DGLS demo)
-  // and CCSPlayerController.m_iAccount (cash remaining after buying — the force-vs-half signal,
-  // not yet validated against a real demo; a bad field name here fails soft into "0 remaining",
-  // which only ever mis-splits force_buy/half_buy, never eco/full_buy) at each round's
-  // freeze-time-end, sampled once per round (not per shot) — same single-anchor-read shape as
-  // sideInference.ts. Wrapped defensively like the reload/inventory tick reads above.
+  // Round economy (#279, #519): classifies each player's save/eco/force/full-buy tier per round
+  // from CCSPlayerPawn.m_unFreezetimeEndEquipmentValue (confirmed against a real DGLS demo) and
+  // CCSPlayerController.m_iAccount (cash remaining after buying — the primary signal for
+  // everything except full_buy, not yet validated against a real demo; a bad field name here
+  // fails soft into "0 remaining", which reads as "spent the bank down" and would misclassify
+  // most non-full-buy rounds as force) at each round's freeze-time-end, sampled once per round
+  // (not per shot) — same single-anchor-read shape as sideInference.ts. Wrapped defensively like
+  // the reload/inventory tick reads above.
   const economyTicks = neededEconomyTicks(freezeEndEvents, context);
   let equipmentRows: PlayerEquipmentRow[] = [];
   if (economyTicks.length > 0) {

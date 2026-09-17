@@ -1,15 +1,15 @@
 import type { MatchContext } from './matchContext';
 import { roundOf, type RoundBounds } from './_shared';
 
-export type EconomyType = 'eco' | 'half_buy' | 'force_buy' | 'full_buy';
+export type EconomyType = 'save' | 'eco' | 'force' | 'full_buy';
 
 /** Display label for each tier — the one place this mapping lives, shared by the Economy sub-tab's
  *  tier picker/table (`SabremetricsLeaderboardView.tsx`) and the round-by-round chart's tooltip
  *  (`RoundEconomyChart.tsx`). */
 export const ECONOMY_TYPE_LABEL: Record<EconomyType, string> = {
+  save: 'Save',
   eco: 'Eco',
-  half_buy: 'Half Buy',
-  force_buy: 'Force Buy',
+  force: 'Force',
   full_buy: 'Full Buy',
 };
 
@@ -18,26 +18,25 @@ export const ECONOMY_TYPE_LABEL: Record<EconomyType, string> = {
 // sub-tab's tier picker can explain them (`EconomyFilterSelect`'s info tooltip,
 // `SabremetricsLeaderboardView.tsx`) from the same numbers `classifyEconomy()` actually uses.
 //
-// Eco and the full-buy floor are the two thresholds a player's raw equipment value alone can
-// resolve. Full-buy is side-specific: a CT's complete kit costs meaningfully more than a T's
-// (Kevlar+Helmet $1000 vs Kevlar $650, plus a CT-only $400 defuse kit — ~$750 more before
-// weapons even enter it), so one flat threshold either misses cheap-but-complete T buys or lets
-// an armor+utility-only CT half-buy read as "full."
-export const ECO_MAX = 2000;
+// Full-buy is decided by equipment value alone, and checked first — a complete kit is a full buy
+// no matter how much money is left over. Full-buy is side-specific: a CT's complete kit costs
+// meaningfully more than a T's (Kevlar+Helmet $1000 vs Kevlar $650, plus a CT-only $400 defuse
+// kit — ~$750 more before weapons even enter it), so one flat threshold either misses
+// cheap-but-complete T buys or lets an armor+utility-only CT round read as "full."
 export const FULL_BUY_MIN_T = 3800;
 export const FULL_BUY_MIN_CT = 4400;
 
-/** A player who ends freeze time with less than this left over spent essentially everything they
- *  had trying to gear up — a force buy — rather than deliberately holding money back for a
- *  future round (a half buy/save). This is the one signal equipment value alone can't provide:
- *  two players can land on an identical mid-tier loadout, one because they spent down to nothing
- *  scraping a kit together under pressure, the other because they chose to buy conservatively
- *  while sitting on a cushion. See https://www.leetify.com/blog/understanding-csgo-economy/ and
- *  https://steamcommunity.com/sharedfiles/filedetails/?id=3131965472 for the community-standard
- *  version of this framing (written for 5v5 team economy; adapted here to a per-player read,
- *  matching every other collector in this codebase).
- */
-export const FORCE_BUY_MAX_REMAINING = 1000;
+/** Everything short of a full buy is classified by *bank balance* first, not equipment value:
+ *  keeping at least this much in reserve after buying means the round was a deliberate,
+ *  controlled buy (`save`/`eco` below); dropping under it means the round was a `force` —
+ *  spending down into a risky low-cash position without ever completing a kit. Only within the
+ *  "kept the bank healthy" branch does equipment value further split `save` (barely spent) from
+ *  `eco` (spent something real) — see `SAVE_EQUIP_MAX`. */
+export const BANK_MIN = 2000;
+
+/** Within the "kept `BANK_MIN`+ in reserve" branch, equipment value under this is `save` (bought
+ *  next to nothing); at or above it is `eco` (spent a real amount while still banking money). */
+export const SAVE_EQUIP_MAX = 1000;
 
 export interface RoundFreezeEndRow {
   tick: number;
@@ -49,8 +48,8 @@ export interface PlayerEquipmentRow {
   steamid: string;
   equipmentValue: number;
   /** Cash left on hand after buying, at the same freeze-time-end tick as `equipmentValue`
-   *  (`CCSPlayerController.m_iAccount`) — the force-buy-vs-half-buy signal, see
-   *  `FORCE_BUY_MAX_REMAINING`. */
+   *  (`CCSPlayerController.m_iAccount`) — the primary signal splitting `force` from `save`/`eco`,
+   *  see `BANK_MIN`. */
   remainingCash: number;
 }
 
@@ -60,10 +59,15 @@ export function fullBuyMin(side: 'CT' | 'T'): number {
   return side === 'CT' ? FULL_BUY_MIN_CT : FULL_BUY_MIN_T;
 }
 
+/** A complete kit is `full_buy` regardless of what's left in the bank; short of that, the round is
+ *  first split by whether the bank stayed healthy (`save`/`eco`) or got spent down (`force`), and
+ *  only within the healthy-bank branch does equipment value further distinguish barely-bought
+ *  (`save`) from a real partial buy (`eco`). See `BANK_MIN`/`SAVE_EQUIP_MAX`'s own comments for
+ *  the reasoning behind each cut. */
 export function classifyEconomy(equipmentValue: number, remainingCash: number, side: 'CT' | 'T'): EconomyType {
-  if (equipmentValue < ECO_MAX) return 'eco';
   if (equipmentValue >= fullBuyMin(side)) return 'full_buy';
-  return remainingCash < FORCE_BUY_MAX_REMAINING ? 'force_buy' : 'half_buy';
+  if (remainingCash < BANK_MIN) return 'force';
+  return equipmentValue < SAVE_EQUIP_MAX ? 'save' : 'eco';
 }
 
 export interface RoundEconomyFactRow {

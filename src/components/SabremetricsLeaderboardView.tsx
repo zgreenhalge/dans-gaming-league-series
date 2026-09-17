@@ -38,7 +38,7 @@ import {
   weaponDisplayName, killWeaponCategory, KILL_WEAPON_CATEGORIES, KILL_WEAPON_CATEGORY_LABEL,
   type KillWeaponCategory,
 } from '@/lib/parsers/weaponClasses';
-import { ECONOMY_TYPE_LABEL, ECO_MAX, FULL_BUY_MIN_T, FULL_BUY_MIN_CT, FORCE_BUY_MAX_REMAINING } from '@/lib/parsers/economy';
+import { ECONOMY_TYPE_LABEL, FULL_BUY_MIN_T, FULL_BUY_MIN_CT, BANK_MIN, SAVE_EQUIP_MAX } from '@/lib/parsers/economy';
 import { InfoTooltip } from './InfoTooltip';
 import { aggregatePerSideStats, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import type { RoundHistoryEntry } from '@/lib/types';
@@ -622,9 +622,9 @@ function WeaponsTable({ aggregated, kills, weaponClassStats, selectedFilter, sin
 
 const ECONOMY_TIERS: { type: string; label: string }[] = [
   { type: ALL_ECONOMY_TIERS, label: 'All Rounds' },
+  { type: 'save', label: ECONOMY_TYPE_LABEL.save },
   { type: 'eco', label: ECONOMY_TYPE_LABEL.eco },
-  { type: 'half_buy', label: ECONOMY_TYPE_LABEL.half_buy },
-  { type: 'force_buy', label: ECONOMY_TYPE_LABEL.force_buy },
+  { type: 'force', label: ECONOMY_TYPE_LABEL.force },
   { type: 'full_buy', label: ECONOMY_TYPE_LABEL.full_buy },
 ];
 
@@ -642,20 +642,22 @@ function EconomyFilterSelect({ value, onChange }: {
         Classified per player from their equipment value (weapons, armor, utility) and cash left
         over, both at freeze-time end:
         <br />
-        {ECONOMY_TYPE_LABEL.eco} — equipment under ${ECO_MAX.toLocaleString()}
-        <br />
         {ECONOMY_TYPE_LABEL.full_buy} — equipment at or above ${FULL_BUY_MIN_T.toLocaleString()} (T)
         / ${FULL_BUY_MIN_CT.toLocaleString()} (CT) — a CT&rsquo;s complete kit costs more (helmet +
-        defuse kit)
+        defuse kit) — always full buy, no matter what&rsquo;s left over
         <br />
-        Between those two, it&rsquo;s a real but incomplete loadout — split by cash left over, not
-        equipment value:
+        Short of that, it&rsquo;s split first by cash left over, not equipment value:
         <br />
-        {ECONOMY_TYPE_LABEL.force_buy} — under ${FORCE_BUY_MAX_REMAINING.toLocaleString()} left
-        (spent nearly everything)
+        {ECONOMY_TYPE_LABEL.force} — under ${BANK_MIN.toLocaleString()} left (spent the bank down
+        without completing a kit)
         <br />
-        {ECONOMY_TYPE_LABEL.half_buy} — ${FORCE_BUY_MAX_REMAINING.toLocaleString()}+ left (bought
-        conservatively, saved the rest)
+        ${BANK_MIN.toLocaleString()}+ left (kept the bank healthy) splits again by equipment value:
+        <br />
+        {ECONOMY_TYPE_LABEL.save} — under ${SAVE_EQUIP_MAX.toLocaleString()} (bought next to
+        nothing)
+        <br />
+        {ECONOMY_TYPE_LABEL.eco} — ${SAVE_EQUIP_MAX.toLocaleString()}+ (a real partial buy, still
+        banking money)
       </InfoTooltip>
       <select
         value={value}
