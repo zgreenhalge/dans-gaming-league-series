@@ -135,6 +135,11 @@ export default function CombinedSeasonTabView({
       });
     return () => {
       cancelled = true;
+      // A switch away before this fetch settles skips the `!cancelled` branch above, which would
+      // otherwise leave `loadingKind` stuck at this tab forever — the guard at the top of this effect
+      // would then treat a later switch back as "already loading" and never fetch again. Only clears
+      // it if it's still this tab's own (a newer effect run may have already moved it on).
+      setLoadingKind((k) => (k === topTab ? null : k));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topTab, retryNonce, regularSeasonId, gauntletSeasonId, seasonNumber]);

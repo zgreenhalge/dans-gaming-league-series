@@ -430,6 +430,10 @@ export function deriveGauntletSeasonLeaderboard(
     for (const match of round.matches) {
       if (!isPlayedScore(match.final_score)) continue;
       for (const s of [...match.shirts_stats, ...match.skins_stats]) {
+        // Matches getGauntletSeasonLeaderboard()'s own `if (!player) continue` — a player_match_stats
+        // row with an unresolved player_id (nullable FK) never gets a leaderboard row there, so this
+        // derivation excludes it too, rather than surfacing a spurious `#<id>`-named row.
+        if (!playersById.has(s.player_id)) continue;
         const agg = byPlayer.get(s.player_id) ?? {
           player_id: s.player_id,
           player_name: s.player_name,
