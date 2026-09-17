@@ -115,6 +115,14 @@ asked, finish the turn and let them check back or ask you to watch it. This incl
 check-ins on a PR you just opened yourself: don't subscribe or schedule a reminder unless asked, even
 though the PR workflow above describes what to do *if* you are watching one.
 
+# Name the session after the issue's title
+
+When work starts on a GitHub issue, the session name carries the issue's actual title, not a bare
+`issue ###`. Look the issue up (`issue_read` / `list_issues` if the title isn't already in hand) and
+call `set_session_title` with the title itself, prefixed with the issue number for quick scanning —
+`#42: Fix ADR rounding in leaderboard export`, not `issue 42`. Do this once, at the start of the work,
+not on every turn.
+
 # Local `*_handoff/` dirs are gitignored scratch
 
 Directories matching `*_handoff/` (e.g. `dathost_handoff/`, `ehog_handoff/`) hold planning and
