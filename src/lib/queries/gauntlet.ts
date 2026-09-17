@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import type { LeaderboardRowWithId, PlayerMatchStat, Match } from '../types';
-import { allMatchesPlayed, canonicalSort, deriveRates, isPlayedScore } from '../util';
+import { allMatchesPlayed, anyMatchPlayed, canonicalSort, deriveRates, isPlayedScore } from '../util';
 import { getPodSibling } from '../gauntlet-pod';
 import { seedByPlayerId, slotRank } from '../gauntlet-draft';
 import { getPlayersById } from './player';
@@ -577,7 +577,7 @@ export async function getGauntletSeasonProgress(seasonId: number): Promise<{ see
   const rows = (data ?? []) as { final_score: string | null }[];
   return {
     seeded: rows.length > 0,
-    started: rows.some((m) => isPlayedScore(m.final_score)),
+    started: anyMatchPlayed(rows),
   };
 }
 
