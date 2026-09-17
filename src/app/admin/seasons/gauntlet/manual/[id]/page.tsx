@@ -17,13 +17,16 @@ export default async function ManualGauntletPage({ params }: { params: Promise<{
   const regularSeasonId = Number(id);
   if (!Number.isFinite(regularSeasonId)) notFound();
 
-  const regularSeason = await getSeason(regularSeasonId);
+  // getSeasonLeaderboard() depends only on regularSeasonId, not on getSeason()'s result, so it
+  // runs alongside it instead of waiting for it. getLinkedGauntlet() genuinely needs
+  // regularSeason.name, so it still has to wait.
+  const [regularSeason, leaderboard] = await Promise.all([
+    getSeason(regularSeasonId),
+    getSeasonLeaderboard(regularSeasonId),
+  ]);
   if (!regularSeason || regularSeason.is_gauntlet) notFound();
 
-  const [leaderboard, gauntletSeason] = await Promise.all([
-    getSeasonLeaderboard(regularSeasonId),
-    getLinkedGauntlet(regularSeason.name),
-  ]);
+  const gauntletSeason = await getLinkedGauntlet(regularSeason.name);
   const players = leaderboard.map((r) => ({ id: r.player_id, name: r.player_name }));
 
   // Loading the initial draft: an already-persisted shape (in-progress manual gauntlet, or a
