@@ -101,6 +101,54 @@ export async function getSeasonSchedule(
   });
 }
 
+export interface SeasonMatchSummary {
+  id: number;
+  week_number: number;
+  match_number: number;
+  scheduled_at: string | null;
+}
+
+export interface SeasonMatchSummaries {
+  weekCount: number;
+  matches: SeasonMatchSummary[];
+}
+
+/** A season's match/week counts and light per-match listing (id, week/match number, scheduled_at) —
+ *  everything the season detail page's header and structured-data (JSON-LD) need, without
+ *  `getSeasonSchedule()`'s full per-match roster embed (`player_match_stats`). Kept separate so the
+ *  page can show accurate counts regardless of which tab (Regular Season vs. Gauntlet) is initially
+ *  rendered, without eagerly paying for the heavy roster-embedded schedule either way. */
+export async function getSeasonMatchSummaries(
+  seasonId: number,
+  client: SupabaseClient = supabase,
+): Promise<SeasonMatchSummaries> {
+  const { data: weeks, error: wErr } = await client
+    .from('weeks')
+    .select('id, week_number')
+    .eq('season_id', seasonId);
+  if (wErr) throw wErr;
+  const weekRows = (weeks ?? []) as { id: number; week_number: number }[];
+  if (weekRows.length === 0) return { weekCount: 0, matches: [] };
+
+  const weekNumberById = new Map(weekRows.map((w) => [w.id, w.week_number]));
+  const { data: matches, error: mErr } = await client
+    .from('matches')
+    .select('id, week_id, match_number, scheduled_at')
+    .in('week_id', weekRows.map((w) => w.id));
+  if (mErr) throw mErr;
+
+  const summaries = ((matches ?? []) as { id: number; week_id: number; match_number: number; scheduled_at: string | null }[])
+    .map((m) => ({
+      id: m.id,
+      week_number: weekNumberById.get(m.week_id) ?? 0,
+      match_number: m.match_number,
+      scheduled_at: m.scheduled_at,
+    }))
+    .sort((a, b) => a.week_number - b.week_number || a.match_number - b.match_number);
+
+  return { weekCount: weekRows.length, matches: summaries };
+}
+
 /** Fetches `final_score` for every match in the given weeks — the shared fetch shape behind
  * `isSeasonFullyPlayed()` (`season-lifecycle.ts`), used wherever a caller already has week ids in
  * hand (`isWeekComplete()` below fetches by season+week number in a single joined query instead,

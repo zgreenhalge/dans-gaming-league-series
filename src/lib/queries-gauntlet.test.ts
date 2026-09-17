@@ -24,6 +24,8 @@ import {
   getGauntletBracketShape,
   getGauntletRounds,
   getAllGauntletSummaries,
+  deriveGauntletSeasonLeaderboard,
+  getPlayersById,
 } from './queries';
 
 /** Guards against a duplicate inline reimplementation of `deriveRates()` silently reappearing. */
@@ -125,6 +127,12 @@ async function main() {
     const rounds = await getGauntletRounds(2);
     assert.equal(rounds.length, 1);
     matchesSnapshot('getGauntletRounds-2', rounds);
+  });
+
+  await test('deriveGauntletSeasonLeaderboard() — same result as getGauntletSeasonLeaderboard() from already-fetched rounds', async () => {
+    const [rounds, playersById] = await Promise.all([getGauntletRounds(2), getPlayersById()]);
+    const derived = deriveGauntletSeasonLeaderboard(rounds, 2, playersById);
+    assert.deepEqual(derived, await getGauntletSeasonLeaderboard(2));
   });
 
   await test('getAllGauntletSummaries() — both gauntlets, snapshot', async () => {

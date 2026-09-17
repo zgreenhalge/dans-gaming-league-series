@@ -1,10 +1,16 @@
 import { supabase } from '../supabase';
-import type { LeaderboardRowWithId, PlayerMatchStat, Match } from '../types';
+import type { LeaderboardRowWithId, PlayerMatchStat, Match, Player } from '../types';
 import { allMatchesPlayed, anyMatchPlayed, canonicalSort, deriveRates, isPlayedScore } from '../util';
 import { getPodSibling } from '../gauntlet-pod';
 import { seedByPlayerId, slotRank } from '../gauntlet-draft';
+import { computeH2H, gauntletRoundsToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
 import { getWeekLookup, weekRowsFromLookup } from './_shared';
+import { getSeasonEhogRatings } from './ehog';
+import { getAllSabremetrics, type SabremetricMatchRow } from './sabremetrics';
+import { getAllMatchRounds, type MatchRoundRow } from './rounds';
+import { getAllMatchKills, type MatchKillRow } from './kills';
+import { getAllWeaponClassStats, getAllEconomyStats, type WeaponClassMatchRow, type EconomyMatchRow } from './weaponStats';
 
 
 function aggToRow(
@@ -212,6 +218,9 @@ export interface GauntletPlayerStat {
   assists: number;
   deaths: number;
   adr: number;
+  /** Raw `player_match_stats.damage` — distinct from `adr` (a rounded per-match average): needed to
+   *  re-derive a true (unrounded) `total_damage`-based aggregate, e.g. `deriveGauntletSeasonLeaderboard()`. */
+  damage: number;
   is_win: boolean;
   rounds_won: number;
   rounds_played: number;
@@ -386,6 +395,122 @@ export async function getGauntletSeasonLeaderboard(
       steam_avatar_url: players.get(agg.player_id)?.steam_avatar_url ?? null,
     }))
     .sort(canonicalSort);
+}
+
+/** Same shape and math as `getGauntletSeasonLeaderboard()`, but derived from an already-fetched
+ *  `rounds` (`getGauntletRounds()`) instead of a second `matches`/`player_match_stats` round trip —
+ *  every field the aggregate needs is already present on each match's `shirts_stats`/`skins_stats`
+ *  rows. Prefer this over `getGauntletSeasonLeaderboard()` whenever the caller already has `rounds`
+ *  in hand for the same season. */
+export function deriveGauntletSeasonLeaderboard(
+  rounds: GauntletRound[],
+  seasonId: number,
+  playersById: Map<number, Player>,
+): LeaderboardRowWithId[] {
+  type Agg = {
+    player_id: number;
+    player_name: string;
+    matches_played: number;
+    matches_won: number;
+    matches_lost: number;
+    total_kills: number;
+    total_assists: number;
+    total_deaths: number;
+    total_damage: number;
+    total_rounds_played: number;
+    total_rounds_won: number;
+    kills_in_wins: number;
+    deaths_in_wins: number;
+    kills_in_losses: number;
+    deaths_in_losses: number;
+  };
+
+  const byPlayer = new Map<number, Agg>();
+  for (const round of rounds) {
+    for (const match of round.matches) {
+      if (!isPlayedScore(match.final_score)) continue;
+      for (const s of [...match.shirts_stats, ...match.skins_stats]) {
+        const agg = byPlayer.get(s.player_id) ?? {
+          player_id: s.player_id,
+          player_name: s.player_name,
+          matches_played: 0,
+          matches_won: 0,
+          matches_lost: 0,
+          total_kills: 0,
+          total_assists: 0,
+          total_deaths: 0,
+          total_damage: 0,
+          total_rounds_played: 0,
+          total_rounds_won: 0,
+          kills_in_wins: 0,
+          deaths_in_wins: 0,
+          kills_in_losses: 0,
+          deaths_in_losses: 0,
+        };
+        agg.matches_played += 1;
+        agg.matches_won += s.is_win ? 1 : 0;
+        agg.matches_lost += s.is_win ? 0 : 1;
+        agg.total_kills += s.kills;
+        agg.total_assists += s.assists;
+        agg.total_deaths += s.deaths;
+        agg.total_damage += s.damage;
+        agg.total_rounds_played += s.rounds_played;
+        agg.total_rounds_won += s.rounds_won;
+        agg.kills_in_wins += s.is_win ? s.kills : 0;
+        agg.deaths_in_wins += s.is_win ? s.deaths : 0;
+        agg.kills_in_losses += s.is_win ? 0 : s.kills;
+        agg.deaths_in_losses += s.is_win ? 0 : s.deaths;
+        byPlayer.set(s.player_id, agg);
+      }
+    }
+  }
+
+  return Array.from(byPlayer.values())
+    .map((agg) => ({
+      ...aggToRow(agg, seasonId),
+      steam_avatar_url: playersById.get(agg.player_id)?.steam_avatar_url ?? null,
+    }))
+    .sort(canonicalSort);
+}
+
+export interface GauntletSeasonHeavyView {
+  rounds: GauntletRound[];
+  leaderboard: LeaderboardRowWithId[];
+  h2hData: H2HData;
+  ehogRatings: Record<number, number>;
+  sabremetrics: SabremetricMatchRow[];
+  matchRounds: MatchRoundRow[];
+  matchKills: MatchKillRow[];
+  matchWeaponClassStats: WeaponClassMatchRow[];
+  matchEconomyStats: EconomyMatchRow[];
+}
+
+/** Every per-match ("heavy") field the season detail page's Gauntlet tab needs, batched into one
+ *  call — distinct from the page's light data (the bracket shape, seed names), which is needed
+ *  regardless of which tab is showing and so is fetched separately, always. `leaderboard` is
+ *  derived from `rounds` (`deriveGauntletSeasonLeaderboard()`) rather than a second
+ *  `getGauntletSeasonLeaderboard()` round trip over the same matches. `seasonNumber`/`playersById`
+ *  are accepted rather than re-resolved here since every caller (the page's own initial render, the
+ *  lazy tab-switch route) already has both in hand. */
+export async function getGauntletSeasonHeavyView(
+  seasonId: number,
+  seasonNumber: number | null,
+  playersById: Map<number, Player>,
+): Promise<GauntletSeasonHeavyView> {
+  const [rounds, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats] = await Promise.all([
+    getGauntletRounds(seasonId),
+    getSeasonEhogRatings(seasonId),
+    getAllSabremetrics(seasonId),
+    getAllMatchRounds(seasonId),
+    getAllMatchKills(seasonId),
+    getAllWeaponClassStats(seasonId),
+    getAllEconomyStats(seasonId),
+  ]);
+  const leaderboard = deriveGauntletSeasonLeaderboard(rounds, seasonId, playersById);
+  // Computed from `rounds` — already fetched above — instead of a second, redundant getH2HData()
+  // round-trip over the same matches (see #441).
+  const h2hData = computeH2H(gauntletRoundsToH2HInput(rounds, seasonNumber), playersById);
+  return { rounds, leaderboard, h2hData, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats };
 }
 
 /** The gauntlet pod a match belongs to, if any — null for non-gauntlet matches and for gauntlets
@@ -611,7 +736,7 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
   const [{ data: stats, error: sErr }, players, { data: pods, error: pErr }] = await Promise.all([
     supabase
       .from('player_match_stats')
-      .select('match_id, player_id, faction, kills, assists, deaths, adr, is_win, rounds_won, rounds_played')
+      .select('match_id, player_id, faction, kills, assists, deaths, adr, damage, is_win, rounds_won, rounds_played')
       .in('match_id', matchIds),
     getPlayersById(),
     supabase
@@ -650,6 +775,7 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
     assists: number;
     deaths: number;
     adr: number;
+    damage: number;
     is_win: boolean;
     rounds_won: number;
     rounds_played: number;
@@ -667,6 +793,7 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
       assists: s.assists ?? 0,
       deaths: s.deaths,
       adr: s.adr,
+      damage: s.damage,
       is_win: s.is_win,
       rounds_won: s.rounds_won,
       rounds_played: s.rounds_played,
