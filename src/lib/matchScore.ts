@@ -363,13 +363,11 @@ export async function writeMatchScore(
     console.error(`reconcile demo_ingest job(${matchId}) failed (non-fatal):`, e);
   }
 
-  // A single batched upsert instead of one UPDATE per player (at most 4 rows — 2v2 Wingman — but
-  // still an avoidable round trip per player on the hottest write path in the app) — also makes the
-  // write atomic, where the previous per-row loop could leave some players updated and others not
-  // on a mid-loop failure. Every row here is already known to exist (validated against
-  // `statsByPlayerId` above), so the upsert always takes the update branch; `faction` is carried
-  // along unchanged since Postgres' `ON CONFLICT DO UPDATE` still needs a value for every NOT NULL
-  // column in the VALUES list.
+  // A single batched, atomic upsert rather than one round trip per player (at most 4 rows — 2v2
+  // Wingman — but still an avoidable cost on the hottest write path in the app). Every row here is
+  // already known to exist (validated against `statsByPlayerId` above), so the upsert always takes
+  // the update branch; `faction` is carried along unchanged since Postgres' `ON CONFLICT DO UPDATE`
+  // still needs a value for every NOT NULL column in the VALUES list.
   const { error: statErr } = await supabaseAdmin
     .from('player_match_stats')
     .upsert(
