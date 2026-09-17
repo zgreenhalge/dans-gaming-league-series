@@ -272,7 +272,12 @@ async function publishThread(
   const stateRows = (threadId: string) => matchIds.map((matchId) => ({ match_id: matchId, thread_id: threadId }));
 
   if (existingThreadId) {
-    await supabaseAdmin.from('match_discord_state').upsert(stateRows(existingThreadId), { onConflict: 'match_id' });
+    const { error: upsertError } = await supabaseAdmin.from('match_discord_state').upsert(stateRows(existingThreadId), { onConflict: 'match_id' });
+    if (upsertError) {
+      const detail = `Already linked to thread ${existingThreadId}, but recording match_discord_state failed: ${upsertError.message}`;
+      await recordOpsError(supabaseAdmin, 'match', anchorId, THREAD_OPERATION, detail);
+      return { matchId: anchorId, title, status: 'failed', detail };
+    }
     // Deliberately doesn't claim the live thread is named `title` — it might have been adopted via a
     // previously-recorded thread_id (resolveExistingThreadId()) rather than an exact title match, in
     // which case its actual Discord name could be anything.
@@ -295,7 +300,12 @@ async function publishThread(
       return { matchId: anchorId, title, status: 'failed', detail };
     }
     const thread = (await res.json()) as { id: string };
-    await supabaseAdmin.from('match_discord_state').upsert(stateRows(thread.id), { onConflict: 'match_id' });
+    const { error: upsertError } = await supabaseAdmin.from('match_discord_state').upsert(stateRows(thread.id), { onConflict: 'match_id' });
+    if (upsertError) {
+      const detail = `Thread ${thread.id} was created but recording match_discord_state failed: ${upsertError.message}`;
+      await recordOpsError(supabaseAdmin, 'match', anchorId, THREAD_OPERATION, detail);
+      return { matchId: anchorId, title, status: 'failed', detail };
+    }
     await clearOpsError(supabaseAdmin, 'match', anchorId, THREAD_OPERATION);
     await addThreadMembers(supabaseAdmin, thread.id, participantDiscordIds, token, anchorId);
     return { matchId: anchorId, title, status: 'created', detail: `Thread ${thread.id}` };
