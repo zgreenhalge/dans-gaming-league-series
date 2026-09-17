@@ -117,33 +117,28 @@ export interface SeasonMatchSummaries {
  *  everything the season detail page's header and structured-data (JSON-LD) need, without
  *  `getSeasonSchedule()`'s full per-match roster embed (`player_match_stats`). Kept separate so the
  *  page can show accurate counts regardless of which tab (Regular Season vs. Gauntlet) is initially
- *  rendered, without eagerly paying for the heavy roster-embedded schedule either way. */
+ *  rendered, without eagerly paying for the heavy roster-embedded schedule either way. One embedded
+ *  query (weeks -> matches), same pattern as `getSeasonSchedule()` above, instead of a `weeks` round
+ *  trip followed by a second `matches` one. */
 export async function getSeasonMatchSummaries(
   seasonId: number,
   client: SupabaseClient = supabase,
 ): Promise<SeasonMatchSummaries> {
   const { data: weeks, error: wErr } = await client
     .from('weeks')
-    .select('id, week_number')
+    .select('week_number, matches(id, match_number, scheduled_at)')
     .eq('season_id', seasonId);
   if (wErr) throw wErr;
-  const weekRows = (weeks ?? []) as { id: number; week_number: number }[];
-  if (weekRows.length === 0) return { weekCount: 0, matches: [] };
+  // Supabase types embedded to-many relations as arrays already, so no unwrap needed at that level —
+  // still cast through unknown since the generated Database type doesn't model this nested select
+  // shape (same pattern as getSeasonSchedule()'s own embed above).
+  const weekRows = (weeks ?? []) as unknown as {
+    week_number: number;
+    matches: { id: number; match_number: number; scheduled_at: string | null }[];
+  }[];
 
-  const weekNumberById = new Map(weekRows.map((w) => [w.id, w.week_number]));
-  const { data: matches, error: mErr } = await client
-    .from('matches')
-    .select('id, week_id, match_number, scheduled_at')
-    .in('week_id', weekRows.map((w) => w.id));
-  if (mErr) throw mErr;
-
-  const summaries = ((matches ?? []) as { id: number; week_id: number; match_number: number; scheduled_at: string | null }[])
-    .map((m) => ({
-      id: m.id,
-      week_number: weekNumberById.get(m.week_id) ?? 0,
-      match_number: m.match_number,
-      scheduled_at: m.scheduled_at,
-    }))
+  const summaries = weekRows
+    .flatMap((w) => w.matches.map((m) => ({ id: m.id, week_number: w.week_number, match_number: m.match_number, scheduled_at: m.scheduled_at })))
     .sort((a, b) => a.week_number - b.week_number || a.match_number - b.match_number);
 
   return { weekCount: weekRows.length, matches: summaries };

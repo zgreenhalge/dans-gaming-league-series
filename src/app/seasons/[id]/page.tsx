@@ -10,25 +10,16 @@ import {
   getSeasonRoster,
   getPlayersById,
   hasSeasonScheduleDraft,
-  getGauntletRounds,
   getGauntletBracketShape,
   getGauntletSeasonProgress,
-  deriveGauntletSeasonLeaderboard,
   getLinkedGauntlet,
   getLinkedRegularSeason,
   getRegularSeasonHeavyView,
   getGauntletSeasonHeavyView,
-  getSeasonEhogRatings,
-  getAllSabremetrics,
-  getAllMatchRounds,
-  getAllMatchKills,
-  getAllWeaponClassStats,
-  getAllEconomyStats,
   type RegularSeasonHeavyView,
   type GauntletSeasonHeavyView,
   type GauntletRound,
 } from '@/lib/queries';
-import { computeH2H, gauntletRoundsToH2HInput } from '@/lib/h2h';
 import SeasonTabView from '@/components/SeasonTabView';
 import CombinedSeasonTabView from '@/components/CombinedSeasonTabView';
 import { UrlStateProvider } from '@/components/UrlStateProvider';
@@ -155,27 +146,20 @@ export default async function SeasonPage({
     const linked = await getLinkedRegularSeason(season.name);
     if (linked) redirect(`/seasons/${linked.id}`);
 
-    // Orphan gauntlet with no paired regular season — render standalone. `getPlayersById()` is
-    // `cache()`-wrapped and reused below (h2hData) with zero additional query — fetched here rather
-    // than earlier so a season that redirects above never pays for it at all.
-    const [rounds, bracketShape, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats, playersById] = await Promise.all([
-      getGauntletRounds(seasonId),
-      getGauntletBracketShape(seasonId),
-      getSeasonEhogRatings(seasonId),
-      getAllSabremetrics(seasonId),
-      getAllMatchRounds(seasonId),
-      getAllMatchKills(seasonId),
-      getAllWeaponClassStats(seasonId),
-      getAllEconomyStats(seasonId),
-      getPlayersById(),
-    ]);
+    // Orphan gauntlet with no paired regular season — render standalone, reusing the same
+    // getGauntletSeasonHeavyView() the paired-season path below fetches for its own Gauntlet tab
+    // instead of duplicating its fetch/derive logic. `getPlayersById()` is `cache()`-wrapped
+    // (fetched here rather than earlier so a season that redirects above never pays for it at all);
+    // it's needed as a value (not just a promise) to build the heavy-view call, so it's resolved
+    // before that fetch starts rather than folded into the same Promise.all — a real but small cost
+    // on this rare path (a gauntlet predating bracket-scheduling, or never paired).
+    const playersById = await getPlayersById();
     const isAdmin = currentPlayerId != null ? !!playersById.get(currentPlayerId)?.is_admin : false;
-    // Derived from `rounds` — already fetched above — instead of a second, redundant
-    // getGauntletSeasonLeaderboard() round trip over the same matches.
-    const leaderboard = deriveGauntletSeasonLeaderboard(rounds, seasonId, playersById);
-    // Computed from `rounds` — already fetched above for the Rounds tab — instead of a second,
-    // redundant getH2HData() round-trip over the same matches (see #441).
-    const h2hData = computeH2H(gauntletRoundsToH2HInput(rounds, extractSeasonNumber(season.name)), playersById);
+    const [heavy, bracketShape] = await Promise.all([
+      getGauntletSeasonHeavyView(seasonId, extractSeasonNumber(season.name), playersById),
+      getGauntletBracketShape(seasonId),
+    ]);
+    const { rounds, leaderboard, h2hData, ehogRatings, sabremetrics, matchRounds, matchKills, matchWeaponClassStats, matchEconomyStats } = heavy;
     const matchCount = countGauntletMatches(rounds);
     const finalRound = rounds.length > 0 ? rounds[rounds.length - 1].round_number : null;
     const seasonJsonLd = buildSeasonJsonLd({
@@ -284,9 +268,9 @@ export default async function SeasonPage({
   }
 
   const matchCount = matchSummaries.matches.length;
-  const finalWeek = matchSummaries.matches.length > 0
-    ? Math.max(...matchSummaries.matches.map((m) => m.week_number))
-    : null;
+  // `matchSummaries.matches` is already sorted ascending by week/match number, so the last entry's
+  // week_number is the max without a second pass over the array.
+  const finalWeek = matchSummaries.matches.at(-1)?.week_number ?? null;
   const seasonJsonLd = buildSeasonJsonLd({
     seasonId: season.id,
     seasonTitle: seasonTitle(season.name),
@@ -298,8 +282,6 @@ export default async function SeasonPage({
       startDate: m.scheduled_at,
     })),
   });
-
-  const regularHeavy = initialHeavyData.kind === 'regular' ? initialHeavyData.data : null;
 
   return (
     <div className="min-h-screen">
@@ -361,26 +343,29 @@ export default async function SeasonPage({
                 initialView={initialView}
                 initialHeavyData={initialHeavyData}
               />
-            ) : (
-              // `showGauntletTab` false guarantees `initialHeavyData.kind === 'regular'` — either
-              // there was never a gauntlet-kind fetch to begin with, or the fallback above already
-              // replaced it with one.
+            ) : initialHeavyData.kind === 'regular' ? (
               <SeasonTabView
                 kind="regular"
                 leaderboard={leaderboard}
-                schedule={regularHeavy!.schedule}
+                schedule={initialHeavyData.data.schedule}
                 seasonStartDate={season.start_date}
                 seasonStatus={season.status}
                 mapPool={season.map_pool}
                 currentPlayerId={currentPlayerId}
-                h2hData={regularHeavy!.h2hData}
-                ehogRatings={regularHeavy!.ehogRatings}
-                sabremetrics={regularHeavy!.sabremetrics}
-                matchRounds={regularHeavy!.matchRounds}
-                matchKills={regularHeavy!.matchKills}
-                matchWeaponClassStats={regularHeavy!.matchWeaponClassStats}
-                matchEconomyStats={regularHeavy!.matchEconomyStats}
+                h2hData={initialHeavyData.data.h2hData}
+                ehogRatings={initialHeavyData.data.ehogRatings}
+                sabremetrics={initialHeavyData.data.sabremetrics}
+                matchRounds={initialHeavyData.data.matchRounds}
+                matchKills={initialHeavyData.data.matchKills}
+                matchWeaponClassStats={initialHeavyData.data.matchWeaponClassStats}
+                matchEconomyStats={initialHeavyData.data.matchEconomyStats}
               />
+            ) : (
+              // Unreachable: `showGauntletTab` false guarantees `initialHeavyData.kind === 'regular'`
+              // — either there was never a gauntlet-kind fetch to begin with, or the fallback above
+              // already replaced it with one. The `kind === 'regular'` check above (rather than an
+              // assertion) gives real type narrowing for the branch instead of asserting it per-field.
+              null
             )}
           </UrlStateProvider>
         </Suspense>
