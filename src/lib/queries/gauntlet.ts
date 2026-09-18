@@ -7,6 +7,7 @@ import { seedByPlayerId, slotRank } from '../gauntlet-draft';
 import { computeH2H, gauntletRoundsToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
 import { getWeekLookup, weekRowsFromLookup } from './_shared';
+import type { UpcomingGameRow } from './schedule';
 import { getSeasonEhogRatings } from './ehog';
 import { getAllSabremetrics, type SabremetricMatchRow } from './sabremetrics';
 import { getAllMatchRounds, type MatchRoundRow } from './rounds';
@@ -855,6 +856,46 @@ export async function getGauntletRounds(seasonId: number, client: SupabaseClient
     });
   }
   return rounds;
+}
+
+export interface UpcomingGauntletGames {
+  /** Unplayed matches with a `scheduled_at` time, soonest first. */
+  scheduled: GauntletMatch[];
+  /** Unplayed, unscheduled matches, by round then match number. A gauntlet has no weekly
+   *  structure to anchor a "current week" window on the way a regular season does — bracket matches
+   *  only exist as rows once their pod is materialized, so every unplayed, unscheduled one here is
+   *  already "next" in the sense that matters. */
+  unscheduled: GauntletMatch[];
+}
+
+/** Powers the home page's Upcoming Games panel for a gauntlet season — the gauntlet-shaped
+ *  counterpart to `getUpcomingGames()` (`schedule.ts`), which relies on regular-season weeks. */
+export function getUpcomingGauntletGames(rounds: GauntletRound[]): UpcomingGauntletGames {
+  const unplayed = rounds.flatMap((r) => r.matches).filter((m) => !isPlayedScore(m.final_score));
+  return {
+    scheduled: unplayed
+      .filter((m) => m.scheduled_at !== null)
+      .sort((a, b) => new Date(a.scheduled_at!).getTime() - new Date(b.scheduled_at!).getTime()),
+    unscheduled: unplayed
+      .filter((m) => m.scheduled_at === null)
+      .sort((a, b) => a.match_number - b.match_number),
+  };
+}
+
+/** Adapts a `GauntletMatch` into the shared `UpcomingGameRow` shape the Upcoming Games panel
+ *  renders — `GauntletMatch` carries full per-player stat rows (`shirts_stats`/`skins_stats`)
+ *  rather than the `{ player_id, player_name }[]` roster shape `MatchWithRoster` (and the panel)
+ *  use. */
+export function gauntletMatchToUpcomingGameRow(m: GauntletMatch): UpcomingGameRow {
+  return {
+    id: m.id,
+    match_number: m.match_number,
+    scheduled_at: m.scheduled_at,
+    picked_map: m.picked_map,
+    shirts_pick: m.shirts_pick,
+    shirts: m.shirts_stats.map((s) => ({ player_id: s.player_id, player_name: s.player_name })),
+    skins: m.skins_stats.map((s) => ({ player_id: s.player_id, player_name: s.player_name })),
+  };
 }
 
 export type GauntletSummary = {

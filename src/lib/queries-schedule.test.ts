@@ -13,7 +13,7 @@ import { matchesSnapshot } from './test-support/snapshot';
 
 __setTestClient(createFakeSupabaseClient(buildFakeDb()));
 
-import { getSeasonSchedule, getOtherScheduledMatches, findCurrentWeek, findNextUnplayedWeek, weekWindowMs, type WeekWithMatches } from './queries';
+import { getSeasonSchedule, getOtherScheduledMatches, findCurrentWeek, findNextUnplayedWeek, getUpcomingGames, weekWindowMs, type WeekWithMatches, type MatchWithRoster } from './queries';
 import { test, report } from './test-support/miniTest';
 
 /** Minimal WeekWithMatches stand-ins — findCurrentWeek/weekWindowMs only read week_number and
@@ -35,6 +35,17 @@ function weekWithScores(weekNumber: number, finalScores: (string | null)[]): Wee
     ...week(weekNumber, false),
     matches: finalScores.map((final_score) => ({ final_score }) as WeekWithMatches['matches'][number]),
   };
+}
+
+/** A match stand-in for getUpcomingGames — only id, match_number, final_score, and scheduled_at
+ *  are read. */
+function matchStub(id: number, matchNumber: number, finalScore: string | null, scheduledAt: string | null): MatchWithRoster {
+  return {
+    id,
+    match_number: matchNumber,
+    final_score: finalScore,
+    scheduled_at: scheduledAt,
+  } as MatchWithRoster;
 }
 
 async function main() {
@@ -128,6 +139,33 @@ async function main() {
   await test('findNextUnplayedWeek: every week already has a played match falls back to the last week', () => {
     const schedule = [weekWithScores(10, ['13-9']), weekWithScores(11, ['13-5'])];
     assert.equal(findNextUnplayedWeek(schedule)?.week_number, 11);
+  });
+
+  await test('getUpcomingGames: scheduled bucket spans every week, soonest first, excludes played and "0-0" placeholder matches', () => {
+    const schedule: WeekWithMatches[] = [
+      { ...week(1, false), matches: [matchStub(1, 1, null, '2026-01-10T00:00:00Z'), matchStub(2, 2, '13-9', '2026-01-05T00:00:00Z')] },
+      { ...week(2, false), matches: [matchStub(3, 1, null, '2026-01-03T00:00:00Z'), matchStub(4, 2, '0-0', '2026-01-04T00:00:00Z')] },
+    ];
+    const { scheduled } = getUpcomingGames(schedule, null);
+    // Match 2 is played, so it's dropped; match 4's "0-0" is a pre-staged placeholder
+    // (isPlayedScore()), so it still counts as unplayed and appears, sorted by scheduled_at.
+    assert.deepEqual(scheduled.map((m) => m.id), [3, 4, 1]);
+  });
+
+  await test('getUpcomingGames: unscheduled bucket is only the current week\'s unplayed, unscheduled matches, by match number', () => {
+    const startDate = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
+    // Every window is past, so findCurrentWeek() falls back to the last week (week 2) — its
+    // unscheduled matches are what should appear, not week 1's.
+    const schedule: WeekWithMatches[] = [
+      { ...week(1, false), matches: [matchStub(1, 1, null, null)] },
+      { ...week(2, false), matches: [matchStub(3, 2, null, null), matchStub(2, 1, '13-9', null), matchStub(4, 3, null, '2026-01-01T00:00:00Z')] },
+    ];
+    const { unscheduled } = getUpcomingGames(schedule, startDate);
+    assert.deepEqual(unscheduled.map((m) => m.id), [3]);
+  });
+
+  await test('getUpcomingGames: empty schedule returns empty buckets', () => {
+    assert.deepEqual(getUpcomingGames([], null), { scheduled: [], unscheduled: [] });
   });
 
   report();

@@ -26,7 +26,29 @@ import {
   getAllGauntletSummaries,
   deriveGauntletSeasonLeaderboard,
   getPlayersById,
+  getUpcomingGauntletGames,
+  gauntletMatchToUpcomingGameRow,
+  type GauntletMatch,
+  type GauntletRound,
 } from './queries';
+
+/** A GauntletMatch stand-in for getUpcomingGauntletGames — only id, match_number, final_score, and
+ *  scheduled_at are read. */
+function gauntletMatchStub(id: number, matchNumber: number, finalScore: string | null, scheduledAt: string | null): GauntletMatch {
+  return {
+    id,
+    match_number: matchNumber,
+    final_score: finalScore,
+    scheduled_at: scheduledAt,
+    picked_map: null,
+    shirts_pick: null,
+    skins_starting_side: null,
+    shirts_stats: [],
+    skins_stats: [],
+    pod_index: null,
+    advance_rule: null,
+  };
+}
 
 /** Guards against a duplicate inline reimplementation of `deriveRates()` silently reappearing. */
 function assertRatesMatchDeriveRates(rows: LeaderboardRowWithId[], label: string) {
@@ -158,6 +180,45 @@ async function main() {
     const summaries = await getAllGauntletSummaries();
     assert.equal(summaries.size, 2);
     matchesSnapshot('getAllGauntletSummaries', summaries);
+  });
+
+  await test('getUpcomingGauntletGames: scheduled soonest-first, unscheduled by match number, played matches excluded', () => {
+    const rounds: GauntletRound[] = [
+      { round_number: 1, is_final_round: false, matches: [
+        gauntletMatchStub(1, 1, '13-9', null),
+        gauntletMatchStub(2, 2, null, '2026-02-10T00:00:00Z'),
+      ] },
+      { round_number: 2, is_final_round: true, matches: [
+        gauntletMatchStub(3, 1, null, '2026-02-05T00:00:00Z'),
+        gauntletMatchStub(4, 2, null, null),
+      ] },
+    ];
+    const { scheduled, unscheduled } = getUpcomingGauntletGames(rounds);
+    assert.deepEqual(scheduled.map((m) => m.id), [3, 2]);
+    assert.deepEqual(unscheduled.map((m) => m.id), [4]);
+  });
+
+  await test('getUpcomingGauntletGames: no rounds returns empty buckets', () => {
+    assert.deepEqual(getUpcomingGauntletGames([]), { scheduled: [], unscheduled: [] });
+  });
+
+  await test('gauntletMatchToUpcomingGameRow: maps shirts_stats/skins_stats down to { player_id, player_name }', () => {
+    const match: GauntletMatch = {
+      ...gauntletMatchStub(5, 1, null, '2026-02-01T00:00:00Z'),
+      picked_map: 'Cobblestone',
+      shirts_pick: 'Vertigo',
+      shirts_stats: [{ player_id: 1, player_name: 'Alice', faction: 'SHIRTS', kills: 20, assists: 2, deaths: 15, adr: 80, damage: 1900, is_win: true, rounds_won: 13, rounds_played: 24 }],
+      skins_stats: [{ player_id: 2, player_name: 'Bob', faction: 'SKINS', kills: 15, assists: 3, deaths: 20, adr: 60, damage: 1400, is_win: false, rounds_won: 11, rounds_played: 24 }],
+    };
+    assert.deepEqual(gauntletMatchToUpcomingGameRow(match), {
+      id: 5,
+      match_number: 1,
+      scheduled_at: '2026-02-01T00:00:00Z',
+      picked_map: 'Cobblestone',
+      shirts_pick: 'Vertigo',
+      shirts: [{ player_id: 1, player_name: 'Alice' }],
+      skins: [{ player_id: 2, player_name: 'Bob' }],
+    });
   });
 
   report();
