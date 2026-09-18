@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { LeaderboardRowWithId, PlayerMatchStat, Match, Player } from '../types';
 import { allMatchesPlayed, anyMatchPlayed, canonicalSort, deriveRates, isPlayedScore } from '../util';
@@ -710,12 +711,15 @@ export async function getGauntletSeasonProgress(seasonId: number): Promise<{ see
   };
 }
 
-/** Fetches all matches for a gauntlet season and groups them into rounds by week_number. */
-export async function getGauntletRounds(seasonId: number): Promise<GauntletRound[]> {
+/** Fetches all matches for a gauntlet season and groups them into rounds by week_number. `client`
+ *  defaults to the app's anon-key client but accepts an admin client for callers running outside a
+ *  Next.js request (a GitHub Actions script, which has no `NEXT_PUBLIC_SUPABASE_ANON_KEY`) — same
+ *  opt-in pattern as `getSeasonSchedule()` (`schedule.ts`). */
+export async function getGauntletRounds(seasonId: number, client: SupabaseClient = supabase): Promise<GauntletRound[]> {
   // getWeekLookup() carries no ordering guarantee, unlike the `.order('week_number')` this used to
   // run itself — sort explicitly here since round_number below is assigned in weekRows iteration
   // order.
-  const weekLookup = await getWeekLookup([seasonId]);
+  const weekLookup = await getWeekLookup([seasonId], client);
   const weekRows = weekRowsFromLookup(weekLookup).sort((a, b) => a.week_number - b.week_number);
   if (weekRows.length === 0) return [];
 
@@ -727,7 +731,7 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
     Match,
     'id' | 'match_number' | 'final_score' | 'scheduled_at' | 'picked_map' | 'shirts_pick' | 'skins_starting_side' | 'week_id'
   >;
-  const { data: matchData, error: mErr } = await supabase
+  const { data: matchData, error: mErr } = await client
     .from('matches')
     .select('id, match_number, final_score, scheduled_at, picked_map, shirts_pick, skins_starting_side, week_id')
     .in('week_id', weekIds)
@@ -738,12 +742,12 @@ export async function getGauntletRounds(seasonId: number): Promise<GauntletRound
 
   const matchIds = matchRows.map((m) => m.id);
   const [{ data: stats, error: sErr }, players, { data: pods, error: pErr }] = await Promise.all([
-    supabase
+    client
       .from('player_match_stats')
       .select('match_id, player_id, faction, kills, assists, deaths, adr, damage, is_win, rounds_won, rounds_played')
       .in('match_id', matchIds),
-    getPlayersById(),
-    supabase
+    getPlayersById(client),
+    client
       .from('gauntlet_pods')
       .select('round_number, pod_index, advance_rule, is_final, match1_id, match2_id')
       .eq('season_id', seasonId),

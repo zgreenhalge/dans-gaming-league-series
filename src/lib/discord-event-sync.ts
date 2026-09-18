@@ -402,7 +402,7 @@ export async function syncSeasonScheduledEvents(
   // resolves to (syncMatchScheduledEvent()'s podPartnerId parameter).
   const podPartnerByAnchorId = new Map<number, number>();
   if (season.is_gauntlet) {
-    const rounds = await getGauntletRounds(seasonId);
+    const rounds = await getGauntletRounds(seasonId, supabaseAdmin);
     for (const round of rounds) {
       for (const { podIndex, game1, game2 } of podGamePairs(round)) {
         if (isPlayedScore(game1.final_score)) continue;
