@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import EmptyState from './EmptyState';
-import { MatchCard, type MatchCardRight } from './MatchCard';
+import { MatchCard, matchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
 import { allMatchesPlayed, isPlayedScore, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
 import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
@@ -240,12 +240,7 @@ function GauntletRoundCard({
                   ) : (
                     entry.matches.map((m) => {
                       const gameNumber = entry.pod_index != null ? ++podGameNumber : ++soloGameNumber;
-                      const played = isPlayedScore(m.final_score);
-                      const right: MatchCardRight = played
-                        ? { type: 'score', score: m.final_score! }
-                        : m.scheduled_at
-                          ? { type: 'scheduled', scheduledAt: m.scheduled_at }
-                          : { type: 'pending' };
+                      const right = matchCardRight(m.final_score, m.scheduled_at, { type: 'pending' });
                       return (
                         <MatchCard
                           key={m.id}

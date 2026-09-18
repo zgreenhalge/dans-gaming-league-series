@@ -5,7 +5,7 @@ import { LocalTime } from './LocalTime';
 import { PlayerName } from './PlayerName';
 import { mapSlug, toSentenceCase } from '@/lib/maps';
 import { useMapLookup } from './MapContext';
-import { fmtWindowDate, formatEhogDelta } from '@/lib/util';
+import { fmtWindowDate, formatEhogDelta, isPlayedScore } from '@/lib/util';
 import { CountdownTimer } from './CountdownTimer';
 import { FeatureMatchIcon } from './FeatureMatch';
 
@@ -29,6 +29,15 @@ export type MatchCardRight =
   | { type: 'week-window'; weekStart: Date; weekEnd: Date }
   | { type: 'pending' }
   | null;
+
+/** A match's right-hand status: its score once played, else its scheduled time once set, else the
+ *  caller's fallback (a week window for the regular season's ScheduleList, plain "pending" for
+ *  GauntletRoundsList) — the one derivation both schedule views share. */
+export function matchCardRight(finalScore: string | null, scheduledAt: string | null, fallback: MatchCardRight): MatchCardRight {
+  if (isPlayedScore(finalScore)) return { type: 'score', score: finalScore! };
+  if (scheduledAt) return { type: 'scheduled', scheduledAt };
+  return fallback;
+}
 
 interface MatchCardProps {
   href: string;
