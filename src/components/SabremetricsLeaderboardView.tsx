@@ -38,7 +38,7 @@ import {
   weaponDisplayName, killWeaponCategory, KILL_WEAPON_CATEGORIES, KILL_WEAPON_CATEGORY_LABEL,
   type KillWeaponCategory,
 } from '@/lib/parsers/weaponClasses';
-import { ECONOMY_TYPE_LABEL, FULL_BUY_MIN_T, FULL_BUY_MIN_CT, BANK_MIN, SAVE_EQUIP_MAX } from '@/lib/parsers/economy';
+import { ECONOMY_TYPE_LABEL, FULL_BUY_MIN_T, FULL_BUY_MIN_CT, BANK_MIN, ECO_EQUIP_MIN } from '@/lib/parsers/economy';
 import { InfoTooltip } from './InfoTooltip';
 import { aggregatePerSideStats, type MatchPickBanInput, type RoundOutcome } from '@/lib/mapSideStats';
 import type { RoundHistoryEntry } from '@/lib/types';
@@ -610,14 +610,14 @@ function WeaponsTable({ aggregated, kills, weaponClassStats, selectedFilter, sin
 // Same per-player breakdown pattern as Weapons above, one economy tier's stats per player at a
 // time, picked by `selectedTier` — but sourced from `player_match_economy_stats`
 // (`aggregateEconomyStats()`/`resolveEconomyStat()`, `src/lib/queries/weaponStats.ts`) instead of
-// `match_kills`, since a round's economy classification isn't itself a kill event. The three real
+// `match_kills`, since a round's economy classification isn't itself a kill event. The four real
 // tiers are a fixed, game-defined set (unlike weapons, which vary player to player), so the
 // picker's options are a static list rather than derived from data. Unlike Weapons'
-// favorite-or-specific picker, there's no "most played" default among the three real tiers: with
+// favorite-or-specific picker, there's no "most played" default among the four real tiers: with
 // full-buy rounds dominating most matches, "most played" would resolve to full-buy for nearly
 // every player, making it a redundant alias for an explicit selection rather than a useful
-// default. The picker's actual default is `ALL_ECONOMY_TIERS` — a genuine fourth option (every
-// tier summed), not a guess at one of the three — so the table/tiles still show something
+// default. The picker's actual default is `ALL_ECONOMY_TIERS` — a genuine fifth option (every
+// tier summed), not a guess at one of the four — so the table/tiles still show something
 // meaningful before a viewer narrows to a specific tier.
 
 const ECONOMY_TIERS: { type: string; label: string }[] = [
@@ -653,10 +653,10 @@ function EconomyFilterSelect({ value, onChange }: {
         <br />
         ${BANK_MIN.toLocaleString()}+ left (kept the bank healthy) splits again by equipment value:
         <br />
-        {ECONOMY_TYPE_LABEL.save} — under ${SAVE_EQUIP_MAX.toLocaleString()} (bought next to
+        {ECONOMY_TYPE_LABEL.save} — under ${ECO_EQUIP_MIN.toLocaleString()} (bought next to
         nothing)
         <br />
-        {ECONOMY_TYPE_LABEL.eco} — ${SAVE_EQUIP_MAX.toLocaleString()}+ (a real partial buy, still
+        {ECONOMY_TYPE_LABEL.eco} — ${ECO_EQUIP_MIN.toLocaleString()}+ (a real partial buy, still
         banking money)
       </InfoTooltip>
       <select
@@ -741,7 +741,7 @@ function EconomyTable({ aggregated, economyRows, selectedTier, singlePlayer, sho
           <thead>
             <tr className={singlePlayer ? undefined : 'bg-[var(--color-bg-secondary)]'}>
               {!singlePlayer && <th className={playerThCls}>Player</th>}
-              <SortableTh label="Rounds Played" title={`Rounds played ${tierPhrase} — seeded from the round's own eco/force/full classification, whether or not this player fired a shot in it`} sortKey="rounds_played" state={sort} onClick={toggleSort} />
+              <SortableTh label="Rounds Played" title={`Rounds played ${tierPhrase} — seeded from the round's own tier classification, whether or not this player fired a shot in it`} sortKey="rounds_played" state={sort} onClick={toggleSort} />
               <SortableTh label="W-L" title={`Rounds won vs. lost ${tierPhrase}`} sortKey="rounds_won" state={sort} onClick={toggleSort} />
               <SortableTh label="Shots Fired" title={`Shots fired (guns only) in rounds ${tierPhrase}`} sortKey="shots_fired" state={sort} onClick={toggleSort} />
               <SortableTh label="Accuracy" title={`Shots that hit an enemy / shots fired, in rounds ${tierPhrase}`} sortKey="acc" state={sort} onClick={toggleSort} />
