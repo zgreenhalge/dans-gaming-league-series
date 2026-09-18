@@ -505,12 +505,16 @@ on the player/statistics/season pages (season-scoped `getAllEconomyStats()`) and
 (`getMatchEconomyStats()`), the same season/match split `getAllWeaponClassStats()`/
 `getMatchWeaponClassStats()` use for the Weapons sub-tab.
 
-On the match page only, the Economy sub-tab also shows `RoundEconomyChart` — one line per player
-plotting equipment value (`match_round_economy.equipment_value`) across every live round, colored
-and grouped by that player's match-long display side rather than SHIRTS/SKINS identity (same
-convention as `Scoreboard`/`TeamHeader`), with the second player sharing a side drawn dashed so
-teammates stay distinguishable. Kills that round are marked directly on the line (a filled dot
-sized to the kill count); money and damage for the hovered round are read from a tooltip rather than
+On the match page only, the Economy sub-tab also shows `RoundEconomyChart` — one dashed line per
+player plotting equipment value (`match_round_economy.equipment_value`) across every live round,
+plus a solid team-total line per team summing its two players — colored and grouped by each
+player's match-long display side rather than SHIRTS/SKINS identity (same convention as
+`Scoreboard`/`TeamHeader`). Solid vs. dashed marks a team total apart from the individual lines
+it's a sum of; within a side, the two teammates get genuinely distinct hues matching CS2's own
+selectable player colors (blue/green on CT, orange/yellow on T) rather than a tint of one base
+color, and the first teammate on a side shares its team-total line's own color, telling the two
+apart by stroke style rather than color alone. Kills that round are marked directly on the line (a
+filled dot sized to the kill count); money for the hovered round is read from a tooltip rather than
 a second plotted axis, keeping the chart to one visual channel (money) per player. Each round's
 background is tinted by the *team* that won it (`matches.round_history`), mapped through that
 team's own fixed display color rather than the round's actual (half-swapping) side, so a band's

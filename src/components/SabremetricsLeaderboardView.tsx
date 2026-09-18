@@ -31,7 +31,6 @@ import {
   type FlairKillStat,
   type EconomyMatchRow,
   type EconomyTierStat,
-  type MatchDamageEventRow,
   type MatchRoundEconomyRow,
 } from '@/lib/queries';
 import {
@@ -70,17 +69,16 @@ export interface TeamGroup {
   header?: React.ReactNode;
 }
 
-/** The Economy sub-tab's round-by-round chart inputs (#519), grouped into one prop since all
- *  three arrays exist solely to feed `RoundEconomyChart` — see `roundEconomyData` below. */
+/** The Economy sub-tab's round-by-round chart inputs (#519), grouped into one prop since both
+ *  arrays exist solely to feed `RoundEconomyChart` — see `roundEconomyData` below. */
 interface RoundEconomyData {
   rows: MatchRoundEconomyRow[];
   history: RoundHistoryEntry[];
-  damageEvents: MatchDamageEventRow[];
 }
 /** Hoisted so the prop's default value is a stable reference across renders — an inline `{}`
  *  default would recreate the object (and invalidate any memo keyed on it) on every render in
  *  which the caller omits the prop. */
-const ROUND_ECONOMY_DATA_EMPTY: RoundEconomyData = { rows: [], history: [], damageEvents: [] };
+const ROUND_ECONOMY_DATA_EMPTY: RoundEconomyData = { rows: [], history: [] };
 
 // --- Sorting ---
 
@@ -1716,7 +1714,6 @@ export default function SabremetricsLeaderboardView({
                 players={roundEconomyInputs.players}
                 roundEconomy={roundEconomyData.rows}
                 kills={kills}
-                damageEvents={roundEconomyData.damageEvents}
                 roundHistory={roundEconomyData.history}
                 teamSides={roundEconomyInputs.teamSides}
                 selectedTier={economyFilter}
