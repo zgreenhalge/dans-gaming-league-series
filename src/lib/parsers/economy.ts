@@ -31,12 +31,14 @@ export const FULL_BUY_MIN_CT = 4400;
  *  controlled buy (`save`/`eco` below); dropping under it means the round was a `force` —
  *  spending down into a risky low-cash position without ever completing a kit. Only within the
  *  "kept the bank healthy" branch does equipment value further split `save` (barely spent) from
- *  `eco` (spent something real) — see `SAVE_EQUIP_MAX`. */
+ *  `eco` (spent something real) — see `ECO_EQUIP_MIN`. */
 export const BANK_MIN = 2000;
 
-/** Within the "kept `BANK_MIN`+ in reserve" branch, equipment value under this is `save` (bought
- *  next to nothing); at or above it is `eco` (spent a real amount while still banking money). */
-export const SAVE_EQUIP_MAX = 1000;
+/** Within the "kept `BANK_MIN`+ in reserve" branch, equipment value at or above this is `eco`
+ *  (spent a real amount while still banking money); under it is `save` (bought next to nothing).
+ *  Named as a minimum-to-clear, like `FULL_BUY_MIN_T/CT`/`BANK_MIN` above, so all three thresholds
+ *  in `classifyEconomy()` read the same direction. */
+export const ECO_EQUIP_MIN = 1000;
 
 export interface RoundFreezeEndRow {
   tick: number;
@@ -62,12 +64,12 @@ export function fullBuyMin(side: 'CT' | 'T'): number {
 /** A complete kit is `full_buy` regardless of what's left in the bank; short of that, the round is
  *  first split by whether the bank stayed healthy (`save`/`eco`) or got spent down (`force`), and
  *  only within the healthy-bank branch does equipment value further distinguish barely-bought
- *  (`save`) from a real partial buy (`eco`). See `BANK_MIN`/`SAVE_EQUIP_MAX`'s own comments for
+ *  (`save`) from a real partial buy (`eco`). See `BANK_MIN`/`ECO_EQUIP_MIN`'s own comments for
  *  the reasoning behind each cut. */
 export function classifyEconomy(equipmentValue: number, remainingCash: number, side: 'CT' | 'T'): EconomyType {
   if (equipmentValue >= fullBuyMin(side)) return 'full_buy';
   if (remainingCash < BANK_MIN) return 'force';
-  return equipmentValue < SAVE_EQUIP_MAX ? 'save' : 'eco';
+  return equipmentValue >= ECO_EQUIP_MIN ? 'eco' : 'save';
 }
 
 export interface RoundEconomyFactRow {
@@ -129,13 +131,29 @@ export function neededEconomyTicks(freezeEndEvents: RoundFreezeEndRow[], bounds:
   return [...ticks];
 }
 
+/** Folds `collectMatchRoundEconomy()`'s flat rows into a `(steamid -> round -> tier)` map — the
+ *  shape `collectEconomyStats()` (`weaponStats.ts`) needs for an O(1) per-shot tier lookup while
+ *  it replays the same match. A separate export (not inlined into `classifyRoundEconomy()` below)
+ *  so a caller that already has the flat rows in hand (`demoOrchestrator.ts`, which also persists
+ *  them as-is) can reshape them without re-running the round/player scan a second time. */
+export function foldRoundEconomyByPlayer(
+  rows: RoundEconomyFactRow[],
+  steamIds: string[],
+): Map<string, Map<number, EconomyType>> {
+  const out = new Map<string, Map<number, EconomyType>>();
+  for (const sid of steamIds) out.set(sid, new Map());
+  for (const row of rows) {
+    out.get(row.player_steamid)?.set(row.round_number, row.economy_type);
+  }
+  return out;
+}
+
 /**
- * Classifies each player's economy tier (#279) for every live round, from their own equipment
- * value and remaining cash at that round's freeze-time-end
- * (`CCSPlayerPawn.m_unFreezetimeEndEquipmentValue` / `CCSPlayerController.m_iAccount`, the former
- * confirmed against a real DGLS demo) plus their side that round (for the side-specific full-buy
- * floor). One entry per (player, round) — a round with no matching tick-state row (parser miss),
- * or no resolvable side, is left unclassified rather than guessed.
+ * Classifies each player's economy tier (#279) for every live round — `collectMatchRoundEconomy()`
+ * plus `foldRoundEconomyByPlayer()`, for a caller that wants the `(steamid -> round -> tier)` shape
+ * without already having the flat rows on hand. One entry per (player, round); a round
+ * `collectMatchRoundEconomy()` couldn't classify (parser miss, unresolvable side) is simply absent
+ * here too.
  */
 export function classifyRoundEconomy(
   freezeEndEvents: RoundFreezeEndRow[],
@@ -143,26 +161,6 @@ export function classifyRoundEconomy(
   context: MatchContext,
   steamIds: string[],
 ): Map<string, Map<number, EconomyType>> {
-  const out = new Map<string, Map<number, EconomyType>>();
-  const steamSet = new Set(steamIds);
-  for (const sid of steamIds) out.set(sid, new Map());
-
-  const rowLookup = new Map<string, PlayerEquipmentRow>();
-  for (const r of equipmentRows) rowLookup.set(`${r.steamid}::${r.tick}`, r);
-
-  for (const e of freezeEndEvents) {
-    const round = roundOf(e, context);
-    if (round == null) continue;
-
-    for (const sid of steamIds) {
-      if (!steamSet.has(sid)) continue;
-      const row = rowLookup.get(`${sid}::${e.tick}`);
-      if (!row) continue;
-      const side = context.playerSides.get(sid)?.get(round);
-      if (!side) continue;
-      out.get(sid)!.set(round, classifyEconomy(row.equipmentValue, row.remainingCash, side));
-    }
-  }
-
-  return out;
+  const rows = collectMatchRoundEconomy(freezeEndEvents, equipmentRows, context, steamIds);
+  return foldRoundEconomyByPlayer(rows, steamIds);
 }

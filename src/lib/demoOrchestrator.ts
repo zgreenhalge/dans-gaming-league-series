@@ -31,7 +31,7 @@ import {
   collectRoundsDropped, neededReloadTicks, type WeaponReloadRow, type PlayerReloadStateRow,
 } from './parsers/reload';
 import {
-  classifyRoundEconomy, collectMatchRoundEconomy, neededEconomyTicks,
+  foldRoundEconomyByPlayer, collectMatchRoundEconomy, neededEconomyTicks,
   type RoundFreezeEndRow, type PlayerEquipmentRow,
 } from './parsers/economy';
 import {
@@ -317,7 +317,10 @@ export function parseDemoSabremetrics(
       );
     }
   }
-  const roundEconomy = classifyRoundEconomy(freezeEndEvents, equipmentRows, context, steamIds);
+  // Computed once here (not re-derived later) since both the per-shot economy breakdown below and
+  // the match_round_economy fact rows persisted further down need it.
+  const roundEconomyFacts = collectMatchRoundEconomy(freezeEndEvents, equipmentRows, context, steamIds);
+  const roundEconomy = foldRoundEconomyByPlayer(roundEconomyFacts, steamIds);
 
   // Per-weapon-category and per-round-economy shot/accuracy/damage/rounds breakdowns (#279).
   const weaponClassStats = collectWeaponClassStats(fireEvents, hurtEvents, context, steamIds);
@@ -357,7 +360,6 @@ export function parseDemoSabremetrics(
     tick: u.tick,
   }));
 
-  const roundEconomyFacts = collectMatchRoundEconomy(freezeEndEvents, equipmentRows, context, steamIds);
   const matchRoundEconomy: DemoMatchRoundEconomy[] = roundEconomyFacts.map((e) => ({
     round_number: e.round_number,
     player_id: playerIdOf(e.player_steamid)!,
