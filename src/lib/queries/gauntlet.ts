@@ -1,12 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { LeaderboardRowWithId, PlayerMatchStat, Match, Player } from '../types';
-import { allMatchesPlayed, anyMatchPlayed, canonicalSort, deriveRates, isPlayedScore, upcomingScheduledMatches, upcomingUnscheduledMatches } from '../util';
+import { allMatchesPlayed, canonicalSort, deriveRates, isPlayedScore, upcomingScheduledMatches, upcomingUnscheduledMatches } from '../util';
 import { getPodSibling } from '../gauntlet-pod';
 import { seedByPlayerId, slotRank } from '../gauntlet-draft';
 import { computeH2H, gauntletRoundsToH2HInput, type H2HData } from '../h2h';
 import { getPlayersById } from './player';
-import { getWeekLookup, weekRowsFromLookup } from './_shared';
+import { getWeekLookup, weekRowsFromLookup, resolveAllMatches } from './_shared';
 import type { UpcomingGameRow, UpcomingGamesOf } from './schedule';
 import { getSeasonEhogRatings } from './ehog';
 import { getAllSabremetrics, type SabremetricMatchRow } from './sabremetrics';
@@ -694,19 +694,14 @@ export async function getGauntletBracketShape(gauntletSeasonId: number): Promise
 /** Whether a gauntlet season has any materialized matches yet ("seeded") and whether any of them has
  *  a played score ("started") — the admin console's gauntlet-lifecycle list needs only these two
  *  booleans per season, not the full per-player payload `getGauntletRounds()` builds (which joins
- *  `player_match_stats`/`players` to get there). Reads only `weeks`/`matches`, so it's cheap enough
- *  to call once per in-progress gauntlet on that page. */
+ *  `player_match_stats`/`players` to get there). Reads from `resolveAllMatches()` (`_shared.ts`,
+ *  `cache()`-wrapped) rather than its own scoped `weeks`/`matches` query, so every season this is
+ *  called for in one render pass (the admin console lists every gauntlet) shares that one read. */
 export async function getGauntletSeasonProgress(seasonId: number): Promise<{ seeded: boolean; started: boolean }> {
-  const weekLookup = await getWeekLookup([seasonId]);
-  const weekIds = weekRowsFromLookup(weekLookup).map((w) => w.id);
-  if (weekIds.length === 0) return { seeded: false, started: false };
-
-  const { data, error } = await supabase.from('matches').select('final_score').in('week_id', weekIds);
-  if (error) throw error;
-  const rows = (data ?? []) as { final_score: string | null }[];
+  const rows = (await resolveAllMatches()).filter((m) => m.season_id === seasonId);
   return {
     seeded: rows.length > 0,
-    started: anyMatchPlayed(rows),
+    started: rows.some((m) => m.played),
   };
 }
 
@@ -718,8 +713,17 @@ export async function getGauntletRounds(seasonId: number, client: SupabaseClient
   // getWeekLookup() carries no ordering guarantee, unlike the `.order('week_number')` this used to
   // run itself — sort explicitly here since round_number below is assigned in weekRows iteration
   // order.
-  const weekLookup = await getWeekLookup([seasonId], client);
-  const weekRows = weekRowsFromLookup(weekLookup).sort((a, b) => a.week_number - b.week_number);
+  //
+  // On the default-client path, call the bare (unscoped) getWeekLookup() rather than
+  // getWeekLookup([seasonId], client) — cache() keys on the exact argument list, so a fresh
+  // `[seasonId]` array literal would miss the request-wide `weeks` read resolveAllMatches() (and
+  // every other bare caller in the same render pass) already shares under that same no-arg call.
+  // Same reasoning as the getPlayersById() call below. Only takes the scoped path for a non-default
+  // client, where there's no render-pass cache to share anyway.
+  const weekLookup = client === supabase ? await getWeekLookup() : await getWeekLookup([seasonId], client);
+  const weekRows = weekRowsFromLookup(weekLookup)
+    .filter((w) => w.season_id === seasonId)
+    .sort((a, b) => a.week_number - b.week_number);
   if (weekRows.length === 0) return [];
 
   const weekIds = weekRows.map((w) => w.id);

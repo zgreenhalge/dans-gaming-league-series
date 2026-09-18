@@ -269,27 +269,60 @@ export const getRoundSides = cache(async (matchId?: number): Promise<Map<string,
   ]));
 });
 
+export interface AllMatchesRow {
+  id: number;
+  season_id: number;
+  is_playoff_game: boolean;
+  played: boolean;
+}
+
 /**
- * Resolves `match_id -> season_id` for every played match (`isPlayedScore(final_score)`), via
- * `matches` -> `weeks` -> `seasons` — the join every demo-derived-stat query needs to scope its
- * rows to a season. Shared by `getAllSabremetrics()` and the weapon-class/economy breakdown
- * queries so the join logic can't drift between them. Wrapped in React's `cache()` (#507) so every
- * caller within one render pass — `getAllMatchRounds()`, `getAllMatchKills()`,
- * `getAllWeaponClassStats()`/`getAllEconomyStats()`, `getSabremetricSeasonTotals()` — shares one
- * `matches`/`weeks` read rather than each resolving the join independently.
+ * Every match in the league — played or not — resolved to its `season_id` via `matches` ->
+ * `weeks`, plus `is_playoff_game` and `played` status. The one shared `matches`/`weeks` join
+ * behind every "which matches belong to this season" caller, whether it only wants played matches
+ * (`resolveMatchSeasons()` below) or needs unplayed ones too (`getSeasonBaseData()`'s roster
+ * derivation in `leaderboard.ts`, `getGauntletSeasonProgress()`'s seeded/started check in
+ * `gauntlet.ts` — a gauntlet can be validly "seeded" with zero played matches). Wrapped in React's
+ * `cache()` so every caller within one render pass shares this one full-table read instead of each
+ * re-querying `matches` with its own scoping/column selection.
  */
-export const resolveMatchSeasons = cache(async (): Promise<Map<number, number>> => {
+export const resolveAllMatches = cache(async (): Promise<AllMatchesRow[]> => {
   const [{ data: matchRows, error: matchErr }, weekLookup] = await Promise.all([
-    supabase.from('matches').select('id, week_id, final_score'),
+    supabase.from('matches').select('id, week_id, is_playoff_game, final_score'),
     getWeekLookup(),
   ]);
   if (matchErr) throw matchErr;
 
-  const matchSeason = new Map<number, number>();
-  for (const m of (matchRows ?? []) as { id: number; week_id: number; final_score: string | null }[]) {
-    if (!isPlayedScore(m.final_score)) continue;
+  const rows: AllMatchesRow[] = [];
+  for (const m of (matchRows ?? []) as { id: number; week_id: number; is_playoff_game: boolean; final_score: string | null }[]) {
     const week = weekLookup.get(m.week_id);
-    if (week != null) matchSeason.set(m.id, week.season_id);
+    if (week == null) continue;
+    rows.push({
+      id: m.id,
+      season_id: week.season_id,
+      is_playoff_game: m.is_playoff_game,
+      played: isPlayedScore(m.final_score),
+    });
+  }
+  return rows;
+});
+
+/**
+ * Resolves `match_id -> season_id` for every played match, via `matches` -> `weeks` -> `seasons` —
+ * the join every demo-derived-stat query needs to scope its rows to a season. Shared by
+ * `getAllSabremetrics()` and the weapon-class/economy breakdown queries so the join logic can't
+ * drift between them. Derived from `resolveAllMatches()` (itself `cache()`-wrapped) rather than its
+ * own `matches` read, so this and every unplayed-inclusive caller of `resolveAllMatches()` share one
+ * fetch. Wrapped in `cache()` (#507) so every caller within one render pass — `getAllMatchRounds()`,
+ * `getAllMatchKills()`, `getAllWeaponClassStats()`/`getAllEconomyStats()`,
+ * `getSabremetricSeasonTotals()` — shares one result rather than each resolving the join
+ * independently.
+ */
+export const resolveMatchSeasons = cache(async (): Promise<Map<number, number>> => {
+  const rows = await resolveAllMatches();
+  const matchSeason = new Map<number, number>();
+  for (const r of rows) {
+    if (r.played) matchSeason.set(r.id, r.season_id);
   }
   return matchSeason;
 });
