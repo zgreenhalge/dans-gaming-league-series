@@ -75,6 +75,10 @@ interface TeamLine {
   points: TeamPoint[];
 }
 
+/** Identifies one series (a player's line or a team's total) for the single-series hover card —
+ *  see `hoverPoint` below. */
+type SeriesRef = { kind: 'player'; id: number } | { kind: 'team'; key: 'shirts' | 'skins' };
+
 /** Round-by-round equipment value (money), with kills surfaced on hover — the Economy sub-tab's
  *  round timeline (#519), a finer grain than the tier-bucketed `EconomyTable` below it. One line
  *  per player, grouped/colored by side rather than by SHIRTS/SKINS identity, matching
@@ -106,7 +110,21 @@ export default function RoundEconomyChart({
   selectedTier: string;
 }) {
   const [containerRef, width] = useElementWidth(320, 600);
+  /** The full multi-series tooltip's round — set only by hovering/clicking a round number along
+   *  the bottom axis, not by moving over the plot generally. */
   const [hoverRound, setHoverRound] = useState<number | null>(null);
+  /** The single-series tooltip's target — set by hovering one specific player/team marker.
+   *  Mutually exclusive with `hoverRound`: each setter clears the other. */
+  const [hoverPoint, setHoverPoint] = useState<{ series: SeriesRef; round: number } | null>(null);
+
+  function focusRound(r: number | null) {
+    setHoverRound(r);
+    if (r != null) setHoverPoint(null);
+  }
+  function focusPoint(point: { series: SeriesRef; round: number } | null) {
+    setHoverPoint(point);
+    if (point != null) setHoverRound(null);
+  }
 
   const { rounds, lines, teamLines, yMax, roundBands } = useMemo(() => {
     const roundSet = new Set<number>();
@@ -197,6 +215,7 @@ export default function RoundEconomyChart({
   const plotW = width - PADDING.left - PADDING.right;
   const plotH = height - PADDING.top - PADDING.bottom;
   const span = Math.max(1, rounds.length - 1);
+  const colWidth = plotW / rounds.length;
 
   const xFor = (i: number) => PADDING.left + (i / span) * plotW;
   const yFor = (v: number) => PADDING.top + plotH - (v / yMax) * plotH;
@@ -226,22 +245,8 @@ export default function RoundEconomyChart({
   const hasFilter = selectedTier !== ALL_ECONOMY_TIERS;
   const DIMMED_OPACITY = 0.22;
 
-  function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    let closest = 0;
-    let closestDist = Infinity;
-    rounds.forEach((_, i) => {
-      const d = Math.abs(xFor(i) - mx);
-      if (d < closestDist) {
-        closestDist = d;
-        closest = i;
-      }
-    });
-    setHoverRound(closestDist < plotW / span ? rounds[closest] : null);
-  }
-
   const hoverIdx = hoverRound != null ? rounds.indexOf(hoverRound) : -1;
+  const activeIdx = hoverIdx >= 0 ? hoverIdx : (hoverPoint != null ? rounds.indexOf(hoverPoint.round) : -1);
 
   return (
     <div ref={containerRef}>
@@ -269,27 +274,23 @@ export default function RoundEconomyChart({
         height={height}
         viewBox={`0 0 ${width} ${height}`}
         style={{ display: 'block', overflow: 'visible' }}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setHoverRound(null)}
+        onMouseLeave={() => { setHoverRound(null); setHoverPoint(null); }}
       >
-        {(() => {
-          const colWidth = plotW / rounds.length;
-          return rounds.map((r, i) => {
-            const color = roundBands[i].color;
-            if (!color) return null;
-            return (
-              <rect
-                key={r}
-                x={xFor(i) - colWidth / 2}
-                y={PADDING.top}
-                width={colWidth}
-                height={plotH}
-                fill={color}
-                fillOpacity={0.1}
-              />
-            );
-          });
-        })()}
+        {rounds.map((r, i) => {
+          const color = roundBands[i].color;
+          if (!color) return null;
+          return (
+            <rect
+              key={r}
+              x={xFor(i) - colWidth / 2}
+              y={PADDING.top}
+              width={colWidth}
+              height={plotH}
+              fill={color}
+              fillOpacity={0.1}
+            />
+          );
+        })}
 
         {yTicks.map((tick) => {
           const y = yFor(tick);
@@ -303,14 +304,26 @@ export default function RoundEconomyChart({
           );
         })}
 
+        {/* The only trigger for the full multi-series tooltip below — hovering/clicking a round
+            number, not the plot area generally. The transparent rect widens the hit target past
+            the digits themselves to the full column width. */}
         {rounds.map((r, i) => (
-          <text key={r} x={xFor(i)} y={height - 6} textAnchor="middle" fill="var(--color-text-secondary)" fontSize={9} fontFamily="monospace">
-            {r}
-          </text>
+          <g
+            key={r}
+            onMouseEnter={() => focusRound(r)}
+            onMouseLeave={() => setHoverRound(null)}
+            onClick={() => focusRound(r)}
+            style={{ cursor: 'pointer' }}
+          >
+            <rect x={xFor(i) - colWidth / 2} y={height - 16} width={colWidth} height={16} fill="transparent" />
+            <text x={xFor(i)} y={height - 6} textAnchor="middle" fill="var(--color-text-secondary)" fontSize={9} fontFamily="monospace">
+              {r}
+            </text>
+          </g>
         ))}
 
-        {hoverIdx >= 0 && (
-          <line x1={xFor(hoverIdx)} x2={xFor(hoverIdx)} y1={PADDING.top} y2={PADDING.top + plotH} stroke="var(--color-border-secondary)" strokeWidth={1} strokeDasharray="3,3" />
+        {activeIdx >= 0 && (
+          <line x1={xFor(activeIdx)} x2={xFor(activeIdx)} y1={PADDING.top} y2={PADDING.top + plotH} stroke="var(--color-border-secondary)" strokeWidth={1} strokeDasharray="3,3" />
         )}
 
         {/* Team totals draw first (thick, solid) so the two dashed per-player lines/markers read
@@ -336,6 +349,27 @@ export default function RoundEconomyChart({
           </g>
         ))}
 
+        {/* Team-point hit targets draw first (no visible marker of their own — the team line
+            itself is the marker) so an overlapping player dot's hit target, added below, wins
+            when a round's team total and a player's own value land on the same pixel. */}
+        {teamLines.map((t) =>
+          t.points.map((p, i) => {
+            if (p.money == null) return null;
+            return (
+              <circle
+                key={`${t.key}-${p.round}`}
+                cx={xFor(i)}
+                cy={yFor(p.money)}
+                r={8}
+                fill="transparent"
+                onMouseEnter={() => focusPoint({ series: { kind: 'team', key: t.key }, round: p.round })}
+                onMouseLeave={() => setHoverPoint(null)}
+                style={{ cursor: 'pointer' }}
+              />
+            );
+          }),
+        )}
+
         {lines.map((l) =>
           l.points.map((p, i) => {
             if (p.money == null) return null;
@@ -349,6 +383,15 @@ export default function RoundEconomyChart({
                     {p.kills}
                   </text>
                 )}
+                <circle
+                  cx={xFor(i)}
+                  cy={yFor(p.money)}
+                  r={8}
+                  fill="transparent"
+                  onMouseEnter={() => focusPoint({ series: { kind: 'player', id: l.id }, round: p.round })}
+                  onMouseLeave={() => setHoverPoint(null)}
+                  style={{ cursor: 'pointer' }}
+                />
               </g>
             );
           }),
@@ -385,6 +428,51 @@ export default function RoundEconomyChart({
                   </text>
                 );
               })}
+            </g>
+          );
+        })()}
+
+        {/* Hovering one player/team marker directly shows just that series's value, instead of
+            the full round breakdown above — the round-number trigger covers the "compare
+            everyone" case, this covers "what was this one line doing here." */}
+        {hoverPoint && (() => {
+          const idx = rounds.indexOf(hoverPoint.round);
+          if (idx < 0) return null;
+          const series = hoverPoint.series;
+          let label: string, color: string, money: number | null;
+          if (series.kind === 'team') {
+            const t = teamLines.find((tt) => tt.key === series.key);
+            if (!t) return null;
+            ({ label, color } = t);
+            money = t.points[idx].money;
+          } else {
+            const l = lines.find((ll) => ll.id === series.id);
+            if (!l) return null;
+            label = l.name;
+            color = l.color;
+            money = l.points[idx].money;
+          }
+
+          const tooltipW = 150;
+          const tooltipH = 34;
+          let tx = xFor(idx) - tooltipW / 2;
+          if (tx < PADDING.left) tx = PADDING.left;
+          if (tx + tooltipW > width - PADDING.right) tx = width - PADDING.right - tooltipW;
+          const pointY = yFor(money ?? 0);
+          let ty = pointY - tooltipH - 10;
+          if (ty < PADDING.top) ty = pointY + 10;
+          if (ty + tooltipH > height - PADDING.bottom) ty = height - PADDING.bottom - tooltipH;
+
+          return (
+            <g style={{ pointerEvents: 'none' }}>
+              <rect x={tx} y={ty} width={tooltipW} height={tooltipH} rx={4} fill="var(--color-bg-secondary)" stroke="var(--color-border-primary)" strokeWidth={1} />
+              <text x={tx + 8} y={ty + 13} fill="var(--color-text-primary)" fontSize={10} fontFamily="monospace" fontWeight={600}>
+                Round {hoverPoint.round}
+              </text>
+              <text x={tx + 8} y={ty + 27} fontSize={9} fontFamily="monospace" fill="var(--color-text-primary)">
+                <tspan fill={color}>{'●'} </tspan>
+                {label}: {money != null ? `$${money}` : '—'}
+              </text>
             </g>
           );
         })()}
