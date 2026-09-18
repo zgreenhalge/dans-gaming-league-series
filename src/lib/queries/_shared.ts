@@ -1,4 +1,5 @@
 import { cache } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { gunzipMaybe } from '../gzip';
 import { getR2Object } from '../r2';
 import { supabase } from '../supabase';
@@ -91,13 +92,16 @@ export function missingIds(requested: number[], covered: number[] | undefined): 
  * Resolves `week_id -> { season_id, week_number }` — the `weeks` -> `seasons` half of the
  * `matches` -> `weeks` -> `seasons` join every season-scoped query needs. Pass `seasonIds` to
  * scope to specific seasons (e.g. gauntlet seasons); omit it to resolve every week in the league.
- * Wrapped in React's `cache()` so every no-arg caller within one render pass (the common case)
- * shares one `weeks` read rather than each resolving it independently.
+ * `client` defaults to the app's anon-key client but accepts an admin client for callers running
+ * outside a Next.js request (a GitHub Actions script, which has no `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
+ * — same opt-in pattern as `getSeasonSchedule()` (`schedule.ts`). Wrapped in React's `cache()` so
+ * every no-arg caller within one render pass (the common case) shares one `weeks` read rather than
+ * each resolving it independently.
  */
 export type WeekLookup = Map<number, { season_id: number; week_number: number }>;
 
-export const getWeekLookup = cache(async (seasonIds?: number[]): Promise<WeekLookup> => {
-  let query = supabase.from('weeks').select('id, season_id, week_number');
+export const getWeekLookup = cache(async (seasonIds?: number[], client: SupabaseClient = supabase): Promise<WeekLookup> => {
+  let query = client.from('weeks').select('id, season_id, week_number');
   if (seasonIds) query = query.in('season_id', seasonIds);
   const { data, error } = await query;
   if (error) throw error;
