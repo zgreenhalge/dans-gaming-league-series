@@ -68,7 +68,7 @@ function GameRow({
           </>
         ) : (
           <span className="tracked text-[10px] text-[var(--color-text-secondary)] opacity-70">
-            Needs a time
+            To Be Scheduled
           </span>
         )}
       </div>
@@ -76,10 +76,11 @@ function GameRow({
   );
 }
 
-/** Home page panel: every scheduled-but-unplayed game (soonest first), plus every unplayed game
- *  still missing a time — the one "what's coming up" surface for both a regular season and a
- *  gauntlet. `scheduled`/`unscheduled` are pre-derived by the caller: `getUpcomingGames()`
- *  (`src/lib/queries/schedule.ts`) for a regular season's current week, or
+/** Home page panels: a titled "Upcoming Games" block for every scheduled-but-unplayed game
+ *  (soonest first), and a separate, untitled block for every unplayed game still missing a time —
+ *  the one "what's coming up" surface for both a regular season and a gauntlet. Either block is
+ *  omitted when its own list is empty. `scheduled`/`unscheduled` are pre-derived by the caller:
+ *  `getUpcomingGames()` (`src/lib/queries/schedule.ts`) for a regular season's current week, or
  *  `getUpcomingGauntletGames()` (`src/lib/queries/gauntlet.ts`) for a gauntlet, which has no weekly
  *  structure to anchor "next week" on and so surfaces every unscheduled bracket match instead. */
 export function UpcomingGamesPanel({
@@ -94,29 +95,27 @@ export function UpcomingGamesPanel({
   if (scheduled.length === 0 && unscheduled.length === 0) return null;
 
   return (
-    <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-      <div className="px-6 py-4 border-b border-[var(--color-border-tertiary)]">
-        <span className="font-display text-[18px] font-semibold text-[var(--color-text-primary)]">
-          Upcoming Games
-        </span>
-      </div>
-
-      {scheduled.map((g) => (
-        <GameRow key={g.id} game={g} currentPlayerId={currentPlayerId} />
-      ))}
-
-      {unscheduled.length > 0 && (
-        <>
-          <div className="px-5 py-1.5 border-b border-[var(--color-border-tertiary)] bg-[var(--color-bg-secondary)]">
-            <span className="tracked text-[9px] font-semibold text-[var(--color-text-secondary)]">
-              Needs scheduling
+    <>
+      {scheduled.length > 0 && (
+        <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
+          <div className="px-6 py-4 border-b border-[var(--color-border-tertiary)]">
+            <span className="font-display text-[18px] font-semibold text-[var(--color-text-primary)]">
+              Upcoming Games
             </span>
           </div>
+          {scheduled.map((g) => (
+            <GameRow key={g.id} game={g} currentPlayerId={currentPlayerId} />
+          ))}
+        </div>
+      )}
+
+      {unscheduled.length > 0 && (
+        <div className={`border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]${scheduled.length > 0 ? ' mt-4' : ''}`}>
           {unscheduled.map((g) => (
             <GameRow key={g.id} game={g} currentPlayerId={currentPlayerId} />
           ))}
-        </>
+        </div>
       )}
-    </div>
+    </>
   );
 }
