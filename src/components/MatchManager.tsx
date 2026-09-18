@@ -13,7 +13,7 @@ import type { ScheduledMatchRef } from '@/lib/server-schedule-collision';
 import EmptyState from './EmptyState';
 import SectionLabel from './SectionLabel';
 import VetoSequence from './VetoSequence';
-import { ScheduleEditor, fmtScheduled } from './ScheduleEditor';
+import { ScheduleEditor } from './ScheduleEditor';
 import { FeatureMatchToggle } from './FeatureMatchToggle';
 import { ReparseDemoButton } from './ReparseDemoButton';
 
@@ -54,7 +54,8 @@ export function MatchManager({
 
   // Every unplayed scheduled match — the collision pool the schedule editor checks against (built
   // once from the loaded list, so no per-row fetch). A gauntlet match's own pod sibling is filtered
-  // out per-row below (see `others`), not here, since it's intentionally 30 minutes away.
+  // out per-row below (see `others`), not here, since the pod's two games share the one server
+  // sequentially by design — being close together in time isn't a double-booking.
   const scheduledRefs: ScheduledMatchRef[] = useMemo(
     () =>
       matches
@@ -126,22 +127,7 @@ export function MatchManager({
                     {!played && (
                       <section>
                         <SectionLabel>Schedule</SectionLabel>
-                        {m.podGameNumber === 2 ? (
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {m.match.scheduled_at ? (
-                              <span className="font-mono text-[12px] text-[var(--color-text-primary)]">{fmtScheduled(m.match.scheduled_at)}</span>
-                            ) : (
-                              <span className="font-mono text-[12px] text-[var(--color-text-secondary)]">unscheduled</span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => setOpenId(m.podSiblingId)}
-                              className="font-mono text-[10px] px-2 py-[3px] rounded border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
-                            >
-                              Game 1 ↗
-                            </button>
-                          </div>
-                        ) : (
+                        <div className="flex items-center gap-2 flex-wrap">
                           <ScheduleEditor
                             matchId={m.match.id}
                             scheduledAt={m.match.scheduled_at}
@@ -149,7 +135,16 @@ export function MatchManager({
                             weekEnd={m.weekEnd}
                             otherScheduled={others}
                           />
-                        )}
+                          {m.podSiblingId != null && (
+                            <button
+                              type="button"
+                              onClick={() => setOpenId(m.podSiblingId)}
+                              className="font-mono text-[10px] px-2 py-[3px] rounded border border-[var(--color-border-secondary)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+                            >
+                              Game {m.podGameNumber === 2 ? 1 : 2} ↗
+                            </button>
+                          )}
+                        </div>
                       </section>
                     )}
 
