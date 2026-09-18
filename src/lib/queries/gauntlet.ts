@@ -235,6 +235,7 @@ export interface GauntletMatch {
   picked_map: string | null;
   shirts_pick: string | null;
   skins_starting_side: 'CT' | 'T' | null;
+  is_feature_match: boolean;
   shirts_stats: GauntletPlayerStat[];
   skins_stats: GauntletPlayerStat[];
   /** The pod this match belongs to — null for gauntlets predating the bracket-scheduling feature
@@ -729,11 +730,11 @@ export async function getGauntletRounds(seasonId: number, client: SupabaseClient
   // JSON/text columns (`round_history`, ban pairs, `pre_match_win_prob*`, etc.) never used here.
   type GauntletMatchRow = Pick<
     Match,
-    'id' | 'match_number' | 'final_score' | 'scheduled_at' | 'picked_map' | 'shirts_pick' | 'skins_starting_side' | 'week_id'
+    'id' | 'match_number' | 'final_score' | 'scheduled_at' | 'picked_map' | 'shirts_pick' | 'skins_starting_side' | 'is_feature_match' | 'week_id'
   >;
   const { data: matchData, error: mErr } = await client
     .from('matches')
-    .select('id, match_number, final_score, scheduled_at, picked_map, shirts_pick, skins_starting_side, week_id')
+    .select('id, match_number, final_score, scheduled_at, picked_map, shirts_pick, skins_starting_side, is_feature_match, week_id')
     .in('week_id', weekIds)
     .order('match_number');
   if (mErr) throw mErr;
@@ -842,6 +843,7 @@ export async function getGauntletRounds(seasonId: number, client: SupabaseClient
         picked_map: m.picked_map,
         shirts_pick: m.shirts_pick,
         skins_starting_side: m.skins_starting_side,
+        is_feature_match: m.is_feature_match,
         shirts_stats: allStats.filter((s) => s.faction === 'SHIRTS'),
         skins_stats: allStats.filter((s) => s.faction === 'SKINS'),
         pod_index: pod?.pod_index ?? null,

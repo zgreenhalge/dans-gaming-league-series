@@ -251,7 +251,7 @@ function GauntletRoundCard({
                           key={m.id}
                           href={`/matches/${m.id}`}
                           map={m.shirts_pick ?? m.picked_map}
-                          label={{ type: 'game', gameNumber }}
+                          label={{ type: 'game', gameNumber, isFeatureMatch: m.is_feature_match }}
                           right={right}
                           shirtsStats={m.shirts_stats}
                           skinsStats={m.skins_stats}

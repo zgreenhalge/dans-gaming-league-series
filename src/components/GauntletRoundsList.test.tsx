@@ -24,6 +24,7 @@ function gauntletMatch(overrides: Partial<GauntletMatch> & { id: number }): Gaun
     picked_map: null,
     shirts_pick: null,
     skins_starting_side: null,
+    is_feature_match: false,
     shirts_stats: [],
     skins_stats: [],
     pod_index: null,
@@ -247,6 +248,27 @@ describe('GauntletRoundsList — pending pod placeholders (#528)', () => {
     expect(screen.getAllByText('Game 1')).toHaveLength(2);
     expect(screen.getAllByText('Game 2')).toHaveLength(2);
     expect(screen.queryByText('Game 3')).not.toBeInTheDocument();
+  });
+
+  test('a game flagged is_feature_match shows the feature icon, same as a regular-season match', () => {
+    const round: GauntletRound = {
+      round_number: 1,
+      matches: [gauntletMatch({ id: 302, match_number: 1, is_feature_match: true })],
+      is_final_round: false,
+    };
+
+    render(
+      <GauntletRoundsList
+        displayRounds={[round]}
+        allRounds={[round]}
+        bracketShape={[]}
+        openRounds={new Set([1])}
+        onToggleRound={() => {}}
+        currentPlayerId={null}
+      />,
+    );
+
+    expect(screen.getByText('⭐')).toBeInTheDocument();
   });
 
   test('an unplayed match with scheduled_at shows the scheduled time instead of "Pending"', () => {

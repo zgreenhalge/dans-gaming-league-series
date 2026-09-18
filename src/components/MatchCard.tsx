@@ -20,7 +20,7 @@ export interface MatchCardPlayer {
 
 export type MatchCardLabel =
   | { type: 'match'; matchNumber: number; isFeatureMatch: boolean }
-  | { type: 'game'; gameNumber: number }
+  | { type: 'game'; gameNumber: number; isFeatureMatch: boolean }
   | { type: 'player-history'; seasonNumber: number | null; isGauntlet: boolean; weekNumber: number; matchNumber: number };
 
 export type MatchCardRight =
@@ -135,7 +135,7 @@ function renderLabel(label: MatchCardLabel, map: string | null | undefined) {
     return (
       <div className="flex items-baseline gap-3">
         <span className="font-display text-[18px] font-semibold text-[var(--color-text-primary)] map-head">
-          Game {label.gameNumber}
+          Game {label.gameNumber} {label.isFeatureMatch && <FeatureMatchIcon />}
         </span>
         {mapLabel}
       </div>
