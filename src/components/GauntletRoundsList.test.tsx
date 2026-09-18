@@ -24,6 +24,7 @@ function gauntletMatch(overrides: Partial<GauntletMatch> & { id: number }): Gaun
     picked_map: null,
     shirts_pick: null,
     skins_starting_side: null,
+    is_feature_match: false,
     shirts_stats: [],
     skins_stats: [],
     pod_index: null,

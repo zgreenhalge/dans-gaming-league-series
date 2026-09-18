@@ -76,13 +76,46 @@ function GameRow({
   );
 }
 
+/** A single bordered block of `GameRow`s, with an optional title — the shape shared by the
+ *  "Upcoming Games" block and the untitled "needs scheduling" block below. Renders nothing when
+ *  `games` is empty, so a caller doesn't need its own parallel emptiness check. */
+function GameBlock({
+  title,
+  games,
+  currentPlayerId,
+  className,
+}: {
+  title?: string;
+  games: UpcomingGameRow[];
+  currentPlayerId: number | null;
+  className?: string;
+}) {
+  if (games.length === 0) return null;
+  return (
+    <div className={`border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]${className ? ` ${className}` : ''}`}>
+      {title && (
+        <div className="px-6 py-4 border-b border-[var(--color-border-tertiary)]">
+          <span className="font-display text-[18px] font-semibold text-[var(--color-text-primary)]">
+            {title}
+          </span>
+        </div>
+      )}
+      {games.map((g) => (
+        <GameRow key={g.id} game={g} currentPlayerId={currentPlayerId} />
+      ))}
+    </div>
+  );
+}
+
 /** Home page panels: a titled "Upcoming Games" block for every scheduled-but-unplayed game
  *  (soonest first), and a separate, untitled block for every unplayed game still missing a time —
  *  the one "what's coming up" surface for both a regular season and a gauntlet. Either block is
- *  omitted when its own list is empty. `scheduled`/`unscheduled` are pre-derived by the caller:
- *  `getUpcomingGames()` (`src/lib/queries/schedule.ts`) for a regular season's current week, or
- *  `getUpcomingGauntletGames()` (`src/lib/queries/gauntlet.ts`) for a gauntlet, which has no weekly
- *  structure to anchor "next week" on and so surfaces every unscheduled bracket match instead. */
+ *  omitted when its own list is empty, and the whole thing renders nothing when both are —
+ *  the caller doesn't need its own emptiness check to decide whether to show it. `scheduled`/
+ *  `unscheduled` are pre-derived by the caller: `getUpcomingGames()` (`src/lib/queries/schedule.ts`)
+ *  for a regular season's current week, or `getUpcomingGauntletGames()`
+ *  (`src/lib/queries/gauntlet.ts`) for a gauntlet, which has no weekly structure to anchor "next
+ *  week" on and so surfaces every unscheduled bracket match instead. */
 export function UpcomingGamesPanel({
   scheduled,
   unscheduled,
@@ -95,27 +128,9 @@ export function UpcomingGamesPanel({
   if (scheduled.length === 0 && unscheduled.length === 0) return null;
 
   return (
-    <>
-      {scheduled.length > 0 && (
-        <div className="border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]">
-          <div className="px-6 py-4 border-b border-[var(--color-border-tertiary)]">
-            <span className="font-display text-[18px] font-semibold text-[var(--color-text-primary)]">
-              Upcoming Games
-            </span>
-          </div>
-          {scheduled.map((g) => (
-            <GameRow key={g.id} game={g} currentPlayerId={currentPlayerId} />
-          ))}
-        </div>
-      )}
-
-      {unscheduled.length > 0 && (
-        <div className={`border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)]${scheduled.length > 0 ? ' mt-4' : ''}`}>
-          {unscheduled.map((g) => (
-            <GameRow key={g.id} game={g} currentPlayerId={currentPlayerId} />
-          ))}
-        </div>
-      )}
-    </>
+    <div className="mt-4">
+      <GameBlock title="Upcoming Games" games={scheduled} currentPlayerId={currentPlayerId} />
+      <GameBlock games={unscheduled} currentPlayerId={currentPlayerId} className={scheduled.length > 0 ? 'mt-4' : undefined} />
+    </div>
   );
 }

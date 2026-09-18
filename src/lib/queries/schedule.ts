@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type { Week, Match, Faction } from '../types';
-import { allMatchesPlayed, isPlayedScore, weekWindow } from '../util';
+import { allMatchesPlayed, isPlayedScore, weekWindow, upcomingScheduledMatches, upcomingUnscheduledMatches } from '../util';
 import { getPlayersById } from './player';
 
 
@@ -220,37 +220,34 @@ export interface UpcomingGameRow {
   scheduled_at: string | null;
   picked_map: string | null;
   shirts_pick: string | null;
+  is_feature_match: boolean;
   shirts: { player_id: number; player_name: string }[];
   skins: { player_id: number; player_name: string }[];
-  /** Optional because `GauntletMatch` (`gauntlet.ts`) doesn't fetch this column — a gauntlet match
-   *  simply never shows the featured-match icon in the panel. */
-  is_feature_match?: boolean;
 }
 
-export interface UpcomingGames {
+/** The two buckets behind the home page's Upcoming Games panel — generic over the season's own
+ *  match shape (`MatchWithRoster` for a regular season below, `GauntletMatch` for
+ *  `getUpcomingGauntletGames()` in `gauntlet.ts`) so both share one result shape without forcing a
+ *  gauntlet match into the regular-season type. */
+export interface UpcomingGamesOf<T> {
   /** Unplayed matches with a `scheduled_at` time, soonest first. */
-  scheduled: MatchWithRoster[];
-  /** Unplayed, unscheduled matches in the week `findCurrentWeek()` treats as current — the games
-   *  still needing a time assigned. A gauntlet season has no weekly structure to anchor this on, so
-   *  it uses `getUpcomingGauntletGames()` (`gauntlet.ts`) instead. */
-  unscheduled: MatchWithRoster[];
+  scheduled: T[];
+  /** Unplayed, unscheduled matches still needing a time assigned. */
+  unscheduled: T[];
 }
+
+export type UpcomingGames = UpcomingGamesOf<MatchWithRoster>;
 
 /** Powers the home page's Upcoming Games panel for a regular season: every unplayed match that
  *  already has a time (regardless of which week it falls in), plus the unplayed matches in the
- *  current/next week that still don't. */
+ *  current/next week (`findCurrentWeek()`) that still don't — a gauntlet season has no weekly
+ *  structure to anchor that second bucket on, so it uses `getUpcomingGauntletGames()` (`gauntlet.ts`)
+ *  instead. */
 export function getUpcomingGames(schedule: WeekWithMatches[], startDate: string | null): UpcomingGames {
-  const scheduled = schedule
-    .flatMap((w) => w.matches)
-    .filter((m) => !isPlayedScore(m.final_score) && m.scheduled_at !== null)
-    .sort((a, b) => new Date(a.scheduled_at!).getTime() - new Date(b.scheduled_at!).getTime());
+  const scheduled = upcomingScheduledMatches(schedule.flatMap((w) => w.matches));
 
   const currentWeek = findCurrentWeek(schedule, startDate);
-  const unscheduled = currentWeek
-    ? [...currentWeek.matches]
-        .filter((m) => !isPlayedScore(m.final_score) && m.scheduled_at === null)
-        .sort((a, b) => a.match_number - b.match_number)
-    : [];
+  const unscheduled = currentWeek ? upcomingUnscheduledMatches(currentWeek.matches) : [];
 
   return { scheduled, unscheduled };
 }

@@ -164,15 +164,11 @@ export default async function Home() {
           />
         ))}
 
-        {(upcomingScheduled.length > 0 || upcomingUnscheduled.length > 0) && (
-          <div className="mt-4">
-            <UpcomingGamesPanel
-              scheduled={upcomingScheduled}
-              unscheduled={upcomingUnscheduled}
-              currentPlayerId={currentPlayerId}
-            />
-          </div>
-        )}
+        <UpcomingGamesPanel
+          scheduled={upcomingScheduled}
+          unscheduled={upcomingUnscheduled}
+          currentPlayerId={currentPlayerId}
+        />
       </main>
     </div>
   );

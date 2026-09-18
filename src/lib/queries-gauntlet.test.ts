@@ -43,6 +43,7 @@ function gauntletMatchStub(id: number, matchNumber: number, finalScore: string |
     picked_map: null,
     shirts_pick: null,
     skins_starting_side: null,
+    is_feature_match: false,
     shirts_stats: [],
     skins_stats: [],
     pod_index: null,
@@ -207,6 +208,7 @@ async function main() {
       ...gauntletMatchStub(5, 1, null, '2026-02-01T00:00:00Z'),
       picked_map: 'Cobblestone',
       shirts_pick: 'Vertigo',
+      is_feature_match: true,
       shirts_stats: [{ player_id: 1, player_name: 'Alice', faction: 'SHIRTS', kills: 20, assists: 2, deaths: 15, adr: 80, damage: 1900, is_win: true, rounds_won: 13, rounds_played: 24 }],
       skins_stats: [{ player_id: 2, player_name: 'Bob', faction: 'SKINS', kills: 15, assists: 3, deaths: 20, adr: 60, damage: 1400, is_win: false, rounds_won: 11, rounds_played: 24 }],
     };
@@ -216,6 +218,7 @@ async function main() {
       scheduled_at: '2026-02-01T00:00:00Z',
       picked_map: 'Cobblestone',
       shirts_pick: 'Vertigo',
+      is_feature_match: true,
       shirts: [{ player_id: 1, player_name: 'Alice' }],
       skins: [{ player_id: 2, player_name: 'Bob' }],
     });
