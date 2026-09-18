@@ -248,6 +248,17 @@ export default function RoundEconomyChart({
   const hoverIdx = hoverRound != null ? rounds.indexOf(hoverRound) : -1;
   const activeIdx = hoverIdx >= 0 ? hoverIdx : (hoverPoint != null ? rounds.indexOf(hoverPoint.round) : -1);
 
+  /** Whether `series`'s own marker at `round` is the one `hoverPoint` is currently on — drives
+   *  the "pop" highlight on that one dot/point below, so the hovered marker itself is obvious,
+   *  not just its tooltip. */
+  function isHoveredPoint(series: SeriesRef, round: number): boolean {
+    if (!hoverPoint || hoverPoint.round !== round) return false;
+    const hp = hoverPoint.series;
+    if (hp.kind === 'team' && series.kind === 'team') return hp.key === series.key;
+    if (hp.kind === 'player' && series.kind === 'player') return hp.id === series.id;
+    return false;
+  }
+
   return (
     <div ref={containerRef}>
       <div className="flex flex-wrap items-center gap-4 mb-2">
@@ -349,23 +360,32 @@ export default function RoundEconomyChart({
           </g>
         ))}
 
-        {/* Team-point hit targets draw first (no visible marker of their own — the team line
-            itself is the marker) so an overlapping player dot's hit target, added below, wins
-            when a round's team total and a player's own value land on the same pixel. */}
+        {/* Team-point hit targets draw first (no visible marker of their own, except while
+            hovered — the team line itself is normally the marker) so an overlapping player dot's
+            hit target, added below, wins when a round's team total and a player's own value land
+            on the same pixel. */}
         {teamLines.map((t) =>
           t.points.map((p, i) => {
             if (p.money == null) return null;
+            const hovered = isHoveredPoint({ kind: 'team', key: t.key }, p.round);
             return (
-              <circle
-                key={`${t.key}-${p.round}`}
-                cx={xFor(i)}
-                cy={yFor(p.money)}
-                r={8}
-                fill="transparent"
-                onMouseEnter={() => focusPoint({ series: { kind: 'team', key: t.key }, round: p.round })}
-                onMouseLeave={() => setHoverPoint(null)}
-                style={{ cursor: 'pointer' }}
-              />
+              <g key={`${t.key}-${p.round}`}>
+                {hovered && (
+                  <>
+                    <circle cx={xFor(i)} cy={yFor(p.money)} r={11} fill={t.color} fillOpacity={0.25} />
+                    <circle cx={xFor(i)} cy={yFor(p.money)} r={5} fill={t.color} stroke="var(--color-bg-primary)" strokeWidth={1.5} />
+                  </>
+                )}
+                <circle
+                  cx={xFor(i)}
+                  cy={yFor(p.money)}
+                  r={8}
+                  fill="transparent"
+                  onMouseEnter={() => focusPoint({ series: { kind: 'team', key: t.key }, round: p.round })}
+                  onMouseLeave={() => setHoverPoint(null)}
+                  style={{ cursor: 'pointer' }}
+                />
+              </g>
             );
           }),
         )}
@@ -375,9 +395,14 @@ export default function RoundEconomyChart({
             if (p.money == null) return null;
             const r = p.kills > 0 ? Math.min(10, DOT_R + p.kills * 2.5) : DOT_R;
             const dimmed = hasFilter && !p.matchesFilter;
+            const hovered = isHoveredPoint({ kind: 'player', id: l.id }, p.round);
             return (
               <g key={`${l.id}-${p.round}`} opacity={dimmed ? DIMMED_OPACITY : 1}>
-                <circle cx={xFor(i)} cy={yFor(p.money)} r={r} fill={p.kills > 0 ? l.color : 'var(--color-bg-primary)'} stroke={l.color} strokeWidth={1.5} />
+                {hovered && <circle cx={xFor(i)} cy={yFor(p.money)} r={r + 6} fill={l.color} fillOpacity={0.25} />}
+                <circle
+                  cx={xFor(i)} cy={yFor(p.money)} r={hovered ? r + 2 : r}
+                  fill={p.kills > 0 ? l.color : 'var(--color-bg-primary)'} stroke={l.color} strokeWidth={hovered ? 2.5 : 1.5}
+                />
                 {p.kills > 1 && (
                   <text x={xFor(i)} y={yFor(p.money)} textAnchor="middle" dominantBaseline="central" fill="var(--color-bg-primary)" fontSize={8} fontWeight={700}>
                     {p.kills}
@@ -398,8 +423,8 @@ export default function RoundEconomyChart({
         )}
 
         {hoverIdx >= 0 && (() => {
-          const tooltipW = 190;
-          const tooltipH = 20 + (teamLines.length + lines.length) * 14;
+          const tooltipW = 210;
+          const tooltipH = 26 + (teamLines.length + lines.length) * 17;
           let tx = xFor(hoverIdx) - tooltipW / 2;
           if (tx < PADDING.left) tx = PADDING.left;
           if (tx + tooltipW > width - PADDING.right) tx = width - PADDING.right - tooltipW;
@@ -407,13 +432,13 @@ export default function RoundEconomyChart({
           return (
             <g style={{ pointerEvents: 'none' }}>
               <rect x={tx} y={ty} width={tooltipW} height={tooltipH} rx={4} fill="var(--color-bg-secondary)" stroke="var(--color-border-primary)" strokeWidth={1} />
-              <text x={tx + 8} y={ty + 13} fill="var(--color-text-primary)" fontSize={10} fontFamily="monospace" fontWeight={600}>
+              <text x={tx + 8} y={ty + 15} fill="var(--color-text-primary)" fontSize={12} fontFamily="monospace" fontWeight={600}>
                 Round {rounds[hoverIdx]}{roundBands[hoverIdx].winner ? ` — ${roundBands[hoverIdx].winner!.winner === 'SHIRTS' ? 'Shirts' : 'Skins'} won` : ''}
               </text>
               {teamLines.map((t, i) => {
                 const p = t.points[hoverIdx];
                 return (
-                  <text key={t.key} x={tx + 8} y={ty + 28 + i * 14} fontSize={9} fontFamily="monospace" fontWeight={600} fill="var(--color-text-primary)">
+                  <text key={t.key} x={tx + 8} y={ty + 34 + i * 17} fontSize={11} fontFamily="monospace" fontWeight={600} fill="var(--color-text-primary)">
                     <tspan fill={t.color}>{'●'} </tspan>
                     {t.label}: {p.money != null ? `$${p.money}` : '—'}
                   </text>
@@ -422,7 +447,7 @@ export default function RoundEconomyChart({
               {lines.map((l, i) => {
                 const p = l.points[hoverIdx];
                 return (
-                  <text key={l.id} x={tx + 8} y={ty + 28 + (teamLines.length + i) * 14} fontSize={9} fontFamily="monospace" fill="var(--color-text-primary)">
+                  <text key={l.id} x={tx + 8} y={ty + 34 + (teamLines.length + i) * 17} fontSize={11} fontFamily="monospace" fill="var(--color-text-primary)">
                     <tspan fill={l.color}>{'●'} </tspan>
                     {l.name}: {p.money != null ? `$${p.money}` : '—'}
                   </text>
@@ -453,8 +478,8 @@ export default function RoundEconomyChart({
             money = l.points[idx].money;
           }
 
-          const tooltipW = 150;
-          const tooltipH = 34;
+          const tooltipW = 175;
+          const tooltipH = 42;
           let tx = xFor(idx) - tooltipW / 2;
           if (tx < PADDING.left) tx = PADDING.left;
           if (tx + tooltipW > width - PADDING.right) tx = width - PADDING.right - tooltipW;
@@ -466,10 +491,10 @@ export default function RoundEconomyChart({
           return (
             <g style={{ pointerEvents: 'none' }}>
               <rect x={tx} y={ty} width={tooltipW} height={tooltipH} rx={4} fill="var(--color-bg-secondary)" stroke="var(--color-border-primary)" strokeWidth={1} />
-              <text x={tx + 8} y={ty + 13} fill="var(--color-text-primary)" fontSize={10} fontFamily="monospace" fontWeight={600}>
+              <text x={tx + 8} y={ty + 16} fill="var(--color-text-primary)" fontSize={12} fontFamily="monospace" fontWeight={600}>
                 Round {hoverPoint.round}
               </text>
-              <text x={tx + 8} y={ty + 27} fontSize={9} fontFamily="monospace" fill="var(--color-text-primary)">
+              <text x={tx + 8} y={ty + 33} fontSize={11} fontFamily="monospace" fill="var(--color-text-primary)">
                 <tspan fill={color}>{'●'} </tspan>
                 {label}: {money != null ? `$${money}` : '—'}
               </text>
