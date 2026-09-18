@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import EmptyState from './EmptyState';
-import { MatchCard } from './MatchCard';
+import { MatchCard, type MatchCardRight } from './MatchCard';
 import { PlayerName } from './PlayerName';
 import { allMatchesPlayed, isPlayedScore, GAUNTLET_POD_STAKES_LABEL, roundAnchorId } from '@/lib/util';
 import { canonicalGauntletRankMap } from '@/lib/gauntlet-ranking';
@@ -241,13 +241,18 @@ function GauntletRoundCard({
                     entry.matches.map((m) => {
                       const gameNumber = entry.pod_index != null ? ++podGameNumber : ++soloGameNumber;
                       const played = isPlayedScore(m.final_score);
+                      const right: MatchCardRight = played
+                        ? { type: 'score', score: m.final_score! }
+                        : m.scheduled_at
+                          ? { type: 'scheduled', scheduledAt: m.scheduled_at }
+                          : { type: 'pending' };
                       return (
                         <MatchCard
                           key={m.id}
                           href={`/matches/${m.id}`}
                           map={m.shirts_pick ?? m.picked_map}
                           label={{ type: 'game', gameNumber }}
-                          right={played ? { type: 'score', score: m.final_score! } : { type: 'pending' }}
+                          right={right}
                           shirtsStats={m.shirts_stats}
                           skinsStats={m.skins_stats}
                           shirtsFallback={m.shirts_stats.map((p) => p.player_name).join(' & ') || 'Shirts TBD'}
