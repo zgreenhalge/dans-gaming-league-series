@@ -23,6 +23,8 @@
   --color-accent-amber-border: #e9b97a;
   --color-accent-amber-pickborder: #f5c542;
 
+  --color-accent-yellow-fg: #a9861a;
+
   --color-accent-blue-bg: #d5e2f1;
   --color-accent-blue-fg: #1f5fa8;
   --color-accent-blue-strong: #143f70;
@@ -85,6 +87,8 @@
   --color-accent-amber-strong: #ffae73;
   --color-accent-amber-border: rgba(255, 138, 61, 0.35);
   --color-accent-amber-pickborder: #f5c542;
+
+  --color-accent-yellow-fg: #ffd54a;
 
   --color-accent-blue-bg: rgba(78, 161, 255, 0.12);
   --color-accent-blue-fg: #4ea1ff;
