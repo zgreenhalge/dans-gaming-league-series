@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import { extractSeasonNumber } from '../util';
 import { MU_DEFAULT, SIGMA_DEFAULT, DEFAULT_EHOG, fromEhog } from '../ehog';
-import { batchedIn, SUPABASE_IN_BATCH, getWeekLookup } from './_shared';
+import { batchedIn, chunk, SUPABASE_IN_BATCH, getWeekLookup } from './_shared';
 
 
 // ---------------------------------------------------------------------------
@@ -151,17 +151,19 @@ export async function getSeasonEhogRatings(seasonId: number): Promise<Record<num
   if (matches.length === 0) return {};
 
   const matchIds = matches.map((m) => m.id);
-  const rows: { player_id: number; ehog_rating: number; sequence_index: number }[] = [];
-  for (let i = 0; i < matchIds.length; i += SUPABASE_IN_BATCH) {
-    const chunk = matchIds.slice(i, i + SUPABASE_IN_BATCH);
-    const { data, error } = await supabase
-      .from('player_rating_history')
-      .select('player_id, ehog_rating, sequence_index')
-      .eq('formula_version', 'ehog_v1')
-      .in('match_id', chunk);
-    if (error) throw error;
-    if (data) rows.push(...data);
-  }
+  // Chunks are independent requests — run them together rather than waiting on one before the next.
+  const pages = await Promise.all(
+    chunk(matchIds, SUPABASE_IN_BATCH).map(async (idBatch) => {
+      const { data, error } = await supabase
+        .from('player_rating_history')
+        .select('player_id, ehog_rating, sequence_index')
+        .eq('formula_version', 'ehog_v1')
+        .in('match_id', idBatch);
+      if (error) throw error;
+      return data ?? [];
+    }),
+  );
+  const rows = pages.flat();
 
   const latest: Record<number, { rating: number; seq: number }> = {};
   for (const row of rows) {
@@ -177,17 +179,19 @@ export async function getSeasonEhogRatings(seasonId: number): Promise<Record<num
 
 export async function getBatchMatchRatingDeltas(matchIds: number[]): Promise<Map<number, Map<number, number>>> {
   if (matchIds.length === 0) return new Map();
-  const rows: { match_id: number; player_id: number; rating_delta: number; ehog_rating: number; sequence_index: number }[] = [];
-  for (let i = 0; i < matchIds.length; i += SUPABASE_IN_BATCH) {
-    const chunk = matchIds.slice(i, i + SUPABASE_IN_BATCH);
-    const { data, error } = await supabase
-      .from('player_rating_history')
-      .select('match_id, player_id, rating_delta, ehog_rating, sequence_index')
-      .in('match_id', chunk)
-      .eq('formula_version', 'ehog_v1');
-    if (error) throw error;
-    if (data) rows.push(...data);
-  }
+  // Chunks are independent requests — run them together rather than waiting on one before the next.
+  const pages = await Promise.all(
+    chunk(matchIds, SUPABASE_IN_BATCH).map(async (idBatch) => {
+      const { data, error } = await supabase
+        .from('player_rating_history')
+        .select('match_id, player_id, rating_delta, ehog_rating, sequence_index')
+        .in('match_id', idBatch)
+        .eq('formula_version', 'ehog_v1');
+      if (error) throw error;
+      return data ?? [];
+    }),
+  );
+  const rows = pages.flat();
   const result = new Map<number, Map<number, number>>();
   for (const r of rows) {
     let inner = result.get(r.match_id);

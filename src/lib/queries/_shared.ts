@@ -48,6 +48,19 @@ export async function fetchAllPages<T>(
  *  caller's id list itself runs into the thousands. */
 export const SUPABASE_IN_BATCH = 200;
 
+/** Splits `arr` into `size`-length slices — the shared chunking step behind every caller that
+ *  fans a large id list out into parallel `SUPABASE_IN_BATCH`-sized `.in()` requests (`batchedIn()`
+ *  below, and `ehog.ts`'s own chunked `player_rating_history` reads, which can't go through
+ *  `batchedIn()` itself since they need an extra `.eq('formula_version', ...)` filter it has no
+ *  parameter for). */
+export function chunk<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
 /**
  * Runs a `.in(column, ids)` select in `SUPABASE_IN_BATCH`-sized id chunks, each chunk itself
  * paginated via `fetchAllPages()` — covers both truncation risks a large `.in()` list carries:
@@ -60,18 +73,19 @@ export async function batchedIn<T>(
   ids: number[],
   select: string,
 ): Promise<T[]> {
-  const results: T[] = [];
-  for (let i = 0; i < ids.length; i += SUPABASE_IN_BATCH) {
-    const chunk = ids.slice(i, i + SUPABASE_IN_BATCH);
-    // `table` is caller-supplied and genuinely dynamic across this helper's call sites, so it can't
-    // be narrowed to the generated client's per-table literal union — `asPage<T>` below covers the
-    // rest of the result shape.
-    const page = await fetchAllPages<T>((from, to) =>
-      asPage<T>(supabase.from(table as never).select(select).in(column, chunk).range(from, to)),
-    );
-    results.push(...page);
-  }
-  return results;
+  // Chunks are independent requests (each its own `.in()` filter) — run them together rather than
+  // waiting on one chunk before starting the next.
+  const pages = await Promise.all(
+    chunk(ids, SUPABASE_IN_BATCH).map((idBatch) =>
+      // `table` is caller-supplied and genuinely dynamic across this helper's call sites, so it
+      // can't be narrowed to the generated client's per-table literal union — `asPage<T>` below
+      // covers the rest of the result shape.
+      fetchAllPages<T>((from, to) =>
+        asPage<T>(supabase.from(table as never).select(select).in(column, idBatch).range(from, to)),
+      ),
+    ),
+  );
+  return pages.flat();
 }
 
 /**
