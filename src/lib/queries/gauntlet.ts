@@ -746,7 +746,11 @@ export async function getGauntletRounds(seasonId: number, client: SupabaseClient
       .from('player_match_stats')
       .select('match_id, player_id, faction, kills, assists, deaths, adr, damage, is_win, rounds_won, rounds_played')
       .in('match_id', matchIds),
-    getPlayersById(client),
+    // Omit the arg entirely on the (common) default-client path so this shares getPlayersById()'s
+    // cache() node with the many other bare callers in the same render, instead of forcing its own
+    // — cache() keys on argument count/identity, so an explicit `client` arg (even === supabase)
+    // would otherwise miss that shared cache and re-read `players`.
+    client === supabase ? getPlayersById() : getPlayersById(client),
     client
       .from('gauntlet_pods')
       .select('round_number, pod_index, advance_rule, is_final, match1_id, match2_id')
